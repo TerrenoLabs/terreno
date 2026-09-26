@@ -1,66 +1,73 @@
 # Task List: Agent UI Asks
 
-**Status:** Draft 2026-09-26 — waiting on grilling round 1 (Q1–Q5 in [`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Do not Pick until the IP is Approved.
+**Status:** Draft 2026-09-26 — waiting on grilling round 1 (Q1–Q7 in [`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Do not Pick until the IP is Approved.
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.
 Work the frontier (tasks whose blockers are complete). Phase 3 also depends on Agent UI
 Blocks Tasks 1.1 and 2.1 ([`docs/tasks/agent-ui-blocks.md`](./agent-ui-blocks.md)).
 
-Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` resume → `GPTChat` card.
+Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` resume → `GPTChat` card; then the same ask answered by `buttonId` through `POST /gpt/histories/:id/turn`.
 
 ### Phase 1: Tracer — "pick one" end to end
 
 - [ ] **Task 1.1**: `ask_choice` (select one) pause and resume, proven on the server
-  - Delivers: `@terreno/blocks` asks module with the shared ask fields, `choice` (`select: one` only), `askResponseSchema`, `validateAskInput`, `validateAskResponse`, `ASK_LIMITS`, `ASK_ERROR_CODES`, and `askPromptSection`. If Agent UI Blocks Task 1.1 has not landed, this task creates the `blocks/` package scaffold exactly as that task lists it. `@terreno/ai`: `asks` route option; `createAskTools(["choice"])` (Zod `inputSchema` + `outputSchema`, no `execute`); `TERRENO_ASKS_SYSTEM_PROMPT` at the top of `prompts.ts`; pause on an ask tool call (SSE `{ask}`, `done.pendingAsk`, `GptHistory.pendingAsk` with `responseMessages`, a `tool-call` row with `ask.status`); a second ask in one step is stored as `cancel` (`one_ask_at_a_time`); resume via `askResponse` (validate → tool-result row → replay `responseMessages` + tool result → stream, `{askResolved}` first); `cancel` when a `prompt` arrives while an ask is pending; 400 / 403 / 409 paths; `buildMessages` includes ask pairs; `AIRequest.metadata.ask`.
-  - Files: `blocks/src/asks/{schema,limits,errors,validateInput,validateResponse,prompt}.ts`, `blocks/src/asks/fixtures/{valid,invalid}/*.json`, `blocks/src/asks/*.test.ts`, `blocks/src/index.ts`; `ai/package.json`, `ai/src/service/asks.ts`, `ai/src/service/prompts.ts`, `ai/src/routes/gpt.ts`, `ai/src/models/gptHistory.ts`, `ai/src/service/aiService.ts`, `ai/src/types/index.ts`, `ai/src/index.ts`, `ai/src/routes/gpt.test.ts`, `ai/src/service/aiService.test.ts`, `ai/src/service/asks.test.ts`.
+  - Delivers: `@terreno/blocks` asks module with the shared ask fields, `choice` (`select: one` only), `askResponseSchema`, `validateAskInput`, `validateAskResponse`, `toSimpleCard` + `simpleCardSchema` (choice-one rule), `ASK_LIMITS`, `ASK_ERROR_CODES`, and `askPromptSection`. If Agent UI Blocks Task 1.1 has not landed, this task creates the `blocks/` package scaffold exactly as that task lists it. `@terreno/ai`: `asks` route option; `createAskTools(["choice"])` (Zod `inputSchema` + `outputSchema`, no `execute`); `TERRENO_ASKS_SYSTEM_PROMPT` at the top of `prompts.ts`; the `/gpt/prompt` turn logic moved into `chatTurn.ts` behind an event sink so Task 1.3 can drive it without SSE; pause on an ask tool call (SSE `{ask}` with `simple`, `done.pendingAsk`, `GptHistory.pendingAsk` with `simple` and `responseMessages`, a `tool-call` row with `ask.status`); a second ask in one step is stored as `cancel` (`one_ask_at_a_time`); resume via `askResponse` (validate → tool-result row → replay `responseMessages` + tool result → stream, `{askResolved}` first); `cancel` when a `prompt` arrives while an ask is pending; 400 / 403 / 409 paths; `buildMessages` includes ask pairs; `AIRequest.metadata.ask`.
+  - Files: `blocks/src/asks/{schema,limits,errors,validateInput,validateResponse,simpleCard,prompt}.ts`, `blocks/src/asks/fixtures/{valid,invalid}/*.json`, `blocks/src/asks/*.test.ts`, `blocks/src/index.ts`; `ai/package.json`, `ai/src/service/asks.ts`, `ai/src/service/chatTurn.ts`, `ai/src/service/prompts.ts`, `ai/src/routes/gpt.ts`, `ai/src/models/gptHistory.ts`, `ai/src/service/aiService.ts`, `ai/src/types/index.ts`, `ai/src/index.ts`, `ai/src/routes/gpt.test.ts`, `ai/src/service/aiService.test.ts`, `ai/src/service/asks.test.ts`.
   - Blocked by: none (IP approval)
   - Docs: `docs/reference/agent-ui-asks.md` (new: envelope, `choice`, limits, error codes, SSE events, wire example), `docs/reference/ai.md` (`asks` option, `askResponse` body, full SSE event table, `GptHistory.pendingAsk`), `docs/explanation/agent-ui-asks.md` (new: why client-side tool calls, the round trip, how asks and blocks divide the work), `docs/reference/README.md`, `docs/explanation/README.md`.
-  - Acceptance: AC1 and AC2 for `choice` (select one); AC3, AC4, AC5, AC6, AC7, AC8; mongoose-schema-safety checklist applied to `GptHistory` (additive, optional, described); ai-prompt-governance checklist applied (constant, mock-model tests with normal, edge, and adversarial inputs); `bun test blocks/ ai/` green.
+  - Acceptance: AC1, AC2, and AC15 for `choice` (select one); AC3, AC4, AC5, AC6, AC7, AC8 (the `chatTurn.ts` move is covered by AC8's unchanged-stream regression); mongoose-schema-safety checklist applied to `GptHistory` (additive, optional, described); ai-prompt-governance checklist applied (constant, mock-model tests with normal, edge, and adversarial inputs); `bun test blocks/ ai/` green.
 
 - [ ] **Task 1.2**: "Pick one" in `GPTChat`, the example apps, and the demo
-  - Delivers: `GPTChatMessage.ask`; `GPTChat` props `onAskSubmit` and `askErrors`; `AskCard` + `AskChoice` (quick-reply buttons for ≤ 4 short options, `RadioField` for ≤ 8, searchable `SelectField` above 8); Skip; inline errors; loading while submitting; answered summary; pending ask restored from history stays interactive. example-backend passes `asks: true`. example-frontend `ai.tsx` handles `{ask}` / `{askResolved}` / `done.pendingAsk` and posts `askResponse` with the same streaming reader as a prompt. Demo `AskCard` story. e2e mock streams an ask, accepts the answer, and streams a continuation.
+  - Delivers: `GPTChatMessage.ask`; `GPTChat` props `onAskSubmit` and `askErrors`; `AskCard` + `AskChoice` (the simple card's buttons for ≤ 3 options with labels ≤ 20, `RadioField` for ≤ 8, searchable `SelectField` above 8); Skip; inline errors; loading while submitting; answered summary; pending ask restored from history stays interactive. example-backend passes `asks: true`. example-frontend `ai.tsx` handles `{ask}` / `{askResolved}` / `done.pendingAsk` and posts `askResponse` with the same streaming reader as a prompt. Demo `AskCard` story. e2e mock streams an ask, accepts the answer, and streams a continuation.
   - Files: `ui/package.json`, `ui/src/asks/AskCard.tsx`, `ui/src/asks/AskChoice.tsx`, `ui/src/asks/askSummary.ts`, `ui/src/GPTChat.tsx`, `ui/src/lazyBoundaries/heavyOptionalExports.tsx`, `ui/src/index.tsx`, `ui/src/asks/*.test.tsx`, `ui/src/GPTChat.test.tsx`; `demo/stories/AskCard.stories.tsx`, `demo/story-config/AskCard.config.tsx`, `demo/demoConfig.tsx`; `example-backend/src/api/ai.ts`; `example-frontend/app/(tabs)/ai.tsx`, `example-frontend/e2e/helpers/mockGpt.ts`, `example-frontend/e2e/ai-chat.spec.ts`.
   - Blocked by: 1.1
   - Docs: `docs/reference/ui.md` (`GPTChat` ask props, `AskCard`), `docs/how-to/agent-ui-asks.md` (new: enable asks on the backend, handle them in the frontend), `docs/explanation/example-coverage.md` (capability row), `docs/how-to/README.md`; regenerate component reference (`cd ui && bun run compile && bun run types`, then `bun run website:generate`).
   - Acceptance: AC9 for `choice`; AC12; `bun run check:demo-coverage` green; screenshots of pending, error, and answered states and a recording of the example-app round trip under `/opt/cursor/artifacts/` (verify-ui-changes).
 
+- [ ] **Task 1.3**: Small-screen path — simple cards, compact surface, headless endpoints
+  - Delivers: `modelRouter` actions on `/gpt/histories`: `collectionActions.pendingAsks` (`GET`, `IsAuthenticated`, caller's histories only) and `instanceActions.turn` (`POST`, `IsOwner`; body one of `{prompt}`, `{askResponse}`, `{toolCallId, buttonId}`, plus `surface`), both driving `chatTurn.ts` with a buffering sink and returning `{text, pendingAsk?}`; `buttonId` resolves to the stored card's `response` (`UNKNOWN_BUTTON` otherwise); the turn finishes and saves after a client disconnect. `surface: "compact"` on `/gpt/prompt` and `turn` narrows the ask tools and adds the compact prompt line (D25). JSON Schema export of the simple card and headless bodies for native clients. `SimpleAskCard` in `@terreno/ui` and a demo story that renders every fixture's card in a 198×242 pt watch-sized frame.
+  - Files: `ai/src/routes/gptHistories.ts`, `ai/src/service/chatTurn.ts`, `ai/src/service/asks.ts`, `ai/src/service/prompts.ts`, `ai/src/routes/gptHistories.test.ts`, `ai/src/routes/gpt.test.ts`; `blocks/src/asks/schema.ts` (compact variants), `blocks/src/asks/jsonSchema.ts`, tests; `ui/src/asks/SimpleAskCard.tsx`, `ui/src/asks/SimpleAskCard.test.tsx`, `ui/src/index.tsx`; `demo/stories/SimpleAskCard.stories.tsx`, `demo/story-config/SimpleAskCard.config.tsx`, `demo/demoConfig.tsx`; `example-frontend/store/openApiSdk.ts` (regenerated with `bun run sdk`).
+  - Blocked by: 1.2
+  - Docs: `docs/reference/agent-ui-asks.md` (simple card contract, rule table, compact mode, headless endpoints, JSON Schema location), `docs/reference/ai.md` (`surface`, the two actions), `docs/how-to/agent-ui-asks.md` ("answer asks from an Apple Watch or another small client": SwiftUI `URLSession` sketch, token hand-off over WatchConnectivity, why the watch always sends `surface: "compact"`), `docs/explanation/agent-ui-asks.md` (why cards carry exact answers; watch paths and their follow-ups), `docs/reference/ui.md` (`SimpleAskCard`); regenerate component reference (`bun run website:generate`).
+  - Acceptance: AC16, AC17, AC18; AC15 for `choice` cards made in compact mode; watch-frame screenshot under `/opt/cursor/artifacts/` (verify-ui-changes).
+
 ### Phase 2: Remaining ask kinds
 
 - [ ] **Task 2.1**: `choice` many and "Other"
-  - Delivers: `select: many`, `minSelected` / `maxSelected`, `allowOther` + `otherLabel`; `MultiselectField` plus an Other `TextField`; `SELECTION_COUNT` and `OTHER_NOT_ALLOWED`.
-  - Files: `blocks/src/asks/schema.ts`, `blocks/src/asks/validateResponse.ts`, fixtures, tests; `ui/src/asks/AskChoice.tsx`, tests; `demo/stories/AskCard.stories.tsx`.
-  - Blocked by: 1.2
-  - Docs: `docs/reference/agent-ui-asks.md` (`choice` fields).
-  - Acceptance: AC1, AC2, and AC9 for many-select and Other; screenshot.
+  - Delivers: `select: many`, `minSelected` / `maxSelected`, `allowOther` + `otherLabel`; `MultiselectField` plus an Other `TextField`; `SELECTION_COUNT` and `OTHER_NOT_ALLOWED`; simple-card rules for many-select and for single-select with more options than fit (Use suggested / Skip / handoff).
+  - Files: `blocks/src/asks/schema.ts`, `blocks/src/asks/validateResponse.ts`, `blocks/src/asks/simpleCard.ts`, fixtures, tests; `ui/src/asks/AskChoice.tsx`, tests; `demo/stories/AskCard.stories.tsx`.
+  - Blocked by: 1.3
+  - Docs: `docs/reference/agent-ui-asks.md` (`choice` fields, card rules).
+  - Acceptance: AC1, AC2, AC9, and AC15 for many-select and Other; screenshot.
 
 - [ ] **Task 2.2**: `confirm`
-  - Delivers: `ask_confirm` (`confirmLabel`, `denyLabel`, `destructive`, `allowDecline` default `false`); two `Button`s, `variant="destructive"` when set; prompt guidance to confirm before irreversible tool calls.
+  - Delivers: `ask_confirm` (`confirmLabel` / `denyLabel` ≤ 20 chars, `destructive`, `allowDecline` default `false`); two `Button`s, `variant="destructive"` when set; simple card Approve / Deny with the D26 destructive marking; offered in compact mode; prompt guidance to confirm before irreversible tool calls.
   - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ai/src/service/prompts.ts`, `ui/src/asks/AskConfirm.tsx`, tests, story.
-  - Blocked by: 1.2
+  - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md`, `docs/how-to/agent-ui-asks.md` ("confirm before a destructive tool").
-  - Acceptance: AC1, AC2, and AC9 for `confirm`; prompt snapshot test lists `confirm` only when enabled.
+  - Acceptance: AC1, AC2, AC9, and AC15 for `confirm`; AC16 includes `ask_confirm`; prompt snapshot test lists `confirm` only when enabled.
 
 - [ ] **Task 2.3**: `markdown`
-  - Delivers: `ask_markdown` (`initial`, `placeholder`, `minLength`, `maxLength` ≤ 20,000); `MarkdownEditorField`; answer `{markdown, changed}`; long answers collapse in the summary.
+  - Delivers: `ask_markdown` (`initial`, `placeholder`, `minLength`, `maxLength` ≤ 20,000); `MarkdownEditorField`; answer `{markdown, changed}`; long answers collapse in the summary; simple card Approve draft / Cancel with `handoff`.
   - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ui/src/asks/AskMarkdown.tsx`, tests, story.
-  - Blocked by: 1.2
+  - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md`.
-  - Acceptance: AC1, AC2 (`TOO_LONG`), and AC9 for `markdown`; `changed` is false when the text is unchanged.
+  - Acceptance: AC1, AC2 (`TOO_LONG`), AC9, and AC15 for `markdown`; `changed` is false when the text is unchanged; no Approve button when `initial` breaks the length rules.
 
 - [ ] **Task 2.4**: `form`
-  - Delivers: `ask_form` with 1–8 flat fields (`text`, `textarea`, `email`, `url`, `phone`, `number`, `date`, `time`, `datetime`, `boolean`, `select`, `multiselect`); per-type rules; Luxon ISO validation; renderer maps each field to `Field` by type.
+  - Delivers: `ask_form` with 1–8 flat fields (`text`, `textarea`, `email`, `url`, `phone`, `number`, `date`, `time`, `datetime`, `boolean`, `select`, `multiselect`); per-type rules; Luxon ISO validation; renderer maps each field to `Field` by type; simple card Submit defaults / Cancel with `handoff`. Dropped if Q4 excludes `form`.
   - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ui/src/asks/AskForm.tsx`, tests, story.
-  - Blocked by: 1.2
+  - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md` (field-type table).
-  - Acceptance: AC1, AC2 (`REQUIRED_FIELD`, `FIELD_TYPE_MISMATCH`, `OUT_OF_RANGE`, `INVALID_DATE`), and AC9 for `form`; one fixture per field type.
+  - Acceptance: AC1, AC2 (`REQUIRED_FIELD`, `FIELD_TYPE_MISMATCH`, `OUT_OF_RANGE`, `INVALID_DATE`), AC9, and AC15 for `form`; one fixture per field type.
 
 - [ ] **Task 2.5**: `files`
-  - Delivers: `ask_files` (`accept`, `minFiles`, `maxFiles`); `FilePickerButton` + `AttachmentPreview` renderer; file refs `{fileId}` or `{url}` per D5; server ref resolution, owner check, byte-level MIME sniffing, size and count caps; `toModelOutput` with `image-data` / `file-data` / text parts; an example-frontend helper that uploads through `/files/upload` when available and falls back to data URLs.
+  - Delivers: `ask_files` (`accept`, `minFiles`, `maxFiles`); `FilePickerButton` + `AttachmentPreview` renderer; file refs `{fileId}` or `{url}` per D5; server ref resolution, owner check, byte-level MIME sniffing, size and count caps; `toModelOutput` with `image-data` / `file-data` / text parts; simple card Skip + `handoff`; an example-frontend helper that uploads through `/files/upload` when available and falls back to data URLs.
   - Files: `blocks/src/asks/*`, `ai/src/service/askFiles.ts`, `ai/src/service/asks.ts`, `ai/src/routes/gpt.ts`, tests; `ui/src/asks/AskFiles.tsx`, tests, story; `example-frontend/app/(tabs)/ai.tsx`.
-  - Blocked by: 1.2
+  - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md` (`files`, storage modes), `docs/how-to/agent-ui-asks.md` ("accept uploads with or without GCS").
-  - Acceptance: AC10; AC1, AC2 (`FILE_TYPE_NOT_ACCEPTED`, `FILE_TOO_LARGE`, `FILE_COUNT`, `FILE_NOT_OWNED`, `MIME_MISMATCH`), and AC9 for `files`.
+  - Acceptance: AC10; AC1, AC2 (`FILE_TYPE_NOT_ACCEPTED`, `FILE_TOO_LARGE`, `FILE_COUNT`, `FILE_NOT_OWNED`, `MIME_MISMATCH`), AC9, and AC15 for `files`.
 
 ### Phase 3: HTML and display additions
 
@@ -83,6 +90,6 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
 - [ ] **Task 4.1**: Changelog, rules, docs indexes, final gate
   - Delivers: changelog entry; agent rules updated in their canonical source and regenerated; every new page linked from its README; `.github` and knip config updated for new files.
   - Files: `changelog/unreleased/agent-ui-asks.md`, `.rulesync/rules/ai/00-ai.md`, `.rulesync/rules/ui/00-ui.md`, `docs/how-to/README.md`, `docs/reference/README.md`, `docs/explanation/README.md`, `knip.jsonc`.
-  - Blocked by: 1.2, 2.1, 2.2, 2.3, 2.4, 2.5 (and 3.1 / 3.2 when in scope)
+  - Blocked by: 1.3, 2.1, 2.2, 2.3, 2.4, 2.5 (and 3.1 / 3.2 when in scope)
   - Docs: as listed; `bun run rules`.
   - Acceptance: AC13, AC14; `bun run website:build` and `bun run rules:check` green.

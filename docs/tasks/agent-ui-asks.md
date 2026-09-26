@@ -1,6 +1,6 @@
 # Task List: Agent UI Asks
 
-**Status:** Draft 2026-09-26 — waiting on grilling round 1 (Q1–Q7 in [`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Do not Pick until the IP is Approved.
+**Status:** Draft 2026-09-26 — grilling round 1 closed; waiting on round 2 (Q3, Q5, Q8–Q10) and Q11 in [`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md). Do not Pick until the IP is Approved.
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.
@@ -56,7 +56,7 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
   - Acceptance: AC1, AC2 (`TOO_LONG`), AC9, and AC15 for `markdown`; `changed` is false when the text is unchanged; no Approve button when `initial` breaks the length rules.
 
 - [ ] **Task 2.4**: `form`
-  - Delivers: `ask_form` with 1–8 flat fields (`text`, `textarea`, `email`, `url`, `phone`, `number`, `date`, `time`, `datetime`, `boolean`, `select`, `multiselect`); per-type rules; Luxon ISO validation; renderer maps each field to `Field` by type; simple card Submit defaults / Cancel with `handoff`. Dropped if Q4 excludes `form`.
+  - Delivers: `ask_form` with 1–8 flat fields (`text`, `textarea`, `email`, `url`, `phone`, `number`, `date`, `time`, `datetime`, `boolean`, `select`, `multiselect`); per-type rules; Luxon ISO validation; renderer maps each field to `Field` by type; simple card Submit defaults / Cancel with `handoff`.
   - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ui/src/asks/AskForm.tsx`, tests, story.
   - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md` (field-type table).
@@ -68,6 +68,13 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
   - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md` (`files`, storage modes), `docs/how-to/agent-ui-asks.md` ("accept uploads with or without GCS").
   - Acceptance: AC10; AC1, AC2 (`FILE_TYPE_NOT_ACCEPTED`, `FILE_TOO_LARGE`, `FILE_COUNT`, `FILE_NOT_OWNED`, `MIME_MISMATCH`), AC9, and AC15 for `files`.
+
+- [ ] **Task 2.6**: Server-enforced approval for host tools (only if Q10 = A)
+  - Delivers: host tools with AI SDK `needsApproval` pause on `tool-approval-request` as a server-made `confirm` ask (`origin: "approval"`, `toolName`, `approvalId`); `AsksOptions.approvals[toolName]` customizes the prompt and labels, with a default "Allow &lt;toolName&gt;?"; the answer appends `tool-approval-response` and resumes, so the SDK runs or denies the tool; works through `/gpt/prompt` and `turn`; `AIRequest.metadata.ask.origin`. example-backend adds a `deleteCompletedTodos` tool with `needsApproval: true` and a destructive approval prompt.
+  - Files: `ai/src/service/asks.ts`, `ai/src/service/chatTurn.ts`, `ai/src/types/index.ts`, `ai/src/routes/gpt.test.ts`, `ai/src/routes/gptHistories.test.ts`; `example-backend/src/api/ai.ts`.
+  - Blocked by: 2.2
+  - Docs: `docs/reference/agent-ui-asks.md` (approval asks), `docs/reference/ai.md` (`asks.approvals`), `docs/how-to/agent-ui-asks.md` ("require approval before a tool runs").
+  - Acceptance: AC19; AC15 for approval cards (destructive approve button per D26).
 
 ### Phase 3: HTML and display additions
 
@@ -90,6 +97,6 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
 - [ ] **Task 4.1**: Changelog, rules, docs indexes, final gate
   - Delivers: changelog entry; agent rules updated in their canonical source and regenerated; every new page linked from its README; `.github` and knip config updated for new files.
   - Files: `changelog/unreleased/agent-ui-asks.md`, `.rulesync/rules/ai/00-ai.md`, `.rulesync/rules/ui/00-ui.md`, `docs/how-to/README.md`, `docs/reference/README.md`, `docs/explanation/README.md`, `knip.jsonc`.
-  - Blocked by: 1.3, 2.1, 2.2, 2.3, 2.4, 2.5 (and 3.1 / 3.2 when in scope)
+  - Blocked by: 1.3, 2.1, 2.2, 2.3, 2.4, 2.5 (and 2.6 / 3.1 / 3.2 when in scope)
   - Docs: as listed; `bun run rules`.
   - Acceptance: AC13, AC14; `bun run website:build` and `bun run rules:check` green.

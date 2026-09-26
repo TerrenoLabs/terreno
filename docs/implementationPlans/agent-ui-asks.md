@@ -1,6 +1,6 @@
 # Agent UI Asks — agents ask the user for a typed answer inside the chat
 
-**Status:** Draft 2026-09-26 — grilling round 1 open, widened the same day for small screens (Apple Watch). Rows marked **open** carry a recommended default, not a decision.  
+**Status:** Draft 2026-09-26 — grilling round 1 closed (Q1, Q2, Q4, Q6, Q7 confirmed); round 2 open (Q3, Q5, Q8–Q10), Q11 after. Rows marked **open** carry a recommended default, not a decision.  
 **Roadmap:** Area=`ai`, Target=`Next`, Impact=`Feature`  
 **Branch:** `cursor/agent-ui-asks-grow-a1e2`  
 **Owner:** unassigned  
@@ -48,7 +48,7 @@ PR #1302.
 | [App MCP server](./app-mcp-server.md) | Draft | Runtime MCP tools, prompts, resources | It defers MCP Apps (`ui://` HTML apps). This plan's HTML is display-only and does not implement MCP Apps. |
 | [Infra MCP](./infra-mcp.md) | Planned | MCP elicitation for write confirmation | Same answer envelope (`accept` / `decline` / `cancel`), different host (IDE MCP client vs `GPTChat`). |
 | [GPT chat mascot](./gpt-chat-mascot.md), [consent forms](./consent-forms.md) | Complete | Empty-chat slot; signature and markdown form UX | Nothing new; renderers reuse the same `@terreno/ui` fields. |
-| [Comms: Expo push](./comms-adapter-expo-push.md), [notification center](./notification-center.md) | Complete | Push with title, body, data, badge, sound; `notify()` fans out title and body only. Notification action buttons are an explicit non-goal. | Nothing in v1 if Q7 = A. Actionable ask notifications (which iOS forwards to Apple Watch) become a follow-up plan that extends both. |
+| [Comms: Expo push](./comms-adapter-expo-push.md), [notification center](./notification-center.md) | Complete | Push with title, body, data, badge, sound; `notify()` fans out title and body only. Notification action buttons are an explicit non-goal. | Nothing in v1 (Q7 = A). Actionable ask notifications, which iOS forwards to Apple Watch, stay in Future Work and would extend both. |
 
 How asks and blocks divide the work:
 
@@ -69,7 +69,7 @@ How asks and blocks divide the work:
 - A co-editing canvas. The `markdown` ask is one round trip, not a persistent document.
 - Changing chat attachments (`attachments` on `/gpt/prompt`) or migrating the chat to the AI SDK `useChat` UI message stream.
 - More than one pending ask per conversation.
-- A native Apple Watch app or actionable push notifications (if Q7 = A). This plan ships the contract those clients consume; building them is a follow-up.
+- A native Apple Watch app or actionable push notifications (Q7). This plan ships the contract those clients consume; building them stays in Future Work.
 - Finishing long agent turns in a background job after a headless answer. The headless endpoint waits for the turn (see D24).
 - Collecting secrets. There is no password field, and the prompt forbids asking for passwords, card numbers, or API keys.
 
@@ -86,17 +86,17 @@ How asks and blocks divide the work:
 
 | ID | Question | Decision | Status |
 | --- | --- | --- | --- |
-| D1 | How does this plan relate to Agent UI Blocks? (Q1) | Companion plan. Agent UI Blocks stays approved as written for display. Ask schemas live in its `@terreno/blocks` package under `src/asks/`; whichever plan starts first creates the package scaffold listed in Agent UI Blocks Task 1.1. This plan adds the `html` block to the blocks catalog. | **open** — recommended |
-| D2 | How does the answer get back to the agent? (Q2) | Approach A: client-side ask tools, pause at the tool call, resume via `POST /gpt/prompt` with `askResponse`. | **open** — recommended |
+| D1 | How does this plan relate to Agent UI Blocks? (Q1) | Companion plan. Agent UI Blocks stays approved as written for display. Ask schemas live in its `@terreno/blocks` package under `src/asks/`; whichever plan starts first creates the package scaffold listed in Agent UI Blocks Task 1.1. This plan adds the `html` block to the blocks catalog. | **confirmed** (Q1 = A) |
+| D2 | How does the answer get back to the agent? (Q2) | Approach A: client-side ask tools, pause at the tool call, resume via `POST /gpt/prompt` with `askResponse` (chat) or the `turn` action (small clients, D24). | **confirmed** (Q2 = A) |
 | D3 | Full HTML? (Q3) | Display-only `html` block, opt-in per app (`uiBlocks.html: true` on the server, `allowHtml` on the client). Server-sanitized, rendered in a sandboxed iframe (web) or a JavaScript-disabled WebView (native), no scripts, no network, no links, at most 100 KB. | **open** — recommended |
-| D4 | Which ask kinds ship in v1? (Q4) | `choice` (one or many, optional "Other"), `files` (images and documents), `markdown` (edit a draft), `confirm` (approve/deny, destructive style), `form` (1–8 flat fields). Rating scale and signature are deferred. | `choice`, `files`, `markdown` **confirmed** (original request); `confirm` **confirmed** (follow-up: "simple approve/cancel buttons"); `form` **open** — recommended; rating and signature **open** — recommended defer |
+| D4 | Which ask kinds ship in v1? (Q4) | `choice` (one or many, optional "Other"), `files` (images and documents), `markdown` (edit a draft), `confirm` (approve/deny, destructive style), `form` (1–8 flat fields). Rating scale and signature are deferred. | **confirmed**: `choice`, `files`, `markdown` (original request), `confirm` (follow-up: "simple approve/cancel buttons"), `form` (Q4 = form). Rating scale and signature **deferred** (Q4). |
 | D5 | Where do uploaded files live? (Q5) | Adaptive. When `FileStorageService` is configured, the client uploads through `POST /files/upload` and the answer carries `fileId`s (owner-checked `FileAttachment`). Otherwise the answer carries data URLs, like chat attachments today. | **open** — recommended |
-| D6 | Can the user type a message while an ask is pending? | Yes. Sending a message stores a `cancel` answer for the pending ask, then appends the message, so the model sees both. | **open** — round 2 |
-| D7 | Which extra display blocks join the catalog with `html`? | `callout` (`Banner`, not dismissible), `image` (`Image`, `alt` required, https or file ref), `details` (`Accordion`). | **open** — round 2 |
-| D8 | Can an ask show blocks (chart, table, HTML) above its control? | Not in v1. The ask `prompt` is plain text. Block "context" on asks is future work. | **open** — round 2 |
-| D9 | Can a host tool require a confirmation the server enforces? | Not in v1. `confirm` is prompt-driven. A `requiresConfirmation` flag on host tools that forces a `confirm` ask before `execute` is future work. | **open** — round 2 |
-| D21 | How do small screens (Apple Watch, notifications, voice, Slack) render asks? (Q6) | The server derives a **simple card** for every ask with a pure function: text ≤ 140 chars and up to 3 buttons, each carrying its exact answer. Asks that cannot shrink set `handoff: true` ("Continue on your phone"). Small clients also send `surface: "compact"` so the agent only asks button-sized questions (D25). | **open** — recommended |
-| D22 | How much Apple Watch support ships in this plan? (Q7) | Protocol-ready only: simple cards, a pending-asks list, and a non-streaming turn endpoint any native client can call, plus a watch-sized preview in the demo and a SwiftUI client sketch in the how-to. Actionable push notifications and a sample watchOS app are follow-up plans (neither can be verified without a real iPhone and Watch). | **open** — recommended |
+| D6 | Can the user type a message while an ask is pending? (Q8) | Yes. Sending a message stores a `cancel` answer for the pending ask, then appends the message, so the model sees both. | **open** — round 2 |
+| D7 | Which extra display blocks join the catalog with `html`? (Q9) | `callout` (`Banner`, not dismissible), `image` (`Image`, `alt` required, https or file ref), `details` (`Accordion`). | **open** — round 2 |
+| D8 | Can an ask show blocks (chart, table, HTML) above its control? (Q11) | Not in v1. The ask `prompt` is plain text. Block "context" on asks is future work. | **open** — round 3 |
+| D9 | Can a host tool require an approval the server enforces? (Q10) | Yes, through AI SDK tool approval. A host tool sets `needsApproval` (boolean or a function of its input). The server turns each approval request into a server-made `confirm` ask with Approve / Deny, so the model cannot skip it and a watch can answer it. Details in [Server-enforced approval](#server-enforced-approval-q10). | **open** — round 2 |
+| D21 | How do small screens (Apple Watch, notifications, voice, Slack) render asks? (Q6) | The server derives a **simple card** for every ask with a pure function: text ≤ 140 chars and up to 3 buttons, each carrying its exact answer. Asks that cannot shrink set `handoff: true` ("Continue on your phone"). Small clients also send `surface: "compact"` so the agent only asks button-sized questions (D25). | **confirmed** (Q6 = A) |
+| D22 | How much Apple Watch support ships in this plan? (Q7) | Protocol-ready only: simple cards, a pending-asks list, and a non-streaming turn endpoint any native client can call, plus a watch-sized preview in the demo and a SwiftUI client sketch in the how-to. Actionable push notifications and a sample watchOS app stay in Future Work; no follow-up plan is committed. | **confirmed** (Q7 = "just A") |
 | D10 | Tool shape | One tool per kind: `ask_choice`, `ask_confirm`, `ask_markdown`, `ask_form`, `ask_files`. Each input root is an object (OpenAI strict mode and Gemini function declarations require it). Every schema is `.strict()`. Host tools whose names start with `ask_` fail at startup. | assumed |
 | D11 | Pause semantics | Ask tools have no `execute`, so the AI SDK step loop ends with finishReason `tool-calls`. One pending ask per history, held in `GptHistory.pendingAsk`. If one step emits two ask calls, the first becomes pending and the second gets a stored `cancel` answer with `reason: "one_ask_at_a_time"`, which the model sees on resume. | assumed |
 | D12 | Answer envelope | `{action: "accept", content}` \| `{action: "decline"}` \| `{action: "cancel", reason?}` — the MCP elicitation shape. `decline` means the user pressed Skip. `cancel` means the ask was superseded (D6) or dropped (D11). | assumed |
@@ -253,6 +253,47 @@ answer:
 `text` → `text/plain`; `csv`; `json`. A file ref is `{fileId}` (uploaded, D5) or `{url}` (a
 `data:` URL). The per-file cap is the host's upload cap (10 MB default); at most 10 files.
 
+## Server-enforced approval (Q10)
+
+Recommended, still open. A prompt-driven `confirm` depends on the model remembering to ask.
+Server-enforced approval does not: the host marks a tool, and the tool cannot run until the
+user approves. AI SDK 6 already supports it (`needsApproval` on `tool()`, a
+`tool-approval-request` part on the assistant message, a `tool-approval-response` part on
+the tool message), so this reuses the ask pause, the Approve / Deny simple card, and the
+headless `turn` endpoint.
+
+```ts
+const deleteCompletedTodos = tool({
+  description: "Delete the user's completed todos",
+  inputSchema: z.object({}).strict(),
+  needsApproval: true,
+  execute: async () => ({deleted: 14}),
+});
+
+addGptRoutes(router, {
+  aiService,
+  tools: {deleteCompletedTodos},
+  asks: {
+    approvals: {
+      deleteCompletedTodos: () => ({
+        prompt: "Delete all completed todos?",
+        confirmLabel: "Delete",
+        denyLabel: "Keep them",
+        destructive: true,
+      }),
+    },
+  },
+});
+```
+
+| Step | Behavior |
+| --- | --- |
+| Request | The model calls the tool; the SDK emits `tool-approval-request {approvalId, toolCallId}` and does not execute. |
+| Pause | The server stores a pending `confirm` ask with `origin: "approval"`, `toolName`, and `approvalId`. Its input comes from `asks.approvals[toolName](input)`, or defaults to "Allow &lt;toolName&gt;?" with the tool description and Allow / Deny labels. The `{ask}` event and simple card carry it like any other ask. |
+| Answer | `{confirmed: true}` appends `tool-approval-response {approvalId, approved: true}` and resumes; the SDK runs the tool once. `{confirmed: false}`, `decline`, or `cancel` appends `approved: false`; the model is told the user denied it. |
+| Integrity | The approval request and response live only in server-stored messages, so a client cannot forge an approval; the client only sends the answer envelope for the pending ask. |
+| Later turns | The approval row is display-only, like other server tool rows today (D14). |
+
 ## Simple cards for small screens
 
 Every ask carries a simple card, the lowest common denominator a client can render
@@ -303,12 +344,12 @@ Headless endpoints (D24), for clients that cannot or should not parse SSE:
 | `GET /gpt/histories/pendingAsks` | `collectionActions.pendingAsks` (`IsAuthenticated`, caller's histories) | `[{historyId, title, toolCallId, kind, simple, created}]`, newest first |
 | `POST /gpt/histories/:id/turn` | `instanceActions.turn` (`IsOwner`) | Body is one of `{prompt}`, `{askResponse}`, `{toolCallId, buttonId}`, plus optional `surface`. Runs the turn to completion and returns `{text, pendingAsk?: {toolCallId, kind, simple}}`. Unknown `buttonId` → 400; stale `toolCallId` → 409. |
 
-How an Apple Watch plugs in (documented in the how-to; not built here if Q7 = A):
+How an Apple Watch plugs in (documented in the how-to; not built here, Q7 = A):
 
 | Path | What it needs | Status |
 | --- | --- | --- |
-| SwiftUI watch app | Native watchOS target (React Native does not run on watchOS; `@bacons/apple-targets` adds one to an Expo app). The session token reaches the watch over WatchConnectivity; the app calls the two headless endpoints with `URLSession`, always with `surface: "compact"`. | Follow-up (Q7 C) |
-| Actionable push, no watch app | iOS forwards iPhone notifications with up to 4 action buttons to the watch. Needs `categoryId` on comms push, `data` on `notify()`, templated categories (labels are fixed when the app registers a category), actions with `opensAppToForeground: false`, a small native iOS handler (expo-notifications completes before a JS `fetch` finishes), and a one-time action token per ask. | Follow-up (Q7 B) |
+| SwiftUI watch app | Native watchOS target (React Native does not run on watchOS; `@bacons/apple-targets` adds one to an Expo app). The session token reaches the watch over WatchConnectivity; the app calls the two headless endpoints with `URLSession`, always with `surface: "compact"`. | Future Work |
+| Actionable push, no watch app | iOS forwards iPhone notifications with up to 4 action buttons to the watch. Needs `categoryId` on comms push, `data` on `notify()`, templated categories (labels are fixed when the app registers a category), actions with `opensAppToForeground: false`, a small native iOS handler (expo-notifications completes before a JS `fetch` finishes), and a one-time action token per ask. | Future Work |
 
 ## Component map — what the chat can render
 
@@ -371,7 +412,7 @@ Display (the reply document):
 
 | Surface | Change |
 | --- | --- |
-| `addGptRoutes(router, {asks?: boolean \| AsksOptions})` | `AsksOptions = {kinds?: AskKind[], maxFileSizeBytes?: number}`. When enabled, merges `createAskTools(kinds)` into the tool set and appends `TERRENO_ASKS_SYSTEM_PROMPT`. Off by default; with it off, tools, prompt, and SSE are unchanged. |
+| `addGptRoutes(router, {asks?: boolean \| AsksOptions})` | `AsksOptions = {kinds?: AskKind[], maxFileSizeBytes?: number, approvals?: Record<toolName, (input) => ConfirmAskInput>}` (`approvals` only if Q10 = A). When enabled, merges `createAskTools(kinds)` into the tool set and appends `TERRENO_ASKS_SYSTEM_PROMPT`. Off by default; with it off, tools, prompt, and SSE are unchanged. |
 | `POST /gpt/prompt` body | Adds `askResponse?: {toolCallId, action, content?}` and `surface?: "full" \| "compact"` (D25). `prompt` becomes optional when `askResponse` is present (400 when both are missing). A `prompt` sent while an ask is pending records `cancel` first (D6). |
 | `POST /gpt/prompt` responses | 400 `{fields}` for an invalid answer (no model call); 403 for another user's history; 409 when `toolCallId` is not the pending ask. |
 | SSE | `{ask: {toolCallId, kind, input, simple}}`, `{askResolved}`, `{done: …, pendingAsk?}` (D15). `docs/reference/ai.md` gets the first complete SSE event table. |
@@ -432,7 +473,6 @@ None beyond `AIRequest` metadata (D19).
 ## Not Included / Future Work
 
 - Block context above an ask's control (D8): chart, table, or HTML previews such as "Send this email?".
-- Server-enforced confirmation for host tools (D9), mapped onto AI SDK tool approval.
 - Rating scale (`Slider` / `ThumbsUpDownFeedback`), signature (`SignatureCaptureField`), address (`AddressField`).
 - Camera capture and audio recording.
 - App-defined ask kinds with custom renderers.
@@ -482,3 +522,4 @@ None beyond `AIRequest` metadata (D19).
 | AC16 | With `surface: "compact"`, the model is offered only `ask_confirm` and the narrowed `ask_choice`; a 4-option choice fails as a tool error; the system prompt contains the compact line; every card produced has `handoff: false` | Supertest inspecting the mock model's tools and prompt |
 | AC17 | `GET /gpt/histories/pendingAsks` lists only the caller's pending asks with their cards; `POST /gpt/histories/:id/turn {toolCallId, buttonId}` resumes with that button's stored answer and returns `{text, pendingAsk?}`; an unknown `buttonId` returns 400 `UNKNOWN_BUTTON`; another user's history returns 403; a stale `toolCallId` returns 409; closing the request mid-turn still saves the finished turn | Supertest (the last case aborts the request, then reloads the history) |
 | AC18 | `SimpleAskCard` renders every fixture's card inside the watch-sized demo frame with `@terreno/ui` components only; pressing a button calls `onPress` with that button; `handoff` shows the continue-on-phone line | `ui/src/asks/SimpleAskCard.test.tsx` + demo screenshot under `/opt/cursor/artifacts/` |
+| AC19 | (Q10 = A) A host tool with `needsApproval: true` never runs before approval: the mock model's call produces an `{ask}` with `kind: "confirm"`, `origin: "approval"` and `execute` is not called; approving (via `/gpt/prompt` or `turn` with `buttonId: approve`) runs it exactly once and the model sees its result; denying, declining, or cancelling never runs it and the model sees the denial | Supertest with a spy `execute` |

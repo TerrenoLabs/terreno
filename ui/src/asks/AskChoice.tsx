@@ -14,11 +14,12 @@ import {useCallback, useMemo, useState} from "react";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
-import type {ButtonProps, FieldOption} from "../Common";
+import type {FieldOption} from "../Common";
 import {RadioField} from "../RadioField";
 import {SelectField} from "../SelectField";
 import {Text} from "../Text";
 import type {ChatAsk} from "./askTypes";
+import {SIMPLE_CARD_BUTTON_VARIANTS} from "./simpleCardButtonVariants";
 
 /** Above this many options, the choice is a searchable select instead of radio buttons. */
 const RADIO_OPTIONS_MAX = 8;
@@ -30,13 +31,6 @@ const SKIP_BUTTON: SimpleCardButton = {
   label: "Skip",
   response: {action: "decline"},
   style: "cancel",
-};
-
-const BUTTON_VARIANTS: Record<SimpleCardButton["style"], NonNullable<ButtonProps["variant"]>> = {
-  cancel: "ghost",
-  default: "outline",
-  destructive: "destructive",
-  primary: "primary",
 };
 
 /** An answer from one of the card's controls, named so the card can show that control loading. */
@@ -197,7 +191,8 @@ export const AskChoice: React.FC<AskChoiceProps> = ({
       onClick={() => onAnswer({actionId: button.id, response: button.response})}
       testID={`${testID}-button-${button.id}`}
       text={button.label}
-      variant={BUTTON_VARIANTS[button.style]}
+      variant={SIMPLE_CARD_BUTTON_VARIANTS[button.style]}
+      wrapText
     />
   );
 
@@ -254,6 +249,7 @@ export const AskChoice: React.FC<AskChoiceProps> = ({
           onClick={handleSubmit}
           testID={`${testID}-submit`}
           text={input.submitLabel ?? "Submit"}
+          wrapText
         />
         {input.allowDecline === false ? null : renderButton(SKIP_BUTTON)}
       </Box>

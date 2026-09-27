@@ -1,12 +1,46 @@
 import {describe, expect, it} from "bun:test";
 import {invalidAskFixtures, validAskFixtures} from "../tests/askFixtures";
-import type {AskKind} from "./schema";
+import type {AskKind, AskSurface} from "./schema";
 import {validateAskInput} from "./validateInput";
 
-const TWO_OPTIONS = [
-  {id: "yes", label: "Yes"},
-  {id: "no", label: "No"},
-];
+const NO_OPTION = {id: "no", label: "No"};
+
+const TWO_OPTIONS = [{id: "yes", label: "Yes"}, NO_OPTION];
+
+/** What the compact surface returns for each valid fixture, read off the compact rules by hand. */
+const COMPACT_ERRORS_BY_FIXTURE: Record<string, {code: string; path: string}[]> = {
+  "choice-emoji-label-cut": [{code: "TOO_LONG", path: "options[0].label"}],
+  "choice-labels-collide-after-cut": [
+    {code: "TOO_LONG", path: "options[0].label"},
+    {code: "TOO_LONG", path: "options[1].label"},
+  ],
+  "choice-long-text-cut": [
+    {code: "TOO_LONG", path: "options[0].label"},
+    {code: "TOO_LONG", path: "options[1].label"},
+  ],
+  "choice-many-options-default-label-collides": [
+    {code: "TOO_MANY", path: "options"},
+    {code: "TOO_LONG", path: "options[0].label"},
+    {code: "TOO_LONG", path: "options[1].label"},
+  ],
+  "choice-many-options-no-buttons": [{code: "TOO_MANY", path: "options"}],
+  "choice-many-options-no-default": [{code: "TOO_MANY", path: "options"}],
+  "choice-many-options-with-default": [{code: "TOO_MANY", path: "options"}],
+  "choice-max-limits": [
+    {code: "TOO_MANY", path: "options"},
+    {code: "TOO_LONG", path: "options[0].label"},
+  ],
+  "choice-plan-with-default": [],
+  "choice-two-options": [],
+  "choice-two-options-no-decline": [],
+};
+
+const compactErrors = (options: {id: string; label: string}[]) =>
+  validateAskInput({
+    input: {options, prompt: "Pick one.", select: "one"},
+    kind: "choice",
+    surface: "compact",
+  });
 
 describe("validateAskInput golden fixtures", () => {
   it("has fixtures in both folders", () => {
@@ -202,5 +236,141 @@ describe("validateAskInput kinds", () => {
     expect(() => validateAskInput({input: {}, kind: "signature" as unknown as AskKind})).toThrow(
       'Unknown ask kind "signature".'
     );
+  });
+
+  it("throws for a surface outside ASK_SURFACES", () => {
+    expect(() =>
+      validateAskInput({input: {}, kind: "choice", surface: "watch" as unknown as AskSurface})
+    ).toThrow('Unknown ask surface "watch".');
+  });
+});
+
+describe("validateAskInput on the compact surface", () => {
+  it("covers exactly the valid fixtures", () => {
+    expect(Object.keys(COMPACT_ERRORS_BY_FIXTURE).sort()).toEqual(
+      validAskFixtures()
+        .map((fixture) => fixture.name)
+        .sort()
+    );
+  });
+
+  for (const fixture of validAskFixtures()) {
+    it(`returns the compact errors of valid/${fixture.name}`, () => {
+      const errors = validateAskInput({
+        input: fixture.input,
+        kind: fixture.kind,
+        surface: "compact",
+      });
+      expect(errors.map(({code, path}) => ({code, path}))).toEqual(
+        COMPACT_ERRORS_BY_FIXTURE[fixture.name] ?? []
+      );
+    });
+  }
+
+  for (const fixture of invalidAskFixtures()) {
+    it(`still rejects invalid/${fixture.name}`, () => {
+      expect(
+        validateAskInput({input: fixture.input, kind: fixture.kind, surface: "compact"}).length
+      ).toBeGreaterThan(0);
+    });
+  }
+
+  it("accepts 2 or 3 options with distinct labels of at most 20 characters", () => {
+    expect(compactErrors(TWO_OPTIONS)).toEqual([]);
+    expect(
+      compactErrors([
+        {id: "starter", label: "Twenty characters!!!"},
+        {id: "team", label: "Exactly twenty chars"},
+        {id: "enterprise", label: "Party 🎉🎉🎉🎉🎉🎉🎉"},
+      ])
+    ).toEqual([]);
+  });
+
+  it("gives the limit of 3 options in TOO_MANY", () => {
+    expect(
+      compactErrors([...TWO_OPTIONS, {id: "maybe", label: "Maybe"}, {id: "later", label: "Later"}])
+    ).toEqual([
+      {
+        code: "TOO_MANY",
+        fix: "Remove items from options until it has 3 or fewer.",
+        message: "options has more than 3 items.",
+        path: "options",
+      },
+    ]);
+  });
+
+  it("gives the limit of 20 characters in TOO_LONG", () => {
+    expect(compactErrors([{id: "yes", label: "x".repeat(21)}, NO_OPTION])).toEqual([
+      {
+        code: "TOO_LONG",
+        fix: "Shorten options[0].label to 20 characters or fewer.",
+        message: "options[0].label is longer than 20 characters.",
+        path: "options[0].label",
+      },
+    ]);
+  });
+
+  it("counts each emoji as 2 or more characters, as the button cut does", () => {
+    expect(compactErrors([{id: "party", label: "Party 🎉🎉🎉🎉🎉🎉🎉🎉"}, NO_OPTION])).toEqual([
+      {
+        code: "TOO_LONG",
+        fix: "Shorten options[0].label to 20 characters or fewer, or use fewer emoji.",
+        message: "options[0].label is longer than 20 characters, counting each emoji as 2 or more.",
+        path: "options[0].label",
+      },
+    ]);
+  });
+
+  it("names the first option that used a duplicated label", () => {
+    expect(
+      compactErrors([
+        {id: "red", label: "Red"},
+        {id: "crimson", label: "Red"},
+      ])
+    ).toEqual([
+      {
+        code: "DUPLICATE_LABEL",
+        fix: "Give every option a different label.",
+        message: 'Option label "Red" is already used by options[0].',
+        path: "options[1].label",
+      },
+    ]);
+  });
+
+  it("allows duplicated labels on the full surface", () => {
+    expect(
+      validateAskInput({
+        input: {
+          options: [
+            {id: "red", label: "Red"},
+            {id: "crimson", label: "Red"},
+          ],
+          prompt: "Pick one.",
+          select: "one",
+        },
+        kind: "choice",
+      })
+    ).toEqual([]);
+  });
+
+  it("keeps the full rules: unique ids and a default among the options", () => {
+    expect(
+      validateAskInput({
+        input: {
+          default: ["green"],
+          options: [
+            {id: "red", label: "Red"},
+            {id: "red", label: "Crimson"},
+          ],
+          prompt: "Pick one.",
+          select: "one",
+        },
+        kind: "choice",
+        surface: "compact",
+      }).map(({code, path}) => ({code, path}))
+    ).toEqual([
+      {code: "DEFAULT_NOT_IN_OPTIONS", path: "default[0]"},
+      {code: "DUPLICATE_ID", path: "options[1].id"},
+    ]);
   });
 });

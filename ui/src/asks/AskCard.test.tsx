@@ -216,6 +216,23 @@ describe("AskCard", () => {
     });
   });
 
+  it("lets every button wrap a long label to fit a narrow chat instead of overflowing it", () => {
+    const quickReplies = renderCard({ask: pendingAsk(PLAN_INPUT)}).getAllByTestId(
+      /^ask-card-button-/
+    );
+    const form = renderCard({ask: pendingAsk(REGION_INPUT)});
+    const buttons = [
+      ...quickReplies,
+      form.getByTestId("ask-card-submit"),
+      form.getByTestId("ask-card-button-skip"),
+    ];
+
+    assert.lengthOf(buttons, 6);
+    for (const button of buttons) {
+      assert.include(button.props.style, {maxWidth: "100%"});
+    }
+  });
+
   it("shows errors for the last answer inline", () => {
     const {getByTestId, getByText} = renderCard({
       ask: pendingAsk(REGION_INPUT),

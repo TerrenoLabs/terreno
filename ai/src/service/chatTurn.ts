@@ -1,10 +1,14 @@
 import {APIError, logger} from "@terreno/api";
 import {
   ASK_CANCEL_REASONS,
+  ASK_SURFACES,
   type Ask,
   type AskKind,
   type AskResponse,
+  type AskSurface,
+  askKindsForSurface,
   type SimpleCard,
+  type TurnResult,
   toSimpleCard,
   validateAskResponse,
 } from "@terreno/blocks";
@@ -37,7 +41,7 @@ import {
   toStoredMessages,
   withoutReservedToolNames,
 } from "./asks";
-import {TITLE_GENERATION_PROMPT} from "./prompts";
+import {COMPACT_SURFACE_SYSTEM_PROMPT, TITLE_GENERATION_PROMPT} from "./prompts";
 
 export const DEMO_RESPONSE =
   "This is demo mode. To use AI features, paste your Gemini API key in Settings.";
@@ -264,6 +268,22 @@ const parseTurnBody = ({
   return askAnswer;
 };
 
+/** The body's `surface`, `"full"` when it sends none. Throws a 400 for any other value. */
+const parseSurface = (surface: unknown): AskSurface => {
+  if (surface === undefined || surface === null) {
+    return "full";
+  }
+  const knownSurface = ASK_SURFACES.find((candidate) => candidate === surface);
+  if (!knownSurface) {
+    throw new APIError({
+      detail: `Send one of: ${ASK_SURFACES.join(", ")}.`,
+      status: 400,
+      title: "surface is not a known surface",
+    });
+  }
+  return knownSurface;
+};
+
 const loadHistory = async ({
   historyId,
   projectId,
@@ -286,7 +306,8 @@ const loadHistory = async ({
   return history;
 };
 
-const staleAskError = (toolCallId: string): APIError =>
+/** The 409 for an answer that names a tool call the conversation is not waiting on. */
+export const staleAskError = (toolCallId: string): APIError =>
   new APIError({
     detail: `Tool call ${toolCallId} is not the ask this conversation is waiting on.`,
     status: 409,
@@ -655,11 +676,13 @@ const collectTools = async ({
   options,
   req,
   supportsTools,
+  surface,
 }: {
   askKinds: AskKind[];
   options: GptRouteOptions;
   req: express.Request;
   supportsTools: boolean;
+  surface: AskSurface;
 }): Promise<Record<string, Tool> | undefined> => {
   const {createRequestTools, mcpService, tools: routeTools} = options;
   const requestTools = createRequestTools ? createRequestTools(req) : undefined;
@@ -678,7 +701,30 @@ const collectTools = async ({
   if (askKinds.length === 0) {
     return allTools;
   }
-  return {...withoutReservedToolNames(allTools), ...createAskTools({kinds: askKinds})};
+  return {...withoutReservedToolNames(allTools), ...createAskTools({kinds: askKinds, surface})};
+};
+
+/**
+ * The system prompt with the asks section when asks are offered and the compact line on the
+ * compact surface. Without either, it is the request's system prompt unchanged.
+ */
+const withTurnSystemPrompt = ({
+  askKinds,
+  surface,
+  systemPrompt,
+}: {
+  askKinds: AskKind[];
+  surface: AskSurface;
+  systemPrompt: string | undefined;
+}): string | undefined => {
+  const sections = [
+    ...(askKinds.length > 0 ? [buildAsksSystemPrompt({kinds: askKinds, surface})] : []),
+    ...(surface === "compact" ? [COMPACT_SURFACE_SYSTEM_PROMPT] : []),
+  ];
+  if (sections.length === 0) {
+    return systemPrompt;
+  }
+  return [systemPrompt, ...sections].filter(Boolean).join("\n\n");
 };
 
 /**
@@ -883,8 +929,10 @@ const answeredAskMetadata = (resolvedAsk: ResolvedAsk | undefined): Record<strin
 
 /**
  * Runs one chat turn: a new prompt, or the user's answer to the pending ask (`askResponse`).
+ * `surface: "compact"` offers only the asks a small screen can show and asks for short replies.
  * Request errors throw an APIError before `sink.open()`; after that, failures are sent as an
- * `{error}` event. `/gpt/prompt` drives it with a server-sent events sink.
+ * `{error}` event. `/gpt/prompt` drives it with a server-sent events sink and the headless
+ * `turn` action with `runBufferedChatTurn`.
  */
 export const runChatTurn = async ({
   body,
@@ -902,6 +950,7 @@ export const runChatTurn = async ({
   const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id;
   const askKinds = resolveAskKinds(options.asks);
   const askAnswer = parseTurnBody({askKinds, body});
+  const surface = parseSurface(body.surface);
 
   // Resolve AI service (per-request key takes priority, then configured service)
   logger.debug("Resolving AI service", {
@@ -931,12 +980,19 @@ export const runChatTurn = async ({
   // Some models (e.g. gemini-2.5-flash-image) don't support tool calling
   const modelId = aiService.modelId;
   const supportsTools = !modelId?.includes("image");
-  const offeredAskKinds = supportsTools ? askKinds : [];
-  const allTools = await collectTools({askKinds: offeredAskKinds, options, req, supportsTools});
-  const system =
-    offeredAskKinds.length > 0
-      ? [effectiveSystemPrompt, buildAsksSystemPrompt(offeredAskKinds)].filter(Boolean).join("\n\n")
-      : effectiveSystemPrompt;
+  const offeredAskKinds = supportsTools ? askKindsForSurface({kinds: askKinds, surface}) : [];
+  const allTools = await collectTools({
+    askKinds: offeredAskKinds,
+    options,
+    req,
+    supportsTools,
+    surface,
+  });
+  const system = withTurnSystemPrompt({
+    askKinds: offeredAskKinds,
+    surface,
+    systemPrompt: effectiveSystemPrompt,
+  });
 
   sink.open();
 
@@ -1106,4 +1162,55 @@ export const runChatTurn = async ({
 
     sink.emit({error: error instanceof Error ? error.message : "Unknown error"});
   }
+};
+
+interface BufferedTurn {
+  ask?: ChatTurnAskEvent["ask"];
+  done?: ChatTurnDoneEvent;
+  errors: string[];
+  texts: string[];
+}
+
+/**
+ * Runs a turn to completion and returns it as one JSON result, for clients that do not read
+ * server-sent events. Nothing is written to the response while the turn runs, so a client that
+ * disconnects does not stop it: the turn still finishes and saves.
+ */
+export const runBufferedChatTurn = async ({
+  body,
+  options,
+  req,
+}: {
+  body: Record<string, unknown> & {historyId: string};
+  options: GptRouteOptions;
+  req: express.Request;
+}): Promise<TurnResult> => {
+  const turn: BufferedTurn = {errors: [], texts: []};
+  await runChatTurn({
+    body,
+    options,
+    req,
+    sink: {
+      emit: (event) => {
+        if ("text" in event) {
+          turn.texts.push(event.text);
+        } else if ("error" in event) {
+          turn.errors.push(event.error);
+        } else if ("ask" in event) {
+          turn.ask = event.ask;
+        } else if ("done" in event) {
+          turn.done = event;
+        }
+      },
+      open: () => {},
+    },
+  });
+  const {ask, done, errors, texts} = turn;
+  return {
+    ...(errors.length > 0 ? {error: errors.join("\n")} : {}),
+    historyId: done?.historyId ?? body.historyId,
+    ...(ask ? {pendingAsk: {kind: ask.kind, simple: ask.simple, toolCallId: ask.toolCallId}} : {}),
+    text: texts.join(""),
+    ...(done?.title ? {title: done.title} : {}),
+  };
 };

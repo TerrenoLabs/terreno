@@ -1,395 +1,56 @@
-import {afterEach, beforeAll, describe, expect, it, mock, spyOn} from "bun:test";
+import {afterEach, beforeAll, describe, expect, it, spyOn} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
-import {jsonSchema, type LanguageModel, type Tool, tool} from "ai";
+import {askPromptSection} from "@terreno/blocks";
+import {jsonSchema, type Tool, tool} from "ai";
 import express from "express";
 
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
-import {AIService} from "../service/aiService";
 import type {MCPService} from "../service/mcpService";
-import {TERRENO_ASKS_SYSTEM_PROMPT} from "../service/prompts";
+import {COMPACT_SURFACE_SYSTEM_PROMPT, TERRENO_ASKS_SYSTEM_PROMPT} from "../service/prompts";
+import {
+  type Agent,
+  buildApp,
+  conversationOf,
+  createPromptKeyedModel,
+  createScriptedModel,
+  DUPLICATE_ID_ASK_INPUT,
+  deferred,
+  LOOKUP_CALL,
+  loadHistory,
+  lookupPlans,
+  modelCall,
+  ONE_ASK_AT_A_TIME,
+  onlyHistoryId,
+  PLAN_ASK_CALL,
+  PLAN_ASK_INPUT,
+  PLAN_ASK_MODEL_CALL,
+  PLAN_ASK_ROW,
+  PLAN_SIMPLE_CARD,
+  pauseOnPlanAsk,
+  pendingAskOf,
+  REGION_ASK_CALL,
+  REGION_ASK_INPUT,
+  REGION_ASK_ROW,
+  REGION_SIMPLE_CARD,
+  rowsOf,
+  streamPrompt,
+  systemPromptOf,
+  TEAM_ANSWER,
+  textStep,
+  toolCallStep,
+  toolNamesOf,
+  USER_PROMPT,
+} from "../tests/chatHarness";
 import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
-import type {GptHistoryDocument, GptRouteOptions} from "../types";
+import type {GptHistoryDocument} from "../types";
 import {addGptRoutes} from "./gpt";
 import {addGptHistoryRoutes} from "./gptHistories";
-
-type ModelStreamPart = {type: string; [key: string]: unknown};
-
-interface ModelPromptMessage {
-  content: unknown;
-  role: string;
-}
-
-interface ModelTool {
-  description?: string;
-  inputSchema: Record<string, unknown>;
-  name: string;
-}
-
-interface ModelCallOptions {
-  prompt: ModelPromptMessage[];
-  toolChoice?: unknown;
-  tools?: ModelTool[];
-}
-
-interface ScriptedToolCall {
-  input: unknown;
-  toolCallId: string;
-  toolName: string;
-}
 
 interface OpenApiProperty {
   properties?: Record<string, unknown>;
   readOnly?: boolean;
 }
-
-type SseEvent = Record<string, unknown>;
-type Agent = Awaited<ReturnType<typeof authAsUser>>;
-
-const USAGE = {inputTokens: 1, outputTokens: 1, totalTokens: 2};
-
-const PLAN_ASK_INPUT = {
-  default: ["team"],
-  options: [
-    {description: "$0, one seat", id: "starter", label: "Starter"},
-    {description: "$20 per seat", id: "team", label: "Team"},
-    {id: "enterprise", label: "Enterprise"},
-  ],
-  prompt: "Which plan should I set up?",
-  select: "one",
-  submitLabel: "Set up plan",
-  title: "Choose a plan",
-};
-
-const PLAN_SIMPLE_CARD = {
-  buttons: [
-    {
-      id: "option:team",
-      label: "Team",
-      response: {action: "accept", content: {selected: ["team"]}},
-      style: "primary",
-    },
-    {
-      id: "option:starter",
-      label: "Starter",
-      response: {action: "accept", content: {selected: ["starter"]}},
-      style: "default",
-    },
-    {
-      id: "option:enterprise",
-      label: "Enterprise",
-      response: {action: "accept", content: {selected: ["enterprise"]}},
-      style: "default",
-    },
-  ],
-  handoff: false,
-  kind: "choice",
-  text: "Which plan should I set up?",
-  title: "Choose a plan",
-  toolCallId: "call_plan",
-};
-
-const REGION_ASK_INPUT = {
-  options: [
-    {id: "us", label: "US"},
-    {id: "eu", label: "EU"},
-  ],
-  prompt: "Where should your data live?",
-  select: "one",
-};
-
-const REGION_SIMPLE_CARD = {
-  buttons: [
-    {
-      id: "option:us",
-      label: "US",
-      response: {action: "accept", content: {selected: ["us"]}},
-      style: "default",
-    },
-    {
-      id: "option:eu",
-      label: "EU",
-      response: {action: "accept", content: {selected: ["eu"]}},
-      style: "default",
-    },
-    {id: "skip", label: "Skip", response: {action: "decline"}, style: "cancel"},
-  ],
-  handoff: false,
-  kind: "choice",
-  text: "Where should your data live?",
-  toolCallId: "call_region",
-};
-
-const DUPLICATE_ID_ASK_INPUT = {
-  options: [
-    {id: "team", label: "Team"},
-    {id: "team", label: "Team (annual)"},
-  ],
-  prompt: "Which plan?",
-  select: "one",
-};
-
-const PLAN_ASK_CALL = {input: PLAN_ASK_INPUT, toolCallId: "call_plan", toolName: "ask_choice"};
-const REGION_ASK_CALL = {
-  input: REGION_ASK_INPUT,
-  toolCallId: "call_region",
-  toolName: "ask_choice",
-};
-const LOOKUP_CALL = {input: {}, toolCallId: "call_lookup", toolName: "lookupPlans"};
-
-const PLAN_ASK_ROW = {
-  args: PLAN_ASK_INPUT,
-  text: "Tool call: ask_choice",
-  toolCallId: "call_plan",
-  toolName: "ask_choice",
-  type: "tool-call",
-};
-
-const REGION_ASK_ROW = {
-  args: REGION_ASK_INPUT,
-  text: "Tool call: ask_choice",
-  toolCallId: "call_region",
-  toolName: "ask_choice",
-  type: "tool-call",
-};
-
-const ONE_ASK_AT_A_TIME = {action: "cancel", reason: "one_ask_at_a_time"};
-
-const PLAN_ASK_MODEL_CALL = {
-  input: PLAN_ASK_INPUT,
-  toolCallId: "call_plan",
-  toolName: "ask_choice",
-  type: "tool-call",
-};
-
-const TEAM_ANSWER = {action: "accept", content: {selected: ["team"]}};
-
-const USER_PROMPT = "Set up my workspace";
-
-const textStep = (text: string): ModelStreamPart[] => [
-  {id: "text-1", type: "text-start"},
-  {delta: text, id: "text-1", type: "text-delta"},
-  {id: "text-1", type: "text-end"},
-  {finishReason: "stop", type: "finish", usage: USAGE},
-];
-
-const toolCallStep = (...calls: ScriptedToolCall[]): ModelStreamPart[] => [
-  ...calls.map((call) => ({
-    input: JSON.stringify(call.input),
-    toolCallId: call.toolCallId,
-    toolName: call.toolName,
-    type: "tool-call",
-  })),
-  {finishReason: "tool-calls", type: "finish", usage: USAGE},
-];
-
-const streamOf = (parts: ModelStreamPart[]): ReadableStream<ModelStreamPart> =>
-  new ReadableStream<ModelStreamPart>({
-    start(controller) {
-      for (const part of parts) {
-        controller.enqueue(part);
-      }
-      controller.close();
-    },
-  });
-
-/** A mock model that streams one scripted step per call and records each call's options. */
-const createScriptedModel = ({
-  modelId = "scripted-model",
-  steps,
-}: {
-  modelId?: string;
-  steps: ModelStreamPart[][];
-}) => {
-  const remaining = [...steps];
-  return {
-    doGenerate: mock(async () => ({
-      content: [{text: "Workspace setup", type: "text" as const}],
-      finishReason: "stop" as const,
-      usage: USAGE,
-    })),
-    doStream: mock(async (_options: ModelCallOptions) => {
-      const parts = remaining.shift();
-      if (!parts) {
-        throw new Error("The scripted model has no more steps");
-      }
-      return {stream: streamOf(parts)};
-    }),
-    modelId,
-    provider: "mock-provider",
-    specificationVersion: "v2" as const,
-    supportedUrls: {},
-  };
-};
-
-type ScriptedModel = ReturnType<typeof createScriptedModel>;
-
-interface Deferred {
-  promise: Promise<void>;
-  resolve: () => void;
-}
-
-const deferred = (): Deferred => {
-  let resolve = (): void => {};
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return {promise, resolve};
-};
-
-const lastUserTextOf = (call: ModelCallOptions): string => {
-  const content = call.prompt.findLast((message) => message.role === "user")?.content;
-  if (!Array.isArray(content)) {
-    return String(content ?? "");
-  }
-  return content.map((part) => (part as {text?: string}).text ?? "").join("");
-};
-
-interface ModelHold {
-  arrived: Deferred;
-  release: Promise<void>;
-}
-
-/**
- * A scripted model for turns that run at the same time: each call streams the next step scripted
- * for its last user message. A call for a prompt in `holds` resolves `arrived`, then waits for
- * `release`, so a test can order two turns' loads, model calls, and saves.
- */
-const createPromptKeyedModel = ({
-  holds = {},
-  steps,
-}: {
-  holds?: Record<string, ModelHold>;
-  steps: Record<string, ModelStreamPart[][]>;
-}): ScriptedModel => {
-  const remaining = new Map(Object.entries(steps).map(([prompt, list]) => [prompt, [...list]]));
-  const model = createScriptedModel({steps: []});
-  model.doStream.mockImplementation(async (options: ModelCallOptions) => {
-    const prompt = lastUserTextOf(options);
-    const hold = holds[prompt];
-    if (hold) {
-      hold.arrived.resolve();
-      await hold.release;
-    }
-    const parts = remaining.get(prompt)?.shift();
-    if (!parts) {
-      throw new Error(`The scripted model has no step for "${prompt}"`);
-    }
-    return {stream: streamOf(parts)};
-  });
-  return model;
-};
-
-const modelCall = (model: ScriptedModel, index: number): ModelCallOptions => {
-  const call = model.doStream.mock.calls[index];
-  if (!call) {
-    throw new Error(`The model was not called ${index + 1} times`);
-  }
-  return call[0];
-};
-
-const systemPromptOf = (call: ModelCallOptions): unknown =>
-  call.prompt.find((message) => message.role === "system")?.content;
-
-const conversationOf = (call: ModelCallOptions): ModelPromptMessage[] =>
-  call.prompt.filter((message) => message.role !== "system");
-
-const toolNamesOf = (call: ModelCallOptions): string[] =>
-  (call.tools ?? []).map((offered) => offered.name);
-
-const lookupPlans = tool({
-  description: "Look up how many plans exist",
-  execute: async () => ({plans: 3}),
-  inputSchema: jsonSchema<Record<string, never>>({properties: {}, type: "object"}),
-});
-
-const buildApp = ({
-  model,
-  ...routeOptions
-}: {model: ScriptedModel} & Partial<GptRouteOptions>): express.Application =>
-  new TerrenoApp({
-    configureApp: (router, options) => {
-      addGptHistoryRoutes(router, options);
-      addGptRoutes(router, {
-        aiService: new AIService({model: model as unknown as LanguageModel}),
-        openApiOptions: options,
-        ...routeOptions,
-      });
-    },
-    skipListen: true,
-    userModel: UserModel,
-  }).build();
-
-type SseStream = {on: (event: string, handler: (chunk: Buffer) => void) => void};
-
-const collectSse = (
-  res: SseStream,
-  callback: (error: Error | null, body: string) => void
-): void => {
-  let body = "";
-  res.on("data", (chunk: Buffer) => {
-    body += chunk.toString();
-  });
-  res.on("end", () => callback(null, body));
-};
-
-const parseSse = (body: string): SseEvent[] =>
-  body
-    .split("\n\n")
-    .filter((chunk) => chunk.startsWith("data: "))
-    .map((chunk) => JSON.parse(chunk.slice("data: ".length)) as SseEvent);
-
-const streamPrompt = async (
-  agent: Agent,
-  body: Record<string, unknown>
-): Promise<{events: SseEvent[]; status: number}> => {
-  const res = await agent
-    .post("/gpt/prompt")
-    .send(body)
-    .buffer(true)
-    .parse(collectSse as never);
-  return {events: parseSse(res.body as string), status: res.status};
-};
-
-const loadHistory = async (historyId: string): Promise<GptHistoryDocument> => {
-  const history = await GptHistory.findById(historyId);
-  if (!history) {
-    throw new Error(`History ${historyId} not found`);
-  }
-  return history;
-};
-
-const plain = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
-
-/** The stored rows. Mongoose gives every row an empty `content` array; no row here has attachments. */
-const rowsOf = (history: GptHistoryDocument): Record<string, unknown>[] =>
-  (plain(history.prompts) as Record<string, unknown>[]).map(({content, ...row}) => {
-    expect(content).toEqual([]);
-    return row;
-  });
-
-/** The stored pending ask without its `created` timestamp, which the test cannot know. */
-const pendingAskOf = (history: GptHistoryDocument): unknown => {
-  if (!history.pendingAsk) {
-    return undefined;
-  }
-  expect(history.pendingAsk.created).toBeInstanceOf(Date);
-  const {created: _created, ...pendingAsk} = plain(history.pendingAsk) as Record<string, unknown>;
-  return pendingAsk;
-};
-
-const onlyHistoryId = async (): Promise<string> => {
-  const histories = await GptHistory.find({});
-  expect(histories).toHaveLength(1);
-  return histories[0]._id.toString();
-};
-
-/** Starts a conversation that pauses on the plan ask and returns its history id. */
-const pauseOnPlanAsk = async (agent: Agent): Promise<string> => {
-  const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
-  expect(events.map((event) => Object.keys(event)[0])).toEqual(["ask", "done"]);
-  return onlyHistoryId();
-};
 
 describe("/gpt/prompt asks", () => {
   beforeAll(async () => {
@@ -1630,6 +1291,164 @@ describe("/gpt/prompt asks", () => {
         {content: [{text: "Hi there", type: "text"}], role: "assistant"},
         {content: [{text: "Are you there?", type: "text"}], role: "user"},
       ]);
+    });
+  });
+
+  describe("compact surface", () => {
+    const COMPACT_ASKS_PROMPT = `${TERRENO_ASKS_SYSTEM_PROMPT}\n\n${askPromptSection({
+      kinds: ["choice"],
+      surface: "compact",
+    })}`;
+
+    const optionsSchemaOf = (call: ReturnType<typeof modelCall>): Record<string, unknown> => {
+      const properties = call.tools?.[0]?.inputSchema.properties as Record<string, unknown>;
+      return properties.options as Record<string, unknown>;
+    };
+
+    it("offers only the compact ask_choice and appends the compact line", async () => {
+      const model = createScriptedModel({steps: [textStep("Hello."), textStep("Hello.")]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      await streamPrompt(agent, {prompt: "Hi", surface: "compact", systemPrompt: "Be brief."});
+      await streamPrompt(agent, {prompt: "Hi", systemPrompt: "Be brief."});
+
+      const compact = modelCall(model, 0);
+      expect(toolNamesOf(compact)).toEqual(["ask_choice"]);
+      expect(optionsSchemaOf(compact)).toMatchObject({maxItems: 3, minItems: 2});
+      expect(optionsSchemaOf(compact).items).toMatchObject({
+        properties: {label: {maxLength: 20}},
+      });
+      expect(systemPromptOf(compact)).toBe(
+        `Be brief.\n\n${COMPACT_ASKS_PROMPT}\n\n${COMPACT_SURFACE_SYSTEM_PROMPT}`
+      );
+      const full = modelCall(model, 1);
+      expect(optionsSchemaOf(full)).toMatchObject({maxItems: 50});
+      expect(systemPromptOf(full)).not.toContain(COMPACT_SURFACE_SYSTEM_PROMPT);
+    });
+
+    it("sends a 4-option choice back as a tool error, then pauses on a card without handoff", async () => {
+      const wideAsk = {
+        ...REGION_ASK_INPUT,
+        options: ["us", "eu", "apac", "latam"].map((id) => ({id, label: id.toUpperCase()})),
+      };
+      const model = createScriptedModel({
+        steps: [
+          toolCallStep({input: wideAsk, toolCallId: "call_wide", toolName: "ask_choice"}),
+          toolCallStep(PLAN_ASK_CALL),
+        ],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const {events} = await streamPrompt(agent, {prompt: USER_PROMPT, surface: "compact"});
+
+      const historyId = await onlyHistoryId();
+      expect(events).toEqual([
+        {
+          ask: {
+            input: PLAN_ASK_INPUT,
+            kind: "choice",
+            simple: {...PLAN_SIMPLE_CARD, handoff: false},
+            toolCallId: "call_plan",
+          },
+        },
+        {done: true, historyId, pendingAsk: {toolCallId: "call_plan"}},
+      ]);
+      expect(conversationOf(modelCall(model, 1))[2]).toEqual({
+        content: [
+          {
+            output: {
+              type: "error-text",
+              value: expect.stringContaining("expected array to have <=3 items"),
+            },
+            toolCallId: "call_wide",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+        ],
+        role: "tool",
+      });
+      expect(systemPromptOf(modelCall(model, 1))).toEndWith(COMPACT_SURFACE_SYSTEM_PROMPT);
+    });
+
+    it("sends back an emoji label that a button would cut, though it is 20 code points or fewer", async () => {
+      const emojiAsk = {
+        ...REGION_ASK_INPUT,
+        options: [
+          {id: "party", label: "Party 🎉🎉🎉🎉🎉🎉🎉🎉"},
+          {id: "quiet", label: "Quiet"},
+        ],
+      };
+      const model = createScriptedModel({
+        steps: [
+          toolCallStep({input: emojiAsk, toolCallId: "call_emoji", toolName: "ask_choice"}),
+          textStep("Party or a quiet night?"),
+        ],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const {events} = await streamPrompt(agent, {prompt: "Plan my evening", surface: "compact"});
+
+      expect(events[0]).toEqual({text: "Party or a quiet night?"});
+      expect(conversationOf(modelCall(model, 1))[2]).toMatchObject({
+        content: [
+          {
+            output: {
+              type: "error-text",
+              value: expect.stringContaining("counting each emoji as 2 or more"),
+            },
+            toolCallId: "call_emoji",
+          },
+        ],
+      });
+      expect((await loadHistory(await onlyHistoryId())).pendingAsk).toBeUndefined();
+    });
+
+    it("appends the compact line when asks are off, and uses it alone without a system prompt", async () => {
+      const model = createScriptedModel({steps: [textStep("Hi."), textStep("Hi.")]});
+      const agent = await authAsUser(buildApp({model}), "notAdmin");
+
+      await streamPrompt(agent, {prompt: "Hi", surface: "compact", systemPrompt: "Be brief."});
+      await streamPrompt(agent, {prompt: "Hi", surface: "compact"});
+
+      expect(modelCall(model, 0).tools).toBeUndefined();
+      expect(systemPromptOf(modelCall(model, 0))).toBe(
+        `Be brief.\n\n${COMPACT_SURFACE_SYSTEM_PROMPT}`
+      );
+      expect(systemPromptOf(modelCall(model, 1))).toBe(COMPACT_SURFACE_SYSTEM_PROMPT);
+    });
+
+    it.each([
+      {name: "an unknown name", surface: "watch"},
+      {name: "a number", surface: 1},
+    ])("rejects a surface that is $name with a 400 before the turn starts", async ({surface}) => {
+      const model = createScriptedModel({steps: []});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const res = await agent.post("/gpt/prompt").send({prompt: "Hi", surface});
+
+      expect(res.status).toBe(400);
+      expect(res.body).toMatchObject({
+        detail: "Send one of: full, compact.",
+        title: "surface is not a known surface",
+      });
+      expect(model.doStream).not.toHaveBeenCalled();
+      expect(await GptHistory.countDocuments({})).toBe(0);
+    });
+
+    it("documents surface in the /gpt/prompt request body", async () => {
+      const agent = await authAsUser(
+        buildApp({asks: true, model: createScriptedModel({steps: []})}),
+        "notAdmin"
+      );
+
+      const res = await agent.get("/openapi.json");
+
+      const body = res.body.paths["/gpt/prompt"].post.requestBody.content["application/json"];
+      expect(body.schema.properties.surface).toMatchObject({
+        enum: ["full", "compact"],
+        type: "string",
+      });
+      expect(body.schema.properties.surface.description).toStartWith("Where the user answers.");
     });
   });
 

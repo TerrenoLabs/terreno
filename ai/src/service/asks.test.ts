@@ -1,5 +1,5 @@
 import {describe, expect, it} from "bun:test";
-import type {AskKind} from "@terreno/blocks";
+import {type AskKind, askPromptSection} from "@terreno/blocks";
 import {asSchema, jsonSchema, type ModelMessage, type Tool, tool} from "ai";
 
 import {
@@ -135,6 +135,30 @@ describe("asks", () => {
     it("creates no tools when no kinds are enabled", () => {
       expect(createAskTools({kinds: []})).toEqual({});
     });
+
+    it("takes the compact input schema on the compact surface", async () => {
+      const inputSchema = asSchema(
+        createAskTools({kinds: ["choice"], surface: "compact"}).ask_choice.inputSchema
+      );
+      const fourOptions = {
+        ...PLAN_ASK_INPUT,
+        options: ["a", "b", "c", "d"].map((id) => ({id, label: id.toUpperCase()})),
+      };
+
+      expect(await inputSchema.validate?.(PLAN_ASK_INPUT)).toEqual({
+        success: true,
+        value: PLAN_ASK_INPUT,
+      });
+      expect(await inputSchema.validate?.(fourOptions)).toEqual({
+        error: expect.any(Error),
+        success: false,
+      });
+      expect(
+        await asSchema(createAskTools({kinds: ["choice"]}).ask_choice.inputSchema).validate?.(
+          fourOptions
+        )
+      ).toEqual({success: true, value: fourOptions});
+    });
   });
 
   describe("parseAsk", () => {
@@ -190,8 +214,14 @@ describe("asks", () => {
   });
 
   describe("buildAsksSystemPrompt", () => {
+    it("appends the compact section on the compact surface", () => {
+      expect(buildAsksSystemPrompt({kinds: ["choice"], surface: "compact"})).toBe(
+        `${TERRENO_ASKS_SYSTEM_PROMPT}\n\n${askPromptSection({kinds: ["choice"], surface: "compact"})}`
+      );
+    });
+
     it("appends the section for the enabled kinds to the asks prompt", () => {
-      expect(buildAsksSystemPrompt(["choice"])).toBe(
+      expect(buildAsksSystemPrompt({kinds: ["choice"]})).toBe(
         [
           TERRENO_ASKS_SYSTEM_PROMPT,
           "Ask tools you can call: ask_choice.",

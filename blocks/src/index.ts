@@ -1,33 +1,59 @@
 export type {AskErrorCode, AskValidationError} from "./asks/errors";
 export {ASK_ERROR_CODES} from "./asks/errors";
+export type {
+  AskResponseWithToolCallId,
+  PendingAskListItem,
+  PendingAskSummary,
+  TurnRequest,
+  TurnResult,
+} from "./asks/headless";
+export {
+  askResponseWithToolCallIdSchema,
+  askSurfaceSchema,
+  pendingAskListItemSchema,
+  pendingAskListSchema,
+  pendingAskSummarySchema,
+  turnRequestSchema,
+  turnResultSchema,
+} from "./asks/headless";
+export {askJsonSchemas} from "./asks/jsonSchema";
 export {ASK_LIMITS} from "./asks/limits";
 export {askPromptSection} from "./asks/prompt";
 export type {
   Ask,
   AskKind,
   AskResponse,
+  AskSurface,
   ChoiceAnswer,
   ChoiceAsk,
   ChoiceAskInput,
   ChoiceAskResponse,
   ChoiceOption,
+  CompactAskKind,
 } from "./asks/schema";
 export {
   ASK_CANCEL_REASONS,
   ASK_KINDS,
+  ASK_SURFACES,
   askAcceptResponseSchema,
   askCancelResponseSchema,
   askDeclineResponseSchema,
+  askInputSchemaFor,
   askInputSchemas,
+  askKindsForSurface,
   askOutputSchemas,
   askResponseSchema,
+  COMPACT_ASK_KINDS,
   choiceAnswerSchema,
   choiceAskInputSchema,
   choiceAskResponseSchema,
   choiceOptionSchema,
+  compactAskInputSchemas,
+  compactChoiceAskInputSchema,
 } from "./asks/schema";
 export type {SimpleCard, SimpleCardButton} from "./asks/simpleCard";
 export {
+  resolveButtonAnswer,
   SIMPLE_CARD_BUTTON_STYLES,
   simpleCardButtonSchema,
   simpleCardSchema,

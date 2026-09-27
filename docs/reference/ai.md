@@ -64,7 +64,7 @@ src/
     project.ts             # GPT project + memories
   routes/
     gpt.ts                 # Streaming chat, remix, tools, ratings
-    gptHistories.ts        # History CRUD
+    gptHistories.ts        # History CRUD, headless pendingAsks and turn actions
     aiRequestsExplorer.ts  # Admin request explorer
     files.ts               # File upload/signed URL/delete
     projects.ts            # Project CRUD + memories
@@ -72,7 +72,7 @@ src/
   service/
     aiService.ts           # Provider-agnostic AI service
     asks.ts                # Ask tools, reserved ask_ names, paused-turn replay
-    chatTurn.ts            # Chat turn runner behind /gpt/prompt (writes to an event sink)
+    chatTurn.ts            # Chat turn runner behind /gpt/prompt (SSE sink) and turn (buffered JSON)
     fileStorage.ts         # GCS upload helper
     getMCPTools.ts         # modelRouter MCP tools as Vercel AI SDK tools
     mcpService.ts          # MCP client connections
@@ -94,8 +94,8 @@ src/
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
 - **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
-- **Prompts:** `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TERRENO_ASKS_SYSTEM_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
-- **Asks:** `createAskTools`, `TERRENO_ASKS_SYSTEM_PROMPT`, types `AsksOptions`, `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus`, and `Ask`, `AskKind`, `AskResponse`, `AskValidationError`, `SimpleCard`, `SimpleCardButton` re-exported from `@terreno/blocks` ([Agent UI Asks](agent-ui-asks.md))
+- **Prompts:** `COMPACT_SURFACE_SYSTEM_PROMPT`, `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TERRENO_ASKS_SYSTEM_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
+- **Asks:** `createAskTools({kinds, surface?})`, `TERRENO_ASKS_SYSTEM_PROMPT`, `COMPACT_SURFACE_SYSTEM_PROMPT`, types `AsksOptions`, `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus`, and `Ask`, `AskKind`, `AskResponse`, `AskValidationError`, `SimpleCard`, `SimpleCardButton` re-exported from `@terreno/blocks` ([Agent UI Asks](agent-ui-asks.md))
 - **Web search:** `WebSearchProvider`, `WebSearchResult` types
 
 ## AIService
@@ -212,10 +212,10 @@ Conversation history with multi-modal prompts.
 | Field | Type | Description |
 |-------|------|-------------|
 | `userId` | ObjectId | Owner (required) |
-| `title` | string? | Auto-generated on first `/gpt/prompt` response when empty |
+| `title` | string? | Auto-generated on the first chat turn's reply (`/gpt/prompt` or `turn`) when empty |
 | `projectId` | ObjectId? | Optional project association |
 | `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields (`toolCallId`, `toolName`, `args`, `result`), and `ask: {kind, status}` on ask `tool-call` rows (`status`: `pending` \| `answered` \| `cancelled`) |
-| `pendingAsk` | object? | The ask the conversation waits on: `toolCallId`, `kind`, `input`, `simple`, `promptIndex`, `responseMessages`, `created`. Only `/gpt/prompt` sets and clears it; see [Agent UI Asks](agent-ui-asks.md#stored-state). |
+| `pendingAsk` | object? | The ask the conversation waits on: `toolCallId`, `kind`, `input`, `simple`, `promptIndex`, `responseMessages`, `created`. Only a chat turn (`/gpt/prompt` or the `turn` action) sets and clears it; see [Agent UI Asks](agent-ui-asks.md#stored-state). |
 
 **Virtual:** `ownerId` aliases `userId` for `Permissions.IsOwner`.
 
@@ -262,6 +262,8 @@ AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerMo
 
 Pass `asks: true` (or `{kinds: ["choice"]}`) to let the model ask the user typed questions in the chat. Asks are off by default; with them off, tools, system prompt, and SSE events are unchanged. See [Agent UI Asks](agent-ui-asks.md).
 
+With `asks` on, pass the same options to `addGptHistoryRoutes` as `chat` to add the non-streaming [headless endpoints](#addgpthistoryroutesrouter-options) for clients that do not read server-sent events.
+
 #### `/gpt/prompt` body
 
 | Field | Type | Description |
@@ -269,6 +271,7 @@ Pass `asks: true` (or `{kinds: ["choice"]}`) to let the model ask the user typed
 | `prompt` | string | The user's message. Required unless `askResponse` is sent. |
 | `historyId` | string? | Continue this conversation; omit to start one. Required with `askResponse`. |
 | `askResponse` | object? | The answer to the pending ask: `{toolCallId, action, content?, reason?}`. Read only when `asks` is on. Send it instead of `prompt`, without `attachments`. See [Answer an ask](agent-ui-asks.md#answer-an-ask). |
+| `surface` | `"full"` \| `"compact"`? | Where the user reads and answers. Default `"full"`. `"compact"` is a watch or another small screen: the model gets only button-sized asks and is asked for replies of at most two short sentences. Any other value returns 400. See [Compact surface](agent-ui-asks.md#compact-surface). |
 | `systemPrompt` | string? | System prompt for this turn; project context and the Langfuse prompt are prepended |
 | `attachments` | array? | `{type: "image" \| "file", url, mimeType, filename?}` items added to the user message |
 | `model` | string? | Model id passed to `createModelFn` or `createServerModelFn` |
@@ -303,7 +306,16 @@ CRUD at `/gpt/histories` via `modelRouter`:
 | Create, List | `IsAuthenticated` |
 | Read, Update, Delete | `IsOwner` |
 
-Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`. Create and update bodies drop `pendingAsk` (including dotted `pendingAsk.*` paths), so only `/gpt/prompt` writes it; the OpenAPI spec marks it `readOnly` on create and update.
+Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`. Create sets `userId` to the caller, so `{}` is a valid create body even when the app validates request bodies. Create and update bodies drop `pendingAsk` (including dotted `pendingAsk.*` paths), so only a chat turn writes it; the OpenAPI spec marks it `readOnly` on create and update.
+
+Pass `chat`, the options given to `addGptRoutes`, to add two headless actions for clients that do not read server-sent events, such as a watch app. Both exist only when `chat` turns `asks` on: without `chat`, or with `asks` off, neither action exists, so a host that never turned asks on gets no new endpoints. `AiApp` adds them when its `asks` option is set.
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/gpt/histories/pendingAsks` | GET | `IsAuthenticated` | The caller's pending asks with their simple cards, newest first |
+| `/gpt/histories/:id/turn` | POST | `IsOwner`; admins who do not own the history get 403 | Runs one chat turn to completion with the `chat` options and returns it as JSON. Body: one of `{prompt}`, `{askResponse}`, or `{toolCallId, buttonId}`, plus `surface`. The turn finishes and saves even if the client disconnects. |
+
+Bodies, results, and errors: [Headless endpoints](agent-ui-asks.md#headless-endpoints).
 
 ### addProjectRoutes(router, options?)
 
@@ -363,7 +375,7 @@ new AiApp({
 | Option | Description |
 |--------|-------------|
 | `aiService` | Pre-configured server-wide AI service |
-| `asks` | Let the model ask the user typed questions in chat: `true` or `{kinds}`. Passed to `addGptRoutes`; see [Agent UI Asks](agent-ui-asks.md) |
+| `asks` | Let the model ask the user typed questions in chat: `true` or `{kinds}`. Passed to `addGptRoutes`, and adds the headless `pendingAsks` and `turn` actions to `/gpt/histories`; see [Agent UI Asks](agent-ui-asks.md) |
 | `createModelFn` | Build model from per-request `x-ai-api-key` |
 | `createServerModelFn` | Server-side model factory (e.g. Vertex ADC) without per-request key |
 | `demoMode` | Not read. The routes send a canned demo reply whenever no AI service resolves |
@@ -512,7 +524,7 @@ new TerrenoApp({userModel: User})
   .start();
 ```
 
-Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. inside `addRoutes`.
+Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. inside `addRoutes`. With `asks` on, pass the chat options to `addGptHistoryRoutes` as `chat` to keep the headless endpoints.
 
 ## Environment variables
 

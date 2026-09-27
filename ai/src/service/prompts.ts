@@ -22,6 +22,15 @@ export const TERRENO_ASKS_SYSTEM_PROMPT =
   "asked more than once in one step.\n" +
   "After a decline or a cancel, do not ask the same question again unless the user asks you to.";
 
+/**
+ * Appended to the chat system prompt when a request sends `surface: "compact"`, because the user
+ * reads replies and answers asks on a small screen. With asks on, the asks section before it
+ * offers only the compact ask tools.
+ */
+export const COMPACT_SURFACE_SYSTEM_PROMPT =
+  "The user is on a small screen, such as a watch. Keep each reply to at most two short " +
+  "sentences, and ask only yes-or-no questions or questions with up to three short options.";
+
 export const ASK_CHOICE_TOOL_DESCRIPTION =
   "Ask the user to pick one option from a list you provide. The chat shows the options as a " +
   "control and returns the user's answer as this tool's result. Use it instead of asking in plain " +

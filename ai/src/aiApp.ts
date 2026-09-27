@@ -16,7 +16,10 @@ import type {AsksOptions} from "./types";
 export interface AiAppOptions {
   /** Pre-configured AIService instance. Optional when using per-request keys or demo mode. */
   aiService?: AIService;
-  /** Let the model ask the user typed questions in chat. Passed through to `addGptRoutes`. */
+  /**
+   * Let the model ask the user typed questions in chat. Passed through to `addGptRoutes`, and adds
+   * the headless `pendingAsks` and `turn` actions to `/gpt/histories`.
+   */
   asks?: boolean | AsksOptions;
   /** Factory function to create a LanguageModel from a per-request API key (sent via x-ai-api-key header). */
   createModelFn?: (apiKey: string, modelId?: string) => LanguageModel;
@@ -92,8 +95,7 @@ export class AiApp implements TerrenoPlugin {
       tools,
     } = this.options;
 
-    addGptHistoryRoutes(router, {openApiOptions});
-    addGptRoutes(router, {
+    const chat = {
       aiService,
       asks,
       createModelFn,
@@ -105,7 +107,9 @@ export class AiApp implements TerrenoPlugin {
       titleModelId,
       toolChoice,
       tools,
-    });
+    };
+    addGptHistoryRoutes(router, {chat, openApiOptions});
+    addGptRoutes(router, chat);
     addAiRequestsExplorerRoutes(router, {openApiOptions});
     addProjectRoutes(router, {openApiOptions});
 

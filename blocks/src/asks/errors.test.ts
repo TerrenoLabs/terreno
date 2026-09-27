@@ -2,6 +2,7 @@ import {describe, expect, it} from "bun:test";
 import {z} from "zod";
 import {ASK_ERROR_CODES, type AskErrorCode, finalizeAskErrors, issuesToAskErrors} from "./errors";
 import type {ChoiceAskInput} from "./schema";
+import {resolveButtonAnswer, toSimpleCard} from "./simpleCard";
 import {validateAskInput} from "./validateInput";
 import {validateAskResponse} from "./validateResponse";
 
@@ -40,6 +41,18 @@ describe("ASK_ERROR_CODES", () => {
           {id: "red", label: "Crimson"},
         ],
       }),
+    DUPLICATE_LABEL: () =>
+      validateAskInput({
+        input: {
+          ...INPUT,
+          options: [
+            {id: "red", label: "Red"},
+            {id: "crimson", label: "Red"},
+          ],
+        },
+        kind: "choice",
+        surface: "compact",
+      }).map((error) => error.code),
     INVALID_ENUM: () => inputCodes({...INPUT, select: "many"}),
     INVALID_FORMAT: () =>
       inputCodes({
@@ -64,11 +77,16 @@ describe("ASK_ERROR_CODES", () => {
         })),
       }),
     TOO_SHORT: () => inputCodes({...INPUT, prompt: ""}),
+    UNKNOWN_BUTTON: () =>
+      resolveButtonAnswer({
+        buttonId: "option:green",
+        card: toSimpleCard({input: INPUT, kind: "choice", toolCallId: "call_1"}),
+      }).errors.map((error) => error.code),
     UNKNOWN_KEY: () => inputCodes({...INPUT, color: "red"}),
   };
 
   for (const code of Object.keys(ASK_ERROR_CODES) as AskErrorCode[]) {
-    it(`${code} is returned by a validator`, () => {
+    it(`${code} is returned by a check`, () => {
       expect(producers[code]()).toEqual([code]);
     });
   }

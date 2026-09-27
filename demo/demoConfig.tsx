@@ -78,6 +78,7 @@ import {SignatureConfiguration} from "@story-config/Signature.config";
 import {SignatureCaptureFieldConfiguration} from "@story-config/SignatureCaptureField.config";
 import {SignatureFieldConfiguration} from "@story-config/SignatureField.config";
 import {SignUpScreenConfiguration} from "@story-config/SignUpScreen.config";
+import {SimpleAskCardConfiguration} from "@story-config/SimpleAskCard.config";
 import {SimpleContentConfiguration} from "@story-config/SimpleContent.config";
 import {SliderConfiguration} from "@story-config/Slider.config";
 import {SocialLoginButtonConfiguration} from "@story-config/SocialLoginButton.config";
@@ -344,6 +345,7 @@ const Config: DemoConfigurationBase[] = [
   SidebarNavigationExpoRouterConfiguration,
   SideDrawerConfiguration,
   SignUpScreenConfiguration,
+  SimpleAskCardConfiguration,
   SimpleContentConfiguration,
   SignatureConfiguration,
   SignatureCaptureFieldConfiguration,

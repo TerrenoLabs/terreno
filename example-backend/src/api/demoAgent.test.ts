@@ -1,5 +1,12 @@
 import {afterAll, beforeAll, describe, expect, it} from "bun:test";
-import {addGptRoutes, createAskTools, GptHistory, TITLE_GENERATION_PROMPT} from "@terreno/ai";
+import {
+  addGptHistoryRoutes,
+  addGptRoutes,
+  COMPACT_SURFACE_SYSTEM_PROMPT,
+  createAskTools,
+  GptHistory,
+  TITLE_GENERATION_PROMPT,
+} from "@terreno/ai";
 import {
   configureOpenApiValidator,
   generateTokens,
@@ -15,14 +22,32 @@ import type {UserDocument} from "../types/models/userTypes";
 import {createDemoAgentModel, createDemoAgentService, DEMO_AGENT_MODEL_ID} from "./demoAgent";
 
 const ASK_TOOLS = createAskTools({kinds: ["choice"]});
+const COMPACT_ASK_TOOLS = createAskTools({kinds: ["choice"], surface: "compact"});
 
-const askFor = async (prompt: string) => {
-  const result = streamText({model: createDemoAgentModel(), prompt, tools: ASK_TOOLS});
+interface SurfaceOptions {
+  /** Calls the model the way a `surface: "compact"` turn does: the compact line and compact ask tools. */
+  isCompact?: boolean;
+}
+
+const surfaceCallOptions = ({isCompact = false}: SurfaceOptions) => ({
+  system: isCompact ? COMPACT_SURFACE_SYSTEM_PROMPT : undefined,
+  tools: isCompact ? COMPACT_ASK_TOOLS : ASK_TOOLS,
+});
+
+const askFor = async (prompt: string, surface: SurfaceOptions = {}) => {
+  const result = streamText({
+    model: createDemoAgentModel(),
+    prompt,
+    ...surfaceCallOptions(surface),
+  });
   return {text: await result.text, toolCalls: await result.toolCalls};
 };
 
-const replyTo = async (response: Record<string, unknown>): Promise<string> => {
-  const {toolCalls} = await askFor("Help me pick a plan");
+const replyTo = async (
+  response: Record<string, unknown>,
+  surface: SurfaceOptions = {}
+): Promise<string> => {
+  const {toolCalls} = await askFor("Help me pick a plan", surface);
   const [call] = toolCalls;
   if (!call) {
     throw new Error("The demo agent did not ask");
@@ -52,7 +77,11 @@ const replyTo = async (response: Record<string, unknown>): Promise<string> => {
       role: "tool",
     },
   ];
-  const result = streamText({messages, model: createDemoAgentModel(), tools: ASK_TOOLS});
+  const result = streamText({
+    messages,
+    model: createDemoAgentModel(),
+    ...surfaceCallOptions(surface),
+  });
   return result.text;
 };
 
@@ -151,7 +180,58 @@ describe("demo agent", () => {
   });
 });
 
-describe("demo agent through /gpt/prompt", () => {
+describe("demo agent on the compact surface", () => {
+  it("asks the plan question with input the compact ask tool accepts", async () => {
+    const {text, toolCalls} = await askFor("Help me pick a plan", {isCompact: true});
+
+    expect(text).toBe("");
+    expect(toolCalls).toHaveLength(1);
+    const [call] = toolCalls;
+    if (!call) {
+      throw new Error("The demo agent did not ask");
+    }
+    expect(call.toolName).toBe("ask_choice");
+    expect(call.invalid).toBeFalsy();
+    const input = call.input as {options: {label: string}[]};
+    expect(input.options.map((option) => option.label)).toEqual(["Starter", "Team", "Enterprise"]);
+  });
+
+  it("replies to the picked plan in two short sentences without markdown", async () => {
+    const text = await replyTo(
+      {action: "accept", content: {selected: ["enterprise"]}},
+      {isCompact: true}
+    );
+
+    expect(text).toBe("You picked the Enterprise plan. A real agent would set it up now.");
+  });
+
+  it("acknowledges a skipped plan question in one sentence", async () => {
+    expect(await replyTo({action: "decline"}, {isCompact: true})).toBe(
+      "OK, I skipped the plan for now."
+    );
+  });
+
+  it("explains how to try an ask in two short sentences", async () => {
+    const {text, toolCalls} = await askFor("Hello there", {isCompact: true});
+
+    expect(toolCalls).toHaveLength(0);
+    expect(text).toBe(`I'm the Terreno demo agent. Say "help me pick a plan" to choose a plan.`);
+  });
+
+  it("says asks are off in one sentence when the route offers no ask tool", async () => {
+    const result = streamText({
+      model: createDemoAgentModel(),
+      prompt: "Help me pick a plan",
+      system: COMPACT_SURFACE_SYSTEM_PROMPT,
+    });
+
+    expect(await result.text).toBe(
+      "Asks are turned off on this server, so I cannot ask you to choose."
+    );
+  });
+});
+
+describe("demo agent through the chat routes", () => {
   let app: ReturnType<TerrenoApp["build"]>;
 
   const signIn = async (): Promise<string> => {
@@ -175,11 +255,9 @@ describe("demo agent through /gpt/prompt", () => {
       .register({
         register: (expressApp, openApi) => {
           const router = express.Router();
-          addGptRoutes(router, {
-            aiService: createDemoAgentService(),
-            asks: true,
-            openApiOptions: {openApi},
-          });
+          const chat = {aiService: createDemoAgentService(), asks: true, openApiOptions: {openApi}};
+          addGptHistoryRoutes(router, {chat, openApiOptions: {openApi}});
+          addGptRoutes(router, chat);
           expressApp.use(router);
         },
       })
@@ -264,5 +342,59 @@ describe("demo agent through /gpt/prompt", () => {
     const text = events.map((event) => (typeof event.text === "string" ? event.text : "")).join("");
     expect(text).toContain('Say "help me pick a plan"');
     expect(events.some((event) => "ask" in event)).toBe(false);
+  });
+
+  it("answers the plan ask from a small screen with a button of its simple card", async () => {
+    const auth = {Authorization: `Bearer ${await signIn()}`};
+    const created = await supertest(app).post("/gpt/histories").set(auth).send({});
+    expect(created.status).toBe(201);
+    const historyId = created.body.data._id as string;
+    const turnPath = `/gpt/histories/${historyId}/turn`;
+
+    const asked = await supertest(app)
+      .post(turnPath)
+      .set(auth)
+      .send({prompt: "Help me pick a plan", surface: "compact"});
+    expect(asked.status).toBe(200);
+    expect(asked.body.data.text).toBe("");
+    const {pendingAsk} = asked.body.data as {
+      pendingAsk: {
+        kind: string;
+        simple: {buttons: {id: string}[]; handoff: boolean};
+        toolCallId: string;
+      };
+    };
+    expect(pendingAsk.kind).toBe("choice");
+    expect(pendingAsk.simple.handoff).toBe(false);
+    expect(pendingAsk.simple.buttons.map((button) => button.id)).toEqual([
+      "option:team",
+      "option:starter",
+      "option:enterprise",
+    ]);
+
+    const listed = await supertest(app).get("/gpt/histories/pendingAsks").set(auth);
+    expect(listed.status).toBe(200);
+    expect(listed.body.data).toEqual([
+      {
+        created: expect.any(String),
+        historyId,
+        kind: "choice",
+        simple: pendingAsk.simple,
+        toolCallId: pendingAsk.toolCallId,
+      },
+    ]);
+
+    const answered = await supertest(app)
+      .post(turnPath)
+      .set(auth)
+      .send({buttonId: "option:starter", surface: "compact", toolCallId: pendingAsk.toolCallId});
+    expect(answered.status).toBe(200);
+    expect(answered.body.data).toEqual({
+      historyId,
+      text: "You picked the Starter plan. A real agent would set it up now.",
+      title: "Choosing a plan",
+    });
+    const remaining = await supertest(app).get("/gpt/histories/pendingAsks").set(auth);
+    expect(remaining.body.data).toEqual([]);
   });
 });

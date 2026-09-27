@@ -5,6 +5,7 @@
     "includes": [
       "package.json",
       "src/**/*.ts",
+      "scripts/**/*.ts",
       "!!**/node_modules",
       "!!node_modules",
       "!!**/dist",

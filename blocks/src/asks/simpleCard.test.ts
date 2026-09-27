@@ -1,7 +1,8 @@
 import {describe, expect, it} from "bun:test";
 import {validAskFixtures} from "../tests/askFixtures";
 import type {ChoiceAskInput} from "./schema";
-import {simpleCardSchema, toSimpleCard} from "./simpleCard";
+import {resolveButtonAnswer, simpleCardSchema, toSimpleCard} from "./simpleCard";
+import {validateAskInput} from "./validateInput";
 import {validateAskResponse} from "./validateResponse";
 
 const TOOL_CALL_ID = "call_fixture";
@@ -142,6 +143,146 @@ describe("the rule-table row map", () => {
         expect(fixture.input.options.length).toBeGreaterThan(3);
       }
     }
+  });
+});
+
+const COMPACT_LABEL_SETS = [
+  ["Yes", "No"],
+  ["Twenty characters!!!", "Exactly twenty chars"],
+  ["Party 🎉🎉🎉🎉🎉🎉🎉", "Quiet night 🌙"],
+  ["Starter", "Team", "Enterprise"],
+  ["A", "B", "C"],
+];
+
+const LONG_PROMPT = Array.from({length: 100}, () => "word").join(" ");
+
+/** Every combination of labels, default, allowDecline, title, and prompt length. */
+const generatedCompactAsks = (): ChoiceAskInput[] =>
+  COMPACT_LABEL_SETS.flatMap((labels) => {
+    const options = labels.map((label, index) => ({id: `option-${index}`, label}));
+    const defaults = [undefined, ...options.map((option) => [option.id])];
+    return defaults.flatMap((defaultIds) =>
+      [undefined, true, false].flatMap((allowDecline) =>
+        [undefined, "t".repeat(80)].flatMap((title) =>
+          ["Pick one.", LONG_PROMPT].map(
+            (prompt): ChoiceAskInput => ({
+              options,
+              prompt,
+              select: "one",
+              ...(allowDecline === undefined ? {} : {allowDecline}),
+              ...(defaultIds === undefined ? {} : {default: defaultIds}),
+              ...(title === undefined ? {} : {title}),
+            })
+          )
+        )
+      )
+    );
+  });
+
+const compactFixtureAsks = (): ChoiceAskInput[] =>
+  validAskFixtures()
+    .filter(
+      (fixture) =>
+        validateAskInput({input: fixture.input, kind: fixture.kind, surface: "compact"}).length ===
+        0
+    )
+    .map((fixture) => fixture.input);
+
+describe("toSimpleCard properties over compact asks", () => {
+  const asks = [...generatedCompactAsks(), ...compactFixtureAsks()];
+  const cards = asks.map((input) => ({
+    card: toSimpleCard({input, kind: "choice", toolCallId: TOOL_CALL_ID}),
+    input,
+  }));
+
+  it("covers generated asks and the compact fixtures", () => {
+    expect(generatedCompactAsks().length).toBeGreaterThan(100);
+    expect(compactFixtureAsks().length).toBe(3);
+  });
+
+  it("only generates asks that pass the compact rules", () => {
+    for (const input of asks) {
+      expect(validateAskInput({input, kind: "choice", surface: "compact"})).toEqual([]);
+    }
+  });
+
+  it("derives cards that pass simpleCardSchema", () => {
+    for (const {card} of cards) {
+      expect(simpleCardSchema.safeParse(card).success).toBe(true);
+    }
+  });
+
+  it("never hands off", () => {
+    for (const {card} of cards) {
+      expect(card.handoff).toBe(false);
+    }
+  });
+
+  it("follows the optionsFit row of the rule table", () => {
+    for (const {card, input} of cards) {
+      expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
+        buttonsForRow(input, "optionsFit")
+      );
+    }
+  });
+
+  it("shows every option's label uncut", () => {
+    for (const {card, input} of cards) {
+      for (const option of input.options) {
+        expect(card.buttons.find((button) => button.id === `option:${option.id}`)?.label).toBe(
+          option.label
+        );
+      }
+    }
+  });
+
+  it("only has buttons whose response is a valid answer to the ask", () => {
+    for (const {card, input} of cards) {
+      for (const button of card.buttons) {
+        expect(validateAskResponse({input, kind: "choice", response: button.response})).toEqual([]);
+      }
+    }
+  });
+});
+
+describe("resolveButtonAnswer", () => {
+  const plan = validAskFixtures().find((fixture) => fixture.name === "choice-plan-with-default");
+  if (!plan) {
+    throw new Error("valid/choice-plan-with-default is missing.");
+  }
+  const card = toSimpleCard({input: plan.input, kind: plan.kind, toolCallId: TOOL_CALL_ID});
+
+  it("returns the response stored on each button", () => {
+    for (const button of card.buttons) {
+      expect(resolveButtonAnswer({buttonId: button.id, card})).toEqual({
+        errors: [],
+        response: button.response,
+      });
+    }
+  });
+
+  it("returns UNKNOWN_BUTTON with the card's button ids for any other id", () => {
+    expect(resolveButtonAnswer({buttonId: "option:gold", card})).toEqual({
+      errors: [
+        {
+          code: "UNKNOWN_BUTTON",
+          fix: 'Send the id of one of the card\'s buttons: "option:team", "option:starter", "option:enterprise".',
+          message: 'Button "option:gold" is not on the pending ask\'s simple card.',
+          path: "buttonId",
+        },
+      ],
+    });
+  });
+
+  it("points to a full answer when the card has no buttons", () => {
+    expect(resolveButtonAnswer({buttonId: "skip", card: {...card, buttons: []}}).errors).toEqual([
+      {
+        code: "UNKNOWN_BUTTON",
+        fix: "The card has no buttons. Send a full askResponse instead.",
+        message: 'Button "skip" is not on the pending ask\'s simple card.',
+        path: "buttonId",
+      },
+    ]);
   });
 });
 

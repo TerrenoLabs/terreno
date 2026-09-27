@@ -1,11 +1,15 @@
 import type {z} from "zod";
 import {ASK_LIMITS} from "./limits";
 
-/** Every code `validateAskInput` and `validateAskResponse` can return, with its meaning. */
+/**
+ * Every ask error code, with its meaning. `validateAskInput` and `validateAskResponse` return all
+ * of them except `UNKNOWN_BUTTON`, which the headless `turn` endpoint returns.
+ */
 export const ASK_ERROR_CODES = {
   DECLINE_NOT_ALLOWED: "The answer skips an ask that does not allow skipping.",
   DEFAULT_NOT_IN_OPTIONS: "A default names an option id that the ask does not offer.",
   DUPLICATE_ID: "Two options share the same id.",
+  DUPLICATE_LABEL: "Two options of a compact ask share the same label.",
   INVALID_ENUM: "A value is not one of the allowed values.",
   INVALID_FORMAT: "A string does not match its required format.",
   INVALID_TYPE: "A value has the wrong type.",
@@ -16,6 +20,7 @@ export const ASK_ERROR_CODES = {
   TOO_LONG: "A string is longer than allowed.",
   TOO_MANY: "A list has more items than allowed.",
   TOO_SHORT: "A string is empty or only whitespace.",
+  UNKNOWN_BUTTON: "The pressed button is not on the pending ask's simple card.",
   UNKNOWN_KEY: "An object has a field that its schema does not define.",
 } as const;
 

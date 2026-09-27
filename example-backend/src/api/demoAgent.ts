@@ -1,5 +1,11 @@
 import {randomUUID} from "node:crypto";
-import {AIService, type Ask, type AskResponse, TITLE_GENERATION_PROMPT} from "@terreno/ai";
+import {
+  AIService,
+  type Ask,
+  type AskResponse,
+  COMPACT_SURFACE_SYSTEM_PROMPT,
+  TITLE_GENERATION_PROMPT,
+} from "@terreno/ai";
 import type {LanguageModel} from "ai";
 
 /** The AI SDK language model spec (v3) that the demo agent implements. */
@@ -15,9 +21,22 @@ export const DEMO_AGENT_MODEL_ID = "terreno-demo-agent";
 /** Tool call ids look like `demo_<scenario id>_<uuid>`, so an answer finds its scenario. */
 const TOOL_CALL_ID_PATTERN = /^demo_([a-z]+)_/;
 
+interface DemoAnswer {
+  /** True when the user answers on a small screen, which wants at most two short sentences. */
+  isCompact: boolean;
+  response: AskResponse;
+}
+
+/** A reply in two lengths: `compact` for a small screen, `full` for the chat. */
+interface DemoReply {
+  compact: string;
+  full: string;
+}
+
 /**
  * A scripted exchange: words in the user's message start it, it calls one ask tool, and it
- * replies to the answer. Add one to DEMO_SCENARIOS for each ask kind the example app shows.
+ * replies to the answer. Add one to DEMO_SCENARIOS for each ask kind the example app shows. On the
+ * compact surface the input must also fit a simple card: at most 3 options with short labels.
  */
 type DemoAskScenario = {
   [Kind in Ask["kind"]]: {
@@ -25,7 +44,7 @@ type DemoAskScenario = {
     id: string;
     input: Extract<Ask, {kind: Kind}>["input"];
     kind: Kind;
-    reply: (response: AskResponse) => string;
+    reply: (answer: DemoAnswer) => string;
     /** Conversation title once the user answers. */
     title: string;
     trigger: RegExp;
@@ -60,9 +79,11 @@ const selectedIds = (content: Record<string, unknown>): string[] => {
   return selected.filter((id): id is string => typeof id === "string");
 };
 
-const planReply = (response: AskResponse): string => {
+const planReply = ({isCompact, response}: DemoAnswer): string => {
   if (response.action === "decline") {
-    return 'No problem, I skipped the plan for now. Say "pick a plan" when you want to choose one.';
+    return isCompact
+      ? "OK, I skipped the plan for now."
+      : 'No problem, I skipped the plan for now. Say "pick a plan" when you want to choose one.';
   }
   if (response.action === "cancel") {
     return "The plan question was cancelled, so I did not choose a plan.";
@@ -71,6 +92,9 @@ const planReply = (response: AskResponse): string => {
   const option = PLAN_OPTIONS.find((candidate) => candidate.id === selectedId);
   if (!option) {
     return 'I could not find that plan. Say "pick a plan" to try again.';
+  }
+  if (isCompact) {
+    return `You picked the ${option.label} plan. A real agent would set it up now.`;
   }
   return `You picked the **${option.label}** plan (${option.description}). A real agent would set it up now. Say "pick a plan" to try another answer.`;
 };
@@ -92,14 +116,19 @@ const DEMO_SCENARIOS: DemoAskScenario[] = [
   },
 ];
 
-const DEMO_HELP_REPLY = [
-  "I'm the Terreno demo agent. This server has no AI model configured, so I follow a script.",
-  'Say "help me pick a plan" and I will ask you to choose one right here in the chat.',
-  "To talk to a real model, set GEMINI_API_KEY on the server or save a Gemini API key on the Profile tab.",
-].join("\n\n");
+const DEMO_HELP_REPLY: DemoReply = {
+  compact: `I'm the Terreno demo agent. Say "help me pick a plan" to choose a plan.`,
+  full: [
+    "I'm the Terreno demo agent. This server has no AI model configured, so I follow a script.",
+    'Say "help me pick a plan" and I will ask you to choose one right here in the chat.',
+    "To talk to a real model, set GEMINI_API_KEY on the server or save a Gemini API key on the Profile tab.",
+  ].join("\n\n"),
+};
 
-const DEMO_ASKS_OFF_REPLY =
-  "Asks are turned off on this server, so I cannot ask you to choose. Pass `asks: true` to addGptRoutes to turn them on.";
+const DEMO_ASKS_OFF_REPLY: DemoReply = {
+  compact: "Asks are turned off on this server, so I cannot ask you to choose.",
+  full: "Asks are turned off on this server, so I cannot ask you to choose. Pass `asks: true` to addGptRoutes to turn them on.",
+};
 
 const DEMO_NO_MODEL_REPLY =
   "The Terreno demo agent only scripts chat. Set GEMINI_API_KEY to use a real model.";
@@ -154,20 +183,35 @@ const scenarioForToolCall = (toolCallId: string): DemoAskScenario | undefined =>
 const matchScenario = (text: string): DemoAskScenario | undefined =>
   DEMO_SCENARIOS.find((scenario) => scenario.trigger.test(text));
 
+/** The chat turn adds the compact line to the system prompt when the user is on a small screen. */
+const isCompactSurface = (prompt: DemoPrompt): boolean =>
+  prompt.some(
+    (message) =>
+      message.role === "system" && message.content.includes(COMPACT_SURFACE_SYSTEM_PROMPT)
+  );
+
 /** Picks the demo agent's next step: reply to an answer, ask a scenario's question, or explain. */
 const planDemoTurn = ({prompt, tools}: Pick<DemoCallOptions, "prompt" | "tools">): DemoTurn => {
+  const isCompact = isCompactSurface(prompt);
+  const replyFor = (reply: DemoReply): DemoTextTurn => ({
+    text: isCompact ? reply.compact : reply.full,
+    type: "text",
+  });
+
   const answer = lastAskAnswer(prompt);
   if (answer) {
     const scenario = scenarioForToolCall(answer.toolCallId);
     return {
-      text: scenario ? scenario.reply(answer.response) : "Thanks for answering.",
+      text: scenario
+        ? scenario.reply({isCompact, response: answer.response})
+        : "Thanks for answering.",
       type: "text",
     };
   }
 
   const scenario = matchScenario(lastUserText(prompt));
   if (!scenario) {
-    return {text: DEMO_HELP_REPLY, type: "text"};
+    return replyFor(DEMO_HELP_REPLY);
   }
 
   const toolName = `ask_${scenario.kind}`;
@@ -175,7 +219,7 @@ const planDemoTurn = ({prompt, tools}: Pick<DemoCallOptions, "prompt" | "tools">
     (tool) => tool.type === "function" && tool.name === toolName
   );
   if (!isOffered) {
-    return {text: DEMO_ASKS_OFF_REPLY, type: "text"};
+    return replyFor(DEMO_ASKS_OFF_REPLY);
   }
   return {
     input: scenario.input,

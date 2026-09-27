@@ -734,8 +734,7 @@ export const addAiRoutes = (
     );
   }
 
-  addGptHistoryRoutes(router, options);
-  addGptRoutes(router, {
+  const chat: GptRouteOptions = {
     aiService: aiService ?? createDemoAgentService(),
     asks: true,
     createModelFn: createModelFromKey,
@@ -747,7 +746,9 @@ export const addAiRoutes = (
     openApiOptions: options,
     toolChoice: "auto",
     tools: getDemoTools() as unknown as GptRouteOptions["tools"],
-  });
+  };
+  addGptHistoryRoutes(router, {...options, chat});
+  addGptRoutes(router, chat);
   if (fileStorageService) {
     addFileRoutes(router, {
       fileStorageService,

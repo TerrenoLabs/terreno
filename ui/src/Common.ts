@@ -1990,6 +1990,13 @@ export interface ButtonProps extends WithTestID {
    */
   withConfirmation?: boolean;
   /**
+   * If true, the button is never wider than its container, and a label that does not fit wraps
+   * onto centered lines while the button grows taller. A small button grows from its 28px height.
+   * If false, the label stays on one line.
+   * @default false
+   */
+  wrapText?: boolean;
+  /**
    * The function to call when the button is clicked.
    */
   onClick: () => void | Promise<void>;

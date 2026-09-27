@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {askIssue, quoteValue} from "./errors";
+import {type AskValidationError, askIssue, quoteValue} from "./errors";
 import {ASK_LIMITS} from "./limits";
 import {
   ASK_KINDS,
@@ -161,6 +161,38 @@ const choiceCard = (input: ChoiceAskInput): Pick<SimpleCard, "buttons" | "handof
   return {
     buttons: hasRoomForSkip ? [...optionButtons, ...skipButtons] : optionButtons,
     handoff: false,
+  };
+};
+
+/**
+ * The answer a pressed button sends: the `response` stored on the card's button with that id.
+ * Returns an `UNKNOWN_BUTTON` error instead when the card has no such button, so a small client can
+ * only send answers the card offered.
+ */
+export const resolveButtonAnswer = ({
+  buttonId,
+  card,
+}: {
+  buttonId: string;
+  card: SimpleCard;
+}): {errors: AskValidationError[]; response?: AskResponse} => {
+  const button = card.buttons.find((candidate) => candidate.id === buttonId);
+  if (button) {
+    return {errors: [], response: button.response};
+  }
+  const buttonIds = card.buttons.map((candidate) => quoteValue(candidate.id)).join(", ");
+  return {
+    errors: [
+      {
+        code: "UNKNOWN_BUTTON",
+        fix:
+          buttonIds === ""
+            ? "The card has no buttons. Send a full askResponse instead."
+            : `Send the id of one of the card's buttons: ${buttonIds}.`,
+        message: `Button ${quoteValue(buttonId)} is not on the pending ask's simple card.`,
+        path: "buttonId",
+      },
+    ],
   };
 };
 

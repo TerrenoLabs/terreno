@@ -10,7 +10,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 - Actions: `Button`, `IconButton`, `Link`
 - Feedback: `Spinner`, `Modal`, `Toast`
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
-- AI chat: `GPTChat`, `AskCard` (agent asks in the transcript)
+- AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts)
 - Authentication: `SocialLoginButton`, `LoginScreen`, `SignUpScreen`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
@@ -190,6 +190,18 @@ Buttons automatically size to their content unless `fullWidth` is specified:
 
 Internally, Button sets `alignSelf: 'flex-start'` when `fullWidth={false}` to prevent stretching in column layouts.
 
+A label stays on one line by default, so a long label can make the button wider than its container.
+Set `wrapText` to keep the button inside its container instead: the label wraps onto centered lines
+and the button grows taller. A `size="sm"` button grows from its 28px height instead of clipping the
+second line. `SimpleAskCard` and `AskCard` set `wrapText` on their answer buttons, because their
+labels come from the agent.
+
+```tsx
+<Box direction="row" width={160}>
+  <Button onClick={handleSave} text="Save all changes now" wrapText />
+</Box>
+```
+
 ### TextField password visibility
 
 `type="password"` masks the value and renders a show/hide eye control at the end of the field.
@@ -341,6 +353,49 @@ continue." instead of controls.
 
 Types: `AskCardProps`, `ChatAsk`, `ChatAskState`, `ChatAskStatus`, `AskSubmission`,
 `AskSubmitHandler`. Demo story: `AskCard`.
+
+### SimpleAskCard
+
+Any agent ask as its [simple card](agent-ui-asks.md#simple-cards): the title, the question, and up
+to three full-width buttons that each send an exact answer. Use it in narrow layouts, such as a
+watch-sized preview. It knows nothing about ask kinds.
+
+```tsx
+const [runTurn] = useGpthistoriesTurnMutation();
+
+<SimpleAskCard
+  card={pendingAsk.simple}
+  onPress={(button) =>
+    runTurn({
+      body: {buttonId: button.id, surface: "compact", toolCallId: pendingAsk.toolCallId},
+      id: historyId,
+    })
+  }
+  pendingButtonId={sendingButtonId}
+/>
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `card` | `SimpleCard` | `pendingAsk.simple` from the server, or `simple` on an `{ask}` event |
+| `onPress` | `(button: SimpleCardButton) => void \| Promise<void>` | Called with the pressed button. Send `{toolCallId: card.toolCallId, buttonId: button.id}` to the history's [`turn` action](agent-ui-asks.md#headless-endpoints), or send `button.response` as the answer. |
+| `pendingButtonId` | string? | The button whose answer is still sending. It shows a spinner, the other buttons are disabled, and presses are ignored. |
+| `testID` | string? | Defaults to `simple-ask-card` |
+
+- A card with `handoff: true` shows "Continue on your phone" under the question, because its
+  buttons cannot give every answer.
+- Button styles map to `Button` variants the same way as `AskCard` quick replies: `primary` to
+  `primary`, `default` to `outline`, `destructive` to `destructive`, and `cancel` to `ghost`.
+
+| Element | testID |
+| --- | --- |
+| Card | `{testID}` |
+| Continue on your phone | `{testID}-handoff` |
+| Button | `{testID}-button-<button id>`, such as `{testID}-button-option:team` |
+
+Types: `SimpleAskCardProps`, and `SimpleCard` and `SimpleCardButton` from `@terreno/blocks`. Demo
+story: `SimpleAskCard`. Its demo answers a plan card on a watch-sized 198×242 pt screen, and its
+"Every fixture" story draws every valid fixture's card at that size.
 
 ### SplitPage
 

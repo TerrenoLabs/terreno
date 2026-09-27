@@ -794,6 +794,20 @@ const injectedRtkApi = api
         providesTags: ["users"],
         query: (queryArg) => ({url: `/users/${queryArg}`}),
       }),
+      gpthistoriesPendingAsks: build.query<GpthistoriesPendingAsksRes, GpthistoriesPendingAsksArgs>(
+        {
+          providesTags: ["gpthistories"],
+          query: () => ({url: `/gpt/histories/pendingAsks`}),
+        }
+      ),
+      gpthistoriesTurn: build.mutation<GpthistoriesTurnRes, GpthistoriesTurnArgs>({
+        invalidatesTags: ["gpthistories"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/gpt/histories/${queryArg.id}/turn`,
+        }),
+      }),
       listMcpServiceTokens: build.query<ListMcpServiceTokensRes, ListMcpServiceTokensArgs>({
         providesTags: ["mcp"],
         query: (queryArg) => ({
@@ -1384,6 +1398,122 @@ const injectedRtkApi = api
   });
 
 export {injectedRtkApi as openapi};
+export type GpthistoriesTurnRes = /** status 200 Successful response */ {
+  data: {
+    /** Set when the turn failed after it started. text holds what the agent said before the error. */
+    error?: string;
+    /** The conversation's id. */
+    historyId: string;
+    /** The ask the turn paused on. Answer it with its toolCallId and the id of one of simple.buttons. */
+    pendingAsk?: {
+      kind: "choice";
+      simple: {
+        buttons: {
+          id: string;
+          label: string;
+          response:
+            | {
+                action: "accept";
+                content: {
+                  [key: string]: any | null;
+                };
+              }
+            | {
+                action: "decline";
+              }
+            | {
+                action: "cancel";
+                reason?: string;
+              };
+          style: "default" | "primary" | "destructive" | "cancel";
+        }[];
+        handoff: boolean;
+        kind: "choice";
+        text: string;
+        title?: string;
+        toolCallId: string;
+      };
+      toolCallId: string;
+    };
+    /** The agent's reply, or an empty string when it only asked. */
+    text: string;
+    /** The conversation's title, once it has one. */
+    title?: string;
+  };
+};
+export type GpthistoriesTurnArgs = {
+  id: string;
+  body: {
+    /** A full answer to the pending ask, as a client that renders the ask sends it. */
+    askResponse?:
+      | {
+          action: "accept";
+          content: {
+            [key: string]: any | null;
+          };
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        }
+      | {
+          action: "decline";
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        }
+      | {
+          action: "cancel";
+          reason?: string;
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        };
+    /** The id of the simple card button the user pressed. Send it with toolCallId. */
+    buttonId?: string;
+    /** A new message from the user. It cancels the pending ask, if there is one. */
+    prompt?: string;
+    /** Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full". */
+    surface?: "full" | "compact";
+    /** The pending ask's toolCallId. */
+    toolCallId?: string;
+  };
+};
+export type GpthistoriesPendingAsksRes = /** status 200 Successful response */ {
+  data: {
+    /** When the agent asked, as an ISO 8601 UTC timestamp. */
+    created: string;
+    /** The conversation the ask belongs to. */
+    historyId: string;
+    kind: "choice";
+    simple: {
+      buttons: {
+        id: string;
+        label: string;
+        response:
+          | {
+              action: "accept";
+              content: {
+                [key: string]: any | null;
+              };
+            }
+          | {
+              action: "decline";
+            }
+          | {
+              action: "cancel";
+              reason?: string;
+            };
+        style: "default" | "primary" | "destructive" | "cancel";
+      }[];
+      handoff: boolean;
+      kind: "choice";
+      text: string;
+      title?: string;
+      toolCallId: string;
+    };
+    /** The conversation's title, once it has one. */
+    title?: string;
+    toolCallId: string;
+  }[];
+};
+export type GpthistoriesPendingAsksArgs = undefined;
 export type PostGptHistoriesRes = /** status 201 Successful create */ {
   /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
   pendingAsk?: {
@@ -1836,6 +1966,8 @@ export type PostGptPromptArgs = {
   model?: string;
   projectId?: string;
   prompt?: string;
+  /** Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full". */
+  surface?: "full" | "compact";
   systemPrompt?: string;
 };
 export type PatchGptHistoriesByIdRatingRes = /** status 200 Success */ {
@@ -6107,6 +6239,8 @@ export type ApiError = {
   title?: string;
 };
 export const {
+  useGpthistoriesTurnMutation,
+  useGpthistoriesPendingAsksQuery,
   usePostGptHistoriesMutation,
   useGetGptHistoriesQuery,
   useGetGptHistoriesByIdQuery,

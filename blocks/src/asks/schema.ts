@@ -7,6 +7,19 @@ export const ASK_KINDS = ["choice"] as const;
 
 export type AskKind = (typeof ASK_KINDS)[number];
 
+/**
+ * Where the user answers. `compact` is a small screen, such as a watch: the model is offered only
+ * asks whose simple card shows every option, so the user never has to continue on a phone.
+ */
+export const ASK_SURFACES = ["full", "compact"] as const;
+
+export type AskSurface = (typeof ASK_SURFACES)[number];
+
+/** Ask kinds the compact surface offers, each with a narrowed input schema. */
+export const COMPACT_ASK_KINDS = ["choice"] as const satisfies readonly AskKind[];
+
+export type CompactAskKind = (typeof COMPACT_ASK_KINDS)[number];
+
 /** Reasons the server records when it answers an ask with `cancel` on the user's behalf. */
 export const ASK_CANCEL_REASONS = {
   oneAskAtATime: "one_ask_at_a_time",
@@ -43,24 +56,27 @@ const sharedAskFields = {
     ),
 };
 
-export const choiceOptionSchema = z
-  .object({
-    description: visibleText(ASK_LIMITS.choice.optionDescriptionMaxLength)
-      .optional()
-      .describe(
-        `One line under the label, at most ${ASK_LIMITS.choice.optionDescriptionMaxLength} characters.`
+const choiceOption = (labelMaxLength: number) =>
+  z
+    .object({
+      description: visibleText(ASK_LIMITS.choice.optionDescriptionMaxLength)
+        .optional()
+        .describe(
+          `One line under the label, at most ${ASK_LIMITS.choice.optionDescriptionMaxLength} characters.`
+        ),
+      id: z
+        .string()
+        .regex(ASK_LIMITS.choice.optionIdPattern)
+        .describe(
+          `Stable id returned in the answer: 1-${ASK_LIMITS.choice.optionIdMaxLength} lowercase letters, digits, "_", or "-", starting with a letter or digit. Unique within the ask.`
+        ),
+      label: visibleText(labelMaxLength).describe(
+        `What the user sees, at most ${labelMaxLength} characters.`
       ),
-    id: z
-      .string()
-      .regex(ASK_LIMITS.choice.optionIdPattern)
-      .describe(
-        `Stable id returned in the answer: 1-${ASK_LIMITS.choice.optionIdMaxLength} lowercase letters, digits, "_", or "-", starting with a letter or digit. Unique within the ask.`
-      ),
-    label: visibleText(ASK_LIMITS.choice.optionLabelMaxLength).describe(
-      `What the user sees, at most ${ASK_LIMITS.choice.optionLabelMaxLength} characters.`
-    ),
-  })
-  .strict();
+    })
+    .strict();
+
+export const choiceOptionSchema = choiceOption(ASK_LIMITS.choice.optionLabelMaxLength);
 
 export type ChoiceOption = z.infer<typeof choiceOptionSchema>;
 
@@ -111,28 +127,97 @@ const checkChoiceInput = (
   });
 };
 
+/**
+ * A compact ask shows each option as a button with its label uncut, so two options with the same
+ * label would be two buttons the user cannot tell apart. Zod counts a label's length in code points,
+ * but a simple card cuts labels by UTF-16 units, so a label with emoji can fit Zod's limit and still
+ * be cut on its button.
+ */
+const checkCompactChoiceInput = (
+  input: {default?: string[]; options: ChoiceOption[]},
+  ctx: z.RefinementCtx
+): void => {
+  checkChoiceInput(input, ctx);
+  const {buttonLabelMaxLength} = ASK_LIMITS.simpleCard;
+  const firstIndexByLabel = new Map<string, number>();
+  input.options.forEach((option, index) => {
+    if (option.label.length > buttonLabelMaxLength) {
+      const path = formatAskPath(["options", index, "label"]);
+      ctx.addIssue(
+        askIssue({
+          code: "TOO_LONG",
+          fix: `Shorten ${path} to ${buttonLabelMaxLength} characters or fewer, or use fewer emoji.`,
+          message: `${path} is longer than ${buttonLabelMaxLength} characters, counting each emoji as 2 or more.`,
+          segments: ["options", index, "label"],
+        })
+      );
+    }
+    const firstIndex = firstIndexByLabel.get(option.label);
+    if (firstIndex === undefined) {
+      firstIndexByLabel.set(option.label, index);
+      return;
+    }
+    ctx.addIssue(
+      askIssue({
+        code: "DUPLICATE_LABEL",
+        fix: "Give every option a different label.",
+        message: `Option label ${quoteValue(option.label)} is already used by ${formatAskPath(["options", firstIndex])}.`,
+        segments: ["options", index, "label"],
+      })
+    );
+  });
+};
+
+const choiceAskInput = ({
+  check,
+  labelMaxLength,
+  optionsMax,
+}: {
+  check: typeof checkChoiceInput;
+  labelMaxLength: number;
+  optionsMax: number;
+}) =>
+  z
+    .object({
+      ...sharedAskFields,
+      default: z
+        .array(z.string())
+        .max(optionsMax)
+        .optional()
+        .describe('Option ids to preselect. With select "one", at most one id.'),
+      options: z
+        .array(choiceOption(labelMaxLength))
+        .min(ASK_LIMITS.choice.optionsMin)
+        .max(optionsMax)
+        .describe(
+          `The options, in display order: ${ASK_LIMITS.choice.optionsMin}-${optionsMax} items.`
+        ),
+      select: z
+        .literal("one")
+        .describe('How many options the user picks. Only "one" is supported.'),
+    })
+    .strict()
+    .superRefine(check);
+
 /** Input for `ask_choice`: pick one option from a list. */
-export const choiceAskInputSchema = z
-  .object({
-    ...sharedAskFields,
-    default: z
-      .array(z.string())
-      .max(ASK_LIMITS.choice.optionsMax)
-      .optional()
-      .describe('Option ids to preselect. With select "one", at most one id.'),
-    options: z
-      .array(choiceOptionSchema)
-      .min(ASK_LIMITS.choice.optionsMin)
-      .max(ASK_LIMITS.choice.optionsMax)
-      .describe(
-        `The options, in display order: ${ASK_LIMITS.choice.optionsMin}-${ASK_LIMITS.choice.optionsMax} items.`
-      ),
-    select: z.literal("one").describe('How many options the user picks. Only "one" is supported.'),
-  })
-  .strict()
-  .superRefine(checkChoiceInput);
+export const choiceAskInputSchema = choiceAskInput({
+  check: checkChoiceInput,
+  labelMaxLength: ASK_LIMITS.choice.optionLabelMaxLength,
+  optionsMax: ASK_LIMITS.choice.optionsMax,
+});
 
 export type ChoiceAskInput = z.infer<typeof choiceAskInputSchema>;
+
+/**
+ * Input for `ask_choice` on the compact surface: every option fits a simple card button, so the
+ * card never hands off. At most 3 options, labels of at most 20 characters (each emoji counts as 2
+ * or more), and no two labels alike.
+ */
+export const compactChoiceAskInputSchema = choiceAskInput({
+  check: checkCompactChoiceInput,
+  labelMaxLength: ASK_LIMITS.simpleCard.buttonLabelMaxLength,
+  optionsMax: ASK_LIMITS.simpleCard.buttonsMax,
+});
 
 /** The `content` of an accepted `choice` answer. */
 export const choiceAnswerSchema = z
@@ -184,6 +269,49 @@ export type ChoiceAskResponse = z.infer<typeof choiceAskResponseSchema>;
 export const askInputSchemas = {
   choice: choiceAskInputSchema,
 } as const satisfies Record<AskKind, z.ZodType>;
+
+/** Input schemas by kind on the compact surface. Every compact input is also a valid full input. */
+export const compactAskInputSchemas = {
+  choice: compactChoiceAskInputSchema,
+} as const satisfies Record<CompactAskKind, z.ZodType>;
+
+export const isCompactAskKind = (kind: AskKind): kind is CompactAskKind =>
+  (COMPACT_ASK_KINDS as readonly AskKind[]).includes(kind);
+
+/** The kinds a surface offers, in the given order. The compact surface drops kinds it cannot show. */
+export const askKindsForSurface = ({
+  kinds,
+  surface,
+}: {
+  kinds: readonly AskKind[];
+  surface: AskSurface;
+}): AskKind[] => (surface === "compact" ? kinds.filter(isCompactAskKind) : [...kinds]);
+
+/**
+ * The input schema for a kind on a surface. Throws for an unknown kind or surface, and when the
+ * compact surface does not offer the kind.
+ */
+export const askInputSchemaFor = ({
+  kind,
+  surface = "full",
+}: {
+  kind: AskKind;
+  surface?: AskSurface;
+}): (typeof askInputSchemas)[AskKind] => {
+  if (!Object.hasOwn(askInputSchemas, kind)) {
+    throw new Error(`Unknown ask kind "${String(kind)}".`);
+  }
+  if (!ASK_SURFACES.includes(surface)) {
+    throw new Error(`Unknown ask surface "${String(surface)}".`);
+  }
+  if (surface === "full") {
+    return askInputSchemas[kind];
+  }
+  if (!isCompactAskKind(kind)) {
+    throw new Error(`The compact surface does not offer ask kind "${String(kind)}".`);
+  }
+  return compactAskInputSchemas[kind];
+};
 
 /** Output (answer envelope) schemas by kind. */
 export const askOutputSchemas = {

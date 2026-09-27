@@ -8,7 +8,15 @@ import {
 } from "pressto";
 import type React from "react";
 import {lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {ActivityIndicator, Pressable, type PressableProps, Text, View} from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  type PressableProps,
+  Text,
+  type TextStyle,
+  View,
+  type ViewStyle,
+} from "react-native";
 
 import {Box} from "./Box";
 import type {ButtonPressAnimation, ButtonProps} from "./Common";
@@ -95,6 +103,7 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
   text,
   variant = "primary",
   withConfirmation = false,
+  wrapText = false,
 }) => {
   const {theme} = useTheme();
   const CustomIcon = useCustomIcon(iconName);
@@ -157,6 +166,20 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
     isPressDisabled ? Pressable : PRESSABLE_BY_ANIMATION[pressAnimation]
   ) as React.ComponentType<ButtonPressableProps>;
   const pressableInteractionProps = isPressDisabled ? {disabled: true} : {enabled: true};
+  // `maxWidth` lets a button in a row fit the row instead of its one-line label. The fixed `sm`
+  // height would clip a wrapped second line, so a wrapping `sm` button grows from 28px instead.
+  const wrapBoxStyle: ViewStyle | undefined = wrapText
+    ? {
+        maxWidth: "100%",
+        ...(size === "sm"
+          ? {height: undefined, minHeight: 28, paddingVertical: 4 - (borderWidth ?? 0)}
+          : undefined),
+      }
+    : undefined;
+  const wrapRowStyle: ViewStyle | undefined = wrapText ? {flexShrink: 1} : undefined;
+  const wrapLabelStyle: TextStyle | undefined = wrapText
+    ? {flexShrink: 1, textAlign: "center"}
+    : undefined;
 
   return (
     <PressableComponent
@@ -181,11 +204,14 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
         paddingHorizontal: size === "sm" ? 16 : 20,
         paddingVertical: size === "sm" ? 0 : 8 - (borderWidth ?? 0),
         width: fullWidth ? "100%" : "auto",
+        ...wrapBoxStyle,
       }}
       testID={testID}
     >
-      <View style={{flexDirection: "row"}}>
-        <View style={{flexDirection: iconPosition === "left" ? "row" : "row-reverse"}}>
+      <View style={{flexDirection: "row", ...wrapRowStyle}}>
+        <View
+          style={{flexDirection: iconPosition === "left" ? "row" : "row-reverse", ...wrapRowStyle}}
+        >
           {Boolean(iconName) && (
             <View
               style={{
@@ -201,7 +227,11 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
               )}
             </View>
           )}
-          <Text style={{color, fontSize: size === "sm" ? 14 : 16, fontWeight: "700"}}>{text}</Text>
+          <Text
+            style={{color, fontSize: size === "sm" ? 14 : 16, fontWeight: "700", ...wrapLabelStyle}}
+          >
+            {text}
+          </Text>
         </View>
         {isLoading && (
           <Box marginLeft={2}>

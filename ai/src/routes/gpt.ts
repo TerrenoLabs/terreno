@@ -7,6 +7,7 @@ import {
   logger,
   type OpenApiSchemaProperty,
 } from "@terreno/api";
+import {ASK_SURFACES, askSurfaceSchema} from "@terreno/blocks";
 import type express from "express";
 import type mongoose from "mongoose";
 
@@ -25,6 +26,12 @@ const ASK_RESPONSE_BODY: OpenApiSchemaProperty = {
     toolCallId: {description: "The pending ask's toolCallId", type: "string"},
   },
   type: "object",
+};
+
+const SURFACE_BODY: OpenApiSchemaProperty = {
+  description: askSurfaceSchema.description,
+  enum: [...ASK_SURFACES],
+  type: "string",
 };
 
 interface SseSink extends ChatTurnSink {
@@ -80,6 +87,7 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
           model: {type: "string"},
           projectId: {type: "string"},
           prompt: {type: "string"},
+          surface: SURFACE_BODY,
           systemPrompt: {type: "string"},
         })
         .withResponse(200, {data: {type: "string"}})

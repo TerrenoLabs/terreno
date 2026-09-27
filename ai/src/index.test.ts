@@ -61,6 +61,7 @@ describe("@terreno/ai public exports", () => {
   ] as const;
 
   const expectedConstants = [
+    "COMPACT_SURFACE_SYSTEM_PROMPT",
     "CONTENT_SUMMARY_PROMPT",
     "DEFAULT_GPT_MEMORY",
     "DEFAULT_VERTEX_LOCATION",

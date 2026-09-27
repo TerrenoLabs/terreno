@@ -63,6 +63,7 @@ export {
   parseAiJson,
 } from "./service/parseAiJson";
 export {
+  COMPACT_SURFACE_SYSTEM_PROMPT,
   CONTENT_SUMMARY_PROMPT,
   DEFAULT_GPT_MEMORY,
   JSON_VALUE_SYSTEM_PROMPT,

@@ -2,12 +2,13 @@
 
 An ask lets an agent stop in the middle of a turn, ask the user a typed question inside the chat,
 and continue with the answer as a tool result. This page explains why asks are client-side tool
-calls on the existing chat stream, how one round trip works, and how asks and Agent UI Blocks
-divide the work. Fields, limits, events, and error codes are in the
-[reference](../reference/agent-ui-asks.md).
+calls on the existing chat stream, how one round trip works, how a watch or another small client
+answers them, and how asks and Agent UI Blocks divide the work. Fields, limits, events, and error
+codes are in the [reference](../reference/agent-ui-asks.md).
 
-Asks ship today as the `choice` kind (pick one option) on `POST /gpt/prompt`, shown in
-`GPTChat`. The other kinds and endpoints for small clients follow the
+Asks ship today as the `choice` kind (pick one option). The chat asks on `POST /gpt/prompt` and
+shows asks in `GPTChat`. Watches and other small clients answer on two JSON endpoints with the
+compact surface. The other kinds follow the
 [implementation plan](../implementationPlans/agent-ui-asks.md).
 
 ## The problem
@@ -105,6 +106,13 @@ when Skip is left out to make room.
 The server derives the card once, when the ask is made, and stores it with the pending ask. A card
 already on a screen never changes, even if the derivation rules change later.
 
+Each button carries its exact answer, not a label for the client to turn into one. A client that
+knows no ask kinds cannot build a valid answer: it would need each kind's answer shape and rules.
+With the answer on the button, those rules stay on the server, and a test checks that every
+button's answer passes `validateAskResponse` for its ask. A client can also send only the pressed
+button's `id`. The server looks the id up on the card it stored and answers with that button's
+answer, so a client that sends only ids cannot send an answer the card did not offer.
+
 ## In the chat
 
 `GPTChat` shows an ask where the model asked it: the ask's tool call row becomes an `AskCard` in
@@ -126,6 +134,38 @@ the answer from that row.
 A pending ask takes focus when it appears, so keyboard and screen reader users land on the question
 instead of hunting for it.
 
+## Small screens and the watch
+
+A watch shows about three short buttons. A full `choice` can offer 50 options, and on a watch its
+card can only hand off to the phone. So a small client says where the user is with
+`surface: "compact"`, and the server narrows what the agent may ask on that turn: only a `choice`
+with 2–3 options whose labels fit a button uncut and differ from each other. Every card made on a
+compact turn can be answered from the watch, and the system prompt asks for replies of at most two
+short sentences. The narrowing is in the tool's input schema, not only in the prompt, so the model
+cannot ask what the watch cannot show. A compact ask that breaks the rules goes back to the model
+as a tool error, like any invalid ask.
+
+The surface belongs to a turn, not to the conversation. One conversation can start in the phone's
+chat and continue on the watch, and each turn gets the rules of the screen it was sent from.
+
+A watch app, a notification action, or a chat bot wants to send one request and read one
+response, not a server-sent event stream. The `turn` action runs the same turn as `/gpt/prompt`,
+through the same turn runner, and collects its events into one JSON result. Both save the same
+rows, so the phone's chat shows what was answered on the watch. The turn keeps running when the
+client disconnects, which matters on a watch, where the system can suspend the app mid-request.
+The turn is saved, and the client reads the reply or the next ask later. `pendingAsks` lists what
+waits on the user across every conversation, so a watch can show it without opening each one.
+
+How an Apple Watch can plug in:
+
+| Path | What it needs | Status |
+| --- | --- | --- |
+| SwiftUI watch app | A native watchOS target, because React Native does not run on watchOS. `@bacons/apple-targets` adds one to an Expo app. The phone hands the session token over WatchConnectivity, and the app calls the two endpoints with `URLSession`, always with `surface: "compact"`. The [how-to](../how-to/agent-ui-asks.md#answer-asks-from-an-apple-watch-or-another-small-client) sketches one. | Protocol ready; a sample app is Future Work |
+| Actionable push, no watch app | iOS forwards iPhone notifications with up to 4 action buttons to the watch. It needs `categoryId` on comms push, `data` on `notify()`, templated categories (iOS fixes action labels when the app registers a category), actions that do not open the app, a small native iOS handler (expo-notifications completes before a JavaScript `fetch` finishes), and a one-time action token per ask. | Future Work |
+
+Other follow-ups: finishing long turns in a `@terreno/jobs` background job, so a headless answer
+returns at once instead of waiting for the agent, and Wear OS.
+
 ## Asks and blocks
 
 Asks and [Agent UI Blocks](../implementationPlans/agent-ui-blocks.md) split the work by where the
@@ -137,7 +177,7 @@ result goes:
 | Suggest a follow-up message | A block button that sends a reply |
 | Run host code, such as an export | A block button with a host callback |
 | Get an answer the agent needs to continue | An ask: tool call, pause, answer, resume |
-| Answer from a watch or another small client | The ask's simple card |
+| Answer from a watch or another small client | The ask's simple card, through `pendingAsks` and `turn` |
 
 Blocks display, and their buttons start something new: a message or host code. Asks collect, and
 their answer goes back to the agent as the result of the call that asked. An ask's `prompt` is
@@ -150,5 +190,10 @@ plain text, so an ask cannot show a chart or table above its control yet. Both l
   verbatim, so a client must not be able to plant or edit them. The history REST API drops
   `pendingAsk` from create and update bodies, and the answer a client sends is only the envelope,
   checked against the stored ask.
+- **A button id answers only with the stored card.** The server resolves `buttonId` on the card
+  it saved when the ask was made. An id that is not on the card gets 400 `UNKNOWN_BUTTON`, and the
+  ask stays pending.
+- **A turn speaks as the conversation's owner.** Only the owner can send a `turn`. An admin gets
+  403, because the model would read the admin's message or answer as the owner's.
 - **Asks do not collect secrets.** The system prompt tells the model never to ask for passwords,
   payment card numbers, API keys, or other secrets.

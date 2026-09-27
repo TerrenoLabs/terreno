@@ -282,7 +282,8 @@ export interface GptRouteOptions {
   aiService?: import("../service/aiService").AIService;
   /**
    * Let the model ask the user typed questions with client-side ask tools. `true` offers every
-   * ask kind. Off by default; when off, tools, system prompt, and SSE events are unchanged.
+   * ask kind. Off by default; when off, tools, system prompt, SSE events, and the `/gpt/histories`
+   * routes are unchanged.
    */
   asks?: boolean | AsksOptions;
   /** Factory to create a LanguageModel from a per-request API key (x-ai-api-key header). */
@@ -306,6 +307,13 @@ export interface GptRouteOptions {
 }
 
 export interface GptHistoryRouteOptions {
+  /**
+   * The chat options headless turns run with, usually the ones passed to `addGptRoutes`. When they
+   * turn `asks` on, `/gpt/histories` adds `GET pendingAsks` and `POST /:id/turn` for clients that do
+   * not read server-sent events, such as a watch app. With `asks` off it adds neither, so a host
+   * that never turned asks on gets no new endpoints.
+   */
+  chat?: GptRouteOptions;
   openApiOptions?: Record<string, unknown>;
 }
 

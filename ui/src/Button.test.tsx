@@ -1,6 +1,7 @@
 import {describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
+import type {ReactTestInstance} from "react-test-renderer";
 
 import {Button} from "./Button";
 import type {ButtonProps} from "./Common";
@@ -31,6 +32,22 @@ interface CancelablePress {
   cancel: () => void;
 }
 
+const LONG_LABEL = "Go team 🎉🎉🎉🎉🎉…";
+
+const hostParentOf = (node: ReactTestInstance | null): ReactTestInstance | null => {
+  let parent = node?.parent ?? null;
+  while (parent && typeof parent.type !== "string") {
+    parent = parent.parent;
+  }
+  return parent;
+};
+
+/** The label and the icon and spinner rows around it, innermost first. */
+const labelAndRows = (label: ReactTestInstance): (ReactTestInstance | null)[] => {
+  const iconRow = hostParentOf(label);
+  return [label, iconRow, hostParentOf(iconRow)];
+};
+
 describe("Button", () => {
   it("renders correctly with default props", () => {
     const {toJSON} = renderWithTheme(<Button onClick={() => {}} text="Click me" />);
@@ -48,6 +65,61 @@ describe("Button", () => {
     );
     expect(getByTestId("test-button")).toBeTruthy();
   });
+
+  it("keeps a long label on one line by default", () => {
+    const {getByTestId, getByText} = renderWithTheme(
+      <Button onClick={() => {}} size="sm" testID="one-line" text={LONG_LABEL} />
+    );
+
+    const [label, iconRow, spinnerRow] = labelAndRows(getByText(LONG_LABEL));
+    for (const node of [label, iconRow, spinnerRow]) {
+      expect(node?.props.style).not.toHaveProperty("flexShrink");
+    }
+    expect(label?.props.style).not.toHaveProperty("textAlign");
+    const style = getByTestId("one-line").props.style;
+    expect(style).toMatchObject({height: 28, paddingVertical: 0});
+    expect(style).not.toHaveProperty("maxWidth");
+    expect(style).not.toHaveProperty("minHeight");
+  });
+
+  it("fits its container and wraps a long label onto centered lines with wrapText", () => {
+    const {getByTestId, getByText} = renderWithTheme(
+      <Button onClick={() => {}} testID="wrapping" text={LONG_LABEL} wrapText />
+    );
+
+    const [label, iconRow, spinnerRow] = labelAndRows(getByText(LONG_LABEL));
+    expect(label?.props.style).toMatchObject({flexShrink: 1, textAlign: "center"});
+    for (const row of [iconRow, spinnerRow]) {
+      expect(row?.props.style).toMatchObject({flexShrink: 1});
+    }
+    const style = getByTestId("wrapping").props.style;
+    expect(style).toMatchObject({maxWidth: "100%", paddingVertical: 8});
+    expect(style.height).toBeUndefined();
+    expect(style).not.toHaveProperty("minHeight");
+  });
+
+  for (const {paddingVertical, variant} of [
+    {paddingVertical: 4, variant: "primary"},
+    {paddingVertical: 2, variant: "outline"},
+  ] as const) {
+    it(`grows a sm ${variant} button from 28px instead of clipping a wrapped label`, () => {
+      const {getByTestId, getByText} = renderWithTheme(
+        <Button
+          onClick={() => {}}
+          size="sm"
+          testID="sm-wrap"
+          text={LONG_LABEL}
+          variant={variant}
+          wrapText
+        />
+      );
+
+      const style = getByTestId("sm-wrap").props.style;
+      expect(style.height).toBeUndefined();
+      expect(style).toMatchObject({maxWidth: "100%", minHeight: 28, paddingVertical});
+      expect(getByText(LONG_LABEL).props.style).toMatchObject({flexShrink: 1, fontSize: 14});
+    });
+  }
 
   it("supports an accessible name distinct from visible text", () => {
     const {getByTestId} = renderWithTheme(

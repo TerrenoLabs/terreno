@@ -5,7 +5,10 @@ import {
   type Ask,
   type AskKind,
   type AskResponse,
+  type AskSurface,
+  askInputSchemaFor,
   askInputSchemas,
+  askKindsForSurface,
   askOutputSchemas,
   askPromptSection,
 } from "@terreno/blocks";
@@ -57,16 +60,24 @@ export const askKindFromToolName = (
 ): AskKind | undefined => kinds.find((kind) => askToolName(kind) === toolName);
 
 /**
- * One tool per enabled kind. Ask tools have no `execute`, so the AI SDK ends the step loop when
- * the model calls one and the turn pauses until the user answers.
+ * One tool per enabled kind the surface offers. Ask tools have no `execute`, so the AI SDK ends
+ * the step loop when the model calls one and the turn pauses until the user answers. On the
+ * compact surface each tool takes the kind's compact input schema, so an ask whose options do not
+ * fit a small screen's buttons goes back to the model as a tool error.
  */
-export const createAskTools = ({kinds}: {kinds: readonly AskKind[]}): Record<string, Tool> =>
+export const createAskTools = ({
+  kinds,
+  surface = "full",
+}: {
+  kinds: readonly AskKind[];
+  surface?: AskSurface;
+}): Record<string, Tool> =>
   Object.fromEntries(
-    kinds.map((kind) => [
+    askKindsForSurface({kinds, surface}).map((kind) => [
       askToolName(kind),
       tool({
         description: ASK_TOOL_DESCRIPTIONS[kind],
-        inputSchema: askInputSchemas[kind],
+        inputSchema: askInputSchemaFor({kind, surface}),
         outputSchema: askOutputSchemas[kind],
       }),
     ])
@@ -105,9 +116,14 @@ export const withoutReservedToolNames = (tools: Record<string, Tool>): Record<st
   );
 };
 
-/** The asks section of the system prompt for the enabled kinds. */
-export const buildAsksSystemPrompt = (kinds: readonly AskKind[]): string =>
-  `${TERRENO_ASKS_SYSTEM_PROMPT}\n\n${askPromptSection({kinds})}`;
+/** The asks section of the system prompt for the kinds offered on the surface. */
+export const buildAsksSystemPrompt = ({
+  kinds,
+  surface = "full",
+}: {
+  kinds: readonly AskKind[];
+  surface?: AskSurface;
+}): string => `${TERRENO_ASKS_SYSTEM_PROMPT}\n\n${askPromptSection({kinds, surface})}`;
 
 /**
  * A plain JSON copy of AI SDK messages. It drops `undefined` fields, which MongoDB would store as

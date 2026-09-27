@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "The small-screen form of an ask: short text and at most three buttons, each carrying the exact answer it sends. Button ids are unique within a card, which JSON Schema cannot express.",
+  "title": "SimpleCard",
+  "type": "object",
+  "properties": {
+    "buttons": {
+      "maxItems": 3,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "response": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "const": "accept"
+                  },
+                  "content": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "action",
+                  "content"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "const": "decline"
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "const": "cancel"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "action"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "title": "AskResponse"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "default",
+              "primary",
+              "destructive",
+              "cancel"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "response",
+          "style"
+        ],
+        "additionalProperties": false,
+        "title": "SimpleCardButton"
+      }
+    },
+    "handoff": {
+      "type": "boolean"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "choice"
+      ]
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 140
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "toolCallId": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "buttons",
+    "handoff",
+    "kind",
+    "text",
+    "toolCallId"
+  ],
+  "additionalProperties": false
+}

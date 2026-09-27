@@ -1,0 +1,187 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "The response body of GET /gpt/histories/pendingAsks: the caller's pending asks, newest first.",
+  "title": "PendingAsksResponse",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "When the agent asked, as an ISO 8601 UTC timestamp."
+          },
+          "historyId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The conversation the ask belongs to."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "choice"
+            ]
+          },
+          "simple": {
+            "type": "object",
+            "properties": {
+              "buttons": {
+                "maxItems": 3,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 20
+                    },
+                    "response": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "action": {
+                              "type": "string",
+                              "const": "accept"
+                            },
+                            "content": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            }
+                          },
+                          "required": [
+                            "action",
+                            "content"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "action": {
+                              "type": "string",
+                              "const": "decline"
+                            }
+                          },
+                          "required": [
+                            "action"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "action": {
+                              "type": "string",
+                              "const": "cancel"
+                            },
+                            "reason": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            }
+                          },
+                          "required": [
+                            "action"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ],
+                      "title": "AskResponse"
+                    },
+                    "style": {
+                      "type": "string",
+                      "enum": [
+                        "default",
+                        "primary",
+                        "destructive",
+                        "cancel"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label",
+                    "response",
+                    "style"
+                  ],
+                  "additionalProperties": false,
+                  "title": "SimpleCardButton"
+                }
+              },
+              "handoff": {
+                "type": "boolean"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "choice"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 140
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              },
+              "toolCallId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "buttons",
+              "handoff",
+              "kind",
+              "text",
+              "toolCallId"
+            ],
+            "additionalProperties": false,
+            "title": "SimpleCard"
+          },
+          "title": {
+            "description": "The conversation's title, once it has one.",
+            "type": "string"
+          },
+          "toolCallId": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "created",
+          "historyId",
+          "kind",
+          "simple",
+          "toolCallId"
+        ],
+        "additionalProperties": false,
+        "title": "PendingAsk"
+      }
+    },
+    "requestId": {
+      "description": "The request's id. Apps built with TerrenoApp add it to every JSON response; quote it when reporting a problem.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "data"
+  ],
+  "additionalProperties": false
+}

@@ -2,16 +2,18 @@
 
 Asks let an agent ask the user a typed question inside the chat and get the answer back as a
 tool result in the same turn. `@terreno/blocks` owns the contract: ask schemas, validators,
-simple cards, limits, and error codes. `@terreno/ai` owns the producer: the `ask_<kind>` tools,
-the pause and resume on `POST /gpt/prompt`, and `GptHistory.pendingAsk`. `@terreno/ui` owns the
-renderer: `AskCard`, which `GPTChat` shows in the transcript. For why asks work this way, see
-[Agent UI Asks explained](../explanation/agent-ui-asks.md). To add asks to an app, see
+simple cards, limits, error codes, and JSON Schemas for native clients. `@terreno/ai` owns the
+producer: the `ask_<kind>` tools, the pause and resume on `POST /gpt/prompt` and the headless
+`turn` action, and `GptHistory.pendingAsk`. `@terreno/ui` owns the renderers: `AskCard`, which
+`GPTChat` shows in the transcript, and `SimpleAskCard` for small screens. For why asks work this
+way, see [Agent UI Asks explained](../explanation/agent-ui-asks.md). To add asks to an app, see
 [Add agent asks to a chat](../how-to/agent-ui-asks.md).
 
 Shipped: the `choice` kind with `select: "one"`, asked and answered through `POST /gpt/prompt`
-and shown in `GPTChat` ([props and controls](ui.md#asks)). The other kinds, compact mode,
-`SimpleAskCard`, and the headless endpoints are planned in the
-[implementation plan](../implementationPlans/agent-ui-asks.md).
+and shown in `GPTChat` ([props and controls](ui.md#asks)), and the small-screen path: the
+[compact surface](#compact-surface), the [headless endpoints](#headless-endpoints),
+[JSON Schemas](#json-schemas-and-fixtures), and [`SimpleAskCard`](ui.md#simpleaskcard). The other
+kinds are planned in the [implementation plan](../implementationPlans/agent-ui-asks.md).
 
 ## Table of Contents
 
@@ -20,12 +22,15 @@ and shown in `GPTChat` ([props and controls](ui.md#asks)). The other kinds, comp
 - [Shared ask fields](#shared-ask-fields)
 - [choice](#choice)
 - [Simple cards](#simple-cards)
+- [Compact surface](#compact-surface)
 - [Validation](#validation)
 - [Error codes](#error-codes)
 - [Limits](#limits)
 - [SSE events](#sse-events)
 - [Answer an ask](#answer-an-ask)
 - [Error responses](#error-responses)
+- [Headless endpoints](#headless-endpoints)
+- [JSON Schemas and fixtures](#json-schemas-and-fixtures)
 - [Stored state](#stored-state)
 - [Wire example](#wire-example)
 - [Exports](#exports)
@@ -38,7 +43,14 @@ import {AiApp} from "@terreno/ai";
 new AiApp({aiService, asks: true}).register(app);
 ```
 
-`addGptRoutes(router, {aiService, asks: true})` takes the same option.
+`AiApp` also registers the [headless endpoints](#headless-endpoints) with the same options. With
+the route registrars, pass the same chat options to both:
+
+```typescript
+const chat = {aiService, asks: true};
+addGptHistoryRoutes(router, {chat});
+addGptRoutes(router, chat);
+```
 
 | `asks` | Ask kinds offered to the model |
 | --- | --- |
@@ -48,7 +60,8 @@ new AiApp({aiService, asks: true}).register(app);
 
 With asks on, each chat turn:
 
-- Adds one tool per kind, named `ask_<kind>` (`ask_choice`).
+- Adds one tool per kind, named `ask_<kind>` (`ask_choice`). A turn on the
+  [compact surface](#compact-surface) offers only the compact kinds, with narrowed schemas.
 - Appends `TERRENO_ASKS_SYSTEM_PROMPT` and the `askPromptSection` for the offered kinds to the
   system prompt. Every number in that section comes from `ASK_LIMITS`.
 - Throws at registration when a `tools` entry starts with `ask_`. Request tools and MCP tools
@@ -134,7 +147,8 @@ the ask is made. The server stores it on `pendingAsk.simple` and sends it in the
 | `handoff` | boolean | `true` when the buttons cannot show every option the ask offers, so the user needs the full app to answer. A card with a button for every option has `handoff: false`, even when Skip is left out to make room. |
 
 Text over a limit is cut to fit and ends in "…". The cut falls on a word boundary when one is in
-the second half of the kept text, and never splits an emoji.
+the second half of the kept text, and never splits an emoji. `toSimpleCard` measures text in
+UTF-16 code units, the `length` of a JavaScript string, so most emoji count as 2 or more.
 
 `choice` card rules:
 
@@ -147,13 +161,53 @@ the second half of the kept text, and never splits an emoji.
 Every button's `response` passes `validateAskResponse` for its ask. `simpleCardSchema` checks a
 card's shape, limits, and unique button ids.
 
+A client answers from a card in one of two ways:
+
+- Send the tapped button's `response` as the answer, like any other answer.
+- Send only the button's id to the [`turn` action](#headless-endpoints): `{toolCallId, buttonId}`.
+  The server finds the button on the stored card with `resolveButtonAnswer({card, buttonId})` and
+  answers with its `response`. An id that is not on the card returns 400 `UNKNOWN_BUTTON`.
+
+`SimpleAskCard` in `@terreno/ui` renders any card ([props](ui.md#simpleaskcard)).
+
+## Compact surface
+
+A client on a small screen, such as a watch, sends `surface: "compact"` to `POST /gpt/prompt` or
+the [`turn` action](#headless-endpoints). `surface` is `"full"` (the default) or `"compact"`
+(`ASK_SURFACES`). Any other value returns 400. On a compact turn:
+
+- The model is offered only the kinds in `COMPACT_ASK_KINDS` (`["choice"]`) that `asks` enables,
+  each with its narrowed input schema (`compactAskInputSchemas`).
+- The asks section of the system prompt is `askPromptSection({kinds, surface: "compact"})`, which
+  states the narrowed limits.
+- `COMPACT_SURFACE_SYSTEM_PROMPT` is appended to the system prompt, even when asks are off: "The
+  user is on a small screen, such as a watch. Keep each reply to at most two short sentences, and
+  ask only yes-or-no questions or questions with up to three short options."
+- Every ask's simple card has `handoff: false`, because the narrowed schemas accept only asks whose
+  buttons show every option.
+
+The surface applies to one turn. An ask made on a compact turn can be answered from any client,
+and the next full turn offers every kind again.
+
+A compact `choice` (`compactChoiceAskInputSchema`) follows the [choice](#choice) rules plus these:
+
+| Field | Compact rule | Error |
+| --- | --- | --- |
+| `options` | 2–3 items (`simpleCard.buttonsMax`) | `TOO_MANY` |
+| `options[].label` | At most 20 UTF-16 code units (`simpleCard.buttonLabelMaxLength`), so its button shows it uncut. Most emoji count as 2 or more. | `TOO_LONG` |
+| `options[].label` | Different from every other option's label | `DUPLICATE_LABEL` |
+
+Every compact ask is also a valid full ask. `validateAskInput({kind, input, surface: "compact"})`
+checks the compact rules. A compact ask that breaks them goes back to the model as a tool error,
+like any invalid ask, and never reaches the client.
+
 ## Validation
 
 The model's ask and the user's answer are checked with pure functions from `@terreno/blocks`:
 
 | Function | Checks | Where it runs |
 | --- | --- | --- |
-| `validateAskInput({kind, input})` | The ask against its schema and rules: unique option ids, at most one default, defaults among the options | The same schema is the tool's `inputSchema`, so the AI SDK checks every ask call. An invalid ask goes back to the model as a tool error and never reaches the client. |
+| `validateAskInput({kind, input, surface?})` | The ask against its schema and rules: unique option ids, at most one default, defaults among the options, and with `surface: "compact"` the [compact rules](#compact-surface) | The same schema is the tool's `inputSchema`, so the AI SDK checks every ask call. An invalid ask goes back to the model as a tool error and never reaches the client. |
 | `validateAskResponse({kind, input, response})` | The answer envelope, then the kind's answer against the ask | The server, before it resumes the turn. Clients can run it before they enable Submit. |
 
 Both return `AskValidationError[]`, empty when valid, sorted by path and then code:
@@ -175,6 +229,7 @@ Both return `AskValidationError[]`, empty when valid, sorted by path and then co
 | `DECLINE_NOT_ALLOWED` | The answer skips an ask that does not allow skipping. | `validateAskResponse` |
 | `DEFAULT_NOT_IN_OPTIONS` | A default names an option id that the ask does not offer. | `validateAskInput` |
 | `DUPLICATE_ID` | Two options share the same id. | `validateAskInput` |
+| `DUPLICATE_LABEL` | Two options of a compact ask share the same label. | `validateAskInput` with `surface: "compact"` |
 | `INVALID_ENUM` | A value is not one of the allowed values. | Both |
 | `INVALID_FORMAT` | A string does not match its required format. | `validateAskInput` |
 | `INVALID_TYPE` | A value has the wrong type. | Both |
@@ -185,6 +240,7 @@ Both return `AskValidationError[]`, empty when valid, sorted by path and then co
 | `TOO_LONG` | A string is longer than allowed. | Both |
 | `TOO_MANY` | A list has more items than allowed. | Both |
 | `TOO_SHORT` | A string is empty or only whitespace. | Both |
+| `UNKNOWN_BUTTON` | The pressed button is not on the pending ask's simple card. | `resolveButtonAnswer` and the `turn` endpoint |
 | `UNKNOWN_KEY` | An object has a field that its schema does not define. | Both |
 
 ## Limits
@@ -237,6 +293,10 @@ Send `historyId` and `askResponse` instead of `prompt` to `POST /gpt/prompt`:
 }
 ```
 
+Clients that do not read server-sent events send the same `askResponse`, or a simple card's
+`buttonId`, to the [`turn` action](#headless-endpoints), which runs the same steps and returns the
+result as JSON.
+
 `askResponse` is the answer envelope plus the pending ask's `toolCallId`. The server then:
 
 1. Loads the history and checks that it belongs to the caller (403) and waits on this
@@ -275,6 +335,7 @@ Errors raised before the stream starts return JSON with `status`, `title`, and `
 | 400 | `askResponse.toolCallId is required` | `toolCallId` is missing or empty |
 | 400 | `attachments cannot be sent with askResponse` | An answer came with `attachments` |
 | 400 | `historyId is required with askResponse` | An answer came without `historyId` |
+| 400 | `surface is not a known surface` | `surface` is not `full` or `compact`. The detail lists the surfaces. |
 | 400 | `Invalid askResponse` | The answer fails `validateAskResponse`. `fields` lists the errors. |
 | 403 | `Not authorized to access this history` | The history belongs to another user |
 | 404 | `History not found` | No history has that id |
@@ -301,6 +362,99 @@ An invalid answer:
 ```
 
 Apps built with `TerrenoApp` add `requestId` to every JSON object response.
+
+## Headless endpoints
+
+Two actions on `/gpt/histories` serve clients that do not read server-sent events, such as a watch
+app, a notification action, or a chat bot. They exist only with asks on, so a host that never
+turned asks on gets no new endpoints: `AiApp` registers them when its `asks` option is set, and
+`addGptHistoryRoutes` when its `chat` option turns `asks` on (see [Enable asks](#enable-asks)).
+
+| Endpoint | Permission | Returns in `data` |
+| --- | --- | --- |
+| `GET /gpt/histories/pendingAsks` | `IsAuthenticated` | The caller's pending asks, newest first: `[{historyId, title?, toolCallId, kind, simple, created}]`. `created` is an ISO 8601 UTC timestamp. Deleted conversations are left out. |
+| `POST /gpt/histories/:id/turn` | `IsOwner`. An admin who does not own the history gets 403, because a turn speaks as the conversation's owner. | `{historyId, text, title?, pendingAsk?: {toolCallId, kind, simple}, error?}`, once the turn finishes |
+
+The `turn` body holds exactly one of three shapes, plus an optional `surface`
+([compact surface](#compact-surface)). Any other field returns 400.
+
+| Body | Runs the same turn as `POST /gpt/prompt` with |
+| --- | --- |
+| `{prompt}` | `{historyId, prompt}`. A pending ask is first cancelled with `user_sent_message`. |
+| `{askResponse: {toolCallId, action, content?, reason?}}` | `{historyId, askResponse}` |
+| `{toolCallId, buttonId}` | `{historyId, askResponse}`, where the answer is the `response` stored on that button of the pending ask's simple card |
+
+`turn` uses the same system prompt, tools, stored rows, and `AIRequest` log as `/gpt/prompt`. In
+the result:
+
+- `text` joins the text the turn produced. It is `""` when the agent only asked.
+- `pendingAsk` is set when the turn paused on an ask. Answer it with its `toolCallId` and the `id`
+  of one of `simple.buttons`.
+- `error` is set, with status 200, when the turn failed after it started. `text` holds what the
+  agent said before the error. An answer is kept even then, as on `/gpt/prompt`.
+
+The server writes nothing until the turn ends, so a client that disconnects does not stop it: the
+turn finishes and is saved. Read it later with `GET /gpt/histories/:id`, or list what still waits
+with `pendingAsks`.
+
+Start a conversation with `POST /gpt/histories` and the body `{}`. The server sets `userId` to the
+caller, even when the app validates request bodies.
+
+| Status | `title` | `code` | When |
+| --- | --- | --- | --- |
+| 400 | `Validation failed` | `action-body-validation-failed` | The body is not one of the three shapes, `surface` is unknown, or a field is not defined. `meta.fields` maps each field to its message. |
+| 400 | `Unknown buttonId` | `UNKNOWN_BUTTON` | `buttonId` is not on the pending ask's simple card. `meta.fields` holds the error, whose `fix` lists the card's button ids. The ask stays pending. |
+| 400 | `Invalid askResponse` | | `askResponse` fails `validateAskResponse`. `meta.fields` lists the errors. |
+| 401 | `Unauthorized` | | No session or bearer token |
+| 403 | `Access denied` | `action-access-denied` | The history belongs to another user |
+| 403 | `Not authorized to access this history` | | An admin sent a turn to another user's history |
+| 404 | `Document not found` | `document-not-found` | No history has that id |
+| 409 | `This ask is no longer pending` | | `toolCallId` is not the ask the history waits on: it was answered, cancelled, or never asked. Also returned for a `prompt` that arrives while an answer is resolving the ask. |
+
+A small client asks and answers with the button's id:
+
+```text
+POST /gpt/histories/6710c2a1f1e2d3c4b5a69701/turn
+{"prompt": "Set up billing for my team", "surface": "compact"}
+
+{"data": {"historyId": "6710c2a1f1e2d3c4b5a69701", "pendingAsk": {"kind": "choice", "simple": {…}, "toolCallId": "call_8f2c1"}, "text": ""}, "requestId": "…"}
+
+POST /gpt/histories/6710c2a1f1e2d3c4b5a69701/turn
+{"toolCallId": "call_8f2c1", "buttonId": "option:team", "surface": "compact"}
+
+{"data": {"historyId": "6710c2a1f1e2d3c4b5a69701", "text": "Done. Your team is on the Team plan.", "title": "Team plan setup"}, "requestId": "…"}
+```
+
+`simple` is the card in the [wire example](#wire-example).
+
+## JSON Schemas and fixtures
+
+`@terreno/blocks` publishes JSON Schema (draft-07) documents for clients that do not run
+TypeScript, such as a watch app that generates Swift `Codable` types. Read them from
+`@terreno/blocks/schemas/<file>`, or from `blocks/schemas/` in the Terreno repo:
+
+| File | Describes |
+| --- | --- |
+| `simpleCard.schema.json` | A simple card, with its buttons and their answer envelopes |
+| `turnRequest.schema.json` | The body of `POST /gpt/histories/{id}/turn` |
+| `turnResponse.schema.json` | The response of `turn`: `{data, requestId?}` |
+| `pendingAsksResponse.schema.json` | The response of `GET /gpt/histories/pendingAsks`: `{data, requestId?}` |
+
+Nested types have titles (`SimpleCard`, `SimpleCardButton`, `AskResponse`, `AskAnswer`,
+`PendingAsk`, `PendingAskSummary`, `TurnResult`), so generated code gets readable names. JSON
+Schema cannot express two rules, so the server enforces them: button ids are unique within a card,
+and a turn body sends exactly one of `prompt`, `askResponse`, or `toolCallId` with `buttonId`.
+
+`askJsonSchemas()` builds the documents from `simpleCardSchema`, `turnRequestSchema`,
+`turnResultSchema`, and `pendingAskListSchema`. After changing one of those, run
+`bun run schemas` in `blocks/`. A test fails while the committed files are out of date.
+
+The ask fixtures are published too, for testing a client's rendering and validation:
+
+| Path | Shape |
+| --- | --- |
+| `@terreno/blocks/fixtures/valid/<name>.json` | `{kind, input, simple}`: a valid ask and the card `toSimpleCard` derives for it, with `toolCallId: "call_fixture"` |
+| `@terreno/blocks/fixtures/invalid/<name>.json` | `{kind, input, errors}`: an invalid ask and the `{path, code}` of every error `validateAskInput` returns for it |
 
 ## Stored state
 
@@ -423,22 +577,28 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 | Export | Description |
 | --- | --- |
 | `ASK_KINDS`, `AskKind` | The ask kinds (`["choice"]`) |
-| `choiceAskInputSchema`, `choiceOptionSchema`, `choiceAnswerSchema`, `choiceAskResponseSchema` | `choice` schemas and their types (`ChoiceAskInput`, `ChoiceOption`, `ChoiceAnswer`, `ChoiceAskResponse`) |
-| `askInputSchemas`, `askOutputSchemas` | Input and answer envelope schemas by kind |
+| `ASK_SURFACES`, `AskSurface`, `askSurfaceSchema` | The surfaces (`["full", "compact"]`) and the schema of a request's `surface` |
+| `COMPACT_ASK_KINDS`, `CompactAskKind`, `askKindsForSurface({kinds, surface})` | The kinds the compact surface offers (`["choice"]`), and the ones a surface offers from a list |
+| `choiceAskInputSchema`, `compactChoiceAskInputSchema`, `choiceOptionSchema`, `choiceAnswerSchema`, `choiceAskResponseSchema` | `choice` schemas and their types (`ChoiceAskInput`, `ChoiceOption`, `ChoiceAnswer`, `ChoiceAskResponse`) |
+| `askInputSchemas`, `compactAskInputSchemas`, `askOutputSchemas`, `askInputSchemaFor({kind, surface?})` | Input and answer envelope schemas by kind, and the input schema for a kind on a surface |
 | `askResponseSchema`, `askAcceptResponseSchema`, `askDeclineResponseSchema`, `askCancelResponseSchema`, `AskResponse` | The answer envelope |
 | `Ask`, `ChoiceAsk` | A validated ask: `{kind, input}` |
 | `ASK_CANCEL_REASONS` | Reasons the server records with `cancel` |
 | `validateAskInput`, `validateAskResponse`, `AskValidationError`, `AskErrorCode` | Validators and their errors |
-| `toSimpleCard`, `simpleCardSchema`, `simpleCardButtonSchema`, `SIMPLE_CARD_BUTTON_STYLES`, `SimpleCard`, `SimpleCardButton` | Simple cards |
-| `askPromptSection({kinds})` | The system prompt section for the given kinds |
+| `toSimpleCard`, `resolveButtonAnswer`, `simpleCardSchema`, `simpleCardButtonSchema`, `SIMPLE_CARD_BUTTON_STYLES`, `SimpleCard`, `SimpleCardButton` | Simple cards, and the answer a card's button sends |
+| `turnRequestSchema`, `turnResultSchema`, `pendingAskSummarySchema`, `pendingAskListItemSchema`, `pendingAskListSchema`, `askResponseWithToolCallIdSchema` | The bodies of the [headless endpoints](#headless-endpoints), with types `TurnRequest`, `TurnResult`, `PendingAskSummary`, `PendingAskListItem`, `AskResponseWithToolCallId` |
+| `askJsonSchemas()` | The [JSON Schema documents](#json-schemas-and-fixtures), keyed by file name |
+| `askPromptSection({kinds, surface?})` | The system prompt section for the kinds a surface offers |
 | `ASK_LIMITS`, `ASK_ERROR_CODES` | Limits and error codes |
 
 `@terreno/ai`:
 
 | Export | Description |
 | --- | --- |
-| `createAskTools({kinds})` | The ask tools, such as `{ask_choice}`: Zod input and output schemas, no `execute`. `/gpt/prompt` handles the pause and the answer; code that calls `streamText` itself must handle both. |
+| `createAskTools({kinds, surface?})` | The ask tools, such as `{ask_choice}`: Zod input and output schemas, no `execute`. With `surface: "compact"`, only the compact kinds, with narrowed input schemas. `/gpt/prompt` and `turn` handle the pause and the answer; code that calls `streamText` itself must handle both. |
 | `TERRENO_ASKS_SYSTEM_PROMPT` | System prompt text added when asks are on, before the `askPromptSection` |
+| `COMPACT_SURFACE_SYSTEM_PROMPT` | System prompt line added on compact turns |
+| `GptHistoryRouteOptions.chat` | Chat options for `addGptHistoryRoutes`. When they turn `asks` on, it adds the headless endpoints; otherwise it adds neither. |
 | `AsksOptions` | `{kinds?: AskKind[]}` |
 | `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus` | Stored ask types |
 | `Ask`, `AskKind`, `AskResponse`, `AskValidationError`, `SimpleCard`, `SimpleCardButton` | Re-exported from `@terreno/blocks` |
@@ -448,6 +608,7 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 | Export | Description |
 | --- | --- |
 | `AskCard`, `AskCardProps` | One ask in a transcript: controls while pending, a summary after |
+| `SimpleAskCard`, `SimpleAskCardProps` | Any ask's simple card, for narrow layouts ([props](ui.md#simpleaskcard)) |
 | `ChatAsk`, `ChatAskState`, `ChatAskStatus` | An ask as the chat shows it: the ask, its `toolCallId`, `status`, and optional `response` and `simple` |
 | `AskSubmission`, `AskSubmitHandler` | What `onAskSubmit` and `AskCard`'s `onSubmit` receive: `{toolCallId, response}` |
 | `GPTChatMessage.ask`, `GPTChatProps.onAskSubmit`, `GPTChatProps.askErrors` | Asks in `GPTChat` |

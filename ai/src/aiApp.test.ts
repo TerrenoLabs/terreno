@@ -1,10 +1,12 @@
-import {beforeAll, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeAll, describe, expect, it, mock} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
 import type {LanguageModel} from "ai";
 import type express from "express";
 import supertest from "supertest";
 
 import {AiApp} from "./aiApp";
+import {AIRequest} from "./models/aiRequest";
+import {GptHistory} from "./models/gptHistory";
 import type {FileStorageService} from "./service/fileStorage";
 import type {MCPService} from "./service/mcpService";
 import {authAsUserWithCredentials, ensureTestUsers, UserModel} from "./tests/helpers";
@@ -43,6 +45,11 @@ const createMockModel = () => ({
 describe("AiApp", () => {
   beforeAll(async () => {
     await ensureTestUsers([AI_APP_TEST_USER]);
+  });
+
+  afterEach(async () => {
+    await AIRequest.deleteMany({});
+    await GptHistory.deleteMany({});
   });
 
   const authAsUser = async (app: express.Application) => {
@@ -88,6 +95,90 @@ describe("AiApp", () => {
     expect(res.status).toBe(200);
     const [callOptions] = model.doStream.mock.calls[0] as unknown as [{tools?: {name: string}[]}];
     expect(callOptions.tools?.map((tool) => tool.name)).toEqual(["ask_choice"]);
+  });
+
+  it("adds the documented headless turn actions to the history routes", async () => {
+    const {AIService} = await import("./service/aiService");
+    const model = createMockModel();
+    const aiService = new AIService({model: model as unknown as LanguageModel});
+    const app = new TerrenoApp({
+      configureApp: (router, options) =>
+        new AiApp({aiService, asks: true, openApiOptions: options}).register(
+          router as unknown as express.Application
+        ),
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+    const agent = await authAsUser(app);
+
+    const openApi = await agent.get("/openapi.json");
+    const created = await agent.post("/gpt/histories").send({});
+    const historyId = created.body.data._id;
+    const turn = await agent
+      .post(`/gpt/histories/${historyId}/turn`)
+      .send({prompt: "Hi", surface: "compact"});
+    const pendingAsks = await agent.get("/gpt/histories/pendingAsks");
+
+    const historyPaths = Object.keys(openApi.body.paths).filter((path) =>
+      path.startsWith("/gpt/histories")
+    );
+    expect(historyPaths.sort()).toEqual([
+      "/gpt/histories/",
+      "/gpt/histories/pendingAsks",
+      "/gpt/histories/{id}",
+      "/gpt/histories/{id}/rating",
+      "/gpt/histories/{id}/turn",
+    ]);
+    expect(turn.body.data).toEqual({historyId, text: ""});
+    expect(pendingAsks.body.data).toEqual([]);
+    const [callOptions] = model.doStream.mock.calls[0] as unknown as [{tools?: {name: string}[]}];
+    expect(callOptions.tools?.map((tool) => tool.name)).toEqual(["ask_choice"]);
+  });
+
+  it("adds the headless actions only with asks on, so hosts without asks get no new endpoints", async () => {
+    const {AIService} = await import("./service/aiService");
+    const historyRoutes = async (asks?: boolean) => {
+      const model = createMockModel();
+      const aiService = new AIService({model: model as unknown as LanguageModel});
+      const app = new TerrenoApp({
+        configureApp: (router, options) =>
+          new AiApp({aiService, asks, openApiOptions: options}).register(
+            router as unknown as express.Application
+          ),
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+      const agent = await authAsUser(app);
+      const openApi = await agent.get("/openapi.json");
+      const created = await agent.post("/gpt/histories").send({});
+      await agent.post(`/gpt/histories/${created.body.data._id}/turn`).send({prompt: "Hi"});
+      const pendingAsks = await agent.get("/gpt/histories/pendingAsks");
+      const paths = Object.keys(openApi.body.paths).filter((path) =>
+        path.startsWith("/gpt/histories")
+      );
+      return {
+        paths: paths.sort(),
+        pendingAsksStatus: pendingAsks.status,
+        turnModelCalls: model.doStream.mock.calls.length,
+      };
+    };
+
+    expect(await historyRoutes()).toEqual({
+      paths: ["/gpt/histories/", "/gpt/histories/{id}", "/gpt/histories/{id}/rating"],
+      pendingAsksStatus: 404,
+      turnModelCalls: 0,
+    });
+    expect(await historyRoutes(true)).toEqual({
+      paths: [
+        "/gpt/histories/",
+        "/gpt/histories/pendingAsks",
+        "/gpt/histories/{id}",
+        "/gpt/histories/{id}/rating",
+        "/gpt/histories/{id}/turn",
+      ],
+      pendingAsksStatus: 200,
+      turnModelCalls: 1,
+    });
   });
 
   it("registers file routes only when fileStorageService and gcsBucket are provided", async () => {

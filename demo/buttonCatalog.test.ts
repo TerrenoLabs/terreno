@@ -2,26 +2,16 @@ import {describe, it} from "bun:test";
 import {assert} from "chai";
 
 import {ButtonConfiguration} from "./story-config/Button.config";
-import {catalogIssues, storiesForDemo, unresolvedRelated} from "./catalogContract";
-import {DemoConfig} from "./demoConfig";
+import {storiesForDemo} from "./catalogContract";
+import {getDemoCatalogIssues} from "./demoConfig";
 
 describe("Button catalog", () => {
   it("ships a copyable usage snippet and resolvable related components", () => {
     assert.include(ButtonConfiguration.usageExample, 'import {Button} from "@terreno/ui"');
-    const names = DemoConfig.map((config) => config.name);
-    assert.deepEqual(unresolvedRelated(ButtonConfiguration.related, names), []);
-    assert.deepEqual(
-      catalogIssues(DemoConfig).filter((issue) => issue.startsWith("Button related")),
-      []
-    );
-    assert.deepEqual(
-      catalogIssues(DemoConfig).filter((issue) => issue.includes("related")),
-      []
-    );
-    assert.deepEqual(
-      catalogIssues(DemoConfig).filter((issue) => issue.includes("usageExample")),
-      []
-    );
+    const issues = getDemoCatalogIssues();
+    assert.deepEqual(issues.filter((issue) => issue.startsWith("Button related")), []);
+    assert.deepEqual(issues.filter((issue) => issue.includes("related")), []);
+    assert.deepEqual(issues.filter((issue) => issue.includes("usageExample")), []);
   });
 
   it("keeps Multiline off the demo page and gives Variants interaction steps", () => {

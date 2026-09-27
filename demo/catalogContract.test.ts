@@ -1,13 +1,7 @@
 import {describe, it} from "bun:test";
 import {assert} from "chai";
 
-import {
-  catalogIssues,
-  controlDefault,
-  matchesDemoSearch,
-  storiesForDemo,
-  unresolvedRelated,
-} from "./catalogContract";
+import {catalogIssues, controlDefault, matchesDemoSearch, storiesForDemo} from "./catalogContract";
 
 describe("catalog contract", () => {
   it("uses false when a boolean control has no default", () => {
@@ -23,7 +17,16 @@ describe("catalog contract", () => {
   });
 
   it("reports related names that do not match a component", () => {
-    assert.deepEqual(unresolvedRelated(["Cards", "Modal"], ["Card", "Modal"]), ["Cards"]);
+    const issues = catalogIssues([
+      {
+        name: "Button",
+        related: ["Cards", "Modal"],
+        stories: {},
+      },
+      {name: "Card", related: [], stories: {}},
+      {name: "Modal", related: [], stories: {}},
+    ]);
+    assert.include(issues.join("\n"), 'Button related "Cards"');
   });
 
   it("hides stories marked showInDemo false from demo mode", () => {

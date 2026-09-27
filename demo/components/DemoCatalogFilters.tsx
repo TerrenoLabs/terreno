@@ -2,7 +2,7 @@ import {Box, Button, TextField} from "@terreno/ui";
 import type React from "react";
 import {useCallback} from "react";
 
-export const DEMO_CATEGORIES = [
+const DEMO_CATEGORIES = [
   "All",
   "Foundation",
   "Component",

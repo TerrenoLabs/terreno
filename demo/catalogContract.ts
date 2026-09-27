@@ -26,7 +26,7 @@ export const controlDefault = (control: DemoControlDefault): unknown => {
   return "";
 };
 
-export const unresolvedRelated = (related: string[], names: string[]): string[] => {
+const unresolvedRelated = (related: string[], names: string[]): string[] => {
   const known = new Set(names.map(normalizeName));
   return related.filter((name) => !known.has(normalizeName(name)));
 };

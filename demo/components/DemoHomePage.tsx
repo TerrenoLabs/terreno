@@ -7,6 +7,7 @@ import type React from "react";
 import {useEffect, useMemo, useState} from "react";
 import {ScrollView} from "react-native";
 import {matchesDemoSearch} from "../catalogContract";
+import {getDemoCatalogIssues} from "../demoConfig";
 
 import {DemoHomeBanner} from "./demoHomeBanner";
 
@@ -24,6 +25,17 @@ export const DemoHomePage: React.FC<{
   useEffect(() => {
     navigation.setOptions({title: "Terreno UI Demo"});
   }, [navigation]);
+
+  // Surface catalog contract drift during local demo development.
+  useEffect(() => {
+    if (!__DEV__) {
+      return;
+    }
+    const issues = getDemoCatalogIssues();
+    if (issues.length > 0) {
+      console.warn(`Demo catalog issues:\n${issues.join("\n")}`);
+    }
+  }, []);
 
   return (
     <ScrollView

@@ -108,6 +108,7 @@ import {WebAddressAutocompleteConfiguration} from "@story-config/WebAddressAutoc
 import type {FieldProps} from "@terreno/ui";
 import type React from "react";
 import type {DemoInteractionStep} from "./catalogContract";
+import {catalogIssues} from "./catalogContract";
 import {OpenAPIContextDemo, OpenAPIContextStories} from "./stories/OpenAPIContext.stories";
 
 export type DemoConfigStatus = "planned" | "inProgress" | "ready" | "notSupported";
@@ -408,3 +409,6 @@ export const findDemoConfig = (component?: string): DemoConfiguration | undefine
   const normalized = normalizeComponentName(component);
   return DemoConfig.find((c) => normalizeComponentName(c.name) === normalized);
 };
+
+/** Catalog contract validation for the demo workshop and CI health checks. */
+export const getDemoCatalogIssues = (): string[] => catalogIssues(DemoConfig);

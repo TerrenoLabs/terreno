@@ -25,6 +25,7 @@ import {DecimalRangeActionSheetConfiguration} from "@story-config/DecimalRangeAc
 import {DismissButtonConfiguration} from "@story-config/DismissButton.config";
 import {DonutChartConfiguration} from "@story-config/DonutChart.config";
 import {DraggableListConfiguration} from "@story-config/DraggableList.config";
+import {DropdownPanelConfiguration} from "@story-config/DropdownPanel.config";
 import {EditableCardConfiguration} from "@story-config/EditableCard.config";
 import {EmailFieldConfiguration} from "@story-config/EmailField.config";
 import {EmojiSelectorConfiguration} from "@story-config/EmojiSelector.config";
@@ -32,7 +33,6 @@ import {ErrorBoundaryConfiguration} from "@story-config/ErrorBoundary.config";
 import {ErrorPageConfiguration} from "@story-config/ErrorPage.config";
 import {FieldConfiguration} from "@story-config/Field.config";
 import {FilePickerButtonConfiguration} from "@story-config/FilePickerButton.config";
-import {FilterConfiguration} from "@story-config/Filter.config";
 import {GPTChatConfiguration} from "@story-config/GPTChat.config";
 import {GPTMemoryModalConfiguration} from "@story-config/GPTMemoryModal.config";
 import {HeadingConfiguration} from "@story-config/Heading.config";
@@ -278,7 +278,6 @@ const Config: DemoConfigurationBase[] = [
   BodyConfiguration,
   BooleanFieldConfiguration,
   BoxConfiguration,
-  FilterConfiguration,
   ButtonConfiguration,
   CardConfiguration,
   // ChatBubbleConfiguration,
@@ -293,6 +292,7 @@ const Config: DemoConfigurationBase[] = [
   DismissButtonConfiguration,
   DonutChartConfiguration,
   DraggableListConfiguration,
+  DropdownPanelConfiguration,
   EditableCardConfiguration,
   EmailFieldConfiguration,
   EmojiSelectorConfiguration,

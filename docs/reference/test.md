@@ -148,7 +148,7 @@ the demo compiles. Add a story plus `demoConfig.tsx` registration for new
 components, or an allowlist entry with a specific reason — not "hard to demo".
 The allowlist is limited to shell/providers, React context objects, thin RN
 list wrappers, subcomponents already exercised by a parent story
-(Filter, Table, DateTimeField, HeightField, ConsentFormScreen), and
+(DropdownPanel, Table, DateTimeField, HeightField, ConsentFormScreen), and
 product surfaces that belong in `example-frontend` rather than the isolated
 UI demo (announcements and in-app notifications).
 Standalone picker sheets (`NumberPickerActionSheet`, `DecimalRangeActionSheet`)

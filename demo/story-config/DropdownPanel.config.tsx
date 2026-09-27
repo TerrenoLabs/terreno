@@ -1,18 +1,18 @@
 import {DemoConfiguration} from "@config";
 import {
-  FilterDemo,
-  FilterNoActionsDemo,
-  FilterSubComponentsDemo,
-} from "@stories/Filter.stories";
-import {Filter} from "@terreno/ui";
+  DropdownPanelDemo,
+  DropdownPanelNoActionsDemo,
+  DropdownPanelSubComponentsDemo,
+} from "@stories/DropdownPanel.stories";
+import {DropdownPanel} from "@terreno/ui";
 import React from "react";
 
-export const FilterConfiguration: DemoConfiguration = {
-  name: "Filter",
-  component: Filter,
+export const DropdownPanelConfiguration: DemoConfiguration = {
+  name: "DropdownPanel",
+  component: DropdownPanel,
   related: ["SelectField", "BooleanField", "Accordion"],
   description:
-    "A compositional filter dropdown for data-heavy views. Combine the select menu, boolean, and accordion sub-components inside the parent, with an optional Apply/Clear/Cancel footer. Desktop web only.",
+    "A compositional dropdown panel: a trigger that opens an anchored panel of composed content with an optional Apply/Clear/Cancel footer. Built for filters (combine the select menu, boolean, and accordion sub-components) but usable for any panel content. The panel escapes ancestor clipping, right-aligns rather than running off screen, and flips above the trigger when there is no room below.",
   a11yNotes: [
     "The trigger button opens and closes the dropdown; clicking outside closes it.",
     "Tab key navigation moves through the dropdown content.",
@@ -24,11 +24,11 @@ export const FilterConfiguration: DemoConfiguration = {
     figma: "ready",
     figmaLink:
       "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=3458-6098",
-    ios: "notSupported",
-    android: "notSupported",
+    ios: "ready",
+    android: "ready",
     web: "ready",
   },
-  interfaceName: "FilterProps",
+  interfaceName: "DropdownPanelProps",
   usage: {
     do: [
       "Compose the select menu, boolean, and accordion sub-components to build a filter.",
@@ -36,22 +36,22 @@ export const FilterConfiguration: DemoConfiguration = {
       "Toggle the Apply/Clear/Cancel footer on or off to match the flow.",
     ],
     doNot: [
-      "Do not use on mobile native — this pattern is desktop web only.",
+      "Do not nest a dropdown panel inside another dropdown panel.",
       "Do not hardcode colors or spacing; the components use design system tokens.",
     ],
   },
   props: {},
-  demo: FilterDemo,
+  demo: DropdownPanelDemo,
   demoOptions: {},
   stories: {
-    Filter: {
-      render: () => <FilterDemo />,
+    DropdownPanel: {
+      render: () => <DropdownPanelDemo />,
     },
     "Without Action Buttons": {
-      render: () => <FilterNoActionsDemo />,
+      render: () => <DropdownPanelNoActionsDemo />,
     },
     "Sub-components": {
-      render: () => <FilterSubComponentsDemo />,
+      render: () => <DropdownPanelSubComponentsDemo />,
     },
   },
 };

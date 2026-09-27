@@ -1,7 +1,7 @@
 import {
   Box,
   CheckBox,
-  Filter,
+  DropdownPanel,
   FilterAccordion,
   FilterBoolean,
   FilterSelectMenu,
@@ -23,8 +23,8 @@ const DATE_OPTIONS = [
 
 const STATUS_OPTIONS = ["Incomplete", "In progress", "Complete", "Not applicable"];
 
-// Full compositional filter mirroring the To Do's reference implementation.
-export const FilterDemo = (): React.ReactElement => {
+// Full compositional filter panel mirroring the To Do's reference implementation.
+export const DropdownPanelDemo = (): React.ReactElement => {
   const [dateRange, setDateRange] = useState("all");
   const [assignedToMe, setAssignedToMe] = useState(false);
   const [urgentOnly, setUrgentOnly] = useState(false);
@@ -38,7 +38,7 @@ export const FilterDemo = (): React.ReactElement => {
 
   return (
     <StorybookContainer>
-      <Filter
+      <DropdownPanel
         onApply={() => console.info("Applied", {assignedToMe, dateRange, statuses, urgentOnly})}
         onClear={() => {
           setDateRange("all");
@@ -96,30 +96,30 @@ export const FilterDemo = (): React.ReactElement => {
             })}
           </Box>
         </FilterAccordion>
-      </Filter>
+      </DropdownPanel>
     </StorybookContainer>
   );
 };
 
-// Compositional filter without the Apply/Clear/Cancel footer.
-export const FilterNoActionsDemo = (): React.ReactElement => {
+// Compositional dropdown panel without the Apply/Clear/Cancel footer.
+export const DropdownPanelNoActionsDemo = (): React.ReactElement => {
   const [assignedToMe, setAssignedToMe] = useState(false);
   return (
     <StorybookContainer>
-      <Filter label="Filters" showActionButtons={false}>
+      <DropdownPanel label="Filters" showActionButtons={false}>
         <FilterBoolean
           onChange={setAssignedToMe}
           showChangesBadge={assignedToMe}
           title="Assigned to me only"
           value={assignedToMe}
         />
-      </Filter>
+      </DropdownPanel>
     </StorybookContainer>
   );
 };
 
 // Each sub-component rendered on its own for state review.
-export const FilterSubComponentsDemo = (): React.ReactElement => {
+export const DropdownPanelSubComponentsDemo = (): React.ReactElement => {
   const [dateRange, setDateRange] = useState("all");
   const [toggle, setToggle] = useState(true);
   const [expanded, setExpanded] = useState(false);

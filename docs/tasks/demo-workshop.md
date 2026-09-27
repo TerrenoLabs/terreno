@@ -42,7 +42,7 @@ See: [`docs/implementationPlans/demo-workshop.md`](../implementationPlans/demo-w
   - Docs: `demo/README.md`
   - Skills: `update-docs`, `verify-ui-changes`
 
-- [ ] **Task 1.4**: Preview toolbar and URL state
+- [x] **Task 1.4**: Preview toolbar and URL state
   - Delivers: demo and dev component routes change theme, viewport, background, locale, right-to-left, and reduced motion from the URL. Embeds apply that state and hide the bar.
   - Files: `demo/components/DemoChrome.tsx`, `demo/app/_layout.tsx`, `demo/app/demo/_layout.tsx`, `demo/app/dev/_layout.tsx`, `demo/contexts/EmbedModeContext.tsx`, `docs/how-to/preview-demo.md`, `demo/README.md`
   - Blocked by: Task 1.1

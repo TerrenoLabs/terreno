@@ -86,7 +86,8 @@ describe("CircleCI concurrency", () => {
     const repoPolicies = jobCommandBlock(continueConfig, "repo-policies");
     assert.ok(repoPolicies);
     assert.match(repoPolicies, /bun run check:no-barrel-imports/);
-    assert.match(repoPolicies, /bun run analyze:full/);
+    assert.match(repoPolicies, /bun run check:dependency-cruiser/);
+    assert.doesNotMatch(repoPolicies, /knip/);
     assert.doesNotMatch(continueConfig, /\n {6}- no-barrel-imports\n/);
     assert.doesNotMatch(continueConfig, /\n {6}- changelog-fragments\n/);
   });
@@ -183,9 +184,13 @@ describe("CircleCI concurrency", () => {
     assert.match(continueConfig, /equal: \[false, << pipeline.parameters.run-example-backend >>\]/);
   });
 
-  it("runs repo-policies on Node 22.14 so Knip can load oxc-parser", () => {
+  it("runs Knip in its own always-on job on Node 22.14 so it can load oxc-parser", () => {
     assert.match(continueConfig, /node22_knip:\n {4}docker:\n {6}- image: cimg\/node:22\.14/);
-    assert.match(continueConfig, /repo-policies:\n {4}executor: node22_knip/);
+    assert.match(continueConfig, /\n {2}knip:\n {4}executor: node22_knip/);
+    const knip = jobCommandBlock(continueConfig, "knip");
+    assert.ok(knip);
+    assert.match(knip, /bun run check:knip/);
+    assert.match(continueConfig, /always:\n {4}jobs:\n {6}- knip\n/);
   });
 
   it("does not duplicate repo-policies on config-only kitchen-sink", () => {

@@ -1216,10 +1216,21 @@ jobs:
       - check_new_file_lcov:
           package: << parameters.package >>
 
+  # Repo-wide unused-code gate. Runs on every pipeline because any file can
+  # orphan an export; kept out of repo-policies so it runs in parallel.
+  knip:
+    executor: node22_knip
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - run:
+          name: Fail on Knip findings
+          command: bun run check:knip
+
   # One container for the former eight policy jobs. Each used to checkout + bun
   # install on its own small/medium class and then sit in the queue behind e2e.
   repo-policies:
-    executor: node22_knip
+    executor: node22
     steps:
       - checkout
       - install_bun_and_deps
@@ -1267,7 +1278,7 @@ jobs:
           name: Static analysis
           command: |
             bun test scripts/static-analysis/
-            bun run analyze:full
+            bun run check:dependency-cruiser
 
   rulesync-check:
     executor: node22
@@ -2091,6 +2102,7 @@ workflows:
   #       context: [terreno-github-api, terreno-agentic]
   always:
     jobs:
+      - knip
       - dco
       - architectural-pr-review
 

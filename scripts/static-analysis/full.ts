@@ -137,6 +137,13 @@ const main = (): void => {
     writeDependencyBaseline();
     return;
   }
+  if (process.argv.includes("--dependency-cruiser-only")) {
+    const dependencyExitCode = runDependencyCruiser({writeBaseline: false});
+    if (dependencyExitCode !== 0) {
+      process.exit(dependencyExitCode);
+    }
+    return;
+  }
   if (process.argv.includes("--knip-only")) {
     if (!checkKnip()) {
       process.exit(1);

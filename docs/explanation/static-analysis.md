@@ -25,9 +25,10 @@ repository-wide correctness checks with a partial changed-file scan.
 | --- | --- | --- | --- |
 | Biome | `bun run analyze:fast` | Changed and untracked analyzable files | Agent post-edit hooks |
 | Biome | `bun run analyze:staged` | Staged analyzable files | Git pre-commit |
-| Knip | `bun run check:knip` | Both development and production module graphs | Dedicated GitHub workflow |
-| Knip | `bun run analyze:full` | Both development and production module graphs | Agent stop hooks and CircleCI |
-| dependency-cruiser | `bun run analyze:full` | Workspace source dependency graph | Agent stop hooks and CI |
+| Knip | `bun run check:knip` | Both development and production module graphs | CircleCI `knip` job |
+| Knip | `bun run analyze:full` | Both development and production module graphs | Agent stop hooks |
+| dependency-cruiser | `bun run check:dependency-cruiser` | Workspace source dependency graph | CircleCI `repo-policies` job |
+| dependency-cruiser | `bun run analyze:full` | Workspace source dependency graph | Agent stop hooks |
 
 Biome runs from the nearest workspace configuration. Knip finds unused files, exports,
 types, dependencies, binaries, and duplicate exports. dependency-cruiser rejects new
@@ -88,8 +89,9 @@ Generated SDK files use a path-scoped `ignoreIssues` entry instead of hand edits
 ## Zero-finding policy
 
 Knip has no baseline. `bun run check:knip` runs the default and production graphs and
-fails on every finding. The dedicated `Knip / Zero findings` GitHub workflow runs this
-command for every pull request and every push to `master`.
+fails on every finding. The dedicated CircleCI `knip` job runs this command in the
+`always` workflow, so it runs for every pull request and every push to `master` in
+parallel with the path-filtered jobs.
 
 Fix every Knip finding or add the narrowest justified exception to `knip.jsonc` with a
 comment naming the runtime loader, public compatibility promise, generated source, or

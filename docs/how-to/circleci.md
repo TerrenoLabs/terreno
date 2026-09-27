@@ -107,9 +107,10 @@ Playwright runs five shards after `e2e-prepare` (`auth`, `app`, `admin-core`,
 first checks the [affected gate](#e2e-affected-gate) and halts when no changed
 file can reach it. Repository
 policy checks share one `repo-policies` job so eight small checkouts do not
-sit in the concurrency queue. `repo-policies` uses Node 22.14 because Knip's
-oxc-parser throws `ERR_REQUIRE_ESM` on the shared 22.11 executor.
-Require `repo-policies` in branch protection. Require `e2e-auth` /
+sit in the concurrency queue. Knip runs in its own `knip` job in the `always`
+workflow because any change can orphan an export. It uses Node 22.14 because
+Knip's oxc-parser throws `ERR_REQUIRE_ESM` on the shared 22.11 executor.
+Require `repo-policies` and `knip` in branch protection. Require `e2e-auth` /
 `e2e-app` / … only as path-filtered checks; config-only PRs post `e2e-auth`
 as the smoke shard and do not run the other four. Do not require the old
 `no-barrel-imports` / `e2e-login` names.

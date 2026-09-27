@@ -103,8 +103,8 @@ const repoPolicySteps = ({baseSha}: {baseSha: string}): PrepushStep[] => [
     name: "repo-policies: changelog fragments",
   },
   {
-    command: "bun test scripts/static-analysis/ && bun run analyze:full",
-    name: "repo-policies: static analysis",
+    command: "bun test scripts/static-analysis/ && bun run check:dependency-cruiser",
+    name: "repo-policies: dependency-cruiser",
   },
 ];
 
@@ -168,6 +168,7 @@ export const planPrepush = ({
   const steps: PrepushStep[] = [
     {command: "bun run lint", name: "lint (all packages)"},
     {command: "bun run compile", name: "compile (all packages)"},
+    {command: "bun run check:knip", name: "knip: zero findings"},
   ];
 
   if (has("run-rulesync")) {

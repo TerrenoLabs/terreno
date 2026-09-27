@@ -208,6 +208,7 @@
     "check": "bun run check:no-barrel-imports && bun run check:explicit-any:baseline && bun run check:lifecycle-skills && bun run check:source-rules",
     "check:changelog": "bun run scripts/changelog/check.ts",
     "check:circleci-parity": "bun run scripts/check-circleci-parity/check.ts",
+    "check:dependency-cruiser": "bun run scripts/static-analysis/full.ts --dependency-cruiser-only",
     "check:demo-coverage": "bun run scripts/check-demo-coverage.ts",
     "check:e2e-affected": "bun run scripts/ci/e2eAffected/check.ts",
     "check:explicit-any": "bun run scripts/check-explicit-any/check.ts",

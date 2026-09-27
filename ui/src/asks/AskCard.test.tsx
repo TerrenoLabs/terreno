@@ -1,6 +1,6 @@
 import {afterEach, describe, it, mock, spyOn} from "bun:test";
 import {type ChoiceAskInput, toSimpleCard} from "@terreno/blocks";
-import {act, fireEvent} from "@testing-library/react-native";
+import {act, fireEvent, within} from "@testing-library/react-native";
 import {assert} from "chai";
 
 import {renderWithTheme} from "../test-utils";
@@ -213,6 +213,164 @@ describe("AskCard", () => {
         action: "accept",
         content: {selected: ["ca"]},
       });
+    });
+  });
+
+  describe("select many", () => {
+    const TOPPINGS_INPUT: ChoiceAskInput = {
+      allowOther: true,
+      default: ["cheese"],
+      maxSelected: 2,
+      options: [
+        {id: "cheese", label: "Extra cheese"},
+        {description: "Button and cremini", id: "mushrooms", label: "Mushrooms"},
+        {id: "olives", label: "Olives"},
+      ],
+      otherLabel: "Another topping",
+      prompt: "Which toppings should I add?",
+      select: "many",
+      submitLabel: "Add toppings",
+    };
+
+    it("renders checkboxes, the Other field, and the selection bounds, not quick replies", () => {
+      const {getByLabelText, getByTestId, getByText, queryByTestId} = renderCard({
+        ask: pendingAsk(TOPPINGS_INPUT),
+      });
+      assert.isOk(getByTestId("ask-card-multiselect"));
+      assert.isOk(getByLabelText("Mushrooms — Button and cremini"));
+      assert.isOk(getByText("Another topping"));
+      assert.isOk(getByTestId("ask-card-other"));
+      assert.isOk(getByText("Choose 1 to 2. Another topping counts as one choice."));
+      assert.isNull(queryByTestId("ask-card-quick-replies"));
+      assert.isNull(queryByTestId("ask-card-button-use-default"));
+    });
+
+    it("preselects the default and sends the selected ids in option order", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const {getByLabelText, getByTestId} = renderCard({
+        ask: pendingAsk({...TOPPINGS_INPUT, allowOther: undefined, otherLabel: undefined}),
+        onSubmit,
+      });
+      assert.isFalse(isDisabled(getByTestId("ask-card-submit")));
+
+      await press(getByLabelText("Olives"));
+      await press(getByLabelText("Extra cheese"));
+      await press(getByLabelText("Extra cheese"));
+      await press(getByTestId("ask-card-submit"));
+
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0], {
+        response: {action: "accept", content: {selected: ["cheese", "olives"]}},
+        toolCallId: "call_1",
+      });
+    });
+
+    it("sends the trimmed Other text, counted as one choice", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const {getByTestId} = renderCard({ask: pendingAsk(TOPPINGS_INPUT), onSubmit});
+
+      await act(async () => {
+        fireEvent.changeText(getByTestId("ask-card-other"), "  Basil  ");
+      });
+      await press(getByTestId("ask-card-submit"));
+
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {
+        action: "accept",
+        content: {other: "Basil", selected: ["cheese"]},
+      });
+    });
+
+    it("keeps Submit disabled and says why when the choices pass maxSelected", async () => {
+      const {getByLabelText, getByTestId, getByText} = renderCard({
+        ask: pendingAsk(TOPPINGS_INPUT),
+      });
+
+      await press(getByLabelText("Olives"));
+      assert.isFalse(isDisabled(getByTestId("ask-card-submit")));
+      await act(async () => {
+        fireEvent.changeText(getByTestId("ask-card-other"), "Basil");
+      });
+
+      assert.isTrue(isDisabled(getByTestId("ask-card-submit")));
+      assert.isOk(getByText("You chose 3. Choose at most 2."));
+    });
+
+    it("keeps Submit disabled until the answer meets minSelected", async () => {
+      const {getByLabelText, getByTestId} = renderCard({
+        ask: pendingAsk({...TOPPINGS_INPUT, default: undefined, minSelected: 2}),
+      });
+      assert.isTrue(isDisabled(getByTestId("ask-card-submit")));
+
+      await press(getByLabelText("Olives"));
+      assert.isTrue(isDisabled(getByTestId("ask-card-submit")));
+      await press(getByLabelText("Extra cheese"));
+      assert.isFalse(isDisabled(getByTestId("ask-card-submit")));
+    });
+
+    it("keeps Submit disabled while the Other text is too long", async () => {
+      const {getByTestId, getByText} = renderCard({ask: pendingAsk(TOPPINGS_INPUT)});
+
+      await act(async () => {
+        fireEvent.changeText(getByTestId("ask-card-other"), "b".repeat(501));
+      });
+
+      assert.isTrue(isDisabled(getByTestId("ask-card-submit")));
+      assert.isOk(getByText("Keep this to 500 characters or fewer."));
+    });
+
+    it("shows a server error on the Other field inline, and other errors below", () => {
+      const {getByTestId, getByText} = renderCard({
+        ask: pendingAsk(TOPPINGS_INPUT),
+        errors: [
+          {
+            code: "SELECTION_COUNT",
+            fix: "Send 1 to 2 options in content.selected. Other counts as one choice.",
+            message: "Choose 1 to 2 options; the answer selects 3, counting Other.",
+            path: "content.selected",
+          },
+          {
+            code: "TOO_SHORT",
+            fix: "Put visible text in content.other.",
+            message: "content.other is empty.",
+            path: "content.other",
+          },
+        ],
+      });
+      assert.isOk(getByText("content.other is empty."));
+      const errorList = within(getByTestId("ask-card-errors"));
+      assert.isOk(
+        errorList.getByText("Choose 1 to 2 options; the answer selects 3, counting Other.")
+      );
+      assert.isNull(errorList.queryByText("content.other is empty."));
+    });
+
+    it("declines when the user presses Skip, and hides Skip when the ask cannot be declined", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const {getByTestId} = renderCard({ask: pendingAsk(TOPPINGS_INPUT), onSubmit});
+      await press(getByTestId("ask-card-button-skip"));
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {action: "decline"});
+
+      const required = renderCard({ask: pendingAsk({...TOPPINGS_INPUT, allowDecline: false})});
+      assert.isNull(required.queryByTestId("ask-card-button-skip"));
+    });
+
+    it("lists the options as plain text when the host takes no answers", () => {
+      const {getByTestId, queryByTestId} = renderWithTheme(
+        <AskCard ask={pendingAsk(TOPPINGS_INPUT)} />
+      );
+      assert.isOk(getByTestId("ask-card-options"));
+      assert.isNull(queryByTestId("ask-card-multiselect"));
+      assert.isTrue(isDisabled(getByTestId("ask-card-submit")));
+      assert.isTrue(isDisabled(getByTestId("ask-card-button-skip")));
+    });
+
+    it("summarizes the answer with the chosen labels and the Other text", () => {
+      const {getByText} = renderCard({
+        ask: pendingAsk(TOPPINGS_INPUT, {
+          response: {action: "accept", content: {other: "Basil", selected: ["olives"]}},
+          status: "answered",
+        }),
+      });
+      assert.isOk(getByText("You chose: Olives. Another topping: Basil"));
     });
   });
 

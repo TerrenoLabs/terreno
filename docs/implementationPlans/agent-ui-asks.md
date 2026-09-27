@@ -187,6 +187,10 @@ Optional: `minSelected` (default 1), `maxSelected` (default 1 for `one`, option 
 `many`), `allowOther` with `otherLabel` (adds a free-text entry; the answer gains `other`).
 Rules: 2–50 options; ids match `^[a-z0-9][a-z0-9_-]{0,63}$` and are unique; `default` ⊆ ids;
 `minSelected` ≤ `maxSelected` ≤ option count. Server rejects ids that were not offered.
+Revised in Pick (Task 2.1): `allowOther` is allowed only with `select: "many"` ("one option or
+your own" is `many` with `maxSelected: 1`); Other counts as one choice, so with Other on the
+default `maxSelected` is the option count + 1 and the cap is option count + 1; `minSelected`
+may be 0 (a `default` below it is valid input but gets no Use suggested button).
 
 ### `confirm` — approve or deny
 

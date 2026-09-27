@@ -7,23 +7,40 @@ import {validateAskResponse} from "./validateResponse";
 
 const TOOL_CALL_ID = "call_fixture";
 
-/** Rows of the `choice` one rule table in docs/reference/agent-ui-asks.md. */
-type ChoiceRow = "optionsFit" | "moreOptions" | "labelsCollide";
+/**
+ * Rows of the `choice` rule table in docs/reference/agent-ui-asks.md. The `many` row splits on
+ * whether the default is a valid answer on its own, which is when the card offers Use suggested.
+ */
+type ChoiceRow =
+  | "optionsFit"
+  | "moreOptions"
+  | "labelsCollide"
+  | "manyWithSuggestion"
+  | "manyWithoutSuggestion";
 
 /** The row each valid fixture exercises, read off the rule table by hand. */
 const CHOICE_ROW_BY_FIXTURE: Record<string, ChoiceRow> = {
   "choice-emoji-label-cut": "optionsFit",
   "choice-labels-collide-after-cut": "labelsCollide",
   "choice-long-text-cut": "optionsFit",
+  "choice-many-default-below-min": "manyWithoutSuggestion",
+  "choice-many-every-choice-with-other": "manyWithoutSuggestion",
+  "choice-many-no-default": "manyWithoutSuggestion",
+  "choice-many-optional-no-buttons": "manyWithoutSuggestion",
   "choice-many-options-default-label-collides": "labelsCollide",
   "choice-many-options-no-buttons": "moreOptions",
   "choice-many-options-no-default": "moreOptions",
   "choice-many-options-with-default": "moreOptions",
+  "choice-many-required-with-default": "manyWithSuggestion",
+  "choice-many-single-pick-or-other": "manyWithSuggestion",
+  "choice-many-toppings-with-default": "manyWithSuggestion",
   "choice-max-limits": "moreOptions",
   "choice-plan-with-default": "optionsFit",
   "choice-two-options": "optionsFit",
   "choice-two-options-no-decline": "optionsFit",
 };
+
+const MANY_ROWS: readonly ChoiceRow[] = ["manyWithSuggestion", "manyWithoutSuggestion"];
 
 interface ExpectedButton {
   id: string;
@@ -33,14 +50,20 @@ interface ExpectedButton {
 
 const SKIP: ExpectedButton = {id: "skip", response: {action: "decline"}, style: "cancel"};
 
-const selects = (id: string): unknown => ({action: "accept", content: {selected: [id]}});
+const selects = (...ids: string[]): unknown => ({action: "accept", content: {selected: ids}});
 
 /** The buttons a row allows for an input, without their labels, written from the rule table. */
 const buttonsForRow = (input: ChoiceAskInput, row: ChoiceRow): ExpectedButton[] => {
   const skip = input.allowDecline === false ? [] : [SKIP];
   const defaultId = input.default?.[0];
-  if (row === "labelsCollide") {
+  if (row === "labelsCollide" || row === "manyWithoutSuggestion") {
     return skip;
+  }
+  if (row === "manyWithSuggestion") {
+    return [
+      {id: "use-default", response: selects(...(input.default ?? [])), style: "primary"},
+      ...skip,
+    ];
   }
   if (row === "moreOptions") {
     const useDefault = defaultId
@@ -143,6 +166,84 @@ describe("the rule-table row map", () => {
         expect(fixture.input.options.length).toBeGreaterThan(3);
       }
     }
+  });
+
+  it("uses the many rows exactly for select many", () => {
+    for (const fixture of validAskFixtures()) {
+      const row = CHOICE_ROW_BY_FIXTURE[fixture.name] ?? "optionsFit";
+      expect(MANY_ROWS.includes(row)).toBe(fixture.input.select === "many");
+    }
+  });
+});
+
+describe("toSimpleCard choice many rules", () => {
+  const TOPPINGS = [
+    {id: "cheese", label: "Cheese"},
+    {id: "olives", label: "Olives"},
+    {id: "peppers", label: "Peppers"},
+  ];
+
+  it("offers Use suggested for a default within the bounds, then Skip", () => {
+    expect(
+      toSimpleCard({
+        input: {
+          default: ["olives", "cheese"],
+          options: TOPPINGS,
+          prompt: "Toppings?",
+          select: "many",
+        },
+        kind: "choice",
+        toolCallId: "call_1",
+      })
+    ).toEqual({
+      buttons: [
+        {
+          id: "use-default",
+          label: "Use suggested",
+          response: {action: "accept", content: {selected: ["olives", "cheese"]}},
+          style: "primary",
+        },
+        {id: "skip", label: "Skip", response: {action: "decline"}, style: "cancel"},
+      ],
+      handoff: true,
+      kind: "choice",
+      text: "Toppings?",
+      toolCallId: "call_1",
+    });
+  });
+
+  it("hands off even when every option would fit a button, because a tap picks only one", () => {
+    const card = toSimpleCard({
+      input: {options: TOPPINGS.slice(0, 2), prompt: "Toppings?", select: "many"},
+      kind: "choice",
+      toolCallId: "call_1",
+    });
+    expect(card.handoff).toBe(true);
+    expect(card.buttons.map((button) => button.id)).toEqual(["skip"]);
+  });
+
+  it("leaves out Use suggested when the default has fewer choices than minSelected", () => {
+    const card = toSimpleCard({
+      input: {
+        default: ["cheese"],
+        minSelected: 2,
+        options: TOPPINGS,
+        prompt: "Toppings?",
+        select: "many",
+      },
+      kind: "choice",
+      toolCallId: "call_1",
+    });
+    expect(card.buttons.map((button) => button.id)).toEqual(["skip"]);
+  });
+
+  it("leaves out Use suggested for an empty default, even when no choice is required", () => {
+    const card = toSimpleCard({
+      input: {default: [], minSelected: 0, options: TOPPINGS, prompt: "Toppings?", select: "many"},
+      kind: "choice",
+      toolCallId: "call_1",
+    });
+    expect(card.buttons.map((button) => button.id)).toEqual(["skip"]);
   });
 });
 

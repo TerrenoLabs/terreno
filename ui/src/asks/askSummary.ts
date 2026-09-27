@@ -15,12 +15,28 @@ const choiceLabels = (input: ChoiceAskInput, content: Record<string, unknown>): 
     .join(", ");
 };
 
+/**
+ * "You chose: A, B", "Other: text", or both, for an accepted `choice` answer. The Other part uses
+ * the ask's `otherLabel` when it sets one.
+ */
+const choiceSummary = (input: ChoiceAskInput, content: Record<string, unknown>): string => {
+  const labels = choiceLabels(input, content);
+  const other = typeof content.other === "string" ? content.other : "";
+  const otherLabel = input.otherLabel ?? "Other";
+  const parts = [
+    labels ? `You chose: ${labels}` : "",
+    other ? `${otherLabel}: ${other}` : "",
+  ].filter(Boolean);
+  if (parts.length > 0) {
+    return parts.join(". ");
+  }
+  return Array.isArray(content.selected) ? "You chose none of the options." : ANSWERED;
+};
+
 const acceptedSummary = (ask: ChatAsk, content: Record<string, unknown>): string => {
   switch (ask.kind) {
-    case "choice": {
-      const labels = choiceLabels(ask.input, content);
-      return labels ? `You chose: ${labels}` : ANSWERED;
-    }
+    case "choice":
+      return choiceSummary(ask.input, content);
   }
 };
 

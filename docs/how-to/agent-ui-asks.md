@@ -18,18 +18,23 @@ The example backend uses a scripted demo agent, `terreno-demo-agent`, when no mo
 3. Send "Help me pick a plan" (a suggested prompt).
 4. Tap a plan. The agent replies with your pick, and the card collapses to "You chose: Team".
 5. Reload the page and open the conversation again. The summary is still there.
+6. Send "Pick toppings for my pizza". Check up to three toppings, type your own in "Another
+   topping", and press "Add toppings". The agent names every topping you picked, and the card
+   collapses to "You chose: Extra cheese, Olives. Another topping: Basil".
 
 | You send | The demo agent |
 | --- | --- |
-| A message with a word like pick, choose, or plan | Asks "Which plan should I set up for your workspace?" with Starter, Team (the default), and Enterprise |
+| A message with the word topping or toppings, such as "pick toppings" or "pick several toppings" | Asks "Which toppings should I add? Pick up to three." with `select: "many"`, six toppings (Extra cheese and Mushrooms preselected), `maxSelected: 3`, and an Other field titled "Another topping" |
+| Any other message with a word like pick, choose, or plan, such as "choose between several plans" | Asks "Which plan should I set up for your workspace?" with Starter, Team (the default), and Enterprise |
 | The same kind of message, on routes without `asks` | Says asks are turned off and how to turn them on |
-| An answer, or Skip | Replies with the plan you picked, or says it skipped the plan |
+| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, or says it skipped the question |
 | Anything else, with or without `asks` | Explains that it follows a script and how to use a real model |
-| Any of these with `surface: "compact"` | Asks the same plan question, which already fits a watch, and replies in one or two short sentences without markdown |
+| Any of these with `surface: "compact"` | Asks the same plan question, which already fits a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one, so a toppings message gets a text reply that says to open the chat on a phone. |
 
 To script another exchange, add an entry to `DEMO_SCENARIOS` in
 `example-backend/src/api/demoAgent.ts`: a trigger pattern, one ask input, and a reply for the
-answer.
+answer. Scenarios match in order, so put one with narrower trigger words first. Set
+`compactFallback` when the input does not fit the compact surface.
 
 ## 1. Enable asks on the backend
 

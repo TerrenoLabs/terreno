@@ -1,0 +1,13 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which toppings?",
+    "select": "many",
+    "options": [
+      {"id": "cheese", "label": "Cheese"},
+      {"id": "olives", "label": "Olives"}
+    ],
+    "minSelected": 3
+  },
+  "errors": [{"path": "minSelected", "code": "RANGE_INVALID"}]
+}

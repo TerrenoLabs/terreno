@@ -12,6 +12,7 @@ export const ASK_LIMITS = {
     optionLabelMaxLength: 120,
     optionsMax: 50,
     optionsMin: 2,
+    otherMaxLength: 500,
   },
   pendingAsksPerHistory: 1,
   promptMaxLength: 500,

@@ -32,6 +32,13 @@ export const COMPACT_SURFACE_SYSTEM_PROMPT =
   "sentences, and ask only yes-or-no questions or questions with up to three short options.";
 
 export const ASK_CHOICE_TOOL_DESCRIPTION =
+  "Ask the user to pick one or more options from a list you provide, optionally with an Other " +
+  "field for an answer of their own. The chat shows the options as a control and returns the " +
+  "user's answer as this tool's result. Use it instead of asking in plain text when the user must " +
+  "choose from options you can list.";
+
+/** The compact surface offers only select one, so its tool description does not mention many or Other. */
+export const COMPACT_ASK_CHOICE_TOOL_DESCRIPTION =
   "Ask the user to pick one option from a list you provide. The chat shows the options as a " +
   "control and returns the user's answer as this tool's result. Use it instead of asking in plain " +
   "text when the user must choose between options you can list.";

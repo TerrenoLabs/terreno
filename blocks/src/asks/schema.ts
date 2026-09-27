@@ -80,27 +80,95 @@ export const choiceOptionSchema = choiceOption(ASK_LIMITS.choice.optionLabelMaxL
 
 export type ChoiceOption = z.infer<typeof choiceOptionSchema>;
 
-const checkChoiceInput = (
-  input: {default?: string[]; options: ChoiceOption[]},
-  ctx: z.RefinementCtx
-): void => {
+/** How many options a `choice` lets the user pick. */
+export const CHOICE_SELECT_MODES = ["one", "many"] as const;
+
+export type ChoiceSelectMode = (typeof CHOICE_SELECT_MODES)[number];
+
+/** The fields of a `choice` input that its semantic rules read. */
+interface ChoiceRuleInput {
+  allowOther?: boolean;
+  default?: string[];
+  maxSelected?: number;
+  minSelected?: number;
+  options: ChoiceOption[];
+  otherLabel?: string;
+  select: ChoiceSelectMode;
+}
+
+/**
+ * How many choices an answer to a `choice` must make, counting a typed Other answer as one.
+ * `select: "one"` is always exactly one. `select: "many"` defaults to at least 1 and at most every
+ * choice the ask offers: each option, plus Other when `allowOther` is true.
+ */
+export const choiceSelectionBounds = (input: ChoiceRuleInput): {max: number; min: number} => {
+  if (input.select === "one") {
+    return {max: 1, min: 1};
+  }
+  const choiceCount = input.options.length + (input.allowOther === true ? 1 : 0);
+  return {max: input.maxSelected ?? choiceCount, min: input.minSelected ?? 1};
+};
+
+const pluralOptions = (count: number): string => (count === 1 ? "1 choice" : `${count} choices`);
+
+const checkDuplicateIds = ({
+  ctx,
+  fix,
+  ids,
+  message,
+  segments,
+}: {
+  ctx: z.RefinementCtx;
+  fix: string;
+  ids: readonly string[];
+  message: (id: string, firstIndex: number) => string;
+  segments: (index: number) => PropertyKey[];
+}): Map<string, number> => {
   const firstIndexById = new Map<string, number>();
-  input.options.forEach((option, index) => {
-    const firstIndex = firstIndexById.get(option.id);
+  ids.forEach((id, index) => {
+    const firstIndex = firstIndexById.get(id);
     if (firstIndex === undefined) {
-      firstIndexById.set(option.id, index);
+      firstIndexById.set(id, index);
       return;
     }
     ctx.addIssue(
       askIssue({
         code: "DUPLICATE_ID",
-        fix: "Give every option a unique id.",
-        message: `Option id ${quoteValue(option.id)} is already used by ${formatAskPath(["options", firstIndex])}.`,
-        segments: ["options", index, "id"],
+        fix,
+        message: message(id, firstIndex),
+        segments: segments(index),
       })
     );
   });
+  return firstIndexById;
+};
 
+/** `select: "one"` picks exactly one option; count bounds and Other belong to `select: "many"`. */
+const checkSelectOne = (input: ChoiceRuleInput, ctx: z.RefinementCtx): void => {
+  for (const field of ["minSelected", "maxSelected"] as const) {
+    const value = input[field];
+    if (value === undefined || value === 1) {
+      continue;
+    }
+    ctx.addIssue(
+      askIssue({
+        code: "RANGE_INVALID",
+        fix: `Remove ${field}, or use select "many".`,
+        message: `select "one" picks exactly one option, so ${field} must be 1, not ${value}.`,
+        segments: [field],
+      })
+    );
+  }
+  if (input.allowOther === true) {
+    ctx.addIssue(
+      askIssue({
+        code: "OTHER_NOT_ALLOWED",
+        fix: 'Use select "many" (with maxSelected 1 for a single pick), or remove allowOther.',
+        message: 'allowOther needs select "many".',
+        segments: ["allowOther"],
+      })
+    );
+  }
   const defaults = input.default ?? [];
   if (defaults.length > 1) {
     ctx.addIssue(
@@ -112,6 +180,83 @@ const checkChoiceInput = (
       })
     );
   }
+};
+
+const checkSelectMany = (input: ChoiceRuleInput, ctx: z.RefinementCtx): void => {
+  const choiceCount = input.options.length + (input.allowOther === true ? 1 : 0);
+  const {max, min} = choiceSelectionBounds(input);
+  if (input.maxSelected !== undefined && input.maxSelected > choiceCount) {
+    ctx.addIssue(
+      askIssue({
+        code: "RANGE_INVALID",
+        fix: `Set maxSelected to ${choiceCount} or fewer, or add options.`,
+        message: `maxSelected is ${input.maxSelected}, but the ask offers ${pluralOptions(choiceCount)}.`,
+        segments: ["maxSelected"],
+      })
+    );
+  }
+  if (min > Math.min(max, choiceCount)) {
+    const limit =
+      input.maxSelected === undefined
+        ? `the ${pluralOptions(choiceCount)} the ask offers`
+        : `maxSelected (${max})`;
+    ctx.addIssue(
+      askIssue({
+        code: "RANGE_INVALID",
+        fix: "Lower minSelected, or raise maxSelected and add options.",
+        message: `minSelected (${min}) is more than ${limit}.`,
+        segments: ["minSelected"],
+      })
+    );
+  }
+  const defaults = input.default ?? [];
+  if (defaults.length > max) {
+    ctx.addIssue(
+      askIssue({
+        code: "SELECTION_COUNT",
+        fix: `Keep at most ${max} option ids in default.`,
+        message: `default lists ${defaults.length} option ids, but the ask allows at most ${max}.`,
+        segments: ["default"],
+      })
+    );
+  }
+  checkDuplicateIds({
+    ctx,
+    fix: "List each option id in default once.",
+    ids: defaults,
+    message: (id, firstIndex) =>
+      `Default ${quoteValue(id)} is already listed at ${formatAskPath(["default", firstIndex])}.`,
+    segments: (index) => ["default", index],
+  });
+};
+
+const checkChoiceInput = (input: ChoiceRuleInput, ctx: z.RefinementCtx): void => {
+  const firstIndexById = checkDuplicateIds({
+    ctx,
+    fix: "Give every option a unique id.",
+    ids: input.options.map((option) => option.id),
+    message: (id, firstIndex) =>
+      `Option id ${quoteValue(id)} is already used by ${formatAskPath(["options", firstIndex])}.`,
+    segments: (index) => ["options", index, "id"],
+  });
+
+  if (input.select === "many") {
+    checkSelectMany(input, ctx);
+  } else {
+    checkSelectOne(input, ctx);
+  }
+  if (input.otherLabel !== undefined && input.allowOther !== true) {
+    ctx.addIssue(
+      askIssue({
+        code: "OTHER_NOT_ALLOWED",
+        fix: "Set allowOther to true, or remove otherLabel.",
+        message: "otherLabel is set, but allowOther is not true.",
+        segments: ["otherLabel"],
+      })
+    );
+  }
+
+  const defaults = input.default ?? [];
   defaults.forEach((id, index) => {
     if (firstIndexById.has(id)) {
       return;
@@ -133,10 +278,7 @@ const checkChoiceInput = (
  * but a simple card cuts labels by UTF-16 units, so a label with emoji can fit Zod's limit and still
  * be cut on its button.
  */
-const checkCompactChoiceInput = (
-  input: {default?: string[]; options: ChoiceOption[]},
-  ctx: z.RefinementCtx
-): void => {
+const checkCompactChoiceInput = (input: ChoiceRuleInput, ctx: z.RefinementCtx): void => {
   checkChoiceInput(input, ctx);
   const {buttonLabelMaxLength} = ASK_LIMITS.simpleCard;
   const firstIndexByLabel = new Map<string, number>();
@@ -168,60 +310,92 @@ const checkCompactChoiceInput = (
   });
 };
 
-const choiceAskInput = ({
-  check,
+const choiceBaseFields = ({
+  defaultDescription,
   labelMaxLength,
   optionsMax,
 }: {
-  check: typeof checkChoiceInput;
+  defaultDescription: string;
   labelMaxLength: number;
   optionsMax: number;
-}) =>
-  z
-    .object({
-      ...sharedAskFields,
-      default: z
-        .array(z.string())
-        .max(optionsMax)
-        .optional()
-        .describe('Option ids to preselect. With select "one", at most one id.'),
-      options: z
-        .array(choiceOption(labelMaxLength))
-        .min(ASK_LIMITS.choice.optionsMin)
-        .max(optionsMax)
-        .describe(
-          `The options, in display order: ${ASK_LIMITS.choice.optionsMin}-${optionsMax} items.`
-        ),
-      select: z
-        .literal("one")
-        .describe('How many options the user picks. Only "one" is supported.'),
-    })
-    .strict()
-    .superRefine(check);
-
-/** Input for `ask_choice`: pick one option from a list. */
-export const choiceAskInputSchema = choiceAskInput({
-  check: checkChoiceInput,
-  labelMaxLength: ASK_LIMITS.choice.optionLabelMaxLength,
-  optionsMax: ASK_LIMITS.choice.optionsMax,
+}) => ({
+  ...sharedAskFields,
+  default: z.array(z.string()).max(optionsMax).optional().describe(defaultDescription),
+  options: z
+    .array(choiceOption(labelMaxLength))
+    .min(ASK_LIMITS.choice.optionsMin)
+    .max(optionsMax)
+    .describe(
+      `The options, in display order: ${ASK_LIMITS.choice.optionsMin}-${optionsMax} items.`
+    ),
 });
+
+/** Input for `ask_choice`: pick one option, or several with `select: "many"`, from a list. */
+export const choiceAskInputSchema = z
+  .object({
+    ...choiceBaseFields({
+      defaultDescription:
+        'Option ids to preselect. With select "one", at most one id; with select "many", at most maxSelected ids.',
+      labelMaxLength: ASK_LIMITS.choice.optionLabelMaxLength,
+      optionsMax: ASK_LIMITS.choice.optionsMax,
+    }),
+    allowOther: z
+      .boolean()
+      .optional()
+      .describe(
+        `With select "many": add a free-text Other entry. The answer's other holds its text, at most ${ASK_LIMITS.choice.otherMaxLength} characters, and counts as one choice.`
+      ),
+    maxSelected: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe(
+        'With select "many": the most choices the user may make. Defaults to every choice: the option count, plus 1 with allowOther.'
+      ),
+    minSelected: z
+      .number()
+      .int()
+      .min(0)
+      .optional()
+      .describe(
+        'With select "many": the fewest choices the user must make. Defaults to 1. 0 lets the user submit no choice.'
+      ),
+    otherLabel: visibleText(ASK_LIMITS.choice.optionLabelMaxLength)
+      .optional()
+      .describe(
+        `Label for the Other entry when allowOther is true, at most ${ASK_LIMITS.choice.optionLabelMaxLength} characters. Defaults to "Other".`
+      ),
+    select: z
+      .enum(CHOICE_SELECT_MODES)
+      .describe('How many options the user picks: "one", or "many" (checkboxes).'),
+  })
+  .strict()
+  .superRefine(checkChoiceInput);
 
 export type ChoiceAskInput = z.infer<typeof choiceAskInputSchema>;
 
 /**
- * Input for `ask_choice` on the compact surface: every option fits a simple card button, so the
+ * Input for `ask_choice` on the compact surface: pick one option by tapping its button, so the
  * card never hands off. At most 3 options, labels of at most 20 characters (each emoji counts as 2
- * or more), and no two labels alike.
+ * or more), and no two labels alike. `select: "many"` and Other are not offered.
  */
-export const compactChoiceAskInputSchema = choiceAskInput({
-  check: checkCompactChoiceInput,
-  labelMaxLength: ASK_LIMITS.simpleCard.buttonLabelMaxLength,
-  optionsMax: ASK_LIMITS.simpleCard.buttonsMax,
-});
+export const compactChoiceAskInputSchema = z
+  .object({
+    ...choiceBaseFields({
+      defaultDescription: 'Option ids to preselect. With select "one", at most one id.',
+      labelMaxLength: ASK_LIMITS.simpleCard.buttonLabelMaxLength,
+      optionsMax: ASK_LIMITS.simpleCard.buttonsMax,
+    }),
+    select: z.literal("one").describe('How many options the user picks. Only "one" is supported.'),
+  })
+  .strict()
+  .superRefine(checkCompactChoiceInput);
 
 /** The `content` of an accepted `choice` answer. */
 export const choiceAnswerSchema = z
   .object({
+    other: visibleText(ASK_LIMITS.choice.otherMaxLength).optional(),
     selected: z.array(z.string()).max(ASK_LIMITS.choice.optionsMax),
   })
   .strict();
@@ -297,7 +471,7 @@ export const askInputSchemaFor = ({
 }: {
   kind: AskKind;
   surface?: AskSurface;
-}): (typeof askInputSchemas)[AskKind] => {
+}): (typeof askInputSchemas)[AskKind] | (typeof compactAskInputSchemas)[CompactAskKind] => {
   if (!Object.hasOwn(askInputSchemas, kind)) {
     throw new Error(`Unknown ask kind "${String(kind)}".`);
   }

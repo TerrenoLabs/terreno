@@ -36,7 +36,9 @@ interface DemoReply {
 /**
  * A scripted exchange: words in the user's message start it, it calls one ask tool, and it
  * replies to the answer. Add one to DEMO_SCENARIOS for each ask kind the example app shows. On the
- * compact surface the input must also fit a simple card: at most 3 options with short labels.
+ * compact surface the input must also fit a simple card (at most 3 options with short labels,
+ * select one), or the scenario sets `compactFallback`. Scenarios match in order, so a scenario with
+ * narrower trigger words comes before a broader one.
  */
 type DemoAskScenario = {
   [Kind in Ask["kind"]]: {
@@ -44,6 +46,11 @@ type DemoAskScenario = {
     id: string;
     input: Extract<Ask, {kind: Kind}>["input"];
     kind: Kind;
+    /**
+     * Sent as text instead of the ask on the compact surface, for an input the compact ask tool
+     * rejects, such as select many. Without it the scenario asks on every surface.
+     */
+    compactFallback?: string;
     reply: (answer: DemoAnswer) => string;
     /** Conversation title once the user answers. */
     title: string;
@@ -69,6 +76,15 @@ const PLAN_OPTIONS = [
   {description: "Free for one person", id: "starter", label: "Starter"},
   {description: "$20 per seat each month", id: "team", label: "Team"},
   {description: "SSO, audit logs, and a support contract", id: "enterprise", label: "Enterprise"},
+];
+
+const TOPPING_OPTIONS = [
+  {id: "cheese", label: "Extra cheese"},
+  {id: "mushrooms", label: "Mushrooms"},
+  {id: "olives", label: "Olives"},
+  {id: "peppers", label: "Peppers"},
+  {description: "Yes, on pizza", id: "pineapple", label: "Pineapple"},
+  {id: "onions", label: "Red onions"},
 ];
 
 const selectedIds = (content: Record<string, unknown>): string[] => {
@@ -99,7 +115,62 @@ const planReply = ({isCompact, response}: DemoAnswer): string => {
   return `You picked the **${option.label}** plan (${option.description}). A real agent would set it up now. Say "pick a plan" to try another answer.`;
 };
 
+/** "A", "A and B", or "A, B, and C". */
+const joinWithAnd = (items: string[]): string => {
+  if (items.length <= 2) {
+    return items.join(" and ");
+  }
+  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
+};
+
+const toppingsReply = ({isCompact, response}: DemoAnswer): string => {
+  if (response.action === "decline") {
+    return isCompact
+      ? "OK, no toppings for now."
+      : 'No problem, I left the pizza as it is. Say "pick toppings" when you want to choose some.';
+  }
+  if (response.action === "cancel") {
+    return "The toppings question was cancelled, so I did not add any toppings.";
+  }
+  const labels = selectedIds(response.content).map(
+    (id) => TOPPING_OPTIONS.find((option) => option.id === id)?.label ?? id
+  );
+  const other = typeof response.content.other === "string" ? response.content.other : "";
+  if (isCompact) {
+    const names = other ? [...labels, other] : labels;
+    return names.length === 0
+      ? "OK, a plain pizza."
+      : `You picked ${joinWithAnd(names)}. A real agent would add them now.`;
+  }
+  const picked = labels.map((label) => `**${label}**`);
+  const own = other ? [`your own topping, **${other}**`] : [];
+  if (picked.length + own.length === 0) {
+    return 'You picked no toppings, so it is a plain pizza. Say "pick toppings" to try another answer.';
+  }
+  return `You picked ${joinWithAnd([...picked, ...own])}. A real agent would add them to the order now. Say "pick toppings" to try another answer.`;
+};
+
 const DEMO_SCENARIOS: DemoAskScenario[] = [
+  {
+    compactFallback:
+      'Picking several toppings needs a bigger screen. Open the chat on your phone and say "pick toppings".',
+    id: "toppings",
+    input: {
+      allowOther: true,
+      default: ["cheese", "mushrooms"],
+      maxSelected: 3,
+      options: TOPPING_OPTIONS,
+      otherLabel: "Another topping",
+      prompt: "Which toppings should I add? Pick up to three.",
+      select: "many",
+      submitLabel: "Add toppings",
+      title: "Build your pizza",
+    },
+    kind: "choice",
+    reply: toppingsReply,
+    title: "Building a pizza",
+    trigger: /\btoppings?\b/i,
+  },
   {
     id: "plan",
     input: {
@@ -120,7 +191,7 @@ const DEMO_HELP_REPLY: DemoReply = {
   compact: `I'm the Terreno demo agent. Say "help me pick a plan" to choose a plan.`,
   full: [
     "I'm the Terreno demo agent. This server has no AI model configured, so I follow a script.",
-    'Say "help me pick a plan" and I will ask you to choose one right here in the chat.',
+    'Say "help me pick a plan" and I will ask you to choose one right here in the chat, or "pick toppings" to choose several with an answer of your own.',
     "To talk to a real model, set GEMINI_API_KEY on the server or save a Gemini API key on the Profile tab.",
   ].join("\n\n"),
 };
@@ -220,6 +291,9 @@ const planDemoTurn = ({prompt, tools}: Pick<DemoCallOptions, "prompt" | "tools">
   );
   if (!isOffered) {
     return replyFor(DEMO_ASKS_OFF_REPLY);
+  }
+  if (isCompact && scenario.compactFallback) {
+    return {text: scenario.compactFallback, type: "text"};
   }
   return {
     input: scenario.input,

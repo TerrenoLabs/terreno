@@ -9,14 +9,17 @@ Rules for every ask:
 - submitLabel: optional, at most 24 characters.
 - allowDecline: optional, default true (the user sees Skip). Set it to false only when you cannot continue without an answer.
 
-ask_choice: the user picks one option from a list you provide.
-- select: always "one".
+ask_choice: the user picks one or more options from a list you provide.
+- select: "one" for exactly one option, or "many" to let the user pick several.
 - options: 2-50 items, each {id, label, description?}.
 - id: 1-64 lowercase letters, digits, "_", or "-", starting with a letter or digit. Unique within the ask.
 - label: at most 120 characters. description: optional, at most 280 characters.
-- default: optional list with at most one option id to preselect.
-- Prefer at most 3 options with labels of 20 characters or fewer; small screens show those as buttons.
-- An accepted answer looks like {"action": "accept", "content": {"selected": ["<id>"]}}.`;
+- default: optional list of option ids to preselect, each listed once. With "one", at most one id; with "many", at most maxSelected ids.
+- minSelected, maxSelected: optional whole numbers, "many" only. The user picks from minSelected (default 1, at least 0) to maxSelected (default: every choice) choices.
+- allowOther: optional, "many" only. true adds a text field where the user types an answer of their own, up to 500 characters. It counts as one choice. otherLabel: optional label for that field, at most 120 characters. For one option or Other, use "many" with maxSelected 1.
+- Prefer select "one" with at most 3 options with labels of 20 characters or fewer; small screens show those as buttons.
+- An accepted answer looks like {"action": "accept", "content": {"selected": ["<id>"]}}.
+- With Other, it looks like {"action": "accept", "content": {"selected": ["<id>"], "other": "<text the user typed>"}}.`;
 
 const COMPACT_CHOICE_SECTION = `Ask tools you can call: ask_choice.
 

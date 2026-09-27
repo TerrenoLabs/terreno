@@ -1,0 +1,19 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which plan?",
+    "select": "one",
+    "options": [
+      {"id": "team", "label": "Team"},
+      {"id": "solo", "label": "Solo"}
+    ],
+    "minSelected": 1,
+    "maxSelected": 2,
+    "allowOther": true,
+    "otherLabel": "Another plan"
+  },
+  "errors": [
+    {"path": "allowOther", "code": "OTHER_NOT_ALLOWED"},
+    {"path": "maxSelected", "code": "RANGE_INVALID"}
+  ]
+}

@@ -8,13 +8,16 @@ import {ASK_LIMITS} from "./limits";
 export const ASK_ERROR_CODES = {
   DECLINE_NOT_ALLOWED: "The answer skips an ask that does not allow skipping.",
   DEFAULT_NOT_IN_OPTIONS: "A default names an option id that the ask does not offer.",
-  DUPLICATE_ID: "Two options share the same id.",
+  DUPLICATE_ID: "An id appears twice where ids must be unique: options, default, or an answer.",
   DUPLICATE_LABEL: "Two options of a compact ask share the same label.",
   INVALID_ENUM: "A value is not one of the allowed values.",
   INVALID_FORMAT: "A string does not match its required format.",
   INVALID_TYPE: "A value has the wrong type.",
   MISSING_REQUIRED: "A required field is missing.",
   OPTION_NOT_OFFERED: "The answer selects an option id that the ask did not offer.",
+  OTHER_NOT_ALLOWED: "An ask or an answer uses Other where the ask does not allow it.",
+  RANGE_INVALID:
+    "A count bound is out of range: below its minimum, above what the ask offers, or minSelected above maxSelected.",
   SELECTION_COUNT: "A default or an answer selects the wrong number of options.",
   TOO_FEW: "A list has fewer items than allowed.",
   TOO_LONG: "A string is longer than allowed.",
@@ -93,6 +96,7 @@ const describeExpected = (expected: string): string => {
     case "boolean":
       return "true or false";
     case "int":
+      return "a whole number";
     case "number":
       return "a number";
     case "map":
@@ -193,6 +197,16 @@ const tooShort = (segments: readonly PropertyKey[]): AskErrorDraft => {
   };
 };
 
+const numberOutOfRange = (segments: readonly PropertyKey[], bound: string): AskErrorDraft => {
+  const path = formatAskPath(segments);
+  return {
+    code: "RANGE_INVALID",
+    fix: `Make ${inlineSubject(path)} ${bound}.`,
+    message: `${sentenceSubject(path)} must be ${bound}.`,
+    segments,
+  };
+};
+
 const unionOptions = (issue: z.core.$ZodIssueInvalidUnion): readonly unknown[] =>
   "options" in issue && Array.isArray(issue.options) ? issue.options : [];
 
@@ -217,11 +231,15 @@ const describeIssue = (
         return [missingRequired(segments)];
       }
       const expected = describeExpected(issue.expected);
+      const received =
+        issue.expected === "int" && typeof target.value === "number"
+          ? String(target.value)
+          : describeReceived(target.value);
       return [
         {
           code: "INVALID_TYPE",
           fix: `Make ${inlineSubject(path)} ${expected}.`,
-          message: `${sentenceSubject(path)} must be ${expected}, not ${describeReceived(target.value)}.`,
+          message: `${sentenceSubject(path)} must be ${expected}, not ${received}.`,
           segments,
         },
       ];
@@ -250,6 +268,9 @@ const describeIssue = (
     }
     case "too_big": {
       const maximum = String(issue.maximum);
+      if (issue.origin === "number") {
+        return [numberOutOfRange(segments, `at most ${maximum}`)];
+      }
       if (issue.origin === "array" || issue.origin === "set") {
         return [
           {
@@ -270,6 +291,9 @@ const describeIssue = (
       ];
     }
     case "too_small": {
+      if (issue.origin === "number") {
+        return [numberOutOfRange(segments, `at least ${String(issue.minimum)}`)];
+      }
       if (issue.origin === "array" || issue.origin === "set") {
         const minimum = String(issue.minimum);
         return [

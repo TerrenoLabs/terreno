@@ -113,9 +113,10 @@ describe("asks", () => {
       const askChoice = tools.ask_choice;
       expect(askChoice.execute).toBeUndefined();
       expect(askChoice.description).toBe(
-        "Ask the user to pick one option from a list you provide. The chat shows the options as a " +
-          "control and returns the user's answer as this tool's result. Use it instead of asking in " +
-          "plain text when the user must choose between options you can list."
+        "Ask the user to pick one or more options from a list you provide, optionally with an " +
+          "Other field for an answer of their own. The chat shows the options as a control and " +
+          "returns the user's answer as this tool's result. Use it instead of asking in plain text " +
+          "when the user must choose from options you can list."
       );
       const inputSchema = asSchema(askChoice.inputSchema);
       expect(await inputSchema.validate?.(PLAN_ASK_INPUT)).toEqual({
@@ -134,6 +135,34 @@ describe("asks", () => {
 
     it("creates no tools when no kinds are enabled", () => {
       expect(createAskTools({kinds: []})).toEqual({});
+    });
+
+    it("accepts select many with Other on the full surface only", async () => {
+      const manyInput = {
+        ...PLAN_ASK_INPUT,
+        allowOther: true,
+        default: ["team", "starter"],
+        maxSelected: 2,
+        select: "many",
+      };
+      expect(
+        await asSchema(createAskTools({kinds: ["choice"]}).ask_choice.inputSchema).validate?.(
+          manyInput
+        )
+      ).toEqual({success: true, value: manyInput});
+      expect(
+        await asSchema(
+          createAskTools({kinds: ["choice"], surface: "compact"}).ask_choice.inputSchema
+        ).validate?.(manyInput)
+      ).toEqual({error: expect.any(Error), success: false});
+    });
+
+    it("describes only select one on the compact surface", () => {
+      expect(createAskTools({kinds: ["choice"], surface: "compact"}).ask_choice.description).toBe(
+        "Ask the user to pick one option from a list you provide. The chat shows the options as a " +
+          "control and returns the user's answer as this tool's result. Use it instead of asking in " +
+          "plain text when the user must choose between options you can list."
+      );
     });
 
     it("takes the compact input schema on the compact surface", async () => {
@@ -170,9 +199,7 @@ describe("asks", () => {
     });
 
     it("throws on an input the kind's schema rejects", () => {
-      expect(() =>
-        parseAsk({input: {...PLAN_ASK_INPUT, select: "many"}, kind: "choice"})
-      ).toThrow();
+      expect(() => parseAsk({input: {...PLAN_ASK_INPUT, select: "all"}, kind: "choice"})).toThrow();
     });
   });
 
@@ -233,14 +260,17 @@ describe("asks", () => {
             "- allowDecline: optional, default true (the user sees Skip). Set it to false only when you cannot continue without an answer.",
           ].join("\n"),
           [
-            "ask_choice: the user picks one option from a list you provide.",
-            '- select: always "one".',
+            "ask_choice: the user picks one or more options from a list you provide.",
+            '- select: "one" for exactly one option, or "many" to let the user pick several.',
             "- options: 2-50 items, each {id, label, description?}.",
             '- id: 1-64 lowercase letters, digits, "_", or "-", starting with a letter or digit. Unique within the ask.',
             "- label: at most 120 characters. description: optional, at most 280 characters.",
-            "- default: optional list with at most one option id to preselect.",
-            "- Prefer at most 3 options with labels of 20 characters or fewer; small screens show those as buttons.",
+            '- default: optional list of option ids to preselect, each listed once. With "one", at most one id; with "many", at most maxSelected ids.',
+            '- minSelected, maxSelected: optional whole numbers, "many" only. The user picks from minSelected (default 1, at least 0) to maxSelected (default: every choice) choices.',
+            '- allowOther: optional, "many" only. true adds a text field where the user types an answer of their own, up to 500 characters. It counts as one choice. otherLabel: optional label for that field, at most 120 characters. For one option or Other, use "many" with maxSelected 1.',
+            '- Prefer select "one" with at most 3 options with labels of 20 characters or fewer; small screens show those as buttons.',
             '- An accepted answer looks like {"action": "accept", "content": {"selected": ["<id>"]}}.',
+            '- With Other, it looks like {"action": "accept", "content": {"selected": ["<id>"], "other": "<text the user typed>"}}.',
           ].join("\n"),
         ].join("\n\n")
       );

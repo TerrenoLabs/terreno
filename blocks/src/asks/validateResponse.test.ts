@@ -15,6 +15,24 @@ const PLAN_INPUT: ChoiceAskInput = {
 
 const REQUIRED_INPUT: ChoiceAskInput = {...PLAN_INPUT, allowDecline: false};
 
+const MANY_INPUT: ChoiceAskInput = {
+  options: [
+    {id: "cheese", label: "Cheese"},
+    {id: "mushrooms", label: "Mushrooms"},
+    {id: "olives", label: "Olives"},
+    {id: "peppers", label: "Peppers"},
+  ],
+  prompt: "Which toppings?",
+  select: "many",
+};
+
+const OTHER_INPUT: ChoiceAskInput = {
+  ...MANY_INPUT,
+  allowOther: true,
+  maxSelected: 2,
+  minSelected: 1,
+};
+
 const check = (response: unknown, input: ChoiceAskInput = PLAN_INPUT) =>
   validateAskResponse({input, kind: "choice", response});
 
@@ -133,9 +151,23 @@ describe("validateAskResponse error codes", () => {
     expect(codesAndPaths({action: "decline", content: {selected: ["team"]}})).toEqual([
       {code: "UNKNOWN_KEY", path: "content"},
     ]);
-    expect(codesAndPaths({action: "accept", content: {other: "Gold", selected: ["team"]}})).toEqual(
-      [{code: "UNKNOWN_KEY", path: "content.other"}]
+    expect(codesAndPaths({action: "accept", content: {extra: "Gold", selected: ["team"]}})).toEqual(
+      [{code: "UNKNOWN_KEY", path: "content.extra"}]
     );
+  });
+
+  it("OTHER_NOT_ALLOWED when the ask does not allow Other", () => {
+    expect(check({action: "accept", content: {other: "Gold", selected: ["team"]}})).toEqual([
+      {
+        code: "OTHER_NOT_ALLOWED",
+        fix: "Remove content.other and pick from the options.",
+        message: "This ask does not accept an Other answer.",
+        path: "content.other",
+      },
+    ]);
+    expect(
+      codesAndPaths({action: "accept", content: {other: "Gold", selected: ["cheese"]}}, MANY_INPUT)
+    ).toEqual([{code: "OTHER_NOT_ALLOWED", path: "content.other"}]);
   });
 
   it("TOO_LONG and TOO_SHORT for a cancel reason", () => {
@@ -152,5 +184,100 @@ describe("validateAskResponse error codes", () => {
     expect(codesAndPaths({action: "accept", content: {selected}})).toEqual([
       {code: "TOO_MANY", path: "content.selected"},
     ]);
+  });
+});
+
+describe("validateAskResponse select many", () => {
+  it("accepts any count from 1 to the option count by default", () => {
+    expect(check({action: "accept", content: {selected: ["cheese"]}}, MANY_INPUT)).toEqual([]);
+    expect(
+      check(
+        {action: "accept", content: {selected: ["cheese", "mushrooms", "olives", "peppers"]}},
+        MANY_INPUT
+      )
+    ).toEqual([]);
+  });
+
+  it("SELECTION_COUNT gives the default bounds when nothing is selected", () => {
+    expect(check({action: "accept", content: {selected: []}}, MANY_INPUT)).toEqual([
+      {
+        code: "SELECTION_COUNT",
+        fix: "Send 1 to 4 options in content.selected.",
+        message: "Choose 1 to 4 options; the answer selects 0.",
+        path: "content.selected",
+      },
+    ]);
+  });
+
+  it("accepts an empty selection when minSelected is 0", () => {
+    expect(
+      check({action: "accept", content: {selected: []}}, {...MANY_INPUT, minSelected: 0})
+    ).toEqual([]);
+  });
+
+  it("counts Other as one choice", () => {
+    expect(check({action: "accept", content: {other: "Basil", selected: []}}, OTHER_INPUT)).toEqual(
+      []
+    );
+    expect(
+      check({action: "accept", content: {other: "Basil", selected: ["cheese"]}}, OTHER_INPUT)
+    ).toEqual([]);
+    expect(
+      check(
+        {action: "accept", content: {other: "Basil", selected: ["cheese", "olives"]}},
+        OTHER_INPUT
+      )
+    ).toEqual([
+      {
+        code: "SELECTION_COUNT",
+        fix: "Send 1 to 2 options in content.selected. Other counts as one choice.",
+        message: "Choose 1 to 2 options; the answer selects 3, counting Other.",
+        path: "content.selected",
+      },
+    ]);
+  });
+
+  it("names exactly N and at most N bounds", () => {
+    const [exactly] = check(
+      {action: "accept", content: {selected: ["cheese"]}},
+      {...MANY_INPUT, maxSelected: 2, minSelected: 2}
+    );
+    expect(exactly?.message).toBe("Choose exactly 2 options; the answer selects 1.");
+    const [atMost] = check(
+      {action: "accept", content: {selected: ["cheese", "olives", "peppers"]}},
+      {...MANY_INPUT, maxSelected: 2, minSelected: 0}
+    );
+    expect(atMost?.message).toBe("Choose at most 2 options; the answer selects 3.");
+  });
+
+  it("DUPLICATE_ID for an id selected twice", () => {
+    expect(
+      check({action: "accept", content: {selected: ["cheese", "cheese"]}}, MANY_INPUT)
+    ).toEqual([
+      {
+        code: "DUPLICATE_ID",
+        fix: "List each option id in content.selected once.",
+        message: '"cheese" is already selected at content.selected[0].',
+        path: "content.selected[1]",
+      },
+    ]);
+  });
+
+  it("OPTION_NOT_OFFERED for an id the ask did not offer", () => {
+    expect(
+      codesAndPaths({action: "accept", content: {selected: ["cheese", "ham"]}}, MANY_INPUT)
+    ).toEqual([{code: "OPTION_NOT_OFFERED", path: "content.selected[1]"}]);
+  });
+
+  it("TOO_LONG and TOO_SHORT for the Other text", () => {
+    expect(
+      codesAndPaths(
+        {action: "accept", content: {other: "o".repeat(501), selected: []}},
+        OTHER_INPUT
+      )
+    ).toEqual([{code: "TOO_LONG", path: "content.other"}]);
+    expect(
+      codesAndPaths({action: "accept", content: {other: "  ", selected: ["cheese"]}}, OTHER_INPUT)
+    ).toEqual([{code: "TOO_SHORT", path: "content.other"}]);
   });
 });

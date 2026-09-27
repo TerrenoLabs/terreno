@@ -6,7 +6,9 @@
     "options": [
       {"id": "cheese", "label": "Cheese"},
       {"id": "olives", "label": "Olives"}
-    ]
+    ],
+    "allowOther": false,
+    "otherLabel": "Something else"
   },
-  "errors": [{"path": "select", "code": "INVALID_ENUM"}]
+  "errors": [{"path": "otherLabel", "code": "OTHER_NOT_ALLOWED"}]
 }

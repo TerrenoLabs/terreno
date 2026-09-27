@@ -314,7 +314,7 @@ renders it for messages with `ask`. Render it directly in a custom transcript.
 | --- | --- | --- |
 | `ask` | `ChatAsk` | The ask. Pending asks are interactive. Answered and cancelled asks show a summary. |
 | `errors` | `AskValidationError[]` | Errors for the last answer, shown under the controls |
-| `onSubmit` | `AskSubmitHandler` | Called with `{toolCallId, response}`. Without it, the card cannot be answered: buttons and the select are disabled, and radio options show as plain text. |
+| `onSubmit` | `AskSubmitHandler` | Called with `{toolCallId, response}`. Without it, the card cannot be answered: buttons and the select are disabled, and radio and checkbox options show as plain text. |
 | `testID` | string | Defaults to `ask-card`. `GPTChat` passes `gpt-ask-<toolCallId>`. |
 
 `choice` controls:
@@ -324,15 +324,20 @@ renders it for messages with `ask`. Render it directly in a custom transcript.
 | The simple card has a button for every option (`handoff: false`), and every option label is at most 20 characters | The card's buttons as quick replies, then Skip unless `allowDecline` is `false`. A tap answers. |
 | Up to 8 options | `RadioField`, then Submit (`submitLabel`) and Skip |
 | More than 8 options | Searchable `SelectField`, then Submit and Skip |
+| `select: "many"` | `MultiselectField` with a hint such as "Choose 1 to 3.", then a `TextField` titled `otherLabel` (default "Other") when `allowOther` is `true`, then Submit and Skip |
 
 The selection starts on the ask's `default`. Submit is enabled only when `validateAskResponse`
-accepts the selection. When `ask.simple` is absent, the card derives it with `toSimpleCard`. An
+accepts the selection. For `select: "many"`, the answer lists the checked ids in option order and
+sends the Other text trimmed, leaving `other` out when the field is blank. When the checked
+options and the Other text add up to more than `maxSelected`, the checkboxes say so ("You chose
+4. Choose at most 3."). An Other text over 500 characters, or a server error at `content.other`,
+shows on the Other field. When `ask.simple` is absent, the card derives it with `toSimpleCard`. An
 ask whose input fails `validateAskInput` shows "This question cannot be shown. Send a message to
 continue." instead of controls.
 
 | How the ask ended | Summary |
 | --- | --- |
-| `accept` | You chose: `<option labels>` |
+| `accept` | You chose: `<option labels>`. With Other text, it adds "`<otherLabel>`: `<text>`" (the label defaults to "Other"), or shows only that when no option was checked. An empty `select: "many"` answer shows "You chose none of the options." |
 | `decline` | You skipped this question. |
 | `cancel` with `user_sent_message` | Not answered: you sent a message instead. |
 | `cancel` with `one_ask_at_a_time` | Not asked: the assistant asked another question first. |
@@ -345,7 +350,9 @@ continue." instead of controls.
 | Quick reply row | `{testID}-quick-replies` |
 | Quick reply or Skip button | `{testID}-button-<button id>`, such as `{testID}-button-option:team` or `{testID}-button-skip` |
 | Select | `{testID}-select` |
-| Radio options as plain text, without `onSubmit` | `{testID}-options` |
+| Checkboxes (`select: "many"`) | `{testID}-multiselect` |
+| Other text field | `{testID}-other` |
+| Radio or checkbox options as plain text, without `onSubmit` | `{testID}-options` |
 | Submit | `{testID}-submit` |
 | Answer errors | `{testID}-errors` |
 | Summary | `{testID}-summary` |

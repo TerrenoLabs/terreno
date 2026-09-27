@@ -724,6 +724,127 @@ describe("/gpt/prompt asks", () => {
     });
   });
 
+  describe("select many with Other", () => {
+    const TOPPINGS_ASK_INPUT = {
+      allowOther: true,
+      default: ["cheese"],
+      maxSelected: 2,
+      options: [
+        {id: "cheese", label: "Extra cheese"},
+        {id: "mushrooms", label: "Mushrooms"},
+        {id: "olives", label: "Olives"},
+      ],
+      otherLabel: "Another topping",
+      prompt: "Which toppings should I add?",
+      select: "many",
+    };
+    const TOPPINGS_ASK_CALL = {
+      input: TOPPINGS_ASK_INPUT,
+      toolCallId: "call_toppings",
+      toolName: "ask_choice",
+    };
+
+    it("pauses with a handoff card and resumes with the selected ids and the Other text", async () => {
+      const answer = {action: "accept", content: {other: "Basil", selected: ["olives"]}};
+      const model = createScriptedModel({
+        steps: [toolCallStep(TOPPINGS_ASK_CALL), textStep("Adding olives and basil.")],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const asked = await streamPrompt(agent, {prompt: "Pick toppings for my pizza"});
+      const historyId = await onlyHistoryId();
+      expect(asked.events[0]).toEqual({
+        ask: {
+          input: TOPPINGS_ASK_INPUT,
+          kind: "choice",
+          simple: {
+            buttons: [
+              {
+                id: "use-default",
+                label: "Use suggested",
+                response: {action: "accept", content: {selected: ["cheese"]}},
+                style: "primary",
+              },
+              {id: "skip", label: "Skip", response: {action: "decline"}, style: "cancel"},
+            ],
+            handoff: true,
+            kind: "choice",
+            text: "Which toppings should I add?",
+            toolCallId: "call_toppings",
+          },
+          toolCallId: "call_toppings",
+        },
+        historyId,
+      });
+
+      const {events} = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_toppings", ...answer},
+        historyId,
+      });
+
+      expect(events).toEqual([
+        {askResolved: {action: "accept", toolCallId: "call_toppings"}},
+        {text: "Adding olives and basil."},
+        {done: true, historyId, title: "Workspace setup"},
+      ]);
+      expect(conversationOf(modelCall(model, 1)).at(-1)).toEqual({
+        content: [
+          {
+            output: {type: "json", value: answer},
+            toolCallId: "call_toppings",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+        ],
+        role: "tool",
+      });
+    });
+
+    it("returns 400 SELECTION_COUNT when Other pushes the answer over maxSelected", async () => {
+      const model = createScriptedModel({steps: [toolCallStep(TOPPINGS_ASK_CALL)]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      await streamPrompt(agent, {prompt: "Pick toppings for my pizza"});
+      const historyId = await onlyHistoryId();
+
+      const res = await agent.post("/gpt/prompt").send({
+        askResponse: {
+          action: "accept",
+          content: {other: "Basil", selected: ["cheese", "olives"]},
+          toolCallId: "call_toppings",
+        },
+        historyId,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.fields).toEqual([
+        {
+          code: "SELECTION_COUNT",
+          fix: "Send 1 to 2 options in content.selected. Other counts as one choice.",
+          message: "Choose 1 to 2 options; the answer selects 3, counting Other.",
+          path: "content.selected",
+        },
+      ]);
+      expect(model.doStream).toHaveBeenCalledTimes(1);
+    });
+
+    it("sends select many back to the model as a tool error on the compact surface", async () => {
+      const model = createScriptedModel({
+        steps: [toolCallStep(TOPPINGS_ASK_CALL), textStep("Open the app to pick toppings.")],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const {events} = await streamPrompt(agent, {
+        prompt: "Pick toppings for my pizza",
+        surface: "compact",
+      });
+
+      expect(events.some((event) => "ask" in event)).toBe(false);
+      expect(model.doStream).toHaveBeenCalledTimes(2);
+      const historyId = await onlyHistoryId();
+      expect((await loadHistory(historyId)).pendingAsk).toBeUndefined();
+    });
+  });
+
   describe("rejected answers", () => {
     it("returns 400 with fields for an option that was not offered, without calling the model", async () => {
       const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
@@ -1143,8 +1264,16 @@ describe("/gpt/prompt asks", () => {
 
     it.each([
       {
-        input: {...REGION_ASK_INPUT, select: "many"},
+        input: {...REGION_ASK_INPUT, select: "all"},
         name: "a select mode this version does not support",
+      },
+      {
+        input: {...REGION_ASK_INPUT, allowOther: true},
+        name: "Other on a select one ask",
+      },
+      {
+        input: {...REGION_ASK_INPUT, maxSelected: 1, minSelected: 2, select: "many"},
+        name: "minSelected above maxSelected",
       },
       {
         input: {
@@ -1545,9 +1674,10 @@ describe("/gpt/prompt asks", () => {
       expect(toolNamesOf(call)).toEqual(["ask_choice"]);
       const askChoice = call.tools?.[0];
       expect(askChoice?.description).toBe(
-        "Ask the user to pick one option from a list you provide. The chat shows the options as a " +
-          "control and returns the user's answer as this tool's result. Use it instead of asking in " +
-          "plain text when the user must choose between options you can list."
+        "Ask the user to pick one or more options from a list you provide, optionally with an " +
+          "Other field for an answer of their own. The chat shows the options as a control and " +
+          "returns the user's answer as this tool's result. Use it instead of asking in plain text " +
+          "when the user must choose from options you can list."
       );
       expect(askChoice?.inputSchema.type).toBe("object");
       expect(askChoice?.inputSchema.additionalProperties).toBe(false);
@@ -1609,7 +1739,7 @@ describe("/gpt/prompt asks", () => {
 
       const call = modelCall(model, 0);
       expect(toolNamesOf(call)).toEqual(["lookupPlans", "ask_choice"]);
-      expect(call.tools?.[1]?.description).toStartWith("Ask the user to pick one option");
+      expect(call.tools?.[1]?.description).toStartWith("Ask the user to pick one or more options");
     });
 
     it("offers nothing extra when asks lists no kinds", async () => {

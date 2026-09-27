@@ -27,6 +27,7 @@ describe("@terreno/blocks public exports", () => {
     "ASK_CANCEL_REASONS",
     "ASK_KINDS",
     "ASK_SURFACES",
+    "CHOICE_SELECT_MODES",
     "COMPACT_ASK_KINDS",
     "askAcceptResponseSchema",
     "askCancelResponseSchema",
@@ -40,6 +41,7 @@ describe("@terreno/blocks public exports", () => {
     "choiceAskInputSchema",
     "choiceAskResponseSchema",
     "choiceOptionSchema",
+    "choiceSelectionBounds",
     "compactAskInputSchemas",
     "compactChoiceAskInputSchema",
 

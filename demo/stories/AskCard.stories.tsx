@@ -42,6 +42,29 @@ const REGION_ASK: ChoiceAsk = {
   toolCallId: "demo-region",
 };
 
+const TOPPINGS_ASK: ChoiceAsk = {
+  input: {
+    allowOther: true,
+    default: ["cheese", "mushrooms"],
+    maxSelected: 3,
+    options: [
+      {id: "cheese", label: "Extra cheese"},
+      {id: "mushrooms", label: "Mushrooms"},
+      {id: "olives", label: "Olives"},
+      {id: "peppers", label: "Peppers"},
+      {description: "Yes, on pizza", id: "pineapple", label: "Pineapple"},
+    ],
+    otherLabel: "Another topping",
+    prompt: "Which toppings should I add? Pick up to three.",
+    select: "many",
+    submitLabel: "Add toppings",
+    title: "Build your pizza",
+  },
+  kind: "choice",
+  status: "pending",
+  toolCallId: "demo-toppings",
+};
+
 const COUNTRY_NAMES = [
   "Argentina",
   "Australia",
@@ -86,6 +109,12 @@ const ANSWERED_ASKS: ChoiceAsk[] = [
     response: {action: "accept", content: {selected: ["team"]}},
     status: "answered",
     toolCallId: "demo-answered",
+  },
+  {
+    ...TOPPINGS_ASK,
+    response: {action: "accept", content: {other: "Basil", selected: ["cheese", "olives"]}},
+    status: "answered",
+    toolCallId: "demo-answered-many",
   },
   {
     ...PLAN_ASK,
@@ -184,6 +213,17 @@ export const AskCardSearchable: React.FC = (): React.ReactElement => {
   );
 };
 
+export const AskCardPickMany: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="select many renders checkboxes with the selection bounds, plus an Other field when the ask allows it. Other counts as one choice, and Submit stays disabled until the answer fits the bounds."
+      title="Pick many with Other"
+    >
+      <InteractiveAsk ask={TOPPINGS_ASK} testID="demo-ask-card-many" />
+    </StorySection>
+  );
+};
+
 export const AskCardError: React.FC = (): React.ReactElement => {
   const handleSubmit = useCallback(async (): Promise<void> => {
     await waitForServer();
@@ -222,12 +262,13 @@ export const AskCardAnswered: React.FC = (): React.ReactElement => {
 export const AskCardReadOnly: React.FC = (): React.ReactElement => {
   return (
     <StorySection
-      note="Without onSubmit the card still shows the question, but it cannot be answered: buttons are disabled and radio options show as plain text."
+      note="Without onSubmit the card still shows the question, but it cannot be answered: buttons are disabled and radio and checkbox options show as plain text."
       title="Read only"
     >
       <Box gap={2}>
         <AskCard ask={PLAN_ASK} testID="demo-ask-card-read-only" />
         <AskCard ask={REGION_ASK} testID="demo-ask-card-read-only-radio" />
+        <AskCard ask={TOPPINGS_ASK} testID="demo-ask-card-read-only-many" />
       </Box>
     </StorySection>
   );

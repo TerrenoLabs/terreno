@@ -3,6 +3,7 @@ import {
   AskCardAnswered,
   AskCardDemo,
   AskCardError,
+  AskCardPickMany,
   AskCardRadio,
   AskCardReadOnly,
   AskCardSearchable,
@@ -12,7 +13,7 @@ import {AskCard} from "@terreno/ui";
 export const AskCardConfiguration: DemoConfiguration = {
   a11yNotes: [
     "GPTChat moves focus to a pending ask so keyboard and screen reader users land on it.",
-    "Every control is a labeled Button, RadioField, or SelectField, so each answer is reachable by keyboard.",
+    "Every control is a labeled Button, RadioField, SelectField, MultiselectField, or TextField, so each answer is reachable by keyboard.",
   ],
   additionalDocumentation: [],
   category: "Pattern",
@@ -24,7 +25,7 @@ export const AskCardConfiguration: DemoConfiguration = {
   interfaceName: "AskCardProps",
   name: "AskCard",
   props: {},
-  related: ["GPTChat", "RadioField", "SelectField"],
+  related: ["GPTChat", "MultiselectField", "RadioField", "SelectField", "TextField"],
   status: {
     android: "ready",
     documentation: "ready",
@@ -37,12 +38,16 @@ export const AskCardConfiguration: DemoConfiguration = {
       description: "Answered, skipped, and cancelled asks as one-line summaries.",
       render: () => <AskCardAnswered />,
     },
+    "Pick many": {
+      description: "select many with checkboxes, selection bounds, and an Other field.",
+      render: () => <AskCardPickMany />,
+    },
     "Radio options": {
       description: "Four to eight options, or labels too long for buttons.",
       render: () => <AskCardRadio />,
     },
     "Read only": {
-      description: "No onSubmit: buttons are disabled and radio options show as plain text.",
+      description: "No onSubmit: buttons are disabled and radio and checkbox options show as plain text.",
       render: () => <AskCardReadOnly />,
     },
     "Searchable options": {
@@ -60,7 +65,7 @@ export const AskCardConfiguration: DemoConfiguration = {
       "Show server validation errors with `errors` (GPTChat: `askErrors`) so the user can fix the answer.",
     ],
     doNot: [
-      "Do not render your own buttons for an ask; the card picks buttons, radio, or select from the options.",
+      "Do not render your own buttons for an ask; the card picks buttons, radio, select, or checkboxes from the options.",
       "Do not drop the answered card from the transcript; its summary records what the user chose.",
     ],
   },

@@ -29,6 +29,7 @@ export type {
   ChoiceAskInput,
   ChoiceAskResponse,
   ChoiceOption,
+  ChoiceSelectMode,
   CompactAskKind,
 } from "./asks/schema";
 export {
@@ -43,11 +44,13 @@ export {
   askKindsForSurface,
   askOutputSchemas,
   askResponseSchema,
+  CHOICE_SELECT_MODES,
   COMPACT_ASK_KINDS,
   choiceAnswerSchema,
   choiceAskInputSchema,
   choiceAskResponseSchema,
   choiceOptionSchema,
+  choiceSelectionBounds,
   compactAskInputSchemas,
   compactChoiceAskInputSchema,
 } from "./asks/schema";

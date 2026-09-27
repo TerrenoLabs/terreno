@@ -45,15 +45,16 @@ const askFor = async (prompt: string, surface: SurfaceOptions = {}) => {
 
 const replyTo = async (
   response: Record<string, unknown>,
-  surface: SurfaceOptions = {}
+  surface: SurfaceOptions = {},
+  userPrompt = "Help me pick a plan"
 ): Promise<string> => {
-  const {toolCalls} = await askFor("Help me pick a plan", surface);
+  const {toolCalls} = await askFor(userPrompt, surface);
   const [call] = toolCalls;
   if (!call) {
     throw new Error("The demo agent did not ask");
   }
   const messages: ModelMessage[] = [
-    {content: "Help me pick a plan", role: "user"},
+    {content: userPrompt, role: "user"},
     {
       content: [
         {
@@ -107,33 +108,31 @@ describe("demo agent", () => {
     expect(createDemoAgentService().modelId).toBe("terreno-demo-agent");
   });
 
-  it.each(["Help me pick a plan", "Which plans do you have?", "I am choosing a subscription"])(
-    "asks which plan to set up for %p",
-    async (prompt) => {
-      const {text, toolCalls} = await askFor(prompt);
+  it.each([
+    "Help me pick a plan",
+    "Which plans do you have?",
+    "I am choosing a subscription",
+    "Help me choose between several plans",
+  ])("asks which plan to set up for %p", async (prompt) => {
+    const {text, toolCalls} = await askFor(prompt);
 
-      expect(text).toBe("");
-      expect(toolCalls).toHaveLength(1);
-      const [call] = toolCalls;
-      if (!call) {
-        throw new Error("The demo agent did not ask");
-      }
-      expect(call.toolName).toBe("ask_choice");
-      expect(call.invalid).toBeFalsy();
-      const input = call.input as {options: {label: string}[]};
-      expect(input).toMatchObject({
-        default: ["team"],
-        prompt: "Which plan should I set up for your workspace?",
-        select: "one",
-        title: "Choose a plan",
-      });
-      expect(input.options.map((option) => option.label)).toEqual([
-        "Starter",
-        "Team",
-        "Enterprise",
-      ]);
+    expect(text).toBe("");
+    expect(toolCalls).toHaveLength(1);
+    const [call] = toolCalls;
+    if (!call) {
+      throw new Error("The demo agent did not ask");
     }
-  );
+    expect(call.toolName).toBe("ask_choice");
+    expect(call.invalid).toBeFalsy();
+    const input = call.input as {options: {label: string}[]};
+    expect(input).toMatchObject({
+      default: ["team"],
+      prompt: "Which plan should I set up for your workspace?",
+      select: "one",
+      title: "Choose a plan",
+    });
+    expect(input.options.map((option) => option.label)).toEqual(["Starter", "Team", "Enterprise"]);
+  });
 
   it("replies with the plan the user picked", async () => {
     const text = await replyTo({action: "accept", content: {selected: ["enterprise"]}});
@@ -154,12 +153,68 @@ describe("demo agent", () => {
     expect(text).toBe("The plan question was cancelled, so I did not choose a plan.");
   });
 
+  it.each(["Pick toppings for my pizza", "Let me pick several toppings"])(
+    "asks which toppings to add, several with Other, for %p",
+    async (prompt) => {
+      const {text, toolCalls} = await askFor(prompt);
+
+      expect(text).toBe("");
+      expect(toolCalls).toHaveLength(1);
+      const [call] = toolCalls;
+      if (!call) {
+        throw new Error("The demo agent did not ask");
+      }
+      expect(call.toolName).toBe("ask_choice");
+      expect(call.invalid).toBeFalsy();
+      expect(call.toolCallId).toStartWith("demo_toppings_");
+      const input = call.input as {options: {id: string}[]};
+      expect(input).toMatchObject({
+        allowOther: true,
+        default: ["cheese", "mushrooms"],
+        maxSelected: 3,
+        otherLabel: "Another topping",
+        select: "many",
+        title: "Build your pizza",
+      });
+      expect(input.options.map((option) => option.id)).toEqual([
+        "cheese",
+        "mushrooms",
+        "olives",
+        "peppers",
+        "pineapple",
+        "onions",
+      ]);
+    }
+  );
+
+  it("replies with the toppings the user picked and the one they typed", async () => {
+    const text = await replyTo(
+      {action: "accept", content: {other: "Basil", selected: ["cheese", "olives"]}},
+      {},
+      "Pick toppings"
+    );
+
+    expect(text).toBe(
+      'You picked **Extra cheese**, **Olives**, and your own topping, **Basil**. A real agent would add them to the order now. Say "pick toppings" to try another answer.'
+    );
+  });
+
+  it("replies to an Other-only answer and to a skipped toppings question", async () => {
+    expect(
+      await replyTo({action: "accept", content: {other: "Anchovies", selected: []}}, {}, "Toppings")
+    ).toContain("You picked your own topping, **Anchovies**.");
+    expect(await replyTo({action: "decline"}, {}, "Toppings")).toContain(
+      "I left the pizza as it is"
+    );
+  });
+
   it("explains how to try an ask when the message has no trigger words", async () => {
     const {text, toolCalls} = await askFor("Hello there");
 
     expect(toolCalls).toHaveLength(0);
     expect(text).toContain("I'm the Terreno demo agent");
     expect(text).toContain('Say "help me pick a plan"');
+    expect(text).toContain('"pick toppings"');
     expect(text).toContain("GEMINI_API_KEY");
   });
 
@@ -176,6 +231,9 @@ describe("demo agent", () => {
     ).toBe("Choosing a plan");
     expect(await titleFor('User: Hello there\nAssistant: Say "help me pick a plan".')).toBe(
       "Demo agent chat"
+    );
+    expect(await titleFor("User: Pick toppings\nAssistant: You picked **Olives**.")).toBe(
+      "Building a pizza"
     );
   });
 });
@@ -208,6 +266,15 @@ describe("demo agent on the compact surface", () => {
   it("acknowledges a skipped plan question in one sentence", async () => {
     expect(await replyTo({action: "decline"}, {isCompact: true})).toBe(
       "OK, I skipped the plan for now."
+    );
+  });
+
+  it("sends the toppings question as text, since the compact surface cannot pick several", async () => {
+    const {text, toolCalls} = await askFor("Pick toppings", {isCompact: true});
+
+    expect(toolCalls).toHaveLength(0);
+    expect(text).toBe(
+      'Picking several toppings needs a bigger screen. Open the chat on your phone and say "pick toppings".'
     );
   });
 
@@ -327,6 +394,66 @@ describe("demo agent through the chat routes", () => {
     const askRow = history?.prompts.find((row) => row.toolCallId === ask.toolCallId && row.ask);
     expect(askRow?.ask?.status).toBe("answered");
     expect(history?.prompts.at(-1)).toMatchObject({model: "terreno-demo-agent", type: "assistant"});
+  });
+
+  it("pauses on the toppings ask and continues with the picked ids and the Other text", async () => {
+    const auth = {Authorization: `Bearer ${await signIn()}`};
+
+    const asked = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({prompt: "Pick toppings for my pizza"});
+    expect(asked.status).toBe(200);
+    const askedEvents = parseEvents(asked.text);
+    const ask = askedEvents.find((event) => "ask" in event)?.ask as {
+      input: {select: string};
+      simple: {buttons: {id: string}[]; handoff: boolean};
+      toolCallId: string;
+    };
+    expect(ask.input.select).toBe("many");
+    expect(ask.simple.handoff).toBe(true);
+    expect(ask.simple.buttons.map((button) => button.id)).toEqual(["use-default", "skip"]);
+    const {historyId} = askedEvents.at(-1) as {historyId: string};
+
+    const tooMany = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({
+        askResponse: {
+          action: "accept",
+          content: {other: "Basil", selected: ["cheese", "olives", "peppers"]},
+          toolCallId: ask.toolCallId,
+        },
+        historyId,
+      });
+    expect(tooMany.status).toBe(400);
+    expect(tooMany.body.fields.map((field: {code: string}) => field.code)).toEqual([
+      "SELECTION_COUNT",
+    ]);
+
+    const response = {
+      action: "accept",
+      content: {other: "Basil", selected: ["cheese", "olives"]},
+    };
+    const answered = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({askResponse: {...response, toolCallId: ask.toolCallId}, historyId});
+    expect(answered.status).toBe(200);
+    const answeredEvents = parseEvents(answered.text);
+    const text = answeredEvents
+      .map((event) => (typeof event.text === "string" ? event.text : ""))
+      .join("");
+    expect(text).toContain(
+      "You picked **Extra cheese**, **Olives**, and your own topping, **Basil**."
+    );
+    expect(answeredEvents.at(-1)).toEqual({done: true, historyId, title: "Building a pizza"});
+
+    const history = await GptHistory.findById(historyId).lean();
+    const resultRow = history?.prompts.find(
+      (row) => row.toolCallId === ask.toolCallId && row.type === "tool-result"
+    );
+    expect(resultRow?.result).toEqual(response);
   });
 
   it("answers other messages with the demo agent's help", async () => {

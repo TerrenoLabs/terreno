@@ -6,10 +6,10 @@ calls on the existing chat stream, how one round trip works, how a watch or anot
 answers them, and how asks and Agent UI Blocks divide the work. Fields, limits, events, and error
 codes are in the [reference](../reference/agent-ui-asks.md).
 
-Asks ship today as the `choice` kind (pick one option). The chat asks on `POST /gpt/prompt` and
-shows asks in `GPTChat`. Watches and other small clients answer on two JSON endpoints with the
-compact surface. The other kinds follow the
-[implementation plan](../implementationPlans/agent-ui-asks.md).
+Asks ship today as the `choice` kind: pick one option, or pick several with an optional answer of
+the user's own (Other). The chat asks on `POST /gpt/prompt` and shows asks in `GPTChat`. Watches
+and other small clients answer select-one asks on two JSON endpoints with the compact surface. The
+other kinds follow the [implementation plan](../implementationPlans/agent-ui-asks.md).
 
 ## The problem
 
@@ -136,6 +136,16 @@ A `choice` whose options all fit its simple card renders as that card's buttons,
 A phone then shows the same buttons a watch would, and the most common ask, two or three short
 options, takes one tap. Longer lists get radio buttons or a searchable select with Submit.
 
+A `select: "many"` choice renders as checkboxes with Submit, because one tap cannot pick several.
+Its Other field lets the user answer with something the agent did not list, without leaving the
+ask for free text: the answer still names the offered ids in `selected`, and only the typed part
+is in `other`. Other counts as one choice against `maxSelected`, so "pick up to three" means three
+things in total, however the user picks them. Other is offered only with `"many"`; an agent that
+wants "one option or your own" asks `"many"` with `maxSelected: 1`, so every ask with free text
+goes through the same control and the same count rule. On a small screen a many-select card can
+offer only its suggested set and Skip, so it always hands off, and the compact surface does not
+offer `"many"` at all.
+
 After an ask ends, the card collapses to one line, such as "You chose: Team". A long conversation
 then reads as a record of what the agent asked and what the user decided. The answer's
 `tool-result` row stays in the message list but is hidden. Ratings address messages by their index
@@ -150,7 +160,7 @@ instead of hunting for it.
 A watch shows about three short buttons. A full `choice` can offer 50 options, and on a watch its
 card can only hand off to the phone. So a small client says where the user is with
 `surface: "compact"`, and the server narrows what the agent may ask on that turn: only a `choice`
-with 2–3 options whose labels fit a button uncut and differ from each other. Every card made on a
+with `select: "one"` and 2–3 options whose labels fit a button uncut and differ from each other. Every card made on a
 compact turn can be answered from the watch, and the system prompt asks for replies of at most two
 short sentences. The narrowing is in the tool's input schema, not only in the prompt, so the model
 cannot ask what the watch cannot show. A compact ask that breaks the rules goes back to the model

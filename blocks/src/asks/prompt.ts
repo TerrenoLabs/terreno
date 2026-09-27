@@ -24,14 +24,17 @@ const compactSharedRules = (): string =>
 const choiceRules = (): string => {
   const {choice, simpleCard} = ASK_LIMITS;
   return [
-    "ask_choice: the user picks one option from a list you provide.",
-    '- select: always "one".',
+    "ask_choice: the user picks one or more options from a list you provide.",
+    '- select: "one" for exactly one option, or "many" to let the user pick several.',
     `- options: ${choice.optionsMin}-${choice.optionsMax} items, each {id, label, description?}.`,
     CHOICE_ID_RULE,
     `- label: at most ${choice.optionLabelMaxLength} characters. description: optional, at most ${choice.optionDescriptionMaxLength} characters.`,
-    "- default: optional list with at most one option id to preselect.",
-    `- Prefer at most ${simpleCard.buttonsMax} options with labels of ${simpleCard.buttonLabelMaxLength} characters or fewer; small screens show those as buttons.`,
+    '- default: optional list of option ids to preselect, each listed once. With "one", at most one id; with "many", at most maxSelected ids.',
+    '- minSelected, maxSelected: optional whole numbers, "many" only. The user picks from minSelected (default 1, at least 0) to maxSelected (default: every choice) choices.',
+    `- allowOther: optional, "many" only. true adds a text field where the user types an answer of their own, up to ${choice.otherMaxLength} characters. It counts as one choice. otherLabel: optional label for that field, at most ${choice.optionLabelMaxLength} characters. For one option or Other, use "many" with maxSelected 1.`,
+    `- Prefer select "one" with at most ${simpleCard.buttonsMax} options with labels of ${simpleCard.buttonLabelMaxLength} characters or fewer; small screens show those as buttons.`,
     CHOICE_ANSWER_EXAMPLE,
+    '- With Other, it looks like {"action": "accept", "content": {"selected": ["<id>"], "other": "<text the user typed>"}}.',
   ].join("\n");
 };
 

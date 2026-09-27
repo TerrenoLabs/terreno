@@ -18,6 +18,23 @@ const COMPACT_ERRORS_BY_FIXTURE: Record<string, {code: string; path: string}[]> 
     {code: "TOO_LONG", path: "options[0].label"},
     {code: "TOO_LONG", path: "options[1].label"},
   ],
+  "choice-many-default-below-min": [
+    {code: "UNKNOWN_KEY", path: "maxSelected"},
+    {code: "UNKNOWN_KEY", path: "minSelected"},
+    {code: "INVALID_ENUM", path: "select"},
+  ],
+  "choice-many-every-choice-with-other": [
+    {code: "UNKNOWN_KEY", path: "allowOther"},
+    {code: "UNKNOWN_KEY", path: "maxSelected"},
+    {code: "UNKNOWN_KEY", path: "minSelected"},
+    {code: "UNKNOWN_KEY", path: "otherLabel"},
+    {code: "INVALID_ENUM", path: "select"},
+  ],
+  "choice-many-no-default": [{code: "INVALID_ENUM", path: "select"}],
+  "choice-many-optional-no-buttons": [
+    {code: "UNKNOWN_KEY", path: "minSelected"},
+    {code: "INVALID_ENUM", path: "select"},
+  ],
   "choice-many-options-default-label-collides": [
     {code: "TOO_MANY", path: "options"},
     {code: "TOO_LONG", path: "options[0].label"},
@@ -26,6 +43,22 @@ const COMPACT_ERRORS_BY_FIXTURE: Record<string, {code: string; path: string}[]> 
   "choice-many-options-no-buttons": [{code: "TOO_MANY", path: "options"}],
   "choice-many-options-no-default": [{code: "TOO_MANY", path: "options"}],
   "choice-many-options-with-default": [{code: "TOO_MANY", path: "options"}],
+  "choice-many-required-with-default": [
+    {code: "TOO_MANY", path: "options"},
+    {code: "INVALID_ENUM", path: "select"},
+  ],
+  "choice-many-single-pick-or-other": [
+    {code: "UNKNOWN_KEY", path: "allowOther"},
+    {code: "UNKNOWN_KEY", path: "maxSelected"},
+    {code: "INVALID_ENUM", path: "select"},
+  ],
+  "choice-many-toppings-with-default": [
+    {code: "UNKNOWN_KEY", path: "allowOther"},
+    {code: "UNKNOWN_KEY", path: "maxSelected"},
+    {code: "TOO_MANY", path: "options"},
+    {code: "UNKNOWN_KEY", path: "otherLabel"},
+    {code: "INVALID_ENUM", path: "select"},
+  ],
   "choice-max-limits": [
     {code: "TOO_MANY", path: "options"},
     {code: "TOO_LONG", path: "options[0].label"},
@@ -176,8 +209,169 @@ describe("validateAskInput messages", () => {
       },
       {
         code: "INVALID_ENUM",
+        fix: 'Use one of "one", "many".',
+        message: 'select must be one of "one", "many", not "all".',
+        path: "select",
+      },
+    ]);
+  });
+
+  it("explains select many bounds that are not whole numbers or are out of range", () => {
+    expect(
+      validateAskInput({
+        input: {
+          maxSelected: 0,
+          minSelected: 1.5,
+          options: TWO_OPTIONS,
+          prompt: "Pick.",
+          select: "many",
+        },
+        kind: "choice",
+      })
+    ).toEqual([
+      {
+        code: "RANGE_INVALID",
+        fix: "Make maxSelected at least 1.",
+        message: "maxSelected must be at least 1.",
+        path: "maxSelected",
+      },
+      {
+        code: "INVALID_TYPE",
+        fix: "Make minSelected a whole number.",
+        message: "minSelected must be a whole number, not 1.5.",
+        path: "minSelected",
+      },
+    ]);
+  });
+
+  it("names the choice count when maxSelected is more than the ask offers", () => {
+    expect(
+      validateAskInput({
+        input: {maxSelected: 3, options: TWO_OPTIONS, prompt: "Pick.", select: "many"},
+        kind: "choice",
+      })
+    ).toEqual([
+      {
+        code: "RANGE_INVALID",
+        fix: "Set maxSelected to 2 or fewer, or add options.",
+        message: "maxSelected is 3, but the ask offers 2 choices.",
+        path: "maxSelected",
+      },
+    ]);
+  });
+
+  it("counts Other as a choice for maxSelected", () => {
+    expect(
+      validateAskInput({
+        input: {
+          allowOther: true,
+          maxSelected: 3,
+          options: TWO_OPTIONS,
+          prompt: "Pick.",
+          select: "many",
+        },
+        kind: "choice",
+      })
+    ).toEqual([]);
+  });
+
+  it("explains minSelected above maxSelected", () => {
+    expect(
+      validateAskInput({
+        input: {
+          maxSelected: 1,
+          minSelected: 2,
+          options: TWO_OPTIONS,
+          prompt: "Pick.",
+          select: "many",
+        },
+        kind: "choice",
+      })
+    ).toEqual([
+      {
+        code: "RANGE_INVALID",
+        fix: "Lower minSelected, or raise maxSelected and add options.",
+        message: "minSelected (2) is more than maxSelected (1).",
+        path: "minSelected",
+      },
+    ]);
+  });
+
+  it("points select one asks with many fields to select many", () => {
+    expect(
+      validateAskInput({
+        input: {
+          allowOther: true,
+          minSelected: 2,
+          options: TWO_OPTIONS,
+          prompt: "Pick.",
+          select: "one",
+        },
+        kind: "choice",
+      })
+    ).toEqual([
+      {
+        code: "OTHER_NOT_ALLOWED",
+        fix: 'Use select "many" (with maxSelected 1 for a single pick), or remove allowOther.',
+        message: 'allowOther needs select "many".',
+        path: "allowOther",
+      },
+      {
+        code: "RANGE_INVALID",
+        fix: 'Remove minSelected, or use select "many".',
+        message: 'select "one" picks exactly one option, so minSelected must be 1, not 2.',
+        path: "minSelected",
+      },
+    ]);
+  });
+
+  it("explains too many or repeated defaults and otherLabel without allowOther", () => {
+    expect(
+      validateAskInput({
+        input: {
+          default: ["yes", "yes", "no"],
+          maxSelected: 2,
+          options: TWO_OPTIONS,
+          otherLabel: "Something else",
+          prompt: "Pick.",
+          select: "many",
+        },
+        kind: "choice",
+      })
+    ).toEqual([
+      {
+        code: "SELECTION_COUNT",
+        fix: "Keep at most 2 option ids in default.",
+        message: "default lists 3 option ids, but the ask allows at most 2.",
+        path: "default",
+      },
+      {
+        code: "DUPLICATE_ID",
+        fix: "List each option id in default once.",
+        message: 'Default "yes" is already listed at default[0].',
+        path: "default[1]",
+      },
+      {
+        code: "OTHER_NOT_ALLOWED",
+        fix: "Set allowOther to true, or remove otherLabel.",
+        message: "otherLabel is set, but allowOther is not true.",
+        path: "otherLabel",
+      },
+    ]);
+  });
+
+  it("rejects select many on the compact surface", () => {
+    expect(
+      validateAskInput({
+        input: {options: TWO_OPTIONS, prompt: "Pick.", select: "many"},
+        kind: "choice",
+        surface: "compact",
+      })
+    ).toEqual([
+      {
+        code: "INVALID_ENUM",
         fix: 'Use "one".',
-        message: 'select must be "one", not "all".',
+        message: 'select must be "one", not "many".',
         path: "select",
       },
     ]);

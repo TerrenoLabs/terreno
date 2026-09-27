@@ -9,7 +9,8 @@ producer: the `ask_<kind>` tools, the pause and resume on `POST /gpt/prompt` and
 way, see [Agent UI Asks explained](../explanation/agent-ui-asks.md). To add asks to an app, see
 [Add agent asks to a chat](../how-to/agent-ui-asks.md).
 
-Shipped: the `choice` kind with `select: "one"`, asked and answered through `POST /gpt/prompt`
+Shipped: the `choice` kind with `select: "one"` and `select: "many"` (with an optional Other
+answer), asked and answered through `POST /gpt/prompt`
 and shown in `GPTChat` ([props and controls](ui.md#asks)), and the small-screen path: the
 [compact surface](#compact-surface), the [headless endpoints](#headless-endpoints),
 [JSON Schemas](#json-schemas-and-fixtures), and [`SimpleAskCard`](ui.md#simpleaskcard). The other
@@ -101,16 +102,34 @@ field must contain visible characters, not only whitespace (`TOO_SHORT`).
 
 ## choice
 
-Tool: `ask_choice`. The user picks one option.
+Tool: `ask_choice`. The user picks one option (`select: "one"`) or several (`select: "many"`).
+A `"many"` ask can also let the user type an answer of their own (Other).
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `select` | `"one"` | Required. `"many"` is not supported yet and fails with `INVALID_ENUM`. |
+| `select` | `"one"` or `"many"` | Required (`CHOICE_SELECT_MODES`). Any other value fails with `INVALID_ENUM`. |
 | `options` | `{id, label, description?}[]` | Required, 2–50 items, in display order. |
 | `options[].id` | string | Matches `^[a-z0-9][a-z0-9_-]{0,63}$`. Unique within the ask (`DUPLICATE_ID`). |
 | `options[].label` | string | 1–120 characters. |
 | `options[].description` | string | Optional, at most 280 characters. |
-| `default` | string[] | Optional. At most one id (`SELECTION_COUNT`), and it must be an option id (`DEFAULT_NOT_IN_OPTIONS`). |
+| `default` | string[] | Optional. Each id must be an option id (`DEFAULT_NOT_IN_OPTIONS`) and listed once (`DUPLICATE_ID`). With `"one"`, at most one id; with `"many"`, at most `maxSelected` ids (`SELECTION_COUNT`). |
+| `minSelected` | integer | Optional, `"many"` only. The fewest choices the answer holds, at least 0. Default 1. With `"one"` it must be 1 (`RANGE_INVALID`). |
+| `maxSelected` | integer | Optional, `"many"` only. The most choices the answer holds, at least 1. Default: every choice the ask offers. With `"one"` it must be 1 (`RANGE_INVALID`). |
+| `allowOther` | boolean | Optional, `"many"` only. `true` adds an Other text field. With `"one"` it fails with `OTHER_NOT_ALLOWED`; for "one option or Other", use `"many"` with `maxSelected: 1`. |
+| `otherLabel` | string | Optional label of the Other field, at most 120 characters. Clients default to "Other". Needs `allowOther: true` (`OTHER_NOT_ALLOWED`). |
+
+Other counts as one choice. The choices an ask offers are its options, plus one when
+`allowOther` is `true`. `choiceSelectionBounds(input)` returns the `{min, max}` an answer must
+meet:
+
+| `select` | `min` | `max` |
+| --- | --- | --- |
+| `"one"` | 1 | 1 |
+| `"many"` | `minSelected`, default 1 | `maxSelected`, default the number of choices the ask offers |
+
+A `"many"` ask fails with `RANGE_INVALID` when `maxSelected` is more than the choices it offers,
+or `minSelected` is more than `maxSelected` or the choices it offers. A `default` with fewer ids
+than `minSelected` is valid: the client preselects it, and the user adds the rest.
 
 ```json
 {
@@ -127,8 +146,39 @@ Tool: `ask_choice`. The user picks one option.
 }
 ```
 
-Answer: `{"action": "accept", "content": {"selected": ["team"]}}`. `selected` holds exactly one
-id (`SELECTION_COUNT` otherwise), and that id must be one the ask offered (`OPTION_NOT_OFFERED`).
+Answer: `{"action": "accept", "content": {"selected": ["team"]}}`. With `"one"`, `selected`
+holds exactly one id (`SELECTION_COUNT` otherwise), and that id must be one the ask offered
+(`OPTION_NOT_OFFERED`).
+
+A `"many"` ask with Other:
+
+```json
+{
+  "title": "Build your pizza",
+  "prompt": "Which toppings should I add? Pick up to three.",
+  "select": "many",
+  "options": [
+    {"id": "cheese", "label": "Extra cheese"},
+    {"id": "mushrooms", "label": "Mushrooms"},
+    {"id": "olives", "label": "Olives"},
+    {"id": "peppers", "label": "Peppers"},
+    {"id": "pineapple", "label": "Pineapple"}
+  ],
+  "default": ["cheese", "mushrooms"],
+  "maxSelected": 3,
+  "allowOther": true,
+  "otherLabel": "Another topping",
+  "submitLabel": "Add toppings"
+}
+```
+
+Answer: `{"action": "accept", "content": {"selected": ["cheese", "olives"], "other": "Basil"}}`.
+
+| Answer field | Rule | Error |
+| --- | --- | --- |
+| `selected` | Offered ids (`OPTION_NOT_OFFERED`), each once (`DUPLICATE_ID`), at most 50 | `TOO_MANY` |
+| `other` | Optional, 1–500 visible characters. Only when the ask sets `allowOther: true`. | `TOO_LONG`, `TOO_SHORT`, `OTHER_NOT_ALLOWED` |
+| `selected` and `other` | Together hold `min` to `max` choices from `choiceSelectionBounds`, with `other` counting as one | `SELECTION_COUNT` |
 
 ## Simple cards
 
@@ -157,6 +207,11 @@ UTF-16 code units, the `length` of a JavaScript string, so most emoji count as 2
 | At most 3 options, and their cut labels are all different | One button per option: id `option:<id>`, response `{action: "accept", content: {selected: [id]}}`. The `default` option comes first with style `primary`, and the others follow in option order with style `default`. Without a `default`, the buttons keep option order, all with style `default`. Then `skip` (label "Skip", style `cancel`, response `{action: "decline"}`) when `allowDecline` is not `false` and there are fewer than 3 options. | `false` |
 | More than 3 options | `use-default` (label `Use "<label>"` with the default's label cut to 14 characters, style `primary`, response selecting the default) when the ask has a `default`, then `skip` when `allowDecline` is not `false` | `true` |
 | The buttons cannot tell options apart: two of at most 3 options have the same cut label, or another option's label cut to 14 characters matches the one in `Use "<label>"` | Only `skip`, when `allowDecline` is not `false` | `true` |
+| `select: "many"` | `use-default` (label "Use suggested", style `primary`, response `{action: "accept", content: {selected: default}}`) when `default` is not empty and is a valid answer on its own (it meets `minSelected`), then `skip` when `allowDecline` is not `false` | `true` |
+
+The first three rows are for `select: "one"`. A `"many"` card never has a button per option,
+because one tap cannot pick several, so the user answers in the full app unless the suggested
+set or Skip is enough.
 
 Every button's `response` passes `validateAskResponse` for its ask. `simpleCardSchema` checks a
 card's shape, limits, and unique button ids.
@@ -193,6 +248,7 @@ A compact `choice` (`compactChoiceAskInputSchema`) follows the [choice](#choice)
 
 | Field | Compact rule | Error |
 | --- | --- | --- |
+| `select` | Only `"one"`. `minSelected`, `maxSelected`, `allowOther`, and `otherLabel` are not defined. | `INVALID_ENUM`, `UNKNOWN_KEY` |
 | `options` | 2–3 items (`simpleCard.buttonsMax`) | `TOO_MANY` |
 | `options[].label` | At most 20 UTF-16 code units (`simpleCard.buttonLabelMaxLength`), so its button shows it uncut. Most emoji count as 2 or more. | `TOO_LONG` |
 | `options[].label` | Different from every other option's label | `DUPLICATE_LABEL` |
@@ -207,7 +263,7 @@ The model's ask and the user's answer are checked with pure functions from `@ter
 
 | Function | Checks | Where it runs |
 | --- | --- | --- |
-| `validateAskInput({kind, input, surface?})` | The ask against its schema and rules: unique option ids, at most one default, defaults among the options, and with `surface: "compact"` the [compact rules](#compact-surface) | The same schema is the tool's `inputSchema`, so the AI SDK checks every ask call. An invalid ask goes back to the model as a tool error and never reaches the client. |
+| `validateAskInput({kind, input, surface?})` | The ask against its schema and rules: unique option ids, the `select` bounds, Other fields only on `"many"` asks, defaults among the options and within the bounds, and with `surface: "compact"` the [compact rules](#compact-surface) | The same schema is the tool's `inputSchema`, so the AI SDK checks every ask call. An invalid ask goes back to the model as a tool error and never reaches the client. |
 | `validateAskResponse({kind, input, response})` | The answer envelope, then the kind's answer against the ask | The server, before it resumes the turn. Clients can run it before they enable Submit. |
 
 Both return `AskValidationError[]`, empty when valid, sorted by path and then code:
@@ -228,13 +284,15 @@ Both return `AskValidationError[]`, empty when valid, sorted by path and then co
 | --- | --- | --- |
 | `DECLINE_NOT_ALLOWED` | The answer skips an ask that does not allow skipping. | `validateAskResponse` |
 | `DEFAULT_NOT_IN_OPTIONS` | A default names an option id that the ask does not offer. | `validateAskInput` |
-| `DUPLICATE_ID` | Two options share the same id. | `validateAskInput` |
+| `DUPLICATE_ID` | An id appears twice where ids must be unique: options, default, or an answer. | Both |
 | `DUPLICATE_LABEL` | Two options of a compact ask share the same label. | `validateAskInput` with `surface: "compact"` |
 | `INVALID_ENUM` | A value is not one of the allowed values. | Both |
 | `INVALID_FORMAT` | A string does not match its required format. | `validateAskInput` |
 | `INVALID_TYPE` | A value has the wrong type. | Both |
 | `MISSING_REQUIRED` | A required field is missing. | Both |
 | `OPTION_NOT_OFFERED` | The answer selects an option id that the ask did not offer. | `validateAskResponse` |
+| `OTHER_NOT_ALLOWED` | An ask or an answer uses Other where the ask does not allow it. | Both |
+| `RANGE_INVALID` | A count bound is out of range: below its minimum, above what the ask offers, or minSelected above maxSelected. | `validateAskInput` |
 | `SELECTION_COUNT` | A default or an answer selects the wrong number of options. | Both |
 | `TOO_FEW` | A list has fewer items than allowed. | `validateAskInput` |
 | `TOO_LONG` | A string is longer than allowed. | Both |
@@ -258,6 +316,7 @@ read it. Keys are paths into `ASK_LIMITS`. A doc-parity test fails when this tab
 | `choice.optionLabelMaxLength` | 120 | `options[].label` |
 | `choice.optionsMax` | 50 | `options`, `default`, and `content.selected` |
 | `choice.optionsMin` | 2 | `options` |
+| `choice.otherMaxLength` | 500 | `content.other` |
 | `pendingAsksPerHistory` | 1 | Asks one conversation can wait on at a time |
 | `promptMaxLength` | 500 | `prompt` |
 | `simpleCard.buttonLabelMaxLength` | 20 | Simple card button `label` |
@@ -588,6 +647,7 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 | `ASK_SURFACES`, `AskSurface`, `askSurfaceSchema` | The surfaces (`["full", "compact"]`) and the schema of a request's `surface` |
 | `COMPACT_ASK_KINDS`, `CompactAskKind`, `askKindsForSurface({kinds, surface})` | The kinds the compact surface offers (`["choice"]`), and the ones a surface offers from a list |
 | `choiceAskInputSchema`, `compactChoiceAskInputSchema`, `choiceOptionSchema`, `choiceAnswerSchema`, `choiceAskResponseSchema` | `choice` schemas and their types (`ChoiceAskInput`, `ChoiceOption`, `ChoiceAnswer`, `ChoiceAskResponse`) |
+| `CHOICE_SELECT_MODES`, `ChoiceSelectMode`, `choiceSelectionBounds(input)` | The `select` values (`["one", "many"]`), and the `{min, max}` choices an answer to a `choice` ask must hold |
 | `askInputSchemas`, `compactAskInputSchemas`, `askOutputSchemas`, `askInputSchemaFor({kind, surface?})` | Input and answer envelope schemas by kind, and the input schema for a kind on a surface |
 | `askResponseSchema`, `askAcceptResponseSchema`, `askDeclineResponseSchema`, `askCancelResponseSchema`, `AskResponse` | The answer envelope |
 | `Ask`, `ChoiceAsk` | A validated ask: `{kind, input}` |

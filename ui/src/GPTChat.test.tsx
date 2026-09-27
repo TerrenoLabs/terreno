@@ -892,6 +892,49 @@ describe("GPTChat asks", () => {
     });
   });
 
+  it("sends the checked options and the Other text of a restored select many ask", async () => {
+    const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+    const toppingsAsk = planAsk({
+      input: {
+        allowOther: true,
+        default: ["cheese"],
+        maxSelected: 3,
+        options: [
+          {id: "cheese", label: "Extra cheese"},
+          {id: "mushrooms", label: "Mushrooms"},
+          {id: "olives", label: "Olives"},
+        ],
+        otherLabel: "Another topping",
+        prompt: "Which toppings should I add?",
+        select: "many",
+      },
+      simple: undefined,
+      toolCallId: "call_toppings",
+    });
+    const restored: GPTChatHistory = {
+      id: "h4",
+      prompts: [userMessage, askMessage(toppingsAsk)],
+      title: "Building a pizza",
+    };
+    const {getByLabelText, getByTestId} = renderChat({
+      currentHistoryId: "h4",
+      currentMessages: restored.prompts,
+      histories: [...histories, restored],
+      onAskSubmit,
+    });
+
+    await press(getByLabelText("Olives"));
+    await act(async () => {
+      fireEvent.changeText(getByTestId("gpt-ask-call_toppings-other"), "Basil");
+    });
+    await press(getByTestId("gpt-ask-call_toppings-submit"));
+
+    assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+      response: {action: "accept", content: {other: "Basil", selected: ["cheese", "olives"]}},
+      toolCallId: "call_toppings",
+    });
+  });
+
   it("summarizes an answered ask from its hidden result message", () => {
     const {getByText, queryByTestId, queryByText} = renderChat({
       currentMessages: [

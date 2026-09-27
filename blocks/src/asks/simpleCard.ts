@@ -9,6 +9,7 @@ import {
   type ChoiceAskInput,
   type ChoiceOption,
 } from "./schema";
+import {validateAskResponse} from "./validateResponse";
 
 export const SIMPLE_CARD_BUTTON_STYLES = ["default", "primary", "destructive", "cancel"] as const;
 
@@ -32,8 +33,9 @@ export type SimpleCardButton = z.infer<typeof simpleCardButtonSchema>;
 /**
  * The small-screen form of an ask: short text and at most three buttons, each carrying the exact
  * answer it sends. `handoff` is true when the buttons cannot show every option the ask offers, so
- * the user needs the full app to answer. A card with a button for every option has `handoff: false`
- * even when Skip is left out to make room.
+ * the user needs the full app to answer; a select-many ask always hands off, because one tap cannot
+ * pick several. A card with a button for every option has `handoff: false` even when Skip is left
+ * out to make room.
  */
 export const simpleCardSchema = z
   .object({
@@ -137,9 +139,28 @@ const useDefaultButtons = (
   ];
 };
 
+/**
+ * The shortcut to a many-select's default, when the default is a valid answer on its own. The
+ * button cannot list every option it picks, so the card still hands off.
+ */
+const useSuggestedButtons = (input: ChoiceAskInput): SimpleCardButton[] => {
+  const defaults = input.default ?? [];
+  if (defaults.length === 0) {
+    return [];
+  }
+  const response: AskResponse = {action: "accept", content: {selected: [...defaults]}};
+  if (validateAskResponse({input, kind: "choice", response}).length > 0) {
+    return [];
+  }
+  return [{id: "use-default", label: "Use suggested", response, style: "primary"}];
+};
+
 const choiceCard = (input: ChoiceAskInput): Pick<SimpleCard, "buttons" | "handoff"> => {
   const {buttonsMax} = ASK_LIMITS.simpleCard;
   const skipButtons = input.allowDecline === false ? [] : [SKIP_BUTTON];
+  if (input.select === "many") {
+    return {buttons: [...useSuggestedButtons(input), ...skipButtons], handoff: true};
+  }
   const defaultOption = input.options.find((option) => option.id === input.default?.[0]);
   if (input.options.length > buttonsMax) {
     return {

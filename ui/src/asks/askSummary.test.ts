@@ -43,6 +43,46 @@ describe("askSummary", () => {
     assert.equal(summary, "You answered this question.");
   });
 
+  it("lists every chosen option and the Other text of a select many answer", () => {
+    const summary = askSummary(
+      planAsk({
+        input: {...PLAN_INPUT, allowOther: true, select: "many"},
+        response: {action: "accept", content: {other: "Nonprofit", selected: ["starter", "team"]}},
+      })
+    );
+    assert.equal(summary, "You chose: Starter, Team. Other: Nonprofit");
+  });
+
+  it("shows only the Other text when the answer selects no option", () => {
+    const summary = askSummary(
+      planAsk({
+        input: {...PLAN_INPUT, allowOther: true, select: "many"},
+        response: {action: "accept", content: {other: "Nonprofit", selected: []}},
+      })
+    );
+    assert.equal(summary, "Other: Nonprofit");
+  });
+
+  it("names the Other text with the ask's otherLabel when it sets one", () => {
+    const summary = askSummary(
+      planAsk({
+        input: {...PLAN_INPUT, allowOther: true, otherLabel: "Another plan", select: "many"},
+        response: {action: "accept", content: {other: "Nonprofit", selected: ["team"]}},
+      })
+    );
+    assert.equal(summary, "You chose: Team. Another plan: Nonprofit");
+  });
+
+  it("says no option was chosen for an empty select many answer", () => {
+    const summary = askSummary(
+      planAsk({
+        input: {...PLAN_INPUT, minSelected: 0, select: "many"},
+        response: {action: "accept", content: {selected: []}},
+      })
+    );
+    assert.equal(summary, "You chose none of the options.");
+  });
+
   it("says the user skipped a declined ask", () => {
     assert.equal(
       askSummary(planAsk({response: {action: "decline"}})),

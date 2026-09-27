@@ -1,6 +1,6 @@
 # Task List: Agent UI Asks
 
-**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 2.1.
+**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 2.2.
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.
@@ -34,9 +34,9 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
 
 ### Phase 2: Remaining ask kinds
 
-- [ ] **Task 2.1**: `choice` many and "Other"
+- [x] **Task 2.1**: `choice` many and "Other"
   - Delivers: `select: many`, `minSelected` / `maxSelected`, `allowOther` + `otherLabel`; `MultiselectField` plus an Other `TextField`; `SELECTION_COUNT` and `OTHER_NOT_ALLOWED`; simple-card rules for many-select and for single-select with more options than fit (Use suggested / Skip / handoff).
-  - Files: `blocks/src/asks/schema.ts`, `blocks/src/asks/validateResponse.ts`, `blocks/src/asks/simpleCard.ts`, fixtures, tests; `ui/src/asks/AskChoice.tsx`, tests; `demo/stories/AskCard.stories.tsx`.
+  - Files: `blocks/src/asks/schema.ts`, `blocks/src/asks/validateResponse.ts`, `blocks/src/asks/simpleCard.ts`, fixtures, tests; `ui/src/asks/AskChoice.tsx`, tests; `demo/stories/AskCard.stories.tsx`. Also touched: `blocks/src/asks/{errors,limits,prompt}.ts`, `blocks/src/index.ts`; `ai/src/service/{asks,prompts}.ts` (full and compact `ask_choice` descriptions); `ui/src/asks/askSummary.ts`; `demo/stories/SimpleAskCard.stories.tsx`, `demo/story-config/AskCard.config.tsx`; `example-backend/src/api/demoAgent.ts` ("pick toppings" scenario); `docs/reference/ui.md`, `docs/how-to/agent-ui-asks.md`, `docs/explanation/{agent-ui-asks,example-coverage}.md`.
   - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md` (`choice` fields, card rules).
   - Acceptance: AC1, AC2, AC9, and AC15 for many-select and Other; screenshot.

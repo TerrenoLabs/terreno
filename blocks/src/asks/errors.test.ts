@@ -53,7 +53,7 @@ describe("ASK_ERROR_CODES", () => {
         kind: "choice",
         surface: "compact",
       }).map((error) => error.code),
-    INVALID_ENUM: () => inputCodes({...INPUT, select: "many"}),
+    INVALID_ENUM: () => inputCodes({...INPUT, select: "all"}),
     INVALID_FORMAT: () =>
       inputCodes({
         ...INPUT,
@@ -65,6 +65,9 @@ describe("ASK_ERROR_CODES", () => {
     INVALID_TYPE: () => inputCodes({...INPUT, prompt: 7}),
     MISSING_REQUIRED: () => inputCodes({options: INPUT.options, select: "one"}),
     OPTION_NOT_OFFERED: () => responseCodes({action: "accept", content: {selected: ["green"]}}),
+    OTHER_NOT_ALLOWED: () =>
+      responseCodes({action: "accept", content: {other: "Green", selected: ["red"]}}),
+    RANGE_INVALID: () => inputCodes({...INPUT, maxSelected: 2, minSelected: 3, select: "many"}),
     SELECTION_COUNT: () => responseCodes({action: "accept", content: {selected: ["red", "blue"]}}),
     TOO_FEW: () => inputCodes({...INPUT, options: [{id: "red", label: "Red"}]}),
     TOO_LONG: () => inputCodes({...INPUT, title: "t".repeat(81)}),

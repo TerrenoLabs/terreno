@@ -168,7 +168,58 @@ const confirmReply =
     return isCompact ? reply.compact : reply.full;
   };
 
+const ANNOUNCEMENT_DRAFT = [
+  "# We're live",
+  "",
+  "Today we launched **Terreno Asks**: your agent can now ask you a question and wait for the answer.",
+  "",
+  "- Pick from options",
+  "- Approve or deny",
+  "- Edit a draft like this one",
+  "",
+].join("\n");
+
+const announcementReply = ({isCompact, response}: DemoAnswer): string => {
+  if (response.action === "decline") {
+    return isCompact
+      ? "OK, I dropped the announcement."
+      : 'No problem, I dropped the announcement. Say "draft an announcement" when you want a new draft.';
+  }
+  if (response.action === "cancel") {
+    return "The announcement question was cancelled, so I did not post anything.";
+  }
+  const markdown = typeof response.content.markdown === "string" ? response.content.markdown : "";
+  if (response.content.changed !== true) {
+    return isCompact
+      ? "You approved the draft. A real agent would post it now."
+      : 'You approved the draft as is, so a real agent would post it now. Say "draft an announcement" to try another answer.';
+  }
+  const length = `${markdown.length.toLocaleString("en-US")} ${markdown.length === 1 ? "character" : "characters"}`;
+  if (isCompact) {
+    return `You edited the draft (${length}). A real agent would post it now.`;
+  }
+  return `You edited the draft (${length}). A real agent would post this now:\n\n---\n\n${markdown}\n\n---\n\nSay "draft an announcement" to try another answer.`;
+};
+
 const DEMO_SCENARIOS: DemoAskScenario[] = [
+  {
+    compactFallback:
+      'Editing a draft needs a bigger screen. Open the chat on your phone and say "draft an announcement".',
+    id: "announcement",
+    input: {
+      initial: ANNOUNCEMENT_DRAFT,
+      maxLength: 2000,
+      minLength: 40,
+      placeholder: "Write the announcement",
+      prompt: "Here is a draft of the launch announcement. Edit it, or approve it as is.",
+      submitLabel: "Post it",
+      title: "Launch announcement",
+    },
+    kind: "markdown",
+    reply: announcementReply,
+    title: "Drafting an announcement",
+    trigger: /\bannouncements?\b/i,
+  },
   {
     compactFallback:
       'Picking several toppings needs a bigger screen. Open the chat on your phone and say "pick toppings".',
@@ -258,6 +309,7 @@ const DEMO_HELP_REPLY: DemoReply = {
     "I'm the Terreno demo agent. This server has no AI model configured, so I follow a script.",
     'Say "help me pick a plan" and I will ask you to choose one right here in the chat, or "pick toppings" to choose several with an answer of your own.',
     'Say "send the weekly report" or "archive old chats" and I will ask you to confirm before I act. Archiving shows a destructive button, because it cannot be undone.',
+    'Say "draft an announcement" and I will ask you to edit my draft in a markdown editor, then send it back.',
     "To talk to a real model, set GEMINI_API_KEY on the server or save a Gemini API key on the Profile tab.",
   ].join("\n\n"),
 };
@@ -352,14 +404,17 @@ const planDemoTurn = ({prompt, tools}: Pick<DemoCallOptions, "prompt" | "tools">
   }
 
   const toolName = `ask_${scenario.kind}`;
-  const isOffered = (tools ?? []).some(
-    (tool) => tool.type === "function" && tool.name === toolName
+  const offeredAskTools = (tools ?? []).flatMap((tool) =>
+    tool.type === "function" && tool.name.startsWith("ask_") ? [tool.name] : []
   );
-  if (!isOffered) {
+  if (offeredAskTools.length === 0) {
     return replyFor(DEMO_ASKS_OFF_REPLY);
   }
   if (isCompact && scenario.compactFallback) {
     return {text: scenario.compactFallback, type: "text"};
+  }
+  if (!offeredAskTools.includes(toolName)) {
+    return replyFor(DEMO_ASKS_OFF_REPLY);
   }
   return {
     input: scenario.input,

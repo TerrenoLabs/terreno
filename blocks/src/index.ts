@@ -35,6 +35,10 @@ export type {
   ConfirmAsk,
   ConfirmAskInput,
   ConfirmAskResponse,
+  MarkdownAnswer,
+  MarkdownAsk,
+  MarkdownAskInput,
+  MarkdownAskResponse,
 } from "./asks/schema";
 export {
   ASK_CANCEL_REASONS,
@@ -63,6 +67,11 @@ export {
   confirmAskInputSchema,
   confirmAskResponseSchema,
   confirmButtonLabels,
+  isCompactAskKind,
+  markdownAnswerSchema,
+  markdownAskInputSchema,
+  markdownAskResponseSchema,
+  markdownLengthBounds,
 } from "./asks/schema";
 export type {SimpleCard, SimpleCardButton} from "./asks/simpleCard";
 export {

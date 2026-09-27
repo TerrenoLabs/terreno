@@ -1,6 +1,6 @@
 import {describe, expect, it} from "bun:test";
 import {invalidAskFixtures, validAskFixtures} from "../tests/askFixtures";
-import type {AskKind, AskSurface} from "./schema";
+import {type AskKind, type AskSurface, isCompactAskKind} from "./schema";
 import {validateAskInput} from "./validateInput";
 
 const NO_OPTION = {id: "no", label: "No"};
@@ -444,16 +444,25 @@ describe("validateAskInput kinds", () => {
   });
 });
 
+const compactKindFixtures = <Fixture extends {kind: AskKind}>(fixtures: Fixture[]): Fixture[] =>
+  fixtures.filter((fixture) => isCompactAskKind(fixture.kind));
+
 describe("validateAskInput on the compact surface", () => {
-  it("covers exactly the valid fixtures", () => {
+  it("covers exactly the valid fixtures of the compact kinds", () => {
     expect(Object.keys(COMPACT_ERRORS_BY_FIXTURE).sort()).toEqual(
-      validAskFixtures()
+      compactKindFixtures(validAskFixtures())
         .map((fixture) => fixture.name)
         .sort()
     );
   });
 
-  for (const fixture of validAskFixtures()) {
+  it("throws for a kind the compact surface does not offer", () => {
+    expect(() =>
+      validateAskInput({input: {prompt: "Edit it."}, kind: "markdown", surface: "compact"})
+    ).toThrow('The compact surface does not offer ask kind "markdown".');
+  });
+
+  for (const fixture of compactKindFixtures(validAskFixtures())) {
     it(`returns the compact errors of valid/${fixture.name}`, () => {
       const errors = validateAskInput({
         input: fixture.input,
@@ -466,7 +475,7 @@ describe("validateAskInput on the compact surface", () => {
     });
   }
 
-  for (const fixture of invalidAskFixtures()) {
+  for (const fixture of compactKindFixtures(invalidAskFixtures())) {
     it(`still rejects invalid/${fixture.name}`, () => {
       expect(
         validateAskInput({input: fixture.input, kind: fixture.kind, surface: "compact"}).length

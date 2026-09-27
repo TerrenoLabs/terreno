@@ -5,6 +5,7 @@ import {useCallback, useState} from "react";
 
 type ChoiceAsk = Extract<ChatAsk, {kind: "choice"}>;
 type ConfirmAsk = Extract<ChatAsk, {kind: "confirm"}>;
+type MarkdownAsk = Extract<ChatAsk, {kind: "markdown"}>;
 
 const SIMULATED_SERVER_DELAY_MS = 600;
 
@@ -131,6 +132,64 @@ const ANSWERED_CONFIRMS: ConfirmAsk[] = [
     response: {action: "accept", content: {confirmed: false}},
     status: "answered",
     toolCallId: "demo-denied",
+  },
+];
+
+const ANNOUNCEMENT_DRAFT =
+  "# We're live\n\nToday we launched **Terreno Asks**: your agent can now ask you a question and wait for the answer.\n\n- Pick from options\n- Approve or deny\n- Edit a draft like this one\n";
+
+const ANNOUNCEMENT_ASK: MarkdownAsk = {
+  input: {
+    initial: ANNOUNCEMENT_DRAFT,
+    maxLength: 600,
+    minLength: 40,
+    placeholder: "Write the announcement",
+    prompt: "Here is a draft of the launch announcement. Edit it, then send it back.",
+    submitLabel: "Send it back",
+    title: "Launch announcement",
+  },
+  kind: "markdown",
+  status: "pending",
+  toolCallId: "demo-announcement",
+};
+
+const MARKDOWN_ERRORS: NonNullable<AskCardProps["errors"]> = [
+  {
+    code: "TOO_LONG",
+    fix: "Shorten content.markdown to 600 characters or fewer.",
+    message: "The text is 640 characters, but this ask allows at most 600.",
+    path: "content.markdown",
+  },
+];
+
+const RELEASE_NOTES = Array.from(
+  {length: 8},
+  (_, index) =>
+    `- Fixed issue ${index + 1}: the sync outbox now retries failed writes with backoff and keeps their order.`
+).join("\n");
+
+const ANSWERED_MARKDOWN: MarkdownAsk[] = [
+  {
+    ...ANNOUNCEMENT_ASK,
+    response: {action: "accept", content: {changed: false, markdown: ANNOUNCEMENT_DRAFT}},
+    status: "answered",
+    toolCallId: "demo-markdown-approved",
+  },
+  {
+    ...ANNOUNCEMENT_ASK,
+    input: {prompt: "Write the release notes for this week."},
+    response: {
+      action: "accept",
+      content: {changed: true, markdown: `# Release notes\n\n${RELEASE_NOTES}`},
+    },
+    status: "answered",
+    toolCallId: "demo-markdown-edited",
+  },
+  {
+    ...ANNOUNCEMENT_ASK,
+    response: {action: "decline"},
+    status: "answered",
+    toolCallId: "demo-markdown-skipped",
   },
 ];
 
@@ -310,6 +369,52 @@ export const AskCardConfirmReadOnly: React.FC = (): React.ReactElement => {
       <Box gap={2}>
         <AskCard ask={ARCHIVE_ASK} testID="demo-ask-card-confirm-read-only" />
         <AskCard ask={REPORT_ASK} testID="demo-ask-card-confirm-read-only-report" />
+      </Box>
+    </StorySection>
+  );
+};
+
+export const AskCardMarkdown: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="markdown opens a markdown editor on the agent's draft, with a preview and a length hint. Submit sends the text back with changed saying whether it differs from the draft."
+      title="Edit a draft"
+    >
+      <InteractiveAsk ask={ANNOUNCEMENT_ASK} testID="demo-ask-card-markdown" />
+    </StorySection>
+  );
+};
+
+export const AskCardMarkdownError: React.FC = (): React.ReactElement => {
+  const handleSubmit = useCallback(async (): Promise<void> => {
+    await waitForServer();
+  }, []);
+
+  return (
+    <StorySection
+      note="A server error about the text shows under the editor. The draft stays editable."
+      title="Draft rejected by the server"
+    >
+      <AskCard
+        ask={ANNOUNCEMENT_ASK}
+        errors={MARKDOWN_ERRORS}
+        onSubmit={handleSubmit}
+        testID="demo-ask-card-markdown-error"
+      />
+    </StorySection>
+  );
+};
+
+export const AskCardMarkdownAnswered: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="An answered markdown ask says whether the user approved or edited the draft and shows the text. Long text shows a preview until Show all."
+      title="Approved, edited, and skipped drafts"
+    >
+      <Box gap={2}>
+        {ANSWERED_MARKDOWN.map((ask) => (
+          <AskCard ask={ask} key={ask.toolCallId} testID={ask.toolCallId} />
+        ))}
       </Box>
     </StorySection>
   );

@@ -1,5 +1,5 @@
 import {describe, expect, it} from "bun:test";
-import type {ChoiceAskInput, ConfirmAskInput} from "./schema";
+import type {ChoiceAskInput, ConfirmAskInput, MarkdownAskInput} from "./schema";
 import {validateAskResponse} from "./validateResponse";
 
 const PLAN_INPUT: ChoiceAskInput = {
@@ -345,5 +345,145 @@ describe("validateAskResponse confirm", () => {
         ({code, path}) => ({code, path})
       )
     ).toEqual([{code: "UNKNOWN_KEY", path: "content.selected"}]);
+  });
+});
+
+describe("validateAskResponse markdown", () => {
+  const DRAFT = "# We're live\n\nToday we launched.";
+  const input: MarkdownAskInput = {
+    initial: DRAFT,
+    maxLength: 40,
+    minLength: 10,
+    prompt: "Edit the announcement, then send it back.",
+  };
+  const checkMarkdown = (
+    response: unknown,
+    markdownInput: MarkdownAskInput = input
+  ): ReturnType<typeof validateAskResponse> =>
+    validateAskResponse({input: markdownInput, kind: "markdown", response});
+  const accept = (markdown: string, changed: boolean): unknown => ({
+    action: "accept",
+    content: {changed, markdown},
+  });
+
+  it("accepts the draft unchanged with changed false, and an edit with changed true", () => {
+    expect(checkMarkdown(accept(DRAFT, false))).toEqual([]);
+    expect(checkMarkdown(accept("# We're live\n\nWe launched today.", true))).toEqual([]);
+  });
+
+  it("accepts Skip, because allowDecline defaults to true", () => {
+    expect(checkMarkdown({action: "decline"})).toEqual([]);
+  });
+
+  it("DECLINE_NOT_ALLOWED when allowDecline is false", () => {
+    expect(
+      checkMarkdown({action: "decline"}, {...input, allowDecline: false}).map(({code}) => code)
+    ).toEqual(["DECLINE_NOT_ALLOWED"]);
+  });
+
+  it("TOO_LONG when the text is longer than maxLength", () => {
+    expect(checkMarkdown(accept("x".repeat(41), true))).toEqual([
+      {
+        code: "TOO_LONG",
+        fix: "Shorten content.markdown to 40 characters or fewer.",
+        message: "The text is 41 characters, but this ask allows at most 40.",
+        path: "content.markdown",
+      },
+    ]);
+  });
+
+  it("counts maxLength in UTF-16 code units, so most emoji count as 2", () => {
+    expect(checkMarkdown(accept("😀".repeat(20), true))).toEqual([]);
+    expect(checkMarkdown(accept("😀".repeat(21), true)).map(({code}) => code)).toEqual([
+      "TOO_LONG",
+    ]);
+  });
+
+  it("TOO_LONG over the 20,000-character cap when the ask sets no maxLength", () => {
+    const uncapped: MarkdownAskInput = {prompt: "Write it."};
+    expect(checkMarkdown(accept("x".repeat(20_000), true), uncapped)).toEqual([]);
+    expect(
+      checkMarkdown(accept("x".repeat(20_001), true), uncapped).map(({code, path}) => ({
+        code,
+        path,
+      }))
+    ).toEqual([{code: "TOO_LONG", path: "content.markdown"}]);
+    expect(
+      checkMarkdown(accept("😀".repeat(10_001), true), uncapped).map(({code}) => code)
+    ).toEqual(["TOO_LONG"]);
+  });
+
+  it("names the ask's maxLength, not the cap, when the text is also over the cap", () => {
+    expect(checkMarkdown(accept("x".repeat(20_001), true))).toEqual([
+      {
+        code: "TOO_LONG",
+        fix: "Shorten content.markdown to 40 characters or fewer.",
+        message: "The text is 20001 characters, but this ask allows at most 40.",
+        path: "content.markdown",
+      },
+    ]);
+  });
+
+  it("TOO_SHORT below minLength, not counting spaces at either end", () => {
+    expect(checkMarkdown(accept("   short   ", true))).toEqual([
+      {
+        code: "TOO_SHORT",
+        fix: "Write at least 10 characters in content.markdown.",
+        message: "The text is 5 characters, but this ask needs at least 10.",
+        path: "content.markdown",
+      },
+    ]);
+    expect(checkMarkdown(accept("  ten chars!  ", true))).toEqual([]);
+  });
+
+  it("accepts an empty answer when the ask sets no minLength", () => {
+    expect(checkMarkdown(accept("", false), {prompt: "Write it."})).toEqual([]);
+    expect(checkMarkdown(accept("", true), {initial: "Draft", prompt: "Write it."})).toEqual([]);
+  });
+
+  it("CHANGED_MISMATCH when changed does not say whether the text differs from the draft", () => {
+    expect(checkMarkdown(accept(DRAFT, true))).toEqual([
+      {
+        code: "CHANGED_MISMATCH",
+        fix: "Set content.changed to false.",
+        message: "The text is the same as the draft, but changed is true.",
+        path: "content.changed",
+      },
+    ]);
+    expect(checkMarkdown(accept(`${DRAFT}!`, false))).toEqual([
+      {
+        code: "CHANGED_MISMATCH",
+        fix: "Set content.changed to true.",
+        message: "The text differs from the draft, but changed is false.",
+        path: "content.changed",
+      },
+    ]);
+  });
+
+  it("compares against an empty draft when the ask has no initial", () => {
+    expect(checkMarkdown(accept("", true), {prompt: "Write it."}).map(({code}) => code)).toEqual([
+      "CHANGED_MISMATCH",
+    ]);
+  });
+
+  it("MISSING_REQUIRED and INVALID_TYPE for a malformed answer", () => {
+    expect(
+      checkMarkdown({action: "accept", content: {markdown: 7}}).map(({code, path}) => ({
+        code,
+        path,
+      }))
+    ).toEqual([
+      {code: "MISSING_REQUIRED", path: "content.changed"},
+      {code: "INVALID_TYPE", path: "content.markdown"},
+    ]);
+  });
+
+  it("UNKNOWN_KEY for a confirm answer sent to a markdown ask", () => {
+    expect(
+      checkMarkdown({
+        action: "accept",
+        content: {changed: false, confirmed: true, markdown: DRAFT},
+      }).map(({code, path}) => ({code, path}))
+    ).toEqual([{code: "UNKNOWN_KEY", path: "content.confirmed"}]);
   });
 });

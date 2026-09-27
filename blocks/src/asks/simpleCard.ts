@@ -10,6 +10,7 @@ import {
   type ChoiceOption,
   type ConfirmAskInput,
   confirmButtonLabels,
+  type MarkdownAskInput,
   visibleLabel,
 } from "./schema";
 import {validateAskResponse} from "./validateResponse";
@@ -37,7 +38,7 @@ export type SimpleCardButton = z.infer<typeof simpleCardButtonSchema>;
  * The small-screen form of an ask: short text and at most three buttons, each carrying the exact
  * answer it sends. `handoff` is true when the buttons cannot show every option the ask offers, so
  * the user needs the full app to answer; a select-many ask always hands off, because one tap cannot
- * pick several. A card with a button for every option has `handoff: false` even when Skip is left
+ * pick several, and so does a markdown ask, because a draft cannot be edited there. A card with a button for every option has `handoff: false` even when Skip is left
  * out to make room.
  */
 export const simpleCardSchema = z
@@ -221,6 +222,37 @@ const confirmCard = (input: ConfirmAskInput): Pick<SimpleCard, "buttons" | "hand
 };
 
 /**
+ * A draft cannot be edited on a small screen, so the card always hands off. Approve draft sends the
+ * draft unchanged, and is left out when the draft breaks the ask's length rules. Cancel declines.
+ */
+const markdownCard = (input: MarkdownAskInput): Pick<SimpleCard, "buttons" | "handoff"> => {
+  const response: AskResponse = {
+    action: "accept",
+    content: {changed: false, markdown: input.initial ?? ""},
+  };
+  const isDraftValid = validateAskResponse({input, kind: "markdown", response}).length === 0;
+  const approveButtons: SimpleCardButton[] = isDraftValid
+    ? [{id: "approve", label: "Approve draft", response, style: "primary"}]
+    : [];
+  const cancelButtons: SimpleCardButton[] =
+    input.allowDecline === false
+      ? []
+      : [{id: "cancel", label: "Cancel", response: {action: "decline"}, style: "cancel"}];
+  return {buttons: [...approveButtons, ...cancelButtons], handoff: true};
+};
+
+const kindCard = (ask: Ask): Pick<SimpleCard, "buttons" | "handoff"> => {
+  switch (ask.kind) {
+    case "choice":
+      return choiceCard(ask.input);
+    case "confirm":
+      return confirmCard(ask.input);
+    case "markdown":
+      return markdownCard(ask.input);
+  }
+};
+
+/**
  * The answer a pressed button sends: the `response` stored on the card's button with that id.
  * Returns an `UNKNOWN_BUTTON` error instead when the card has no such button, so a small client can
  * only send answers the card offered.
@@ -264,6 +296,6 @@ export const toSimpleCard = ({
   const {textMaxLength, titleMaxLength} = ASK_LIMITS.simpleCard;
   const {input, kind} = ask;
   const title = input.title === undefined ? {} : {title: shorten(input.title, titleMaxLength)};
-  const card = ask.kind === "confirm" ? confirmCard(ask.input) : choiceCard(ask.input);
+  const card = kindCard(ask);
   return {...card, kind, text: shorten(input.prompt, textMaxLength), ...title, toolCallId};
 };

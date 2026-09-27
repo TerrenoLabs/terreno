@@ -50,6 +50,11 @@ describe("@terreno/blocks public exports", () => {
     "confirmAskInputSchema",
     "confirmAskResponseSchema",
     "confirmButtonLabels",
+    "isCompactAskKind",
+    "markdownAnswerSchema",
+    "markdownAskInputSchema",
+    "markdownAskResponseSchema",
+    "markdownLengthBounds",
 
     "SIMPLE_CARD_BUTTON_STYLES",
     "resolveButtonAnswer",

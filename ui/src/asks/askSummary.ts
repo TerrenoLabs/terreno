@@ -8,6 +8,11 @@ import {
 import type {ChatAsk} from "./askTypes";
 
 const ANSWERED = "You answered this question.";
+
+const THOUSANDS = /\B(?=(\d{3})+(?!\d))/g;
+
+/** A whole number with thousands separators, such as "1,240". */
+export const formatCount = (count: number): string => String(count).replace(THOUSANDS, ",");
 const CANCELLED = "This question was cancelled.";
 
 const choiceLabels = (input: ChoiceAskInput, content: Record<string, unknown>): string => {
@@ -50,12 +55,26 @@ const confirmSummary = (input: ConfirmAskInput, content: Record<string, unknown>
   return ANSWERED;
 };
 
+/** "You edited the draft (1,240 characters)" or "You approved the draft as is" for a `markdown` answer. */
+const markdownSummary = (content: Record<string, unknown>): string => {
+  if (typeof content.markdown !== "string") {
+    return ANSWERED;
+  }
+  if (content.changed === false) {
+    return "You approved the draft as is";
+  }
+  const {length} = content.markdown;
+  return `You edited the draft (${formatCount(length)} ${length === 1 ? "character" : "characters"})`;
+};
+
 const acceptedSummary = (ask: ChatAsk, content: Record<string, unknown>): string => {
   switch (ask.kind) {
     case "choice":
       return choiceSummary(ask.input, content);
     case "confirm":
       return confirmSummary(ask.input, content);
+    case "markdown":
+      return markdownSummary(content);
   }
 };
 

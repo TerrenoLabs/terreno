@@ -1041,6 +1041,173 @@ describe("/gpt/prompt asks", () => {
     });
   });
 
+  describe("markdown", () => {
+    const DRAFT = "# We're live\n\nToday we launched.";
+    const DRAFT_ASK_INPUT = {
+      initial: DRAFT,
+      maxLength: 200,
+      prompt: "Here is a draft announcement. Edit anything, then send it back.",
+      title: "Launch announcement",
+    };
+    const DRAFT_ASK_CALL = {
+      input: DRAFT_ASK_INPUT,
+      toolCallId: "call_draft",
+      toolName: "ask_markdown",
+    };
+    const DRAFT_CARD = {
+      buttons: [
+        {
+          id: "approve",
+          label: "Approve draft",
+          response: {action: "accept", content: {changed: false, markdown: DRAFT}},
+          style: "primary",
+        },
+        {id: "cancel", label: "Cancel", response: {action: "decline"}, style: "cancel"},
+      ],
+      handoff: true,
+      kind: "markdown",
+      text: "Here is a draft announcement. Edit anything, then send it back.",
+      title: "Launch announcement",
+      toolCallId: "call_draft",
+    };
+
+    it.each([
+      {changed: true, markdown: "# We're live\n\nWe launched today.", reply: "Posted your edit."},
+      {changed: false, markdown: DRAFT, reply: "Posted the draft."},
+    ])(
+      "pauses on a handoff card and resumes with changed $changed",
+      async ({changed, markdown, reply}) => {
+        const answer = {action: "accept", content: {changed, markdown}};
+        const model = createScriptedModel({
+          steps: [toolCallStep(DRAFT_ASK_CALL), textStep(reply)],
+        });
+        const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+        const asked = await streamPrompt(agent, {prompt: "Draft an announcement"});
+        const historyId = await onlyHistoryId();
+        expect(asked.events).toEqual([
+          {
+            ask: {
+              input: DRAFT_ASK_INPUT,
+              kind: "markdown",
+              simple: DRAFT_CARD,
+              toolCallId: "call_draft",
+            },
+            historyId,
+          },
+          {done: true, historyId, pendingAsk: {toolCallId: "call_draft"}},
+        ]);
+        expect(rowsOf(await loadHistory(historyId)).at(-1)).toMatchObject({
+          ask: {kind: "markdown", status: "pending"},
+          toolName: "ask_markdown",
+        });
+
+        const {events} = await streamPrompt(agent, {
+          askResponse: {toolCallId: "call_draft", ...answer},
+          historyId,
+        });
+
+        expect(events).toEqual([
+          {askResolved: {action: "accept", toolCallId: "call_draft"}},
+          {text: reply},
+          {done: true, historyId, title: "Workspace setup"},
+        ]);
+        expect(conversationOf(modelCall(model, 1)).at(-1)).toEqual({
+          content: [
+            {
+              output: {type: "json", value: answer},
+              toolCallId: "call_draft",
+              toolName: "ask_markdown",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        });
+      }
+    );
+
+    it("does not offer ask_markdown on the compact surface", async () => {
+      const model = createScriptedModel({steps: [textStep("Hello.")]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      await streamPrompt(agent, {prompt: "Hi", surface: "compact"});
+
+      const call = modelCall(model, 0);
+      expect(toolNamesOf(call)).toEqual(["ask_choice", "ask_confirm"]);
+      expect(systemPromptOf(call)).not.toContain("ask_markdown");
+    });
+
+    it("returns 400 TOO_LONG or CHANGED_MISMATCH without calling the model", async () => {
+      const model = createScriptedModel({steps: [toolCallStep(DRAFT_ASK_CALL)]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      await streamPrompt(agent, {prompt: "Draft an announcement"});
+      const historyId = await onlyHistoryId();
+
+      const tooLong = await agent.post("/gpt/prompt").send({
+        askResponse: {
+          action: "accept",
+          content: {changed: true, markdown: "x".repeat(201)},
+          toolCallId: "call_draft",
+        },
+        historyId,
+      });
+      const mismatch = await agent.post("/gpt/prompt").send({
+        askResponse: {
+          action: "accept",
+          content: {changed: true, markdown: DRAFT},
+          toolCallId: "call_draft",
+        },
+        historyId,
+      });
+
+      expect(tooLong.status).toBe(400);
+      expect(tooLong.body.fields).toEqual([
+        {
+          code: "TOO_LONG",
+          fix: "Shorten content.markdown to 200 characters or fewer.",
+          message: "The text is 201 characters, but this ask allows at most 200.",
+          path: "content.markdown",
+        },
+      ]);
+      expect(mismatch.status).toBe(400);
+      expect(mismatch.body.fields.map((field: {code: string}) => field.code)).toEqual([
+        "CHANGED_MISMATCH",
+      ]);
+      expect(model.doStream).toHaveBeenCalledTimes(1);
+      expect((await loadHistory(historyId)).pendingAsk?.toolCallId).toBe("call_draft");
+    });
+
+    it("sends a markdown ask with minLength above maxLength back to the model as a tool error", async () => {
+      const model = createScriptedModel({
+        steps: [
+          toolCallStep({
+            input: {...DRAFT_ASK_INPUT, minLength: 300},
+            toolCallId: "call_bounds",
+            toolName: "ask_markdown",
+          }),
+          toolCallStep(DRAFT_ASK_CALL),
+        ],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const {events} = await streamPrompt(agent, {prompt: "Draft an announcement"});
+
+      expect(events[0]).toMatchObject({ask: {kind: "markdown", toolCallId: "call_draft"}});
+      expect(conversationOf(modelCall(model, 1))[2]).toMatchObject({
+        content: [
+          {
+            output: {
+              type: "error-text",
+              value: expect.stringContaining("minLength (300) is more than maxLength (200)"),
+            },
+            toolCallId: "call_bounds",
+            toolName: "ask_markdown",
+          },
+        ],
+      });
+    });
+  });
+
   describe("rejected answers", () => {
     it("returns 400 with fields for an option that was not offered, without calling the model", async () => {
       const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
@@ -1854,7 +2021,7 @@ describe("/gpt/prompt asks", () => {
   });
 
   describe("system prompt and tools", () => {
-    it("appends the asks prompt after the host system prompt and offers ask_choice and ask_confirm", async () => {
+    it("appends the asks prompt after the host system prompt and offers every ask tool", async () => {
       const model = createScriptedModel({steps: [textStep("Hello.")]});
       const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
 
@@ -1864,10 +2031,10 @@ describe("/gpt/prompt asks", () => {
       const system = systemPromptOf(call) as string;
       expect(
         system.startsWith(
-          `Answer in one sentence.\n\n${TERRENO_ASKS_SYSTEM_PROMPT}\n\nAsk tools you can call: ask_choice, ask_confirm.`
+          `Answer in one sentence.\n\n${TERRENO_ASKS_SYSTEM_PROMPT}\n\nAsk tools you can call: ask_choice, ask_confirm, ask_markdown.`
         )
       ).toBe(true);
-      expect(toolNamesOf(call)).toEqual(["ask_choice", "ask_confirm"]);
+      expect(toolNamesOf(call)).toEqual(["ask_choice", "ask_confirm", "ask_markdown"]);
       const askChoice = call.tools?.[0];
       expect(askChoice?.description).toBe(
         "Ask the user to pick one or more options from a list you provide, optionally with an " +
@@ -1938,7 +2105,12 @@ describe("/gpt/prompt asks", () => {
       await streamPrompt(agent, {prompt: "Hi"});
 
       const call = modelCall(model, 0);
-      expect(toolNamesOf(call)).toEqual(["lookupPlans", "ask_choice", "ask_confirm"]);
+      expect(toolNamesOf(call)).toEqual([
+        "lookupPlans",
+        "ask_choice",
+        "ask_confirm",
+        "ask_markdown",
+      ]);
       expect(call.tools?.[1]?.description).toStartWith("Ask the user to pick one or more options");
     });
 
@@ -2226,7 +2398,7 @@ describe("/gpt/prompt asks", () => {
     it("rejects unknown ask kinds", () => {
       expect(() => addGptRoutes(express.Router(), {asks: {kinds: ["poll" as "choice"]}})).toThrow(
         expect.objectContaining({
-          detail: "Unknown ask kinds: poll. Known kinds: choice, confirm.",
+          detail: "Unknown ask kinds: poll. Known kinds: choice, confirm, markdown.",
           message: "The asks option lists unknown ask kinds",
         })
       );

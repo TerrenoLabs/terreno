@@ -224,6 +224,16 @@ input:
 answer: {action: accept, content: {markdown: "# We're live\n…", changed: true}}
 ```
 
+Revised in Pick (Task 2.3): `minLength` defaults to 0 and counts the text without spaces at
+either end; `maxLength` defaults to 20,000 and counts UTF-16 code units, like `String.length`.
+`minLength` above `maxLength` (or above the 20,000 cap) fails with `RANGE_INVALID`. An
+`initial` that breaks `minLength` or `maxLength` is still a valid ask, but its simple card has
+no Approve draft button. The server checks `changed` against the text: `changed` must be true
+exactly when `markdown` differs from `initial` (empty when unset), or the answer fails with a
+new code, `CHANGED_MISMATCH`. Cancel shows on the simple card only when `allowDecline` is not
+false; the chat shows Skip for the same answer. `markdown` is never offered on the compact
+surface, and `SimpleAskCard` shows "Edit on your phone" for its handoff line.
+
 ### `form` — a few fields, one submit
 
 ```yaml

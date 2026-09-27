@@ -94,7 +94,11 @@ describe("AiApp", () => {
 
     expect(res.status).toBe(200);
     const [callOptions] = model.doStream.mock.calls[0] as unknown as [{tools?: {name: string}[]}];
-    expect(callOptions.tools?.map((tool) => tool.name)).toEqual(["ask_choice", "ask_confirm"]);
+    expect(callOptions.tools?.map((tool) => tool.name)).toEqual([
+      "ask_choice",
+      "ask_confirm",
+      "ask_markdown",
+    ]);
   });
 
   it("adds the documented headless turn actions to the history routes", async () => {

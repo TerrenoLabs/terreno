@@ -223,6 +223,71 @@ describe("/gpt/histories headless turns", () => {
       }
     );
 
+    it.each([
+      {
+        answer: {action: "accept", content: {changed: false, markdown: "Ship it on Friday."}},
+        buttonId: "approve",
+        reply: "Posted the draft as is.",
+      },
+      {answer: {action: "decline"}, buttonId: "cancel", reply: "I left the draft alone."},
+    ])(
+      "pauses on a markdown card with handoff and resumes with the $buttonId button",
+      async ({answer, buttonId, reply}) => {
+        const draftInput = {initial: "Ship it on Friday.", prompt: "Edit the release note."};
+        const model = createScriptedModel({
+          steps: [
+            toolCallStep({input: draftInput, toolCallId: "call_note", toolName: "ask_markdown"}),
+            textStep(reply),
+          ],
+        });
+        const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+        const historyId = await createHistory(agent);
+
+        const asked = await postTurn(agent, historyId, {prompt: "Draft a release note"});
+        const answered = await postTurn(agent, historyId, {buttonId, toolCallId: "call_note"});
+
+        expect(asked.body.data).toEqual({
+          historyId,
+          pendingAsk: {
+            kind: "markdown",
+            simple: {
+              buttons: [
+                {
+                  id: "approve",
+                  label: "Approve draft",
+                  response: {
+                    action: "accept",
+                    content: {changed: false, markdown: "Ship it on Friday."},
+                  },
+                  style: "primary",
+                },
+                {id: "cancel", label: "Cancel", response: {action: "decline"}, style: "cancel"},
+              ],
+              handoff: true,
+              kind: "markdown",
+              text: "Edit the release note.",
+              toolCallId: "call_note",
+            },
+            toolCallId: "call_note",
+          },
+          text: "",
+        });
+        expect(turnResultSchema.parse(asked.body.data)).toEqual(asked.body.data);
+        expect(answered.body.data).toEqual({historyId, text: reply, title: "Workspace setup"});
+        expect(conversationOf(modelCall(model, 1)).at(-1)).toEqual({
+          content: [
+            {
+              output: {type: "json", value: answer},
+              toolCallId: "call_note",
+              toolName: "ask_markdown",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        });
+      }
+    );
+
     it("resumes with a full askResponse, as a client that renders the ask sends it", async () => {
       const model = createScriptedModel({
         steps: [toolCallStep(PLAN_ASK_CALL), textStep(TEAM_REPLY)],

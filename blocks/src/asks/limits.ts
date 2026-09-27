@@ -18,6 +18,11 @@ export const ASK_LIMITS = {
     /** Every confirm label fits a simple card button uncut. */
     labelMaxLength: 20,
   },
+  markdown: {
+    /** The cap on `initial`, on `maxLength`, and on every answer. */
+    maxLength: 20_000,
+    placeholderMaxLength: 120,
+  },
   pendingAsksPerHistory: 1,
   promptMaxLength: 500,
   simpleCard: {

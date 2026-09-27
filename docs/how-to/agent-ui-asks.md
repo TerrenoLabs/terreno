@@ -26,17 +26,22 @@ The example backend uses a scripted demo agent, `terreno-demo-agent`, when no mo
    and the card collapses to "You declined: Keep them".
 8. Send "Send the weekly report" and press "Send report". The card collapses to "You confirmed:
    Send report". Reload the page: both summaries are still there.
+9. Send "Draft an announcement" (a suggested prompt). The card shows a markdown editor with the agent's draft and a
+   length hint. Add a line and press "Post it": the agent quotes your text, and the card
+   collapses to "You edited the draft (N characters)" with the text under it. Press "Post it"
+   without editing and the summary says "You approved the draft as is".
 
 | You send | The demo agent |
 | --- | --- |
 | A message with the word topping or toppings, such as "pick toppings" or "pick several toppings" | Asks "Which toppings should I add? Pick up to three." with `select: "many"`, six toppings (Extra cheese and Mushrooms preselected), `maxSelected: 3`, and an Other field titled "Another topping" |
 | A message with "weekly report", such as "send the weekly report" | Asks `ask_confirm` "Send the weekly report to the team now? It goes to 8 people." with "Send report" (primary) and "Not now" |
 | A message with the word archive, such as "archive old chats" | Asks `ask_confirm` "Archive the 12 chats older than 90 days? You can't undo this." with `destructive: true`, "Archive 12 chats" (destructive) and "Keep them" |
+| A message with the word announcement, such as "draft an announcement" | Asks `ask_markdown` with a launch announcement draft as `initial`, `minLength: 40`, `maxLength: 2000`, and "Post it" as `submitLabel` |
 | Any other message with a word like pick, choose, or plan, such as "choose between several plans" | Asks "Which plan should I set up for your workspace?" with Starter, Team (the default), and Enterprise |
 | The same kind of message, on routes without `asks` | Says asks are turned off and how to turn them on |
-| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, says whether it would send the report or archive the chats, or says it skipped the question |
+| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, says whether it would send the report or archive the chats, quotes an edited draft or says you approved it, or says it skipped the question |
 | Anything else, with or without `asks` | Explains that it follows a script and how to use a real model |
-| Any of these with `surface: "compact"` | Asks the same plan and confirm questions, which already fit a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one for `choice`, so a toppings message gets a text reply that says to open the chat on a phone. |
+| Any of these with `surface: "compact"` | Asks the same plan and confirm questions, which already fit a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one for `choice` and no `markdown`, so a toppings or announcement message gets a text reply that says to open the chat on a phone. |
 
 To script another exchange, add an entry to `DEMO_SCENARIOS` in
 `example-backend/src/api/demoAgent.ts`: a trigger pattern, one ask input, and a reply for the
@@ -71,6 +76,17 @@ The card shows `confirmLabel` first and `denyLabel` last. With `destructive: tru
 button uses the destructive style, and a watch never makes it the Double Tap button. A deny sends
 `{"confirmed": false}`, so the model hears "no" and skips the action. Skip appears only when the
 ask sets `allowDecline: true`. See [confirm](../reference/agent-ui-asks.md#confirm).
+
+## Have the user edit a draft
+
+With asks on, the model can call `ask_markdown` with a draft in `initial`, such as an email or
+release notes, before it sends or saves the text. The chat shows a markdown editor on the draft.
+The answer is `{markdown, changed}`: `changed: false` means the user approved the draft as is,
+and the server rejects a `changed` flag that does not match the text (`CHANGED_MISMATCH`). Set
+`minLength` and `maxLength` to bound the answer; an `initial` outside them makes the user edit
+before Submit is enabled. A phone or watch that shows only the simple card gets "Approve draft"
+(when the draft fits the bounds) and Cancel, with "Edit on your phone". See
+[markdown](../reference/agent-ui-asks.md#markdown).
 
 ## 1. Enable asks on the backend
 
@@ -427,8 +443,8 @@ instead, which also picks up asks from other devices. To start a conversation fr
 The watch sends `surface: "compact"` on every turn, answers included:
 
 - **Every ask fits the watch.** On a compact turn the agent can ask only a `choice` with 2–3
-  options whose labels fit a button uncut and differ from each other. Its card has
-  `handoff: false`, so the user can answer it from the watch.
+  options whose labels fit a button uncut and differ from each other, or a `confirm`. Its card
+  has `handoff: false`, so the user can answer it from the watch. `markdown` is never offered.
 - **Replies fit the screen.** The system prompt asks for at most two short sentences.
 - **The surface covers one turn.** The server does not store it. An answer starts a turn that can
   end in a new ask, so the answer sends `compact` too. The phone's chat sends no `surface`, so its
@@ -436,7 +452,7 @@ The watch sends `surface: "compact"` on every turn, answers included:
 
 `pendingAsks` also lists asks the agent made in the phone's chat, whose cards can set `handoff`.
 Show the buttons such a card has, such as `Use "Team"` and Skip, with its "Continue on your phone"
-line.
+line. A `markdown` card offers "Approve draft" and Cancel; say "Edit on your phone" for it.
 
 ### 5. Show the card in SwiftUI
 
@@ -526,7 +542,7 @@ in `@terreno/ui` draws the same card in React Native ([props](../reference/ui.md
 | --- | --- |
 | `example-frontend/e2e/ai-chat.spec.ts` | Against a mocked stream: a quick-reply answer, a radio answer after a rejected one, an answer another tab sent first, a turn that streams only `{done}`, a message that goes through after another tab answered the ask, and an ask on a new chat answered before `{done}` |
 | `example-frontend/lib/gptAsks.test.ts` | Stream events and saved rows mapped to messages, image-only replies kept, and the conversation an answer goes to |
-| `example-backend/src/api/demoAgent.test.ts` | The demo agent's ask, answers, and replies on both surfaces, and a plan ask answered over HTTP with a button of its simple card |
+| `example-backend/src/api/demoAgent.test.ts` | The demo agent's ask, answers, and replies on both surfaces, a plan ask answered over HTTP with a button of its simple card, and an announcement draft edited in chat and approved as is with its card's Approve draft button |
 | `ui/src/GPTChat.test.tsx`, `ui/src/asks/AskCard.test.tsx` | Rendering, focus, answers, errors, and summaries |
 | `ai/src/routes/gptHistories.test.ts`, `ai/src/aiApp.test.ts` | `turn` and `pendingAsks`: a pressed button, a full answer, a prompt that cancels the ask, a failed turn, a stream that fails mid-reply, a client that disconnects, the 400, 403, 404, and 409 responses, response bodies that match the published JSON Schemas, and neither endpoint when asks are off |
 | `ai/src/routes/gpt.test.ts` (compact surface) | A compact turn offers only the narrowed `ask_choice` and adds the compact line to the system prompt |

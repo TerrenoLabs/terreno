@@ -21,8 +21,14 @@ import {User as UserModel} from "../models/user";
 import type {UserDocument} from "../types/models/userTypes";
 import {createDemoAgentModel, createDemoAgentService, DEMO_AGENT_MODEL_ID} from "./demoAgent";
 
-const ASK_TOOLS = createAskTools({kinds: ["choice", "confirm"]});
-const COMPACT_ASK_TOOLS = createAskTools({kinds: ["choice", "confirm"], surface: "compact"});
+const ASK_TOOLS = createAskTools({kinds: ["choice", "confirm", "markdown"]});
+const COMPACT_ASK_TOOLS = createAskTools({
+  kinds: ["choice", "confirm", "markdown"],
+  surface: "compact",
+});
+
+const ANNOUNCEMENT_DRAFT =
+  "# We're live\n\nToday we launched **Terreno Asks**: your agent can now ask you a question and wait for the answer.\n\n- Pick from options\n- Approve or deny\n- Edit a draft like this one\n";
 
 interface SurfaceOptions {
   /** Calls the model the way a `surface: "compact"` turn does: the compact line and compact ask tools. */
@@ -217,7 +223,61 @@ describe("demo agent", () => {
     expect(text).toContain('"pick toppings"');
     expect(text).toContain('"send the weekly report"');
     expect(text).toContain('"archive old chats"');
+    expect(text).toContain('"draft an announcement"');
     expect(text).toContain("GEMINI_API_KEY");
+  });
+
+  it.each(["Draft an announcement", "Write the launch announcements"])(
+    "asks the user to edit an announcement draft for %p",
+    async (prompt) => {
+      const {text, toolCalls} = await askFor(prompt);
+
+      expect(text).toBe("");
+      expect(toolCalls).toHaveLength(1);
+      const [call] = toolCalls;
+      expect(call?.toolName).toBe("ask_markdown");
+      expect(call?.invalid).toBeFalsy();
+      expect(call?.toolCallId).toStartWith("demo_announcement_");
+      expect(call?.input).toEqual({
+        initial: ANNOUNCEMENT_DRAFT,
+        maxLength: 2000,
+        minLength: 40,
+        placeholder: "Write the announcement",
+        prompt: "Here is a draft of the launch announcement. Edit it, or approve it as is.",
+        submitLabel: "Post it",
+        title: "Launch announcement",
+      });
+    }
+  );
+
+  it.each([
+    {
+      expected:
+        'You approved the draft as is, so a real agent would post it now. Say "draft an announcement" to try another answer.',
+      response: {action: "accept", content: {changed: false, markdown: ANNOUNCEMENT_DRAFT}},
+    },
+    {
+      expected:
+        'You edited the draft (17 characters). A real agent would post this now:\n\n---\n\n# We shipped Asks\n\n---\n\nSay "draft an announcement" to try another answer.',
+      response: {action: "accept", content: {changed: true, markdown: "# We shipped Asks"}},
+    },
+    {
+      expected:
+        'No problem, I dropped the announcement. Say "draft an announcement" when you want a new draft.',
+      response: {action: "decline"},
+    },
+    {
+      expected: "The announcement question was cancelled, so I did not post anything.",
+      response: {action: "cancel", reason: "user_sent_message"},
+    },
+  ])("replies to the announcement answer $response", async ({expected, response}) => {
+    expect(await replyTo(response, {}, "Draft an announcement")).toBe(expected);
+  });
+
+  it("titles an announcement conversation from the user's message", async () => {
+    expect(await titleFor("User: Draft an announcement\nAssistant: OK.")).toBe(
+      "Drafting an announcement"
+    );
   });
 
   it("says asks are off when the route offers no ask tool", async () => {
@@ -356,6 +416,63 @@ describe("demo agent on the compact surface", () => {
       'Picking several toppings needs a bigger screen. Open the chat on your phone and say "pick toppings".'
     );
   });
+
+  it("sends the announcement question as text, since the compact surface has no markdown ask", async () => {
+    const {text, toolCalls} = await askFor("Draft an announcement", {isCompact: true});
+
+    expect(toolCalls).toHaveLength(0);
+    expect(text).toBe(
+      'Editing a draft needs a bigger screen. Open the chat on your phone and say "draft an announcement".'
+    );
+  });
+
+  it.each([
+    {
+      expected: "You approved the draft. A real agent would post it now.",
+      response: {action: "accept", content: {changed: false, markdown: ANNOUNCEMENT_DRAFT}},
+    },
+    {
+      expected: "You edited the draft (1,500 characters). A real agent would post it now.",
+      response: {action: "accept", content: {changed: true, markdown: "a".repeat(1500)}},
+    },
+    {expected: "OK, I dropped the announcement.", response: {action: "decline"}},
+  ])(
+    "replies to an announcement answer answered on a small screen: $expected",
+    async ({expected, response}) => {
+      const messages: ModelMessage[] = [
+        {content: "Draft an announcement", role: "user"},
+        {
+          content: [
+            {
+              input: {initial: ANNOUNCEMENT_DRAFT, prompt: "Edit it."},
+              toolCallId: "demo_announcement_1",
+              toolName: "ask_markdown",
+              type: "tool-call",
+            },
+          ],
+          role: "assistant",
+        },
+        {
+          content: [
+            {
+              output: {type: "json", value: response as never},
+              toolCallId: "demo_announcement_1",
+              toolName: "ask_markdown",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        },
+      ];
+      const result = streamText({
+        messages,
+        model: createDemoAgentModel(),
+        ...surfaceCallOptions({isCompact: true}),
+      });
+
+      expect(await result.text).toBe(expected);
+    }
+  );
 
   it.each(["Send the weekly report", "Archive old chats"])(
     "asks to confirm %p with the compact ask tool",
@@ -627,6 +744,114 @@ describe("demo agent through the chat routes", () => {
     const history = await GptHistory.findById(historyId).lean();
     const askRow = history?.prompts.find((row) => row.toolCallId === ask.toolCallId && row.ask);
     expect(askRow?.ask).toEqual({kind: "confirm", status: "answered"});
+  });
+
+  it("pauses on the announcement draft, rejects a false changed flag, and continues with the edit", async () => {
+    const auth = {Authorization: `Bearer ${await signIn()}`};
+
+    const asked = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({prompt: "Draft an announcement"});
+    expect(asked.status).toBe(200);
+    const askedEvents = parseEvents(asked.text);
+    const ask = askedEvents.find((event) => "ask" in event)?.ask as {
+      input: {initial: string};
+      kind: string;
+      simple: {buttons: {id: string; label: string}[]; handoff: boolean};
+      toolCallId: string;
+    };
+    expect(ask.kind).toBe("markdown");
+    expect(ask.input.initial).toBe(ANNOUNCEMENT_DRAFT);
+    expect(ask.simple.handoff).toBe(true);
+    expect(ask.simple.buttons.map(({id, label}) => ({id, label}))).toEqual([
+      {id: "approve", label: "Approve draft"},
+      {id: "cancel", label: "Cancel"},
+    ]);
+    const {historyId} = askedEvents.at(-1) as {historyId: string};
+    const edited = `${ANNOUNCEMENT_DRAFT}\nThanks to everyone who tried the beta.\n`;
+
+    const mismatched = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({
+        askResponse: {
+          action: "accept",
+          content: {changed: false, markdown: edited},
+          toolCallId: ask.toolCallId,
+        },
+        historyId,
+      });
+    expect(mismatched.status).toBe(400);
+    expect(mismatched.body.fields.map((field: {code: string}) => field.code)).toEqual([
+      "CHANGED_MISMATCH",
+    ]);
+
+    const response = {action: "accept", content: {changed: true, markdown: edited}};
+    const answered = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({askResponse: {...response, toolCallId: ask.toolCallId}, historyId});
+    expect(answered.status).toBe(200);
+    const answeredEvents = parseEvents(answered.text);
+    const text = answeredEvents
+      .map((event) => (typeof event.text === "string" ? event.text : ""))
+      .join("");
+    expect(text).toStartWith(
+      `You edited the draft (${edited.length} characters). A real agent would post this now:`
+    );
+    expect(text).toContain("Thanks to everyone who tried the beta.");
+    expect(answeredEvents.at(-1)).toEqual({
+      done: true,
+      historyId,
+      title: "Drafting an announcement",
+    });
+
+    const history = await GptHistory.findById(historyId).lean();
+    const resultRow = history?.prompts.find(
+      (row) => row.toolCallId === ask.toolCallId && row.type === "tool-result"
+    );
+    expect(resultRow?.result).toEqual(response);
+  });
+
+  it("approves the announcement draft as is from a small screen with the card's Approve button", async () => {
+    const auth = {Authorization: `Bearer ${await signIn()}`};
+
+    const asked = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({prompt: "Draft an announcement"});
+    const {historyId} = parseEvents(asked.text).at(-1) as {historyId: string};
+
+    const listed = await supertest(app).get("/gpt/histories/pendingAsks").set(auth);
+    expect(listed.status).toBe(200);
+    const [pending] = listed.body.data as {
+      kind: string;
+      simple: {buttons: {id: string}[]; handoff: boolean};
+      toolCallId: string;
+    }[];
+    expect(pending?.kind).toBe("markdown");
+    expect(pending?.simple.handoff).toBe(true);
+
+    const answered = await supertest(app)
+      .post(`/gpt/histories/${historyId}/turn`)
+      .set(auth)
+      .send({buttonId: "approve", surface: "compact", toolCallId: pending?.toolCallId});
+    expect(answered.status).toBe(200);
+    expect(answered.body.data).toEqual({
+      historyId,
+      text: "You approved the draft. A real agent would post it now.",
+      title: "Drafting an announcement",
+    });
+
+    const history = await GptHistory.findById(historyId).lean();
+    const resultRow = history?.prompts.find(
+      (row) => row.toolCallId === pending?.toolCallId && row.type === "tool-result"
+    );
+    expect(resultRow?.result).toEqual({
+      action: "accept",
+      content: {changed: false, markdown: ANNOUNCEMENT_DRAFT},
+    });
   });
 
   it("answers other messages with the demo agent's help", async () => {

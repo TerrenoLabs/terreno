@@ -341,8 +341,19 @@ button uses the `destructive` variant when the ask sets `destructive: true`, els
 deny button uses `ghost`. Skip follows only when `allowDecline` is `true`. A tap answers
 `{"confirmed": true}` or `{"confirmed": false}`. Without `onSubmit`, both buttons are disabled.
 
+`markdown` controls: a `MarkdownEditorField` (edit and preview, at most 320 pt tall) that starts
+on the ask's `initial` draft and shows `placeholder` while empty, then Submit (`submitLabel`) and
+Skip unless `allowDecline` is `false`. Under the editor a hint gives the length and the bounds,
+such as "1,240 / 2,000 characters. At least 20." Submit is enabled only when
+`validateAskResponse` accepts the text, and it sends `{markdown, changed}` with `changed` true
+when the text differs from `initial`. Text over `maxLength`, or a server error at
+`content.markdown`, shows on the editor. Without `onSubmit`, the editor and both buttons are
+disabled. An answered markdown ask shows the sent text under its summary; text over 280
+characters shows a preview cut at a word, with Show all and Show less.
+
 | How the ask ended | Summary |
 | --- | --- |
+| `markdown` `accept` | You approved the draft as is (`changed: false`), or You edited the draft (`<n>` characters) |
 | `confirm` `accept` | You confirmed: `<confirmLabel>`, or You declined: `<denyLabel>`, with the default labels when the ask sets none |
 | `choice` `accept` | You chose: `<option labels>`. With Other text, it adds "`<otherLabel>`: `<text>`" (the label defaults to "Other"), or shows only that when no option was checked. An empty `select: "many"` answer shows "You chose none of the options." |
 | `decline` | You skipped this question. |
@@ -361,6 +372,8 @@ deny button uses `ghost`. Skip follows only when `allowDecline` is `true`. A tap
 | Select | `{testID}-select` |
 | Checkboxes (`select: "many"`) | `{testID}-multiselect` |
 | Other text field | `{testID}-other` |
+| Markdown editor, and its text input | `{testID}-editor`, `{testID}-editor-input` |
+| Sent markdown under an answered ask, and its Show all toggle | `{testID}-answer`, `{testID}-answer-toggle` |
 | Radio or checkbox options as plain text, without `onSubmit` | `{testID}-options` |
 | Submit | `{testID}-submit` |
 | Answer errors | `{testID}-errors` |
@@ -374,7 +387,7 @@ Types: `AskCardProps`, `ChatAsk`, `ChatAskState`, `ChatAskStatus`, `AskSubmissio
 
 Any agent ask as its [simple card](agent-ui-asks.md#simple-cards): the title, the question, and up
 to three full-width buttons that each send an exact answer. Use it in narrow layouts, such as a
-watch-sized preview. It knows nothing about ask kinds.
+watch-sized preview. It reads the card's `kind` only to word the handoff line.
 
 ```tsx
 const [runTurn] = useGpthistoriesTurnMutation();
@@ -399,14 +412,14 @@ const [runTurn] = useGpthistoriesTurnMutation();
 | `testID` | string? | Defaults to `simple-ask-card` |
 
 - A card with `handoff: true` shows "Continue on your phone" under the question, because its
-  buttons cannot give every answer.
+  buttons cannot give every answer. A `markdown` card shows "Edit on your phone" instead.
 - Button styles map to `Button` variants the same way as `AskCard` quick replies: `primary` to
   `primary`, `default` to `outline`, `destructive` to `destructive`, and `cancel` to `ghost`.
 
 | Element | testID |
 | --- | --- |
 | Card | `{testID}` |
-| Continue on your phone | `{testID}-handoff` |
+| Continue on your phone, or Edit on your phone | `{testID}-handoff` |
 | Button | `{testID}-button-<button id>`, such as `{testID}-button-option:team` |
 
 Types: `SimpleAskCardProps`, and `SimpleCard` and `SimpleCardButton` from `@terreno/blocks`. Demo

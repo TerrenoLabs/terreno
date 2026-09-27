@@ -14783,6 +14783,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "enum": [
                                   "choice",
                                   "confirm",
+                                  "markdown",
                                 ],
                                 "type": "string",
                               },
@@ -14832,6 +14833,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                       "enum": [
                                         "choice",
                                         "confirm",
+                                        "markdown",
                                       ],
                                       "type": "string",
                                     },
@@ -15064,6 +15066,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "enum": [
                           "choice",
                           "confirm",
+                          "markdown",
                         ],
                         "type": "string",
                       },
@@ -15114,6 +15117,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                               "enum": [
                                 "choice",
                                 "confirm",
+                                "markdown",
                               ],
                               "type": "string",
                             },
@@ -15275,6 +15279,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "enum": [
                             "choice",
                             "confirm",
+                            "markdown",
                           ],
                           "type": "string",
                         },
@@ -15325,6 +15330,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "enum": [
                                   "choice",
                                   "confirm",
+                                  "markdown",
                                 ],
                                 "type": "string",
                               },
@@ -15533,6 +15539,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "enum": [
                               "choice",
                               "confirm",
+                              "markdown",
                             ],
                             "type": "string",
                           },
@@ -15641,6 +15648,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "enum": [
                                   "choice",
                                   "confirm",
+                                  "markdown",
                                 ],
                                 "type": "string",
                               },
@@ -15860,6 +15868,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "enum": [
                             "choice",
                             "confirm",
+                            "markdown",
                           ],
                           "type": "string",
                         },
@@ -15909,6 +15918,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "enum": [
                                   "choice",
                                   "confirm",
+                                  "markdown",
                                 ],
                                 "type": "string",
                               },
@@ -16134,6 +16144,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "enum": [
                           "choice",
                           "confirm",
+                          "markdown",
                         ],
                         "type": "string",
                       },
@@ -16184,6 +16195,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                               "enum": [
                                 "choice",
                                 "confirm",
+                                "markdown",
                               ],
                               "type": "string",
                             },
@@ -16345,6 +16357,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "enum": [
                             "choice",
                             "confirm",
+                            "markdown",
                           ],
                           "type": "string",
                         },
@@ -16395,6 +16408,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "enum": [
                                   "choice",
                                   "confirm",
+                                  "markdown",
                                 ],
                                 "type": "string",
                               },
@@ -16827,6 +16841,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                               "enum": [
                                 "choice",
                                 "confirm",
+                                "markdown",
                               ],
                               "type": "string",
                             },
@@ -16935,6 +16950,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                   "enum": [
                                     "choice",
                                     "confirm",
+                                    "markdown",
                                   ],
                                   "type": "string",
                                 },

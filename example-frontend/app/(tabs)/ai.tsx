@@ -695,6 +695,7 @@ const AiScreen: React.FC = () => {
         "Tell me a witty joke about MongoDB",
         "Help me pick a plan",
         "Archive old chats",
+        "Draft an announcement",
       ]}
       testID="chat"
     />

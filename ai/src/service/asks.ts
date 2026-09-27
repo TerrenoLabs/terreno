@@ -12,6 +12,7 @@ import {
   askOutputSchemas,
   askPromptSection,
   type CompactAskKind,
+  isCompactAskKind,
 } from "@terreno/blocks";
 import {
   type JSONValue,
@@ -26,6 +27,7 @@ import type {AsksOptions} from "../types";
 import {
   ASK_CHOICE_TOOL_DESCRIPTION,
   ASK_CONFIRM_TOOL_DESCRIPTION,
+  ASK_MARKDOWN_TOOL_DESCRIPTION,
   COMPACT_ASK_CHOICE_TOOL_DESCRIPTION,
   COMPACT_ASK_CONFIRM_TOOL_DESCRIPTION,
   TERRENO_ASKS_SYSTEM_PROMPT,
@@ -37,6 +39,7 @@ const ASK_TOOL_PREFIX = "ask_";
 const ASK_TOOL_DESCRIPTIONS: Record<AskKind, string> = {
   choice: ASK_CHOICE_TOOL_DESCRIPTION,
   confirm: ASK_CONFIRM_TOOL_DESCRIPTION,
+  markdown: ASK_MARKDOWN_TOOL_DESCRIPTION,
 };
 
 const COMPACT_ASK_TOOL_DESCRIPTIONS: Record<CompactAskKind, string> = {
@@ -45,7 +48,9 @@ const COMPACT_ASK_TOOL_DESCRIPTIONS: Record<CompactAskKind, string> = {
 };
 
 const askToolDescription = ({kind, surface}: {kind: AskKind; surface: AskSurface}): string =>
-  surface === "compact" ? COMPACT_ASK_TOOL_DESCRIPTIONS[kind] : ASK_TOOL_DESCRIPTIONS[kind];
+  surface === "compact" && isCompactAskKind(kind)
+    ? COMPACT_ASK_TOOL_DESCRIPTIONS[kind]
+    : ASK_TOOL_DESCRIPTIONS[kind];
 
 /** The kinds the `asks` route option enables; empty when asks are off. Throws on unknown kinds. */
 export const resolveAskKinds = (asks: boolean | AsksOptions | undefined): AskKind[] => {

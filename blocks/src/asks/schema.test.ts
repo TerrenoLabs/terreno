@@ -12,6 +12,9 @@ import {
   compactConfirmAskInputSchema,
   confirmAskInputSchema,
   confirmButtonLabels,
+  isCompactAskKind,
+  markdownAskInputSchema,
+  markdownLengthBounds,
 } from "./schema";
 
 describe("askKindsForSurface", () => {
@@ -45,10 +48,21 @@ describe("askInputSchemaFor", () => {
     expect(askInputSchemaFor({kind: "confirm", surface: "compact"})).toBe(
       compactConfirmAskInputSchema
     );
+    expect(askInputSchemaFor({kind: "markdown"})).toBe(markdownAskInputSchema);
+  });
+
+  it("does not offer markdown on the compact surface, because a draft cannot be edited there", () => {
+    expect(isCompactAskKind("markdown")).toBe(false);
+    expect(() => askInputSchemaFor({kind: "markdown", surface: "compact"})).toThrow(
+      'The compact surface does not offer ask kind "markdown".'
+    );
   });
 
   it("only narrows: every fixture the compact schema accepts, the full schema accepts", () => {
     for (const fixture of validAskFixtures()) {
+      if (!isCompactAskKind(fixture.kind)) {
+        continue;
+      }
       const compact = askInputSchemaFor({kind: fixture.kind, surface: "compact"});
       if (compact.safeParse(fixture.input).success) {
         expect(askInputSchemaFor({kind: fixture.kind}).safeParse(fixture.input).success).toBe(true);
@@ -80,6 +94,19 @@ describe("askAllowsDecline", () => {
     const prompt = "Go ahead?";
     expect(askAllowsDecline({input: {allowDecline: true, prompt}, kind: "confirm"})).toBe(true);
     expect(askAllowsDecline({input: {allowDecline: false, prompt}, kind: "confirm"})).toBe(false);
+  });
+
+  it("defaults to true for markdown", () => {
+    const prompt = "Edit the draft.";
+    expect(askAllowsDecline({input: {prompt}, kind: "markdown"})).toBe(true);
+    expect(askAllowsDecline({input: {allowDecline: false, prompt}, kind: "markdown"})).toBe(false);
+  });
+});
+
+describe("markdownLengthBounds", () => {
+  it("defaults to 0 through the 20,000-character cap", () => {
+    expect(markdownLengthBounds({})).toEqual({max: 20_000, min: 0});
+    expect(markdownLengthBounds({maxLength: 400, minLength: 20})).toEqual({max: 400, min: 20});
   });
 });
 

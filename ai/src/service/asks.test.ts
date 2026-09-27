@@ -67,8 +67,8 @@ describe("asks", () => {
     it.each([
       {asks: undefined, expected: [], label: "undefined"},
       {asks: false, expected: [], label: "false"},
-      {asks: true, expected: ["choice", "confirm"], label: "true"},
-      {asks: {}, expected: ["choice", "confirm"], label: "{}"},
+      {asks: true, expected: ["choice", "confirm", "markdown"], label: "true"},
+      {asks: {}, expected: ["choice", "confirm", "markdown"], label: "{}"},
       {
         asks: {kinds: ["confirm"] as AskKind[]},
         expected: ["confirm"],
@@ -87,7 +87,7 @@ describe("asks", () => {
     it("throws on an unknown kind and names the known kinds", () => {
       expect(() => resolveAskKinds({kinds: ["choice", "form"] as AskKind[]})).toThrow(
         expect.objectContaining({
-          detail: "Unknown ask kinds: form. Known kinds: choice, confirm.",
+          detail: "Unknown ask kinds: form. Known kinds: choice, confirm, markdown.",
           message: "The asks option lists unknown ask kinds",
           status: 500,
         })
@@ -104,6 +104,7 @@ describe("asks", () => {
       {expected: "choice", kinds: undefined, toolName: "ask_choice"},
       {expected: "confirm", kinds: undefined, toolName: "ask_confirm"},
       {expected: undefined, kinds: ["choice"] as AskKind[], toolName: "ask_confirm"},
+      {expected: "markdown", kinds: undefined, toolName: "ask_markdown"},
       {expected: undefined, kinds: undefined, toolName: "ask_form"},
       {expected: undefined, kinds: undefined, toolName: "lookupPlans"},
       {expected: undefined, kinds: [] as AskKind[], toolName: "ask_choice"},
@@ -268,6 +269,71 @@ describe("asks", () => {
     });
   });
 
+  describe("createAskTools markdown", () => {
+    const markdownInput = {
+      initial: "# We're live\n\nToday we launched.",
+      maxLength: 2000,
+      prompt: "Here is a draft announcement. Edit anything, then send it back.",
+    };
+
+    it("creates ask_markdown after ask_confirm on the full surface only", () => {
+      expect(Object.keys(createAskTools({kinds: ["choice", "confirm", "markdown"]}))).toEqual([
+        "ask_choice",
+        "ask_confirm",
+        "ask_markdown",
+      ]);
+      expect(
+        Object.keys(createAskTools({kinds: ["choice", "confirm", "markdown"], surface: "compact"}))
+      ).toEqual(["ask_choice", "ask_confirm"]);
+      expect(createAskTools({kinds: ["markdown"], surface: "compact"})).toEqual({});
+      expect(createAskTools({kinds: ["markdown"]}).ask_markdown.execute).toBeUndefined();
+    });
+
+    it("describes editing a draft and the {markdown, changed} result", () => {
+      expect(createAskTools({kinds: ["markdown"]}).ask_markdown.description).toBe(
+        "Ask the user to edit a markdown draft you write, or to write one, and send it back. The " +
+          "chat shows a markdown editor with a preview and returns {markdown, changed} as this " +
+          "tool's result; changed is false when the user approved your draft as is. Use it when " +
+          "the user should review or rewrite text before you use it, such as an announcement, an " +
+          "email, or release notes."
+      );
+    });
+
+    it("validates markdown input and answers", async () => {
+      const askMarkdown = createAskTools({kinds: ["markdown"]}).ask_markdown;
+      const inputSchema = asSchema(askMarkdown.inputSchema);
+
+      expect(await inputSchema.validate?.(markdownInput)).toEqual({
+        success: true,
+        value: markdownInput,
+      });
+      for (const invalid of [
+        {...markdownInput, initial: "x".repeat(20_001)},
+        {...markdownInput, maxLength: 20_001},
+        {...markdownInput, minLength: 3000},
+        {...markdownInput, language: "md"},
+      ]) {
+        expect(await inputSchema.validate?.(invalid)).toEqual({
+          error: expect.any(Error),
+          success: false,
+        });
+      }
+      const outputSchema = asSchema(askMarkdown.outputSchema);
+      const edited = {action: "accept", content: {changed: true, markdown: "# Live"}};
+      expect(await outputSchema.validate?.(edited)).toEqual({success: true, value: edited});
+      expect(
+        await outputSchema.validate?.({action: "accept", content: {markdown: "# Live"}})
+      ).toEqual({error: expect.any(Error), success: false});
+    });
+
+    it("types a valid markdown input", () => {
+      expect(parseAsk({input: markdownInput, kind: "markdown"})).toEqual({
+        input: markdownInput,
+        kind: "markdown",
+      });
+    });
+  });
+
   describe("parseAsk", () => {
     it("types a valid ask input", () => {
       expect(parseAsk({input: PLAN_ASK_INPUT, kind: "choice"})).toEqual({
@@ -367,6 +433,15 @@ describe("asks", () => {
           "ask_confirm: the user approves or denies one action you describe in prompt."
         );
       }
+    });
+
+    it("describes ask_markdown only on the full surface", () => {
+      const markdownRules = "ask_markdown: the user edits a markdown draft you write";
+      expect(buildAsksSystemPrompt({kinds: ["choice", "markdown"]})).toContain(markdownRules);
+      expect(buildAsksSystemPrompt({kinds: ["choice"]})).not.toContain("ask_markdown");
+      expect(
+        buildAsksSystemPrompt({kinds: ["choice", "markdown"], surface: "compact"})
+      ).not.toContain("ask_markdown");
     });
   });
 

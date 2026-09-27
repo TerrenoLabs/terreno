@@ -103,7 +103,8 @@
       "type": "string",
       "enum": [
         "choice",
-        "confirm"
+        "confirm",
+        "markdown"
       ]
     },
     "text": {

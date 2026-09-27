@@ -6,6 +6,8 @@ import {ASK_LIMITS} from "./limits";
  * of them except `UNKNOWN_BUTTON`, which the headless `turn` endpoint returns.
  */
 export const ASK_ERROR_CODES = {
+  CHANGED_MISMATCH:
+    "A markdown answer's changed flag does not match whether its text differs from the draft.",
   DECLINE_NOT_ALLOWED: "The answer skips an ask that does not allow skipping.",
   DEFAULT_NOT_IN_OPTIONS: "A default names an option id that the ask does not offer.",
   DUPLICATE_ID: "An id appears twice where ids must be unique: options, default, or an answer.",
@@ -18,12 +20,12 @@ export const ASK_ERROR_CODES = {
   OPTION_NOT_OFFERED: "The answer selects an option id that the ask did not offer.",
   OTHER_NOT_ALLOWED: "An ask or an answer uses Other where the ask does not allow it.",
   RANGE_INVALID:
-    "A count bound is out of range: below its minimum, above what the ask offers, or minSelected above maxSelected.",
+    "A count or length bound is out of range: below its minimum, above what the ask offers, or a minimum above its maximum.",
   SELECTION_COUNT: "A default or an answer selects the wrong number of options.",
   TOO_FEW: "A list has fewer items than allowed.",
   TOO_LONG: "A string is longer than allowed.",
   TOO_MANY: "A list has more items than allowed.",
-  TOO_SHORT: "A string is empty or only whitespace.",
+  TOO_SHORT: "A string is empty, only whitespace, or shorter than its minimum.",
   UNKNOWN_BUTTON: "The pressed button is not on the pending ask's simple card.",
   UNKNOWN_KEY: "An object has a field that its schema does not define.",
 } as const;

@@ -50,6 +50,9 @@ const fixtureCard = (name: string): SimpleCard => {
   return fixture.card;
 };
 
+const ANNOUNCEMENT_DRAFT =
+  "# We're live\n\nToday we launched **Terreno Asks**: your agent can now ask you a question and wait for the answer.\n\n- Pick from options\n- Approve or deny\n- Edit a draft like this one\n";
+
 const renderCard = (props: Partial<SimpleAskCardProps> & Pick<SimpleAskCardProps, "card">) =>
   renderWithTheme(<SimpleAskCard onPress={mock(() => {})} {...props} />);
 
@@ -94,7 +97,9 @@ describe("SimpleAskCard", () => {
       assert.isOk(getByText(card.text));
       if (card.handoff) {
         assert.isOk(
-          within(getByTestId("simple-ask-card-handoff")).getByText("Continue on your phone")
+          within(getByTestId("simple-ask-card-handoff")).getByText(
+            card.kind === "markdown" ? "Edit on your phone" : "Continue on your phone"
+          )
         );
       } else {
         assert.isNull(queryByTestId("simple-ask-card-handoff"));
@@ -147,6 +152,22 @@ describe("SimpleAskCard", () => {
     assert.isOk(getByText(card.text));
     assert.isOk(within(getByTestId("simple-ask-card-handoff")).getByText("Continue on your phone"));
     assert.lengthOf(queryAllByTestId(BUTTON_TEST_ID), 0);
+  });
+
+  it("tells the user to edit a markdown draft on their phone, next to Approve draft and Cancel", async () => {
+    const card = fixtureCard("markdown-announcement-draft");
+    const onPress = mock((_button: SimpleCardButton) => {});
+    const {getByTestId} = renderCard({card, onPress});
+
+    assert.isOk(within(getByTestId("simple-ask-card-handoff")).getByText("Edit on your phone"));
+    assert.isOk(within(getByTestId("simple-ask-card-button-approve")).getByText("Approve draft"));
+    assert.isOk(within(getByTestId("simple-ask-card-button-cancel")).getByText("Cancel"));
+    await press(getByTestId("simple-ask-card-button-approve"));
+    assert.deepEqual(onPress.mock.calls[0]?.[0], card.buttons[0]);
+    assert.deepEqual(onPress.mock.calls[0]?.[0]?.response, {
+      action: "accept",
+      content: {changed: false, markdown: ANNOUNCEMENT_DRAFT},
+    });
   });
 
   it("keeps the handoff card's buttons next to the continue-on-phone line", async () => {

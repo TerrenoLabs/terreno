@@ -1,4 +1,4 @@
-import type {SimpleCard, SimpleCardButton} from "@terreno/blocks";
+import type {AskKind, SimpleCard, SimpleCardButton} from "@terreno/blocks";
 import type React from "react";
 import {useCallback} from "react";
 
@@ -7,6 +7,11 @@ import {Button} from "../Button";
 import {Heading} from "../Heading";
 import {Text} from "../Text";
 import {SIMPLE_CARD_BUTTON_VARIANTS} from "./simpleCardButtonVariants";
+
+const DEFAULT_HANDOFF_TEXT = "Continue on your phone";
+
+/** A handoff line that names what the phone is for, where the card's kind says so. */
+const HANDOFF_TEXT_BY_KIND: Partial<Record<AskKind, string>> = {markdown: "Edit on your phone"};
 
 export interface SimpleAskCardProps {
   /** The ask's simple card: `pendingAsk.simple` from the server, or `simple` on an `{ask}` event. */
@@ -23,8 +28,9 @@ export interface SimpleAskCardProps {
 
 /**
  * Any ask as a small-screen card: its title, its question, and up to three buttons that each send an
- * exact answer. For watch-sized and other narrow layouts; it knows nothing about ask kinds. A
- * `handoff` card cannot offer every answer, so it tells the user to continue on their phone.
+ * exact answer. For watch-sized and other narrow layouts; it renders every kind the same way. A
+ * `handoff` card cannot offer every answer, so it tells the user to continue on their phone ("Edit
+ * on your phone" for a `markdown` card).
  */
 export const SimpleAskCard: React.FC<SimpleAskCardProps> = ({
   card,
@@ -50,7 +56,7 @@ export const SimpleAskCard: React.FC<SimpleAskCardProps> = ({
       <Text>{card.text}</Text>
       {card.handoff ? (
         <Text color="secondaryDark" size="sm" testID={`${testID}-handoff`}>
-          Continue on your phone
+          {HANDOFF_TEXT_BY_KIND[card.kind] ?? DEFAULT_HANDOFF_TEXT}
         </Text>
       ) : null}
       {card.buttons.map((button) => (

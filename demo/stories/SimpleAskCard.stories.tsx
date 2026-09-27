@@ -22,6 +22,13 @@ import confirmDefaultLabels from "@terreno/blocks/fixtures/valid/confirm-default
 import confirmDestructiveDelete from "@terreno/blocks/fixtures/valid/confirm-destructive-delete.json";
 import confirmEmojiLabels from "@terreno/blocks/fixtures/valid/confirm-emoji-labels.json";
 import confirmLongTextCut from "@terreno/blocks/fixtures/valid/confirm-long-text-cut.json";
+import markdownAnnouncementDraft from "@terreno/blocks/fixtures/valid/markdown-announcement-draft.json";
+import markdownEmptyDraft from "@terreno/blocks/fixtures/valid/markdown-empty-draft.json";
+import markdownInitialBlankBelowMin from "@terreno/blocks/fixtures/valid/markdown-initial-blank-below-min.json";
+import markdownInitialOverMax from "@terreno/blocks/fixtures/valid/markdown-initial-over-max.json";
+import markdownLongTextCut from "@terreno/blocks/fixtures/valid/markdown-long-text-cut.json";
+import markdownNoDecline from "@terreno/blocks/fixtures/valid/markdown-no-decline.json";
+import markdownNoInitialWithMin from "@terreno/blocks/fixtures/valid/markdown-no-initial-with-min.json";
 import {Box, Button, Heading, SimpleAskCard, Text} from "@terreno/ui";
 import type React from "react";
 import {useCallback, useState} from "react";
@@ -60,6 +67,13 @@ const FIXTURES: Record<string, {simple: unknown}> = {
   "confirm-destructive-delete": confirmDestructiveDelete,
   "confirm-emoji-labels": confirmEmojiLabels,
   "confirm-long-text-cut": confirmLongTextCut,
+  "markdown-announcement-draft": markdownAnnouncementDraft,
+  "markdown-empty-draft": markdownEmptyDraft,
+  "markdown-initial-blank-below-min": markdownInitialBlankBelowMin,
+  "markdown-initial-over-max": markdownInitialOverMax,
+  "markdown-long-text-cut": markdownLongTextCut,
+  "markdown-no-decline": markdownNoDecline,
+  "markdown-no-initial-with-min": markdownNoInitialWithMin,
 };
 
 const FIXTURE_CARDS = Object.entries(FIXTURES).map(([name, fixture]) => ({

@@ -31,6 +31,12 @@ const mapIssues = (schema: z.ZodType, root: unknown) => {
 
 describe("ASK_ERROR_CODES", () => {
   const producers: Record<AskErrorCode, () => AskErrorCode[]> = {
+    CHANGED_MISMATCH: () =>
+      validateAskResponse({
+        input: {initial: "Draft", prompt: "Edit it."},
+        kind: "markdown",
+        response: {action: "accept", content: {changed: true, markdown: "Draft"}},
+      }).map((error) => error.code),
     DECLINE_NOT_ALLOWED: () => responseCodes({action: "decline"}, {...INPUT, allowDecline: false}),
     DEFAULT_NOT_IN_OPTIONS: () => inputCodes({...INPUT, default: ["green"]}),
     DUPLICATE_ID: () =>

@@ -1,6 +1,7 @@
 import {describe, expect, it} from "bun:test";
 import {type ValidAskFixture, validAskFixtures, validAskFixturesOf} from "../tests/askFixtures";
-import type {ChoiceAskInput, ConfirmAskInput} from "./schema";
+import {ASK_LIMITS} from "./limits";
+import type {ChoiceAskInput, ConfirmAskInput, MarkdownAskInput} from "./schema";
 import {resolveButtonAnswer, simpleCardSchema, toSimpleCard} from "./simpleCard";
 import {validateAskInput} from "./validateInput";
 import {validateAskResponse} from "./validateResponse";
@@ -91,10 +92,44 @@ const confirmButtons = (input: ConfirmAskInput): ExpectedButton[] => [
   {id: "deny", response: {action: "accept", content: {confirmed: false}}, style: "cancel"},
 ];
 
+/** Whether each valid `markdown` fixture's `initial` meets its length rules, read off by hand. */
+const MARKDOWN_DRAFT_FITS_BY_FIXTURE: Record<string, boolean> = {
+  "markdown-announcement-draft": true,
+  "markdown-empty-draft": true,
+  "markdown-initial-blank-below-min": false,
+  "markdown-initial-over-max": false,
+  "markdown-long-text-cut": true,
+  "markdown-no-decline": true,
+  "markdown-no-initial-with-min": false,
+};
+
+/** The `markdown` row: Approve draft when the draft fits, then Cancel when the ask allows it. */
+const markdownButtons = (input: MarkdownAskInput, isDraftFitting: boolean): ExpectedButton[] => [
+  ...(isDraftFitting
+    ? [
+        {
+          id: "approve",
+          response: {action: "accept", content: {changed: false, markdown: input.initial ?? ""}},
+          style: "primary",
+        },
+      ]
+    : []),
+  ...(input.allowDecline === false
+    ? []
+    : [{id: "cancel", response: {action: "decline"}, style: "cancel"}]),
+];
+
 /** The buttons and handoff the rule table gives a valid fixture. */
 const expectedCard = (fixture: ValidAskFixture): {buttons: ExpectedButton[]; handoff: boolean} => {
   if (fixture.kind === "confirm") {
     return {buttons: confirmButtons(fixture.input), handoff: false};
+  }
+  if (fixture.kind === "markdown") {
+    const isDraftFitting = MARKDOWN_DRAFT_FITS_BY_FIXTURE[fixture.name];
+    if (isDraftFitting === undefined) {
+      throw new Error(`Add valid/${fixture.name} to MARKDOWN_DRAFT_FITS_BY_FIXTURE.`);
+    }
+    return {buttons: markdownButtons(fixture.input, isDraftFitting), handoff: true};
   }
   const row = CHOICE_ROW_BY_FIXTURE[fixture.name];
   if (!row) {
@@ -167,6 +202,14 @@ describe("toSimpleCard properties over every valid fixture", () => {
 });
 
 describe("the rule-table row map", () => {
+  it("lists exactly the valid markdown fixtures", () => {
+    expect(Object.keys(MARKDOWN_DRAFT_FITS_BY_FIXTURE).sort()).toEqual(
+      validAskFixturesOf("markdown")
+        .map((fixture) => fixture.name)
+        .sort()
+    );
+  });
+
   it("lists exactly the valid choice fixtures", () => {
     expect(Object.keys(CHOICE_ROW_BY_FIXTURE).sort()).toEqual(
       validAskFixturesOf("choice")
@@ -685,5 +728,82 @@ describe("toSimpleCard confirm rules", () => {
         toolCallId: TOOL_CALL_ID,
       }).buttons.map((button) => button.label)
     ).toEqual(["Send it", "Wait"]);
+  });
+});
+
+const MARKDOWN_CAP = ASK_LIMITS.markdown.maxLength;
+
+/** Drafts at, above, and below each length rule, with the bounds they are measured against. */
+const MARKDOWN_LENGTH_CASES: {fits: boolean; input: Omit<MarkdownAskInput, "prompt">}[] = [
+  {fits: true, input: {}},
+  {fits: true, input: {initial: "x".repeat(MARKDOWN_CAP)}},
+  {fits: true, input: {initial: "x".repeat(10), maxLength: 10}},
+  {fits: false, input: {initial: "x".repeat(11), maxLength: 10}},
+  {fits: true, input: {initial: "😀".repeat(5), maxLength: 10}},
+  {fits: false, input: {initial: "😀".repeat(6), maxLength: 10}},
+  {fits: true, input: {initial: "  twelve chars  ", minLength: 12}},
+  {fits: false, input: {initial: "  eleven chr  ", minLength: 12}},
+  {fits: false, input: {minLength: 1}},
+  {fits: true, input: {initial: "Exactly", maxLength: 7, minLength: 7}},
+];
+
+describe("toSimpleCard markdown rules", () => {
+  const asks = MARKDOWN_LENGTH_CASES.flatMap(({fits, input}) =>
+    [undefined, true, false].flatMap((allowDecline) =>
+      [undefined, "t".repeat(80)].map((title) => ({
+        fits,
+        input: {
+          prompt: "Edit the draft, then send it back.",
+          ...input,
+          ...(allowDecline === undefined ? {} : {allowDecline}),
+          ...(title === undefined ? {} : {title}),
+        } satisfies MarkdownAskInput,
+      }))
+    )
+  );
+  const cards = asks.map(({fits, input}) => ({
+    card: toSimpleCard({input, kind: "markdown", toolCallId: TOOL_CALL_ID}),
+    fits,
+    input,
+  }));
+
+  it("only generates valid asks", () => {
+    for (const {input} of asks) {
+      expect(validateAskInput({input, kind: "markdown"})).toEqual([]);
+    }
+  });
+
+  it("always hands off, because a draft cannot be edited on a small screen", () => {
+    for (const {card} of cards) {
+      expect(simpleCardSchema.safeParse(card).success).toBe(true);
+      expect(card.handoff).toBe(true);
+    }
+  });
+
+  it("offers Approve draft exactly when the draft meets the length rules, then Cancel", () => {
+    for (const {card, fits, input} of cards) {
+      expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
+        markdownButtons(input, fits)
+      );
+    }
+  });
+
+  it("labels the buttons Approve draft and Cancel", () => {
+    const card = toSimpleCard({
+      input: {initial: "Hello", prompt: "Edit it."},
+      kind: "markdown",
+      toolCallId: TOOL_CALL_ID,
+    });
+    expect(card.buttons.map((button) => button.label)).toEqual(["Approve draft", "Cancel"]);
+  });
+
+  it("only has buttons whose response is a valid answer to the ask", () => {
+    for (const {card, input} of cards) {
+      for (const button of card.buttons) {
+        expect(validateAskResponse({input, kind: "markdown", response: button.response})).toEqual(
+          []
+        );
+      }
+    }
   });
 });

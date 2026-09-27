@@ -7,6 +7,9 @@ import {
   AskCardConfirmReadOnly,
   AskCardDemo,
   AskCardError,
+  AskCardMarkdown,
+  AskCardMarkdownAnswered,
+  AskCardMarkdownError,
   AskCardPickMany,
   AskCardRadio,
   AskCardReadOnly,
@@ -17,7 +20,7 @@ import {AskCard} from "@terreno/ui";
 export const AskCardConfiguration: DemoConfiguration = {
   a11yNotes: [
     "GPTChat moves focus to a pending ask so keyboard and screen reader users land on it.",
-    "Every control is a labeled Button, RadioField, SelectField, MultiselectField, or TextField, so each answer is reachable by keyboard.",
+    "Every control is a labeled Button, RadioField, SelectField, MultiselectField, TextField, or MarkdownEditorField, so each answer is reachable by keyboard.",
   ],
   additionalDocumentation: [],
   category: "Pattern",
@@ -29,7 +32,14 @@ export const AskCardConfiguration: DemoConfiguration = {
   interfaceName: "AskCardProps",
   name: "AskCard",
   props: {},
-  related: ["GPTChat", "MultiselectField", "RadioField", "SelectField", "TextField"],
+  related: [
+    "GPTChat",
+    "MarkdownEditorField",
+    "MultiselectField",
+    "RadioField",
+    "SelectField",
+    "TextField",
+  ],
   status: {
     android: "ready",
     documentation: "ready",
@@ -57,6 +67,18 @@ export const AskCardConfiguration: DemoConfiguration = {
     "Confirm read only": {
       description: "No onSubmit: both confirm buttons are disabled.",
       render: () => <AskCardConfirmReadOnly />,
+    },
+    Markdown: {
+      description: "markdown: edit the agent's draft in a markdown editor and send it back.",
+      render: () => <AskCardMarkdown />,
+    },
+    "Markdown answered": {
+      description: "Approved, edited, and skipped drafts, with the sent text under the summary.",
+      render: () => <AskCardMarkdownAnswered />,
+    },
+    "Markdown error": {
+      description: "A server error about the draft's length under the editor.",
+      render: () => <AskCardMarkdownError />,
     },
     "Pick many": {
       description: "select many with checkboxes, selection bounds, and an Other field.",

@@ -70,9 +70,23 @@ const confirmRules = (): string => {
   ].join("\n");
 };
 
+const markdownRules = (): string => {
+  const {markdown} = ASK_LIMITS;
+  return [
+    "ask_markdown: the user edits a markdown draft you write and sends it back.",
+    `- initial: optional, the draft in markdown, at most ${markdown.maxLength} characters. Put the whole draft here, not in prompt.`,
+    `- minLength, maxLength: optional whole numbers. The answer must have at least minLength (default 0) and at most maxLength (default ${markdown.maxLength}, the most allowed) characters. minLength must not be more than maxLength.`,
+    `- placeholder: optional hint shown while the editor is empty, at most ${markdown.placeholderMaxLength} characters.`,
+    `- submitLabel: optional label for the submit button, at most ${ASK_LIMITS.submitLabelMaxLength} characters.`,
+    "- allowDecline: optional, default true (the user sees Skip).",
+    '- An accepted answer looks like {"action": "accept", "content": {"markdown": "<the text>", "changed": true}}. changed is false when the user sent your draft unchanged.',
+  ].join("\n");
+};
+
 const KIND_RULES: Record<AskKind, () => string> = {
   choice: choiceRules,
   confirm: confirmRules,
+  markdown: markdownRules,
 };
 
 const COMPACT_KIND_RULES: Record<CompactAskKind, () => string> = {

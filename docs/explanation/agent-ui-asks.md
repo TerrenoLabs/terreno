@@ -6,10 +6,11 @@ calls on the existing chat stream, how one round trip works, how a watch or anot
 answers them, and how asks and Agent UI Blocks divide the work. Fields, limits, events, and error
 codes are in the [reference](../reference/agent-ui-asks.md).
 
-Asks ship today as two kinds: `choice`, to pick one option or several with an optional answer of
-the user's own (Other), and `confirm`, to approve or deny one action. The chat asks on
-`POST /gpt/prompt` and shows asks in `GPTChat`. Watches and other small clients answer select-one
-choices and confirms on two JSON endpoints with the compact surface. The
+Asks ship today as three kinds: `choice`, to pick one option or several with an optional answer
+of the user's own (Other), `confirm`, to approve or deny one action, and `markdown`, to edit a
+draft the agent wrote and send it back. The chat asks on `POST /gpt/prompt` and shows asks in
+`GPTChat`. Watches and other small clients answer select-one choices and confirms on two JSON
+endpoints with the compact surface, and can approve a markdown draft as is. The
 other kinds follow the [implementation plan](../implementationPlans/agent-ui-asks.md).
 
 ## The problem
@@ -155,6 +156,16 @@ phone and a watch, approve first and deny last. A `destructive` ask draws the ap
 the destructive style, and a watch never makes it the Double Tap button, so a gesture cannot
 approve an action that cannot be undone. The confirm is a pause in the turn, not a lock: the host's
 tool should still check that the action is allowed.
+
+A `markdown` ask hands the user a draft, such as an announcement or an email, in a markdown editor
+with a preview. It is one round trip, not a shared document: the user edits and sends the text
+back, and the agent continues with it. The answer carries `changed`, and the server checks it
+against the text, so `changed: false` reliably means "approved as is" and the agent need not diff
+the text itself. Editing needs a keyboard and room, so the compact surface never offers `markdown`.
+A watch still sees a markdown ask the phone's chat made: its card offers Approve draft, when the
+draft already meets the length rules, and Cancel, and it always hands off to the phone. A long
+answer collapses to a preview in the transcript, so one draft does not push the conversation out
+of view.
 
 After an ask ends, the card collapses to one line, such as "You chose: Team" or "You declined:
 Keep them". A long conversation

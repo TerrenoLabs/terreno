@@ -3,7 +3,7 @@ import {askIssue, formatAskPath, quoteValue} from "./errors";
 import {ASK_LIMITS} from "./limits";
 
 /** Ask kinds in the catalog. Each kind is offered to the model as the tool `ask_<kind>`. */
-export const ASK_KINDS = ["choice", "confirm"] as const;
+export const ASK_KINDS = ["choice", "confirm", "markdown"] as const;
 
 export type AskKind = (typeof ASK_KINDS)[number];
 
@@ -509,6 +509,114 @@ export type ConfirmAskInput = z.infer<typeof confirmAskInputSchema>;
  */
 export const compactConfirmAskInputSchema = confirmAskInputSchema;
 
+/** The fields of a `markdown` input that its length rules read. */
+interface MarkdownRuleInput {
+  initial?: string;
+  maxLength?: number;
+  minLength?: number;
+}
+
+/**
+ * How long an answer to a `markdown` ask may be. `max` counts UTF-16 code units (the `length` of a
+ * JavaScript string, so most emoji count as 2 or more) and defaults to the 20,000 cap. `min`
+ * counts the text without spaces at either end and defaults to 0.
+ */
+export const markdownLengthBounds = (input: MarkdownRuleInput): {max: number; min: number} => ({
+  max: input.maxLength ?? ASK_LIMITS.markdown.maxLength,
+  min: input.minLength ?? 0,
+});
+
+/**
+ * Checks a draft's length against the cap in UTF-16 code units. Zod counts code points, so a draft
+ * with emoji could otherwise pass Zod and still be longer than a text field lets the user keep.
+ */
+const checkMarkdownCap = ({
+  ctx,
+  segments,
+  value,
+}: {
+  ctx: z.RefinementCtx;
+  segments: PropertyKey[];
+  value: string;
+}): void => {
+  const cap = ASK_LIMITS.markdown.maxLength;
+  if (value.length <= cap) {
+    return;
+  }
+  const path = formatAskPath(segments);
+  ctx.addIssue(
+    askIssue({
+      code: "TOO_LONG",
+      fix: `Shorten ${path} to ${cap} characters or fewer.`,
+      message: `${path} is longer than ${cap} characters.`,
+      segments,
+    })
+  );
+};
+
+/**
+ * `minLength` must not be above `maxLength`, or no answer could be sent. An `initial` draft outside
+ * the bounds is valid: the user edits it to fit, and the simple card offers no Approve draft.
+ */
+const checkMarkdownInput = (input: MarkdownRuleInput, ctx: z.RefinementCtx): void => {
+  if (input.initial !== undefined) {
+    checkMarkdownCap({ctx, segments: ["initial"], value: input.initial});
+  }
+  const {max, min} = markdownLengthBounds(input);
+  if (min <= max) {
+    return;
+  }
+  const limit = input.maxLength === undefined ? `the ${max}-character cap` : `maxLength (${max})`;
+  ctx.addIssue(
+    askIssue({
+      code: "RANGE_INVALID",
+      fix: "Lower minLength, or raise maxLength.",
+      message: `minLength (${min}) is more than ${limit}.`,
+      segments: ["minLength"],
+    })
+  );
+};
+
+/** Input for `ask_markdown`: the user edits a markdown draft and sends it back. */
+export const markdownAskInputSchema = z
+  .object({
+    ...sharedAskFields,
+    initial: z
+      .string()
+      .max(ASK_LIMITS.markdown.maxLength)
+      .optional()
+      .describe(
+        `The draft the user starts from, in markdown, at most ${ASK_LIMITS.markdown.maxLength} characters. Defaults to empty.`
+      ),
+    maxLength: z
+      .number()
+      .int()
+      .min(1)
+      .max(ASK_LIMITS.markdown.maxLength)
+      .optional()
+      .describe(
+        `The longest answer the user may send, in characters. Defaults to ${ASK_LIMITS.markdown.maxLength}, the most allowed.`
+      ),
+    minLength: z
+      .number()
+      .int()
+      .min(0)
+      .max(ASK_LIMITS.markdown.maxLength)
+      .optional()
+      .describe(
+        "The shortest answer the user may send, in characters, not counting spaces at either end. Defaults to 0."
+      ),
+    placeholder: visibleText(ASK_LIMITS.markdown.placeholderMaxLength)
+      .optional()
+      .describe(
+        `Hint text shown while the editor is empty, at most ${ASK_LIMITS.markdown.placeholderMaxLength} characters.`
+      ),
+  })
+  .strict()
+  .superRefine(checkMarkdownInput);
+
+export type MarkdownAskInput = z.infer<typeof markdownAskInputSchema>;
+
 /** The `content` of an accepted `choice` answer. */
 export const choiceAnswerSchema = z
   .object({
@@ -570,10 +678,36 @@ export const confirmAskResponseSchema = z.discriminatedUnion("action", [
 
 export type ConfirmAskResponse = z.infer<typeof confirmAskResponseSchema>;
 
+/**
+ * The `content` of an accepted `markdown` answer: the text the user sends back, and whether it
+ * differs from the ask's `initial` draft.
+ */
+export const markdownAnswerSchema = z
+  .object({
+    changed: z.boolean(),
+    markdown: z.string().max(ASK_LIMITS.markdown.maxLength),
+  })
+  .strict()
+  .superRefine((answer, ctx) => {
+    checkMarkdownCap({ctx, segments: ["markdown"], value: answer.markdown});
+  });
+
+export type MarkdownAnswer = z.infer<typeof markdownAnswerSchema>;
+
+/** The answer envelope for `ask_markdown`, with `content` typed. Used as the tool's output schema. */
+export const markdownAskResponseSchema = z.discriminatedUnion("action", [
+  z.object({action: z.literal("accept"), content: markdownAnswerSchema}).strict(),
+  askDeclineResponseSchema,
+  askCancelResponseSchema,
+]);
+
+export type MarkdownAskResponse = z.infer<typeof markdownAskResponseSchema>;
+
 /** Input schemas by kind. */
 export const askInputSchemas = {
   choice: choiceAskInputSchema,
   confirm: confirmAskInputSchema,
+  markdown: markdownAskInputSchema,
 } as const satisfies Record<AskKind, z.ZodType>;
 
 /** Input schemas by kind on the compact surface. Every compact input is also a valid full input. */
@@ -624,6 +758,7 @@ export const askInputSchemaFor = ({
 export const askOutputSchemas = {
   choice: choiceAskResponseSchema,
   confirm: confirmAskResponseSchema,
+  markdown: markdownAskResponseSchema,
 } as const satisfies Record<AskKind, z.ZodType>;
 
 export interface ChoiceAsk {
@@ -636,8 +771,13 @@ export interface ConfirmAsk {
   kind: "confirm";
 }
 
+export interface MarkdownAsk {
+  input: MarkdownAskInput;
+  kind: "markdown";
+}
+
 /** A validated ask: its kind and its input. */
-export type Ask = ChoiceAsk | ConfirmAsk;
+export type Ask = ChoiceAsk | ConfirmAsk | MarkdownAsk;
 
 /**
  * Whether the user may skip the ask. `allowDecline` defaults to true, except on `confirm`, where

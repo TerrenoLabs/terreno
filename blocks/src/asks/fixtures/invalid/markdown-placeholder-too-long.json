@@ -1,0 +1,13 @@
+{
+  "kind": "markdown",
+  "input": {
+    "prompt": "Write a tagline.",
+    "placeholder": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  "errors": [
+    {
+      "path": "placeholder",
+      "code": "TOO_LONG"
+    }
+  ]
+}

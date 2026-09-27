@@ -1,6 +1,6 @@
 # Task List: Agent UI Asks
 
-**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 2.3.
+**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 2.4.
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.
@@ -48,9 +48,9 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
   - Docs: `docs/reference/agent-ui-asks.md`, `docs/how-to/agent-ui-asks.md` ("confirm before a destructive tool").
   - Acceptance: AC1, AC2, AC9, and AC15 for `confirm`; AC16 includes `ask_confirm`; prompt snapshot test lists `confirm` only when enabled.
 
-- [ ] **Task 2.3**: `markdown`
+- [x] **Task 2.3**: `markdown`
   - Delivers: `ask_markdown` (`initial`, `placeholder`, `minLength`, `maxLength` ≤ 20,000); `MarkdownEditorField`; answer `{markdown, changed}`; long answers collapse in the summary; simple card Approve draft / Cancel with `handoff`.
-  - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ui/src/asks/AskMarkdown.tsx`, tests, story.
+  - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ui/src/asks/AskMarkdown.tsx`, tests, story. Also touched: `ai/src/service/prompts.ts` (`ask_markdown` description); `ui/src/asks/{AskCard,SimpleAskCard}.tsx` ("Edit on your phone" handoff line), `ui/src/asks/askSummary.ts`; `demo/stories/{AskCard,SimpleAskCard}.stories.tsx`, `demo/story-config/AskCard.config.tsx`; `example-backend/src/api/demoAgent.ts` ("draft an announcement" scenario); `example-frontend/store/{openApiSdk,sdk}.ts`, `example-frontend/app/(tabs)/ai.tsx`; `docs/reference/ui.md`, `docs/how-to/agent-ui-asks.md`, `docs/explanation/{agent-ui-asks,example-coverage}.md`.
   - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md`.
   - Acceptance: AC1, AC2 (`TOO_LONG`), AC9, and AC15 for `markdown`; `changed` is false when the text is unchanged; no Approve button when `initial` breaks the length rules.

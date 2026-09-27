@@ -54,6 +54,12 @@ export const COMPACT_ASK_CONFIRM_TOOL_DESCRIPTION =
   "answer comes back as {confirmed: true} or {confirmed: false}. Call it before a tool that " +
   "deletes data, sends something, spends money, or cannot be undone.";
 
+export const ASK_MARKDOWN_TOOL_DESCRIPTION =
+  "Ask the user to edit a markdown draft you write, or to write one, and send it back. The chat " +
+  "shows a markdown editor with a preview and returns {markdown, changed} as this tool's result; " +
+  "changed is false when the user approved your draft as is. Use it when the user should review " +
+  "or rewrite text before you use it, such as an announcement, an email, or release notes.";
+
 /** Tool result for a call that was left without one when the turn paused for an ask. */
 export const UNANSWERED_TOOL_CALL_RESULT = "This tool call did not run, so it has no result.";
 

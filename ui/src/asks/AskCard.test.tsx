@@ -1,8 +1,12 @@
 import {afterEach, describe, it, mock, spyOn} from "bun:test";
-import {type ChoiceAskInput, type ConfirmAskInput, toSimpleCard} from "@terreno/blocks";
-import {act, fireEvent, within} from "@testing-library/react-native";
+import {
+  type ChoiceAskInput,
+  type ConfirmAskInput,
+  type MarkdownAskInput,
+  toSimpleCard,
+} from "@terreno/blocks";
+import {act, fireEvent, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
-
 import {renderWithTheme} from "../test-utils";
 import {AskCard, type AskCardProps} from "./AskCard";
 import type {AskSubmission, ChatAsk} from "./askTypes";
@@ -60,6 +64,21 @@ const REPORT_INPUT: ConfirmAskInput = {prompt: "Send the weekly report to the te
 
 const pendingConfirm = (input: ConfirmAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
   ({input, kind: "confirm", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
+
+const DRAFT = "# We're live\n\nToday we launched.";
+
+const DRAFT_INPUT: MarkdownAskInput = {
+  initial: DRAFT,
+  maxLength: 60,
+  minLength: 10,
+  placeholder: "Write the announcement",
+  prompt: "Here is a draft announcement. Edit anything, then send it back.",
+  submitLabel: "Send it back",
+  title: "Launch announcement",
+};
+
+const pendingMarkdown = (input: MarkdownAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
+  ({input, kind: "markdown", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
 
 const renderCard = (props: Partial<AskCardProps> & Pick<AskCardProps, "ask">) =>
   renderWithTheme(<AskCard onSubmit={mock(async () => {})} {...props} />);
@@ -524,6 +543,189 @@ describe("AskCard", () => {
       });
       assert.isOk(getByTestId("ask-card-invalid"));
       assert.isNull(queryByTestId("ask-card-button-approve"));
+    });
+  });
+
+  describe("markdown", () => {
+    const typeDraft = (root: ReturnType<typeof renderCard>, text: string): void => {
+      act(() => {
+        fireEvent.changeText(root.getByTestId("ask-card-editor-input"), text);
+      });
+    };
+
+    it("starts the editor from the draft and shows the length hint, Submit, and Skip", () => {
+      const card = renderCard({ask: pendingMarkdown(DRAFT_INPUT)});
+
+      assert.isOk(card.getByText("Launch announcement"));
+      assert.equal(card.getByTestId("ask-card-editor-input").props.value, DRAFT);
+      assert.isOk(card.getByText(`${DRAFT.length} / 60 characters. At least 10.`));
+      assert.isOk(within(card.getByTestId("ask-card-submit")).getByText("Send it back"));
+      assert.isFalse(isDisabled(card.getByTestId("ask-card-submit")));
+      assert.isOk(card.getByTestId("ask-card-button-skip"));
+    });
+
+    it("sends the draft unchanged with changed false", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingMarkdown(DRAFT_INPUT), onSubmit});
+
+      await press(card.getByTestId("ask-card-submit"));
+
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0], {
+        response: {action: "accept", content: {changed: false, markdown: DRAFT}},
+        toolCallId: "call_1",
+      });
+    });
+
+    it("sends an edit with changed true, and changed false again once the edit is undone", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingMarkdown(DRAFT_INPUT), onSubmit});
+
+      typeDraft(card, "# We're live\n\nWe launched today.");
+      await press(card.getByTestId("ask-card-submit"));
+      typeDraft(card, DRAFT);
+      await press(card.getByTestId("ask-card-submit"));
+
+      assert.deepEqual(
+        onSubmit.mock.calls.map((call) => call[0].response),
+        [
+          {
+            action: "accept",
+            content: {changed: true, markdown: "# We're live\n\nWe launched today."},
+          },
+          {action: "accept", content: {changed: false, markdown: DRAFT}},
+        ]
+      );
+    });
+
+    it("keeps Submit disabled and says why while the text is longer than maxLength", () => {
+      const card = renderCard({ask: pendingMarkdown(DRAFT_INPUT)});
+
+      typeDraft(card, "x".repeat(61));
+
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+      assert.isOk(card.getByText("Keep this to 60 characters or fewer."));
+      assert.isOk(card.getByText("61 / 60 characters. At least 10."));
+    });
+
+    it("keeps Submit disabled until the text meets minLength", () => {
+      const card = renderCard({ask: pendingMarkdown({...DRAFT_INPUT, initial: undefined})});
+
+      assert.equal(card.getByTestId("ask-card-editor-input").props.value, "");
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+      typeDraft(card, "   short   ");
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+      typeDraft(card, "Long enough now");
+      assert.isFalse(isDisabled(card.getByTestId("ask-card-submit")));
+    });
+
+    it("declines with Skip, and hides Skip when the ask cannot be declined", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingMarkdown(DRAFT_INPUT), onSubmit});
+      await press(card.getByTestId("ask-card-button-skip"));
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {action: "decline"});
+
+      const required = renderCard({ask: pendingMarkdown({...DRAFT_INPUT, allowDecline: false})});
+      assert.isNull(required.queryByTestId("ask-card-button-skip"));
+    });
+
+    it("shows a server error on the text in the editor, and other errors below", () => {
+      const card = renderCard({
+        ask: pendingMarkdown(DRAFT_INPUT),
+        errors: [
+          {
+            code: "CHANGED_MISMATCH",
+            fix: "Set content.changed to false.",
+            message: "The text is the same as the draft, but changed is true.",
+            path: "content.changed",
+          },
+          {
+            code: "TOO_LONG",
+            fix: "Shorten content.markdown to 60 characters or fewer.",
+            message: "The text is 61 characters, but this ask allows at most 60.",
+            path: "content.markdown",
+          },
+        ],
+      });
+
+      assert.isOk(card.getByText("The text is 61 characters, but this ask allows at most 60."));
+      assert.isOk(
+        within(card.getByTestId("ask-card-errors")).getByText(
+          "The text is the same as the draft, but changed is true."
+        )
+      );
+    });
+
+    it("disables the editor, Submit, and Skip when the host takes no answers", () => {
+      const {getByTestId} = renderWithTheme(<AskCard ask={pendingMarkdown(DRAFT_INPUT)} />);
+      assert.isFalse(getByTestId("ask-card-editor-input").props.editable);
+      assert.isTrue(isDisabled(getByTestId("ask-card-submit")));
+      assert.isTrue(isDisabled(getByTestId("ask-card-button-skip")));
+    });
+
+    it("says a markdown ask with minLength above maxLength cannot be shown", () => {
+      const {getByTestId, queryByTestId} = renderCard({
+        ask: pendingMarkdown({...DRAFT_INPUT, minLength: 100}),
+      });
+      assert.isOk(getByTestId("ask-card-invalid"));
+      assert.isNull(queryByTestId("ask-card-editor"));
+    });
+
+    it("summarizes an edit with its length and shows the text it sent", () => {
+      const {getByTestId, getByText, queryByTestId} = renderCard({
+        ask: pendingMarkdown(DRAFT_INPUT, {
+          response: {action: "accept", content: {changed: true, markdown: "We launched today."}},
+          status: "answered",
+        }),
+      });
+
+      assert.isOk(getByText("You edited the draft (18 characters)"));
+      assert.isOk(within(getByTestId("ask-card-answer")).getByText("We launched today."));
+      assert.isNull(queryByTestId("ask-card-answer-toggle"));
+      assert.isNull(queryByTestId("ask-card-editor"));
+    });
+
+    it("summarizes an approved draft", () => {
+      const {getByTestId, getByText} = renderCard({
+        ask: pendingMarkdown(DRAFT_INPUT, {
+          response: {action: "accept", content: {changed: false, markdown: DRAFT}},
+          status: "answered",
+        }),
+      });
+      assert.isOk(getByText("You approved the draft as is"));
+      assert.isOk(getByTestId("ask-card-answer"));
+    });
+
+    it("collapses a long answer to a preview until the user shows all of it", async () => {
+      const longAnswer = `${"word ".repeat(80)}THE END`;
+      const card = renderCard({
+        ask: pendingMarkdown(
+          {prompt: "Write it."},
+          {
+            response: {action: "accept", content: {changed: true, markdown: longAnswer}},
+            status: "answered",
+          }
+        ),
+      });
+      const answerText = (): string => JSON.stringify(card.toJSON());
+
+      assert.isOk(card.getByText("You edited the draft (407 characters)"));
+      await waitFor(() => {
+        assert.include(answerText(), "…");
+      });
+      assert.notInclude(answerText(), "THE END");
+      await press(card.getByTestId("ask-card-answer-toggle"));
+      await waitFor(() => {
+        assert.include(answerText(), "THE END");
+      });
+      assert.isOk(within(card.getByTestId("ask-card-answer-toggle")).getByText("Show less"));
+    });
+
+    it("summarizes a skipped draft without the answer box", () => {
+      const {getByText, queryByTestId} = renderCard({
+        ask: pendingMarkdown(DRAFT_INPUT, {response: {action: "decline"}, status: "answered"}),
+      });
+      assert.isOk(getByText("You skipped this question."));
+      assert.isNull(queryByTestId("ask-card-answer"));
     });
   });
 

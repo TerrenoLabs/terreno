@@ -9,6 +9,7 @@ import {Icon} from "../Icon";
 import {Text} from "../Text";
 import {AskChoice} from "./AskChoice";
 import {AskConfirm} from "./AskConfirm";
+import {AskMarkdown, AskMarkdownAnswer} from "./AskMarkdown";
 import type {AskAction} from "./askControls";
 import {askSummary} from "./askSummary";
 import type {AskSubmitHandler, ChatAsk} from "./askTypes";
@@ -43,6 +44,28 @@ const AskSummaryLine = ({ask, testID}: {ask: ChatAsk; testID: string}): React.Re
   </Box>
 );
 
+/** The text an accepted `markdown` answer sent back, or undefined for any other answer. */
+const answeredMarkdown = (ask: ChatAsk): string | undefined => {
+  if (ask.kind !== "markdown" || ask.response?.action !== "accept") {
+    return undefined;
+  }
+  const {markdown} = ask.response.content;
+  return typeof markdown === "string" ? markdown : undefined;
+};
+
+const AskSummary = ({ask, testID}: {ask: ChatAsk; testID: string}): React.ReactElement => {
+  const markdown = answeredMarkdown(ask);
+  if (markdown === undefined) {
+    return <AskSummaryLine ask={ask} testID={testID} />;
+  }
+  return (
+    <Box gap={2}>
+      <AskSummaryLine ask={ask} testID={testID} />
+      <AskMarkdownAnswer markdown={markdown} testID={testID} />
+    </Box>
+  );
+};
+
 const AskBody = ({
   ask,
   errors,
@@ -73,6 +96,17 @@ const AskBody = ({
     case "confirm":
       return (
         <AskConfirm
+          ask={ask}
+          errors={errors}
+          isDisabled={isDisabled}
+          onAnswer={onAnswer}
+          pendingActionId={pendingActionId}
+          testID={testID}
+        />
+      );
+    case "markdown":
+      return (
+        <AskMarkdown
           ask={ask}
           errors={errors}
           isDisabled={isDisabled}
@@ -113,7 +147,7 @@ export const AskCard: React.FC<AskCardProps> = ({ask, errors, onSubmit, testID =
   );
 
   if (ask.status !== "pending") {
-    return <AskSummaryLine ask={ask} testID={testID} />;
+    return <AskSummary ask={ask} testID={testID} />;
   }
 
   if (validateAskInput({input: ask.input, kind: ask.kind}).length > 0) {

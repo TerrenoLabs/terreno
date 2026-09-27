@@ -47,6 +47,14 @@ const CONFIRM_RULES = `ask_confirm: the user approves or denies one action you d
 - Before you call a tool that deletes data, sends something on the user's behalf, spends money, or cannot be undone, call ask_confirm and say in prompt exactly what will happen. Make the call only after {"confirmed": true}.
 - An accepted answer looks like {"action": "accept", "content": {"confirmed": true}}. {"confirmed": false} means the user said no, so do not take the action.`;
 
+const MARKDOWN_RULES = `ask_markdown: the user edits a markdown draft you write and sends it back.
+- initial: optional, the draft in markdown, at most 20000 characters. Put the whole draft here, not in prompt.
+- minLength, maxLength: optional whole numbers. The answer must have at least minLength (default 0) and at most maxLength (default 20000, the most allowed) characters. minLength must not be more than maxLength.
+- placeholder: optional hint shown while the editor is empty, at most 120 characters.
+- submitLabel: optional label for the submit button, at most 24 characters.
+- allowDecline: optional, default true (the user sees Skip).
+- An accepted answer looks like {"action": "accept", "content": {"markdown": "<the text>", "changed": true}}. changed is false when the user sent your draft unchanged.`;
+
 const sectionOf = (section: string, kindRules: string[]): string =>
   [section.replace("ask_choice.", "ask_choice, ask_confirm."), ...kindRules].join("\n\n");
 
@@ -82,6 +90,16 @@ describe("askPromptSection", () => {
     expect(section).not.toContain("ask_choice");
   });
 
+  it("describes ask_markdown after ask_confirm, with the length limits from ASK_LIMITS", () => {
+    expect(askPromptSection({kinds: ["choice", "confirm", "markdown"]})).toBe(
+      [
+        CHOICE_SECTION.replace("ask_choice.", "ask_choice, ask_confirm, ask_markdown."),
+        CONFIRM_RULES,
+        MARKDOWN_RULES,
+      ].join("\n\n")
+    );
+  });
+
   it("leaves submitLabel and the Skip default out of the shared rules, since confirm differs", () => {
     const section = askPromptSection({kinds: ["confirm"]});
     expect(section).not.toContain("submitLabel");
@@ -109,5 +127,12 @@ describe("askPromptSection on the compact surface", () => {
     expect(askPromptSection({kinds: ["choice", "confirm"], surface: "compact"})).toBe(
       sectionOf(COMPACT_CHOICE_SECTION, [CONFIRM_RULES])
     );
+  });
+
+  it("leaves ask_markdown out, because a draft cannot be edited on a small screen", () => {
+    expect(askPromptSection({kinds: ["choice", "confirm", "markdown"], surface: "compact"})).toBe(
+      sectionOf(COMPACT_CHOICE_SECTION, [CONFIRM_RULES])
+    );
+    expect(askPromptSection({kinds: ["markdown"], surface: "compact"})).toBe("");
   });
 });

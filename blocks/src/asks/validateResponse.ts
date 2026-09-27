@@ -8,10 +8,13 @@ import {
 } from "./errors";
 import {
   type Ask,
+  type AskKind,
+  askAllowsDecline,
   askResponseSchema,
   type ChoiceAskInput,
   choiceAnswerSchema,
   choiceSelectionBounds,
+  confirmAnswerSchema,
 } from "./schema";
 
 const countText = (count: number): string => (count === 1 ? "1 option" : `${count} options`);
@@ -103,6 +106,14 @@ const validateChoiceAnswer = (input: ChoiceAskInput, content: unknown): AskError
   return drafts;
 };
 
+const validateConfirmAnswer = (content: unknown): AskErrorDraft[] => {
+  const parsed = confirmAnswerSchema.safeParse(content);
+  if (parsed.success) {
+    return [];
+  }
+  return issuesToAskErrors({issues: parsed.error.issues, prefix: ["content"], root: content});
+};
+
 /**
  * Checks a user's answer against the ask it answers. The client runs it before enabling Submit and
  * the server runs it before resuming the turn. Returns no errors when the answer is valid.
@@ -111,7 +122,12 @@ export const validateAskResponse = ({
   input,
   kind,
   response,
-}: Ask & {response: unknown}): AskValidationError[] => {
+}: {
+  input: Ask["input"];
+  kind: AskKind;
+  response: unknown;
+}): AskValidationError[] => {
+  const ask = {input, kind} as Ask;
   const envelope = askResponseSchema.safeParse(response);
   if (!envelope.success) {
     return finalizeAskErrors(issuesToAskErrors({issues: envelope.error.issues, root: response}));
@@ -121,7 +137,7 @@ export const validateAskResponse = ({
     return [];
   }
   if (answer.action === "decline") {
-    if (input.allowDecline !== false) {
+    if (askAllowsDecline(ask)) {
       return [];
     }
     return [
@@ -133,8 +149,10 @@ export const validateAskResponse = ({
       },
     ];
   }
-  switch (kind) {
+  switch (ask.kind) {
     case "choice":
-      return finalizeAskErrors(validateChoiceAnswer(input, answer.content));
+      return finalizeAskErrors(validateChoiceAnswer(ask.input, answer.content));
+    case "confirm":
+      return finalizeAskErrors(validateConfirmAnswer(answer.content));
   }
 };

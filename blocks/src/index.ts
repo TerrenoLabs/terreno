@@ -31,12 +31,17 @@ export type {
   ChoiceOption,
   ChoiceSelectMode,
   CompactAskKind,
+  ConfirmAnswer,
+  ConfirmAsk,
+  ConfirmAskInput,
+  ConfirmAskResponse,
 } from "./asks/schema";
 export {
   ASK_CANCEL_REASONS,
   ASK_KINDS,
   ASK_SURFACES,
   askAcceptResponseSchema,
+  askAllowsDecline,
   askCancelResponseSchema,
   askDeclineResponseSchema,
   askInputSchemaFor,
@@ -53,6 +58,11 @@ export {
   choiceSelectionBounds,
   compactAskInputSchemas,
   compactChoiceAskInputSchema,
+  compactConfirmAskInputSchema,
+  confirmAnswerSchema,
+  confirmAskInputSchema,
+  confirmAskResponseSchema,
+  confirmButtonLabels,
 } from "./asks/schema";
 export type {SimpleCard, SimpleCardButton} from "./asks/simpleCard";
 export {

@@ -100,8 +100,10 @@ export interface SetAdminUserPasswordRequest {
 
 // GptHistory endpoints are hand-maintained: nested modelRouter mounts under /gpt/histories
 // are not always present in the generated OpenAPI SDK after regen.
+type GptHistoryAskKind = "choice" | "confirm";
+
 interface GptHistoryPromptAsk {
-  kind: "choice";
+  kind: GptHistoryAskKind;
   status: "pending" | "answered" | "cancelled";
 }
 
@@ -127,7 +129,7 @@ interface GptHistoryPrompt {
 /** The ask a conversation is waiting on. Only the chat turn writes it, so clients never send it. */
 interface GptHistoryPendingAsk {
   input: Record<string, unknown>;
-  kind: "choice";
+  kind: GptHistoryAskKind;
   simple: Record<string, unknown>;
   toolCallId: string;
 }

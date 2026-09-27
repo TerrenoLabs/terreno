@@ -1,4 +1,9 @@
-import {ASK_CANCEL_REASONS, type ChoiceAskInput} from "@terreno/blocks";
+import {
+  ASK_CANCEL_REASONS,
+  type ChoiceAskInput,
+  type ConfirmAskInput,
+  confirmButtonLabels,
+} from "@terreno/blocks";
 
 import type {ChatAsk} from "./askTypes";
 
@@ -33,10 +38,24 @@ const choiceSummary = (input: ChoiceAskInput, content: Record<string, unknown>):
   return Array.isArray(content.selected) ? "You chose none of the options." : ANSWERED;
 };
 
+/** "You confirmed: <approve label>" or "You declined: <deny label>" for an accepted `confirm` answer. */
+const confirmSummary = (input: ConfirmAskInput, content: Record<string, unknown>): string => {
+  const labels = confirmButtonLabels(input);
+  if (content.confirmed === true) {
+    return `You confirmed: ${labels.confirm}`;
+  }
+  if (content.confirmed === false) {
+    return `You declined: ${labels.deny}`;
+  }
+  return ANSWERED;
+};
+
 const acceptedSummary = (ask: ChatAsk, content: Record<string, unknown>): string => {
   switch (ask.kind) {
     case "choice":
       return choiceSummary(ask.input, content);
+    case "confirm":
+      return confirmSummary(ask.input, content);
   }
 };
 

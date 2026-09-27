@@ -1,5 +1,5 @@
 import {describe, expect, it} from "bun:test";
-import type {ChoiceAskInput} from "./schema";
+import type {ChoiceAskInput, ConfirmAskInput} from "./schema";
 import {validateAskResponse} from "./validateResponse";
 
 const PLAN_INPUT: ChoiceAskInput = {
@@ -279,5 +279,71 @@ describe("validateAskResponse select many", () => {
     expect(
       codesAndPaths({action: "accept", content: {other: "  ", selected: ["cheese"]}}, OTHER_INPUT)
     ).toEqual([{code: "TOO_SHORT", path: "content.other"}]);
+  });
+});
+
+describe("validateAskResponse confirm", () => {
+  const DELETE_INPUT: ConfirmAskInput = {
+    confirmLabel: "Delete 14 todos",
+    denyLabel: "Keep them",
+    destructive: true,
+    prompt: "Delete 14 completed todos?",
+  };
+
+  const checkConfirm = (response: unknown, input: ConfirmAskInput = DELETE_INPUT) =>
+    validateAskResponse({input, kind: "confirm", response});
+
+  it("accepts confirmed true and confirmed false", () => {
+    expect(checkConfirm({action: "accept", content: {confirmed: true}})).toEqual([]);
+    expect(checkConfirm({action: "accept", content: {confirmed: false}})).toEqual([]);
+  });
+
+  it("refuses decline by default, because deny is the negative answer", () => {
+    expect(checkConfirm({action: "decline"})).toEqual([
+      {
+        code: "DECLINE_NOT_ALLOWED",
+        fix: 'Answer with action "accept".',
+        message: "This ask cannot be skipped.",
+        path: "action",
+      },
+    ]);
+    expect(checkConfirm({action: "decline"}, {...DELETE_INPUT, allowDecline: false})).toHaveLength(
+      1
+    );
+  });
+
+  it("accepts decline when allowDecline is true, and cancel always", () => {
+    expect(checkConfirm({action: "decline"}, {...DELETE_INPUT, allowDecline: true})).toEqual([]);
+    expect(checkConfirm({action: "cancel", reason: "user_sent_message"})).toEqual([]);
+  });
+
+  it("MISSING_REQUIRED when confirmed is missing", () => {
+    expect(checkConfirm({action: "accept", content: {}})).toEqual([
+      {
+        code: "MISSING_REQUIRED",
+        fix: 'Add "confirmed" to content.',
+        message: "content.confirmed is required.",
+        path: "content.confirmed",
+      },
+    ]);
+  });
+
+  it("INVALID_TYPE when confirmed is not a boolean", () => {
+    expect(checkConfirm({action: "accept", content: {confirmed: "yes"}})).toEqual([
+      {
+        code: "INVALID_TYPE",
+        fix: "Make content.confirmed true or false.",
+        message: "content.confirmed must be true or false, not a string.",
+        path: "content.confirmed",
+      },
+    ]);
+  });
+
+  it("UNKNOWN_KEY for a choice answer sent to a confirm", () => {
+    expect(
+      checkConfirm({action: "accept", content: {confirmed: true, selected: ["yes"]}}).map(
+        ({code, path}) => ({code, path})
+      )
+    ).toEqual([{code: "UNKNOWN_KEY", path: "content.selected"}]);
   });
 });

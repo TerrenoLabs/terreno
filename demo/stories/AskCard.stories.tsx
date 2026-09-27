@@ -4,6 +4,7 @@ import type React from "react";
 import {useCallback, useState} from "react";
 
 type ChoiceAsk = Extract<ChatAsk, {kind: "choice"}>;
+type ConfirmAsk = Extract<ChatAsk, {kind: "confirm"}>;
 
 const SIMULATED_SERVER_DELAY_MS = 600;
 
@@ -94,6 +95,45 @@ const COUNTRY_ASK: ChoiceAsk = {
   toolCallId: "demo-country",
 };
 
+const ARCHIVE_ASK: ConfirmAsk = {
+  input: {
+    confirmLabel: "Archive 12 chats",
+    denyLabel: "Keep them",
+    destructive: true,
+    prompt: "Archive the 12 chats older than 90 days? You can't undo this.",
+    title: "Archive old chats",
+  },
+  kind: "confirm",
+  status: "pending",
+  toolCallId: "demo-archive",
+};
+
+const REPORT_ASK: ConfirmAsk = {
+  input: {
+    confirmLabel: "Send report",
+    denyLabel: "Not now",
+    prompt: "Send the weekly report to the team now?",
+  },
+  kind: "confirm",
+  status: "pending",
+  toolCallId: "demo-report",
+};
+
+const ANSWERED_CONFIRMS: ConfirmAsk[] = [
+  {
+    ...ARCHIVE_ASK,
+    response: {action: "accept", content: {confirmed: true}},
+    status: "answered",
+    toolCallId: "demo-confirmed",
+  },
+  {
+    ...REPORT_ASK,
+    response: {action: "accept", content: {confirmed: false}},
+    status: "answered",
+    toolCallId: "demo-denied",
+  },
+];
+
 const SERVER_ERRORS: NonNullable<AskCardProps["errors"]> = [
   {
     code: "OPTION_NOT_OFFERED",
@@ -142,8 +182,8 @@ const waitForServer = (): Promise<void> =>
   });
 
 /** Answers locally after a short delay, then shows the card's answered summary. */
-const InteractiveAsk: React.FC<{ask: ChoiceAsk; testID: string}> = ({ask, testID}) => {
-  const [current, setCurrent] = useState<ChoiceAsk>(ask);
+const InteractiveAsk: React.FC<{ask: ChatAsk; testID: string}> = ({ask, testID}) => {
+  const [current, setCurrent] = useState<ChatAsk>(ask);
 
   const handleSubmit = useCallback(async ({response}: AskSubmission): Promise<void> => {
     await waitForServer();
@@ -220,6 +260,57 @@ export const AskCardPickMany: React.FC = (): React.ReactElement => {
       title="Pick many with Other"
     >
       <InteractiveAsk ask={TOPPINGS_ASK} testID="demo-ask-card-many" />
+    </StorySection>
+  );
+};
+
+export const AskCardConfirmDestructive: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="confirm with destructive: the approve button comes first in the destructive style, and the deny button last. No Skip, because deny is the negative answer."
+      title="Confirm a destructive action"
+    >
+      <InteractiveAsk ask={ARCHIVE_ASK} testID="demo-ask-card-confirm-destructive" />
+    </StorySection>
+  );
+};
+
+export const AskCardConfirm: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="confirm without destructive: the approve button is primary. Set allowDecline to add Skip after the deny button."
+      title="Confirm an action"
+    >
+      <InteractiveAsk ask={REPORT_ASK} testID="demo-ask-card-confirm" />
+    </StorySection>
+  );
+};
+
+export const AskCardConfirmAnswered: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="An answered confirm collapses to one line that names the pressed button."
+      title="Confirmed and declined"
+    >
+      <Box gap={2}>
+        {ANSWERED_CONFIRMS.map((ask) => (
+          <AskCard ask={ask} key={ask.toolCallId} testID={ask.toolCallId} />
+        ))}
+      </Box>
+    </StorySection>
+  );
+};
+
+export const AskCardConfirmReadOnly: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="Without onSubmit both confirm buttons are disabled."
+      title="Confirm, read only"
+    >
+      <Box gap={2}>
+        <AskCard ask={ARCHIVE_ASK} testID="demo-ask-card-confirm-read-only" />
+        <AskCard ask={REPORT_ASK} testID="demo-ask-card-confirm-read-only-report" />
+      </Box>
     </StorySection>
   );
 };

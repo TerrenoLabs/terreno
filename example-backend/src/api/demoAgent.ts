@@ -150,6 +150,24 @@ const toppingsReply = ({isCompact, response}: DemoAnswer): string => {
   return `You picked ${joinWithAnd([...picked, ...own])}. A real agent would add them to the order now. Say "pick toppings" to try another answer.`;
 };
 
+interface ConfirmReplies {
+  cancelled: string;
+  confirmed: DemoReply;
+  denied: DemoReply;
+}
+
+/** Replies to a confirm answer. A decline, which confirm refuses by default, counts as a deny. */
+const confirmReply =
+  ({cancelled, confirmed, denied}: ConfirmReplies) =>
+  ({isCompact, response}: DemoAnswer): string => {
+    if (response.action === "cancel") {
+      return cancelled;
+    }
+    const reply =
+      response.action === "accept" && response.content.confirmed === true ? confirmed : denied;
+    return isCompact ? reply.compact : reply.full;
+  };
+
 const DEMO_SCENARIOS: DemoAskScenario[] = [
   {
     compactFallback:
@@ -172,6 +190,53 @@ const DEMO_SCENARIOS: DemoAskScenario[] = [
     trigger: /\btoppings?\b/i,
   },
   {
+    id: "report",
+    input: {
+      confirmLabel: "Send report",
+      denyLabel: "Not now",
+      prompt: "Send the weekly report to the team now? It goes to 8 people.",
+      title: "Send the weekly report",
+    },
+    kind: "confirm",
+    reply: confirmReply({
+      cancelled: "The weekly report question was cancelled, so I did not send it.",
+      confirmed: {
+        compact: "OK. A real agent would send the weekly report now.",
+        full: 'You said yes, so a real agent would send the **weekly report** to the team now. Say "send the weekly report" to try another answer.',
+      },
+      denied: {
+        compact: "OK, I did not send the report.",
+        full: 'OK, I did not send the weekly report. Say "send the weekly report" to try another answer.',
+      },
+    }),
+    title: "Sending the weekly report",
+    trigger: /\bweekly report\b/i,
+  },
+  {
+    id: "archive",
+    input: {
+      confirmLabel: "Archive 12 chats",
+      denyLabel: "Keep them",
+      destructive: true,
+      prompt: "Archive the 12 chats older than 90 days? You can't undo this.",
+      title: "Archive old chats",
+    },
+    kind: "confirm",
+    reply: confirmReply({
+      cancelled: "The archive question was cancelled, so I kept your chats.",
+      confirmed: {
+        compact: "Confirmed. A real agent would archive 12 chats now.",
+        full: 'You confirmed, so a real agent would archive the **12 chats** older than 90 days now. This demo archived nothing. Say "archive old chats" to try another answer.',
+      },
+      denied: {
+        compact: "OK, I kept your chats.",
+        full: 'OK, I kept all your chats. Say "archive old chats" to try another answer.',
+      },
+    }),
+    title: "Archiving old chats",
+    trigger: /\barchive\b/i,
+  },
+  {
     id: "plan",
     input: {
       default: ["team"],
@@ -188,10 +253,11 @@ const DEMO_SCENARIOS: DemoAskScenario[] = [
 ];
 
 const DEMO_HELP_REPLY: DemoReply = {
-  compact: `I'm the Terreno demo agent. Say "help me pick a plan" to choose a plan.`,
+  compact: `I'm the Terreno demo agent. Say "help me pick a plan" or "archive old chats" to try an ask.`,
   full: [
     "I'm the Terreno demo agent. This server has no AI model configured, so I follow a script.",
     'Say "help me pick a plan" and I will ask you to choose one right here in the chat, or "pick toppings" to choose several with an answer of your own.',
+    'Say "send the weekly report" or "archive old chats" and I will ask you to confirm before I act. Archiving shows a destructive button, because it cannot be undone.',
     "To talk to a real model, set GEMINI_API_KEY on the server or save a Gemini API key on the Profile tab.",
   ].join("\n\n"),
 };

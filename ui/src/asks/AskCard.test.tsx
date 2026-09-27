@@ -1,5 +1,5 @@
 import {afterEach, describe, it, mock, spyOn} from "bun:test";
-import {type ChoiceAskInput, toSimpleCard} from "@terreno/blocks";
+import {type ChoiceAskInput, type ConfirmAskInput, toSimpleCard} from "@terreno/blocks";
 import {act, fireEvent, within} from "@testing-library/react-native";
 import {assert} from "chai";
 
@@ -47,6 +47,19 @@ const pendingAsk = (input: ChoiceAskInput, state: Partial<ChatAsk> = {}): ChatAs
   toolCallId: "call_1",
   ...state,
 });
+
+const ARCHIVE_INPUT: ConfirmAskInput = {
+  confirmLabel: "Archive 12 chats",
+  denyLabel: "Keep them",
+  destructive: true,
+  prompt: "Archive the 12 chats older than 90 days?",
+  title: "Archive old chats",
+};
+
+const REPORT_INPUT: ConfirmAskInput = {prompt: "Send the weekly report to the team now?"};
+
+const pendingConfirm = (input: ConfirmAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
+  ({input, kind: "confirm", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
 
 const renderCard = (props: Partial<AskCardProps> & Pick<AskCardProps, "ask">) =>
   renderWithTheme(<AskCard onSubmit={mock(async () => {})} {...props} />);
@@ -371,6 +384,146 @@ describe("AskCard", () => {
         }),
       });
       assert.isOk(getByText("You chose: Olives. Another topping: Basil"));
+    });
+  });
+
+  describe("confirm", () => {
+    // The variant each answer button renders with, read from the Button element that gets it.
+    const buttonVariants = (root: ReturnType<typeof renderCard>): [string, string][] =>
+      root
+        .getAllByTestId(/^ask-card-button-/)
+        .map((element) => element.props.testID as string)
+        .map((testID) => {
+          const [button] = root
+            .UNSAFE_queryAllByProps({testID})
+            .filter((instance) => instance.props.variant !== undefined);
+          return [testID, button?.props.variant];
+        });
+
+    it("shows the approve button first as destructive, then the deny button, with no Skip", () => {
+      const card = renderCard({ask: pendingConfirm(ARCHIVE_INPUT)});
+
+      assert.isOk(card.getByText("Archive old chats"));
+      assert.isOk(card.getByText("Archive the 12 chats older than 90 days?"));
+      assert.deepEqual(buttonVariants(card), [
+        ["ask-card-button-approve", "destructive"],
+        ["ask-card-button-deny", "ghost"],
+      ]);
+      assert.isOk(
+        within(card.getByTestId("ask-card-button-approve")).getByText("Archive 12 chats")
+      );
+      assert.isOk(within(card.getByTestId("ask-card-button-deny")).getByText("Keep them"));
+      for (const button of card.getAllByTestId(/^ask-card-button-/)) {
+        assert.include(button.props.style, {maxWidth: "100%"});
+      }
+    });
+
+    it("uses the primary style and the default labels when the ask is not destructive", () => {
+      const card = renderCard({ask: pendingConfirm(REPORT_INPUT)});
+
+      assert.deepEqual(buttonVariants(card), [
+        ["ask-card-button-approve", "primary"],
+        ["ask-card-button-deny", "ghost"],
+      ]);
+      assert.isOk(within(card.getByTestId("ask-card-button-approve")).getByText("Confirm"));
+      assert.isOk(within(card.getByTestId("ask-card-button-deny")).getByText("Cancel"));
+    });
+
+    it.each([
+      {buttonId: "approve", confirmed: true},
+      {buttonId: "deny", confirmed: false},
+    ])("sends {confirmed: $confirmed} from the $buttonId button", async ({buttonId, confirmed}) => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const {getByTestId} = renderCard({ask: pendingConfirm(ARCHIVE_INPUT), onSubmit});
+
+      await press(getByTestId(`ask-card-button-${buttonId}`));
+
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0], {
+        response: {action: "accept", content: {confirmed}},
+        toolCallId: "call_1",
+      });
+    });
+
+    it("adds Skip last when allowDecline is true, and it declines", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({
+        ask: pendingConfirm({...REPORT_INPUT, allowDecline: true}),
+        onSubmit,
+      });
+
+      assert.deepEqual(
+        card.getAllByTestId(/^ask-card-button-/).map((button) => button.props.testID),
+        ["ask-card-button-approve", "ask-card-button-deny", "ask-card-button-skip"]
+      );
+      await press(card.getByTestId("ask-card-button-skip"));
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0], {
+        response: {action: "decline"},
+        toolCallId: "call_1",
+      });
+    });
+
+    it("shows the pressed button loading and blocks the other until the host finishes", async () => {
+      const pending = deferred();
+      const onSubmit = mock((_submission: AskSubmission) => pending.promise);
+      const {getByTestId} = renderCard({ask: pendingConfirm(ARCHIVE_INPUT), onSubmit});
+
+      await press(getByTestId("ask-card-button-approve"));
+      assert.lengthOf(
+        getByTestId("ask-card-button-approve").findAll((node) => node.type === "ActivityIndicator"),
+        1
+      );
+      assert.isTrue(isDisabled(getByTestId("ask-card-button-deny")));
+      await press(getByTestId("ask-card-button-deny"));
+      assert.lengthOf(onSubmit.mock.calls, 1);
+
+      await act(async () => {
+        pending.resolve();
+        await pending.promise;
+      });
+      assert.isFalse(isDisabled(getByTestId("ask-card-button-deny")));
+    });
+
+    it("disables both buttons when the host takes no answers", () => {
+      const {getByTestId} = renderWithTheme(<AskCard ask={pendingConfirm(ARCHIVE_INPUT)} />);
+      assert.isTrue(isDisabled(getByTestId("ask-card-button-approve")));
+      assert.isTrue(isDisabled(getByTestId("ask-card-button-deny")));
+    });
+
+    it("shows server errors for the last answer inline", () => {
+      const {getByText} = renderCard({
+        ask: pendingConfirm(ARCHIVE_INPUT),
+        errors: [
+          {
+            code: "DECLINE_NOT_ALLOWED",
+            fix: 'Answer with action "accept".',
+            message: "This ask cannot be skipped.",
+            path: "action",
+          },
+        ],
+      });
+      assert.isOk(getByText("This ask cannot be skipped."));
+    });
+
+    it.each([
+      {confirmed: true, summary: "You confirmed: Archive 12 chats"},
+      {confirmed: false, summary: "You declined: Keep them"},
+    ])("summarizes an answer of confirmed $confirmed with its label", ({confirmed, summary}) => {
+      const {getByText, queryByTestId} = renderCard({
+        ask: pendingConfirm(ARCHIVE_INPUT, {
+          response: {action: "accept", content: {confirmed}},
+          status: "answered",
+        }),
+      });
+      assert.isOk(getByText(summary));
+      assert.isNull(queryByTestId("ask-card-button-approve"));
+    });
+
+    it("says a confirm with matching labels cannot be shown", () => {
+      const {getByTestId, queryByTestId} = renderCard({
+        ask: pendingConfirm({...REPORT_INPUT, confirmLabel: "Cancel"}),
+      });
+      assert.isOk(getByTestId("ask-card-invalid"));
+      assert.isNull(queryByTestId("ask-card-button-approve"));
     });
   });
 

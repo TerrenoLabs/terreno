@@ -204,6 +204,13 @@ input:
 answer: {action: accept, content: {confirmed: true}}
 ```
 
+Revised in Pick (Task 2.2): `confirm` does not take the shared `submitLabel` (its two buttons
+are the submit). `confirmLabel` / `denyLabel` default to "Confirm" / "Cancel" and must differ
+after trimming, defaults included (`DUPLICATE_LABEL`). With `allowDecline: true` the chat shows
+Skip, but the simple card never does (its two buttons already cover both answers). The
+"confirm before a tool that deletes, sends, spends, or can't be undone" guidance ships in the
+confirm prompt rules and the `ask_confirm` tool description, only when `confirm` is enabled.
+
 ### `markdown` — edit a draft
 
 ```yaml

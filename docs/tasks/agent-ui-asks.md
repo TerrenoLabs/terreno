@@ -1,6 +1,6 @@
 # Task List: Agent UI Asks
 
-**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 2.2.
+**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 2.3.
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.
@@ -41,9 +41,9 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
   - Docs: `docs/reference/agent-ui-asks.md` (`choice` fields, card rules).
   - Acceptance: AC1, AC2, AC9, and AC15 for many-select and Other; screenshot.
 
-- [ ] **Task 2.2**: `confirm`
+- [x] **Task 2.2**: `confirm`
   - Delivers: `ask_confirm` (`confirmLabel` / `denyLabel` ≤ 20 chars, `destructive`, `allowDecline` default `false`); two `Button`s, `variant="destructive"` when set; simple card Approve / Deny with the D26 destructive marking; offered in compact mode; prompt guidance to confirm before irreversible tool calls.
-  - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ai/src/service/prompts.ts`, `ui/src/asks/AskConfirm.tsx`, tests, story.
+  - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ai/src/service/prompts.ts`, `ui/src/asks/AskConfirm.tsx`, tests, story. Also touched: `ui/src/asks/askControls.tsx` (controls shared with `AskChoice`), `ui/src/asks/{AskCard,AskChoice}.tsx`, `ui/src/asks/askSummary.ts`; `demo/stories/{AskCard,SimpleAskCard}.stories.tsx`, `demo/story-config/AskCard.config.tsx`; `example-backend/src/api/demoAgent.ts` ("send the weekly report" and "archive old chats" scenarios); `example-frontend/store/{openApiSdk,sdk}.ts`, `example-frontend/app/(tabs)/ai.tsx`; `docs/reference/ui.md`, `docs/explanation/{agent-ui-asks,example-coverage}.md`.
   - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md`, `docs/how-to/agent-ui-asks.md` ("confirm before a destructive tool").
   - Acceptance: AC1, AC2, AC9, and AC15 for `confirm`; AC16 includes `ask_confirm`; prompt snapshot test lists `confirm` only when enabled.

@@ -1,5 +1,5 @@
 import {describe, it} from "bun:test";
-import type {ChoiceAskInput} from "@terreno/blocks";
+import type {ChoiceAskInput, ConfirmAskInput} from "@terreno/blocks";
 import {assert} from "chai";
 
 import {askSummary} from "./askSummary";
@@ -22,6 +22,16 @@ const planAsk = (state: Partial<ChatAsk>): ChatAsk => ({
   toolCallId: "call_plan",
   ...state,
 });
+
+const confirmAsk = (input: ConfirmAskInput, state: Partial<ChatAsk>): ChatAsk =>
+  ({input, kind: "confirm", status: "answered", toolCallId: "call_archive", ...state}) as ChatAsk;
+
+const ARCHIVE_INPUT: ConfirmAskInput = {
+  confirmLabel: "Archive 12 chats",
+  denyLabel: "Keep them",
+  destructive: true,
+  prompt: "Archive the 12 chats older than 90 days?",
+};
 
 describe("askSummary", () => {
   it("names the chosen option by its label", () => {
@@ -81,6 +91,32 @@ describe("askSummary", () => {
       })
     );
     assert.equal(summary, "You chose none of the options.");
+  });
+
+  it.each([
+    {confirmed: true, expected: "You confirmed: Archive 12 chats", input: ARCHIVE_INPUT},
+    {confirmed: false, expected: "You declined: Keep them", input: ARCHIVE_INPUT},
+    {confirmed: true, expected: "You confirmed: Confirm", input: {prompt: "Send it?"}},
+    {confirmed: false, expected: "You declined: Cancel", input: {prompt: "Send it?"}},
+  ])('summarizes a confirm answer as "$expected"', ({confirmed, expected, input}) => {
+    const summary = askSummary(
+      confirmAsk(input, {response: {action: "accept", content: {confirmed}}})
+    );
+    assert.equal(summary, expected);
+  });
+
+  it("says the user answered when a confirm answer has no confirmed value", () => {
+    const summary = askSummary(
+      confirmAsk(ARCHIVE_INPUT, {response: {action: "accept", content: {}}})
+    );
+    assert.equal(summary, "You answered this question.");
+  });
+
+  it("says the user skipped a declined confirm", () => {
+    assert.equal(
+      askSummary(confirmAsk(ARCHIVE_INPUT, {response: {action: "decline"}})),
+      "You skipped this question."
+    );
   });
 
   it("says the user skipped a declined ask", () => {

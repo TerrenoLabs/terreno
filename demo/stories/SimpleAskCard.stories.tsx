@@ -17,6 +17,11 @@ import maxLimits from "@terreno/blocks/fixtures/valid/choice-max-limits.json";
 import planWithDefault from "@terreno/blocks/fixtures/valid/choice-plan-with-default.json";
 import twoOptions from "@terreno/blocks/fixtures/valid/choice-two-options.json";
 import twoOptionsNoDecline from "@terreno/blocks/fixtures/valid/choice-two-options-no-decline.json";
+import confirmAllowDecline from "@terreno/blocks/fixtures/valid/confirm-allow-decline.json";
+import confirmDefaultLabels from "@terreno/blocks/fixtures/valid/confirm-default-labels.json";
+import confirmDestructiveDelete from "@terreno/blocks/fixtures/valid/confirm-destructive-delete.json";
+import confirmEmojiLabels from "@terreno/blocks/fixtures/valid/confirm-emoji-labels.json";
+import confirmLongTextCut from "@terreno/blocks/fixtures/valid/confirm-long-text-cut.json";
 import {Box, Button, Heading, SimpleAskCard, Text} from "@terreno/ui";
 import type React from "react";
 import {useCallback, useState} from "react";
@@ -50,6 +55,11 @@ const FIXTURES: Record<string, {simple: unknown}> = {
   "choice-plan-with-default": planWithDefault,
   "choice-two-options": twoOptions,
   "choice-two-options-no-decline": twoOptionsNoDecline,
+  "confirm-allow-decline": confirmAllowDecline,
+  "confirm-default-labels": confirmDefaultLabels,
+  "confirm-destructive-delete": confirmDestructiveDelete,
+  "confirm-emoji-labels": confirmEmojiLabels,
+  "confirm-long-text-cut": confirmLongTextCut,
 };
 
 const FIXTURE_CARDS = Object.entries(FIXTURES).map(([name, fixture]) => ({

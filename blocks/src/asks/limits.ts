@@ -14,6 +14,10 @@ export const ASK_LIMITS = {
     optionsMin: 2,
     otherMaxLength: 500,
   },
+  confirm: {
+    /** Every confirm label fits a simple card button uncut. */
+    labelMaxLength: 20,
+  },
   pendingAsksPerHistory: 1,
   promptMaxLength: 500,
   simpleCard: {

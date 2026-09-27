@@ -4,6 +4,9 @@ import {type AskKind, type AskSurface, type CompactAskKind, isCompactAskKind} fr
 const CHOICE_ANSWER_EXAMPLE =
   '- An accepted answer looks like {"action": "accept", "content": {"selected": ["<id>"]}}.';
 
+const CHOICE_DECLINE_RULE =
+  "- allowDecline: optional, default true (the user sees Skip). Set it to false only when you cannot continue without an answer.";
+
 const CHOICE_ID_RULE = `- id: 1-${ASK_LIMITS.choice.optionIdMaxLength} lowercase letters, digits, "_", or "-", starting with a letter or digit. Unique within the ask.`;
 
 const sharedRules = (): string =>
@@ -11,8 +14,7 @@ const sharedRules = (): string =>
     "Rules for every ask:",
     `- prompt: required. Plain text with no markdown and no links, 1-${ASK_LIMITS.promptMaxLength} characters.`,
     `- title: optional, at most ${ASK_LIMITS.titleMaxLength} characters.`,
-    `- submitLabel: optional, at most ${ASK_LIMITS.submitLabelMaxLength} characters.`,
-    "- allowDecline: optional, default true (the user sees Skip). Set it to false only when you cannot continue without an answer.",
+    "- Each ask kind below lists its other fields, including whether the user can skip it.",
   ].join("\n");
 
 const compactSharedRules = (): string =>
@@ -32,6 +34,8 @@ const choiceRules = (): string => {
     '- default: optional list of option ids to preselect, each listed once. With "one", at most one id; with "many", at most maxSelected ids.',
     '- minSelected, maxSelected: optional whole numbers, "many" only. The user picks from minSelected (default 1, at least 0) to maxSelected (default: every choice) choices.',
     `- allowOther: optional, "many" only. true adds a text field where the user types an answer of their own, up to ${choice.otherMaxLength} characters. It counts as one choice. otherLabel: optional label for that field, at most ${choice.optionLabelMaxLength} characters. For one option or Other, use "many" with maxSelected 1.`,
+    `- submitLabel: optional label for the submit button, at most ${ASK_LIMITS.submitLabelMaxLength} characters.`,
+    CHOICE_DECLINE_RULE,
     `- Prefer select "one" with at most ${simpleCard.buttonsMax} options with labels of ${simpleCard.buttonLabelMaxLength} characters or fewer; small screens show those as buttons.`,
     CHOICE_ANSWER_EXAMPLE,
     '- With Other, it looks like {"action": "accept", "content": {"selected": ["<id>"], "other": "<text the user typed>"}}.',
@@ -48,16 +52,32 @@ const compactChoiceRules = (): string => {
     `- label: at most ${simpleCard.buttonLabelMaxLength} characters, counting each emoji as 2 or more, and no two options share a label.`,
     `- description: optional, at most ${choice.optionDescriptionMaxLength} characters. The buttons show only labels, so put what the user needs to decide in prompt and the labels.`,
     "- default: optional list with at most one option id to preselect.",
+    CHOICE_DECLINE_RULE,
     CHOICE_ANSWER_EXAMPLE,
+  ].join("\n");
+};
+
+/** A confirm always fits a simple card, so the full and compact surfaces share these rules. */
+const confirmRules = (): string => {
+  const {labelMaxLength} = ASK_LIMITS.confirm;
+  return [
+    "ask_confirm: the user approves or denies one action you describe in prompt.",
+    `- confirmLabel, denyLabel: optional labels for the approve and deny buttons, at most ${labelMaxLength} characters each, counting each emoji as 2 or more, and different from each other. They default to "Confirm" and "Cancel". Name the action, such as "Delete 14 todos" and "Keep them".`,
+    "- destructive: optional, default false. Set it to true when the action deletes data or cannot be undone; the approve button then shows as destructive.",
+    "- allowDecline: optional, default false, because the deny button is the negative answer. Set it to true to show Skip as well.",
+    `- Before you call a tool that deletes data, sends something on the user's behalf, spends money, or cannot be undone, call ask_confirm and say in prompt exactly what will happen. Make the call only after {"confirmed": true}.`,
+    '- An accepted answer looks like {"action": "accept", "content": {"confirmed": true}}. {"confirmed": false} means the user said no, so do not take the action.',
   ].join("\n");
 };
 
 const KIND_RULES: Record<AskKind, () => string> = {
   choice: choiceRules,
+  confirm: confirmRules,
 };
 
 const COMPACT_KIND_RULES: Record<CompactAskKind, () => string> = {
   choice: compactChoiceRules,
+  confirm: confirmRules,
 };
 
 const formatSection = ({

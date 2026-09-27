@@ -1,6 +1,6 @@
 import {describe, expect, it} from "bun:test";
-import {validAskFixtures} from "../tests/askFixtures";
-import type {ChoiceAskInput} from "./schema";
+import {type ValidAskFixture, validAskFixtures, validAskFixturesOf} from "../tests/askFixtures";
+import type {ChoiceAskInput, ConfirmAskInput} from "./schema";
 import {resolveButtonAnswer, simpleCardSchema, toSimpleCard} from "./simpleCard";
 import {validateAskInput} from "./validateInput";
 import {validateAskResponse} from "./validateResponse";
@@ -18,7 +18,7 @@ type ChoiceRow =
   | "manyWithSuggestion"
   | "manyWithoutSuggestion";
 
-/** The row each valid fixture exercises, read off the rule table by hand. */
+/** The row each valid `choice` fixture exercises, read off the rule table by hand. */
 const CHOICE_ROW_BY_FIXTURE: Record<string, ChoiceRow> = {
   "choice-emoji-label-cut": "optionsFit",
   "choice-labels-collide-after-cut": "labelsCollide",
@@ -81,6 +81,28 @@ const buttonsForRow = (input: ChoiceAskInput, row: ChoiceRow): ExpectedButton[] 
   return options.length < 3 ? [...options, ...skip] : options;
 };
 
+/** The `confirm` row: approve (destructive when the ask is) first, deny last, and never Skip. */
+const confirmButtons = (input: ConfirmAskInput): ExpectedButton[] => [
+  {
+    id: "approve",
+    response: {action: "accept", content: {confirmed: true}},
+    style: input.destructive === true ? "destructive" : "primary",
+  },
+  {id: "deny", response: {action: "accept", content: {confirmed: false}}, style: "cancel"},
+];
+
+/** The buttons and handoff the rule table gives a valid fixture. */
+const expectedCard = (fixture: ValidAskFixture): {buttons: ExpectedButton[]; handoff: boolean} => {
+  if (fixture.kind === "confirm") {
+    return {buttons: confirmButtons(fixture.input), handoff: false};
+  }
+  const row = CHOICE_ROW_BY_FIXTURE[fixture.name];
+  if (!row) {
+    throw new Error(`Add valid/${fixture.name} to CHOICE_ROW_BY_FIXTURE.`);
+  }
+  return {buttons: buttonsForRow(fixture.input, row), handoff: row !== "optionsFit"};
+};
+
 describe("toSimpleCard golden fixtures", () => {
   for (const fixture of validAskFixtures()) {
     it(`derives the expected card for valid/${fixture.name}`, () => {
@@ -122,13 +144,10 @@ describe("toSimpleCard properties over every valid fixture", () => {
       });
 
       it("has the buttons and handoff of its rule-table row", () => {
-        const row = CHOICE_ROW_BY_FIXTURE[fixture.name];
-        if (!row) {
-          throw new Error(`Add valid/${fixture.name} to CHOICE_ROW_BY_FIXTURE.`);
-        }
-        expect(card.handoff).toBe(row !== "optionsFit");
+        const expected = expectedCard(fixture);
+        expect(card.handoff).toBe(expected.handoff);
         expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
-          buttonsForRow(fixture.input, row)
+          expected.buttons
         );
       });
 
@@ -148,16 +167,16 @@ describe("toSimpleCard properties over every valid fixture", () => {
 });
 
 describe("the rule-table row map", () => {
-  it("lists exactly the valid fixtures", () => {
+  it("lists exactly the valid choice fixtures", () => {
     expect(Object.keys(CHOICE_ROW_BY_FIXTURE).sort()).toEqual(
-      validAskFixtures()
+      validAskFixturesOf("choice")
         .map((fixture) => fixture.name)
         .sort()
     );
   });
 
   it("uses optionsFit only for at most 3 options and moreOptions only for more", () => {
-    for (const fixture of validAskFixtures()) {
+    for (const fixture of validAskFixturesOf("choice")) {
       const row = CHOICE_ROW_BY_FIXTURE[fixture.name];
       if (row === "optionsFit") {
         expect(fixture.input.options.length).toBeLessThanOrEqual(3);
@@ -169,7 +188,7 @@ describe("the rule-table row map", () => {
   });
 
   it("uses the many rows exactly for select many", () => {
-    for (const fixture of validAskFixtures()) {
+    for (const fixture of validAskFixturesOf("choice")) {
       const row = CHOICE_ROW_BY_FIXTURE[fixture.name] ?? "optionsFit";
       expect(MANY_ROWS.includes(row)).toBe(fixture.input.select === "many");
     }
@@ -281,7 +300,7 @@ const generatedCompactAsks = (): ChoiceAskInput[] =>
   });
 
 const compactFixtureAsks = (): ChoiceAskInput[] =>
-  validAskFixtures()
+  validAskFixturesOf("choice")
     .filter(
       (fixture) =>
         validateAskInput({input: fixture.input, kind: fixture.kind, surface: "compact"}).length ===
@@ -347,7 +366,9 @@ describe("toSimpleCard properties over compact asks", () => {
 });
 
 describe("resolveButtonAnswer", () => {
-  const plan = validAskFixtures().find((fixture) => fixture.name === "choice-plan-with-default");
+  const plan = validAskFixturesOf("choice").find(
+    (fixture) => fixture.name === "choice-plan-with-default"
+  );
   if (!plan) {
     throw new Error("valid/choice-plan-with-default is missing.");
   }
@@ -461,6 +482,33 @@ describe("toSimpleCard choice rules", () => {
       {id: "skip", label: "Skip", response: {action: "decline"}, style: "cancel"},
     ]);
   });
+
+  it("shows labels without spaces at either end, and hands off when that makes two alike", () => {
+    const card = (options: {id: string; label: string}[]) =>
+      toSimpleCard({
+        input: {options, prompt: "Pick one.", select: "one"},
+        kind: "choice",
+        toolCallId: "call_1",
+      });
+    expect(
+      card([
+        {id: "go", label: " Go "},
+        {id: "wait", label: "Wait"},
+      ]).buttons.map((button) => button.label)
+    ).toEqual(["Go", "Wait", "Skip"]);
+    expect(
+      card([
+        {id: "go", label: "Go"},
+        {id: "go_now", label: "Go "},
+      ])
+    ).toEqual({
+      buttons: [{id: "skip", label: "Skip", response: {action: "decline"}, style: "cancel"}],
+      handoff: true,
+      kind: "choice",
+      text: "Pick one.",
+      toolCallId: "call_1",
+    });
+  });
 });
 
 describe("simpleCardSchema", () => {
@@ -531,5 +579,111 @@ describe("toSimpleCard text cuts", () => {
     expect(ask("Supercalifragilisticexpialidocious").buttons[0]?.label).toBe(
       "Supercalifragilisti…"
     );
+  });
+});
+
+const CONFIRM_LABEL_SETS: {confirmLabel?: string; denyLabel?: string}[] = [
+  {},
+  {confirmLabel: "Delete 14 todos", denyLabel: "Keep them"},
+  {confirmLabel: "Twenty characters!!!", denyLabel: "Exactly twenty chars"},
+  {confirmLabel: "Ship it 🚀", denyLabel: "Wait ⏳"},
+  {confirmLabel: "Send"},
+  {denyLabel: "Not now"},
+];
+
+/** Every combination of labels, destructive, allowDecline, title, and prompt length. */
+const generatedConfirmAsks = (): ConfirmAskInput[] =>
+  CONFIRM_LABEL_SETS.flatMap((labels) =>
+    [undefined, true, false].flatMap((destructive) =>
+      [undefined, true, false].flatMap((allowDecline) =>
+        [undefined, "t".repeat(80)].flatMap((title) =>
+          ["Go ahead?", LONG_PROMPT].map(
+            (prompt): ConfirmAskInput => ({
+              prompt,
+              ...labels,
+              ...(allowDecline === undefined ? {} : {allowDecline}),
+              ...(destructive === undefined ? {} : {destructive}),
+              ...(title === undefined ? {} : {title}),
+            })
+          )
+        )
+      )
+    )
+  );
+
+describe("toSimpleCard confirm rules", () => {
+  const asks = [
+    ...generatedConfirmAsks(),
+    ...validAskFixturesOf("confirm").map((fixture) => fixture.input),
+  ];
+  const cards = asks.map((input) => ({
+    card: toSimpleCard({input, kind: "confirm", toolCallId: TOOL_CALL_ID}),
+    input,
+  }));
+
+  it("covers generated asks and every confirm fixture", () => {
+    expect(generatedConfirmAsks().length).toBeGreaterThan(100);
+    expect(validAskFixturesOf("confirm").length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("only generates asks that pass the full and compact rules", () => {
+    for (const input of asks) {
+      expect(validateAskInput({input, kind: "confirm"})).toEqual([]);
+      expect(validateAskInput({input, kind: "confirm", surface: "compact"})).toEqual([]);
+    }
+  });
+
+  it("derives cards that pass simpleCardSchema and never hand off", () => {
+    for (const {card} of cards) {
+      expect(simpleCardSchema.safeParse(card).success).toBe(true);
+      expect(card.handoff).toBe(false);
+    }
+  });
+
+  it("puts approve first and deny last, with no Skip even when the ask allows declining", () => {
+    for (const {card, input} of cards) {
+      expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
+        confirmButtons(input)
+      );
+    }
+  });
+
+  it("marks approve destructive exactly when the ask is, so Double Tap cannot approve it", () => {
+    for (const {card, input} of cards) {
+      const [approve] = card.buttons;
+      expect(approve?.style === "destructive").toBe(input.destructive === true);
+      expect(card.buttons.filter((button) => button.style !== "destructive").at(0)?.id).toBe(
+        input.destructive === true ? "deny" : "approve"
+      );
+    }
+  });
+
+  it("shows the labels uncut, defaulting to Confirm and Cancel", () => {
+    for (const {card, input} of cards) {
+      expect(card.buttons.map((button) => button.label)).toEqual([
+        input.confirmLabel ?? "Confirm",
+        input.denyLabel ?? "Cancel",
+      ]);
+    }
+  });
+
+  it("only has buttons whose response is a valid answer to the ask", () => {
+    for (const {card, input} of cards) {
+      for (const button of card.buttons) {
+        expect(validateAskResponse({input, kind: "confirm", response: button.response})).toEqual(
+          []
+        );
+      }
+    }
+  });
+
+  it("shows the labels without spaces at either end", () => {
+    expect(
+      toSimpleCard({
+        input: {confirmLabel: " Send it ", denyLabel: "Wait ", prompt: "Send?"},
+        kind: "confirm",
+        toolCallId: TOOL_CALL_ID,
+      }).buttons.map((button) => button.label)
+    ).toEqual(["Send it", "Wait"]);
   });
 });

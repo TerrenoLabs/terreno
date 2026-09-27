@@ -335,9 +335,16 @@ shows on the Other field. When `ask.simple` is absent, the card derives it with 
 ask whose input fails `validateAskInput` shows "This question cannot be shown. Send a message to
 continue." instead of controls.
 
+`confirm` controls: the simple card's two buttons in its order, the approve button (`confirmLabel`,
+default "Confirm") first and the deny button (`denyLabel`, default "Cancel") last. The approve
+button uses the `destructive` variant when the ask sets `destructive: true`, else `primary`; the
+deny button uses `ghost`. Skip follows only when `allowDecline` is `true`. A tap answers
+`{"confirmed": true}` or `{"confirmed": false}`. Without `onSubmit`, both buttons are disabled.
+
 | How the ask ended | Summary |
 | --- | --- |
-| `accept` | You chose: `<option labels>`. With Other text, it adds "`<otherLabel>`: `<text>`" (the label defaults to "Other"), or shows only that when no option was checked. An empty `select: "many"` answer shows "You chose none of the options." |
+| `confirm` `accept` | You confirmed: `<confirmLabel>`, or You declined: `<denyLabel>`, with the default labels when the ask sets none |
+| `choice` `accept` | You chose: `<option labels>`. With Other text, it adds "`<otherLabel>`: `<text>`" (the label defaults to "Other"), or shows only that when no option was checked. An empty `select: "many"` answer shows "You chose none of the options." |
 | `decline` | You skipped this question. |
 | `cancel` with `user_sent_message` | Not answered: you sent a message instead. |
 | `cancel` with `one_ask_at_a_time` | Not asked: the assistant asked another question first. |
@@ -349,6 +356,8 @@ continue." instead of controls.
 | Card | `{testID}` |
 | Quick reply row | `{testID}-quick-replies` |
 | Quick reply or Skip button | `{testID}-button-<button id>`, such as `{testID}-button-option:team` or `{testID}-button-skip` |
+| Confirm button row | `{testID}-confirm-buttons` |
+| Confirm approve or deny button | `{testID}-button-approve`, `{testID}-button-deny` |
 | Select | `{testID}-select` |
 | Checkboxes (`select: "many"`) | `{testID}-multiselect` |
 | Other text field | `{testID}-other` |

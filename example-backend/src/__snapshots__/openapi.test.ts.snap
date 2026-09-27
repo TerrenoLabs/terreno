@@ -14782,6 +14782,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "description": "Ask kind; the model asked with the tool ask_<kind>",
                                 "enum": [
                                   "choice",
+                                  "confirm",
                                 ],
                                 "type": "string",
                               },
@@ -14830,6 +14831,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                       "description": "Ask kind; the model asked with the tool ask_<kind>",
                                       "enum": [
                                         "choice",
+                                        "confirm",
                                       ],
                                       "type": "string",
                                     },
@@ -15061,6 +15063,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "description": "Ask kind; the model asked with the tool ask_<kind>",
                         "enum": [
                           "choice",
+                          "confirm",
                         ],
                         "type": "string",
                       },
@@ -15110,6 +15113,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                               "description": "Ask kind; the model asked with the tool ask_<kind>",
                               "enum": [
                                 "choice",
+                                "confirm",
                               ],
                               "type": "string",
                             },
@@ -15270,6 +15274,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "description": "Ask kind; the model asked with the tool ask_<kind>",
                           "enum": [
                             "choice",
+                            "confirm",
                           ],
                           "type": "string",
                         },
@@ -15319,6 +15324,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "description": "Ask kind; the model asked with the tool ask_<kind>",
                                 "enum": [
                                   "choice",
+                                  "confirm",
                                 ],
                                 "type": "string",
                               },
@@ -15526,6 +15532,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "kind": {
                             "enum": [
                               "choice",
+                              "confirm",
                             ],
                             "type": "string",
                           },
@@ -15633,6 +15640,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                               "kind": {
                                 "enum": [
                                   "choice",
+                                  "confirm",
                                 ],
                                 "type": "string",
                               },
@@ -15851,6 +15859,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "description": "Ask kind; the model asked with the tool ask_<kind>",
                           "enum": [
                             "choice",
+                            "confirm",
                           ],
                           "type": "string",
                         },
@@ -15899,6 +15908,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "description": "Ask kind; the model asked with the tool ask_<kind>",
                                 "enum": [
                                   "choice",
+                                  "confirm",
                                 ],
                                 "type": "string",
                               },
@@ -16123,6 +16133,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "description": "Ask kind; the model asked with the tool ask_<kind>",
                         "enum": [
                           "choice",
+                          "confirm",
                         ],
                         "type": "string",
                       },
@@ -16172,6 +16183,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                               "description": "Ask kind; the model asked with the tool ask_<kind>",
                               "enum": [
                                 "choice",
+                                "confirm",
                               ],
                               "type": "string",
                             },
@@ -16332,6 +16344,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "description": "Ask kind; the model asked with the tool ask_<kind>",
                           "enum": [
                             "choice",
+                            "confirm",
                           ],
                           "type": "string",
                         },
@@ -16381,6 +16394,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "description": "Ask kind; the model asked with the tool ask_<kind>",
                                 "enum": [
                                   "choice",
+                                  "confirm",
                                 ],
                                 "type": "string",
                               },
@@ -16812,6 +16826,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "kind": {
                               "enum": [
                                 "choice",
+                                "confirm",
                               ],
                               "type": "string",
                             },
@@ -16919,6 +16934,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "kind": {
                                   "enum": [
                                     "choice",
+                                    "confirm",
                                   ],
                                   "type": "string",
                                 },

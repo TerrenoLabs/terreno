@@ -845,6 +845,202 @@ describe("/gpt/prompt asks", () => {
     });
   });
 
+  describe("confirm", () => {
+    const ARCHIVE_ASK_INPUT = {
+      confirmLabel: "Archive 12 chats",
+      denyLabel: "Keep them",
+      destructive: true,
+      prompt: "Archive the 12 chats older than 90 days?",
+    };
+    const ARCHIVE_ASK_CALL = {
+      input: ARCHIVE_ASK_INPUT,
+      toolCallId: "call_archive",
+      toolName: "ask_confirm",
+    };
+    const archiveCard = (handoff: boolean) => ({
+      buttons: [
+        {
+          id: "approve",
+          label: "Archive 12 chats",
+          response: {action: "accept", content: {confirmed: true}},
+          style: "destructive",
+        },
+        {
+          id: "deny",
+          label: "Keep them",
+          response: {action: "accept", content: {confirmed: false}},
+          style: "cancel",
+        },
+      ],
+      handoff,
+      kind: "confirm",
+      text: "Archive the 12 chats older than 90 days?",
+      toolCallId: "call_archive",
+    });
+
+    it.each([
+      {confirmed: true, reply: "Archived 12 chats."},
+      {confirmed: false, reply: "I kept your chats."},
+    ])(
+      "pauses on a card without handoff and resumes with confirmed $confirmed",
+      async ({confirmed, reply}) => {
+        const answer = {action: "accept", content: {confirmed}};
+        const model = createScriptedModel({
+          steps: [toolCallStep(ARCHIVE_ASK_CALL), textStep(reply)],
+        });
+        const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+        const asked = await streamPrompt(agent, {prompt: "Archive old chats"});
+        const historyId = await onlyHistoryId();
+        expect(asked.events).toEqual([
+          {
+            ask: {
+              input: ARCHIVE_ASK_INPUT,
+              kind: "confirm",
+              simple: archiveCard(false),
+              toolCallId: "call_archive",
+            },
+            historyId,
+          },
+          {done: true, historyId, pendingAsk: {toolCallId: "call_archive"}},
+        ]);
+        expect(rowsOf(await loadHistory(historyId)).at(-1)).toMatchObject({
+          ask: {kind: "confirm", status: "pending"},
+          toolName: "ask_confirm",
+        });
+
+        const {events} = await streamPrompt(agent, {
+          askResponse: {toolCallId: "call_archive", ...answer},
+          historyId,
+        });
+
+        expect(events).toEqual([
+          {askResolved: {action: "accept", toolCallId: "call_archive"}},
+          {text: reply},
+          {done: true, historyId, title: "Workspace setup"},
+        ]);
+        expect(conversationOf(modelCall(model, 1)).at(-1)).toEqual({
+          content: [
+            {
+              output: {type: "json", value: answer},
+              toolCallId: "call_archive",
+              toolName: "ask_confirm",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        });
+      }
+    );
+
+    it("offers ask_confirm on the compact surface and pauses on the same card", async () => {
+      const model = createScriptedModel({steps: [toolCallStep(ARCHIVE_ASK_CALL)]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const {events} = await streamPrompt(agent, {prompt: "Archive old chats", surface: "compact"});
+
+      expect(toolNamesOf(modelCall(model, 0))).toContain("ask_confirm");
+      expect(events[0]).toEqual({
+        ask: {
+          input: ARCHIVE_ASK_INPUT,
+          kind: "confirm",
+          simple: archiveCard(false),
+          toolCallId: "call_archive",
+        },
+        historyId: await onlyHistoryId(),
+      });
+    });
+
+    it("refuses a decline by default and accepts one when allowDecline is true", async () => {
+      const model = createScriptedModel({
+        steps: [
+          toolCallStep(ARCHIVE_ASK_CALL),
+          toolCallStep({
+            input: {...ARCHIVE_ASK_INPUT, allowDecline: true},
+            toolCallId: "call_archive_skippable",
+            toolName: "ask_confirm",
+          }),
+          textStep("Skipped."),
+        ],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      await streamPrompt(agent, {prompt: "Archive old chats"});
+      const historyId = await onlyHistoryId();
+
+      const refused = await agent.post("/gpt/prompt").send({
+        askResponse: {action: "decline", toolCallId: "call_archive"},
+        historyId,
+      });
+      expect(refused.status).toBe(400);
+      expect(refused.body.fields).toEqual([
+        {
+          code: "DECLINE_NOT_ALLOWED",
+          fix: 'Answer with action "accept".',
+          message: "This ask cannot be skipped.",
+          path: "action",
+        },
+      ]);
+      expect(model.doStream).toHaveBeenCalledTimes(1);
+
+      await streamPrompt(agent, {historyId, prompt: "Archive old chats again"});
+      const skipped = await streamPrompt(agent, {
+        askResponse: {action: "decline", toolCallId: "call_archive_skippable"},
+        historyId,
+      });
+      expect(skipped.events[0]).toEqual({
+        askResolved: {action: "decline", toolCallId: "call_archive_skippable"},
+      });
+    });
+
+    it("returns 400 for an answer that is not {confirmed: boolean}", async () => {
+      const model = createScriptedModel({steps: [toolCallStep(ARCHIVE_ASK_CALL)]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      await streamPrompt(agent, {prompt: "Archive old chats"});
+      const historyId = await onlyHistoryId();
+
+      const res = await agent.post("/gpt/prompt").send({
+        askResponse: {action: "accept", content: {selected: ["yes"]}, toolCallId: "call_archive"},
+        historyId,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.fields.map((field: {path: string}) => field.path)).toEqual(
+        expect.arrayContaining(["content.confirmed"])
+      );
+      expect(model.doStream).toHaveBeenCalledTimes(1);
+    });
+
+    it("sends a confirm whose labels match back to the model as a tool error", async () => {
+      const model = createScriptedModel({
+        steps: [
+          toolCallStep({
+            input: {...ARCHIVE_ASK_INPUT, denyLabel: "Archive 12 chats"},
+            toolCallId: "call_alike",
+            toolName: "ask_confirm",
+          }),
+          toolCallStep(ARCHIVE_ASK_CALL),
+        ],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const {events} = await streamPrompt(agent, {prompt: "Archive old chats"});
+
+      expect(events[0]).toMatchObject({ask: {kind: "confirm", toolCallId: "call_archive"}});
+      expect(conversationOf(modelCall(model, 1))[2]).toMatchObject({
+        content: [
+          {
+            output: {
+              type: "error-text",
+              value: expect.stringContaining("the approve button's label"),
+            },
+            toolCallId: "call_alike",
+            toolName: "ask_confirm",
+          },
+        ],
+      });
+    });
+  });
+
   describe("rejected answers", () => {
     it("returns 400 with fields for an option that was not offered, without calling the model", async () => {
       const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
@@ -1658,7 +1854,7 @@ describe("/gpt/prompt asks", () => {
   });
 
   describe("system prompt and tools", () => {
-    it("appends the asks prompt after the host system prompt and offers ask_choice", async () => {
+    it("appends the asks prompt after the host system prompt and offers ask_choice and ask_confirm", async () => {
       const model = createScriptedModel({steps: [textStep("Hello.")]});
       const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
 
@@ -1668,10 +1864,10 @@ describe("/gpt/prompt asks", () => {
       const system = systemPromptOf(call) as string;
       expect(
         system.startsWith(
-          `Answer in one sentence.\n\n${TERRENO_ASKS_SYSTEM_PROMPT}\n\nAsk tools you can call: ask_choice.`
+          `Answer in one sentence.\n\n${TERRENO_ASKS_SYSTEM_PROMPT}\n\nAsk tools you can call: ask_choice, ask_confirm.`
         )
       ).toBe(true);
-      expect(toolNamesOf(call)).toEqual(["ask_choice"]);
+      expect(toolNamesOf(call)).toEqual(["ask_choice", "ask_confirm"]);
       const askChoice = call.tools?.[0];
       expect(askChoice?.description).toBe(
         "Ask the user to pick one or more options from a list you provide, optionally with an " +
@@ -1682,6 +1878,10 @@ describe("/gpt/prompt asks", () => {
       expect(askChoice?.inputSchema.type).toBe("object");
       expect(askChoice?.inputSchema.additionalProperties).toBe(false);
       expect(askChoice?.inputSchema.required).toEqual(["prompt", "options", "select"]);
+      const askConfirm = call.tools?.[1];
+      expect(askConfirm?.description).toStartWith("Ask the user to approve or deny one action");
+      expect(askConfirm?.inputSchema.additionalProperties).toBe(false);
+      expect(askConfirm?.inputSchema.required).toEqual(["prompt"]);
       expect(call.toolChoice).toEqual({type: "auto"});
     });
 
@@ -1738,7 +1938,7 @@ describe("/gpt/prompt asks", () => {
       await streamPrompt(agent, {prompt: "Hi"});
 
       const call = modelCall(model, 0);
-      expect(toolNamesOf(call)).toEqual(["lookupPlans", "ask_choice"]);
+      expect(toolNamesOf(call)).toEqual(["lookupPlans", "ask_choice", "ask_confirm"]);
       expect(call.tools?.[1]?.description).toStartWith("Ask the user to pick one or more options");
     });
 
@@ -1785,7 +1985,7 @@ describe("/gpt/prompt asks", () => {
 
   describe("compact surface", () => {
     const COMPACT_ASKS_PROMPT = `${TERRENO_ASKS_SYSTEM_PROMPT}\n\n${askPromptSection({
-      kinds: ["choice"],
+      kinds: ["choice", "confirm"],
       surface: "compact",
     })}`;
 
@@ -1794,7 +1994,7 @@ describe("/gpt/prompt asks", () => {
       return properties.options as Record<string, unknown>;
     };
 
-    it("offers only the compact ask_choice and appends the compact line", async () => {
+    it("offers the compact ask_choice and ask_confirm and appends the compact line", async () => {
       const model = createScriptedModel({steps: [textStep("Hello."), textStep("Hello.")]});
       const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
 
@@ -1802,7 +2002,10 @@ describe("/gpt/prompt asks", () => {
       await streamPrompt(agent, {prompt: "Hi", systemPrompt: "Be brief."});
 
       const compact = modelCall(model, 0);
-      expect(toolNamesOf(compact)).toEqual(["ask_choice"]);
+      expect(toolNamesOf(compact)).toEqual(["ask_choice", "ask_confirm"]);
+      expect(compact.tools?.[1]?.description).toStartWith(
+        "Ask the user to approve or deny one action you describe, with two short buttons."
+      );
       expect(optionsSchemaOf(compact)).toMatchObject({maxItems: 3, minItems: 2});
       expect(optionsSchemaOf(compact).items).toMatchObject({
         properties: {label: {maxLength: 20}},
@@ -2023,7 +2226,7 @@ describe("/gpt/prompt asks", () => {
     it("rejects unknown ask kinds", () => {
       expect(() => addGptRoutes(express.Router(), {asks: {kinds: ["poll" as "choice"]}})).toThrow(
         expect.objectContaining({
-          detail: "Unknown ask kinds: poll. Known kinds: choice.",
+          detail: "Unknown ask kinds: poll. Known kinds: choice, confirm.",
           message: "The asks option lists unknown ask kinds",
         })
       );

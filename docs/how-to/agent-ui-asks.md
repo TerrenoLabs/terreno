@@ -21,20 +21,56 @@ The example backend uses a scripted demo agent, `terreno-demo-agent`, when no mo
 6. Send "Pick toppings for my pizza". Check up to three toppings, type your own in "Another
    topping", and press "Add toppings". The agent names every topping you picked, and the card
    collapses to "You chose: Extra cheese, Olives. Another topping: Basil".
+7. Send "Archive old chats" (a suggested prompt). The card shows a red "Archive 12 chats" button
+   first and "Keep them" last, with no Skip. Press "Keep them": the agent says it kept your chats,
+   and the card collapses to "You declined: Keep them".
+8. Send "Send the weekly report" and press "Send report". The card collapses to "You confirmed:
+   Send report". Reload the page: both summaries are still there.
 
 | You send | The demo agent |
 | --- | --- |
 | A message with the word topping or toppings, such as "pick toppings" or "pick several toppings" | Asks "Which toppings should I add? Pick up to three." with `select: "many"`, six toppings (Extra cheese and Mushrooms preselected), `maxSelected: 3`, and an Other field titled "Another topping" |
+| A message with "weekly report", such as "send the weekly report" | Asks `ask_confirm` "Send the weekly report to the team now? It goes to 8 people." with "Send report" (primary) and "Not now" |
+| A message with the word archive, such as "archive old chats" | Asks `ask_confirm` "Archive the 12 chats older than 90 days? You can't undo this." with `destructive: true`, "Archive 12 chats" (destructive) and "Keep them" |
 | Any other message with a word like pick, choose, or plan, such as "choose between several plans" | Asks "Which plan should I set up for your workspace?" with Starter, Team (the default), and Enterprise |
 | The same kind of message, on routes without `asks` | Says asks are turned off and how to turn them on |
-| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, or says it skipped the question |
+| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, says whether it would send the report or archive the chats, or says it skipped the question |
 | Anything else, with or without `asks` | Explains that it follows a script and how to use a real model |
-| Any of these with `surface: "compact"` | Asks the same plan question, which already fits a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one, so a toppings message gets a text reply that says to open the chat on a phone. |
+| Any of these with `surface: "compact"` | Asks the same plan and confirm questions, which already fit a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one for `choice`, so a toppings message gets a text reply that says to open the chat on a phone. |
 
 To script another exchange, add an entry to `DEMO_SCENARIOS` in
 `example-backend/src/api/demoAgent.ts`: a trigger pattern, one ask input, and a reply for the
 answer. Scenarios match in order, so put one with narrower trigger words first. Set
 `compactFallback` when the input does not fit the compact surface.
+
+## Confirm before a destructive tool
+
+With asks on, the model can call `ask_confirm` before a tool that deletes data, sends something on
+the user's behalf, spends money, or cannot be undone. The asks system prompt tells it to, and to
+take the action only after `{"confirmed": true}`. `ask_confirm` has no `execute`, so the turn
+pauses until the user presses a button.
+
+1. Say in the tool's description what it changes and that it needs a confirm first:
+
+   ```typescript
+   const deleteCompletedTodos = tool({
+     description:
+       "Deletes the user's completed todos. Cannot be undone. Call ask_confirm with " +
+       "destructive: true first, and call this only after {confirmed: true}.",
+     execute: async () => ({deleted: await removeCompletedTodos(userId)}),
+     inputSchema: z.object({}),
+   });
+
+   addGptRoutes(router, {aiService, asks: true, tools: {deleteCompletedTodos}});
+   ```
+
+2. Check the rule in the tool too. The model decides when to ask, so a tool that must never run
+   unconfirmed should refuse on its own, for example by requiring an id list the user saw.
+
+The card shows `confirmLabel` first and `denyLabel` last. With `destructive: true` the approve
+button uses the destructive style, and a watch never makes it the Double Tap button. A deny sends
+`{"confirmed": false}`, so the model hears "no" and skips the action. Skip appears only when the
+ask sets `allowDecline: true`. See [confirm](../reference/agent-ui-asks.md#confirm).
 
 ## 1. Enable asks on the backend
 
@@ -433,9 +469,15 @@ struct PendingAskView: View {
                     }
                     .tint(button.style == "primary" ? .accentColor : nil)
                     .disabled(pressedButtonId != nil)
+                    .handGestureShortcut(.primaryAction, isEnabled: button.id == doubleTapButtonId)
                 }
             }
         }
+    }
+
+    /// The first button that is not destructive, so Double Tap never approves a destructive action.
+    private var doubleTapButtonId: String? {
+        ask.simple.buttons.first { $0.style != "destructive" }?.id
     }
 
     private func role(for style: String) -> ButtonRole? {
@@ -461,7 +503,10 @@ struct PendingAskView: View {
 ```
 
 Keep the buttons in the card's order. When the ask suggests an answer, its button comes first with
-style `primary`, and Skip comes last with style `cancel`. Disable every button while one answer is
+style `primary`, and Skip comes last with style `cancel`. A `confirm` card has the approve button
+first and the deny button last. Give Double Tap (`handGestureShortcut`, watchOS 11 and later) to the
+first button that is not `destructive`: on a destructive confirm that is the deny button, so the
+gesture cannot approve an action that cannot be undone. Disable every button while one answer is
 sending, so a double tap sends one answer instead of a second one that gets 409. `SimpleAskCard`
 in `@terreno/ui` draws the same card in React Native ([props](../reference/ui.md#simpleaskcard)).
 

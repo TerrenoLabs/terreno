@@ -9,7 +9,8 @@ export const ASK_ERROR_CODES = {
   DECLINE_NOT_ALLOWED: "The answer skips an ask that does not allow skipping.",
   DEFAULT_NOT_IN_OPTIONS: "A default names an option id that the ask does not offer.",
   DUPLICATE_ID: "An id appears twice where ids must be unique: options, default, or an answer.",
-  DUPLICATE_LABEL: "Two options of a compact ask share the same label.",
+  DUPLICATE_LABEL:
+    "Two buttons would share a label: options of a compact ask, or a confirm's approve and deny.",
   INVALID_ENUM: "A value is not one of the allowed values.",
   INVALID_FORMAT: "A string does not match its required format.",
   INVALID_TYPE: "A value has the wrong type.",

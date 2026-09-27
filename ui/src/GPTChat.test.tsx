@@ -1,6 +1,6 @@
 import {afterAll, afterEach, describe, it, mock} from "bun:test";
 import type {ChoiceAskInput} from "@terreno/blocks";
-import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
+import {act, fireEvent, render, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {AccessibilityInfo, Platform, Pressable, ScrollView} from "react-native";
@@ -932,6 +932,77 @@ describe("GPTChat asks", () => {
     assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
       response: {action: "accept", content: {other: "Basil", selected: ["cheese", "olives"]}},
       toolCallId: "call_toppings",
+    });
+  });
+
+  describe("confirm asks", () => {
+    const archiveAsk = (state: Partial<ChatAsk> = {}): ChatAsk =>
+      ({
+        input: {
+          confirmLabel: "Archive 12 chats",
+          denyLabel: "Keep them",
+          destructive: true,
+          prompt: "Archive the 12 chats older than 90 days?",
+        },
+        kind: "confirm",
+        status: "pending",
+        toolCallId: "call_archive",
+        ...state,
+      }) as ChatAsk;
+
+    const confirmMessage = (ask: ChatAsk): GPTChatMessage => ({
+      ask,
+      content: "Tool call: ask_confirm",
+      role: "tool-call",
+      toolCall: {args: {...ask.input}, toolCallId: ask.toolCallId, toolName: "ask_confirm"},
+    });
+
+    it("sends {confirmed: false} from the deny button of a restored confirm ask", async () => {
+      const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+      const restored: GPTChatHistory = {
+        id: "h5",
+        prompts: [userMessage, confirmMessage(archiveAsk())],
+        title: "Cleaning up",
+      };
+      const {getByTestId} = renderChat({
+        currentHistoryId: "h5",
+        currentMessages: restored.prompts,
+        histories: [...histories, restored],
+        onAskSubmit,
+      });
+
+      assert.isOk(
+        within(getByTestId("gpt-ask-call_archive-button-approve")).getByText("Archive 12 chats")
+      );
+      await press(getByTestId("gpt-ask-call_archive-button-deny"));
+
+      assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+        response: {action: "accept", content: {confirmed: false}},
+        toolCallId: "call_archive",
+      });
+    });
+
+    it("summarizes an answered confirm ask from its hidden result message", () => {
+      const {getByText, queryByTestId, queryByText} = renderChat({
+        currentMessages: [
+          userMessage,
+          confirmMessage(archiveAsk({status: "answered"})),
+          {
+            content: "Tool result: ask_confirm",
+            role: "tool-result",
+            toolResult: {
+              result: {action: "accept", content: {confirmed: true}},
+              toolCallId: "call_archive",
+              toolName: "ask_confirm",
+            },
+          },
+          {content: "Archived 12 chats.", role: "assistant"},
+        ],
+      });
+
+      assert.isOk(getByText("You confirmed: Archive 12 chats"));
+      assert.isNull(queryByText("Result: ask_confirm"));
+      assert.isNull(queryByTestId("gpt-ask-call_archive-button-approve"));
     });
   });
 

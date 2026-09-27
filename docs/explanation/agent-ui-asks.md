@@ -6,9 +6,10 @@ calls on the existing chat stream, how one round trip works, how a watch or anot
 answers them, and how asks and Agent UI Blocks divide the work. Fields, limits, events, and error
 codes are in the [reference](../reference/agent-ui-asks.md).
 
-Asks ship today as the `choice` kind: pick one option, or pick several with an optional answer of
-the user's own (Other). The chat asks on `POST /gpt/prompt` and shows asks in `GPTChat`. Watches
-and other small clients answer select-one asks on two JSON endpoints with the compact surface. The
+Asks ship today as two kinds: `choice`, to pick one option or several with an optional answer of
+the user's own (Other), and `confirm`, to approve or deny one action. The chat asks on
+`POST /gpt/prompt` and shows asks in `GPTChat`. Watches and other small clients answer select-one
+choices and confirms on two JSON endpoints with the compact surface. The
 other kinds follow the [implementation plan](../implementationPlans/agent-ui-asks.md).
 
 ## The problem
@@ -146,7 +147,17 @@ goes through the same control and the same count rule. On a small screen a many-
 offer only its suggested set and Skip, so it always hands off, and the compact surface does not
 offer `"many"` at all.
 
-After an ask ends, the card collapses to one line, such as "You chose: Team". A long conversation
+A `confirm` guards one action the agent is about to take, such as deleting data or sending a
+message for the user. Its answer is `{confirmed: true}` or `{confirmed: false}`, so "no" is a real
+answer the agent must respect, not a skip: deny is the second button, and Skip appears only when
+the ask sets `allowDecline`. The card shows the simple card's two buttons in the same order on a
+phone and a watch, approve first and deny last. A `destructive` ask draws the approve button in
+the destructive style, and a watch never makes it the Double Tap button, so a gesture cannot
+approve an action that cannot be undone. The confirm is a pause in the turn, not a lock: the host's
+tool should still check that the action is allowed.
+
+After an ask ends, the card collapses to one line, such as "You chose: Team" or "You declined:
+Keep them". A long conversation
 then reads as a record of what the agent asked and what the user decided. The answer's
 `tool-result` row stays in the message list but is hidden. Ratings address messages by their index
 in the stored rows, so the client keeps one message per row, and after a reload the summary reads
@@ -159,8 +170,9 @@ instead of hunting for it.
 
 A watch shows about three short buttons. A full `choice` can offer 50 options, and on a watch its
 card can only hand off to the phone. So a small client says where the user is with
-`surface: "compact"`, and the server narrows what the agent may ask on that turn: only a `choice`
-with `select: "one"` and 2–3 options whose labels fit a button uncut and differ from each other. Every card made on a
+`surface: "compact"`, and the server narrows what the agent may ask on that turn: a `choice`
+with `select: "one"` and 2–3 options whose labels fit a button uncut and differ from each other,
+or a `confirm`, whose two labels already fit. Every card made on a
 compact turn can be answered from the watch, and the system prompt asks for replies of at most two
 short sentences. The narrowing is in the tool's input schema, not only in the prompt, so the model
 cannot ask what the watch cannot show. A compact ask that breaks the rules goes back to the model

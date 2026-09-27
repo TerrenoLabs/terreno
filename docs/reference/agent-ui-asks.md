@@ -10,7 +10,8 @@ way, see [Agent UI Asks explained](../explanation/agent-ui-asks.md). To add asks
 [Add agent asks to a chat](../how-to/agent-ui-asks.md).
 
 Shipped: the `choice` kind with `select: "one"` and `select: "many"` (with an optional Other
-answer), asked and answered through `POST /gpt/prompt`
+answer) and the `confirm` kind (approve or deny, optionally destructive), asked and answered
+through `POST /gpt/prompt`
 and shown in `GPTChat` ([props and controls](ui.md#asks)), and the small-screen path: the
 [compact surface](#compact-surface), the [headless endpoints](#headless-endpoints),
 [JSON Schemas](#json-schemas-and-fixtures), and [`SimpleAskCard`](ui.md#simpleaskcard). The other
@@ -22,6 +23,7 @@ kinds are planned in the [implementation plan](../implementationPlans/agent-ui-a
 - [Answer envelope](#answer-envelope)
 - [Shared ask fields](#shared-ask-fields)
 - [choice](#choice)
+- [confirm](#confirm)
 - [Simple cards](#simple-cards)
 - [Compact surface](#compact-surface)
 - [Validation](#validation)
@@ -56,12 +58,12 @@ addGptRoutes(router, chat);
 | `asks` | Ask kinds offered to the model |
 | --- | --- |
 | unset or `false` | None. Tools, system prompt, and SSE events are unchanged. |
-| `true` or `{}` | Every kind in `ASK_KINDS` (today only `choice`) |
+| `true` or `{}` | Every kind in `ASK_KINDS` (today `choice` and `confirm`) |
 | `{kinds: ["choice"]}` | The listed kinds. An unknown kind throws when the routes are registered. An empty list offers none. |
 
 With asks on, each chat turn:
 
-- Adds one tool per kind, named `ask_<kind>` (`ask_choice`). A turn on the
+- Adds one tool per kind, named `ask_<kind>` (`ask_choice`, `ask_confirm`). A turn on the
   [compact surface](#compact-surface) offers only the compact kinds, with narrowed schemas.
 - Appends `TERRENO_ASKS_SYSTEM_PROMPT` and the `askPromptSection` for the offered kinds to the
   system prompt. Every number in that section comes from `ASK_LIMITS`.
@@ -76,7 +78,7 @@ Every ask is answered with one of three shapes (`askResponseSchema`, the MCP eli
 | `action` | Shape | Meaning |
 | --- | --- | --- |
 | `accept` | `{action: "accept", content}` | The user answered. `content` holds the kind's answer. |
-| `decline` | `{action: "decline"}` | The user pressed Skip. Rejected with `DECLINE_NOT_ALLOWED` when the ask sets `allowDecline: false`. |
+| `decline` | `{action: "decline"}` | The user pressed Skip. Rejected with `DECLINE_NOT_ALLOWED` when the ask does not allow skipping (`askAllowsDecline`): `allowDecline: false`, or a `confirm` without `allowDecline: true`. |
 | `cancel` | `{action: "cancel", reason?}` | The ask was dropped. `reason` is optional, at most 200 characters. |
 
 The server sends `cancel` for the user in two cases (`ASK_CANCEL_REASONS`):
@@ -94,8 +96,8 @@ Every ask input has these fields:
 | --- | --- | --- |
 | `prompt` | string | Required. The question in plain text (no markdown, no links), 1–500 characters. |
 | `title` | string | Optional heading, at most 80 characters. |
-| `submitLabel` | string | Optional, at most 24 characters. Clients default to "Submit". |
-| `allowDecline` | boolean | Optional, default `true` (the client shows Skip). |
+| `submitLabel` | string | Optional, at most 24 characters. Clients default to "Submit". Not a field of `confirm`, which names its buttons with `confirmLabel` and `denyLabel`. |
+| `allowDecline` | boolean | Optional, default `true` (the client shows Skip). `confirm` defaults to `false`, because deny is its negative answer. |
 
 Every object is strict: a field the schema does not define fails with `UNKNOWN_KEY`. Every text
 field must contain visible characters, not only whitespace (`TOO_SHORT`).
@@ -180,6 +182,39 @@ Answer: `{"action": "accept", "content": {"selected": ["cheese", "olives"], "oth
 | `other` | Optional, 1–500 visible characters. Only when the ask sets `allowOther: true`. | `TOO_LONG`, `TOO_SHORT`, `OTHER_NOT_ALLOWED` |
 | `selected` and `other` | Together hold `min` to `max` choices from `choiceSelectionBounds`, with `other` counting as one | `SELECTION_COUNT` |
 
+## confirm
+
+Tool: `ask_confirm`. The user approves or denies one action the prompt describes. The prompt
+section tells the model to confirm before a tool call that deletes data, sends something on the
+user's behalf, spends money, or cannot be undone, and to make the call only after
+`{"confirmed": true}`.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `prompt`, `title` | string | The [shared fields](#shared-ask-fields) |
+| `confirmLabel` | string | Optional label of the approve button, at most 20 UTF-16 code units (`confirm.labelMaxLength`), so a simple card shows it uncut (`TOO_LONG`). Default "Confirm". |
+| `denyLabel` | string | Optional label of the deny button, with the same limit. Default "Cancel". It must differ from the approve label, defaults included and ignoring spaces at either end (`DUPLICATE_LABEL`). |
+| `destructive` | boolean | Optional, default `false`. `true` when the action deletes data or cannot be undone: the approve button shows as destructive. |
+| `allowDecline` | boolean | Optional, default `false`. `true` adds Skip next to deny in the full chat. |
+
+`confirm` has no `submitLabel` (`UNKNOWN_KEY`). `confirmButtonLabels(input)` returns
+`{confirm, deny}` with the defaults filled in.
+
+```json
+{
+  "title": "Clean up todos",
+  "prompt": "Delete 14 completed todos? This cannot be undone.",
+  "confirmLabel": "Delete 14 todos",
+  "denyLabel": "Keep them",
+  "destructive": true
+}
+```
+
+Answer: `{"action": "accept", "content": {"confirmed": true}}` approves, and
+`{"confirmed": false}` denies. `confirmed` is required (`MISSING_REQUIRED`) and must be a
+boolean (`INVALID_TYPE`). A `decline` returns `DECLINE_NOT_ALLOWED` unless the ask sets
+`allowDecline: true`.
+
 ## Simple cards
 
 Every ask comes with a simple card: short text and up to three buttons, each holding the exact
@@ -196,7 +231,8 @@ the ask is made. The server stores it on `pendingAsk.simple` and sends it in the
 | `buttons` | `{id, label, style, response}[]` | 0–3 buttons. `label` is at most 20 characters. `style` is `default`, `primary`, `destructive`, or `cancel`. `response` is an answer envelope. |
 | `handoff` | boolean | `true` when the buttons cannot show every option the ask offers, so the user needs the full app to answer. A card with a button for every option has `handoff: false`, even when Skip is left out to make room. |
 
-Text over a limit is cut to fit and ends in "…". The cut falls on a word boundary when one is in
+Button labels lose spaces at either end, so " Go " shows as "Go", and the card compares labels
+after that trim. Text over a limit is cut to fit and ends in "…". The cut falls on a word boundary when one is in
 the second half of the kept text, and never splits an emoji. `toSimpleCard` measures text in
 UTF-16 code units, the `length` of a JavaScript string, so most emoji count as 2 or more.
 
@@ -212,6 +248,16 @@ UTF-16 code units, the `length` of a JavaScript string, so most emoji count as 2
 The first three rows are for `select: "one"`. A `"many"` card never has a button per option,
 because one tap cannot pick several, so the user answers in the full app unless the suggested
 set or Skip is enough.
+
+`confirm` card rule:
+
+| Case | Buttons | `handoff` |
+| --- | --- | --- |
+| Every `confirm` | `approve` (the approve label, style `destructive` when the ask sets `destructive: true`, else `primary`, response `{action: "accept", content: {confirmed: true}}`), then `deny` (the deny label, style `cancel`, response `{action: "accept", content: {confirmed: false}}`). No `skip`, even with `allowDecline: true`: deny is the negative answer. | `false` |
+
+The primary answer comes first and `cancel` last. A destructive approve is never the first
+non-destructive button, so the Apple Watch Double Tap gesture, which presses that button, can
+only deny.
 
 Every button's `response` passes `validateAskResponse` for its ask. `simpleCardSchema` checks a
 card's shape, limits, and unique button ids.
@@ -231,7 +277,7 @@ A client on a small screen, such as a watch, sends `surface: "compact"` to `POST
 the [`turn` action](#headless-endpoints). `surface` is `"full"` (the default) or `"compact"`
 (`ASK_SURFACES`). Any other value returns 400. On a compact turn:
 
-- The model is offered only the kinds in `COMPACT_ASK_KINDS` (`["choice"]`) that `asks` enables,
+- The model is offered only the kinds in `COMPACT_ASK_KINDS` (`["choice", "confirm"]`) that `asks` enables,
   each with its narrowed input schema (`compactAskInputSchemas`).
 - The asks section of the system prompt is `askPromptSection({kinds, surface: "compact"})`, which
   states the narrowed limits.
@@ -251,7 +297,10 @@ A compact `choice` (`compactChoiceAskInputSchema`) follows the [choice](#choice)
 | `select` | Only `"one"`. `minSelected`, `maxSelected`, `allowOther`, and `otherLabel` are not defined. | `INVALID_ENUM`, `UNKNOWN_KEY` |
 | `options` | 2–3 items (`simpleCard.buttonsMax`) | `TOO_MANY` |
 | `options[].label` | At most 20 UTF-16 code units (`simpleCard.buttonLabelMaxLength`), so its button shows it uncut. Most emoji count as 2 or more. | `TOO_LONG` |
-| `options[].label` | Different from every other option's label | `DUPLICATE_LABEL` |
+| `options[].label` | Different from every other option's label, ignoring spaces at either end | `DUPLICATE_LABEL` |
+
+A compact `confirm` (`compactConfirmAskInputSchema`) is the full [confirm](#confirm) schema: its
+two labels already fit a button uncut, so every confirm card has `handoff: false`.
 
 Every compact ask is also a valid full ask. `validateAskInput({kind, input, surface: "compact"})`
 checks the compact rules. A compact ask that breaks them goes back to the model as a tool error,
@@ -263,7 +312,7 @@ The model's ask and the user's answer are checked with pure functions from `@ter
 
 | Function | Checks | Where it runs |
 | --- | --- | --- |
-| `validateAskInput({kind, input, surface?})` | The ask against its schema and rules: unique option ids, the `select` bounds, Other fields only on `"many"` asks, defaults among the options and within the bounds, and with `surface: "compact"` the [compact rules](#compact-surface) | The same schema is the tool's `inputSchema`, so the AI SDK checks every ask call. An invalid ask goes back to the model as a tool error and never reaches the client. |
+| `validateAskInput({kind, input, surface?})` | The ask against its schema and rules: unique option ids, the `select` bounds, Other fields only on `"many"` asks, defaults among the options and within the bounds, `confirm` labels that fit a button and differ, and with `surface: "compact"` the [compact rules](#compact-surface) | The same schema is the tool's `inputSchema`, so the AI SDK checks every ask call. An invalid ask goes back to the model as a tool error and never reaches the client. |
 | `validateAskResponse({kind, input, response})` | The answer envelope, then the kind's answer against the ask | The server, before it resumes the turn. Clients can run it before they enable Submit. |
 
 Both return `AskValidationError[]`, empty when valid, sorted by path and then code:
@@ -285,7 +334,7 @@ Both return `AskValidationError[]`, empty when valid, sorted by path and then co
 | `DECLINE_NOT_ALLOWED` | The answer skips an ask that does not allow skipping. | `validateAskResponse` |
 | `DEFAULT_NOT_IN_OPTIONS` | A default names an option id that the ask does not offer. | `validateAskInput` |
 | `DUPLICATE_ID` | An id appears twice where ids must be unique: options, default, or an answer. | Both |
-| `DUPLICATE_LABEL` | Two options of a compact ask share the same label. | `validateAskInput` with `surface: "compact"` |
+| `DUPLICATE_LABEL` | Two buttons would share a label: options of a compact ask, or a confirm's approve and deny. Labels that differ only in spaces at either end, such as "Go " and "Go", count as the same. | `validateAskInput` (a `choice` only with `surface: "compact"`) |
 | `INVALID_ENUM` | A value is not one of the allowed values. | Both |
 | `INVALID_FORMAT` | A string does not match its required format. | `validateAskInput` |
 | `INVALID_TYPE` | A value has the wrong type. | Both |
@@ -317,6 +366,7 @@ read it. Keys are paths into `ASK_LIMITS`. A doc-parity test fails when this tab
 | `choice.optionsMax` | 50 | `options`, `default`, and `content.selected` |
 | `choice.optionsMin` | 2 | `options` |
 | `choice.otherMaxLength` | 500 | `content.other` |
+| `confirm.labelMaxLength` | 20 | `confirmLabel` and `denyLabel`, in UTF-16 code units |
 | `pendingAsksPerHistory` | 1 | Asks one conversation can wait on at a time |
 | `promptMaxLength` | 500 | `prompt` |
 | `simpleCard.buttonLabelMaxLength` | 20 | Simple card button `label` |
@@ -643,14 +693,17 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 
 | Export | Description |
 | --- | --- |
-| `ASK_KINDS`, `AskKind` | The ask kinds (`["choice"]`) |
+| `ASK_KINDS`, `AskKind` | The ask kinds (`["choice", "confirm"]`) |
 | `ASK_SURFACES`, `AskSurface`, `askSurfaceSchema` | The surfaces (`["full", "compact"]`) and the schema of a request's `surface` |
-| `COMPACT_ASK_KINDS`, `CompactAskKind`, `askKindsForSurface({kinds, surface})` | The kinds the compact surface offers (`["choice"]`), and the ones a surface offers from a list |
+| `COMPACT_ASK_KINDS`, `CompactAskKind`, `askKindsForSurface({kinds, surface})` | The kinds the compact surface offers (`["choice", "confirm"]`), and the ones a surface offers from a list |
 | `choiceAskInputSchema`, `compactChoiceAskInputSchema`, `choiceOptionSchema`, `choiceAnswerSchema`, `choiceAskResponseSchema` | `choice` schemas and their types (`ChoiceAskInput`, `ChoiceOption`, `ChoiceAnswer`, `ChoiceAskResponse`) |
+| `confirmAskInputSchema`, `compactConfirmAskInputSchema`, `confirmAnswerSchema`, `confirmAskResponseSchema` | `confirm` schemas and their types (`ConfirmAskInput`, `ConfirmAnswer`, `ConfirmAskResponse`) |
+| `confirmButtonLabels(input)` | The `{confirm, deny}` labels of a `confirm` ask, with the defaults `"Confirm"` and `"Cancel"` |
+| `askAllowsDecline(ask)` | Whether an ask accepts `decline`: `confirm` defaults to no, other kinds to yes |
 | `CHOICE_SELECT_MODES`, `ChoiceSelectMode`, `choiceSelectionBounds(input)` | The `select` values (`["one", "many"]`), and the `{min, max}` choices an answer to a `choice` ask must hold |
 | `askInputSchemas`, `compactAskInputSchemas`, `askOutputSchemas`, `askInputSchemaFor({kind, surface?})` | Input and answer envelope schemas by kind, and the input schema for a kind on a surface |
 | `askResponseSchema`, `askAcceptResponseSchema`, `askDeclineResponseSchema`, `askCancelResponseSchema`, `AskResponse` | The answer envelope |
-| `Ask`, `ChoiceAsk` | A validated ask: `{kind, input}` |
+| `Ask`, `ChoiceAsk`, `ConfirmAsk` | A validated ask: `{kind, input}` |
 | `ASK_CANCEL_REASONS` | Reasons the server records with `cancel` |
 | `validateAskInput`, `validateAskResponse`, `AskValidationError`, `AskErrorCode` | Validators and their errors |
 | `toSimpleCard`, `resolveButtonAnswer`, `simpleCardSchema`, `simpleCardButtonSchema`, `SIMPLE_CARD_BUTTON_STYLES`, `SimpleCard`, `SimpleCardButton` | Simple cards, and the answer a card's button sends |
@@ -663,7 +716,7 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 
 | Export | Description |
 | --- | --- |
-| `createAskTools({kinds, surface?})` | The ask tools, such as `{ask_choice}`: Zod input and output schemas, no `execute`. With `surface: "compact"`, only the compact kinds, with narrowed input schemas. `/gpt/prompt` and `turn` handle the pause and the answer; code that calls `streamText` itself must handle both. |
+| `createAskTools({kinds, surface?})` | The ask tools, such as `{ask_choice, ask_confirm}`: Zod input and output schemas, no `execute`. With `surface: "compact"`, only the compact kinds, with narrowed input schemas. `/gpt/prompt` and `turn` handle the pause and the answer; code that calls `streamText` itself must handle both. |
 | `TERRENO_ASKS_SYSTEM_PROMPT` | System prompt text added when asks are on, before the `askPromptSection` |
 | `COMPACT_SURFACE_SYSTEM_PROMPT` | System prompt line added on compact turns |
 | `GptHistoryRouteOptions.chat` | Chat options for `addGptHistoryRoutes`. When they turn `asks` on, it adds the headless endpoints; otherwise it adds neither. |

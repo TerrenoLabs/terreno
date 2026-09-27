@@ -67,8 +67,13 @@ describe("asks", () => {
     it.each([
       {asks: undefined, expected: [], label: "undefined"},
       {asks: false, expected: [], label: "false"},
-      {asks: true, expected: ["choice"], label: "true"},
-      {asks: {}, expected: ["choice"], label: "{}"},
+      {asks: true, expected: ["choice", "confirm"], label: "true"},
+      {asks: {}, expected: ["choice", "confirm"], label: "{}"},
+      {
+        asks: {kinds: ["confirm"] as AskKind[]},
+        expected: ["confirm"],
+        label: '{kinds: ["confirm"]}',
+      },
       {asks: {kinds: []}, expected: [], label: "{kinds: []}"},
       {
         asks: {kinds: ["choice", "choice"] as AskKind[]},
@@ -82,7 +87,7 @@ describe("asks", () => {
     it("throws on an unknown kind and names the known kinds", () => {
       expect(() => resolveAskKinds({kinds: ["choice", "form"] as AskKind[]})).toThrow(
         expect.objectContaining({
-          detail: "Unknown ask kinds: form. Known kinds: choice.",
+          detail: "Unknown ask kinds: form. Known kinds: choice, confirm.",
           message: "The asks option lists unknown ask kinds",
           status: 500,
         })
@@ -97,6 +102,8 @@ describe("asks", () => {
 
     it.each([
       {expected: "choice", kinds: undefined, toolName: "ask_choice"},
+      {expected: "confirm", kinds: undefined, toolName: "ask_confirm"},
+      {expected: undefined, kinds: ["choice"] as AskKind[], toolName: "ask_confirm"},
       {expected: undefined, kinds: undefined, toolName: "ask_form"},
       {expected: undefined, kinds: undefined, toolName: "lookupPlans"},
       {expected: undefined, kinds: [] as AskKind[], toolName: "ask_choice"},
@@ -190,6 +197,77 @@ describe("asks", () => {
     });
   });
 
+  describe("createAskTools confirm", () => {
+    const confirmInput = {
+      confirmLabel: "Delete 14 todos",
+      denyLabel: "Keep them",
+      destructive: true,
+      prompt: "Delete your 14 completed todos?",
+    };
+
+    it("creates ask_confirm on both surfaces, after ask_choice", () => {
+      expect(Object.keys(createAskTools({kinds: ["choice", "confirm"]}))).toEqual([
+        "ask_choice",
+        "ask_confirm",
+      ]);
+      expect(
+        Object.keys(createAskTools({kinds: ["choice", "confirm"], surface: "compact"}))
+      ).toEqual(["ask_choice", "ask_confirm"]);
+      expect(createAskTools({kinds: ["confirm"]}).ask_confirm.execute).toBeUndefined();
+    });
+
+    it("describes approving one action on the full and compact surfaces", () => {
+      expect(createAskTools({kinds: ["confirm"]}).ask_confirm.description).toBe(
+        "Ask the user to approve or deny one action you describe. The chat shows an approve " +
+          "button and a deny button and returns {confirmed: true} or {confirmed: false} as this " +
+          "tool's result. Call it before a tool that deletes data, sends something on the user's " +
+          "behalf, spends money, or cannot be undone."
+      );
+      expect(createAskTools({kinds: ["confirm"], surface: "compact"}).ask_confirm.description).toBe(
+        "Ask the user to approve or deny one action you describe, with two short buttons. The " +
+          "user's answer comes back as {confirmed: true} or {confirmed: false}. Call it before a " +
+          "tool that deletes data, sends something, spends money, or cannot be undone."
+      );
+    });
+
+    it.each(["full", "compact"] as const)(
+      "validates confirm input and answers on the %s surface",
+      async (surface) => {
+        const askConfirm = createAskTools({kinds: ["confirm"], surface}).ask_confirm;
+        const inputSchema = asSchema(askConfirm.inputSchema);
+
+        expect(await inputSchema.validate?.(confirmInput)).toEqual({
+          success: true,
+          value: confirmInput,
+        });
+        for (const invalid of [
+          {...confirmInput, confirmLabel: "Delete all fourteen todos"},
+          {...confirmInput, denyLabel: "Delete 14 todos"},
+          {...confirmInput, submitLabel: "Go"},
+          {confirmLabel: "Go"},
+        ]) {
+          expect(await inputSchema.validate?.(invalid)).toEqual({
+            error: expect.any(Error),
+            success: false,
+          });
+        }
+        const outputSchema = asSchema(askConfirm.outputSchema);
+        const approved = {action: "accept", content: {confirmed: true}};
+        expect(await outputSchema.validate?.(approved)).toEqual({success: true, value: approved});
+        expect(
+          await outputSchema.validate?.({action: "accept", content: {confirmed: "yes"}})
+        ).toEqual({error: expect.any(Error), success: false});
+      }
+    );
+
+    it("types a valid confirm input", () => {
+      expect(parseAsk({input: confirmInput, kind: "confirm"})).toEqual({
+        input: confirmInput,
+        kind: "confirm",
+      });
+    });
+  });
+
   describe("parseAsk", () => {
     it("types a valid ask input", () => {
       expect(parseAsk({input: PLAN_ASK_INPUT, kind: "choice"})).toEqual({
@@ -256,8 +334,7 @@ describe("asks", () => {
             "Rules for every ask:",
             "- prompt: required. Plain text with no markdown and no links, 1-500 characters.",
             "- title: optional, at most 80 characters.",
-            "- submitLabel: optional, at most 24 characters.",
-            "- allowDecline: optional, default true (the user sees Skip). Set it to false only when you cannot continue without an answer.",
+            "- Each ask kind below lists its other fields, including whether the user can skip it.",
           ].join("\n"),
           [
             "ask_choice: the user picks one or more options from a list you provide.",
@@ -268,12 +345,28 @@ describe("asks", () => {
             '- default: optional list of option ids to preselect, each listed once. With "one", at most one id; with "many", at most maxSelected ids.',
             '- minSelected, maxSelected: optional whole numbers, "many" only. The user picks from minSelected (default 1, at least 0) to maxSelected (default: every choice) choices.',
             '- allowOther: optional, "many" only. true adds a text field where the user types an answer of their own, up to 500 characters. It counts as one choice. otherLabel: optional label for that field, at most 120 characters. For one option or Other, use "many" with maxSelected 1.',
+            "- submitLabel: optional label for the submit button, at most 24 characters.",
+            "- allowDecline: optional, default true (the user sees Skip). Set it to false only when you cannot continue without an answer.",
             '- Prefer select "one" with at most 3 options with labels of 20 characters or fewer; small screens show those as buttons.',
             '- An accepted answer looks like {"action": "accept", "content": {"selected": ["<id>"]}}.',
             '- With Other, it looks like {"action": "accept", "content": {"selected": ["<id>"], "other": "<text the user typed>"}}.',
           ].join("\n"),
         ].join("\n\n")
       );
+    });
+
+    it("tells the model when to ask without naming a kind that is not enabled", () => {
+      expect(TERRENO_ASKS_SYSTEM_PROMPT).toContain(
+        "- When you need an answer that one of the ask tools listed below can collect, call that tool instead of asking in plain text.\n"
+      );
+      for (const surface of ["full", "compact"] as const) {
+        const prompt = buildAsksSystemPrompt({kinds: ["choice"], surface});
+        expect(prompt).not.toContain("approve");
+        expect(prompt).not.toContain("confirm");
+        expect(buildAsksSystemPrompt({kinds: ["choice", "confirm"], surface})).toContain(
+          "ask_confirm: the user approves or denies one action you describe in prompt."
+        );
+      }
     });
   });
 

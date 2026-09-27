@@ -94,7 +94,7 @@ describe("AiApp", () => {
 
     expect(res.status).toBe(200);
     const [callOptions] = model.doStream.mock.calls[0] as unknown as [{tools?: {name: string}[]}];
-    expect(callOptions.tools?.map((tool) => tool.name)).toEqual(["ask_choice"]);
+    expect(callOptions.tools?.map((tool) => tool.name)).toEqual(["ask_choice", "ask_confirm"]);
   });
 
   it("adds the documented headless turn actions to the history routes", async () => {
@@ -132,7 +132,7 @@ describe("AiApp", () => {
     expect(turn.body.data).toEqual({historyId, text: ""});
     expect(pendingAsks.body.data).toEqual([]);
     const [callOptions] = model.doStream.mock.calls[0] as unknown as [{tools?: {name: string}[]}];
-    expect(callOptions.tools?.map((tool) => tool.name)).toEqual(["ask_choice"]);
+    expect(callOptions.tools?.map((tool) => tool.name)).toEqual(["ask_choice", "ask_confirm"]);
   });
 
   it("adds the headless actions only with asks on, so hosts without asks get no new endpoints", async () => {

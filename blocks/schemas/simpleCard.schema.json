@@ -102,7 +102,8 @@
     "kind": {
       "type": "string",
       "enum": [
-        "choice"
+        "choice",
+        "confirm"
       ]
     },
     "text": {

@@ -140,7 +140,7 @@ describe("/gpt/histories headless turns", () => {
       });
       for (const index of [0, 1]) {
         const call = modelCall(model, index);
-        expect(toolNamesOf(call)).toEqual(["ask_choice"]);
+        expect(toolNamesOf(call)).toEqual(["ask_choice", "ask_confirm"]);
         expect(call.tools?.[0]?.inputSchema.properties).toMatchObject({options: {maxItems: 3}});
         expect(systemPromptOf(call)).toEndWith(COMPACT_SURFACE_SYSTEM_PROMPT);
       }
@@ -148,6 +148,80 @@ describe("/gpt/histories headless turns", () => {
       expect(history.pendingAsk).toBeUndefined();
       expect(rowsOf(history)).toEqual(ANSWERED_PLAN_ROWS);
     });
+
+    it.each([
+      {buttonId: "approve", confirmed: true, reply: "Sent the weekly report."},
+      {buttonId: "deny", confirmed: false, reply: "I did not send it."},
+    ])(
+      "pauses a compact turn on a confirm card without handoff and resumes with the $buttonId button",
+      async ({buttonId, confirmed, reply}) => {
+        const reportInput = {
+          confirmLabel: "Send report",
+          denyLabel: "Not now",
+          prompt: "Send the weekly report to the team now?",
+        };
+        const model = createScriptedModel({
+          steps: [
+            toolCallStep({input: reportInput, toolCallId: "call_report", toolName: "ask_confirm"}),
+            textStep(reply),
+          ],
+        });
+        const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+        const historyId = await createHistory(agent);
+
+        const asked = await postTurn(agent, historyId, {
+          prompt: "Send the weekly report",
+          surface: "compact",
+        });
+        const answered = await postTurn(agent, historyId, {
+          buttonId,
+          surface: "compact",
+          toolCallId: "call_report",
+        });
+
+        expect(asked.body.data).toEqual({
+          historyId,
+          pendingAsk: {
+            kind: "confirm",
+            simple: {
+              buttons: [
+                {
+                  id: "approve",
+                  label: "Send report",
+                  response: {action: "accept", content: {confirmed: true}},
+                  style: "primary",
+                },
+                {
+                  id: "deny",
+                  label: "Not now",
+                  response: {action: "accept", content: {confirmed: false}},
+                  style: "cancel",
+                },
+              ],
+              handoff: false,
+              kind: "confirm",
+              text: "Send the weekly report to the team now?",
+              toolCallId: "call_report",
+            },
+            toolCallId: "call_report",
+          },
+          text: "",
+        });
+        expect(turnResultSchema.parse(asked.body.data)).toEqual(asked.body.data);
+        expect(answered.body.data).toEqual({historyId, text: reply, title: "Workspace setup"});
+        expect(conversationOf(modelCall(model, 1)).at(-1)).toEqual({
+          content: [
+            {
+              output: {type: "json", value: {action: "accept", content: {confirmed}}},
+              toolCallId: "call_report",
+              toolName: "ask_confirm",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        });
+      }
+    );
 
     it("resumes with a full askResponse, as a client that renders the ask sends it", async () => {
       const model = createScriptedModel({

@@ -66,6 +66,11 @@ const COMPACT_ERRORS_BY_FIXTURE: Record<string, {code: string; path: string}[]> 
   "choice-plan-with-default": [],
   "choice-two-options": [],
   "choice-two-options-no-decline": [],
+  "confirm-allow-decline": [],
+  "confirm-default-labels": [],
+  "confirm-destructive-delete": [],
+  "confirm-emoji-labels": [],
+  "confirm-long-text-cut": [],
 };
 
 const compactErrors = (options: {id: string; label: string}[]) =>
@@ -531,6 +536,29 @@ describe("validateAskInput on the compact surface", () => {
     ]);
   });
 
+  it("counts labels that differ only in spaces at either end as the same", () => {
+    expect(
+      compactErrors([
+        {id: "go", label: "Go"},
+        {id: "go_now", label: " Go "},
+      ])
+    ).toEqual([
+      {
+        code: "DUPLICATE_LABEL",
+        fix: "Give every option a different label.",
+        message:
+          'Option label " Go " is already used by options[0], ignoring spaces at either end.',
+        path: "options[1].label",
+      },
+    ]);
+  });
+
+  it("still rejects a label that is only spaces", () => {
+    expect(
+      compactErrors([{id: "go", label: "   "}, NO_OPTION]).map(({code, path}) => ({code, path}))
+    ).toEqual([{code: "TOO_SHORT", path: "options[0].label"}]);
+  });
+
   it("allows duplicated labels on the full surface", () => {
     expect(
       validateAskInput({
@@ -566,5 +594,115 @@ describe("validateAskInput on the compact surface", () => {
       {code: "DEFAULT_NOT_IN_OPTIONS", path: "default[0]"},
       {code: "DUPLICATE_ID", path: "options[1].id"},
     ]);
+  });
+});
+
+describe("validateAskInput confirm", () => {
+  it("accepts a prompt alone, taking the default labels", () => {
+    expect(validateAskInput({input: {prompt: "Send it?"}, kind: "confirm"})).toEqual([]);
+  });
+
+  it("gives the 20-character limit of a button label in TOO_LONG", () => {
+    expect(
+      validateAskInput({input: {confirmLabel: "x".repeat(21), prompt: "Go?"}, kind: "confirm"})
+    ).toEqual([
+      {
+        code: "TOO_LONG",
+        fix: "Shorten confirmLabel to 20 characters or fewer.",
+        message: "confirmLabel is longer than 20 characters.",
+        path: "confirmLabel",
+      },
+    ]);
+  });
+
+  it("counts each emoji as 2 or more characters, as the button cut does", () => {
+    expect(
+      validateAskInput({
+        input: {denyLabel: "Wait 🕒🕒🕒🕒🕒🕒🕒🕒", prompt: "Go?"},
+        kind: "confirm",
+      })
+    ).toEqual([
+      {
+        code: "TOO_LONG",
+        fix: "Shorten denyLabel to 20 characters or fewer, or use fewer emoji.",
+        message: "denyLabel is longer than 20 characters, counting each emoji as 2 or more.",
+        path: "denyLabel",
+      },
+    ]);
+  });
+
+  it("rejects two buttons with the same label, counting the default labels", () => {
+    expect(
+      validateAskInput({
+        input: {confirmLabel: "Cancel", prompt: "Cancel the order?"},
+        kind: "confirm",
+      })
+    ).toEqual([
+      {
+        code: "DUPLICATE_LABEL",
+        fix: 'Give confirmLabel a label other than "Cancel", the deny button\'s label.',
+        message: 'confirmLabel "Cancel" is the same as the deny button\'s label.',
+        path: "confirmLabel",
+      },
+    ]);
+    expect(
+      validateAskInput({
+        input: {confirmLabel: "OK", denyLabel: "OK", prompt: "Go?"},
+        kind: "confirm",
+      }).map(({code, path}) => ({code, path}))
+    ).toEqual([{code: "DUPLICATE_LABEL", path: "denyLabel"}]);
+  });
+
+  it("counts labels that differ only in spaces at either end as the same", () => {
+    expect(
+      validateAskInput({
+        input: {confirmLabel: "Send ", denyLabel: " Send", prompt: "Go?"},
+        kind: "confirm",
+      })
+    ).toEqual([
+      {
+        code: "DUPLICATE_LABEL",
+        fix: 'Give denyLabel a label other than "Send ", the approve button\'s label.',
+        message:
+          'denyLabel " Send" is the same as the approve button\'s label, ignoring spaces at either end.',
+        path: "denyLabel",
+      },
+    ]);
+    expect(
+      validateAskInput({input: {confirmLabel: "Cancel ", prompt: "Go?"}, kind: "confirm"}).map(
+        ({code, path}) => ({code, path})
+      )
+    ).toEqual([{code: "DUPLICATE_LABEL", path: "confirmLabel"}]);
+    expect(
+      validateAskInput({input: {denyLabel: "  ", prompt: "Go?"}, kind: "confirm"}).map(
+        ({code, path}) => ({code, path})
+      )
+    ).toEqual([{code: "TOO_SHORT", path: "denyLabel"}]);
+  });
+
+  it("names confirmLabel and denyLabel in place of submitLabel", () => {
+    expect(
+      validateAskInput({input: {prompt: "Send it?", submitLabel: "Send"}, kind: "confirm"})
+    ).toEqual([
+      {
+        code: "UNKNOWN_KEY",
+        fix: 'Remove "submitLabel".',
+        message: '"submitLabel" is not a field of this object.',
+        path: "submitLabel",
+      },
+    ]);
+  });
+
+  it("applies the same rules on the compact surface", () => {
+    for (const input of [
+      {prompt: "Send it?"},
+      {confirmLabel: "Delete 14 todos", denyLabel: "Keep them", destructive: true, prompt: "Go?"},
+      {confirmLabel: "Cancel", prompt: "Go?"},
+      {confirmLabel: "x".repeat(21), prompt: "Go?"},
+    ]) {
+      expect(validateAskInput({input, kind: "confirm", surface: "compact"})).toEqual(
+        validateAskInput({input, kind: "confirm"})
+      );
+    }
   });
 });

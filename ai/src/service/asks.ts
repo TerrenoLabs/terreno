@@ -1,4 +1,4 @@
-import {APIError, logger} from "@terreno/api";
+import {APIError, logger, type z} from "@terreno/api";
 import {
   ASK_CANCEL_REASONS,
   ASK_KINDS,
@@ -25,7 +25,9 @@ import {
 import type {AsksOptions} from "../types";
 import {
   ASK_CHOICE_TOOL_DESCRIPTION,
+  ASK_CONFIRM_TOOL_DESCRIPTION,
   COMPACT_ASK_CHOICE_TOOL_DESCRIPTION,
+  COMPACT_ASK_CONFIRM_TOOL_DESCRIPTION,
   TERRENO_ASKS_SYSTEM_PROMPT,
   UNANSWERED_TOOL_CALL_RESULT,
 } from "./prompts";
@@ -34,10 +36,12 @@ const ASK_TOOL_PREFIX = "ask_";
 
 const ASK_TOOL_DESCRIPTIONS: Record<AskKind, string> = {
   choice: ASK_CHOICE_TOOL_DESCRIPTION,
+  confirm: ASK_CONFIRM_TOOL_DESCRIPTION,
 };
 
 const COMPACT_ASK_TOOL_DESCRIPTIONS: Record<CompactAskKind, string> = {
   choice: COMPACT_ASK_CHOICE_TOOL_DESCRIPTION,
+  confirm: COMPACT_ASK_CONFIRM_TOOL_DESCRIPTION,
 };
 
 const askToolDescription = ({kind, surface}: {kind: AskKind; surface: AskSurface}): string =>
@@ -84,19 +88,17 @@ export const createAskTools = ({
   Object.fromEntries(
     askKindsForSurface({kinds, surface}).map((kind) => [
       askToolName(kind),
-      tool({
+      tool<Ask["input"], AskResponse>({
         description: askToolDescription({kind, surface}),
-        inputSchema: askInputSchemaFor({kind, surface}),
-        outputSchema: askOutputSchemas[kind],
+        inputSchema: askInputSchemaFor({kind, surface}) as z.ZodType<Ask["input"]>,
+        outputSchema: askOutputSchemas[kind] as z.ZodType<AskResponse>,
       }),
     ])
   );
 
 /** Types the input of a valid ask call. The AI SDK has already checked it against the kind's schema. */
-export const parseAsk = ({input, kind}: {input: unknown; kind: AskKind}): Ask => ({
-  input: askInputSchemas[kind].parse(input),
-  kind,
-});
+export const parseAsk = ({input, kind}: {input: unknown; kind: AskKind}): Ask =>
+  ({input: askInputSchemas[kind].parse(input), kind}) as Ask;
 
 const reservedToolNames = (tools: Record<string, Tool>): string[] =>
   Object.keys(tools).filter((name) => name.startsWith(ASK_TOOL_PREFIX));

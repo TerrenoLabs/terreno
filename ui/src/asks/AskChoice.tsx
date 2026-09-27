@@ -2,6 +2,7 @@ import {
   ASK_LIMITS,
   type AskResponse,
   type AskValidationError,
+  askAllowsDecline,
   type ChoiceAskInput,
   type ChoiceOption,
   choiceSelectionBounds,
@@ -21,36 +22,22 @@ import {RadioField} from "../RadioField";
 import {SelectField} from "../SelectField";
 import {Text} from "../Text";
 import {TextField} from "../TextField";
+import {
+  type AskControlProps,
+  AskErrors,
+  SKIP_BUTTON,
+  SkipButton,
+  useAnswerButton,
+} from "./askControls";
 import type {ChatAsk} from "./askTypes";
-import {SIMPLE_CARD_BUTTON_VARIANTS} from "./simpleCardButtonVariants";
 
 /** Above this many options, the choice is a searchable select instead of radio buttons. */
 const RADIO_OPTIONS_MAX = 8;
 
 const SUBMIT_ACTION_ID = "submit";
 
-const SKIP_BUTTON: SimpleCardButton = {
-  id: "skip",
-  label: "Skip",
-  response: {action: "decline"},
-  style: "cancel",
-};
-
-/** An answer from one of the card's controls, named so the card can show that control loading. */
-export interface AskAction {
-  actionId: string;
-  response: AskResponse;
-}
-
-export interface AskChoiceProps {
+export interface AskChoiceProps extends AskControlProps {
   ask: Extract<ChatAsk, {kind: "choice"}>;
-  errors?: AskValidationError[];
-  /** True when the host takes no answers: buttons are disabled and radio options are plain text. */
-  isDisabled: boolean;
-  onAnswer: (action: AskAction) => void | Promise<void>;
-  /** The control whose answer the host is still handling. */
-  pendingActionId?: string;
-  testID: string;
 }
 
 /**
@@ -65,7 +52,7 @@ const fitsQuickReplies = (card: SimpleCard, input: ChoiceAskInput): boolean =>
 
 const quickReplyButtons = (card: SimpleCard, input: ChoiceAskInput): SimpleCardButton[] => {
   const hasSkip = card.buttons.some((button) => button.response.action === "decline");
-  if (hasSkip || input.allowDecline === false) {
+  if (hasSkip || !askAllowsDecline({input, kind: "choice"})) {
     return card.buttons;
   }
   return [...card.buttons, SKIP_BUTTON];
@@ -81,27 +68,6 @@ const toFieldOptions = (input: ChoiceAskInput, isRadio: boolean): FieldOption[] 
     }
     return {helperText: option.description, key: option.id, label: option.label, value: option.id};
   });
-
-const AskErrors = ({
-  errors,
-  testID,
-}: {
-  errors?: AskValidationError[];
-  testID: string;
-}): React.ReactElement | null => {
-  if (!errors || errors.length === 0) {
-    return null;
-  }
-  return (
-    <Box gap={1} testID={testID}>
-      {errors.map((error) => (
-        <Text color="error" key={`${error.path}:${error.code}`} size="sm">
-          {error.message}
-        </Text>
-      ))}
-    </Box>
-  );
-};
 
 const OptionDescriptions = ({input}: {input: ChoiceAskInput}): React.ReactElement | null => {
   const described = input.options.filter((option) => option.description);
@@ -135,40 +101,6 @@ const ReadOnlyOptions = ({
     ))}
   </Box>
 );
-
-const SkipButton = ({
-  input,
-  renderButton,
-}: {
-  input: ChoiceAskInput;
-  renderButton: (button: SimpleCardButton) => React.ReactElement;
-}): React.ReactElement | null => (input.allowDecline === false ? null : renderButton(SKIP_BUTTON));
-
-const useAnswerButton = ({
-  isDisabled,
-  onAnswer,
-  pendingActionId,
-  testID,
-}: Pick<AskChoiceProps, "isDisabled" | "onAnswer" | "pendingActionId" | "testID">): ((
-  button: SimpleCardButton
-) => React.ReactElement) => {
-  const isAnswering = pendingActionId !== undefined;
-  return useCallback(
-    (button: SimpleCardButton): React.ReactElement => (
-      <Button
-        disabled={isDisabled || (isAnswering && pendingActionId !== button.id)}
-        key={button.id}
-        loading={pendingActionId === button.id}
-        onClick={() => onAnswer({actionId: button.id, response: button.response})}
-        testID={`${testID}-button-${button.id}`}
-        text={button.label}
-        variant={SIMPLE_CARD_BUTTON_VARIANTS[button.style]}
-        wrapText
-      />
-    ),
-    [isAnswering, isDisabled, onAnswer, pendingActionId, testID]
-  );
-};
 
 const otherTitle = (input: ChoiceAskInput): string => input.otherLabel ?? "Other";
 
@@ -309,7 +241,7 @@ const AskChoiceMany: React.FC<AskChoiceProps> = ({
           text={input.submitLabel ?? "Submit"}
           wrapText
         />
-        <SkipButton input={input} renderButton={renderButton} />
+        <SkipButton ask={ask} renderButton={renderButton} />
       </Box>
     </Box>
   );
@@ -422,7 +354,7 @@ const AskChoiceOne: React.FC<AskChoiceProps> = ({
           text={input.submitLabel ?? "Submit"}
           wrapText
         />
-        <SkipButton input={input} renderButton={renderButton} />
+        <SkipButton ask={ask} renderButton={renderButton} />
       </Box>
     </Box>
   );

@@ -3,7 +3,7 @@ import {askIssue, formatAskPath, quoteValue} from "./errors";
 import {ASK_LIMITS} from "./limits";
 
 /** Ask kinds in the catalog. Each kind is offered to the model as the tool `ask_<kind>`. */
-export const ASK_KINDS = ["choice"] as const;
+export const ASK_KINDS = ["choice", "confirm"] as const;
 
 export type AskKind = (typeof ASK_KINDS)[number];
 
@@ -16,7 +16,7 @@ export const ASK_SURFACES = ["full", "compact"] as const;
 export type AskSurface = (typeof ASK_SURFACES)[number];
 
 /** Ask kinds the compact surface offers, each with a narrowed input schema. */
-export const COMPACT_ASK_KINDS = ["choice"] as const satisfies readonly AskKind[];
+export const COMPACT_ASK_KINDS = ["choice", "confirm"] as const satisfies readonly AskKind[];
 
 export type CompactAskKind = (typeof COMPACT_ASK_KINDS)[number];
 
@@ -278,32 +278,56 @@ const checkChoiceInput = (input: ChoiceRuleInput, ctx: z.RefinementCtx): void =>
  * but a simple card cuts labels by UTF-16 units, so a label with emoji can fit Zod's limit and still
  * be cut on its button.
  */
+const checkButtonLabelLength = ({
+  ctx,
+  label,
+  segments,
+}: {
+  ctx: z.RefinementCtx;
+  label: string;
+  segments: PropertyKey[];
+}): void => {
+  const {buttonLabelMaxLength} = ASK_LIMITS.simpleCard;
+  if (label.length <= buttonLabelMaxLength) {
+    return;
+  }
+  const path = formatAskPath(segments);
+  ctx.addIssue(
+    askIssue({
+      code: "TOO_LONG",
+      fix: `Shorten ${path} to ${buttonLabelMaxLength} characters or fewer, or use fewer emoji.`,
+      message: `${path} is longer than ${buttonLabelMaxLength} characters, counting each emoji as 2 or more.`,
+      segments,
+    })
+  );
+};
+
+/**
+ * A label as its button shows it. Spaces at either end don't show, so "Go " and "Go" look the same
+ * and are compared, and put on simple card buttons, without them.
+ */
+export const visibleLabel = (label: string): string => label.trim();
+
+/** Says why two labels that differ only in spaces at either end count as the same. */
+const spacesNote = (label: string, otherLabel: string): string =>
+  label === otherLabel ? "" : ", ignoring spaces at either end";
+
 const checkCompactChoiceInput = (input: ChoiceRuleInput, ctx: z.RefinementCtx): void => {
   checkChoiceInput(input, ctx);
-  const {buttonLabelMaxLength} = ASK_LIMITS.simpleCard;
   const firstIndexByLabel = new Map<string, number>();
   input.options.forEach((option, index) => {
-    if (option.label.length > buttonLabelMaxLength) {
-      const path = formatAskPath(["options", index, "label"]);
-      ctx.addIssue(
-        askIssue({
-          code: "TOO_LONG",
-          fix: `Shorten ${path} to ${buttonLabelMaxLength} characters or fewer, or use fewer emoji.`,
-          message: `${path} is longer than ${buttonLabelMaxLength} characters, counting each emoji as 2 or more.`,
-          segments: ["options", index, "label"],
-        })
-      );
-    }
-    const firstIndex = firstIndexByLabel.get(option.label);
+    checkButtonLabelLength({ctx, label: option.label, segments: ["options", index, "label"]});
+    const firstIndex = firstIndexByLabel.get(visibleLabel(option.label));
     if (firstIndex === undefined) {
-      firstIndexByLabel.set(option.label, index);
+      firstIndexByLabel.set(visibleLabel(option.label), index);
       return;
     }
+    const note = spacesNote(option.label, input.options[firstIndex].label);
     ctx.addIssue(
       askIssue({
         code: "DUPLICATE_LABEL",
         fix: "Give every option a different label.",
-        message: `Option label ${quoteValue(option.label)} is already used by ${formatAskPath(["options", firstIndex])}.`,
+        message: `Option label ${quoteValue(option.label)} is already used by ${formatAskPath(["options", firstIndex])}${note}.`,
         segments: ["options", index, "label"],
       })
     );
@@ -392,6 +416,99 @@ export const compactChoiceAskInputSchema = z
   .strict()
   .superRefine(checkCompactChoiceInput);
 
+/** The button labels a `confirm` ask shows when it does not name its own. */
+const CONFIRM_DEFAULT_LABELS = {confirm: "Confirm", deny: "Cancel"} as const;
+
+/** The fields of a `confirm` input that its semantic rules read. */
+interface ConfirmRuleInput {
+  confirmLabel?: string;
+  denyLabel?: string;
+}
+
+/** The labels of a `confirm` ask's approve and deny buttons, with the defaults filled in. */
+export const confirmButtonLabels = (input: ConfirmRuleInput): {confirm: string; deny: string} => ({
+  confirm: input.confirmLabel ?? CONFIRM_DEFAULT_LABELS.confirm,
+  deny: input.denyLabel ?? CONFIRM_DEFAULT_LABELS.deny,
+});
+
+/**
+ * Both labels fit a simple card button uncut, so every surface shows the same words, and they
+ * differ, so the user can tell approve from deny.
+ */
+const checkConfirmInput = (input: ConfirmRuleInput, ctx: z.RefinementCtx): void => {
+  for (const field of ["confirmLabel", "denyLabel"] as const) {
+    const label = input[field];
+    if (label !== undefined) {
+      checkButtonLabelLength({ctx, label, segments: [field]});
+    }
+  }
+  const {confirm, deny} = confirmButtonLabels(input);
+  if (visibleLabel(confirm) !== visibleLabel(deny)) {
+    return;
+  }
+  const note = spacesNote(confirm, deny);
+  if (input.denyLabel === undefined) {
+    ctx.addIssue(
+      askIssue({
+        code: "DUPLICATE_LABEL",
+        fix: `Give confirmLabel a label other than ${quoteValue(deny)}, the deny button's label.`,
+        message: `confirmLabel ${quoteValue(confirm)} is the same as the deny button's label${note}.`,
+        segments: ["confirmLabel"],
+      })
+    );
+    return;
+  }
+  ctx.addIssue(
+    askIssue({
+      code: "DUPLICATE_LABEL",
+      fix: `Give denyLabel a label other than ${quoteValue(confirm)}, the approve button's label.`,
+      message: `denyLabel ${quoteValue(deny)} is the same as the approve button's label${note}.`,
+      segments: ["denyLabel"],
+    })
+  );
+};
+
+const confirmLabelField = (button: "approve" | "deny", fallback: string) =>
+  visibleText(ASK_LIMITS.confirm.labelMaxLength)
+    .optional()
+    .describe(
+      `Label for the ${button} button, at most ${ASK_LIMITS.confirm.labelMaxLength} characters. Defaults to "${fallback}".`
+    );
+
+/**
+ * Input for `ask_confirm`: approve or deny one action. It has no Submit, so no `submitLabel`, and
+ * `allowDecline` defaults to false because deny is already the negative answer.
+ */
+export const confirmAskInputSchema = z
+  .object({
+    allowDecline: z
+      .boolean()
+      .optional()
+      .describe(
+        "Show a Skip button as well as deny. Defaults to false, because deny is the negative answer."
+      ),
+    confirmLabel: confirmLabelField("approve", CONFIRM_DEFAULT_LABELS.confirm),
+    denyLabel: confirmLabelField("deny", CONFIRM_DEFAULT_LABELS.deny),
+    destructive: z
+      .boolean()
+      .optional()
+      .describe(
+        "True when the action deletes data or cannot be undone. The approve button then shows as destructive. Defaults to false."
+      ),
+    prompt: sharedAskFields.prompt,
+    title: sharedAskFields.title,
+  })
+  .strict()
+  .superRefine(checkConfirmInput);
+
+export type ConfirmAskInput = z.infer<typeof confirmAskInputSchema>;
+
+/**
+ * Input for `ask_confirm` on the compact surface. A confirm always fits a simple card (two buttons
+ * with labels that show uncut), so it is the full schema.
+ */
+export const compactConfirmAskInputSchema = confirmAskInputSchema;
+
 /** The `content` of an accepted `choice` answer. */
 export const choiceAnswerSchema = z
   .object({
@@ -439,14 +556,30 @@ export const choiceAskResponseSchema = z.discriminatedUnion("action", [
 
 export type ChoiceAskResponse = z.infer<typeof choiceAskResponseSchema>;
 
+/** The `content` of an accepted `confirm` answer: true approves the action, false denies it. */
+export const confirmAnswerSchema = z.object({confirmed: z.boolean()}).strict();
+
+export type ConfirmAnswer = z.infer<typeof confirmAnswerSchema>;
+
+/** The answer envelope for `ask_confirm`, with `content` typed. Used as the tool's output schema. */
+export const confirmAskResponseSchema = z.discriminatedUnion("action", [
+  z.object({action: z.literal("accept"), content: confirmAnswerSchema}).strict(),
+  askDeclineResponseSchema,
+  askCancelResponseSchema,
+]);
+
+export type ConfirmAskResponse = z.infer<typeof confirmAskResponseSchema>;
+
 /** Input schemas by kind. */
 export const askInputSchemas = {
   choice: choiceAskInputSchema,
+  confirm: confirmAskInputSchema,
 } as const satisfies Record<AskKind, z.ZodType>;
 
 /** Input schemas by kind on the compact surface. Every compact input is also a valid full input. */
 export const compactAskInputSchemas = {
   choice: compactChoiceAskInputSchema,
+  confirm: compactConfirmAskInputSchema,
 } as const satisfies Record<CompactAskKind, z.ZodType>;
 
 export const isCompactAskKind = (kind: AskKind): kind is CompactAskKind =>
@@ -490,6 +623,7 @@ export const askInputSchemaFor = ({
 /** Output (answer envelope) schemas by kind. */
 export const askOutputSchemas = {
   choice: choiceAskResponseSchema,
+  confirm: confirmAskResponseSchema,
 } as const satisfies Record<AskKind, z.ZodType>;
 
 export interface ChoiceAsk {
@@ -497,5 +631,17 @@ export interface ChoiceAsk {
   kind: "choice";
 }
 
+export interface ConfirmAsk {
+  input: ConfirmAskInput;
+  kind: "confirm";
+}
+
 /** A validated ask: its kind and its input. */
-export type Ask = ChoiceAsk;
+export type Ask = ChoiceAsk | ConfirmAsk;
+
+/**
+ * Whether the user may skip the ask. `allowDecline` defaults to true, except on `confirm`, where
+ * deny is already the negative answer.
+ */
+export const askAllowsDecline = ({input, kind}: Ask): boolean =>
+  kind === "confirm" ? input.allowDecline === true : input.allowDecline !== false;

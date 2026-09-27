@@ -8,6 +8,9 @@ import {
   askResponseSchema,
   type ChoiceAskInput,
   type ChoiceOption,
+  type ConfirmAskInput,
+  confirmButtonLabels,
+  visibleLabel,
 } from "./schema";
 import {validateAskResponse} from "./validateResponse";
 
@@ -88,6 +91,12 @@ const shorten = (text: string, maxLength: number): string => {
   return `${kept.trimEnd()}${ELLIPSIS}`;
 };
 
+/** A label as its button shows it: without spaces at either end, cut to fit. */
+const buttonLabel = (
+  label: string,
+  maxLength: number = ASK_LIMITS.simpleCard.buttonLabelMaxLength
+): string => shorten(visibleLabel(label), maxLength);
+
 const SKIP_BUTTON: SimpleCardButton = {
   id: "skip",
   label: "Skip",
@@ -102,7 +111,7 @@ const acceptSelected = (id: string): AskResponse => ({
 
 const optionButton = (option: ChoiceOption, isDefault: boolean): SimpleCardButton => ({
   id: `option:${option.id}`,
-  label: shorten(option.label, ASK_LIMITS.simpleCard.buttonLabelMaxLength),
+  label: buttonLabel(option.label),
   response: acceptSelected(option.id),
   style: isDefault ? "primary" : "default",
 });
@@ -121,10 +130,10 @@ const useDefaultButtons = (
   if (!defaultOption) {
     return [];
   }
-  const label = shorten(defaultOption.label, USE_DEFAULT_LABEL_MAX_LENGTH);
+  const label = buttonLabel(defaultOption.label, USE_DEFAULT_LABEL_MAX_LENGTH);
   const namesAnotherOption = options.some(
     (option) =>
-      option !== defaultOption && shorten(option.label, USE_DEFAULT_LABEL_MAX_LENGTH) === label
+      option !== defaultOption && buttonLabel(option.label, USE_DEFAULT_LABEL_MAX_LENGTH) === label
   );
   if (namesAnotherOption) {
     return [];
@@ -186,6 +195,32 @@ const choiceCard = (input: ChoiceAskInput): Pick<SimpleCard, "buttons" | "handof
 };
 
 /**
+ * Approve first and deny last (D26). A destructive approve is styled `destructive`, so a watch's
+ * Double Tap, which presses the first non-destructive button, can only deny. Deny is the negative
+ * answer, so the card has no Skip even when the ask allows declining.
+ */
+const confirmCard = (input: ConfirmAskInput): Pick<SimpleCard, "buttons" | "handoff"> => {
+  const labels = confirmButtonLabels(input);
+  return {
+    buttons: [
+      {
+        id: "approve",
+        label: buttonLabel(labels.confirm),
+        response: {action: "accept", content: {confirmed: true}},
+        style: input.destructive === true ? "destructive" : "primary",
+      },
+      {
+        id: "deny",
+        label: buttonLabel(labels.deny),
+        response: {action: "accept", content: {confirmed: false}},
+        style: "cancel",
+      },
+    ],
+    handoff: false,
+  };
+};
+
+/**
  * The answer a pressed button sends: the `response` stored on the card's button with that id.
  * Returns an `UNKNOWN_BUTTON` error instead when the card has no such button, so a small client can
  * only send answers the card offered.
@@ -221,17 +256,14 @@ export const resolveButtonAnswer = ({
  * Derives the simple card for a valid ask. Pure and deterministic: the same ask always gives the
  * same card, and every button's `response` passes `validateAskResponse` for that ask.
  */
-export const toSimpleCard = ({input, kind, toolCallId}: Ask & {toolCallId: string}): SimpleCard => {
+export const toSimpleCard = ({
+  toolCallId,
+  ...askFields
+}: Ask & {toolCallId: string}): SimpleCard => {
+  const ask = askFields as Ask;
   const {textMaxLength, titleMaxLength} = ASK_LIMITS.simpleCard;
+  const {input, kind} = ask;
   const title = input.title === undefined ? {} : {title: shorten(input.title, titleMaxLength)};
-  switch (kind) {
-    case "choice":
-      return {
-        ...choiceCard(input),
-        kind,
-        text: shorten(input.prompt, textMaxLength),
-        ...title,
-        toolCallId,
-      };
-  }
+  const card = ask.kind === "confirm" ? confirmCard(ask.input) : choiceCard(ask.input);
+  return {...card, kind, text: shorten(input.prompt, textMaxLength), ...title, toolCallId};
 };

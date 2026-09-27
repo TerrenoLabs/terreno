@@ -1,6 +1,10 @@
 import type {DemoConfiguration} from "@config";
 import {
   AskCardAnswered,
+  AskCardConfirm,
+  AskCardConfirmAnswered,
+  AskCardConfirmDestructive,
+  AskCardConfirmReadOnly,
   AskCardDemo,
   AskCardError,
   AskCardPickMany,
@@ -38,6 +42,22 @@ export const AskCardConfiguration: DemoConfiguration = {
       description: "Answered, skipped, and cancelled asks as one-line summaries.",
       render: () => <AskCardAnswered />,
     },
+    Confirm: {
+      description: "confirm: approve first in the primary style, deny last.",
+      render: () => <AskCardConfirm />,
+    },
+    "Confirm answered": {
+      description: "Confirmed and declined confirm asks as one-line summaries.",
+      render: () => <AskCardConfirmAnswered />,
+    },
+    "Confirm destructive": {
+      description: "confirm with destructive: the approve button uses the destructive style.",
+      render: () => <AskCardConfirmDestructive />,
+    },
+    "Confirm read only": {
+      description: "No onSubmit: both confirm buttons are disabled.",
+      render: () => <AskCardConfirmReadOnly />,
+    },
     "Pick many": {
       description: "select many with checkboxes, selection bounds, and an Other field.",
       render: () => <AskCardPickMany />,
@@ -66,6 +86,7 @@ export const AskCardConfiguration: DemoConfiguration = {
     ],
     doNot: [
       "Do not render your own buttons for an ask; the card picks buttons, radio, select, or checkboxes from the options.",
+      "Do not take an irreversible action from a confirm until the answer is {confirmed: true}.",
       "Do not drop the answered card from the transcript; its summary records what the user chose.",
     ],
   },

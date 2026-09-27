@@ -22,7 +22,8 @@
             "kind": {
               "type": "string",
               "enum": [
-                "choice"
+                "choice",
+                "confirm"
               ]
             },
             "simple": {
@@ -126,7 +127,8 @@
                 "kind": {
                   "type": "string",
                   "enum": [
-                    "choice"
+                    "choice",
+                    "confirm"
                   ]
                 },
                 "text": {

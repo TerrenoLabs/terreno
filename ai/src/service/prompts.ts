@@ -7,8 +7,8 @@ export const TERRENO_ASKS_SYSTEM_PROMPT =
   "You can ask the user a question inside the chat by calling an ask tool. The chat shows the " +
   "ask as a control, the user answers it, and the answer comes back to you as the tool's result.\n\n" +
   "When to ask:\n" +
-  "- When you need the user to choose between options you can list, call an ask tool instead of " +
-  "asking in plain text.\n" +
+  "- When you need an answer that one of the ask tools listed below can collect, call that tool " +
+  "instead of asking in plain text.\n" +
   "- Ask only when you cannot continue well without the answer. Do not ask for anything you can " +
   "find out with another tool.\n" +
   "- Call at most one ask tool per step, and do not call other tools in the same step.\n" +
@@ -42,6 +42,17 @@ export const COMPACT_ASK_CHOICE_TOOL_DESCRIPTION =
   "Ask the user to pick one option from a list you provide. The chat shows the options as a " +
   "control and returns the user's answer as this tool's result. Use it instead of asking in plain " +
   "text when the user must choose between options you can list.";
+
+export const ASK_CONFIRM_TOOL_DESCRIPTION =
+  "Ask the user to approve or deny one action you describe. The chat shows an approve button and " +
+  "a deny button and returns {confirmed: true} or {confirmed: false} as this tool's result. Call " +
+  "it before a tool that deletes data, sends something on the user's behalf, spends money, or " +
+  "cannot be undone.";
+
+export const COMPACT_ASK_CONFIRM_TOOL_DESCRIPTION =
+  "Ask the user to approve or deny one action you describe, with two short buttons. The user's " +
+  "answer comes back as {confirmed: true} or {confirmed: false}. Call it before a tool that " +
+  "deletes data, sends something, spends money, or cannot be undone.";
 
 /** Tool result for a call that was left without one when the turn paused for an ask. */
 export const UNANSWERED_TOOL_CALL_RESULT = "This tool call did not run, so it has no result.";

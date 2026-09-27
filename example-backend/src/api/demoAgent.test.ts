@@ -21,8 +21,8 @@ import {User as UserModel} from "../models/user";
 import type {UserDocument} from "../types/models/userTypes";
 import {createDemoAgentModel, createDemoAgentService, DEMO_AGENT_MODEL_ID} from "./demoAgent";
 
-const ASK_TOOLS = createAskTools({kinds: ["choice"]});
-const COMPACT_ASK_TOOLS = createAskTools({kinds: ["choice"], surface: "compact"});
+const ASK_TOOLS = createAskTools({kinds: ["choice", "confirm"]});
+const COMPACT_ASK_TOOLS = createAskTools({kinds: ["choice", "confirm"], surface: "compact"});
 
 interface SurfaceOptions {
   /** Calls the model the way a `surface: "compact"` turn does: the compact line and compact ask tools. */
@@ -215,6 +215,8 @@ describe("demo agent", () => {
     expect(text).toContain("I'm the Terreno demo agent");
     expect(text).toContain('Say "help me pick a plan"');
     expect(text).toContain('"pick toppings"');
+    expect(text).toContain('"send the weekly report"');
+    expect(text).toContain('"archive old chats"');
     expect(text).toContain("GEMINI_API_KEY");
   });
 
@@ -223,6 +225,83 @@ describe("demo agent", () => {
 
     expect(await result.toolCalls).toHaveLength(0);
     expect(await result.text).toContain("Pass `asks: true` to addGptRoutes");
+  });
+
+  it.each([
+    {
+      id: "report",
+      input: {
+        confirmLabel: "Send report",
+        denyLabel: "Not now",
+        prompt: "Send the weekly report to the team now? It goes to 8 people.",
+        title: "Send the weekly report",
+      },
+      prompt: "Send the weekly report",
+    },
+    {
+      id: "archive",
+      input: {
+        confirmLabel: "Archive 12 chats",
+        denyLabel: "Keep them",
+        destructive: true,
+        prompt: "Archive the 12 chats older than 90 days? You can't undo this.",
+        title: "Archive old chats",
+      },
+      prompt: "Please archive old chats",
+    },
+  ])("asks to confirm before the $id action", async ({id, input, prompt}) => {
+    const {text, toolCalls} = await askFor(prompt);
+
+    expect(text).toBe("");
+    expect(toolCalls).toHaveLength(1);
+    const [call] = toolCalls;
+    if (!call) {
+      throw new Error("The demo agent did not ask");
+    }
+    expect(call.toolName).toBe("ask_confirm");
+    expect(call.invalid).toBeFalsy();
+    expect(call.toolCallId).toStartWith(`demo_${id}_`);
+    expect(call.input).toEqual(input);
+  });
+
+  it.each([
+    {
+      expected:
+        'You said yes, so a real agent would send the **weekly report** to the team now. Say "send the weekly report" to try another answer.',
+      prompt: "Send the weekly report",
+      response: {action: "accept", content: {confirmed: true}},
+    },
+    {
+      expected:
+        'OK, I did not send the weekly report. Say "send the weekly report" to try another answer.',
+      prompt: "Send the weekly report",
+      response: {action: "accept", content: {confirmed: false}},
+    },
+    {
+      expected:
+        'You confirmed, so a real agent would archive the **12 chats** older than 90 days now. This demo archived nothing. Say "archive old chats" to try another answer.',
+      prompt: "Archive old chats",
+      response: {action: "accept", content: {confirmed: true}},
+    },
+    {
+      expected: 'OK, I kept all your chats. Say "archive old chats" to try another answer.',
+      prompt: "Archive old chats",
+      response: {action: "accept", content: {confirmed: false}},
+    },
+    {
+      expected: "The archive question was cancelled, so I kept your chats.",
+      prompt: "Archive old chats",
+      response: {action: "cancel", reason: "user_sent_message"},
+    },
+  ])("replies to $response for $prompt", async ({expected, prompt, response}) => {
+    expect(await replyTo(response, {}, prompt)).toBe(expected);
+  });
+
+  it("titles confirm conversations from the user's message", async () => {
+    expect(await titleFor("User: Send the weekly report\nAssistant: OK.")).toBe(
+      "Sending the weekly report"
+    );
+    expect(await titleFor("User: Archive old chats\nAssistant: OK.")).toBe("Archiving old chats");
   });
 
   it("titles a plan conversation from the user's message only", async () => {
@@ -278,11 +357,56 @@ describe("demo agent on the compact surface", () => {
     );
   });
 
+  it.each(["Send the weekly report", "Archive old chats"])(
+    "asks to confirm %p with the compact ask tool",
+    async (prompt) => {
+      const {toolCalls} = await askFor(prompt, {isCompact: true});
+
+      expect(toolCalls).toHaveLength(1);
+      expect(toolCalls[0]?.toolName).toBe("ask_confirm");
+      expect(toolCalls[0]?.invalid).toBeFalsy();
+    }
+  );
+
+  it.each([
+    {confirmed: true, expected: "Confirmed. A real agent would archive 12 chats now."},
+    {confirmed: false, expected: "OK, I kept your chats."},
+  ])(
+    "replies to an archive answer of $confirmed in short sentences",
+    async ({confirmed, expected}) => {
+      expect(
+        await replyTo(
+          {action: "accept", content: {confirmed}},
+          {isCompact: true},
+          "Archive old chats"
+        )
+      ).toBe(expected);
+    }
+  );
+
+  it.each([
+    {confirmed: true, expected: "OK. A real agent would send the weekly report now."},
+    {confirmed: false, expected: "OK, I did not send the report."},
+  ])(
+    "replies to a report answer of $confirmed in short sentences",
+    async ({confirmed, expected}) => {
+      expect(
+        await replyTo(
+          {action: "accept", content: {confirmed}},
+          {isCompact: true},
+          "Send the weekly report"
+        )
+      ).toBe(expected);
+    }
+  );
+
   it("explains how to try an ask in two short sentences", async () => {
     const {text, toolCalls} = await askFor("Hello there", {isCompact: true});
 
     expect(toolCalls).toHaveLength(0);
-    expect(text).toBe(`I'm the Terreno demo agent. Say "help me pick a plan" to choose a plan.`);
+    expect(text).toBe(
+      `I'm the Terreno demo agent. Say "help me pick a plan" or "archive old chats" to try an ask.`
+    );
   });
 
   it("says asks are off in one sentence when the route offers no ask tool", async () => {
@@ -456,6 +580,55 @@ describe("demo agent through the chat routes", () => {
     expect(resultRow?.result).toEqual(response);
   });
 
+  it("pauses on the archive confirm, refuses Skip, and continues with the deny answer", async () => {
+    const auth = {Authorization: `Bearer ${await signIn()}`};
+
+    const asked = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({prompt: "Archive old chats"});
+    expect(asked.status).toBe(200);
+    const askedEvents = parseEvents(asked.text);
+    const ask = askedEvents.find((event) => "ask" in event)?.ask as {
+      kind: string;
+      simple: {buttons: {id: string; label: string; style: string}[]; handoff: boolean};
+      toolCallId: string;
+    };
+    expect(ask.kind).toBe("confirm");
+    expect(ask.simple.handoff).toBe(false);
+    expect(ask.simple.buttons.map(({id, label, style}) => ({id, label, style}))).toEqual([
+      {id: "approve", label: "Archive 12 chats", style: "destructive"},
+      {id: "deny", label: "Keep them", style: "cancel"},
+    ]);
+    const {historyId} = askedEvents.at(-1) as {historyId: string};
+
+    const skipped = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({askResponse: {action: "decline", toolCallId: ask.toolCallId}, historyId});
+    expect(skipped.status).toBe(400);
+    expect(skipped.body.fields.map((field: {code: string}) => field.code)).toEqual([
+      "DECLINE_NOT_ALLOWED",
+    ]);
+
+    const response = {action: "accept", content: {confirmed: false}};
+    const answered = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({askResponse: {...response, toolCallId: ask.toolCallId}, historyId});
+    expect(answered.status).toBe(200);
+    const answeredEvents = parseEvents(answered.text);
+    const text = answeredEvents
+      .map((event) => (typeof event.text === "string" ? event.text : ""))
+      .join("");
+    expect(text).toBe('OK, I kept all your chats. Say "archive old chats" to try another answer.');
+    expect(answeredEvents.at(-1)).toEqual({done: true, historyId, title: "Archiving old chats"});
+
+    const history = await GptHistory.findById(historyId).lean();
+    const askRow = history?.prompts.find((row) => row.toolCallId === ask.toolCallId && row.ask);
+    expect(askRow?.ask).toEqual({kind: "confirm", status: "answered"});
+  });
+
   it("answers other messages with the demo agent's help", async () => {
     const token = await signIn();
 
@@ -469,6 +642,43 @@ describe("demo agent through the chat routes", () => {
     const text = events.map((event) => (typeof event.text === "string" ? event.text : "")).join("");
     expect(text).toContain('Say "help me pick a plan"');
     expect(events.some((event) => "ask" in event)).toBe(false);
+  });
+
+  it("answers the weekly report confirm from a small screen with its approve button", async () => {
+    const auth = {Authorization: `Bearer ${await signIn()}`};
+    const created = await supertest(app).post("/gpt/histories").set(auth).send({});
+    const historyId = created.body.data._id as string;
+    const turnPath = `/gpt/histories/${historyId}/turn`;
+
+    const asked = await supertest(app)
+      .post(turnPath)
+      .set(auth)
+      .send({prompt: "Send the weekly report", surface: "compact"});
+    expect(asked.status).toBe(200);
+    const {pendingAsk} = asked.body.data as {
+      pendingAsk: {
+        kind: string;
+        simple: {buttons: {id: string; style: string}[]; handoff: boolean};
+        toolCallId: string;
+      };
+    };
+    expect(pendingAsk.kind).toBe("confirm");
+    expect(pendingAsk.simple.handoff).toBe(false);
+    expect(pendingAsk.simple.buttons.map(({id, style}) => ({id, style}))).toEqual([
+      {id: "approve", style: "primary"},
+      {id: "deny", style: "cancel"},
+    ]);
+
+    const answered = await supertest(app)
+      .post(turnPath)
+      .set(auth)
+      .send({buttonId: "approve", surface: "compact", toolCallId: pendingAsk.toolCallId});
+    expect(answered.status).toBe(200);
+    expect(answered.body.data).toEqual({
+      historyId,
+      text: "OK. A real agent would send the weekly report now.",
+      title: "Sending the weekly report",
+    });
   });
 
   it("answers the plan ask from a small screen with a button of its simple card", async () => {

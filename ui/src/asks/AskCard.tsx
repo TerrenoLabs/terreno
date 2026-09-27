@@ -7,7 +7,9 @@ import type {IconName} from "../Common";
 import {Heading} from "../Heading";
 import {Icon} from "../Icon";
 import {Text} from "../Text";
-import {type AskAction, AskChoice} from "./AskChoice";
+import {AskChoice} from "./AskChoice";
+import {AskConfirm} from "./AskConfirm";
+import type {AskAction} from "./askControls";
 import {askSummary} from "./askSummary";
 import type {AskSubmitHandler, ChatAsk} from "./askTypes";
 
@@ -60,6 +62,17 @@ const AskBody = ({
     case "choice":
       return (
         <AskChoice
+          ask={ask}
+          errors={errors}
+          isDisabled={isDisabled}
+          onAnswer={onAnswer}
+          pendingActionId={pendingActionId}
+          testID={testID}
+        />
+      );
+    case "confirm":
+      return (
+        <AskConfirm
           ask={ask}
           errors={errors}
           isDisabled={isDisabled}

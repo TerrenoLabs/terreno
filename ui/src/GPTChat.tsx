@@ -1,12 +1,18 @@
+import {type AskValidationError, askResponseSchema} from "@terreno/blocks";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {
+  AccessibilityInfo,
+  findNodeHandle,
   Platform,
   Image as RNImage,
   type ScrollView as RNScrollView,
   type TextInput as RNTextInput,
+  View,
 } from "react-native";
 
 import {AttachmentPreview} from "./AttachmentPreview";
+import {AskCard} from "./asks/AskCard";
+import type {AskSubmitHandler, ChatAsk} from "./asks/askTypes";
 import {Box} from "./Box";
 import {Button} from "./Button";
 import type {SelectedFile} from "./FilePickerButton";
@@ -67,6 +73,11 @@ export interface ToolResultInfo {
 // ============================================================
 
 export interface GPTChatMessage {
+  /**
+   * Set on a `tool-call` message when the tool call is an agent ask. The chat renders an `AskCard`
+   * instead of the tool call, and hides the ask's `tool-result` message.
+   */
+  ask?: ChatAsk;
   content: string;
   contentParts?: MessageContentPart[];
   rating?: "up" | "down";
@@ -93,6 +104,8 @@ export interface MCPToolDetail {
 }
 
 export interface GPTChatProps {
+  /** Errors for the last answer to each ask, keyed by tool call id, such as a 400's `fields`. */
+  askErrors?: Record<string, AskValidationError[]>;
   attachments?: SelectedFile[];
   availableModels?: Array<{label: string; value: string}>;
   currentHistoryId?: string;
@@ -103,6 +116,11 @@ export interface GPTChatProps {
   /** Available MCP tools to display in the tools panel. */
   mcpTools?: MCPToolDetail[];
   mcpServers?: MCPServerStatus[];
+  /**
+   * Called when the user answers a pending ask. The pressed control shows a loading state until
+   * the returned promise settles. Without it, asks are shown but cannot be answered.
+   */
+  onAskSubmit?: AskSubmitHandler;
   onAttachFiles?: (files: SelectedFile[]) => void;
   onCreateHistory: () => void;
   onDeleteHistory: (id: string) => void;
@@ -651,18 +669,124 @@ const EmptyChatHero = ({
   );
 };
 
+/**
+ * Moves focus to a pending ask when it appears, so keyboard and screen reader users land on it.
+ * A raw `View` because `Box` does not expose its native view to a ref.
+ */
+const AskFocusTarget = ({
+  children,
+  label,
+}: {
+  children: React.ReactNode;
+  label: string;
+}): React.ReactElement => {
+  const viewRef = useRef<View>(null);
+
+  // Focus the ask once, when it mounts; later renders of the same ask leave focus alone.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+    if (Platform.OS === "web") {
+      (view as unknown as HTMLElement).focus?.({preventScroll: true});
+      return;
+    }
+    const node = findNodeHandle(view);
+    if (node) {
+      AccessibilityInfo.setAccessibilityFocus(node);
+    }
+  }, []);
+
+  return (
+    <View aria-label={label} ref={viewRef} role="group" tabIndex={-1}>
+      {children}
+    </View>
+  );
+};
+
+/** The ask's answer, taken from its `tool-result` message when the host did not set `response`. */
+const withStoredResponse = (ask: ChatAsk, results: Map<string, unknown>): ChatAsk => {
+  if (ask.response || !results.has(ask.toolCallId)) {
+    return ask;
+  }
+  const stored = askResponseSchema.safeParse(results.get(ask.toolCallId));
+  return stored.success ? {...ask, response: stored.data} : ask;
+};
+
+const AskTranscriptItem = ({
+  ask,
+  errors,
+  onAskSubmit,
+}: {
+  ask: ChatAsk;
+  errors?: AskValidationError[];
+  onAskSubmit?: AskSubmitHandler;
+}): React.ReactElement => {
+  const card = (
+    <AskCard
+      ask={ask}
+      errors={errors}
+      onSubmit={onAskSubmit}
+      testID={`gpt-ask-${ask.toolCallId}`}
+    />
+  );
+  if (ask.status !== "pending") {
+    return <Box alignItems="start">{card}</Box>;
+  }
+  return (
+    <Box maxWidth="80%" width="100%">
+      <AskFocusTarget label={ask.input?.title ?? "Question from the assistant"}>
+        {card}
+      </AskFocusTarget>
+    </Box>
+  );
+};
+
 const MessageList = ({
+  askErrors,
   currentMessages,
   handleCopyMessage,
+  onAskSubmit,
   onRateFeedback,
 }: {
+  askErrors?: Record<string, AskValidationError[]>;
   currentMessages: GPTChatMessage[];
   handleCopyMessage: (text: string) => void;
+  onAskSubmit?: AskSubmitHandler;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
 }): React.ReactElement => {
+  const askToolCallIds = new Set<string>();
+  const toolResults = new Map<string, unknown>();
+  for (const message of currentMessages) {
+    if (message.role === "tool-call" && message.ask) {
+      askToolCallIds.add(message.ask.toolCallId);
+    }
+    if (message.role === "tool-result" && message.toolResult) {
+      toolResults.set(message.toolResult.toolCallId, message.toolResult.result);
+    }
+  }
+
   return (
     <>
       {currentMessages.map((message, index) => {
+        if (message.role === "tool-call" && message.ask) {
+          return (
+            <AskTranscriptItem
+              ask={withStoredResponse(message.ask, toolResults)}
+              errors={askErrors?.[message.ask.toolCallId]}
+              key={`ask-${message.ask.toolCallId}`}
+              onAskSubmit={onAskSubmit}
+            />
+          );
+        }
+        if (
+          message.role === "tool-result" &&
+          message.toolResult &&
+          askToolCallIds.has(message.toolResult.toolCallId)
+        ) {
+          return null;
+        }
         if (message.role === "tool-call" && message.toolCall) {
           return (
             <Box alignItems="start" key={`msg-${index}`} maxWidth="80%">
@@ -859,6 +983,7 @@ const ApiKeyModal = ({
 // ============================================================
 
 export const GPTChat = ({
+  askErrors,
   attachments = [],
   availableModels,
   currentHistoryId,
@@ -868,6 +993,7 @@ export const GPTChat = ({
   isStreaming = false,
   mcpTools,
   mcpServers,
+  onAskSubmit,
   onAttachFiles,
   onCreateHistory,
   onDeleteHistory,
@@ -1132,8 +1258,10 @@ export const GPTChat = ({
               ) : (
                 <>
                   <MessageList
+                    askErrors={askErrors}
                     currentMessages={currentMessages}
                     handleCopyMessage={handleCopyMessage}
+                    onAskSubmit={onAskSubmit}
                     onRateFeedback={onRateFeedback}
                   />
                   <StreamingIndicator isStreaming={isStreaming} />

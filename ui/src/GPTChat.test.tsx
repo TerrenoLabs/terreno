@@ -1,9 +1,11 @@
 import {afterAll, afterEach, describe, it, mock} from "bun:test";
+import type {ChoiceAskInput} from "@terreno/blocks";
 import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {Platform, Pressable, ScrollView} from "react-native";
+import {AccessibilityInfo, Platform, Pressable, ScrollView} from "react-native";
 
+import type {AskSubmission, ChatAsk} from "./asks/askTypes";
 import type {SelectedFile} from "./FilePickerButton";
 import type {GPTChatHistory, GPTChatMessage, GPTChatProps, MessageContentPart} from "./GPTChat";
 import {GPTChat} from "./GPTChat";
@@ -799,5 +801,285 @@ describe("GPTChat web keyboard submit", () => {
     const {removed, result} = renderOnWeb();
     result.unmount();
     assert.include(removed, "keydown");
+  });
+});
+
+describe("GPTChat asks", () => {
+  const PLAN_INPUT: ChoiceAskInput = {
+    default: ["team"],
+    options: [
+      {description: "$0, one seat", id: "starter", label: "Starter"},
+      {description: "$20 per seat", id: "team", label: "Team"},
+      {id: "enterprise", label: "Enterprise"},
+    ],
+    prompt: "Which plan should I set up?",
+    select: "one",
+    title: "Choose a plan",
+  };
+
+  const planAsk = (state: Partial<ChatAsk> = {}): ChatAsk => ({
+    input: PLAN_INPUT,
+    kind: "choice",
+    status: "pending",
+    toolCallId: "call_plan",
+    ...state,
+  });
+
+  const askMessage = (ask: ChatAsk): GPTChatMessage => ({
+    ask,
+    content: "Tool call: ask_choice",
+    role: "tool-call",
+    toolCall: {args: {...ask.input}, toolCallId: ask.toolCallId, toolName: "ask_choice"},
+  });
+
+  const askResultMessage = (result: unknown): GPTChatMessage => ({
+    content: "Tool result: ask_choice",
+    role: "tool-result",
+    toolResult: {result, toolCallId: "call_plan", toolName: "ask_choice"},
+  });
+
+  const userMessage: GPTChatMessage = {content: "Set up my workspace", role: "user"};
+
+  const originalOS = Platform.OS;
+  const setAccessibilityFocus = AccessibilityInfo.setAccessibilityFocus as ReturnType<typeof mock>;
+
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+
+  it("renders a pending ask as a card in place of its tool call and sends the answer", async () => {
+    const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+    const {getByTestId, queryByText} = renderChat({
+      currentMessages: [userMessage, askMessage(planAsk())],
+      onAskSubmit,
+    });
+
+    assert.isOk(getByTestId("gpt-ask-call_plan"));
+    assert.isNull(queryByText("Tool: ask_choice"));
+    await act(async () => {
+      fireEvent.press(getByTestId("gpt-ask-call_plan-button-option:team"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+      response: {action: "accept", content: {selected: ["team"]}},
+      toolCallId: "call_plan",
+    });
+  });
+
+  it("keeps a pending ask restored from history interactive", async () => {
+    const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+    const restored: GPTChatHistory = {
+      id: "h3",
+      prompts: [userMessage, askMessage(planAsk({simple: undefined}))],
+      title: "Plan setup",
+    };
+    const {getByTestId} = renderChat({
+      currentHistoryId: "h3",
+      currentMessages: restored.prompts,
+      histories: [...histories, restored],
+      onAskSubmit,
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("gpt-ask-call_plan-button-skip"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+      response: {action: "decline"},
+      toolCallId: "call_plan",
+    });
+  });
+
+  it("summarizes an answered ask from its hidden result message", () => {
+    const {getByText, queryByTestId, queryByText} = renderChat({
+      currentMessages: [
+        userMessage,
+        askMessage(planAsk({status: "answered"})),
+        askResultMessage({action: "accept", content: {selected: ["starter"]}}),
+        {content: "Starter it is.", role: "assistant"},
+      ],
+    });
+
+    assert.isOk(getByText("You chose: Starter"));
+    assert.isNull(queryByText("Result: ask_choice"));
+    assert.isNull(queryByTestId("gpt-ask-call_plan-button-option:team"));
+    assert.isOk(getByText("Starter it is."));
+  });
+
+  it("still shows tool results that do not belong to an ask", () => {
+    const {getByText} = renderChat({
+      currentMessages: [
+        askMessage(planAsk({status: "answered"})),
+        askResultMessage({action: "decline"}),
+        {
+          content: "Tool result: lookup",
+          role: "tool-result",
+          toolResult: {result: {ok: true}, toolCallId: "call_lookup", toolName: "lookup"},
+        },
+      ],
+    });
+
+    assert.isOk(getByText("You skipped this question."));
+    assert.isOk(getByText("Result: lookup"));
+  });
+
+  it("shows the errors for the matching ask inline", () => {
+    const {getByText} = renderChat({
+      askErrors: {
+        call_other: [
+          {code: "SELECTION_COUNT", fix: "", message: "Not this ask's error.", path: "content"},
+        ],
+        call_plan: [
+          {
+            code: "OPTION_NOT_OFFERED",
+            fix: "Use the id of one of the ask's options.",
+            message: '"gold" is not one of the offered options.',
+            path: "content.selected[0]",
+          },
+        ],
+      },
+      currentMessages: [askMessage(planAsk())],
+      onAskSubmit: async () => {},
+    });
+
+    assert.isOk(getByText('"gold" is not one of the offered options.'));
+  });
+
+  describe("when the host switches to another conversation", () => {
+    const regionAsk = (toolCallId: string): ChatAsk => ({
+      input: {
+        options: [
+          {description: "Oregon", id: "west", label: "West"},
+          {id: "central", label: "Central"},
+          {id: "east", label: "East"},
+          {id: "europe", label: "Europe"},
+          {id: "asia", label: "Asia"},
+        ],
+        prompt: "Where should the data live?",
+        select: "one",
+      },
+      kind: "choice",
+      status: "pending",
+      toolCallId,
+    });
+
+    const chatWith = ({
+      historyId,
+      onAskSubmit,
+      toolCallId,
+    }: {
+      historyId: string;
+      onAskSubmit: GPTChatProps["onAskSubmit"];
+      toolCallId: string;
+    }): React.ReactElement => (
+      <GPTChat
+        currentHistoryId={historyId}
+        currentMessages={[userMessage, askMessage(regionAsk(toolCallId))]}
+        histories={histories}
+        onAskSubmit={onAskSubmit}
+        onCreateHistory={() => {}}
+        onDeleteHistory={() => {}}
+        onSelectHistory={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    const isDisabled = (element: {props: {accessibilityState?: {disabled?: boolean}}}): boolean =>
+      element.props.accessibilityState?.disabled === true;
+
+    it("does not carry the option chosen in one chat into the other chat's ask", async () => {
+      const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+      const {getByLabelText, getByTestId, rerender} = renderWithTheme(
+        chatWith({historyId: "h1", onAskSubmit, toolCallId: "call_first"})
+      );
+      await press(getByLabelText("West — Oregon"));
+      assert.isFalse(isDisabled(getByTestId("gpt-ask-call_first-submit")));
+
+      rerender(chatWith({historyId: "h2", onAskSubmit, toolCallId: "call_second"}));
+
+      assert.isTrue(isDisabled(getByTestId("gpt-ask-call_second-submit")));
+    });
+
+    it("does not show one chat's answer still loading on the other chat's ask", async () => {
+      const onAskSubmit = mock((_submission: AskSubmission) => new Promise<void>(() => {}));
+      const {getByLabelText, getByTestId, rerender} = renderWithTheme(
+        chatWith({historyId: "h1", onAskSubmit, toolCallId: "call_first"})
+      );
+      await press(getByLabelText("West — Oregon"));
+      await act(async () => {
+        fireEvent.press(getByTestId("gpt-ask-call_first-submit"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.lengthOf(onAskSubmit.mock.calls, 1);
+
+      rerender(chatWith({historyId: "h2", onAskSubmit, toolCallId: "call_second"}));
+
+      const spinners = getByTestId("gpt-ask-call_second-submit").findAll(
+        (node) => node.type === "ActivityIndicator"
+      );
+      assert.lengthOf(spinners, 0);
+      assert.isFalse(isDisabled(getByTestId("gpt-ask-call_second-button-skip")));
+    });
+  });
+
+  it("moves screen reader focus to a pending ask when it appears", () => {
+    setAccessibilityFocus.mockClear();
+    const scrollable = {scrollTo: (): void => {}, scrollToEnd: (): void => {}};
+    const {rerender} = render(
+      <GPTChat
+        currentMessages={[userMessage]}
+        histories={histories}
+        onCreateHistory={() => {}}
+        onDeleteHistory={() => {}}
+        onSelectHistory={() => {}}
+        onSubmit={() => {}}
+      />,
+      {
+        createNodeMock: (element) => (element.props.role === "group" ? 42 : scrollable),
+        wrapper: ThemeProvider,
+      }
+    );
+    assert.lengthOf(setAccessibilityFocus.mock.calls, 0);
+
+    rerender(
+      <GPTChat
+        currentMessages={[userMessage, askMessage(planAsk())]}
+        histories={histories}
+        onCreateHistory={() => {}}
+        onDeleteHistory={() => {}}
+        onSelectHistory={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    assert.deepEqual(setAccessibilityFocus.mock.calls, [[42]]);
+  });
+
+  it("focuses a pending ask's group on web without scrolling the page", () => {
+    Platform.OS = "web";
+    const focus = mock((_options: {preventScroll: boolean}) => {});
+    const node = {
+      addEventListener: (): void => {},
+      focus,
+      removeEventListener: (): void => {},
+      scrollTo: (): void => {},
+      scrollToEnd: (): void => {},
+    };
+    const {getByLabelText} = render(
+      <GPTChat
+        currentMessages={[userMessage, askMessage(planAsk())]}
+        histories={histories}
+        onCreateHistory={() => {}}
+        onDeleteHistory={() => {}}
+        onSelectHistory={() => {}}
+        onSubmit={() => {}}
+      />,
+      {createNodeMock: () => node, wrapper: ThemeProvider}
+    );
+
+    assert.isOk(getByLabelText("Choose a plan"));
+    assert.deepEqual(focus.mock.calls, [[{preventScroll: true}]]);
   });
 });

@@ -10,6 +10,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 - Actions: `Button`, `IconButton`, `Link`
 - Feedback: `Spinner`, `Modal`, `Toast`
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
+- AI chat: `GPTChat`, `AskCard` (agent asks in the transcript)
 - Authentication: `SocialLoginButton`, `LoginScreen`, `SignUpScreen`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
@@ -32,7 +33,7 @@ supported and is convenient when startup cost is not material:
 import {Box, DataTable, Icon} from "@terreno/ui";
 ```
 
-Heavy optional widgets (`GPTChat`, `EmojiSelector`, `MarkdownEditor`, consent flows, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, and related admin tools) are
+Heavy optional widgets (`GPTChat`, `AskCard`, `EmojiSelector`, `MarkdownEditor`, consent flows, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, and related admin tools) are
 re-exported from the root entry through lazy boundaries. Importing them from `@terreno/ui` stays type-compatible, but
 their implementation modules load on first render instead of during the initial root import. `DashboardGrid` stays eager.
 their implementation modules load on first render instead of during the initial root import. `MarkdownView` and
@@ -253,6 +254,93 @@ The composer row (attachment picker, tools, input, Send) is vertically centered,
 Operator steps: [Add a GPT chat mascot](../how-to/add-gpt-chat-mascot.md). Demo story: `GPTChat` → `Mascot`.
 The example AI screen demonstrates a consumer selecting one of four bundled mascot
 images once per mount.
+
+#### Asks
+
+`GPTChat` shows an [agent ask](agent-ui-asks.md) as an `AskCard` in the transcript. Set `ask` on
+the ask's `tool-call` message and pass `onAskSubmit`:
+
+```tsx
+<GPTChat
+  askErrors={askErrors}
+  currentMessages={currentMessages}
+  histories={histories}
+  onAskSubmit={handleAskSubmit}
+  onCreateHistory={onCreateHistory}
+  onDeleteHistory={onDeleteHistory}
+  onSelectHistory={onSelectHistory}
+  onSubmit={onSubmit}
+/>
+```
+
+| Prop or field | Type | Description |
+| --- | --- | --- |
+| `GPTChatMessage.ask` | `ChatAsk` | On a `tool-call` message: the ask (`kind`, `input`), its `toolCallId`, `status` (`pending`, `answered`, or `cancelled`), and optional `response` and `simple` card. The chat shows an `AskCard` instead of the tool call. |
+| `onAskSubmit` | `(submission: {toolCallId, response}) => void \| Promise<void>` | Called when the user answers a pending ask. `response` is the answer envelope. The pressed control shows a loading state until the promise settles. Without it, asks show but cannot be answered. |
+| `askErrors` | `Record<string, AskValidationError[]>` | Errors for the last answer to each ask, keyed by tool call id, such as the `fields` of a 400 `Invalid askResponse`. Shown inside the card. |
+
+- The ask's `tool-result` message stays in `currentMessages` but is not shown. Keep it: message
+  indexes must match the stored `prompts` rows that ratings use. When `ask.response` is unset, the
+  card reads the answer from that message.
+- A pending ask takes focus when it appears (DOM focus on web, accessibility focus on native),
+  labelled with the ask's `title`.
+- Answered and cancelled asks collapse to a one-line summary.
+
+The example AI screen, `example-frontend/app/(tabs)/ai.tsx`, handles the stream events, saved
+rows, answers, and errors. Steps: [Add agent asks to a chat](../how-to/agent-ui-asks.md).
+
+### AskCard
+
+One agent ask in a chat transcript: controls while it is pending, a summary line after. `GPTChat`
+renders it for messages with `ask`. Render it directly in a custom transcript.
+
+```tsx
+<AskCard ask={ask} errors={errors} onSubmit={handleAskSubmit} testID="plan-ask" />
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `ask` | `ChatAsk` | The ask. Pending asks are interactive. Answered and cancelled asks show a summary. |
+| `errors` | `AskValidationError[]` | Errors for the last answer, shown under the controls |
+| `onSubmit` | `AskSubmitHandler` | Called with `{toolCallId, response}`. Without it, the card cannot be answered: buttons and the select are disabled, and radio options show as plain text. |
+| `testID` | string | Defaults to `ask-card`. `GPTChat` passes `gpt-ask-<toolCallId>`. |
+
+`choice` controls:
+
+| Ask | Controls |
+| --- | --- |
+| The simple card has a button for every option (`handoff: false`), and every option label is at most 20 characters | The card's buttons as quick replies, then Skip unless `allowDecline` is `false`. A tap answers. |
+| Up to 8 options | `RadioField`, then Submit (`submitLabel`) and Skip |
+| More than 8 options | Searchable `SelectField`, then Submit and Skip |
+
+The selection starts on the ask's `default`. Submit is enabled only when `validateAskResponse`
+accepts the selection. When `ask.simple` is absent, the card derives it with `toSimpleCard`. An
+ask whose input fails `validateAskInput` shows "This question cannot be shown. Send a message to
+continue." instead of controls.
+
+| How the ask ended | Summary |
+| --- | --- |
+| `accept` | You chose: `<option labels>` |
+| `decline` | You skipped this question. |
+| `cancel` with `user_sent_message` | Not answered: you sent a message instead. |
+| `cancel` with `one_ask_at_a_time` | Not asked: the assistant asked another question first. |
+| Any other `cancel`, or status `cancelled` without a response | This question was cancelled. |
+| Status `answered` without a response | You answered this question. |
+
+| Element | testID |
+| --- | --- |
+| Card | `{testID}` |
+| Quick reply row | `{testID}-quick-replies` |
+| Quick reply or Skip button | `{testID}-button-<button id>`, such as `{testID}-button-option:team` or `{testID}-button-skip` |
+| Select | `{testID}-select` |
+| Radio options as plain text, without `onSubmit` | `{testID}-options` |
+| Submit | `{testID}-submit` |
+| Answer errors | `{testID}-errors` |
+| Summary | `{testID}-summary` |
+| Ask that cannot be shown | `{testID}-invalid` |
+
+Types: `AskCardProps`, `ChatAsk`, `ChatAskState`, `ChatAskStatus`, `AskSubmission`,
+`AskSubmitHandler`. Demo story: `AskCard`.
 
 ### SplitPage
 

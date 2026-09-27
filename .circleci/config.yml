@@ -94,6 +94,7 @@ workflows:
             ai/.* run-ai true
             blocks/.* run-blocks true
             blocks/.* run-ai true
+            blocks/.* run-ui true
             rtk/.* run-rtk true
             ui/.* run-ui true
             demo/.* run-ui true
@@ -291,6 +292,7 @@ workflows:
             syncdb/.* run-syncdb true
             demo/.* run-deploy-demo true
             ui/.* run-deploy-demo true
+            blocks/.* run-deploy-demo true
             example-frontend/.* run-deploy-frontend true
             ui/.* run-deploy-frontend true
             rtk/.* run-deploy-frontend true

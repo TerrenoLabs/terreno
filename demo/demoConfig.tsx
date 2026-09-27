@@ -4,6 +4,7 @@ import {AddressFieldConfiguration} from "@story-config/AddressField.config";
 import {AIRequestExplorerConfiguration} from "@story-config/AIRequestExplorer.config";
 import {AiSuggestionBoxConfiguration} from "@story-config/AiSuggestionBox.config";
 import {AreaChartConfiguration} from "@story-config/AreaChart.config";
+import {AskCardConfiguration} from "@story-config/AskCard.config";
 import {AttachmentPreviewConfiguration} from "@story-config/AttachmentPreview.config";
 import {AvatarConfiguration} from "@story-config/Avatar.config";
 import {BadgeConfiguration} from "@story-config/Badge.config";
@@ -269,6 +270,7 @@ const Config: DemoConfigurationBase[] = [
   AIRequestExplorerConfiguration,
   AiSuggestionBoxConfiguration,
   AreaChartConfiguration,
+  AskCardConfiguration,
   AvatarConfiguration,
   AddressFieldConfiguration,
   AttachmentPreviewConfiguration,

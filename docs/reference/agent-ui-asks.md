@@ -3,12 +3,15 @@
 Asks let an agent ask the user a typed question inside the chat and get the answer back as a
 tool result in the same turn. `@terreno/blocks` owns the contract: ask schemas, validators,
 simple cards, limits, and error codes. `@terreno/ai` owns the producer: the `ask_<kind>` tools,
-the pause and resume on `POST /gpt/prompt`, and `GptHistory.pendingAsk`. For why asks work this
-way, see [Agent UI Asks explained](../explanation/agent-ui-asks.md).
+the pause and resume on `POST /gpt/prompt`, and `GptHistory.pendingAsk`. `@terreno/ui` owns the
+renderer: `AskCard`, which `GPTChat` shows in the transcript. For why asks work this way, see
+[Agent UI Asks explained](../explanation/agent-ui-asks.md). To add asks to an app, see
+[Add agent asks to a chat](../how-to/agent-ui-asks.md).
 
-Shipped: the `choice` kind with `select: "one"`, asked and answered through `POST /gpt/prompt`.
-The `GPTChat` renderer, the other kinds, compact mode, and the headless endpoints are planned in
-the [implementation plan](../implementationPlans/agent-ui-asks.md).
+Shipped: the `choice` kind with `select: "one"`, asked and answered through `POST /gpt/prompt`
+and shown in `GPTChat` ([props and controls](ui.md#asks)). The other kinds, compact mode,
+`SimpleAskCard`, and the headless endpoints are planned in the
+[implementation plan](../implementationPlans/agent-ui-asks.md).
 
 ## Table of Contents
 
@@ -128,7 +131,7 @@ the ask is made. The server stores it on `pendingAsk.simple` and sends it in the
 | `title` | string? | The ask's `title`, cut to 40 characters |
 | `text` | string | The ask's `prompt`, cut to 140 characters |
 | `buttons` | `{id, label, style, response}[]` | 0–3 buttons. `label` is at most 20 characters. `style` is `default`, `primary`, `destructive`, or `cancel`. `response` is an answer envelope. |
-| `handoff` | boolean | `true` when the buttons cannot give every answer the ask allows, so the user should continue in the full app |
+| `handoff` | boolean | `true` when the buttons cannot show every option the ask offers, so the user needs the full app to answer. A card with a button for every option has `handoff: false`, even when Skip is left out to make room. |
 
 Text over a limit is cut to fit and ends in "…". The cut falls on a word boundary when one is in
 the second half of the kept text, and never splits an emoji.
@@ -254,8 +257,9 @@ answer, and the new message.
 A `prompt` sent while an ask is pending first records `{action: "cancel", reason:
 "user_sent_message"}` for the ask, then adds the message. The model sees both, and the stream
 starts with `{askResolved}` with `action: "cancel"`. A `prompt` that arrives while an answer is
-resolving the ask returns 409 `This ask is no longer pending`, because the answer resolved it
-first. Send the message again after the answer's turn ends.
+resolving the ask returns 409 `This ask is no longer pending` with the detail "This conversation
+is finishing an answer; try again.", because the answer resolved it first. Send the message again
+after the answer's turn ends.
 
 With asks off, `askResponse` is ignored and `prompt` is required, as before.
 
@@ -275,7 +279,7 @@ Errors raised before the stream starts return JSON with `status`, `title`, and `
 | 403 | `Not authorized to access this history` | The history belongs to another user |
 | 404 | `History not found` | No history has that id |
 | 409 | `This ask is no longer pending` | `toolCallId` is not the ask the history waits on: it was answered, cancelled, or never asked |
-| 409 | `This ask is no longer pending` | A `prompt` arrived while an answer was resolving the pending ask |
+| 409 | `This ask is no longer pending` | A `prompt` arrived while an answer was resolving the pending ask. The detail asks the user to try again. |
 
 An invalid answer:
 
@@ -438,3 +442,12 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 | `AsksOptions` | `{kinds?: AskKind[]}` |
 | `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus` | Stored ask types |
 | `Ask`, `AskKind`, `AskResponse`, `AskValidationError`, `SimpleCard`, `SimpleCardButton` | Re-exported from `@terreno/blocks` |
+
+`@terreno/ui` ([UI reference](ui.md#askcard)):
+
+| Export | Description |
+| --- | --- |
+| `AskCard`, `AskCardProps` | One ask in a transcript: controls while pending, a summary after |
+| `ChatAsk`, `ChatAskState`, `ChatAskStatus` | An ask as the chat shows it: the ask, its `toolCallId`, `status`, and optional `response` and `simple` |
+| `AskSubmission`, `AskSubmitHandler` | What `onAskSubmit` and `AskCard`'s `onSubmit` receive: `{toolCallId, response}` |
+| `GPTChatMessage.ask`, `GPTChatProps.onAskSubmit`, `GPTChatProps.askErrors` | Asks in `GPTChat` |

@@ -1,0 +1,152 @@
+import type {AskSubmission, ChatAsk, GPTChatMessage, GPTChatProps} from "@terreno/ui";
+
+import type {GptHistory} from "@/store/sdk";
+
+type AskResponse = AskSubmission["response"];
+type AskFieldErrors = NonNullable<GPTChatProps["askErrors"]>[string];
+type HistoryPrompt = GptHistory["prompts"][number];
+
+/** The `{ask}` event the server streams when the model asks the user a question. */
+export interface AskStreamEvent {
+  input: Record<string, unknown>;
+  kind: ChatAsk["kind"];
+  simple?: Record<string, unknown>;
+  toolCallId: string;
+}
+
+/** The `{askResolved}` event that starts a turn which answered or cancelled an ask. */
+export interface AskResolvedStreamEvent {
+  action: AskResponse["action"];
+  toolCallId: string;
+}
+
+/** What the server records for a pending ask when the user sends a message instead of answering. */
+const CANCELLED_BY_MESSAGE: AskResponse = {action: "cancel", reason: "user_sent_message"};
+
+const askToolName = (kind: ChatAsk["kind"]): string => `ask_${kind}`;
+
+/**
+ * The server validates an ask's input and card before storing or streaming them, and `AskCard`
+ * checks the input again before it renders controls, so the wire values are used as they are.
+ */
+const toChatAsk = ({
+  input,
+  kind,
+  simple,
+  status,
+  toolCallId,
+}: Omit<AskStreamEvent, "simple"> & {
+  simple?: Record<string, unknown>;
+  status: ChatAsk["status"];
+}): ChatAsk => ({input, kind, status, toolCallId, ...(simple ? {simple} : {})}) as ChatAsk;
+
+/**
+ * The ask a saved history row holds, if any. Only the conversation's `pendingAsk` can still be
+ * answered, so a row marked pending that is not the pending ask shows as cancelled.
+ */
+export const askFromHistoryPrompt = ({
+  pendingAsk,
+  prompt,
+}: {
+  pendingAsk?: GptHistory["pendingAsk"];
+  prompt: HistoryPrompt;
+}): ChatAsk | undefined => {
+  if (prompt.type !== "tool-call" || !prompt.ask || !prompt.toolCallId) {
+    return undefined;
+  }
+  const isPendingAsk = pendingAsk?.toolCallId === prompt.toolCallId;
+  const status = prompt.ask.status === "pending" && !isPendingAsk ? "cancelled" : prompt.ask.status;
+  return toChatAsk({
+    input: prompt.args ?? {},
+    kind: prompt.ask.kind,
+    simple: isPendingAsk ? pendingAsk?.simple : undefined,
+    status,
+    toolCallId: prompt.toolCallId,
+  });
+};
+
+/** The transcript message for a streamed `{ask}`: a tool-call row holding the pending ask. */
+export const askMessage = (event: AskStreamEvent): GPTChatMessage => {
+  const toolName = askToolName(event.kind);
+  return {
+    ask: toChatAsk({...event, status: "pending"}),
+    content: `Tool call: ${toolName}`,
+    role: "tool-call",
+    toolCall: {args: event.input, toolCallId: event.toolCallId, toolName},
+  };
+};
+
+const resolvedResponse = ({
+  action,
+  submitted,
+  toolCallId,
+}: AskResolvedStreamEvent & {submitted?: AskSubmission}): AskResponse | undefined => {
+  if (submitted?.toolCallId === toolCallId) {
+    return submitted.response;
+  }
+  if (action === "cancel") {
+    return CANCELLED_BY_MESSAGE;
+  }
+  return undefined;
+};
+
+/**
+ * Applies an `{askResolved}` event: marks the ask answered or cancelled and adds its result row
+ * right after it, as the server saves them, so message indexes keep matching history rows (ratings
+ * are sent by index). `submitted` is the answer this client sent, when the turn is an answer.
+ */
+export const withResolvedAsk = ({
+  action,
+  messages,
+  submitted,
+  toolCallId,
+}: AskResolvedStreamEvent & {
+  messages: GPTChatMessage[];
+  submitted?: AskSubmission;
+}): GPTChatMessage[] => {
+  const index = messages.findIndex((message) => message.ask?.toolCallId === toolCallId);
+  const resolvedMessage = messages[index];
+  if (!resolvedMessage?.ask) {
+    return messages;
+  }
+  const response = resolvedResponse({action, submitted, toolCallId});
+  const toolName = askToolName(resolvedMessage.ask.kind);
+  const ask: ChatAsk = {
+    ...resolvedMessage.ask,
+    status: action === "cancel" ? "cancelled" : "answered",
+    ...(response ? {response} : {}),
+  };
+  const resultMessage: GPTChatMessage = {
+    content: `Tool result: ${toolName}`,
+    role: "tool-result",
+    toolResult: {result: response ?? {action}, toolCallId, toolName},
+  };
+  return [
+    ...messages.slice(0, index),
+    {...resolvedMessage, ask},
+    resultMessage,
+    ...messages.slice(index + 1),
+  ];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The `fields` of a 400 answer response, shown inline on the ask. */
+export const askErrorsFromBody = (body: unknown): AskFieldErrors | undefined => {
+  if (!isRecord(body) || !Array.isArray(body.fields) || body.fields.length === 0) {
+    return undefined;
+  }
+  return body.fields as AskFieldErrors;
+};
+
+/** The message of a JSON error response: its `detail`, or its `title` without one. */
+export const errorDetailFromBody = (body: unknown): string | undefined => {
+  if (!isRecord(body)) {
+    return undefined;
+  }
+  if (typeof body.detail === "string" && body.detail) {
+    return body.detail;
+  }
+  return typeof body.title === "string" && body.title ? body.title : undefined;
+};

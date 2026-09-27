@@ -1,4 +1,4 @@
-import {afterEach, beforeAll, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeAll, describe, expect, it, mock, spyOn} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
 import {jsonSchema, type LanguageModel, type Tool, tool} from "ai";
 import express from "express";
@@ -1056,6 +1056,34 @@ describe("/gpt/prompt asks", () => {
       expect(res.status).toBe(409);
       expect(res.body.title).toBe("This ask is no longer pending");
       expect(model.doStream).toHaveBeenCalledTimes(2);
+    });
+
+    it("asks a prompt to retry when an answer resolves the ask after the prompt loaded it", async () => {
+      const model = createScriptedModel({
+        steps: [toolCallStep(PLAN_ASK_CALL), textStep("Setting up the Team plan.")],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await pauseOnPlanAsk(agent);
+      const loadedWhilePending = await loadHistory(historyId);
+      await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER},
+        historyId,
+      });
+      const findById = spyOn(GptHistory, "findById").mockResolvedValueOnce(loadedWhilePending);
+
+      const res = await agent.post("/gpt/prompt").send({historyId, prompt: "Actually, wait"});
+      findById.mockRestore();
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({
+        detail: "This conversation is finishing an answer; try again.",
+        requestId: expect.any(String),
+        status: 409,
+        title: "This ask is no longer pending",
+      });
+      expect(model.doStream).toHaveBeenCalledTimes(2);
+      const history = await loadHistory(historyId);
+      expect(history.prompts.filter((row) => row.type === "user")).toHaveLength(1);
     });
 
     it("returns 403 when another user answers the ask", async () => {

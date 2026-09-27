@@ -6,8 +6,8 @@ calls on the existing chat stream, how one round trip works, and how asks and Ag
 divide the work. Fields, limits, events, and error codes are in the
 [reference](../reference/agent-ui-asks.md).
 
-Asks ship today as the `choice` kind (pick one option) on `POST /gpt/prompt`. The `GPTChat`
-renderer, the other kinds, and endpoints for small clients follow the
+Asks ship today as the `choice` kind (pick one option) on `POST /gpt/prompt`, shown in
+`GPTChat`. The other kinds and endpoints for small clients follow the
 [implementation plan](../implementationPlans/agent-ui-asks.md).
 
 ## The problem
@@ -98,11 +98,33 @@ Submit exactly when the server will accept the answer.
 Every ask comes with a simple card: short text and at most three buttons, each holding the exact
 answer it sends. A client that knows nothing about ask kinds, such as a watch, a notification, or
 a chat bot, can render the card and answer with one tap by sending back the tapped button's answer.
-When the buttons cannot give every answer the ask allows, the card sets `handoff` so the client
-can send the user to the full app.
+When the buttons cannot show every option the ask offers, the card sets `handoff` so the client
+can send the user to the full app. A card with a button for every option does not set it, even
+when Skip is left out to make room.
 
 The server derives the card once, when the ask is made, and stores it with the pending ask. A card
 already on a screen never changes, even if the derivation rules change later.
+
+## In the chat
+
+`GPTChat` shows an ask where the model asked it: the ask's tool call row becomes an `AskCard` in
+the transcript, and the continuation streams in below it. The host still owns the network.
+`GPTChat` calls `onAskSubmit`, and the host posts the answer and reads the continuation with the
+same stream reader it uses for prompts. An answer the server rejects comes back to the card as
+`askErrors`, next to the control that caused it.
+
+A `choice` whose options all fit its simple card renders as that card's buttons, and a tap answers.
+A phone then shows the same buttons a watch would, and the most common ask, two or three short
+options, takes one tap. Longer lists get radio buttons or a searchable select with Submit.
+
+After an ask ends, the card collapses to one line, such as "You chose: Team". A long conversation
+then reads as a record of what the agent asked and what the user decided. The answer's
+`tool-result` row stays in the message list but is hidden. Ratings address messages by their index
+in the stored rows, so the client keeps one message per row, and after a reload the summary reads
+the answer from that row.
+
+A pending ask takes focus when it appears, so keyboard and screen reader users land on the question
+instead of hunting for it.
 
 ## Asks and blocks
 

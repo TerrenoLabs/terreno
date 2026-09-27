@@ -4,7 +4,7 @@
   # lockfile changes can retain an old TypeScript that a frozen install won't prune, and the
   # package tsconfigs use TypeScript 6 settings. A clean install guarantees only the
   # lockfile-pinned TypeScript is present.
-  command = "cd .. && rm -rf node_modules && bun install --frozen-lockfile && bun run --filter '@terreno/ui' compile && cd ui && bun run types && cd .. && bun run website:build"
+  command = "cd .. && rm -rf node_modules && bun install --frozen-lockfile && bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile && cd ui && bun run types && cd .. && bun run website:build"
   # GitHub Actions owns docs builds and deployments.
   ignore = "true"
   publish = "build"

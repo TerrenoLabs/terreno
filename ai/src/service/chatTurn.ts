@@ -293,6 +293,14 @@ const staleAskError = (toolCallId: string): APIError =>
     title: "This ask is no longer pending",
   });
 
+/** A new message lost the race to cancel the pending ask because an answer resolved it first. */
+const answerInProgressError = (): APIError =>
+  new APIError({
+    detail: "This conversation is finishing an answer; try again.",
+    status: 409,
+    title: "This ask is no longer pending",
+  });
+
 /*
  * The ask updates below are pipeline updates because MongoDB rejects `$push` and a positional
  * `$set` on the same array in one update. Values go in through `$literal` so a string that starts
@@ -343,12 +351,15 @@ const promptsWithAskResult = ({
 const resolvePendingAsk = async ({
   history,
   result,
+  staleError,
   status,
   toolCallId,
   toolName,
 }: {
   history: GptHistoryDocument;
   result: AskResponse;
+  /** Thrown when the ask is no longer pending, so the caller can explain what the user should do. */
+  staleError: () => APIError;
   status: GptHistoryAskStatus;
   toolCallId: string;
   toolName: string;
@@ -362,7 +373,7 @@ const resolvePendingAsk = async ({
     {returnDocument: "after", updatePipeline: true}
   );
   if (!resolved) {
-    throw staleAskError(toolCallId);
+    throw staleError();
   }
   return resolved;
 };
@@ -508,6 +519,7 @@ const startTurn = async ({
     history = await resolvePendingAsk({
       history,
       result: answer,
+      staleError: () => staleAskError(toolCallId),
       status: answer.action === "cancel" ? "cancelled" : "answered",
       toolCallId,
       toolName: askToolName(kind),
@@ -534,6 +546,7 @@ const startTurn = async ({
     history = await resolvePendingAsk({
       history,
       result: {action: "cancel", reason: ASK_CANCEL_REASONS.userSentMessage},
+      staleError: answerInProgressError,
       status: "cancelled",
       toolCallId,
       toolName: askToolName(kind),

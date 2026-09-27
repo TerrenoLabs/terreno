@@ -25,6 +25,8 @@ import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
 
+import {createDemoAgentService} from "./demoAgent";
+
 /** A provider that creates language models and image models from model IDs. */
 interface AIProvider {
   (modelId: string): LanguageModel;
@@ -725,13 +727,20 @@ export const addAiRoutes = (
     void verifyAllowedVertexModels(vertexProvider);
   }
 
+  if (!aiService) {
+    logger.info(
+      "No AI model configured (GEMINI_API_KEY or GOOGLE_VERTEX_PROJECT); chat uses the scripted " +
+        "Terreno demo agent unless a request sends x-ai-api-key."
+    );
+  }
+
   addGptHistoryRoutes(router, options);
   addGptRoutes(router, {
-    aiService,
+    aiService: aiService ?? createDemoAgentService(),
+    asks: true,
     createModelFn: createModelFromKey,
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,
-    demoMode: !aiService,
     langfuseSystemPromptName: "chat-assistant",
     maxSteps: 5,
     mcpService,

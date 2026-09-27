@@ -291,7 +291,7 @@ export interface GptRouteOptions {
   createServerModelFn?: (modelId?: string) => import("ai").LanguageModel | undefined;
   /** Factory to create per-request tools (e.g. tools that need the request's API key). Merged with static tools. */
   createRequestTools?: (req: import("express").Request) => Record<string, import("ai").Tool>;
-  /** Return canned responses when no AI service is available. */
+  /** Not read: the routes send a canned demo reply whenever no AI service resolves. */
   demoMode?: boolean;
   mcpService?: import("../service/mcpService").MCPService;
   openApiOptions?: Record<string, unknown>;

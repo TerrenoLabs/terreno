@@ -46,6 +46,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [In-app notifications](in-app-notifications.md) — Register `NotificationsApp`, syncdb inbox, and UI bell
 - [Add organizations](add-organizations.md) — Opt into Membership-backed tenancy, RBAC, admin, and seeded examples
 - [Add a GPT chat mascot](add-gpt-chat-mascot.md) — Optional consumer-owned character on empty `GPTChat`
+- [Add agent asks to a chat](agent-ui-asks.md) — Turn on `asks`, show and answer them in `GPTChat`, and try the keyless demo agent
 
 ## Admin
 

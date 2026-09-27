@@ -1,6 +1,34 @@
-import type {Page} from "@playwright/test";
+import type {Page, Route} from "@playwright/test";
+import {DateTime} from "luxon";
 
 const API_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
+
+type SseEvent = Record<string, unknown>;
+type HistoryRow = Record<string, unknown>;
+type AskStatus = "pending" | "answered" | "cancelled";
+
+const fulfillSse = (route: Route, events: SseEvent[]): Promise<void> =>
+  route.fulfill({
+    body: events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
+    headers: {
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Content-Type": "text/event-stream",
+    },
+    status: 200,
+  });
+
+/** The 409 the server returns when a request finds the conversation's ask already resolved. */
+const fulfillAskConflict = (route: Route, detail: string): Promise<void> =>
+  route.fulfill({
+    body: JSON.stringify({detail, status: 409, title: "This ask is no longer pending"}),
+    contentType: "application/json",
+    status: 409,
+  });
+
+/** Word-level text events, for realistic streaming. */
+const textEvents = (text: string): SseEvent[] =>
+  text.split(" ").map((word) => ({text: `${word} `}));
 
 export const mockGptStream = async (
   page: Page,
@@ -10,30 +38,230 @@ export const mockGptStream = async (
   const historyId = options?.historyId ?? `mock-history-${Date.now()}`;
   const title = options?.title ?? "Mock Chat";
 
+  await page.route(`${API_URL}/gpt/prompt`, (route) =>
+    fulfillSse(route, [...textEvents(responseText), {done: true, historyId, title}])
+  );
+};
+
+/**
+ * Streams `turns[i]` for the i-th `/gpt/prompt` request and aborts any request past the last turn.
+ * Returns every request body, in order.
+ */
+export const mockGptTurns = async (
+  page: Page,
+  turns: SseEvent[][]
+): Promise<Array<Record<string, unknown>>> => {
+  const requests: Array<Record<string, unknown>> = [];
   await page.route(`${API_URL}/gpt/prompt`, (route) => {
-    const chunks: string[] = [];
-
-    // Split response into word-level chunks for realistic streaming
-    const words = responseText.split(" ");
-    for (const word of words) {
-      chunks.push(`data: ${JSON.stringify({text: `${word} `})}\n\n`);
+    requests.push((route.request().postDataJSON() ?? {}) as Record<string, unknown>);
+    const events = turns[requests.length - 1];
+    if (!events) {
+      return route.abort();
     }
-
-    // Send the done event
-    chunks.push(`data: ${JSON.stringify({done: true, historyId, title})}\n\n`);
-
-    const body = chunks.join("");
-
-    route.fulfill({
-      body,
-      headers: {
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "Content-Type": "text/event-stream",
-      },
-      status: 200,
-    });
+    return fulfillSse(route, events);
   });
+  return requests;
+};
+
+/** The `{ask}` event payload, as the server streams it. */
+export interface MockAsk {
+  input: Record<string, unknown>;
+  kind: "choice";
+  simple?: Record<string, unknown>;
+  toolCallId: string;
+}
+
+/** A 400 the mock returns for the next answer, as the server does for an invalid `askResponse`. */
+export interface MockAnswerRejection {
+  fields: Array<{code: string; fix: string; message: string; path: string}>;
+}
+
+/** An answer another tab or device already sent, and the assistant's reply to it. */
+export interface MockAnswerElsewhere {
+  content: Record<string, unknown>;
+  continuation: string;
+}
+
+export interface MockGptAsk {
+  /**
+   * Makes the next answer fail with a 409, as when another tab already answered the ask, and
+   * serves the conversation as that tab left it from `GET /gpt/histories/:id` and the history list.
+   */
+  answerElsewhere: (answer: MockAnswerElsewhere) => Promise<void>;
+  /**
+   * Makes the next prompt fail with a 409, as when an answer from another tab resolves the ask just
+   * before the prompt can cancel it.
+   */
+  answerRacesNextPrompt: () => void;
+  /** Every `/gpt/prompt` request body, in order. */
+  requests: Array<Record<string, unknown>>;
+  /** Makes the next answer fail with a 400 and these `fields`. */
+  rejectNextAnswer: (rejection: MockAnswerRejection) => void;
+}
+
+export const userRow = (text: string): HistoryRow => ({content: [], text, type: "user"});
+
+export const assistantRow = (text: string): HistoryRow => ({content: [], text, type: "assistant"});
+
+/** The tool-call row that holds an ask, as the server saves it. */
+export const askCallRow = (ask: MockAsk, status: AskStatus): HistoryRow => ({
+  args: ask.input,
+  ask: {kind: ask.kind, status},
+  content: [],
+  text: `Tool call: ask_${ask.kind}`,
+  toolCallId: ask.toolCallId,
+  toolName: `ask_${ask.kind}`,
+  type: "tool-call",
+});
+
+/** The tool-result row that holds an ask's answer envelope, as the server saves it. */
+export const askResultRow = (ask: MockAsk, result: Record<string, unknown>): HistoryRow => ({
+  result,
+  text: `Tool result: ask_${ask.kind}`,
+  toolCallId: ask.toolCallId,
+  toolName: `ask_${ask.kind}`,
+  type: "tool-result",
+});
+
+/** A saved conversation as `GET /gpt/histories/:id` returns it; `pendingAsk` is still waiting. */
+export const savedHistory = ({
+  historyId,
+  pendingAsk,
+  prompts,
+  title,
+}: {
+  historyId: string;
+  pendingAsk?: MockAsk;
+  prompts: HistoryRow[];
+  title: string;
+}): Record<string, unknown> => {
+  const now = DateTime.now().toISO();
+  return {
+    _id: historyId,
+    created: now,
+    id: historyId,
+    // Only the fields the client reads; the server also sends the paused turn's replay state.
+    ...(pendingAsk
+      ? {
+          pendingAsk: {
+            input: pendingAsk.input,
+            kind: pendingAsk.kind,
+            toolCallId: pendingAsk.toolCallId,
+            ...(pendingAsk.simple ? {simple: pendingAsk.simple} : {}),
+          },
+        }
+      : {}),
+    prompts,
+    title,
+    updated: now,
+    userId: "mock-user",
+  };
+};
+
+/** Serves `history` from `GET /gpt/histories/:id` and as the only conversation in the list. */
+export const mockSavedHistory = async (
+  page: Page,
+  history: Record<string, unknown>
+): Promise<void> => {
+  await page.route(`${API_URL}/gpt/histories/${history.id}`, (route) =>
+    route.fulfill({
+      body: JSON.stringify({data: history}),
+      contentType: "application/json",
+      status: 200,
+    })
+  );
+  await page.route(
+    (url) => url.href.startsWith(API_URL) && url.pathname === "/gpt/histories",
+    (route) =>
+      route.fulfill({
+        body: JSON.stringify({data: [history], limit: 100, more: false, page: 1, total: 1}),
+        contentType: "application/json",
+        status: 200,
+      })
+  );
+};
+
+/**
+ * Mocks an ask round trip on `/gpt/prompt`: a prompt streams `ask` and pauses; an answer
+ * (`askResponse`) streams `{askResolved}`, the continuation text, and `{done}`.
+ */
+export const mockGptAskStream = async (
+  page: Page,
+  {ask, continuation, title}: {ask: MockAsk; continuation: string; title?: string}
+): Promise<MockGptAsk> => {
+  const historyId = `mock-history-${Date.now()}`;
+  const requests: Array<Record<string, unknown>> = [];
+  let rejection: MockAnswerRejection | undefined;
+  let isAnsweredElsewhere = false;
+  let isAnswerRacingPrompt = false;
+
+  await page.route(`${API_URL}/gpt/prompt`, (route) => {
+    const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
+    requests.push(body);
+    const answer = body.askResponse as {action?: string; toolCallId?: string} | undefined;
+    if (!answer && isAnswerRacingPrompt) {
+      isAnswerRacingPrompt = false;
+      return fulfillAskConflict(route, "This conversation is finishing an answer; try again.");
+    }
+    if (!answer) {
+      return fulfillSse(route, [
+        {ask},
+        {done: true, historyId, pendingAsk: {toolCallId: ask.toolCallId}},
+      ]);
+    }
+    if (isAnsweredElsewhere) {
+      return fulfillAskConflict(
+        route,
+        `Tool call ${ask.toolCallId} is not the ask this conversation is waiting on.`
+      );
+    }
+    if (rejection) {
+      const {fields} = rejection;
+      rejection = undefined;
+      return route.fulfill({
+        body: JSON.stringify({
+          detail: "The answer does not match the ask. See fields.",
+          fields,
+          status: 400,
+          title: "Invalid askResponse",
+        }),
+        contentType: "application/json",
+        status: 400,
+      });
+    }
+    return fulfillSse(route, [
+      {askResolved: {action: answer.action, toolCallId: answer.toolCallId}},
+      ...textEvents(continuation),
+      {done: true, historyId, ...(title ? {title} : {})},
+    ]);
+  });
+
+  return {
+    answerElsewhere: async ({content, continuation: elsewhereContinuation}) => {
+      isAnsweredElsewhere = true;
+      const prompt = requests.find((body) => typeof body.prompt === "string")?.prompt as string;
+      await mockSavedHistory(
+        page,
+        savedHistory({
+          historyId,
+          prompts: [
+            userRow(prompt),
+            askCallRow(ask, "answered"),
+            askResultRow(ask, {action: "accept", content}),
+            assistantRow(elsewhereContinuation),
+          ],
+          title: title ?? "Mock Chat",
+        })
+      );
+    },
+    answerRacesNextPrompt: () => {
+      isAnswerRacingPrompt = true;
+    },
+    rejectNextAnswer: (next) => {
+      rejection = next;
+    },
+    requests,
+  };
 };
 
 export const unmockGptStream = async (page: Page): Promise<void> => {

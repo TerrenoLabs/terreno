@@ -300,7 +300,7 @@
     "test:compile": "bun run --filter '@terreno/test' compile",
     "test:lint": "bun run --filter '@terreno/test' lint",
     "test:test": "bun run --filter '@terreno/test' test:ci",
-    "ui:compile": "bun run --filter '@terreno/ui' compile",
+    "ui:compile": "bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile",
     "ui:dev": "bun run --filter '@terreno/ui' dev",
     "ui:lint": "bun run --filter '@terreno/ui' lint",
     "ui:charts:compare": "bun scripts/charts/compareRenderedSnapshots.ts",

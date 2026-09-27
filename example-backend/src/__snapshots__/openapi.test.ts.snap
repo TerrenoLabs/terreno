@@ -16421,6 +16421,32 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "application/json": {
               "schema": {
                 "properties": {
+                  "askResponse": {
+                    "description": "The user's answer to the conversation's pending ask. Send it with historyId instead of prompt.",
+                    "properties": {
+                      "action": {
+                        "enum": [
+                          "accept",
+                          "decline",
+                          "cancel",
+                        ],
+                        "type": "string",
+                      },
+                      "content": {
+                        "description": "The answer, when action is accept",
+                        "type": "object",
+                      },
+                      "reason": {
+                        "description": "Why the ask was cancelled, when action is cancel",
+                        "type": "string",
+                      },
+                      "toolCallId": {
+                        "description": "The pending ask's toolCallId",
+                        "type": "string",
+                      },
+                    },
+                    "type": "object",
+                  },
                   "attachments": {
                     "items": {
                       "properties": {

@@ -233,10 +233,10 @@ commands:
             done
 
   demo_lint_and_typecheck:
-    description: Compile ui, then lint, typecheck, and smoke-test demo, then check story coverage
+    description: Compile blocks and ui, then lint, typecheck, and smoke-test demo, then check story coverage
     steps:
       - compile_packages:
-          packages: ui
+          packages: blocks ui
       - run:
           name: Lint and typecheck demo
           command: |
@@ -712,7 +712,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: ui
+          packages: blocks ui
       - run:
           name: Lint / compile / test rtk
           working_directory: ~/project/rtk
@@ -732,6 +732,8 @@ jobs:
     steps:
       - checkout
       - install_bun_and_deps
+      - compile_packages:
+          packages: blocks
       - run:
           name: Lint / compile / types / test ui
           working_directory: ~/project/ui
@@ -776,7 +778,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: ui
+          packages: blocks ui
       - run:
           name: Lint / compile / test admin-frontend
           working_directory: ~/project/admin-frontend
@@ -1008,7 +1010,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: ui rtk admin-frontend
+          packages: blocks ui rtk admin-frontend
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1163,7 +1165,7 @@ jobs:
       - run:
           name: Compile admin-spa dependencies
           command: |
-            bun run --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
+            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
       - run:
           name: Lint / compile / types / unit / build / smoke
           working_directory: ~/project/admin-spa
@@ -2035,7 +2037,7 @@ jobs:
               npm_tag=latest
             fi
             packages=(
-              api test ui rtk admin-backend admin-frontend admin-spa blocks ai
+              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             for package in "${packages[@]}"; do
@@ -2056,7 +2058,7 @@ jobs:
             # Publish rewrites catalog:/workspace:* specifiers in the working tree;
             # --force drops those edits so only the version bump is committed.
             git checkout --force -B release-master origin/master
-            for package in api test ui rtk admin-backend admin-frontend admin-spa blocks ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
+            for package in api test blocks ui rtk admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
               [ -d "$package" ] || continue
               node -e "
                 const fs=require('fs');
@@ -2230,7 +2232,7 @@ workflows:
     jobs:
       - packages-ci:
           package: admin-frontend
-          compile-deps: ui
+          compile-deps: blocks ui
 
   api-health:
     when: << pipeline.parameters.run-api-health >>

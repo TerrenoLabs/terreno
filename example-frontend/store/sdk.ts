@@ -100,8 +100,15 @@ export interface SetAdminUserPasswordRequest {
 
 // GptHistory endpoints are hand-maintained: nested modelRouter mounts under /gpt/histories
 // are not always present in the generated OpenAPI SDK after regen.
+interface GptHistoryPromptAsk {
+  kind: "choice";
+  status: "pending" | "answered" | "cancelled";
+}
+
 interface GptHistoryPrompt {
   args?: Record<string, unknown>;
+  /** Set on tool-call rows where the model asked the user a question; `args` holds the ask input. */
+  ask?: GptHistoryPromptAsk;
   content?: Array<{
     filename?: string;
     mimeType?: string;
@@ -117,10 +124,19 @@ interface GptHistoryPrompt {
   type: "assistant" | "system" | "tool-call" | "tool-result" | "user";
 }
 
+/** The ask a conversation is waiting on. Only the chat turn writes it, so clients never send it. */
+interface GptHistoryPendingAsk {
+  input: Record<string, unknown>;
+  kind: "choice";
+  simple: Record<string, unknown>;
+  toolCallId: string;
+}
+
 export interface GptHistory {
   _id: string;
   created: string;
   id: string;
+  pendingAsk?: GptHistoryPendingAsk;
   prompts: GptHistoryPrompt[];
   title?: string;
   updated: string;
@@ -133,10 +149,6 @@ export interface GptHistoriesListResponse {
   more?: boolean;
   page?: number;
   total?: number;
-}
-
-export interface GptHistoryResponse {
-  data: GptHistory;
 }
 
 export interface CreateGptHistoryBody {
@@ -204,7 +216,9 @@ export const terrenoApi = openapi
           url: "/gpt/histories",
         }),
       }),
-      getGptHistoriesById: builder.query<GptHistoryResponse, {id: string}>({
+      // The @terreno/rtk base query returns the `data` of single-document responses, so this
+      // endpoint and the GptHistory mutations below resolve to the history itself.
+      getGptHistoriesById: builder.query<GptHistory, {id: string}>({
         providesTags: (_result, _error, {id}) => [{id, type: "gptHistories" as const}],
         query: ({id}) => ({url: `/gpt/histories/${id}`}),
       }),
@@ -216,20 +230,19 @@ export const terrenoApi = openapi
           url: "/auth/me",
         }),
       }),
-      patchGptHistoriesById: builder.mutation<
-        GptHistoryResponse,
-        {body: UpdateGptHistoryBody; id: string}
-      >({
-        invalidatesTags: (_result, _error, {id}) => [
-          {id, type: "gptHistories" as const},
-          {id: "LIST", type: "gptHistories" as const},
-        ],
-        query: ({body, id}) => ({
-          body,
-          method: "PATCH",
-          url: `/gpt/histories/${id}`,
-        }),
-      }),
+      patchGptHistoriesById: builder.mutation<GptHistory, {body: UpdateGptHistoryBody; id: string}>(
+        {
+          invalidatesTags: (_result, _error, {id}) => [
+            {id, type: "gptHistories" as const},
+            {id: "LIST", type: "gptHistories" as const},
+          ],
+          query: ({body, id}) => ({
+            body,
+            method: "PATCH",
+            url: `/gpt/histories/${id}`,
+          }),
+        }
+      ),
       // Update current user profile
       patchMe: builder.mutation<ProfileResponse, UpdateProfileRequest>({
         invalidatesTags: ["profile"],
@@ -271,7 +284,7 @@ export const terrenoApi = openapi
           url: "/comms/dev/testPush",
         }),
       }),
-      postGptHistories: builder.mutation<GptHistoryResponse, {body: CreateGptHistoryBody}>({
+      postGptHistories: builder.mutation<GptHistory, {body: CreateGptHistoryBody}>({
         invalidatesTags: [{id: "LIST", type: "gptHistories"}],
         query: ({body}) => ({
           body,

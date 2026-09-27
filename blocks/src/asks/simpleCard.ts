@@ -31,7 +31,9 @@ export type SimpleCardButton = z.infer<typeof simpleCardButtonSchema>;
 
 /**
  * The small-screen form of an ask: short text and at most three buttons, each carrying the exact
- * answer it sends. `handoff` is true when the card cannot express every answer the ask allows.
+ * answer it sends. `handoff` is true when the buttons cannot show every option the ask offers, so
+ * the user needs the full app to answer. A card with a button for every option has `handoff: false`
+ * even when Skip is left out to make room.
  */
 export const simpleCardSchema = z
   .object({

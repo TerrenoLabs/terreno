@@ -1,9 +1,11 @@
 import {baseUrl, selectBetterAuthUserId, useMCPTools} from "@terreno/rtk";
 import {
+  type AskSubmission,
   Box,
   GPTChat,
   type GPTChatHistory,
   type GPTChatMessage,
+  type GPTChatProps,
   Heading,
   type MCPToolDetail,
   type MessageContentPart,
@@ -13,11 +15,19 @@ import {
 } from "@terreno/ui";
 import {DateTime} from "luxon";
 import type React from "react";
-import {useCallback, useMemo, useState} from "react";
+import {useCallback, useMemo, useRef, useState} from "react";
 import {type ImageSourcePropType, Image as RNImage} from "react-native";
-import {useDispatch, useSelector} from "react-redux";
+import {useSelector} from "react-redux";
 import {getSessionToken} from "@/lib/betterAuth";
+import {
+  askErrorsFromBody,
+  askFromHistoryPrompt,
+  askMessage,
+  errorDetailFromBody,
+  withResolvedAsk,
+} from "@/lib/gptAsks";
 import {selectGptMascotIndex} from "@/lib/gptMascot";
+import {useAppDispatch} from "@/store/index";
 import {
   type GptHistory,
   terrenoApi,
@@ -27,31 +37,59 @@ import {
   usePatchGptHistoriesByIdMutation,
 } from "@/store/sdk";
 
+type AskErrors = NonNullable<GPTChatProps["askErrors"]>;
+
+interface TurnRequest {
+  body: Record<string, unknown>;
+  /** The answer this turn sends, so its `{askResolved}` event can show what the user chose. */
+  submitted?: AskSubmission;
+}
+
+type TurnOutcome =
+  | {kind: "streamed"}
+  | {fields: AskErrors[string]; kind: "invalidAnswer"}
+  | {detail: string; kind: "conflict"};
+
 const mapHistoryToChat = (history: GptHistory): GPTChatHistory => ({
   id: history.id,
-  prompts: history.prompts.map((p) => ({
-    content: p.text,
-    contentParts: p.content?.map((c): MessageContentPart => {
-      if (c.type === "text") {
-        return {text: c.text ?? "", type: "text"};
-      }
-      if (c.type === "image") {
-        return {mimeType: c.mimeType, type: "image", url: c.url ?? ""};
-      }
-      return {filename: c.filename, mimeType: c.mimeType ?? "", type: "file", url: c.url ?? ""};
-    }),
-    rating: (p as unknown as {rating?: "up" | "down"}).rating,
-    role: p.type,
-    ...(p.toolCallId && p.type === "tool-call"
-      ? {toolCall: {args: p.args ?? {}, toolCallId: p.toolCallId, toolName: p.toolName ?? ""}}
-      : {}),
-    ...(p.toolCallId && p.type === "tool-result"
-      ? {toolResult: {result: p.result, toolCallId: p.toolCallId, toolName: p.toolName ?? ""}}
-      : {}),
-  })),
+  prompts: history.prompts.map((p) => {
+    const ask = askFromHistoryPrompt({pendingAsk: history.pendingAsk, prompt: p});
+    return {
+      ...(ask ? {ask} : {}),
+      content: p.text,
+      contentParts: p.content?.map((c): MessageContentPart => {
+        if (c.type === "text") {
+          return {text: c.text ?? "", type: "text"};
+        }
+        if (c.type === "image") {
+          return {mimeType: c.mimeType, type: "image", url: c.url ?? ""};
+        }
+        return {filename: c.filename, mimeType: c.mimeType ?? "", type: "file", url: c.url ?? ""};
+      }),
+      rating: (p as unknown as {rating?: "up" | "down"}).rating,
+      role: p.type,
+      ...(p.toolCallId && p.type === "tool-call"
+        ? {toolCall: {args: p.args ?? {}, toolCallId: p.toolCallId, toolName: p.toolName ?? ""}}
+        : {}),
+      ...(p.toolCallId && p.type === "tool-result"
+        ? {toolResult: {result: p.result, toolCallId: p.toolCallId, toolName: p.toolName ?? ""}}
+        : {}),
+    };
+  }),
   title: history.title,
   updated: history.updated,
 });
+
+const readJson = async (response: Response): Promise<unknown> => {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
+};
+
+const withoutEmptyAssistant = (messages: GPTChatMessage[]): GPTChatMessage[] =>
+  messages.filter((m) => m.content || m.role !== "assistant");
 
 const IMAGE_MIME_PREFIXES = ["image/"];
 
@@ -89,6 +127,8 @@ const DEFAULT_MODEL_VALUE = "gemini-2.5-flash";
 /** RTK Query cache key for the default gpt histories list (must match useGetGptHistoriesQuery). */
 const gptHistoriesListQueryArgs = {};
 
+const STALE_ASK_DETAIL = "This question is no longer waiting for an answer.";
+
 const GPT_MASCOT_IMAGES: ImageSourcePropType[] = [
   require("../../assets/gptMascots/mascot-1.png"),
   require("../../assets/gptMascots/mascot-2.png"),
@@ -100,6 +140,10 @@ const AiScreen: React.FC = () => {
   const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>(undefined);
   const [currentMessages, setCurrentMessages] = useState<GPTChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const [askErrors, setAskErrors] = useState<AskErrors>({});
+  // Bumped when a turn starts or another conversation opens, so a late reload of the saved
+  // conversation never replaces newer messages.
+  const transcriptVersionRef = useRef(0);
   const [geminiApiKey, setGeminiApiKey] = useStoredState<string>("geminiApiKey", "");
   const [attachments, setAttachments] = useState<SelectedFile[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_VALUE);
@@ -123,7 +167,7 @@ const AiScreen: React.FC = () => {
     [mascotIndex]
   );
 
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const userId = useSelector(selectBetterAuthUserId);
   const {data: modelsData} = useGetAiModelsQuery(undefined, {skip: !userId});
 
@@ -149,6 +193,7 @@ const AiScreen: React.FC = () => {
     (id: string) => {
       const history = histories.find((h) => h.id === id);
       if (history) {
+        transcriptVersionRef.current += 1;
         setCurrentHistoryId(id);
         setCurrentMessages(history.prompts);
       }
@@ -157,6 +202,7 @@ const AiScreen: React.FC = () => {
   );
 
   const handleCreateHistory = useCallback(() => {
+    transcriptVersionRef.current += 1;
     setCurrentHistoryId(undefined);
     setCurrentMessages([]);
   }, []);
@@ -228,6 +274,274 @@ const AiScreen: React.FC = () => {
     [currentHistoryId]
   );
 
+  /** Replaces the transcript with the saved conversation, for turns whose stream left rows out. */
+  const syncConversation = useCallback(
+    async (historyId: string): Promise<void> => {
+      const version = transcriptVersionRef.current;
+      try {
+        const history = await dispatch(
+          terrenoApi.endpoints.getGptHistoriesById.initiate(
+            {id: historyId},
+            {forceRefetch: true, subscribe: false}
+          )
+        ).unwrap();
+        if (transcriptVersionRef.current === version) {
+          setCurrentMessages(mapHistoryToChat(history).prompts);
+        }
+      } catch (err) {
+        console.warn("Could not reload the conversation:", err);
+      }
+    },
+    [dispatch]
+  );
+
+  /** The sidebar cache holds each conversation's rows; refetch it after a turn changes them. */
+  const refreshHistories = useCallback((): void => {
+    dispatch(
+      terrenoApi.endpoints.getGptHistories.initiate(gptHistoriesListQueryArgs, {
+        forceRefetch: true,
+        subscribe: false,
+      })
+    );
+  }, [dispatch]);
+
+  /**
+   * Sends one turn to /gpt/prompt, either a new prompt or an answer to the pending ask, and applies
+   * its SSE events to the transcript. An answer that fails validation and an ask that is no longer
+   * pending come back as outcomes instead of errors.
+   */
+  const runTurn = useCallback(
+    async ({body, submitted}: TurnRequest): Promise<TurnOutcome> => {
+      const token = await getSessionToken();
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      };
+      if (geminiApiKey) {
+        headers["x-ai-api-key"] = geminiApiKey;
+      }
+      const response = await fetch(`${baseUrl}/gpt/prompt`, {
+        body: JSON.stringify(body),
+        headers,
+        method: "POST",
+      });
+
+      if (response.status === 400 && submitted) {
+        const fields = askErrorsFromBody(await readJson(response));
+        if (!fields) {
+          throw new Error("HTTP 400");
+        }
+        return {fields, kind: "invalidAnswer"};
+      }
+      if (response.status === 409) {
+        const detail = errorDetailFromBody(await readJson(response));
+        return {detail: detail ?? STALE_ASK_DETAIL, kind: "conflict"};
+      }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      const decoder = new TextDecoder();
+      let assistantText = "";
+      let buffer = "";
+      let finishedHistoryId: string | undefined;
+      let pendingAskId: string | undefined;
+      let hasAskEvents = false;
+      let hasVisibleEvents = false;
+      const streamedAskIds = new Set<string>();
+
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, {stream: true});
+        const lines = buffer.split("\n");
+        // Keep the last potentially incomplete line in the buffer
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) {
+            continue;
+          }
+
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+
+            if (data.text) {
+              hasVisibleEvents = true;
+              assistantText += data.text;
+              const updatedText = assistantText;
+              setCurrentMessages((prev) => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                // Update existing assistant message or create one
+                if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                  updated[lastIdx] = {...updated[lastIdx], content: updatedText};
+                } else {
+                  updated.push({content: updatedText, role: "assistant"});
+                }
+                return updated;
+              });
+            } else if (data.toolCall) {
+              hasVisibleEvents = true;
+              setCurrentMessages((prev) => [
+                ...prev,
+                {
+                  content: `Tool call: ${data.toolCall.toolName}`,
+                  role: "tool-call",
+                  toolCall: data.toolCall,
+                },
+              ]);
+              // Add a new empty assistant message for continued text after tool results
+              assistantText = "";
+              setCurrentMessages((prev) => [...prev, {content: "", role: "assistant"}]);
+            } else if (data.toolResult) {
+              hasVisibleEvents = true;
+              // Insert tool result before the last empty assistant message
+              setCurrentMessages((prev) => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (
+                  lastIdx >= 0 &&
+                  updated[lastIdx].role === "assistant" &&
+                  !updated[lastIdx].content
+                ) {
+                  updated.splice(lastIdx, 0, {
+                    content: `Tool result: ${data.toolResult.toolName}`,
+                    role: "tool-result",
+                    toolResult: data.toolResult,
+                  });
+                }
+                return updated;
+              });
+            } else if (data.ask) {
+              hasAskEvents = true;
+              hasVisibleEvents = true;
+              streamedAskIds.add(data.ask.toolCallId);
+              const message = askMessage(data.ask);
+              assistantText = "";
+              setCurrentMessages((prev) => [...withoutEmptyAssistant(prev), message]);
+            } else if (data.askResolved) {
+              hasAskEvents = true;
+              hasVisibleEvents = true;
+              const {action, toolCallId} = data.askResolved;
+              setCurrentMessages((prev) =>
+                withResolvedAsk({action, messages: prev, submitted, toolCallId})
+              );
+            } else if (data.image || data.file) {
+              hasVisibleEvents = true;
+              const part = data.image
+                ? {mimeType: data.image.mimeType, type: "image" as const, url: data.image.url}
+                : {
+                    filename: data.file.filename,
+                    mimeType: data.file.mimeType,
+                    type: (typeof data.file.mimeType === "string" &&
+                    data.file.mimeType.startsWith("image/")
+                      ? "image"
+                      : "file") as "image" | "file",
+                    url: data.file.url,
+                  };
+              setCurrentMessages((prev) => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                  const existing = updated[lastIdx].contentParts ?? [];
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    contentParts: [...existing, part],
+                  };
+                } else {
+                  updated.push({content: "", contentParts: [part], role: "assistant"});
+                }
+                return updated;
+              });
+            } else if (data.done) {
+              finishedHistoryId = data.historyId;
+              pendingAskId = data.pendingAsk?.toolCallId;
+              // Clean up trailing empty assistant messages
+              setCurrentMessages((prev) =>
+                prev.filter(
+                  (m) =>
+                    m.content ||
+                    (m.contentParts && m.contentParts.length > 0) ||
+                    m.role !== "assistant"
+                )
+              );
+              if (data.historyId) {
+                setCurrentHistoryId(data.historyId);
+              }
+              // Update sidebar locally (backend already persisted it)
+              if (data.historyId) {
+                dispatch(
+                  terrenoApi.util.updateQueryData(
+                    "getGptHistories" as never,
+                    gptHistoriesListQueryArgs as never,
+                    (draft: {data?: GptHistory[]}) => {
+                      const entry = draft.data?.find((h: GptHistory) => h.id === data.historyId);
+                      if (entry) {
+                        if (data.title) {
+                          entry.title = data.title;
+                        }
+                      } else {
+                        if (!draft.data) {
+                          draft.data = [];
+                        }
+                        // New conversation — add it to the sidebar immediately
+                        draft.data.unshift({
+                          _id: data.historyId,
+                          created: DateTime.now().toISO() ?? "",
+                          id: data.historyId,
+                          prompts: [],
+                          title: data.title ?? "New Chat",
+                          updated: DateTime.now().toISO() ?? "",
+                          userId: "",
+                        });
+                      }
+                    }
+                  )
+                );
+              }
+            } else if (data.error) {
+              hasVisibleEvents = true;
+              console.error("SSE error:", data.error);
+              setCurrentMessages((prev) => [
+                ...withoutEmptyAssistant(prev),
+                {content: `Error: ${data.error}`, role: "assistant"},
+              ]);
+            }
+          } catch {
+            // Skip malformed JSON lines
+          }
+        }
+      }
+
+      if (!finishedHistoryId) {
+        return {kind: "streamed"};
+      }
+      // A turn that streams only `{done}` still saved rows, such as an ask the server cancelled
+      // because another ask was already pending, so show the saved conversation instead.
+      const missedPendingAsk = pendingAskId !== undefined && !streamedAskIds.has(pendingAskId);
+      const isStreamIncomplete = !hasVisibleEvents || missedPendingAsk;
+      if (isStreamIncomplete) {
+        await syncConversation(finishedHistoryId);
+      }
+      // Reopening this conversation from the sidebar should show its asks as they now stand.
+      if (hasAskEvents || isStreamIncomplete) {
+        refreshHistories();
+      }
+      return {kind: "streamed"};
+    },
+    [dispatch, geminiApiKey, refreshHistories, syncConversation]
+  );
+
   const handleSubmit = useCallback(
     async (prompt: string) => {
       const currentAttachments = [...attachments];
@@ -246,6 +560,7 @@ const AiScreen: React.FC = () => {
         contentParts: userContentParts.length > 0 ? userContentParts : undefined,
         role: "user",
       };
+      transcriptVersionRef.current += 1;
       setCurrentMessages((prev) => [...prev, userMessage]);
       setIsStreaming(true);
 
@@ -263,195 +578,70 @@ const AiScreen: React.FC = () => {
           })
         );
 
-        const token = await getSessionToken();
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        };
-        if (geminiApiKey) {
-          headers["x-ai-api-key"] = geminiApiKey;
-        }
-        const response = await fetch(`${baseUrl}/gpt/prompt`, {
-          body: JSON.stringify({
+        const outcome = await runTurn({
+          body: {
             attachments: apiAttachments.length > 0 ? apiAttachments : undefined,
             historyId: currentHistoryId,
             model: selectedModel,
             prompt,
-          }),
-          headers,
-          method: "POST",
+          },
         });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error("No response body");
-        }
-
-        const decoder = new TextDecoder();
-        let assistantText = "";
-        let buffer = "";
-
-        while (true) {
-          const {done, value} = await reader.read();
-          if (done) {
-            break;
-          }
-
-          buffer += decoder.decode(value, {stream: true});
-          const lines = buffer.split("\n");
-          // Keep the last potentially incomplete line in the buffer
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data: ")) {
-              continue;
-            }
-
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-
-              if (data.text) {
-                assistantText += data.text;
-                const updatedText = assistantText;
-                setCurrentMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIdx = updated.length - 1;
-                  // Update existing assistant message or create one
-                  if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-                    updated[lastIdx] = {...updated[lastIdx], content: updatedText};
-                  } else {
-                    updated.push({content: updatedText, role: "assistant"});
-                  }
-                  return updated;
-                });
-              } else if (data.toolCall) {
-                setCurrentMessages((prev) => [
-                  ...prev,
-                  {
-                    content: `Tool call: ${data.toolCall.toolName}`,
-                    role: "tool-call",
-                    toolCall: data.toolCall,
-                  },
-                ]);
-                // Add a new empty assistant message for continued text after tool results
-                assistantText = "";
-                setCurrentMessages((prev) => [...prev, {content: "", role: "assistant"}]);
-              } else if (data.toolResult) {
-                // Insert tool result before the last empty assistant message
-                setCurrentMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIdx = updated.length - 1;
-                  if (
-                    lastIdx >= 0 &&
-                    updated[lastIdx].role === "assistant" &&
-                    !updated[lastIdx].content
-                  ) {
-                    updated.splice(lastIdx, 0, {
-                      content: `Tool result: ${data.toolResult.toolName}`,
-                      role: "tool-result",
-                      toolResult: data.toolResult,
-                    });
-                  }
-                  return updated;
-                });
-              } else if (data.image || data.file) {
-                const part = data.image
-                  ? {mimeType: data.image.mimeType, type: "image" as const, url: data.image.url}
-                  : {
-                      filename: data.file.filename,
-                      mimeType: data.file.mimeType,
-                      type: (typeof data.file.mimeType === "string" &&
-                      data.file.mimeType.startsWith("image/")
-                        ? "image"
-                        : "file") as "image" | "file",
-                      url: data.file.url,
-                    };
-                setCurrentMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIdx = updated.length - 1;
-                  if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-                    const existing = updated[lastIdx].contentParts ?? [];
-                    updated[lastIdx] = {
-                      ...updated[lastIdx],
-                      contentParts: [...existing, part],
-                    };
-                  } else {
-                    updated.push({content: "", contentParts: [part], role: "assistant"});
-                  }
-                  return updated;
-                });
-              } else if (data.done) {
-                // Clean up trailing empty assistant messages
-                setCurrentMessages((prev) =>
-                  prev.filter(
-                    (m) =>
-                      m.content ||
-                      (m.contentParts && m.contentParts.length > 0) ||
-                      m.role !== "assistant"
-                  )
-                );
-                if (data.historyId) {
-                  setCurrentHistoryId(data.historyId);
-                }
-                // Update sidebar locally (backend already persisted it)
-                if (data.historyId) {
-                  dispatch(
-                    terrenoApi.util.updateQueryData(
-                      "getGptHistories" as never,
-                      gptHistoriesListQueryArgs as never,
-                      (draft: {data?: GptHistory[]}) => {
-                        const entry = draft.data?.find((h: GptHistory) => h.id === data.historyId);
-                        if (entry) {
-                          if (data.title) {
-                            entry.title = data.title;
-                          }
-                        } else {
-                          if (!draft.data) {
-                            draft.data = [];
-                          }
-                          // New conversation — add it to the sidebar immediately
-                          draft.data.unshift({
-                            _id: data.historyId,
-                            created: DateTime.now().toISO() ?? "",
-                            id: data.historyId,
-                            prompts: [],
-                            title: data.title ?? "New Chat",
-                            updated: DateTime.now().toISO() ?? "",
-                            userId: "",
-                          });
-                        }
-                      }
-                    )
-                  );
-                }
-              } else if (data.error) {
-                console.error("SSE error:", data.error);
-                setCurrentMessages((prev) => [
-                  ...prev.filter((m) => m.content || m.role !== "assistant"),
-                  {content: `Error: ${data.error}`, role: "assistant"},
-                ]);
-              }
-            } catch {
-              // Skip malformed JSON lines
-            }
-          }
+        if (outcome.kind === "conflict") {
+          setCurrentMessages((prev) => [
+            ...withoutEmptyAssistant(prev),
+            {content: outcome.detail, role: "assistant"},
+          ]);
         }
       } catch (err) {
         console.error("Error sending prompt:", err);
         setCurrentMessages((prev) => [
-          ...prev.filter((m) => m.content || m.role !== "assistant"),
+          ...withoutEmptyAssistant(prev),
           {content: "Failed to get response. Please try again.", role: "assistant"},
         ]);
       } finally {
         setIsStreaming(false);
       }
     },
-    [attachments, currentHistoryId, geminiApiKey, selectedModel]
+    [attachments, currentHistoryId, runTurn, selectedModel]
+  );
+
+  const handleAskSubmit = useCallback(
+    async (submission: AskSubmission): Promise<void> => {
+      if (!currentHistoryId) {
+        return;
+      }
+      const {response, toolCallId} = submission;
+      transcriptVersionRef.current += 1;
+      setAskErrors(({[toolCallId]: _cleared, ...rest}) => rest);
+      setIsStreaming(true);
+
+      try {
+        const outcome = await runTurn({
+          body: {
+            askResponse: {...response, toolCallId},
+            historyId: currentHistoryId,
+            model: selectedModel,
+          },
+          submitted: submission,
+        });
+        if (outcome.kind === "invalidAnswer") {
+          setAskErrors((prev) => ({...prev, [toolCallId]: outcome.fields}));
+        } else if (outcome.kind === "conflict") {
+          // Another tab or device already resolved the ask; show how it ended.
+          await syncConversation(currentHistoryId);
+          refreshHistories();
+        }
+      } catch (err) {
+        console.error("Error answering the question:", err);
+        setCurrentMessages((prev) => [
+          ...withoutEmptyAssistant(prev),
+          {content: "Failed to send your answer. Please try again.", role: "assistant"},
+        ]);
+      } finally {
+        setIsStreaming(false);
+      }
+    },
+    [currentHistoryId, refreshHistories, runTurn, selectedModel, syncConversation]
   );
 
   if (isLoading) {
@@ -464,6 +654,7 @@ const AiScreen: React.FC = () => {
 
   return (
     <GPTChat
+      askErrors={askErrors}
       attachments={attachments}
       availableModels={availableModels}
       currentHistoryId={currentHistoryId}
@@ -473,6 +664,7 @@ const AiScreen: React.FC = () => {
       isStreaming={isStreaming}
       mascot={mascot}
       mcpTools={mcpTools}
+      onAskSubmit={handleAskSubmit}
       onAttachFiles={handleAttachFiles}
       onCreateHistory={handleCreateHistory}
       onDeleteHistory={handleDeleteHistory}
@@ -488,6 +680,7 @@ const AiScreen: React.FC = () => {
         "Tell me a dad joke about TypeScript",
         "Make a pun about React hooks",
         "Tell me a witty joke about MongoDB",
+        "Help me pick a plan",
       ]}
       testID="chat"
     />

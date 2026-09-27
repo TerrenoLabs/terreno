@@ -1385,12 +1385,36 @@ const injectedRtkApi = api
 
 export {injectedRtkApi as openapi};
 export type PostGptHistoriesRes = /** status 201 Successful create */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice";
+    /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
+    promptIndex: number;
+    /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
+    responseMessages: any;
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1439,6 +1463,13 @@ export type PostGptHistoriesArgs = {
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1482,12 +1513,36 @@ export type PostGptHistoriesArgs = {
 };
 export type GetGptHistoriesRes = /** status 200 Successful list */ {
   data?: {
+    /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+    pendingAsk?: {
+      /** When the model asked */
+      created: string;
+      /** The validated ask input the model sent */
+      input: any;
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice";
+      /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
+      promptIndex: number;
+      /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
+      responseMessages: any;
+      /** Simple card (short text and up to three answer buttons) made when the ask was made */
+      simple: any;
+      /** Tool call id of the ask; an answer must name it */
+      toolCallId: string;
+    };
     /** Project this conversation belongs to */
     projectId?: string;
     /** Ordered list of messages in this conversation */
     prompts?: {
       /** Arguments passed to a tool call */
       args?: any;
+      /** Set on tool-call rows where the model asked the user a question */
+      ask?: {
+        /** Ask kind; the model asked with the tool ask_<kind> */
+        kind: "choice";
+        /** pending while the user can answer; answered or cancelled once the ask is resolved */
+        status: "pending" | "answered" | "cancelled";
+      };
       /** Multipart content attached to this prompt */
       content?: {
         /** Original filename of the attached file */
@@ -1553,12 +1608,36 @@ export type GetGptHistoriesArgs = {
   limit?: number;
 };
 export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice";
+    /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
+    promptIndex: number;
+    /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
+    responseMessages: any;
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1602,12 +1681,36 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
 };
 export type GetGptHistoriesByIdArgs = string;
 export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice";
+    /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
+    promptIndex: number;
+    /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
+    responseMessages: any;
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1658,6 +1761,13 @@ export type PatchGptHistoriesByIdArgs = {
     prompts?: {
       /** Arguments passed to a tool call */
       args?: any;
+      /** Set on tool-call rows where the model asked the user a question */
+      ask?: {
+        /** Ask kind; the model asked with the tool ask_<kind> */
+        kind: "choice";
+        /** pending while the user can answer; answered or cancelled once the ask is resolved */
+        status: "pending" | "answered" | "cancelled";
+      };
       /** Multipart content attached to this prompt */
       content?: {
         /** Original filename of the attached file */
@@ -1706,6 +1816,16 @@ export type PostGptPromptRes = /** status 200 Success */ {
   data?: string;
 };
 export type PostGptPromptArgs = {
+  /** The user's answer to the conversation's pending ask. Send it with historyId instead of prompt. */
+  askResponse?: {
+    action?: "accept" | "decline" | "cancel";
+    /** The answer, when action is accept */
+    content?: object;
+    /** Why the ask was cancelled, when action is cancel */
+    reason?: string;
+    /** The pending ask's toolCallId */
+    toolCallId?: string;
+  };
   attachments?: {
     filename?: string;
     mimeType?: string;

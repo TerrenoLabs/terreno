@@ -258,7 +258,7 @@ GPT project with persistent context and memories.
 | `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null}` |
 | `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools (ask tools are not listed) |
 
-AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerModelFn(modelId)` → configured `aiService` → demo SSE response when `demoMode` and none available.
+AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerModelFn(modelId)` → configured `aiService`. When none resolves, `/gpt/prompt` streams a canned demo reply and `/gpt/remix` returns it. This happens whether or not `demoMode` is set.
 
 Pass `asks: true` (or `{kinds: ["choice"]}`) to let the model ask the user typed questions in the chat. Asks are off by default; with them off, tools, system prompt, and SSE events are unchanged. See [Agent UI Asks](agent-ui-asks.md).
 
@@ -355,7 +355,6 @@ new AiApp({
   gcsBucket: "my-bucket",
   mcpService: new MCPService([{name: "tools", transport: {type: "sse", url: "..."}}]),
   tools: myToolDefinitions,
-  demoMode: false,
   createModelFn: (apiKey, modelId) => google(modelId ?? "gemini-2.5-flash", {apiKey}),
   openApiOptions: options,
 }).register(app);
@@ -367,7 +366,7 @@ new AiApp({
 | `asks` | Let the model ask the user typed questions in chat: `true` or `{kinds}`. Passed to `addGptRoutes`; see [Agent UI Asks](agent-ui-asks.md) |
 | `createModelFn` | Build model from per-request `x-ai-api-key` |
 | `createServerModelFn` | Server-side model factory (e.g. Vertex ADC) without per-request key |
-| `demoMode` | Return canned responses when no AI service resolves |
+| `demoMode` | Not read. The routes send a canned demo reply whenever no AI service resolves |
 | `fileStorageService` + `gcsBucket` | Enable file upload routes |
 | `mcpService` | Enable MCP routes and tool discovery in chat |
 | `tools` | Static Vercel AI SDK tool definitions for chat |

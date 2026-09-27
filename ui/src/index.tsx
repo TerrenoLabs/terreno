@@ -14,6 +14,8 @@ export * from "./AnnouncementScreen";
 export type * from "./AreaChart";
 export type * from "./AttachmentPreview";
 export * from "./Avatar";
+export type * from "./asks/AskCard";
+export type * from "./asks/askTypes";
 export * from "./Badge";
 export {Banner, hideBanner} from "./Banner";
 export type * from "./BarChart";
@@ -70,6 +72,7 @@ export {
   AIRequestExplorer,
   AiSuggestionBox,
   AreaChart,
+  AskCard,
   AttachmentPreview,
   BarChart,
   ConflictSheet,

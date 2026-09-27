@@ -2,6 +2,7 @@ import type {AIRequestExplorer as AIRequestExplorerComponent} from "../AIRequest
 import type {AiSuggestionBox as AiSuggestionBoxComponent} from "../AiSuggestionBox";
 import type {AreaChart as AreaChartComponent} from "../AreaChart";
 import type {AttachmentPreview as AttachmentPreviewComponent} from "../AttachmentPreview";
+import type {AskCard as AskCardComponent} from "../asks/AskCard";
 import type {BarChart as BarChartComponent} from "../BarChart";
 import type {ConflictSheet as ConflictSheetComponent} from "../ConflictSheet";
 import type {ConsentFormScreen as ConsentFormScreenComponent} from "../ConsentFormScreen";
@@ -22,6 +23,7 @@ export const heavyOptionalModuleFactories = {
   AIRequestExplorer: () => import("../AIRequestExplorer"),
   AiSuggestionBox: () => import("../AiSuggestionBox"),
   AreaChart: () => import("../AreaChart"),
+  AskCard: () => import("../asks/AskCard"),
   AttachmentPreview: () => import("../AttachmentPreview"),
   BarChart: () => import("../BarChart"),
   ConflictSheet: () => import("../ConflictSheet"),
@@ -63,6 +65,11 @@ export const AiSuggestionBox = createLazyNamedExport(
   heavyOptionalModuleFactories.AiSuggestionBox,
   "AiSuggestionBox"
 ) as unknown as typeof AiSuggestionBoxComponent;
+
+export const AskCard = createLazyNamedExport(
+  heavyOptionalModuleFactories.AskCard,
+  "AskCard"
+) as unknown as typeof AskCardComponent;
 
 export const AttachmentPreview = createLazyNamedExport(
   heavyOptionalModuleFactories.AttachmentPreview,

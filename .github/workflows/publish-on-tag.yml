@@ -220,7 +220,7 @@ jobs:
         run: echo "Published @terreno/test@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
   publish-ui:
-    needs: check-changes
+    needs: [check-changes, publish-blocks]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -358,6 +358,9 @@ jobs:
         env:
           VERSION: ${{ needs.check-changes.outputs.version }}
           UI_VERSION: ${{ steps.ui_version.outputs.ui_version }}
+
+      - name: Compile workspace dependencies
+        run: node ../.github/scripts/compile-workspace-deps.js
 
       - name: Compile
         run: bun run compile
@@ -1889,6 +1892,10 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Build blocks dependency
+        working-directory: blocks
+        run: bun run compile
 
       - name: Generate docs inputs
         run: |

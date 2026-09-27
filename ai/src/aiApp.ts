@@ -22,7 +22,7 @@ export interface AiAppOptions {
   createModelFn?: (apiKey: string, modelId?: string) => LanguageModel;
   /** Factory function to create a LanguageModel on the server side without a per-request key (e.g. Vertex AI with ADC). Returns undefined if no provider is configured. */
   createServerModelFn?: (modelId?: string) => LanguageModel | undefined;
-  /** When true and no AI service is available, routes return canned demo responses instead of failing. */
+  /** Not read: the routes send a canned demo reply whenever no AI service resolves. */
   demoMode?: boolean;
   /** File storage service for handling file uploads to GCS. */
   fileStorageService?: FileStorageService;
@@ -61,10 +61,9 @@ export interface AiAppOptions {
  *
  * @example
  * ```typescript
- * // Demo mode with per-request key support (no server-side API key needed)
+ * // Per-request keys only (no server-side API key needed); requests without a key get the canned demo reply
  * new AiApp({
  *   createModelFn: (key) => google("gemini-2.5-flash", {apiKey: key}),
- *   demoMode: true,
  * }).register(app);
  * ```
  */

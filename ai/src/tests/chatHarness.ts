@@ -226,7 +226,7 @@ export const createScriptedModel = ({
       }
       const parts = remaining.shift();
       if (!parts) {
-        throw new Error("The scripted model has no more steps");
+        expect.unreachable("The scripted model has no more steps");
       }
       return {stream: streamOf(parts)};
     }),
@@ -283,7 +283,7 @@ export const createPromptKeyedModel = ({
     }
     const parts = remaining.get(prompt)?.shift();
     if (!parts) {
-      throw new Error(`The scripted model has no step for "${prompt}"`);
+      expect.unreachable(`The scripted model has no step for "${prompt}"`);
     }
     return {stream: streamOf(parts)};
   });
@@ -293,7 +293,7 @@ export const createPromptKeyedModel = ({
 export const modelCall = (model: ScriptedModel, index: number): ModelCallOptions => {
   const call = model.doStream.mock.calls[index];
   if (!call) {
-    throw new Error(`The model was not called ${index + 1} times`);
+    expect.unreachable(`The model was not called ${index + 1} times`);
   }
   return call[0];
 };
@@ -393,7 +393,7 @@ export const streamPrompt = async (
 export const loadHistory = async (historyId: string): Promise<GptHistoryDocument> => {
   const history = await GptHistory.findById(historyId);
   if (!history) {
-    throw new Error(`History ${historyId} not found`);
+    expect.unreachable(`History ${historyId} not found`);
   }
   return history;
 };

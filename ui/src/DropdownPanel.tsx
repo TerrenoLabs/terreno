@@ -155,7 +155,7 @@ export const DropdownPanel: FC<DropdownPanelProps> = ({
       opacity: 0.15,
     }),
     maxHeight: layout.maxHeight,
-    width,
+    width: layout.width,
   };
 
   const panelBody: ReactNode = (

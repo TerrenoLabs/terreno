@@ -42,7 +42,7 @@ describe("computeDropdownPanelLayout", () => {
     expect(layout.left).toBe(DROPDOWN_PANEL_SCREEN_MARGIN);
   });
 
-  it("keeps a panel wider than the viewport at the left margin", () => {
+  it("narrows a panel wider than the viewport so both edges stay inside the margins", () => {
     const layout = computeDropdownPanelLayout({
       anchor: {height: 40, width: 60, x: 120, y: 60},
       panelWidth: 400,
@@ -50,6 +50,32 @@ describe("computeDropdownPanelLayout", () => {
       viewportWidth: 320,
     });
     expect(layout.left).toBe(DROPDOWN_PANEL_SCREEN_MARGIN);
+    // Moving the panel cannot keep a 400px panel on a 320px screen, so it shrinks.
+    expect(layout.width).toBe(320 - DROPDOWN_PANEL_SCREEN_MARGIN * 2);
+    expect(layout.left + layout.width).toBe(320 - DROPDOWN_PANEL_SCREEN_MARGIN);
+  });
+
+  it("leaves the requested width alone when it fits", () => {
+    const layout = computeDropdownPanelLayout({
+      anchor: {height: 40, width: 100, x: 100, y: 60},
+      panelWidth: 320,
+      ...viewport,
+    });
+    expect(layout.width).toBe(320);
+  });
+
+  it("right-aligns against the narrowed width on a cramped viewport", () => {
+    // A trigger near the right edge of a small phone: the panel narrows first, then the
+    // right-align uses that narrowed width so it still lines up with the trigger.
+    const layout = computeDropdownPanelLayout({
+      anchor: {height: 40, width: 80, x: 240, y: 60},
+      panelWidth: 340,
+      viewportHeight: 800,
+      viewportWidth: 320,
+    });
+    expect(layout.width).toBe(304);
+    expect(layout.left).toBe(DROPDOWN_PANEL_SCREEN_MARGIN);
+    expect(layout.left + layout.width).toBeLessThanOrEqual(320 - DROPDOWN_PANEL_SCREEN_MARGIN);
   });
 
   it("honours an explicit alignment over the auto behaviour", () => {

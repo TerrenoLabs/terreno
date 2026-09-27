@@ -262,7 +262,7 @@ mounted). `computeDropdownPanelLayout` then anchors it to the measured trigger:
 | --- | --- |
 | Panel fits beside the trigger | Left edges line up (`align="start"`) |
 | Left-aligned panel would cross the right viewport edge | Right edges line up instead (`align="auto"`, the default) |
-| Panel is wider than the viewport | Clamped to an 8px screen margin |
+| Panel is wider than the viewport | Narrowed to the viewport minus the 8px screen margins |
 | Less than 160px below the trigger, and more above | Flipped above the trigger |
 | Content taller than the space on screen | Panel body scrolls; the footer stays pinned |
 

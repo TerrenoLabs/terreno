@@ -40,6 +40,11 @@ export interface DropdownPanelLayout {
   maxHeight: number;
   placement: "above" | "below";
   top?: number;
+  /**
+   * Requested panel width, shrunk to what fits between the screen margins. Moving a
+   * panel that is wider than the viewport cannot keep it on screen, so it narrows.
+   */
+  width: number;
 }
 
 export const DROPDOWN_PANEL_GAP = 4;
@@ -85,16 +90,21 @@ export const computeDropdownPanelLayout = ({
   viewportHeight,
   viewportWidth,
 }: DropdownPanelLayoutInput): DropdownPanelLayout => {
+  // Everything downstream positions the panel at the width it will actually render at,
+  // so a panel too wide for the viewport narrows instead of running past the margin.
+  const availableWidth = viewportWidth - screenMargin * 2;
+  const width = availableWidth > 0 ? Math.min(panelWidth, availableWidth) : panelWidth;
+
   const startLeft = anchor.x;
-  const endLeft = anchor.x + anchor.width - panelWidth;
-  const overflowsRight = startLeft + panelWidth > viewportWidth - screenMargin;
+  const endLeft = anchor.x + anchor.width - width;
+  const overflowsRight = startLeft + width > viewportWidth - screenMargin;
 
   let desiredLeft = startLeft;
   if (align === "end" || (align === "auto" && overflowsRight)) {
     desiredLeft = endLeft;
   }
 
-  const left = clampLeft({left: desiredLeft, panelWidth, screenMargin, viewportWidth});
+  const left = clampLeft({left: desiredLeft, panelWidth: width, screenMargin, viewportWidth});
 
   const belowTop = anchor.y + anchor.height + gap;
   const spaceBelow = viewportHeight - belowTop - screenMargin;
@@ -113,8 +123,9 @@ export const computeDropdownPanelLayout = ({
       left,
       maxHeight,
       placement: "above",
+      width,
     };
   }
 
-  return {left, maxHeight, placement: "below", top: belowTop};
+  return {left, maxHeight, placement: "below", top: belowTop, width};
 };

@@ -350,8 +350,9 @@ describe("DropdownPanel viewport clamping", () => {
         <Text>Body</Text>
       </DropdownPanel>
     );
-    const style = getByTestId("f.panel").props.style as {maxHeight?: number};
-    // The inline (no host) overlay still caps its height to the space on screen.
+    const style = getByTestId("f.panel").props.style as {maxHeight?: number; width?: number};
+    // A 320px panel cannot fit a 240px screen, so it renders at the margin-to-margin width.
+    expect(style.width).toBe(224);
     expect(style.maxHeight).toBeGreaterThan(0);
   });
 });

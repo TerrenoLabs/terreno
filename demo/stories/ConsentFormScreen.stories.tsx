@@ -1,5 +1,8 @@
-import {ConsentFormScreen} from "@terreno/ui";
-import {type ReactElement, useCallback} from "react";
+import {ConsentFormScreen, Text} from "@terreno/ui";
+import type React from "react";
+import {type ReactElement, useCallback, useContext} from "react";
+
+import {DemoPreviewContext} from "../previewContext";
 
 const consentForm = {
   active: true,
@@ -9,6 +12,7 @@ const consentForm = {
   checkboxes: [{label: "I have read and understand this consent form.", required: true}],
   content: {
     en: "Please review this consent form. The signature area should fit within the card and the action buttons should share one row.",
+    "en-US": "US English consent copy for the preview locale.",
   },
   declineButtonText: "Decline",
   defaultLocale: "en",
@@ -25,13 +29,17 @@ const consentForm = {
 export const ConsentFormScreenDemo: React.FC = (): ReactElement => {
   const handleAgree = useCallback((): void => {}, []);
   const handleDecline = useCallback((): void => {}, []);
+  const preview = useContext(DemoPreviewContext);
 
   return (
-    <ConsentFormScreen
-      form={consentForm}
-      locale="en"
-      onAgree={handleAgree}
-      onDecline={handleDecline}
-    />
+    <>
+      <Text testID="consent-preview-locale">{preview.locale}</Text>
+      <ConsentFormScreen
+        form={consentForm}
+        locale={preview.locale}
+        onAgree={handleAgree}
+        onDecline={handleDecline}
+      />
+    </>
   );
 };

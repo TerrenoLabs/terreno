@@ -1,3 +1,4 @@
+import {DemoPreviewFrame} from "@components/DemoPreviewFrame";
 import {ErrorBoundary} from "@components/ErrorBoundary";
 import {RelatedComponents} from "@components/RelatedComponents";
 import {UsageSnippet} from "@components/UsageSnippet";
@@ -402,44 +403,48 @@ const ComponentPage: FC = () => {
 
   if (isEmbedMode) {
     return (
-      <Box padding={2} width="100%">
-        <ComponentDemo config={config} key={config.name} />
-      </Box>
+      <DemoPreviewFrame>
+        <Box padding={2} width="100%">
+          <ComponentDemo config={config} key={config.name} />
+        </Box>
+      </DemoPreviewFrame>
     );
   }
 
   return (
-    <Box flex="grow" height="100%" padding={4} scroll>
-      <Box marginBottom={4}>
-        <Heading size="lg">{config?.name}</Heading>
-      </Box>
-      <Box marginBottom={4}>
-        <Box marginBottom={2}>
-          <Heading size="sm">Description</Heading>
+    <DemoPreviewFrame>
+      <Box flex="grow" height="100%" padding={4} scroll>
+        <Box marginBottom={4}>
+          <Heading size="lg">{config?.name}</Heading>
         </Box>
-        <MarkdownView>{config?.description}</MarkdownView>
-      </Box>
-      <ComponentDemo config={config} key={config.name} />
-      {config.usageExample ? <UsageSnippet example={config.usageExample} /> : null}
-      <ComponentUsage config={config!} />
-      <ComponentA11yNotes config={config!} />
-      <ComponentProps props={config?.props?.children} />
-      <ComponentStatus config={config!} />
-      <ComponentAdditionalDocs config={config!} />
-      {Boolean(config?.related.length) && (
         <Box marginBottom={4}>
           <Box marginBottom={2}>
-            <Heading size="sm">Related</Heading>
+            <Heading size="sm">Description</Heading>
           </Box>
-          <RelatedComponents names={config.related} />
+          <MarkdownView>{config?.description}</MarkdownView>
         </Box>
-      )}
-      <Box marginBottom={2}>
-        <Heading size="sm">Examples</Heading>
+        <ComponentDemo config={config} key={config.name} />
+        {config.usageExample ? <UsageSnippet example={config.usageExample} /> : null}
+        <ComponentUsage config={config!} />
+        <ComponentA11yNotes config={config!} />
+        <ComponentProps props={config?.props?.children} />
+        <ComponentStatus config={config!} />
+        <ComponentAdditionalDocs config={config!} />
+        {Boolean(config?.related.length) && (
+          <Box marginBottom={4}>
+            <Box marginBottom={2}>
+              <Heading size="sm">Related</Heading>
+            </Box>
+            <RelatedComponents names={config.related} />
+          </Box>
+        )}
+        <Box marginBottom={2}>
+          <Heading size="sm">Examples</Heading>
+        </Box>
+        <ComponentStories config={config!} />
+        {/* <ComponentTestMatrix config={config} /> */}
       </Box>
-      <ComponentStories config={config!} />
-      {/* <ComponentTestMatrix config={config} /> */}
-    </Box>
+    </DemoPreviewFrame>
   );
 };
 

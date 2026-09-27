@@ -48,7 +48,8 @@ Each story config can set `usageExample` (copyable usage), `related` names that 
 component's `name`, and per-story `showInDemo`, `stability` (`stable` or `exclude` with
 `excludeReason`), and `interactions`. Boolean controls without a default use `false`. Number
 controls without a default use `0`. Demo mode hides stories with `showInDemo: false`. The home grid and dev index filter by
-search text and category.
+search text and category. Preview query params are documented in
+[preview-demo.md](../docs/how-to/preview-demo.md).
 
 ## Add a story
 

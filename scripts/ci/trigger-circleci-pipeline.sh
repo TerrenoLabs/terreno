@@ -10,7 +10,7 @@ if [ "$#" -ne 1 ]; then
 fi
 
 parameters="$1"
-project_slug="${CIRCLECI_PROJECT_SLUG:-circleci/6UHiK7pThPXbhnNi3umQNe/W3HZeMJujyMB2sYiUXaQbs}"
+project_slug="${CIRCLECI_PROJECT_SLUG:-circleci/6UHiK7pThPXbhnNi3umQNe/LdjghuhydHjFMyFjcEXMA2}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 "${SCRIPT_DIR}/validate-env.sh" CIRCLECI_TOKEN CIRCLECI_PIPELINE_DEFINITION_ID

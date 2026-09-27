@@ -42,6 +42,13 @@ The demo serves on **port 8085**. Open the Expo web URL that the CLI prints (typ
 - From the repo root, `bun run check:demo-coverage` fails CI when a `@terreno/ui` export has no story and no allowlist reason
 - `bun run --filter terreno-demo test:ci` mounts every registered story with `renderWithTheme`
 
+## Catalog contract
+
+Each story config can set `usageExample` (copyable usage), `related` names that match another
+component's `name`, and per-story `showInDemo`, `stability` (`stable` or `exclude` with
+`excludeReason`), and `interactions`. Boolean controls without a default use `false`. Number
+controls without a default use `0`. Demo mode hides stories with `showInDemo: false`.
+
 ## Add a story
 
 1. Create `stories/MyComponent.stories.tsx` with a `React.FC` demo using `@terreno/ui`.

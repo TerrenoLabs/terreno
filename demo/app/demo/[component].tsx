@@ -1,4 +1,6 @@
 import {ErrorBoundary} from "@components/ErrorBoundary";
+import {RelatedComponents} from "@components/RelatedComponents";
+import {UsageSnippet} from "@components/UsageSnippet";
 import {
   DemoConfig,
   type DemoConfigStatus,
@@ -25,6 +27,7 @@ import type React from "react";
 import {type FC, useEffect, useState} from "react";
 import {Linking, Pressable} from "react-native";
 import MarkdownView from "react-native-markdown-display";
+import {controlDefault, storiesForDemo} from "../../catalogContract";
 
 export const generateStaticParams = () => DemoConfig.map((c) => ({component: c.name}));
 
@@ -76,7 +79,7 @@ const ComponentStories: FC<{config: DemoConfiguration}> = ({config}) => {
   }
   return (
     <Box>
-      {Object.keys(config.stories ?? {}).map(
+      {Object.keys(storiesForDemo(config.stories ?? {})).map(
         (s, i): React.ReactElement => (
           <Box key={i} marginBottom={8} rounding="lg">
             <Box marginBottom={2}>
@@ -157,8 +160,7 @@ const ComponentDemo = ({config}: {config: DemoConfiguration}) => {
   ): Record<string, unknown> => {
     const result: Record<string, unknown> = {};
     Object.keys(controls).forEach((key) => {
-      // TODO: use type to figure out a better default (e.g. true for boolean, etc)
-      result[key] = controls[key].defaultValue ?? "";
+      result[key] = controlDefault(controls[key] ?? {});
     });
     return result;
   };
@@ -417,7 +419,8 @@ const ComponentPage: FC = () => {
         </Box>
         <MarkdownView>{config?.description}</MarkdownView>
       </Box>
-      <ComponentDemo config={config!} key={config!.name} />
+      <ComponentDemo config={config} key={config.name} />
+      {config.usageExample ? <UsageSnippet example={config.usageExample} /> : null}
       <ComponentUsage config={config!} />
       <ComponentA11yNotes config={config!} />
       <ComponentProps props={config?.props?.children} />
@@ -428,7 +431,7 @@ const ComponentPage: FC = () => {
           <Box marginBottom={2}>
             <Heading size="sm">Related</Heading>
           </Box>
-          <Text>{config?.related.join(", ")}</Text>
+          <RelatedComponents names={config.related} />
         </Box>
       )}
       <Box marginBottom={2}>

@@ -1,6 +1,6 @@
 # Implementation Plan: Demo workshop
 
-**Status:** Draft
+**Status:** Approved
 **Branch:** `cursor/demo-workshop-cc39`
 **Owner:** —
 **Created:** 2026-09-26

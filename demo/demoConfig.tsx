@@ -107,6 +107,7 @@ import {UserInactivityConfiguration} from "@story-config/UserInactivity.config";
 import {WebAddressAutocompleteConfiguration} from "@story-config/WebAddressAutocomplete.config";
 import type {FieldProps} from "@terreno/ui";
 import type React from "react";
+import type {DemoInteractionStep} from "./catalogContract";
 import {OpenAPIContextDemo, OpenAPIContextStories} from "./stories/OpenAPIContext.stories";
 
 export type DemoConfigStatus = "planned" | "inProgress" | "ready" | "notSupported";
@@ -162,11 +163,15 @@ interface DemoConfigurationBase {
       >;
     };
   };
+  usageExample?: string;
   // Stories represent different states of the component and different examples of using it.
   stories: {
     [name: string]: {
       description?: string;
-      showInDemo?: boolean; // TODO filter in Demo site
+      excludeReason?: string;
+      interactions?: DemoInteractionStep[];
+      showInDemo?: boolean;
+      stability?: "stable" | "exclude";
       render: () => React.ReactElement | null;
     };
   };

@@ -203,7 +203,7 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
   - Depends on: Task 0.2
   - Acceptance: Security tab still receives results **or** explicit maintainer sign-off on alternative.
 
-- [ ] **Task 9.2**: Replace Dependabot auto-merge + triage + roadmap-generate + docs-audit
+- [ ] **Task 9.2**: Replace Dependabot auto-merge + triage + docs-audit (roadmap workflows stay on GitHub Actions, decided 2026-09-26)
   - Description: Implement CircleCI (or Renovate) equivalents; wire issue/schedule triggers without leaving required logic on GHA.
   - Files: `.circleci/continue-config.yml`, corresponding GHA deletions
   - Depends on: Task 0.2

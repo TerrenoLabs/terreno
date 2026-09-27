@@ -397,7 +397,7 @@ do not claim completion until done.
 
 | Workflow | Trigger | Purpose |
 | -------- | ------- | ------- |
-| [`.github/workflows/triage.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/triage.yml) | Issue opened | `status:needs-triage` + `area:*` from package dropdown + `type:*` from Kind when present |
+| [`.github/workflows/triage.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/triage.yml) | Issue opened | `status:needs-triage` + `area:*` from package dropdown + `type:*` from Kind when present; `area:*` / `type:*` labels the issue was opened with win, so `roadmap:sync` issues are not asked for an area |
 | [`.github/workflows/roadmap-generate.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-generate.yml) | Daily + manual | `roadmap:sync --check` for board drift, then regenerate `ROADMAP.md` from the board and open a pull request when it changes |
 | [`.github/workflows/roadmap-sync.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-sync.yml) | Taxonomy files change on `master` + manual | Apply labels and reconcile the board's fields and items |
 | [`.github/workflows/roadmap-reconcile.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-reconcile.yml) | IP or task files change on `master` + manual | Advance status from IP headers, add an entry for every new IP, open its tracking issue, push to the board, regenerate `ROADMAP.md` |

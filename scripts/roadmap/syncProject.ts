@@ -287,6 +287,68 @@ export interface BoardItemSnapshot {
   issueNumber: number | null;
 }
 
+/**
+ * Finds the issue for seed entries whose title no longer matches one: the
+ * board's IP field still names the plan. Without this, renaming a tracking issue
+ * on GitHub would make `--create-missing-ip-issues` open a duplicate. Issue
+ * numbers flow roadmap → issue only; nothing is written back into IP headers.
+ */
+export const attachIssuesByIp = <T extends Pick<ResolvedItem, "ip" | "issueNumber">>({
+  boardItems,
+  items,
+}: {
+  boardItems: BoardItemSnapshot[];
+  items: T[];
+}): T[] => {
+  const issueByIp = new Map<string, number>();
+  for (const boardItem of boardItems) {
+    const ip = boardItem.fields[IP_FIELD_NAME] ?? "";
+    if (ip !== "" && boardItem.issueNumber !== null) {
+      issueByIp.set(ip, boardItem.issueNumber);
+    }
+  }
+  const attached: T[] = [];
+  for (const item of items) {
+    if (item.issueNumber === null && item.ip !== "") {
+      item.issueNumber = issueByIp.get(item.ip) ?? null;
+      if (item.issueNumber !== null) {
+        attached.push(item);
+      }
+    }
+  }
+  return attached;
+};
+
+export interface LabelWork {
+  labels: string[];
+  number: number;
+}
+
+/** Seed labels each already-open issue is missing. */
+export const planLabelWork = ({
+  issueLabelsByNumber,
+  items,
+}: {
+  issueLabelsByNumber: Map<number, string[]>;
+  items: Pick<ResolvedItem, "issueNumber" | "labels">[];
+}): LabelWork[] => {
+  const work: LabelWork[] = [];
+  for (const item of items) {
+    if (item.issueNumber === null) {
+      continue;
+    }
+    const existing = issueLabelsByNumber.get(item.issueNumber);
+    if (existing === undefined) {
+      continue;
+    }
+    const toAdd = item.labels.filter((label) => !existing.includes(label));
+    if (toAdd.length > 0) {
+      work.push({labels: toAdd, number: item.issueNumber});
+    }
+  }
+  return work;
+};
+
 export interface ItemFieldWrite {
   field: string;
   itemIssue: number;
@@ -740,20 +802,12 @@ export const main = async (): Promise<void> => {
     process.exit(1);
   }
 
-  const labelWork: {labels: string[]; number: number}[] = [];
-  for (const item of items) {
-    if (item.issueNumber === null) {
-      continue;
-    }
-    const issue = issuesById.get(item.issueNumber);
-    if (issue === undefined) {
-      continue;
-    }
-    const toAdd = item.labels.filter((label) => !issue.labels.includes(label));
-    if (toAdd.length > 0) {
-      labelWork.push({labels: toAdd, number: item.issueNumber});
-      actions.push(`label #${item.issueNumber} += ${toAdd.join(", ")}`);
-    }
+  const issueLabelsByNumber = new Map(
+    [...issuesById.entries()].map(([number, issue]) => [number, issue.labels])
+  );
+  const labelWork = planLabelWork({issueLabelsByNumber, items});
+  for (const work of labelWork) {
+    actions.push(`label #${work.number} += ${work.labels.join(", ")}`);
   }
 
   // Reported before the project queries so a dry run is still useful when the
@@ -860,6 +914,13 @@ export const main = async (): Promise<void> => {
 
   // --- items ----------------------------------------------------------------
   const boardItems = await fetchBoardItems({projectId: project.id, token});
+  // Issues found only through the board's IP field (renamed on GitHub) missed
+  // the label pass above, so plan their labels now.
+  const attachedByIp = attachIssuesByIp({boardItems, items});
+  for (const work of planLabelWork({issueLabelsByNumber, items: attachedByIp})) {
+    labelWork.push(work);
+    actions.push(`label #${work.number} += ${work.labels.join(", ")}`);
+  }
   const boardByIssue = new Map(
     boardItems
       .filter((item) => item.issueNumber !== null)

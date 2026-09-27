@@ -1236,6 +1236,27 @@ Add two additive library seams to `@terreno/ai` so app code can:
 
 ---
 
+## terreno-58
+
+**Title:** `Terreno 58`
+
+**Labels:** `area:dx`, `type:chore`, `breaking`  
+**Project fields:** Area=`dx`, Target=`58`, Impact=`Breaking`, IP=*(not yet written)*, Status=`Planned`
+
+Umbrella for the Terreno 58 / Expo SDK 58 major release: every breaking change that was
+deprecated during 57.x lands together so consumers upgrade once. Each change keeps its own
+IP and tracking issue; this entry is the release checklist, not a plan.
+
+- Remove legacy RTK realtime (`modelRouter` `realtime`, RTK cache patching) — [remove-legacy-realtime](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/remove-legacy-realtime.md)
+- Remove admin `api` / `injectEndpoints` and `useAdminApi`; admin runs on syncdb — follow-up to [migrate-admin-to-syncdb](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/migrate-admin-to-syncdb.md)
+- Native module baseline (new dev-client binary) — [native-module-baseline](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/native-module-baseline.md)
+- HTTP rate limiting on by default — [rate-limiting](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/rate-limiting.md)
+- Expo SDK 58 upgrade — release PR [#1310](https://github.com/TerrenoLabs/terreno/pull/1310)
+- **RTK flag:** Breaking
+- **Depends on:** remove-legacy-realtime, migrate-admin-to-syncdb, native-module-baseline
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

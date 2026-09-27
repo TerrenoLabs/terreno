@@ -32,11 +32,13 @@ jobs:
           bun-version: 1.4.0
 
       # Resolve area:* and type:* from the shared tables in scripts/issueAreaLabels.ts
-      # so the workflow and its tests cannot disagree about the mapping.
+      # so the workflow and its tests cannot disagree about the mapping. Labels
+      # the issue was opened with (roadmap:sync, gh issue create --label) win.
       - name: Resolve area and type labels
         id: area
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
         run: bun run scripts/issueAreaLabels.ts
 
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0

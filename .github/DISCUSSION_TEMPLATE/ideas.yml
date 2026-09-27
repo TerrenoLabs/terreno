@@ -7,6 +7,9 @@ body:
         Maintainers review Ideas discussions and promote promising ones to
         tracked issues on the [Terreno Roadmap](https://github.com/TerrenoLabs/terreno/blob/master/ROADMAP.md).
 
+        Hacktoberfest pitches go here too: tick the Hacktoberfest box below and a
+        maintainer will apply the `hacktoberfest` label. Upvote the pitches you want built.
+
   - type: textarea
     id: problem
     attributes:
@@ -27,9 +30,27 @@ body:
       label: Rough idea for a solution
       description: How might Terreno address this?
 
+  - type: dropdown
+    id: size
+    attributes:
+      label: Rough size
+      description: Helps maintainers route small ideas straight to a good first issue
+      options:
+        - Small — a few hours, good first contribution
+        - Medium — a weekend
+        - Large — needs splitting into several issues
+        - Not sure
+
+  - type: textarea
+    id: done
+    attributes:
+      label: What "done" looks like
+      description: Acceptance criteria, screenshots, or the docs page that would change
+
   - type: checkboxes
     id: help
     attributes:
       label: Contribution
       options:
         - label: I am willing to help implement this if maintainers agree on direction
+        - label: This is a Hacktoberfest pitch (maintainers apply the `hacktoberfest` label)

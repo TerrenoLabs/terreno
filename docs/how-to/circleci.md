@@ -33,7 +33,7 @@ pipeline.
 6. Build forked PRs if you want DCO + rulesync on forks.
 
 GitHub App org/project slug (API and CLI):
-`circleci/6UHiK7pThPXbhnNi3umQNe/W3HZeMJujyMB2sYiUXaQbs`.
+`circleci/6UHiK7pThPXbhnNi3umQNe/LdjghuhydHjFMyFjcEXMA2`.
 
 Do not query `gh/TerrenoLabs/terreno` — that slug returns `404 Project not found`.
 Cloud agents use `CIRCLECI_TOKEN` (accepted alias of CircleCI's `CIRCLE_TOKEN`). Send
@@ -372,7 +372,9 @@ and deactivates the PR's old GitHub Deployments. The manual GHA publisher
 (`publish-on-tag.yml`) uses the same script to start `{"run-demo-deploy":true}`
 on `master`. Both need the GitHub secret `CIRCLECI_TOKEN` (a CircleCI personal
 or project API token) and the repository variable
-`CIRCLECI_PIPELINE_DEFINITION_ID` (Project Settings → Pipelines). Set the
+`CIRCLECI_PIPELINE_DEFINITION_ID` (Project Settings → Pipelines, or
+`GET /api/v2/projects/<project id>/pipeline-definitions`; the project id comes from
+`GET /api/v2/project/<slug>`). Set the
 optional variable `CIRCLECI_PROJECT_SLUG` if re-linking the project changes
 its slug. Path-filtered
 preview **deploys** run on open PRs from this repository; fork PRs are skipped.

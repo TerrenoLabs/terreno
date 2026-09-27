@@ -1,6 +1,6 @@
 # Task List: Agent UI Asks
 
-**Status:** Draft 2026-09-26 — grilling round 1 closed; waiting on round 2 (Q3, Q5, Q8–Q10) and Q11 in [`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md). Do not Pick until the IP is Approved.
+**Status:** Draft 2026-09-27 — grilling rounds 1–2 closed; waiting on round 3 (Q11, Q12) and shared-understanding confirmation in [`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md). Do not Pick until the IP is Approved.
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.
@@ -69,7 +69,7 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
   - Docs: `docs/reference/agent-ui-asks.md` (`files`, storage modes), `docs/how-to/agent-ui-asks.md` ("accept uploads with or without GCS").
   - Acceptance: AC10; AC1, AC2 (`FILE_TYPE_NOT_ACCEPTED`, `FILE_TOO_LARGE`, `FILE_COUNT`, `FILE_NOT_OWNED`, `MIME_MISMATCH`), AC9, and AC15 for `files`.
 
-- [ ] **Task 2.6**: Server-enforced approval for host tools (only if Q10 = A)
+- [ ] **Task 2.6**: Server-enforced approval for host tools
   - Delivers: host tools with AI SDK `needsApproval` pause on `tool-approval-request` as a server-made `confirm` ask (`origin: "approval"`, `toolName`, `approvalId`); `AsksOptions.approvals[toolName]` customizes the prompt and labels, with a default "Allow &lt;toolName&gt;?"; the answer appends `tool-approval-response` and resumes, so the SDK runs or denies the tool; works through `/gpt/prompt` and `turn`; `AIRequest.metadata.ask.origin`. example-backend adds a `deleteCompletedTodos` tool with `needsApproval: true` and a destructive approval prompt.
   - Files: `ai/src/service/asks.ts`, `ai/src/service/chatTurn.ts`, `ai/src/types/index.ts`, `ai/src/routes/gpt.test.ts`, `ai/src/routes/gptHistories.test.ts`; `example-backend/src/api/ai.ts`.
   - Blocked by: 2.2
@@ -82,21 +82,21 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
   - Delivers: `html` block schema (`title`, `height: sm|md|lg`, `html` ≤ 100,000 bytes) and `HTML_DISABLED` / `HTML_TOO_LARGE` in `@terreno/blocks`; `uiBlocks.html` server option; `sanitizeHtml` in `@terreno/ai` applied to the final document (re-sent with `{replace: text}` when changed); `HtmlFrame` (web `iframe sandbox=""` + injected CSP meta; native WebView with JavaScript and navigation off); `html` renderer in `BlocksView` with a streaming placeholder and an `allowHtml` gate.
   - Files: `blocks/src/schema.ts`, `blocks/src/errors.ts`, fixtures, tests; `root package.json` (catalog `sanitize-html`), `ai/package.json`, `ai/src/service/sanitizeHtml.ts`, `ai/src/routes/gpt.ts`, tests; `ui/src/HtmlFrame.tsx`, `ui/src/blocks/blockRenderers.tsx`, `ui/src/GPTChat.tsx`, tests; `demo/stories/HtmlFrame.stories.tsx`, `demo/story-config/HtmlFrame.config.tsx`, `demo/demoConfig.tsx`.
   - Blocked by: 1.1, Agent UI Blocks 1.1 and 2.1
-  - Docs: `docs/reference/agent-ui-asks.md` (HTML section) or `docs/reference/blocks.md` (`html` row, whichever owns the block reference after D1), `docs/explanation/agent-ui-asks.md` (threat model: XSS, phishing, exfiltration, clickjacking), `docs/reference/ui.md` (`HtmlFrame`, `allowHtml`); regenerate component reference (`bun run website:generate`).
+  - Docs: `docs/reference/blocks.md` (`html` row and `uiBlocks.html`; the page exists once Agent UI Blocks Task 1.1 lands), `docs/explanation/agent-ui-asks.md` (threat model: XSS, phishing, exfiltration, clickjacking), `docs/reference/ui.md` (`HtmlFrame`, `allowHtml`); regenerate component reference (`bun run website:generate`).
   - Acceptance: AC11; `bun run check:licenses` green with the new dependency; screenshot of a sanitized invoice preview on web.
 
-- [ ] **Task 3.2**: `callout`, `image`, and `details` blocks (only if D7 is confirmed)
-  - Delivers: three display blocks rendered with `Banner` (not dismissible), `Image` (`alt` required; https or file ref), and `Accordion`; schema, lint, renderer, fixtures.
-  - Files: `blocks/src/schema.ts`, fixtures, tests; `ui/src/blocks/blockRenderers.tsx`, tests; `demo/stories/BlocksView.stories.tsx`.
-  - Blocked by: Agent UI Blocks 2.1
-  - Docs: `docs/reference/blocks.md` (three rows).
-  - Acceptance: golden fixtures; `BlocksView` renders each block with `@terreno/ui` components only.
+- [ ] **Task 3.2**: `callout`, `image`, and `details` blocks
+  - Delivers: three display blocks rendered with `Banner` (not dismissible), `Image` (`alt` required; sources per D27, including the `uiBlocks.imageHosts` allowlist and `IMAGE_HOST_NOT_ALLOWED`), and `Accordion`; schema, lint, renderer, fixtures.
+  - Files: `blocks/src/schema.ts`, `blocks/src/errors.ts`, fixtures, tests; `ai/src/routes/gpt.ts` (`imageHosts` passed to validation), tests; `ui/src/blocks/blockRenderers.tsx`, tests; `demo/stories/BlocksView.stories.tsx`.
+  - Blocked by: Agent UI Blocks 1.1 and 2.1
+  - Docs: `docs/reference/blocks.md` (three rows, `imageHosts`), `docs/explanation/agent-ui-asks.md` (why image hosts are allowlisted).
+  - Acceptance: AC20; `BlocksView` renders each block with `@terreno/ui` components only.
 
 ### Phase 4: Wrap-up
 
 - [ ] **Task 4.1**: Changelog, rules, docs indexes, final gate
   - Delivers: changelog entry; agent rules updated in their canonical source and regenerated; every new page linked from its README; `.github` and knip config updated for new files.
   - Files: `changelog/unreleased/agent-ui-asks.md`, `.rulesync/rules/ai/00-ai.md`, `.rulesync/rules/ui/00-ui.md`, `docs/how-to/README.md`, `docs/reference/README.md`, `docs/explanation/README.md`, `knip.jsonc`.
-  - Blocked by: 1.3, 2.1, 2.2, 2.3, 2.4, 2.5 (and 2.6 / 3.1 / 3.2 when in scope)
+  - Blocked by: 1.3, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2
   - Docs: as listed; `bun run rules`.
   - Acceptance: AC13, AC14; `bun run website:build` and `bun run rules:check` green.

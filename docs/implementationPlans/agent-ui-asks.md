@@ -1,6 +1,6 @@
 # Agent UI Asks — agents ask the user for a typed answer inside the chat
 
-**Status:** Draft 2026-09-26 — grilling round 1 closed (Q1, Q2, Q4, Q6, Q7 confirmed); round 2 open (Q3, Q5, Q8–Q10), Q11 after. Rows marked **open** carry a recommended default, not a decision.  
+**Status:** Draft 2026-09-27 — grilling rounds 1–2 closed (Q1–Q10 confirmed); round 3 open (Q11, Q12) with shared-understanding confirmation. Rows marked **open** carry a recommended default, not a decision.  
 **Roadmap:** Area=`ai`, Target=`Next`, Impact=`Feature`  
 **Branch:** `cursor/agent-ui-asks-grow-a1e2`  
 **Owner:** unassigned  
@@ -54,7 +54,7 @@ How asks and blocks divide the work:
 
 | Need | Mechanism | Owner |
 | --- | --- | --- |
-| Show data (chart, table, metric, callout, HTML preview) | Block in the reply document | Agent UI Blocks (+ `html` from this plan) |
+| Show data (chart, table, metric, callout, image, HTML preview) | Block in the reply document | Agent UI Blocks (+ `html`, `callout`, `image`, `details` from this plan) |
 | Suggest a follow-up message | `actions` button with `reply` | Agent UI Blocks |
 | Run host code (export, open a record) | `actions` button with `callback` → `POST /gpt/actions` | Agent UI Blocks |
 | Get an answer the agent needs to continue | Ask tool call → pause → answer → resume | This plan |
@@ -86,15 +86,16 @@ How asks and blocks divide the work:
 
 | ID | Question | Decision | Status |
 | --- | --- | --- | --- |
-| D1 | How does this plan relate to Agent UI Blocks? (Q1) | Companion plan. Agent UI Blocks stays approved as written for display. Ask schemas live in its `@terreno/blocks` package under `src/asks/`; whichever plan starts first creates the package scaffold listed in Agent UI Blocks Task 1.1. This plan adds the `html` block to the blocks catalog. | **confirmed** (Q1 = A) |
+| D1 | How does this plan relate to Agent UI Blocks? (Q1) | Companion plan. Agent UI Blocks stays approved as written for display. Ask schemas live in its `@terreno/blocks` package under `src/asks/`; whichever plan starts first creates the package scaffold listed in Agent UI Blocks Task 1.1. This plan adds the `html`, `callout`, `image`, and `details` blocks to the blocks catalog (D3, D7). | **confirmed** (Q1 = A) |
 | D2 | How does the answer get back to the agent? (Q2) | Approach A: client-side ask tools, pause at the tool call, resume via `POST /gpt/prompt` with `askResponse` (chat) or the `turn` action (small clients, D24). | **confirmed** (Q2 = A) |
-| D3 | Full HTML? (Q3) | Display-only `html` block, opt-in per app (`uiBlocks.html: true` on the server, `allowHtml` on the client). Server-sanitized, rendered in a sandboxed iframe (web) or a JavaScript-disabled WebView (native), no scripts, no network, no links, at most 100 KB. | **open** — recommended |
+| D3 | Full HTML? (Q3) | Display-only `html` block, opt-in per app (`uiBlocks.html: true` on the server, `allowHtml` on the client). Server-sanitized, rendered in a sandboxed iframe (web) or a JavaScript-disabled WebView (native), no scripts, no network, no links, at most 100 KB. | **confirmed** (Q3 = A) |
 | D4 | Which ask kinds ship in v1? (Q4) | `choice` (one or many, optional "Other"), `files` (images and documents), `markdown` (edit a draft), `confirm` (approve/deny, destructive style), `form` (1–8 flat fields). Rating scale and signature are deferred. | **confirmed**: `choice`, `files`, `markdown` (original request), `confirm` (follow-up: "simple approve/cancel buttons"), `form` (Q4 = form). Rating scale and signature **deferred** (Q4). |
-| D5 | Where do uploaded files live? (Q5) | Adaptive. When `FileStorageService` is configured, the client uploads through `POST /files/upload` and the answer carries `fileId`s (owner-checked `FileAttachment`). Otherwise the answer carries data URLs, like chat attachments today. | **open** — recommended |
-| D6 | Can the user type a message while an ask is pending? (Q8) | Yes. Sending a message stores a `cancel` answer for the pending ask, then appends the message, so the model sees both. | **open** — round 2 |
-| D7 | Which extra display blocks join the catalog with `html`? (Q9) | `callout` (`Banner`, not dismissible), `image` (`Image`, `alt` required, https or file ref), `details` (`Accordion`). | **open** — round 2 |
+| D5 | Where do uploaded files live? (Q5) | Adaptive. When `FileStorageService` is configured, the client uploads through `POST /files/upload` and the answer carries `fileId`s (owner-checked `FileAttachment`). Otherwise the answer carries data URLs, like chat attachments today. | **confirmed** (Q5 = A) |
+| D6 | Can the user type a message while an ask is pending? (Q8) | Yes. Sending a message stores a `cancel` answer for the pending ask, then appends the message, so the model sees both. | **confirmed** (Q8 = A) |
+| D7 | Which extra display blocks join the catalog with `html`? (Q9) | `callout` (`Banner`, not dismissible), `image` (`Image`, `alt` required; allowed sources per D27), `details` (`Accordion`). | **confirmed** (Q9 = A) |
 | D8 | Can an ask show blocks (chart, table, HTML) above its control? (Q11) | Not in v1. The ask `prompt` is plain text. Block "context" on asks is future work. | **open** — round 3 |
-| D9 | Can a host tool require an approval the server enforces? (Q10) | Yes, through AI SDK tool approval. A host tool sets `needsApproval` (boolean or a function of its input). The server turns each approval request into a server-made `confirm` ask with Approve / Deny, so the model cannot skip it and a watch can answer it. Details in [Server-enforced approval](#server-enforced-approval-q10). | **open** — round 2 |
+| D27 | Which image URLs may the `image` block load? (Q12) | File refs and `data:` URLs always; `https` only from hosts the app lists in `uiBlocks.imageHosts` (default empty), otherwise `IMAGE_HOST_NOT_ALLOWED`. An agent that was fed hostile content cannot leak conversation data through image URLs it controls. Markdown images in `text` blocks keep today's `MarkdownView` behavior. | **open** — round 3 |
+| D9 | Can a host tool require an approval the server enforces? (Q10) | Yes, through AI SDK tool approval. A host tool sets `needsApproval` (boolean or a function of its input). The server turns each approval request into a server-made `confirm` ask with Approve / Deny, so the model cannot skip it and a watch can answer it. Details in [Server-enforced approval](#server-enforced-approval-q10). | **confirmed** (Q10 = A) |
 | D21 | How do small screens (Apple Watch, notifications, voice, Slack) render asks? (Q6) | The server derives a **simple card** for every ask with a pure function: text ≤ 140 chars and up to 3 buttons, each carrying its exact answer. Asks that cannot shrink set `handoff: true` ("Continue on your phone"). Small clients also send `surface: "compact"` so the agent only asks button-sized questions (D25). | **confirmed** (Q6 = A) |
 | D22 | How much Apple Watch support ships in this plan? (Q7) | Protocol-ready only: simple cards, a pending-asks list, and a non-streaming turn endpoint any native client can call, plus a watch-sized preview in the demo and a SwiftUI client sketch in the how-to. Actionable push notifications and a sample watchOS app stay in Future Work; no follow-up plan is committed. | **confirmed** (Q7 = "just A") |
 | D10 | Tool shape | One tool per kind: `ask_choice`, `ask_confirm`, `ask_markdown`, `ask_form`, `ask_files`. Each input root is an object (OpenAI strict mode and Gemini function declarations require it). Every schema is `.strict()`. Host tools whose names start with `ask_` fail at startup. | assumed |
@@ -255,7 +256,7 @@ answer:
 
 ## Server-enforced approval (Q10)
 
-Recommended, still open. A prompt-driven `confirm` depends on the model remembering to ask.
+Confirmed (Q10 = A). A prompt-driven `confirm` depends on the model remembering to ask.
 Server-enforced approval does not: the host marks a tool, and the tool cannot run until the
 user approves. AI SDK 6 already supports it (`needsApproval` on `tool()`, a
 `tool-approval-request` part on the assistant message, a `tool-approval-response` part on
@@ -375,7 +376,7 @@ Display (the reply document):
 | `heading`, `text`, `metric`, `badge`, `divider`, `context`, `table`, `actions`, `columns`, `card` | `Heading`, `MarkdownView`, `Card`, `Badge`, `SectionDivider`, `Text`, `DataTable`, `Button` / `SegmentedControl`, `Box` | Agent UI Blocks D5 |
 | `chart` (`line`, `bar`, `area`, `donut`; inline or `ref` datasets) | `LineChart`, `BarChart`, `AreaChart`, `DonutChart` | Agent UI Blocks D4, D15 |
 | `html` | `HtmlFrame` (new) | This plan (D3) |
-| `callout`, `image`, `details` | `Banner`, `Image`, `Accordion` | Proposed (D7) |
+| `callout`, `image`, `details` | `Banner`, `Image`, `Accordion` | This plan (D7, D27) |
 | Not recommended | `Avatar`, `Tooltip`, `Popover`, `SelectBadge`, `TapToEdit`, `DraggableList` | Poor fit for a transcript |
 | Missing | Progress bar (props type only), star rating, sparkline | Future components |
 
@@ -412,7 +413,7 @@ Display (the reply document):
 
 | Surface | Change |
 | --- | --- |
-| `addGptRoutes(router, {asks?: boolean \| AsksOptions})` | `AsksOptions = {kinds?: AskKind[], maxFileSizeBytes?: number, approvals?: Record<toolName, (input) => ConfirmAskInput>}` (`approvals` only if Q10 = A). When enabled, merges `createAskTools(kinds)` into the tool set and appends `TERRENO_ASKS_SYSTEM_PROMPT`. Off by default; with it off, tools, prompt, and SSE are unchanged. |
+| `addGptRoutes(router, {asks?: boolean \| AsksOptions})` | `AsksOptions = {kinds?: AskKind[], maxFileSizeBytes?: number, approvals?: Record<toolName, (input) => ConfirmAskInput>}` (D9). The Agent UI Blocks `uiBlocks` option gains `html?: boolean` (D3) and `imageHosts?: string[]` (D27). When enabled, merges `createAskTools(kinds)` into the tool set and appends `TERRENO_ASKS_SYSTEM_PROMPT`. Off by default; with it off, tools, prompt, and SSE are unchanged. |
 | `POST /gpt/prompt` body | Adds `askResponse?: {toolCallId, action, content?}` and `surface?: "full" \| "compact"` (D25). `prompt` becomes optional when `askResponse` is present (400 when both are missing). A `prompt` sent while an ask is pending records `cancel` first (D6). |
 | `POST /gpt/prompt` responses | 400 `{fields}` for an invalid answer (no model call); 403 for another user's history; 409 when `toolCallId` is not the pending ask. |
 | SSE | `{ask: {toolCallId, kind, input, simple}}`, `{askResolved}`, `{done: …, pendingAsk?}` (D15). `docs/reference/ai.md` gets the first complete SSE event table. |
@@ -426,7 +427,7 @@ Error shape matches Agent UI Blocks: `{path, code, message, fix}`. Codes include
 `SELECTION_COUNT`, `OTHER_NOT_ALLOWED`, `REQUIRED_FIELD`, `FIELD_TYPE_MISMATCH`,
 `OUT_OF_RANGE`, `INVALID_DATE`, `TOO_LONG`, `FILE_TYPE_NOT_ACCEPTED`, `FILE_TOO_LARGE`,
 `FILE_COUNT`, `FILE_NOT_OWNED`, `MIME_MISMATCH`, `UNKNOWN_BUTTON`, `HTML_DISABLED`,
-`HTML_TOO_LARGE`.
+`HTML_TOO_LARGE`, `IMAGE_HOST_NOT_ALLOWED`.
 
 ## Limits
 
@@ -458,7 +459,7 @@ Error shape matches Agent UI Blocks: `{path, code, message, fix}`. Codes include
 | --- | --- | --- |
 | 1 | Tracer: `choice` (select one) end to end, then the small-screen path | Mock-model supertest: pause → SSE `ask` → answer → resumed model call sees the tool result; `GPTChat` renders and submits; example app e2e with mocked SSE; a simple-card `buttonId` sent to `turn` resumes the same way |
 | 2 | Remaining kinds: `choice` many + Other, `confirm`, `markdown`, `form`, `files` | One vertical slice per kind: schema, answer validation, simple-card rule, renderer, docs, tests |
-| 3 | `html` block (after Agent UI Blocks Tasks 1.1 and 2.1) and, if D7 holds, `callout` / `image` / `details` | Sanitizer and frame security tests; `BlocksView` renders; demo screenshots |
+| 3 | `html`, `callout`, `image`, and `details` blocks (after Agent UI Blocks Tasks 1.1 and 2.1) | Sanitizer and frame security tests; image host rule; `BlocksView` renders; demo screenshots |
 | 4 | Wrap-up | Changelog, rules, docs indexes, `bun run prepush` |
 
 ## Feature Flags & Migrations
@@ -487,9 +488,9 @@ None beyond `AIRequest` metadata (D19).
 
 | Package | Files |
 | --- | --- |
-| `blocks/` | `src/asks/schema.ts`, `src/asks/limits.ts`, `src/asks/errors.ts`, `src/asks/validateInput.ts`, `src/asks/validateResponse.ts`, `src/asks/simpleCard.ts`, `src/asks/prompt.ts`, `src/asks/jsonSchema.ts`, `src/asks/fixtures/**`, `src/asks/*.test.ts`, `src/index.ts`; `src/schema.ts` (`html` block); package scaffold (`package.json`, `tsconfig.json`, `biome.jsonc`, CI job) only if Agent UI Blocks Task 1.1 has not landed |
+| `blocks/` | `src/asks/schema.ts`, `src/asks/limits.ts`, `src/asks/errors.ts`, `src/asks/validateInput.ts`, `src/asks/validateResponse.ts`, `src/asks/simpleCard.ts`, `src/asks/prompt.ts`, `src/asks/jsonSchema.ts`, `src/asks/fixtures/**`, `src/asks/*.test.ts`, `src/index.ts`; `src/schema.ts` (`html`, `callout`, `image`, `details` blocks); package scaffold (`package.json`, `tsconfig.json`, `biome.jsonc`, CI job) only if Agent UI Blocks Task 1.1 has not landed |
 | `ai/` | `src/service/asks.ts` (`createAskTools`, `toModelOutput`, resume helpers), `src/service/chatTurn.ts` (turn runner shared by SSE and JSON), `src/service/askFiles.ts` (ref resolution, MIME sniffing), `src/service/sanitizeHtml.ts`, `src/service/prompts.ts` (`TERRENO_ASKS_SYSTEM_PROMPT`), `src/routes/gpt.ts`, `src/routes/gptHistories.ts` (`pendingAsks`, `turn` actions), `src/models/gptHistory.ts`, `src/service/aiService.ts` (`buildMessages`), `src/types/index.ts`, `src/index.ts`, `package.json` (`@terreno/blocks`, `sanitize-html`), tests |
-| `ui/` | `src/asks/AskCard.tsx`, `src/asks/SimpleAskCard.tsx`, `src/asks/AskChoice.tsx`, `src/asks/AskConfirm.tsx`, `src/asks/AskMarkdown.tsx`, `src/asks/AskForm.tsx`, `src/asks/AskFiles.tsx`, `src/asks/askSummary.ts`, `src/HtmlFrame.tsx`, `src/GPTChat.tsx`, `src/lazyBoundaries/heavyOptionalExports.tsx`, `src/index.tsx`, `package.json` (`@terreno/blocks`), tests; `src/blocks/blockRenderers.tsx` (`html`) after Agent UI Blocks Task 2.1 |
+| `ui/` | `src/asks/AskCard.tsx`, `src/asks/SimpleAskCard.tsx`, `src/asks/AskChoice.tsx`, `src/asks/AskConfirm.tsx`, `src/asks/AskMarkdown.tsx`, `src/asks/AskForm.tsx`, `src/asks/AskFiles.tsx`, `src/asks/askSummary.ts`, `src/HtmlFrame.tsx`, `src/GPTChat.tsx`, `src/lazyBoundaries/heavyOptionalExports.tsx`, `src/index.tsx`, `package.json` (`@terreno/blocks`), tests; `src/blocks/blockRenderers.tsx` (`html`, `callout`, `image`, `details`) after Agent UI Blocks Task 2.1 |
 | `demo/` | `stories/AskCard.stories.tsx`, `story-config/AskCard.config.tsx`, `stories/SimpleAskCard.stories.tsx`, `story-config/SimpleAskCard.config.tsx`, `stories/HtmlFrame.stories.tsx`, `story-config/HtmlFrame.config.tsx`, `demoConfig.tsx` |
 | `example-backend/` | `src/api/ai.ts` (`asks: true`, later `uiBlocks.html`) |
 | `example-frontend/` | `app/(tabs)/ai.tsx`, `e2e/helpers/mockGpt.ts`, `e2e/ai-chat.spec.ts` |
@@ -522,4 +523,5 @@ None beyond `AIRequest` metadata (D19).
 | AC16 | With `surface: "compact"`, the model is offered only `ask_confirm` and the narrowed `ask_choice`; a 4-option choice fails as a tool error; the system prompt contains the compact line; every card produced has `handoff: false` | Supertest inspecting the mock model's tools and prompt |
 | AC17 | `GET /gpt/histories/pendingAsks` lists only the caller's pending asks with their cards; `POST /gpt/histories/:id/turn {toolCallId, buttonId}` resumes with that button's stored answer and returns `{text, pendingAsk?}`; an unknown `buttonId` returns 400 `UNKNOWN_BUTTON`; another user's history returns 403; a stale `toolCallId` returns 409; closing the request mid-turn still saves the finished turn | Supertest (the last case aborts the request, then reloads the history) |
 | AC18 | `SimpleAskCard` renders every fixture's card inside the watch-sized demo frame with `@terreno/ui` components only; pressing a button calls `onPress` with that button; `handoff` shows the continue-on-phone line | `ui/src/asks/SimpleAskCard.test.tsx` + demo screenshot under `/opt/cursor/artifacts/` |
-| AC19 | (Q10 = A) A host tool with `needsApproval: true` never runs before approval: the mock model's call produces an `{ask}` with `kind: "confirm"`, `origin: "approval"` and `execute` is not called; approving (via `/gpt/prompt` or `turn` with `buttonId: approve`) runs it exactly once and the model sees its result; denying, declining, or cancelling never runs it and the model sees the denial | Supertest with a spy `execute` |
+| AC19 | A host tool with `needsApproval: true` never runs before approval: the mock model's call produces an `{ask}` with `kind: "confirm"`, `origin: "approval"` and `execute` is not called; approving (via `/gpt/prompt` or `turn` with `buttonId: approve`) runs it exactly once and the model sees its result; denying, declining, or cancelling never runs it and the model sees the denial | Supertest with a spy `execute` |
+| AC20 | `callout`, `image`, and `details` blocks validate and render with `Banner`, `Image`, and `Accordion` only; `image` requires `alt`; an `https` image whose host is not in `uiBlocks.imageHosts` fails with `IMAGE_HOST_NOT_ALLOWED` while file refs and `data:` URLs pass (per Q12) | `blocks` golden fixtures, `BlocksView.test.tsx`, demo screenshot |

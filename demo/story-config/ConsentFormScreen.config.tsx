@@ -7,6 +7,7 @@ import {ConsentFormScreenDemo} from "../stories/ConsentFormScreen.stories";
 const renderConsentFormScreenDemo = (): ReactElement => <ConsentFormScreenDemo />;
 
 export const ConsentFormScreenConfiguration: DemoConfiguration = {
+  usageExample: "import {ConsentFormScreen} from \"@terreno/ui\";\n\n<ConsentFormScreen />",
   name: "ConsentFormScreen",
   component: ConsentFormScreen,
   related: ["Button", "Signature field"],

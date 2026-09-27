@@ -11,6 +11,7 @@ import {
 import {Slider} from "@terreno/ui";
 
 export const SliderConfiguration: DemoConfiguration = {
+  usageExample: "import {Slider} from \"@terreno/ui\";\n\n<Slider />",
   name: "Slider",
   component: Slider,
   related: ["Number field"],

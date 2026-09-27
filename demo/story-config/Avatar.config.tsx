@@ -3,6 +3,7 @@ import {AvatarDemo, AvatarImage, AvatarInitials, AvatarOutlines, AvatarSizes} fr
 import {Avatar} from "@terreno/ui";
 
 export const AvatarConfiguration: DemoConfiguration = {
+  usageExample: "import {Avatar} from \"@terreno/ui\";\n\n<Avatar />",
   name: "Avatar",
   related: ["Icon"],
   description: "Used to represent a single user.",

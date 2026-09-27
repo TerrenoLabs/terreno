@@ -5,6 +5,7 @@ import {SideDrawer} from "@terreno/ui";
 import React from "react";
 
 export const SideDrawerConfiguration: DemoConfiguration = {
+  usageExample: "import {SideDrawer} from \"@terreno/ui\";\n\n<SideDrawer />",
   name: "Side drawer",
   component: SideDrawer,
   related: ["Modal"],

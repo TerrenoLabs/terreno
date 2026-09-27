@@ -3,6 +3,7 @@ import {BoxColors, BoxDemo, FlexBox, ResponsiveBoxLayout} from "@stories/Box.sto
 import {Box} from "@terreno/ui";
 
 export const BoxConfiguration: DemoConfiguration = {
+  usageExample: "import {Box} from \"@terreno/ui\";\n\n<Box />",
   name: "Box",
   component: Box,
   related: ["Page", "Card"],

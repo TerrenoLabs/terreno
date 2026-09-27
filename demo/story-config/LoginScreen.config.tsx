@@ -7,6 +7,7 @@ import {LoginScreenDemo} from "../stories/LoginScreen.stories";
 const renderLoginScreenDemo = (): ReactElement => <LoginScreenDemo />;
 
 export const LoginScreenConfiguration: DemoConfiguration = {
+  usageExample: "import {LoginScreen} from \"@terreno/ui\";\n\n<LoginScreen />",
   name: "LoginScreen",
   component: LoginScreen,
   related: ["Button", "Text field", "SignUpScreen"],

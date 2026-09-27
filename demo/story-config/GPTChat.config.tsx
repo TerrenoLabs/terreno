@@ -3,6 +3,7 @@ import {GPTChatDemo, GPTChatEmpty, GPTChatMascot, GPTChatStreaming} from "@stori
 import {GPTChat} from "@terreno/ui";
 
 export const GPTChatConfiguration: DemoConfiguration = {
+  usageExample: "import {GPTChat} from \"@terreno/ui\";\n\n<GPTChat />",
   name: "GPTChat",
   component: GPTChat,
   related: ["AI Suggestion Box", "MarkdownView"],

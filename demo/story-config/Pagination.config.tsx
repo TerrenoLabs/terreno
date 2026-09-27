@@ -4,6 +4,7 @@ import {Pagination} from "@terreno/ui";
 import {PaginationDemo, PaginationMoreStory, PaginationStory} from "../stories/Pagination.stories";
 
 export const PaginationConfiguration: DemoConfiguration = {
+  usageExample: "import {Pagination} from \"@terreno/ui\";\n\n<Pagination />",
   name: "Pagination",
   component: Pagination,
   related: ["DataTable"],

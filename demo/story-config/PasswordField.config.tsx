@@ -4,6 +4,7 @@ import {PasswordField} from "@terreno/ui";
 import React from "react";
 
 export const PasswordFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {PasswordField} from \"@terreno/ui\";\n\n<PasswordField />",
   name: "Password field",
   component: PasswordField,
   related: [],

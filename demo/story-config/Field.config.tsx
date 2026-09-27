@@ -20,6 +20,7 @@ import {
 import {Field} from "@terreno/ui";
 
 export const FieldConfiguration: DemoConfiguration = {
+  usageExample: "import {Field} from \"@terreno/ui\";\n\n<Field />",
   name: "Field",
   component: Field,
   related: [],

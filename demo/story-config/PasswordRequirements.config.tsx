@@ -6,6 +6,7 @@ import {
 import {PasswordRequirements} from "@terreno/ui";
 
 export const PasswordRequirementsConfiguration: DemoConfiguration = {
+  usageExample: "import {PasswordRequirements} from \"@terreno/ui\";\n\n<PasswordRequirements />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

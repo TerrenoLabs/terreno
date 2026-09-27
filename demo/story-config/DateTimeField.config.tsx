@@ -5,6 +5,7 @@ import {DateTimeFieldDemo, DateTimeFieldStory, DateTimeFieldTypes} from "../stor
 
 // TODO: Update with the notes from TimeField and DateField.
 export const DateTimeFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {DateTimeField} from \"@terreno/ui\";\n\n<DateTimeField />",
   name: "Date & Time field",
   component: DateTimeField,
   related: ["Modal"],

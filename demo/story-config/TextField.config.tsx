@@ -11,6 +11,7 @@ import {
 import {TextField} from "@terreno/ui";
 
 export const TextFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {TextField} from \"@terreno/ui\";\n\n<TextField />",
   name: "Text field",
   component: TextField, // Replace with actual component reference
   related: ["Text area"],

@@ -8,6 +8,7 @@ import {
 import {MarkdownEditorField} from "@terreno/ui";
 
 export const MarkdownEditorFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {MarkdownEditorField} from \"@terreno/ui\";\n\n<MarkdownEditorField />",
   name: "Markdown editor field",
   component: MarkdownEditorField,
   related: ["MarkdownView", "Text area", "Text field"],

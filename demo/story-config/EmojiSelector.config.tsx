@@ -4,6 +4,7 @@ import {EmojiSelector} from "@terreno/ui";
 import {EmojiSelectorDemo} from "../stories/EmojiSelector.stories";
 
 export const EmojiSelectorConfiguration: DemoConfiguration = {
+  usageExample: "import {EmojiSelector} from \"@terreno/ui\";\n\n<EmojiSelector />",
   name: "Emoji selector",
   component: EmojiSelector,
   related: ["Text field"],

@@ -3,6 +3,7 @@ import {EmailFieldDemo} from "@stories/EmailField.stories";
 import {EmailField} from "@terreno/ui";
 
 export const EmailFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {EmailField} from \"@terreno/ui\";\n\n<EmailField />",
   name: "Email field",
   component: EmailField,
   related: ["Text area"],

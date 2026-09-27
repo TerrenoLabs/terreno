@@ -5,6 +5,7 @@ import {Badge} from "@terreno/ui";
 import React from "react";
 
 export const BadgeConfiguration: DemoConfiguration = {
+  usageExample: "import {Badge} from \"@terreno/ui\";\n\n<Badge />",
   name: "Badge",
   related: [],
   description:

@@ -4,6 +4,7 @@ import {Box, CustomSelectField} from "@terreno/ui";
 import React from "react";
 
 export const CustomSelectFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {CustomSelectField} from \"@terreno/ui\";\n\n<CustomSelectField />",
   name: "Custom Select Field",
   component: CustomSelectField,
   related: ["Select field", "Field", "Tap to edit"],

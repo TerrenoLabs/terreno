@@ -3,6 +3,7 @@ import {SpinnerDemo, SpinnerVariations} from "@stories/Spinner.stories";
 import {Spinner} from "@terreno/ui";
 
 export const SpinnerConfiguration: DemoConfiguration = {
+  usageExample: "import {Spinner} from \"@terreno/ui\";\n\n<Spinner />",
   name: "Spinner",
   component: Spinner,
   related: ["Page"],

@@ -6,6 +6,7 @@ import {
 import {NumberPickerActionSheet} from "@terreno/ui";
 
 export const NumberPickerActionSheetConfiguration: DemoConfiguration = {
+  usageExample: "import {NumberPickerActionSheet} from \"@terreno/ui\";\n\n<NumberPickerActionSheet />",
   a11yNotes: ["Open from the button; the sheet starts closed."],
   additionalDocumentation: [],
   category: "Component",

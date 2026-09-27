@@ -10,6 +10,7 @@ import {
 } from "../stories/SignatureCaptureField.stories";
 
 export const SignatureCaptureFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {SignatureCaptureField} from \"@terreno/ui\";\n\n<SignatureCaptureField />",
   name: "Signature capture field",
   component: SignatureCaptureField,
   related: ["Signature field", "Typed signature field"],

@@ -24,7 +24,7 @@ See: [`docs/implementationPlans/demo-workshop.md`](../implementationPlans/demo-w
   - Docs: `demo/README.md` catalog-contract section
   - Skills: `update-docs`, `terreno-ui`, `verify-ui-changes`
 
-- [ ] **Task 1.2**: Search, categories, and related links
+- [x] **Task 1.2**: Search, categories, and related links
   - Delivers: the home grid and dev index filter by text and category, and every component's related row is links.
   - Files: `demo/components/DemoHomePage.tsx`, `demo/components/DevHomePage.tsx`, `demo/app/demo/[component].tsx`, story configs whose `related` strings do not resolve, `demo/README.md`
   - Blocked by: Task 1.1
@@ -33,7 +33,7 @@ See: [`docs/implementationPlans/demo-workshop.md`](../implementationPlans/demo-w
   - Docs: `demo/README.md`
   - Skills: `update-docs`, `terreno-ui`, `verify-ui-changes`
 
-- [ ] **Task 1.3**: Usage snippet on every component
+- [x] **Task 1.3**: Usage snippet on every component
   - Delivers: every registered story config has `usageExample`, and the component page can copy it.
   - Files: `demo/story-config/*.config.tsx`, `demo/app/demo/[component].tsx`, `scripts/check-demo-coverage.ts` or a sibling check, `demo/README.md`
   - Blocked by: Task 1.1

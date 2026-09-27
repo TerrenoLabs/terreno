@@ -3,6 +3,7 @@ import {TextAreaDisabled, TextAreaErrored, TextAreas, WithLabelTextArea} from "@
 import {TextArea} from "@terreno/ui";
 
 export const TextAreaConfiguration: DemoConfiguration = {
+  usageExample: "import {TextArea} from \"@terreno/ui\";\n\n<TextArea />",
   name: "Text area",
   component: TextArea, // Replace with actual component reference
   related: ["Text field"],

@@ -6,6 +6,7 @@ import {
 import {DecimalRangeActionSheet} from "@terreno/ui";
 
 export const DecimalRangeActionSheetConfiguration: DemoConfiguration = {
+  usageExample: "import {DecimalRangeActionSheet} from \"@terreno/ui\";\n\n<DecimalRangeActionSheet />",
   a11yNotes: ["Open from the button; the sheet starts closed."],
   additionalDocumentation: [],
   category: "Component",

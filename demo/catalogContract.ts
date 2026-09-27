@@ -49,11 +49,15 @@ export const catalogIssues = (
     name: string;
     related: string[];
     stories: Record<string, {excludeReason?: string; stability?: string}>;
+    usageExample?: string;
   }[]
 ): string[] => {
   const names = configs.map((config) => config.name);
   const issues: string[] = [];
   for (const config of configs) {
+    if (!config.usageExample?.trim()) {
+      issues.push(`${config.name} is missing usageExample`);
+    }
     for (const missing of unresolvedRelated(config.related, names)) {
       issues.push(`${config.name} related "${missing}" does not match a component`);
     }

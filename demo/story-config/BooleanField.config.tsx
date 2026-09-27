@@ -11,6 +11,7 @@ import {BooleanField} from "@terreno/ui";
 import React from "react";
 
 export const BooleanFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {BooleanField} from \"@terreno/ui\";\n\n<BooleanField />",
   name: "Boolean field",
   component: BooleanField,
   related: ["CheckBox", "Radio"],

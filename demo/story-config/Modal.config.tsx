@@ -18,6 +18,7 @@ import {Modal} from "@terreno/ui";
 // testMatrixDefaultProps: {}, };
 
 export const ModalConfiguration: DemoConfiguration = {
+  usageExample: "import {Modal} from \"@terreno/ui\";\n\n<Modal />",
   name: "Modal",
   component: Modal,
   related: ["ActionSheet", "SimpleContent"],

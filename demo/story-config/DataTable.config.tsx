@@ -9,6 +9,7 @@ import {
 import {TableMockupPreview} from "../stories/TableMockupPreview";
 
 export const DataTableConfiguration: DemoConfiguration = {
+  usageExample: "import {DataTable} from \"@terreno/ui\";\n\n<DataTable />",
   name: "DataTable",
   component: DataTable,
   related: [],

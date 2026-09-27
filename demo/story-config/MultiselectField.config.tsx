@@ -3,6 +3,7 @@ import {MultiselectFieldDemo, MultiselectVariants} from "@stories/MultiselectFie
 import {MultiselectField} from "@terreno/ui";
 
 export const MultiselectFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {MultiselectField} from \"@terreno/ui\";\n\n<MultiselectField />",
   name: "Multiselect Field",
   component: MultiselectField,
   related: ["CheckBox"],

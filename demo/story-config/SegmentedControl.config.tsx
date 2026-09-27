@@ -10,6 +10,7 @@ import {
 import {SegmentedControl} from "@terreno/ui";
 
 export const SegmentedControlConfiguration: DemoConfiguration = {
+  usageExample: "import {SegmentedControl} from \"@terreno/ui\";\n\n<SegmentedControl />",
   name: "Segmented control",
   component: SegmentedControl,
   related: ["Button"],

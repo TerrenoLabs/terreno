@@ -3,6 +3,7 @@ import {RadioDemo, RadioSelected} from "@stories/Radio.stories";
 import {Radio} from "@terreno/ui";
 
 export const RadioConfiguration: DemoConfiguration = {
+  usageExample: "import {Radio} from \"@terreno/ui\";\n\n<Radio />",
   a11yNotes: ["Selected and unselected states should remain distinguishable without color alone."],
   additionalDocumentation: [],
   category: "Component",

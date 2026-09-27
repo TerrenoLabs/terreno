@@ -9,6 +9,7 @@ import {
 import {NumberField} from "@terreno/ui";
 
 export const NumberFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {NumberField} from \"@terreno/ui\";\n\n<NumberField />",
   name: "Number field",
   component: NumberField, // Replace with actual component reference
   related: ["Text area"],

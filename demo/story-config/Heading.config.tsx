@@ -3,6 +3,7 @@ import {HeadingPreview, Headings, renderHeadingText} from "@stories/Heading.stor
 import {HeadingProps} from "@terreno/ui";
 
 export const HeadingConfiguration: DemoConfiguration = {
+  usageExample: "import {Headings} from \"@terreno/ui\";\n\n<Headings />",
   name: "Heading",
   component: Headings, // Replace with actual component reference
   related: ["Text"],

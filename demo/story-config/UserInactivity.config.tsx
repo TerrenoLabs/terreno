@@ -3,6 +3,7 @@ import {UserInactivityDemo} from "@stories/UserInactivity.stories";
 import {UserInactivity} from "@terreno/ui";
 
 export const UserInactivityConfiguration: DemoConfiguration = {
+  usageExample: "import {UserInactivity} from \"@terreno/ui\";\n\n<UserInactivity />",
   name: "UserInactivity",
   component: UserInactivity,
   related: ["Modal"],

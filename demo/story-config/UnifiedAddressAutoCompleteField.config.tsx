@@ -6,6 +6,7 @@ import {
 import {UnifiedAddressAutoCompleteField} from "@terreno/ui";
 
 export const UnifiedAddressAutoCompleteFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {UnifiedAddressAutoCompleteField} from \"@terreno/ui\";\n\n<UnifiedAddressAutoCompleteField />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

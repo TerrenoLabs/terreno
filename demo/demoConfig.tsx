@@ -266,6 +266,9 @@ const OpenAPIContextConfiguration: DemoConfigurationBase = {
     ],
     doNot: ["Fetch OpenAPI specs manually in every field component."],
   },
+  usageExample: `import {OpenAPIProvider, useOpenAPISpec} from "@terreno/ui";
+
+<OpenAPIProvider url="/openapi.json">{children}</OpenAPIProvider>`,
 };
 
 const Config: DemoConfigurationBase[] = [

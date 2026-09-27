@@ -3,6 +3,7 @@ import {ToastDemo, Toasts} from "@stories/Toast.stories";
 import {Toast} from "@terreno/ui";
 
 export const ToastConfiguration: DemoConfiguration = {
+  usageExample: "import {Toast} from \"@terreno/ui\";\n\n<Toast />",
   name: "Toast",
   component: Toast, // Replace with actual component reference
   related: ["Banner"],

@@ -8,6 +8,7 @@ import {
 import {SectionDivider} from "@terreno/ui";
 
 export const SectionDividerConfiguration: DemoConfiguration = {
+  usageExample: "import {SectionDivider} from \"@terreno/ui\";\n\n<SectionDivider />",
   name: "SectionDivider",
   component: SectionDivider,
   related: ["Card", "Box"],

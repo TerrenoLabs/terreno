@@ -8,6 +8,7 @@ import {ThumbsUpDownFeedback} from "@terreno/ui";
 import React from "react";
 
 export const ThumbsUpDownFeedbackConfiguration: DemoConfiguration = {
+  usageExample: "import {ThumbsUpDownFeedback} from \"@terreno/ui\";\n\n<ThumbsUpDownFeedback />",
   name: "ThumbsUpDownFeedback",
   related: ["AI Suggestion Box", "IconButton"],
   description:

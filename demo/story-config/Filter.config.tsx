@@ -8,6 +8,7 @@ import {Filter} from "@terreno/ui";
 import React from "react";
 
 export const FilterConfiguration: DemoConfiguration = {
+  usageExample: "import {Filter} from \"@terreno/ui\";\n\n<Filter />",
   name: "Filter",
   component: Filter,
   related: ["Select field", "Boolean field", "Accordion"],

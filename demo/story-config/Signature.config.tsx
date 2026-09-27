@@ -3,6 +3,7 @@ import {SignatureDemo, SignatureFullWidth} from "@stories/Signature.stories";
 import {Signature} from "@terreno/ui";
 
 export const SignatureConfiguration: DemoConfiguration = {
+  usageExample: "import {Signature} from \"@terreno/ui\";\n\n<Signature />",
   a11yNotes: ["The pad is a drawing surface; SignatureField adds labels and required-state copy."],
   additionalDocumentation: [],
   category: "Component",

@@ -3,6 +3,7 @@ import {TapDemo, TapStory} from "@stories/TapToEdit.stories";
 import {TapToEdit} from "@terreno/ui";
 
 export const TapToEditConfiguration: DemoConfiguration = {
+  usageExample: "import {TapToEdit} from \"@terreno/ui\";\n\n<TapToEdit />",
   name: "Tap to edit",
   component: TapToEdit,
   related: ["AddressField", "Text field"],

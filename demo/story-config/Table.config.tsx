@@ -4,6 +4,7 @@ import {TableMockupPreview} from "@stories/TableMockupPreview";
 import {Table} from "@terreno/ui";
 
 export const TableConfiguration: DemoConfiguration = {
+  usageExample: "import {Table} from \"@terreno/ui\";\n\n<Table />",
   name: "Table",
   component: Table,
   related: [

@@ -25,6 +25,7 @@ const badgeStatusOptions = [
 ];
 
 export const SidebarNavigationConfiguration: DemoConfiguration = {
+  usageExample: "import {SidebarNavigationPanel} from \"@terreno/ui\";\n\n<SidebarNavigationPanel />",
   name: "Sidebar navigation (non-expo)",
   component: SidebarNavigationPanel,
   related: ["Sidebar navigation (expo-router)", "Side drawer", "Page"],
@@ -95,6 +96,7 @@ export const SidebarNavigationConfiguration: DemoConfiguration = {
 };
 
 export const SidebarNavigationExpoRouterConfiguration: DemoConfiguration = {
+  usageExample: "import {SidebarNavigation} from \"@terreno/ui\";\n\n<SidebarNavigation />",
   name: "Sidebar navigation (expo-router)",
   component: SidebarNavigation,
   related: ["Sidebar navigation (non-expo)", "Side drawer", "Page"],

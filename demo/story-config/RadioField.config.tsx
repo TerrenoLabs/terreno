@@ -4,6 +4,7 @@ import {RadioField} from "@terreno/ui";
 import React from "react";
 
 export const RadioFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {RadioField} from \"@terreno/ui\";\n\n<RadioField />",
   name: "Radio field",
   component: RadioField,
   related: ["Radio", "Checkbox"],

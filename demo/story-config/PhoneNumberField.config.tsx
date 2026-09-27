@@ -3,6 +3,7 @@ import {PhoneNumberFieldDemo} from "@stories/PhoneNumberField.stories";
 import {EmailField} from "@terreno/ui";
 
 export const PhoneNumberConfiguration: DemoConfiguration = {
+  usageExample: "import {EmailField} from \"@terreno/ui\";\n\n<EmailField />",
   name: "Phone number field",
   component: EmailField,
   related: ["Text area"],

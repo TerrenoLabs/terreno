@@ -71,6 +71,8 @@ src/
     mcp.ts                 # MCP server status and tools
   service/
     aiService.ts           # Provider-agnostic AI service
+    asks.ts                # Ask tools, reserved ask_ names, paused-turn replay
+    chatTurn.ts            # Chat turn runner behind /gpt/prompt (writes to an event sink)
     fileStorage.ts         # GCS upload helper
     getMCPTools.ts         # modelRouter MCP tools as Vercel AI SDK tools
     mcpService.ts          # MCP client connections
@@ -92,7 +94,8 @@ src/
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
 - **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
-- **Prompts:** `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
+- **Prompts:** `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TERRENO_ASKS_SYSTEM_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
+- **Asks:** `createAskTools`, `TERRENO_ASKS_SYSTEM_PROMPT`, types `AsksOptions`, `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus`, and `Ask`, `AskKind`, `AskResponse`, `AskValidationError`, `SimpleCard`, `SimpleCardButton` re-exported from `@terreno/blocks` ([Agent UI Asks](agent-ui-asks.md))
 - **Web search:** `WebSearchProvider`, `WebSearchResult` types
 
 ## AIService
@@ -136,7 +139,7 @@ const aiService = new AIService({
 | `generateRemix(options)` | Reword text using `REMIX_PROMPT` at `TemperaturePresets.BALANCED` |
 | `generateSummary(options)` | Summarize text using `CONTENT_SUMMARY_PROMPT` at `TemperaturePresets.LOW` |
 | `translateText(options)` | Translate text using `TRANSLATION_PROMPT` at `TemperaturePresets.LOW` |
-| `buildMessages(prompts)` | Convert `GptHistoryPrompt[]` to Vercel AI SDK `ModelMessage[]` (skips tool-call/result entries) |
+| `buildMessages(prompts)` | Convert `GptHistoryPrompt[]` to Vercel AI SDK `ModelMessage[]`. Skips host tool-call/result rows. Keeps each answered or cancelled ask as an assistant tool call plus its tool result; consecutive ask calls share one assistant message. Skips asks still waiting for an answer. |
 | `generateChatStream(options)` | Stream multi-turn chat with optional tools; logs prompt as joined message text |
 
 All generation methods log to `AIRequest` via private `logRequest()`. Logging failures never throw.
@@ -192,7 +195,7 @@ Logs all AI calls for monitoring and admin explorer.
 | `tokensUsed` | number? | Total tokens |
 | `userId` | ObjectId? | Requesting user |
 | `error` | string? | Error message |
-| `metadata` | Mixed? | Extra data (e.g. structured-output debug) |
+| `metadata` | Mixed? | Extra data (e.g. structured-output debug; `ask` and `nextAsk` for [asks](agent-ui-asks.md#stored-state)) |
 | `parentRequestId` | ObjectId? | Parent in multi-agent workflow |
 | `subRequestIds` | ObjectId[]? | Child request refs |
 | `totalResponseTime` | number? | Combined sub-request time |
@@ -211,7 +214,8 @@ Conversation history with multi-modal prompts.
 | `userId` | ObjectId | Owner (required) |
 | `title` | string? | Auto-generated on first `/gpt/prompt` response when empty |
 | `projectId` | ObjectId? | Optional project association |
-| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields |
+| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields (`toolCallId`, `toolName`, `args`, `result`), and `ask: {kind, status}` on ask `tool-call` rows (`status`: `pending` \| `answered` \| `cancelled`) |
+| `pendingAsk` | object? | The ask the conversation waits on: `toolCallId`, `kind`, `input`, `simple`, `promptIndex`, `responseMessages`, `created`. Only `/gpt/prompt` sets and clears it; see [Agent UI Asks](agent-ui-asks.md#stored-state). |
 
 **Virtual:** `ownerId` aliases `userId` for `Permissions.IsOwner`.
 
@@ -249,12 +253,46 @@ GPT project with persistent context and memories.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/gpt/prompt` | POST | `IsAuthenticated` | SSE streaming chat; body: `prompt`, optional `historyId`, `systemPrompt`, `attachments`, `model`, `projectId` |
+| `/gpt/prompt` | POST | `IsAuthenticated` | SSE streaming chat turn; [body](#gptprompt-body) and [events](#sse-events) below |
 | `/gpt/remix` | POST | `IsAuthenticated` | Non-streaming text remix; body: `{text}` |
 | `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null}` |
-| `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools |
+| `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools (ask tools are not listed) |
 
 AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerModelFn(modelId)` → configured `aiService` → demo SSE response when `demoMode` and none available.
+
+Pass `asks: true` (or `{kinds: ["choice"]}`) to let the model ask the user typed questions in the chat. Asks are off by default; with them off, tools, system prompt, and SSE events are unchanged. See [Agent UI Asks](agent-ui-asks.md).
+
+#### `/gpt/prompt` body
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prompt` | string | The user's message. Required unless `askResponse` is sent. |
+| `historyId` | string? | Continue this conversation; omit to start one. Required with `askResponse`. |
+| `askResponse` | object? | The answer to the pending ask: `{toolCallId, action, content?, reason?}`. Read only when `asks` is on. Send it instead of `prompt`, without `attachments`. See [Answer an ask](agent-ui-asks.md#answer-an-ask). |
+| `systemPrompt` | string? | System prompt for this turn; project context and the Langfuse prompt are prepended |
+| `attachments` | array? | `{type: "image" \| "file", url, mimeType, filename?}` items added to the user message |
+| `model` | string? | Model id passed to `createModelFn` or `createServerModelFn` |
+| `projectId` | string? | Project whose context and memories are prepended to the system prompt; saved on a history that has none |
+
+#### SSE events
+
+`/gpt/prompt` streams `data: <json>` lines, one event object per line. `{askResolved}` comes first, `{ask}` and `{done}` come last, and the rest arrive as the model streams.
+
+| Event | Shape | When |
+|-------|-------|------|
+| `{askResolved}` | `{askResolved: {toolCallId, action}}` | The turn answered the pending ask, or cancelled it because a new `prompt` arrived. Asks only. |
+| `{text}` | `{text: string}` | A step's text, sent when the step ends. Text from a step that calls a tool is dropped, and a trailing JSON `"action"` blob is stripped. |
+| `{toolCall}` | `{toolCall: {toolCallId, toolName, args}}` | The model called a host tool (route, request, or MCP). Never sent for ask tools. |
+| `{file}` | `{file: {filename, mimeType, url}}` | A host tool result had a `fileData` data URL. Sent before its `{toolResult}`. `filename` defaults to `document` and `mimeType` to `application/octet-stream`. |
+| `{toolResult}` | `{toolResult: {toolCallId, toolName, result}}` | A host tool returned. `fileData` is removed from `result`. Never sent for ask tools. |
+| `{image}` | `{image: {mimeType, url}}` | The model generated an image; `url` is a `data:` URL |
+| `{ask}` | `{ask: {toolCallId, kind, input, simple}}` | The turn paused on an ask. Sent after the turn is saved. Asks only. |
+| `{error}` | `{error: string}` | The model stream reported an error and the turn goes on, or the turn failed after the stream started and the stream ends without `{done}` |
+| `{done}` | `{done: true, historyId?, title?, pendingAsk?}` | Last event. `historyId` is missing only in the demo response. `title` is set once the conversation has one. `pendingAsk: {toolCallId}` when the turn waits on an ask. |
+
+When the model call after an answer fails, the stream is `{askResolved}`, `{error}`, `{done}`. The answer is kept: the ask stays answered and sending it again returns 409. Send a new `prompt` to continue.
+
+Errors raised before the stream starts return JSON `{status, title, detail, fields?}` instead: 400 for an invalid body, 403 for another user's history, 404 for an unknown `historyId`, 409 for an answer to an ask that is not pending or a `prompt` that arrives while an answer is resolving the pending ask, and 500 otherwise. [Agent UI Asks error responses](agent-ui-asks.md#error-responses) lists the ask cases.
 
 ### addGptHistoryRoutes(router, options?)
 
@@ -265,7 +303,7 @@ CRUD at `/gpt/histories` via `modelRouter`:
 | Create, List | `IsAuthenticated` |
 | Read, Update, Delete | `IsOwner` |
 
-Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`.
+Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`. Create and update bodies drop `pendingAsk` (including dotted `pendingAsk.*` paths), so only `/gpt/prompt` writes it; the OpenAPI spec marks it `readOnly` on create and update.
 
 ### addProjectRoutes(router, options?)
 
@@ -326,6 +364,7 @@ new AiApp({
 | Option | Description |
 |--------|-------------|
 | `aiService` | Pre-configured server-wide AI service |
+| `asks` | Let the model ask the user typed questions in chat: `true` or `{kinds}`. Passed to `addGptRoutes`; see [Agent UI Asks](agent-ui-asks.md) |
 | `createModelFn` | Build model from per-request `x-ai-api-key` |
 | `createServerModelFn` | Server-side model factory (e.g. Vertex ADC) without per-request key |
 | `demoMode` | Return canned responses when no AI service resolves |

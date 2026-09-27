@@ -1,0 +1,52 @@
+{
+  "author": "Josh Gachnang",
+  "bugs": {
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "description": "Shared contracts for agent-driven UI: ask schemas, answer validation, and simple cards — part of Terreno, the batteries-included TypeScript framework for universal apps.",
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  },
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
+  "keywords": [
+    "ai",
+    "agents",
+    "generative-ui",
+    "zod",
+    "terreno"
+  ],
+  "license": "MIT",
+  "main": "dist/index.js",
+  "name": "@terreno/blocks",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
+  },
+  "scripts": {
+    "compile": "bun tsc",
+    "compile:watch": "bun tsc -w",
+    "dev": "bun tsc -w",
+    "lint": "biome check ./src",
+    "lint:fix": "biome check --write ./src",
+    "test": "bun test",
+    "test:agent": "AGENT=1 bun test --only-failures",
+    "test:ci": "bun test",
+    "test:coverage": "bun run ../scripts/check-coverage.ts"
+  },
+  "types": "dist/index.d.ts",
+  "version": "57.6.1"
+}

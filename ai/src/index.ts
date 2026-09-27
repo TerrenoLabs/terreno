@@ -1,3 +1,11 @@
+export type {
+  Ask,
+  AskKind,
+  AskResponse,
+  AskValidationError,
+  SimpleCard,
+  SimpleCardButton,
+} from "@terreno/blocks";
 export type {FlexibleSchema, JSONValue} from "ai";
 export {jsonSchema, Output} from "ai";
 export type {AIAdminAppOptions} from "./aiAdminApp";
@@ -39,6 +47,7 @@ export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";
 export {addProjectRoutes} from "./routes/projects";
 export {AIService, TemperaturePresets} from "./service/aiService";
+export {createAskTools} from "./service/asks";
 export {FileStorageService} from "./service/fileStorage";
 export type {ListGeminiApiModelsOptions} from "./service/gemini";
 export {
@@ -58,6 +67,7 @@ export {
   DEFAULT_GPT_MEMORY,
   JSON_VALUE_SYSTEM_PROMPT,
   REMIX_PROMPT,
+  TERRENO_ASKS_SYSTEM_PROMPT,
   TITLE_GENERATION_PROMPT,
   TRANSLATION_PROMPT,
 } from "./service/prompts";

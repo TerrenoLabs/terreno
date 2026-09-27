@@ -588,6 +588,235 @@ describe("AIService", () => {
       expect(messages.length).toBe(2);
       expect(messages[0]).toEqual({content: "You are helpful", role: "system"});
     });
+
+    describe("asks", () => {
+      const planAsk = {
+        options: [
+          {id: "starter", label: "Starter"},
+          {id: "team", label: "Team"},
+        ],
+        prompt: "Which plan should I set up?",
+        select: "one",
+      };
+      const regionAsk = {
+        options: [
+          {id: "us", label: "US"},
+          {id: "eu", label: "EU"},
+        ],
+        prompt: "Where should your data live?",
+        select: "one",
+      };
+      const buildMessages = (prompts: Parameters<AIService["buildMessages"]>[0]) =>
+        new AIService({model: createMockModel() as unknown as LanguageModel}).buildMessages(
+          prompts
+        );
+
+      it("includes a completed ask as a tool call and its result, and still skips host tool rows", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: {},
+            text: "Tool call: lookupPlans",
+            toolCallId: "call_lookup",
+            toolName: "lookupPlans",
+            type: "tool-call",
+          },
+          {
+            result: {plans: 2},
+            text: "Tool result: lookupPlans",
+            toolCallId: "call_lookup",
+            toolName: "lookupPlans",
+            type: "tool-result",
+          },
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            result: {action: "accept", content: {selected: ["team"]}},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+          {text: "Setting up the Team plan.", type: "assistant"},
+          {text: "Thanks", type: "user"},
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Set up my workspace", role: "user"},
+          {
+            content: [
+              {input: planAsk, toolCallId: "call_plan", toolName: "ask_choice", type: "tool-call"},
+            ],
+            role: "assistant",
+          },
+          {
+            content: [
+              {
+                output: {type: "json", value: {action: "accept", content: {selected: ["team"]}}},
+                toolCallId: "call_plan",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+            ],
+            role: "tool",
+          },
+          {content: "Setting up the Team plan.", role: "assistant"},
+          {content: "Thanks", role: "user"},
+        ]);
+      });
+
+      it("puts consecutive ask calls from one step in one assistant message, in call order", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            args: regionAsk,
+            ask: {kind: "choice", status: "cancelled"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_region",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            result: {action: "cancel", reason: "one_ask_at_a_time"},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_region",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+          {
+            result: {action: "decline"},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+          {text: "No plan for now.", type: "assistant"},
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Set up my workspace", role: "user"},
+          {
+            content: [
+              {input: planAsk, toolCallId: "call_plan", toolName: "ask_choice", type: "tool-call"},
+              {
+                input: regionAsk,
+                toolCallId: "call_region",
+                toolName: "ask_choice",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+          {
+            content: [
+              {
+                output: {type: "json", value: {action: "decline"}},
+                toolCallId: "call_plan",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+              {
+                output: {type: "json", value: {action: "cancel", reason: "one_ask_at_a_time"}},
+                toolCallId: "call_region",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+            ],
+            role: "tool",
+          },
+          {content: "No plan for now.", role: "assistant"},
+        ]);
+      });
+
+      it("skips an ask that is still waiting for an answer", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "pending"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+        ]);
+
+        expect(messages).toEqual([{content: "Set up my workspace", role: "user"}]);
+      });
+
+      it("skips ask rows without a tool call id or tool name, and sends null for a missing result", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            type: "tool-call",
+          },
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_nameless",
+            type: "tool-call",
+          },
+          {
+            result: {action: "decline"},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_nameless",
+            type: "tool-result",
+          },
+          {
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_bare",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            text: "Tool result: ask_choice",
+            toolCallId: "call_bare",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Set up my workspace", role: "user"},
+          {
+            content: [
+              {input: {}, toolCallId: "call_bare", toolName: "ask_choice", type: "tool-call"},
+            ],
+            role: "assistant",
+          },
+          {
+            content: [
+              {
+                output: {type: "json", value: null},
+                toolCallId: "call_bare",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+            ],
+            role: "tool",
+          },
+        ]);
+      });
+    });
   });
 
   describe("generateChatStream", () => {

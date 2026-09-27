@@ -1,5 +1,6 @@
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin} from "@terreno/api";
-import type {LanguageModel, StopCondition, ToolSet} from "ai";
+import type {Ask, AskKind, SimpleCard} from "@terreno/blocks";
+import type {LanguageModel, ModelMessage, StopCondition, ToolSet} from "ai";
 import type mongoose from "mongoose";
 
 // ============================================================
@@ -96,6 +97,14 @@ export type MessageContentPart = TextContentPart | ImageContentPart | FileConten
 // GptHistory Types
 // ============================================================
 
+export type GptHistoryAskStatus = "pending" | "answered" | "cancelled";
+
+/** Marks a `tool-call` row as an ask and records whether the user has answered it. */
+export interface GptHistoryPromptAsk {
+  kind: AskKind;
+  status: GptHistoryAskStatus;
+}
+
 export interface GptHistoryPrompt {
   model?: string;
   rating?: "up" | "down";
@@ -106,11 +115,26 @@ export interface GptHistoryPrompt {
   toolName?: string;
   args?: Record<string, unknown>;
   result?: unknown;
+  ask?: GptHistoryPromptAsk;
 }
+
+interface GptHistoryPendingAskState {
+  created: Date;
+  /** Number of leading `prompts` rows that form the paused turn's history. */
+  promptIndex: number;
+  /** AI SDK messages the paused turn produced, replayed verbatim when the user answers. */
+  responseMessages: ModelMessage[];
+  simple: SimpleCard;
+  toolCallId: string;
+}
+
+/** The ask a history is waiting on. At most one per history. */
+export type GptHistoryPendingAsk = Ask & GptHistoryPendingAskState;
 
 export interface GptHistoryDocument extends mongoose.Document<mongoose.Types.ObjectId> {
   created: Date;
   deleted: boolean;
+  pendingAsk?: GptHistoryPendingAsk;
   projectId?: mongoose.Types.ObjectId;
   prompts: GptHistoryPrompt[];
   title?: string;
@@ -248,9 +272,19 @@ export interface GenerateJsonArrayOptions<ELEMENT> {
 // Route Option Types
 // ============================================================
 
+export interface AsksOptions {
+  /** Ask kinds offered to the model, each as the tool `ask_<kind>`. Defaults to every kind. */
+  kinds?: AskKind[];
+}
+
 export interface GptRouteOptions {
   /** Pre-configured AIService. Optional when using per-request keys or demo mode. */
   aiService?: import("../service/aiService").AIService;
+  /**
+   * Let the model ask the user typed questions with client-side ask tools. `true` offers every
+   * ask kind. Off by default; when off, tools, system prompt, and SSE events are unchanged.
+   */
+  asks?: boolean | AsksOptions;
   /** Factory to create a LanguageModel from a per-request API key (x-ai-api-key header). */
   createModelFn?: (apiKey: string, modelId?: string) => import("ai").LanguageModel;
   /** Factory to create a LanguageModel on the server side without a per-request key (e.g. Vertex AI with ADC). Used for model switching when no x-ai-api-key header is present. Returns undefined if no provider is configured (falls through to demo mode). */

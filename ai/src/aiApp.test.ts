@@ -71,6 +71,25 @@ describe("AiApp", () => {
     expect(projects.status).toBe(200);
   });
 
+  it("passes asks to the gpt routes, so the model is offered the ask tools", async () => {
+    const {AIService} = await import("./service/aiService");
+    const model = createMockModel();
+    const aiService = new AIService({model: model as unknown as LanguageModel});
+    const plugin = new AiApp({aiService, asks: true});
+    const app = new TerrenoApp({
+      configureApp: (router) => plugin.register(router as unknown as express.Application),
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+    const agent = await authAsUser(app);
+
+    const res = await agent.post("/gpt/prompt").send({prompt: "Hi"});
+
+    expect(res.status).toBe(200);
+    const [callOptions] = model.doStream.mock.calls[0] as unknown as [{tools?: {name: string}[]}];
+    expect(callOptions.tools?.map((tool) => tool.name)).toEqual(["ask_choice"]);
+  });
+
   it("registers file routes only when fileStorageService and gcsBucket are provided", async () => {
     const fileStorageService = {
       delete: mock(async () => {}),

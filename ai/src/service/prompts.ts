@@ -1,3 +1,35 @@
+/**
+ * Appended to the chat system prompt when a route enables asks. The enabled ask tools and their
+ * limits follow it at call time (`askPromptSection` from @terreno/blocks), so the numbers stay in
+ * one place.
+ */
+export const TERRENO_ASKS_SYSTEM_PROMPT =
+  "You can ask the user a question inside the chat by calling an ask tool. The chat shows the " +
+  "ask as a control, the user answers it, and the answer comes back to you as the tool's result.\n\n" +
+  "When to ask:\n" +
+  "- When you need the user to choose between options you can list, call an ask tool instead of " +
+  "asking in plain text.\n" +
+  "- Ask only when you cannot continue well without the answer. Do not ask for anything you can " +
+  "find out with another tool.\n" +
+  "- Call at most one ask tool per step, and do not call other tools in the same step.\n" +
+  "- Never ask for passwords, payment card numbers, API keys, or other secrets.\n\n" +
+  "How answers come back:\n" +
+  '- {"action": "accept", "content": {...}}: the user answered; content holds the answer.\n' +
+  '- {"action": "decline"}: the user skipped the question. Continue without the answer, or ' +
+  "explain what you need.\n" +
+  '- {"action": "cancel", "reason": "..."}: the ask was dropped. "user_sent_message" means the ' +
+  'user typed a message instead, so respond to that message. "one_ask_at_a_time" means you ' +
+  "asked more than once in one step.\n" +
+  "After a decline or a cancel, do not ask the same question again unless the user asks you to.";
+
+export const ASK_CHOICE_TOOL_DESCRIPTION =
+  "Ask the user to pick one option from a list you provide. The chat shows the options as a " +
+  "control and returns the user's answer as this tool's result. Use it instead of asking in plain " +
+  "text when the user must choose between options you can list.";
+
+/** Tool result for a call that was left without one when the turn paused for an ask. */
+export const UNANSWERED_TOOL_CALL_RESULT = "This tool call did not run, so it has no result.";
+
 export const DEFAULT_GPT_MEMORY =
   "You are a helpful, friendly AI assistant. Provide clear, accurate, and concise responses. " +
   "When you don't know something, say so honestly rather than guessing.";

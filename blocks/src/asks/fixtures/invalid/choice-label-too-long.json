@@ -1,0 +1,23 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Pick one.",
+    "select": "one",
+    "options": [
+      {
+        "id": "a",
+        "label": "lllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll"
+      },
+      {
+        "id": "b",
+        "label": "B"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "options[0].label",
+      "code": "TOO_LONG"
+    }
+  ]
+}

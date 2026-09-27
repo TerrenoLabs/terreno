@@ -11,10 +11,13 @@ import {addProjectRoutes} from "./routes/projects";
 import type {AIService} from "./service/aiService";
 import type {FileStorageService} from "./service/fileStorage";
 import type {MCPService} from "./service/mcpService";
+import type {AsksOptions} from "./types";
 
 export interface AiAppOptions {
   /** Pre-configured AIService instance. Optional when using per-request keys or demo mode. */
   aiService?: AIService;
+  /** Let the model ask the user typed questions in chat. Passed through to `addGptRoutes`. */
+  asks?: boolean | AsksOptions;
   /** Factory function to create a LanguageModel from a per-request API key (sent via x-ai-api-key header). */
   createModelFn?: (apiKey: string, modelId?: string) => LanguageModel;
   /** Factory function to create a LanguageModel on the server side without a per-request key (e.g. Vertex AI with ADC). Returns undefined if no provider is configured. */
@@ -76,6 +79,7 @@ export class AiApp implements TerrenoPlugin {
     const router = app;
     const {
       aiService,
+      asks,
       createModelFn,
       createServerModelFn,
       demoMode,
@@ -92,6 +96,7 @@ export class AiApp implements TerrenoPlugin {
     addGptHistoryRoutes(router, {openApiOptions});
     addGptRoutes(router, {
       aiService,
+      asks,
       createModelFn,
       createServerModelFn,
       demoMode,

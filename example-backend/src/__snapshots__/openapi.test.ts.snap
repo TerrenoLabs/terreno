@@ -14767,6 +14767,50 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "ownerId": {
                             "type": "any",
                           },
+                          "pendingAsk": {
+                            "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                            "properties": {
+                              "created": {
+                                "description": "When the model asked",
+                                "format": "date-time",
+                                "type": "string",
+                              },
+                              "input": {
+                                "description": "The validated ask input the model sent",
+                              },
+                              "kind": {
+                                "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                "enum": [
+                                  "choice",
+                                ],
+                                "type": "string",
+                              },
+                              "promptIndex": {
+                                "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
+                                "type": "number",
+                              },
+                              "responseMessages": {
+                                "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
+                              },
+                              "simple": {
+                                "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                              },
+                              "toolCallId": {
+                                "description": "Tool call id of the ask; an answer must name it",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "created",
+                              "input",
+                              "kind",
+                              "promptIndex",
+                              "responseMessages",
+                              "simple",
+                              "toolCallId",
+                            ],
+                            "type": "object",
+                          },
                           "projectId": {
                             "description": "Project this conversation belongs to",
                             "format": "objectid",
@@ -14778,6 +14822,32 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                               "properties": {
                                 "args": {
                                   "description": "Arguments passed to a tool call",
+                                },
+                                "ask": {
+                                  "description": "Set on tool-call rows where the model asked the user a question",
+                                  "properties": {
+                                    "kind": {
+                                      "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                      "enum": [
+                                        "choice",
+                                      ],
+                                      "type": "string",
+                                    },
+                                    "status": {
+                                      "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                                      "enum": [
+                                        "pending",
+                                        "answered",
+                                        "cancelled",
+                                      ],
+                                      "type": "string",
+                                    },
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "status",
+                                  ],
+                                  "type": "object",
                                 },
                                 "content": {
                                   "description": "Multipart content attached to this prompt",
@@ -14976,6 +15046,51 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                   "ownerId": {
                     "type": "any",
                   },
+                  "pendingAsk": {
+                    "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                    "properties": {
+                      "created": {
+                        "description": "When the model asked",
+                        "format": "date-time",
+                        "type": "string",
+                      },
+                      "input": {
+                        "description": "The validated ask input the model sent",
+                      },
+                      "kind": {
+                        "description": "Ask kind; the model asked with the tool ask_<kind>",
+                        "enum": [
+                          "choice",
+                        ],
+                        "type": "string",
+                      },
+                      "promptIndex": {
+                        "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
+                        "type": "number",
+                      },
+                      "responseMessages": {
+                        "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
+                      },
+                      "simple": {
+                        "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                      },
+                      "toolCallId": {
+                        "description": "Tool call id of the ask; an answer must name it",
+                        "type": "string",
+                      },
+                    },
+                    "readOnly": true,
+                    "required": [
+                      "created",
+                      "input",
+                      "kind",
+                      "promptIndex",
+                      "responseMessages",
+                      "simple",
+                      "toolCallId",
+                    ],
+                    "type": "object",
+                  },
                   "projectId": {
                     "description": "Project this conversation belongs to",
                     "format": "objectid",
@@ -14987,6 +15102,32 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "properties": {
                         "args": {
                           "description": "Arguments passed to a tool call",
+                        },
+                        "ask": {
+                          "description": "Set on tool-call rows where the model asked the user a question",
+                          "properties": {
+                            "kind": {
+                              "description": "Ask kind; the model asked with the tool ask_<kind>",
+                              "enum": [
+                                "choice",
+                              ],
+                              "type": "string",
+                            },
+                            "status": {
+                              "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                              "enum": [
+                                "pending",
+                                "answered",
+                                "cancelled",
+                              ],
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "kind",
+                            "status",
+                          ],
+                          "type": "object",
                         },
                         "content": {
                           "description": "Multipart content attached to this prompt",
@@ -15114,6 +15255,51 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "ownerId": {
                       "type": "any",
                     },
+                    "pendingAsk": {
+                      "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                      "properties": {
+                        "created": {
+                          "description": "When the model asked",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "input": {
+                          "description": "The validated ask input the model sent",
+                        },
+                        "kind": {
+                          "description": "Ask kind; the model asked with the tool ask_<kind>",
+                          "enum": [
+                            "choice",
+                          ],
+                          "type": "string",
+                        },
+                        "promptIndex": {
+                          "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
+                          "type": "number",
+                        },
+                        "responseMessages": {
+                          "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
+                        },
+                        "simple": {
+                          "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                        },
+                        "toolCallId": {
+                          "description": "Tool call id of the ask; an answer must name it",
+                          "type": "string",
+                        },
+                      },
+                      "readOnly": true,
+                      "required": [
+                        "created",
+                        "input",
+                        "kind",
+                        "promptIndex",
+                        "responseMessages",
+                        "simple",
+                        "toolCallId",
+                      ],
+                      "type": "object",
+                    },
                     "projectId": {
                       "description": "Project this conversation belongs to",
                       "format": "objectid",
@@ -15125,6 +15311,32 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "properties": {
                           "args": {
                             "description": "Arguments passed to a tool call",
+                          },
+                          "ask": {
+                            "description": "Set on tool-call rows where the model asked the user a question",
+                            "properties": {
+                              "kind": {
+                                "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                "enum": [
+                                  "choice",
+                                ],
+                                "type": "string",
+                              },
+                              "status": {
+                                "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                                "enum": [
+                                  "pending",
+                                  "answered",
+                                  "cancelled",
+                                ],
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "kind",
+                              "status",
+                            ],
+                            "type": "object",
                           },
                           "content": {
                             "description": "Multipart content attached to this prompt",
@@ -15382,6 +15594,50 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "ownerId": {
                       "type": "any",
                     },
+                    "pendingAsk": {
+                      "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                      "properties": {
+                        "created": {
+                          "description": "When the model asked",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "input": {
+                          "description": "The validated ask input the model sent",
+                        },
+                        "kind": {
+                          "description": "Ask kind; the model asked with the tool ask_<kind>",
+                          "enum": [
+                            "choice",
+                          ],
+                          "type": "string",
+                        },
+                        "promptIndex": {
+                          "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
+                          "type": "number",
+                        },
+                        "responseMessages": {
+                          "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
+                        },
+                        "simple": {
+                          "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                        },
+                        "toolCallId": {
+                          "description": "Tool call id of the ask; an answer must name it",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "created",
+                        "input",
+                        "kind",
+                        "promptIndex",
+                        "responseMessages",
+                        "simple",
+                        "toolCallId",
+                      ],
+                      "type": "object",
+                    },
                     "projectId": {
                       "description": "Project this conversation belongs to",
                       "format": "objectid",
@@ -15393,6 +15649,32 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "properties": {
                           "args": {
                             "description": "Arguments passed to a tool call",
+                          },
+                          "ask": {
+                            "description": "Set on tool-call rows where the model asked the user a question",
+                            "properties": {
+                              "kind": {
+                                "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                "enum": [
+                                  "choice",
+                                ],
+                                "type": "string",
+                              },
+                              "status": {
+                                "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                                "enum": [
+                                  "pending",
+                                  "answered",
+                                  "cancelled",
+                                ],
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "kind",
+                              "status",
+                            ],
+                            "type": "object",
                           },
                           "content": {
                             "description": "Multipart content attached to this prompt",
@@ -15584,6 +15866,51 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                   "ownerId": {
                     "type": "any",
                   },
+                  "pendingAsk": {
+                    "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                    "properties": {
+                      "created": {
+                        "description": "When the model asked",
+                        "format": "date-time",
+                        "type": "string",
+                      },
+                      "input": {
+                        "description": "The validated ask input the model sent",
+                      },
+                      "kind": {
+                        "description": "Ask kind; the model asked with the tool ask_<kind>",
+                        "enum": [
+                          "choice",
+                        ],
+                        "type": "string",
+                      },
+                      "promptIndex": {
+                        "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
+                        "type": "number",
+                      },
+                      "responseMessages": {
+                        "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
+                      },
+                      "simple": {
+                        "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                      },
+                      "toolCallId": {
+                        "description": "Tool call id of the ask; an answer must name it",
+                        "type": "string",
+                      },
+                    },
+                    "readOnly": true,
+                    "required": [
+                      "created",
+                      "input",
+                      "kind",
+                      "promptIndex",
+                      "responseMessages",
+                      "simple",
+                      "toolCallId",
+                    ],
+                    "type": "object",
+                  },
                   "projectId": {
                     "description": "Project this conversation belongs to",
                     "format": "objectid",
@@ -15595,6 +15922,32 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "properties": {
                         "args": {
                           "description": "Arguments passed to a tool call",
+                        },
+                        "ask": {
+                          "description": "Set on tool-call rows where the model asked the user a question",
+                          "properties": {
+                            "kind": {
+                              "description": "Ask kind; the model asked with the tool ask_<kind>",
+                              "enum": [
+                                "choice",
+                              ],
+                              "type": "string",
+                            },
+                            "status": {
+                              "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                              "enum": [
+                                "pending",
+                                "answered",
+                                "cancelled",
+                              ],
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "kind",
+                            "status",
+                          ],
+                          "type": "object",
                         },
                         "content": {
                           "description": "Multipart content attached to this prompt",
@@ -15722,6 +16075,51 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "ownerId": {
                       "type": "any",
                     },
+                    "pendingAsk": {
+                      "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                      "properties": {
+                        "created": {
+                          "description": "When the model asked",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "input": {
+                          "description": "The validated ask input the model sent",
+                        },
+                        "kind": {
+                          "description": "Ask kind; the model asked with the tool ask_<kind>",
+                          "enum": [
+                            "choice",
+                          ],
+                          "type": "string",
+                        },
+                        "promptIndex": {
+                          "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
+                          "type": "number",
+                        },
+                        "responseMessages": {
+                          "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
+                        },
+                        "simple": {
+                          "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                        },
+                        "toolCallId": {
+                          "description": "Tool call id of the ask; an answer must name it",
+                          "type": "string",
+                        },
+                      },
+                      "readOnly": true,
+                      "required": [
+                        "created",
+                        "input",
+                        "kind",
+                        "promptIndex",
+                        "responseMessages",
+                        "simple",
+                        "toolCallId",
+                      ],
+                      "type": "object",
+                    },
                     "projectId": {
                       "description": "Project this conversation belongs to",
                       "format": "objectid",
@@ -15733,6 +16131,32 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "properties": {
                           "args": {
                             "description": "Arguments passed to a tool call",
+                          },
+                          "ask": {
+                            "description": "Set on tool-call rows where the model asked the user a question",
+                            "properties": {
+                              "kind": {
+                                "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                "enum": [
+                                  "choice",
+                                ],
+                                "type": "string",
+                              },
+                              "status": {
+                                "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                                "enum": [
+                                  "pending",
+                                  "answered",
+                                  "cancelled",
+                                ],
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "kind",
+                              "status",
+                            ],
+                            "type": "object",
                           },
                           "content": {
                             "description": "Multipart content attached to this prompt",

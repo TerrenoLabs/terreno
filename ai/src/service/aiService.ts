@@ -1,5 +1,12 @@
 import {logger} from "@terreno/api";
-import type {DataContent, JSONValue, LanguageModel, ModelMessage} from "ai";
+import type {
+  DataContent,
+  JSONValue,
+  LanguageModel,
+  ModelMessage,
+  ToolCallPart,
+  ToolResultPart,
+} from "ai";
 import {
   generateText as aiGenerateText,
   NoObjectGeneratedError,
@@ -91,6 +98,25 @@ const withStrippedJsonFencesModel = (model: LanguageModel): LanguageModel => {
       return Reflect.get(target, prop, receiver);
     },
   }) as LanguageModel;
+};
+
+/** Result rows of ask tool calls, by tool call id. */
+const collectAskResults = (prompts: GptHistoryPrompt[]): Map<string, GptHistoryPrompt> => {
+  const askCallIds = new Set(
+    prompts
+      .filter((prompt) => prompt.type === "tool-call" && prompt.ask && prompt.toolCallId)
+      .map((prompt) => prompt.toolCallId)
+  );
+  return new Map(
+    prompts
+      .filter(
+        (prompt): prompt is GptHistoryPrompt & {toolCallId: string} =>
+          prompt.type === "tool-result" &&
+          prompt.toolCallId !== undefined &&
+          askCallIds.has(prompt.toolCallId)
+      )
+      .map((prompt) => [prompt.toolCallId, prompt])
+  );
 };
 
 const getModelId = (model: LanguageModel): string => {
@@ -505,10 +531,45 @@ export class AIService {
     });
   }
 
+  /**
+   * Converts history rows to model messages. Ask call/result pairs are kept so the model sees what
+   * it asked and how the user answered; other tool rows, and asks still waiting for an answer, are
+   * skipped. Consecutive ask calls came from one step and share one assistant message.
+   */
   buildMessages(prompts: GptHistoryPrompt[]): ModelMessage[] {
     const messages: ModelMessage[] = [];
+    const askResults = collectAskResults(prompts);
+    let askStep: {calls: ToolCallPart[]; results: ToolResultPart[]} | undefined;
 
     for (const prompt of prompts) {
+      if (prompt.type === "tool-call" && prompt.ask) {
+        const askResult = prompt.toolCallId ? askResults.get(prompt.toolCallId) : undefined;
+        if (!askResult || !prompt.toolCallId || !prompt.toolName) {
+          continue;
+        }
+        if (!askStep) {
+          askStep = {calls: [], results: []};
+          messages.push(
+            {content: askStep.calls, role: "assistant"},
+            {content: askStep.results, role: "tool"}
+          );
+        }
+        askStep.calls.push({
+          input: prompt.args ?? {},
+          toolCallId: prompt.toolCallId,
+          toolName: prompt.toolName,
+          type: "tool-call",
+        });
+        askStep.results.push({
+          output: {type: "json", value: (askResult.result ?? null) as JSONValue},
+          toolCallId: prompt.toolCallId,
+          toolName: prompt.toolName,
+          type: "tool-result",
+        });
+        continue;
+      }
+      askStep = undefined;
+
       if (prompt.type === "tool-call" || prompt.type === "tool-result") {
         continue;
       }

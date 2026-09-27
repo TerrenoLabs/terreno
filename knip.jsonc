@@ -270,6 +270,12 @@
         "!src/tests/**!"
       ]
     },
+    "blocks": {
+      "project": [
+        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "!src/tests/**!"
+      ]
+    },
     "comms": {
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

@@ -33,6 +33,7 @@ const COVERAGE_PACKAGES: Record<string, string> = {
   "run-ai": "ai",
   "run-api": "api",
   "run-api-health": "api-health",
+  "run-blocks": "blocks",
   "run-comms": "comms",
   "run-create-terreno-app": "create-terreno-app",
   "run-feature-flags": "feature-flags",

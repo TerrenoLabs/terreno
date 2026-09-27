@@ -8,7 +8,7 @@
 **Task list:** [`docs/tasks/agent-ui-blocks.md`](../tasks/agent-ui-blocks.md)  
 **Linear:** none  
 **Roadmap issue:** none yet (handoff after Approved)  
-**Related:** [`charts-and-dashboards.md`](./charts-and-dashboards.md) (PR #1302 — chart components this DSL targets), [`ai-observability.md`](./ai-observability.md), [`app-mcp-server.md`](./app-mcp-server.md)  
+**Related:** [`charts-and-dashboards.md`](./charts-and-dashboards.md) (PR #1302 — chart components this DSL targets), [`agent-ui-asks.md`](./agent-ui-asks.md) (companion: asks that return answers to the agent, plus the `html`, `callout`, `image`, and `details` blocks), [`ai-observability.md`](./ai-observability.md), [`app-mcp-server.md`](./app-mcp-server.md)  
 **Primary packages:** new `@terreno/blocks` (contract), `@terreno/ui` (renderer), `@terreno/ai` (prompting + validation), `@terreno/mcp` (validator tool), `demo`, `example-frontend`, `example-backend`
 
 ## Goal
@@ -18,7 +18,9 @@ chat, **every assistant reply is one YAML document**: a short, ordered list of *
 (heading, text, metric, chart, table, actions, columns, card, …) plus named **datasets**
 that charts and tables bind to. Prose is a `text` block. Terreno owns the grammar, the
 validator, and the renderer, so the agent can only ever produce `@terreno/ui` components
-painted from the app theme — never HTML, JSX, or hex colors.
+painted from the app theme — never HTML, JSX, or hex colors. The one exception is the
+opt-in, display-only, sandboxed `html` block that [Agent UI Asks](./agent-ui-asks.md)
+adds to this catalog; it is off unless the host enables `uiBlocks.html`.
 
 The grammar is deliberately **strict and small** so an agent can check its own work in
 milliseconds: unknown keys, missing dataset columns, a non-numeric `y`, more than 50
@@ -39,7 +41,9 @@ to a server-side handle a tool returned when there are thousands — rendered by
   theme tokens `@terreno/ui` already exposes (`color: primary`, `size: lg`, …).
 - Forms and data entry (`TextField`, `DateTimeField`, file upload). v1 interaction is
   buttons, a segmented dataset switch, table row press, chart tooltips, and typed server
-  callbacks.
+  callbacks. Asking the user for a typed answer (pick one or many, files, markdown edits,
+  confirm, forms) is designed in [Agent UI Asks](./agent-ui-asks.md) as tool calls, not
+  blocks.
 - Agent-authored queries. The agent never names a collection or writes a filter; `ref`
   datasets come only from server tools (D17).
 - Mixed markdown-and-blocks replies. With `uiBlocks` on, the reply *is* the document; a
@@ -75,7 +79,7 @@ with ids, caps, and a `validate` call (D) — without importing a moving depende
 | D2 | Wire format on the model side? (Q2: fenced YAML inside markdown / whole reply is YAML) | **The whole assistant reply is one YAML document** (`v`, `datasets`, `blocks`, in that key order). Prose is a `text` block (markdown inside). No fences: the model's text output is the document; a leading/trailing ` ```yaml ` fence is tolerated and stripped. JSON is accepted too (YAML superset; what the structured-output path emits). A reply that does not parse as a document is wrapped as `{v: 1, blocks: [{type: text, markdown: <reply>}]}` for display and reported to the model as `NOT_A_DOCUMENT` (D10, D11). The model is told to emit no text before tool calls; only the final step is the document. | **confirmed** (Q2 = b) |
 | D3 | Nested tree or flat adjacency list? | Nested, depth-capped at 2 (`blocks` → `columns`/`card` → leaf). Nested YAML mirrors the rendered layout and is what humans review; the depth cap keeps LLM error rates near flat-list levels. Ids are optional except on interactive blocks and elements. | assumed |
 | D4 | Where does chart/table data live, and how do thousands of points work? (Q6) | In a top-level `datasets:` map. Each dataset is one of two sources. **`inline`**: `columns: [{name, type: string\|number\|date}]` plus `rows: [[...]]`, capped at 500 rows — for numbers the agent already has. **`ref`**: `{source: ref, id, grain?, limit?}` pointing at a server-side `AIDataset` handle that a tool returned (the model sees `{datasetId, columns, rowCount, preview}` instead of rows); the renderer fetches an aggregated or paginated slice from `GET /gpt/datasets/:id`. Charts and tables reference `data: <name>` and column names (`x`, `y`, `columns`); one dataset can feed a chart and a table; lint checks refs, types, and rendered-point caps. Per-chart inline `points` is also accepted for one-off charts. | **confirmed** (Q6 = b) |
-| D5 | v1 block catalog? | `heading`, `text` (markdown), `metric`, `badge`, `divider`, `context`, `chart` (`kind: line\|bar\|area\|donut`), `table`, `actions`, `columns` (2–4 children), `card`. Maps 1:1 onto `Heading`, `MarkdownView`, `Text`+`Heading`, `Badge`, `SectionDivider`, `Text size=sm color=secondaryLight`, chart components, `DataTable`, `Button`/`SegmentedControl`, `Box direction=row`, `Card`. | assumed |
+| D5 | v1 block catalog? | `heading`, `text` (markdown), `metric`, `badge`, `divider`, `context`, `chart` (`kind: line\|bar\|area\|donut`), `table`, `actions`, `columns` (2–4 children), `card`. Maps 1:1 onto `Heading`, `MarkdownView`, `Text`+`Heading`, `Badge`, `SectionDivider`, `Text size=sm color=secondaryLight`, chart components, `DataTable`, `Button`/`SegmentedControl`, `Box direction=row`, `Card`. [Agent UI Asks](./agent-ui-asks.md) adds `html`, `callout`, `image`, and `details` (its D3, D7, D27). | assumed |
 | D6 | Interaction model, and how do Block Kit-style server callbacks work? (Q7) | Elements carry an `action` with a closed `kind`: `reply` (post `text` to the chat as the user's next message), `open` (`url` or app `route`; host may allowlist), `select` (client-local: switch a target chart/table's `data` to another dataset), `callback` (`name` + `payload`). The renderer emits one `onAction({blockId, elementId, messageId, action})`; it never executes code from the document. **`callback` ships in v1** with the Slack `block_actions` analog: hosts register `hostActions: {name: {payload: zodSchema, handler}}` on `addGptRoutes`; the client posts to `POST /gpt/actions`; the payload is validated against the host schema before the handler runs; the handler may return `text` (appended assistant message), `blocks` with `replace: block \| message` (in-place re-render, the `chat.update` analog), or nothing (button shows `loading` then success). Registered names are injected into the system prompt; an unregistered name fails validation (`UNKNOWN_HOST_ACTION`) and renders disabled. | **confirmed** (Q7 = b) |
 | D7 | Hard limits (strict mode)? | Unknown keys fail. ≤ 50 blocks total, depth ≤ 2, ≤ 25 elements per `actions`, ≤ 4 columns, ≤ 8 datasets, inline ≤ 500 rows × 12 columns, `ref` `limit` ≤ 1,000 rendered rows (≤ 60 categories for bar/donut), ≤ 8 donut slices, text ≤ 4,000 chars per block, ≤ 20,000 chars per document. Same numbers everywhere (schema, prompt, docs). | assumed |
 | D8 | Where does the contract live? (Q3) | New workspace package `blocks/` → `@terreno/blocks` (schema, parse, partial parse, validate, lint, JSON Schema, prompt section). Deps: `zod` (catalog) and `yaml` (already in `api`). No React, no Express. `@terreno/ui`, `@terreno/ai`, `@terreno/mcp` depend on it. | **confirmed** (Q3 = A) |
@@ -339,7 +343,7 @@ a new collection.
 - A `collection` dataset source that lets the agent query Mongoose models directly
   through permission-scoped aggregation (Q8, deferred).
 - Multi-series / stacked charts when #1302 grows them.
-- Form elements (`select`, `date`, `text input`) with a `submit` action.
+- Form elements (`select`, `date`, `text input`) with a `submit` action — now designed in [Agent UI Asks](./agent-ui-asks.md) as ask tool calls.
 - Adapters: emit A2UI or json-render specs from a validated `BlocksDocument`.
 - Admin AI playground rendering blocks in the observability screens (#1196).
 

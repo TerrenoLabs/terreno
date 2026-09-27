@@ -1,6 +1,6 @@
 # Task List: Agent UI Asks
 
-**Status:** Draft 2026-09-27 — grilling rounds 1–2 closed; waiting on round 3 (Q11, Q12) and shared-understanding confirmation in [`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md). Do not Pick until the IP is Approved.
+**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 1.1.
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.

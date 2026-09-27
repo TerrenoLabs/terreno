@@ -89,10 +89,14 @@ export interface MockGptAsk {
    */
   answerElsewhere: (answer: MockAnswerElsewhere) => Promise<void>;
   /**
-   * Makes the next prompt fail with a 409, as when an answer from another tab resolves the ask just
-   * before the prompt can cancel it.
+   * Makes the next prompt arrive just after another tab answered the ask: the prompt streams a
+   * normal reply without `{askResolved}`, and the saved conversation shows the other tab's answer.
    */
-  answerRacesNextPrompt: () => void;
+  answerRacesNextPrompt: (
+    answer: MockAnswerElsewhere & {prompt: string; reply: string}
+  ) => Promise<void>;
+  /** Makes the next prompt stream its `{ask}` but end before `{done}`, as a slow turn does. */
+  holdNextDone: () => void;
   /** Every `/gpt/prompt` request body, in order. */
   requests: Array<Record<string, unknown>>;
   /** Makes the next answer fail with a 400 and these `fields`. */
@@ -193,21 +197,27 @@ export const mockGptAskStream = async (
   const requests: Array<Record<string, unknown>> = [];
   let rejection: MockAnswerRejection | undefined;
   let isAnsweredElsewhere = false;
-  let isAnswerRacingPrompt = false;
+  let racingAnswer: (MockAnswerElsewhere & {prompt: string; reply: string}) | undefined;
+  let isDoneHeld = false;
 
   await page.route(`${API_URL}/gpt/prompt`, (route) => {
     const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
     requests.push(body);
     const answer = body.askResponse as {action?: string; toolCallId?: string} | undefined;
-    if (!answer && isAnswerRacingPrompt) {
-      isAnswerRacingPrompt = false;
-      return fulfillAskConflict(route, "This conversation is finishing an answer; try again.");
+    if (!answer && racingAnswer) {
+      const {reply} = racingAnswer;
+      racingAnswer = undefined;
+      return fulfillSse(route, [
+        ...textEvents(reply),
+        {done: true, historyId, ...(title ? {title} : {})},
+      ]);
     }
     if (!answer) {
-      return fulfillSse(route, [
-        {ask},
-        {done: true, historyId, pendingAsk: {toolCallId: ask.toolCallId}},
-      ]);
+      const doneEvents = isDoneHeld
+        ? []
+        : [{done: true, historyId, pendingAsk: {toolCallId: ask.toolCallId}}];
+      isDoneHeld = false;
+      return fulfillSse(route, [{ask, historyId}, ...doneEvents]);
     }
     if (isAnsweredElsewhere) {
       return fulfillAskConflict(
@@ -254,8 +264,27 @@ export const mockGptAskStream = async (
         })
       );
     },
-    answerRacesNextPrompt: () => {
-      isAnswerRacingPrompt = true;
+    answerRacesNextPrompt: async (next) => {
+      racingAnswer = next;
+      const prompts = requests.filter((body) => typeof body.prompt === "string");
+      await mockSavedHistory(
+        page,
+        savedHistory({
+          historyId,
+          prompts: [
+            userRow(prompts[0]?.prompt as string),
+            askCallRow(ask, "answered"),
+            askResultRow(ask, {action: "accept", content: next.content}),
+            assistantRow(next.continuation),
+            userRow(next.prompt),
+            assistantRow(next.reply),
+          ],
+          title: title ?? "Mock Chat",
+        })
+      );
+    },
+    holdNextDone: () => {
+      isDoneHeld = true;
     },
     rejectNextAnswer: (next) => {
       rejection = next;

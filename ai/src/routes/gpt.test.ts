@@ -16,6 +16,7 @@ import {
   createScriptedModel,
   DUPLICATE_ID_ASK_INPUT,
   deferred,
+  failingTextStep,
   LOOKUP_CALL,
   loadHistory,
   lookupPlans,
@@ -34,6 +35,7 @@ import {
   REGION_ASK_ROW,
   REGION_SIMPLE_CARD,
   rowsOf,
+  streamFailure,
   streamPrompt,
   systemPromptOf,
   TEAM_ANSWER,
@@ -79,6 +81,7 @@ describe("/gpt/prompt asks", () => {
             simple: PLAN_SIMPLE_CARD,
             toolCallId: "call_plan",
           },
+          historyId,
         },
         {done: true, historyId, pendingAsk: {toolCallId: "call_plan"}},
       ]);
@@ -137,6 +140,7 @@ describe("/gpt/prompt asks", () => {
             simple: PLAN_SIMPLE_CARD,
             toolCallId: "call_plan",
           },
+          historyId,
         },
         {done: true, historyId, pendingAsk: {toolCallId: "call_plan"}},
       ]);
@@ -386,6 +390,7 @@ describe("/gpt/prompt asks", () => {
             simple: REGION_SIMPLE_CARD,
             toolCallId: "call_region",
           },
+          historyId,
         },
         {done: true, historyId, pendingAsk: {toolCallId: "call_region"}},
       ]);
@@ -595,6 +600,130 @@ describe("/gpt/prompt asks", () => {
     });
   });
 
+  describe("a model stream that fails", () => {
+    it("ends with {error} then {done} and keeps the message when the model fails before the first chunk", async () => {
+      const model = createScriptedModel({steps: []});
+      model.doStream.mockImplementationOnce(async () => {
+        throw new Error("The model is overloaded");
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+      const historyId = await onlyHistoryId();
+      expect(events).toEqual([{error: "The model is overloaded"}, {done: true, historyId}]);
+      expect(rowsOf(await loadHistory(historyId))).toEqual([{text: USER_PROMPT, type: "user"}]);
+    });
+
+    it("ends with {error} then {done} and keeps the message when a new chat's stream fails mid-reply", async () => {
+      const model = createScriptedModel({
+        steps: [failingTextStep("Setting up", "Connection reset")],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+      const historyId = await onlyHistoryId();
+      expect(events).toEqual([{error: "Connection reset"}, {done: true, historyId}]);
+      expect(rowsOf(await loadHistory(historyId))).toEqual([{text: USER_PROMPT, type: "user"}]);
+    });
+
+    it("keeps the host tool rows the client saw when a later step fails", async () => {
+      const model = createScriptedModel({
+        steps: [toolCallStep(LOOKUP_CALL), failingTextStep("There are", "Connection reset")],
+      });
+      const agent = await authAsUser(
+        buildApp({asks: true, model, tools: {lookupPlans}}),
+        "notAdmin"
+      );
+
+      const {events} = await streamPrompt(agent, {prompt: "How many plans are there?"});
+
+      const historyId = await onlyHistoryId();
+      expect(events).toEqual([
+        {toolCall: {args: {}, toolCallId: "call_lookup", toolName: "lookupPlans"}},
+        {toolResult: {result: {plans: 3}, toolCallId: "call_lookup", toolName: "lookupPlans"}},
+        {error: "Connection reset"},
+        {done: true, historyId},
+      ]);
+      expect(rowsOf(await loadHistory(historyId))).toEqual([
+        {text: "How many plans are there?", type: "user"},
+        {
+          text: "Tool call: lookupPlans",
+          toolCallId: "call_lookup",
+          toolName: "lookupPlans",
+          type: "tool-call",
+        },
+        {
+          result: {plans: 3},
+          text: "Tool result: lookupPlans",
+          toolCallId: "call_lookup",
+          toolName: "lookupPlans",
+          type: "tool-result",
+        },
+      ]);
+    });
+
+    it("ends with {error} then {done} when the resumed stream fails mid-reply, and keeps the answer", async () => {
+      const model = createScriptedModel({
+        steps: [toolCallStep(PLAN_ASK_CALL), failingTextStep("Setting up", "Connection reset")],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await pauseOnPlanAsk(agent);
+
+      const {events} = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER},
+        historyId,
+      });
+
+      expect(events).toEqual([
+        {askResolved: {action: "accept", toolCallId: "call_plan"}},
+        {error: "Connection reset"},
+        {done: true, historyId},
+      ]);
+      const history = await loadHistory(historyId);
+      expect(history.pendingAsk).toBeUndefined();
+      expect(history.prompts.map((row) => row.ask?.status ?? row.type)).toEqual([
+        "user",
+        "answered",
+        "tool-result",
+      ]);
+    });
+
+    it("ends with {error} then {done} and pauses on nothing when the stream fails right after an ask call", async () => {
+      const model = createScriptedModel({
+        steps: [
+          toolCallStep(PLAN_ASK_CALL),
+          [
+            {
+              input: JSON.stringify(REGION_ASK_INPUT),
+              toolCallId: "call_region",
+              toolName: "ask_choice",
+              type: "tool-call",
+            },
+            streamFailure("Connection reset"),
+          ],
+        ],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await pauseOnPlanAsk(agent);
+
+      const {events} = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER},
+        historyId,
+      });
+
+      expect(events).toEqual([
+        {askResolved: {action: "accept", toolCallId: "call_plan"}},
+        {error: "Connection reset"},
+        {done: true, historyId},
+      ]);
+      const history = await loadHistory(historyId);
+      expect(history.pendingAsk).toBeUndefined();
+      expect(history.prompts.some((row) => row.toolCallId === "call_region")).toBe(false);
+    });
+  });
+
   describe("rejected answers", () => {
     it("returns 400 with fields for an option that was not offered, without calling the model", async () => {
       const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
@@ -719,9 +848,13 @@ describe("/gpt/prompt asks", () => {
       expect(model.doStream).toHaveBeenCalledTimes(2);
     });
 
-    it("asks a prompt to retry when an answer resolves the ask after the prompt loaded it", async () => {
+    it("sends a prompt as a message when an answer resolved the ask after the prompt loaded it", async () => {
       const model = createScriptedModel({
-        steps: [toolCallStep(PLAN_ASK_CALL), textStep("Setting up the Team plan.")],
+        steps: [
+          toolCallStep(PLAN_ASK_CALL),
+          textStep("Setting up the Team plan."),
+          textStep("Okay, I will wait."),
+        ],
       });
       const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
       const historyId = await pauseOnPlanAsk(agent);
@@ -732,19 +865,40 @@ describe("/gpt/prompt asks", () => {
       });
       const findById = spyOn(GptHistory, "findById").mockResolvedValueOnce(loadedWhilePending);
 
-      const res = await agent.post("/gpt/prompt").send({historyId, prompt: "Actually, wait"});
+      const {events, status} = await streamPrompt(agent, {historyId, prompt: "Actually, wait"});
       findById.mockRestore();
 
-      expect(res.status).toBe(409);
-      expect(res.body).toEqual({
-        detail: "This conversation is finishing an answer; try again.",
-        requestId: expect.any(String),
-        status: 409,
-        title: "This ask is no longer pending",
-      });
-      expect(model.doStream).toHaveBeenCalledTimes(2);
+      expect(status).toBe(200);
+      expect(events).toEqual([
+        {text: "Okay, I will wait."},
+        {done: true, historyId, title: "Workspace setup"},
+      ]);
+      expect(conversationOf(modelCall(model, 2))).toEqual([
+        {content: [{text: USER_PROMPT, type: "text"}], role: "user"},
+        {content: [PLAN_ASK_MODEL_CALL], role: "assistant"},
+        {
+          content: [
+            {
+              output: {type: "json", value: TEAM_ANSWER},
+              toolCallId: "call_plan",
+              toolName: "ask_choice",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        },
+        {content: [{text: "Setting up the Team plan.", type: "text"}], role: "assistant"},
+        {content: [{text: "Actually, wait", type: "text"}], role: "user"},
+      ]);
       const history = await loadHistory(historyId);
-      expect(history.prompts.filter((row) => row.type === "user")).toHaveLength(1);
+      expect(history.prompts.map((row) => row.ask?.status ?? row.type)).toEqual([
+        "user",
+        "answered",
+        "tool-result",
+        "assistant",
+        "user",
+        "assistant",
+      ]);
     });
 
     it("returns 403 when another user answers the ask", async () => {
@@ -858,6 +1012,64 @@ describe("/gpt/prompt asks", () => {
       ]);
     });
 
+    it("cancels the ask once when two prompts arrive together, and answers both", async () => {
+      const model = createScriptedModel({
+        steps: [
+          toolCallStep(PLAN_ASK_CALL),
+          textStep("Team is $20 per seat."),
+          textStep("Starter is free."),
+        ],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await pauseOnPlanAsk(agent);
+      const loadedWhilePending = await loadHistory(historyId);
+      await streamPrompt(agent, {historyId, prompt: "What does Team cost?"});
+      // The second prompt loaded the history before the first one cancelled the ask.
+      const findById = spyOn(GptHistory, "findById").mockResolvedValueOnce(loadedWhilePending);
+
+      const second = await streamPrompt(agent, {historyId, prompt: "And Starter?"});
+      findById.mockRestore();
+
+      expect(second.status).toBe(200);
+      expect(second.events).toEqual([
+        {text: "Starter is free."},
+        {done: true, historyId, title: "Workspace setup"},
+      ]);
+      const cancel = {action: "cancel", reason: "user_sent_message"};
+      expect(conversationOf(modelCall(model, 2)).slice(2)).toEqual([
+        {
+          content: [
+            {
+              output: {type: "json", value: cancel},
+              toolCallId: "call_plan",
+              toolName: "ask_choice",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        },
+        {content: [{text: "What does Team cost?", type: "text"}], role: "user"},
+        {content: [{text: "Team is $20 per seat.", type: "text"}], role: "assistant"},
+        {content: [{text: "And Starter?", type: "text"}], role: "user"},
+      ]);
+      const history = await loadHistory(historyId);
+      expect(history.pendingAsk).toBeUndefined();
+      expect(rowsOf(history).slice(1)).toEqual([
+        {...PLAN_ASK_ROW, ask: {kind: "choice", status: "cancelled"}},
+        {
+          result: cancel,
+          text: "Tool result: ask_choice",
+          toolCallId: "call_plan",
+          toolName: "ask_choice",
+          type: "tool-result",
+        },
+        {text: "What does Team cost?", type: "user"},
+        {model: "scripted-model", text: "Team is $20 per seat.", type: "assistant"},
+        {text: "And Starter?", type: "user"},
+        {model: "scripted-model", text: "Starter is free.", type: "assistant"},
+      ]);
+    });
+
     it("treats a typed message that looks like an answer as a message, not an answer", async () => {
       const model = createScriptedModel({
         steps: [toolCallStep(PLAN_ASK_CALL), textStep("Please pick from the card.")],
@@ -901,6 +1113,7 @@ describe("/gpt/prompt asks", () => {
             simple: PLAN_SIMPLE_CARD,
             toolCallId: "call_plan",
           },
+          historyId,
         },
         {done: true, historyId, pendingAsk: {toolCallId: "call_plan"}},
       ]);
@@ -1075,6 +1288,7 @@ describe("/gpt/prompt asks", () => {
             simple: PLAN_SIMPLE_CARD,
             toolCallId: "call_plan",
           },
+          historyId,
         },
         {done: true, historyId, pendingAsk: {toolCallId: "call_plan"}},
       ]);
@@ -1111,6 +1325,151 @@ describe("/gpt/prompt asks", () => {
         historyId,
       });
       expect(lateAnswer.status).toBe(409);
+    });
+
+    it("keeps both turns' rows when a pausing turn saves before a replying turn, and resumes from its own prompt", async () => {
+      const regionArrived = deferred();
+      const planDone = deferred();
+      const model = createPromptKeyedModel({
+        holds: {
+          [PLAN_PROMPT]: {arrived: deferred(), release: regionArrived.promise},
+          [REGION_PROMPT]: {arrived: regionArrived, release: planDone.promise},
+        },
+        steps: {
+          [PLAN_PROMPT]: [toolCallStep(PLAN_ASK_CALL), textStep("Setting up the Team plan.")],
+          [REGION_PROMPT]: [textStep("Your data lives in the EU.")],
+        },
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await startHistory(agent);
+
+      // Both turns load the history before either saves; the plan turn saves and pauses first.
+      const [plan, region] = await Promise.all([
+        streamPrompt(agent, {historyId, prompt: PLAN_PROMPT}).finally(planDone.resolve),
+        streamPrompt(agent, {historyId, prompt: REGION_PROMPT}),
+      ]);
+
+      expect(plan.events.at(-1)).toEqual({
+        done: true,
+        historyId,
+        pendingAsk: {toolCallId: "call_plan"},
+      });
+      expect(region.events).toEqual([
+        {text: "Your data lives in the EU."},
+        {done: true, historyId, title: "Workspace setup"},
+      ]);
+      const paused = await loadHistory(historyId);
+      expect(rowsOf(paused)).toEqual([
+        {text: "Hi", type: "user"},
+        {model: "scripted-model", text: "Hello!", type: "assistant"},
+        {text: PLAN_PROMPT, type: "user"},
+        {...PLAN_ASK_ROW, ask: {kind: "choice", status: "pending"}},
+        {text: REGION_PROMPT, type: "user"},
+        {model: "scripted-model", text: "Your data lives in the EU.", type: "assistant"},
+      ]);
+      expect(paused.pendingAsk?.promptIndex).toBe(3);
+
+      const resumed = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER},
+        historyId,
+      });
+
+      expect(resumed.events.at(-1)).toEqual({done: true, historyId, title: "Workspace setup"});
+      expect(conversationOf(modelCall(model, 2))).toEqual([
+        {content: [{text: "Hi", type: "text"}], role: "user"},
+        {content: [{text: "Hello!", type: "text"}], role: "assistant"},
+        {content: [{text: PLAN_PROMPT, type: "text"}], role: "user"},
+        {content: [PLAN_ASK_MODEL_CALL], role: "assistant"},
+        {
+          content: [
+            {
+              output: {type: "json", value: TEAM_ANSWER},
+              toolCallId: "call_plan",
+              toolName: "ask_choice",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        },
+      ]);
+      expect(
+        (await loadHistory(historyId)).prompts.map((row) => row.ask?.status ?? row.text)
+      ).toEqual([
+        "Hi",
+        "Hello!",
+        PLAN_PROMPT,
+        "answered",
+        REGION_PROMPT,
+        "Your data lives in the EU.",
+        "Tool result: ask_choice",
+        "Setting up the Team plan.",
+      ]);
+    });
+
+    it("keeps both replies, each after its own message, when two turns finish at the same time", async () => {
+      const planArrived = deferred();
+      const regionArrived = deferred();
+      const bothLoaded = Promise.all([planArrived.promise, regionArrived.promise]).then(() => {});
+      const model = createPromptKeyedModel({
+        holds: {
+          [PLAN_PROMPT]: {arrived: planArrived, release: bothLoaded},
+          [REGION_PROMPT]: {arrived: regionArrived, release: bothLoaded},
+        },
+        steps: {
+          [PLAN_PROMPT]: [textStep("Team is a good fit.")],
+          [REGION_PROMPT]: [textStep("Your data lives in the EU.")],
+        },
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await startHistory(agent);
+
+      const turns = await Promise.all([
+        streamPrompt(agent, {historyId, prompt: PLAN_PROMPT}),
+        streamPrompt(agent, {historyId, prompt: REGION_PROMPT}),
+      ]);
+
+      for (const turn of turns) {
+        expect(turn.status).toBe(200);
+        expect(turn.events.at(-1)).toMatchObject({done: true, historyId});
+        expect(turn.events.some((event) => "error" in event)).toBe(false);
+      }
+      const rows = rowsOf(await loadHistory(historyId));
+      expect(rows).toHaveLength(6);
+      const replyTo = (prompt: string): unknown =>
+        rows[rows.findIndex((row) => row.text === prompt) + 1];
+      expect(replyTo(PLAN_PROMPT)).toEqual({
+        model: "scripted-model",
+        text: "Team is a good fit.",
+        type: "assistant",
+      });
+      expect(replyTo(REGION_PROMPT)).toEqual({
+        model: "scripted-model",
+        text: "Your data lives in the EU.",
+        type: "assistant",
+      });
+    });
+
+    it("rates a message without dropping rows a turn saved after the rating loaded the history", async () => {
+      const model = createScriptedModel({steps: [textStep("Your data lives in the EU.")]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await startHistory(agent);
+      const loadedBeforeTurn = await loadHistory(historyId);
+      await streamPrompt(agent, {historyId, prompt: REGION_PROMPT});
+      const findById = spyOn(GptHistory, "findById").mockResolvedValueOnce(loadedBeforeTurn);
+
+      const res = await agent
+        .patch(`/gpt/histories/${historyId}/rating`)
+        .send({promptIndex: 1, rating: "up"});
+      findById.mockRestore();
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({promptIndex: 1, rating: "up"});
+      expect(rowsOf(await loadHistory(historyId))).toEqual([
+        {text: "Hi", type: "user"},
+        {model: "scripted-model", rating: "up", text: "Hello!", type: "assistant"},
+        {text: REGION_PROMPT, type: "user"},
+        {model: "scripted-model", text: "Your data lives in the EU.", type: "assistant"},
+      ]);
     });
 
     it("replays a paused turn from its own prompt when another turn saved rows first", async () => {
@@ -1350,6 +1709,7 @@ describe("/gpt/prompt asks", () => {
             simple: {...PLAN_SIMPLE_CARD, handoff: false},
             toolCallId: "call_plan",
           },
+          historyId,
         },
         {done: true, historyId, pendingAsk: {toolCallId: "call_plan"}},
       ]);

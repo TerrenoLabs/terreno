@@ -20,10 +20,12 @@ import {type ImageSourcePropType, Image as RNImage} from "react-native";
 import {useSelector} from "react-redux";
 import {getSessionToken} from "@/lib/betterAuth";
 import {
+  answerHistoryId,
   askErrorsFromBody,
   askFromHistoryPrompt,
   askMessage,
   errorDetailFromBody,
+  withoutEmptyAssistant,
   withResolvedAsk,
 } from "@/lib/gptAsks";
 import {selectGptMascotIndex} from "@/lib/gptMascot";
@@ -41,6 +43,11 @@ type AskErrors = NonNullable<GPTChatProps["askErrors"]>;
 
 interface TurnRequest {
   body: Record<string, unknown>;
+  /**
+   * The ask a prompt turn leaves behind. When no `{askResolved}` cancels it, another tab resolved
+   * it first, so the saved conversation is shown after the turn.
+   */
+  pendingAskId?: string;
   /** The answer this turn sends, so its `{askResolved}` event can show what the user chose. */
   submitted?: AskSubmission;
 }
@@ -87,9 +94,6 @@ const readJson = async (response: Response): Promise<unknown> => {
     return undefined;
   }
 };
-
-const withoutEmptyAssistant = (messages: GPTChatMessage[]): GPTChatMessage[] =>
-  messages.filter((m) => m.content || m.role !== "assistant");
 
 const IMAGE_MIME_PREFIXES = ["image/"];
 
@@ -144,6 +148,8 @@ const AiScreen: React.FC = () => {
   // Bumped when a turn starts or another conversation opens, so a late reload of the saved
   // conversation never replaces newer messages.
   const transcriptVersionRef = useRef(0);
+  // The conversation each streamed ask waits in, so it can be answered before `{done}` arrives.
+  const askHistoryIdsRef = useRef(new Map<string, string>());
   const [geminiApiKey, setGeminiApiKey] = useStoredState<string>("geminiApiKey", "");
   const [attachments, setAttachments] = useState<SelectedFile[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_VALUE);
@@ -311,7 +317,7 @@ const AiScreen: React.FC = () => {
    * pending come back as outcomes instead of errors.
    */
   const runTurn = useCallback(
-    async ({body, submitted}: TurnRequest): Promise<TurnOutcome> => {
+    async ({body, pendingAskId: askBeforeTurn, submitted}: TurnRequest): Promise<TurnOutcome> => {
       const token = await getSessionToken();
       const headers: Record<string, string> = {
         Authorization: `Bearer ${token}`,
@@ -354,6 +360,7 @@ const AiScreen: React.FC = () => {
       let hasAskEvents = false;
       let hasVisibleEvents = false;
       const streamedAskIds = new Set<string>();
+      const resolvedAskIds = new Set<string>();
 
       while (true) {
         const {done, value} = await reader.read();
@@ -426,6 +433,9 @@ const AiScreen: React.FC = () => {
               hasAskEvents = true;
               hasVisibleEvents = true;
               streamedAskIds.add(data.ask.toolCallId);
+              if (typeof data.historyId === "string") {
+                askHistoryIdsRef.current.set(data.ask.toolCallId, data.historyId);
+              }
               const message = askMessage(data.ask);
               assistantText = "";
               setCurrentMessages((prev) => [...withoutEmptyAssistant(prev), message]);
@@ -433,6 +443,7 @@ const AiScreen: React.FC = () => {
               hasAskEvents = true;
               hasVisibleEvents = true;
               const {action, toolCallId} = data.askResolved;
+              resolvedAskIds.add(toolCallId);
               setCurrentMessages((prev) =>
                 withResolvedAsk({action, messages: prev, submitted, toolCallId})
               );
@@ -467,14 +478,7 @@ const AiScreen: React.FC = () => {
               finishedHistoryId = data.historyId;
               pendingAskId = data.pendingAsk?.toolCallId;
               // Clean up trailing empty assistant messages
-              setCurrentMessages((prev) =>
-                prev.filter(
-                  (m) =>
-                    m.content ||
-                    (m.contentParts && m.contentParts.length > 0) ||
-                    m.role !== "assistant"
-                )
-              );
+              setCurrentMessages(withoutEmptyAssistant);
               if (data.historyId) {
                 setCurrentHistoryId(data.historyId);
               }
@@ -529,7 +533,8 @@ const AiScreen: React.FC = () => {
       // A turn that streams only `{done}` still saved rows, such as an ask the server cancelled
       // because another ask was already pending, so show the saved conversation instead.
       const missedPendingAsk = pendingAskId !== undefined && !streamedAskIds.has(pendingAskId);
-      const isStreamIncomplete = !hasVisibleEvents || missedPendingAsk;
+      const missedAskResolution = askBeforeTurn !== undefined && !resolvedAskIds.has(askBeforeTurn);
+      const isStreamIncomplete = !hasVisibleEvents || missedPendingAsk || missedAskResolution;
       if (isStreamIncomplete) {
         await syncConversation(finishedHistoryId);
       }
@@ -544,6 +549,8 @@ const AiScreen: React.FC = () => {
 
   const handleSubmit = useCallback(
     async (prompt: string) => {
+      const pendingAskId = currentMessages.find((message) => message.ask?.status === "pending")?.ask
+        ?.toolCallId;
       const currentAttachments = [...attachments];
       setAttachments([]);
 
@@ -585,6 +592,7 @@ const AiScreen: React.FC = () => {
             model: selectedModel,
             prompt,
           },
+          pendingAskId,
         });
         if (outcome.kind === "conflict") {
           setCurrentMessages((prev) => [
@@ -602,15 +610,20 @@ const AiScreen: React.FC = () => {
         setIsStreaming(false);
       }
     },
-    [attachments, currentHistoryId, runTurn, selectedModel]
+    [attachments, currentHistoryId, currentMessages, runTurn, selectedModel]
   );
 
   const handleAskSubmit = useCallback(
     async (submission: AskSubmission): Promise<void> => {
-      if (!currentHistoryId) {
+      const {response, toolCallId} = submission;
+      const historyId = answerHistoryId({
+        askHistoryIds: askHistoryIdsRef.current,
+        currentHistoryId,
+        toolCallId,
+      });
+      if (!historyId) {
         return;
       }
-      const {response, toolCallId} = submission;
       transcriptVersionRef.current += 1;
       setAskErrors(({[toolCallId]: _cleared, ...rest}) => rest);
       setIsStreaming(true);
@@ -619,7 +632,7 @@ const AiScreen: React.FC = () => {
         const outcome = await runTurn({
           body: {
             askResponse: {...response, toolCallId},
-            historyId: currentHistoryId,
+            historyId,
             model: selectedModel,
           },
           submitted: submission,
@@ -628,7 +641,7 @@ const AiScreen: React.FC = () => {
           setAskErrors((prev) => ({...prev, [toolCallId]: outcome.fields}));
         } else if (outcome.kind === "conflict") {
           // Another tab or device already resolved the ask; show how it ended.
-          await syncConversation(currentHistoryId);
+          await syncConversation(historyId);
           refreshHistories();
         }
       } catch (err) {

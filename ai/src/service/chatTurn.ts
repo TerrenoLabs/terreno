@@ -48,6 +48,8 @@ export const DEMO_RESPONSE =
 
 interface ChatTurnAskEvent {
   ask: Ask & {simple: SimpleCard; toolCallId: string};
+  /** The conversation that waits on the ask, so a client can answer before `{done}` arrives. */
+  historyId: string;
 }
 
 interface ChatTurnAskResolvedEvent {
@@ -134,18 +136,28 @@ interface ResolvedAsk {
 
 interface TurnStart {
   history: GptHistoryDocument;
+  /** True when the turn starts a conversation, which is inserted with the turn's rows. */
+  isNewHistory: boolean;
   logPrompt: string;
   messages: ModelMessage[];
-  promptIndex: number;
+  /**
+   * The paused turn's `promptIndex` when this turn answers its ask. A prompt turn's is known only
+   * once its rows are appended.
+   */
+  promptIndex?: number;
   replayedMessages: ModelMessage[];
   resolvedAsk?: ResolvedAsk;
   titlePrompt: string;
+  /** The turn's new rows so far: the user's message for a prompt, none for an answer. */
+  rows: GptHistoryPrompt[];
 }
 
-interface StreamedTurn {
+/** What the turn streamed so far. The rows are appended together when the turn ends or fails. */
+interface TurnRecord {
   askCalls: AskCall[];
   fullResponse: string;
   generatedImages: GeneratedImage[];
+  rows: GptHistoryPrompt[];
 }
 
 type StreamPart = {type: string; [key: string]: unknown};
@@ -314,23 +326,19 @@ export const staleAskError = (toolCallId: string): APIError =>
     title: "This ask is no longer pending",
   });
 
-/** A new message lost the race to cancel the pending ask because an answer resolved it first. */
-const answerInProgressError = (): APIError =>
-  new APIError({
-    detail: "This conversation is finishing an answer; try again.",
-    status: 409,
-    title: "This ask is no longer pending",
-  });
-
 /*
  * The ask updates below are pipeline updates because MongoDB rejects `$push` and a positional
  * `$set` on the same array in one update. Values go in through `$literal` so a string that starts
  * with `$` is not read as a field path.
  */
 
-/** Inside a `$map` over `prompts` as `row`: true for the ask's tool-call row. */
-const isAskCallRow = (toolCallId: string): Record<string, unknown> => ({
-  $and: [{$eq: ["$$row.type", "tool-call"]}, {$eq: ["$$row.toolCallId", {$literal: toolCallId}]}],
+/** Inside a `$map` over `prompts` as `row`: true for the ask's call row while it is pending. */
+const isPendingAskCallRow = (toolCallId: string): Record<string, unknown> => ({
+  $and: [
+    {$eq: ["$$row.type", "tool-call"]},
+    {$eq: ["$$row.toolCallId", {$literal: toolCallId}]},
+    {$eq: ["$$row.ask.status", "pending"]},
+  ],
 });
 
 /** `prompts` with the ask's call row marked `status` and its result row appended. */
@@ -358,7 +366,7 @@ const promptsWithAskResult = ({
   const markedRows = {
     $map: {
       as: "row",
-      in: {$cond: [isAskCallRow(toolCallId), markedRow, "$$row"]},
+      in: {$cond: [isPendingAskCallRow(toolCallId), markedRow, "$$row"]},
       input: "$prompts",
     },
   };
@@ -367,36 +375,134 @@ const promptsWithAskResult = ({
 
 /**
  * Clears the pending ask, stores its result row, and marks its call row in one atomic update, so
- * an ask resolves once even when two requests answer it at the same time.
+ * an ask resolves once even when two requests answer it at the same time. Returns null when the
+ * conversation no longer waits on this ask.
  */
 const resolvePendingAsk = async ({
   history,
   result,
-  staleError,
   status,
   toolCallId,
   toolName,
 }: {
   history: GptHistoryDocument;
   result: AskResponse;
-  /** Thrown when the ask is no longer pending, so the caller can explain what the user should do. */
-  staleError: () => APIError;
   status: GptHistoryAskStatus;
   toolCallId: string;
   toolName: string;
-}): Promise<GptHistoryDocument> => {
-  const resolved = await GptHistory.findOneAndUpdate(
+}): Promise<GptHistoryDocument | null> =>
+  GptHistory.findOneAndUpdate(
     {_id: history._id, "pendingAsk.toolCallId": toolCallId},
     [
-      {$set: {prompts: promptsWithAskResult({result, status, toolCallId, toolName})}},
+      {
+        $set: {
+          prompts: promptsWithAskResult({result, status, toolCallId, toolName}),
+          updated: {$literal: DateTime.now().toJSDate()},
+        },
+      },
       {$unset: "pendingAsk"},
     ],
     {returnDocument: "after", updatePipeline: true}
   );
-  if (!resolved) {
-    throw staleError();
+
+/** How many times a new message retries cancelling an ask that other requests keep replacing. */
+const MAX_CANCEL_ATTEMPTS = 3;
+
+/**
+ * Cancels the pending ask because the user sent a message instead of answering. When another
+ * request resolves the ask first, the message goes ahead as a normal prompt on the reloaded
+ * history, cancelling any ask that took its place.
+ */
+const cancelPendingAsk = async (
+  loaded: GptHistoryDocument
+): Promise<{history: GptHistoryDocument; resolvedAsk?: ResolvedAsk}> => {
+  let history = loaded;
+  for (let attempt = 0; attempt < MAX_CANCEL_ATTEMPTS && history.pendingAsk; attempt++) {
+    const {kind, toolCallId} = history.pendingAsk;
+    const cancelled = await resolvePendingAsk({
+      history,
+      result: {action: "cancel", reason: ASK_CANCEL_REASONS.userSentMessage},
+      status: "cancelled",
+      toolCallId,
+      toolName: askToolName(kind),
+    });
+    if (cancelled) {
+      return {history: cancelled, resolvedAsk: {action: "cancel", kind, toolCallId}};
+    }
+    const reloaded = await GptHistory.findById(history._id);
+    if (!reloaded) {
+      throw new APIError({status: 404, title: "History not found"});
+    }
+    history = reloaded;
   }
-  return resolved;
+  if (history.pendingAsk) {
+    logger.warn("Sent a message without cancelling an ask that other requests kept replacing", {
+      historyId: history._id.toString(),
+      toolCallId: history.pendingAsk.toolCallId,
+    });
+  }
+  return {history};
+};
+
+/**
+ * Appends the turn's rows in one atomic `$push`, so rows another turn saved meanwhile are kept.
+ * A new conversation is inserted with its rows instead. Returns the saved history and the index
+ * of the turn's first row.
+ */
+const appendTurnRows = async ({
+  history,
+  isNewHistory,
+  projectId,
+  rows,
+}: {
+  history: GptHistoryDocument;
+  isNewHistory: boolean;
+  projectId: unknown;
+  rows: GptHistoryPrompt[];
+}): Promise<{firstRowIndex: number; history: GptHistoryDocument}> => {
+  if (isNewHistory) {
+    history.prompts.push(...rows);
+    await history.save();
+    return {firstRowIndex: 0, history};
+  }
+  if (projectId && !history.projectId) {
+    await GptHistory.updateOne({_id: history._id, projectId: null}, {$set: {projectId}});
+  }
+  if (rows.length === 0) {
+    return {firstRowIndex: history.prompts.length, history};
+  }
+  const saved = await GptHistory.findOneAndUpdate(
+    {_id: history._id},
+    {$push: {prompts: {$each: rows}}, $set: {updated: DateTime.now().toJSDate()}},
+    {returnDocument: "after"}
+  );
+  if (!saved) {
+    throw new APIError({status: 404, title: "History not found"});
+  }
+  return {firstRowIndex: saved.prompts.length - rows.length, history: saved};
+};
+
+/**
+ * Stores the generated title unless another turn titled the conversation first, and returns the
+ * title the conversation ends up with.
+ */
+const saveTitle = async ({
+  history,
+  title,
+}: {
+  history: GptHistoryDocument;
+  title: string;
+}): Promise<string | undefined> => {
+  const titled = await GptHistory.findOneAndUpdate(
+    {_id: history._id, title: {$in: [null, ""]}},
+    {$set: {title}},
+    {returnDocument: "after"}
+  );
+  if (titled) {
+    return titled.title;
+  }
+  const current = await GptHistory.findById(history._id);
+  return current?.title ?? undefined;
 };
 
 /**
@@ -404,10 +510,6 @@ const resolvePendingAsk = async ({
  * already pending: then the ask is answered with `cancel` (`one_ask_at_a_time`) instead, so two
  * turns that pause at the same time cannot overwrite each other. The ask's call row must already
  * be saved. Returns whether the ask became the pending ask.
- *
- * `promptIndex` is a number after an answer: the paused turn's own index. After a prompt it is
- * counted back from the saved call row, because another turn may have saved rows before this
- * turn's prompt; `rowsAfterPrompt` is how many of this turn's rows precede the call row.
  */
 const claimPendingAsk = async ({
   ask,
@@ -417,30 +519,17 @@ const claimPendingAsk = async ({
 }: {
   ask: AskCall & {simple: SimpleCard};
   history: GptHistoryDocument;
-  promptIndex: number | {rowsAfterPrompt: number};
+  /** How many leading rows replay as the paused turn's history, its user message included. */
+  promptIndex: number;
   responseMessages: ModelMessage[];
 }): Promise<boolean> => {
   const {input, kind, simple, toolCallId} = ask;
   const waitsOnNoAsk = {$eq: [{$ifNull: ["$pendingAsk", null]}, null]};
-  const savedPromptIndex =
-    typeof promptIndex === "number"
-      ? {$literal: promptIndex}
-      : {
-          $subtract: [
-            {
-              $indexOfArray: [
-                {$map: {as: "row", in: isAskCallRow(toolCallId), input: "$prompts"}},
-                true,
-              ],
-            },
-            promptIndex.rowsAfterPrompt,
-          ],
-        };
   const pendingAsk = {
     created: {$literal: DateTime.now().toJSDate()},
     input: {$literal: input},
     kind: {$literal: kind},
-    promptIndex: savedPromptIndex,
+    promptIndex: {$literal: promptIndex},
     responseMessages: {$literal: responseMessages},
     simple: {$literal: simple},
     toolCallId: {$literal: toolCallId},
@@ -515,9 +604,11 @@ const startTurn = async ({
   userId: mongoose.Types.ObjectId | undefined;
 }): Promise<TurnStart> => {
   const {attachments, historyId, projectId, prompt} = body;
-  let history = await loadHistory({historyId, projectId, userId});
+  const loaded = await loadHistory({historyId, projectId, userId});
+  const isNewHistory = !historyId;
 
   if (askAnswer) {
+    const history = loaded;
     const pending = history.pendingAsk;
     if (!pending || pending.toolCallId !== askAnswer.toolCallId) {
       throw staleAskError(askAnswer.toolCallId);
@@ -537,71 +628,61 @@ const startTurn = async ({
     }
     const answer = askAnswer.response as AskResponse;
     const {kind, promptIndex, responseMessages, toolCallId} = pending;
-    history = await resolvePendingAsk({
+    const resolved = await resolvePendingAsk({
       history,
       result: answer,
-      staleError: () => staleAskError(toolCallId),
       status: answer.action === "cancel" ? "cancelled" : "answered",
       toolCallId,
       toolName: askToolName(kind),
     });
-    if (projectId && !history.projectId) {
-      history.projectId = projectId as mongoose.Types.ObjectId;
+    if (!resolved) {
+      throw staleAskError(toolCallId);
     }
-    const turnHistory = history.prompts.slice(0, promptIndex);
+    const turnHistory = resolved.prompts.slice(0, promptIndex);
     const replayedMessages = completePausedTurn({answer, responseMessages, toolCallId});
     return {
-      history,
+      history: resolved,
+      isNewHistory: false,
       logPrompt: JSON.stringify(answer),
       messages: [...aiService.buildMessages(turnHistory), ...replayedMessages],
       promptIndex,
       replayedMessages,
       resolvedAsk: {action: answer.action, kind, toolCallId},
+      rows: [],
       titlePrompt: lastUserText(turnHistory),
     };
   }
 
-  let resolvedAsk: ResolvedAsk | undefined;
-  if (history.pendingAsk) {
-    const {kind, toolCallId} = history.pendingAsk;
-    history = await resolvePendingAsk({
-      history,
-      result: {action: "cancel", reason: ASK_CANCEL_REASONS.userSentMessage},
-      staleError: answerInProgressError,
-      status: "cancelled",
-      toolCallId,
-      toolName: askToolName(kind),
-    });
-    resolvedAsk = {action: "cancel", kind, toolCallId};
-  }
+  const {history, resolvedAsk} = await cancelPendingAsk(loaded);
 
   // If history doesn't have a projectId yet but one was provided, associate it
-  if (projectId && !history.projectId) {
+  if (isNewHistory && projectId) {
     history.projectId = projectId as mongoose.Types.ObjectId;
   }
 
   const promptText = prompt as string;
   const contentParts = buildContentParts(promptText, attachments);
   const hasAttachments = contentParts.length > 1;
-  history.prompts.push({
+  const userRow: GptHistoryPrompt = {
     text: promptText,
     type: "user",
     ...(hasAttachments ? {content: contentParts} : {}),
-  });
+  };
 
   logger.debug("Building messages", {
     attachmentCount: contentParts.length - 1,
-    historyLength: history.prompts.length,
+    historyLength: history.prompts.length + 1,
   });
-  const messages = aiService.buildMessages(history.prompts);
+  const messages = aiService.buildMessages([...history.prompts, userRow]);
   logger.debug("Messages built", {messageCount: messages.length});
   return {
     history,
+    isNewHistory,
     logPrompt: promptText,
     messages,
-    promptIndex: history.prompts.length,
     replayedMessages: [],
     resolvedAsk,
+    rows: [userRow],
     titlePrompt: promptText,
   };
 };
@@ -728,23 +809,22 @@ const withTurnSystemPrompt = ({
 };
 
 /**
- * Forwards the model stream to the sink and records host tool rows. Ask calls are collected, not
- * forwarded: an invalid one goes back to the model as a tool error, and a valid one pauses the turn.
+ * Forwards the model stream to the sink and records what it sent in `record`, which stays valid
+ * when the stream fails partway. Ask calls are collected, not forwarded: an invalid one goes back
+ * to the model as a tool error, and a valid one pauses the turn.
  */
 const consumeStream = async ({
   askKinds,
-  history,
+  record,
   result,
   sink,
 }: {
   askKinds: AskKind[];
-  history: GptHistoryDocument;
+  record: TurnRecord;
   result: ReturnType<typeof streamText>;
   sink: ChatTurnSink;
-}): Promise<StreamedTurn> => {
-  let fullResponse = "";
-  const askCalls: AskCall[] = [];
-  const generatedImages: GeneratedImage[] = [];
+}): Promise<void> => {
+  const {askCalls, generatedImages} = record;
   let partCount = 0;
   // Buffer text per step so we can discard reasoning text when a tool call follows
   let stepTextBuffer = "";
@@ -774,7 +854,7 @@ const consumeStream = async ({
       if (!stepHasToolCall && stepTextBuffer) {
         const cleaned = cleanStepText(stepTextBuffer);
         if (cleaned) {
-          fullResponse += cleaned;
+          record.fullResponse += cleaned;
           sink.emit({text: cleaned});
         }
       }
@@ -823,8 +903,7 @@ const consumeStream = async ({
         continue;
       }
       sink.emit({toolCall: {args: part.input, toolCallId, toolName}});
-      // Persist tool call in history
-      history.prompts.push({
+      record.rows.push({
         args: part.input as Record<string, unknown>,
         text: `Tool call: ${toolName}`,
         toolCallId,
@@ -854,8 +933,7 @@ const consumeStream = async ({
       const toolName = part.toolName as string;
       const toolCallId = part.toolCallId as string;
       sink.emit({toolResult: {result: cleanResult, toolCallId, toolName}});
-      // Persist tool result in history (without the large file data)
-      history.prompts.push({
+      record.rows.push({
         result: cleanResult as unknown,
         text: `Tool result: ${toolName}`,
         toolCallId,
@@ -869,12 +947,12 @@ const consumeStream = async ({
   if (!stepHasToolCall && stepTextBuffer) {
     const cleaned = cleanStepText(stepTextBuffer);
     if (cleaned) {
-      fullResponse += cleaned;
+      record.fullResponse += cleaned;
       sink.emit({text: cleaned});
     }
   }
 
-  logger.debug("Stream completed", {fullResponseLength: fullResponse.length, partCount});
+  logger.debug("Stream completed", {fullResponseLength: record.fullResponse.length, partCount});
 
   // Check for generated images (e.g. from gemini-2.5-flash-image)
   try {
@@ -894,8 +972,34 @@ const consumeStream = async ({
       error: fileErr instanceof Error ? fileErr.message : String(fileErr),
     });
   }
+};
 
-  return {askCalls, fullResponse, generatedImages};
+/** The assistant's reply row, or none when the turn produced no text or images. */
+const assistantRows = ({
+  fullResponse,
+  generatedImages,
+  modelId,
+}: {
+  fullResponse: string;
+  generatedImages: GeneratedImage[];
+  modelId: string | undefined;
+}): GptHistoryPrompt[] => {
+  if (!fullResponse && generatedImages.length === 0) {
+    return [];
+  }
+  const contentParts: MessageContentPart[] = generatedImages.map((img) => ({
+    mimeType: img.mimeType,
+    type: "image" as const,
+    url: img.url,
+  }));
+  return [
+    {
+      model: modelId,
+      text: fullResponse || "(image)",
+      type: "assistant",
+      ...(contentParts.length > 0 ? {content: contentParts} : {}),
+    },
+  ];
 };
 
 const askCallRow = (call: AskCall, status: GptHistoryAskStatus): GptHistoryPrompt => ({
@@ -967,8 +1071,9 @@ export const runChatTurn = async ({
     return;
   }
 
-  const {history, logPrompt, messages, promptIndex, replayedMessages, resolvedAsk, titlePrompt} =
-    await startTurn({aiService, askAnswer, body, userId});
+  const turn = await startTurn({aiService, askAnswer, body, userId});
+  const {isNewHistory, logPrompt, messages, replayedMessages, resolvedAsk, titlePrompt} = turn;
+  let {history} = turn;
   const effectiveSystemPrompt = await buildSystemPrompt({
     history,
     options,
@@ -997,6 +1102,19 @@ export const runChatTurn = async ({
   sink.open();
 
   const startTime = DateTime.now().toMillis();
+  const record: TurnRecord = {
+    askCalls: [],
+    fullResponse: "",
+    generatedImages: [],
+    rows: [...turn.rows],
+  };
+  let isSaved = false;
+  const saveRows = async (rows: GptHistoryPrompt[]): Promise<number> => {
+    const saved = await appendTurnRows({history, isNewHistory, projectId, rows});
+    history = saved.history;
+    isSaved = true;
+    return saved.firstRowIndex;
+  };
   try {
     if (resolvedAsk) {
       sink.emit({askResolved: {action: resolvedAsk.action, toolCallId: resolvedAsk.toolCallId}});
@@ -1028,45 +1146,29 @@ export const runChatTurn = async ({
       tools: allTools,
     });
 
-    const {askCalls, fullResponse, generatedImages} = await consumeStream({
-      askKinds: offeredAskKinds,
-      history,
-      result,
-      sink,
-    });
-
-    // Save assistant response to history
-    if (fullResponse || generatedImages.length > 0) {
-      const contentParts: MessageContentPart[] = generatedImages.map((img) => ({
-        mimeType: img.mimeType,
-        type: "image" as const,
-        url: img.url,
-      }));
-      history.prompts.push({
-        model: aiService.modelId,
-        text: fullResponse || "(image)",
-        type: "assistant",
-        ...(contentParts.length > 0 ? {content: contentParts} : {}),
-      });
-    }
+    await consumeStream({askKinds: offeredAskKinds, record, result, sink});
+    const {askCalls, fullResponse, generatedImages} = record;
 
     // The first valid ask in the step pauses the turn; any other ask in that step is cancelled.
     const [asked, ...droppedAsks] = askCalls;
     const ask = asked ? {...asked, simple: toSimpleCard(asked)} : undefined;
-    const askRowIndex = history.prompts.length;
-    if (ask) {
-      history.prompts.push(
-        askCallRow(ask, "pending"),
-        ...droppedAsks.map((call) => askCallRow(call, "cancelled")),
-        ...droppedAsks.map(droppedAskResultRow)
-      );
-    }
-    await history.save();
+    const firstRowIndex = await saveRows([
+      ...record.rows,
+      ...assistantRows({fullResponse, generatedImages, modelId: aiService.modelId}),
+      ...(ask
+        ? [
+            askCallRow(ask, "pending"),
+            ...droppedAsks.map((call) => askCallRow(call, "cancelled")),
+            ...droppedAsks.map(droppedAskResultRow),
+          ]
+        : []),
+    ]);
     const isPaused = ask
       ? await claimPendingAsk({
           ask,
           history,
-          promptIndex: askAnswer ? promptIndex : {rowsAfterPrompt: askRowIndex - promptIndex},
+          // A prompt turn's history ends with its own user message, the first row it appended.
+          promptIndex: turn.promptIndex ?? firstRowIndex + 1,
           responseMessages: toStoredMessages([
             ...replayedMessages,
             ...(await result.response).messages,
@@ -1081,7 +1183,7 @@ export const runChatTurn = async ({
       });
     }
     if (pausedAsk) {
-      sink.emit({ask: pausedAsk});
+      sink.emit({ask: pausedAsk, historyId: history._id.toString()});
     }
 
     const metadata = {
@@ -1113,18 +1215,18 @@ export const runChatTurn = async ({
     }
 
     // Generate a title for new conversations using a cheap model call
-    if (!history.title && fullResponse) {
+    let title = history.title;
+    if (!title && fullResponse) {
       const perRequestApiKey = req.headers["x-ai-api-key"] as string | undefined;
-      const title = await generateTitle(
+      const generatedTitle = await generateTitle(
         titlePrompt,
         fullResponse,
         aiService,
         options,
         perRequestApiKey
       );
-      if (title) {
-        history.title = title;
-        await history.save();
+      if (generatedTitle) {
+        title = await saveTitle({history, title: generatedTitle});
       }
     }
 
@@ -1135,19 +1237,18 @@ export const runChatTurn = async ({
     sink.emit({
       done: true,
       historyId: history._id.toString(),
-      ...(history.title ? {title: history.title} : {}),
+      ...(title ? {title} : {}),
       ...(pausedAsk ? {pendingAsk: {toolCallId: pausedAsk.toolCallId}} : {}),
     });
   } catch (error) {
-    logger.error("Error in GPT stream", {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error("Error in GPT stream", {error: errorMessage});
 
     const metadata = answeredAskMetadata(resolvedAsk);
     try {
       await AIRequest.logRequest({
         aiModel: modelId ?? "unknown",
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
         prompt: logPrompt,
         requestType: "general",
         responseTime: DateTime.now().toMillis() - startTime,
@@ -1161,6 +1262,30 @@ export const runChatTurn = async ({
     }
 
     sink.emit({error: error instanceof Error ? error.message : "Unknown error"});
+
+    // Keep what the user saw before the failure. Asks are dropped: the turn cannot pause on them.
+    if (!isSaved) {
+      try {
+        await saveRows([
+          ...record.rows,
+          ...assistantRows({
+            fullResponse: record.fullResponse,
+            generatedImages: record.generatedImages,
+            modelId: aiService.modelId,
+          }),
+        ]);
+      } catch (saveErr) {
+        logger.error("Failed to save a failed turn's rows", {
+          error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+          historyId: history._id.toString(),
+        });
+      }
+    }
+    sink.emit({
+      done: true,
+      ...(isSaved || !isNewHistory ? {historyId: history._id.toString()} : {}),
+      ...(history.title ? {title: history.title} : {}),
+    });
   }
 };
 

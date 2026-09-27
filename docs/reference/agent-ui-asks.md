@@ -274,7 +274,7 @@ With asks on, `POST /gpt/prompt` adds these events to the stream. The full event
 
 | Event | When | Shape |
 | --- | --- | --- |
-| `{ask}` | The turn paused on a valid ask. Sent after the turn is saved, just before `{done}`. | `{ask: {toolCallId, kind, input, simple}}` |
+| `{ask}` | The turn paused on a valid ask. Sent after the turn is saved, just before `{done}`. `historyId` names the conversation that waits on the ask, so a client can answer before `{done}` arrives, even on a new chat. | `{ask: {toolCallId, kind, input, simple}, historyId}` |
 | `{askResolved}` | First event of a turn that answered the pending ask or cancelled it with a new `prompt` | `{askResolved: {toolCallId, action}}` |
 | `pendingAsk` on `{done}` | The turn ended waiting on an answer | `{done: true, historyId, title?, pendingAsk: {toolCallId}}` |
 
@@ -309,17 +309,25 @@ result as JSON.
 4. Replays the paused turn's stored messages with the answer as the ask's tool result, and
    streams the continuation, starting with `{askResolved}`.
 
-The answer is kept even when the continuation fails. If the model call fails, the stream sends
-`{askResolved}`, `{error}`, and `{done}` without `pendingAsk`. The ask's row stays `answered`, and
+The answer is kept even when the continuation fails. If the model call fails, before its first
+chunk or partway through, the stream sends `{askResolved}`, `{error}`, and `{done}` without
+`pendingAsk`. An ask the failed stream had started is dropped, not paused on. The ask's row stays `answered`, and
 sending the answer again returns 409. To continue, send a new `prompt`: the model sees the ask, its
 answer, and the new message.
 
 A `prompt` sent while an ask is pending first records `{action: "cancel", reason:
 "user_sent_message"}` for the ask, then adds the message. The model sees both, and the stream
-starts with `{askResolved}` with `action: "cancel"`. A `prompt` that arrives while an answer is
-resolving the ask returns 409 `This ask is no longer pending` with the detail "This conversation
-is finishing an answer; try again.", because the answer resolved it first. Send the message again
-after the answer's turn ends.
+starts with `{askResolved}` with `action: "cancel"`. A `prompt` is never rejected because the ask
+it meant to cancel is gone: when an answer from another tab or device resolved the ask first, the
+prompt goes ahead as a normal message on the conversation as that answer left it, without
+`{askResolved}`. Only an ask that is still pending is cancelled, and it is cancelled once when two
+prompts arrive together. A client that showed the ask as pending and gets no `{askResolved}` for
+it can reload the conversation to show how the ask ended.
+
+Every turn saves its rows with one atomic append when it ends, so two turns on one conversation
+keep both turns' rows, each after its own user message. A paused turn's `promptIndex` counts the
+rows before and including its own user message, so its resume replays exactly that history, its
+stored response messages, and the answer.
 
 With asks off, `askResponse` is ignored and `prompt` is required, as before.
 
@@ -339,8 +347,7 @@ Errors raised before the stream starts return JSON with `status`, `title`, and `
 | 400 | `Invalid askResponse` | The answer fails `validateAskResponse`. `fields` lists the errors. |
 | 403 | `Not authorized to access this history` | The history belongs to another user |
 | 404 | `History not found` | No history has that id |
-| 409 | `This ask is no longer pending` | `toolCallId` is not the ask the history waits on: it was answered, cancelled, or never asked |
-| 409 | `This ask is no longer pending` | A `prompt` arrived while an answer was resolving the pending ask. The detail asks the user to try again. |
+| 409 | `This ask is no longer pending` | `toolCallId` is not the ask the history waits on: it was answered, cancelled, or never asked. Only answers get 409; a `prompt` is never rejected this way. |
 
 An invalid answer:
 
@@ -409,7 +416,7 @@ caller, even when the app validates request bodies.
 | 403 | `Access denied` | `action-access-denied` | The history belongs to another user |
 | 403 | `Not authorized to access this history` | | An admin sent a turn to another user's history |
 | 404 | `Document not found` | `document-not-found` | No history has that id |
-| 409 | `This ask is no longer pending` | | `toolCallId` is not the ask the history waits on: it was answered, cancelled, or never asked. Also returned for a `prompt` that arrives while an answer is resolving the ask. |
+| 409 | `This ask is no longer pending` | | `toolCallId` is not the ask the history waits on: it was answered, cancelled, or never asked. A `prompt` never gets 409. |
 
 A small client asks and answers with the button's id:
 
@@ -548,7 +555,8 @@ The `{ask}` event, formatted:
       "toolCallId": "call_8f2c1"
     },
     "toolCallId": "call_8f2c1"
-  }
+  },
+  "historyId": "6710c2a1f1e2d3c4b5a69701"
 }
 ```
 

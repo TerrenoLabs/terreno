@@ -46,21 +46,24 @@ system prompt that asks add tells it how. See [Enable asks](../reference/agent-u
 
 | Event | Transcript change |
 | --- | --- |
-| `{ask: {toolCallId, kind, input, simple}}` | Append a `tool-call` message with `ask: {kind, input, simple, status: "pending", toolCallId}` |
+| `{ask: {toolCallId, kind, input, simple}, historyId}` | Append a `tool-call` message with `ask: {kind, input, simple, status: "pending", toolCallId}`, and remember `historyId` for the ask so it can be answered before `{done}` |
 | `{askResolved: {toolCallId, action}}` | Mark the ask `answered` (`cancelled` for `cancel`), set its `response`, and insert a `tool-result` message right after it |
-| `{done: true, historyId, pendingAsk?}` | The turn ended. `pendingAsk.toolCallId` names the ask the conversation waits on. |
+| `{done: true, historyId, pendingAsk?}` | The turn ended, also after `{error}`. `pendingAsk.toolCallId` names the ask the conversation waits on. |
 
 ```typescript
 if (data.ask) {
-  setCurrentMessages((prev) => [...prev, askMessage(data.ask)]);
+  askHistoryIdsRef.current.set(data.ask.toolCallId, data.historyId);
+  setCurrentMessages((prev) => [...withoutEmptyAssistant(prev), askMessage(data.ask)]);
 } else if (data.askResolved) {
   const {action, toolCallId} = data.askResolved;
   setCurrentMessages((prev) => withResolvedAsk({action, messages: prev, submitted, toolCallId}));
 }
 ```
 
-Copy `askMessage` and `withResolvedAsk` from `example-frontend/lib/gptAsks.ts`. `submitted` is the
-answer this turn sent, so the summary can name the chosen option.
+Copy `askMessage`, `withResolvedAsk`, `withoutEmptyAssistant`, and `answerHistoryId` from
+`example-frontend/lib/gptAsks.ts`. `submitted` is the answer this turn sent, so the summary can
+name the chosen option. `withoutEmptyAssistant` drops the empty assistant placeholder but keeps a
+reply that holds only an image or a file. `askHistoryIdsRef` is a `useRef(new Map<string, string>())`.
 
 Insert the `tool-result` message even though `GPTChat` hides it. The server stores the ask and its
 answer as two rows, and ratings are sent by message index.
@@ -104,8 +107,17 @@ const prompts = history.prompts.map((p): GPTChatMessage => {
 ```tsx
 const handleAskSubmit = useCallback(
   async ({response, toolCallId}: AskSubmission): Promise<void> => {
+    // A new chat's ask can be answered before `{done}` sets currentHistoryId.
+    const historyId = answerHistoryId({
+      askHistoryIds: askHistoryIdsRef.current,
+      currentHistoryId,
+      toolCallId,
+    });
+    if (!historyId) {
+      return;
+    }
     await runTurn({
-      body: {askResponse: {...response, toolCallId}, historyId: currentHistoryId},
+      body: {askResponse: {...response, toolCallId}, historyId},
       submitted: {response, toolCallId},
     });
   },
@@ -136,7 +148,7 @@ shows a loading state until it settles.
 | --- | --- |
 | 400 `Invalid askResponse` with `fields` | Set `askErrors[toolCallId]` to `fields`. The card shows each `message`. Clear the entry when the user answers again. |
 | 409 `This ask is no longer pending` on an answer | Another tab or device resolved the ask first. Reload the conversation and the history list so the card shows how it ended. |
-| 409 on a `prompt` | An answer is still resolving the ask. Show the `detail`, "This conversation is finishing an answer; try again.", and let the user send again. |
+| A `prompt` sent while the transcript shows a pending ask, with no `{askResolved}` for it | Another tab or device resolved the ask first, and the message went ahead as a normal prompt. Reload the conversation so the card shows how the ask ended. A `prompt` never gets 409. |
 
 ## Answer asks from an Apple Watch or another small client
 
@@ -455,19 +467,20 @@ in `@terreno/ui` draws the same card in React Native ([props](../reference/ui.md
 | 401 | The session ended or the user signed out. The client above deletes the token. Ask the user to open the phone app, which sends a new token after sign-in. |
 | 409 `This ask is no longer pending` | Another device answered or cancelled the ask first. Reload `pendingAsks`. |
 | 400 `UNKNOWN_BUTTON` | The `buttonId` is not on the card. Send only ids from `simple.buttons`; the error's `fix` lists them. |
-| 200 with `error` in `data` | The agent failed after the turn started. An answer is kept anyway. Show a short error; the next message continues the conversation. |
+| 200 with `error` in `data` | The agent failed after the turn started. The message or answer is kept, with what the agent did before it failed. Show a short error; the next message continues the conversation. |
 | A timeout or a lost connection | The turn still finishes and is saved. Reload `pendingAsks`, or read the conversation with `GET /gpt/histories/:id`. |
 
 ## Verify
 
 | Test | Covers |
 | --- | --- |
-| `example-frontend/e2e/ai-chat.spec.ts` | Against a mocked stream: a quick-reply answer, a radio answer after a rejected one, an answer another tab sent first, a turn that streams only `{done}`, and a message sent while another tab's answer finishes |
-| `example-frontend/lib/gptAsks.test.ts` | Stream events and saved rows mapped to messages |
+| `example-frontend/e2e/ai-chat.spec.ts` | Against a mocked stream: a quick-reply answer, a radio answer after a rejected one, an answer another tab sent first, a turn that streams only `{done}`, a message that goes through after another tab answered the ask, and an ask on a new chat answered before `{done}` |
+| `example-frontend/lib/gptAsks.test.ts` | Stream events and saved rows mapped to messages, image-only replies kept, and the conversation an answer goes to |
 | `example-backend/src/api/demoAgent.test.ts` | The demo agent's ask, answers, and replies on both surfaces, and a plan ask answered over HTTP with a button of its simple card |
 | `ui/src/GPTChat.test.tsx`, `ui/src/asks/AskCard.test.tsx` | Rendering, focus, answers, errors, and summaries |
-| `ai/src/routes/gptHistories.test.ts`, `ai/src/aiApp.test.ts` | `turn` and `pendingAsks`: a pressed button, a full answer, a prompt that cancels the ask, a failed turn, a client that disconnects, the 400, 403, 404, and 409 responses, response bodies that match the published JSON Schemas, and neither endpoint when asks are off |
+| `ai/src/routes/gptHistories.test.ts`, `ai/src/aiApp.test.ts` | `turn` and `pendingAsks`: a pressed button, a full answer, a prompt that cancels the ask, a failed turn, a stream that fails mid-reply, a client that disconnects, the 400, 403, 404, and 409 responses, response bodies that match the published JSON Schemas, and neither endpoint when asks are off |
 | `ai/src/routes/gpt.test.ts` (compact surface) | A compact turn offers only the narrowed `ask_choice` and adds the compact line to the system prompt |
+| `ai/src/routes/gpt.test.ts` (failures and races) | `{error}` then `{done}` when the model fails before its first chunk, mid-reply, or during a resume; a prompt that goes through after an answer resolved the ask; two turns and a rating on one conversation keeping every row |
 | `ui/src/asks/SimpleAskCard.test.tsx`, `demo/stories/SimpleAskCard.stories.test.tsx` | Every fixture's card, button presses, the sending state, and the compact `turn` body the watch-sized demo sends |
 
 Related: [UI reference for `GPTChat` asks and `AskCard`](../reference/ui.md#asks),

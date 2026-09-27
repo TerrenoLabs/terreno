@@ -14,6 +14,32 @@ export interface AskStreamEvent {
   toolCallId: string;
 }
 
+/**
+ * The transcript without assistant rows that hold nothing to show. A row with only an image or a
+ * file is kept: its text is empty but its attachments are the reply.
+ */
+export const withoutEmptyAssistant = (messages: GPTChatMessage[]): GPTChatMessage[] =>
+  messages.filter(
+    (message) =>
+      message.role !== "assistant" ||
+      Boolean(message.content) ||
+      (message.contentParts?.length ?? 0) > 0
+  );
+
+/**
+ * The conversation an answer goes to: the one the ask's `{ask}` event named, so an ask on a new
+ * chat can be answered before `{done}` opens it, else the open conversation.
+ */
+export const answerHistoryId = ({
+  askHistoryIds,
+  currentHistoryId,
+  toolCallId,
+}: {
+  askHistoryIds: ReadonlyMap<string, string>;
+  currentHistoryId: string | undefined;
+  toolCallId: string;
+}): string | undefined => askHistoryIds.get(toolCallId) ?? currentHistoryId;
+
 /** The `{askResolved}` event that starts a turn which answered or cancelled an ask. */
 export interface AskResolvedStreamEvent {
   action: AskResponse["action"];

@@ -289,13 +289,13 @@ With `asks` on, pass the same options to `addGptHistoryRoutes` as `chat` to add 
 | `{file}` | `{file: {filename, mimeType, url}}` | A host tool result had a `fileData` data URL. Sent before its `{toolResult}`. `filename` defaults to `document` and `mimeType` to `application/octet-stream`. |
 | `{toolResult}` | `{toolResult: {toolCallId, toolName, result}}` | A host tool returned. `fileData` is removed from `result`. Never sent for ask tools. |
 | `{image}` | `{image: {mimeType, url}}` | The model generated an image; `url` is a `data:` URL |
-| `{ask}` | `{ask: {toolCallId, kind, input, simple}}` | The turn paused on an ask. Sent after the turn is saved. Asks only. |
-| `{error}` | `{error: string}` | The model stream reported an error and the turn goes on, or the turn failed after the stream started and the stream ends without `{done}` |
-| `{done}` | `{done: true, historyId?, title?, pendingAsk?}` | Last event. `historyId` is missing only in the demo response. `title` is set once the conversation has one. `pendingAsk: {toolCallId}` when the turn waits on an ask. |
+| `{ask}` | `{ask: {toolCallId, kind, input, simple}, historyId}` | The turn paused on an ask. Sent after the turn is saved. `historyId` is the conversation that waits on the ask, so a new chat's ask can be answered before `{done}`. Asks only. |
+| `{error}` | `{error: string}` | The model stream reported an error, or the turn failed after the stream started. `{done}` still follows. |
+| `{done}` | `{done: true, historyId?, title?, pendingAsk?}` | Last event of every turn that started streaming, also after `{error}`. `historyId` is missing only in the demo response and when a failed new chat could not be saved. `title` is set once the conversation has one. `pendingAsk: {toolCallId}` when the turn waits on an ask. |
 
-When the model call after an answer fails, the stream is `{askResolved}`, `{error}`, `{done}`. The answer is kept: the ask stays answered and sending it again returns 409. Send a new `prompt` to continue.
+When a turn fails after the stream starts, before the model's first chunk or partway through, the stream sends `{error}` then `{done}` with `historyId`. The turn keeps what the client already saw: the user's message, host tool rows, and text from steps that finished. An ask the failed stream had started is dropped. When the model call after an answer fails, the stream is `{askResolved}`, `{error}`, `{done}`. The answer is kept: the ask stays answered and sending it again returns 409. Send a new `prompt` to continue.
 
-Errors raised before the stream starts return JSON `{status, title, detail, fields?}` instead: 400 for an invalid body, 403 for another user's history, 404 for an unknown `historyId`, 409 for an answer to an ask that is not pending or a `prompt` that arrives while an answer is resolving the pending ask, and 500 otherwise. [Agent UI Asks error responses](agent-ui-asks.md#error-responses) lists the ask cases.
+Errors raised before the stream starts return JSON `{status, title, detail, fields?}` instead: 400 for an invalid body, 403 for another user's history, 404 for an unknown `historyId`, 409 for an answer to an ask that is not pending, and 500 otherwise. A `prompt` never gets 409: when another request resolved the ask it meant to cancel, it goes ahead as a normal message. [Agent UI Asks error responses](agent-ui-asks.md#error-responses) lists the ask cases.
 
 ### addGptHistoryRoutes(router, options?)
 

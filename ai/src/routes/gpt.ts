@@ -145,7 +145,7 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
       const {promptIndex, rating} = req.body;
       const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id;
 
-      if (typeof promptIndex !== "number" || promptIndex < 0) {
+      if (typeof promptIndex !== "number" || !Number.isInteger(promptIndex) || promptIndex < 0) {
         throw new APIError({status: 400, title: "promptIndex must be a non-negative number"});
       }
       if (rating !== null && rating !== "up" && rating !== "down") {
@@ -163,15 +163,14 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         throw new APIError({status: 400, title: "promptIndex out of range"});
       }
 
-      if (rating === null) {
-        history.prompts[promptIndex].rating = undefined;
-      } else {
-        history.prompts[promptIndex].rating = rating;
-      }
-      history.markModified("prompts");
-      await history.save();
+      // One field update, so rows a running turn appends meanwhile are kept.
+      const ratingPath = `prompts.${promptIndex}.rating`;
+      await GptHistory.updateOne(
+        {_id: history._id},
+        rating === null ? {$unset: {[ratingPath]: ""}} : {$set: {[ratingPath]: rating}}
+      );
 
-      return res.json({data: {promptIndex, rating: history.prompts[promptIndex].rating ?? null}});
+      return res.json({data: {promptIndex, rating}});
     })
   );
 

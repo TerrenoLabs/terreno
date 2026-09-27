@@ -4,10 +4,12 @@ import type {AskSubmission, GPTChatMessage} from "@terreno/ui";
 import type {GptHistory} from "@/store/sdk";
 
 import {
+  answerHistoryId,
   askErrorsFromBody,
   askFromHistoryPrompt,
   askMessage,
   errorDetailFromBody,
+  withoutEmptyAssistant,
   withResolvedAsk,
 } from "./gptAsks";
 
@@ -28,6 +30,8 @@ const PLAN_CARD = {
   text: "Which plan should I set up?",
   toolCallId: "call_plan",
 };
+
+const HELLO_MESSAGE: GPTChatMessage = {content: "Hello", role: "user"};
 
 const TEAM_ANSWER: AskSubmission = {
   response: {action: "accept", content: {selected: ["team"]}},
@@ -178,14 +182,63 @@ describe("askErrorsFromBody", () => {
   });
 });
 
+describe("withoutEmptyAssistant", () => {
+  it("drops an assistant row with no text and no attachments", () => {
+    const messages: GPTChatMessage[] = [HELLO_MESSAGE, {content: "", role: "assistant"}];
+
+    expect(withoutEmptyAssistant(messages)).toEqual([HELLO_MESSAGE]);
+  });
+
+  it("keeps an assistant row that holds only an image or a file", () => {
+    const imageReply: GPTChatMessage = {
+      content: "",
+      contentParts: [{mimeType: "image/png", type: "image", url: "data:image/png;base64,AAAA"}],
+      role: "assistant",
+    };
+    const fileReply: GPTChatMessage = {
+      content: "",
+      contentParts: [
+        {filename: "plan.pdf", mimeType: "application/pdf", type: "file", url: "data:,"},
+      ],
+      role: "assistant",
+    };
+
+    expect(withoutEmptyAssistant([HELLO_MESSAGE, imageReply, fileReply])).toEqual([
+      HELLO_MESSAGE,
+      imageReply,
+      fileReply,
+    ]);
+  });
+});
+
+describe("answerHistoryId", () => {
+  it("answers in the conversation the ask's event named, before {done} opens it", () => {
+    const askHistoryIds = new Map([["call_plan", "history-new"]]);
+
+    expect(
+      answerHistoryId({askHistoryIds, currentHistoryId: undefined, toolCallId: "call_plan"})
+    ).toBe("history-new");
+  });
+
+  it("answers in the open conversation for an ask loaded from a saved history", () => {
+    expect(
+      answerHistoryId({
+        askHistoryIds: new Map(),
+        currentHistoryId: "history-open",
+        toolCallId: "call_plan",
+      })
+    ).toBe("history-open");
+  });
+});
+
 describe("errorDetailFromBody", () => {
   it("prefers the detail and falls back to the title", () => {
     expect(
       errorDetailFromBody({
-        detail: "This conversation is finishing an answer; try again.",
+        detail: "Tool call call_plan is not the ask this conversation is waiting on.",
         title: "This ask is no longer pending",
       })
-    ).toBe("This conversation is finishing an answer; try again.");
+    ).toBe("Tool call call_plan is not the ask this conversation is waiting on.");
     expect(errorDetailFromBody({title: "This ask is no longer pending"})).toBe(
       "This ask is no longer pending"
     );

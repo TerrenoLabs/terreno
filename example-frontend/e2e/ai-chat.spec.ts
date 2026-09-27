@@ -308,11 +308,9 @@ test.describe("AI Chat", () => {
     expect(requests[1]).toMatchObject({historyId, prompt: "Help me pick a plan"});
   });
 
-  test("asks to try again when a message races an answer from another tab", async ({
+  test("sends a message that races an answer from another tab, and shows that answer", async ({
     page,
-    consoleGuard,
   }) => {
-    consoleGuard.allow("Failed to load resource: the server responded with a status of 409");
     const gpt = await mockGptAskStream(page, {
       ask: PLAN_ASK,
       continuation: "You picked the Team plan.",
@@ -322,17 +320,45 @@ test.describe("AI Chat", () => {
     await page.getByTestId("gpt-submit").click();
     await expect(page.getByTestId("gpt-ask-call_plan")).toBeVisible();
 
-    gpt.answerRacesNextPrompt();
+    await gpt.answerRacesNextPrompt({
+      content: {selected: ["enterprise"]},
+      continuation: "You picked the Enterprise plan.",
+      prompt: "Actually, never mind",
+      reply: "No problem, the Enterprise plan stays.",
+    });
     await page.getByTestId("gpt-input").fill("Actually, never mind");
     await page.getByTestId("gpt-submit").click();
 
-    await expect(
-      page.getByText("This conversation is finishing an answer; try again.")
-    ).toBeVisible();
+    await expect(page.getByText("No problem, the Enterprise plan stays.")).toBeVisible();
+    await expect(page.getByTestId("gpt-ask-call_plan-summary")).toContainText(
+      "You chose: Enterprise"
+    );
     await expect(page.getByText("Actually, never mind")).toBeVisible();
+    await expect(page.getByText(/try again/)).toHaveCount(0);
     expect(gpt.requests.at(-1)).toMatchObject({
       historyId: expect.stringMatching(/^mock-history-/),
       prompt: "Actually, never mind",
+    });
+  });
+
+  test("answers an ask on a new chat before the turn's end arrives", async ({page}) => {
+    const gpt = await mockGptAskStream(page, {
+      ask: PLAN_ASK,
+      continuation: "You picked the Team plan.",
+      title: "Choosing a plan",
+    });
+    gpt.holdNextDone();
+
+    await page.getByTestId("gpt-input").fill("Help me pick a plan");
+    await page.getByTestId("gpt-submit").click();
+    await page.getByTestId("gpt-ask-call_plan-button-option:team").click();
+
+    await expect(page.getByText("You picked the Team plan.")).toBeVisible();
+    await expect(page.getByTestId("gpt-ask-call_plan-summary")).toContainText("You chose: Team");
+    expect(gpt.requests).toHaveLength(2);
+    expect(gpt.requests[1]).toMatchObject({
+      askResponse: {action: "accept", content: {selected: ["team"]}, toolCallId: "call_plan"},
+      historyId: expect.stringMatching(/^mock-history-/),
     });
   });
 });

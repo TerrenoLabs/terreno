@@ -52,7 +52,9 @@ Other approaches were rejected:
    an invalid ask goes back to the model as a tool error.
 2. **Pause.** The step loop ends. The server derives the ask's simple card and saves the paused
    turn on the history as `pendingAsk`, including the AI SDK messages the turn produced. It adds a
-   row for the ask with status `pending`, then sends `{ask}` and `{done}` with `pendingAsk`.
+   row for the ask with status `pending`, then sends `{ask}` with the conversation's `historyId`
+   and `{done}` with `pendingAsk`. Because `{ask}` names the conversation, a client can answer a
+   new chat's ask before `{done}` arrives.
 3. **Answer.** The client shows the ask and posts the answer with the ask's tool call id to
    `POST /gpt/prompt`.
 4. **Check.** The server confirms the history belongs to the caller (403), that this is the ask
@@ -72,7 +74,9 @@ the turn once. It matches on the pending ask's tool call id, so the second answe
 update and gets 409.
 
 The answer stays stored even when the model call that continues the turn fails. The user did
-answer, so the next message continues from the ask and its answer instead of asking again.
+answer, so the next message continues from the ask and its answer instead of asking again. Any
+turn that fails after its stream starts still ends with `{error}` then `{done}` and saves what the
+user saw, so a client always learns the turn ended and which conversation holds it.
 
 ## One ask at a time
 
@@ -84,7 +88,14 @@ keeps waiting and the other turn's ask gets the same `cancel` instead of overwri
 
 The user is never stuck behind a question. Typing a message instead of answering records `cancel`
 with the reason `user_sent_message`, then adds the message. The model sees both and can respond to
-what the user actually said.
+what the user actually said. A message is never refused because its ask is gone: when another tab
+answered the ask first, the message goes ahead on the conversation as that answer left it. Only an
+answer can be stale, so only an answer gets 409.
+
+Turns never write back a whole copy of the conversation. Each turn appends its rows with one
+atomic update when it ends, and ratings set one field, so two turns or a rating racing a turn
+cannot drop each other's rows. A paused turn remembers how many rows come before and include its
+own user message, and its resume replays exactly those.
 
 ## Strict by design
 

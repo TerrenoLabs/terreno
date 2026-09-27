@@ -181,10 +181,29 @@ export const toolCallStep = (...calls: ScriptedToolCall[]): ModelStreamPart[] =>
   {finishReason: "tool-calls", type: "finish", usage: USAGE},
 ];
 
+const STREAM_FAILURE = "harness-stream-failure";
+
+/** A scripted part that makes the model's stream fail with `message`, as a dropped connection does. */
+export const streamFailure = (message: string): ModelStreamPart => ({
+  message,
+  type: STREAM_FAILURE,
+});
+
+/** A step that streams `text`, then fails before the step finishes. */
+export const failingTextStep = (text: string, message: string): ModelStreamPart[] => [
+  {id: "text-1", type: "text-start"},
+  {delta: text, id: "text-1", type: "text-delta"},
+  streamFailure(message),
+];
+
 const streamOf = (parts: ModelStreamPart[]): ReadableStream<ModelStreamPart> =>
   new ReadableStream<ModelStreamPart>({
     start(controller) {
       for (const part of parts) {
+        if (part.type === STREAM_FAILURE) {
+          controller.error(new Error(String(part.message)));
+          return;
+        }
         controller.enqueue(part);
       }
       controller.close();

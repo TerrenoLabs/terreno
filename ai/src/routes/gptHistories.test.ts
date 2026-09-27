@@ -21,6 +21,7 @@ import {
   conversationOf,
   createScriptedModel,
   deferred,
+  failingTextStep,
   loadHistory,
   modelCall,
   PLAN_ASK_CALL,
@@ -202,6 +203,20 @@ describe("/gpt/histories headless turns", () => {
       const history = await loadHistory(historyId);
       expect(history.pendingAsk).toBeUndefined();
       expect(rowsOf(history).at(-1)).toEqual(TEAM_ANSWER_ROW);
+    });
+
+    it("returns the error and keeps the message when the model stream fails mid-reply", async () => {
+      const model = createScriptedModel({
+        steps: [failingTextStep("Setting up", "Connection reset")],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await createHistory(agent);
+
+      const res = await postTurn(agent, historyId, {prompt: USER_PROMPT});
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({error: "Connection reset", historyId, text: ""});
+      expect(rowsOf(await loadHistory(historyId))).toEqual([{text: USER_PROMPT, type: "user"}]);
     });
 
     it("finishes and saves the turn when the client disconnects mid-turn", async () => {

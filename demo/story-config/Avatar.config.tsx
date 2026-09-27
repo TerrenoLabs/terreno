@@ -4,7 +4,7 @@ import {Avatar} from "@terreno/ui";
 
 export const AvatarConfiguration: DemoConfiguration = {
   name: "Avatar",
-  related: ["Profile Picture", "Userpic"],
+  related: ["Icon"],
   description: "Used to represent a single user.",
   category: "Component",
   component: Avatar,

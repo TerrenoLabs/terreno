@@ -5,7 +5,7 @@ import {MultiselectField} from "@terreno/ui";
 export const MultiselectFieldConfiguration: DemoConfiguration = {
   name: "Multiselect Field",
   component: MultiselectField,
-  related: ["Checkbox microcomponent"],
+  related: ["CheckBox"],
   description:
     "Also called 'checkbox field'. This component is a list of checkable items. In this case, a user can choose one, many, all, or no options.",
   a11yNotes: [

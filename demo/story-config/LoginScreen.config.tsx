@@ -9,7 +9,7 @@ const renderLoginScreenDemo = (): ReactElement => <LoginScreenDemo />;
 export const LoginScreenConfiguration: DemoConfiguration = {
   name: "LoginScreen",
   component: LoginScreen,
-  related: ["Button", "TextField", "SignUpScreen"],
+  related: ["Button", "Text field", "SignUpScreen"],
   description:
     "Email/password login screen with optional forgot-password and sign-up actions.",
   a11yNotes: [],

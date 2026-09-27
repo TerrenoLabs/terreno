@@ -20,7 +20,7 @@ import {Modal} from "@terreno/ui";
 export const ModalConfiguration: DemoConfiguration = {
   name: "Modal",
   component: Modal,
-  related: ["Date / time modal", "Custom content block"],
+  related: ["ActionSheet", "SimpleContent"],
   description:
     "A Modal displays content that requires user interaction. Modals appear on a layer above the page and therefore block the content underneath, preventing users from interacting with anything else besides the Modal. Modal should be used to gather short bits of information from the user. Also known as dialog or prompt.",
   shortDescription:

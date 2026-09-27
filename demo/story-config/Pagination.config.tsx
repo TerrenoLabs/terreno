@@ -6,7 +6,7 @@ import {PaginationDemo, PaginationMoreStory, PaginationStory} from "../stories/P
 export const PaginationConfiguration: DemoConfiguration = {
   name: "Pagination",
   component: Pagination,
-  related: ["Top navigation", "Bottom navigation"],
+  related: ["DataTable"],
   description:
     "Break large sets of content into smaller, manageable pages. Used primarily in the staff portal to parse large tables.",
   a11yNotes: ["The tappable area of each pagination item should fit within a 44pt square."],

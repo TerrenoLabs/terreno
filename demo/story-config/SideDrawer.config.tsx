@@ -7,7 +7,7 @@ import React from "react";
 export const SideDrawerConfiguration: DemoConfiguration = {
   name: "Side drawer",
   component: SideDrawer,
-  related: ["Modals"],
+  related: ["Modal"],
   description:
     "Side drawers function like the Material navigation drawer. They open up a surface that allows the system to display information, navigation, or other content.",
   a11yNotes: [

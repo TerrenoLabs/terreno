@@ -5,7 +5,7 @@ import {Text} from "@terreno/ui";
 export const LinkConfiguration: DemoConfiguration = {
   name: "Link",
   component: Text, // Replace with actual component reference
-  related: ["Hyperlink"],
+  related: ["Text"],
   description: "",
   a11yNotes: [""],
   category: "Component",

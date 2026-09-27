@@ -69,3 +69,27 @@ export const catalogIssues = (
 export const relatedDemoHref = (name: string): string => {
   return `/demo/${encodeURIComponent(name)}`;
 };
+
+export interface DemoSearchable {
+  category: string | string[];
+  description: string;
+  name: string;
+  shortDescription?: string;
+}
+
+export const matchesDemoSearch = (
+  config: DemoSearchable,
+  query: string,
+  category: string
+): boolean => {
+  const needle = query.trim().toLowerCase();
+  const haystack = `${config.name} ${config.description} ${config.shortDescription ?? ""}`.toLowerCase();
+  if (needle && !haystack.includes(needle)) {
+    return false;
+  }
+  if (!category || category === "All") {
+    return true;
+  }
+  const categories = Array.isArray(config.category) ? config.category : [config.category];
+  return categories.includes(category);
+};

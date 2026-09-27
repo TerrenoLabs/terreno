@@ -249,7 +249,7 @@ const OpenAPIContextConfiguration: DemoConfigurationBase = {
     "Loads backend OpenAPI metadata and exposes model field descriptions through useOpenAPISpec.",
   interfaceName: "OpenAPIProviderProps",
   name: "OpenAPI Context",
-  related: ["TerrenoProvider"],
+  related: ["Theme"],
   status: {
     android: "ready",
     documentation: "ready",

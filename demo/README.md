@@ -47,7 +47,8 @@ The demo serves on **port 8085**. Open the Expo web URL that the CLI prints (typ
 Each story config can set `usageExample` (copyable usage), `related` names that match another
 component's `name`, and per-story `showInDemo`, `stability` (`stable` or `exclude` with
 `excludeReason`), and `interactions`. Boolean controls without a default use `false`. Number
-controls without a default use `0`. Demo mode hides stories with `showInDemo: false`.
+controls without a default use `0`. Demo mode hides stories with `showInDemo: false`. The home grid and dev index filter by
+search text and category.
 
 ## Add a story
 

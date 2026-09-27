@@ -10,7 +10,7 @@ import {SectionDivider} from "@terreno/ui";
 export const SectionDividerConfiguration: DemoConfiguration = {
   name: "SectionDivider",
   component: SectionDivider,
-  related: ["Card", "Box", "List components"],
+  related: ["Card", "Box"],
   description:
     "A horizontal divider used to separate content sections. Provides visual separation between different groups of content within a container.",
   a11yNotes: [

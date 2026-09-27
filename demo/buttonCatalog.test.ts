@@ -14,6 +14,10 @@ describe("Button catalog", () => {
       catalogIssues(DemoConfig).filter((issue) => issue.startsWith("Button related")),
       []
     );
+    assert.deepEqual(
+      catalogIssues(DemoConfig).filter((issue) => issue.includes("related")),
+      []
+    );
   });
 
   it("keeps Multiline off the demo page and gives Variants interaction steps", () => {

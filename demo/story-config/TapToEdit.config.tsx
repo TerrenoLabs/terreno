@@ -5,7 +5,7 @@ import {TapToEdit} from "@terreno/ui";
 export const TapToEditConfiguration: DemoConfiguration = {
   name: "Tap to edit",
   component: TapToEdit,
-  related: ["Tap to edit pattern", "Address tap-to-edit pattern"],
+  related: ["AddressField", "Text field"],
   description:
     "This element allows the user to see information and interact with an icon to edit it. See the pattern here.",
   a11yNotes: [

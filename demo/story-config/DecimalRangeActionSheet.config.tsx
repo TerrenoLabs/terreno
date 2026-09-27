@@ -16,7 +16,7 @@ export const DecimalRangeActionSheetConfiguration: DemoConfiguration = {
   interfaceName: "DecimalRangeActionSheetProps",
   name: "DecimalRangeActionSheet",
   props: {},
-  related: ["ActionSheet", "NumberField"],
+  related: ["ActionSheet", "Number field"],
   status: {
     android: "ready",
     documentation: "ready",

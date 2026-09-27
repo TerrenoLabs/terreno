@@ -16,7 +16,7 @@ export const PasswordRequirementsConfiguration: DemoConfiguration = {
   interfaceName: "PasswordRequirementsProps",
   name: "PasswordRequirements",
   props: {},
-  related: ["SignUpScreen", "PasswordField"],
+  related: ["SignUpScreen", "Password field"],
   status: {
     android: "ready",
     documentation: "ready",

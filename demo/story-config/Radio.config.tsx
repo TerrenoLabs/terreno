@@ -13,7 +13,7 @@ export const RadioConfiguration: DemoConfiguration = {
   interfaceName: "RadioProps",
   name: "Radio",
   props: {},
-  related: ["RadioField"],
+  related: ["Radio field"],
   status: {
     android: "ready",
     documentation: "ready",

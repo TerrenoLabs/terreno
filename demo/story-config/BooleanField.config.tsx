@@ -13,7 +13,7 @@ import React from "react";
 export const BooleanFieldConfiguration: DemoConfiguration = {
   name: "Boolean field",
   component: BooleanField,
-  related: ["Switch", "Checkbox", "Radio"],
+  related: ["CheckBox", "Radio"],
   description:
     "Use the Boolean field for single cell options that can be turned on and off only. Also called 'toggle fields' and 'switch fields'.",
   a11yNotes: [

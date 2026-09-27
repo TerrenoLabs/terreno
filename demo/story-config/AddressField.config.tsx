@@ -4,7 +4,7 @@ import {Field} from "@terreno/ui";
 
 export const AddressFieldConfiguration: DemoConfiguration = {
   name: "AddressField",
-  related: ["TapToEdit"],
+  related: ["Tap to edit"],
   description: "Set/Display a user's address",
   category: "Pattern",
   component: Field,

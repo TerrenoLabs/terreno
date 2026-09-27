@@ -14,7 +14,7 @@ export const MarkdownEditorConfiguration: DemoConfiguration = {
   interfaceName: "MarkdownEditorProps",
   name: "MarkdownEditor",
   props: {},
-  related: ["MarkdownEditorField", "MarkdownView"],
+  related: ["Markdown editor field", "MarkdownView"],
   status: {
     android: "ready",
     documentation: "ready",

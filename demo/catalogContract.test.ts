@@ -1,7 +1,13 @@
 import {describe, it} from "bun:test";
 import {assert} from "chai";
 
-import {catalogIssues, controlDefault, storiesForDemo, unresolvedRelated} from "./catalogContract";
+import {
+  catalogIssues,
+  controlDefault,
+  matchesDemoSearch,
+  storiesForDemo,
+  unresolvedRelated,
+} from "./catalogContract";
 
 describe("catalog contract", () => {
   it("uses false when a boolean control has no default", () => {
@@ -26,6 +32,17 @@ describe("catalog contract", () => {
       Shown: {showInDemo: true},
     });
     assert.deepEqual(Object.keys(visible), ["Shown"]);
+  });
+
+  it("matches a name query and a single category", () => {
+    const button = {
+      category: "Component",
+      description: "Buttons allow users to perform actions",
+      name: "Button",
+    };
+    assert.strictEqual(matchesDemoSearch(button, "but", "All"), true);
+    assert.strictEqual(matchesDemoSearch(button, "button", "Form"), false);
+    assert.strictEqual(matchesDemoSearch(button, "", "Component"), true);
   });
 
   it("reports an excluded story that has no reason", () => {

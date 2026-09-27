@@ -10,7 +10,7 @@ import React from "react";
 export const FilterConfiguration: DemoConfiguration = {
   name: "Filter",
   component: Filter,
-  related: ["SelectField", "BooleanField", "Accordion"],
+  related: ["Select field", "Boolean field", "Accordion"],
   description:
     "A compositional filter dropdown for data-heavy views. Combine the select menu, boolean, and accordion sub-components inside the parent, with an optional Apply/Clear/Cancel footer. Desktop web only.",
   a11yNotes: [

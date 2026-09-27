@@ -5,7 +5,7 @@ import {HeadingProps} from "@terreno/ui";
 export const HeadingConfiguration: DemoConfiguration = {
   name: "Heading",
   component: Headings, // Replace with actual component reference
-  related: ["Title"],
+  related: ["Text"],
   description: "",
   a11yNotes: [""],
   category: "Component",

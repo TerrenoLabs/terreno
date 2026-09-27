@@ -6,7 +6,7 @@ import {EmojiSelectorDemo} from "../stories/EmojiSelector.stories";
 export const EmojiSelectorConfiguration: DemoConfiguration = {
   name: "Emoji selector",
   component: EmojiSelector,
-  related: ["Text field", "Chat", "Reactions"],
+  related: ["Text field"],
   description: "A grid-based emoji picker with categories, search, and recent history.",
   a11yNotes: [
     "Ensure emoji choices are keyboard and screen-reader accessible.",

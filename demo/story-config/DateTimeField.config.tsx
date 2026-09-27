@@ -7,7 +7,7 @@ import {DateTimeFieldDemo, DateTimeFieldStory, DateTimeFieldTypes} from "../stor
 export const DateTimeFieldConfiguration: DemoConfiguration = {
   name: "Date & Time field",
   component: DateTimeField,
-  related: ["Date / time modal"],
+  related: ["Modal"],
   description:
     "This form field allows the user to select a date and a time. Used in conjunction with the date & time modal in this pattern.",
   a11yNotes: [

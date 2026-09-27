@@ -16,7 +16,7 @@ export const NumberPickerActionSheetConfiguration: DemoConfiguration = {
   interfaceName: "NumberPickerActionSheetProps",
   name: "NumberPickerActionSheet",
   props: {},
-  related: ["ActionSheet", "NumberField"],
+  related: ["ActionSheet", "Number field"],
   status: {
     android: "ready",
     documentation: "ready",

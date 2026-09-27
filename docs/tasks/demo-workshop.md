@@ -15,7 +15,7 @@ See: [`docs/implementationPlans/demo-workshop.md`](../implementationPlans/demo-w
 
 ## Phase 1: Catalog, snippets, and preview bar
 
-- [ ] **Task 1.1**: Button catalog contract
+- [x] **Task 1.1**: Button catalog contract
   - Delivers: Button has a copyable usage snippet, resolvable related links, stable stories, one declarative interaction list, and typed control defaults.
   - Files: `demo/demoConfig.tsx`, `demo/story-config/Button.config.tsx`, `demo/stories/Button.stories.tsx`, `demo/collectRegisteredStoryRenders.ts`, `demo/app/demo/[component].tsx`, `demo/README.md`
   - Blocked by: none

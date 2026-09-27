@@ -5,7 +5,7 @@ import {Spinner} from "@terreno/ui";
 export const SpinnerConfiguration: DemoConfiguration = {
   name: "Spinner",
   component: Spinner,
-  related: ["Activity Indicator", "Loading"],
+  related: ["Page"],
   description:
     "This is a microcomponent that’s used to indicate that the system is loading information. It can be used on a loading surface or on a button.",
   a11yNotes: [],

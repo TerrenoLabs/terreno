@@ -13,7 +13,7 @@ export const SignatureConfiguration: DemoConfiguration = {
   interfaceName: "SignatureProps",
   name: "Signature",
   props: {},
-  related: ["SignatureField", "SignatureCaptureField"],
+  related: ["Signature field", "Signature capture field"],
   status: {
     android: "ready",
     documentation: "ready",

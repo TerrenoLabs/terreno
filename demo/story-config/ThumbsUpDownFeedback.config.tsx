@@ -9,7 +9,7 @@ import React from "react";
 
 export const ThumbsUpDownFeedbackConfiguration: DemoConfiguration = {
   name: "ThumbsUpDownFeedback",
-  related: ["AiSuggestionBox", "IconButton"],
+  related: ["AI Suggestion Box", "IconButton"],
   description:
     "ThumbsUpDownFeedback is a thumbs up / thumbs down pair for collecting a single positive or negative reaction, e.g. on an AI generated response. Pressing the selected option again clears the selection.",
   category: "Component",

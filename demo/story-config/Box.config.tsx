@@ -5,7 +5,7 @@ import {Box} from "@terreno/ui";
 export const BoxConfiguration: DemoConfiguration = {
   name: "Box",
   component: Box,
-  related: ["Div", "View"],
+  related: ["Page", "Card"],
   description:
     "Box is a component primitive that can be used to build the foundation of pretty much any other component. It keeps details like spacing, borders and colors consistent with the rest of Gestalt, while allowing the developer to focus on the content. Also known as “div” or “view”.",
   shortDescription:

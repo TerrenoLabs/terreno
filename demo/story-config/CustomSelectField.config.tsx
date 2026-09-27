@@ -6,7 +6,7 @@ import React from "react";
 export const CustomSelectFieldConfiguration: DemoConfiguration = {
   name: "Custom Select Field",
   component: CustomSelectField,
-  related: ["SelectField", "Field", "Tap-to-edit"],
+  related: ["Select field", "Field", "Tap to edit"],
   description:
     "Displays a list of options using the browser’s native select and includes a custom option that renders a text field when selected and allows user to input value not included in predefined options.",
   a11yNotes: ["The list should be labeled so that screen readers know that the list is related."],

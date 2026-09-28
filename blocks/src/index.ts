@@ -87,7 +87,6 @@ export {
   choiceSelectionBounds,
   compactAskInputSchemas,
   compactChoiceAskInputSchema,
-  compactConfirmAskInputSchema,
   confirmAnswerSchema,
   confirmAskInputSchema,
   confirmAskResponseSchema,

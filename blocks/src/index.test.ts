@@ -57,7 +57,6 @@ describe("@terreno/blocks public exports", () => {
     "choiceSelectionBounds",
     "compactAskInputSchemas",
     "compactChoiceAskInputSchema",
-    "compactConfirmAskInputSchema",
     "confirmAnswerSchema",
     "confirmAskInputSchema",
     "confirmAskResponseSchema",

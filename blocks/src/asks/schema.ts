@@ -505,12 +505,6 @@ export const confirmAskInputSchema = z
 
 export type ConfirmAskInput = z.infer<typeof confirmAskInputSchema>;
 
-/**
- * Input for `ask_confirm` on the compact surface. A confirm always fits a simple card (two buttons
- * with labels that show uncut), so it is the full schema.
- */
-export const compactConfirmAskInputSchema = confirmAskInputSchema;
-
 /** The fields of a `markdown` input that its length rules read. */
 interface MarkdownRuleInput {
   initial?: string;
@@ -1121,7 +1115,8 @@ export const askInputSchemas = {
 /** Input schemas by kind on the compact surface. Every compact input is also a valid full input. */
 export const compactAskInputSchemas = {
   choice: compactChoiceAskInputSchema,
-  confirm: compactConfirmAskInputSchema,
+  // A confirm always fits a simple card (two buttons with labels that show uncut).
+  confirm: confirmAskInputSchema,
 } as const satisfies Record<CompactAskKind, z.ZodType>;
 
 export const isCompactAskKind = (kind: AskKind): kind is CompactAskKind =>

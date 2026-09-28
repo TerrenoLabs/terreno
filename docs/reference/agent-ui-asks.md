@@ -548,7 +548,7 @@ A compact `choice` (`compactChoiceAskInputSchema`) follows the [choice](#choice)
 | `options[].label` | At most 20 UTF-16 code units (`simpleCard.buttonLabelMaxLength`), so its button shows it uncut. Most emoji count as 2 or more. | `TOO_LONG` |
 | `options[].label` | Different from every other option's label, ignoring spaces at either end | `DUPLICATE_LABEL` |
 
-A compact `confirm` (`compactConfirmAskInputSchema`) is the full [confirm](#confirm) schema: its
+A compact `confirm` uses the full [confirm](#confirm) schema (`confirmAskInputSchema`): its
 two labels already fit a button uncut, so every confirm card has `handoff: false`.
 
 Every compact ask is also a valid full ask. `validateAskInput({kind, input, surface: "compact"})`
@@ -994,7 +994,7 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 | `ASK_SURFACES`, `AskSurface`, `askSurfaceSchema` | The surfaces (`["full", "compact"]`) and the schema of a request's `surface` |
 | `COMPACT_ASK_KINDS`, `CompactAskKind`, `isCompactAskKind(kind)`, `askKindsForSurface({kinds, surface})` | The kinds the compact surface offers (`["choice", "confirm"]`), whether it offers a kind, and the ones a surface offers from a list |
 | `choiceAskInputSchema`, `compactChoiceAskInputSchema`, `choiceOptionSchema`, `choiceAnswerSchema`, `choiceAskResponseSchema` | `choice` schemas and their types (`ChoiceAskInput`, `ChoiceOption`, `ChoiceAnswer`, `ChoiceAskResponse`) |
-| `confirmAskInputSchema`, `compactConfirmAskInputSchema`, `confirmAnswerSchema`, `confirmAskResponseSchema` | `confirm` schemas and their types (`ConfirmAskInput`, `ConfirmAnswer`, `ConfirmAskResponse`) |
+| `confirmAskInputSchema`, `confirmAnswerSchema`, `confirmAskResponseSchema` | `confirm` schemas and their types (`ConfirmAskInput`, `ConfirmAnswer`, `ConfirmAskResponse`) |
 | `markdownAskInputSchema`, `markdownAnswerSchema`, `markdownAskResponseSchema`, `markdownLengthBounds(input)` | `markdown` schemas and their types (`MarkdownAskInput`, `MarkdownAnswer`, `MarkdownAskResponse`), and the `{min, max}` length an answer must meet |
 | `formAskInputSchema`, `formFieldSchema`, `formAnswerSchema`, `formAskResponseSchema`, `FORM_FIELD_TYPES`, `formDefaultValues(input)`, `formTextMaxLength(field)` | `form` schemas and their types (`FormAskInput`, `FormField`, `FormFieldType`, `FormAnswer`, `FormAskResponse`, `FormValue`), the field types, the defaults keyed by field id, and a field's longest string value |
 | `filesAskInputSchema`, `askFileRefSchema`, `filesAnswerSchema`, `filesAskResponseSchema`, `filesCountBounds(input)` | `files` schemas and their types (`FilesAskInput`, `AskFileRef`, `FilesAnswer`, `FilesAskResponse`), and the `{min, max}` files an answer must hold |

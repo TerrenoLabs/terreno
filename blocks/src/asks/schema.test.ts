@@ -11,7 +11,6 @@ import {
   COMPACT_ASK_KINDS,
   choiceAskInputSchema,
   compactChoiceAskInputSchema,
-  compactConfirmAskInputSchema,
   confirmAskInputSchema,
   confirmButtonLabels,
   filesAskInputSchema,
@@ -50,9 +49,7 @@ describe("askInputSchemaFor", () => {
       compactChoiceAskInputSchema
     );
     expect(askInputSchemaFor({kind: "confirm"})).toBe(confirmAskInputSchema);
-    expect(askInputSchemaFor({kind: "confirm", surface: "compact"})).toBe(
-      compactConfirmAskInputSchema
-    );
+    expect(askInputSchemaFor({kind: "confirm", surface: "compact"})).toBe(confirmAskInputSchema);
     expect(askInputSchemaFor({kind: "markdown"})).toBe(markdownAskInputSchema);
   });
 

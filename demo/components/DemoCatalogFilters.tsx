@@ -44,7 +44,7 @@ export const DemoCatalogFilters: React.FC<{
           onChange={handleQueryChange}
           placeholder="Search components"
           testID="demo-search"
-          title="Search"
+          type="search"
           value={query}
         />
       </Box>

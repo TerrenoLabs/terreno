@@ -1257,6 +1257,20 @@ IP and tracking issue; this entry is the release checklist, not a plan.
 
 ---
 
+## demo-workshop
+
+**Title:** `Demo workshop`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`demo-workshop`, Status=`Planned`
+
+Turn the Expo demo into the workshop for `@terreno/ui`: a person can find a component, copy a usage snippet, change theme and viewport from the URL, and see whether every stable story passes interaction, accessibility, and visual checks on web and Android.
+
+- **Implementation plan:** [demo-workshop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/demo-workshop.md)
+- **Tasks:** [demo-workshop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/demo-workshop.md)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

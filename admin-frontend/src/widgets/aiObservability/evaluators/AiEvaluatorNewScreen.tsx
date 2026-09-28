@@ -1,7 +1,7 @@
 import {router} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
-import {unwrapPromptDetail} from "../prompts/promptTypes";
+import {unwrapPromptDetail, unwrapPromptList} from "../prompts/promptTypes";
 import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPromptsApi";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {
@@ -12,19 +12,23 @@ import {
 import {
   type EvaluatorDimension,
   type EvaluatorRecord,
+  isCompleteNumericRange,
   judgeSchemaMissingDimensions,
   parseApiErrorTitle,
+  parseCategories,
 } from "./evaluatorTypes";
 import {useAiObservabilityEvaluatorsApi} from "./useAiObservabilityEvaluatorsApi";
 
 export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {api, routeBase} = props;
   const {useCreateMutation} = useAiObservabilityEvaluatorsApi(api);
-  const {useDetailQuery: usePromptDetailQuery} = useAiObservabilityPromptsApi(api);
+  const {useDetailQuery: usePromptDetailQuery, useListQuery: usePromptListQuery} =
+    useAiObservabilityPromptsApi(api);
   const [createEvaluator, createState] = useCreateMutation();
   const [name, setName] = useState("");
   const [type, setType] = useState<EvaluatorRecord["type"]>("human");
-  const [target, setTarget] = useState<EvaluatorRecord["target"]>("full trace");
+  // TODO: enable generation span and dataset item targets.
+  const target: EvaluatorRecord["target"] = "full trace";
   const [dimensions, setDimensions] = useState<EvaluatorDimension[]>(initialNewEvaluatorDimensions);
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
@@ -35,6 +39,13 @@ export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pro
   const [createError, setCreateError] = useState("");
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const backHref = `${prefix}/ai-evaluators`;
+
+  const promptsQuery = usePromptListQuery({});
+  const judgePromptOptions = useMemo(() => {
+    return unwrapPromptList(promptsQuery.data).map((prompt) => {
+      return {label: prompt.name, value: prompt.name};
+    });
+  }, [promptsQuery.data]);
 
   const {
     data: promptDetailRaw,
@@ -154,8 +165,24 @@ export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pro
       setCreateError("Each score needs a name.");
       return;
     }
+    const numericMissingBounds = dimensions.some((dimension) => {
+      return dimension.dataType === "numeric" && !isCompleteNumericRange(dimension.range);
+    });
+    if (numericMissingBounds) {
+      setCreateError(
+        "Each numeric score needs a min and a max, with min less than or equal to max."
+      );
+      return;
+    }
+    const categoricalMissingLabels = dimensions.some((dimension) => {
+      return dimension.dataType === "categorical" && parseCategories(dimension.range).length === 0;
+    });
+    if (categoricalMissingLabels) {
+      setCreateError("Add at least one category for each categorical score.");
+      return;
+    }
     if (type === "llm-judge" && !judgePromptName.trim()) {
-      setCreateError("Judge prompt name is required.");
+      setCreateError("Select a judge prompt.");
       return;
     }
     if (type === "llm-judge" && isJudgePromptLoading) {
@@ -221,6 +248,7 @@ export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pro
         instructions={instructions}
         isCreating={createState.isLoading}
         judgePromptName={judgePromptName}
+        judgePromptOptions={judgePromptOptions}
         judgePromptStatus={judgePromptStatus}
         name={name}
         onAddDimension={handleAddDimension}
@@ -234,7 +262,6 @@ export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pro
         onLiveSampleRateChange={handleLiveSampleRateChange}
         onNameChange={setName}
         onRemoveDimension={handleRemoveDimension}
-        onTargetChange={setTarget}
         onTypeChange={handleTypeChange}
         runModes={runModes}
         schemaMismatchKey={schemaMismatchKey}

@@ -1,4 +1,4 @@
-import {asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
+import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
 
 import {requireAdmin} from "../../langfuseRoutesMiddleware";
@@ -52,6 +52,7 @@ const writeFromBody = (
       ...input,
       dimensions: input.dimensions ?? [],
       name: input.name ?? "",
+      // TODO: enable generation span and dataset item targets.
       target: input.target ?? "full trace",
       type: input.type ?? "human",
     };
@@ -130,9 +131,18 @@ export const addObservabilityEvaluatorRoutes = (
         .build(),
     ],
     asyncHandler(async (req, res) => {
-      const data = await options.store.create(
-        writeFromBody(req.body as Record<string, unknown>, "create") as EvaluatorWriteInput
-      );
+      const input = writeFromBody(
+        req.body as Record<string, unknown>,
+        "create"
+      ) as EvaluatorWriteInput;
+      // TODO: enable generation span and dataset item targets.
+      if (input.target !== "full trace") {
+        throw new APIError({
+          status: 400,
+          title: "Only full trace evaluators are supported",
+        });
+      }
+      const data = await options.store.create(input);
       return res.status(201).json({data});
     })
   );

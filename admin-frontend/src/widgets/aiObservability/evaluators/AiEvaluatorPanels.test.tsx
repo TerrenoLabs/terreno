@@ -1,4 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
+import {SelectField} from "@terreno/ui";
 import {act, fireEvent, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
@@ -38,7 +39,6 @@ describe("AiEvaluatorNewView schema mismatch", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         schemaMismatchKey={missing[0]}
@@ -71,7 +71,6 @@ describe("AiEvaluatorNewView helper text", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
@@ -83,8 +82,9 @@ describe("AiEvaluatorNewView helper text", () => {
     );
     expect(getByTestId("ai-evaluator-help-type")).toHaveTextContent(/reviewer decides the score/);
     expect(getByTestId("ai-evaluator-help-target")).toHaveTextContent(/complete interaction/);
+    expect(getByTestId("ai-evaluator-step-target")).toHaveTextContent(/not enabled yet/);
     expect(getByTestId("ai-evaluator-step-method")).toHaveTextContent(/Choose how scoring happens/);
-    expect(getByTestId("ai-evaluator-step-target")).toHaveTextContent(/Choose what it evaluates/);
+    expect(getByTestId("ai-evaluator-step-target")).toHaveTextContent(/What it evaluates/);
     expect(getByTestId("ai-evaluator-step-scores")).toHaveTextContent(
       /Each dimension becomes a separate saved score/
     );
@@ -116,15 +116,14 @@ describe("AiEvaluatorNewView helper text", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
-        target="generation span"
+        target="full trace"
         type="json-assert"
       />
     );
     expect(getByTestId("ai-evaluator-help-type")).toHaveTextContent(/reads one value/);
-    expect(getByTestId("ai-evaluator-help-target")).toHaveTextContent(/one model call/);
+    expect(getByTestId("ai-evaluator-help-target")).toHaveTextContent(/complete interaction/);
     expect(getByText(/Enter the field to inspect/)).toBeTruthy();
     expect(getByText(/Enter the rule for that field/)).toBeTruthy();
   });
@@ -151,7 +150,6 @@ describe("AiEvaluatorNewView panels", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
@@ -181,10 +179,9 @@ describe("AiEvaluatorNewView panels", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
-        target="generation span"
+        target="full trace"
         type="json-assert"
       />
     );
@@ -193,7 +190,6 @@ describe("AiEvaluatorNewView panels", () => {
 
   it("wires new-evaluator controls for dimensions, targets, and run modes", async () => {
     const onTypeChange = mock(() => undefined);
-    const onTargetChange = mock(() => undefined);
     const onAddDimension = mock(() => undefined);
     const onRemoveDimension = mock(() => undefined);
     const onLiveSampleRateChange = mock(() => undefined);
@@ -223,7 +219,6 @@ describe("AiEvaluatorNewView panels", () => {
         onLiveSampleRateChange={onLiveSampleRateChange}
         onNameChange={() => undefined}
         onRemoveDimension={onRemoveDimension}
-        onTargetChange={onTargetChange}
         onTypeChange={onTypeChange}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 5}}
         target="full trace"
@@ -232,7 +227,6 @@ describe("AiEvaluatorNewView panels", () => {
     );
     await act(async () => {
       fireEvent.press(getByTestId("ai-evaluator-type-llm-judge"));
-      fireEvent.press(getByTestId("ai-evaluator-target-generation-span"));
       fireEvent.press(getByTestId("ai-evaluator-add-dimension"));
       const removeButtons = getAllByText("Remove");
       if (removeButtons.length > 0) {
@@ -458,7 +452,6 @@ describe("AiEvaluatorNewView dimension editing", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={onRemoveDimension}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
@@ -502,14 +495,17 @@ describe("AiEvaluatorNewView dimension editing", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
         type="llm-judge"
       />
     );
-    fireEvent.changeText(llmJudge.getByTestId("ai-evaluator-judge-prompt"), "judge-v2");
+    const judgeSelect = llmJudge.UNSAFE_root.findAllByType(SelectField).find((field) => {
+      return field.props.testID === "ai-evaluator-judge-prompt";
+    });
+    assert.ok(judgeSelect);
+    fireEvent(judgeSelect, "onChange", "judge-v2");
     assert.isAtLeast(onJudgePromptNameChange.mock.calls.length, 1);
     expect(llmJudge.getByText("Schema match check passed")).toBeTruthy();
 
@@ -532,7 +528,6 @@ describe("AiEvaluatorNewView dimension editing", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
@@ -561,7 +556,6 @@ describe("AiEvaluatorNewView dimension editing", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
@@ -570,7 +564,7 @@ describe("AiEvaluatorNewView dimension editing", () => {
     );
     fireEvent.changeText(jsonAssert.getByTestId("ai-evaluator-assertion-path"), "output.score");
     fireEvent.changeText(jsonAssert.getByTestId("ai-evaluator-assertion-constraint"), "gte 0.8");
-    fireEvent.changeText(jsonAssert.getAllByDisplayValue("0-1")[0]!, "0-10");
+    fireEvent.changeText(jsonAssert.getByTestId("ai-evaluator-dimension-0-max"), "10");
     assert.isAtLeast(onAssertionPathChange.mock.calls.length, 1);
     assert.isAtLeast(onAssertionConstraintChange.mock.calls.length, 1);
     assert.isAtLeast(onDimensionChange.mock.calls.length, 1);
@@ -601,7 +595,6 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
         onLiveSampleRateChange={onLiveSampleRateChange}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={onTypeChange}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
@@ -645,14 +638,17 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
         type="llm-judge"
       />
     );
-    fireEvent.changeText(llmJudge.getByTestId("ai-evaluator-judge-prompt"), "judge");
+    const fallbackJudge = llmJudge.UNSAFE_root.findAllByType(SelectField).find((field) => {
+      return field.props.testID === "ai-evaluator-judge-prompt";
+    });
+    assert.ok(fallbackJudge);
+    fireEvent(fallbackJudge, "onChange", "judge");
 
     const human = renderWithTheme(
       <AiEvaluatorNewView
@@ -673,7 +669,6 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
@@ -701,7 +696,6 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
         onLiveSampleRateChange={() => undefined}
         onNameChange={() => undefined}
         onRemoveDimension={() => undefined}
-        onTargetChange={() => undefined}
         onTypeChange={() => undefined}
         runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
         target="full trace"
@@ -711,6 +705,54 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
     fireEvent.changeText(jsonAssert.getByTestId("ai-evaluator-assertion-path"), "output.score");
     fireEvent.changeText(jsonAssert.getByTestId("ai-evaluator-assertion-constraint"), "gte 0.8");
     expect(jsonAssert.getByTestId("ai-evaluator-assertion-path")).toBeTruthy();
+  });
+});
+
+describe("AiEvaluatorNewView score fields", () => {
+  it("hides extra controls for boolean and edits numeric and categorical scores", async () => {
+    const onDimensionChange = mock(() => undefined);
+    const view = renderWithTheme(
+      <AiEvaluatorNewView
+        assertionConstraint="exists"
+        assertionPath="output"
+        dimensions={[
+          {dataType: "boolean", key: "pass", required: true},
+          {dataType: "numeric", key: "score", range: "0-1", required: true},
+          {dataType: "categorical", key: "tone", range: "warm", required: true},
+        ]}
+        instructions=""
+        isCreating={false}
+        judgePromptName=""
+        judgePromptOptions={[{label: "judge", value: "judge"}]}
+        name="quality"
+        onAddDimension={() => undefined}
+        onAssertionConstraintChange={() => undefined}
+        onAssertionPathChange={() => undefined}
+        onCreate={() => undefined}
+        onDimensionChange={onDimensionChange}
+        onInstructionsChange={() => undefined}
+        onJudgePromptNameChange={() => undefined}
+        onLiveSampleRateChange={() => undefined}
+        onNameChange={() => undefined}
+        onRemoveDimension={() => undefined}
+        onTypeChange={() => undefined}
+        runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
+        target="full trace"
+        type="human"
+      />
+    );
+    assert.isNull(view.queryByTestId("ai-evaluator-dimension-0-numeric"));
+    assert.isNull(view.queryByTestId("ai-evaluator-dimension-0-categories"));
+    expect(view.getByTestId("ai-evaluator-dimension-1-min")).toBeTruthy();
+    expect(view.getByTestId("ai-evaluator-dimension-1-max")).toBeTruthy();
+    fireEvent.changeText(view.getByTestId("ai-evaluator-dimension-1-min"), "1");
+    assert.equal(onDimensionChange.mock.calls[0]?.[1].range, "1-1");
+    fireEvent.changeText(view.getByTestId("ai-evaluator-dimension-2-category-draft"), "cold");
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-evaluator-dimension-2-add-category"));
+      await Promise.resolve();
+    });
+    assert.equal(onDimensionChange.mock.calls.at(-1)?.[1].range, "warm|cold");
   });
 });
 

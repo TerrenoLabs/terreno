@@ -1375,15 +1375,35 @@ const _buildModelRouter = <T>(
     });
   };
 
-  const arrayPost = async (req: Request, res: Response) => {
+  // Array routes are `/:id/:field`. A non-ObjectId id is another resource under the
+  // same prefix (for example POST /ai/observability/evaluators), so leave the router
+  // and let a later registration handle it.
+  const continueUnlessDocumentId = (req: Request, next: NextFunction): boolean => {
+    if (isValidObjectId(req.params.id)) {
+      return false;
+    }
+    next("router");
+    return true;
+  };
+
+  const arrayPost = async (req: Request, res: Response, next: NextFunction) => {
+    if (continueUnlessDocumentId(req, next)) {
+      return;
+    }
     return arrayOperation(req, res, "POST");
   };
 
-  const arrayPatch = async (req: Request, res: Response) => {
+  const arrayPatch = async (req: Request, res: Response, next: NextFunction) => {
+    if (continueUnlessDocumentId(req, next)) {
+      return;
+    }
     return arrayOperation(req, res, "PATCH");
   };
 
-  const arrayDelete = async (req: Request, res: Response) => {
+  const arrayDelete = async (req: Request, res: Response, next: NextFunction) => {
+    if (continueUnlessDocumentId(req, next)) {
+      return;
+    }
     return arrayOperation(req, res, "DELETE");
   };
   // Set up routes for managing array fields. Check if there any array fields to add this for.

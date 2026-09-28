@@ -58,6 +58,73 @@ export const emptyDimension = (): EvaluatorDimension => {
   };
 };
 
+const NUMERIC_RANGE_PATTERN = /^(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)$/;
+
+export const parseNumericBounds = (range?: string): {max: string; min: string} => {
+  const matches = range?.match(NUMERIC_RANGE_PATTERN);
+  if (!matches) {
+    return {max: "1", min: "0"};
+  }
+  return {max: matches[2] ?? "1", min: matches[1] ?? "0"};
+};
+
+export const formatNumericRange = (min: string, max: string): string => {
+  return `${min.trim()}-${max.trim()}`;
+};
+
+export const isCompleteNumericRange = (range?: string): boolean => {
+  const matches = range?.match(NUMERIC_RANGE_PATTERN);
+  if (!matches?.[1] || !matches[2]) {
+    return false;
+  }
+  return Number(matches[1]) <= Number(matches[2]);
+};
+
+export const parseCategories = (range?: string): string[] => {
+  if (!range || NUMERIC_RANGE_PATTERN.test(range)) {
+    return [];
+  }
+  return range
+    .split(/[|,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+export const formatCategories = (categories: string[]): string | undefined => {
+  const cleaned = categories.map((entry) => entry.trim()).filter(Boolean);
+  if (cleaned.length === 0) {
+    return undefined;
+  }
+  return cleaned.join("|");
+};
+
+export const dimensionForDataType = (
+  dimension: EvaluatorDimension,
+  dataType: EvaluatorDimension["dataType"]
+): EvaluatorDimension => {
+  if (dataType === "boolean") {
+    return {
+      dataType,
+      key: dimension.key,
+      required: dimension.required,
+    };
+  }
+  if (dataType === "numeric") {
+    return {
+      ...dimension,
+      dataType,
+      range: isCompleteNumericRange(dimension.range)
+        ? dimension.range
+        : formatNumericRange("0", "1"),
+    };
+  }
+  return {
+    ...dimension,
+    dataType,
+    range: formatCategories(parseCategories(dimension.range)),
+  };
+};
+
 const unwrapObservabilityPayload = <T>(raw: unknown): T | undefined => {
   if (raw == null) {
     return undefined;

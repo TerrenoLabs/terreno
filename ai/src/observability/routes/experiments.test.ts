@@ -113,7 +113,7 @@ describe("observability experiment routes", () => {
       assertion: {constraint: "exists", path: "answer"},
       dimensions: [{dataType: "boolean", key: "correct", required: true}],
       name: "route-correctness",
-      target: "generation span",
+      target: "full trace",
       type: "json-assert",
     });
 

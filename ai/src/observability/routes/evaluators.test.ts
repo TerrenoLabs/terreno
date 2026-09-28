@@ -87,10 +87,21 @@ describe("observability evaluator routes", () => {
       instructions: "Check it",
       judgePromptName: "eval-judge-correctness",
       name: "route-evaluator",
-      target: "generation span",
+      target: "full trace",
       type: "llm-judge",
     });
     expect(created.status).toBe(201);
+    expect(created.body.data.target).toBe("full trace");
+
+    const spanTarget = await agent.post("/ai/observability/evaluators").send({
+      dimensions: [{dataType: "boolean", key: "correct", required: true}],
+      judgePromptName: "eval-judge-correctness",
+      name: "span-evaluator",
+      target: "generation span",
+      type: "llm-judge",
+    });
+    expect(spanTarget.status).toBe(400);
+    expect(spanTarget.body.title).toBe("Only full trace evaluators are supported");
     const evaluatorId = created.body.data.id as string;
 
     const detail = await agent.get(`/ai/observability/evaluators/${evaluatorId}`);

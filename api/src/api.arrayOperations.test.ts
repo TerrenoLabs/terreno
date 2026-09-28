@@ -581,6 +581,35 @@ describe("array operation errors", () => {
     expect(res.body.detail).toContain("Access to PATCH");
   });
 
+  it("lets a later route handle non-ObjectId paths under the same prefix", async () => {
+    app.use(
+      "/ai",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [],
+          delete: [],
+          list: [],
+          read: [],
+          update: [],
+        },
+      })
+    );
+    app.post("/ai/observability/evaluators", (_req, res) => {
+      res.status(201).json({data: {created: true}});
+    });
+    _server = supertest(app);
+
+    const created = await _server
+      .post("/ai/observability/evaluators")
+      .send({name: "toxicity", target: "full trace"})
+      .expect(201);
+    expect(created.body.data.created).toBe(true);
+
+    const denied = await _server.post(`/ai/${apple._id}/tags`).send({tags: "organic"}).expect(405);
+    expect(denied.body.code).toBe("array-update-not-allowed");
+  });
+
   it("array operation on non-existent document returns 404", async () => {
     app.use(
       "/food",

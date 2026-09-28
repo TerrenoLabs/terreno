@@ -1,5 +1,5 @@
-import {Badge, Box, Button, Heading, Link, Text, TextField} from "@terreno/ui";
-import React, {useCallback, useMemo} from "react";
+import {Badge, Box, Button, Heading, Link, SelectField, Text, TextField} from "@terreno/ui";
+import React, {useCallback, useMemo, useState} from "react";
 import {
   ObservabilityTable,
   type ObservabilityTableColumn,
@@ -7,14 +7,18 @@ import {
 } from "../shell/ObservabilityTable";
 import {
   DIMENSION_DATA_TYPES,
-  EVALUATOR_TARGET_OPTIONS,
+  dimensionForDataType,
   EVALUATOR_TYPE_LABELS,
   type EvaluatorDimension,
   type EvaluatorRecord,
   type EvaluatorUsageRow,
   emptyDimension,
+  formatCategories,
+  formatNumericRange,
   formatRunModeChips,
   judgeSchemaMissingDimensions,
+  parseCategories,
+  parseNumericBounds,
 } from "./evaluatorTypes";
 
 type JudgePromptStatus = "error" | "idle" | "loading" | "ready";
@@ -31,14 +35,8 @@ const EVALUATOR_TYPE_HELP: Record<EvaluatorRecord["type"], string> = {
     "A scoring prompt asks a model to judge quality or meaning that code cannot reliably check. Each evaluation is a billed model call.",
 };
 
-const EVALUATOR_TARGET_HELP: Record<EvaluatorRecord["target"], string> = {
-  "dataset item":
-    "The evaluator sees one experiment case: its input, expected output, and the model's actual output.",
-  "full trace":
-    "The evaluator sees the complete interaction, including nested steps, the compiled prompt, and final output.",
-  "generation span":
-    "The evaluator sees one model call. Choose this when each response should be scored independently.",
-};
+const FULL_TRACE_TARGET_HELP =
+  "The evaluator sees the complete interaction, including nested steps, the compiled prompt, and final output.";
 
 const EVALUATOR_NAME_HELP =
   "Use a short, unique name such as answer-correctness or safe-response. This name also identifies its scores.";
@@ -52,8 +50,12 @@ const EVALUATOR_DIMENSIONS_HELP =
 const EVALUATOR_DIMENSION_KEY_HELP =
   "The score label shown on traces and experiment results, such as correct, helpful, or toxicity.";
 
-const EVALUATOR_DIMENSION_RANGE_HELP =
-  "Numeric: 0-1 or 1-5. Categorical: pass, partial, fail. Boolean scores ignore this field.";
+const EVALUATOR_DIMENSION_MIN_HELP = "Lowest allowed number, such as 0.";
+
+const EVALUATOR_DIMENSION_MAX_HELP = "Highest allowed number, such as 1 or 5.";
+
+const EVALUATOR_DIMENSION_CATEGORY_HELP =
+  "Add each label reviewers or the judge can choose, such as pass, partial, or fail.";
 
 const EVALUATOR_INSTRUCTIONS_HELP =
   "Reviewers see these instructions above the score fields. Define what each score means and include examples of borderline or failing results.";
@@ -65,7 +67,7 @@ const EVALUATOR_ASSERTION_CONSTRAINT_HELP =
   "Enter the rule for that field: exists, an exact value, or a numeric comparison such as gte 0.8.";
 
 const EVALUATOR_JUDGE_PROMPT_HELP =
-  "Use a prompt from AI Observability → Prompts that tells the model how to score. Its production output schema must return every required score name above.";
+  "Choose a prompt from AI Observability → Prompts that tells the model how to score. Its production output schema must return every required score name above.";
 
 const EVALUATOR_LIVE_SAMPLE_HELP =
   "Choose what percentage of production traces to score automatically. Use 0 to keep live scoring off.";
@@ -126,6 +128,7 @@ export interface AiEvaluatorNewViewProps {
   instructions: string;
   isCreating: boolean;
   judgePromptName: string;
+  judgePromptOptions?: Array<{label: string; value: string}>;
   judgePromptStatus?: JudgePromptStatus;
   name: string;
   onAddDimension: () => void;
@@ -139,7 +142,6 @@ export interface AiEvaluatorNewViewProps {
   onLiveSampleRateChange: (value: number) => void;
   onNameChange: (value: string) => void;
   onRemoveDimension: (index: number) => void;
-  onTargetChange: (value: EvaluatorRecord["target"]) => void;
   onTypeChange: (value: EvaluatorRecord["type"]) => void;
   runModes: EvaluatorRecord["runModes"];
   schemaMismatchKey?: string;
@@ -173,6 +175,7 @@ const renderTypePanel = ({
   onAssertionPathChange,
   onInstructionsChange,
   onJudgePromptNameChange,
+  judgePromptOptions,
   onOpenPrompt,
   routeBase,
   schemaMismatchKey,
@@ -184,6 +187,7 @@ const renderTypePanel = ({
   judgeOutputSchema?: Record<string, unknown>;
   instructions?: string;
   judgePromptName?: string;
+  judgePromptOptions?: Array<{label: string; value: string}>;
   judgePromptStatus?: JudgePromptStatus;
   onAssertionConstraintChange?: (value: string) => void;
   onAssertionPathChange?: (value: string) => void;
@@ -230,11 +234,17 @@ const renderTypePanel = ({
             </Text>
           </Box>
         ) : (
-          <TextField
-            helperText={EVALUATOR_JUDGE_PROMPT_HELP}
+          <SelectField
+            helperText={
+              (judgePromptOptions ?? []).length === 0
+                ? "Create a prompt first, then choose it here."
+                : EVALUATOR_JUDGE_PROMPT_HELP
+            }
             onChange={onJudgePromptNameChange ?? (() => undefined)}
+            options={judgePromptOptions ?? []}
+            placeholder="Select a prompt"
             testID="ai-evaluator-judge-prompt"
-            title="Judge prompt name"
+            title="Judge prompt"
             value={judgePromptName ?? ""}
           />
         )}
@@ -252,7 +262,7 @@ const renderTypePanel = ({
           </Text>
         ) : promptStatus === "idle" ? (
           <Text color="secondaryDark" size="sm" testID="ai-evaluator-schema-idle">
-            Enter a judge prompt name to check its production output schema.
+            Select a judge prompt to check its production output schema.
           </Text>
         ) : (
           <Text color="success" size="sm">
@@ -421,6 +431,125 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
   );
 };
 
+interface DimensionScaleFieldsProps {
+  dimension: EvaluatorDimension;
+  index: number;
+  onDimensionChange: (index: number, dimension: EvaluatorDimension) => void;
+}
+
+const DimensionScaleFields: React.FC<DimensionScaleFieldsProps> = ({
+  dimension,
+  index,
+  onDimensionChange,
+}) => {
+  const [draftCategory, setDraftCategory] = useState("");
+  const bounds = parseNumericBounds(dimension.range);
+  const [min, setMin] = useState(bounds.min);
+  const [max, setMax] = useState(bounds.max);
+  const categories = parseCategories(dimension.range);
+
+  const handleMinChange = useCallback(
+    (value: string): void => {
+      setMin(value);
+      onDimensionChange(index, {...dimension, range: formatNumericRange(value, max)});
+    },
+    [dimension, index, max, onDimensionChange]
+  );
+
+  const handleMaxChange = useCallback(
+    (value: string): void => {
+      setMax(value);
+      onDimensionChange(index, {...dimension, range: formatNumericRange(min, value)});
+    },
+    [dimension, index, min, onDimensionChange]
+  );
+
+  const handleAddCategory = useCallback((): void => {
+    const next = draftCategory.trim();
+    if (!next) {
+      return;
+    }
+    if (categories.includes(next)) {
+      setDraftCategory("");
+      return;
+    }
+    onDimensionChange(index, {
+      ...dimension,
+      range: formatCategories([...categories, next]),
+    });
+    setDraftCategory("");
+  }, [categories, dimension, draftCategory, index, onDimensionChange]);
+
+  const handleRemoveCategory = useCallback(
+    (category: string): void => {
+      onDimensionChange(index, {
+        ...dimension,
+        range: formatCategories(categories.filter((entry) => entry !== category)),
+      });
+    },
+    [categories, dimension, index, onDimensionChange]
+  );
+
+  if (dimension.dataType === "boolean") {
+    return null;
+  }
+
+  if (dimension.dataType === "numeric") {
+    return (
+      <Box direction="row" gap={2} testID={`ai-evaluator-dimension-${index}-numeric`} wrap>
+        <TextField
+          helperText={EVALUATOR_DIMENSION_MIN_HELP}
+          onChange={handleMinChange}
+          testID={`ai-evaluator-dimension-${index}-min`}
+          title="Min"
+          value={min}
+        />
+        <TextField
+          helperText={EVALUATOR_DIMENSION_MAX_HELP}
+          onChange={handleMaxChange}
+          testID={`ai-evaluator-dimension-${index}-max`}
+          title="Max"
+          value={max}
+        />
+      </Box>
+    );
+  }
+
+  return (
+    <Box gap={2} testID={`ai-evaluator-dimension-${index}-categories`}>
+      <Box direction="row" gap={2} wrap>
+        <TextField
+          helperText={EVALUATOR_DIMENSION_CATEGORY_HELP}
+          onChange={setDraftCategory}
+          testID={`ai-evaluator-dimension-${index}-category-draft`}
+          title="Category"
+          value={draftCategory}
+        />
+        <Button
+          onClick={handleAddCategory}
+          testID={`ai-evaluator-dimension-${index}-add-category`}
+          text="Add category"
+        />
+      </Box>
+      {categories.map((category) => {
+        return (
+          <Box alignItems="center" direction="row" gap={2} key={category}>
+            <Text>{category}</Text>
+            <Button
+              onClick={() => {
+                handleRemoveCategory(category);
+              }}
+              testID={`ai-evaluator-dimension-${index}-remove-category-${category}`}
+              text="Remove category"
+              variant="ghost"
+            />
+          </Box>
+        );
+      })}
+    </Box>
+  );
+};
+
 export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
   assertionConstraint,
   assertionPath,
@@ -430,6 +559,7 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
   instructions,
   isCreating,
   judgePromptName,
+  judgePromptOptions = [],
   judgePromptStatus,
   name,
   onAddDimension,
@@ -443,7 +573,6 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
   onLiveSampleRateChange,
   onNameChange,
   onRemoveDimension,
-  onTargetChange,
   onTypeChange,
   runModes,
   schemaMismatchKey,
@@ -471,13 +600,36 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
 
   return (
     <Box gap={4} testID="ai-evaluator-new">
+      <EvaluatorSetupStep
+        description="Give teammates enough context to recognize and reuse this evaluator."
+        number={1}
+        testID="ai-evaluator-step-name"
+        title="Name the evaluator"
+      >
+        <TextField
+          helperText={EVALUATOR_NAME_HELP}
+          onChange={onNameChange}
+          testID="ai-evaluator-name"
+          title="Name"
+          value={name}
+        />
+        <TextField
+          helperText={EVALUATOR_DESCRIPTION_HELP}
+          multiline
+          onChange={onDescriptionChange ?? (() => undefined)}
+          rows={3}
+          testID="ai-evaluator-description"
+          title="Purpose (optional)"
+          value={description ?? ""}
+        />
+      </EvaluatorSetupStep>
       <Box border="default" gap={2} padding={4} rounding="md" testID="ai-evaluator-help-intro">
         <Heading size="sm">Create a reusable scoring rule</Heading>
         <Text color="secondaryDark">{EVALUATOR_NEW_INTRO}</Text>
       </Box>
       <EvaluatorSetupStep
         description="Choose whether a person, a deterministic JSON rule, or another model decides the score."
-        number={1}
+        number={2}
         testID="ai-evaluator-step-method"
         title="Choose how scoring happens"
       >
@@ -500,34 +652,21 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
           {EVALUATOR_TYPE_HELP[type]}
         </Text>
       </EvaluatorSetupStep>
+      {/* TODO: enable generation span and dataset item targets. */}
       <EvaluatorSetupStep
-        description="Select how much context is available when the evaluator makes its decision."
-        number={2}
+        description="Full traces are the only target available. Span and dataset item scoring are not enabled yet."
+        number={3}
         testID="ai-evaluator-step-target"
-        title="Choose what it evaluates"
+        title="What it evaluates"
       >
-        <Box direction="row" gap={2} wrap>
-          {EVALUATOR_TARGET_OPTIONS.map((option) => {
-            return (
-              <Button
-                key={option.value}
-                onClick={() => {
-                  onTargetChange(option.value);
-                }}
-                testID={`ai-evaluator-target-${option.value.replace(/\s+/g, "-")}`}
-                text={option.label}
-                variant={target === option.value ? "primary" : "secondary"}
-              />
-            );
-          })}
-        </Box>
+        <Badge status="neutral" value={target} />
         <Text color="secondaryDark" size="sm" testID="ai-evaluator-help-target">
-          {EVALUATOR_TARGET_HELP[target]}
+          {FULL_TRACE_TARGET_HELP}
         </Text>
       </EvaluatorSetupStep>
       <EvaluatorSetupStep
         description="Define exactly what appears in results. Each dimension is saved independently."
-        number={3}
+        number={4}
         testID="ai-evaluator-step-scores"
         title="Define the scores it returns"
       >
@@ -554,6 +693,7 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
                 onChange={(value) => {
                   onDimensionChange(index, {...dimension, key: value});
                 }}
+                testID={`ai-evaluator-dimension-${index}-key`}
                 title="Score name"
                 value={dimension.key}
               />
@@ -565,7 +705,7 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
                       <Button
                         key={dataType}
                         onClick={() => {
-                          onDimensionChange(index, {...dimension, dataType});
+                          onDimensionChange(index, dimensionForDataType(dimension, dataType));
                         }}
                         text={dataType}
                         variant={dimension.dataType === dataType ? "primary" : "ghost"}
@@ -577,13 +717,10 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
                   boolean is pass/fail, numeric is a number, categorical is a labeled bucket.
                 </Text>
               </Box>
-              <TextField
-                helperText={EVALUATOR_DIMENSION_RANGE_HELP}
-                onChange={(value) => {
-                  onDimensionChange(index, {...dimension, range: value});
-                }}
-                title="Scale or labels (optional)"
-                value={dimension.range ?? ""}
+              <DimensionScaleFields
+                dimension={dimension}
+                index={index}
+                onDimensionChange={onDimensionChange}
               />
               <Button
                 onClick={() => {
@@ -598,7 +735,7 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
       </EvaluatorSetupStep>
       <EvaluatorSetupStep
         description={methodStepDescription}
-        number={4}
+        number={5}
         testID="ai-evaluator-step-config"
         title="Configure the scoring method"
       >
@@ -608,6 +745,7 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
           evaluatorType: type,
           instructions,
           judgePromptName,
+          judgePromptOptions,
           judgePromptStatus,
           onAssertionConstraintChange,
           onAssertionPathChange,
@@ -618,7 +756,7 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
       </EvaluatorSetupStep>
       <EvaluatorSetupStep
         description={runStepDescription}
-        number={5}
+        number={6}
         testID="ai-evaluator-step-run"
         title="Choose where it runs"
       >
@@ -649,29 +787,6 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
             ) : undefined}
           </>
         )}
-      </EvaluatorSetupStep>
-      <EvaluatorSetupStep
-        description="Give teammates enough context to recognize and reuse this evaluator."
-        number={6}
-        testID="ai-evaluator-step-name"
-        title="Name the evaluator"
-      >
-        <TextField
-          helperText={EVALUATOR_NAME_HELP}
-          onChange={onNameChange}
-          testID="ai-evaluator-name"
-          title="Name"
-          value={name}
-        />
-        <TextField
-          helperText={EVALUATOR_DESCRIPTION_HELP}
-          multiline
-          onChange={onDescriptionChange ?? (() => undefined)}
-          rows={3}
-          testID="ai-evaluator-description"
-          title="Purpose (optional)"
-          value={description ?? ""}
-        />
       </EvaluatorSetupStep>
       {createError ? (
         <Text color="error" testID="ai-evaluator-create-error">

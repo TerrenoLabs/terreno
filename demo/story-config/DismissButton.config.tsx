@@ -3,6 +3,7 @@ import {DismissButtonDemo, DismissButtonSecondary} from "@stories/DismissButton.
 import {DismissButton} from "@terreno/ui";
 
 export const DismissButtonConfiguration: DemoConfiguration = {
+  usageExample: "import {DismissButton} from \"@terreno/ui\";\n\n<DismissButton />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

@@ -135,3 +135,9 @@ variable "mcp_max_instances" {
   type        = number
   default     = 10
 }
+
+variable "announcements_upload_token" {
+  description = "Bearer token for POST /announcements/import-release on the example backend. This default is documented so the example deployment can be tested without a Secret Manager lookup. Override it to rotate."
+  type        = string
+  default     = "terreno-example-announcement-upload"
+}

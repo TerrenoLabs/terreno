@@ -3,6 +3,7 @@ import {TableBooleanDemo, TableBooleanStates} from "@stories/TableBoolean.storie
 import {TableBoolean} from "@terreno/ui";
 
 export const TableBooleanConfiguration: DemoConfiguration = {
+  usageExample: "import {TableBoolean} from \"@terreno/ui\";\n\n<TableBoolean />",
   name: "Table boolean",
   component: TableBoolean,
   related: ["Table"],

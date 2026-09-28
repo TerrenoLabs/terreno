@@ -20,6 +20,22 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.7.0] - 2026-09-28
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.7.0.md`](mcp-server/src/docs/upgrades/57.7.0.md).
+
+### Changed
+
+- CircleCI is now the only continuous deployer for the Netlify demo, example frontend, and docs sites and for GCP terraform, Cloud Run backend/tasks, and MCP. The GitHub Actions deploy workflows are disabled for rollback only, and CircleCI deploy jobs fail instead of skipping when `terreno-netlify` or `terreno-gcp` is missing a value. CircleCI deploys record GitHub Deployments (same environment names as before, plus `docs` and `mcp-production`) when the `terreno-github-deployments` context holds `GITHUB_DEPLOYMENTS_TOKEN`.
+- `@terreno/ui`'s `Filter` is now `DropdownPanel`, reflecting that it is a general compositional dropdown (trigger + anchored panel + optional Apply/Clear/Cancel footer), not a filter-only control. `Filter` and `FilterProps` stay exported as deprecated aliases until Terreno 58; the `FilterSelectMenu` / `FilterBoolean` / `FilterAccordion` / `FilterChangesBadge` controls keep their names.
+- `DropdownPanel` no longer runs off screen. The panel right-aligns to its trigger when a left-aligned panel would cross the right viewport edge, clamps to an 8px screen margin, flips above the trigger when there is no usable room below, and scrolls its body (footer pinned) when the content is taller than the space available. `align` and `maxPanelHeight` override the automatic behavior, and `computeDropdownPanelLayout` is exported for callers that position their own panels.
+- `DropdownPanel` renders through the `TerrenoProvider` portal host on native, so the panel is no longer clipped inside scroll views or cards. Without a host it falls back to the previous inline overlay.
+- `DropdownPanel` triggers are now styleable: `triggerVariant` (any `Button` variant), `applyButtonVariant`, `triggerSize` on labeled triggers, `fullWidth`, and `renderTrigger` for a fully custom trigger.
+- `bun run prepush` now runs the local mirror of every CI job the branch triggers, using the CircleCI path-filter mapping. That covers package `test:coverage` plus the new-file LCOV gate, `ui` types, example-backend and example-frontend tests, every `repo-policies` step, rulesync drift, and the typedoc API reference. It runs every step even after a failure and prints a summary. Use `--dry-run` to see the plan and `--all` to run everything.
+- New `bun run check:test-isolation` blocks new `mock.module` calls in shared Bun test suites (see `docs/explanation/test-isolation.md`).
+- The lifecycle plugin now makes one commit per task after Roast `PASS` with no bookkeeping commits, keeps pushes out of Pick and Roast, has Pick list edge cases before coding, has Roast run the CI-equivalent package gate, and has Taste merge `master` only when the PR conflicts, a failure traces to base drift, or the branch is merge-ready.
+- Taste invoked directly by a human now repeats bounded reactions (at most 3 fix pushes and 3 hours of waiting) until `PASS`, `BLOCKED`, or `FAIL` instead of returning `PENDING`, and a directly invoked Brew starts Taste as its next stage.
+
 ## [57.6.1] - 2026-09-25
 
 ### Fixed

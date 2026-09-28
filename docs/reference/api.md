@@ -222,6 +222,7 @@ export const todoRouter = modelRouter("/todos", Todo, {
 ```
 
 Do not add `endpoints: (router) => { router.get(...) }` when an action fits.
+Action config supports `allowAnonymous: true` as a per-action override; it does not change authentication for CRUD or sibling actions.
 
 ## modelRouter array operations
 

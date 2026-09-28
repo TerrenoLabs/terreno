@@ -14,10 +14,15 @@ import {
 } from "@stories/Button.stories";
 import {Button} from "@terreno/ui";
 
+const BUTTON_USAGE_EXAMPLE = `import {Button} from "@terreno/ui";
+
+<Button onClick={() => {}} text="Save" />`;
+
 export const ButtonConfiguration: DemoConfiguration = {
   name: "Button",
   component: Button,
-  related: ["Cards", "Modals", "Table icon buttons"],
+  related: ["Card", "Modal", "Table icon button"],
+  usageExample: BUTTON_USAGE_EXAMPLE,
   description:
     "Buttons allow users to perform actions within a surface. They can be used alone for immediate action. Also known as CTA (call to action).",
   a11yNotes: [
@@ -126,7 +131,13 @@ export const ButtonConfiguration: DemoConfiguration = {
     },
   },
   stories: {
-    Variants: {render: () => <ButtonVariants />},
+    Variants: {
+      interactions: [
+        {action: "expectText", value: "Default/Primary"},
+        {action: "press", targetTestID: "button-variant-primary"},
+      ],
+      render: () => <ButtonVariants />,
+    },
     States: {render: () => <ButtonStates />},
     Sizes: {render: () => <ButtonSizes />},
     IconPosition: {render: () => <ButtonIconPosition />},
@@ -134,7 +145,7 @@ export const ButtonConfiguration: DemoConfiguration = {
     Confirmation: {render: () => <ConfirmationButton />},
     FullWidth: {render: () => <FullWidthButtons />},
     PressAnimations: {render: () => <ButtonPressAnimations />},
-    Multiline: {render: () => <MultilineButtons />},
+    Multiline: {render: () => <MultilineButtons />, showInDemo: false},
     WrapText: {render: () => <WrapTextButtons />},
   },
 };

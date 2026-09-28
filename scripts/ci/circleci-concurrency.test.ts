@@ -246,3 +246,23 @@ describe("CircleCI config parameter syntax", () => {
     }
   });
 });
+
+/** Names under the top-level `parameters:` block of a CircleCI config. */
+const topLevelParameterNames = (config: string): string[] => {
+  const block = config.split(/^parameters:\s*$/m)[1]?.split(/^\S/m)[0] ?? "";
+  return [...block.matchAll(/^ {2}([a-z0-9-]+):\s*$/gm)].map((match) => match[1] ?? "");
+};
+
+describe("setup → continuation parameters", (): void => {
+  it("declares every setup pipeline parameter in the continued config", (): void => {
+    // CircleCI forwards trigger parameters into the continuation; an undeclared
+    // one errors the pipeline with "Unexpected argument(s)".
+    const setupParameters = topLevelParameterNames(setupConfig);
+    const continueParameters = new Set(topLevelParameterNames(continueConfig));
+    assert.ok(setupParameters.includes("run-preview-cleanup"));
+    assert.deepEqual(
+      setupParameters.filter((name) => !continueParameters.has(name)),
+      []
+    );
+  });
+});

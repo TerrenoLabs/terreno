@@ -4,6 +4,7 @@ import {TableNumber} from "@terreno/ui";
 import {TableNumberDemo} from "../stories/TableNumber.stories";
 
 export const TableNumberConfiguration: DemoConfiguration = {
+  usageExample: "import {TableNumber} from \"@terreno/ui\";\n\n<TableNumber />",
   name: "Table number",
   component: TableNumber, // Replace with actual component reference
   related: ["Table"],

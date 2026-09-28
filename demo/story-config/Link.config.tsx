@@ -3,9 +3,10 @@ import {LinkDemo} from "@stories/Link.stories";
 import {Text} from "@terreno/ui";
 
 export const LinkConfiguration: DemoConfiguration = {
+  usageExample: "import {Text} from \"@terreno/ui\";\n\n<Text />",
   name: "Link",
   component: Text, // Replace with actual component reference
-  related: ["Hyperlink"],
+  related: ["Text"],
   description: "",
   a11yNotes: [""],
   category: "Component",

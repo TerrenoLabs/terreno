@@ -1,4 +1,5 @@
 import {describe, it} from "bun:test";
+import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import {StyleSheet} from "react-native";
 
@@ -48,5 +49,31 @@ describe("DemoHomeBanner", () => {
     assert.isAbove(calloutIndex, -1, "palette callout is rendered");
     assert.isAbove(bannerIndex, calloutIndex, "banner sits below the palette callout");
     assert.equal(firstCardIndex, bannerIndex + 1, "banner takes the first card slots");
+  });
+
+  it("filters the grid to Button and hides it for the Form category", async () => {
+    const rendered = renderWithTheme(<DemoHomePage onPress={() => {}} />);
+    await act(async () => {
+      fireEvent.changeText(rendered.getByTestId("demo-search"), "button");
+    });
+    assert.isOk(rendered.queryByTestId("demo-home-button"));
+    await act(async () => {
+      fireEvent.press(rendered.getByTestId("demo-category-Form"));
+    });
+    assert.isNull(rendered.queryByTestId("demo-home-button"));
+  });
+
+  it("shows input fields in the Form category and keeps Text out", async () => {
+    const rendered = renderWithTheme(<DemoHomePage onPress={() => {}} />);
+    await act(async () => {
+      fireEvent.press(rendered.getByTestId("demo-category-Form"));
+    });
+    assert.isOk(rendered.queryByTestId("demo-home-text-field"));
+    assert.isOk(rendered.queryByTestId("demo-home-select-field"));
+    assert.isOk(rendered.queryByTestId("demo-home-email-field"));
+    assert.isOk(rendered.queryByTestId("demo-home-markdown-editor-field"));
+    assert.isNull(rendered.queryByTestId("demo-category-Data Entry"));
+    assert.isNull(rendered.queryByTestId("demo-home-text"));
+    assert.isNull(rendered.queryByTestId("demo-home-button"));
   });
 });

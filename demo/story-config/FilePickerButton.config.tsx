@@ -3,9 +3,10 @@ import {FilePickerButtonDemo, FilePickerButtonDisabled} from "@stories/FilePicke
 import {FilePickerButton} from "@terreno/ui";
 
 export const FilePickerButtonConfiguration: DemoConfiguration = {
+  usageExample: "import {FilePickerButton} from \"@terreno/ui\";\n\n<FilePickerButton />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
-  category: "Component",
+  category: ["Component", "Form"],
   component: FilePickerButton,
   demo: () => <FilePickerButtonDemo />,
   demoOptions: {size: "lg"},

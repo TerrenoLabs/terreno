@@ -128,6 +128,22 @@ parameters:
   preview-cleanup-pr:
     type: string
     default: ""
+  # CircleCI forwards the trigger's pipeline parameters into the continued
+  # config, so every setup parameter in config.yml must be declared here too or
+  # API-triggered pipelines error with "Unexpected argument(s)". The setup job
+  # maps these onto force-cd / force-demo-deploy / preview-cleanup-pr / e2e-load.
+  run-e2e-load:
+    type: boolean
+    default: false
+  run-cd:
+    type: boolean
+    default: false
+  run-demo-deploy:
+    type: boolean
+    default: false
+  run-preview-cleanup:
+    type: string
+    default: ""
   eas-dev-target:
     type: enum
     enum: ["none", "example-frontend", "demo", "both"]

@@ -3,6 +3,7 @@ import {ActionSheetClosed, ActionSheetDemo} from "@stories/ActionSheet.stories";
 import {ActionSheet} from "@terreno/ui";
 
 export const ActionSheetConfiguration: DemoConfiguration = {
+  usageExample: "import {ActionSheet} from \"@terreno/ui\";\n\n<ActionSheet />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

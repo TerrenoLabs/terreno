@@ -16,6 +16,8 @@ export const SimpleAskCardConfiguration: DemoConfiguration = {
     "Any agent ask as a small-screen card: its title, its question, and up to three buttons that each send an exact answer. For watch-sized and other narrow layouts; native watch apps render the same `simple` JSON themselves.",
   interfaceName: "SimpleAskCardProps",
   name: "SimpleAskCard",
+  usageExample:
+    'import {SimpleAskCard} from "@terreno/ui";\n\n<SimpleAskCard card={pendingAsk.simple} onPress={handleButtonPress} />',
   props: {},
   related: ["AskCard", "GPTChat", "Button"],
   status: {

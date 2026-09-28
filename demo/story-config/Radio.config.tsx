@@ -3,9 +3,10 @@ import {RadioDemo, RadioSelected} from "@stories/Radio.stories";
 import {Radio} from "@terreno/ui";
 
 export const RadioConfiguration: DemoConfiguration = {
+  usageExample: "import {Radio} from \"@terreno/ui\";\n\n<Radio />",
   a11yNotes: ["Selected and unselected states should remain distinguishable without color alone."],
   additionalDocumentation: [],
-  category: "Component",
+  category: ["Component", "Form"],
   component: Radio,
   demo: () => <RadioDemo />,
   demoOptions: {size: "md"},
@@ -13,7 +14,7 @@ export const RadioConfiguration: DemoConfiguration = {
   interfaceName: "RadioProps",
   name: "Radio",
   props: {},
-  related: ["RadioField"],
+  related: ["Radio field"],
   status: {
     android: "ready",
     documentation: "ready",

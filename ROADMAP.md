@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-09-26T19:11:07.851Z.
+> dates are promised. Last updated: 2026-09-28T22:53:37.721Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -29,7 +29,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### ui
 
-- [Charts and dashboard primitives](https://github.com/TerrenoLabs/terreno/issues/1175) (Feature, In progress) — IP: [charts-and-dashboards](docs/implementationPlans/charts-and-dashboards.md) · Tasks: [charts-and-dashboards](docs/tasks/charts-and-dashboards.md)
+- [Charts and dashboard primitives](https://github.com/TerrenoLabs/terreno/issues/1175) (Feature, Shipped) — IP: [charts-and-dashboards](docs/implementationPlans/charts-and-dashboards.md) · Tasks: [charts-and-dashboards](docs/tasks/charts-and-dashboards.md)
 - [First-class dark mode](https://github.com/TerrenoLabs/terreno/issues/1176) (Feature, Planned)
 - [Native module baseline for the next major release](https://github.com/TerrenoLabs/terreno/issues/1026) (Breaking, Shipped) — IP: [native-module-baseline](docs/implementationPlans/native-module-baseline.md) · Tasks: [native-module-baseline](docs/tasks/native-module-baseline.md)
 
@@ -40,7 +40,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 ### mcp
 
 - [AI development loop (MCP Boost)](https://github.com/TerrenoLabs/terreno/issues/1014) (Feature, In review) — IP: [ai-dev-loop-boost](docs/implementationPlans/ai-dev-loop-boost.md) · Tasks: [ai-dev-loop-boost](docs/tasks/ai-dev-loop-boost.md)
-- [MCP Boost parity](https://github.com/TerrenoLabs/terreno/issues/1085) (Feature, In progress) — IP: [mcp-boost-parity](docs/implementationPlans/mcp-boost-parity.md)
+- [MCP Boost parity](https://github.com/TerrenoLabs/terreno/issues/1085) (Feature, Shipped) — IP: [mcp-boost-parity](docs/implementationPlans/mcp-boost-parity.md)
 
 ### docs
 
@@ -54,8 +54,9 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### dx
 
-- [create-terreno-app scaffolding CLI](https://github.com/TerrenoLabs/terreno/issues/1174) (Feature, In progress) — IP: [create-terreno-app](docs/implementationPlans/create-terreno-app.md) · Tasks: [create-terreno-app](docs/tasks/create-terreno-app.md)
-- [Migrate CI/CD to CircleCI](https://github.com/TerrenoLabs/terreno/issues/1088) (Improvement, In progress) — IP: [migrate-cicd-to-circleci](docs/implementationPlans/migrate-cicd-to-circleci.md) · Tasks: [migrate-cicd-to-circleci](docs/tasks/migrate-cicd-to-circleci.md)
+- [create-terreno-app scaffolding CLI](https://github.com/TerrenoLabs/terreno/issues/1174) (Feature, Shipped) — IP: [create-terreno-app](docs/implementationPlans/create-terreno-app.md) · Tasks: [create-terreno-app](docs/tasks/create-terreno-app.md)
+- [Demo workshop](https://github.com/TerrenoLabs/terreno/issues/1470) (Feature, Planned) — IP: [demo-workshop](docs/implementationPlans/demo-workshop.md) · Tasks: [demo-workshop](docs/tasks/demo-workshop.md)
+- [Migrate CI/CD to CircleCI](https://github.com/TerrenoLabs/terreno/issues/1088) (Improvement, Shipped) — IP: [migrate-cicd-to-circleci](docs/implementationPlans/migrate-cicd-to-circleci.md) · Tasks: [migrate-cicd-to-circleci](docs/tasks/migrate-cicd-to-circleci.md)
 - [Open source launch program](https://github.com/TerrenoLabs/terreno/issues/1094) (Improvement, In progress) — IP: [oss-launch-program](docs/implementationPlans/oss-launch-program.md)
 
 ## Target: Future

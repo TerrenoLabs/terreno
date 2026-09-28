@@ -1,38 +1,40 @@
 import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
-import {act, fireEvent, waitFor} from "@testing-library/react-native";
+import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
-// Filter.tsx reads `Platform.OS` through this ESM binding, so the web branch tests must mutate
+// DropdownPanel.tsx reads `Platform.OS` through this ESM binding, so the web branch tests must mutate
 // the same object the component observes.
-import {Platform as ImportedPlatform} from "react-native";
+import {Dimensions, Platform as ImportedPlatform, Pressable} from "react-native";
 
-import {Filter} from "./Filter";
+import {DropdownPanel} from "./DropdownPanel";
+import {PortalContext} from "./PortalHost";
 import {Text} from "./Text";
+import {ThemeProvider} from "./Theme";
 import {renderWithTheme} from "./test-utils";
 
-describe("Filter", () => {
+describe("DropdownPanel", () => {
   it("renders correctly with default props", () => {
     const {toJSON} = renderWithTheme(
-      <Filter>
+      <DropdownPanel>
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders the trigger label", () => {
     const {getByText} = renderWithTheme(
-      <Filter label="Filters">
+      <DropdownPanel label="Filters">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(getByText("Filters")).toBeTruthy();
   });
 
   it("renders a compact icon-only trigger without the label", () => {
     const {getByTestId, queryByText} = renderWithTheme(
-      <Filter iconOnly label="Filters" testID="f" triggerAccessibilityLabel="Filter Name">
+      <DropdownPanel iconOnly label="Filters" testID="f" triggerAccessibilityLabel="Filter Name">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     const trigger = getByTestId("f.trigger");
     expect(queryByText("Filters")).toBeNull();
@@ -44,9 +46,9 @@ describe("Filter", () => {
 
   it("opens the panel from the icon-only trigger", () => {
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <Filter iconOnly testID="f">
+      <DropdownPanel iconOnly testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(queryByTestId("f.panel")).toBeNull();
     fireEvent.press(getByTestId("f.trigger"));
@@ -55,16 +57,16 @@ describe("Filter", () => {
 
   it("keeps the panel closed by default and open with defaultOpen", () => {
     const closed = renderWithTheme(
-      <Filter testID="f">
+      <DropdownPanel testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(closed.queryByTestId("f.panel")).toBeNull();
 
     const open = renderWithTheme(
-      <Filter defaultOpen testID="f">
+      <DropdownPanel defaultOpen testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(open.queryByTestId("f.panel")).toBeTruthy();
     expect(open.getByText("Body")).toBeTruthy();
@@ -72,9 +74,9 @@ describe("Filter", () => {
 
   it("hides the footer when action buttons are disabled", () => {
     const {queryByTestId} = renderWithTheme(
-      <Filter defaultOpen showActionButtons={false} testID="f">
+      <DropdownPanel defaultOpen showActionButtons={false} testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(queryByTestId("f.apply")).toBeNull();
     expect(queryByTestId("f.clear")).toBeNull();
@@ -84,9 +86,9 @@ describe("Filter", () => {
   it("closes on outside click and calls onCancel", () => {
     const onCancel = mock();
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <Filter defaultOpen onCancel={onCancel} testID="f">
+      <DropdownPanel defaultOpen onCancel={onCancel} testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     fireEvent.press(getByTestId("f.backdrop"));
     expect(onCancel).toHaveBeenCalled();
@@ -96,9 +98,9 @@ describe("Filter", () => {
   it("calls onClear and keeps the panel open when Clear is pressed", () => {
     const onClear = mock();
     const {getByTestId} = renderWithTheme(
-      <Filter defaultOpen onClear={onClear} testID="f">
+      <DropdownPanel defaultOpen onClear={onClear} testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     fireEvent.press(getByTestId("f.clear"));
     expect(onClear).toHaveBeenCalled();
@@ -108,9 +110,9 @@ describe("Filter", () => {
   it("calls onApply and closes when Apply is pressed", async () => {
     const onApply = mock();
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <Filter defaultOpen onApply={onApply} testID="f">
+      <DropdownPanel defaultOpen onApply={onApply} testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     await act(async () => {
       fireEvent.press(getByTestId("f.apply"));
@@ -124,9 +126,9 @@ describe("Filter", () => {
   it("toggles the panel from the trigger when uncontrolled", async () => {
     const onOpenChange = mock();
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <Filter onOpenChange={onOpenChange} testID="f">
+      <DropdownPanel onOpenChange={onOpenChange} testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
 
     await act(async () => {
@@ -145,12 +147,12 @@ describe("Filter", () => {
   it("defers open state to the parent when controlled", async () => {
     const onOpenChange = mock();
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <Filter isOpen onOpenChange={onOpenChange} testID="f">
+      <DropdownPanel isOpen onOpenChange={onOpenChange} testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
 
-    // A controlled Filter must stay open until the parent flips `isOpen`, even after a
+    // A controlled DropdownPanel must stay open until the parent flips `isOpen`, even after a
     // dismissal that would close an uncontrolled panel.
     await act(async () => {
       fireEvent.press(getByTestId("f.cancel"));
@@ -161,9 +163,9 @@ describe("Filter", () => {
 
   it("renders only the requested footer buttons", () => {
     const {queryByTestId, getByTestId} = renderWithTheme(
-      <Filter defaultOpen showApplyButton={false} showClearButton={false} testID="f">
+      <DropdownPanel defaultOpen showApplyButton={false} showClearButton={false} testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(queryByTestId("f.clear")).toBeNull();
     expect(queryByTestId("f.apply")).toBeNull();
@@ -172,7 +174,7 @@ describe("Filter", () => {
 
   it("hides the footer when every button is disabled", () => {
     const {queryByTestId} = renderWithTheme(
-      <Filter
+      <DropdownPanel
         defaultOpen
         showApplyButton={false}
         showCancelButton={false}
@@ -180,7 +182,7 @@ describe("Filter", () => {
         testID="f"
       >
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(queryByTestId("f.clear")).toBeNull();
     expect(queryByTestId("f.apply")).toBeNull();
@@ -189,7 +191,7 @@ describe("Filter", () => {
 
   it("uses custom footer button labels", () => {
     const {getByText} = renderWithTheme(
-      <Filter
+      <DropdownPanel
         applyButtonText="Save"
         cancelButtonText="Dismiss"
         clearButtonText="Reset"
@@ -197,7 +199,7 @@ describe("Filter", () => {
         testID="f"
       >
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(getByText("Save")).toBeTruthy();
     expect(getByText("Dismiss")).toBeTruthy();
@@ -206,16 +208,16 @@ describe("Filter", () => {
 
   it("omits testIDs on the panel internals when no testID is provided", () => {
     const {queryByTestId, getByText} = renderWithTheme(
-      <Filter defaultOpen>
+      <DropdownPanel defaultOpen>
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
     expect(getByText("Apply")).toBeTruthy();
     expect(queryByTestId("f.panel")).toBeNull();
   });
 });
 
-describe("Filter web platform", () => {
+describe("DropdownPanel web platform", () => {
   const globalScope = globalThis as {document?: unknown; HTMLElement?: unknown};
   const originalDocument = globalScope.document;
   const originalHTMLElement = globalScope.HTMLElement;
@@ -239,9 +241,9 @@ describe("Filter web platform", () => {
 
   it("renders the fixed-position overlay once the trigger is measured", async () => {
     const {getByTestId, getByText} = renderWithTheme(
-      <Filter defaultOpen testID="f">
+      <DropdownPanel defaultOpen testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
 
     await waitFor(() => {
@@ -255,9 +257,9 @@ describe("Filter web platform", () => {
   it("closes from the web backdrop", async () => {
     const onCancel = mock();
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <Filter defaultOpen onCancel={onCancel} testID="f">
+      <DropdownPanel defaultOpen onCancel={onCancel} testID="f">
         <Text>Body</Text>
-      </Filter>
+      </DropdownPanel>
     );
 
     await waitFor(() => {
@@ -268,5 +270,89 @@ describe("Filter web platform", () => {
     });
     expect(onCancel).toHaveBeenCalled();
     expect(queryByTestId("f.panel")).toBeNull();
+  });
+});
+
+describe("DropdownPanel trigger", () => {
+  it("renders a custom trigger and toggles the panel from it", async () => {
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <DropdownPanel
+        renderTrigger={({isOpen, toggle}) => (
+          <Pressable onPress={toggle} testID="custom-trigger">
+            <Text>{isOpen ? "Close" : "Open"}</Text>
+          </Pressable>
+        )}
+        testID="f"
+      >
+        <Text>Body</Text>
+      </DropdownPanel>
+    );
+
+    expect(queryByTestId("f.trigger")).toBeNull();
+    await act(async () => {
+      fireEvent.press(getByTestId("custom-trigger"));
+    });
+    expect(getByTestId("f.panel")).toBeTruthy();
+  });
+
+  it("stretches the trigger wrapper when fullWidth is set", () => {
+    const {getByTestId} = renderWithTheme(
+      <DropdownPanel fullWidth testID="f">
+        <Text>Body</Text>
+      </DropdownPanel>
+    );
+    expect((getByTestId("f").props.style as {width?: string}).width).toBe("100%");
+  });
+});
+
+describe("DropdownPanel portal host", () => {
+  const manager = {mount: () => {}, unmount: () => {}, update: () => {}};
+
+  it("teleports the panel to the portal host when one is mounted", async () => {
+    const {getByTestId} = render(
+      <ThemeProvider>
+        <PortalContext.Provider value={manager as never}>
+          <DropdownPanel defaultOpen testID="f">
+            <Text>Body</Text>
+          </DropdownPanel>
+        </PortalContext.Provider>
+      </ThemeProvider>
+    );
+
+    await waitFor(() => {
+      expect(getByTestId("f.panel")).toBeTruthy();
+    });
+    expect(getByTestId("portal")).toBeTruthy();
+  });
+
+  it("renders inline when no portal host is mounted", async () => {
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <DropdownPanel defaultOpen testID="f">
+        <Text>Body</Text>
+      </DropdownPanel>
+    );
+    expect(getByTestId("f.panel")).toBeTruthy();
+    expect(queryByTestId("portal")).toBeNull();
+  });
+});
+
+describe("DropdownPanel viewport clamping", () => {
+  const originalGet = Dimensions.get;
+
+  afterEach(() => {
+    (Dimensions as {get: typeof originalGet}).get = originalGet;
+  });
+
+  it("keeps a panel wider than the viewport inside the screen margin", () => {
+    (Dimensions as {get: unknown}).get = () => ({fontScale: 1, height: 600, scale: 1, width: 240});
+    const {getByTestId} = renderWithTheme(
+      <DropdownPanel defaultOpen testID="f" width={320}>
+        <Text>Body</Text>
+      </DropdownPanel>
+    );
+    const style = getByTestId("f.panel").props.style as {maxHeight?: number; width?: number};
+    // A 320px panel cannot fit a 240px screen, so it renders at the margin-to-margin width.
+    expect(style.width).toBe(224);
+    expect(style.maxHeight).toBeGreaterThan(0);
   });
 });

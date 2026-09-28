@@ -1,6 +1,6 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
-exports[`Filter renders correctly with default props 1`] = `
+exports[`DropdownPanel renders correctly with default props 1`] = `
 {
   "$$typeof": Symbol(react.test.json),
   "children": [
@@ -141,6 +141,7 @@ exports[`Filter renders correctly with default props 1`] = `
         },
       ],
       "props": {
+        "collapsable": false,
         "ref": {
           "current": null,
         },
@@ -153,6 +154,7 @@ exports[`Filter renders correctly with default props 1`] = `
   "props": {
     "style": {
       "position": "relative",
+      "width": undefined,
     },
     "testID": undefined,
   },

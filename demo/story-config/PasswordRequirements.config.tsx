@@ -6,6 +6,7 @@ import {
 import {PasswordRequirements} from "@terreno/ui";
 
 export const PasswordRequirementsConfiguration: DemoConfiguration = {
+  usageExample: "import {PasswordRequirements} from \"@terreno/ui\";\n\n<PasswordRequirements />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",
@@ -16,7 +17,7 @@ export const PasswordRequirementsConfiguration: DemoConfiguration = {
   interfaceName: "PasswordRequirementsProps",
   name: "PasswordRequirements",
   props: {},
-  related: ["SignUpScreen", "PasswordField"],
+  related: ["SignUpScreen", "Password field"],
   status: {
     android: "ready",
     documentation: "ready",

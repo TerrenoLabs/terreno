@@ -19,7 +19,7 @@ import type {Model} from "mongoose";
 import {registerAnnouncementHelpRoutes} from "./helpRoutes";
 import {Announcement, toAnnouncementPublic} from "./models/announcement";
 import {AnnouncementAcknowledgement} from "./models/announcementAcknowledgement";
-import {AnnouncementClickEvent, isValidClickAction} from "./models/announcementClickEvent";
+import {AnnouncementClickEvent} from "./models/announcementClickEvent";
 import {AnnouncementImpression, isValidPlatform} from "./models/announcementImpression";
 import {fetchAnnouncementOverview, parseOverviewPagination} from "./overview";
 import {
@@ -31,6 +31,17 @@ import {
   passesMinBuildNumber,
   selectPendingAnnouncements,
 } from "./pending";
+import {
+  announcementReleaseImportSchema,
+  importAnnouncementRelease,
+  requireAnnouncementUploadAccess,
+} from "./releaseImport";
+import {
+  announcementClickBodySchema,
+  announcementClickPlatformSchema,
+  announcementImpressionBodySchema,
+  parseAnnouncementBody,
+} from "./requestBodies";
 import type {
   AcknowledgementPolicy,
   AnnouncementDocument,
@@ -94,16 +105,6 @@ const hasPrimaryAction = (announcement: AnnouncementDocument): boolean => {
   const label = announcement.primaryAction?.label?.trim();
   const url = announcement.primaryAction?.url?.trim();
   return Boolean(label && url);
-};
-
-const resolveClickPlatform = (req: Request, bodyPlatform: unknown): AnnouncementPlatform => {
-  if (bodyPlatform !== undefined && bodyPlatform !== null) {
-    if (!isValidPlatform(bodyPlatform)) {
-      throw new APIError({status: 400, title: "Invalid platform"});
-    }
-    return bodyPlatform;
-  }
-  return parsePlatform(req);
 };
 
 const requireVisibleAnnouncement = async ({
@@ -254,6 +255,22 @@ export class AnnouncementsApp implements TerrenoPlugin {
 
     const routerOptions: ModelRouterOptions<AnnouncementDocument> = {
       ...(openApi ? {openApi: openApi as OpenApiMiddleware} : {}),
+      collectionActions: {
+        "import-release": {
+          allowAnonymous: true,
+          body: announcementReleaseImportSchema,
+          description:
+            "Idempotently create or update a release pack. Defaults to drafts; set publish=true to publish.",
+          handler: async ({body, req}) => {
+            requireAnnouncementUploadAccess({req, uploadToken: this.options.uploadToken});
+            return importAnnouncementRelease({input: body});
+          },
+          method: "POST",
+          permissions: [Permissions.IsAny],
+          summary: "Import a product release announcement pack",
+          tag: "announcements",
+        },
+      },
       permissions: {
         create: [Permissions.IsAdmin],
         delete: [Permissions.IsAdmin],
@@ -434,8 +451,11 @@ export class AnnouncementsApp implements TerrenoPlugin {
         }
 
         const userId = getUserId(user as {_id?: unknown; id?: string});
-        const bodyPlatform = (req.body as {platform?: unknown})?.platform;
-        const platform = isValidPlatform(bodyPlatform) ? bodyPlatform : parsePlatform(req);
+        const body = parseAnnouncementBody({
+          body: req.body,
+          schema: announcementImpressionBodySchema,
+        });
+        const platform = body.platform ?? parsePlatform(req);
         const announcement = await requireVisibleAnnouncement({
           announcement: await Announcement.findById(req.params.id),
           isStaff,
@@ -467,8 +487,11 @@ export class AnnouncementsApp implements TerrenoPlugin {
         }
 
         const userId = getUserId(user as {_id?: unknown; id?: string});
-        const body = req.body as {action?: unknown; platform?: unknown};
-        const platform = resolveClickPlatform(req, body.platform);
+        const {platform: bodyPlatform} = parseAnnouncementBody({
+          body: req.body,
+          schema: announcementClickPlatformSchema,
+        });
+        const platform = bodyPlatform ?? parsePlatform(req);
         const announcement = await requireVisibleAnnouncement({
           announcement: await Announcement.findById(req.params.id),
           isStaff,
@@ -478,9 +501,7 @@ export class AnnouncementsApp implements TerrenoPlugin {
           user,
         });
 
-        if (!isValidClickAction(body.action)) {
-          throw new APIError({status: 400, title: "Invalid click action"});
-        }
+        const body = parseAnnouncementBody({body: req.body, schema: announcementClickBodySchema});
 
         if (!hasPrimaryAction(announcement)) {
           throw new APIError({status: 400, title: "Announcement has no primary action"});

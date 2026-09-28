@@ -54,6 +54,7 @@
     // Backwards-compatible public aliases intentionally point at the same implementation.
     "api/src/api.ts": ["duplicates"],
     "api/src/rbac/middleware.ts": ["duplicates"],
+    "ui/src/DropdownPanel.tsx": ["duplicates"],
     "mcp-server/src/docs/templates/**": ["files", "exports", "types"],
     // Tests load this CLI through createRequire(); Knip does not see those CJS exports.
     ".github/scripts/prune-cloud-run-not-ready-traffic.js": ["exports"]

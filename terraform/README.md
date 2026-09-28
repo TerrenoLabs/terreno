@@ -18,7 +18,7 @@ It is applied by **[Google Cloud Infrastructure Manager](https://cloud.google.co
   OIDC service account. The private tasks Cloud Run service executes callbacks;
   Cloud Run worker pools are not used because they have no HTTP ingress. The
   project default Compute Engine SA is not an enqueuer.
-- Secret Manager containers for backend sensitive env vars. Values are seeded out-of-band; CircleCI deploy jobs mount them by secret reference.
+- Secret Manager containers for backend sensitive env vars. Values are seeded out-of-band; CircleCI deploy jobs mount them by secret reference. `terreno-backend-example-announcements-upload-token` is the exception: Terraform writes the default `terreno-example-announcement-upload` so the example import API can be tested without a manual seed.
 
 The pre-existing `EXAMPLE_*` Secret Manager secrets (`EXAMPLE_MONGO_CONNECTION`, `EXAMPLE_TOKEN_SECRET`, `EXAMPLE_REFRESH_TOKEN_SECRET`) feeding `MONGO_URI`/`TOKEN_SECRET`/`REFRESH_TOKEN_SECRET` are not yet Terraform-managed but already use proper SM mounts. Terraform grants the backend runtime access to the two legacy JWT secrets because Cloud Run validates existing mounts before it applies a revised template. The secret containers can be imported in a follow-up. The MCP server's `SENTRY_DSN` is also still inline-from-GH-secret and could be migrated.
 

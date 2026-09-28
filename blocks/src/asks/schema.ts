@@ -198,10 +198,11 @@ const checkSelectMany = (input: ChoiceRuleInput, ctx: z.RefinementCtx): void => 
     );
   }
   if (min > Math.min(max, choiceCount)) {
-    const limit =
-      input.maxSelected === undefined
-        ? `the ${pluralOptions(choiceCount)} the ask offers`
-        : `maxSelected (${max})`;
+    const isMaxSelectedBinding =
+      input.maxSelected !== undefined && input.maxSelected <= choiceCount;
+    const limit = isMaxSelectedBinding
+      ? `maxSelected (${max})`
+      : `the ${pluralOptions(choiceCount)} the ask offers`;
     ctx.addIssue(
       askIssue({
         code: "RANGE_INVALID",

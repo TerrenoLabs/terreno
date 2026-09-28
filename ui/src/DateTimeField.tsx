@@ -444,6 +444,18 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
   const [year, setYear] = useState("");
   const [hour, setHour] = useState("");
   const [minute, setMinute] = useState("");
+  // Whether the minute's "00" came from the user clearing the segment rather than from a value.
+  const isMinuteClearedRef = useRef(false);
+  // The last value this field emitted, so a controlled parent passing it back is not taken as
+  // an external change.
+  const lastEmittedRef = useRef<string | undefined>(undefined);
+  const emitChange = useCallback(
+    (next: string): void => {
+      lastEmittedRef.current = next;
+      onChange(next);
+    },
+    [onChange]
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<number, string | undefined>>({});
   const [localTimezone, setLocalTimezone] = useState(
     providedTimezone ?? DateTime.local().zoneName ?? "UTC"
@@ -663,8 +675,9 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
 
   /**
    * Tells `onEntryStatusChange` what the segments hold after a typed change: nothing, an entry
-   * that is unfinished or has a segment error, or a complete value. A minute of "00" alone counts
-   * as empty, because clearing the minute segment resets it to "00".
+   * that is unfinished or has a segment error, or a complete value. Clearing the minute segment
+   * resets it to "00", so a "00" minute counts as empty only when the user cleared it; the "00"
+   * of an on-the-hour value is still part of the entry.
    */
   const reportEntryStatus = useCallback(
     (
@@ -677,7 +690,10 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       const next = {day, hour, minute, month, year, ...override};
       const dateParts = type === "time" ? [] : [next.month, next.day, next.year];
       const timeParts = type === "date" ? [] : [next.hour];
-      const hasMinute = type !== "date" && next.minute !== "" && next.minute !== "00";
+      const hasMinute =
+        type !== "date" &&
+        next.minute !== "" &&
+        !(next.minute === "00" && isMinuteClearedRef.current);
       if (![...dateParts, ...timeParts].some(Boolean) && !hasMinute) {
         onEntryStatusChange("empty");
         return;
@@ -706,6 +722,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
         // This lets users freely edit or clear the minute field without breaking the time format.
         const finalValue = numericValue === "" ? "00" : numericValue.slice(-2);
         const minuteNum = parseInt(finalValue, 10);
+        isMinuteClearedRef.current = numericValue === "";
 
         // Update the minute state so the UI reflects the latest input,
         // even if it's temporarily invalid
@@ -728,7 +745,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
           if (result) {
             const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
             if (result !== currentValueUTC) {
-              onChange(result);
+              emitChange(result);
             }
           }
         } else {
@@ -795,7 +812,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
           if (result) {
             const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
             if (result !== currentValueUTC) {
-              onChange(result);
+              emitChange(result);
             }
           }
         }
@@ -811,7 +828,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       type,
       getFieldConfigs,
       getISOFromFields,
-      onChange,
+      emitChange,
       value,
       validateField,
       month,
@@ -831,7 +848,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
     (inputDate: string) => {
       // Handle clear case - empty string should clear the field
       if (!inputDate || inputDate === "") {
-        onChange("");
+        emitChange("");
         onEntryStatusChange?.("empty");
         setShowDate(false);
         return;
@@ -858,6 +875,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
         hourNum = hourNum === 0 ? 12 : hourNum;
         setHour(hourNum.toString().padStart(2, "0"));
         setMinute(parsedDate.minute.toString().padStart(2, "0"));
+        isMinuteClearedRef.current = false;
       }
 
       // Normalize emitted value to ISO (UTC for date-only)
@@ -868,11 +886,11 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
               .set({millisecond: 0, second: 0})
               .toISO()
           : parsedDate.set({millisecond: 0, second: 0}).toUTC().toISO();
-      onChange(normalized ?? "");
+      emitChange(normalized ?? "");
       onEntryStatusChange?.("valid");
       setShowDate(false);
     },
-    [onChange, onEntryStatusChange, type]
+    [emitChange, onEntryStatusChange, type]
   );
 
   /**
@@ -885,14 +903,14 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       // Compare in UTC to avoid timezone issues
       const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
       if (iso && iso !== currentValueUTC) {
-        onChange(iso);
+        emitChange(iso);
       }
       reportEntryStatus({...pendingValueRef.current}, fieldErrors);
 
       // Clear the pending value after processing
       pendingValueRef.current = undefined;
     },
-    [getISOFromFields, onChange, value, reportEntryStatus, fieldErrors]
+    [getISOFromFields, emitChange, value, reportEntryStatus, fieldErrors]
   );
 
   // Handle external value changes
@@ -931,6 +949,12 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       hourNum = hourNum === 0 ? 12 : hourNum;
       setHour(hourNum.toString().padStart(2, "0"));
       setMinute(parsedDate.minute.toString().padStart(2, "0"));
+      const lastEmitted = lastEmittedRef.current
+        ? DateTime.fromISO(lastEmittedRef.current)
+        : undefined;
+      if (!lastEmitted?.isValid || lastEmitted.toMillis() !== parsedDate.toMillis()) {
+        isMinuteClearedRef.current = false;
+      }
     }
   }, [value, type, timezone]);
 
@@ -1002,10 +1026,10 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       const iso = getISOFromFields({amPm: newAmPm});
       const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
       if (iso && iso !== currentValueUTC) {
-        onChange(iso);
+        emitChange(iso);
       }
     },
-    [getISOFromFields, value, onChange]
+    [getISOFromFields, value, emitChange]
   );
 
   /** Handles timezone changes from the TimezonePicker, recomputes and emits the ISO value. */
@@ -1019,10 +1043,10 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       const iso = getISOFromFields({timezone: tz});
       const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
       if (iso && iso !== currentValueUTC) {
-        onChange(iso);
+        emitChange(iso);
       }
     },
-    [getISOFromFields, value, onChange, onTimezoneChange]
+    [getISOFromFields, value, emitChange, onTimezoneChange]
   );
 
   const openActionSheet = useCallback((): void => {

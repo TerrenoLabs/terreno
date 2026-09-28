@@ -1017,6 +1017,68 @@ describe("AskCard", () => {
       );
     });
 
+    it("keeps Submit disabled when the hour of an on-the-hour time is cleared, and keeps the time", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const input: FormAskInput = {
+        fields: [{default: "09:00", id: "reminder", label: "Reminder", type: "time"}],
+        prompt: "When should I remind you?",
+      };
+      const card = renderCard({ask: pendingForm(input), onSubmit});
+      const reminder = within(card.getByTestId("ask-card-form-field-reminder"));
+      assert.equal(reminder.getByPlaceholderText("mm").props.value, "00");
+
+      act(() => {
+        fireEvent.changeText(reminder.getByPlaceholderText("hh"), "");
+      });
+      assert.isOk(card.getByText("Enter a complete time, or clear it."));
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+
+      act(() => {
+        fireEvent.changeText(reminder.getByPlaceholderText("hh"), "11");
+      });
+      act(() => {
+        fireEvent(reminder.getByPlaceholderText("hh"), "blur");
+      });
+      assert.isNull(card.queryByText("Enter a complete time, or clear it."));
+      await press(card.getByTestId("ask-card-submit"));
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {
+        action: "accept",
+        content: {values: {reminder: "11:00"}},
+      });
+    });
+
+    it("clears a time and a datetime cleared minute first, so Submit sends neither", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const input: FormAskInput = {
+        fields: [
+          {default: "09:30", id: "reminder", label: "Reminder", type: "time"},
+          {default: "2026-10-01T13:30:00Z", id: "meeting", label: "Meeting", type: "datetime"},
+        ],
+        prompt: "When should I remind you?",
+      };
+      const card = renderCard({ask: pendingForm(input), onSubmit});
+      const segments = {
+        meeting: ["mm", "MM", "DD", "YYYY", "hh"],
+        reminder: ["mm", "hh"],
+      };
+      for (const [id, placeholders] of Object.entries(segments)) {
+        const field = within(card.getByTestId(`ask-card-form-field-${id}`));
+        for (const placeholder of placeholders) {
+          act(() => {
+            fireEvent.changeText(field.getByPlaceholderText(placeholder), "");
+          });
+        }
+      }
+
+      assert.isNull(card.queryByText("Enter a complete time, or clear it."));
+      assert.isNull(card.queryByText("Enter a complete date and time, or clear it."));
+      await press(card.getByTestId("ask-card-submit"));
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {
+        action: "accept",
+        content: {values: {}},
+      });
+    });
+
     it("keeps the shown time when the user picks another time zone", async () => {
       const onSubmit = mock(async (_submission: AskSubmission) => {});
       const card = renderCard({ask: pendingForm(DEFAULTS_INPUT), onSubmit});

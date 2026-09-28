@@ -302,6 +302,51 @@ describe("validateAskInput messages", () => {
     ]);
   });
 
+  it("names the offered choices as the limit when minSelected and maxSelected are both above them", () => {
+    expect(
+      validateAskInput({
+        input: {
+          allowOther: true,
+          maxSelected: 5,
+          minSelected: 4,
+          options: TWO_OPTIONS,
+          prompt: "Pick.",
+          select: "many",
+        },
+        kind: "choice",
+      })
+    ).toEqual([
+      {
+        code: "RANGE_INVALID",
+        fix: "Set maxSelected to 3 or fewer, or add options.",
+        message: "maxSelected is 5, but the ask offers 3 choices.",
+        path: "maxSelected",
+      },
+      {
+        code: "RANGE_INVALID",
+        fix: "Lower minSelected, or raise maxSelected and add options.",
+        message: "minSelected (4) is more than the 3 choices the ask offers.",
+        path: "minSelected",
+      },
+    ]);
+  });
+
+  it("names the offered choices as the limit when minSelected is above them without maxSelected", () => {
+    expect(
+      validateAskInput({
+        input: {minSelected: 3, options: TWO_OPTIONS, prompt: "Pick.", select: "many"},
+        kind: "choice",
+      })
+    ).toEqual([
+      {
+        code: "RANGE_INVALID",
+        fix: "Lower minSelected, or raise maxSelected and add options.",
+        message: "minSelected (3) is more than the 2 choices the ask offers.",
+        path: "minSelected",
+      },
+    ]);
+  });
+
   it("points select one asks with many fields to select many", () => {
     expect(
       validateAskInput({

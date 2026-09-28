@@ -26,6 +26,24 @@ const DECIMAL_TEXT = /^-?(?:\d+\.?\d*|\.\d+)$/;
 const TIME_FORMAT = "HH:mm";
 const WHITESPACE = /\s+/g;
 
+const UNFINISHED_ENTRY_TEXT: Record<DateFieldType, string> = {
+  date: "Enter a complete date, or clear it.",
+  datetime: "Enter a complete date and time, or clear it.",
+  time: "Enter a complete time, or clear it.",
+};
+
+/**
+ * Field ids whose date control holds an unfinished or invalid entry, such as "0 / 5 / 026". The
+ * draft cannot hold such an entry, so these block Submit until the user finishes or clears them.
+ */
+export type UnfinishedEntries = Record<string, true>;
+
+/** What a date field says while its control holds an unfinished entry; undefined for other types. */
+export const unfinishedEntryText = (field: FormField): string | undefined =>
+  field.type === "date" || field.type === "time" || field.type === "datetime"
+    ? UNFINISHED_ENTRY_TEXT[field.type]
+    : undefined;
+
 /** The draft a form starts from: each field's default, or empty. Checkboxes start unchecked. */
 export const initialFormDraft = (input: FormAskInput): FormDraft =>
   Object.fromEntries(

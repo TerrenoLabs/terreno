@@ -11,6 +11,7 @@ import {useCallback, useMemo, useState} from "react";
 import {BooleanField} from "../BooleanField";
 import {Box} from "../Box";
 import {Button} from "../Button";
+import type {DateTimeEntryStatus} from "../Common";
 import {DateTimeField} from "../DateTimeField";
 import {MultiselectField} from "../MultiselectField";
 import {SelectField} from "../SelectField";
@@ -28,6 +29,8 @@ import {
   initialFormDraft,
   isFormFieldError,
   toPickerValue,
+  type UnfinishedEntries,
+  unfinishedEntryText,
 } from "./askFormDraft";
 import type {ChatAsk} from "./askTypes";
 
@@ -61,6 +64,7 @@ interface FormFieldControlProps {
   errorText?: string;
   field: FormField;
   onChange: (id: string, value: FormDraftValue) => void;
+  onEntryStatusChange: (id: string, status: DateTimeEntryStatus) => void;
   onTimezoneChange: (id: string, timezone: string) => void;
   testID: string;
   timezone: string;
@@ -73,6 +77,7 @@ const FormFieldControl = ({
   errorText,
   field,
   onChange,
+  onEntryStatusChange,
   onTimezoneChange,
   testID,
   timezone,
@@ -131,6 +136,7 @@ const FormFieldControl = ({
             }
             onChange(field.id, fromPickerValue({iso, timezone: activeTimezone, type: field.type}));
           }}
+          onEntryStatusChange={(status) => onEntryStatusChange(field.id, status)}
           onTimezoneChange={(nextTimezone) => {
             activeTimezone = nextTimezone;
             onTimezoneChange(field.id, nextTimezone);
@@ -165,8 +171,9 @@ const FormFieldControl = ({
 
 /**
  * Fill in a form's fields and submit them at once. Each field uses the `@terreno/ui` control for
- * its type. Submit is enabled once the answer passes the ask's rules; a field says what is wrong
- * after the user edits it, and the host's `errors` for a field show on that field.
+ * its type. Submit is enabled once the answer passes the ask's rules and no date field holds an
+ * unfinished entry; a field says what is wrong after the user edits it, and the host's `errors`
+ * for a field show on that field.
  */
 export const AskForm: React.FC<AskFormProps> = ({
   ask,
@@ -181,6 +188,7 @@ export const AskForm: React.FC<AskFormProps> = ({
   const [touched, setTouched] = useState<Record<string, true>>({});
   const [editedSinceErrors, setEditedSinceErrors] = useState<EditedSinceErrors>({ids: {}});
   const [timezones, setTimezones] = useState<Record<string, string>>({});
+  const [unfinished, setUnfinished] = useState<UnfinishedEntries>({});
   const isAnswering = pendingActionId !== undefined;
   const renderButton = useAnswerButton({isDisabled, onAnswer, pendingActionId, testID});
 
@@ -209,6 +217,28 @@ export const AskForm: React.FC<AskFormProps> = ({
     [errors, isAnswering, isDisabled]
   );
 
+  const handleEntryStatusChange = useCallback(
+    (id: string, status: DateTimeEntryStatus): void => {
+      if (isDisabled || isAnswering) {
+        return;
+      }
+      setUnfinished((previous) => {
+        if (status === "invalid") {
+          return previous[id] ? previous : {...previous, [id]: true};
+        }
+        if (!previous[id]) {
+          return previous;
+        }
+        const {[id]: _finished, ...rest} = previous;
+        return rest;
+      });
+      if (status === "empty") {
+        handleChange(id, "");
+      }
+    },
+    [handleChange, isAnswering, isDisabled]
+  );
+
   const handleTimezoneChange = useCallback((id: string, timezone: string): void => {
     setTimezones((previous) => ({...previous, [id]: timezone}));
   }, []);
@@ -219,6 +249,9 @@ export const AskForm: React.FC<AskFormProps> = ({
   );
 
   const fieldErrorText = (field: FormField): string | undefined => {
+    if (unfinished[field.id]) {
+      return unfinishedEntryText(field);
+    }
     if (touched[field.id]) {
       const clientText = formFieldErrorText({errors: clientErrors, field});
       if (clientText) {
@@ -237,6 +270,7 @@ export const AskForm: React.FC<AskFormProps> = ({
             errorText={fieldErrorText(field)}
             field={field}
             onChange={handleChange}
+            onEntryStatusChange={handleEntryStatusChange}
             onTimezoneChange={handleTimezoneChange}
             testID={`${testID}-field-${field.id}`}
             timezone={timezones[field.id] ?? localTimezone()}
@@ -253,6 +287,7 @@ export const AskForm: React.FC<AskFormProps> = ({
           disabled={
             isDisabled ||
             clientErrors.length > 0 ||
+            Object.keys(unfinished).length > 0 ||
             (isAnswering && pendingActionId !== SUBMIT_ACTION_ID)
           }
           loading={pendingActionId === SUBMIT_ACTION_ID}

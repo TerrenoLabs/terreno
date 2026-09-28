@@ -900,6 +900,120 @@ describe("AskCard", () => {
       });
     });
 
+    it("keeps Submit disabled while the date holds an unfinished entry, and sends it once complete", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingForm(INVOICE_INPUT), onSubmit});
+      const start = within(card.getByTestId("ask-card-form-field-start"));
+      const typeDate = (month: string, dayOfMonth: string, fullYear: string): void => {
+        act(() => {
+          fireEvent.changeText(start.getByPlaceholderText("MM"), month);
+          fireEvent.changeText(start.getByPlaceholderText("DD"), dayOfMonth);
+          fireEvent.changeText(start.getByPlaceholderText("YYYY"), fullYear);
+        });
+        act(() => {
+          fireEvent(start.getByPlaceholderText("YYYY"), "blur");
+        });
+      };
+      typeInto(card, "ask-card-field-company", "Acme");
+      assert.isFalse(isDisabled(card.getByTestId("ask-card-submit")));
+
+      typeDate("0", "5", "026");
+      assert.isOk(card.getByText("Enter a complete date, or clear it."));
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+
+      typeDate("10", "15", "2026");
+      assert.isNull(card.queryByText("Enter a complete date, or clear it."));
+      await press(card.getByTestId("ask-card-submit"));
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {
+        action: "accept",
+        content: {values: {company: "Acme", notify: true, start: "2026-10-15"}},
+      });
+    });
+
+    it("keeps Submit disabled after the user clears a datetime's hour", () => {
+      const card = renderCard({ask: pendingForm(DEFAULTS_INPUT)});
+      typeInto(card, "ask-card-field-email", "ada@example.com");
+      const meeting = within(card.getByTestId("ask-card-form-field-meeting"));
+
+      act(() => {
+        fireEvent.changeText(meeting.getByPlaceholderText("hh"), "");
+      });
+      assert.isOk(card.getByText("Enter a complete date and time, or clear it."));
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+    });
+
+    it("keeps Submit disabled while number or phone text does not parse", () => {
+      const card = renderCard({ask: pendingForm(DEFAULTS_INPUT)});
+      typeInto(card, "ask-card-field-email", "ada@example.com");
+      assert.isFalse(isDisabled(card.getByTestId("ask-card-submit")));
+
+      typeInto(card, "ask-card-field-phone", "555-01");
+      assert.isOk(card.getByText("Enter a valid phone number."));
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+      typeInto(card, "ask-card-field-phone", "");
+
+      const invoice = renderCard({ask: pendingForm(INVOICE_INPUT)});
+      typeInto(invoice, "ask-card-field-company", "Acme");
+      typeInto(invoice, "ask-card-field-seats", "12abc");
+      assert.isOk(invoice.getByText("Enter a whole number."));
+      assert.isTrue(isDisabled(invoice.getByTestId("ask-card-submit")));
+    });
+
+    it("drops the date only when the user clears every part of it", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingForm(INVOICE_INPUT), onSubmit});
+      const start = within(card.getByTestId("ask-card-form-field-start"));
+      typeInto(card, "ask-card-field-company", "Acme");
+      act(() => {
+        fireEvent.changeText(start.getByPlaceholderText("MM"), "10");
+      });
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+
+      act(() => {
+        fireEvent.changeText(start.getByPlaceholderText("MM"), "");
+      });
+      assert.isNull(card.queryByText("Enter a complete date, or clear it."));
+      await press(card.getByTestId("ask-card-submit"));
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {
+        action: "accept",
+        content: {values: {company: "Acme", notify: true}},
+      });
+    });
+
+    it("keeps Submit disabled while a time or datetime holds an unfinished entry", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingForm(DEFAULTS_INPUT), onSubmit});
+      typeInto(card, "ask-card-field-email", "ada@example.com");
+      const reminder = within(card.getByTestId("ask-card-form-field-reminder"));
+      const meeting = within(card.getByTestId("ask-card-form-field-meeting"));
+
+      act(() => {
+        fireEvent.changeText(reminder.getByPlaceholderText("hh"), "");
+      });
+      assert.isOk(card.getByText("Enter a complete time, or clear it."));
+      act(() => {
+        fireEvent.changeText(meeting.getByPlaceholderText("MM"), "13");
+      });
+      assert.isOk(card.getByText("Enter a complete date and time, or clear it."));
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+
+      act(() => {
+        fireEvent.changeText(reminder.getByPlaceholderText("hh"), "10");
+        fireEvent.changeText(meeting.getByPlaceholderText("MM"), "10");
+      });
+      act(() => {
+        fireEvent(reminder.getByPlaceholderText("hh"), "blur");
+      });
+      assert.isNull(card.queryByText("Enter a complete time, or clear it."));
+      assert.isNull(card.queryByText("Enter a complete date and time, or clear it."));
+      await press(card.getByTestId("ask-card-submit"));
+      assert.deepInclude(
+        (onSubmit.mock.calls[0]?.[0]?.response as {content: {values: Record<string, unknown>}})
+          ?.content?.values ?? {},
+        {meeting: "2026-10-01T09:30:00Z", reminder: "10:30"}
+      );
+    });
+
     it("keeps the shown time when the user picks another time zone", async () => {
       const onSubmit = mock(async (_submission: AskSubmission) => {});
       const card = renderCard({ask: pendingForm(DEFAULTS_INPUT), onSubmit});

@@ -371,7 +371,10 @@ Skip unless `allowDecline` is `false`. Each field uses the `@terreno/ui` control
 | `multiselect` | `MultiselectField` | The checked option ids |
 
 Fields start on their `default`. Blank fields are left out of `values`. Submit is enabled only
-when `validateAskResponse` accepts the values. After the user edits a field, it says what is
+when `validateAskResponse` accepts the values and no date, time, or datetime field holds an
+unfinished entry. `DateTimeField` reports that through `onEntryStatusChange`, such as
+"0 / 5 / 026": the field says "Enter a complete date, or clear it." until the user finishes it,
+and clearing every part leaves the field out. After the user edits a field, it says what is
 wrong in plain words, such as "Enter a number from 1 to 500." or "This field is required." A
 server error whose path is `content.values.<id>` (or an item under it) shows on that field until
 the user edits it; other errors show under the form. Without `onSubmit`, every field and both

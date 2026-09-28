@@ -18,6 +18,13 @@ import {useTheme} from "./Theme";
 import {TimezonePicker} from "./TimezonePicker";
 import {resolveFieldTestIDsFromProps} from "./testing/resolveTestId";
 
+/** The state each segment index edits, per field type. */
+const SEGMENT_NAMES = {
+  date: ["month", "day", "year"],
+  datetime: ["month", "day", "year", "hour", "minute"],
+  time: ["hour", "minute"],
+} as const;
+
 interface SeparatorProps {
   type: "date" | "time";
 }
@@ -418,6 +425,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
   title,
   value,
   onChange,
+  onEntryStatusChange,
   timezone: providedTimezone,
   onTimezoneChange,
   errorText,
@@ -574,10 +582,13 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       const hourVal = override?.hour ?? hour;
       let date: DateTime;
       if (type === "datetime") {
-        if (!monthVal || !dayVal || !yearVal || !hour || !minuteVal) {
+        if (!monthVal || !dayVal || !yearVal || !hourVal || !minuteVal) {
           return undefined;
         }
         let hourNum = parseInt(hourVal, 10);
+        if (Number.isNaN(hourNum)) {
+          return undefined;
+        }
         if (ampPmVal === "pm" && hourNum !== 12) {
           hourNum += 12;
         } else if (ampPmVal === "am" && hourNum === 12) {
@@ -616,10 +627,13 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
           }
         );
       } else {
-        if (!hour || !minuteVal) {
+        if (!hourVal || !minuteVal) {
           return undefined;
         }
-        let hourNum = parseInt(hour, 10);
+        let hourNum = parseInt(hourVal, 10);
+        if (Number.isNaN(hourNum)) {
+          return undefined;
+        }
         if (ampPmVal === "pm" && hourNum !== 12) {
           hourNum += 12;
         } else if (ampPmVal === "am" && hourNum === 12) {
@@ -648,6 +662,33 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
   );
 
   /**
+   * Tells `onEntryStatusChange` what the segments hold after a typed change: nothing, an entry
+   * that is unfinished or has a segment error, or a complete value. A minute of "00" alone counts
+   * as empty, because clearing the minute segment resets it to "00".
+   */
+  const reportEntryStatus = useCallback(
+    (
+      override: {day?: string; hour?: string; minute?: string; month?: string; year?: string},
+      errors: Record<number, string | undefined>
+    ): void => {
+      if (!onEntryStatusChange) {
+        return;
+      }
+      const next = {day, hour, minute, month, year, ...override};
+      const dateParts = type === "time" ? [] : [next.month, next.day, next.year];
+      const timeParts = type === "date" ? [] : [next.hour];
+      const hasMinute = type !== "date" && next.minute !== "" && next.minute !== "00";
+      if (![...dateParts, ...timeParts].some(Boolean) && !hasMinute) {
+        onEntryStatusChange("empty");
+        return;
+      }
+      const hasError = Object.values(errors).some((error) => error !== undefined);
+      onEntryStatusChange(!hasError && getISOFromFields(override) ? "valid" : "invalid");
+    },
+    [onEntryStatusChange, day, hour, minute, month, year, type, getISOFromFields]
+  );
+
+  /**
    * Handles text changes in any {@link DateTimeSegment} input.
    * Strips non-numeric characters, validates the value, updates local state,
    * and emits the ISO value via onChange when all required fields are complete.
@@ -671,8 +712,14 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
         // This allows the user to freely edit or clear the field.
         setMinute(finalValue);
 
+        const isValidMinute = !Number.isNaN(minuteNum) && minuteNum >= 0 && minuteNum <= 59;
+        reportEntryStatus(
+          {minute: finalValue},
+          {...fieldErrors, [index]: isValidMinute ? undefined : "Minute must be between 0 and 59"}
+        );
+
         // Only update ref and result if it's a valid minute value
-        if (!Number.isNaN(minuteNum) && minuteNum >= 0 && minuteNum <= 59) {
+        if (isValidMinute) {
           pendingValueRef.current = {minute: finalValue};
           setFieldErrors((prev) => ({...prev, [index]: undefined}));
 
@@ -700,6 +747,10 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
 
       const error = validateField(index, finalValue);
       setFieldErrors((prev) => ({...prev, [index]: error}));
+      const segmentName = SEGMENT_NAMES[type][index];
+      if (segmentName) {
+        reportEntryStatus({[segmentName]: finalValue}, {...fieldErrors, [index]: error});
+      }
 
       if (type === "date" || type === "datetime") {
         if (index === 0) {
@@ -756,7 +807,19 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
         inputRefs.current[index + 1]?.focus();
       }
     },
-    [type, getFieldConfigs, getISOFromFields, onChange, value, validateField, month, day, year]
+    [
+      type,
+      getFieldConfigs,
+      getISOFromFields,
+      onChange,
+      value,
+      validateField,
+      month,
+      day,
+      year,
+      fieldErrors,
+      reportEntryStatus,
+    ]
   );
 
   /**
@@ -769,6 +832,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       // Handle clear case - empty string should clear the field
       if (!inputDate || inputDate === "") {
         onChange("");
+        onEntryStatusChange?.("empty");
         setShowDate(false);
         return;
       }
@@ -805,9 +869,10 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
               .toISO()
           : parsedDate.set({millisecond: 0, second: 0}).toUTC().toISO();
       onChange(normalized ?? "");
+      onEntryStatusChange?.("valid");
       setShowDate(false);
     },
-    [onChange, type]
+    [onChange, onEntryStatusChange, type]
   );
 
   /**
@@ -822,11 +887,12 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       if (iso && iso !== currentValueUTC) {
         onChange(iso);
       }
+      reportEntryStatus({...pendingValueRef.current}, fieldErrors);
 
       // Clear the pending value after processing
       pendingValueRef.current = undefined;
     },
-    [getISOFromFields, onChange, value]
+    [getISOFromFields, onChange, value, reportEntryStatus, fieldErrors]
   );
 
   // Handle external value changes

@@ -8,7 +8,7 @@ import {
   type mock as MockType,
   mock,
 } from "bun:test";
-import {act, userEvent} from "@testing-library/react-native";
+import {act, fireEvent, userEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import {DateTime} from "luxon";
 import type {ReactTestInstance} from "react-test-renderer";
@@ -456,6 +456,89 @@ describe("DateTimeField", () => {
       expect(getByPlaceholderText("MM").props.value).toBe("");
       expect(getByPlaceholderText("hh").props.value).toBe("");
       expect(getByPlaceholderText("mm").props.value).toBe("");
+    });
+  });
+
+  describe("onEntryStatusChange", () => {
+    it("reports an unfinished date as invalid, a complete one as valid, and a cleared one as empty", async () => {
+      const user = userEvent.setup();
+      const onEntryStatusChange = mock((_status: string) => {});
+      const {getByPlaceholderText} = renderWithTheme(
+        <DateTimeField
+          onChange={mockOnChange}
+          onEntryStatusChange={onEntryStatusChange}
+          type="date"
+          value=""
+        />
+      );
+      await user.type(getByPlaceholderText("MM"), "0");
+      expect(onEntryStatusChange).toHaveBeenLastCalledWith("invalid");
+
+      await user.clear(getByPlaceholderText("MM"));
+      expect(onEntryStatusChange).toHaveBeenLastCalledWith("empty");
+
+      await user.type(getByPlaceholderText("MM"), "10");
+      await user.type(getByPlaceholderText("DD"), "15");
+      await user.type(getByPlaceholderText("YYYY"), "202");
+      expect(onEntryStatusChange).toHaveBeenLastCalledWith("invalid");
+      await user.type(getByPlaceholderText("YYYY"), "6");
+      expect(onEntryStatusChange).toHaveBeenLastCalledWith("valid");
+    });
+
+    it("reports a datetime whose hour is cleared as invalid without throwing", async () => {
+      const user = userEvent.setup();
+      const onEntryStatusChange = mock((_status: string) => {});
+      const {getByPlaceholderText} = renderWithTheme(
+        <DateTimeField
+          onChange={mockOnChange}
+          onEntryStatusChange={onEntryStatusChange}
+          timezone="America/New_York"
+          type="datetime"
+          value="2023-05-15T15:30:00.000Z"
+        />
+      );
+      await user.clear(getByPlaceholderText("hh"));
+      expect(onEntryStatusChange).toHaveBeenLastCalledWith("invalid");
+    });
+
+    it("reports a single-digit hour typed into an empty datetime hour as valid", async () => {
+      const user = userEvent.setup();
+      const onEntryStatusChange = mock((_status: string) => {});
+      const {getByPlaceholderText} = renderWithTheme(
+        <DateTimeField
+          onChange={mockOnChange}
+          onEntryStatusChange={onEntryStatusChange}
+          timezone="America/New_York"
+          type="datetime"
+          value=""
+        />
+      );
+      await user.type(getByPlaceholderText("MM"), "10");
+      await user.type(getByPlaceholderText("DD"), "15");
+      await user.type(getByPlaceholderText("YYYY"), "2026");
+      await user.type(getByPlaceholderText("mm"), "30");
+      act(() => {
+        fireEvent.changeText(getByPlaceholderText("hh"), "4");
+      });
+      expect(onEntryStatusChange).toHaveBeenLastCalledWith("valid");
+    });
+
+    it("reports a time without an hour as invalid", async () => {
+      const user = userEvent.setup();
+      const onEntryStatusChange = mock((_status: string) => {});
+      const {getByPlaceholderText} = renderWithTheme(
+        <DateTimeField
+          onChange={mockOnChange}
+          onEntryStatusChange={onEntryStatusChange}
+          timezone="America/New_York"
+          type="time"
+          value="2023-05-15T15:30:00.000Z"
+        />
+      );
+      await user.clear(getByPlaceholderText("hh"));
+      expect(onEntryStatusChange).toHaveBeenLastCalledWith("invalid");
+      await user.type(getByPlaceholderText("hh"), "4");
+      expect(onEntryStatusChange).toHaveBeenLastCalledWith("valid");
     });
   });
 

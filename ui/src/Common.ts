@@ -978,10 +978,22 @@ export interface NumberRangeFieldProps extends BaseFieldProps, HelperTextProps, 
   max: number;
 }
 
+/**
+ * What the typed parts of a {@link DateTimeFieldProps | DateTimeField} hold: nothing, an unfinished
+ * or invalid entry, or a complete value.
+ */
+export type DateTimeEntryStatus = "empty" | "invalid" | "valid";
+
 export interface DateTimeFieldProps extends BaseFieldProps, HelperTextProps, ErrorTextProps {
   type: "date" | "datetime" | "time";
   value?: string; // ISO string always
   onChange: (date: string) => void;
+  /**
+   * Called after each typed change and picker selection with what the field now holds.
+   * `onChange` only fires for complete values, so use this to refuse an unfinished entry
+   * (such as "0 / 5 / 026") or to notice the user cleared the field.
+   */
+  onEntryStatusChange?: (status: DateTimeEntryStatus) => void;
   onTimezoneChange?: (timezone: string) => void;
   dateFormat?: string;
   pickerType?: "default" | "compact" | "inline" | "spinner";

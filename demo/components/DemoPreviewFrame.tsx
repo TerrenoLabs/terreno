@@ -55,12 +55,14 @@ export const DemoPreviewFrame: React.FC<{children: React.ReactNode}> = ({childre
 
   return (
     <DemoPreviewContext.Provider value={state}>
-      <Box testID="demo-preview-root">
+      <Box flex="grow" height="100%" testID="demo-preview-root" width="100%">
         {isEmbedMode ? null : (
           <DemoPreviewBar onChange={handleChange} shareQuery={shareQuery} state={state} />
         )}
         <Box
           color={state.background === "transparent" ? undefined : background}
+          flex="grow"
+          height="100%"
           maxWidth={frameWidth}
           testID="demo-preview-frame"
           width={frameWidth}

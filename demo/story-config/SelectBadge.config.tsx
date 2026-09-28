@@ -4,6 +4,7 @@ import {SelectBadge} from "@terreno/ui";
 import React from "react";
 
 export const SelectBadgeConfiguration: DemoConfiguration = {
+  usageExample: "import {SelectBadge} from \"@terreno/ui\";\n\n<SelectBadge />",
   name: "SelectBadge",
   related: [],
   description:

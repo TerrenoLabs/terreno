@@ -8,8 +8,9 @@ import {ThumbsUpDownFeedback} from "@terreno/ui";
 import React from "react";
 
 export const ThumbsUpDownFeedbackConfiguration: DemoConfiguration = {
+  usageExample: "import {ThumbsUpDownFeedback} from \"@terreno/ui\";\n\n<ThumbsUpDownFeedback />",
   name: "ThumbsUpDownFeedback",
-  related: ["AiSuggestionBox", "IconButton"],
+  related: ["AI Suggestion Box", "IconButton"],
   description:
     "ThumbsUpDownFeedback is a thumbs up / thumbs down pair for collecting a single positive or negative reaction, e.g. on an AI generated response. Pressing the selected option again clears the selection.",
   category: "Component",

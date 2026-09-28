@@ -10,12 +10,13 @@ import {
 } from "../stories/SignatureField.stories";
 
 export const SignatureFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {SignatureField} from \"@terreno/ui\";\n\n<SignatureField />",
   name: "Signature field",
   component: SignatureField,
   related: [],
   description: "The signature field allows a signature input from the user.",
   a11yNotes: [],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

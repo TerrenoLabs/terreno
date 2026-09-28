@@ -13,9 +13,10 @@ import {
 import {IconButton} from "@terreno/ui";
 
 export const IconButtonConfiguration: DemoConfiguration = {
+  usageExample: "import {IconButton} from \"@terreno/ui\";\n\n<IconButton />",
   name: "IconButton",
   component: IconButton,
-  related: ["Buttons", "Icons", "Actions"],
+  related: ["Button", "Icon"],
   description: "Icon buttons allow users to take actions and make choices with a single tap.",
   a11yNotes: [
     "Ensure that each IconButton has an appropriate accessibilityLabel that describes the action it performs.",

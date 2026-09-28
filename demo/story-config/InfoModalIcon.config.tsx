@@ -3,6 +3,7 @@ import {InfoModalIconDemo, InfoModalIconWithSubtitle} from "@stories/InfoModalIc
 import {InfoModalIcon} from "@terreno/ui";
 
 export const InfoModalIconConfiguration: DemoConfiguration = {
+  usageExample: "import {InfoModalIcon} from \"@terreno/ui\";\n\n<InfoModalIcon />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

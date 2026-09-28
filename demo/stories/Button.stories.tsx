@@ -72,7 +72,12 @@ export const ButtonVariants: React.FC<Partial<ButtonProps>> = (props = {}) => {
     <>
       <Box direction="row" wrap>
         <Box padding={1}>
-          <Button onClick={handleDemoClick} text="Default/Primary" {...props} />
+          <Button
+            onClick={handleDemoClick}
+            testID="button-variant-primary"
+            text="Default/Primary"
+            {...props}
+          />
         </Box>
         <Box padding={1}>
           <Button onClick={handleDemoClick} text="Secondary" variant="secondary" {...props} />

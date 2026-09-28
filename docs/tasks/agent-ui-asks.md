@@ -1,6 +1,6 @@
 # Task List: Agent UI Asks
 
-**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 2.5.
+**Status:** Approved 2026-09-27 — in progress ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Phases 1–2 Roast-passed; Task 4.1 done for Phases 1–2. Tasks 3.1 and 3.2 are blocked on Agent UI Blocks Tasks 1.1 and 2.1, which have not started.
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.
@@ -94,7 +94,8 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
 
 ### Phase 4: Wrap-up
 
-- [ ] **Task 4.1**: Changelog, rules, docs indexes, final gate
+- [x] **Task 4.1**: Changelog, rules, docs indexes, final gate
+  - Split (2026-09-27, Pick–Roast loop): Phase 3 is blocked on another plan, so this task ships the wrap-up for Phases 1–2 now; Tasks 3.1 and 3.2 add their own changelog, rules, and index lines when they land.
   - Delivers: changelog entry; agent rules updated in their canonical source and regenerated; every new page linked from its README; `.github` and knip config updated for new files.
   - Files: `changelog/unreleased/agent-ui-asks.md`, `.rulesync/rules/ai/00-ai.md`, `.rulesync/rules/ui/00-ui.md`, `docs/how-to/README.md`, `docs/reference/README.md`, `docs/explanation/README.md`, `knip.jsonc`.
   - Blocked by: 1.3, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2

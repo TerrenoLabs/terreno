@@ -10,9 +10,9 @@ Cut a new Terreno release end-to-end: gather commits, write organized release no
 ## How releases work in this repo
 
 - Pushing a tag matching `X.Y.Z` (no `v` prefix, e.g. `0.18.0`) triggers `.github/workflows/publish-on-tag.yml`.
-- That workflow publishes **fourteen packages, all at the same version**: `@terreno/api`, `@terreno/test`, `@terreno/ui`, `@terreno/rtk`, `@terreno/admin-backend`, `@terreno/admin-frontend`, `@terreno/admin-spa`, `@terreno/ai`, `@terreno/api-health`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/jobs`, `@terreno/mcp`, `@terreno/syncdb`. (`demo` and the example apps are not published.)
+- That workflow publishes **fifteen packages, all at the same version**: `@terreno/api`, `@terreno/test`, `@terreno/blocks`, `@terreno/ui`, `@terreno/rtk`, `@terreno/admin-backend`, `@terreno/admin-frontend`, `@terreno/admin-spa`, `@terreno/ai`, `@terreno/api-health`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/jobs`, `@terreno/mcp`, `@terreno/syncdb`. (`demo` and the example apps are not published.)
 - Every publish job waits on `breaking-change-documentation`, which runs `bun run check:upgrade-docs "<tag>"` against the tagged commit. That job fails the whole release when the tag's `CHANGELOG.md` has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` section for the version but `mcp-server/src/docs/upgrades/<version>.md` is missing — so assembled changelog entries and the upgrade note must be on master *before* tagging.
-- Publish jobs are chained: `rtk`, `admin-frontend`, and `admin-spa` depend on `publish-ui`; `admin-backend`, `ai`, `api-health`, `comms`, `feature-flags`, `jobs`, and `mcp` depend on `publish-api` and `publish-test`; `admin-spa` also waits on `publish-rtk` and `publish-admin-frontend`. `api`, `test`, `ui`, and `syncdb` publish independently. A `ui`, `api`, or `test` failure cascades.
+- Publish jobs are chained: `ui` depends on `publish-blocks`; `rtk`, `admin-frontend`, and `admin-spa` depend on `publish-ui`; `ai` depends on `publish-api`, `publish-test`, and `publish-blocks`; `admin-backend`, `api-health`, `comms`, `feature-flags`, `jobs`, and `mcp` depend on `publish-api` and `publish-test`; `admin-spa` also waits on `publish-rtk` and `publish-admin-frontend`. `api`, `test`, `blocks`, and `syncdb` publish independently. A `blocks`, `ui`, `api`, or `test` failure cascades.
 - After the master version bump, the workflow dispatches `demo-deploy.yml` against the release tag, and for `X.Y.0` tags also cuts the versioned docs.
 - After successful publishes, the workflow commits `chore: bump package versions to X.Y.Z` back to master and sends a Zoom notification. Prerelease tags (`-beta`, `-alpha`) skip the master bump.
 
@@ -134,7 +134,7 @@ gh release create "$VERSION" --target master --title "$VERSION" --notes-file /tm
 2. Verify every package is live on npm (allow a couple of minutes of registry lag):
 
    ```bash
-   for p in api test ui rtk admin-backend admin-frontend admin-spa ai api-health comms feature-flags jobs mcp syncdb; do
+   for p in api test blocks ui rtk admin-backend admin-frontend admin-spa ai api-health comms feature-flags jobs mcp syncdb; do
      echo "@terreno/$p: $(npm view "@terreno/$p" version)"
    done
    ```

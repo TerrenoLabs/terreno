@@ -35,6 +35,7 @@ deploy.
 - **admin-backend/** - Admin panel backend plugin for @terreno/api (`@terreno/admin-backend`)
 - **admin-frontend/** - Admin panel frontend screens for @terreno/api backends (`@terreno/admin-frontend`)
 - **admin-spa/** - Standalone admin SPA (Expo Router web app) + Express plugin to serve it from a backend (`@terreno/admin-spa`)
+- **blocks/** - Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards, and JSON Schemas for native clients (`@terreno/blocks`)
 - **comms/** - Pluggable transactional communications (`@terreno/comms`)
 - **cli/** - Operator CLI (`@terreno/cli`, bin `terreno`) for docs, codegen, bootstrap, and OpenAPI REST
 - **jobs/** - Durable background jobs plugin for `@terreno/api` (`@terreno/jobs`)

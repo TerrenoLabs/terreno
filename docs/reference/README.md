@@ -8,7 +8,7 @@ Technical reference for Terreno packages and APIs. Information-oriented, precise
 - [@terreno/ui](ui.md) — Components, theming, layout
 - [@terreno/syncdb](syncdb.md) — Local-first data layer (reads, writes, offline sync)
 - [@terreno/ai](ai.md) — AI service, GPT routes, Langfuse integration
-- [Agent UI Asks](agent-ui-asks.md) — Ask schemas, simple cards, the compact surface, limits, error codes, SSE events, the headless `pendingAsks` and `turn` endpoints, and JSON Schemas for native clients
+- [Agent UI Asks](agent-ui-asks.md) — `@terreno/blocks` ask schemas, simple cards, the compact surface, limits, error codes, SSE events, the headless `pendingAsks` and `turn` endpoints, and JSON Schemas for native clients
 - [@terreno/admin-backend](admin-backend.md) — Auto-generated admin CRUD endpoints
 - [@terreno/admin-frontend](admin-frontend.md) — Admin panel UI components
 - [@terreno/admin-spa](admin-spa.md) — Standalone admin SPA + Express serve plugin

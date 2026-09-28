@@ -18,8 +18,9 @@ and shown in `GPTChat` ([props and controls](ui.md#asks)),
 [approval asks](#approval-asks) that the server makes before a host tool with `needsApproval`
 runs, and the small-screen path: the
 [compact surface](#compact-surface), the [headless endpoints](#headless-endpoints),
-[JSON Schemas](#json-schemas-and-fixtures), and [`SimpleAskCard`](ui.md#simpleaskcard). The other
-kinds are planned in the [implementation plan](../implementationPlans/agent-ui-asks.md).
+[JSON Schemas](#json-schemas-and-fixtures), and [`SimpleAskCard`](ui.md#simpleaskcard). The
+sandboxed HTML block and the `callout`, `image`, and `details` display blocks are planned in the
+[implementation plan](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-asks.md).
 
 ## Table of Contents
 

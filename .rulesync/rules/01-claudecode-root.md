@@ -32,6 +32,7 @@ deploy.
 - **syncdb/** - Local-first data layer (`@terreno/syncdb`)
 - **admin-backend/** - Admin panel backend plugin for @terreno/api (`@terreno/admin-backend`)
 - **admin-frontend/** - Admin panel frontend screens for @terreno/api backends (`@terreno/admin-frontend`)
+- **blocks/** - Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards (`@terreno/blocks`)
 - **demo/** - Demo app for showcasing and testing UI components
 - **example-frontend/** - Example Expo app demonstrating full stack usage
 - **example-backend/** - Example Express backend using @terreno/api

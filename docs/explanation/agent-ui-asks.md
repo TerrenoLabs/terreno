@@ -13,8 +13,9 @@ send images or documents the agent reads in the same turn. The chat asks
 on `POST /gpt/prompt` and shows asks in `GPTChat`. Watches and other small clients answer
 select-one choices and confirms on two JSON endpoints with the compact surface, and can approve a
 markdown draft or submit a form's defaults as is. A host tool can also require an approval that
-the server enforces, shown as a `confirm`. The
-other kinds follow the [implementation plan](../implementationPlans/agent-ui-asks.md).
+the server enforces, shown as a `confirm`. The sandboxed HTML block and the `callout`, `image`,
+and `details` display blocks follow the
+[implementation plan](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-asks.md).
 
 ## The problem
 
@@ -259,7 +260,7 @@ returns at once instead of waiting for the agent, and Wear OS.
 
 ## Asks and blocks
 
-Asks and [Agent UI Blocks](../implementationPlans/agent-ui-blocks.md) split the work by where the
+Asks and [Agent UI Blocks](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-blocks.md) split the work by where the
 result goes:
 
 | Need | Mechanism |

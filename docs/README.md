@@ -37,6 +37,7 @@ Canonical copy, language rules, and the Django/Rails comparison:
 | [@terreno/ui](reference/ui.md) | React Native UI component library for iOS, Android, and web |
 | [@terreno/syncdb](reference/syncdb.md) | Local-first data layer with TinyBase, durable outbox, and delta sync |
 | [@terreno/ai](reference/ai.md) | Provider-agnostic AI service with streaming chat, request logging, and admin tools |
+| [@terreno/blocks](reference/agent-ui-asks.md) | Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards, and JSON Schemas for native clients |
 | [@terreno/admin-backend](reference/admin-backend.md) | Admin panel backend plugin for `@terreno/api` |
 | [@terreno/admin-frontend](reference/admin-frontend.md) | Admin panel frontend screens for `@terreno/api` backends |
 | [@terreno/admin-spa](reference/admin-spa.md) | Standalone admin SPA (Expo Router web) plus Express serve plugin |

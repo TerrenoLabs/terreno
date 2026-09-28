@@ -8,7 +8,7 @@ TypeScript 7 removes.
 
 | Profile | Packages | `module` | `target` | Emits |
 | --- | --- | --- | --- | --- |
-| Node library | `api`, `ai`, `admin-backend`, `announcements`, `api-health`, `comms`, `feature-flags`, `jobs`, `test`, `admin-spa` server (`tsconfig.server.json`) | `nodenext` | `es2023` | CommonJS `dist/` |
+| Node library | `api`, `ai`, `admin-backend`, `announcements`, `api-health`, `blocks`, `comms`, `feature-flags`, `jobs`, `test`, `admin-spa` server (`tsconfig.server.json`) | `nodenext` | `es2023` | CommonJS `dist/` |
 | Node ESM tool | `mcp-server`, `create-terreno-app` | `nodenext` | `es2023` | ESM `dist/` (`"type": "module"`) |
 | Frontend library | `ui`, `admin-frontend`, `rtk`, `syncdb` | `esnext` + `moduleResolution: bundler` | `es2022` | ESM `dist/` for Metro |
 | Bun CLI | `cli` | `esnext` + `moduleResolution: bundler` + `customConditions: ["bun"]` | `es2022` | ESM `dist/` for Bun |

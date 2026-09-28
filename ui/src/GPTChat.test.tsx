@@ -1211,7 +1211,7 @@ describe("GPTChat asks", () => {
     });
   });
 
-  it("moves screen reader focus to a pending ask when it appears", () => {
+  it("moves screen reader focus to a pending ask's question, an accessible header, when it appears", () => {
     setAccessibilityFocus.mockClear();
     const scrollable = {scrollTo: (): void => {}, scrollToEnd: (): void => {}};
     const {rerender} = render(
@@ -1224,7 +1224,11 @@ describe("GPTChat asks", () => {
         onSubmit={() => {}}
       />,
       {
-        createNodeMock: (element) => (element.props.role === "group" ? 42 : scrollable),
+        createNodeMock: (element) =>
+          element.props.accessibilityRole === "header" &&
+          element.props.children === PLAN_INPUT.prompt
+            ? 42
+            : scrollable,
         wrapper: ThemeProvider,
       }
     );

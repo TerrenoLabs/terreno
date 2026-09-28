@@ -1527,10 +1527,6 @@ export type PostGptHistoriesRes = /** status 201 Successful create */ {
     kind: "choice" | "confirm" | "markdown" | "form" | "files";
     /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
     origin?: "approval";
-    /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
-    promptIndex: number;
-    /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
-    responseMessages: any;
     /** Simple card (short text and up to three answer buttons) made when the ask was made */
     simple: any;
     /** Tool call id of the ask; an answer must name it */
@@ -1665,10 +1661,6 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
       kind: "choice" | "confirm" | "markdown" | "form" | "files";
       /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
       origin?: "approval";
-      /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
-      promptIndex: number;
-      /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
-      responseMessages: any;
       /** Simple card (short text and up to three answer buttons) made when the ask was made */
       simple: any;
       /** Tool call id of the ask; an answer must name it */
@@ -1768,10 +1760,6 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
     kind: "choice" | "confirm" | "markdown" | "form" | "files";
     /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
     origin?: "approval";
-    /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
-    promptIndex: number;
-    /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
-    responseMessages: any;
     /** Simple card (short text and up to three answer buttons) made when the ask was made */
     simple: any;
     /** Tool call id of the ask; an answer must name it */
@@ -1849,10 +1837,6 @@ export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
     kind: "choice" | "confirm" | "markdown" | "form" | "files";
     /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
     origin?: "approval";
-    /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
-    promptIndex: number;
-    /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
-    responseMessages: any;
     /** Simple card (short text and up to three answer buttons) made when the ask was made */
     simple: any;
     /** Tool call id of the ask; an answer must name it */

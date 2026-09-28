@@ -3,6 +3,7 @@ import React, {useCallback, useEffect, useRef, useState} from "react";
 import {
   AccessibilityInfo,
   findNodeHandle,
+  type Text as NativeText,
   Platform,
   Image as RNImage,
   type ScrollView as RNScrollView,
@@ -677,28 +678,27 @@ const EmptyChatHero = ({
 
 /**
  * Moves focus to a pending ask when it appears, so keyboard and screen reader users land on it.
- * A raw `View` because `Box` does not expose its native view to a ref.
+ * On web the ask's group takes keyboard focus. On native, screen reader focus goes to the ask's
+ * question, because it only lands on an accessible element and the group is not one. A raw
+ * `View` because `Box` does not expose its native view to a ref.
  */
 const AskFocusTarget = ({
-  children,
   label,
+  renderCard,
 }: {
-  children: React.ReactNode;
   label: string;
+  renderCard: (promptRef: React.RefObject<NativeText | null>) => React.ReactElement;
 }): React.ReactElement => {
   const viewRef = useRef<View>(null);
+  const promptRef = useRef<NativeText>(null);
 
   // Focus the ask once, when it mounts; later renders of the same ask leave focus alone.
   useEffect(() => {
-    const view = viewRef.current;
-    if (!view) {
-      return;
-    }
     if (Platform.OS === "web") {
-      (view as unknown as HTMLElement).focus?.({preventScroll: true});
+      (viewRef.current as unknown as HTMLElement | null)?.focus?.({preventScroll: true});
       return;
     }
-    const node = findNodeHandle(view);
+    const node = promptRef.current ? findNodeHandle(promptRef.current) : null;
     if (node) {
       AccessibilityInfo.setAccessibilityFocus(node);
     }
@@ -706,7 +706,7 @@ const AskFocusTarget = ({
 
   return (
     <View aria-label={label} ref={viewRef} role="group" tabIndex={-1}>
-      {children}
+      {renderCard(promptRef)}
     </View>
   );
 };
@@ -731,23 +731,25 @@ const AskTranscriptItem = ({
   onAskSubmit?: AskSubmitHandler;
   resolveAskFiles?: AskFilesResolver;
 }): React.ReactElement => {
-  const card = (
+  const renderCard = (promptRef?: React.Ref<NativeText>): React.ReactElement => (
     <AskCard
       ask={ask}
       errors={errors}
       onSubmit={onAskSubmit}
+      promptRef={promptRef}
       resolveAskFiles={resolveAskFiles}
       testID={`gpt-ask-${ask.toolCallId}`}
     />
   );
   if (ask.status !== "pending") {
-    return <Box alignItems="start">{card}</Box>;
+    return <Box alignItems="start">{renderCard()}</Box>;
   }
   return (
     <Box maxWidth="80%" width="100%">
-      <AskFocusTarget label={ask.input?.title ?? "Question from the assistant"}>
-        {card}
-      </AskFocusTarget>
+      <AskFocusTarget
+        label={ask.input?.title ?? "Question from the assistant"}
+        renderCard={renderCard}
+      />
     </Box>
   );
 };

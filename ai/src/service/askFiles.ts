@@ -1,4 +1,4 @@
-import {APIError} from "@terreno/api";
+import {APIError, logger} from "@terreno/api";
 import {
   ASK_LIMITS,
   type AskFileRef,
@@ -14,6 +14,7 @@ import type mongoose from "mongoose";
 
 import {FileAttachment} from "../models/fileAttachment";
 import type {AskFileDownloader} from "../types";
+import {askFileHeading, truncatedAskFileNote, unloadedAskUploadsNote} from "./prompts";
 
 type ToolResultOutput = ToolResultPart["output"];
 
@@ -70,7 +71,15 @@ const loadUpload = async ({
   if (!attachment) {
     return undefined;
   }
-  return new Uint8Array(await fileStorageService.download(attachment.gcsKey));
+  try {
+    return new Uint8Array(await fileStorageService.download(attachment.gcsKey));
+  } catch (error) {
+    logger.warn("Could not download an upload sent as an ask answer", {
+      error: error instanceof Error ? error.message : String(error),
+      fileId,
+    });
+    return undefined;
+  }
 };
 
 /**
@@ -147,7 +156,7 @@ const textParts = (bytes: Uint8Array): ContentPart[] => {
   }
   return [
     {text: decodeText(bytes.subarray(0, end)), type: "text"},
-    {text: `[The file is cut to its first ${end} of ${bytes.length} bytes.]`, type: "text"},
+    {text: truncatedAskFileNote({keptBytes: end, totalBytes: bytes.length}), type: "text"},
   ];
 };
 
@@ -173,7 +182,13 @@ export const askFilesModelOutput = (files: ResolvedAskFile[]): ContentOutput => 
     {text: JSON.stringify(storedFilesAnswer(files)), type: "text"},
     ...files.flatMap((file, index): ContentPart[] => [
       {
-        text: `File ${index + 1} of ${files.length}: ${file.filename} (${file.mimeType}, ${file.bytes.length} bytes)`,
+        text: askFileHeading({
+          count: files.length,
+          filename: file.filename,
+          mimeType: file.mimeType,
+          position: index + 1,
+          size: file.bytes.length,
+        }),
         type: "text",
       },
       ...fileParts(file),
@@ -202,6 +217,6 @@ export const askFilesToolModelOutput = ({output}: {output: AskResponse}): ToolRe
   }
   return {
     type: "content",
-    value: [...value, {text: `Uploads not loaded here: ${JSON.stringify(uploads)}`, type: "text"}],
+    value: [...value, {text: unloadedAskUploadsNote(uploads), type: "text"}],
   };
 };

@@ -20,6 +20,15 @@ const ALLOWED_MIME_TYPES = new Set([
 
 const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+/** The `*gcsKey` wildcard as a key: Express 5 passes it as its path segments. */
+const gcsKeyParam = (req: express.Request): string => {
+  const param = (req.params as Record<string, string | string[]>).gcsKey ?? "";
+  return Array.isArray(param) ? param.join("/") : param;
+};
+
+const requestUserId = (req: express.Request): mongoose.Types.ObjectId =>
+  (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id as mongoose.Types.ObjectId;
+
 export const addFileRoutes = (
   router: express.Router,
   options: FileRouteOptions & {fileStorageService: FileStorageService}
@@ -58,8 +67,7 @@ export const addFileRoutes = (
     ],
     asyncHandler(async (req: express.Request, res: express.Response) => {
       const file = (req as express.Request & {file?: Express.Multer.File}).file;
-      const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)
-        ?._id as mongoose.Types.ObjectId;
+      const userId = requestUserId(req);
 
       if (!file) {
         throw new APIError({status: 400, title: "No file provided"});
@@ -79,6 +87,7 @@ export const addFileRoutes = (
   router.get(
     "/files/*gcsKey",
     [
+      authenticateMiddleware(),
       createOpenApiBuilder(options.openApiOptions ?? {})
         .withTags(["files"])
         .withSummary("Get file URL")
@@ -87,9 +96,14 @@ export const addFileRoutes = (
         .build(),
     ],
     asyncHandler(async (req: express.Request, res: express.Response) => {
-      const gcsKey = req.params.gcsKey as string;
+      const gcsKey = gcsKeyParam(req);
 
-      const attachment = await FileAttachment.findOneOrNone({deleted: false, gcsKey});
+      // Another user's file is "not found", so keys cannot be probed.
+      const attachment = await FileAttachment.findOneOrNone({
+        deleted: false,
+        gcsKey,
+        userId: requestUserId(req),
+      });
       if (!attachment) {
         throw new APIError({status: 404, title: "File not found"});
       }
@@ -111,9 +125,8 @@ export const addFileRoutes = (
         .build(),
     ],
     asyncHandler(async (req: express.Request, res: express.Response) => {
-      const gcsKey = req.params.gcsKey as string;
-      const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)
-        ?._id as mongoose.Types.ObjectId;
+      const gcsKey = gcsKeyParam(req);
+      const userId = requestUserId(req);
 
       const attachment = await FileAttachment.findOneOrNone({deleted: false, gcsKey});
       if (!attachment) {

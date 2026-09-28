@@ -27,6 +27,7 @@ import type {
   AskOrigin,
   GptHistoryAskStatus,
   GptHistoryDocument,
+  GptHistoryPendingAsk,
   GptHistoryPrompt,
   GptRouteOptions,
   MessageContentPart,
@@ -152,7 +153,18 @@ interface ResolvedAsk {
   toolName?: string;
 }
 
+/** A checked answer to the pending ask, resolved once the turn's tools and prompt are ready. */
+interface PendingAnswer {
+  /** The pending ask as stored, put back when the turn fails before the client sees any output. */
+  pendingAsk: GptHistoryPendingAsk;
+  result: AskResponse;
+  status: GptHistoryAskStatus;
+  toolCallId: string;
+  toolName: string;
+}
+
 interface TurnStart {
+  answer?: PendingAnswer;
   history: GptHistoryDocument;
   /** True when the turn starts a conversation, which is inserted with the turn's rows. */
   isNewHistory: boolean;
@@ -175,7 +187,11 @@ interface TurnRecord {
   askCalls: AskCall[];
   fullResponse: string;
   generatedImages: GeneratedImage[];
+  /** True once the client was sent any of the model's output. Errors do not count. */
+  hasOutput: boolean;
   rows: GptHistoryPrompt[];
+  /** The last error the model stream reported, which it streams instead of throwing. */
+  streamError?: string;
 }
 
 type StreamPart = {type: string; [key: string]: unknown};
@@ -361,14 +377,44 @@ export const staleAskError = (toolCallId: string): APIError =>
  * with `$` is not read as a field path.
  */
 
-/** Inside a `$map` over `prompts` as `row`: true for the ask's call row while it is pending. */
-const isPendingAskCallRow = (toolCallId: string): Record<string, unknown> => ({
+/** Inside a `$map` over `prompts` as `row`: true for the ask's call row while it has `status`. */
+const isAskCallRow = ({
+  status,
+  toolCallId,
+}: {
+  status: GptHistoryAskStatus;
+  toolCallId: string;
+}): Record<string, unknown> => ({
   $and: [
     {$eq: ["$$row.type", "tool-call"]},
     {$eq: ["$$row.toolCallId", {$literal: toolCallId}]},
-    {$eq: ["$$row.ask.status", "pending"]},
+    {$eq: ["$$row.ask.status", {$literal: status}]},
   ],
 });
+
+/** A `$map` over `rows` that sets the ask's call row from status `from` to status `to`. */
+const withAskCallStatus = ({
+  from,
+  rows,
+  to,
+  toolCallId,
+}: {
+  from: GptHistoryAskStatus;
+  rows: unknown;
+  to: GptHistoryAskStatus;
+  toolCallId: string;
+}): Record<string, unknown> => {
+  const markedRow = {
+    $mergeObjects: ["$$row", {ask: {$mergeObjects: ["$$row.ask", {status: {$literal: to}}]}}],
+  };
+  return {
+    $map: {
+      as: "row",
+      in: {$cond: [isAskCallRow({status: from, toolCallId}), markedRow, "$$row"]},
+      input: rows,
+    },
+  };
+};
 
 /** `prompts` with the ask's call row marked `status` and its result row appended. */
 const promptsWithAskResult = ({
@@ -389,16 +435,12 @@ const promptsWithAskResult = ({
     toolName,
     type: "tool-result",
   };
-  const markedRow = {
-    $mergeObjects: ["$$row", {ask: {$mergeObjects: ["$$row.ask", {status: {$literal: status}}]}}],
-  };
-  const markedRows = {
-    $map: {
-      as: "row",
-      in: {$cond: [isPendingAskCallRow(toolCallId), markedRow, "$$row"]},
-      input: "$prompts",
-    },
-  };
+  const markedRows = withAskCallStatus({
+    from: "pending",
+    rows: "$prompts",
+    to: status,
+    toolCallId,
+  });
   return {$concatArrays: [markedRows, [{$literal: resultRow}]]};
 };
 
@@ -433,6 +475,93 @@ const resolvePendingAsk = async ({
     ],
     {returnDocument: "after", updatePipeline: true}
   );
+
+/**
+ * Undoes `resolvePendingAsk` for an answer whose turn failed before the client saw any output, so
+ * the user can answer again. Only applies while the conversation is as the answer left it: no
+ * ask is pending and it still has `rowCount` rows, the last being the answer's result row.
+ * Returns whether it applied.
+ */
+const restorePendingAsk = async ({
+  answer,
+  history,
+  rowCount,
+}: {
+  answer: PendingAnswer;
+  history: GptHistoryDocument;
+  /** The row count right after the answer was stored. */
+  rowCount: number;
+}): Promise<boolean> => {
+  try {
+    const restored = await GptHistory.findOneAndUpdate(
+      {_id: history._id, pendingAsk: null, prompts: {$size: rowCount}},
+      [
+        {
+          $set: {
+            pendingAsk: {$literal: answer.pendingAsk},
+            prompts: withAskCallStatus({
+              from: answer.status,
+              rows: {$slice: ["$prompts", rowCount - 1]},
+              to: "pending",
+              toolCallId: answer.toolCallId,
+            }),
+          },
+        },
+      ],
+      {returnDocument: "after", updatePipeline: true}
+    );
+    return restored !== null;
+  } catch (error) {
+    logger.error("Failed to put back an ask whose answer's turn failed", {
+      error: error instanceof Error ? error.message : String(error),
+      historyId: history._id.toString(),
+      toolCallId: answer.toolCallId,
+    });
+    return false;
+  }
+};
+
+/**
+ * Cancels an ask whose call row was saved pending by a turn that failed before making it the
+ * pending ask, so no row waits on an ask the conversation does not.
+ */
+const cancelUnclaimedAsk = async ({
+  ask,
+  history,
+}: {
+  ask: AskCall;
+  history: GptHistoryDocument;
+}): Promise<void> => {
+  const {toolCallId} = ask;
+  try {
+    await GptHistory.findOneAndUpdate(
+      {
+        _id: history._id,
+        "pendingAsk.toolCallId": {$ne: toolCallId},
+        prompts: {$elemMatch: {"ask.status": "pending", toolCallId, type: "tool-call"}},
+      },
+      [
+        {
+          $set: {
+            prompts: promptsWithAskResult({
+              result: {action: "cancel"},
+              status: "cancelled",
+              toolCallId,
+              toolName: askRowToolName(ask),
+            }),
+          },
+        },
+      ],
+      {updatePipeline: true}
+    );
+  } catch (error) {
+    logger.error("Failed to cancel an ask a failed turn left pending", {
+      error: error instanceof Error ? error.message : String(error),
+      historyId: history._id.toString(),
+      toolCallId,
+    });
+  }
+};
 
 /** How many times a new message retries cancelling an ask that other requests keep replacing. */
 const MAX_CANCEL_ATTEMPTS = 3;
@@ -661,7 +790,8 @@ const prepareAnswer = async ({
 
 /**
  * Loads the history and prepares the turn's messages. A new prompt first cancels any pending
- * ask. An answer resolves the pending ask and replays the paused turn with the answer appended.
+ * ask. An answer is checked and replays the paused turn with the answer appended; `runChatTurn`
+ * resolves the pending ask once the turn's tools and system prompt are ready.
  */
 const startTurn = async ({
   aiService,
@@ -705,17 +835,12 @@ const startTurn = async ({
       maxFileSizeBytes,
       userId,
     });
-    const resolved = await resolvePendingAsk({
-      history,
-      result: storedAnswer,
-      status: answer.action === "cancel" ? "cancelled" : "answered",
-      toolCallId,
-      toolName: askRowToolName(pending),
-    });
-    if (!resolved) {
-      throw staleAskError(toolCallId);
-    }
-    const turnHistory = resolved.prompts.slice(0, promptIndex);
+    // `minimize: false` keeps the empty objects the replayed messages need, such as `input: {}`.
+    const storedPendingAsk = history.toObject({minimize: false, virtuals: false})
+      .pendingAsk as GptHistoryPendingAsk;
+    // Rows are only ever appended, and the paused turn's rows start at `promptIndex`, so these
+    // rows are the same once the ask is resolved.
+    const turnHistory = history.prompts.slice(0, promptIndex);
     const replayedMessages = completePausedTurn({
       answer: storedAnswer,
       approvalId,
@@ -732,7 +857,14 @@ const startTurn = async ({
         })
       : replayedMessages;
     return {
-      history: resolved,
+      answer: {
+        pendingAsk: storedPendingAsk,
+        result: storedAnswer,
+        status: answer.action === "cancel" ? "cancelled" : "answered",
+        toolCallId,
+        toolName: askRowToolName(pending),
+      },
+      history,
       isNewHistory: false,
       logPrompt: JSON.stringify(storedAnswer),
       messages: [...aiService.buildMessages(turnHistory), ...modelMessages],
@@ -976,6 +1108,7 @@ const consumeStream = async ({
           ? part.error.message
           : String(part.error ?? "Unknown stream error");
       logger.error("AI stream error part", {error: errMsg});
+      record.streamError = errMsg;
       sink.emit({error: errMsg});
       continue;
     }
@@ -1223,7 +1356,8 @@ export const runChatTurn = async ({
   }
 
   const turn = await startTurn({aiService, askAnswer, body, options, userId});
-  const {isNewHistory, logPrompt, messages, replayedMessages, resolvedAsk, titlePrompt} = turn;
+  const {answer, isNewHistory, logPrompt, messages, replayedMessages, resolvedAsk, titlePrompt} =
+    turn;
   let {history} = turn;
   const effectiveSystemPrompt = await buildSystemPrompt({
     history,
@@ -1250,6 +1384,17 @@ export const runChatTurn = async ({
     systemPrompt: effectiveSystemPrompt,
   });
 
+  // Rows saved after the answer mean the turn moved on, so a failure keeps the answer.
+  let answeredRowCount = 0;
+  if (answer) {
+    const resolved = await resolvePendingAsk({history, ...answer});
+    if (!resolved) {
+      throw staleAskError(answer.toolCallId);
+    }
+    history = resolved;
+    answeredRowCount = resolved.prompts.length;
+  }
+
   sink.open();
 
   const startTime = DateTime.now().toMillis();
@@ -1257,7 +1402,17 @@ export const runChatTurn = async ({
     askCalls: [],
     fullResponse: "",
     generatedImages: [],
+    hasOutput: false,
     rows: [...turn.rows],
+  };
+  const outputSink: ChatTurnSink = {
+    emit: (event) => {
+      if (!("error" in event)) {
+        record.hasOutput = true;
+      }
+      sink.emit(event);
+    },
+    open: sink.open,
   };
   let isSaved = false;
   const saveRows = async (rows: GptHistoryPrompt[]): Promise<number> => {
@@ -1266,6 +1421,74 @@ export const runChatTurn = async ({
     isSaved = true;
     return saved.firstRowIndex;
   };
+  // An ask whose call row is saved pending but that is not yet the conversation's pending ask.
+  let unclaimedAsk: AskCall | undefined;
+
+  /**
+   * Ends a failed turn with `{error}` then `{done}`. An answer's turn that failed before the
+   * client saw any output puts the ask back, so the user can answer again.
+   */
+  const endFailedTurn = async ({
+    errorMessage,
+    isErrorSent,
+  }: {
+    errorMessage: string;
+    isErrorSent: boolean;
+  }): Promise<void> => {
+    const isAskRestored =
+      answer && !record.hasOutput
+        ? await restorePendingAsk({answer, history, rowCount: answeredRowCount})
+        : false;
+    const metadata = isAskRestored ? {} : answeredAskMetadata(resolvedAsk);
+    try {
+      await AIRequest.logRequest({
+        aiModel: modelId ?? "unknown",
+        error: errorMessage,
+        prompt: logPrompt,
+        requestType: "general",
+        responseTime: DateTime.now().toMillis() - startTime,
+        userId: userId ?? undefined,
+        ...(Object.keys(metadata).length > 0 ? {metadata} : {}),
+      });
+    } catch (logErr) {
+      logger.warn("Failed to log AIRequest error", {
+        error: logErr instanceof Error ? logErr.message : String(logErr),
+      });
+    }
+
+    if (!isErrorSent) {
+      sink.emit({error: errorMessage});
+    }
+    if (unclaimedAsk) {
+      await cancelUnclaimedAsk({ask: unclaimedAsk, history});
+    }
+
+    // Keep what the user saw before the failure. Asks are dropped: the turn cannot pause on them.
+    if (!isSaved && !isAskRestored) {
+      try {
+        await saveRows([
+          ...record.rows,
+          ...assistantRows({
+            fullResponse: record.fullResponse,
+            generatedImages: record.generatedImages,
+            modelId: aiService.modelId,
+          }),
+        ]);
+      } catch (saveErr) {
+        logger.error("Failed to save a failed turn's rows", {
+          error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+          historyId: history._id.toString(),
+        });
+      }
+    }
+    sink.emit({
+      done: true,
+      ...(isSaved || !isNewHistory ? {historyId: history._id.toString()} : {}),
+      ...(history.title ? {title: history.title} : {}),
+      ...(isAskRestored && answer ? {pendingAsk: {toolCallId: answer.toolCallId}} : {}),
+    });
+  };
+
   try {
     if (resolvedAsk) {
       sink.emit({askResolved: {action: resolvedAsk.action, toolCallId: resolvedAsk.toolCallId}});
@@ -1306,8 +1529,12 @@ export const runChatTurn = async ({
       deniedReasons: deniedApprovalReasons(messages),
       record,
       result,
-      sink,
+      sink: outputSink,
     });
+    if (answer && !record.hasOutput && record.streamError !== undefined) {
+      await endFailedTurn({errorMessage: record.streamError, isErrorSent: true});
+      return;
+    }
     const {askCalls, fullResponse, generatedImages} = record;
 
     // The first ask in the step pauses the turn. Any other ask the model made in that step is
@@ -1326,6 +1553,7 @@ export const runChatTurn = async ({
           ]
         : []),
     ]);
+    unclaimedAsk = ask;
     const isPaused = ask
       ? await claimPendingAsk({
           ask,
@@ -1338,6 +1566,7 @@ export const runChatTurn = async ({
           ]),
         })
       : false;
+    unclaimedAsk = undefined;
     const pausedAsk = isPaused ? ask : undefined;
     if (ask && !pausedAsk) {
       logger.warn("Cancelled an ask because another turn's ask is already pending", {
@@ -1407,48 +1636,9 @@ export const runChatTurn = async ({
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error("Error in GPT stream", {error: errorMessage});
-
-    const metadata = answeredAskMetadata(resolvedAsk);
-    try {
-      await AIRequest.logRequest({
-        aiModel: modelId ?? "unknown",
-        error: errorMessage,
-        prompt: logPrompt,
-        requestType: "general",
-        responseTime: DateTime.now().toMillis() - startTime,
-        userId: userId ?? undefined,
-        ...(Object.keys(metadata).length > 0 ? {metadata} : {}),
-      });
-    } catch (logErr) {
-      logger.warn("Failed to log AIRequest error", {
-        error: logErr instanceof Error ? logErr.message : String(logErr),
-      });
-    }
-
-    sink.emit({error: error instanceof Error ? error.message : "Unknown error"});
-
-    // Keep what the user saw before the failure. Asks are dropped: the turn cannot pause on them.
-    if (!isSaved) {
-      try {
-        await saveRows([
-          ...record.rows,
-          ...assistantRows({
-            fullResponse: record.fullResponse,
-            generatedImages: record.generatedImages,
-            modelId: aiService.modelId,
-          }),
-        ]);
-      } catch (saveErr) {
-        logger.error("Failed to save a failed turn's rows", {
-          error: saveErr instanceof Error ? saveErr.message : String(saveErr),
-          historyId: history._id.toString(),
-        });
-      }
-    }
-    sink.emit({
-      done: true,
-      ...(isSaved || !isNewHistory ? {historyId: history._id.toString()} : {}),
-      ...(history.title ? {title: history.title} : {}),
+    await endFailedTurn({
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      isErrorSent: false,
     });
   }
 };
@@ -1494,10 +1684,14 @@ export const runBufferedChatTurn = async ({
       open: () => {},
     },
   });
-  const {ask, done, errors, texts} = turn;
+  const {done, errors, texts} = turn;
+  const historyId = done?.historyId ?? body.historyId;
+  // A failed answer's turn puts its ask back without streaming it again.
+  const ask =
+    turn.ask ?? (done?.pendingAsk ? (await GptHistory.findById(historyId))?.pendingAsk : undefined);
   return {
     ...(errors.length > 0 ? {error: errors.join("\n")} : {}),
-    historyId: done?.historyId ?? body.historyId,
+    historyId,
     ...(ask ? {pendingAsk: {kind: ask.kind, simple: ask.simple, toolCallId: ask.toolCallId}} : {}),
     text: texts.join(""),
     ...(done?.title ? {title: done.title} : {}),

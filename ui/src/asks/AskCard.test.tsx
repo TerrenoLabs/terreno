@@ -6,8 +6,11 @@ import {
   type MarkdownAskInput,
   toSimpleCard,
 } from "@terreno/blocks";
-import {act, fireEvent, waitFor, within} from "@testing-library/react-native";
+import {act, fireEvent, render, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
+import {createRef} from "react";
+import type {Text as NativeText} from "react-native";
+import {ThemeProvider} from "../Theme";
 import {TimezonePicker} from "../TimezonePicker";
 import {renderWithTheme} from "../test-utils";
 import {AskCard, type AskCardProps} from "./AskCard";
@@ -237,14 +240,14 @@ describe("AskCard", () => {
   describe("radio buttons", () => {
     it("keeps Submit disabled until an option is chosen, then sends that option", async () => {
       const onSubmit = mock(async (_submission: AskSubmission) => {});
-      const {getByLabelText, getByTestId, getByText} = renderCard({
+      const {getByTestId, getByText} = renderCard({
         ask: pendingAsk(REGION_INPUT),
         onSubmit,
       });
       assert.isOk(getByText("Choose one"));
       assert.isTrue(isDisabled(getByTestId("ask-card-submit")));
 
-      await press(getByLabelText("West — Oregon"));
+      await press(within(getByTestId("ask-card-radio")).getByLabelText("West — Oregon"));
       assert.isFalse(isDisabled(getByTestId("ask-card-submit")));
       await press(getByTestId("ask-card-submit"));
 
@@ -1209,6 +1212,47 @@ describe("AskCard", () => {
     assert.isFalse(isDisabled(getByTestId("ask-card-button-option:team")));
   });
 
+  it("says the answer was not sent when the host's submit fails, until the next try", async () => {
+    spyOn(console, "warn").mockImplementation(() => {});
+    const retry = deferred();
+    const onSubmit = mock(async (_submission: AskSubmission) => {});
+    onSubmit.mockImplementationOnce(async () => {
+      throw new Error("network down");
+    });
+    onSubmit.mockImplementationOnce(() => retry.promise);
+    const {getByTestId, queryByTestId} = renderCard({ask: pendingAsk(PLAN_INPUT), onSubmit});
+
+    await press(getByTestId("ask-card-button-option:team"));
+
+    assert.isOk(
+      within(getByTestId("ask-card-submit-error")).getByText(
+        "Your answer could not be sent. Try again."
+      )
+    );
+    await press(getByTestId("ask-card-button-option:starter"));
+    assert.isNull(queryByTestId("ask-card-submit-error"));
+    assert.lengthOf(onSubmit.mock.calls, 2);
+    await act(async () => {
+      retry.resolve();
+    });
+    assert.isNull(queryByTestId("ask-card-submit-error"));
+  });
+
+  it("shows the question as an accessible header the host can focus through promptRef", () => {
+    const promptRef = createRef<NativeText>();
+    const prompt = {focus: (): void => {}};
+    const {getByRole} = render(
+      <AskCard ask={pendingAsk(PLAN_INPUT)} onSubmit={async () => {}} promptRef={promptRef} />,
+      {
+        createNodeMock: (element) => (element.props.accessibilityRole === "header" ? prompt : null),
+        wrapper: ThemeProvider,
+      }
+    );
+
+    assert.isOk(getByRole("header", {name: "Which plan should I set up for your workspace?"}));
+    assert.strictEqual(promptRef.current, prompt as unknown as NativeText);
+  });
+
   it("disables its controls when the host takes no answers", () => {
     const {getByTestId} = renderWithTheme(<AskCard ask={pendingAsk(PLAN_INPUT)} />);
     assert.isTrue(isDisabled(getByTestId("ask-card-button-option:team")));
@@ -1266,4 +1310,57 @@ describe("AskCard", () => {
     assert.isOk(getByTestId("ask-card-invalid"));
     assert.isNull(queryByTestId("ask-card-submit"));
   });
+});
+
+describe("AskCard with a saved ask the wire left incomplete", () => {
+  const ANSWERED = "You answered this question.";
+  const kinds: Array<{content: Record<string, unknown>; input: unknown; kind: ChatAsk["kind"]}> = [
+    {content: {selected: ["team"]}, input: PLAN_INPUT, kind: "choice"},
+    {content: {confirmed: true}, input: REPORT_INPUT, kind: "confirm"},
+    {content: {changed: true, markdown: DRAFT}, input: DRAFT_INPUT, kind: "markdown"},
+    {content: {values: {amount: 120}}, input: INVOICE_INPUT, kind: "form"},
+    {content: {files: []}, input: {prompt: "Upload the receipt."}, kind: "files"},
+  ];
+  const savedAsk = (state: Record<string, unknown>): ChatAsk =>
+    ({status: "answered", toolCallId: "call_1", ...state}) as unknown as ChatAsk;
+
+  for (const {content, input, kind} of kinds) {
+    it(`shows the generic line for a ${kind} answered with empty input`, () => {
+      const {getByTestId} = renderCard({
+        ask: savedAsk({input: {}, kind, response: {action: "accept", content}}),
+      });
+      assert.isOk(within(getByTestId("ask-card-summary")).getByText(ANSWERED));
+    });
+
+    it(`shows the generic line for a ${kind} answered with no input`, () => {
+      const {getByTestId} = renderCard({
+        ask: savedAsk({kind, response: {action: "accept", content}}),
+      });
+      assert.isOk(within(getByTestId("ask-card-summary")).getByText(ANSWERED));
+    });
+
+    it(`shows the generic line for a ${kind} accepted with no content`, () => {
+      const {getByTestId, queryByTestId} = renderCard({
+        ask: savedAsk({input, kind, response: {action: "accept"}}),
+      });
+      assert.isOk(within(getByTestId("ask-card-summary")).getByText(ANSWERED));
+      assert.isNull(queryByTestId("ask-card-answer"));
+    });
+
+    it(`shows the generic line for a ${kind} accepted with content that is not an object`, () => {
+      const {getByTestId} = renderCard({
+        ask: savedAsk({input, kind, response: {action: "accept", content: "yes"}}),
+      });
+      assert.isOk(within(getByTestId("ask-card-summary")).getByText(ANSWERED));
+    });
+
+    it(`shows the cancelled line for a ${kind} cancelled with no input and an odd reason`, () => {
+      const {getByTestId} = renderCard({
+        ask: savedAsk({kind, response: {action: "cancel", reason: 5}, status: "cancelled"}),
+      });
+      assert.isOk(
+        within(getByTestId("ask-card-summary")).getByText("This question was cancelled.")
+      );
+    });
+  }
 });

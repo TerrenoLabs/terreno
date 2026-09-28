@@ -170,6 +170,17 @@ describe("AskCard files", () => {
     assert.isNull(rendered.queryByTestId("ask-card-errors"));
   });
 
+  it("accepts a CSV the picker reports as application/vnd.ms-excel, as Windows does", async () => {
+    const rendered = renderCard({ask: pendingFiles(RECEIPT_INPUT)});
+
+    await pickFiles(rendered, [
+      {mimeType: "application/vnd.ms-excel", name: "day.csv", size: 30, uri: "file:///day.csv"},
+    ]);
+
+    assert.isNull(rendered.queryByTestId("ask-card-errors"));
+    assert.isFalse(isDisabled(rendered.getByTestId("ask-card-submit")));
+  });
+
   it("explains a file that is over the size limit", async () => {
     const rendered = renderCard({ask: pendingFiles(RECEIPT_INPUT)});
 
@@ -200,6 +211,60 @@ describe("AskCard files", () => {
       )
     );
     assert.isFalse(isDisabled(rendered.getByTestId("ask-card-submit")));
+  });
+
+  it("disables Skip while the files are still being prepared, so the answer cannot be sent twice", async () => {
+    const onSubmit = mock(async (_submission: AskSubmission) => {});
+    let finishResolving: (refs: AskFileRef[]) => void = () => {};
+    const resolveAskFiles = mock(
+      (): Promise<AskFileRef[]> =>
+        new Promise((resolve) => {
+          finishResolving = resolve;
+        })
+    );
+    const rendered = renderCard({ask: pendingFiles(RECEIPT_INPUT), onSubmit, resolveAskFiles});
+    await pickFiles(rendered, [ITEMS_TXT]);
+
+    await press(rendered.getByTestId("ask-card-submit"));
+
+    assert.isTrue(isDisabled(rendered.getByTestId("ask-card-button-skip")));
+    assert.isTrue(isDisabled(rendered.getByTestId("ask-card-submit")));
+    await press(rendered.getByTestId("ask-card-button-skip"));
+    assert.equal(onSubmit.mock.calls.length, 0);
+
+    await act(async () => {
+      finishResolving(refsFor([ITEMS_TXT]));
+    });
+    assert.equal(onSubmit.mock.calls.length, 1);
+    assert.equal(onSubmit.mock.calls[0]?.[0].response.action, "accept");
+  });
+
+  it("sends nothing when the files finish after the ask was answered elsewhere", async () => {
+    const onSubmit = mock(async (_submission: AskSubmission) => {});
+    let finishResolving: (refs: AskFileRef[]) => void = () => {};
+    const resolveAskFiles = mock(
+      (): Promise<AskFileRef[]> =>
+        new Promise((resolve) => {
+          finishResolving = resolve;
+        })
+    );
+    const rendered = renderCard({ask: pendingFiles(RECEIPT_INPUT), onSubmit, resolveAskFiles});
+    await pickFiles(rendered, [ITEMS_TXT]);
+    await press(rendered.getByTestId("ask-card-submit"));
+
+    rendered.rerender(
+      <AskCard
+        ask={pendingFiles(RECEIPT_INPUT, {status: "answered"})}
+        onSubmit={onSubmit}
+        resolveAskFiles={resolveAskFiles}
+      />
+    );
+    await act(async () => {
+      finishResolving(refsFor([ITEMS_TXT]));
+    });
+
+    assert.isOk(rendered.getByTestId("ask-card-summary"));
+    assert.equal(onSubmit.mock.calls.length, 0);
   });
 
   it("shows the server's errors for the last answer", () => {

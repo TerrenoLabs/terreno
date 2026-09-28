@@ -405,7 +405,7 @@ describe("/gpt/histories headless turns", () => {
       ]);
     });
 
-    it("returns the error in the result when the model fails after the turn starts, and keeps the answer", async () => {
+    it("returns the error and the ask again when the model fails before streaming, so the button can be pressed again", async () => {
       const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
       const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
       const historyId = await pauseOnPlanAsk(agent);
@@ -416,10 +416,18 @@ describe("/gpt/histories headless turns", () => {
       const res = await postTurn(agent, historyId, TEAM_BUTTON);
 
       expect(res.status).toBe(200);
-      expect(res.body.data).toEqual({error: "The model is overloaded", historyId, text: ""});
+      expect(res.body.data).toEqual({
+        error: "The model is overloaded",
+        historyId,
+        pendingAsk: {kind: "choice", simple: PLAN_SIMPLE_CARD, toolCallId: "call_plan"},
+        text: "",
+      });
       const history = await loadHistory(historyId);
-      expect(history.pendingAsk).toBeUndefined();
-      expect(rowsOf(history).at(-1)).toEqual(TEAM_ANSWER_ROW);
+      expect(history.pendingAsk?.toolCallId).toBe("call_plan");
+      expect(rowsOf(history).at(-1)).toEqual({
+        ...PLAN_ASK_ROW,
+        ask: {kind: "choice", status: "pending"},
+      });
     });
 
     it("returns the error and keeps the message when the model stream fails mid-reply", async () => {

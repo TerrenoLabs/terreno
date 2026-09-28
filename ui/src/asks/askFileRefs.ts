@@ -13,6 +13,42 @@ export type AskFilesResolver = (files: SelectedFile[]) => Promise<AskFileRef[]>;
 export const normalizeMimeType = (mimeType: string): string =>
   (mimeType.split(";")[0] ?? "").trim().toLowerCase();
 
+/**
+ * Types pickers report when they do not know the file's type. Windows browsers report a CSV as
+ * `application/vnd.ms-excel` when Excel is installed.
+ */
+const GENERIC_MIME_TYPES: readonly string[] = [
+  "",
+  "application/octet-stream",
+  "application/vnd.ms-excel",
+];
+
+/** The type of each extension a `files` ask can accept. */
+const MIME_TYPE_BY_EXTENSION: Record<string, string> = {
+  csv: "text/csv",
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  json: "application/json",
+  pdf: "application/pdf",
+  png: "image/png",
+  txt: "text/plain",
+  webp: "image/webp",
+};
+
+/**
+ * A picked file's MIME type, normalized. When the picker reports no type or a generic one, the
+ * type of the file's extension, if a `files` ask can accept that extension.
+ */
+export const selectedFileMimeType = (file: {mimeType: string; name: string}): string => {
+  const reported = normalizeMimeType(file.mimeType);
+  if (!GENERIC_MIME_TYPES.includes(reported)) {
+    return reported;
+  }
+  const extension = file.name.includes(".") ? file.name.split(".").pop()?.toLowerCase() : "";
+  return MIME_TYPE_BY_EXTENSION[extension ?? ""] ?? reported;
+};
+
 const readViaFileReader = (blob: Blob): Promise<string> =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -44,10 +80,10 @@ const decodedLength = (base64: string): number =>
 
 /**
  * Reads a picked file into a `{url}` ref: a base64 data URL whose media type is the file's
- * declared type, with the size of its bytes.
+ * `selectedFileMimeType`, with the size of its bytes.
  */
 export const selectedFileToDataUrlRef = async (file: SelectedFile): Promise<AskFileRef> => {
-  const mimeType = normalizeMimeType(file.mimeType);
+  const mimeType = selectedFileMimeType(file);
   const base64 = await base64Of(file.uri);
   return {
     filename: file.name,

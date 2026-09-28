@@ -234,17 +234,26 @@ use uploads, or lower the per-file cap with `asks: {maxFileSizeBytes: 5_000_000}
    URLs when `/files/upload` answers 404, so the same app works with and without a bucket:
 
    ```tsx
+   const [postFilesUpload] = usePostFilesUploadMutation();
    const resolveAskFiles = useMemo(
-     () => createAskFilesResolver({upload: uploadAskFile}),
-     []
+     () =>
+       createAskFilesResolver({
+         upload: createAskFileUploader({
+           send: async (file) => postFilesUpload(await uploadFormData(file)),
+         }),
+       }),
+     [postFilesUpload]
    );
 
    <GPTChat resolveAskFiles={resolveAskFiles} {...chatProps} />;
    ```
 
-   `uploadAskFile` posts the file as multipart form data to `/files/upload` with the session
-   token, returns `undefined` on 404, and returns `uploadedFileFromBody(body)` (the upload's `id`
-   and `size`) otherwise. See `example-frontend/app/(tabs)/ai.tsx`.
+   `postFilesUpload` is an RTK Query mutation in `example-frontend/store/sdk.ts` whose body is a
+   `FormData` with a `file` part; the base query sends it with the session token. The generated
+   SDK has no file endpoints, because `/files/*` exists only on a server with a bucket.
+   `createAskFileUploader` (in `gptAsks.ts`) returns `undefined` on 404, the upload's `id` and
+   `size` on success, and throws with the server's detail otherwise (such as 401 when the session
+   has ended), so the ask stays open. See `example-frontend/app/(tabs)/ai.tsx`.
 
 A resolver that throws keeps the ask open, and the card says the files could not be sent. A
 `fileId` must name an upload of the user who answers, so one user cannot send another's files.

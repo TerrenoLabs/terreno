@@ -295,8 +295,8 @@ the ask's `tool-call` message and pass `onAskSubmit`:
 - The ask's `tool-result` message stays in `currentMessages` but is not shown. Keep it: message
   indexes must match the stored `prompts` rows that ratings use. When `ask.response` is unset, the
   card reads the answer from that message.
-- A pending ask takes focus when it appears (DOM focus on web, accessibility focus on native),
-  labelled with the ask's `title`.
+- A pending ask takes focus when it appears: DOM focus on the card, labelled with the ask's
+  `title`, on web; accessibility focus on the question, an accessibility header, on native.
 - Answered and cancelled asks collapse to a one-line summary.
 
 The example AI screen, `example-frontend/app/(tabs)/ai.tsx`, handles the stream events, saved
@@ -305,7 +305,9 @@ rows, answers, and errors. Steps: [Add agent asks to a chat](../how-to/agent-ui-
 ### AskCard
 
 One agent ask in a chat transcript: controls while it is pending, a summary line after. `GPTChat`
-renders it for messages with `ask`. Render it directly in a custom transcript.
+renders it for messages with `ask`. Render it directly in a custom transcript. A saved ask whose
+input no longer validates, or whose `accept` answer has no `content` object, shows the generic
+line ("You answered this question.") and no sent values.
 
 ```tsx
 <AskCard ask={ask} errors={errors} onSubmit={handleAskSubmit} testID="plan-ask" />
@@ -315,9 +317,13 @@ renders it for messages with `ask`. Render it directly in a custom transcript.
 | --- | --- | --- |
 | `ask` | `ChatAsk` | The ask. Pending asks are interactive. Answered and cancelled asks show a summary. |
 | `errors` | `AskValidationError[]` | Errors for the last answer, shown under the controls |
-| `onSubmit` | `AskSubmitHandler` | Called with `{toolCallId, response}`. Without it, the card cannot be answered: buttons and the select are disabled, and radio and checkbox options show as plain text. |
+| `onSubmit` | `AskSubmitHandler` | Called with `{toolCallId, response}`. Without it, the card cannot be answered: buttons and the select are disabled, and radio and checkbox options show as plain text. When the promise it returns rejects, the ask stays open and the card shows "Your answer could not be sent. Try again." until the next answer. |
+| `promptRef` | `React.Ref<Text>` (React Native) | Receives the question's native text, which is an accessibility header. `GPTChat` uses it to move screen reader focus to a pending ask on native. |
 | `resolveAskFiles` | `AskFilesResolver` | For a `files` ask: turns the picked files into refs on Submit. Defaults to data URLs. `GPTChat` passes its own `resolveAskFiles`. |
 | `testID` | string | Defaults to `ask-card`. `GPTChat` passes `gpt-ask-<toolCallId>`. |
+
+A saved ask whose input no longer passes `validateAskInput` shows "This question cannot be shown.
+Send a message to continue." while pending, and "You answered this question." once answered.
 
 `choice` controls:
 
@@ -389,9 +395,13 @@ default "Submit") and Skip unless `allowDecline` is `false`. The picker offers P
 when `accept` has `image`, and its document picker offers only the accepted MIME types. It allows
 several files when `maxFiles` is more than 1 and is disabled once `maxFiles` files are picked.
 Submit is enabled only when `validateAskResponse` accepts the picked names, types, and sizes. On
-Submit, the card calls `resolveAskFiles` with the picked files and sends `{files: refs}`. If the
-resolver throws, the ask stays open and the card shows "The files could not be sent. Try again, or
-pick them again." Server errors, such as `MIME_MISMATCH`, show under the picked files.
+Submit, the card calls `resolveAskFiles` with the picked files and sends `{files: refs}`; Submit
+shows a spinner and Skip is disabled until the answer is sent. When the ask ends another way while
+the resolver runs, such as an answer from another tab, its refs are not sent. If the resolver throws, the ask
+stays open and the card shows "The files could not be sent. Try again, or pick them again." Server
+errors, such as `MIME_MISMATCH`, show under the picked files. Each file's type is
+`selectedFileMimeType(file)`, so a CSV a picker reports as `application/vnd.ms-excel` is sent as
+`text/csv`.
 
 | How the ask ended | Summary |
 | --- | --- |
@@ -413,6 +423,7 @@ pick them again." Server errors, such as `MIME_MISMATCH`, show under the picked 
 | Quick reply or Skip button | `{testID}-button-<button id>`, such as `{testID}-button-option:team` or `{testID}-button-skip` |
 | Confirm button row | `{testID}-confirm-buttons` |
 | Confirm approve or deny button | `{testID}-button-approve`, `{testID}-button-deny` |
+| Radio options (up to 8) | `{testID}-radio` |
 | Select | `{testID}-select` |
 | Checkboxes (`select: "many"`) | `{testID}-multiselect` |
 | Other text field | `{testID}-other` |
@@ -427,6 +438,7 @@ pick them again." Server errors, such as `MIME_MISMATCH`, show under the picked 
 | Answer errors | `{testID}-errors` |
 | Summary | `{testID}-summary` |
 | Ask that cannot be shown | `{testID}-invalid` |
+| Answer that could not be sent | `{testID}-submit-error` |
 
 Types: `AskCardProps`, `ChatAsk`, `ChatAskState`, `ChatAskStatus`, `AskSubmission`,
 `AskSubmitHandler`, `AskFilesResolver`. Demo story: `AskCard`.
@@ -437,7 +449,8 @@ File ref helpers:
 | --- | --- |
 | `AskFilesResolver` | `(files: SelectedFile[]) => Promise<AskFileRef[]>`. Throw to keep the ask open. |
 | `resolveAskFilesAsDataUrls` | The default resolver: every file as a `{url}` data URL |
-| `selectedFileToDataUrlRef(file)` | One picked file as `{filename, mimeType, size, url}`. The data URL's media type is the file's declared type, and `size` is the decoded byte count. |
+| `selectedFileToDataUrlRef(file)` | One picked file as `{filename, mimeType, size, url}`. The data URL's media type is `selectedFileMimeType(file)`, and `size` is the decoded byte count. |
+| `selectedFileMimeType(file)` | The picked file's normalized type. When the picker reports none, `application/octet-stream`, or `application/vnd.ms-excel` (Windows reports CSV files so), the type comes from the extension: `.csv`, `.gif`, `.jpeg`, `.jpg`, `.json`, `.pdf`, `.png`, `.txt`, `.webp`. Otherwise the reported type is kept. |
 | `normalizeMimeType(mimeType)` | Drops parameters and lowercases: `Text/CSV; charset=utf-8` becomes `text/csv` |
 
 `FilePickerButton` props used by the files card, also available to any caller:

@@ -73,6 +73,34 @@ export const ASK_FILES_TOOL_DESCRIPTION =
   "images and PDFs as they are, text, CSV, and JSON as text. Use it when you need the file's " +
   "contents; ask for a typed value with a form instead.";
 
+/** The line before each file of a `files` answer in the tool result the model sees. */
+export const askFileHeading = ({
+  count,
+  filename,
+  mimeType,
+  position,
+  size,
+}: {
+  count: number;
+  filename: string;
+  mimeType: string;
+  position: number;
+  size: number;
+}): string => `File ${position} of ${count}: ${filename} (${mimeType}, ${size} bytes)`;
+
+/** The note after a text file of a `files` answer that was cut to fit. */
+export const truncatedAskFileNote = ({
+  keptBytes,
+  totalBytes,
+}: {
+  keptBytes: number;
+  totalBytes: number;
+}): string => `[The file is cut to its first ${keptBytes} of ${totalBytes} bytes.]`;
+
+/** The note naming the uploads of a `files` answer that a host's own replay could not load. */
+export const unloadedAskUploadsNote = (uploads: unknown[]): string =>
+  `Uploads not loaded here: ${JSON.stringify(uploads)}`;
+
 /** Tool result for a call that was left without one when the turn paused for an ask. */
 export const UNANSWERED_TOOL_CALL_RESULT = "This tool call did not run, so it has no result.";
 

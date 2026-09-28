@@ -9,8 +9,8 @@ import {
   askFromHistoryPrompt,
   askMessage,
   createAskFilesResolver,
+  createAskFileUploader,
   errorDetailFromBody,
-  uploadedFileFromBody,
   withoutEmptyAssistant,
   withResolvedAsk,
   withToolResult,
@@ -31,6 +31,14 @@ const PLAN_CARD = {
   handoff: false,
   kind: "choice",
   text: "Which plan should I set up?",
+  toolCallId: "call_plan",
+};
+
+const PLAN_PENDING_ASK: GptHistory["pendingAsk"] = {
+  created: "2026-09-28T12:00:00.000Z",
+  input: PLAN_INPUT,
+  kind: "choice",
+  simple: PLAN_CARD,
   toolCallId: "call_plan",
 };
 
@@ -55,7 +63,7 @@ const planAskRow = (
 describe("askFromHistoryPrompt", () => {
   it("restores the conversation's pending ask with its stored card", () => {
     const ask = askFromHistoryPrompt({
-      pendingAsk: {input: PLAN_INPUT, kind: "choice", simple: PLAN_CARD, toolCallId: "call_plan"},
+      pendingAsk: PLAN_PENDING_ASK,
       prompt: planAskRow("pending"),
     });
 
@@ -66,6 +74,17 @@ describe("askFromHistoryPrompt", () => {
       status: "pending",
       toolCallId: "call_plan",
     } as unknown as typeof ask);
+  });
+
+  it("takes a pending ask's input from the conversation when its row holds no args", () => {
+    const {args: _args, ...rowWithoutArgs} = planAskRow("pending");
+
+    const ask = askFromHistoryPrompt({
+      pendingAsk: PLAN_PENDING_ASK,
+      prompt: rowWithoutArgs,
+    });
+
+    expect(ask?.input).toEqual(PLAN_INPUT as unknown as NonNullable<typeof ask>["input"]);
   });
 
   it("keeps an answered ask's status", () => {
@@ -356,6 +375,16 @@ describe("createAskFilesResolver", () => {
     expect(uploads).toBe(1);
   });
 
+  it("answers with the extension's type for a CSV the picker reports as application/vnd.ms-excel", async () => {
+    const resolve = createAskFilesResolver({
+      upload: async (file) => ({id: `id-${file.name}`, size: 9}),
+    });
+
+    expect(
+      await resolve([{mimeType: "application/vnd.ms-excel", name: "items.csv", uri: "blob:items"}])
+    ).toEqual([{fileId: "id-items.csv", filename: "items.csv", mimeType: "text/csv", size: 9}]);
+  });
+
   it("keeps the ask open when an upload fails", async () => {
     const resolve = createAskFilesResolver({
       upload: async () => {
@@ -367,14 +396,67 @@ describe("createAskFilesResolver", () => {
   });
 });
 
-describe("uploadedFileFromBody", () => {
-  it("reads the id and size of an upload response", () => {
-    expect(
-      uploadedFileFromBody({
-        data: {filename: "a.png", gcsKey: "k", id: "66f0c0ffee", mimeType: "image/png", size: 12},
-      })
-    ).toEqual({id: "66f0c0ffee", size: 12});
-    expect(uploadedFileFromBody({data: {gcsKey: "k"}})).toBeUndefined();
-    expect(uploadedFileFromBody(undefined)).toBeUndefined();
+describe("createAskFileUploader", () => {
+  it("sends the file and returns the uploaded file's id and size", async () => {
+    const sent: SelectedFile[] = [];
+    const upload = createAskFileUploader({
+      send: async (file) => {
+        sent.push(file);
+        return {data: {gcsKey: "uploads/u/1-receipt.png", id: "66f0c0ffee", size: 12}};
+      },
+    });
+
+    expect(await upload(RECEIPT)).toEqual({id: "66f0c0ffee", size: 12});
+    expect(sent).toEqual([RECEIPT]);
+  });
+
+  it("keeps the ask open with the server's detail when the user is signed out", async () => {
+    const upload = createAskFileUploader({
+      send: async () => ({error: {data: {title: "Unauthorized"}, status: 401}}),
+    });
+
+    await expect(upload(RECEIPT)).rejects.toThrow("Unauthorized");
+  });
+
+  it("returns nothing when the server has no file routes", async () => {
+    const upload = createAskFileUploader({
+      send: async () => ({error: {data: {title: "Not found"}, status: 404}}),
+    });
+
+    expect(await upload(RECEIPT)).toBeUndefined();
+  });
+
+  it("returns nothing when the server's 404 is not JSON", async () => {
+    const upload = createAskFileUploader({
+      send: async () => ({
+        error: {data: "Cannot POST /files/upload", originalStatus: 404, status: "PARSING_ERROR"},
+      }),
+    });
+
+    expect(await upload(RECEIPT)).toBeUndefined();
+  });
+
+  it("fails with the server's detail when the upload is rejected", async () => {
+    const upload = createAskFileUploader({
+      send: async () => ({error: {data: {title: "File too large"}, status: 413}}),
+    });
+
+    await expect(upload(RECEIPT)).rejects.toThrow("File too large");
+  });
+
+  it("fails with the status when the error has no detail", async () => {
+    const upload = createAskFileUploader({
+      send: async () => ({error: {error: "TypeError: Failed to fetch", status: "FETCH_ERROR"}}),
+    });
+
+    await expect(upload(RECEIPT)).rejects.toThrow("FETCH_ERROR");
+  });
+
+  it("fails when a successful response names no upload id or size", async () => {
+    const upload = createAskFileUploader({
+      send: async () => ({data: {gcsKey: "k"}}),
+    });
+
+    await expect(upload(RECEIPT)).rejects.toThrow("The upload returned no file id or size.");
   });
 });

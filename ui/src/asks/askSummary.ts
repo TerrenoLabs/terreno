@@ -3,6 +3,7 @@ import {
   type ChoiceAskInput,
   type ConfirmAskInput,
   confirmButtonLabels,
+  validateAskInput,
 } from "@terreno/blocks";
 
 import type {ChatAsk} from "./askTypes";
@@ -88,7 +89,31 @@ const filesSummary = (content: Record<string, unknown>): string => {
   return names.length > 0 ? `You sent ${count}: ${names.join(", ")}` : `You sent ${count}`;
 };
 
-const acceptedSummary = (ask: ChatAsk, content: Record<string, unknown>): string => {
+/** An accepted answer's `content`, or undefined when the saved answer has no content object. */
+export const acceptedContent = (ask: ChatAsk): Record<string, unknown> | undefined => {
+  if (ask.response?.action !== "accept") {
+    return undefined;
+  }
+  const {content} = ask.response as {content?: unknown};
+  if (content === null || typeof content !== "object" || Array.isArray(content)) {
+    return undefined;
+  }
+  return content as Record<string, unknown>;
+};
+
+/** Whether a saved ask's input still validates, so its labels and fields can be read. */
+export const hasValidAskInput = (ask: ChatAsk): boolean =>
+  validateAskInput({input: ask.input, kind: ask.kind}).length === 0;
+
+/**
+ * A saved ask's input and answer come from the wire, so one that no longer validates gets the
+ * generic line instead of a summary that reads its labels.
+ */
+const acceptedSummary = (ask: ChatAsk): string => {
+  const content = acceptedContent(ask);
+  if (!content || !hasValidAskInput(ask)) {
+    return ANSWERED;
+  }
   switch (ask.kind) {
     case "choice":
       return choiceSummary(ask.input, content);
@@ -117,7 +142,7 @@ const cancelledSummary = (reason: string | undefined): string => {
 export const askSummary = (ask: ChatAsk): string => {
   const {response, status} = ask;
   if (response?.action === "accept") {
-    return acceptedSummary(ask, response.content);
+    return acceptedSummary(ask);
   }
   if (response?.action === "decline") {
     return "You skipped this question.";

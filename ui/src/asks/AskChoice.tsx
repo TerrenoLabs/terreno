@@ -317,13 +317,16 @@ const AskChoiceOne: React.FC<AskChoiceProps> = ({
     if (isDisabled) {
       return <ReadOnlyOptions input={input} testID={`${testID}-options`} />;
     }
+    // RadioField takes no testID, so the wrapper carries it.
     return (
-      <RadioField
-        onChange={handleSelect}
-        options={fieldOptions}
-        title="Choose one"
-        value={selectedId}
-      />
+      <Box testID={`${testID}-radio`}>
+        <RadioField
+          onChange={handleSelect}
+          options={fieldOptions}
+          title="Choose one"
+          value={selectedId}
+        />
+      </Box>
     );
   };
 

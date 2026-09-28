@@ -14800,13 +14800,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 ],
                                 "type": "string",
                               },
-                              "promptIndex": {
-                                "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
-                                "type": "number",
-                              },
-                              "responseMessages": {
-                                "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
-                              },
                               "simple": {
                                 "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
                               },
@@ -14819,12 +14812,11 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "type": "string",
                               },
                             },
+                            "readOnly": true,
                             "required": [
                               "created",
                               "input",
                               "kind",
-                              "promptIndex",
-                              "responseMessages",
                               "simple",
                               "toolCallId",
                             ],
@@ -15109,13 +15101,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         ],
                         "type": "string",
                       },
-                      "promptIndex": {
-                        "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
-                        "type": "number",
-                      },
-                      "responseMessages": {
-                        "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
-                      },
                       "simple": {
                         "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
                       },
@@ -15133,8 +15118,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "created",
                       "input",
                       "kind",
-                      "promptIndex",
-                      "responseMessages",
                       "simple",
                       "toolCallId",
                     ],
@@ -15348,13 +15331,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           ],
                           "type": "string",
                         },
-                        "promptIndex": {
-                          "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
-                          "type": "number",
-                        },
-                        "responseMessages": {
-                          "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
-                        },
                         "simple": {
                           "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
                         },
@@ -15372,8 +15348,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "created",
                         "input",
                         "kind",
-                        "promptIndex",
-                        "responseMessages",
                         "simple",
                         "toolCallId",
                       ],
@@ -15967,13 +15941,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           ],
                           "type": "string",
                         },
-                        "promptIndex": {
-                          "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
-                          "type": "number",
-                        },
-                        "responseMessages": {
-                          "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
-                        },
                         "simple": {
                           "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
                         },
@@ -15986,12 +15953,11 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "type": "string",
                         },
                       },
+                      "readOnly": true,
                       "required": [
                         "created",
                         "input",
                         "kind",
-                        "promptIndex",
-                        "responseMessages",
                         "simple",
                         "toolCallId",
                       ],
@@ -16269,13 +16235,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         ],
                         "type": "string",
                       },
-                      "promptIndex": {
-                        "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
-                        "type": "number",
-                      },
-                      "responseMessages": {
-                        "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
-                      },
                       "simple": {
                         "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
                       },
@@ -16293,8 +16252,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "created",
                       "input",
                       "kind",
-                      "promptIndex",
-                      "responseMessages",
                       "simple",
                       "toolCallId",
                     ],
@@ -16508,13 +16465,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           ],
                           "type": "string",
                         },
-                        "promptIndex": {
-                          "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
-                          "type": "number",
-                        },
-                        "responseMessages": {
-                          "description": "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
-                        },
                         "simple": {
                           "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
                         },
@@ -16532,8 +16482,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "created",
                         "input",
                         "kind",
-                        "promptIndex",
-                        "responseMessages",
                         "simple",
                         "toolCallId",
                       ],

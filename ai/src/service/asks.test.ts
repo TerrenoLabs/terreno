@@ -534,6 +534,39 @@ describe("asks", () => {
         },
       ]);
     });
+
+    it("leaves out the fileData a tool result carries, as the stored rows do", () => {
+      const messages: ModelMessage[] = [
+        {
+          content: [
+            {
+              output: {
+                type: "json",
+                value: {fileData: "data:application/pdf;base64,AAAA", filename: "plan.pdf"},
+              },
+              toolCallId: "call_export",
+              toolName: "exportPlan",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        },
+      ];
+
+      expect(toStoredMessages(messages)).toStrictEqual([
+        {
+          content: [
+            {
+              output: {type: "json", value: {filename: "plan.pdf"}},
+              toolCallId: "call_export",
+              toolName: "exportPlan",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        },
+      ]);
+    });
   });
 
   describe("completePausedTurn", () => {

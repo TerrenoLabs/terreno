@@ -1,4 +1,4 @@
-import {expect, mock} from "bun:test";
+import {expect, mock, spyOn} from "bun:test";
 import {once} from "node:events";
 import type {AddressInfo} from "node:net";
 import {TerrenoApp} from "@terreno/api";
@@ -440,6 +440,29 @@ export const onlyHistoryId = async (): Promise<string> => {
   const histories = await GptHistory.find({});
   expect(histories).toHaveLength(1);
   return histories[0]._id.toString();
+};
+
+const isAskClaim = (update: unknown): boolean =>
+  Array.isArray(update) &&
+  (update[0] as {$set?: {pendingAsk?: {$cond?: unknown}}} | undefined)?.$set?.pendingAsk?.$cond !==
+    undefined;
+
+/**
+ * Makes the next update that claims a pending ask throw, as a replica set failover would, after
+ * the turn saved its rows. Call `mockRestore()` on the result when the turn ends.
+ */
+export const failNextAskClaim = (): {mockRestore: () => void} => {
+  const findOneAndUpdate = GptHistory.findOneAndUpdate.bind(GptHistory) as (
+    ...args: unknown[]
+  ) => unknown;
+  let hasFailed = false;
+  return spyOn(GptHistory, "findOneAndUpdate").mockImplementation(((...args: unknown[]) => {
+    if (!hasFailed && isAskClaim(args[1])) {
+      hasFailed = true;
+      throw new Error("Primary stepped down");
+    }
+    return findOneAndUpdate(...args);
+  }) as never);
 };
 
 /** Starts a conversation that pauses on the plan ask and returns its history id. */

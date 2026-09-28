@@ -1,6 +1,7 @@
 import {type AskValidationError, validateAskInput} from "@terreno/blocks";
 import type React from "react";
 import {useCallback, useRef, useState} from "react";
+import type {Text as NativeText} from "react-native";
 
 import {Box} from "../Box";
 import type {IconName} from "../Common";
@@ -14,7 +15,7 @@ import {AskForm, AskFormAnswer} from "./AskForm";
 import {AskMarkdown, AskMarkdownAnswer} from "./AskMarkdown";
 import type {AskAction} from "./askControls";
 import type {AskFilesResolver} from "./askFileRefs";
-import {askSummary} from "./askSummary";
+import {acceptedContent, askSummary, hasValidAskInput} from "./askSummary";
 import type {AskSubmitHandler, ChatAsk} from "./askTypes";
 
 export interface AskCardProps {
@@ -29,12 +30,19 @@ export interface AskCardProps {
    */
   onSubmit?: AskSubmitHandler;
   /**
+   * The pending ask's question, an accessible header. Pass it to
+   * `AccessibilityInfo.setAccessibilityFocus` to move screen reader focus to the ask.
+   */
+  promptRef?: React.Ref<NativeText>;
+  /**
    * Turns the files picked for a `files` ask into the answer's refs on Submit: uploads
    * (`{fileId}`) or data URLs (`{url}`). Defaults to data URLs (`resolveAskFilesAsDataUrls`).
    */
   resolveAskFiles?: AskFilesResolver;
   testID?: string;
 }
+
+const SUBMIT_ERROR = "Your answer could not be sent. Try again.";
 
 const summaryIcon = (ask: ChatAsk): IconName => {
   if (ask.response?.action === "accept" || (!ask.response && ask.status === "answered")) {
@@ -52,25 +60,19 @@ const AskSummaryLine = ({ask, testID}: {ask: ChatAsk; testID: string}): React.Re
   </Box>
 );
 
-/** The text an accepted `markdown` answer sent back, or undefined for any other answer. */
-const answeredMarkdown = (ask: ChatAsk): string | undefined => {
-  if (ask.kind !== "markdown" || ask.response?.action !== "accept") {
-    return undefined;
-  }
-  const {markdown} = ask.response.content;
-  return typeof markdown === "string" ? markdown : undefined;
-};
-
-/** What an accepted answer sent back, for kinds that show more than the summary line. */
+/**
+ * What an accepted answer sent back, for kinds that show more than the summary line. A saved
+ * ask's input and answer come from the wire, so an invalid one shows only the summary line.
+ */
 const AnswerDetail = ({ask, testID}: {ask: ChatAsk; testID: string}): React.ReactElement | null => {
-  if (ask.response?.action !== "accept") {
+  const content = acceptedContent(ask);
+  if (!content || !hasValidAskInput(ask)) {
     return null;
   }
-  const markdown = answeredMarkdown(ask);
-  if (markdown !== undefined) {
+  const {markdown, values} = content;
+  if (ask.kind === "markdown" && typeof markdown === "string") {
     return <AskMarkdownAnswer markdown={markdown} testID={testID} />;
   }
-  const {values} = ask.response.content;
   if (ask.kind === "form" && values !== null && typeof values === "object") {
     return <AskFormAnswer ask={ask} testID={testID} values={values as Record<string, unknown>} />;
   }
@@ -169,10 +171,12 @@ export const AskCard: React.FC<AskCardProps> = ({
   ask,
   errors,
   onSubmit,
+  promptRef,
   resolveAskFiles,
   testID = "ask-card",
 }) => {
   const [pendingActionId, setPendingActionId] = useState<string | undefined>(undefined);
+  const [submitError, setSubmitError] = useState<string | undefined>(undefined);
   const isAnsweringRef = useRef(false);
   const {toolCallId} = ask;
 
@@ -183,10 +187,12 @@ export const AskCard: React.FC<AskCardProps> = ({
       }
       isAnsweringRef.current = true;
       setPendingActionId(actionId);
+      setSubmitError(undefined);
       try {
         await onSubmit({response, toolCallId});
       } catch (error) {
         console.warn("[AskCard] Submitting the answer failed", {error, toolCallId});
+        setSubmitError(SUBMIT_ERROR);
       } finally {
         isAnsweringRef.current = false;
         setPendingActionId(undefined);
@@ -212,7 +218,9 @@ export const AskCard: React.FC<AskCardProps> = ({
   return (
     <Box border="default" color="base" gap={3} padding={3} rounding="md" testID={testID}>
       {ask.input.title ? <Heading size="sm">{ask.input.title}</Heading> : null}
-      <Text>{ask.input.prompt}</Text>
+      <Text accessibilityRole="header" ref={promptRef}>
+        {ask.input.prompt}
+      </Text>
       <AskBody
         ask={ask}
         errors={errors}
@@ -222,6 +230,11 @@ export const AskCard: React.FC<AskCardProps> = ({
         resolveAskFiles={resolveAskFiles}
         testID={testID}
       />
+      {submitError ? (
+        <Text color="error" size="sm" testID={`${testID}-submit-error`}>
+          {submitError}
+        </Text>
+      ) : null}
     </Box>
   );
 };

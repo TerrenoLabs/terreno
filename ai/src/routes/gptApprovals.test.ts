@@ -8,6 +8,7 @@ import {
   buildApp,
   conversationOf,
   createScriptedModel,
+  failNextAskClaim,
   loadHistory,
   type ModelPromptMessage,
   modelCall,
@@ -15,6 +16,7 @@ import {
   onlyHistoryId,
   PLAN_ASK_CALL,
   PLAN_ASK_ROW,
+  pauseOnPlanAsk,
   pendingAskOf,
   rowsOf,
   type ScriptedModel,
@@ -405,6 +407,89 @@ describe("host tools that need approval", () => {
         );
       }
     );
+
+    it("keeps the approval pending and never runs the tool when the tools fail to load on resume", async () => {
+      let isToolLoadBroken = false;
+      const paused = await pauseOnApproval({
+        createRequestTools: () => {
+          if (isToolLoadBroken) {
+            throw new Error("Tool registry is down");
+          }
+          return {};
+        },
+      });
+      const pausedAsk = pendingAskOf(await loadHistory(paused.historyId));
+      isToolLoadBroken = true;
+
+      const failed = await paused.agent.post("/gpt/prompt").send({
+        askResponse: {...APPROVE, toolCallId: paused.approvalId},
+        historyId: paused.historyId,
+      });
+
+      expect(failed.status).toBe(500);
+      expect(paused.host.execute).not.toHaveBeenCalled();
+      expect(pendingAskOf(await loadHistory(paused.historyId))).toEqual(pausedAsk);
+
+      isToolLoadBroken = false;
+      const retry = await answer(paused, APPROVE);
+      expect(eventKeys(retry.events)).toEqual(["askResolved", "toolResult", "text", "done"]);
+      expect(paused.host.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the approval answered when the model fails after the approved tool ran", async () => {
+      const paused = await pauseOnApproval({});
+      paused.model.doStream.mockImplementationOnce(async () => {
+        throw new Error("The model is overloaded");
+      });
+
+      const {events} = await answer(paused, APPROVE);
+
+      expect(eventKeys(events)).toEqual(["askResolved", "toolResult", "error", "done"]);
+      expect(events.at(-1)).toEqual({done: true, historyId: paused.historyId});
+      expect(paused.host.execute).toHaveBeenCalledTimes(1);
+      expect((await loadHistory(paused.historyId)).pendingAsk).toBeUndefined();
+      const retry = await paused.agent.post("/gpt/prompt").send({
+        askResponse: {...APPROVE, toolCallId: paused.approvalId},
+        historyId: paused.historyId,
+      });
+      expect(retry.status).toBe(409);
+      expect(paused.host.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps an ask's answer and cancels the approval when claiming it fails after its rows were saved", async () => {
+      const host = hostTools();
+      const model = createScriptedModel({
+        steps: [toolCallStep(PLAN_ASK_CALL), toolCallStep(DELETE_CALL), textStep(DELETED_REPLY)],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model, tools: host.tools}), "notAdmin");
+      const historyId = await pauseOnPlanAsk(agent);
+      const claim = failNextAskClaim();
+
+      const {events} = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER},
+        historyId,
+      });
+      claim.mockRestore();
+
+      expect(eventKeys(events)).toEqual(["askResolved", "toolCall", "error", "done"]);
+      expect(events.at(-1)).toEqual({done: true, historyId});
+      const history = await loadHistory(historyId);
+      expect(history.pendingAsk).toBeUndefined();
+      expect(history.prompts.filter((row) => row.ask?.status === "pending")).toHaveLength(0);
+      expect(history.prompts.find((row) => row.toolCallId === "call_plan")?.ask?.status).toBe(
+        "answered"
+      );
+      const retry = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER},
+        historyId,
+      });
+      expect(retry.status).toBe(409);
+      const after = await loadHistory(historyId);
+      expect(
+        after.prompts.filter((row) => row.type === "tool-result" && row.toolCallId === "call_plan")
+      ).toHaveLength(1);
+      expect(host.execute).not.toHaveBeenCalled();
+    });
 
     it("a new message cancels the pending approval and the tool never runs", async () => {
       const paused = await pauseOnApproval({

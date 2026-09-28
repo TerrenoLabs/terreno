@@ -4,9 +4,9 @@ import {
   type ChatAsk,
   type GPTChatMessage,
   type GPTChatProps,
-  normalizeMimeType,
   resolveAskFilesAsDataUrls,
   type SelectedFile,
+  selectedFileMimeType,
 } from "@terreno/ui";
 
 import type {GptHistory} from "@/store/sdk";
@@ -102,7 +102,8 @@ const toChatAsk = ({
 
 /**
  * The ask a saved history row holds, if any. Only the conversation's `pendingAsk` can still be
- * answered, so a row marked pending that is not the pending ask shows as cancelled.
+ * answered, so a row marked pending that is not the pending ask shows as cancelled. The pending
+ * ask's input comes from `pendingAsk`, which the server validated when it paused the turn.
  */
 export const askFromHistoryPrompt = ({
   pendingAsk,
@@ -117,7 +118,7 @@ export const askFromHistoryPrompt = ({
   const isPendingAsk = pendingAsk?.toolCallId === prompt.toolCallId;
   const status = prompt.ask.status === "pending" && !isPendingAsk ? "cancelled" : prompt.ask.status;
   return toChatAsk({
-    input: prompt.args ?? {},
+    input: (isPendingAsk ? pendingAsk?.input : undefined) ?? prompt.args ?? {},
     kind: prompt.ask.kind,
     simple: isPendingAsk ? pendingAsk?.simple : undefined,
     status,
@@ -201,7 +202,7 @@ export const askErrorsFromBody = (body: unknown): AskFieldErrors | undefined => 
 };
 
 /** The part of a POST /files/upload response that a `files` answer needs. */
-export interface UploadedAskFile {
+interface UploadedAskFile {
   id: string;
   size: number;
 }
@@ -212,9 +213,8 @@ export interface UploadedAskFile {
  */
 export type AskFileUploader = (file: SelectedFile) => Promise<UploadedAskFile | undefined>;
 
-/** The `data` of a POST /files/upload response, or undefined when it has no id or size. */
-export const uploadedFileFromBody = (body: unknown): UploadedAskFile | undefined => {
-  const data = isRecord(body) ? body.data : undefined;
+/** A POST /files/upload response's `data`, or undefined when it has no id or size. */
+const uploadedFileFromData = (data: unknown): UploadedAskFile | undefined => {
   if (!isRecord(data) || typeof data.id !== "string" || typeof data.size !== "number") {
     return undefined;
   }
@@ -248,7 +248,7 @@ export const createAskFilesResolver = ({
       refs.push({
         fileId: uploaded.id,
         filename: file.name,
-        mimeType: normalizeMimeType(file.mimeType),
+        mimeType: selectedFileMimeType(file),
         size: uploaded.size,
       });
     }
@@ -265,4 +265,54 @@ export const errorDetailFromBody = (body: unknown): string | undefined => {
     return body.detail;
   }
   return typeof body.title === "string" && body.title ? body.title : undefined;
+};
+
+/** A response's JSON body, or undefined when it has none. */
+export const readJson = async (response: Response): Promise<unknown> => {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * What an RTK Query upload mutation resolves to: the response's `data` (the base query unwraps
+ * it), or the error, whose `status` is the HTTP status or, for a body that is not JSON, a string
+ * such as `PARSING_ERROR` with the HTTP status in `originalStatus`.
+ */
+export type AskFileUploadResult = {data: unknown} | {error: unknown};
+
+const NO_UPLOADED_FILE = "The upload returned no file id or size.";
+
+const isNotFound = (error: unknown): boolean =>
+  isRecord(error) && (error.status === 404 || error.originalStatus === 404);
+
+/**
+ * The example app's `AskFileUploader`. `send` posts the file as multipart form data, as the
+ * `postFilesUpload` mutation does. A 404 means the server has no file routes; any other error
+ * throws with the server's detail, so the ask stays open for another try.
+ */
+export const createAskFileUploader = ({
+  send,
+}: {
+  send: (file: SelectedFile) => Promise<AskFileUploadResult>;
+}): AskFileUploader => {
+  return async (file) => {
+    const result = await send(file);
+    if ("error" in result) {
+      const {error} = result;
+      if (isNotFound(error)) {
+        return undefined;
+      }
+      const detail = isRecord(error) ? errorDetailFromBody(error.data) : undefined;
+      const status = isRecord(error) ? String(error.status ?? "") : "";
+      throw new Error(detail ?? `Upload failed (${status || "unknown error"})`);
+    }
+    const uploaded = uploadedFileFromData(result.data);
+    if (!uploaded) {
+      throw new Error(NO_UPLOADED_FILE);
+    }
+    return uploaded;
+  };
 };

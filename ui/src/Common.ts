@@ -4,6 +4,7 @@ import type {FC, ReactElement, ReactNode} from "react";
 import type {
   ImageStyle,
   ListRenderItemInfo,
+  Text as NativeText,
   ScrollView,
   StyleProp,
   TextInput,
@@ -2894,6 +2895,8 @@ export interface TableContextProviderProps extends TableContextType {
 }
 
 export interface TextProps extends WithTestID {
+  /** `"header"` marks the text as a heading, so screen readers announce it and can jump to it. */
+  accessibilityRole?: "header";
   align?: "left" | "right" | "center" | "justify"; // default "left"
   children?: React.ReactNode;
   bold?: boolean; // default false
@@ -2903,6 +2906,11 @@ export interface TextProps extends WithTestID {
   truncate?: boolean; // default false
   underline?: boolean;
   numberOfLines?: number;
+  /**
+   * The native text, for example to move screen reader focus to it with
+   * `AccessibilityInfo.setAccessibilityFocus`.
+   */
+  ref?: React.Ref<NativeText>;
   skipLinking?: boolean;
 }
 

@@ -4,6 +4,7 @@ import {assert} from "chai";
 import {
   normalizeMimeType,
   resolveAskFilesAsDataUrls,
+  selectedFileMimeType,
   selectedFileToDataUrlRef,
 } from "./askFileRefs";
 
@@ -15,6 +16,48 @@ describe("askFileRefs", () => {
   it("normalizes a MIME type to its lowercase type without parameters", () => {
     assert.equal(normalizeMimeType("Text/CSV; charset=utf-8"), "text/csv");
     assert.equal(normalizeMimeType("image/png"), "image/png");
+  });
+
+  it("takes the type from the extension when the picker reports none or a generic one", () => {
+    assert.equal(selectedFileMimeType({mimeType: "", name: "day.CSV"}), "text/csv");
+    assert.equal(
+      selectedFileMimeType({mimeType: "application/octet-stream", name: "notes.txt"}),
+      "text/plain"
+    );
+    assert.equal(
+      selectedFileMimeType({mimeType: "application/vnd.ms-excel", name: "export.csv"}),
+      "text/csv"
+    );
+    assert.equal(selectedFileMimeType({mimeType: "", name: "scan.jpeg"}), "image/jpeg");
+    assert.equal(
+      selectedFileMimeType({mimeType: "application/octet-stream", name: "plan.pdf"}),
+      "application/pdf"
+    );
+    assert.equal(selectedFileMimeType({mimeType: "", name: "total.json"}), "application/json");
+  });
+
+  it("keeps a specific reported type, and a generic one it cannot improve on", () => {
+    assert.equal(selectedFileMimeType({mimeType: "Image/PNG", name: "photo.jpg"}), "image/png");
+    assert.equal(
+      selectedFileMimeType({mimeType: "application/octet-stream", name: "archive.zip"}),
+      "application/octet-stream"
+    );
+    assert.equal(
+      selectedFileMimeType({mimeType: "application/vnd.ms-excel", name: "sheet.xls"}),
+      "application/vnd.ms-excel"
+    );
+    assert.equal(selectedFileMimeType({mimeType: "", name: "README"}), "");
+  });
+
+  it("sends the extension's type in the data URL when the picker reports a generic one", async () => {
+    const ref = await selectedFileToDataUrlRef({
+      mimeType: "application/vnd.ms-excel",
+      name: "items.csv",
+      uri: textUri("application/vnd.ms-excel"),
+    });
+
+    assert.equal(ref.mimeType, "text/csv");
+    assert.isTrue(ref.url.startsWith("data:text/csv;base64,"));
   });
 
   it("reads a picked file into a data URL of its declared type, with its byte size", async () => {

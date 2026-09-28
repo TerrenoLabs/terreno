@@ -365,7 +365,7 @@ Each file (`askFileRefSchema`) names its bytes one of two ways:
 
 | Ref | When | Rule |
 | --- | --- | --- |
-| `{fileId}` | The host has file storage ([`FileStorageService`](ai.md), a GCS bucket) | The id `POST /files/upload` returns. It must name an upload of the caller that is not deleted (`FILE_NOT_OWNED`). |
+| `{fileId}` | The host has file storage ([`FileStorageService`](ai.md), a GCS bucket) | The id `POST /files/upload` returns. It must name an upload of the caller that is not deleted, and storage must return its bytes (`FILE_NOT_OWNED`; a failed download is logged as a warning). |
 | `{url}` | The host has no file storage | A base64 `data:` URL whose media type is the declared `mimeType` (`MIME_MISMATCH`). The server never fetches a remote URL (`INVALID_FORMAT`). |
 
 | Answer field | Rule | Error |
@@ -664,7 +664,7 @@ With asks on, `POST /gpt/prompt` adds these events to the stream. The full event
 | --- | --- | --- |
 | `{ask}` | The turn paused on a valid ask. Sent after the turn is saved, just before `{done}`. `historyId` names the conversation that waits on the ask, so a client can answer before `{done}` arrives, even on a new chat. | `{ask: {toolCallId, kind, input, simple, origin?, toolName?}, historyId}`. An [approval ask](#approval-asks) adds `origin: "approval"` and the host `toolName`. |
 | `{askResolved}` | First event of a turn that answered the pending ask or cancelled it with a new `prompt` | `{askResolved: {toolCallId, action}}` |
-| `pendingAsk` on `{done}` | The turn ended waiting on an answer | `{done: true, historyId, title?, pendingAsk: {toolCallId}}` |
+| `pendingAsk` on `{done}` | The turn ended waiting on an answer. After `{askResolved}` and `{error}`, it names the answered ask when the answer was [undone](#answer-an-ask); the stream sent no `{ask}` for it, so reload the conversation to show it again. | `{done: true, historyId, title?, pendingAsk: {toolCallId}}` |
 
 Ask tool calls never produce `{toolCall}` or `{toolResult}` events, and an invalid ask produces
 no event. A host tool that needs approval sends its `{toolCall}` when the model calls it, and its
@@ -694,17 +694,32 @@ result as JSON.
 2. Checks the answer with `validateAskResponse`. For a `files` answer it then loads and checks
    each file's bytes ([files](#files)). An invalid answer returns 400 with `fields`, and the model
    is not called.
-3. In one atomic update, stores the answer as a `tool-result` row, marks the ask's row
+3. Builds the system prompt and loads the host's tools. If that fails, the request returns 500
+   JSON and the ask stays pending, so the same answer can be sent again.
+4. In one atomic update, stores the answer as a `tool-result` row, marks the ask's row
    `answered` (`cancelled` for a `cancel` answer), and clears `pendingAsk`. When two answers race,
    one resumes the turn and the other gets 409.
-4. Replays the paused turn's stored messages with the answer as the ask's tool result, and
+5. Replays the paused turn's stored messages with the answer as the ask's tool result, and
    streams the continuation, starting with `{askResolved}`.
 
-The answer is kept even when the continuation fails. If the model call fails, before its first
-chunk or partway through, the stream sends `{askResolved}`, `{error}`, and `{done}` without
-`pendingAsk`. An ask the failed stream had started is dropped, not paused on. The ask's row stays `answered`, and
-sending the answer again returns 409. To continue, send a new `prompt`: the model sees the ask, its
-answer, and the new message.
+If the continuation fails before anything but `{askResolved}` reaches the client (no text, tool
+result, or ask), the answer is undone. The stream sends `{askResolved}`, `{error}`, and
+`{done, pendingAsk: {toolCallId}}`; the ask is pending again, its row is back to `pending`, the
+answer's `tool-result` row is removed, and the same answer can be sent again. A client reloads the
+conversation to show the ask again. The undo is skipped when the conversation changed in the
+meantime, such as a `prompt` from another tab, or when the turn saved rows after the answer, such
+as the call row of a next ask it then failed to pause on. Then the answer is kept, and that ask
+is cancelled as below.
+
+Once the continuation has sent a text, a tool result, or an ask, the answer is kept even when the
+model call fails later. The stream sends `{askResolved}`, `{error}`, and `{done}` without
+`pendingAsk`. An ask the failed stream had started is dropped, not paused on. The ask's row
+stays `answered`, and sending the answer again returns 409. To continue, send a new `prompt`: the
+model sees the ask, its answer, and the new message.
+
+A turn that fails after saving an ask's `tool-call` row but before pausing on it marks that row
+`cancelled` with a `{action: "cancel"}` result, so no row is left `pending` without a
+`pendingAsk`.
 
 A `prompt` sent while an ask is pending first records `{action: "cancel", reason:
 "user_sent_message"}` for the ask, then adds the message. The model sees both, and the stream
@@ -868,7 +883,7 @@ The ask fixtures are published too, for testing a client's rendering and validat
 | `input` | The validated ask input |
 | `simple` | The simple card, as sent in the `{ask}` event |
 | `promptIndex` | How many leading `prompts` rows are replayed before `responseMessages`: every row up to and including the paused turn's user message |
-| `responseMessages` | The paused turn's AI SDK messages, replayed verbatim when the user answers |
+| `responseMessages` | The paused turn's AI SDK messages, replayed verbatim when the user answers. A tool result's `fileData` is left out, as in the stored rows. |
 | `created` | When the ask was made |
 | `origin` | `"approval"` for an [approval ask](#approval-asks); unset when the model asked |
 | `approvalId` | An approval ask's AI SDK approval id, the same as `toolCallId`. The resume answers only this approval. |
@@ -890,8 +905,10 @@ the model sees the files themselves only on the turn that answers. The stored an
 or `url`. Uploads stay in storage as `FileAttachment` rows.
 
 The history REST API (`/gpt/histories`) drops `pendingAsk` from create and update bodies, so only
-a chat turn writes it. Its OpenAPI spec marks `pendingAsk` `readOnly` on create and update, so
-generated SDKs leave it out of their request types.
+a chat turn writes it. Its OpenAPI spec marks `pendingAsk` `readOnly`, so generated SDKs leave it
+out of their request types. Every response the router serializes, including list and read, leaves
+out `promptIndex` and `responseMessages`: they are for the model only. A host's own `responseHandler` runs first, and the fields are removed from its
+result. The OpenAPI response schemas leave them out too.
 
 `AIRequest.metadata` records asks (`requestType` stays `general`):
 
@@ -1039,4 +1056,4 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 | `ChatAsk`, `ChatAskState`, `ChatAskStatus` | An ask as the chat shows it: the ask, its `toolCallId`, `status`, and optional `response` and `simple` |
 | `AskSubmission`, `AskSubmitHandler` | What `onAskSubmit` and `AskCard`'s `onSubmit` receive: `{toolCallId, response}` |
 | `GPTChatMessage.ask`, `GPTChatProps.onAskSubmit`, `GPTChatProps.askErrors`, `GPTChatProps.resolveAskFiles` | Asks in `GPTChat` |
-| `AskFilesResolver`, `resolveAskFilesAsDataUrls`, `selectedFileToDataUrlRef(file)`, `normalizeMimeType(mimeType)` | How picked files become `files` refs: the resolver type, the default that sends data URLs, one file as a data URL ref, and a MIME type without parameters |
+| `AskFilesResolver`, `resolveAskFilesAsDataUrls`, `selectedFileToDataUrlRef(file)`, `selectedFileMimeType(file)`, `normalizeMimeType(mimeType)` | How picked files become `files` refs: the resolver type, the default that sends data URLs, one file as a data URL ref, a picked file's type (from its extension when the picker reports a generic one), and a MIME type without parameters |

@@ -8,7 +8,7 @@ import {
   validateAskResponse,
 } from "@terreno/blocks";
 import type React from "react";
-import {useCallback, useMemo, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 
 import {AttachmentPreview} from "../AttachmentPreview";
 import {Box} from "../Box";
@@ -16,7 +16,11 @@ import {Button} from "../Button";
 import {FilePickerButton, type SelectedFile} from "../FilePickerButton";
 import {Text} from "../Text";
 import {type AskControlProps, AskErrors, SkipButton, useAnswerButton} from "./askControls";
-import {type AskFilesResolver, normalizeMimeType, resolveAskFilesAsDataUrls} from "./askFileRefs";
+import {
+  type AskFilesResolver,
+  resolveAskFilesAsDataUrls,
+  selectedFileMimeType,
+} from "./askFileRefs";
 import type {ChatAsk} from "./askTypes";
 
 const SUBMIT_ACTION_ID = "submit";
@@ -72,7 +76,7 @@ const draftOf = (files: SelectedFile[]): AskResponse => ({
     files: files.map((file) => ({
       fileId: DRAFT_FILE_ID,
       filename: file.name,
-      mimeType: normalizeMimeType(file.mimeType),
+      mimeType: selectedFileMimeType(file),
       size: file.size ?? 0,
     })),
   },
@@ -96,13 +100,40 @@ export const AskFiles: React.FC<AskFilesProps> = ({
   const {max} = filesCountBounds(input);
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [isResolving, setIsResolving] = useState(false);
+  // Refs, not state, so a press in the same frame as Submit, or a resolver that finishes after the
+  // card is gone (the ask was answered elsewhere), cannot send a second answer.
+  const isResolvingRef = useRef(false);
+  const isMountedRef = useRef(true);
   const [resolveError, setResolveError] = useState<string | undefined>(undefined);
   const [changedSinceErrors, setChangedSinceErrors] = useState<ChangedSinceErrors | undefined>(
     undefined
   );
   const serverErrors = changedSinceErrors?.errors === errors ? [] : (errors ?? []);
   const isAnswering = pendingActionId !== undefined || isResolving;
-  const renderButton = useAnswerButton({isDisabled, onAnswer, pendingActionId, testID});
+
+  // Track mounting so a resolver that finishes after unmount neither sets state nor answers.
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const answerUnlessResolving = useCallback(
+    (action: Parameters<typeof onAnswer>[0]): void | Promise<void> => {
+      if (isResolvingRef.current) {
+        return;
+      }
+      return onAnswer(action);
+    },
+    [onAnswer]
+  );
+  const renderButton = useAnswerButton({
+    isDisabled,
+    onAnswer: answerUnlessResolving,
+    pendingActionId: isResolving ? SUBMIT_ACTION_ID : pendingActionId,
+    testID,
+  });
   const mimeTypes = useMemo(() => acceptedFileMimeTypes(input.accept), [input.accept]);
 
   const draftErrors = useMemo((): AskValidationError[] => {
@@ -137,6 +168,10 @@ export const AskFiles: React.FC<AskFilesProps> = ({
   );
 
   const handleSubmit = useCallback(async (): Promise<void> => {
+    if (isResolvingRef.current) {
+      return;
+    }
+    isResolvingRef.current = true;
     setIsResolving(true);
     setResolveError(undefined);
     let refs: Awaited<ReturnType<AskFilesResolver>>;
@@ -144,8 +179,15 @@ export const AskFiles: React.FC<AskFilesProps> = ({
       refs = await resolveFiles(files);
     } catch (error) {
       console.warn("[AskFiles] Preparing the files failed", {error, toolCallId: ask.toolCallId});
-      setResolveError(RESOLVE_ERROR);
-      setIsResolving(false);
+      isResolvingRef.current = false;
+      if (isMountedRef.current) {
+        setResolveError(RESOLVE_ERROR);
+        setIsResolving(false);
+      }
+      return;
+    }
+    isResolvingRef.current = false;
+    if (!isMountedRef.current) {
       return;
     }
     setIsResolving(false);

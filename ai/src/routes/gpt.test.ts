@@ -1,11 +1,12 @@
 import {afterEach, beforeAll, describe, expect, it, spyOn} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
 import {askPromptSection} from "@terreno/blocks";
-import {jsonSchema, type Tool, tool} from "ai";
+import {jsonSchema, type LanguageModel, type Tool, tool} from "ai";
 import express from "express";
 
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
+import {AIService} from "../service/aiService";
 import type {MCPService} from "../service/mcpService";
 import {COMPACT_SURFACE_SYSTEM_PROMPT, TERRENO_ASKS_SYSTEM_PROMPT} from "../service/prompts";
 import {
@@ -17,6 +18,7 @@ import {
   DUPLICATE_ID_ASK_INPUT,
   deferred,
   failingTextStep,
+  failNextAskClaim,
   LOOKUP_CALL,
   loadHistory,
   lookupPlans,
@@ -526,12 +528,13 @@ describe("/gpt/prompt asks", () => {
       expect(history.prompts.filter((row) => row.type === "tool-result")).toHaveLength(1);
     });
 
-    it("keeps the answer when the resumed model call fails, and a new message continues", async () => {
+    it("puts the ask back when the resumed model call fails before streaming, so the answer can be retried", async () => {
       const model = createScriptedModel({
         steps: [toolCallStep(PLAN_ASK_CALL), textStep("Setting up the Team plan.")],
       });
       const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
       const historyId = await pauseOnPlanAsk(agent);
+      const pausedAsk = pendingAskOf(await loadHistory(historyId));
       model.doStream.mockImplementationOnce(async () => {
         throw new Error("The model is overloaded");
       });
@@ -542,44 +545,63 @@ describe("/gpt/prompt asks", () => {
       expect(failed.events).toEqual([
         {askResolved: {action: "accept", toolCallId: "call_plan"}},
         {error: "The model is overloaded"},
-        {done: true, historyId},
+        {done: true, historyId, pendingAsk: {toolCallId: "call_plan"}},
       ]);
       const history = await loadHistory(historyId);
-      expect(history.pendingAsk).toBeUndefined();
+      expect(pendingAskOf(history)).toEqual(pausedAsk);
       expect(rowsOf(history)).toEqual([
         {text: USER_PROMPT, type: "user"},
-        {...PLAN_ASK_ROW, ask: {kind: "choice", status: "answered"}},
-        {
-          result: TEAM_ANSWER,
-          text: "Tool result: ask_choice",
-          toolCallId: "call_plan",
-          toolName: "ask_choice",
-          type: "tool-result",
-        },
+        {...PLAN_ASK_ROW, ask: {kind: "choice", status: "pending"}},
       ]);
 
-      const retry = await agent.post("/gpt/prompt").send(answer);
-      expect(retry.status).toBe(409);
-      expect(retry.body.title).toBe("This ask is no longer pending");
-
-      const next = await streamPrompt(agent, {historyId, prompt: "Please continue"});
-      expect(next.events.at(-1)).toEqual({done: true, historyId, title: "Workspace setup"});
-      expect(conversationOf(modelCall(model, 2))).toEqual([
-        {content: [{text: USER_PROMPT, type: "text"}], role: "user"},
-        {content: [PLAN_ASK_MODEL_CALL], role: "assistant"},
-        {
-          content: [
-            {
-              output: {type: "json", value: TEAM_ANSWER},
-              toolCallId: "call_plan",
-              toolName: "ask_choice",
-              type: "tool-result",
-            },
-          ],
-          role: "tool",
-        },
-        {content: [{text: "Please continue", type: "text"}], role: "user"},
+      const retry = await streamPrompt(agent, answer);
+      expect(retry.events).toEqual([
+        {askResolved: {action: "accept", toolCallId: "call_plan"}},
+        {text: "Setting up the Team plan."},
+        {done: true, historyId, title: "Workspace setup"},
       ]);
+      const retried = await loadHistory(historyId);
+      expect(retried.pendingAsk).toBeUndefined();
+      expect(retried.prompts.map((row) => row.ask?.status ?? row.type)).toEqual([
+        "user",
+        "answered",
+        "tool-result",
+        "assistant",
+      ]);
+    });
+
+    it("keeps the ask pending when the host tools fail to load on resume", async () => {
+      const model = createScriptedModel({
+        steps: [toolCallStep(PLAN_ASK_CALL), textStep("Setting up the Team plan.")],
+      });
+      let isToolLoadBroken = false;
+      const createRequestTools = (): Record<string, Tool> => {
+        if (isToolLoadBroken) {
+          throw new Error("Tool registry is down");
+        }
+        return {lookupPlans};
+      };
+      const agent = await authAsUser(buildApp({asks: true, createRequestTools, model}), "notAdmin");
+      const historyId = await pauseOnPlanAsk(agent);
+      const pausedAsk = pendingAskOf(await loadHistory(historyId));
+      const answer = {askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER}, historyId};
+      isToolLoadBroken = true;
+
+      const failed = await agent.post("/gpt/prompt").send(answer);
+
+      expect(failed.status).toBe(500);
+      expect(failed.body.detail).toBe("Tool registry is down");
+      const history = await loadHistory(historyId);
+      expect(pendingAskOf(history)).toEqual(pausedAsk);
+      expect(rowsOf(history)).toEqual([
+        {text: USER_PROMPT, type: "user"},
+        {...PLAN_ASK_ROW, ask: {kind: "choice", status: "pending"}},
+      ]);
+
+      isToolLoadBroken = false;
+      const retry = await streamPrompt(agent, answer);
+      expect(retry.events.at(-1)).toEqual({done: true, historyId, title: "Workspace setup"});
+      expect((await loadHistory(historyId)).pendingAsk).toBeUndefined();
     });
 
     it("attaches a projectId sent with the answer to the history", async () => {
@@ -664,7 +686,7 @@ describe("/gpt/prompt asks", () => {
       ]);
     });
 
-    it("ends with {error} then {done} when the resumed stream fails mid-reply, and keeps the answer", async () => {
+    it("puts the ask back when the resumed stream fails before any text reaches the client", async () => {
       const model = createScriptedModel({
         steps: [toolCallStep(PLAN_ASK_CALL), failingTextStep("Setting up", "Connection reset")],
       });
@@ -679,18 +701,48 @@ describe("/gpt/prompt asks", () => {
       expect(events).toEqual([
         {askResolved: {action: "accept", toolCallId: "call_plan"}},
         {error: "Connection reset"},
-        {done: true, historyId},
+        {done: true, historyId, pendingAsk: {toolCallId: "call_plan"}},
       ]);
+      const history = await loadHistory(historyId);
+      expect(history.pendingAsk?.toolCallId).toBe("call_plan");
+      expect(history.prompts.map((row) => row.ask?.status ?? row.type)).toEqual([
+        "user",
+        "pending",
+      ]);
+    });
+
+    it("keeps the answer when the resumed stream fails after a host tool ran", async () => {
+      const model = createScriptedModel({
+        steps: [
+          toolCallStep(PLAN_ASK_CALL),
+          toolCallStep(LOOKUP_CALL),
+          failingTextStep("There are", "Connection reset"),
+        ],
+      });
+      const agent = await authAsUser(
+        buildApp({asks: true, model, tools: {lookupPlans}}),
+        "notAdmin"
+      );
+      const historyId = await pauseOnPlanAsk(agent);
+
+      const {events} = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER},
+        historyId,
+      });
+
+      expect(events.at(-1)).toEqual({done: true, historyId});
       const history = await loadHistory(historyId);
       expect(history.pendingAsk).toBeUndefined();
       expect(history.prompts.map((row) => row.ask?.status ?? row.type)).toEqual([
         "user",
         "answered",
         "tool-result",
+        "tool-call",
+        "tool-result",
       ]);
     });
 
-    it("ends with {error} then {done} and pauses on nothing when the stream fails right after an ask call", async () => {
+    it("ends with {error} then {done} and puts the answered ask back when the stream fails right after an ask call", async () => {
       const model = createScriptedModel({
         steps: [
           toolCallStep(PLAN_ASK_CALL),
@@ -716,11 +768,78 @@ describe("/gpt/prompt asks", () => {
       expect(events).toEqual([
         {askResolved: {action: "accept", toolCallId: "call_plan"}},
         {error: "Connection reset"},
+        {done: true, historyId, pendingAsk: {toolCallId: "call_plan"}},
+      ]);
+      const history = await loadHistory(historyId);
+      expect(history.pendingAsk?.toolCallId).toBe("call_plan");
+      expect(history.prompts.some((row) => row.toolCallId === "call_region")).toBe(false);
+    });
+
+    it("cancels an ask whose call row was saved when the turn fails before claiming it", async () => {
+      const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const claim = spyOn(GptHistory, "findOneAndUpdate").mockImplementationOnce(() => {
+        throw new Error("Primary stepped down");
+      });
+
+      const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+      claim.mockRestore();
+      const historyId = await onlyHistoryId();
+      expect(events).toEqual([{error: "Primary stepped down"}, {done: true, historyId}]);
+      const history = await loadHistory(historyId);
+      expect(history.pendingAsk).toBeUndefined();
+      expect(rowsOf(history)).toEqual([
+        {text: USER_PROMPT, type: "user"},
+        {...PLAN_ASK_ROW, ask: {kind: "choice", status: "cancelled"}},
+        {
+          result: {action: "cancel"},
+          text: "Tool result: ask_choice",
+          toolCallId: "call_plan",
+          toolName: "ask_choice",
+          type: "tool-result",
+        },
+      ]);
+    });
+
+    it("keeps the answer and cancels the next ask when claiming it fails after its rows were saved", async () => {
+      const model = createScriptedModel({
+        steps: [toolCallStep(PLAN_ASK_CALL), toolCallStep(REGION_ASK_CALL), textStep("Done.")],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await pauseOnPlanAsk(agent);
+      const claim = failNextAskClaim();
+
+      const {events} = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER},
+        historyId,
+      });
+      claim.mockRestore();
+
+      expect(events).toEqual([
+        {askResolved: {action: "accept", toolCallId: "call_plan"}},
+        {error: "Primary stepped down"},
         {done: true, historyId},
       ]);
       const history = await loadHistory(historyId);
       expect(history.pendingAsk).toBeUndefined();
-      expect(history.prompts.some((row) => row.toolCallId === "call_region")).toBe(false);
+      expect(history.prompts.map((row) => [row.type, row.toolCallId, row.ask?.status])).toEqual([
+        ["user", undefined, undefined],
+        ["tool-call", "call_plan", "answered"],
+        ["tool-result", "call_plan", undefined],
+        ["tool-call", "call_region", "cancelled"],
+        ["tool-result", "call_region", undefined],
+      ]);
+
+      const retry = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_plan", ...TEAM_ANSWER},
+        historyId,
+      });
+      expect(retry.status).toBe(409);
+      const after = await loadHistory(historyId);
+      expect(
+        after.prompts.filter((row) => row.type === "tool-result" && row.toolCallId === "call_plan")
+      ).toHaveLength(1);
     });
   });
 
@@ -2626,12 +2745,89 @@ describe("/gpt/prompt asks", () => {
       "input",
       "kind",
       "origin",
-      "promptIndex",
-      "responseMessages",
       "simple",
       "toolCallId",
       "toolName",
     ];
+
+    const CLIENT_PENDING_ASK = {
+      input: PLAN_ASK_INPUT,
+      kind: "choice",
+      simple: PLAN_SIMPLE_CARD,
+      toolCallId: "call_plan",
+    };
+
+    it("reads and lists a pending ask without the paused turn's stored messages", async () => {
+      const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      const historyId = await pauseOnPlanAsk(agent);
+
+      const read = await agent.get(`/gpt/histories/${historyId}`);
+      const list = await agent.get("/gpt/histories");
+
+      expect(read.status).toBe(200);
+      expect(list.status).toBe(200);
+      const listed = list.body.data.find((history: {_id: string}) => history._id === historyId);
+      for (const pendingAsk of [read.body.data.pendingAsk, listed.pendingAsk]) {
+        const {created, ...rest} = pendingAsk;
+        expect(typeof created).toBe("string");
+        expect(rest).toEqual(CLIENT_PENDING_ASK);
+      }
+    });
+
+    it("documents pendingAsk without the stored messages in the read and list responses", async () => {
+      const agent = await authAsUser(
+        buildApp({asks: true, model: createScriptedModel({steps: []})}),
+        "notAdmin"
+      );
+
+      const res = await agent.get("/openapi.json");
+
+      const responseSchema = (operation: {
+        responses: {"200": {content: {"application/json": {schema: OpenApiProperty}}}};
+      }): OpenApiProperty => operation.responses["200"].content["application/json"].schema;
+      const read = responseSchema(res.body.paths["/gpt/histories/{id}"].get);
+      const listData = responseSchema(res.body.paths["/gpt/histories/"].get).properties?.data as {
+        items: OpenApiProperty;
+      };
+      for (const history of [read, listData.items]) {
+        const pendingAsk = history.properties?.pendingAsk as OpenApiProperty & {required: string[]};
+        expect(Object.keys(pendingAsk.properties ?? {}).sort()).toEqual(PENDING_ASK_FIELDS);
+        expect(pendingAsk.required).not.toContain("promptIndex");
+        expect(pendingAsk.required).not.toContain("responseMessages");
+      }
+    });
+
+    it("runs a host's responseHandler before leaving out the stored messages", async () => {
+      const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
+      const app = new TerrenoApp({
+        configureApp: (router, options) => {
+          const chat = {
+            aiService: new AIService({model: model as unknown as LanguageModel}),
+            asks: true,
+          };
+          addGptHistoryRoutes(router, {
+            ...options,
+            chat,
+            responseHandler: async (value) => {
+              const history = (value as GptHistoryDocument).toObject();
+              return {...history, _id: history._id.toString(), label: "host"};
+            },
+          });
+          addGptRoutes(router, chat);
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+      const agent = await authAsUser(app, "notAdmin");
+      const historyId = await pauseOnPlanAsk(agent);
+
+      const read = await agent.get(`/gpt/histories/${historyId}`);
+
+      expect(read.body.data.label).toBe("host");
+      expect(read.body.data.pendingAsk).not.toHaveProperty("responseMessages");
+      expect(read.body.data.pendingAsk).not.toHaveProperty("promptIndex");
+    });
 
     const requestBodyProperties = (operation: {
       requestBody: {

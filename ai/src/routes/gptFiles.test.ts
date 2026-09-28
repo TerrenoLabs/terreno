@@ -510,6 +510,32 @@ describe("/gpt/prompt files asks", () => {
       expect((await loadHistory(historyId)).pendingAsk?.toolCallId).toBe("call_receipt");
     });
 
+    it("returns 400 FILE_NOT_OWNED and keeps the ask pending when an upload cannot be downloaded", async () => {
+      const download = mock(async (gcsKey: string): Promise<Buffer> => {
+        throw new Error(`No such object: ${gcsKey}`);
+      });
+      const {agent, historyId, model} = await pauseOnReceiptAsk({
+        fileStorageService: {download},
+      });
+      const fileId = await createUpload({
+        filename: "receipt.png",
+        gcsKey: "uploads/receipt.png",
+        mimeType: "image/png",
+        size: PNG_BYTES.length,
+        userId,
+      });
+
+      const {body, status} = await answerFiles(agent, historyId, [
+        {fileId, filename: "receipt.png", mimeType: "image/png", size: PNG_BYTES.length},
+      ]);
+
+      expect(status).toBe(400);
+      expect(fieldCodes(body)).toEqual([{code: "FILE_NOT_OWNED", path: "content.files[0].fileId"}]);
+      expect(download).toHaveBeenCalledWith("uploads/receipt.png");
+      expect(model.doStream).toHaveBeenCalledTimes(1);
+      expect((await loadHistory(historyId)).pendingAsk?.toolCallId).toBe("call_receipt");
+    });
+
     it("returns 400 when an upload's bytes are larger than the cap or not its declared type", async () => {
       const downloader = fakeDownloader({
         "uploads/big.txt": Buffer.from("x".repeat(64)),

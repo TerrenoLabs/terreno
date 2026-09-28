@@ -1,4 +1,12 @@
-import {APIError, type ModelRouterOptions, modelRouter, Permissions} from "@terreno/api";
+import {
+  APIError,
+  defaultResponseHandler,
+  getOpenApiSpecForModel,
+  type JSONValue,
+  type ModelRouterOptions,
+  modelRouter,
+  Permissions,
+} from "@terreno/api";
 import {
   type PendingAskListItem,
   pendingAskListSchema,
@@ -41,6 +49,36 @@ const READ_ONLY_PENDING_ASK: OpenApiFragment = {
 
 const isFragment = (value: unknown): value is OpenApiFragment =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Server-only fields of `pendingAsk`: the paused turn's messages, replayed only to the model. */
+const SERVER_ONLY_PENDING_ASK_FIELDS = ["promptIndex", "responseMessages"];
+
+const withoutServerOnlyFields = (pendingAsk: OpenApiFragment): OpenApiFragment =>
+  Object.fromEntries(
+    Object.entries(pendingAsk).filter(([key]) => !SERVER_ONLY_PENDING_ASK_FIELDS.includes(key))
+  );
+
+/** A serialized history as clients receive it: its pending ask without the server-only fields. */
+const withClientPendingAsk = (history: unknown): unknown => {
+  if (!isFragment(history) || !isFragment(history.pendingAsk)) {
+    return history;
+  }
+  return {...history, pendingAsk: withoutServerOnlyFields(history.pendingAsk)};
+};
+
+/** The model's `pendingAsk` schema without the server-only fields, for the OpenAPI spec. */
+const clientPendingAskSchema = (): OpenApiFragment => {
+  const {properties} = getOpenApiSpecForModel(GptHistory);
+  const schema = isFragment(properties.pendingAsk) ? properties.pendingAsk : {};
+  const {properties: fields, required, ...rest} = schema;
+  return {
+    ...rest,
+    ...(isFragment(fields) ? {properties: withoutServerOnlyFields(fields)} : {}),
+    ...(Array.isArray(required)
+      ? {required: required.filter((field) => !SERVER_ONLY_PENDING_ASK_FIELDS.includes(field))}
+      : {}),
+  };
+};
 
 const mergeFragments = (base: OpenApiFragment, extra: OpenApiFragment = {}): OpenApiFragment => {
   const merged = {...base};
@@ -204,6 +242,10 @@ export const addGptHistoryRoutes = (
       ...openApiOptions,
       ...routerOptions,
       ...(headlessChat ? headlessActions({chat: headlessChat, routerOptions}) : {}),
+      openApiExtraModelProperties: {
+        ...routerOptions.openApiExtraModelProperties,
+        pendingAsk: clientPendingAskSchema(),
+      },
       openApiOverwrite: {
         ...routerOptions.openApiOverwrite,
         create: mergeFragments(READ_ONLY_PENDING_ASK, routerOptions.openApiOverwrite?.create),
@@ -230,6 +272,20 @@ export const addGptHistoryRoutes = (
       },
       queryFields: ["userId", "projectId"],
       queryFilter: (user) => ({userId: user?.id}),
+      responseHandler: async (value, method, req, handlerOptions) => {
+        const hostHandler = routerOptions.responseHandler ?? defaultResponseHandler;
+        const serialized = await hostHandler(
+          value,
+          method as Parameters<typeof defaultResponseHandler>[1],
+          req,
+          handlerOptions
+        );
+        return (
+          Array.isArray(serialized)
+            ? serialized.map(withClientPendingAsk)
+            : withClientPendingAsk(serialized)
+        ) as JSONValue;
+      },
       sort: "-updated",
       validation: withCallerUserId(routerOptions.validation),
     })

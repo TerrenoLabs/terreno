@@ -157,12 +157,28 @@ export const buildAsksSystemPrompt = ({
   surface?: AskSurface;
 }): string => `${TERRENO_ASKS_SYSTEM_PROMPT}\n\n${askPromptSection({kinds, surface})}`;
 
+/** A tool result part without the `fileData` a host tool returns for the client to download. */
+const withoutFileData = (part: unknown): unknown => {
+  const output = (part as {output?: {type?: string; value?: unknown}}).output;
+  const value = output?.type === "json" ? output.value : undefined;
+  if (typeof value !== "object" || value === null || !("fileData" in value)) {
+    return part;
+  }
+  const {fileData: _fileData, ...rest} = value as Record<string, unknown>;
+  return {...(part as object), output: {...output, value: rest}};
+};
+
 /**
  * A plain JSON copy of AI SDK messages. It drops `undefined` fields, which MongoDB would store as
- * null and the AI SDK would then reject when the messages are replayed.
+ * null and the AI SDK would then reject when the messages are replayed. Tool results leave out
+ * `fileData`, as the stored rows do, so a generated file is not stored twice.
  */
 export const toStoredMessages = (messages: ModelMessage[]): ModelMessage[] =>
-  JSON.parse(JSON.stringify(messages)) as ModelMessage[];
+  (JSON.parse(JSON.stringify(messages)) as ModelMessage[]).map((message) =>
+    message.role === "tool"
+      ? ({...message, content: message.content.map(withoutFileData)} as ModelMessage)
+      : message
+  );
 
 /** Why an approval was denied, as the model sees it in the tool's `execution-denied` result. */
 const APPROVAL_DENIAL_REASONS = {

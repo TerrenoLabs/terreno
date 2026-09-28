@@ -11,6 +11,7 @@ import {
   type MessageContentPart,
   type SelectedFile,
   Spinner,
+  selectedFileMimeType,
   useStoredState,
 } from "@terreno/ui";
 import {DateTime} from "luxon";
@@ -20,14 +21,14 @@ import {type ImageSourcePropType, Platform, Image as RNImage} from "react-native
 import {useSelector} from "react-redux";
 import {getSessionToken} from "@/lib/betterAuth";
 import {
-  type AskFileUploader,
   answerHistoryId,
   askErrorsFromBody,
   askFromHistoryPrompt,
   askMessage,
   createAskFilesResolver,
+  createAskFileUploader,
   errorDetailFromBody,
-  uploadedFileFromBody,
+  readJson,
   withoutEmptyAssistant,
   withResolvedAsk,
   withToolResult,
@@ -41,6 +42,7 @@ import {
   useGetAiModelsQuery,
   useGetGptHistoriesQuery,
   usePatchGptHistoriesByIdMutation,
+  usePostFilesUploadMutation,
 } from "@/store/sdk";
 
 type AskErrors = NonNullable<GPTChatProps["askErrors"]>;
@@ -77,7 +79,7 @@ const mapHistoryToChat = (history: GptHistory): GPTChatHistory => ({
         }
         return {filename: c.filename, mimeType: c.mimeType ?? "", type: "file", url: c.url ?? ""};
       }),
-      rating: (p as unknown as {rating?: "up" | "down"}).rating,
+      rating: p.rating,
       role: p.type,
       ...(p.toolCallId && p.type === "tool-call"
         ? {toolCall: {args: p.args ?? {}, toolCallId: p.toolCallId, toolName: p.toolName ?? ""}}
@@ -90,14 +92,6 @@ const mapHistoryToChat = (history: GptHistory): GPTChatHistory => ({
   title: history.title,
   updated: history.updated,
 });
-
-const readJson = async (response: Response): Promise<unknown> => {
-  try {
-    return await response.json();
-  } catch {
-    return undefined;
-  }
-};
 
 const IMAGE_MIME_PREFIXES = ["image/"];
 
@@ -120,32 +114,14 @@ const readFileAsBase64DataUrl = async (uri: string, _mimeType: string): Promise<
 /** The multipart part for a picked file: a typed Blob on web, a `{uri, name, type}` part on native. */
 const uploadFormData = async (file: SelectedFile): Promise<FormData> => {
   const form = new FormData();
+  const type = selectedFileMimeType(file);
   if (Platform.OS !== "web") {
-    form.append("file", {name: file.name, type: file.mimeType, uri: file.uri} as unknown as Blob);
+    form.append("file", {name: file.name, type, uri: file.uri} as unknown as Blob);
     return form;
   }
   const blob = await (await fetch(file.uri)).blob();
-  form.append("file", new Blob([blob], {type: file.mimeType}), file.name);
+  form.append("file", new Blob([blob], {type}), file.name);
   return form;
-};
-
-/** Uploads a file picked for a `files` ask; the server has no file routes without a GCS bucket. */
-const uploadAskFile: AskFileUploader = async (file) => {
-  const token = await getSessionToken();
-  const response = await fetch(`${baseUrl}/files/upload`, {
-    body: await uploadFormData(file),
-    headers: {Authorization: `Bearer ${token}`},
-    method: "POST",
-  });
-  if (response.status === 404) {
-    return undefined;
-  }
-  const body = await readJson(response);
-  const uploaded = response.ok ? uploadedFileFromBody(body) : undefined;
-  if (!uploaded) {
-    throw new Error(errorDetailFromBody(body) ?? `HTTP ${response.status}`);
-  }
-  return uploaded;
 };
 
 /**
@@ -189,7 +165,18 @@ const AiScreen: React.FC = () => {
   const [attachments, setAttachments] = useState<SelectedFile[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_VALUE);
   const [mascotIndex] = useState<number>(() => selectGptMascotIndex(Math.random()));
-  const resolveAskFiles = useMemo(() => createAskFilesResolver({upload: uploadAskFile}), []);
+  const [postFilesUpload] = usePostFilesUploadMutation();
+  // Uploads each file picked for a `files` ask; without a GCS bucket the server has no file
+  // routes, and the resolver sends data URLs instead.
+  const resolveAskFiles = useMemo(
+    () =>
+      createAskFilesResolver({
+        upload: createAskFileUploader({
+          send: async (file) => postFilesUpload(await uploadFormData(file)),
+        }),
+      }),
+    [postFilesUpload]
+  );
 
   const mascot = useMemo(
     (): React.ReactElement => (

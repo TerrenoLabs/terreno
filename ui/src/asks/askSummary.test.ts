@@ -203,9 +203,53 @@ describe("askSummary", () => {
     assert.equal(askSummary(formAsk("not values")), "You answered this question.");
   });
 
+  it("says the user answered when a saved ask's input is missing or invalid", () => {
+    const answeredWithInput = (input: unknown): ChatAsk =>
+      planAsk({
+        input: input as ChoiceAskInput,
+        response: {action: "accept", content: {selected: ["team"]}},
+      });
+
+    assert.equal(askSummary(answeredWithInput({})), "You answered this question.");
+    assert.equal(
+      askSummary(answeredWithInput({options: "team", prompt: "Which plan?"})),
+      "You answered this question."
+    );
+    assert.equal(
+      askSummary(
+        confirmAsk({} as ConfirmAskInput, {
+          response: {action: "accept", content: {confirmed: true}},
+        })
+      ),
+      "You answered this question."
+    );
+  });
+
   it("describes an ask from its status when its answer is not known", () => {
     assert.equal(askSummary(planAsk({status: "answered"})), "You answered this question.");
     assert.equal(askSummary(planAsk({status: "cancelled"})), "This question was cancelled.");
     assert.equal(askSummary(planAsk({status: "pending"})), "Waiting for your answer.");
+  });
+
+  it("says the user answered when an accepted answer has no content object", () => {
+    const withContent = (state: Partial<ChatAsk>, content: unknown): string =>
+      askSummary({...state, response: {action: "accept", content}} as ChatAsk);
+    const valid: Array<Partial<ChatAsk>> = [
+      planAsk({}),
+      confirmAsk(ARCHIVE_INPUT, {}),
+      {input: CONTACT_INPUT, kind: "form", status: "answered", toolCallId: "call_contact"},
+      {
+        input: {draft: "# Hi", prompt: "Review the post"},
+        kind: "markdown",
+        status: "answered",
+        toolCallId: "call_post",
+      } as ChatAsk,
+      {input: {prompt: "Upload"}, kind: "files", status: "answered", toolCallId: "call_upload"},
+    ] as ChatAsk[];
+    for (const ask of valid) {
+      assert.equal(withContent(ask, undefined), "You answered this question.", ask.kind);
+      assert.equal(withContent(ask, null), "You answered this question.", ask.kind);
+      assert.equal(withContent(ask, "yes"), "You answered this question.", ask.kind);
+    }
   });
 });

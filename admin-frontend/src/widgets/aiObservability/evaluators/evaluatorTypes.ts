@@ -38,12 +38,6 @@ export const EVALUATOR_TYPE_LABELS: Record<EvaluatorRecord["type"], string> = {
   "llm-judge": "LLM judge",
 };
 
-export const EVALUATOR_TARGET_OPTIONS: Array<{label: string; value: EvaluatorRecord["target"]}> = [
-  {label: "Full trace", value: "full trace"},
-  {label: "Generation span", value: "generation span"},
-  {label: "Dataset item", value: "dataset item"},
-];
-
 export const DIMENSION_DATA_TYPES: EvaluatorDimension["dataType"][] = [
   "boolean",
   "numeric",

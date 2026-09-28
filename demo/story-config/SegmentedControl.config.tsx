@@ -19,7 +19,7 @@ export const SegmentedControlConfiguration: DemoConfiguration = {
   shortDescription:
     "SegmentedControl may be used to group multiple selections. The controls display the current state and related state. ",
   a11yNotes: [],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

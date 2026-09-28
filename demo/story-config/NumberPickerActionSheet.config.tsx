@@ -9,7 +9,7 @@ export const NumberPickerActionSheetConfiguration: DemoConfiguration = {
   usageExample: "import {NumberPickerActionSheet} from \"@terreno/ui\";\n\n<NumberPickerActionSheet />",
   a11yNotes: ["Open from the button; the sheet starts closed."],
   additionalDocumentation: [],
-  category: "Component",
+  category: ["Component", "Form"],
   component: NumberPickerActionSheet,
   demo: () => <NumberPickerActionSheetDemo />,
   demoOptions: {size: "lg"},

@@ -9,7 +9,7 @@ export const TextConfiguration: DemoConfiguration = {
   related: ["Heading"],
   description: "",
   a11yNotes: [""],
-  category: ["Data Entry", "Form"],
+  category: "Component",
   status: {
     documentation: "ready",
     figma: "inProgress",

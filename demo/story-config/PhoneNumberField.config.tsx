@@ -9,7 +9,7 @@ export const PhoneNumberConfiguration: DemoConfiguration = {
   related: ["Text area"],
   description: "Use the phone number field to allow a user to input a valid phone number.",
   a11yNotes: [],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "planned",
     figma: "planned",

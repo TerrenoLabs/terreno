@@ -16,7 +16,7 @@ export const SignatureFieldConfiguration: DemoConfiguration = {
   related: [],
   description: "The signature field allows a signature input from the user.",
   a11yNotes: [],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

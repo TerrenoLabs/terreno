@@ -21,7 +21,7 @@ export const SliderConfiguration: DemoConfiguration = {
     "Touch zone is very important here, and must be at least 48 by 48 px. The “handle” as its currently designed fulfills this.",
     "Contrast is also important. It should be obvious when the active track is present, and when it’s not.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "planned",

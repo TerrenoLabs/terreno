@@ -6,7 +6,7 @@ export const RadioConfiguration: DemoConfiguration = {
   usageExample: "import {Radio} from \"@terreno/ui\";\n\n<Radio />",
   a11yNotes: ["Selected and unselected states should remain distinguishable without color alone."],
   additionalDocumentation: [],
-  category: "Component",
+  category: ["Component", "Form"],
   component: Radio,
   demo: () => <RadioDemo />,
   demoOptions: {size: "md"},

@@ -11,7 +11,7 @@ export const SelectFieldConfiguration: DemoConfiguration = {
   description:
     "Displays a list of options. Uses a custom dropdown with optional search on web and native (centered modal on Android).",
   a11yNotes: ["The list should be labeled so that screen readers know that the list is related."],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

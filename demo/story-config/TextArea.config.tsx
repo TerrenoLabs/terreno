@@ -9,7 +9,7 @@ export const TextAreaConfiguration: DemoConfiguration = {
   related: ["Text field"],
   description: "Use the text area form field to allow the user to enter multiple lines of text.",
   a11yNotes: ["The user should be able to use tab to navigate between elements."],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

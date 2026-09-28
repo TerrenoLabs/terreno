@@ -9,7 +9,7 @@ export const EmailFieldConfiguration: DemoConfiguration = {
   related: ["Text area"],
   description: "Use the email field to allow a user to input a valid email.",
   a11yNotes: [],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "planned",
     figma: "planned",

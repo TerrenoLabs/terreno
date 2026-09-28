@@ -13,7 +13,7 @@ export const EmojiSelectorConfiguration: DemoConfiguration = {
     "Ensure emoji choices are keyboard and screen-reader accessible.",
     "Provide clear focus states when navigating between emoji and category tabs.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "inProgress",
     figma: "planned",

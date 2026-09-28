@@ -15,7 +15,7 @@ export const NumberFieldConfiguration: DemoConfiguration = {
   related: ["Text area"],
   description: "Use the number field to allow a user to input numerical values.",
   a11yNotes: ["The user should be able to use tab to navigate between elements."],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

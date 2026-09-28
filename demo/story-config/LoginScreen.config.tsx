@@ -14,7 +14,7 @@ export const LoginScreenConfiguration: DemoConfiguration = {
   description:
     "Email/password login screen with optional forgot-password and sign-up actions.",
   a11yNotes: [],
-  category: "Pattern",
+  category: ["Pattern", "Form"],
   status: {
     documentation: "ready",
     figma: "planned",

@@ -19,7 +19,7 @@ export const SignatureCaptureFieldConfiguration: DemoConfiguration = {
     "Draw/Type toggle. Works the same on web and mobile and emits a discriminated value the " +
     "consumer can persist and re-render.",
   a11yNotes: [],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "planned",

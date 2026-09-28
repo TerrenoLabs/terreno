@@ -13,7 +13,7 @@ export const TapToEditConfiguration: DemoConfiguration = {
     "The user should be able to tab to the tap-to-edit icon and press enter/space to interact with it.",
     "The user should be able to tap the label as well to interact with the element.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

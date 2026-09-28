@@ -13,7 +13,7 @@ export const ConsentFormScreenConfiguration: DemoConfiguration = {
   related: ["Button", "Signature field"],
   description: "The consent form screen renders consent content, required acknowledgements, signatures, and actions.",
   a11yNotes: [],
-  category: "Pattern",
+  category: ["Pattern", "Form"],
   status: {
     documentation: "ready",
     figma: "planned",

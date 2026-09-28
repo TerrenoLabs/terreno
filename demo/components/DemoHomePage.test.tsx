@@ -62,4 +62,16 @@ describe("DemoHomeBanner", () => {
     });
     assert.isNull(rendered.queryByTestId("demo-home-button"));
   });
+
+  it("shows input fields in the Form category and keeps Text out", async () => {
+    const rendered = renderWithTheme(<DemoHomePage onPress={() => {}} />);
+    await act(async () => {
+      fireEvent.press(rendered.getByTestId("demo-category-Form"));
+    });
+    assert.isOk(rendered.queryByTestId("demo-home-text-field"));
+    assert.isOk(rendered.queryByTestId("demo-home-select-field"));
+    assert.isOk(rendered.queryByTestId("demo-home-email-field"));
+    assert.isNull(rendered.queryByTestId("demo-home-text"));
+    assert.isNull(rendered.queryByTestId("demo-home-button"));
+  });
 });

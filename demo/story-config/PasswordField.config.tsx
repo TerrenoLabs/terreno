@@ -13,7 +13,7 @@ export const PasswordFieldConfiguration: DemoConfiguration = {
     "In general, this field is already accessible.",
     "Some additional WCAG documentation can be found here.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

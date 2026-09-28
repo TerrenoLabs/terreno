@@ -7,7 +7,7 @@ export const AddressFieldConfiguration: DemoConfiguration = {
   name: "AddressField",
   related: ["Tap to edit"],
   description: "Set/Display a user's address",
-  category: "Pattern",
+  category: ["Pattern", "Form"],
   component: Field,
   status: {
     documentation: "planned",

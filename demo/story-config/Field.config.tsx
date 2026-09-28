@@ -27,7 +27,7 @@ export const FieldConfiguration: DemoConfiguration = {
   description:
     "A higher level component that wraps all input fields, allowing you to pass type and get the correct field.",
   a11yNotes: [],
-  category: "Pattern",
+  category: ["Pattern", "Form"],
   status: {
     documentation: "planned",
     figma: "notSupported",

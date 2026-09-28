@@ -9,7 +9,7 @@ export const MobileAddressAutocompleteConfiguration: DemoConfiguration = {
   usageExample: "import {MobileAddressAutocomplete} from \"@terreno/ui\";\n\n<MobileAddressAutocomplete />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
-  category: "Component",
+  category: ["Component", "Form"],
   component: MobileAddressAutocomplete,
   demo: () => <MobileAddressAutocompleteDemo />,
   demoOptions: {size: "lg"},

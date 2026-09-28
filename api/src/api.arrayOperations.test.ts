@@ -598,6 +598,9 @@ describe("array operation errors", () => {
     app.post("/ai/observability/evaluators", (_req, res) => {
       res.status(201).json({data: {created: true}});
     });
+    app.post("/ai/observability/experiments", (_req, res) => {
+      res.status(201).json({data: {started: true}});
+    });
     _server = supertest(app);
 
     const created = await _server
@@ -605,6 +608,12 @@ describe("array operation errors", () => {
       .send({name: "toxicity", target: "full trace"})
       .expect(201);
     expect(created.body.data.created).toBe(true);
+
+    const started = await _server
+      .post("/ai/observability/experiments")
+      .send({name: "Example Experiment"})
+      .expect(201);
+    expect(started.body.data.started).toBe(true);
 
     const denied = await _server.post(`/ai/${apple._id}/tags`).send({tags: "organic"}).expect(405);
     expect(denied.body.code).toBe("array-update-not-allowed");

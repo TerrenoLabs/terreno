@@ -3,7 +3,11 @@ import React from "react";
 import type {DatasetRecord} from "../datasets/datasetTypes";
 import type {EvaluatorRecord} from "../evaluators/evaluatorTypes";
 import type {PromptDetail, PromptListItem} from "../prompts/promptTypes";
-import {type ExperimentEstimate, isValidExperimentVersionCount} from "./experimentTypes";
+import {
+  type ExperimentEstimate,
+  isAutomaticExperimentEvaluator,
+  isValidExperimentVersionCount,
+} from "./experimentTypes";
 
 export type ExperimentWizardStep = 1 | 2 | 3 | 4;
 
@@ -87,6 +91,7 @@ export const AiExperimentNewView: React.FC<AiExperimentNewViewProps> = ({
   versions,
 }) => {
   const selectedDataset = datasets.find((entry) => entry.id === datasetId);
+  const automaticEvaluators = evaluators.filter(isAutomaticExperimentEvaluator);
   const hasVersionSelection = isValidExperimentVersionCount(versions.length);
   const isNextDisabled = step === 2 && !hasVersionSelection;
 
@@ -199,25 +204,31 @@ export const AiExperimentNewView: React.FC<AiExperimentNewViewProps> = ({
       ) : undefined}
       {step === 3 ? (
         <Box gap={2} testID="ai-experiment-step-evaluators">
-          {evaluators.map((evaluator) => {
-            const selected = evaluatorIds.includes(evaluator.id);
-            return (
-              <Box
-                accessibilityHint={`Toggle evaluator ${evaluator.name}`}
-                accessibilityLabel={evaluator.name}
-                alignItems="center"
-                direction="row"
-                gap={1}
-                key={evaluator.id}
-                onClick={() => {
-                  onEvaluatorToggle(evaluator.id);
-                }}
-              >
-                <CheckBox selected={selected} />
-                <Text>{`${evaluator.name} (${evaluator.type})`}</Text>
-              </Box>
-            );
-          })}
+          {automaticEvaluators.length === 0 ? (
+            <Text color="secondaryDark" size="sm" testID="ai-experiment-evaluators-empty">
+              Create an LLM judge or JSON assert evaluator before running an experiment.
+            </Text>
+          ) : (
+            automaticEvaluators.map((evaluator) => {
+              const selected = evaluatorIds.includes(evaluator.id);
+              return (
+                <Box
+                  accessibilityHint={`Toggle evaluator ${evaluator.name}`}
+                  accessibilityLabel={evaluator.name}
+                  alignItems="center"
+                  direction="row"
+                  gap={1}
+                  key={evaluator.id}
+                  onClick={() => {
+                    onEvaluatorToggle(evaluator.id);
+                  }}
+                >
+                  <CheckBox selected={selected} />
+                  <Text>{`${evaluator.name} (${evaluator.type})`}</Text>
+                </Box>
+              );
+            })
+          )}
         </Box>
       ) : undefined}
       {step === 4 ? (

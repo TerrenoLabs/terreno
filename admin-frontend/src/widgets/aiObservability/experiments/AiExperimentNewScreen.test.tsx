@@ -82,11 +82,20 @@ const injectedHooks = {
       {
         confidenceAlertBelow: 0.5,
         dimensions: [{dataType: "boolean", key: "correct", required: true}],
+        id: "eval-human",
+        name: "review queue",
+        runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+        target: "full trace",
+        type: "human",
+      },
+      {
+        confidenceAlertBelow: 0.5,
+        dimensions: [{dataType: "boolean", key: "correct", required: true}],
         id: "eval-1",
         name: "quality",
         runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
         target: "full trace",
-        type: "human",
+        type: "json-assert",
       },
     ],
     isLoading: false,
@@ -324,6 +333,7 @@ describe("AiExperimentNewScreenWidget", () => {
       await Promise.resolve();
     });
     expect(view.getByTestId("ai-experiment-step-evaluators")).toBeTruthy();
+    expect(view.queryByLabelText("review queue")).toBeNull();
     await act(async () => {
       fireEvent.press(view.getByLabelText("quality"));
       fireEvent.press(view.getByTestId("ai-experiment-step-4"));

@@ -1208,6 +1208,163 @@ describe("/gpt/prompt asks", () => {
     });
   });
 
+  describe("form", () => {
+    const INVOICE_ASK_INPUT = {
+      fields: [
+        {id: "company", label: "Company name", maxLength: 120, required: true, type: "text"},
+        {id: "seats", integer: true, label: "Seats", max: 500, min: 1, type: "number"},
+        {id: "start", label: "Start date", type: "date"},
+        {
+          id: "region",
+          label: "Region",
+          options: [
+            {id: "us", label: "US"},
+            {id: "eu", label: "EU"},
+          ],
+          type: "select",
+        },
+        {default: true, id: "notify", label: "Email me the invoice", type: "boolean"},
+      ],
+      prompt: "A few details for the invoice.",
+      title: "Invoice details",
+    };
+    const INVOICE_ASK_CALL = {
+      input: INVOICE_ASK_INPUT,
+      toolCallId: "call_invoice",
+      toolName: "ask_form",
+    };
+    const INVOICE_CARD = {
+      buttons: [{id: "cancel", label: "Cancel", response: {action: "decline"}, style: "cancel"}],
+      handoff: true,
+      kind: "form",
+      text: "A few details for the invoice.",
+      title: "Invoice details",
+      toolCallId: "call_invoice",
+    };
+
+    it("pauses on a handoff card and resumes with the submitted values", async () => {
+      const answer = {
+        action: "accept",
+        content: {
+          values: {company: "Acme", notify: true, region: "us", seats: 12, start: "2026-10-01"},
+        },
+      };
+      const model = createScriptedModel({
+        steps: [toolCallStep(INVOICE_ASK_CALL), textStep("Invoice drafted for Acme.")],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const asked = await streamPrompt(agent, {prompt: "Invoice details"});
+      const historyId = await onlyHistoryId();
+      expect(asked.events).toEqual([
+        {
+          ask: {
+            input: INVOICE_ASK_INPUT,
+            kind: "form",
+            simple: INVOICE_CARD,
+            toolCallId: "call_invoice",
+          },
+          historyId,
+        },
+        {done: true, historyId, pendingAsk: {toolCallId: "call_invoice"}},
+      ]);
+
+      const {events} = await streamPrompt(agent, {
+        askResponse: {toolCallId: "call_invoice", ...answer},
+        historyId,
+      });
+
+      expect(events).toEqual([
+        {askResolved: {action: "accept", toolCallId: "call_invoice"}},
+        {text: "Invoice drafted for Acme."},
+        {done: true, historyId, title: "Workspace setup"},
+      ]);
+      expect(conversationOf(modelCall(model, 1)).at(-1)).toEqual({
+        content: [
+          {
+            output: {type: "json", value: answer},
+            toolCallId: "call_invoice",
+            toolName: "ask_form",
+            type: "tool-result",
+          },
+        ],
+        role: "tool",
+      });
+    });
+
+    it("does not offer ask_form on the compact surface", async () => {
+      const model = createScriptedModel({steps: [textStep("Hello.")]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      await streamPrompt(agent, {prompt: "Hi", surface: "compact"});
+
+      const call = modelCall(model, 0);
+      expect(toolNamesOf(call)).toEqual(["ask_choice", "ask_confirm"]);
+      expect(systemPromptOf(call)).not.toContain("ask_form");
+    });
+
+    it("returns 400 with a field error per value, without calling the model", async () => {
+      const model = createScriptedModel({steps: [toolCallStep(INVOICE_ASK_CALL)]});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+      await streamPrompt(agent, {prompt: "Invoice details"});
+      const historyId = await onlyHistoryId();
+
+      const res = await agent.post("/gpt/prompt").send({
+        askResponse: {
+          action: "accept",
+          content: {values: {notify: "yes", seats: 0, start: "2026-02-30"}},
+          toolCallId: "call_invoice",
+        },
+        historyId,
+      });
+
+      expect(res.status).toBe(400);
+      expect(
+        res.body.fields.map(({code, path}: {code: string; path: string}) => ({code, path}))
+      ).toEqual([
+        {code: "REQUIRED_FIELD", path: "content.values.company"},
+        {code: "FIELD_TYPE_MISMATCH", path: "content.values.notify"},
+        {code: "OUT_OF_RANGE", path: "content.values.seats"},
+        {code: "INVALID_DATE", path: "content.values.start"},
+      ]);
+      expect(model.doStream).toHaveBeenCalledTimes(1);
+      expect((await loadHistory(historyId)).pendingAsk?.toolCallId).toBe("call_invoice");
+    });
+
+    it("sends a form ask with an invalid default back to the model as a tool error", async () => {
+      const model = createScriptedModel({
+        steps: [
+          toolCallStep({
+            input: {
+              ...INVOICE_ASK_INPUT,
+              fields: [{default: 0, id: "seats", label: "Seats", min: 1, type: "number"}],
+            },
+            toolCallId: "call_bad_default",
+            toolName: "ask_form",
+          }),
+          toolCallStep(INVOICE_ASK_CALL),
+        ],
+      });
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      const {events} = await streamPrompt(agent, {prompt: "Invoice details"});
+
+      expect(events[0]).toMatchObject({ask: {kind: "form", toolCallId: "call_invoice"}});
+      expect(conversationOf(modelCall(model, 1))[2]).toMatchObject({
+        content: [
+          {
+            output: {
+              type: "error-text",
+              value: expect.stringContaining("fields[0].default is 0, below the field's min of 1"),
+            },
+            toolCallId: "call_bad_default",
+            toolName: "ask_form",
+          },
+        ],
+      });
+    });
+  });
+
   describe("rejected answers", () => {
     it("returns 400 with fields for an option that was not offered, without calling the model", async () => {
       const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
@@ -2031,10 +2188,10 @@ describe("/gpt/prompt asks", () => {
       const system = systemPromptOf(call) as string;
       expect(
         system.startsWith(
-          `Answer in one sentence.\n\n${TERRENO_ASKS_SYSTEM_PROMPT}\n\nAsk tools you can call: ask_choice, ask_confirm, ask_markdown.`
+          `Answer in one sentence.\n\n${TERRENO_ASKS_SYSTEM_PROMPT}\n\nAsk tools you can call: ask_choice, ask_confirm, ask_markdown, ask_form.`
         )
       ).toBe(true);
-      expect(toolNamesOf(call)).toEqual(["ask_choice", "ask_confirm", "ask_markdown"]);
+      expect(toolNamesOf(call)).toEqual(["ask_choice", "ask_confirm", "ask_markdown", "ask_form"]);
       const askChoice = call.tools?.[0];
       expect(askChoice?.description).toBe(
         "Ask the user to pick one or more options from a list you provide, optionally with an " +
@@ -2110,6 +2267,7 @@ describe("/gpt/prompt asks", () => {
         "ask_choice",
         "ask_confirm",
         "ask_markdown",
+        "ask_form",
       ]);
       expect(call.tools?.[1]?.description).toStartWith("Ask the user to pick one or more options");
     });
@@ -2398,7 +2556,7 @@ describe("/gpt/prompt asks", () => {
     it("rejects unknown ask kinds", () => {
       expect(() => addGptRoutes(express.Router(), {asks: {kinds: ["poll" as "choice"]}})).toThrow(
         expect.objectContaining({
-          detail: "Unknown ask kinds: poll. Known kinds: choice, confirm, markdown.",
+          detail: "Unknown ask kinds: poll. Known kinds: choice, confirm, markdown, form.",
           message: "The asks option lists unknown ask kinds",
         })
       );

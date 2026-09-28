@@ -22,6 +22,20 @@ import confirmDefaultLabels from "@terreno/blocks/fixtures/valid/confirm-default
 import confirmDestructiveDelete from "@terreno/blocks/fixtures/valid/confirm-destructive-delete.json";
 import confirmEmojiLabels from "@terreno/blocks/fixtures/valid/confirm-emoji-labels.json";
 import confirmLongTextCut from "@terreno/blocks/fixtures/valid/confirm-long-text-cut.json";
+import formBooleanNewsletter from "@terreno/blocks/fixtures/valid/form-boolean-newsletter.json";
+import formDateDue from "@terreno/blocks/fixtures/valid/form-date-due.json";
+import formDatetimeMeeting from "@terreno/blocks/fixtures/valid/form-datetime-meeting.json";
+import formEightFields from "@terreno/blocks/fixtures/valid/form-eight-fields.json";
+import formEmailContact from "@terreno/blocks/fixtures/valid/form-email-contact.json";
+import formInvoiceDetails from "@terreno/blocks/fixtures/valid/form-invoice-details.json";
+import formMultiselectChannels from "@terreno/blocks/fixtures/valid/form-multiselect-channels.json";
+import formNumberBudget from "@terreno/blocks/fixtures/valid/form-number-budget.json";
+import formPhoneCallback from "@terreno/blocks/fixtures/valid/form-phone-callback.json";
+import formSelectShipping from "@terreno/blocks/fixtures/valid/form-select-shipping.json";
+import formTextRequiredDefault from "@terreno/blocks/fixtures/valid/form-text-required-default.json";
+import formTextareaNotes from "@terreno/blocks/fixtures/valid/form-textarea-notes.json";
+import formTimeReminder from "@terreno/blocks/fixtures/valid/form-time-reminder.json";
+import formUrlWebsite from "@terreno/blocks/fixtures/valid/form-url-website.json";
 import markdownAnnouncementDraft from "@terreno/blocks/fixtures/valid/markdown-announcement-draft.json";
 import markdownEmptyDraft from "@terreno/blocks/fixtures/valid/markdown-empty-draft.json";
 import markdownInitialBlankBelowMin from "@terreno/blocks/fixtures/valid/markdown-initial-blank-below-min.json";
@@ -67,6 +81,20 @@ const FIXTURES: Record<string, {simple: unknown}> = {
   "confirm-destructive-delete": confirmDestructiveDelete,
   "confirm-emoji-labels": confirmEmojiLabels,
   "confirm-long-text-cut": confirmLongTextCut,
+  "form-boolean-newsletter": formBooleanNewsletter,
+  "form-date-due": formDateDue,
+  "form-datetime-meeting": formDatetimeMeeting,
+  "form-eight-fields": formEightFields,
+  "form-email-contact": formEmailContact,
+  "form-invoice-details": formInvoiceDetails,
+  "form-multiselect-channels": formMultiselectChannels,
+  "form-number-budget": formNumberBudget,
+  "form-phone-callback": formPhoneCallback,
+  "form-select-shipping": formSelectShipping,
+  "form-text-required-default": formTextRequiredDefault,
+  "form-textarea-notes": formTextareaNotes,
+  "form-time-reminder": formTimeReminder,
+  "form-url-website": formUrlWebsite,
   "markdown-announcement-draft": markdownAnnouncementDraft,
   "markdown-empty-draft": markdownEmptyDraft,
   "markdown-initial-blank-below-min": markdownInitialBlankBelowMin,

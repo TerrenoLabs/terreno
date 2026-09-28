@@ -1,9 +1,10 @@
 import {z} from "zod";
 import {askIssue, formatAskPath, quoteValue} from "./errors";
+import {checkFormValue, formTextMaxLength} from "./formValues";
 import {ASK_LIMITS} from "./limits";
 
 /** Ask kinds in the catalog. Each kind is offered to the model as the tool `ask_<kind>`. */
-export const ASK_KINDS = ["choice", "confirm", "markdown"] as const;
+export const ASK_KINDS = ["choice", "confirm", "markdown", "form"] as const;
 
 export type AskKind = (typeof ASK_KINDS)[number];
 
@@ -617,6 +618,257 @@ export const markdownAskInputSchema = z
 
 export type MarkdownAskInput = z.infer<typeof markdownAskInputSchema>;
 
+/** The field types a `form` offers. Every field is flat: no nesting and no conditional fields. */
+export const FORM_FIELD_TYPES = [
+  "text",
+  "textarea",
+  "email",
+  "url",
+  "phone",
+  "number",
+  "date",
+  "time",
+  "datetime",
+  "boolean",
+  "select",
+  "multiselect",
+] as const;
+
+export type FormFieldType = (typeof FORM_FIELD_TYPES)[number];
+
+const formFieldBase = <Type extends FormFieldType>(type: Type) => ({
+  helperText: visibleText(ASK_LIMITS.form.helperTextMaxLength)
+    .optional()
+    .describe(
+      `One line under the field, at most ${ASK_LIMITS.form.helperTextMaxLength} characters.`
+    ),
+  id: z
+    .string()
+    .regex(ASK_LIMITS.choice.optionIdPattern)
+    .describe(
+      `The key of this field's value in the answer: 1-${ASK_LIMITS.choice.optionIdMaxLength} lowercase letters, digits, "_", or "-", starting with a letter or digit. Unique within the form.`
+    ),
+  label: visibleText(ASK_LIMITS.form.labelMaxLength).describe(
+    `What the user sees, at most ${ASK_LIMITS.form.labelMaxLength} characters.`
+  ),
+  required: z
+    .boolean()
+    .optional()
+    .describe(
+      "True when the answer must hold a non-blank value for this field. Defaults to false."
+    ),
+  type: z.literal(type),
+});
+
+const formTextField = <Type extends "text" | "textarea">(type: Type, cap: number) =>
+  z
+    .object({
+      ...formFieldBase(type),
+      default: z.string().optional().describe("The text the field starts with."),
+      maxLength: z
+        .number()
+        .int()
+        .min(1)
+        .max(cap)
+        .optional()
+        .describe(`The most characters the value may have. Defaults to ${cap}, the most allowed.`),
+      minLength: z
+        .number()
+        .int()
+        .min(0)
+        .max(cap)
+        .optional()
+        .describe(
+          "The fewest characters a non-blank value may have, not counting spaces at either end. Defaults to 0."
+        ),
+    })
+    .strict();
+
+const formStringField = <Type extends "email" | "url" | "phone">(type: Type, example: string) =>
+  z
+    .object({
+      ...formFieldBase(type),
+      default: z
+        .string()
+        .optional()
+        .describe(`The value the field starts with, such as ${example}.`),
+    })
+    .strict();
+
+const formDateField = <Type extends "date" | "time" | "datetime">(type: Type, format: string) =>
+  z
+    .object({
+      ...formFieldBase(type),
+      default: z.string().optional().describe(`The value the field starts with, as ${format}.`),
+    })
+    .strict();
+
+const formOption = z
+  .object({
+    id: choiceOptionSchema.shape.id,
+    label: choiceOptionSchema.shape.label,
+  })
+  .strict();
+
+const formOptions = formOption
+  .array()
+  .min(ASK_LIMITS.choice.optionsMin)
+  .max(ASK_LIMITS.choice.optionsMax)
+  .describe(
+    `The options, in display order: ${ASK_LIMITS.choice.optionsMin}-${ASK_LIMITS.choice.optionsMax} items, each {id, label}.`
+  );
+
+export const formFieldSchema = z.discriminatedUnion("type", [
+  formTextField("text", ASK_LIMITS.form.textMaxLength),
+  formTextField("textarea", ASK_LIMITS.form.textareaMaxLength),
+  formStringField("email", '"ada@example.com"'),
+  formStringField("url", '"https://example.com"'),
+  formStringField("phone", '"+1 415 555 2671"'),
+  z
+    .object({
+      ...formFieldBase("number"),
+      default: z.number().optional().describe("The number the field starts with."),
+      integer: z.boolean().optional().describe("True to accept whole numbers only."),
+      max: z.number().optional().describe("The largest value allowed."),
+      min: z.number().optional().describe("The smallest value allowed."),
+    })
+    .strict(),
+  formDateField("date", 'YYYY-MM-DD, such as "2026-10-01"'),
+  formDateField("time", '24-hour HH:mm, such as "09:30"'),
+  formDateField(
+    "datetime",
+    'an ISO 8601 date and time with Z or an offset, seconds optional, such as "2026-10-01T09:30Z"'
+  ),
+  z
+    .object({
+      ...formFieldBase("boolean"),
+      default: z.boolean().optional().describe("Whether the checkbox starts checked."),
+    })
+    .strict(),
+  z
+    .object({
+      ...formFieldBase("select"),
+      default: z.string().optional().describe("The option id selected at first."),
+      options: formOptions,
+    })
+    .strict(),
+  z
+    .object({
+      ...formFieldBase("multiselect"),
+      default: z
+        .array(z.string())
+        .optional()
+        .describe("The option ids selected at first, each listed once."),
+      options: formOptions,
+    })
+    .strict(),
+]);
+
+export type FormField = z.infer<typeof formFieldSchema>;
+
+/**
+ * Field ids are unique, length and number bounds have their minimum at or below their maximum,
+ * option ids are unique within a field, and every default is a value its field accepts.
+ */
+const checkFormInput = (input: {fields: FormField[]}, ctx: z.RefinementCtx): void => {
+  checkDuplicateIds({
+    ctx,
+    fix: "Give every field a unique id.",
+    ids: input.fields.map((field) => field.id),
+    message: (id, firstIndex) =>
+      `Field id ${quoteValue(id)} is already used by ${formatAskPath(["fields", firstIndex])}.`,
+    segments: (index) => ["fields", index, "id"],
+  });
+  input.fields.forEach((field, index) => {
+    if ((field.type === "text" || field.type === "textarea") && field.minLength !== undefined) {
+      const max = formTextMaxLength(field);
+      if (field.minLength > max) {
+        ctx.addIssue(
+          askIssue({
+            code: "RANGE_INVALID",
+            fix: "Lower minLength, or raise maxLength.",
+            message: `minLength (${field.minLength}) is more than maxLength (${max}).`,
+            segments: ["fields", index, "minLength"],
+          })
+        );
+      }
+    }
+    if (
+      field.type === "number" &&
+      field.min !== undefined &&
+      field.max !== undefined &&
+      field.min > field.max
+    ) {
+      ctx.addIssue(
+        askIssue({
+          code: "RANGE_INVALID",
+          fix: "Lower min, or raise max.",
+          message: `min (${field.min}) is more than max (${field.max}).`,
+          segments: ["fields", index, "min"],
+        })
+      );
+    }
+    if (field.type === "select" || field.type === "multiselect") {
+      checkDuplicateIds({
+        ctx,
+        fix: "Give every option of the field a unique id.",
+        ids: field.options.map((option) => option.id),
+        message: (id, firstIndex) =>
+          `Option id ${quoteValue(id)} is already used by ${formatAskPath(["fields", index, "options", firstIndex])}.`,
+        segments: (optionIndex) => ["fields", index, "options", optionIndex, "id"],
+      });
+    }
+    if (field.default === undefined) {
+      return;
+    }
+    for (const draft of checkFormValue({
+      field,
+      isDefault: true,
+      segments: ["fields", index, "default"],
+      value: field.default,
+    })) {
+      ctx.addIssue(askIssue(draft));
+    }
+  });
+};
+
+/** Input for `ask_form`: a few flat fields the user fills in and submits at once. */
+export const formAskInputSchema = z
+  .object({
+    ...sharedAskFields,
+    fields: z
+      .array(formFieldSchema)
+      .min(ASK_LIMITS.form.fieldsMin)
+      .max(ASK_LIMITS.form.fieldsMax)
+      .describe(
+        `The fields, in display order: ${ASK_LIMITS.form.fieldsMin}-${ASK_LIMITS.form.fieldsMax} items. Each has a type (${FORM_FIELD_TYPES.join(", ")}).`
+      ),
+  })
+  .strict()
+  .superRefine(checkFormInput);
+
+export type FormAskInput = z.infer<typeof formAskInputSchema>;
+
+/** The `content` of an accepted answer from any client, before its values meet their fields. */
+export const formAnswerEnvelopeSchema = z
+  .object({values: z.record(z.string(), z.unknown())})
+  .strict();
+
+/**
+ * The `content` of an accepted `form` answer: one value per answered field, keyed by field id.
+ * Unanswered optional fields are left out.
+ */
+export const formAnswerSchema = z
+  .object({
+    values: z.record(
+      z.string(),
+      z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])
+    ),
+  })
+  .strict();
+
+export type FormAnswer = z.infer<typeof formAnswerSchema>;
+
 /** The `content` of an accepted `choice` answer. */
 export const choiceAnswerSchema = z
   .object({
@@ -703,10 +955,20 @@ export const markdownAskResponseSchema = z.discriminatedUnion("action", [
 
 export type MarkdownAskResponse = z.infer<typeof markdownAskResponseSchema>;
 
+/** The answer envelope for `ask_form`, with `content` typed. Used as the tool's output schema. */
+export const formAskResponseSchema = z.discriminatedUnion("action", [
+  z.object({action: z.literal("accept"), content: formAnswerSchema}).strict(),
+  askDeclineResponseSchema,
+  askCancelResponseSchema,
+]);
+
+export type FormAskResponse = z.infer<typeof formAskResponseSchema>;
+
 /** Input schemas by kind. */
 export const askInputSchemas = {
   choice: choiceAskInputSchema,
   confirm: confirmAskInputSchema,
+  form: formAskInputSchema,
   markdown: markdownAskInputSchema,
 } as const satisfies Record<AskKind, z.ZodType>;
 
@@ -758,6 +1020,7 @@ export const askInputSchemaFor = ({
 export const askOutputSchemas = {
   choice: choiceAskResponseSchema,
   confirm: confirmAskResponseSchema,
+  form: formAskResponseSchema,
   markdown: markdownAskResponseSchema,
 } as const satisfies Record<AskKind, z.ZodType>;
 
@@ -776,8 +1039,13 @@ export interface MarkdownAsk {
   kind: "markdown";
 }
 
+export interface FormAsk {
+  input: FormAskInput;
+  kind: "form";
+}
+
 /** A validated ask: its kind and its input. */
-export type Ask = ChoiceAsk | ConfirmAsk | MarkdownAsk;
+export type Ask = ChoiceAsk | ConfirmAsk | MarkdownAsk | FormAsk;
 
 /**
  * Whether the user may skip the ask. `allowDecline` defaults to true, except on `confirm`, where

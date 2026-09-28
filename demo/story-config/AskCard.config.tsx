@@ -7,6 +7,9 @@ import {
   AskCardConfirmReadOnly,
   AskCardDemo,
   AskCardError,
+  AskCardForm,
+  AskCardFormAnswered,
+  AskCardFormError,
   AskCardMarkdown,
   AskCardMarkdownAnswered,
   AskCardMarkdownError,
@@ -20,7 +23,7 @@ import {AskCard} from "@terreno/ui";
 export const AskCardConfiguration: DemoConfiguration = {
   a11yNotes: [
     "GPTChat moves focus to a pending ask so keyboard and screen reader users land on it.",
-    "Every control is a labeled Button, RadioField, SelectField, MultiselectField, TextField, or MarkdownEditorField, so each answer is reachable by keyboard.",
+    "Every control is a labeled Button, RadioField, SelectField, MultiselectField, TextField, TextArea, DateTimeField, BooleanField, or MarkdownEditorField, so each answer is reachable by keyboard.",
   ],
   additionalDocumentation: [],
   category: "Pattern",
@@ -33,11 +36,14 @@ export const AskCardConfiguration: DemoConfiguration = {
   name: "AskCard",
   props: {},
   related: [
+    "BooleanField",
+    "DateTimeField",
     "GPTChat",
     "MarkdownEditorField",
     "MultiselectField",
     "RadioField",
     "SelectField",
+    "TextArea",
     "TextField",
   ],
   status: {
@@ -67,6 +73,18 @@ export const AskCardConfiguration: DemoConfiguration = {
     "Confirm read only": {
       description: "No onSubmit: both confirm buttons are disabled.",
       render: () => <AskCardConfirmReadOnly />,
+    },
+    Form: {
+      description: "form: typed fields filled in and submitted at once.",
+      render: () => <AskCardForm />,
+    },
+    "Form answered": {
+      description: "Sent and skipped forms, with a label and value list under the summary.",
+      render: () => <AskCardFormAnswered />,
+    },
+    "Form error": {
+      description: "Server errors shown on the fields they name.",
+      render: () => <AskCardFormError />,
     },
     Markdown: {
       description: "markdown: edit the agent's draft in a markdown editor and send it back.",

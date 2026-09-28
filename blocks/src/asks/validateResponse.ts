@@ -6,6 +6,7 @@ import {
   issuesToAskErrors,
   quoteValue,
 } from "./errors";
+import {checkFormValue, isBlankFormValue} from "./formValues";
 import {
   type Ask,
   type AskKind,
@@ -15,6 +16,8 @@ import {
   choiceAnswerSchema,
   choiceSelectionBounds,
   confirmAnswerSchema,
+  type FormAskInput,
+  formAnswerEnvelopeSchema,
   type MarkdownAskInput,
   markdownAnswerSchema,
   markdownLengthBounds,
@@ -179,6 +182,44 @@ const validateMarkdownAnswer = (input: MarkdownAskInput, content: unknown): AskE
 };
 
 /**
+ * Every value must belong to a field, every required field needs a non-blank value, and every
+ * value must be one its field accepts. A blank value on an optional field counts as unanswered.
+ */
+const validateFormAnswer = (input: FormAskInput, content: unknown): AskErrorDraft[] => {
+  const parsed = formAnswerEnvelopeSchema.safeParse(content);
+  if (!parsed.success) {
+    return issuesToAskErrors({issues: parsed.error.issues, prefix: ["content"], root: content});
+  }
+  const {values} = parsed.data;
+  const fieldIds = new Set(input.fields.map((field) => field.id));
+  const drafts: AskErrorDraft[] = Object.keys(values)
+    .filter((id) => !fieldIds.has(id))
+    .map((id) => ({
+      code: "UNKNOWN_KEY",
+      fix: `Remove ${quoteValue(id)} from content.values.`,
+      message: `${quoteValue(id)} is not the id of any field in this form.`,
+      segments: ["content", "values", id],
+    }));
+  for (const field of input.fields) {
+    const segments = ["content", "values", field.id];
+    const value = Object.hasOwn(values, field.id) ? values[field.id] : undefined;
+    if (value === undefined || isBlankFormValue(value)) {
+      if (field.required === true) {
+        drafts.push({
+          code: "REQUIRED_FIELD",
+          fix: `Fill in ${quoteValue(field.label)} (content.values.${field.id}).`,
+          message: `${quoteValue(field.label)} is required.`,
+          segments,
+        });
+      }
+      continue;
+    }
+    drafts.push(...checkFormValue({field, isDefault: false, segments, value}));
+  }
+  return drafts;
+};
+
+/**
  * Checks a user's answer against the ask it answers. The client runs it before enabling Submit and
  * the server runs it before resuming the turn. Returns no errors when the answer is valid.
  */
@@ -220,5 +261,7 @@ export const validateAskResponse = ({
       return finalizeAskErrors(validateConfirmAnswer(answer.content));
     case "markdown":
       return finalizeAskErrors(validateMarkdownAnswer(ask.input, answer.content));
+    case "form":
+      return finalizeAskErrors(validateFormAnswer(ask.input, answer.content));
   }
 };

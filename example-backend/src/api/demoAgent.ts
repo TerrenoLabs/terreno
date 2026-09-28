@@ -16,6 +16,8 @@ type DemoGenerateResult = Awaited<ReturnType<DemoLanguageModel["doGenerate"]>>;
 type DemoStreamResult = Awaited<ReturnType<DemoLanguageModel["doStream"]>>;
 type DemoStreamPart = DemoStreamResult["stream"] extends ReadableStream<infer Part> ? Part : never;
 
+type FormAskInput = Extract<Ask, {kind: "form"}>["input"];
+
 export const DEMO_AGENT_MODEL_ID = "terreno-demo-agent";
 
 /** Tool call ids look like `demo_<scenario id>_<uuid>`, so an answer finds its scenario. */
@@ -201,6 +203,86 @@ const announcementReply = ({isCompact, response}: DemoAnswer): string => {
   return `You edited the draft (${length}). A real agent would post this now:\n\n---\n\n${markdown}\n\n---\n\nSay "draft an announcement" to try another answer.`;
 };
 
+const INVOICE_INPUT: FormAskInput = {
+  fields: [
+    {
+      default: "Acme Corp",
+      id: "company",
+      label: "Company name",
+      maxLength: 120,
+      required: true,
+      type: "text",
+    },
+    {
+      default: "billing@acme.example",
+      id: "email",
+      label: "Billing email",
+      required: true,
+      type: "email",
+    },
+    {
+      helperText: "We call this number if a payment fails.",
+      id: "phone",
+      label: "Callback phone",
+      type: "phone",
+    },
+    {default: 5, id: "seats", integer: true, label: "Seats", max: 500, min: 1, type: "number"},
+    {id: "start", label: "Start date", type: "date"},
+    {
+      default: "us",
+      id: "region",
+      label: "Region",
+      options: [
+        {id: "us", label: "United States"},
+        {id: "eu", label: "European Union"},
+      ],
+      type: "select",
+    },
+    {default: true, id: "notify", label: "Email me the invoice", type: "boolean"},
+    {id: "notes", label: "Notes for the invoice", maxLength: 500, type: "textarea"},
+  ],
+  prompt: "Here are the invoice details I have on file. Fix anything, then send them.",
+  submitLabel: "Send details",
+  title: "Invoice details",
+};
+
+/** One sent value as the reply shows it: Yes or No, an option's label, or the value itself. */
+const invoiceValueText = (field: FormAskInput["fields"][number], value: unknown): string => {
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  if (field.type === "select") {
+    return field.options.find((option) => option.id === value)?.label ?? String(value);
+  }
+  return String(value);
+};
+
+const invoiceReply = ({isCompact, response}: DemoAnswer): string => {
+  if (response.action === "decline") {
+    return isCompact
+      ? "OK, no invoice for now."
+      : 'No problem, I did not create an invoice. Say "invoice details" when you want to fill them in.';
+  }
+  if (response.action === "cancel") {
+    return "The invoice question was cancelled, so I did not create an invoice.";
+  }
+  const {values} = response.content;
+  const sent =
+    typeof values === "object" && values !== null ? (values as Record<string, unknown>) : {};
+  const fields = INVOICE_INPUT.fields.filter((field) => Object.hasOwn(sent, field.id));
+  if (isCompact) {
+    const count = `${fields.length} ${fields.length === 1 ? "field" : "fields"}`;
+    return `You sent the invoice details (${count}). A real agent would create the invoice now.`;
+  }
+  return [
+    "Thanks. A real agent would create the invoice with these details:",
+    "",
+    ...fields.map((field) => `- **${field.label}:** ${invoiceValueText(field, sent[field.id])}`),
+    "",
+    'Say "invoice details" to try another answer.',
+  ].join("\n");
+};
+
 const DEMO_SCENARIOS: DemoAskScenario[] = [
   {
     compactFallback:
@@ -219,6 +301,16 @@ const DEMO_SCENARIOS: DemoAskScenario[] = [
     reply: announcementReply,
     title: "Drafting an announcement",
     trigger: /\bannouncements?\b/i,
+  },
+  {
+    compactFallback:
+      'Filling in a form needs a bigger screen. Open the chat on your phone and say "invoice details".',
+    id: "invoice",
+    input: INVOICE_INPUT,
+    kind: "form",
+    reply: invoiceReply,
+    title: "Filling in invoice details",
+    trigger: /\b(invoices?|forms?)\b/i,
   },
   {
     compactFallback:
@@ -310,6 +402,7 @@ const DEMO_HELP_REPLY: DemoReply = {
     'Say "help me pick a plan" and I will ask you to choose one right here in the chat, or "pick toppings" to choose several with an answer of your own.',
     'Say "send the weekly report" or "archive old chats" and I will ask you to confirm before I act. Archiving shows a destructive button, because it cannot be undone.',
     'Say "draft an announcement" and I will ask you to edit my draft in a markdown editor, then send it back.',
+    'Say "invoice details" and I will ask you to check a short form, with a date, a number, and a few other field types, then send it.',
     "To talk to a real model, set GEMINI_API_KEY on the server or save a Gemini API key on the Profile tab.",
   ].join("\n\n"),
 };

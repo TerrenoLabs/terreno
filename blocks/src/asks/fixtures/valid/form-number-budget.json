@@ -1,0 +1,45 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "What is the monthly budget?",
+    "fields": [
+      {
+        "id": "budget",
+        "type": "number",
+        "label": "Budget (USD)",
+        "min": 0,
+        "max": 100000,
+        "default": 2500.5
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "submit-defaults",
+        "label": "Submit defaults",
+        "response": {
+          "action": "accept",
+          "content": {
+            "values": {
+              "budget": 2500.5
+            }
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "What is the monthly budget?",
+    "toolCallId": "call_fixture"
+  }
+}

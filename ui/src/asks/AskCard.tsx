@@ -9,6 +9,7 @@ import {Icon} from "../Icon";
 import {Text} from "../Text";
 import {AskChoice} from "./AskChoice";
 import {AskConfirm} from "./AskConfirm";
+import {AskForm, AskFormAnswer} from "./AskForm";
 import {AskMarkdown, AskMarkdownAnswer} from "./AskMarkdown";
 import type {AskAction} from "./askControls";
 import {askSummary} from "./askSummary";
@@ -53,18 +54,28 @@ const answeredMarkdown = (ask: ChatAsk): string | undefined => {
   return typeof markdown === "string" ? markdown : undefined;
 };
 
-const AskSummary = ({ask, testID}: {ask: ChatAsk; testID: string}): React.ReactElement => {
-  const markdown = answeredMarkdown(ask);
-  if (markdown === undefined) {
-    return <AskSummaryLine ask={ask} testID={testID} />;
+/** What an accepted answer sent back, for kinds that show more than the summary line. */
+const AnswerDetail = ({ask, testID}: {ask: ChatAsk; testID: string}): React.ReactElement | null => {
+  if (ask.response?.action !== "accept") {
+    return null;
   }
-  return (
-    <Box gap={2}>
-      <AskSummaryLine ask={ask} testID={testID} />
-      <AskMarkdownAnswer markdown={markdown} testID={testID} />
-    </Box>
-  );
+  const markdown = answeredMarkdown(ask);
+  if (markdown !== undefined) {
+    return <AskMarkdownAnswer markdown={markdown} testID={testID} />;
+  }
+  const {values} = ask.response.content;
+  if (ask.kind === "form" && values !== null && typeof values === "object") {
+    return <AskFormAnswer ask={ask} testID={testID} values={values as Record<string, unknown>} />;
+  }
+  return null;
 };
+
+const AskSummary = ({ask, testID}: {ask: ChatAsk; testID: string}): React.ReactElement => (
+  <Box gap={2}>
+    <AskSummaryLine ask={ask} testID={testID} />
+    <AnswerDetail ask={ask} testID={testID} />
+  </Box>
+);
 
 const AskBody = ({
   ask,
@@ -107,6 +118,17 @@ const AskBody = ({
     case "markdown":
       return (
         <AskMarkdown
+          ask={ask}
+          errors={errors}
+          isDisabled={isDisabled}
+          onAnswer={onAnswer}
+          pendingActionId={pendingActionId}
+          testID={testID}
+        />
+      );
+    case "form":
+      return (
+        <AskForm
           ask={ask}
           errors={errors}
           isDisabled={isDisabled}

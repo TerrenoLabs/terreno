@@ -288,6 +288,84 @@ describe("/gpt/histories headless turns", () => {
       }
     );
 
+    it.each([
+      {
+        answer: {action: "accept", content: {values: {email: "billing@acme.test", seats: 5}}},
+        buttonId: "submit-defaults",
+        reply: "Sent the invoice to billing@acme.test.",
+      },
+      {answer: {action: "decline"}, buttonId: "cancel", reply: "I left the invoice alone."},
+    ])(
+      "pauses on a form card with handoff and resumes with the $buttonId button",
+      async ({answer, buttonId, reply}) => {
+        const formInput = {
+          fields: [
+            {
+              default: "billing@acme.test",
+              id: "email",
+              label: "Email",
+              required: true,
+              type: "email",
+            },
+            {default: 5, id: "seats", integer: true, label: "Seats", min: 1, type: "number"},
+            {id: "po", label: "PO number", type: "text"},
+          ],
+          prompt: "Where should I send the invoice?",
+        };
+        const model = createScriptedModel({
+          steps: [
+            toolCallStep({input: formInput, toolCallId: "call_invoice", toolName: "ask_form"}),
+            textStep(reply),
+          ],
+        });
+        const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+        const historyId = await createHistory(agent);
+
+        const asked = await postTurn(agent, historyId, {prompt: "Invoice details"});
+        const answered = await postTurn(agent, historyId, {buttonId, toolCallId: "call_invoice"});
+
+        expect(asked.body.data).toEqual({
+          historyId,
+          pendingAsk: {
+            kind: "form",
+            simple: {
+              buttons: [
+                {
+                  id: "submit-defaults",
+                  label: "Submit defaults",
+                  response: {
+                    action: "accept",
+                    content: {values: {email: "billing@acme.test", seats: 5}},
+                  },
+                  style: "primary",
+                },
+                {id: "cancel", label: "Cancel", response: {action: "decline"}, style: "cancel"},
+              ],
+              handoff: true,
+              kind: "form",
+              text: "Where should I send the invoice?",
+              toolCallId: "call_invoice",
+            },
+            toolCallId: "call_invoice",
+          },
+          text: "",
+        });
+        expect(turnResultSchema.parse(asked.body.data)).toEqual(asked.body.data);
+        expect(answered.body.data).toEqual({historyId, text: reply, title: "Workspace setup"});
+        expect(conversationOf(modelCall(model, 1)).at(-1)).toEqual({
+          content: [
+            {
+              output: {type: "json", value: answer},
+              toolCallId: "call_invoice",
+              toolName: "ask_form",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        });
+      }
+    );
+
     it("resumes with a full askResponse, as a client that renders the ask sends it", async () => {
       const model = createScriptedModel({
         steps: [toolCallStep(PLAN_ASK_CALL), textStep(TEAM_REPLY)],

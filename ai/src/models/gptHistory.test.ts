@@ -314,13 +314,13 @@ describe("GptHistory Model", () => {
 
     it.each([
       {
-        expected: "`form` is not a valid enum value for path `kind`",
-        history: {pendingAsk: {...pendingAsk, kind: "form"}},
+        expected: "`bogus` is not a valid enum value for path `kind`",
+        history: {pendingAsk: {...pendingAsk, kind: "bogus"}},
         label: "an unknown pending ask kind",
       },
       {
-        expected: "`form` is not a valid enum value for path `kind`",
-        history: {prompts: [{...askRow, ask: {kind: "form", status: "pending"}}]},
+        expected: "`bogus` is not a valid enum value for path `kind`",
+        history: {prompts: [{...askRow, ask: {kind: "bogus", status: "pending"}}]},
         label: "an unknown row ask kind",
       },
       {

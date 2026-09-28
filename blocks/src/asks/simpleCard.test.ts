@@ -1,7 +1,7 @@
 import {describe, expect, it} from "bun:test";
 import {type ValidAskFixture, validAskFixtures, validAskFixturesOf} from "../tests/askFixtures";
 import {ASK_LIMITS} from "./limits";
-import type {ChoiceAskInput, ConfirmAskInput, MarkdownAskInput} from "./schema";
+import type {ChoiceAskInput, ConfirmAskInput, FormAskInput, MarkdownAskInput} from "./schema";
 import {resolveButtonAnswer, simpleCardSchema, toSimpleCard} from "./simpleCard";
 import {validateAskInput} from "./validateInput";
 import {validateAskResponse} from "./validateResponse";
@@ -119,8 +119,50 @@ const markdownButtons = (input: MarkdownAskInput, isDraftFitting: boolean): Expe
     : [{id: "cancel", response: {action: "decline"}, style: "cancel"}]),
 ];
 
+/**
+ * The defaults each valid `form` fixture's Submit defaults button sends, read off by hand, or
+ * null when the card has no Submit defaults (a required field without a default, or no default).
+ */
+const FORM_SUBMIT_VALUES_BY_FIXTURE: Record<string, Record<string, unknown> | null> = {
+  "form-boolean-newsletter": null,
+  "form-date-due": {due: "2026-10-01"},
+  "form-datetime-meeting": {starts: "2026-10-01T16:30:00Z"},
+  "form-datetime-minutes-offset": {departs: "2026-10-01T09:30+02:00"},
+  "form-eight-fields": null,
+  "form-email-contact": {email: "billing@acme.test"},
+  "form-invoice-details": null,
+  "form-multiselect-channels": {channels: ["email", "slack"]},
+  "form-number-budget": {budget: 2500.5},
+  "form-phone-callback": {phone: "+1 (415) 555-2671"},
+  "form-select-shipping": {speed: "standard"},
+  "form-text-required-default": {name: "Launch plan"},
+  "form-textarea-notes": null,
+  "form-time-reminder": {at: "09:30"},
+  "form-url-website": null,
+};
+
+/** The `form` row: Submit defaults when every required field has a default, then Cancel. */
+const formButtons = (
+  input: FormAskInput,
+  values: Record<string, unknown> | null
+): ExpectedButton[] => [
+  ...(values === null
+    ? []
+    : [{id: "submit-defaults", response: {action: "accept", content: {values}}, style: "primary"}]),
+  ...(input.allowDecline === false
+    ? []
+    : [{id: "cancel", response: {action: "decline"}, style: "cancel"}]),
+];
+
 /** The buttons and handoff the rule table gives a valid fixture. */
 const expectedCard = (fixture: ValidAskFixture): {buttons: ExpectedButton[]; handoff: boolean} => {
+  if (fixture.kind === "form") {
+    const values = FORM_SUBMIT_VALUES_BY_FIXTURE[fixture.name];
+    if (values === undefined) {
+      throw new Error(`Add valid/${fixture.name} to FORM_SUBMIT_VALUES_BY_FIXTURE.`);
+    }
+    return {buttons: formButtons(fixture.input, values), handoff: true};
+  }
   if (fixture.kind === "confirm") {
     return {buttons: confirmButtons(fixture.input), handoff: false};
   }
@@ -202,6 +244,14 @@ describe("toSimpleCard properties over every valid fixture", () => {
 });
 
 describe("the rule-table row map", () => {
+  it("lists exactly the valid form fixtures", () => {
+    expect(Object.keys(FORM_SUBMIT_VALUES_BY_FIXTURE).sort()).toEqual(
+      validAskFixturesOf("form")
+        .map((fixture) => fixture.name)
+        .sort()
+    );
+  });
+
   it("lists exactly the valid markdown fixtures", () => {
     expect(Object.keys(MARKDOWN_DRAFT_FITS_BY_FIXTURE).sort()).toEqual(
       validAskFixturesOf("markdown")
@@ -803,6 +853,98 @@ describe("toSimpleCard markdown rules", () => {
         expect(validateAskResponse({input, kind: "markdown", response: button.response})).toEqual(
           []
         );
+      }
+    }
+  });
+});
+
+describe("toSimpleCard form rules", () => {
+  const OPTIONS = [
+    {id: "us", label: "US"},
+    {id: "eu", label: "EU"},
+  ];
+  const CASES: {fields: FormAskInput["fields"]; values: Record<string, unknown> | null}[] = [
+    {fields: [{id: "name", label: "Name", type: "text"}], values: null},
+    {fields: [{id: "name", label: "Name", required: true, type: "text"}], values: null},
+    {
+      fields: [{default: "Acme", id: "name", label: "Name", required: true, type: "text"}],
+      values: {name: "Acme"},
+    },
+    {
+      fields: [
+        {default: "Acme", id: "name", label: "Name", required: true, type: "text"},
+        {id: "seats", label: "Seats", required: true, type: "number"},
+      ],
+      values: null,
+    },
+    {
+      fields: [
+        {default: "Acme", id: "name", label: "Name", required: true, type: "text"},
+        {id: "seats", label: "Seats", type: "number"},
+        {default: false, id: "notify", label: "Notify", type: "boolean"},
+      ],
+      values: {name: "Acme", notify: false},
+    },
+    {
+      fields: [
+        {default: 0, id: "count", label: "Count", min: 0, required: true, type: "number"},
+        {default: "eu", id: "region", label: "Region", options: OPTIONS, type: "select"},
+        {default: ["us"], id: "regions", label: "Regions", options: OPTIONS, type: "multiselect"},
+      ],
+      values: {count: 0, region: "eu", regions: ["us"]},
+    },
+    {fields: [{id: "notify", label: "Notify", required: true, type: "boolean"}], values: null},
+  ];
+  const asks = CASES.flatMap(({fields, values}) =>
+    [undefined, true, false].map((allowDecline) => ({
+      input: {
+        fields,
+        prompt: "A few details.",
+        ...(allowDecline === undefined ? {} : {allowDecline}),
+      } satisfies FormAskInput,
+      values,
+    }))
+  );
+  const cards = asks.map(({input, values}) => ({
+    card: toSimpleCard({input, kind: "form", toolCallId: TOOL_CALL_ID}),
+    input,
+    values,
+  }));
+
+  it("only generates valid asks", () => {
+    for (const {input} of asks) {
+      expect(validateAskInput({input, kind: "form"})).toEqual([]);
+    }
+  });
+
+  it("always hands off, because fields cannot be filled in on a small screen", () => {
+    for (const {card} of cards) {
+      expect(simpleCardSchema.safeParse(card).success).toBe(true);
+      expect(card.handoff).toBe(true);
+    }
+  });
+
+  it("offers Submit defaults exactly when there is a default and every required field has one", () => {
+    for (const {card, input, values} of cards) {
+      expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
+        formButtons(input, values)
+      );
+    }
+  });
+
+  it("labels the buttons Submit defaults and Cancel", () => {
+    const card = toSimpleCard({
+      input: {fields: [{default: "Acme", id: "name", label: "Name", type: "text"}], prompt: "Go."},
+      kind: "form",
+      toolCallId: TOOL_CALL_ID,
+    });
+    expect(card.buttons.map((button) => button.label)).toEqual(["Submit defaults", "Cancel"]);
+  });
+
+  it("only has buttons whose response is a valid answer to the ask", () => {
+    for (const {card, input} of cards) {
+      for (const button of card.buttons) {
+        expect(validateAskResponse({input, kind: "form", response: button.response})).toEqual([]);
       }
     }
   });

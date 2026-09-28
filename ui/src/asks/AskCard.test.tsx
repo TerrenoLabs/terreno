@@ -2,11 +2,13 @@ import {afterEach, describe, it, mock, spyOn} from "bun:test";
 import {
   type ChoiceAskInput,
   type ConfirmAskInput,
+  type FormAskInput,
   type MarkdownAskInput,
   toSimpleCard,
 } from "@terreno/blocks";
 import {act, fireEvent, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
+import {TimezonePicker} from "../TimezonePicker";
 import {renderWithTheme} from "../test-utils";
 import {AskCard, type AskCardProps} from "./AskCard";
 import type {AskSubmission, ChatAsk} from "./askTypes";
@@ -79,6 +81,69 @@ const DRAFT_INPUT: MarkdownAskInput = {
 
 const pendingMarkdown = (input: MarkdownAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
   ({input, kind: "markdown", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
+
+const INVOICE_INPUT: FormAskInput = {
+  fields: [
+    {
+      helperText: "As it appears on the invoice.",
+      id: "company",
+      label: "Company name",
+      maxLength: 120,
+      required: true,
+      type: "text",
+    },
+    {id: "seats", integer: true, label: "Seats", max: 500, min: 1, type: "number"},
+    {id: "start", label: "Start date", type: "date"},
+    {
+      id: "region",
+      label: "Region",
+      options: [
+        {id: "us", label: "US"},
+        {id: "eu", label: "EU"},
+      ],
+      type: "select",
+    },
+    {default: true, id: "notify", label: "Email me the invoice", type: "boolean"},
+  ],
+  prompt: "A few details for the invoice.",
+  submitLabel: "Send details",
+  title: "Invoice details",
+};
+
+const DEFAULTS_INPUT: FormAskInput = {
+  fields: [
+    {default: "Ring twice.", id: "notes", label: "Notes", type: "textarea"},
+    {id: "email", label: "Email", required: true, type: "email"},
+    {default: "https://example.com", id: "site", label: "Website", type: "url"},
+    {id: "phone", label: "Phone", type: "phone"},
+    {default: "09:30", id: "reminder", label: "Reminder", type: "time"},
+    {default: "2026-10-01T09:30:00Z", id: "meeting", label: "Meeting", type: "datetime"},
+    {
+      default: "express",
+      id: "shipping",
+      label: "Shipping",
+      options: [
+        {id: "standard", label: "Standard"},
+        {id: "express", label: "Express"},
+      ],
+      type: "select",
+    },
+    {
+      default: ["email"],
+      id: "channels",
+      label: "Channels",
+      options: [
+        {id: "email", label: "Email"},
+        {id: "sms", label: "Text message"},
+      ],
+      type: "multiselect",
+    },
+  ],
+  prompt: "Check the details.",
+};
+
+const pendingForm = (input: FormAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
+  ({input, kind: "form", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
 
 const renderCard = (props: Partial<AskCardProps> & Pick<AskCardProps, "ask">) =>
   renderWithTheme(<AskCard onSubmit={mock(async () => {})} {...props} />);
@@ -723,6 +788,238 @@ describe("AskCard", () => {
     it("summarizes a skipped draft without the answer box", () => {
       const {getByText, queryByTestId} = renderCard({
         ask: pendingMarkdown(DRAFT_INPUT, {response: {action: "decline"}, status: "answered"}),
+      });
+      assert.isOk(getByText("You skipped this question."));
+      assert.isNull(queryByTestId("ask-card-answer"));
+    });
+  });
+
+  describe("form", () => {
+    const typeInto = (root: ReturnType<typeof renderCard>, testID: string, text: string): void => {
+      act(() => {
+        fireEvent.changeText(root.getByTestId(testID), text);
+      });
+    };
+
+    it("renders one labelled control per field, marks required fields, and shows helper text", () => {
+      const card = renderCard({ask: pendingForm(INVOICE_INPUT)});
+
+      assert.isOk(card.getByText("Invoice details"));
+      assert.isOk(card.getByText("Company name (required)"));
+      assert.isOk(card.getByText("As it appears on the invoice."));
+      assert.isOk(card.getByTestId("ask-card-field-company"));
+      assert.isOk(card.getByTestId("ask-card-field-seats"));
+      assert.isOk(card.getByTestId("ask-card-field-start"));
+      assert.isOk(within(card.getByTestId("ask-card-form-field-region")).getByText("Region"));
+      assert.isOk(card.getByTestId("ask-card-field-notify.switch"));
+      assert.isOk(within(card.getByTestId("ask-card-submit")).getByText("Send details"));
+      assert.isOk(card.getByTestId("ask-card-button-skip"));
+    });
+
+    it("keeps Submit disabled until required fields are filled, then sends the typed values", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingForm(INVOICE_INPUT), onSubmit});
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+
+      typeInto(card, "ask-card-field-company", "  Acme Corp ");
+      typeInto(card, "ask-card-field-seats", "12");
+      await press(card.getByTestId("ask-card-field-notify.switch"));
+      assert.isFalse(isDisabled(card.getByTestId("ask-card-submit")));
+      await press(card.getByTestId("ask-card-submit"));
+
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0], {
+        response: {
+          action: "accept",
+          content: {values: {company: "Acme Corp", notify: false, seats: 12}},
+        },
+        toolCallId: "call_1",
+      });
+    });
+
+    it("sends a date typed into the date field as YYYY-MM-DD", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingForm(INVOICE_INPUT), onSubmit});
+      const start = within(card.getByTestId("ask-card-form-field-start"));
+
+      typeInto(card, "ask-card-field-company", "Acme");
+      act(() => {
+        fireEvent.changeText(start.getByPlaceholderText("MM"), "10");
+        fireEvent.changeText(start.getByPlaceholderText("DD"), "01");
+        fireEvent.changeText(start.getByPlaceholderText("YYYY"), "2026");
+      });
+      act(() => {
+        fireEvent(start.getByPlaceholderText("YYYY"), "blur");
+      });
+      await press(card.getByTestId("ask-card-submit"));
+
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {
+        action: "accept",
+        content: {values: {company: "Acme", notify: true, start: "2026-10-01"}},
+      });
+    });
+
+    it("shows why a field is invalid once the user edits it, and keeps Submit disabled", () => {
+      const card = renderCard({ask: pendingForm(INVOICE_INPUT)});
+      assert.isNull(card.queryByText("This field is required."));
+
+      typeInto(card, "ask-card-field-company", "Acme");
+      typeInto(card, "ask-card-field-seats", "900");
+      assert.isOk(card.getByText("Enter a number from 1 to 500."));
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+
+      typeInto(card, "ask-card-field-seats", "1.5");
+      assert.isOk(card.getByText("Enter a whole number."));
+      typeInto(card, "ask-card-field-company", "   ");
+      assert.isOk(card.getByText("This field is required."));
+    });
+
+    it("starts from the defaults and sends every field type in its answer format", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingForm(DEFAULTS_INPUT), onSubmit});
+      assert.isTrue(isDisabled(card.getByTestId("ask-card-submit")));
+
+      typeInto(card, "ask-card-field-phone", "(415) 555-2671");
+      typeInto(card, "ask-card-field-email", "ada@example.com");
+      assert.isFalse(isDisabled(card.getByTestId("ask-card-submit")));
+      await press(card.getByTestId("ask-card-submit"));
+
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {
+        action: "accept",
+        content: {
+          values: {
+            channels: ["email"],
+            email: "ada@example.com",
+            meeting: "2026-10-01T09:30:00Z",
+            notes: "Ring twice.",
+            phone: "+14155552671",
+            reminder: "09:30",
+            shipping: "express",
+            site: "https://example.com",
+          },
+        },
+      });
+    });
+
+    it("keeps the shown time when the user picks another time zone", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingForm(DEFAULTS_INPUT), onSubmit});
+      typeInto(card, "ask-card-field-email", "ada@example.com");
+      for (const id of ["reminder", "meeting"]) {
+        const picker = within(card.getByTestId(`ask-card-form-field-${id}`)).UNSAFE_getByType(
+          TimezonePicker
+        );
+        act(() => {
+          picker.props.onChange("America/Los_Angeles");
+        });
+      }
+      await press(card.getByTestId("ask-card-submit"));
+
+      // Tests run in America/New_York, where the 09:30Z meeting shows as 05:30.
+      assert.deepInclude(onSubmit.mock.calls[0]?.[0]?.response, {
+        content: {
+          values: {
+            channels: ["email"],
+            email: "ada@example.com",
+            meeting: "2026-10-01T05:30:00-07:00",
+            notes: "Ring twice.",
+            reminder: "09:30",
+            shipping: "express",
+            site: "https://example.com",
+          },
+        },
+      });
+    });
+
+    it("shows server errors on their fields, and errors for no field below", () => {
+      const card = renderCard({
+        ask: pendingForm(INVOICE_INPUT),
+        errors: [
+          {
+            code: "REQUIRED_FIELD",
+            fix: 'Fill in "Company name" (content.values.company).',
+            message: '"Company name" is required.',
+            path: "content.values.company",
+          },
+          {
+            code: "INVALID_DATE",
+            fix: 'Write content.values.start as YYYY-MM-DD, such as "2026-10-01".',
+            message: 'content.values.start "2026-02-30" is not a real date in YYYY-MM-DD.',
+            path: "content.values.start",
+          },
+          {
+            code: "UNKNOWN_KEY",
+            fix: 'Remove "plan" from content.values.',
+            message: '"plan" is not the id of any field in this form.',
+            path: "content.values.plan",
+          },
+        ],
+      });
+
+      assert.isOk(card.getByText("This field is required."));
+      assert.isOk(card.getByText("Enter a real date."));
+      assert.isOk(
+        within(card.getByTestId("ask-card-errors")).getByText(
+          '"plan" is not the id of any field in this form.'
+        )
+      );
+    });
+
+    it("declines with Skip, and hides Skip when the ask cannot be declined", async () => {
+      const onSubmit = mock(async (_submission: AskSubmission) => {});
+      const card = renderCard({ask: pendingForm(INVOICE_INPUT), onSubmit});
+      await press(card.getByTestId("ask-card-button-skip"));
+      assert.deepEqual(onSubmit.mock.calls[0]?.[0]?.response, {action: "decline"});
+
+      const required = renderCard({ask: pendingForm({...INVOICE_INPUT, allowDecline: false})});
+      assert.isNull(required.queryByTestId("ask-card-button-skip"));
+    });
+
+    it("disables the fields, Submit, and Skip when the host takes no answers", () => {
+      const {getByTestId} = renderWithTheme(<AskCard ask={pendingForm(INVOICE_INPUT)} />);
+      assert.isTrue(getByTestId("ask-card-field-company").props.readOnly);
+      assert.isTrue(isDisabled(getByTestId("ask-card-submit")));
+      assert.isTrue(isDisabled(getByTestId("ask-card-button-skip")));
+    });
+
+    it("says a form with a default its field rejects cannot be shown", () => {
+      const {getByTestId, queryByTestId} = renderCard({
+        ask: pendingForm({
+          fields: [{default: 0, id: "seats", label: "Seats", min: 1, type: "number"}],
+          prompt: "How many?",
+        }),
+      });
+      assert.isOk(getByTestId("ask-card-invalid"));
+      assert.isNull(queryByTestId("ask-card-field-seats"));
+    });
+
+    it("summarizes a sent form with the number of fields and a label: value list", () => {
+      const {getByTestId, getByText, queryByTestId} = renderCard({
+        ask: pendingForm(INVOICE_INPUT, {
+          response: {
+            action: "accept",
+            content: {values: {company: "Acme", notify: true, region: "eu", start: "2026-10-01"}},
+          },
+          status: "answered",
+        }),
+      });
+
+      assert.isOk(getByText("You sent the form (4 fields)"));
+      const answer = within(getByTestId("ask-card-answer"));
+      assert.isOk(answer.getByText("Company name"));
+      assert.isOk(answer.getByText("Acme"));
+      assert.isOk(answer.getByText("Region"));
+      assert.isOk(answer.getByText("EU"));
+      assert.isOk(answer.getByText("Start date"));
+      assert.isOk(answer.getByText("Oct 1, 2026"));
+      assert.isOk(answer.getByText("Email me the invoice"));
+      assert.isOk(answer.getByText("Yes"));
+      assert.isNull(answer.queryByText("Seats"));
+      assert.isNull(queryByTestId("ask-card-field-company"));
+    });
+
+    it("summarizes a skipped form without the answer list", () => {
+      const {getByText, queryByTestId} = renderCard({
+        ask: pendingForm(INVOICE_INPUT, {response: {action: "decline"}, status: "answered"}),
       });
       assert.isOk(getByText("You skipped this question."));
       assert.isNull(queryByTestId("ask-card-answer"));

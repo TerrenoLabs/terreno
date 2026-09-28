@@ -13,14 +13,20 @@ export const ASK_ERROR_CODES = {
   DUPLICATE_ID: "An id appears twice where ids must be unique: options, default, or an answer.",
   DUPLICATE_LABEL:
     "Two buttons would share a label: options of a compact ask, or a confirm's approve and deny.",
+  FIELD_TYPE_MISMATCH:
+    "A form value or default does not fit its field's type: the wrong JSON type, not a whole number, or not a valid email, URL, or phone number.",
+  INVALID_DATE:
+    "A form date, time, or datetime value or default is not a real ISO 8601 value in the field's format.",
   INVALID_ENUM: "A value is not one of the allowed values.",
   INVALID_FORMAT: "A string does not match its required format.",
   INVALID_TYPE: "A value has the wrong type.",
   MISSING_REQUIRED: "A required field is missing.",
   OPTION_NOT_OFFERED: "The answer selects an option id that the ask did not offer.",
   OTHER_NOT_ALLOWED: "An ask or an answer uses Other where the ask does not allow it.",
+  OUT_OF_RANGE: "A form number value or default is below the field's min or above its max.",
   RANGE_INVALID:
     "A count or length bound is out of range: below its minimum, above what the ask offers, or a minimum above its maximum.",
+  REQUIRED_FIELD: "A form answer leaves a required field missing or blank.",
   SELECTION_COUNT: "A default or an answer selects the wrong number of options.",
   TOO_FEW: "A list has fewer items than allowed.",
   TOO_LONG: "A string is longer than allowed.",
@@ -312,11 +318,12 @@ const describeIssue = (
     }
     case "invalid_format":
       if (issue.pattern === String(ASK_LIMITS.choice.optionIdPattern)) {
+        const idKind = issue.path.length === 3 && issue.path[0] === "fields" ? "field" : "option";
         return [
           {
             code: "INVALID_FORMAT",
             fix: `Use 1-${ASK_LIMITS.choice.optionIdMaxLength} lowercase letters, digits, "_", or "-", starting with a letter or digit.`,
-            message: `${sentenceSubject(path)} ${quoteValue(target.value)} is not a valid option id.`,
+            message: `${sentenceSubject(path)} ${quoteValue(target.value)} is not a valid ${idKind} id.`,
             segments,
           },
         ];

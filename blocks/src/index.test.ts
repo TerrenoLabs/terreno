@@ -20,6 +20,9 @@ describe("@terreno/blocks public exports", () => {
 
     "askJsonSchemas",
 
+    "formDefaultValues",
+    "formTextMaxLength",
+
     "ASK_LIMITS",
 
     "askPromptSection",
@@ -50,6 +53,11 @@ describe("@terreno/blocks public exports", () => {
     "confirmAskInputSchema",
     "confirmAskResponseSchema",
     "confirmButtonLabels",
+    "FORM_FIELD_TYPES",
+    "formAnswerSchema",
+    "formAskInputSchema",
+    "formAskResponseSchema",
+    "formFieldSchema",
     "isCompactAskKind",
     "markdownAnswerSchema",
     "markdownAskInputSchema",

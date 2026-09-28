@@ -1,5 +1,6 @@
 import {z} from "zod";
 import {type AskValidationError, askIssue, quoteValue} from "./errors";
+import {formDefaultValues} from "./formValues";
 import {ASK_LIMITS} from "./limits";
 import {
   ASK_KINDS,
@@ -10,6 +11,7 @@ import {
   type ChoiceOption,
   type ConfirmAskInput,
   confirmButtonLabels,
+  type FormAskInput,
   type MarkdownAskInput,
   visibleLabel,
 } from "./schema";
@@ -38,8 +40,9 @@ export type SimpleCardButton = z.infer<typeof simpleCardButtonSchema>;
  * The small-screen form of an ask: short text and at most three buttons, each carrying the exact
  * answer it sends. `handoff` is true when the buttons cannot show every option the ask offers, so
  * the user needs the full app to answer; a select-many ask always hands off, because one tap cannot
- * pick several, and so does a markdown ask, because a draft cannot be edited there. A card with a button for every option has `handoff: false` even when Skip is left
- * out to make room.
+ * pick several, and so do a markdown ask, because a draft cannot be edited there, and a form ask,
+ * because fields cannot be filled in there. A card with a button for every option has
+ * `handoff: false` even when Skip is left out to make room.
  */
 export const simpleCardSchema = z
   .object({
@@ -241,6 +244,31 @@ const markdownCard = (input: MarkdownAskInput): Pick<SimpleCard, "buttons" | "ha
   return {buttons: [...approveButtons, ...cancelButtons], handoff: true};
 };
 
+/**
+ * Fields cannot be filled in on a small screen, so the card always hands off. Submit defaults sends
+ * the fields' defaults, and is offered only when the form has a default and every required field
+ * has one, so the answer is valid. Cancel declines.
+ */
+const formCard = (input: FormAskInput): Pick<SimpleCard, "buttons" | "handoff"> => {
+  const values = formDefaultValues(input);
+  const hasEveryRequiredDefault = input.fields.every(
+    (field) => field.required !== true || Object.hasOwn(values, field.id)
+  );
+  const response: AskResponse = {action: "accept", content: {values}};
+  const isSubmittable =
+    Object.keys(values).length > 0 &&
+    hasEveryRequiredDefault &&
+    validateAskResponse({input, kind: "form", response}).length === 0;
+  const submitButtons: SimpleCardButton[] = isSubmittable
+    ? [{id: "submit-defaults", label: "Submit defaults", response, style: "primary"}]
+    : [];
+  const cancelButtons: SimpleCardButton[] =
+    input.allowDecline === false
+      ? []
+      : [{id: "cancel", label: "Cancel", response: {action: "decline"}, style: "cancel"}];
+  return {buttons: [...submitButtons, ...cancelButtons], handoff: true};
+};
+
 const kindCard = (ask: Ask): Pick<SimpleCard, "buttons" | "handoff"> => {
   switch (ask.kind) {
     case "choice":
@@ -249,6 +277,8 @@ const kindCard = (ask: Ask): Pick<SimpleCard, "buttons" | "handoff"> => {
       return confirmCard(ask.input);
     case "markdown":
       return markdownCard(ask.input);
+    case "form":
+      return formCard(ask.input);
   }
 };
 

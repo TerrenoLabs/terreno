@@ -255,6 +255,23 @@ Field types: `text`, `textarea`, `email`, `url`, `phone`, `number`, `date`, `tim
 `min` / `max` / `integer`, `options`). Dates are ISO strings validated with Luxon. Fields are
 flat: no nesting, no conditional fields, no password or secret type.
 
+Revised in Pick (Task 2.4): dates are validated with Zod's ISO validators, not Luxon, because
+`@terreno/blocks` depends only on Zod. `date` is `YYYY-MM-DD` and must be a real calendar date;
+`time` is 24-hour `HH:mm`; `datetime` needs `Z` or an offset, so the agent never guesses a time
+zone, and seconds are optional (`2026-10-01T09:30Z` is accepted). Every `default` must be a value its field accepts, checked with the answer rules. A blank
+string or an empty list counts as unanswered. `phone` accepts 7–15 digits with optional `+`,
+spaces, dots, dashes, and parentheses; the chat sends E.164 when the number parses. Limits:
+labels 120, helper text 280, `text` 2,000, `textarea` 10,000, `select` / `multiselect` options
+2–50. New codes `REQUIRED_FIELD`, `FIELD_TYPE_MISMATCH`, `OUT_OF_RANGE`, and `INVALID_DATE`;
+form values also reuse `TOO_LONG`, `TOO_SHORT`, `OPTION_NOT_OFFERED`, `DUPLICATE_ID`,
+`DEFAULT_NOT_IN_OPTIONS`, `UNKNOWN_KEY`, and `RANGE_INVALID`. The simple card offers Submit
+defaults only when at least one field has a default and every required field has one. `form` is
+appended after `markdown` in `ASK_KINDS`, never offered on the compact surface, and
+`SimpleAskCard` shows "Fill it in on your phone" for its handoff line. The chat renders `number`
+with `TextField`, not `NumberField`, because `NumberField` rejects keystrokes below `min` (so
+"50" cannot be typed when `min` is 10) and negative numbers; the shared rules report range and
+whole-number errors instead.
+
 ### `files` — upload images or documents
 
 ```yaml

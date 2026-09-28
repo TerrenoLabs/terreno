@@ -1,0 +1,58 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "region",
+        "type": "select",
+        "label": "Region",
+        "options": [
+          {
+            "id": "us",
+            "label": "US"
+          },
+          {
+            "id": "eu",
+            "label": "EU"
+          }
+        ],
+        "default": "apac"
+      },
+      {
+        "id": "regions",
+        "type": "multiselect",
+        "label": "Regions",
+        "options": [
+          {
+            "id": "us",
+            "label": "US"
+          },
+          {
+            "id": "eu",
+            "label": "EU"
+          }
+        ],
+        "default": [
+          "us",
+          "apac",
+          "us"
+        ]
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].default",
+      "code": "DEFAULT_NOT_IN_OPTIONS"
+    },
+    {
+      "path": "fields[1].default[1]",
+      "code": "DEFAULT_NOT_IN_OPTIONS"
+    },
+    {
+      "path": "fields[1].default[2]",
+      "code": "DUPLICATE_ID"
+    }
+  ]
+}

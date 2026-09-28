@@ -25,7 +25,8 @@
             "enum": [
               "choice",
               "confirm",
-              "markdown"
+              "markdown",
+              "form"
             ]
           },
           "simple": {
@@ -131,7 +132,8 @@
                 "enum": [
                   "choice",
                   "confirm",
-                  "markdown"
+                  "markdown",
+                  "form"
                 ]
               },
               "text": {

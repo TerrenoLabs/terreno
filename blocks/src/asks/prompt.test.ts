@@ -55,6 +55,21 @@ const MARKDOWN_RULES = `ask_markdown: the user edits a markdown draft you write 
 - allowDecline: optional, default true (the user sees Skip).
 - An accepted answer looks like {"action": "accept", "content": {"markdown": "<the text>", "changed": true}}. changed is false when the user sent your draft unchanged.`;
 
+const FORM_RULES = `ask_form: the user fills in a few fields and submits them at once.
+- fields: 1-8 items, in display order, each {id, type, label, helperText?, required?, default?} plus the rules of its type. Fields are flat: no nesting, no conditional fields, and no password fields.
+- id: 1-64 lowercase letters, digits, "_", or "-", starting with a letter or digit. Unique within the form. It keys the field's value in the answer.
+- label: at most 120 characters. helperText: optional, at most 280 characters. required: optional, default false; true means the answer must hold a non-blank value.
+- type "text" (one line) or "textarea" (several lines): optional minLength and maxLength. maxLength is at most 2000 for text and 10000 for textarea. The value is a string.
+- type "email", "url" (http or https), or "phone" (7-15 digits): the value is a string in that format.
+- type "number": optional min, max, and integer (true for whole numbers only). The value is a number.
+- type "date" (YYYY-MM-DD), "time" (24-hour HH:mm), or "datetime" (ISO 8601 with Z or an offset; seconds are optional, such as "2026-10-01T09:30Z" or "2026-10-01T09:30:00+02:00"): the value is a string in that format.
+- type "boolean": a checkbox. The value is true or false.
+- type "select" (pick one) or "multiselect" (pick any): options, 2-50 items, each {id, label}. The value is an option id, or a list of option ids.
+- default: optional, a value the field accepts, filled in when the form opens.
+- submitLabel: optional label for the submit button, at most 24 characters.
+- allowDecline: optional, default true (the user sees Skip).
+- An accepted answer looks like {"action": "accept", "content": {"values": {"<field id>": <value>}}}. Optional fields the user left empty are left out.`;
+
 const sectionOf = (section: string, kindRules: string[]): string =>
   [section.replace("ask_choice.", "ask_choice, ask_confirm."), ...kindRules].join("\n\n");
 
@@ -100,6 +115,17 @@ describe("askPromptSection", () => {
     );
   });
 
+  it("describes ask_form after ask_markdown, with the field limits from ASK_LIMITS", () => {
+    expect(askPromptSection({kinds: ["choice", "confirm", "markdown", "form"]})).toBe(
+      [
+        CHOICE_SECTION.replace("ask_choice.", "ask_choice, ask_confirm, ask_markdown, ask_form."),
+        CONFIRM_RULES,
+        MARKDOWN_RULES,
+        FORM_RULES,
+      ].join("\n\n")
+    );
+  });
+
   it("leaves submitLabel and the Skip default out of the shared rules, since confirm differs", () => {
     const section = askPromptSection({kinds: ["confirm"]});
     expect(section).not.toContain("submitLabel");
@@ -134,5 +160,12 @@ describe("askPromptSection on the compact surface", () => {
       sectionOf(COMPACT_CHOICE_SECTION, [CONFIRM_RULES])
     );
     expect(askPromptSection({kinds: ["markdown"], surface: "compact"})).toBe("");
+  });
+
+  it("leaves ask_form out, because fields cannot be filled in on a small screen", () => {
+    expect(askPromptSection({kinds: ["choice", "confirm", "form"], surface: "compact"})).toBe(
+      sectionOf(COMPACT_CHOICE_SECTION, [CONFIRM_RULES])
+    );
+    expect(askPromptSection({kinds: ["form"], surface: "compact"})).toBe("");
   });
 });

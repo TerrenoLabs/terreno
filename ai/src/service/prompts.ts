@@ -60,6 +60,12 @@ export const ASK_MARKDOWN_TOOL_DESCRIPTION =
   "changed is false when the user approved your draft as is. Use it when the user should review " +
   "or rewrite text before you use it, such as an announcement, an email, or release notes.";
 
+export const ASK_FORM_TOOL_DESCRIPTION =
+  "Ask the user to fill in a few typed fields and submit them at once, such as the details for " +
+  "an invoice or a booking. The chat shows one input per field and returns {values}, keyed by " +
+  "field id, as this tool's result. Use it when you need several values together; for one pick " +
+  "from a list, use a choice instead.";
+
 /** Tool result for a call that was left without one when the turn paused for an ask. */
 export const UNANSWERED_TOOL_CALL_RESULT = "This tool call did not run, so it has no result.";
 

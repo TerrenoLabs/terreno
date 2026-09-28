@@ -6,6 +6,7 @@ import {useCallback, useState} from "react";
 type ChoiceAsk = Extract<ChatAsk, {kind: "choice"}>;
 type ConfirmAsk = Extract<ChatAsk, {kind: "confirm"}>;
 type MarkdownAsk = Extract<ChatAsk, {kind: "markdown"}>;
+type FormAsk = Extract<ChatAsk, {kind: "form"}>;
 
 const SIMULATED_SERVER_DELAY_MS = 600;
 
@@ -190,6 +191,111 @@ const ANSWERED_MARKDOWN: MarkdownAsk[] = [
     response: {action: "decline"},
     status: "answered",
     toolCallId: "demo-markdown-skipped",
+  },
+];
+
+const INVOICE_ASK: FormAsk = {
+  input: {
+    fields: [
+      {
+        helperText: "As it appears on the invoice.",
+        id: "company",
+        label: "Company name",
+        maxLength: 120,
+        required: true,
+        type: "text",
+      },
+      {id: "email", label: "Billing email", required: true, type: "email"},
+      {id: "seats", integer: true, label: "Seats", max: 500, min: 1, type: "number"},
+      {id: "start", label: "Start date", type: "date"},
+      {
+        default: "us",
+        id: "region",
+        label: "Region",
+        options: [
+          {id: "us", label: "United States"},
+          {id: "eu", label: "European Union"},
+        ],
+        type: "select",
+      },
+      {default: true, id: "notify", label: "Email me the invoice", type: "boolean"},
+    ],
+    prompt: "A few details for the invoice.",
+    submitLabel: "Send details",
+    title: "Invoice details",
+  },
+  kind: "form",
+  status: "pending",
+  toolCallId: "demo-invoice",
+};
+
+const BOOKING_ASK: FormAsk = {
+  input: {
+    fields: [
+      {id: "phone", label: "Callback number", type: "phone"},
+      {default: "https://example.com", id: "site", label: "Website", type: "url"},
+      {default: "09:30", id: "reminder", label: "Reminder time", type: "time"},
+      {default: "2026-10-01T09:30:00-07:00", id: "meeting", label: "Meeting", type: "datetime"},
+      {
+        default: ["email"],
+        id: "channels",
+        label: "Reach me by",
+        options: [
+          {id: "email", label: "Email"},
+          {id: "sms", label: "Text message"},
+          {id: "call", label: "Phone call"},
+        ],
+        type: "multiselect",
+      },
+      {id: "notes", label: "Notes", maxLength: 500, type: "textarea"},
+    ],
+    prompt: "When should we meet, and how should we reach you?",
+    title: "Book a call",
+  },
+  kind: "form",
+  status: "pending",
+  toolCallId: "demo-booking",
+};
+
+const FORM_ERRORS: NonNullable<AskCardProps["errors"]> = [
+  {
+    code: "OUT_OF_RANGE",
+    fix: "Make content.values.seats at most 500.",
+    message: "content.values.seats is 900, above the field's max of 500.",
+    path: "content.values.seats",
+  },
+  {
+    code: "INVALID_DATE",
+    fix: 'Write content.values.start as YYYY-MM-DD, such as "2026-10-01".',
+    message: 'content.values.start "2026-02-30" is not a real date in YYYY-MM-DD.',
+    path: "content.values.start",
+  },
+];
+
+const ANSWERED_FORMS: FormAsk[] = [
+  {
+    ...INVOICE_ASK,
+    response: {
+      action: "accept",
+      content: {
+        values: {
+          company: "Acme Corp",
+          email: "billing@acme.example",
+          notify: true,
+          region: "eu",
+          seats: 12,
+          start: "2026-10-01",
+        },
+      },
+    },
+    status: "answered",
+    toolCallId: "demo-form-sent",
+  },
+  {
+    ...INVOICE_ASK,
+    response: {action: "decline"},
+    status: "answered",
+    toolCallId: "demo-form-skipped",
   },
 ];
 
@@ -413,6 +519,55 @@ export const AskCardMarkdownAnswered: React.FC = (): React.ReactElement => {
     >
       <Box gap={2}>
         {ANSWERED_MARKDOWN.map((ask) => (
+          <AskCard ask={ask} key={ask.toolCallId} testID={ask.toolCallId} />
+        ))}
+      </Box>
+    </StorySection>
+  );
+};
+
+export const AskCardForm: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="form renders one field per entry, with the control for its type. Submit stays disabled until required fields are filled and every value fits its field; a field says what is wrong once you edit it."
+      title="Fill in a form"
+    >
+      <Box gap={4}>
+        <InteractiveAsk ask={INVOICE_ASK} testID="demo-ask-card-form" />
+        <InteractiveAsk ask={BOOKING_ASK} testID="demo-ask-card-form-booking" />
+      </Box>
+    </StorySection>
+  );
+};
+
+export const AskCardFormError: React.FC = (): React.ReactElement => {
+  const handleSubmit = useCallback(async (): Promise<void> => {
+    await waitForServer();
+  }, []);
+
+  return (
+    <StorySection
+      note="Server errors for a field show on that field, in plain words. Errors for no field show under the form."
+      title="Form rejected by the server"
+    >
+      <AskCard
+        ask={INVOICE_ASK}
+        errors={FORM_ERRORS}
+        onSubmit={handleSubmit}
+        testID="demo-ask-card-form-error"
+      />
+    </StorySection>
+  );
+};
+
+export const AskCardFormAnswered: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="A sent form counts the fields it filled in and lists each one as label and value."
+      title="Sent and skipped forms"
+    >
+      <Box gap={2}>
+        {ANSWERED_FORMS.map((ask) => (
           <AskCard ask={ask} key={ask.toolCallId} testID={ask.toolCallId} />
         ))}
       </Box>

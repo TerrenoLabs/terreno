@@ -1,5 +1,6 @@
 import {describe, expect, it} from "bun:test";
 import {validAskFixtures} from "../tests/askFixtures";
+import {formDefaultValues} from "./formValues";
 import {
   ASK_KINDS,
   type AskKind,
@@ -12,6 +13,7 @@ import {
   compactConfirmAskInputSchema,
   confirmAskInputSchema,
   confirmButtonLabels,
+  formAskInputSchema,
   isCompactAskKind,
   markdownAskInputSchema,
   markdownLengthBounds,
@@ -49,6 +51,14 @@ describe("askInputSchemaFor", () => {
       compactConfirmAskInputSchema
     );
     expect(askInputSchemaFor({kind: "markdown"})).toBe(markdownAskInputSchema);
+  });
+
+  it("returns the form schema on the full surface and throws on compact", () => {
+    expect(askInputSchemaFor({kind: "form"})).toBe(formAskInputSchema);
+    expect(isCompactAskKind("form")).toBe(false);
+    expect(() => askInputSchemaFor({kind: "form", surface: "compact"})).toThrow(
+      'The compact surface does not offer ask kind "form".'
+    );
   });
 
   it("does not offer markdown on the compact surface, because a draft cannot be edited there", () => {
@@ -100,6 +110,36 @@ describe("askAllowsDecline", () => {
     const prompt = "Edit the draft.";
     expect(askAllowsDecline({input: {prompt}, kind: "markdown"})).toBe(true);
     expect(askAllowsDecline({input: {allowDecline: false, prompt}, kind: "markdown"})).toBe(false);
+  });
+});
+
+describe("ASK_KINDS", () => {
+  it("lists form after markdown, so existing tool order is kept", () => {
+    expect([...ASK_KINDS]).toEqual(["choice", "confirm", "markdown", "form"]);
+  });
+});
+
+describe("askAllowsDecline for form", () => {
+  it("defaults to true", () => {
+    const input = {fields: [{id: "name", label: "Name", type: "text" as const}], prompt: "Go."};
+    expect(askAllowsDecline({input, kind: "form"})).toBe(true);
+    expect(askAllowsDecline({input: {...input, allowDecline: false}, kind: "form"})).toBe(false);
+  });
+});
+
+describe("formDefaultValues", () => {
+  it("keys each field's default by id and leaves fields without one out", () => {
+    expect(
+      formDefaultValues({
+        fields: [
+          {default: "Acme", id: "company", label: "Company", type: "text"},
+          {id: "seats", label: "Seats", type: "number"},
+          {default: false, id: "notify", label: "Notify", type: "boolean"},
+          {default: 0, id: "count", label: "Count", type: "number"},
+        ],
+        prompt: "Go.",
+      })
+    ).toEqual({company: "Acme", count: 0, notify: false});
   });
 });
 

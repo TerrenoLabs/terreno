@@ -351,8 +351,35 @@ when the text differs from `initial`. Text over `maxLength`, or a server error a
 disabled. An answered markdown ask shows the sent text under its summary; text over 280
 characters shows a preview cut at a word, with Show all and Show less.
 
+`form` controls: one field per entry in `fields`, in order, titled with the field's `label`
+("(required)" appended for required fields) and its `helperText`, then Submit (`submitLabel`) and
+Skip unless `allowDecline` is `false`. Each field uses the `@terreno/ui` control for its type:
+
+| Field `type` | Control | Sends |
+| --- | --- | --- |
+| `text`, `email`, `url` | `TextField` (`text`, `email`, `url`) | The trimmed text |
+| `phone` | `TextField` (`phoneNumber`) | E.164, such as `+14155552671`, when the number parses (as a US number without a country code); else the trimmed text |
+| `number` | `TextField` | A number when the text is plain decimal notation; else the text, so validation says why |
+| `textarea` | `TextArea` | The trimmed text |
+| `date` | `DateTimeField` (`date`) | `YYYY-MM-DD` |
+| `time` | `DateTimeField` (`time`) with its time zone picker (the device's zone to start) | 24-hour `HH:mm` as shown; the zone is not sent |
+| `datetime` | `DateTimeField` (`datetime`) with a time zone picker | An ISO datetime with the chosen zone's offset, such as `2026-10-01T09:30:00-07:00` |
+| `boolean` | `BooleanField` | `true` or `false`, always |
+| `select` | `SelectField` | The option id |
+| `multiselect` | `MultiselectField` | The checked option ids |
+
+Fields start on their `default`. Blank fields are left out of `values`. Submit is enabled only
+when `validateAskResponse` accepts the values. After the user edits a field, it says what is
+wrong in plain words, such as "Enter a number from 1 to 500." or "This field is required." A
+server error whose path is `content.values.<id>` (or an item under it) shows on that field until
+the user edits it; other errors show under the form. Without `onSubmit`, every field and both
+buttons are disabled. An answered form lists each sent field as its label and a readable value
+(Yes or No, option labels, "Oct 1, 2026", "9:30 AM", text shortened to one line of 80
+characters) under its summary.
+
 | How the ask ended | Summary |
 | --- | --- |
+| `form` `accept` | You sent the form (`<n>` fields) |
 | `markdown` `accept` | You approved the draft as is (`changed: false`), or You edited the draft (`<n>` characters) |
 | `confirm` `accept` | You confirmed: `<confirmLabel>`, or You declined: `<denyLabel>`, with the default labels when the ask sets none |
 | `choice` `accept` | You chose: `<option labels>`. With Other text, it adds "`<otherLabel>`: `<text>`" (the label defaults to "Other"), or shows only that when no option was checked. An empty `select: "many"` answer shows "You chose none of the options." |
@@ -374,6 +401,8 @@ characters shows a preview cut at a word, with Show all and Show less.
 | Other text field | `{testID}-other` |
 | Markdown editor, and its text input | `{testID}-editor`, `{testID}-editor-input` |
 | Sent markdown under an answered ask, and its Show all toggle | `{testID}-answer`, `{testID}-answer-toggle` |
+| Form field, and its wrapper | `{testID}-field-<field id>` (a `BooleanField` switch is `{testID}-field-<field id>.switch`), `{testID}-form-field-<field id>` |
+| Sent form values under an answered ask | `{testID}-answer` |
 | Radio or checkbox options as plain text, without `onSubmit` | `{testID}-options` |
 | Submit | `{testID}-submit` |
 | Answer errors | `{testID}-errors` |
@@ -412,7 +441,8 @@ const [runTurn] = useGpthistoriesTurnMutation();
 | `testID` | string? | Defaults to `simple-ask-card` |
 
 - A card with `handoff: true` shows "Continue on your phone" under the question, because its
-  buttons cannot give every answer. A `markdown` card shows "Edit on your phone" instead.
+  buttons cannot give every answer. A `markdown` card shows "Edit on your phone" instead, and a
+  `form` card "Fill it in on your phone".
 - Button styles map to `Button` variants the same way as `AskCard` quick replies: `primary` to
   `primary`, `default` to `outline`, `destructive` to `destructive`, and `cancel` to `ghost`.
 

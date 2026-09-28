@@ -10,8 +10,8 @@ way, see [Agent UI Asks explained](../explanation/agent-ui-asks.md). To add asks
 [Add agent asks to a chat](../how-to/agent-ui-asks.md).
 
 Shipped: the `choice` kind with `select: "one"` and `select: "many"` (with an optional Other
-answer), the `confirm` kind (approve or deny, optionally destructive), and the `markdown` kind
-(edit a draft and send it back), asked and answered
+answer), the `confirm` kind (approve or deny, optionally destructive), the `markdown` kind
+(edit a draft and send it back), and the `form` kind (a few typed fields, one submit), asked and answered
 through `POST /gpt/prompt`
 and shown in `GPTChat` ([props and controls](ui.md#asks)), and the small-screen path: the
 [compact surface](#compact-surface), the [headless endpoints](#headless-endpoints),
@@ -26,6 +26,7 @@ kinds are planned in the [implementation plan](../implementationPlans/agent-ui-a
 - [choice](#choice)
 - [confirm](#confirm)
 - [markdown](#markdown)
+- [form](#form)
 - [Simple cards](#simple-cards)
 - [Compact surface](#compact-surface)
 - [Validation](#validation)
@@ -60,12 +61,12 @@ addGptRoutes(router, chat);
 | `asks` | Ask kinds offered to the model |
 | --- | --- |
 | unset or `false` | None. Tools, system prompt, and SSE events are unchanged. |
-| `true` or `{}` | Every kind in `ASK_KINDS` (today `choice`, `confirm`, and `markdown`) |
+| `true` or `{}` | Every kind in `ASK_KINDS` (today `choice`, `confirm`, `markdown`, and `form`) |
 | `{kinds: ["choice"]}` | The listed kinds. An unknown kind throws when the routes are registered. An empty list offers none. |
 
 With asks on, each chat turn:
 
-- Adds one tool per kind, named `ask_<kind>` (`ask_choice`, `ask_confirm`, `ask_markdown`). A turn on the
+- Adds one tool per kind, named `ask_<kind>` (`ask_choice`, `ask_confirm`, `ask_markdown`, `ask_form`). A turn on the
   [compact surface](#compact-surface) offers only the compact kinds, with narrowed schemas.
 - Appends `TERRENO_ASKS_SYSTEM_PROMPT` and the `askPromptSection` for the offered kinds to the
   system prompt. Every number in that section comes from `ASK_LIMITS`.
@@ -254,6 +255,72 @@ Answer: `{"action": "accept", "content": {"markdown": "# We're live\n\nWe launch
 
 `changed: false` means the user approved the draft as is, so the agent can rely on it.
 
+## form
+
+Tool: `ask_form`. The user fills in a few typed fields and submits them at once. The full chat
+shows one `@terreno/ui` field per entry in `fields`. The [compact surface](#compact-surface) does
+not offer it, because fields cannot be filled in on a small screen.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `prompt`, `title`, `submitLabel`, `allowDecline` | | The [shared fields](#shared-ask-fields). `allowDecline` defaults to `true`. |
+| `fields` | object[] | Required, 1–8 items (`form.fieldsMin`, `form.fieldsMax`), in display order. Fields are flat: no nesting, no conditional fields, and no password type. |
+| `fields[].type` | string | Required. One of `FORM_FIELD_TYPES` (below). Any other value fails with `INVALID_ENUM`. |
+| `fields[].id` | string | Matches `^[a-z0-9][a-z0-9_-]{0,63}$`, like an option id. Unique within the form (`DUPLICATE_ID`). It keys the field's value in the answer. |
+| `fields[].label` | string | 1–120 characters (`form.labelMaxLength`). |
+| `fields[].helperText` | string | Optional line under the field, at most 280 characters (`form.helperTextMaxLength`). |
+| `fields[].required` | boolean | Optional, default `false`. `true` means the answer must hold a non-blank value for the field (`REQUIRED_FIELD`). |
+| `fields[].default` | by type | Optional value the field starts with. It must be a value the field accepts, checked with the same rules as an answer: a wrong JSON type fails with `INVALID_TYPE`, and a value that breaks the type's rules with that rule's code at `fields[i].default`. A `select` or `multiselect` default that is not an option id fails with `DEFAULT_NOT_IN_OPTIONS`. |
+
+Each field type takes its own keys; a key of another type fails with `UNKNOWN_KEY`:
+
+| `type` | Extra keys | Value in the answer | Value rules |
+| --- | --- | --- | --- |
+| `text` | `minLength`, `maxLength` | string | One line. At most `maxLength` UTF-16 code units (default and cap 2,000, `form.textMaxLength`, `TOO_LONG`), and at least `minLength` characters without spaces at either end (`TOO_SHORT`). |
+| `textarea` | `minLength`, `maxLength` | string | Several lines. The same rules, with a default and cap of 10,000 (`form.textareaMaxLength`). |
+| `email` | | string | An email address (`FIELD_TYPE_MISMATCH`), at most 2,000 characters |
+| `url` | | string | An `http` or `https` URL (`FIELD_TYPE_MISMATCH`), at most 2,000 characters |
+| `phone` | | string | 7–15 digits (`form.phoneDigitsMin`, `form.phoneDigitsMax`), optionally starting with `+`, with only spaces, dots, dashes, and parentheses between them (`FIELD_TYPE_MISMATCH`). The full chat sends E.164, such as `"+14155552671"`. |
+| `number` | `min`, `max`, `integer` | number | A finite JSON number (`FIELD_TYPE_MISMATCH`). A whole number when `integer` is `true` (`FIELD_TYPE_MISMATCH`). At least `min` and at most `max` (`OUT_OF_RANGE`). |
+| `date` | | string | A real calendar date as `YYYY-MM-DD`, such as `"2026-10-01"` (`INVALID_DATE`) |
+| `time` | | string | A 24-hour time as `HH:mm`, such as `"09:30"` (`INVALID_DATE`) |
+| `datetime` | | string | An ISO 8601 date and time with `Z` or an offset, such as `"2026-10-01T09:30Z"` or `"2026-10-01T09:30:00+02:00"`; seconds and fractions of a second are optional (`INVALID_DATE`). A time without an offset is refused, so the agent never guesses the time zone. |
+| `boolean` | | `true` or `false` | A JSON boolean (`FIELD_TYPE_MISMATCH`). The full chat shows a switch and always sends it, since off is an answer. |
+| `select` | `options` | string | The id of one of `options` (`OPTION_NOT_OFFERED`) |
+| `multiselect` | `options` | string[] | Ids of `options` (`OPTION_NOT_OFFERED`), each once (`DUPLICATE_ID`) |
+
+`options` holds 2–50 items (`choice.optionsMin`, `choice.optionsMax`), each `{id, label}` with the
+[choice](#choice) option id and label rules; ids are unique within the field (`DUPLICATE_ID`).
+`minLength` above `maxLength` (or above the cap), or `min` above `max`, fails with
+`RANGE_INVALID`. In an answer, a value of the wrong JSON type, including `null`, fails with
+`FIELD_TYPE_MISMATCH`.
+
+```json
+{
+  "title": "Invoice details",
+  "prompt": "A few details for the invoice.",
+  "fields": [
+    {"id": "company", "type": "text", "label": "Company name", "required": true, "maxLength": 120},
+    {"id": "seats", "type": "number", "label": "Seats", "min": 1, "max": 500, "integer": true},
+    {"id": "start", "type": "date", "label": "Start date"},
+    {"id": "region", "type": "select", "label": "Region", "options": [{"id": "us", "label": "US"}, {"id": "eu", "label": "EU"}]},
+    {"id": "notify", "type": "boolean", "label": "Email me the invoice", "default": true}
+  ],
+  "submitLabel": "Send details"
+}
+```
+
+Answer: `{"action": "accept", "content": {"values": {"company": "Acme", "seats": 12, "start": "2026-10-01", "region": "us", "notify": true}}}`.
+
+| Answer field | Rule | Error |
+| --- | --- | --- |
+| `values` | Required object, keyed by field id. A key that is no field's id fails. | `MISSING_REQUIRED`, `UNKNOWN_KEY` |
+| `values.<id>` | A value the field accepts (table above). A blank string or an empty list counts as unanswered: allowed on an optional field, `REQUIRED_FIELD` on a required one. Unanswered optional fields may be left out. | `REQUIRED_FIELD`, `FIELD_TYPE_MISMATCH`, `OUT_OF_RANGE`, `INVALID_DATE`, `TOO_LONG`, `TOO_SHORT`, `OPTION_NOT_OFFERED`, `DUPLICATE_ID` |
+
+Errors on a value have the path `content.values.<id>`, so a client can show each one under its
+field. `formDefaultValues(input)` returns the defaults keyed by field id, leaving out fields
+without one. `formTextMaxLength(field)` returns the longest string value a field accepts.
+
 ## Simple cards
 
 Every ask comes with a simple card: short text and up to three buttons, each holding the exact
@@ -307,6 +374,15 @@ only deny.
 A markdown card always hands off: editing needs the full app. `SimpleAskCard` shows "Edit on your
 phone" on a `markdown` card instead of "Continue on your phone".
 
+`form` card rule:
+
+| Case | Buttons | `handoff` |
+| --- | --- | --- |
+| Every `form` | `submit-defaults` (label "Submit defaults", style `primary`, response `{action: "accept", content: {values: formDefaultValues(input)}}`) when at least one field has a `default` and every required field has one, then `cancel` (label "Cancel", style `cancel`, response `{action: "decline"}`) when `allowDecline` is not `false` | `true` |
+
+A form card always hands off: filling in fields needs the full app. `SimpleAskCard` shows "Fill it
+in on your phone" on a `form` card.
+
 Every button's `response` passes `validateAskResponse` for its ask. `simpleCardSchema` checks a
 card's shape, limits, and unique button ids.
 
@@ -326,7 +402,7 @@ the [`turn` action](#headless-endpoints). `surface` is `"full"` (the default) or
 (`ASK_SURFACES`). Any other value returns 400. On a compact turn:
 
 - The model is offered only the kinds in `COMPACT_ASK_KINDS` (`["choice", "confirm"]`) that `asks` enables,
-  each with its narrowed input schema (`compactAskInputSchemas`). `markdown` is never offered.
+  each with its narrowed input schema (`compactAskInputSchemas`). `markdown` and `form` are never offered.
 - The asks section of the system prompt is `askPromptSection({kinds, surface: "compact"})`, which
   states the narrowed limits.
 - `COMPACT_SURFACE_SYSTEM_PROMPT` is appended to the system prompt, even when asks are off: "The
@@ -360,7 +436,7 @@ The model's ask and the user's answer are checked with pure functions from `@ter
 
 | Function | Checks | Where it runs |
 | --- | --- | --- |
-| `validateAskInput({kind, input, surface?})` | The ask against its schema and rules: unique option ids, the `select` bounds, Other fields only on `"many"` asks, defaults among the options and within the bounds, `confirm` labels that fit a button and differ, `markdown` length bounds, and with `surface: "compact"` the [compact rules](#compact-surface) | The same schema is the tool's `inputSchema`, so the AI SDK checks every ask call. An invalid ask goes back to the model as a tool error and never reaches the client. |
+| `validateAskInput({kind, input, surface?})` | The ask against its schema and rules: unique option ids, the `select` bounds, Other fields only on `"many"` asks, defaults among the options and within the bounds, `confirm` labels that fit a button and differ, `markdown` length bounds, `form` field ids, bounds, and defaults, and with `surface: "compact"` the [compact rules](#compact-surface) | The same schema is the tool's `inputSchema`, so the AI SDK checks every ask call. An invalid ask goes back to the model as a tool error and never reaches the client. |
 | `validateAskResponse({kind, input, response})` | The answer envelope, then the kind's answer against the ask | The server, before it resumes the turn. Clients can run it before they enable Submit. |
 
 Both return `AskValidationError[]`, empty when valid, sorted by path and then code:
@@ -384,13 +460,17 @@ Both return `AskValidationError[]`, empty when valid, sorted by path and then co
 | `DEFAULT_NOT_IN_OPTIONS` | A default names an option id that the ask does not offer. | `validateAskInput` |
 | `DUPLICATE_ID` | An id appears twice where ids must be unique: options, default, or an answer. | Both |
 | `DUPLICATE_LABEL` | Two buttons would share a label: options of a compact ask, or a confirm's approve and deny. | `validateAskInput` (a `choice` only with `surface: "compact"`) |
+| `FIELD_TYPE_MISMATCH` | A form value or default does not fit its field's type: the wrong JSON type, not a whole number, or not a valid email, URL, or phone number. | Both |
+| `INVALID_DATE` | A form date, time, or datetime value or default is not a real ISO 8601 value in the field's format. | Both |
 | `INVALID_ENUM` | A value is not one of the allowed values. | Both |
 | `INVALID_FORMAT` | A string does not match its required format. | `validateAskInput` |
 | `INVALID_TYPE` | A value has the wrong type. | Both |
 | `MISSING_REQUIRED` | A required field is missing. | Both |
 | `OPTION_NOT_OFFERED` | The answer selects an option id that the ask did not offer. | `validateAskResponse` |
 | `OTHER_NOT_ALLOWED` | An ask or an answer uses Other where the ask does not allow it. | Both |
+| `OUT_OF_RANGE` | A form number value or default is below the field's min or above its max. | Both |
 | `RANGE_INVALID` | A count or length bound is out of range: below its minimum, above what the ask offers, or a minimum above its maximum. | `validateAskInput` |
+| `REQUIRED_FIELD` | A form answer leaves a required field missing or blank. | `validateAskResponse` |
 | `SELECTION_COUNT` | A default or an answer selects the wrong number of options. | Both |
 | `TOO_FEW` | A list has fewer items than allowed. | `validateAskInput` |
 | `TOO_LONG` | A string is longer than allowed. | Both |
@@ -412,13 +492,21 @@ read it. Keys are paths into `ASK_LIMITS`. A doc-parity test fails when this tab
 | --- | --- | --- |
 | `cancelReasonMaxLength` | 200 | `reason` on a `cancel` answer |
 | `choice.optionDescriptionMaxLength` | 280 | `options[].description` |
-| `choice.optionIdMaxLength` | 64 | `options[].id` |
-| `choice.optionIdPattern` | `^[a-z0-9][a-z0-9_-]{0,63}$` | `options[].id` |
-| `choice.optionLabelMaxLength` | 120 | `options[].label` |
-| `choice.optionsMax` | 50 | `options`, `default`, and `content.selected` |
-| `choice.optionsMin` | 2 | `options` |
+| `choice.optionIdMaxLength` | 64 | `options[].id`, and a form's `fields[].id` and `fields[].options[].id` |
+| `choice.optionIdPattern` | `^[a-z0-9][a-z0-9_-]{0,63}$` | `options[].id`, and a form's `fields[].id` and `fields[].options[].id` |
+| `choice.optionLabelMaxLength` | 120 | `options[].label`, and a form's `fields[].options[].label` |
+| `choice.optionsMax` | 50 | `options`, `default`, and `content.selected`, and a form field's `options` and `multiselect` value |
+| `choice.optionsMin` | 2 | `options`, and a form field's `options` |
 | `choice.otherMaxLength` | 500 | `content.other` |
 | `confirm.labelMaxLength` | 20 | `confirmLabel` and `denyLabel`, in UTF-16 code units |
+| `form.fieldsMax` | 8 | `fields` on a `form` ask |
+| `form.fieldsMin` | 1 | `fields` on a `form` ask |
+| `form.helperTextMaxLength` | 280 | `fields[].helperText` |
+| `form.labelMaxLength` | 120 | `fields[].label` |
+| `form.phoneDigitsMax` | 15 | Digits in a `phone` value |
+| `form.phoneDigitsMin` | 7 | Digits in a `phone` value |
+| `form.textMaxLength` | 2000 | A `text`, `email`, `url`, or `phone` value, and a `text` field's `maxLength`, in UTF-16 code units |
+| `form.textareaMaxLength` | 10000 | A `textarea` value and a `textarea` field's `maxLength`, in UTF-16 code units |
 | `markdown.maxLength` | 20000 | `initial`, `maxLength`, and `content.markdown` on a `markdown` ask, in UTF-16 code units |
 | `markdown.placeholderMaxLength` | 120 | `placeholder` on a `markdown` ask |
 | `pendingAsksPerHistory` | 1 | Asks one conversation can wait on at a time |
@@ -747,18 +835,19 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 
 | Export | Description |
 | --- | --- |
-| `ASK_KINDS`, `AskKind` | The ask kinds (`["choice", "confirm", "markdown"]`) |
+| `ASK_KINDS`, `AskKind` | The ask kinds (`["choice", "confirm", "markdown", "form"]`) |
 | `ASK_SURFACES`, `AskSurface`, `askSurfaceSchema` | The surfaces (`["full", "compact"]`) and the schema of a request's `surface` |
 | `COMPACT_ASK_KINDS`, `CompactAskKind`, `isCompactAskKind(kind)`, `askKindsForSurface({kinds, surface})` | The kinds the compact surface offers (`["choice", "confirm"]`), whether it offers a kind, and the ones a surface offers from a list |
 | `choiceAskInputSchema`, `compactChoiceAskInputSchema`, `choiceOptionSchema`, `choiceAnswerSchema`, `choiceAskResponseSchema` | `choice` schemas and their types (`ChoiceAskInput`, `ChoiceOption`, `ChoiceAnswer`, `ChoiceAskResponse`) |
 | `confirmAskInputSchema`, `compactConfirmAskInputSchema`, `confirmAnswerSchema`, `confirmAskResponseSchema` | `confirm` schemas and their types (`ConfirmAskInput`, `ConfirmAnswer`, `ConfirmAskResponse`) |
 | `markdownAskInputSchema`, `markdownAnswerSchema`, `markdownAskResponseSchema`, `markdownLengthBounds(input)` | `markdown` schemas and their types (`MarkdownAskInput`, `MarkdownAnswer`, `MarkdownAskResponse`), and the `{min, max}` length an answer must meet |
+| `formAskInputSchema`, `formFieldSchema`, `formAnswerSchema`, `formAskResponseSchema`, `FORM_FIELD_TYPES`, `formDefaultValues(input)`, `formTextMaxLength(field)` | `form` schemas and their types (`FormAskInput`, `FormField`, `FormFieldType`, `FormAnswer`, `FormAskResponse`, `FormValue`), the field types, the defaults keyed by field id, and a field's longest string value |
 | `confirmButtonLabels(input)` | The `{confirm, deny}` labels of a `confirm` ask, with the defaults `"Confirm"` and `"Cancel"` |
 | `askAllowsDecline(ask)` | Whether an ask accepts `decline`: `confirm` defaults to no, other kinds to yes |
 | `CHOICE_SELECT_MODES`, `ChoiceSelectMode`, `choiceSelectionBounds(input)` | The `select` values (`["one", "many"]`), and the `{min, max}` choices an answer to a `choice` ask must hold |
 | `askInputSchemas`, `compactAskInputSchemas`, `askOutputSchemas`, `askInputSchemaFor({kind, surface?})` | Input and answer envelope schemas by kind, and the input schema for a kind on a surface |
 | `askResponseSchema`, `askAcceptResponseSchema`, `askDeclineResponseSchema`, `askCancelResponseSchema`, `AskResponse` | The answer envelope |
-| `Ask`, `ChoiceAsk`, `ConfirmAsk`, `MarkdownAsk` | A validated ask: `{kind, input}` |
+| `Ask`, `ChoiceAsk`, `ConfirmAsk`, `MarkdownAsk`, `FormAsk` | A validated ask: `{kind, input}` |
 | `ASK_CANCEL_REASONS` | Reasons the server records with `cancel` |
 | `validateAskInput`, `validateAskResponse`, `AskValidationError`, `AskErrorCode` | Validators and their errors |
 | `toSimpleCard`, `resolveButtonAnswer`, `simpleCardSchema`, `simpleCardButtonSchema`, `SIMPLE_CARD_BUTTON_STYLES`, `SimpleCard`, `SimpleCardButton` | Simple cards, and the answer a card's button sends |
@@ -771,7 +860,7 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 
 | Export | Description |
 | --- | --- |
-| `createAskTools({kinds, surface?})` | The ask tools, such as `{ask_choice, ask_confirm, ask_markdown}`: Zod input and output schemas, no `execute`. With `surface: "compact"`, only the compact kinds, with narrowed input schemas. `/gpt/prompt` and `turn` handle the pause and the answer; code that calls `streamText` itself must handle both. |
+| `createAskTools({kinds, surface?})` | The ask tools, such as `{ask_choice, ask_confirm, ask_markdown, ask_form}`: Zod input and output schemas, no `execute`. With `surface: "compact"`, only the compact kinds, with narrowed input schemas. `/gpt/prompt` and `turn` handle the pause and the answer; code that calls `streamText` itself must handle both. |
 | `TERRENO_ASKS_SYSTEM_PROMPT` | System prompt text added when asks are on, before the `askPromptSection` |
 | `COMPACT_SURFACE_SYSTEM_PROMPT` | System prompt line added on compact turns |
 | `GptHistoryRouteOptions.chat` | Chat options for `addGptHistoryRoutes`. When they turn `asks` on, it adds the headless endpoints; otherwise it adds neither. |

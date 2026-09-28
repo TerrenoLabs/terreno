@@ -6,11 +6,12 @@ calls on the existing chat stream, how one round trip works, how a watch or anot
 answers them, and how asks and Agent UI Blocks divide the work. Fields, limits, events, and error
 codes are in the [reference](../reference/agent-ui-asks.md).
 
-Asks ship today as three kinds: `choice`, to pick one option or several with an optional answer
-of the user's own (Other), `confirm`, to approve or deny one action, and `markdown`, to edit a
-draft the agent wrote and send it back. The chat asks on `POST /gpt/prompt` and shows asks in
-`GPTChat`. Watches and other small clients answer select-one choices and confirms on two JSON
-endpoints with the compact surface, and can approve a markdown draft as is. The
+Asks ship today as four kinds: `choice`, to pick one option or several with an optional answer
+of the user's own (Other), `confirm`, to approve or deny one action, `markdown`, to edit a draft
+the agent wrote and send it back, and `form`, to fill in a few typed fields at once. The chat asks
+on `POST /gpt/prompt` and shows asks in `GPTChat`. Watches and other small clients answer
+select-one choices and confirms on two JSON endpoints with the compact surface, and can approve a
+markdown draft or submit a form's defaults as is. The
 other kinds follow the [implementation plan](../implementationPlans/agent-ui-asks.md).
 
 ## The problem
@@ -166,6 +167,16 @@ A watch still sees a markdown ask the phone's chat made: its card offers Approve
 draft already meets the length rules, and Cancel, and it always hands off to the phone. A long
 answer collapses to a preview in the transcript, so one draft does not push the conversation out
 of view.
+
+A `form` asks for several values in one step, such as the details for an invoice, instead of a
+string of questions. Its fields are flat and typed, and the same rules check a default when the
+ask is made and a value when the answer arrives, so the agent never receives a value its own form
+would reject and never offers a default the user could not send back. Blank means unanswered.
+Dates travel as ISO strings in fixed shapes (`YYYY-MM-DD`, 24-hour `HH:mm`, and datetimes with an
+offset) so the agent never has to guess a time zone. Each error names its field
+(`content.values.<id>`), so the card shows it where the user can fix it. A small screen cannot
+fill in fields, so the compact surface never offers `form`; a watch can still send the defaults
+when every required field has one, and otherwise hands off to the phone.
 
 After an ask ends, the card collapses to one line, such as "You chose: Team" or "You declined:
 Keep them". A long conversation

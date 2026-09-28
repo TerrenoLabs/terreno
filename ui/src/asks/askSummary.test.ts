@@ -1,5 +1,5 @@
 import {describe, it} from "bun:test";
-import type {ChoiceAskInput, ConfirmAskInput} from "@terreno/blocks";
+import type {ChoiceAskInput, ConfirmAskInput, FormAskInput} from "@terreno/blocks";
 import {assert} from "chai";
 
 import {askSummary} from "./askSummary";
@@ -31,6 +31,14 @@ const ARCHIVE_INPUT: ConfirmAskInput = {
   denyLabel: "Keep them",
   destructive: true,
   prompt: "Archive the 12 chats older than 90 days?",
+};
+
+const CONTACT_INPUT: FormAskInput = {
+  fields: [
+    {id: "name", label: "Name", required: true, type: "text"},
+    {id: "email", label: "Email", type: "email"},
+  ],
+  prompt: "How should we reach you?",
 };
 
 describe("askSummary", () => {
@@ -145,6 +153,25 @@ describe("askSummary", () => {
       askSummary(planAsk({response: {action: "cancel"}, status: "cancelled"})),
       "This question was cancelled."
     );
+  });
+
+  it("counts the fields a form answer filled in", () => {
+    const formAsk = (values: unknown): ChatAsk =>
+      ({
+        input: CONTACT_INPUT,
+        kind: "form",
+        response: {action: "accept", content: {values}},
+        status: "answered",
+        toolCallId: "call_contact",
+      }) as ChatAsk;
+
+    assert.equal(
+      askSummary(formAsk({email: "ada@example.com", name: "Ada"})),
+      "You sent the form (2 fields)"
+    );
+    assert.equal(askSummary(formAsk({name: "Ada"})), "You sent the form (1 field)");
+    assert.equal(askSummary(formAsk({})), "You sent the form (0 fields)");
+    assert.equal(askSummary(formAsk("not values")), "You answered this question.");
   });
 
   it("describes an ask from its status when its answer is not known", () => {

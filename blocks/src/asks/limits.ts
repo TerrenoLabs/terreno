@@ -18,6 +18,19 @@ export const ASK_LIMITS = {
     /** Every confirm label fits a simple card button uncut. */
     labelMaxLength: 20,
   },
+  form: {
+    fieldsMax: 8,
+    fieldsMin: 1,
+    helperTextMaxLength: 280,
+    labelMaxLength: 120,
+    /** The fewest and most digits in a `phone` value. */
+    phoneDigitsMax: 15,
+    phoneDigitsMin: 7,
+    /** The cap on a `textarea` value and on a `textarea` field's `maxLength`. */
+    textareaMaxLength: 10_000,
+    /** The cap on a `text`, `email`, `url`, or `phone` value, and on a `text` field's `maxLength`. */
+    textMaxLength: 2000,
+  },
   markdown: {
     /** The cap on `initial`, on `maxLength`, and on every answer. */
     maxLength: 20_000,

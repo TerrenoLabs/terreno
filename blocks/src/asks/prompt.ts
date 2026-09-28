@@ -83,9 +83,30 @@ const markdownRules = (): string => {
   ].join("\n");
 };
 
+const formRules = (): string => {
+  const {choice, form} = ASK_LIMITS;
+  return [
+    "ask_form: the user fills in a few fields and submits them at once.",
+    `- fields: ${form.fieldsMin}-${form.fieldsMax} items, in display order, each {id, type, label, helperText?, required?, default?} plus the rules of its type. Fields are flat: no nesting, no conditional fields, and no password fields.`,
+    `- id: 1-${choice.optionIdMaxLength} lowercase letters, digits, "_", or "-", starting with a letter or digit. Unique within the form. It keys the field's value in the answer.`,
+    `- label: at most ${form.labelMaxLength} characters. helperText: optional, at most ${form.helperTextMaxLength} characters. required: optional, default false; true means the answer must hold a non-blank value.`,
+    `- type "text" (one line) or "textarea" (several lines): optional minLength and maxLength. maxLength is at most ${form.textMaxLength} for text and ${form.textareaMaxLength} for textarea. The value is a string.`,
+    `- type "email", "url" (http or https), or "phone" (${form.phoneDigitsMin}-${form.phoneDigitsMax} digits): the value is a string in that format.`,
+    '- type "number": optional min, max, and integer (true for whole numbers only). The value is a number.',
+    '- type "date" (YYYY-MM-DD), "time" (24-hour HH:mm), or "datetime" (ISO 8601 with Z or an offset; seconds are optional, such as "2026-10-01T09:30Z" or "2026-10-01T09:30:00+02:00"): the value is a string in that format.',
+    '- type "boolean": a checkbox. The value is true or false.',
+    `- type "select" (pick one) or "multiselect" (pick any): options, ${choice.optionsMin}-${choice.optionsMax} items, each {id, label}. The value is an option id, or a list of option ids.`,
+    "- default: optional, a value the field accepts, filled in when the form opens.",
+    `- submitLabel: optional label for the submit button, at most ${ASK_LIMITS.submitLabelMaxLength} characters.`,
+    "- allowDecline: optional, default true (the user sees Skip).",
+    '- An accepted answer looks like {"action": "accept", "content": {"values": {"<field id>": <value>}}}. Optional fields the user left empty are left out.',
+  ].join("\n");
+};
+
 const KIND_RULES: Record<AskKind, () => string> = {
   choice: choiceRules,
   confirm: confirmRules,
+  form: formRules,
   markdown: markdownRules,
 };
 

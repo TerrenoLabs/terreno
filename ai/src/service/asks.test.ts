@@ -67,8 +67,8 @@ describe("asks", () => {
     it.each([
       {asks: undefined, expected: [], label: "undefined"},
       {asks: false, expected: [], label: "false"},
-      {asks: true, expected: ["choice", "confirm", "markdown"], label: "true"},
-      {asks: {}, expected: ["choice", "confirm", "markdown"], label: "{}"},
+      {asks: true, expected: ["choice", "confirm", "markdown", "form"], label: "true"},
+      {asks: {}, expected: ["choice", "confirm", "markdown", "form"], label: "{}"},
       {
         asks: {kinds: ["confirm"] as AskKind[]},
         expected: ["confirm"],
@@ -85,9 +85,9 @@ describe("asks", () => {
     });
 
     it("throws on an unknown kind and names the known kinds", () => {
-      expect(() => resolveAskKinds({kinds: ["choice", "form"] as AskKind[]})).toThrow(
+      expect(() => resolveAskKinds({kinds: ["choice", "files"] as AskKind[]})).toThrow(
         expect.objectContaining({
-          detail: "Unknown ask kinds: form. Known kinds: choice, confirm, markdown.",
+          detail: "Unknown ask kinds: files. Known kinds: choice, confirm, markdown, form.",
           message: "The asks option lists unknown ask kinds",
           status: 500,
         })
@@ -105,7 +105,8 @@ describe("asks", () => {
       {expected: "confirm", kinds: undefined, toolName: "ask_confirm"},
       {expected: undefined, kinds: ["choice"] as AskKind[], toolName: "ask_confirm"},
       {expected: "markdown", kinds: undefined, toolName: "ask_markdown"},
-      {expected: undefined, kinds: undefined, toolName: "ask_form"},
+      {expected: "form", kinds: undefined, toolName: "ask_form"},
+      {expected: undefined, kinds: undefined, toolName: "ask_files"},
       {expected: undefined, kinds: undefined, toolName: "lookupPlans"},
       {expected: undefined, kinds: [] as AskKind[], toolName: "ask_choice"},
     ])("maps $toolName with kinds $kinds to $expected", ({expected, kinds, toolName}) => {
@@ -334,6 +335,63 @@ describe("asks", () => {
     });
   });
 
+  describe("createAskTools form", () => {
+    const formInput = {
+      fields: [
+        {id: "company", label: "Company name", maxLength: 120, required: true, type: "text"},
+        {id: "seats", integer: true, label: "Seats", max: 500, min: 1, type: "number"},
+        {id: "start", label: "Start date", type: "date"},
+      ],
+      prompt: "A few details for the invoice.",
+    };
+
+    it("creates ask_form after ask_markdown on the full surface only", () => {
+      expect(
+        Object.keys(createAskTools({kinds: ["choice", "confirm", "markdown", "form"]}))
+      ).toEqual(["ask_choice", "ask_confirm", "ask_markdown", "ask_form"]);
+      expect(
+        Object.keys(
+          createAskTools({kinds: ["choice", "confirm", "markdown", "form"], surface: "compact"})
+        )
+      ).toEqual(["ask_choice", "ask_confirm"]);
+      expect(createAskTools({kinds: ["form"], surface: "compact"})).toEqual({});
+      expect(createAskTools({kinds: ["form"]}).ask_form.execute).toBeUndefined();
+    });
+
+    it("describes the fields and the {values} result", () => {
+      expect(createAskTools({kinds: ["form"]}).ask_form.description).toBe(
+        "Ask the user to fill in a few typed fields and submit them at once, such as the details " +
+          "for an invoice or a booking. The chat shows one input per field and returns {values}, " +
+          "keyed by field id, as this tool's result. Use it when you need several values together; " +
+          "for one pick from a list, use a choice instead."
+      );
+    });
+
+    it("validates form input and answers", async () => {
+      const askForm = createAskTools({kinds: ["form"]}).ask_form;
+      const inputSchema = asSchema(askForm.inputSchema);
+
+      expect(await inputSchema.validate?.(formInput)).toEqual({success: true, value: formInput});
+      for (const invalid of [
+        {...formInput, fields: []},
+        {...formInput, fields: [{id: "secret", label: "Password", type: "password"}]},
+        {...formInput, fields: [{default: 0, id: "seats", label: "Seats", min: 1, type: "number"}]},
+        {...formInput, fields: [{default: "2026-02-30", id: "d", label: "Due", type: "date"}]},
+      ]) {
+        expect(await inputSchema.validate?.(invalid)).toEqual({
+          error: expect.any(Error),
+          success: false,
+        });
+      }
+      const outputSchema = asSchema(askForm.outputSchema);
+      const answer = {action: "accept", content: {values: {company: "Acme", seats: 12}}};
+      expect(await outputSchema.validate?.(answer)).toEqual({success: true, value: answer});
+      expect(await outputSchema.validate?.({action: "accept", content: {company: "Acme"}})).toEqual(
+        {error: expect.any(Error), success: false}
+      );
+    });
+  });
+
   describe("parseAsk", () => {
     it("types a valid ask input", () => {
       expect(parseAsk({input: PLAN_ASK_INPUT, kind: "choice"})).toEqual({
@@ -433,6 +491,15 @@ describe("asks", () => {
           "ask_confirm: the user approves or denies one action you describe in prompt."
         );
       }
+    });
+
+    it("describes ask_form only on the full surface", () => {
+      const formRules = "ask_form: the user fills in a few fields and submits them at once.";
+      expect(buildAsksSystemPrompt({kinds: ["choice", "form"]})).toContain(formRules);
+      expect(buildAsksSystemPrompt({kinds: ["choice"]})).not.toContain("ask_form");
+      expect(buildAsksSystemPrompt({kinds: ["choice", "form"], surface: "compact"})).not.toContain(
+        "ask_form"
+      );
     });
 
     it("describes ask_markdown only on the full surface", () => {

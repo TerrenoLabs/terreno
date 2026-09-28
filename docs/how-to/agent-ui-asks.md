@@ -30,6 +30,11 @@ The example backend uses a scripted demo agent, `terreno-demo-agent`, when no mo
    length hint. Add a line and press "Post it": the agent quotes your text, and the card
    collapses to "You edited the draft (N characters)" with the text under it. Press "Post it"
    without editing and the summary says "You approved the draft as is".
+10. Send "Fill in the invoice details" (a suggested prompt). The card shows eight fields, most
+    filled in from defaults. Pick a start date, type "900" in Seats (it says "Enter a number from
+    1 to 500." and Send details stays disabled), change it to "12", and press "Send details". The
+    agent lists the details you sent, and the card collapses to "You sent the form (N fields)"
+    with each field's label and value under it.
 
 | You send | The demo agent |
 | --- | --- |
@@ -37,11 +42,12 @@ The example backend uses a scripted demo agent, `terreno-demo-agent`, when no mo
 | A message with "weekly report", such as "send the weekly report" | Asks `ask_confirm` "Send the weekly report to the team now? It goes to 8 people." with "Send report" (primary) and "Not now" |
 | A message with the word archive, such as "archive old chats" | Asks `ask_confirm` "Archive the 12 chats older than 90 days? You can't undo this." with `destructive: true`, "Archive 12 chats" (destructive) and "Keep them" |
 | A message with the word announcement, such as "draft an announcement" | Asks `ask_markdown` with a launch announcement draft as `initial`, `minLength: 40`, `maxLength: 2000`, and "Post it" as `submitLabel` |
+| A message with the word invoice or form, such as "invoice details" or "fill out a form" | Asks `ask_form` "Invoice details" with eight fields: company name and billing email (required, with defaults), callback phone, seats (a whole number from 1 to 500, default 5), start date, region (select, default United States), "Email me the invoice" (default on), and notes |
 | Any other message with a word like pick, choose, or plan, such as "choose between several plans" | Asks "Which plan should I set up for your workspace?" with Starter, Team (the default), and Enterprise |
 | The same kind of message, on routes without `asks` | Says asks are turned off and how to turn them on |
-| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, says whether it would send the report or archive the chats, quotes an edited draft or says you approved it, or says it skipped the question |
+| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, says whether it would send the report or archive the chats, quotes an edited draft or says you approved it, lists the invoice details you sent, or says it skipped the question |
 | Anything else, with or without `asks` | Explains that it follows a script and how to use a real model |
-| Any of these with `surface: "compact"` | Asks the same plan and confirm questions, which already fit a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one for `choice` and no `markdown`, so a toppings or announcement message gets a text reply that says to open the chat on a phone. |
+| Any of these with `surface: "compact"` | Asks the same plan and confirm questions, which already fit a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one for `choice` and no `markdown` or `form`, so a toppings, announcement, or invoice message gets a text reply that says to open the chat on a phone. |
 
 To script another exchange, add an entry to `DEMO_SCENARIOS` in
 `example-backend/src/api/demoAgent.ts`: a trigger pattern, one ask input, and a reply for the
@@ -87,6 +93,20 @@ and the server rejects a `changed` flag that does not match the text (`CHANGED_M
 before Submit is enabled. A phone or watch that shows only the simple card gets "Approve draft"
 (when the draft fits the bounds) and Cancel, with "Edit on your phone". See
 [markdown](../reference/agent-ui-asks.md#markdown).
+
+## Collect a few details in one form
+
+With asks on, the model can call `ask_form` when it needs several values together, such as the
+details for an invoice or a booking. Each of the 1–8 fields has an `id`, a `label`, and a `type`:
+`text`, `textarea`, `email`, `url`, `phone`, `number`, `date`, `time`, `datetime`, `boolean`,
+`select`, or `multiselect`. The chat shows the matching `@terreno/ui` control for each field and
+answers `{values}`, keyed by field id. Dates come back as `YYYY-MM-DD`, times as 24-hour `HH:mm`,
+and datetimes with an offset. The server checks every value against its field, so a 400 names
+each bad field (`REQUIRED_FIELD`, `FIELD_TYPE_MISMATCH`, `OUT_OF_RANGE`, `INVALID_DATE`) at
+`content.values.<id>`, and the card shows each error on its field. Give required fields a
+`default` when you know the likely answer: a phone or watch that shows only the simple card then
+gets "Submit defaults" and Cancel, with "Fill it in on your phone". See
+[form](../reference/agent-ui-asks.md#form).
 
 ## 1. Enable asks on the backend
 
@@ -444,7 +464,8 @@ The watch sends `surface: "compact"` on every turn, answers included:
 
 - **Every ask fits the watch.** On a compact turn the agent can ask only a `choice` with 2–3
   options whose labels fit a button uncut and differ from each other, or a `confirm`. Its card
-  has `handoff: false`, so the user can answer it from the watch. `markdown` is never offered.
+  has `handoff: false`, so the user can answer it from the watch. `markdown` and `form` are never
+  offered.
 - **Replies fit the screen.** The system prompt asks for at most two short sentences.
 - **The surface covers one turn.** The server does not store it. An answer starts a turn that can
   end in a new ask, so the answer sends `compact` too. The phone's chat sends no `surface`, so its
@@ -452,7 +473,9 @@ The watch sends `surface: "compact"` on every turn, answers included:
 
 `pendingAsks` also lists asks the agent made in the phone's chat, whose cards can set `handoff`.
 Show the buttons such a card has, such as `Use "Team"` and Skip, with its "Continue on your phone"
-line. A `markdown` card offers "Approve draft" and Cancel; say "Edit on your phone" for it.
+line. A `markdown` card offers "Approve draft" and Cancel; say "Edit on your phone" for it. A
+`form` card offers "Submit defaults", when every required field has a default, and Cancel; say
+"Fill it in on your phone" for it.
 
 ### 5. Show the card in SwiftUI
 

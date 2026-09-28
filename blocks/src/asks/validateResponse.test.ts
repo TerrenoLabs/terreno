@@ -1,5 +1,5 @@
 import {describe, expect, it} from "bun:test";
-import type {ChoiceAskInput, ConfirmAskInput, MarkdownAskInput} from "./schema";
+import type {ChoiceAskInput, ConfirmAskInput, FormAskInput, MarkdownAskInput} from "./schema";
 import {validateAskResponse} from "./validateResponse";
 
 const PLAN_INPUT: ChoiceAskInput = {
@@ -485,5 +485,256 @@ describe("validateAskResponse markdown", () => {
         content: {changed: false, confirmed: true, markdown: DRAFT},
       }).map(({code, path}) => ({code, path}))
     ).toEqual([{code: "UNKNOWN_KEY", path: "content.confirmed"}]);
+  });
+});
+
+describe("validateAskResponse form", () => {
+  const OPTIONS = [
+    {id: "us", label: "US"},
+    {id: "eu", label: "EU"},
+  ];
+  const input: FormAskInput = {
+    fields: [
+      {id: "company", label: "Company name", maxLength: 120, required: true, type: "text"},
+      {id: "seats", integer: true, label: "Seats", max: 500, min: 1, type: "number"},
+      {id: "start", label: "Start date", type: "date"},
+      {id: "region", label: "Region", options: OPTIONS, type: "select"},
+      {default: true, id: "notify", label: "Email me the invoice", type: "boolean"},
+    ],
+    prompt: "A few details for the invoice.",
+  };
+  const everyType: FormAskInput = {
+    fields: [
+      {id: "notes", label: "Notes", maxLength: 20, minLength: 5, type: "textarea"},
+      {id: "email", label: "Email", type: "email"},
+      {id: "site", label: "Site", type: "url"},
+      {id: "phone", label: "Phone", type: "phone"},
+      {id: "at", label: "At", type: "time"},
+      {id: "starts", label: "Starts", type: "datetime"},
+      {id: "regions", label: "Regions", options: OPTIONS, required: true, type: "multiselect"},
+    ],
+    prompt: "Every other type.",
+  };
+  const checkForm = (values: unknown, formInput: FormAskInput = input) =>
+    validateAskResponse({
+      input: formInput,
+      kind: "form",
+      response: {action: "accept", content: {values}},
+    });
+  const codesAndPaths = (values: unknown, formInput: FormAskInput = input) =>
+    checkForm(values, formInput).map(({code, path}) => ({code, path}));
+
+  it("accepts the answer from the plan's example", () => {
+    expect(
+      checkForm({company: "Acme", notify: true, region: "us", seats: 12, start: "2026-10-01"})
+    ).toEqual([]);
+  });
+
+  it("accepts an answer that leaves optional fields out", () => {
+    expect(checkForm({company: "Acme"})).toEqual([]);
+  });
+
+  it("counts a blank value on an optional field as unanswered", () => {
+    expect(checkForm({company: "Acme", start: "  "})).toEqual([]);
+    expect(checkForm({notes: "", regions: ["us"]}, everyType)).toEqual([]);
+  });
+
+  it("accepts a valid value for every other type", () => {
+    expect(
+      checkForm(
+        {
+          at: "09:30",
+          email: "ada@example.com",
+          notes: "Gate 12",
+          phone: "+14155552671",
+          regions: ["eu", "us"],
+          site: "https://example.com/about",
+          starts: "2026-10-01T09:30:00-07:00",
+        },
+        everyType
+      )
+    ).toEqual([]);
+  });
+
+  it("accepts a datetime with or without seconds", () => {
+    for (const starts of [
+      "2026-10-01T09:30Z",
+      "2026-10-01T09:30+02:00",
+      "2026-10-01T09:30:15Z",
+      "2026-10-01T09:30:15.250-07:00",
+    ]) {
+      expect(checkForm({regions: ["us"], starts}, everyType)).toEqual([]);
+    }
+    expect(codesAndPaths({regions: ["us"], starts: "2026-10-01T09:30"}, everyType)).toEqual([
+      {code: "INVALID_DATE", path: "content.values.starts"},
+    ]);
+  });
+
+  it("REQUIRED_FIELD when a required field is missing, blank, or an empty list", () => {
+    expect(checkForm({})).toEqual([
+      {
+        code: "REQUIRED_FIELD",
+        fix: 'Fill in "Company name" (content.values.company).',
+        message: '"Company name" is required.',
+        path: "content.values.company",
+      },
+    ]);
+    expect(codesAndPaths({company: "   "})).toEqual([
+      {code: "REQUIRED_FIELD", path: "content.values.company"},
+    ]);
+    expect(codesAndPaths({regions: []}, everyType)).toEqual([
+      {code: "REQUIRED_FIELD", path: "content.values.regions"},
+    ]);
+  });
+
+  it("FIELD_TYPE_MISMATCH for the wrong JSON type, a fraction in an integer field, or null", () => {
+    expect(checkForm({company: "Acme", seats: "12"})).toEqual([
+      {
+        code: "FIELD_TYPE_MISMATCH",
+        fix: "Make content.values.seats a number.",
+        message: 'content.values.seats must be a number for the number field "seats".',
+        path: "content.values.seats",
+      },
+    ]);
+    expect(checkForm({company: "Acme", seats: 1.5})).toEqual([
+      {
+        code: "FIELD_TYPE_MISMATCH",
+        fix: "Make content.values.seats a whole number.",
+        message: "content.values.seats is 1.5, but the field takes whole numbers only.",
+        path: "content.values.seats",
+      },
+    ]);
+    expect(codesAndPaths({company: 7, notify: "yes", region: ["us"], start: null})).toEqual([
+      {code: "FIELD_TYPE_MISMATCH", path: "content.values.company"},
+      {code: "FIELD_TYPE_MISMATCH", path: "content.values.notify"},
+      {code: "FIELD_TYPE_MISMATCH", path: "content.values.region"},
+      {code: "FIELD_TYPE_MISMATCH", path: "content.values.start"},
+    ]);
+  });
+
+  it("FIELD_TYPE_MISMATCH for an invalid email, URL, or phone number", () => {
+    expect(
+      codesAndPaths(
+        {email: "ada@", phone: "call me", regions: ["us"], site: "ftp://example.com"},
+        everyType
+      )
+    ).toEqual([
+      {code: "FIELD_TYPE_MISMATCH", path: "content.values.email"},
+      {code: "FIELD_TYPE_MISMATCH", path: "content.values.phone"},
+      {code: "FIELD_TYPE_MISMATCH", path: "content.values.site"},
+    ]);
+    expect(codesAndPaths({phone: "+1 234", regions: ["us"]}, everyType)).toEqual([
+      {code: "FIELD_TYPE_MISMATCH", path: "content.values.phone"},
+    ]);
+    expect(checkForm({phone: "(415) 555-2671", regions: ["us"]}, everyType)).toEqual([]);
+  });
+
+  it("OUT_OF_RANGE below min or above max", () => {
+    expect(checkForm({company: "Acme", seats: 0})).toEqual([
+      {
+        code: "OUT_OF_RANGE",
+        fix: "Make content.values.seats at least 1.",
+        message: "content.values.seats is 0, below the field's min of 1.",
+        path: "content.values.seats",
+      },
+    ]);
+    expect(codesAndPaths({company: "Acme", seats: 501})).toEqual([
+      {code: "OUT_OF_RANGE", path: "content.values.seats"},
+    ]);
+    expect(checkForm({company: "Acme", seats: 500})).toEqual([]);
+  });
+
+  it("INVALID_DATE for a date that is not real or not in the field's format", () => {
+    expect(checkForm({company: "Acme", start: "2026-02-30"})).toEqual([
+      {
+        code: "INVALID_DATE",
+        fix: 'Write content.values.start as YYYY-MM-DD, such as "2026-10-01".',
+        message: 'content.values.start "2026-02-30" is not a real date in YYYY-MM-DD.',
+        path: "content.values.start",
+      },
+    ]);
+    expect(
+      codesAndPaths({at: "9:30 PM", regions: ["us"], starts: "2026-10-01T09:30:00"}, everyType)
+    ).toEqual([
+      {code: "INVALID_DATE", path: "content.values.at"},
+      {code: "INVALID_DATE", path: "content.values.starts"},
+    ]);
+    expect(codesAndPaths({company: "Acme", start: "2026-10-01T00:00:00Z"})).toEqual([
+      {code: "INVALID_DATE", path: "content.values.start"},
+    ]);
+  });
+
+  it("TOO_LONG and TOO_SHORT against the field's length bounds", () => {
+    expect(codesAndPaths({company: "x".repeat(121)})).toEqual([
+      {code: "TOO_LONG", path: "content.values.company"},
+    ]);
+    expect(checkForm({notes: "  abc  ", regions: ["us"]}, everyType)).toEqual([
+      {
+        code: "TOO_SHORT",
+        fix: "Write at least 5 characters in content.values.notes.",
+        message: "content.values.notes is 3 characters, but the field needs at least 5.",
+        path: "content.values.notes",
+      },
+    ]);
+  });
+
+  it("caps a text field without maxLength at 2,000 characters and a textarea at 10,000", () => {
+    const uncapped: FormAskInput = {
+      fields: [
+        {id: "title", label: "Title", type: "text"},
+        {id: "body", label: "Body", type: "textarea"},
+      ],
+      prompt: "Write it.",
+    };
+    expect(checkForm({body: "x".repeat(10_000), title: "x".repeat(2000)}, uncapped)).toEqual([]);
+    expect(codesAndPaths({body: "x".repeat(10_001), title: "x".repeat(2001)}, uncapped)).toEqual([
+      {code: "TOO_LONG", path: "content.values.body"},
+      {code: "TOO_LONG", path: "content.values.title"},
+    ]);
+  });
+
+  it("OPTION_NOT_OFFERED and DUPLICATE_ID for select and multiselect values", () => {
+    expect(codesAndPaths({company: "Acme", region: "apac"})).toEqual([
+      {code: "OPTION_NOT_OFFERED", path: "content.values.region"},
+    ]);
+    expect(codesAndPaths({regions: ["us", "apac", "us"]}, everyType)).toEqual([
+      {code: "OPTION_NOT_OFFERED", path: "content.values.regions[1]"},
+      {code: "DUPLICATE_ID", path: "content.values.regions[2]"},
+    ]);
+  });
+
+  it("UNKNOWN_KEY for a value that belongs to no field", () => {
+    expect(checkForm({company: "Acme", password: "hunter2"})).toEqual([
+      {
+        code: "UNKNOWN_KEY",
+        fix: 'Remove "password" from content.values.',
+        message: '"password" is not the id of any field in this form.',
+        path: "content.values.password",
+      },
+    ]);
+  });
+
+  it("MISSING_REQUIRED and UNKNOWN_KEY for a malformed content object", () => {
+    expect(
+      validateAskResponse({
+        input,
+        kind: "form",
+        response: {action: "accept", content: {company: "Acme"}},
+      }).map(({code, path}) => ({code, path}))
+    ).toEqual([
+      {code: "UNKNOWN_KEY", path: "content.company"},
+      {code: "MISSING_REQUIRED", path: "content.values"},
+    ]);
+  });
+
+  it("accepts Skip unless allowDecline is false", () => {
+    expect(validateAskResponse({input, kind: "form", response: {action: "decline"}})).toEqual([]);
+    expect(
+      validateAskResponse({
+        input: {...input, allowDecline: false},
+        kind: "form",
+        response: {action: "decline"},
+      }).map(({code}) => code)
+    ).toEqual(["DECLINE_NOT_ALLOWED"]);
   });
 });

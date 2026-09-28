@@ -696,6 +696,7 @@ const AiScreen: React.FC = () => {
         "Help me pick a plan",
         "Archive old chats",
         "Draft an announcement",
+        "Fill in the invoice details",
       ]}
       testID="chat"
     />

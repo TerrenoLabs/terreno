@@ -715,3 +715,116 @@ describe("validateAskInput confirm", () => {
     }
   });
 });
+
+describe("validateAskInput form", () => {
+  const form = (fields: unknown[]) => ({fields, prompt: "A few details."});
+
+  it("accepts a form with a single field", () => {
+    expect(
+      validateAskInput({
+        input: form([{id: "company", label: "Company", type: "text"}]),
+        kind: "form",
+      })
+    ).toEqual([]);
+  });
+
+  it("names a field id that breaks the id format", () => {
+    expect(
+      validateAskInput({
+        input: form([{id: "Full Name", label: "Name", type: "text"}]),
+        kind: "form",
+      })
+    ).toEqual([
+      {
+        code: "INVALID_FORMAT",
+        fix: 'Use 1-64 lowercase letters, digits, "_", or "-", starting with a letter or digit.',
+        message: 'fields[0].id "Full Name" is not a valid field id.',
+        path: "fields[0].id",
+      },
+    ]);
+  });
+
+  it("names the first field that used a duplicated id", () => {
+    expect(
+      validateAskInput({
+        input: form([
+          {id: "name", label: "Name", type: "text"},
+          {id: "name", label: "Email", type: "email"},
+        ]),
+        kind: "form",
+      })
+    ).toEqual([
+      {
+        code: "DUPLICATE_ID",
+        fix: "Give every field a unique id.",
+        message: 'Field id "name" is already used by fields[0].',
+        path: "fields[1].id",
+      },
+    ]);
+  });
+
+  it("lists the field types for an unknown type, so a password field is refused", () => {
+    const [error] = validateAskInput({
+      input: form([{id: "secret", label: "Password", type: "password"}]),
+      kind: "form",
+    });
+    expect(error.code).toBe("INVALID_ENUM");
+    expect(error.path).toBe("fields[0].type");
+    expect(error.fix).toBe(
+      'Use one of "text", "textarea", "email", "url", "phone", "number", "date", "time", "datetime", "boolean", "select", "multiselect".'
+    );
+  });
+
+  it("checks a default with the same rules as an answer, naming the default", () => {
+    expect(
+      validateAskInput({
+        input: form([
+          {default: 0, id: "seats", label: "Seats", max: 500, min: 1, type: "number"},
+          {
+            default: "apac",
+            id: "region",
+            label: "Region",
+            options: [
+              {id: "us", label: "US"},
+              {id: "eu", label: "EU"},
+            ],
+            type: "select",
+          },
+        ]),
+        kind: "form",
+      })
+    ).toEqual([
+      {
+        code: "OUT_OF_RANGE",
+        fix: "Make fields[0].default at least 1.",
+        message: "fields[0].default is 0, below the field's min of 1.",
+        path: "fields[0].default",
+      },
+      {
+        code: "DEFAULT_NOT_IN_OPTIONS",
+        fix: "Use an id from fields[1].options, or remove it from the default.",
+        message: 'Default "apac" is not the id of any option of the field.',
+        path: "fields[1].default",
+      },
+    ]);
+  });
+
+  it("runs the default rules only once the field's shape is valid", () => {
+    expect(
+      validateAskInput({
+        input: form([{default: 0, id: "seats", label: "Seats", min: "1", type: "number"}]),
+        kind: "form",
+      }).map(({code, path}) => ({code, path}))
+    ).toEqual([{code: "INVALID_TYPE", path: "fields[0].min"}]);
+  });
+
+  it("is not offered on the compact surface, because fields cannot be filled in there", () => {
+    expect(() =>
+      validateAskInput({
+        input: form([{id: "name", label: "Name", type: "text"}]),
+        kind: "form",
+        surface: "compact",
+      })
+    ).toThrow('The compact surface does not offer ask kind "form".');
+  });
+});

@@ -67,6 +67,16 @@ const markdownSummary = (content: Record<string, unknown>): string => {
   return `You edited the draft (${formatCount(length)} ${length === 1 ? "character" : "characters"})`;
 };
 
+/** "You sent the form (5 fields)" for a `form` answer, counting the fields it filled in. */
+const formSummary = (content: Record<string, unknown>): string => {
+  const {values} = content;
+  if (values === null || typeof values !== "object" || Array.isArray(values)) {
+    return ANSWERED;
+  }
+  const count = Object.keys(values).length;
+  return `You sent the form (${formatCount(count)} ${count === 1 ? "field" : "fields"})`;
+};
+
 const acceptedSummary = (ask: ChatAsk, content: Record<string, unknown>): string => {
   switch (ask.kind) {
     case "choice":
@@ -75,6 +85,8 @@ const acceptedSummary = (ask: ChatAsk, content: Record<string, unknown>): string
       return confirmSummary(ask.input, content);
     case "markdown":
       return markdownSummary(content);
+    case "form":
+      return formSummary(content);
   }
 };
 

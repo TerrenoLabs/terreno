@@ -1,7 +1,7 @@
 import {describe, expect, it} from "bun:test";
 import {z} from "zod";
 import {ASK_ERROR_CODES, type AskErrorCode, finalizeAskErrors, issuesToAskErrors} from "./errors";
-import type {ChoiceAskInput} from "./schema";
+import type {ChoiceAskInput, FormAskInput} from "./schema";
 import {resolveButtonAnswer, toSimpleCard} from "./simpleCard";
 import {validateAskInput} from "./validateInput";
 import {validateAskResponse} from "./validateResponse";
@@ -20,6 +20,22 @@ const inputCodes = (input: unknown): AskErrorCode[] =>
 
 const responseCodes = (response: unknown, input: ChoiceAskInput = INPUT): AskErrorCode[] =>
   validateAskResponse({input, kind: "choice", response}).map((error) => error.code);
+
+const FORM_INPUT: FormAskInput = {
+  fields: [
+    {id: "company", label: "Company", required: true, type: "text"},
+    {id: "seats", label: "Seats", max: 500, min: 1, type: "number"},
+    {id: "start", label: "Start date", type: "date"},
+  ],
+  prompt: "A few details.",
+};
+
+const formCodes = (values: unknown): AskErrorCode[] =>
+  validateAskResponse({
+    input: FORM_INPUT,
+    kind: "form",
+    response: {action: "accept", content: {values}},
+  }).map((error) => error.code);
 
 const mapIssues = (schema: z.ZodType, root: unknown) => {
   const result = schema.safeParse(root);
@@ -59,6 +75,8 @@ describe("ASK_ERROR_CODES", () => {
         kind: "choice",
         surface: "compact",
       }).map((error) => error.code),
+    FIELD_TYPE_MISMATCH: () => formCodes({company: "Acme", seats: "12"}),
+    INVALID_DATE: () => formCodes({company: "Acme", start: "2026-02-30"}),
     INVALID_ENUM: () => inputCodes({...INPUT, select: "all"}),
     INVALID_FORMAT: () =>
       inputCodes({
@@ -73,7 +91,9 @@ describe("ASK_ERROR_CODES", () => {
     OPTION_NOT_OFFERED: () => responseCodes({action: "accept", content: {selected: ["green"]}}),
     OTHER_NOT_ALLOWED: () =>
       responseCodes({action: "accept", content: {other: "Green", selected: ["red"]}}),
+    OUT_OF_RANGE: () => formCodes({company: "Acme", seats: 0}),
     RANGE_INVALID: () => inputCodes({...INPUT, maxSelected: 2, minSelected: 3, select: "many"}),
+    REQUIRED_FIELD: () => formCodes({seats: 12}),
     SELECTION_COUNT: () => responseCodes({action: "accept", content: {selected: ["red", "blue"]}}),
     TOO_FEW: () => inputCodes({...INPUT, options: [{id: "red", label: "Red"}]}),
     TOO_LONG: () => inputCodes({...INPUT, title: "t".repeat(81)}),

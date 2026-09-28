@@ -1,5 +1,7 @@
 export type {AskErrorCode, AskValidationError} from "./asks/errors";
 export {ASK_ERROR_CODES} from "./asks/errors";
+export type {FormValue} from "./asks/formValues";
+export {formDefaultValues, formTextMaxLength} from "./asks/formValues";
 export type {
   AskResponseWithToolCallId,
   PendingAskListItem,
@@ -35,6 +37,12 @@ export type {
   ConfirmAsk,
   ConfirmAskInput,
   ConfirmAskResponse,
+  FormAnswer,
+  FormAsk,
+  FormAskInput,
+  FormAskResponse,
+  FormField,
+  FormFieldType,
   MarkdownAnswer,
   MarkdownAsk,
   MarkdownAskInput,
@@ -67,6 +75,11 @@ export {
   confirmAskInputSchema,
   confirmAskResponseSchema,
   confirmButtonLabels,
+  FORM_FIELD_TYPES,
+  formAnswerSchema,
+  formAskInputSchema,
+  formAskResponseSchema,
+  formFieldSchema,
   isCompactAskKind,
   markdownAnswerSchema,
   markdownAskInputSchema,

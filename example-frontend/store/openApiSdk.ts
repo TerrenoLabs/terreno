@@ -1406,7 +1406,7 @@ export type GpthistoriesTurnRes = /** status 200 Successful response */ {
     historyId: string;
     /** The ask the turn paused on. Answer it with its toolCallId and the id of one of simple.buttons. */
     pendingAsk?: {
-      kind: "choice" | "confirm" | "markdown";
+      kind: "choice" | "confirm" | "markdown" | "form";
       simple: {
         buttons: {
           id: string;
@@ -1428,7 +1428,7 @@ export type GpthistoriesTurnRes = /** status 200 Successful response */ {
           style: "default" | "primary" | "destructive" | "cancel";
         }[];
         handoff: boolean;
-        kind: "choice" | "confirm" | "markdown";
+        kind: "choice" | "confirm" | "markdown" | "form";
         text: string;
         title?: string;
         toolCallId: string;
@@ -1481,7 +1481,7 @@ export type GpthistoriesPendingAsksRes = /** status 200 Successful response */ {
     created: string;
     /** The conversation the ask belongs to. */
     historyId: string;
-    kind: "choice" | "confirm" | "markdown";
+    kind: "choice" | "confirm" | "markdown" | "form";
     simple: {
       buttons: {
         id: string;
@@ -1503,7 +1503,7 @@ export type GpthistoriesPendingAsksRes = /** status 200 Successful response */ {
         style: "default" | "primary" | "destructive" | "cancel";
       }[];
       handoff: boolean;
-      kind: "choice" | "confirm" | "markdown";
+      kind: "choice" | "confirm" | "markdown" | "form";
       text: string;
       title?: string;
       toolCallId: string;
@@ -1522,7 +1522,7 @@ export type PostGptHistoriesRes = /** status 201 Successful create */ {
     /** The validated ask input the model sent */
     input: any;
     /** Ask kind; the model asked with the tool ask_<kind> */
-    kind: "choice" | "confirm" | "markdown";
+    kind: "choice" | "confirm" | "markdown" | "form";
     /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
     promptIndex: number;
     /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
@@ -1541,7 +1541,7 @@ export type PostGptHistoriesRes = /** status 201 Successful create */ {
     /** Set on tool-call rows where the model asked the user a question */
     ask?: {
       /** Ask kind; the model asked with the tool ask_<kind> */
-      kind: "choice" | "confirm" | "markdown";
+      kind: "choice" | "confirm" | "markdown" | "form";
       /** pending while the user can answer; answered or cancelled once the ask is resolved */
       status: "pending" | "answered" | "cancelled";
     };
@@ -1596,7 +1596,7 @@ export type PostGptHistoriesArgs = {
     /** Set on tool-call rows where the model asked the user a question */
     ask?: {
       /** Ask kind; the model asked with the tool ask_<kind> */
-      kind: "choice" | "confirm" | "markdown";
+      kind: "choice" | "confirm" | "markdown" | "form";
       /** pending while the user can answer; answered or cancelled once the ask is resolved */
       status: "pending" | "answered" | "cancelled";
     };
@@ -1650,7 +1650,7 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
       /** The validated ask input the model sent */
       input: any;
       /** Ask kind; the model asked with the tool ask_<kind> */
-      kind: "choice" | "confirm" | "markdown";
+      kind: "choice" | "confirm" | "markdown" | "form";
       /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
       promptIndex: number;
       /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
@@ -1669,7 +1669,7 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
       /** Set on tool-call rows where the model asked the user a question */
       ask?: {
         /** Ask kind; the model asked with the tool ask_<kind> */
-        kind: "choice" | "confirm" | "markdown";
+        kind: "choice" | "confirm" | "markdown" | "form";
         /** pending while the user can answer; answered or cancelled once the ask is resolved */
         status: "pending" | "answered" | "cancelled";
       };
@@ -1745,7 +1745,7 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
     /** The validated ask input the model sent */
     input: any;
     /** Ask kind; the model asked with the tool ask_<kind> */
-    kind: "choice" | "confirm" | "markdown";
+    kind: "choice" | "confirm" | "markdown" | "form";
     /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
     promptIndex: number;
     /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
@@ -1764,7 +1764,7 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
     /** Set on tool-call rows where the model asked the user a question */
     ask?: {
       /** Ask kind; the model asked with the tool ask_<kind> */
-      kind: "choice" | "confirm" | "markdown";
+      kind: "choice" | "confirm" | "markdown" | "form";
       /** pending while the user can answer; answered or cancelled once the ask is resolved */
       status: "pending" | "answered" | "cancelled";
     };
@@ -1818,7 +1818,7 @@ export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
     /** The validated ask input the model sent */
     input: any;
     /** Ask kind; the model asked with the tool ask_<kind> */
-    kind: "choice" | "confirm" | "markdown";
+    kind: "choice" | "confirm" | "markdown" | "form";
     /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
     promptIndex: number;
     /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
@@ -1837,7 +1837,7 @@ export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
     /** Set on tool-call rows where the model asked the user a question */
     ask?: {
       /** Ask kind; the model asked with the tool ask_<kind> */
-      kind: "choice" | "confirm" | "markdown";
+      kind: "choice" | "confirm" | "markdown" | "form";
       /** pending while the user can answer; answered or cancelled once the ask is resolved */
       status: "pending" | "answered" | "cancelled";
     };
@@ -1894,7 +1894,7 @@ export type PatchGptHistoriesByIdArgs = {
       /** Set on tool-call rows where the model asked the user a question */
       ask?: {
         /** Ask kind; the model asked with the tool ask_<kind> */
-        kind: "choice" | "confirm" | "markdown";
+        kind: "choice" | "confirm" | "markdown" | "form";
         /** pending while the user can answer; answered or cancelled once the ask is resolved */
         status: "pending" | "answered" | "cancelled";
       };

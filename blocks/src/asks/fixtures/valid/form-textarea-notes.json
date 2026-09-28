@@ -1,0 +1,23 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Anything the installer should know?",
+    "fields": [
+      {
+        "id": "notes",
+        "type": "textarea",
+        "label": "Notes",
+        "maxLength": 10000,
+        "helperText": "Gate codes, pets, parking."
+      }
+    ],
+    "allowDecline": false
+  },
+  "simple": {
+    "buttons": [],
+    "handoff": true,
+    "kind": "form",
+    "text": "Anything the installer should know?",
+    "toolCallId": "call_fixture"
+  }
+}

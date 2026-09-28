@@ -1,6 +1,6 @@
 # Task List: Agent UI Asks
 
-**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 2.4.
+**Status:** Approved 2026-09-27 — ready for Pick ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Frontier: Task 2.5.
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.
@@ -55,9 +55,9 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
   - Docs: `docs/reference/agent-ui-asks.md`.
   - Acceptance: AC1, AC2 (`TOO_LONG`), AC9, and AC15 for `markdown`; `changed` is false when the text is unchanged; no Approve button when `initial` breaks the length rules.
 
-- [ ] **Task 2.4**: `form`
-  - Delivers: `ask_form` with 1–8 flat fields (`text`, `textarea`, `email`, `url`, `phone`, `number`, `date`, `time`, `datetime`, `boolean`, `select`, `multiselect`); per-type rules; Luxon ISO validation; renderer maps each field to `Field` by type; simple card Submit defaults / Cancel with `handoff`.
-  - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ui/src/asks/AskForm.tsx`, tests, story.
+- [x] **Task 2.4**: `form`
+  - Delivers: `ask_form` with 1–8 flat fields (`text`, `textarea`, `email`, `url`, `phone`, `number`, `date`, `time`, `datetime`, `boolean`, `select`, `multiselect`); per-type rules; Luxon ISO validation (revised in Pick: Zod ISO validators); renderer maps each field to `Field` by type; simple card Submit defaults / Cancel with `handoff`.
+  - Files: `blocks/src/asks/*`, `ai/src/service/asks.ts`, `ui/src/asks/AskForm.tsx`, tests, story. Also touched: `blocks/src/asks/formValues.ts` (`formDefaultValues`, `formTextMaxLength`), `blocks/src/index.ts`; `ai/src/service/prompts.ts` (`ask_form` description); `ui/src/asks/askFormDraft.ts` (draft, picker, and error-text helpers), `ui/src/asks/{AskCard,SimpleAskCard}.tsx` ("Fill it in on your phone" handoff line), `ui/src/asks/askSummary.ts`; `demo/stories/{AskCard,SimpleAskCard}.stories.tsx`, `demo/story-config/AskCard.config.tsx`; `example-backend/src/api/demoAgent.ts` ("invoice details" scenario), `example-backend/src/__snapshots__/openapi.test.ts.snap`; `example-frontend/store/{openApiSdk,sdk}.ts`, `example-frontend/app/(tabs)/ai.tsx`; `docs/reference/ui.md`, `docs/how-to/agent-ui-asks.md`, `docs/explanation/{agent-ui-asks,example-coverage}.md`.
   - Blocked by: 1.3
   - Docs: `docs/reference/agent-ui-asks.md` (field-type table).
   - Acceptance: AC1, AC2 (`REQUIRED_FIELD`, `FIELD_TYPE_MISMATCH`, `OUT_OF_RANGE`, `INVALID_DATE`), AC9, and AC15 for `form`; one fixture per field type.

@@ -98,6 +98,7 @@ describe("AiApp", () => {
       "ask_choice",
       "ask_confirm",
       "ask_markdown",
+      "ask_form",
     ]);
   });
 

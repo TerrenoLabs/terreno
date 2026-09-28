@@ -73,6 +73,11 @@ const spinnerCount = (element: {
 
 const BUTTON_TEST_ID = /^simple-ask-card-button-/;
 
+const HANDOFF_TEXT: Partial<Record<SimpleCard["kind"], string>> = {
+  form: "Fill it in on your phone",
+  markdown: "Edit on your phone",
+};
+
 describe("SimpleAskCard", () => {
   afterEach(() => {
     mock.restore();
@@ -98,7 +103,7 @@ describe("SimpleAskCard", () => {
       if (card.handoff) {
         assert.isOk(
           within(getByTestId("simple-ask-card-handoff")).getByText(
-            card.kind === "markdown" ? "Edit on your phone" : "Continue on your phone"
+            HANDOFF_TEXT[card.kind] ?? "Continue on your phone"
           )
         );
       } else {
@@ -168,6 +173,23 @@ describe("SimpleAskCard", () => {
       action: "accept",
       content: {changed: false, markdown: ANNOUNCEMENT_DRAFT},
     });
+  });
+
+  it("tells the user to fill a form in on their phone, next to Submit defaults and Cancel", async () => {
+    const card = fixtureCard("form-text-required-default");
+    const onPress = mock((_button: SimpleCardButton) => {});
+    const {getByTestId} = renderCard({card, onPress});
+
+    assert.isOk(
+      within(getByTestId("simple-ask-card-handoff")).getByText("Fill it in on your phone")
+    );
+    await press(getByTestId("simple-ask-card-button-submit-defaults"));
+    assert.deepEqual(onPress.mock.calls[0]?.[0]?.response, {
+      action: "accept",
+      content: {values: {name: "Launch plan"}},
+    });
+    await press(getByTestId("simple-ask-card-button-cancel"));
+    assert.deepEqual(onPress.mock.calls[1]?.[0]?.response, {action: "decline"});
   });
 
   it("keeps the handoff card's buttons next to the continue-on-phone line", async () => {

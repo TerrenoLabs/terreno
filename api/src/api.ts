@@ -1379,7 +1379,8 @@ const _buildModelRouter = <T>(
   // same prefix (for example POST /ai/observability/evaluators), so leave the router
   // and let a later registration handle it.
   const continueUnlessDocumentId = (req: Request, next: NextFunction): boolean => {
-    if (isValidObjectId(req.params.id)) {
+    const id = req.params.id;
+    if (typeof id === "string" && isValidObjectId(id)) {
       return false;
     }
     next("router");

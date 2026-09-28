@@ -327,6 +327,24 @@ jobs:
           else
             echo "flag=" >> "$GITHUB_OUTPUT"
           fi
+      - name: Resolve announcement upload token
+        id: announcements
+        run: |
+          set -euo pipefail
+          SECRET_NAME="${{ env.GCP_BACKEND_SERVICE }}-announcements-upload-token"
+          if gcloud secrets versions access latest --secret="$SECRET_NAME" --project="${{ env.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Announcement upload secret found; mounting it on this revision."
+            echo "secrets=ANNOUNCEMENTS_UPLOAD_TOKEN=$SECRET_NAME:latest" >> "$GITHUB_OUTPUT"
+            echo "env_vars=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Announcement upload secret '$SECRET_NAME' is not accessible yet; using the documented example default."
+            echo "secrets=" >> "$GITHUB_OUTPUT"
+            {
+              echo "env_vars<<ANNOUNCEMENTS_EOF"
+              echo "ANNOUNCEMENTS_UPLOAD_TOKEN=terreno-example-announcement-upload"
+              echo "ANNOUNCEMENTS_EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
       - name: Deploy to Cloud Run
         id: deploy
         uses: ./.github/actions/deploy-cloudrun-wif-retry
@@ -344,11 +362,13 @@ jobs:
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
+            ${{ steps.announcements.outputs.env_vars }}
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
             LANGFUSE_SECRET_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-secret-key:latest
             LANGFUSE_PUBLIC_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-public-key:latest
             ${{ steps.better-auth.outputs.secrets }}
+            ${{ steps.announcements.outputs.secrets }}
           flags: |
             --port=3000
             --memory=512Mi
@@ -527,6 +547,24 @@ jobs:
           else
             echo "flag=" >> "$GITHUB_OUTPUT"
           fi
+      - name: Resolve announcement upload token
+        id: announcements
+        run: |
+          set -euo pipefail
+          SECRET_NAME="${{ env.GCP_BACKEND_SERVICE }}-announcements-upload-token"
+          if gcloud secrets versions access latest --secret="$SECRET_NAME" --project="${{ env.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Announcement upload secret found; mounting it on this revision."
+            echo "secrets=ANNOUNCEMENTS_UPLOAD_TOKEN=$SECRET_NAME:latest" >> "$GITHUB_OUTPUT"
+            echo "env_vars=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Announcement upload secret '$SECRET_NAME' is not accessible yet; using the documented example default."
+            echo "secrets=" >> "$GITHUB_OUTPUT"
+            {
+              echo "env_vars<<ANNOUNCEMENTS_EOF"
+              echo "ANNOUNCEMENTS_UPLOAD_TOKEN=terreno-example-announcement-upload"
+              echo "ANNOUNCEMENTS_EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
       - name: Rebuild traffic without not-ready preview tags
         run: |
           chmod +x .github/workflows/scripts/rebuild-cloud-run-ready-traffic.sh
@@ -552,10 +590,12 @@ jobs:
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
+            ${{ steps.announcements.outputs.env_vars }}
           secrets_update_strategy: overwrite
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
             ${{ steps.better-auth.outputs.secrets }}
+            ${{ steps.announcements.outputs.secrets }}
           flags: |
             --port=3000
             --memory=1Gi

@@ -103,6 +103,14 @@ deploy_backend() {
     args+=("$runtime_sa_flag")
   fi
 
+  # Keep the fallback in sync with terraform variable announcements_upload_token.
+  announcements_upload_secret="${GCP_BACKEND_SERVICE}-announcements-upload-token"
+  if gcloud secrets versions access latest --secret="$announcements_upload_secret" >/dev/null 2>&1; then
+    secrets+=",ANNOUNCEMENTS_UPLOAD_TOKEN=${announcements_upload_secret}:latest"
+  else
+    env_vars+=",ANNOUNCEMENTS_UPLOAD_TOKEN=terreno-example-announcement-upload"
+  fi
+
   better_auth_secret="${GCP_BACKEND_SERVICE}-better-auth-secret"
   if gcloud secrets versions access latest --secret="$better_auth_secret" >/dev/null 2>&1; then
     secrets+=",BETTER_AUTH_SECRET=${better_auth_secret}:latest"

@@ -467,6 +467,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
               userOrganizationIds.includes(organizationId)
             );
           },
+          uploadToken: process.env.ANNOUNCEMENTS_UPLOAD_TOKEN,
         })
       );
 

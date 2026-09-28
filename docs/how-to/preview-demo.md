@@ -16,4 +16,4 @@ dev component routes. `?embed=1` applies the same query and hides the bar.
 | `rtl` | `1` sets document direction to `rtl` on web |
 | `reducedMotion` | `1` sets `data-reduced-motion="1"` on the document element |
 
-Reload keeps the query. Choosing a control's default removes that key from the URL. Leaving the component route restores the app theme and, on web, document direction and reduced motion. Custom palettes stay on `/palette`.
+Reload keeps the query. The bar shows the current query when any value is not the default. Choosing a control's default removes that key from the URL. Leaving the component route restores the app theme and, on web, document direction and reduced motion. Custom palettes stay on `/palette`.

@@ -1,4 +1,4 @@
-import {Box, Button} from "@terreno/ui";
+import {Box, Button, Text} from "@terreno/ui";
 import type React from "react";
 import {useCallback} from "react";
 import type {DemoPreviewState} from "../previewState";
@@ -8,8 +8,9 @@ const BACKGROUNDS: DemoPreviewState["background"][] = ["default", "inverse", "tr
 
 export const DemoPreviewBar: React.FC<{
   onChange: (state: DemoPreviewState) => void;
+  shareQuery: string;
   state: DemoPreviewState;
-}> = ({onChange, state}) => {
+}> = ({onChange, shareQuery, state}) => {
   const update = useCallback(
     (patch: Partial<DemoPreviewState>): void => {
       onChange({...state, ...patch});
@@ -19,6 +20,7 @@ export const DemoPreviewBar: React.FC<{
 
   return (
     <Box gap={2} marginBottom={4} testID="demo-preview-bar">
+      {shareQuery ? <Text size="sm" testID="demo-preview-query">{`?${shareQuery}`}</Text> : null}
       <Box direction="row" gap={2} wrap>
         <Button
           onClick={() => {

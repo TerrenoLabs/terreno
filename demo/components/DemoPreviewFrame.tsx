@@ -8,6 +8,7 @@ import {DemoPreviewContext} from "../previewContext";
 import {
   type DemoPreviewState,
   previewParamsFromState,
+  previewQueryFromState,
   previewStateFromQuery,
 } from "../previewState";
 import {DemoPreviewBar} from "./DemoPreviewBar";
@@ -17,6 +18,7 @@ export const DemoPreviewFrame: React.FC<{children: React.ReactNode}> = ({childre
   const params = useGlobalSearchParams();
   const {isEmbedMode} = useEmbedMode();
   const state = previewStateFromQuery(params);
+  const shareQuery = previewQueryFromState(state);
   const {resetTheme, setTheme} = useTheme();
 
   // Keep the live theme aligned with the shareable preview query, and restore the app theme on leave.
@@ -54,7 +56,9 @@ export const DemoPreviewFrame: React.FC<{children: React.ReactNode}> = ({childre
   return (
     <DemoPreviewContext.Provider value={state}>
       <Box testID="demo-preview-root">
-        {isEmbedMode ? null : <DemoPreviewBar onChange={handleChange} state={state} />}
+        {isEmbedMode ? null : (
+          <DemoPreviewBar onChange={handleChange} shareQuery={shareQuery} state={state} />
+        )}
         <Box
           color={state.background === "transparent" ? undefined : background}
           maxWidth={frameWidth}

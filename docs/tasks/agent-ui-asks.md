@@ -1,6 +1,6 @@
 # Task List: Agent UI Asks
 
-**Status:** Approved 2026-09-27 — in progress ([`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)). Phases 1–2 Roast-passed; Task 4.1 done for Phases 1–2. Tasks 3.1 and 3.2 are blocked on Agent UI Blocks Tasks 1.1 and 2.1, which have not started.
+**Status:** Phases 1–2 complete and Roast-passed (in review, [PR #1402](https://github.com/TerrenoLabs/terreno/pull/1402)). Phase 3 deferred until Agent UI Blocks Tasks 1.1 and 2.1 merge (D28 in [`docs/implementationPlans/agent-ui-asks.md`](../implementationPlans/agent-ui-asks.md)).
 **Supporting skills:** `ai-prompt-governance`, `terreno-ui`, `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `update-docs`, `verify-ui-changes`.
 
 Every task is a vertical slice: contract, producer and/or renderer, docs, and Bun tests.
@@ -77,6 +77,8 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
   - Acceptance: AC19; AC15 for approval cards (destructive approve button per D26).
 
 ### Phase 3: HTML and display additions
+
+Deferred (D28, 2026-09-28): Phases 1–2 ship first; these tasks start once Agent UI Blocks Tasks 1.1 and 2.1 have merged.
 
 - [ ] **Task 3.1**: Sandboxed `html` block
   - Delivers: `html` block schema (`title`, `height: sm|md|lg`, `html` ≤ 100,000 bytes) and `HTML_DISABLED` / `HTML_TOO_LARGE` in `@terreno/blocks`; `uiBlocks.html` server option; `sanitizeHtml` in `@terreno/ai` applied to the final document (re-sent with `{replace: text}` when changed); `HtmlFrame` (web `iframe sandbox=""` + injected CSP meta; native WebView with JavaScript and navigation off); `html` renderer in `BlocksView` with a streaming placeholder and an `allowHtml` gate.

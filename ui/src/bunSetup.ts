@@ -727,6 +727,8 @@ mock.module("@react-native-async-storage/async-storage", () => ({
   setItem: mock(() => Promise.resolve()),
 }));
 
+const mockPortalContext = React.createContext<unknown>(null);
+
 // Mock the portal host. The real `Host` wraps children in an extra View
 // whose presence makes snapshots brittle, and individual tests already mock
 // this to render inline; hoisting the mock to setup keeps test ordering from
@@ -737,6 +739,10 @@ mock.module("./PortalHost", () => ({
     React.createElement("View", {testID: "portal-host"}, children),
   Portal: ({children}: MockComponentProps) =>
     React.createElement("View", {testID: "portal"}, children),
+  // Components that only portal when a host is mounted read this context. It defaults to
+  // null (no host) so they keep rendering inline; tests that want the portal path wrap the
+  // tree in `PortalContext.Provider`.
+  PortalContext: mockPortalContext,
 }));
 
 // Mock IconButton component

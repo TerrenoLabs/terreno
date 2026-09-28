@@ -2,14 +2,7 @@ import {Box, Button, TextField} from "@terreno/ui";
 import type React from "react";
 import {useCallback} from "react";
 
-const DEMO_CATEGORIES = [
-  "All",
-  "Foundation",
-  "Component",
-  "Pattern",
-  "Data Entry",
-  "Form",
-] as const;
+const DEMO_CATEGORIES = ["All", "Foundation", "Component", "Pattern", "Form"] as const;
 
 export const DemoCatalogFilters: React.FC<{
   category: string;

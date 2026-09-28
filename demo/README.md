@@ -49,7 +49,7 @@ component's `name`, and per-story `showInDemo`, `stability` (`stable` or `exclud
 `excludeReason`), and `interactions`. Boolean controls without a default use `false`. Number
 controls without a default use `0`. Demo mode hides stories with `showInDemo: false`. The home grid and dev index filter by
 search text and category. The Form category is the input fields (text, select, checkbox,
-address, signature, and the login and consent screens). Preview query params are documented in
+address, signature, markdown, and the login and consent screens). There is no separate Data Entry filter. Preview query params are documented in
 [preview-demo.md](../docs/how-to/preview-demo.md).
 
 ## Add a story

@@ -15,7 +15,7 @@ export const MarkdownEditorFieldConfiguration: DemoConfiguration = {
   description:
     "A side-by-side markdown editor with a text input on the left and a live preview on the right. Useful for editing rich text content in admin panels and forms.",
   a11yNotes: ["The text input supports standard keyboard navigation and screen readers."],
-  category: ["Data Entry", "Form"],
+  category: "Form",
   status: {
     documentation: "ready",
     figma: "planned",

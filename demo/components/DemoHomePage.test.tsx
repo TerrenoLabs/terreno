@@ -71,6 +71,8 @@ describe("DemoHomeBanner", () => {
     assert.isOk(rendered.queryByTestId("demo-home-text-field"));
     assert.isOk(rendered.queryByTestId("demo-home-select-field"));
     assert.isOk(rendered.queryByTestId("demo-home-email-field"));
+    assert.isOk(rendered.queryByTestId("demo-home-markdown-editor-field"));
+    assert.isNull(rendered.queryByTestId("demo-category-Data Entry"));
     assert.isNull(rendered.queryByTestId("demo-home-text"));
     assert.isNull(rendered.queryByTestId("demo-home-button"));
   });

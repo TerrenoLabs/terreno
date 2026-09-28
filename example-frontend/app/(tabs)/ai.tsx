@@ -16,15 +16,18 @@ import {
 import {DateTime} from "luxon";
 import type React from "react";
 import {useCallback, useMemo, useRef, useState} from "react";
-import {type ImageSourcePropType, Image as RNImage} from "react-native";
+import {type ImageSourcePropType, Platform, Image as RNImage} from "react-native";
 import {useSelector} from "react-redux";
 import {getSessionToken} from "@/lib/betterAuth";
 import {
+  type AskFileUploader,
   answerHistoryId,
   askErrorsFromBody,
   askFromHistoryPrompt,
   askMessage,
+  createAskFilesResolver,
   errorDetailFromBody,
+  uploadedFileFromBody,
   withoutEmptyAssistant,
   withResolvedAsk,
 } from "@/lib/gptAsks";
@@ -113,6 +116,37 @@ const readFileAsBase64DataUrl = async (uri: string, _mimeType: string): Promise<
   });
 };
 
+/** The multipart part for a picked file: a typed Blob on web, a `{uri, name, type}` part on native. */
+const uploadFormData = async (file: SelectedFile): Promise<FormData> => {
+  const form = new FormData();
+  if (Platform.OS !== "web") {
+    form.append("file", {name: file.name, type: file.mimeType, uri: file.uri} as unknown as Blob);
+    return form;
+  }
+  const blob = await (await fetch(file.uri)).blob();
+  form.append("file", new Blob([blob], {type: file.mimeType}), file.name);
+  return form;
+};
+
+/** Uploads a file picked for a `files` ask; the server has no file routes without a GCS bucket. */
+const uploadAskFile: AskFileUploader = async (file) => {
+  const token = await getSessionToken();
+  const response = await fetch(`${baseUrl}/files/upload`, {
+    body: await uploadFormData(file),
+    headers: {Authorization: `Bearer ${token}`},
+    method: "POST",
+  });
+  if (response.status === 404) {
+    return undefined;
+  }
+  const body = await readJson(response);
+  const uploaded = response.ok ? uploadedFileFromBody(body) : undefined;
+  if (!uploaded) {
+    throw new Error(errorDetailFromBody(body) ?? `HTTP ${response.status}`);
+  }
+  return uploaded;
+};
+
 /**
  * Fallback model list used before the backend responds (or if the request fails). The live list is
  * fetched from GET /ai/models, which reflects the backend's allow-list and Vertex enabled models.
@@ -154,6 +188,7 @@ const AiScreen: React.FC = () => {
   const [attachments, setAttachments] = useState<SelectedFile[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_VALUE);
   const [mascotIndex] = useState<number>(() => selectGptMascotIndex(Math.random()));
+  const resolveAskFiles = useMemo(() => createAskFilesResolver({upload: uploadAskFile}), []);
 
   const mascot = useMemo(
     (): React.ReactElement => (
@@ -688,6 +723,7 @@ const AiScreen: React.FC = () => {
       onSelectHistory={handleSelectHistory}
       onSubmit={handleSubmit}
       onUpdateTitle={handleUpdateTitle}
+      resolveAskFiles={resolveAskFiles}
       selectedModel={selectedModel}
       suggestedPrompts={[
         "Tell me a dad joke about TypeScript",
@@ -697,6 +733,7 @@ const AiScreen: React.FC = () => {
         "Archive old chats",
         "Draft an announcement",
         "Fill in the invoice details",
+        "Upload a receipt",
       ]}
       testID="chat"
     />

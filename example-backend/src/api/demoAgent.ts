@@ -24,6 +24,11 @@ export const DEMO_AGENT_MODEL_ID = "terreno-demo-agent";
 const TOOL_CALL_ID_PATTERN = /^demo_([a-z]+)_/;
 
 interface DemoAnswer {
+  /**
+   * The text the model saw for each text, CSV, or JSON file of a `files` answer, by the file's
+   * index. Empty for other answers.
+   */
+  fileTexts: ReadonlyMap<number, string>;
   /** True when the user answers on a small screen, which wants at most two short sentences. */
   isCompact: boolean;
   response: AskResponse;
@@ -283,6 +288,79 @@ const invoiceReply = ({isCompact, response}: DemoAnswer): string => {
   ].join("\n");
 };
 
+const FILE_TYPE_LABELS: Record<string, string> = {
+  "application/json": "JSON file",
+  "application/pdf": "PDF",
+  "image/gif": "GIF image",
+  "image/jpeg": "JPEG image",
+  "image/png": "PNG image",
+  "image/webp": "WebP image",
+  "text/csv": "CSV file",
+  "text/plain": "text file",
+};
+
+const FIRST_LINE_MAX_LENGTH = 120;
+
+interface SentFile {
+  filename: string;
+  mimeType: string;
+  size: number;
+}
+
+/** The files of a stored `files` answer: metadata only, since the bytes reach the model as parts. */
+const sentFiles = (content: Record<string, unknown>): SentFile[] => {
+  const {files} = content;
+  if (!Array.isArray(files)) {
+    return [];
+  }
+  return files.flatMap((file): SentFile[] => {
+    const {filename, mimeType, size} = (file ?? {}) as Record<string, unknown>;
+    if (typeof filename !== "string" || typeof mimeType !== "string" || typeof size !== "number") {
+      return [];
+    }
+    return [{filename, mimeType, size}];
+  });
+};
+
+const firstLine = (text: string): string => {
+  const [line = ""] = text.split(/\r?\n/);
+  const trimmed = line.trim();
+  return trimmed.length > FIRST_LINE_MAX_LENGTH
+    ? `${trimmed.slice(0, FIRST_LINE_MAX_LENGTH)}…`
+    : trimmed;
+};
+
+const byteCount = (size: number): string =>
+  `${size.toLocaleString("en-US")} ${size === 1 ? "byte" : "bytes"}`;
+
+const receiptReply = ({fileTexts, isCompact, response}: DemoAnswer): string => {
+  if (response.action === "decline") {
+    return isCompact
+      ? "OK, no receipt for now."
+      : 'No problem, I did not file a receipt. Say "upload a receipt" when you have one.';
+  }
+  if (response.action === "cancel") {
+    return "The receipt question was cancelled, so I did not file a receipt.";
+  }
+  const files = sentFiles(response.content);
+  const count = `${files.length} ${files.length === 1 ? "file" : "files"}`;
+  if (isCompact) {
+    return `You sent ${count}. A real agent would add them to your expense report now.`;
+  }
+  const lines = files.map(({filename, mimeType, size}, index) => {
+    const summary = `- **${filename}**: ${FILE_TYPE_LABELS[mimeType] ?? mimeType}, ${byteCount(size)}`;
+    const text = fileTexts.get(index);
+    return text === undefined ? summary : `${summary}. First line: "${firstLine(text)}"`;
+  });
+  return [
+    `You sent ${count}:`,
+    "",
+    ...lines,
+    "",
+    'A real agent would add them to your expense report now. Say "upload a receipt" to try another answer.',
+  ].join("\n");
+};
+
 const DEMO_SCENARIOS: DemoAskScenario[] = [
   {
     compactFallback:
@@ -311,6 +389,24 @@ const DEMO_SCENARIOS: DemoAskScenario[] = [
     reply: invoiceReply,
     title: "Filling in invoice details",
     trigger: /\b(invoices?|forms?)\b/i,
+  },
+  {
+    compactFallback:
+      'Uploading a receipt needs a bigger screen. Open the chat on your phone and say "upload a receipt".',
+    id: "receipt",
+    input: {
+      accept: ["image", "pdf", "text", "csv"],
+      maxFiles: 3,
+      prompt:
+        "Upload the receipt for your expense report: a photo, a PDF, or a text or CSV export.",
+      submitLabel: "Send receipt",
+      title: "Upload a receipt",
+    },
+    kind: "files",
+    reply: receiptReply,
+    title: "Uploading a receipt",
+    trigger:
+      /\b(receipts?|upload\s+(?:(?:a|an|my|some|the)\s+)?(?:files?|documents?|photos?|images?))\b/i,
   },
   {
     compactFallback:
@@ -403,6 +499,7 @@ const DEMO_HELP_REPLY: DemoReply = {
     'Say "send the weekly report" or "archive old chats" and I will ask you to confirm before I act. Archiving shows a destructive button, because it cannot be undone.',
     'Say "draft an announcement" and I will ask you to edit my draft in a markdown editor, then send it back.',
     'Say "invoice details" and I will ask you to check a short form, with a date, a number, and a few other field types, then send it.',
+    'Say "upload a receipt" and I will ask you for a photo, a PDF, or a text or CSV file, then tell you what arrived.',
     "To talk to a real model, set GEMINI_API_KEY on the server or save a Gemini API key on the Profile tab.",
   ].join("\n\n"),
 };
@@ -436,22 +533,77 @@ const isAskResponse = (value: unknown): value is AskResponse => {
   return action === "accept" || action === "decline" || action === "cancel";
 };
 
+type DemoToolMessage = Extract<DemoPrompt[number], {role: "tool"}>;
+type DemoToolOutput = Extract<DemoToolMessage["content"][number], {type: "tool-result"}>["output"];
+type DemoContentPart = Extract<DemoToolOutput, {type: "content"}>["value"][number];
+
+/** The line the chat turn puts before each file of a `files` answer. */
+const FILE_HEADER_PATTERN = /^File (\d+) of \d+: /;
+
+const parseJson = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * A `files` answer reaches the model as content: the stored answer as JSON, then each file after a
+ * "File i of n" line. The text part right after a file's line is that file's text; an image or PDF
+ * is a data part instead.
+ */
+const fileTextsOf = (parts: DemoContentPart[]): Map<number, string> => {
+  const texts = new Map<number, string>();
+  let current: number | undefined;
+  for (const part of parts) {
+    if (part.type !== "text") {
+      current = undefined;
+      continue;
+    }
+    if (current !== undefined) {
+      texts.set(current, part.text);
+      current = undefined;
+      continue;
+    }
+    const header = FILE_HEADER_PATTERN.exec(part.text);
+    if (header) {
+      current = Number(header[1]) - 1;
+    }
+  }
+  return texts;
+};
+
+interface DemoToolAnswer {
+  fileTexts: ReadonlyMap<number, string>;
+  response: AskResponse;
+}
+
+const answerOf = (output: DemoToolOutput): DemoToolAnswer | undefined => {
+  if (output.type === "json") {
+    return isAskResponse(output.value) ? {fileTexts: new Map(), response: output.value} : undefined;
+  }
+  if (output.type !== "content") {
+    return undefined;
+  }
+  const [first, ...rest] = output.value;
+  const stored = first?.type === "text" ? parseJson(first.text) : undefined;
+  return isAskResponse(stored) ? {fileTexts: fileTextsOf(rest), response: stored} : undefined;
+};
+
 /** The user's answer when the conversation ends with an ask's tool result. */
-const lastAskAnswer = (
-  prompt: DemoPrompt
-): {response: AskResponse; toolCallId: string} | undefined => {
+const lastAskAnswer = (prompt: DemoPrompt): (DemoToolAnswer & {toolCallId: string}) | undefined => {
   const message = prompt.at(-1);
   if (message?.role !== "tool") {
     return undefined;
   }
   for (const part of message.content) {
-    if (
-      part.type === "tool-result" &&
-      part.toolName.startsWith("ask_") &&
-      part.output.type === "json" &&
-      isAskResponse(part.output.value)
-    ) {
-      return {response: part.output.value, toolCallId: part.toolCallId};
+    if (part.type !== "tool-result" || !part.toolName.startsWith("ask_")) {
+      continue;
+    }
+    const answer = answerOf(part.output);
+    if (answer) {
+      return {...answer, toolCallId: part.toolCallId};
     }
   }
   return undefined;
@@ -485,7 +637,7 @@ const planDemoTurn = ({prompt, tools}: Pick<DemoCallOptions, "prompt" | "tools">
     const scenario = scenarioForToolCall(answer.toolCallId);
     return {
       text: scenario
-        ? scenario.reply({isCompact, response: answer.response})
+        ? scenario.reply({fileTexts: answer.fileTexts, isCompact, response: answer.response})
         : "Thanks for answering.",
       type: "text",
     };

@@ -1,7 +1,8 @@
 import {describe, expect, it} from "bun:test";
 import {z} from "zod";
 import {ASK_ERROR_CODES, type AskErrorCode, finalizeAskErrors, issuesToAskErrors} from "./errors";
-import type {ChoiceAskInput, FormAskInput} from "./schema";
+import {checkAskFileBytes, fileNotOwnedError} from "./files";
+import type {ChoiceAskInput, FilesAskInput, FormAskInput} from "./schema";
 import {resolveButtonAnswer, toSimpleCard} from "./simpleCard";
 import {validateAskInput} from "./validateInput";
 import {validateAskResponse} from "./validateResponse";
@@ -36,6 +37,19 @@ const formCodes = (values: unknown): AskErrorCode[] =>
     kind: "form",
     response: {action: "accept", content: {values}},
   }).map((error) => error.code);
+
+const FILES_INPUT: FilesAskInput = {accept: ["image"], maxFiles: 2, prompt: "Upload the receipt."};
+
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+
+const filesCodes = (files: unknown[]): AskErrorCode[] =>
+  validateAskResponse({
+    input: FILES_INPUT,
+    kind: "files",
+    response: {action: "accept", content: {files}},
+  }).map((error) => error.code);
+
+const PHOTO = {fileId: "file_1", filename: "receipt.png", mimeType: "image/png", size: 12};
 
 const mapIssues = (schema: z.ZodType, root: unknown) => {
   const result = schema.safeParse(root);
@@ -76,6 +90,11 @@ describe("ASK_ERROR_CODES", () => {
         surface: "compact",
       }).map((error) => error.code),
     FIELD_TYPE_MISMATCH: () => formCodes({company: "Acme", seats: "12"}),
+    FILE_COUNT: () => filesCodes([PHOTO, PHOTO, PHOTO]),
+    FILE_NOT_OWNED: () => [fileNotOwnedError({index: 0}).code],
+    FILE_TOO_LARGE: () => filesCodes([{...PHOTO, size: 11 * 1024 * 1024}]),
+    FILE_TYPE_NOT_ACCEPTED: () =>
+      filesCodes([{...PHOTO, filename: "notes.txt", mimeType: "text/plain"}]),
     INVALID_DATE: () => formCodes({company: "Acme", start: "2026-02-30"}),
     INVALID_ENUM: () => inputCodes({...INPUT, select: "all"}),
     INVALID_FORMAT: () =>
@@ -87,6 +106,13 @@ describe("ASK_ERROR_CODES", () => {
         ],
       }),
     INVALID_TYPE: () => inputCodes({...INPUT, prompt: 7}),
+    MIME_MISMATCH: () =>
+      checkAskFileBytes({
+        bytes: PNG_BYTES,
+        index: 0,
+        maxFileSizeBytes: 1024,
+        mimeType: "image/jpeg",
+      }).map((error) => error.code),
     MISSING_REQUIRED: () => inputCodes({options: INPUT.options, select: "one"}),
     OPTION_NOT_OFFERED: () => responseCodes({action: "accept", content: {selected: ["green"]}}),
     OTHER_NOT_ALLOWED: () =>

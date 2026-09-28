@@ -67,8 +67,8 @@ describe("asks", () => {
     it.each([
       {asks: undefined, expected: [], label: "undefined"},
       {asks: false, expected: [], label: "false"},
-      {asks: true, expected: ["choice", "confirm", "markdown", "form"], label: "true"},
-      {asks: {}, expected: ["choice", "confirm", "markdown", "form"], label: "{}"},
+      {asks: true, expected: ["choice", "confirm", "markdown", "form", "files"], label: "true"},
+      {asks: {}, expected: ["choice", "confirm", "markdown", "form", "files"], label: "{}"},
       {
         asks: {kinds: ["confirm"] as AskKind[]},
         expected: ["confirm"],
@@ -85,9 +85,9 @@ describe("asks", () => {
     });
 
     it("throws on an unknown kind and names the known kinds", () => {
-      expect(() => resolveAskKinds({kinds: ["choice", "files"] as AskKind[]})).toThrow(
+      expect(() => resolveAskKinds({kinds: ["choice", "video"] as unknown as AskKind[]})).toThrow(
         expect.objectContaining({
-          detail: "Unknown ask kinds: files. Known kinds: choice, confirm, markdown, form.",
+          detail: "Unknown ask kinds: video. Known kinds: choice, confirm, markdown, form, files.",
           message: "The asks option lists unknown ask kinds",
           status: 500,
         })
@@ -106,7 +106,8 @@ describe("asks", () => {
       {expected: undefined, kinds: ["choice"] as AskKind[], toolName: "ask_confirm"},
       {expected: "markdown", kinds: undefined, toolName: "ask_markdown"},
       {expected: "form", kinds: undefined, toolName: "ask_form"},
-      {expected: undefined, kinds: undefined, toolName: "ask_files"},
+      {expected: "files", kinds: undefined, toolName: "ask_files"},
+      {expected: undefined, kinds: undefined, toolName: "ask_video"},
       {expected: undefined, kinds: undefined, toolName: "lookupPlans"},
       {expected: undefined, kinds: [] as AskKind[], toolName: "ask_choice"},
     ])("maps $toolName with kinds $kinds to $expected", ({expected, kinds, toolName}) => {

@@ -12,6 +12,7 @@ import {
 
 import {AttachmentPreview} from "./AttachmentPreview";
 import {AskCard} from "./asks/AskCard";
+import type {AskFilesResolver} from "./asks/askFileRefs";
 import type {AskSubmitHandler, ChatAsk} from "./asks/askTypes";
 import {Box} from "./Box";
 import {Button} from "./Button";
@@ -132,6 +133,11 @@ export interface GPTChatProps {
   onSelectHistory: (id: string) => void;
   onSubmit: (prompt: string) => void;
   onUpdateTitle?: (id: string, title: string) => void;
+  /**
+   * Turns the files picked for a `files` ask into the answer's refs: uploads (`{fileId}`) or data
+   * URLs (`{url}`). Defaults to data URLs. Throw to keep the ask open.
+   */
+  resolveAskFiles?: AskFilesResolver;
   selectedModel?: string;
   /**
    * Optional consumer-owned character for an empty chat. Terreno does not ship a
@@ -718,16 +724,19 @@ const AskTranscriptItem = ({
   ask,
   errors,
   onAskSubmit,
+  resolveAskFiles,
 }: {
   ask: ChatAsk;
   errors?: AskValidationError[];
   onAskSubmit?: AskSubmitHandler;
+  resolveAskFiles?: AskFilesResolver;
 }): React.ReactElement => {
   const card = (
     <AskCard
       ask={ask}
       errors={errors}
       onSubmit={onAskSubmit}
+      resolveAskFiles={resolveAskFiles}
       testID={`gpt-ask-${ask.toolCallId}`}
     />
   );
@@ -749,12 +758,14 @@ const MessageList = ({
   handleCopyMessage,
   onAskSubmit,
   onRateFeedback,
+  resolveAskFiles,
 }: {
   askErrors?: Record<string, AskValidationError[]>;
   currentMessages: GPTChatMessage[];
   handleCopyMessage: (text: string) => void;
   onAskSubmit?: AskSubmitHandler;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
+  resolveAskFiles?: AskFilesResolver;
 }): React.ReactElement => {
   const askToolCallIds = new Set<string>();
   const toolResults = new Map<string, unknown>();
@@ -777,6 +788,7 @@ const MessageList = ({
               errors={askErrors?.[message.ask.toolCallId]}
               key={`ask-${message.ask.toolCallId}`}
               onAskSubmit={onAskSubmit}
+              resolveAskFiles={resolveAskFiles}
             />
           );
         }
@@ -1005,6 +1017,7 @@ export const GPTChat = ({
   onSelectHistory,
   onSubmit,
   onUpdateTitle,
+  resolveAskFiles,
   selectedModel,
   mascot,
   suggestedPrompts,
@@ -1263,6 +1276,7 @@ export const GPTChat = ({
                     handleCopyMessage={handleCopyMessage}
                     onAskSubmit={onAskSubmit}
                     onRateFeedback={onRateFeedback}
+                    resolveAskFiles={resolveAskFiles}
                   />
                   <StreamingIndicator isStreaming={isStreaming} />
                 </>

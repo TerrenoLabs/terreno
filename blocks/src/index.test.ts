@@ -10,6 +10,15 @@ describe("@terreno/blocks public exports", () => {
   const expectedExports = [
     "ASK_ERROR_CODES",
 
+    "ASK_FILE_ACCEPT",
+    "ASK_FILE_ACCEPT_MIME_TYPES",
+    "acceptedFileMimeTypes",
+    "checkAskFileBytes",
+    "fileNotOwnedError",
+    "isTextFileMimeType",
+    "parseAskDataUrl",
+    "sniffFileBytes",
+
     "askResponseWithToolCallIdSchema",
     "askSurfaceSchema",
     "pendingAskListItemSchema",
@@ -54,6 +63,11 @@ describe("@terreno/blocks public exports", () => {
     "confirmAskResponseSchema",
     "confirmButtonLabels",
     "FORM_FIELD_TYPES",
+    "askFileRefSchema",
+    "filesAnswerSchema",
+    "filesAskInputSchema",
+    "filesAskResponseSchema",
+    "filesCountBounds",
     "formAnswerSchema",
     "formAskInputSchema",
     "formAskResponseSchema",

@@ -292,6 +292,28 @@ answer:
 `text` → `text/plain`; `csv`; `json`. A file ref is `{fileId}` (uploaded, D5) or `{url}` (a
 `data:` URL). The per-file cap is the host's upload cap (10 MB default); at most 10 files.
 
+Revised in Pick (Task 2.5): `maxFiles` defaults to 10, and each `accept` value may appear once
+(`DUPLICATE_ID`). A data URL's media type must equal the declared `mimeType` (`MIME_MISMATCH`),
+and the server never fetches a remote URL. The byte sniffer (`sniffFileBytes`,
+`checkAskFileBytes`) lives in `@terreno/blocks` with no new dependency: images and PDFs need their
+signature, and text, CSV, and JSON must be UTF-8 without NUL (JSON must parse). The history and the
+`AIRequest` log store only `{fileId?, filename, mimeType, size}` with the real byte count, never
+`url`; the bytes reach the model only on the answering turn, and later turns replay the metadata.
+The model output is `content`: the stored answer as JSON text, then per file a
+`File i of n: name (mime, N bytes)` line and its part, with
+`[The file is cut to its first N of M bytes.]` after a cut text file. To support `fileId`,
+`POST /files/upload` now returns the attachment `id`, `FileStorageService` gains
+`download(gcsKey)`, `GptRouteOptions` gains `fileStorageService` (`AiApp` passes it only when
+`gcsBucket` is set; without it a `fileId` fails with `FILE_NOT_OWNED`), and
+`asks.maxFileSizeBytes` sets both the answer cap and the `/files/upload` cap. How picked files
+become refs is the host's choice: `GPTChat`'s `resolveAskFiles` defaults to data URLs, and the
+example app uploads through `/files/upload` and falls back to data URLs on 404. `SelectedFile`
+gains `size`, and `FilePickerButton` gains `documentTypes`, `includeImages`, and `text`. The
+Submit label defaults to "Submit". The simple card has only Skip (when `allowDecline` is not
+false) with `handoff: true`, `files` is never offered on the compact surface, and `SimpleAskCard`
+shows "Upload on your phone". Known gap: an upload over the cap fails in multer's error handler,
+not with a clean 413.
+
 ## Server-enforced approval (Q10)
 
 Confirmed (Q10 = A). A prompt-driven `confirm` depends on the model remembering to ask.

@@ -935,6 +935,79 @@ describe("GPTChat asks", () => {
     });
   });
 
+  describe("files asks", () => {
+    const notesAsk = (state: Partial<ChatAsk> = {}): ChatAsk =>
+      ({
+        input: {accept: ["text"], maxFiles: 1, prompt: "Upload your notes."},
+        kind: "files",
+        status: "pending",
+        toolCallId: "call_notes",
+        ...state,
+      }) as ChatAsk;
+
+    const filesMessage = (ask: ChatAsk): GPTChatMessage => ({
+      ask,
+      content: "Tool call: ask_files",
+      role: "tool-call",
+      toolCall: {args: {...ask.input}, toolCallId: ask.toolCallId, toolName: "ask_files"},
+    });
+
+    it("sends the refs resolveAskFiles returns for the picked files", async () => {
+      const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+      const resolveAskFiles = mock(async (files: SelectedFile[]) =>
+        files.map((file) => ({
+          fileId: "upload-1",
+          filename: file.name,
+          mimeType: file.mimeType,
+          size: 12,
+        }))
+      );
+      const {getByTestId, getByText} = renderChat({
+        currentMessages: [userMessage, filesMessage(notesAsk())],
+        onAskSubmit,
+        resolveAskFiles,
+      });
+
+      await press(getByTestId("gpt-ask-call_notes-picker"));
+      await waitFor(() => assert.isOk(getByText("notes.txt")));
+      await press(getByTestId("gpt-ask-call_notes-submit"));
+
+      assert.deepEqual(resolveAskFiles.mock.calls[0]?.[0], [pickedDocument]);
+      assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+        response: {
+          action: "accept",
+          content: {
+            files: [{fileId: "upload-1", filename: "notes.txt", mimeType: "text/plain", size: 12}],
+          },
+        },
+        toolCallId: "call_notes",
+      });
+    });
+
+    it("summarizes an answered files ask from the stored metadata", () => {
+      const {getByText} = renderChat({
+        currentMessages: [
+          userMessage,
+          filesMessage(notesAsk({status: "answered"})),
+          {
+            content: "Tool result: ask_files",
+            role: "tool-result",
+            toolResult: {
+              result: {
+                action: "accept",
+                content: {files: [{filename: "notes.txt", mimeType: "text/plain", size: 12}]},
+              },
+              toolCallId: "call_notes",
+              toolName: "ask_files",
+            },
+          },
+        ],
+      });
+
+      assert.isOk(getByText("You sent 1 file: notes.txt"));
+    });
+  });
+
   describe("confirm asks", () => {
     const archiveAsk = (state: Partial<ChatAsk> = {}): ChatAsk =>
       ({

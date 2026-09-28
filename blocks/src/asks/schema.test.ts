@@ -1,5 +1,6 @@
 import {describe, expect, it} from "bun:test";
 import {validAskFixtures} from "../tests/askFixtures";
+import {acceptedFileMimeTypes} from "./files";
 import {formDefaultValues} from "./formValues";
 import {
   ASK_KINDS,
@@ -13,6 +14,8 @@ import {
   compactConfirmAskInputSchema,
   confirmAskInputSchema,
   confirmButtonLabels,
+  filesAskInputSchema,
+  filesCountBounds,
   formAskInputSchema,
   isCompactAskKind,
   markdownAskInputSchema,
@@ -114,8 +117,46 @@ describe("askAllowsDecline", () => {
 });
 
 describe("ASK_KINDS", () => {
-  it("lists form after markdown, so existing tool order is kept", () => {
-    expect([...ASK_KINDS]).toEqual(["choice", "confirm", "markdown", "form"]);
+  it("appends each new kind, so existing tool order is kept", () => {
+    expect([...ASK_KINDS]).toEqual(["choice", "confirm", "markdown", "form", "files"]);
+  });
+});
+
+describe("files asks", () => {
+  it("are offered on the full surface only, because files cannot be picked on a small screen", () => {
+    expect(askInputSchemaFor({kind: "files"})).toBe(filesAskInputSchema);
+    expect(isCompactAskKind("files")).toBe(false);
+    expect(() => askInputSchemaFor({kind: "files", surface: "compact"})).toThrow(
+      'The compact surface does not offer ask kind "files".'
+    );
+  });
+
+  it("allow declining by default", () => {
+    const input = {accept: ["image" as const], prompt: "Upload it."};
+    expect(askAllowsDecline({input, kind: "files"})).toBe(true);
+    expect(askAllowsDecline({input: {...input, allowDecline: false}, kind: "files"})).toBe(false);
+  });
+
+  it("take 1 to 10 files unless the ask narrows the count", () => {
+    expect(filesCountBounds({accept: ["pdf"]})).toEqual({max: 10, min: 1});
+    expect(filesCountBounds({accept: ["pdf"], maxFiles: 3, minFiles: 2})).toEqual({
+      max: 3,
+      min: 2,
+    });
+  });
+
+  it("map each accept value to the MIME types of the /files/upload allowlist", () => {
+    expect(acceptedFileMimeTypes(["image", "pdf", "text", "csv", "json"])).toEqual([
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "application/pdf",
+      "text/plain",
+      "text/csv",
+      "application/json",
+    ]);
+    expect(acceptedFileMimeTypes(["csv"])).toEqual(["text/csv"]);
   });
 });
 

@@ -70,6 +70,13 @@ const FORM_RULES = `ask_form: the user fills in a few fields and submits them at
 - allowDecline: optional, default true (the user sees Skip).
 - An accepted answer looks like {"action": "accept", "content": {"values": {"<field id>": <value>}}}. Optional fields the user left empty are left out.`;
 
+const FILES_RULES = `ask_files: the user uploads one or more images or documents.
+- accept: required list, each value once: "image" (JPEG, PNG, GIF, or WebP), "pdf", "text" (plain text), "csv", or "json".
+- minFiles, maxFiles: optional whole numbers from 1 to 10. The user sends from minFiles (default 1) to maxFiles (default 10) files.
+- submitLabel: optional label for the submit button, at most 24 characters.
+- allowDecline: optional, default true (the user sees Skip).
+- The answer lists each file's filename, mimeType, and size, and the tool result then shows you each file: images and PDFs as they are, and text, CSV, and JSON as text cut to 100000 bytes.`;
+
 const sectionOf = (section: string, kindRules: string[]): string =>
   [section.replace("ask_choice.", "ask_choice, ask_confirm."), ...kindRules].join("\n\n");
 
@@ -126,6 +133,21 @@ describe("askPromptSection", () => {
     );
   });
 
+  it("describes ask_files after ask_form, with the file limits from ASK_LIMITS", () => {
+    expect(askPromptSection({kinds: ["choice", "confirm", "markdown", "form", "files"]})).toBe(
+      [
+        CHOICE_SECTION.replace(
+          "ask_choice.",
+          "ask_choice, ask_confirm, ask_markdown, ask_form, ask_files."
+        ),
+        CONFIRM_RULES,
+        MARKDOWN_RULES,
+        FORM_RULES,
+        FILES_RULES,
+      ].join("\n\n")
+    );
+  });
+
   it("leaves submitLabel and the Skip default out of the shared rules, since confirm differs", () => {
     const section = askPromptSection({kinds: ["confirm"]});
     expect(section).not.toContain("submitLabel");
@@ -167,5 +189,12 @@ describe("askPromptSection on the compact surface", () => {
       sectionOf(COMPACT_CHOICE_SECTION, [CONFIRM_RULES])
     );
     expect(askPromptSection({kinds: ["form"], surface: "compact"})).toBe("");
+  });
+
+  it("leaves ask_files out, because files cannot be picked on a small screen", () => {
+    expect(askPromptSection({kinds: ["choice", "confirm", "files"], surface: "compact"})).toBe(
+      sectionOf(COMPACT_CHOICE_SECTION, [CONFIRM_RULES])
+    );
+    expect(askPromptSection({kinds: ["files"], surface: "compact"})).toBe("");
   });
 });

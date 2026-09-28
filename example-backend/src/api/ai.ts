@@ -740,6 +740,7 @@ export const addAiRoutes = (
     createModelFn: createModelFromKey,
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,
+    ...(fileStorageService ? {fileStorageService} : {}),
     langfuseSystemPromptName: "chat-assistant",
     maxSteps: 5,
     mcpService,

@@ -275,6 +275,16 @@ export interface GenerateJsonArrayOptions<ELEMENT> {
 export interface AsksOptions {
   /** Ask kinds offered to the model, each as the tool `ask_<kind>`. Defaults to every kind. */
   kinds?: AskKind[];
+  /**
+   * The per-file cap for answers to a `files` ask, in bytes. Defaults to 10 MB, the
+   * `/files/upload` default; `AiApp` applies it to `/files/upload` too.
+   */
+  maxFileSizeBytes?: number;
+}
+
+/** Loads an upload's bytes by its GCS key. `FileStorageService` implements it. */
+export interface AskFileDownloader {
+  download: (gcsKey: string) => Promise<Buffer>;
 }
 
 export interface GptRouteOptions {
@@ -294,6 +304,11 @@ export interface GptRouteOptions {
   createRequestTools?: (req: import("express").Request) => Record<string, import("ai").Tool>;
   /** Not read: the routes send a canned demo reply whenever no AI service resolves. */
   demoMode?: boolean;
+  /**
+   * Where `/files/upload` stores files. With it, an answer to a `files` ask may name uploads by
+   * `fileId`; without it, only `data:` URLs are accepted and a `fileId` fails with `FILE_NOT_OWNED`.
+   */
+  fileStorageService?: AskFileDownloader;
   mcpService?: import("../service/mcpService").MCPService;
   openApiOptions?: Record<string, unknown>;
   tools?: Record<string, import("ai").Tool>;

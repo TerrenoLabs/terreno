@@ -6,6 +6,7 @@ import {FileAttachment} from "../models/fileAttachment";
 // Mock @google-cloud/storage so the service doesn't try to authenticate
 const bucketFileMock = {
   delete: mock(async (_opts?: Record<string, unknown>) => [undefined]),
+  download: mock(async () => [Buffer.from("stored bytes")]),
   getSignedUrl: mock(async () => ["https://example.com/signed-url"]),
   save: mock(async (_buffer: Buffer, _opts: Record<string, unknown>) => [undefined]),
 };
@@ -55,6 +56,16 @@ describe("FileStorageService", () => {
       const attachment = await FileAttachment.findOne({gcsKey: result.gcsKey});
       expect(attachment).toBeDefined();
       expect(attachment?.mimeType).toBe("text/plain");
+      expect(result.id).toBe(attachment?._id.toString() ?? "");
+    });
+  });
+
+  describe("download", () => {
+    it("returns the bytes of the bucket file", async () => {
+      const service = new FileStorageService({bucketName: "test-bucket"});
+      const bytes = await service.download("uploads/abc/file.txt");
+      expect(bytes.toString("utf8")).toBe("stored bytes");
+      expect(bucketObj.file).toHaveBeenCalledWith("uploads/abc/file.txt");
     });
   });
 

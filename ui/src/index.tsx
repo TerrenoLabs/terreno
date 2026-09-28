@@ -15,6 +15,7 @@ export type * from "./AreaChart";
 export type * from "./AttachmentPreview";
 export * from "./Avatar";
 export type * from "./asks/AskCard";
+export * from "./asks/askFileRefs";
 export type * from "./asks/askTypes";
 export * from "./asks/SimpleAskCard";
 export * from "./Badge";

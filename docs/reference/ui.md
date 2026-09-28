@@ -290,6 +290,7 @@ the ask's `tool-call` message and pass `onAskSubmit`:
 | `GPTChatMessage.ask` | `ChatAsk` | On a `tool-call` message: the ask (`kind`, `input`), its `toolCallId`, `status` (`pending`, `answered`, or `cancelled`), and optional `response` and `simple` card. The chat shows an `AskCard` instead of the tool call. |
 | `onAskSubmit` | `(submission: {toolCallId, response}) => void \| Promise<void>` | Called when the user answers a pending ask. `response` is the answer envelope. The pressed control shows a loading state until the promise settles. Without it, asks show but cannot be answered. |
 | `askErrors` | `Record<string, AskValidationError[]>` | Errors for the last answer to each ask, keyed by tool call id, such as the `fields` of a 400 `Invalid askResponse`. Shown inside the card. |
+| `resolveAskFiles` | `AskFilesResolver` | Turns the files picked for a `files` ask into the refs its answer sends. Defaults to `resolveAskFilesAsDataUrls`. Pass an uploader to send `{fileId}` refs; see [Accept uploads with or without GCS](../how-to/agent-ui-asks.md#accept-uploads-with-or-without-gcs). |
 
 - The ask's `tool-result` message stays in `currentMessages` but is not shown. Keep it: message
   indexes must match the stored `prompts` rows that ratings use. When `ask.response` is unset, the
@@ -315,6 +316,7 @@ renders it for messages with `ask`. Render it directly in a custom transcript.
 | `ask` | `ChatAsk` | The ask. Pending asks are interactive. Answered and cancelled asks show a summary. |
 | `errors` | `AskValidationError[]` | Errors for the last answer, shown under the controls |
 | `onSubmit` | `AskSubmitHandler` | Called with `{toolCallId, response}`. Without it, the card cannot be answered: buttons and the select are disabled, and radio and checkbox options show as plain text. |
+| `resolveAskFiles` | `AskFilesResolver` | For a `files` ask: turns the picked files into refs on Submit. Defaults to data URLs. `GPTChat` passes its own `resolveAskFiles`. |
 | `testID` | string | Defaults to `ask-card`. `GPTChat` passes `gpt-ask-<toolCallId>`. |
 
 `choice` controls:
@@ -377,8 +379,20 @@ buttons are disabled. An answered form lists each sent field as its label and a 
 (Yes or No, option labels, "Oct 1, 2026", "9:30 AM", text shortened to one line of 80
 characters) under its summary.
 
+`files` controls: a hint built from the counts and types, such as "Up to 3 files: images, PDFs or
+text files.", then a "Choose files" `FilePickerButton` ("Add files" once some are picked), the
+picked files as an `AttachmentPreview` with a remove control on each, then Submit (`submitLabel`,
+default "Submit") and Skip unless `allowDecline` is `false`. The picker offers Photo Library only
+when `accept` has `image`, and its document picker offers only the accepted MIME types. It allows
+several files when `maxFiles` is more than 1 and is disabled once `maxFiles` files are picked.
+Submit is enabled only when `validateAskResponse` accepts the picked names, types, and sizes. On
+Submit, the card calls `resolveAskFiles` with the picked files and sends `{files: refs}`. If the
+resolver throws, the ask stays open and the card shows "The files could not be sent. Try again, or
+pick them again." Server errors, such as `MIME_MISMATCH`, show under the picked files.
+
 | How the ask ended | Summary |
 | --- | --- |
+| `files` `accept` | You sent `<n>` files: `<filenames>`, or You sent 1 file: `<filename>` |
 | `form` `accept` | You sent the form (`<n>` fields) |
 | `markdown` `accept` | You approved the draft as is (`changed: false`), or You edited the draft (`<n>` characters) |
 | `confirm` `accept` | You confirmed: `<confirmLabel>`, or You declined: `<denyLabel>`, with the default labels when the ask sets none |
@@ -403,6 +417,8 @@ characters) under its summary.
 | Sent markdown under an answered ask, and its Show all toggle | `{testID}-answer`, `{testID}-answer-toggle` |
 | Form field, and its wrapper | `{testID}-field-<field id>` (a `BooleanField` switch is `{testID}-field-<field id>.switch`), `{testID}-form-field-<field id>` |
 | Sent form values under an answered ask | `{testID}-answer` |
+| Files hint, picker, and picked files | `{testID}-hint`, `{testID}-picker`, `{testID}-selected` |
+| Files that could not be sent | `{testID}-resolve-error` |
 | Radio or checkbox options as plain text, without `onSubmit` | `{testID}-options` |
 | Submit | `{testID}-submit` |
 | Answer errors | `{testID}-errors` |
@@ -410,7 +426,26 @@ characters) under its summary.
 | Ask that cannot be shown | `{testID}-invalid` |
 
 Types: `AskCardProps`, `ChatAsk`, `ChatAskState`, `ChatAskStatus`, `AskSubmission`,
-`AskSubmitHandler`. Demo story: `AskCard`.
+`AskSubmitHandler`, `AskFilesResolver`. Demo story: `AskCard`.
+
+File ref helpers:
+
+| Export | Description |
+| --- | --- |
+| `AskFilesResolver` | `(files: SelectedFile[]) => Promise<AskFileRef[]>`. Throw to keep the ask open. |
+| `resolveAskFilesAsDataUrls` | The default resolver: every file as a `{url}` data URL |
+| `selectedFileToDataUrlRef(file)` | One picked file as `{filename, mimeType, size, url}`. The data URL's media type is the file's declared type, and `size` is the decoded byte count. |
+| `normalizeMimeType(mimeType)` | Drops parameters and lowercases: `Text/CSV; charset=utf-8` becomes `text/csv` |
+
+`FilePickerButton` props used by the files card, also available to any caller:
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `documentTypes` | `string[]` | MIME types the document picker offers. Defaults to PDF, text, CSV, and JSON. An empty list hides Document. |
+| `includeImages` | boolean | Offer Photo Library. Defaults to `true`. When `false`, the button opens the document picker directly. |
+| `text` | string | Shows an outline button with this label instead of the paperclip icon |
+
+`SelectedFile.size` is the file's size in bytes when the picker reports it.
 
 ### SimpleAskCard
 
@@ -441,8 +476,8 @@ const [runTurn] = useGpthistoriesTurnMutation();
 | `testID` | string? | Defaults to `simple-ask-card` |
 
 - A card with `handoff: true` shows "Continue on your phone" under the question, because its
-  buttons cannot give every answer. A `markdown` card shows "Edit on your phone" instead, and a
-  `form` card "Fill it in on your phone".
+  buttons cannot give every answer. A `markdown` card shows "Edit on your phone" instead, a
+  `form` card "Fill it in on your phone", and a `files` card "Upload on your phone".
 - Button styles map to `Button` variants the same way as `AskCard` quick replies: `primary` to
   `primary`, `default` to `outline`, `destructive` to `destructive`, and `cancel` to `ghost`.
 

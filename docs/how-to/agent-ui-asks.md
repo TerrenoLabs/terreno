@@ -35,6 +35,11 @@ The example backend uses a scripted demo agent, `terreno-demo-agent`, when no mo
     1 to 500." and Send details stays disabled), change it to "12", and press "Send details". The
     agent lists the details you sent, and the card collapses to "You sent the form (N fields)"
     with each field's label and value under it.
+11. Send "Upload a receipt" (a suggested prompt). Press "Choose files", pick an image and a text
+    or CSV file, and press "Send receipt". The agent names each file with its type and size, and
+    the first line of each text or CSV file. The card collapses to "You sent 2 files: …". Without
+    `GCS_BUCKET`, the files travel as data URLs; see
+    [Accept uploads with or without GCS](#accept-uploads-with-or-without-gcs).
 
 | You send | The demo agent |
 | --- | --- |
@@ -43,11 +48,12 @@ The example backend uses a scripted demo agent, `terreno-demo-agent`, when no mo
 | A message with the word archive, such as "archive old chats" | Asks `ask_confirm` "Archive the 12 chats older than 90 days? You can't undo this." with `destructive: true`, "Archive 12 chats" (destructive) and "Keep them" |
 | A message with the word announcement, such as "draft an announcement" | Asks `ask_markdown` with a launch announcement draft as `initial`, `minLength: 40`, `maxLength: 2000`, and "Post it" as `submitLabel` |
 | A message with the word invoice or form, such as "invoice details" or "fill out a form" | Asks `ask_form` "Invoice details" with eight fields: company name and billing email (required, with defaults), callback phone, seats (a whole number from 1 to 500, default 5), start date, region (select, default United States), "Email me the invoice" (default on), and notes |
+| A message with the word receipt or receipts, or "upload" followed by file, document, photo, or image (optionally after a, an, my, some, or the), such as "upload a receipt" or "upload a file". "I uploaded the slides" does not match. | Asks `ask_files` "Upload a receipt" for up to 3 images, PDFs, text, or CSV files, with "Send receipt" as `submitLabel` |
 | Any other message with a word like pick, choose, or plan, such as "choose between several plans" | Asks "Which plan should I set up for your workspace?" with Starter, Team (the default), and Enterprise |
 | The same kind of message, on routes without `asks` | Says asks are turned off and how to turn them on |
-| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, says whether it would send the report or archive the chats, quotes an edited draft or says you approved it, lists the invoice details you sent, or says it skipped the question |
+| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, says whether it would send the report or archive the chats, quotes an edited draft or says you approved it, lists the invoice details you sent, names the files you sent, or says it skipped the question |
 | Anything else, with or without `asks` | Explains that it follows a script and how to use a real model |
-| Any of these with `surface: "compact"` | Asks the same plan and confirm questions, which already fit a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one for `choice` and no `markdown` or `form`, so a toppings, announcement, or invoice message gets a text reply that says to open the chat on a phone. |
+| Any of these with `surface: "compact"` | Asks the same plan and confirm questions, which already fit a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one for `choice` and no `markdown`, `form`, or `files`, so a toppings, announcement, invoice, or receipt message gets a text reply that says to open the chat on a phone. |
 
 To script another exchange, add an entry to `DEMO_SCENARIOS` in
 `example-backend/src/api/demoAgent.ts`: a trigger pattern, one ask input, and a reply for the
@@ -107,6 +113,64 @@ each bad field (`REQUIRED_FIELD`, `FIELD_TYPE_MISMATCH`, `OUT_OF_RANGE`, `INVALI
 `default` when you know the likely answer: a phone or watch that shows only the simple card then
 gets "Submit defaults" and Cancel, with "Fill it in on your phone". See
 [form](../reference/agent-ui-asks.md#form).
+
+## Accept uploads with or without GCS
+
+With asks on, the model can call `ask_files` to have the user send a receipt, a screenshot, or an
+export. Each file in the answer names its bytes one of two ways, and the host picks which:
+
+| Host | Ref | Setup |
+| --- | --- | --- |
+| No file storage | `{url}`: a base64 `data:` URL | Nothing. `GPTChat` sends data URLs by default. |
+| A GCS bucket | `{fileId}`: the id `POST /files/upload` returns | Give the server a `FileStorageService`, and pass `GPTChat` a `resolveAskFiles` that uploads |
+
+Either way the server checks each file's bytes against its declared type before the model sees it
+(`MIME_MISMATCH`), caps each file at 10 MB (`FILE_TOO_LARGE`), and stores only
+`{fileId?, filename, mimeType, size}` in the history. Data URLs are not saved, so a long
+conversation does not grow by the size of its files. See [files](../reference/agent-ui-asks.md#files).
+
+### Without GCS
+
+1. Turn asks on: `addGptRoutes(router, {aiService, asks: true})`.
+2. Render `GPTChat` with `onAskSubmit`. Leave `resolveAskFiles` unset.
+
+The answer's request body carries each file as a data URL, about a third larger than the file.
+`TerrenoApp` parses JSON bodies up to 50 MB, so one answer fits about three 10 MB files. For more,
+use uploads, or lower the per-file cap with `asks: {maxFileSizeBytes: 5_000_000}`.
+
+### With GCS
+
+1. Create the storage service and pass it to both the file routes and the chat. With `AiApp`,
+   set both options and it does this for you:
+
+   ```typescript
+   const fileStorageService = new FileStorageService({bucketName: process.env.GCS_BUCKET});
+
+   new AiApp({aiService, asks: true, fileStorageService, gcsBucket: process.env.GCS_BUCKET});
+   ```
+
+   With the route functions, pass the same service to `addFileRoutes` and, as
+   `fileStorageService`, to the chat options you give `addGptRoutes` and `addGptHistoryRoutes`.
+   Without it, the chat cannot read uploads, and every `fileId` fails with `FILE_NOT_OWNED`.
+2. Pass `GPTChat` a resolver that uploads each file and returns its id. The example app's
+   `createAskFilesResolver` in `example-frontend/lib/gptAsks.ts` does this, and falls back to data
+   URLs when `/files/upload` answers 404, so the same app works with and without a bucket:
+
+   ```tsx
+   const resolveAskFiles = useMemo(
+     () => createAskFilesResolver({upload: uploadAskFile}),
+     []
+   );
+
+   <GPTChat resolveAskFiles={resolveAskFiles} {...chatProps} />;
+   ```
+
+   `uploadAskFile` posts the file as multipart form data to `/files/upload` with the session
+   token, returns `undefined` on 404, and returns `uploadedFileFromBody(body)` (the upload's `id`
+   and `size`) otherwise. See `example-frontend/app/(tabs)/ai.tsx`.
+
+A resolver that throws keeps the ask open, and the card says the files could not be sent. A
+`fileId` must name an upload of the user who answers, so one user cannot send another's files.
 
 ## 1. Enable asks on the backend
 
@@ -464,8 +528,8 @@ The watch sends `surface: "compact"` on every turn, answers included:
 
 - **Every ask fits the watch.** On a compact turn the agent can ask only a `choice` with 2–3
   options whose labels fit a button uncut and differ from each other, or a `confirm`. Its card
-  has `handoff: false`, so the user can answer it from the watch. `markdown` and `form` are never
-  offered.
+  has `handoff: false`, so the user can answer it from the watch. `markdown`, `form`, and `files`
+  are never offered.
 - **Replies fit the screen.** The system prompt asks for at most two short sentences.
 - **The surface covers one turn.** The server does not store it. An answer starts a turn that can
   end in a new ask, so the answer sends `compact` too. The phone's chat sends no `surface`, so its
@@ -475,7 +539,8 @@ The watch sends `surface: "compact"` on every turn, answers included:
 Show the buttons such a card has, such as `Use "Team"` and Skip, with its "Continue on your phone"
 line. A `markdown` card offers "Approve draft" and Cancel; say "Edit on your phone" for it. A
 `form` card offers "Submit defaults", when every required field has a default, and Cancel; say
-"Fill it in on your phone" for it.
+"Fill it in on your phone" for it. A `files` card offers only Skip, when the ask allows it; say
+"Upload on your phone" for it.
 
 ### 5. Show the card in SwiftUI
 
@@ -563,9 +628,10 @@ in `@terreno/ui` draws the same card in React Native ([props](../reference/ui.md
 
 | Test | Covers |
 | --- | --- |
-| `example-frontend/e2e/ai-chat.spec.ts` | Against a mocked stream: a quick-reply answer, a radio answer after a rejected one, an answer another tab sent first, a turn that streams only `{done}`, a message that goes through after another tab answered the ask, and an ask on a new chat answered before `{done}` |
-| `example-frontend/lib/gptAsks.test.ts` | Stream events and saved rows mapped to messages, image-only replies kept, and the conversation an answer goes to |
-| `example-backend/src/api/demoAgent.test.ts` | The demo agent's ask, answers, and replies on both surfaces, a plan ask answered over HTTP with a button of its simple card, and an announcement draft edited in chat and approved as is with its card's Approve draft button |
+| `example-frontend/e2e/ai-chat.spec.ts` | Against a mocked stream: a quick-reply answer, a radio answer after a rejected one, an answer another tab sent first, a turn that streams only `{done}`, a message that goes through after another tab answered the ask, an ask on a new chat answered before `{done}`, and a receipt sent as data URLs after a rejected answer and as uploads |
+| `example-frontend/lib/gptAsks.test.ts` | Stream events and saved rows mapped to messages, image-only replies kept, the conversation an answer goes to, and the upload resolver with its data URL fallback |
+| `example-backend/src/api/demoAgent.test.ts` | The demo agent's ask, answers, and replies on both surfaces, a plan ask answered over HTTP with a button of its simple card, an announcement draft edited in chat and approved as is with its card's Approve draft button, and a receipt upload rejected for a wrong file and then named file by file |
+| `ai/src/routes/gptFiles.test.ts` | `ask_files` answers with data URLs and with uploads: the bytes the model gets, the metadata-only stored answer, and each error code |
 | `ui/src/GPTChat.test.tsx`, `ui/src/asks/AskCard.test.tsx` | Rendering, focus, answers, errors, and summaries |
 | `ai/src/routes/gptHistories.test.ts`, `ai/src/aiApp.test.ts` | `turn` and `pendingAsks`: a pressed button, a full answer, a prompt that cancels the ask, a failed turn, a stream that fails mid-reply, a client that disconnects, the 400, 403, 404, and 409 responses, response bodies that match the published JSON Schemas, and neither endpoint when asks are off |
 | `ai/src/routes/gpt.test.ts` (compact surface) | A compact turn offers only the narrowed `ask_choice` and adds the compact line to the system prompt |

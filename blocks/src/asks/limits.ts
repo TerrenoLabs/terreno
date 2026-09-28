@@ -18,6 +18,15 @@ export const ASK_LIMITS = {
     /** Every confirm label fits a simple card button uncut. */
     labelMaxLength: 20,
   },
+  files: {
+    /** The per-file cap when the host sets no `maxFileSizeBytes`, matching `/files/upload`. */
+    defaultMaxFileSizeBytes: 10 * 1024 * 1024,
+    filenameMaxLength: 255,
+    maxFiles: 10,
+    minFiles: 1,
+    /** Text, CSV, and JSON files reach the model cut to this many bytes, with a note. */
+    textMaxBytes: 100_000,
+  },
   form: {
     fieldsMax: 8,
     fieldsMin: 1,

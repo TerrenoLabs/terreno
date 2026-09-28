@@ -74,6 +74,7 @@ const spinnerCount = (element: {
 const BUTTON_TEST_ID = /^simple-ask-card-button-/;
 
 const HANDOFF_TEXT: Partial<Record<SimpleCard["kind"], string>> = {
+  files: "Upload on your phone",
   form: "Fill it in on your phone",
   markdown: "Edit on your phone",
 };
@@ -190,6 +191,20 @@ describe("SimpleAskCard", () => {
     });
     await press(getByTestId("simple-ask-card-button-cancel"));
     assert.deepEqual(onPress.mock.calls[1]?.[0]?.response, {action: "decline"});
+  });
+
+  it("tells the user to upload files on their phone, next to Skip", async () => {
+    const card = fixtureCard("files-receipt-photos");
+    const onPress = mock((_button: SimpleCardButton) => {});
+    const {getByTestId, queryAllByTestId} = renderCard({card, onPress});
+
+    assert.isOk(within(getByTestId("simple-ask-card-handoff")).getByText("Upload on your phone"));
+    assert.deepEqual(
+      queryAllByTestId(BUTTON_TEST_ID).map((element) => element.props.testID),
+      ["simple-ask-card-button-skip"]
+    );
+    await press(getByTestId("simple-ask-card-button-skip"));
+    assert.deepEqual(onPress.mock.calls[0]?.[0]?.response, {action: "decline"});
   });
 
   it("keeps the handoff card's buttons next to the continue-on-phone line", async () => {

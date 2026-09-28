@@ -1,0 +1,13 @@
+{
+  "kind": "files",
+  "input": {
+    "prompt": "Upload the receipt.",
+    "accept": []
+  },
+  "errors": [
+    {
+      "path": "accept",
+      "code": "TOO_FEW"
+    }
+  ]
+}

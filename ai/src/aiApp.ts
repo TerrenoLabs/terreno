@@ -95,12 +95,14 @@ export class AiApp implements TerrenoPlugin {
       tools,
     } = this.options;
 
+    const hasFileRoutes = Boolean(fileStorageService && gcsBucket);
     const chat = {
       aiService,
       asks,
       createModelFn,
       createServerModelFn,
       demoMode,
+      ...(hasFileRoutes ? {fileStorageService} : {}),
       maxSteps,
       mcpService,
       openApiOptions,
@@ -117,6 +119,9 @@ export class AiApp implements TerrenoPlugin {
       addFileRoutes(router, {
         fileStorageService,
         gcsBucket,
+        ...(typeof asks === "object" && asks.maxFileSizeBytes !== undefined
+          ? {maxFileSize: asks.maxFileSizeBytes}
+          : {}),
         openApiOptions,
       });
     }

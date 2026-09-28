@@ -103,9 +103,22 @@ const formRules = (): string => {
   ].join("\n");
 };
 
+const filesRules = (): string => {
+  const {files} = ASK_LIMITS;
+  return [
+    "ask_files: the user uploads one or more images or documents.",
+    '- accept: required list, each value once: "image" (JPEG, PNG, GIF, or WebP), "pdf", "text" (plain text), "csv", or "json".',
+    `- minFiles, maxFiles: optional whole numbers from ${files.minFiles} to ${files.maxFiles}. The user sends from minFiles (default ${files.minFiles}) to maxFiles (default ${files.maxFiles}) files.`,
+    `- submitLabel: optional label for the submit button, at most ${ASK_LIMITS.submitLabelMaxLength} characters.`,
+    "- allowDecline: optional, default true (the user sees Skip).",
+    `- The answer lists each file's filename, mimeType, and size, and the tool result then shows you each file: images and PDFs as they are, and text, CSV, and JSON as text cut to ${files.textMaxBytes} bytes.`,
+  ].join("\n");
+};
+
 const KIND_RULES: Record<AskKind, () => string> = {
   choice: choiceRules,
   confirm: confirmRules,
+  files: filesRules,
   form: formRules,
   markdown: markdownRules,
 };

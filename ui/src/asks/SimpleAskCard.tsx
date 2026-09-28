@@ -12,6 +12,7 @@ const DEFAULT_HANDOFF_TEXT = "Continue on your phone";
 
 /** A handoff line that names what the phone is for, where the card's kind says so. */
 const HANDOFF_TEXT_BY_KIND: Partial<Record<AskKind, string>> = {
+  files: "Upload on your phone",
   form: "Fill it in on your phone",
   markdown: "Edit on your phone",
 };
@@ -33,7 +34,8 @@ export interface SimpleAskCardProps {
  * Any ask as a small-screen card: its title, its question, and up to three buttons that each send an
  * exact answer. For watch-sized and other narrow layouts; it renders every kind the same way. A
  * `handoff` card cannot offer every answer, so it tells the user to continue on their phone ("Edit
- * on your phone" for a `markdown` card, "Fill it in on your phone" for a `form` card).
+ * on your phone" for a `markdown` card, "Fill it in on your phone" for a `form` card, "Upload on your
+ * phone" for a `files` card).
  */
 export const SimpleAskCard: React.FC<SimpleAskCardProps> = ({
   card,

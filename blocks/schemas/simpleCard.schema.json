@@ -105,7 +105,8 @@
         "choice",
         "confirm",
         "markdown",
-        "form"
+        "form",
+        "files"
       ]
     },
     "text": {

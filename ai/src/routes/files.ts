@@ -49,6 +49,7 @@ export const addFileRoutes = (
         .withResponse(200, {
           filename: {type: "string"},
           gcsKey: {type: "string"},
+          id: {type: "string"},
           mimeType: {type: "string"},
           size: {type: "number"},
           url: {type: "string"},

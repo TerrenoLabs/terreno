@@ -22,9 +22,13 @@ import confirmDefaultLabels from "@terreno/blocks/fixtures/valid/confirm-default
 import confirmDestructiveDelete from "@terreno/blocks/fixtures/valid/confirm-destructive-delete.json";
 import confirmEmojiLabels from "@terreno/blocks/fixtures/valid/confirm-emoji-labels.json";
 import confirmLongTextCut from "@terreno/blocks/fixtures/valid/confirm-long-text-cut.json";
+import filesEveryType from "@terreno/blocks/fixtures/valid/files-every-type.json";
+import filesOneCsvNoDecline from "@terreno/blocks/fixtures/valid/files-one-csv-no-decline.json";
+import filesReceiptPhotos from "@terreno/blocks/fixtures/valid/files-receipt-photos.json";
 import formBooleanNewsletter from "@terreno/blocks/fixtures/valid/form-boolean-newsletter.json";
 import formDateDue from "@terreno/blocks/fixtures/valid/form-date-due.json";
 import formDatetimeMeeting from "@terreno/blocks/fixtures/valid/form-datetime-meeting.json";
+import formDatetimeMinutesOffset from "@terreno/blocks/fixtures/valid/form-datetime-minutes-offset.json";
 import formEightFields from "@terreno/blocks/fixtures/valid/form-eight-fields.json";
 import formEmailContact from "@terreno/blocks/fixtures/valid/form-email-contact.json";
 import formInvoiceDetails from "@terreno/blocks/fixtures/valid/form-invoice-details.json";
@@ -81,9 +85,13 @@ const FIXTURES: Record<string, {simple: unknown}> = {
   "confirm-destructive-delete": confirmDestructiveDelete,
   "confirm-emoji-labels": confirmEmojiLabels,
   "confirm-long-text-cut": confirmLongTextCut,
+  "files-every-type": filesEveryType,
+  "files-one-csv-no-decline": filesOneCsvNoDecline,
+  "files-receipt-photos": filesReceiptPhotos,
   "form-boolean-newsletter": formBooleanNewsletter,
   "form-date-due": formDateDue,
   "form-datetime-meeting": formDatetimeMeeting,
+  "form-datetime-minutes-offset": formDatetimeMinutesOffset,
   "form-eight-fields": formEightFields,
   "form-email-contact": formEmailContact,
   "form-invoice-details": formInvoiceDetails,

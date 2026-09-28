@@ -11,6 +11,7 @@ import {
   type ChoiceOption,
   type ConfirmAskInput,
   confirmButtonLabels,
+  type FilesAskInput,
   type FormAskInput,
   type MarkdownAskInput,
   visibleLabel,
@@ -40,8 +41,9 @@ export type SimpleCardButton = z.infer<typeof simpleCardButtonSchema>;
  * The small-screen form of an ask: short text and at most three buttons, each carrying the exact
  * answer it sends. `handoff` is true when the buttons cannot show every option the ask offers, so
  * the user needs the full app to answer; a select-many ask always hands off, because one tap cannot
- * pick several, and so do a markdown ask, because a draft cannot be edited there, and a form ask,
- * because fields cannot be filled in there. A card with a button for every option has
+ * pick several, and so do a markdown ask, because a draft cannot be edited there, a form ask,
+ * because fields cannot be filled in there, and a files ask, because files cannot be picked there.
+ * A card with a button for every option has
  * `handoff: false` even when Skip is left out to make room.
  */
 export const simpleCardSchema = z
@@ -269,6 +271,12 @@ const formCard = (input: FormAskInput): Pick<SimpleCard, "buttons" | "handoff"> 
   return {buttons: [...submitButtons, ...cancelButtons], handoff: true};
 };
 
+/** Files cannot be picked on a small screen, so the card always hands off. Skip declines. */
+const filesCard = (input: FilesAskInput): Pick<SimpleCard, "buttons" | "handoff"> => ({
+  buttons: input.allowDecline === false ? [] : [SKIP_BUTTON],
+  handoff: true,
+});
+
 const kindCard = (ask: Ask): Pick<SimpleCard, "buttons" | "handoff"> => {
   switch (ask.kind) {
     case "choice":
@@ -279,6 +287,8 @@ const kindCard = (ask: Ask): Pick<SimpleCard, "buttons" | "handoff"> => {
       return markdownCard(ask.input);
     case "form":
       return formCard(ask.input);
+    case "files":
+      return filesCard(ask.input);
   }
 };
 

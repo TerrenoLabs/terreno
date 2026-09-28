@@ -34,6 +34,7 @@ describe("File Routes", () => {
         async (params: UploadFileParams): Promise<UploadFileResult> => ({
           filename: params.filename,
           gcsKey: `uploads/${params.userId.toString()}/${params.filename}`,
+          id: "6710c2a4f1c0de0000000001",
           mimeType: params.mimeType,
           size: params.buffer.length,
           url: `https://example.com/${params.filename}`,

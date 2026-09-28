@@ -2188,10 +2188,16 @@ describe("/gpt/prompt asks", () => {
       const system = systemPromptOf(call) as string;
       expect(
         system.startsWith(
-          `Answer in one sentence.\n\n${TERRENO_ASKS_SYSTEM_PROMPT}\n\nAsk tools you can call: ask_choice, ask_confirm, ask_markdown, ask_form.`
+          `Answer in one sentence.\n\n${TERRENO_ASKS_SYSTEM_PROMPT}\n\nAsk tools you can call: ask_choice, ask_confirm, ask_markdown, ask_form, ask_files.`
         )
       ).toBe(true);
-      expect(toolNamesOf(call)).toEqual(["ask_choice", "ask_confirm", "ask_markdown", "ask_form"]);
+      expect(toolNamesOf(call)).toEqual([
+        "ask_choice",
+        "ask_confirm",
+        "ask_markdown",
+        "ask_form",
+        "ask_files",
+      ]);
       const askChoice = call.tools?.[0];
       expect(askChoice?.description).toBe(
         "Ask the user to pick one or more options from a list you provide, optionally with an " +
@@ -2268,6 +2274,7 @@ describe("/gpt/prompt asks", () => {
         "ask_confirm",
         "ask_markdown",
         "ask_form",
+        "ask_files",
       ]);
       expect(call.tools?.[1]?.description).toStartWith("Ask the user to pick one or more options");
     });
@@ -2556,7 +2563,7 @@ describe("/gpt/prompt asks", () => {
     it("rejects unknown ask kinds", () => {
       expect(() => addGptRoutes(express.Router(), {asks: {kinds: ["poll" as "choice"]}})).toThrow(
         expect.objectContaining({
-          detail: "Unknown ask kinds: poll. Known kinds: choice, confirm, markdown, form.",
+          detail: "Unknown ask kinds: poll. Known kinds: choice, confirm, markdown, form, files.",
           message: "The asks option lists unknown ask kinds",
         })
       );

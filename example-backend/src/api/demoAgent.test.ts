@@ -21,11 +21,19 @@ import {User as UserModel} from "../models/user";
 import type {UserDocument} from "../types/models/userTypes";
 import {createDemoAgentModel, createDemoAgentService, DEMO_AGENT_MODEL_ID} from "./demoAgent";
 
-const ASK_TOOLS = createAskTools({kinds: ["choice", "confirm", "markdown", "form"]});
+const ASK_TOOLS = createAskTools({kinds: ["choice", "confirm", "markdown", "form", "files"]});
 const COMPACT_ASK_TOOLS = createAskTools({
-  kinds: ["choice", "confirm", "markdown", "form"],
+  kinds: ["choice", "confirm", "markdown", "form", "files"],
   surface: "compact",
 });
+
+const PNG_BYTES = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+]);
+const RECEIPT_CSV = "date,item,amount\n2026-09-01,Coffee,4.50\n2026-09-01,Bagel,3.25\n";
+
+const dataUrl = (mimeType: string, bytes: Buffer): string =>
+  `data:${mimeType};base64,${bytes.toString("base64")}`;
 
 const INVOICE_DEFAULTS = {
   company: "Acme Corp",
@@ -57,10 +65,22 @@ const askFor = async (prompt: string, surface: SurfaceOptions = {}) => {
   return {text: await result.text, toolCalls: await result.toolCalls};
 };
 
+type ToolResultOutput = Extract<
+  Extract<ModelMessage, {role: "tool"}>["content"][number],
+  {type: "tool-result"}
+>["output"];
+
 const replyTo = async (
   response: Record<string, unknown>,
   surface: SurfaceOptions = {},
   userPrompt = "Help me pick a plan"
+): Promise<string> =>
+  replyWithOutput({type: "json", value: response as never}, surface, userPrompt);
+
+const replyWithOutput = async (
+  output: ToolResultOutput,
+  surface: SurfaceOptions,
+  userPrompt: string
 ): Promise<string> => {
   const {toolCalls} = await askFor(userPrompt, surface);
   const [call] = toolCalls;
@@ -83,7 +103,7 @@ const replyTo = async (
     {
       content: [
         {
-          output: {type: "json", value: response as never},
+          output,
           toolCallId: call.toolCallId,
           toolName: call.toolName,
           type: "tool-result",
@@ -233,6 +253,7 @@ describe("demo agent", () => {
     expect(text).toContain('"archive old chats"');
     expect(text).toContain('"draft an announcement"');
     expect(text).toContain('"invoice details"');
+    expect(text).toContain('"upload a receipt"');
     expect(text).toContain("GEMINI_API_KEY");
   });
 
@@ -372,6 +393,96 @@ describe("demo agent", () => {
     expect(await titleFor("User: Fill out a form\nAssistant: OK.")).toBe(
       "Filling in invoice details"
     );
+  });
+
+  it.each(["Upload a receipt", "Can I upload my receipts?", "Upload a file", "upload some photos"])(
+    "asks the user to upload a receipt for %p",
+    async (prompt) => {
+      const {text, toolCalls} = await askFor(prompt);
+
+      expect(text).toBe("");
+      expect(toolCalls).toHaveLength(1);
+      const [call] = toolCalls;
+      expect(call?.toolName).toBe("ask_files");
+      expect(call?.invalid).toBeFalsy();
+      expect(call?.toolCallId).toStartWith("demo_receipt_");
+      expect(call?.input).toEqual({
+        accept: ["image", "pdf", "text", "csv"],
+        maxFiles: 3,
+        prompt:
+          "Upload the receipt for your expense report: a photo, a PDF, or a text or CSV export.",
+        submitLabel: "Send receipt",
+        title: "Upload a receipt",
+      });
+    }
+  );
+
+  it("names each sent file with its type and size, and quotes the first line of a text file", async () => {
+    const stored = {
+      action: "accept",
+      content: {
+        files: [
+          {filename: "receipt.png", mimeType: "image/png", size: 16},
+          {filename: "items.csv", mimeType: "text/csv", size: 1234},
+          {filename: "note.txt", mimeType: "text/plain", size: 1},
+        ],
+      },
+    };
+    const text = await replyWithOutput(
+      {
+        type: "content",
+        value: [
+          {text: JSON.stringify(stored), type: "text"},
+          {text: "File 1 of 3: receipt.png (image/png, 16 bytes)", type: "text"},
+          {data: PNG_BYTES.toString("base64"), mediaType: "image/png", type: "image-data"},
+          {text: "File 2 of 3: items.csv (text/csv, 1234 bytes)", type: "text"},
+          {text: RECEIPT_CSV, type: "text"},
+          {text: "[The file is cut to its first 40 of 1234 bytes.]", type: "text"},
+          {text: "File 3 of 3: note.txt (text/plain, 1 bytes)", type: "text"},
+          {text: "File 1 of 9: not a header, just the note's text", type: "text"},
+        ],
+      },
+      {},
+      "Upload a receipt"
+    );
+
+    expect(text).toBe(
+      [
+        "You sent 3 files:",
+        "",
+        "- **receipt.png**: PNG image, 16 bytes",
+        '- **items.csv**: CSV file, 1,234 bytes. First line: "date,item,amount"',
+        '- **note.txt**: text file, 1 byte. First line: "File 1 of 9: not a header, just the note\'s text"',
+        "",
+        'A real agent would add them to your expense report now. Say "upload a receipt" to try another answer.',
+      ].join("\n")
+    );
+  });
+
+  it.each([
+    {
+      expected: 'No problem, I did not file a receipt. Say "upload a receipt" when you have one.',
+      response: {action: "decline"},
+    },
+    {
+      expected: "The receipt question was cancelled, so I did not file a receipt.",
+      response: {action: "cancel", reason: "user_sent_message"},
+    },
+  ])("replies to the receipt answer $response", async ({expected, response}) => {
+    expect(await replyTo(response, {}, "Upload a receipt")).toBe(expected);
+  });
+
+  it.each(["I uploaded the slides yesterday. What should I do next?", "Where do uploads go?"])(
+    "does not ask for files when %p only mentions uploading",
+    async (prompt) => {
+      const {toolCalls} = await askFor(prompt);
+
+      expect(toolCalls.map((call) => call.toolName)).not.toContain("ask_files");
+    }
+  );
+
+  it("titles a receipt conversation from the user's message", async () => {
+    expect(await titleFor("User: Upload a receipt\nAssistant: OK.")).toBe("Uploading a receipt");
   });
 
   it("says asks are off when the route offers no ask tool", async () => {
@@ -574,6 +685,15 @@ describe("demo agent on the compact surface", () => {
     expect(toolCalls).toHaveLength(0);
     expect(text).toBe(
       'Filling in a form needs a bigger screen. Open the chat on your phone and say "invoice details".'
+    );
+  });
+
+  it("sends the receipt upload as text, since the compact surface has no files ask", async () => {
+    const {text, toolCalls} = await askFor("Upload a receipt", {isCompact: true});
+
+    expect(toolCalls).toHaveLength(0);
+    expect(text).toBe(
+      'Uploading a receipt needs a bigger screen. Open the chat on your phone and say "upload a receipt".'
     );
   });
 
@@ -1107,6 +1227,127 @@ describe("demo agent through the chat routes", () => {
       (row) => row.toolCallId === pending?.toolCallId && row.type === "tool-result"
     );
     expect(resultRow?.result).toEqual({action: "accept", content: {values: INVOICE_DEFAULTS}});
+  });
+
+  it("pauses on the receipt upload, rejects a wrong file, and names the files it received", async () => {
+    const auth = {Authorization: `Bearer ${await signIn()}`};
+
+    const asked = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({prompt: "Upload a receipt"});
+    expect(asked.status).toBe(200);
+    const askedEvents = parseEvents(asked.text);
+    const ask = askedEvents.find((event) => "ask" in event)?.ask as {
+      kind: string;
+      simple: {buttons: {id: string}[]; handoff: boolean};
+      toolCallId: string;
+    };
+    expect(ask.kind).toBe("files");
+    expect(ask.simple.handoff).toBe(true);
+    expect(ask.simple.buttons.map((button) => button.id)).toEqual(["skip"]);
+    const {historyId} = askedEvents.at(-1) as {historyId: string};
+
+    const answer = async (files: Record<string, unknown>[]) =>
+      supertest(app)
+        .post("/gpt/prompt")
+        .set(auth)
+        .send({
+          askResponse: {action: "accept", content: {files}, toolCallId: ask.toolCallId},
+          historyId,
+        });
+
+    const notAccepted = await answer([
+      {
+        filename: "items.json",
+        mimeType: "application/json",
+        size: 2,
+        url: dataUrl("application/json", Buffer.from("{}")),
+      },
+    ]);
+    expect(notAccepted.status).toBe(400);
+    expect(notAccepted.body.fields.map((field: {code: string}) => field.code)).toEqual([
+      "FILE_TYPE_NOT_ACCEPTED",
+    ]);
+
+    const mismatched = await answer([
+      {
+        filename: "receipt.jpg",
+        mimeType: "image/jpeg",
+        size: PNG_BYTES.length,
+        url: dataUrl("image/jpeg", PNG_BYTES),
+      },
+    ]);
+    expect(mismatched.status).toBe(400);
+    expect(mismatched.body.fields.map((field: {code: string}) => field.code)).toEqual([
+      "MIME_MISMATCH",
+    ]);
+
+    const csvBytes = Buffer.from(RECEIPT_CSV);
+    const answered = await answer([
+      {
+        filename: "receipt.png",
+        mimeType: "image/png",
+        size: PNG_BYTES.length,
+        url: dataUrl("image/png", PNG_BYTES),
+      },
+      {
+        filename: "items.csv",
+        mimeType: "text/csv",
+        size: csvBytes.length,
+        url: dataUrl("text/csv", csvBytes),
+      },
+    ]);
+    expect(answered.status).toBe(200);
+    const answeredEvents = parseEvents(answered.text);
+    const text = answeredEvents
+      .map((event) => (typeof event.text === "string" ? event.text : ""))
+      .join("");
+    expect(text).toContain("You sent 2 files:");
+    expect(text).toContain(`- **receipt.png**: PNG image, ${PNG_BYTES.length} bytes`);
+    expect(text).toContain(
+      `- **items.csv**: CSV file, ${csvBytes.length} bytes. First line: "date,item,amount"`
+    );
+    expect(answeredEvents.at(-1)).toEqual({done: true, historyId, title: "Uploading a receipt"});
+
+    const history = await GptHistory.findById(historyId).lean();
+    const resultRow = history?.prompts.find(
+      (row) => row.toolCallId === ask.toolCallId && row.type === "tool-result"
+    );
+    expect(resultRow?.result).toEqual({
+      action: "accept",
+      content: {
+        files: [
+          {filename: "receipt.png", mimeType: "image/png", size: PNG_BYTES.length},
+          {filename: "items.csv", mimeType: "text/csv", size: csvBytes.length},
+        ],
+      },
+    });
+  });
+
+  it("skips the receipt upload from a small screen with the card's Skip button", async () => {
+    const auth = {Authorization: `Bearer ${await signIn()}`};
+
+    const asked = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({prompt: "Upload a receipt"});
+    const {historyId} = parseEvents(asked.text).at(-1) as {historyId: string};
+
+    const listed = await supertest(app).get("/gpt/histories/pendingAsks").set(auth);
+    const [pending] = listed.body.data as {kind: string; toolCallId: string}[];
+    expect(pending?.kind).toBe("files");
+
+    const answered = await supertest(app)
+      .post(`/gpt/histories/${historyId}/turn`)
+      .set(auth)
+      .send({buttonId: "skip", surface: "compact", toolCallId: pending?.toolCallId});
+    expect(answered.status).toBe(200);
+    expect(answered.body.data).toEqual({
+      historyId,
+      text: "OK, no receipt for now.",
+      title: "Uploading a receipt",
+    });
   });
 
   it("answers other messages with the demo agent's help", async () => {

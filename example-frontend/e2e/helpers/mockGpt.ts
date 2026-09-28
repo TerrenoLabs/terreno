@@ -66,7 +66,7 @@ export const mockGptTurns = async (
 /** The `{ask}` event payload, as the server streams it. */
 export interface MockAsk {
   input: Record<string, unknown>;
-  kind: "choice";
+  kind: "choice" | "files";
   simple?: Record<string, unknown>;
   toolCallId: string;
 }
@@ -291,6 +291,32 @@ export const mockGptAskStream = async (
     },
     requests,
   };
+};
+
+/**
+ * Mocks POST /files/upload. Without `uploads` it answers 404, as a server without file storage
+ * does; with it, each upload returns the next id. Returns the uploaded filenames, in order.
+ */
+export const mockFileUploads = async (
+  page: Page,
+  {uploads}: {uploads?: Array<{id: string; size: number}>} = {}
+): Promise<string[]> => {
+  const filenames: string[] = [];
+  await page.route(`${API_URL}/files/upload`, (route) => {
+    const filename = /filename="([^"]+)"/.exec(route.request().postData() ?? "")?.[1] ?? "";
+    const upload = uploads?.[filenames.length];
+    filenames.push(filename);
+    if (!upload) {
+      return route.fulfill({body: "Not Found", status: 404});
+    }
+    const {id, size} = upload;
+    return route.fulfill({
+      body: JSON.stringify({data: {filename, gcsKey: `uploads/${id}`, id, size}}),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+  return filenames;
 };
 
 export const unmockGptStream = async (page: Page): Promise<void> => {

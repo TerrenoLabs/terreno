@@ -1,9 +1,19 @@
-import type {AskSubmission, ChatAsk, GPTChatMessage, GPTChatProps} from "@terreno/ui";
+import {
+  type AskFilesResolver,
+  type AskSubmission,
+  type ChatAsk,
+  type GPTChatMessage,
+  type GPTChatProps,
+  normalizeMimeType,
+  resolveAskFilesAsDataUrls,
+  type SelectedFile,
+} from "@terreno/ui";
 
 import type {GptHistory} from "@/store/sdk";
 
 type AskResponse = AskSubmission["response"];
 type AskFieldErrors = NonNullable<GPTChatProps["askErrors"]>[string];
+type AskFileRef = Awaited<ReturnType<AskFilesResolver>>[number];
 type HistoryPrompt = GptHistory["prompts"][number];
 
 /** The `{ask}` event the server streams when the model asks the user a question. */
@@ -164,6 +174,62 @@ export const askErrorsFromBody = (body: unknown): AskFieldErrors | undefined => 
     return undefined;
   }
   return body.fields as AskFieldErrors;
+};
+
+/** The part of a POST /files/upload response that a `files` answer needs. */
+export interface UploadedAskFile {
+  id: string;
+  size: number;
+}
+
+/**
+ * Uploads one picked file to POST /files/upload. Resolves undefined when the server answers 404,
+ * which means it has no file storage (no GCS bucket) and so no file routes.
+ */
+export type AskFileUploader = (file: SelectedFile) => Promise<UploadedAskFile | undefined>;
+
+/** The `data` of a POST /files/upload response, or undefined when it has no id or size. */
+export const uploadedFileFromBody = (body: unknown): UploadedAskFile | undefined => {
+  const data = isRecord(body) ? body.data : undefined;
+  if (!isRecord(data) || typeof data.id !== "string" || typeof data.size !== "number") {
+    return undefined;
+  }
+  return {id: data.id, size: data.size};
+};
+
+/**
+ * The example app's `resolveAskFiles`: it uploads each picked file and answers with `{fileId}`
+ * refs, so the conversation stores only ids. When the server has no file routes it sends every
+ * file as a data URL instead, and skips the upload attempt from then on.
+ */
+export const createAskFilesResolver = ({
+  toDataUrlRefs = resolveAskFilesAsDataUrls,
+  upload,
+}: {
+  toDataUrlRefs?: AskFilesResolver;
+  upload: AskFileUploader;
+}): AskFilesResolver => {
+  let hasFileRoutes = true;
+  return async (files) => {
+    if (!hasFileRoutes) {
+      return toDataUrlRefs(files);
+    }
+    const refs: AskFileRef[] = [];
+    for (const file of files) {
+      const uploaded = await upload(file);
+      if (!uploaded) {
+        hasFileRoutes = false;
+        return toDataUrlRefs(files);
+      }
+      refs.push({
+        fileId: uploaded.id,
+        filename: file.name,
+        mimeType: normalizeMimeType(file.mimeType),
+        size: uploaded.size,
+      });
+    }
+    return refs;
+  };
 };
 
 /** The message of a JSON error response: its `detail`, or its `title` without one. */

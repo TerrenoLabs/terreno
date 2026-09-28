@@ -1,10 +1,11 @@
 import {z} from "zod";
 import {askIssue, formatAskPath, quoteValue} from "./errors";
+import {ASK_FILE_ACCEPT, type AskFileAccept, parseAskDataUrl} from "./files";
 import {checkFormValue, formTextMaxLength} from "./formValues";
 import {ASK_LIMITS} from "./limits";
 
 /** Ask kinds in the catalog. Each kind is offered to the model as the tool `ask_<kind>`. */
-export const ASK_KINDS = ["choice", "confirm", "markdown", "form"] as const;
+export const ASK_KINDS = ["choice", "confirm", "markdown", "form", "files"] as const;
 
 export type AskKind = (typeof ASK_KINDS)[number];
 
@@ -869,6 +870,141 @@ export const formAnswerSchema = z
 
 export type FormAnswer = z.infer<typeof formAnswerSchema>;
 
+/** The fields of a `files` input that its count rules read. */
+interface FilesRuleInput {
+  accept: AskFileAccept[];
+  maxFiles?: number;
+  minFiles?: number;
+}
+
+/** How many files an answer to a `files` ask must carry: 1 to 10 unless the ask narrows it. */
+export const filesCountBounds = (input: FilesRuleInput): {max: number; min: number} => ({
+  max: input.maxFiles ?? ASK_LIMITS.files.maxFiles,
+  min: input.minFiles ?? ASK_LIMITS.files.minFiles,
+});
+
+const checkFilesInput = (input: FilesRuleInput, ctx: z.RefinementCtx): void => {
+  checkDuplicateIds({
+    ctx,
+    fix: "List each accept value once.",
+    ids: input.accept,
+    message: (value, firstIndex) =>
+      `${quoteValue(value)} is already listed at ${formatAskPath(["accept", firstIndex])}.`,
+    segments: (index) => ["accept", index],
+  });
+  const {max, min} = filesCountBounds(input);
+  if (min <= max) {
+    return;
+  }
+  const limit =
+    input.maxFiles === undefined ? `the ${max}-file cap` : `maxFiles (${input.maxFiles})`;
+  ctx.addIssue(
+    askIssue({
+      code: "RANGE_INVALID",
+      fix: "Lower minFiles, or raise maxFiles.",
+      message: `minFiles (${min}) is more than ${limit}.`,
+      segments: ["minFiles"],
+    })
+  );
+};
+
+const fileCountField = (description: string) =>
+  z
+    .number()
+    .int()
+    .min(ASK_LIMITS.files.minFiles)
+    .max(ASK_LIMITS.files.maxFiles)
+    .optional()
+    .describe(description);
+
+/** Input for `ask_files`: the user uploads one or more images or documents. */
+export const filesAskInputSchema = z
+  .object({
+    ...sharedAskFields,
+    accept: z
+      .array(z.enum(ASK_FILE_ACCEPT))
+      .min(1)
+      .max(ASK_FILE_ACCEPT.length)
+      .describe(
+        'The kinds of file the user may send, each listed once: "image" (JPEG, PNG, GIF, WebP), "pdf", "text" (plain text), "csv", or "json".'
+      ),
+    maxFiles: fileCountField(
+      `The most files the user may send: ${ASK_LIMITS.files.minFiles}-${ASK_LIMITS.files.maxFiles}. Defaults to ${ASK_LIMITS.files.maxFiles}.`
+    ),
+    minFiles: fileCountField(
+      `The fewest files the user must send: ${ASK_LIMITS.files.minFiles}-${ASK_LIMITS.files.maxFiles}. Defaults to ${ASK_LIMITS.files.minFiles}.`
+    ),
+  })
+  .strict()
+  .superRefine(checkFilesInput);
+
+export type FilesAskInput = z.infer<typeof filesAskInputSchema>;
+
+/**
+ * Exactly one of `fileId` and `url` names the bytes. A `url` must be a base64 `data:` URL whose
+ * media type is the declared `mimeType`, so the server never fetches a remote URL.
+ */
+const checkFileRef = (ref: {fileId?: string; url?: string}, ctx: z.RefinementCtx): void => {
+  if (ref.fileId === undefined && ref.url === undefined) {
+    ctx.addIssue(
+      askIssue({
+        code: "MISSING_REQUIRED",
+        fix: 'Add "fileId" (an upload from POST /files/upload) or "url" (a base64 data: URL).',
+        message: "A file needs a fileId or a url.",
+        segments: [],
+      })
+    );
+    return;
+  }
+  if (ref.fileId !== undefined && ref.url !== undefined) {
+    ctx.addIssue(
+      askIssue({
+        code: "INVALID_FORMAT",
+        fix: "Send fileId or url, not both.",
+        message: "A file has both a fileId and a url.",
+        segments: ["url"],
+      })
+    );
+    return;
+  }
+  if (ref.url !== undefined && parseAskDataUrl(ref.url) === undefined) {
+    ctx.addIssue(
+      askIssue({
+        code: "INVALID_FORMAT",
+        fix: 'Send the bytes as a base64 data: URL, such as "data:image/png;base64,...".',
+        message: "url is not a base64 data: URL.",
+        segments: ["url"],
+      })
+    );
+  }
+};
+
+/** One file in an accepted `files` answer: an upload (`fileId`) or inline bytes (`url`). */
+export const askFileRefSchema = z
+  .object({
+    fileId: z
+      .string()
+      .min(1)
+      .max(64)
+      .optional()
+      .describe("The id of the user's upload from POST /files/upload."),
+    filename: visibleText(ASK_LIMITS.files.filenameMaxLength).describe(
+      "The file's name as the user picked it."
+    ),
+    mimeType: z.string().min(1).max(127).describe('The file\'s MIME type, such as "image/png".'),
+    size: z.number().int().min(0).describe("The file's size in bytes."),
+    url: z.string().optional().describe("The file's bytes as a base64 data: URL."),
+  })
+  .strict()
+  .superRefine(checkFileRef);
+
+export type AskFileRef = z.infer<typeof askFileRefSchema>;
+
+/** The `content` of an accepted `files` answer: the files the user sent, in the order they chose. */
+export const filesAnswerSchema = z.object({files: z.array(askFileRefSchema)}).strict();
+
+export type FilesAnswer = z.infer<typeof filesAnswerSchema>;
+
 /** The `content` of an accepted `choice` answer. */
 export const choiceAnswerSchema = z
   .object({
@@ -964,10 +1100,20 @@ export const formAskResponseSchema = z.discriminatedUnion("action", [
 
 export type FormAskResponse = z.infer<typeof formAskResponseSchema>;
 
+/** The answer envelope for `ask_files`, with `content` typed. Used as the tool's output schema. */
+export const filesAskResponseSchema = z.discriminatedUnion("action", [
+  z.object({action: z.literal("accept"), content: filesAnswerSchema}).strict(),
+  askDeclineResponseSchema,
+  askCancelResponseSchema,
+]);
+
+export type FilesAskResponse = z.infer<typeof filesAskResponseSchema>;
+
 /** Input schemas by kind. */
 export const askInputSchemas = {
   choice: choiceAskInputSchema,
   confirm: confirmAskInputSchema,
+  files: filesAskInputSchema,
   form: formAskInputSchema,
   markdown: markdownAskInputSchema,
 } as const satisfies Record<AskKind, z.ZodType>;
@@ -1020,6 +1166,7 @@ export const askInputSchemaFor = ({
 export const askOutputSchemas = {
   choice: choiceAskResponseSchema,
   confirm: confirmAskResponseSchema,
+  files: filesAskResponseSchema,
   form: formAskResponseSchema,
   markdown: markdownAskResponseSchema,
 } as const satisfies Record<AskKind, z.ZodType>;
@@ -1044,8 +1191,13 @@ export interface FormAsk {
   kind: "form";
 }
 
+export interface FilesAsk {
+  input: FilesAskInput;
+  kind: "files";
+}
+
 /** A validated ask: its kind and its input. */
-export type Ask = ChoiceAsk | ConfirmAsk | MarkdownAsk | FormAsk;
+export type Ask = ChoiceAsk | ConfirmAsk | MarkdownAsk | FormAsk | FilesAsk;
 
 /**
  * Whether the user may skip the ask. `allowDecline` defaults to true, except on `confirm`, where

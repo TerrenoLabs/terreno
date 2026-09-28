@@ -66,6 +66,13 @@ export const ASK_FORM_TOOL_DESCRIPTION =
   "field id, as this tool's result. Use it when you need several values together; for one pick " +
   "from a list, use a choice instead.";
 
+export const ASK_FILES_TOOL_DESCRIPTION =
+  "Ask the user to upload one or more files, such as a photo of a receipt, a signed PDF, or a " +
+  "CSV export. The chat shows a file picker limited to the types in accept, and this tool's " +
+  "result lists each file's filename, mimeType, and size, followed by the files themselves: " +
+  "images and PDFs as they are, text, CSV, and JSON as text. Use it when you need the file's " +
+  "contents; ask for a typed value with a form instead.";
+
 /** Tool result for a call that was left without one when the turn paused for an ask. */
 export const UNANSWERED_TOOL_CALL_RESULT = "This tool call did not run, so it has no result.";
 

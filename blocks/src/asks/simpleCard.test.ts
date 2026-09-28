@@ -1,7 +1,13 @@
 import {describe, expect, it} from "bun:test";
 import {type ValidAskFixture, validAskFixtures, validAskFixturesOf} from "../tests/askFixtures";
 import {ASK_LIMITS} from "./limits";
-import type {ChoiceAskInput, ConfirmAskInput, FormAskInput, MarkdownAskInput} from "./schema";
+import type {
+  ChoiceAskInput,
+  ConfirmAskInput,
+  FilesAskInput,
+  FormAskInput,
+  MarkdownAskInput,
+} from "./schema";
 import {resolveButtonAnswer, simpleCardSchema, toSimpleCard} from "./simpleCard";
 import {validateAskInput} from "./validateInput";
 import {validateAskResponse} from "./validateResponse";
@@ -156,6 +162,9 @@ const formButtons = (
 
 /** The buttons and handoff the rule table gives a valid fixture. */
 const expectedCard = (fixture: ValidAskFixture): {buttons: ExpectedButton[]; handoff: boolean} => {
+  if (fixture.kind === "files") {
+    return {buttons: fixture.input.allowDecline === false ? [] : [SKIP], handoff: true};
+  }
   if (fixture.kind === "form") {
     const values = FORM_SUBMIT_VALUES_BY_FIXTURE[fixture.name];
     if (values === undefined) {
@@ -946,6 +955,44 @@ describe("toSimpleCard form rules", () => {
       for (const button of card.buttons) {
         expect(validateAskResponse({input, kind: "form", response: button.response})).toEqual([]);
       }
+    }
+  });
+});
+
+describe("toSimpleCard files rules", () => {
+  const asks: FilesAskInput[] = [undefined, true, false].flatMap((allowDecline) =>
+    [{accept: ["image"]}, {accept: ["pdf", "csv"], maxFiles: 3, minFiles: 2}].map((fields) => ({
+      ...fields,
+      accept: [...fields.accept] as FilesAskInput["accept"],
+      prompt: "Upload the receipt.",
+      ...(allowDecline === undefined ? {} : {allowDecline}),
+    }))
+  );
+  const cards = asks.map((input) => ({
+    card: toSimpleCard({input, kind: "files", toolCallId: TOOL_CALL_ID}),
+    input,
+  }));
+
+  it("only generates valid asks", () => {
+    for (const input of asks) {
+      expect(validateAskInput({input, kind: "files"})).toEqual([]);
+    }
+  });
+
+  it("always hands off, because files cannot be picked on a small screen", () => {
+    for (const {card} of cards) {
+      expect(simpleCardSchema.safeParse(card).success).toBe(true);
+      expect(card.handoff).toBe(true);
+    }
+  });
+
+  it("offers only Skip, and only when the ask allows declining", () => {
+    for (const {card, input} of cards) {
+      expect(card.buttons).toEqual(
+        input.allowDecline === false
+          ? []
+          : [{id: "skip", label: "Skip", response: {action: "decline"}, style: "cancel"}]
+      );
     }
   });
 });

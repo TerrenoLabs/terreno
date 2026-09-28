@@ -6,7 +6,9 @@ import {
   issuesToAskErrors,
   quoteValue,
 } from "./errors";
+import {acceptedFileMimeTypes, base64ByteLength, fileTooLargeDraft, parseAskDataUrl} from "./files";
 import {checkFormValue, isBlankFormValue} from "./formValues";
+import {ASK_LIMITS} from "./limits";
 import {
   type Ask,
   type AskKind,
@@ -16,7 +18,10 @@ import {
   choiceAnswerSchema,
   choiceSelectionBounds,
   confirmAnswerSchema,
+  type FilesAskInput,
   type FormAskInput,
+  filesAnswerSchema,
+  filesCountBounds,
   formAnswerEnvelopeSchema,
   type MarkdownAskInput,
   markdownAnswerSchema,
@@ -219,17 +224,84 @@ const validateFormAnswer = (input: FormAskInput, content: unknown): AskErrorDraf
   return drafts;
 };
 
+const fileCountText = (count: number): string => (count === 1 ? "1 file" : `${count} files`);
+
+const fileBoundsText = ({max, min}: {max: number; min: number}): string =>
+  min === max ? `exactly ${fileCountText(min)}` : `${min} to ${fileCountText(max)}`;
+
+/**
+ * The count must fit the ask, each declared type must be one `accept` allows, each file must fit
+ * the per-file cap, and a data URL's media type must be the declared type. The server then checks
+ * the bytes themselves with `checkAskFileBytes`.
+ */
+const validateFilesAnswer = (
+  input: FilesAskInput,
+  content: unknown,
+  maxFileSizeBytes: number
+): AskErrorDraft[] => {
+  const parsed = filesAnswerSchema.safeParse(content);
+  if (!parsed.success) {
+    return issuesToAskErrors({issues: parsed.error.issues, prefix: ["content"], root: content});
+  }
+  const {files} = parsed.data;
+  const drafts: AskErrorDraft[] = [];
+  const bounds = filesCountBounds(input);
+  if (files.length < bounds.min || files.length > bounds.max) {
+    drafts.push({
+      code: "FILE_COUNT",
+      fix: `Send ${fileBoundsText(bounds)} in content.files.`,
+      message: `This ask takes ${fileBoundsText(bounds)}; the answer has ${files.length}.`,
+      segments: ["content", "files"],
+    });
+  }
+  const accepted: readonly string[] = acceptedFileMimeTypes(input.accept);
+  files.forEach((file, index) => {
+    const segments = ["content", "files", index];
+    if (!accepted.includes(file.mimeType)) {
+      drafts.push({
+        code: "FILE_TYPE_NOT_ACCEPTED",
+        fix: `Send a file of type ${accepted.join(", ")}.`,
+        message: `${quoteValue(file.filename)} is ${file.mimeType}, which this ask does not accept.`,
+        segments: [...segments, "mimeType"],
+      });
+    }
+    const dataUrl = file.url === undefined ? undefined : parseAskDataUrl(file.url);
+    const size = dataUrl === undefined ? file.size : base64ByteLength(dataUrl.base64);
+    if (Math.max(size, file.size) > maxFileSizeBytes) {
+      drafts.push(
+        fileTooLargeDraft({
+          maxFileSizeBytes,
+          segments: [...segments, "size"],
+          size: Math.max(size, file.size),
+        })
+      );
+    }
+    if (dataUrl !== undefined && dataUrl.mediaType !== file.mimeType) {
+      drafts.push({
+        code: "MIME_MISMATCH",
+        fix: `Make the data URL's media type ${file.mimeType}, or declare ${dataUrl.mediaType}.`,
+        message: `The data URL holds ${dataUrl.mediaType}, but the file is declared as ${file.mimeType}.`,
+        segments: [...segments, "url"],
+      });
+    }
+  });
+  return drafts;
+};
+
 /**
  * Checks a user's answer against the ask it answers. The client runs it before enabling Submit and
  * the server runs it before resuming the turn. Returns no errors when the answer is valid.
+ * `maxFileSizeBytes` is the host's per-file cap for `files` answers (10 MB by default).
  */
 export const validateAskResponse = ({
   input,
   kind,
+  maxFileSizeBytes = ASK_LIMITS.files.defaultMaxFileSizeBytes,
   response,
 }: {
   input: Ask["input"];
   kind: AskKind;
+  maxFileSizeBytes?: number;
   response: unknown;
 }): AskValidationError[] => {
   const ask = {input, kind} as Ask;
@@ -263,5 +335,7 @@ export const validateAskResponse = ({
       return finalizeAskErrors(validateMarkdownAnswer(ask.input, answer.content));
     case "form":
       return finalizeAskErrors(validateFormAnswer(ask.input, answer.content));
+    case "files":
+      return finalizeAskErrors(validateFilesAnswer(ask.input, answer.content, maxFileSizeBytes));
   }
 };

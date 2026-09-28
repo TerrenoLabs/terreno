@@ -2,6 +2,7 @@ import {APIError, logger, type z} from "@terreno/api";
 import {
   ASK_CANCEL_REASONS,
   ASK_KINDS,
+  ASK_LIMITS,
   type Ask,
   type AskKind,
   type AskResponse,
@@ -24,9 +25,11 @@ import {
 } from "ai";
 
 import type {AsksOptions} from "../types";
+import {askFilesToolModelOutput} from "./askFiles";
 import {
   ASK_CHOICE_TOOL_DESCRIPTION,
   ASK_CONFIRM_TOOL_DESCRIPTION,
+  ASK_FILES_TOOL_DESCRIPTION,
   ASK_FORM_TOOL_DESCRIPTION,
   ASK_MARKDOWN_TOOL_DESCRIPTION,
   COMPACT_ASK_CHOICE_TOOL_DESCRIPTION,
@@ -40,6 +43,7 @@ const ASK_TOOL_PREFIX = "ask_";
 const ASK_TOOL_DESCRIPTIONS: Record<AskKind, string> = {
   choice: ASK_CHOICE_TOOL_DESCRIPTION,
   confirm: ASK_CONFIRM_TOOL_DESCRIPTION,
+  files: ASK_FILES_TOOL_DESCRIPTION,
   form: ASK_FORM_TOOL_DESCRIPTION,
   markdown: ASK_MARKDOWN_TOOL_DESCRIPTION,
 };
@@ -53,6 +57,11 @@ const askToolDescription = ({kind, surface}: {kind: AskKind; surface: AskSurface
   surface === "compact" && isCompactAskKind(kind)
     ? COMPACT_ASK_TOOL_DESCRIPTIONS[kind]
     : ASK_TOOL_DESCRIPTIONS[kind];
+
+/** The per-file cap for `files` answers: `asks.maxFileSizeBytes`, or 10 MB. */
+export const resolveMaxFileSizeBytes = (asks: boolean | AsksOptions | undefined): number =>
+  (typeof asks === "object" ? asks.maxFileSizeBytes : undefined) ??
+  ASK_LIMITS.files.defaultMaxFileSizeBytes;
 
 /** The kinds the `asks` route option enables; empty when asks are off. Throws on unknown kinds. */
 export const resolveAskKinds = (asks: boolean | AsksOptions | undefined): AskKind[] => {
@@ -99,6 +108,7 @@ export const createAskTools = ({
         description: askToolDescription({kind, surface}),
         inputSchema: askInputSchemaFor({kind, surface}) as z.ZodType<Ask["input"]>,
         outputSchema: askOutputSchemas[kind] as z.ZodType<AskResponse>,
+        ...(kind === "files" ? {toModelOutput: askFilesToolModelOutput} : {}),
       }),
     ])
   );
@@ -152,15 +162,17 @@ export const toStoredMessages = (messages: ModelMessage[]): ModelMessage[] =>
 
 const outputForUnansweredCall = ({
   answer,
+  answerOutput,
   call,
   toolCallId,
 }: {
   answer: AskResponse;
+  answerOutput?: ToolResultPart["output"];
   call: ToolCallPart;
   toolCallId: string;
 }): ToolResultPart["output"] => {
   if (call.toolCallId === toolCallId) {
-    return {type: "json", value: answer as JSONValue};
+    return answerOutput ?? {type: "json", value: answer as JSONValue};
   }
   if (askKindFromToolName(call.toolName)) {
     return {type: "json", value: {action: "cancel", reason: ASK_CANCEL_REASONS.oneAskAtATime}};
@@ -173,13 +185,16 @@ const outputForUnansweredCall = ({
  * the user's answer for the pending ask, `cancel` for asks dropped because the model asked more
  * than once, and an error for any other tool that did not run. Results join the step's tool
  * message, in call order, so providers see one tool message per assistant message.
+ * `answerOutput` replaces the answer's JSON result, such as a `files` answer with its files.
  */
 export const completePausedTurn = ({
   answer,
+  answerOutput,
   responseMessages,
   toolCallId,
 }: {
   answer: AskResponse;
+  answerOutput?: ToolResultPart["output"];
   responseMessages: ModelMessage[];
   toolCallId: string;
 }): ModelMessage[] => {
@@ -206,7 +221,7 @@ export const completePausedTurn = ({
     .filter((call) => !answeredIds.has(call.toolCallId))
     .map(
       (call): ToolResultPart => ({
-        output: outputForUnansweredCall({answer, call, toolCallId}),
+        output: outputForUnansweredCall({answer, answerOutput, call, toolCallId}),
         toolCallId: call.toolCallId,
         toolName: call.toolName,
         type: "tool-result",

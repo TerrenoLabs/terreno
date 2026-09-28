@@ -77,6 +77,17 @@ const formSummary = (content: Record<string, unknown>): string => {
   return `You sent the form (${formatCount(count)} ${count === 1 ? "field" : "fields"})`;
 };
 
+/** "You sent 2 files: receipt.png, items.txt" for a `files` answer. */
+const filesSummary = (content: Record<string, unknown>): string => {
+  const {files} = content;
+  if (!Array.isArray(files)) {
+    return ANSWERED;
+  }
+  const names = files.map((file) => String((file as {filename?: unknown}).filename ?? "file"));
+  const count = `${formatCount(names.length)} ${names.length === 1 ? "file" : "files"}`;
+  return names.length > 0 ? `You sent ${count}: ${names.join(", ")}` : `You sent ${count}`;
+};
+
 const acceptedSummary = (ask: ChatAsk, content: Record<string, unknown>): string => {
   switch (ask.kind) {
     case "choice":
@@ -87,6 +98,8 @@ const acceptedSummary = (ask: ChatAsk, content: Record<string, unknown>): string
       return markdownSummary(content);
     case "form":
       return formSummary(content);
+    case "files":
+      return filesSummary(content);
   }
 };
 

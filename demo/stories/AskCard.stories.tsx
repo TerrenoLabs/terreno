@@ -7,6 +7,7 @@ type ChoiceAsk = Extract<ChatAsk, {kind: "choice"}>;
 type ConfirmAsk = Extract<ChatAsk, {kind: "confirm"}>;
 type MarkdownAsk = Extract<ChatAsk, {kind: "markdown"}>;
 type FormAsk = Extract<ChatAsk, {kind: "form"}>;
+type FilesAsk = Extract<ChatAsk, {kind: "files"}>;
 
 const SIMULATED_SERVER_DELAY_MS = 600;
 
@@ -299,6 +300,57 @@ const ANSWERED_FORMS: FormAsk[] = [
   },
 ];
 
+const RECEIPT_ASK: FilesAsk = {
+  input: {
+    accept: ["image", "pdf", "text", "csv"],
+    maxFiles: 3,
+    prompt: "Upload the receipt for this expense: a photo, a PDF, or the exported CSV.",
+    submitLabel: "Send receipt",
+    title: "Expense receipt",
+  },
+  kind: "files",
+  status: "pending",
+  toolCallId: "demo-receipt",
+};
+
+const FILES_ERRORS: NonNullable<AskCardProps["errors"]> = [
+  {
+    code: "MIME_MISMATCH",
+    fix: "Send the file with its real type, or a file that is image/png.",
+    message: "The file is declared as image/png, but its bytes are text.",
+    path: "content.files[0].mimeType",
+  },
+  {
+    code: "FILE_NOT_OWNED",
+    fix: "Upload the file with POST /files/upload and send the id it returns, or send a data: URL.",
+    message: "The file id does not name one of your uploads.",
+    path: "content.files[1].fileId",
+  },
+];
+
+const ANSWERED_FILES: FilesAsk[] = [
+  {
+    ...RECEIPT_ASK,
+    response: {
+      action: "accept",
+      content: {
+        files: [
+          {filename: "lunch-receipt.jpg", mimeType: "image/jpeg", size: 184_320},
+          {filename: "items.csv", mimeType: "text/csv", size: 212},
+        ],
+      },
+    },
+    status: "answered",
+    toolCallId: "demo-files-sent",
+  },
+  {
+    ...RECEIPT_ASK,
+    response: {action: "decline"},
+    status: "answered",
+    toolCallId: "demo-files-skipped",
+  },
+];
+
 const SERVER_ERRORS: NonNullable<AskCardProps["errors"]> = [
   {
     code: "OPTION_NOT_OFFERED",
@@ -568,6 +620,52 @@ export const AskCardFormAnswered: React.FC = (): React.ReactElement => {
     >
       <Box gap={2}>
         {ANSWERED_FORMS.map((ask) => (
+          <AskCard ask={ask} key={ask.toolCallId} testID={ask.toolCallId} />
+        ))}
+      </Box>
+    </StorySection>
+  );
+};
+
+export const AskCardFiles: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="files opens the file picker with the ask's accepted types and lists the picked files. Submit stays disabled until their count and types fit the ask; on Submit each file becomes a data URL, or an upload when the host passes resolveAskFiles."
+      title="Upload files"
+    >
+      <InteractiveAsk ask={RECEIPT_ASK} testID="demo-ask-card-files" />
+    </StorySection>
+  );
+};
+
+export const AskCardFilesError: React.FC = (): React.ReactElement => {
+  const handleSubmit = useCallback(async (): Promise<void> => {
+    await waitForServer();
+  }, []);
+
+  return (
+    <StorySection
+      note="The server checks each file's bytes and owner. A file whose bytes are not its declared type, or an upload that is not the user's, comes back as an error under the picker."
+      title="Files rejected by the server"
+    >
+      <AskCard
+        ask={RECEIPT_ASK}
+        errors={FILES_ERRORS}
+        onSubmit={handleSubmit}
+        testID="demo-ask-card-files-error"
+      />
+    </StorySection>
+  );
+};
+
+export const AskCardFilesAnswered: React.FC = (): React.ReactElement => {
+  return (
+    <StorySection
+      note="A sent files answer names the files it sent. The transcript keeps only each file's name, type, and size, never its bytes."
+      title="Sent and skipped files"
+    >
+      <Box gap={2}>
+        {ANSWERED_FILES.map((ask) => (
           <AskCard ask={ask} key={ask.toolCallId} testID={ask.toolCallId} />
         ))}
       </Box>

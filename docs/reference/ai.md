@@ -331,7 +331,7 @@ Requires `fileStorageService` and `gcsBucket` (registered by `AiApp` when both a
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/files/upload` | POST | `IsAuthenticated` | Multipart upload (`file` field); allowed MIME: images, PDF, plain text, CSV, JSON |
+| `/files/upload` | POST | `IsAuthenticated` | Multipart upload (`file` field); allowed MIME: images, PDF, plain text, CSV, JSON. Capped at `maxFileSize` (default 10 MB). Returns `{data: {id, filename, gcsKey, mimeType, size, url}}`; send `id` as the `fileId` of a [`files` ask](agent-ui-asks.md#files) answer. |
 | `/files/*gcsKey` | GET | None | Returns signed read URL (1 hour) |
 | `/files/*gcsKey` | DELETE | `IsAuthenticated` (owner) | Soft-delete attachment and remove from GCS |
 
@@ -375,11 +375,11 @@ new AiApp({
 | Option | Description |
 |--------|-------------|
 | `aiService` | Pre-configured server-wide AI service |
-| `asks` | Let the model ask the user typed questions in chat: `true` or `{kinds}`. Passed to `addGptRoutes`, and adds the headless `pendingAsks` and `turn` actions to `/gpt/histories`; see [Agent UI Asks](agent-ui-asks.md) |
+| `asks` | Let the model ask the user typed questions in chat: `true` or `{kinds, maxFileSizeBytes}`. Passed to `addGptRoutes`, and adds the headless `pendingAsks` and `turn` actions to `/gpt/histories`; see [Agent UI Asks](agent-ui-asks.md). `maxFileSizeBytes` also caps `/files/upload`. |
 | `createModelFn` | Build model from per-request `x-ai-api-key` |
 | `createServerModelFn` | Server-side model factory (e.g. Vertex ADC) without per-request key |
 | `demoMode` | Not read. The routes send a canned demo reply whenever no AI service resolves |
-| `fileStorageService` + `gcsBucket` | Enable file upload routes |
+| `fileStorageService` + `gcsBucket` | Enable file upload routes, and let `files` ask answers name uploads by `fileId` |
 | `mcpService` | Enable MCP routes and tool discovery in chat |
 | `tools` | Static Vercel AI SDK tool definitions for chat |
 | `toolChoice` | `"auto"` \| `"none"` \| `"required"` (default `"auto"` when tools present) |
@@ -442,7 +442,8 @@ const storage = new FileStorageService({
   storageOptions: {}, // optional @google-cloud/storage options
 });
 
-await storage.upload({buffer, filename, mimeType, userId});
+await storage.upload({buffer, filename, mimeType, userId}); // {id, filename, gcsKey, mimeType, size, url}
+await storage.download(gcsKey);      // the upload's bytes, as a Buffer
 await storage.getSignedUrl(gcsKey);  // 1-hour v4 signed URL
 await storage.delete(gcsKey);        // GCS delete + soft-delete FileAttachment
 ```

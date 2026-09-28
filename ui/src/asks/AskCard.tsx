@@ -9,9 +9,11 @@ import {Icon} from "../Icon";
 import {Text} from "../Text";
 import {AskChoice} from "./AskChoice";
 import {AskConfirm} from "./AskConfirm";
+import {AskFiles} from "./AskFiles";
 import {AskForm, AskFormAnswer} from "./AskForm";
 import {AskMarkdown, AskMarkdownAnswer} from "./AskMarkdown";
 import type {AskAction} from "./askControls";
+import type {AskFilesResolver} from "./askFileRefs";
 import {askSummary} from "./askSummary";
 import type {AskSubmitHandler, ChatAsk} from "./askTypes";
 
@@ -26,6 +28,11 @@ export interface AskCardProps {
    * disabled, and radio options show as plain text.
    */
   onSubmit?: AskSubmitHandler;
+  /**
+   * Turns the files picked for a `files` ask into the answer's refs on Submit: uploads
+   * (`{fileId}`) or data URLs (`{url}`). Defaults to data URLs (`resolveAskFilesAsDataUrls`).
+   */
+  resolveAskFiles?: AskFilesResolver;
   testID?: string;
 }
 
@@ -83,6 +90,7 @@ const AskBody = ({
   isDisabled,
   onAnswer,
   pendingActionId,
+  resolveAskFiles,
   testID,
 }: {
   ask: ChatAsk;
@@ -90,6 +98,7 @@ const AskBody = ({
   isDisabled: boolean;
   onAnswer: (action: AskAction) => Promise<void>;
   pendingActionId?: string;
+  resolveAskFiles?: AskFilesResolver;
   testID: string;
 }): React.ReactElement => {
   switch (ask.kind) {
@@ -137,6 +146,18 @@ const AskBody = ({
           testID={testID}
         />
       );
+    case "files":
+      return (
+        <AskFiles
+          ask={ask}
+          errors={errors}
+          isDisabled={isDisabled}
+          onAnswer={onAnswer}
+          pendingActionId={pendingActionId}
+          resolveFiles={resolveAskFiles}
+          testID={testID}
+        />
+      );
   }
 };
 
@@ -144,7 +165,13 @@ const AskBody = ({
  * A question the agent asked, shown in the transcript. Renders the kind's controls while the ask
  * is pending and a one-line summary of the answer afterwards.
  */
-export const AskCard: React.FC<AskCardProps> = ({ask, errors, onSubmit, testID = "ask-card"}) => {
+export const AskCard: React.FC<AskCardProps> = ({
+  ask,
+  errors,
+  onSubmit,
+  resolveAskFiles,
+  testID = "ask-card",
+}) => {
   const [pendingActionId, setPendingActionId] = useState<string | undefined>(undefined);
   const isAnsweringRef = useRef(false);
   const {toolCallId} = ask;
@@ -192,6 +219,7 @@ export const AskCard: React.FC<AskCardProps> = ({ask, errors, onSubmit, testID =
         isDisabled={!onSubmit}
         onAnswer={handleAnswer}
         pendingActionId={pendingActionId}
+        resolveAskFiles={resolveAskFiles}
         testID={testID}
       />
     </Box>

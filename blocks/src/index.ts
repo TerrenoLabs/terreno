@@ -1,5 +1,16 @@
 export type {AskErrorCode, AskValidationError} from "./asks/errors";
 export {ASK_ERROR_CODES} from "./asks/errors";
+export type {AskFileAccept, AskFileMimeType, SniffedFileType} from "./asks/files";
+export {
+  ASK_FILE_ACCEPT,
+  ASK_FILE_ACCEPT_MIME_TYPES,
+  acceptedFileMimeTypes,
+  checkAskFileBytes,
+  fileNotOwnedError,
+  isTextFileMimeType,
+  parseAskDataUrl,
+  sniffFileBytes,
+} from "./asks/files";
 export type {FormValue} from "./asks/formValues";
 export {formDefaultValues, formTextMaxLength} from "./asks/formValues";
 export type {
@@ -23,6 +34,7 @@ export {ASK_LIMITS} from "./asks/limits";
 export {askPromptSection} from "./asks/prompt";
 export type {
   Ask,
+  AskFileRef,
   AskKind,
   AskResponse,
   AskSurface,
@@ -37,6 +49,10 @@ export type {
   ConfirmAsk,
   ConfirmAskInput,
   ConfirmAskResponse,
+  FilesAnswer,
+  FilesAsk,
+  FilesAskInput,
+  FilesAskResponse,
   FormAnswer,
   FormAsk,
   FormAskInput,
@@ -56,6 +72,7 @@ export {
   askAllowsDecline,
   askCancelResponseSchema,
   askDeclineResponseSchema,
+  askFileRefSchema,
   askInputSchemaFor,
   askInputSchemas,
   askKindsForSurface,
@@ -76,6 +93,10 @@ export {
   confirmAskResponseSchema,
   confirmButtonLabels,
   FORM_FIELD_TYPES,
+  filesAnswerSchema,
+  filesAskInputSchema,
+  filesAskResponseSchema,
+  filesCountBounds,
   formAnswerSchema,
   formAskInputSchema,
   formAskResponseSchema,

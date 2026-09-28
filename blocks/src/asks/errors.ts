@@ -3,23 +3,32 @@ import {ASK_LIMITS} from "./limits";
 
 /**
  * Every ask error code, with its meaning. `validateAskInput` and `validateAskResponse` return all
- * of them except `UNKNOWN_BUTTON`, which the headless `turn` endpoint returns.
+ * of them except `UNKNOWN_BUTTON`, which the headless `turn` endpoint returns, and
+ * `FILE_NOT_OWNED`, which the server returns when it loads an uploaded file.
  */
 export const ASK_ERROR_CODES = {
   CHANGED_MISMATCH:
     "A markdown answer's changed flag does not match whether its text differs from the draft.",
   DECLINE_NOT_ALLOWED: "The answer skips an ask that does not allow skipping.",
   DEFAULT_NOT_IN_OPTIONS: "A default names an option id that the ask does not offer.",
-  DUPLICATE_ID: "An id appears twice where ids must be unique: options, default, or an answer.",
+  DUPLICATE_ID:
+    "An id appears twice where ids must be unique: options, default, accept, or an answer.",
   DUPLICATE_LABEL:
     "Two buttons would share a label: options of a compact ask, or a confirm's approve and deny.",
   FIELD_TYPE_MISMATCH:
     "A form value or default does not fit its field's type: the wrong JSON type, not a whole number, or not a valid email, URL, or phone number.",
+  FILE_COUNT: "A files answer has fewer files than minFiles or more than maxFiles.",
+  FILE_NOT_OWNED:
+    "A files answer names a fileId that is not an upload of the caller, or the host has no file storage.",
+  FILE_TOO_LARGE: "A file is larger than the host's per-file upload cap.",
+  FILE_TYPE_NOT_ACCEPTED: "A file's declared type is not one the ask's accept list allows.",
   INVALID_DATE:
     "A form date, time, or datetime value or default is not a real ISO 8601 value in the field's format.",
   INVALID_ENUM: "A value is not one of the allowed values.",
   INVALID_FORMAT: "A string does not match its required format.",
   INVALID_TYPE: "A value has the wrong type.",
+  MIME_MISMATCH:
+    "A file's bytes, or its data URL's media type, do not match the type the answer declares.",
   MISSING_REQUIRED: "A required field is missing.",
   OPTION_NOT_OFFERED: "The answer selects an option id that the ask did not offer.",
   OTHER_NOT_ALLOWED: "An ask or an answer uses Other where the ask does not allow it.",

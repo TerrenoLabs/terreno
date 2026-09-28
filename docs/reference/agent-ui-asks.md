@@ -11,7 +11,8 @@ way, see [Agent UI Asks explained](../explanation/agent-ui-asks.md). To add asks
 
 Shipped: the `choice` kind with `select: "one"` and `select: "many"` (with an optional Other
 answer), the `confirm` kind (approve or deny, optionally destructive), the `markdown` kind
-(edit a draft and send it back), and the `form` kind (a few typed fields, one submit), asked and answered
+(edit a draft and send it back), the `form` kind (a few typed fields, one submit), and the
+`files` kind (upload images or documents that the model then reads), asked and answered
 through `POST /gpt/prompt`
 and shown in `GPTChat` ([props and controls](ui.md#asks)), and the small-screen path: the
 [compact surface](#compact-surface), the [headless endpoints](#headless-endpoints),
@@ -27,6 +28,7 @@ kinds are planned in the [implementation plan](../implementationPlans/agent-ui-a
 - [confirm](#confirm)
 - [markdown](#markdown)
 - [form](#form)
+- [files](#files)
 - [Simple cards](#simple-cards)
 - [Compact surface](#compact-surface)
 - [Validation](#validation)
@@ -61,12 +63,13 @@ addGptRoutes(router, chat);
 | `asks` | Ask kinds offered to the model |
 | --- | --- |
 | unset or `false` | None. Tools, system prompt, and SSE events are unchanged. |
-| `true` or `{}` | Every kind in `ASK_KINDS` (today `choice`, `confirm`, `markdown`, and `form`) |
+| `true` or `{}` | Every kind in `ASK_KINDS` (today `choice`, `confirm`, `markdown`, `form`, and `files`) |
 | `{kinds: ["choice"]}` | The listed kinds. An unknown kind throws when the routes are registered. An empty list offers none. |
+| `{maxFileSizeBytes: 5_000_000}` | Every kind, with a per-file cap for `files` answers. Defaults to 10 MB (`files.defaultMaxFileSizeBytes`). `AiApp` also caps `POST /files/upload` at it. |
 
 With asks on, each chat turn:
 
-- Adds one tool per kind, named `ask_<kind>` (`ask_choice`, `ask_confirm`, `ask_markdown`, `ask_form`). A turn on the
+- Adds one tool per kind, named `ask_<kind>` (`ask_choice`, `ask_confirm`, `ask_markdown`, `ask_form`, `ask_files`). A turn on the
   [compact surface](#compact-surface) offers only the compact kinds, with narrowed schemas.
 - Appends `TERRENO_ASKS_SYSTEM_PROMPT` and the `askPromptSection` for the offered kinds to the
   system prompt. Every number in that section comes from `ASK_LIMITS`.
@@ -321,6 +324,67 @@ Errors on a value have the path `content.values.<id>`, so a client can show each
 field. `formDefaultValues(input)` returns the defaults keyed by field id, leaving out fields
 without one. `formTextMaxLength(field)` returns the longest string value a field accepts.
 
+## files
+
+Tool: `ask_files`. The user picks one or more files and sends them, and the model reads them in
+the same turn. The full chat shows a picker limited to the accepted types, the picked files, and
+Submit. The [compact surface](#compact-surface) does not offer it, because files cannot be picked
+on a small screen.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `prompt`, `title`, `submitLabel`, `allowDecline` | | The [shared fields](#shared-ask-fields). `allowDecline` defaults to `true`. |
+| `accept` | string[] | Required, 1–5 values from `ASK_FILE_ACCEPT`, each listed once (`DUPLICATE_ID`). Any other value fails with `INVALID_ENUM`. |
+| `minFiles` | integer | Optional, 1–10 (`files.minFiles`, `files.maxFiles`). Default 1. Above `maxFiles` fails with `RANGE_INVALID`. |
+| `maxFiles` | integer | Optional, 1–10. Default 10. |
+
+| `accept` value | MIME types (`ASK_FILE_ACCEPT_MIME_TYPES`) | The model sees |
+| --- | --- | --- |
+| `image` | `image/jpeg`, `image/png`, `image/gif`, `image/webp` | An `image-data` part |
+| `pdf` | `application/pdf` | A `file-data` part |
+| `text` | `text/plain` | Text, cut to 100 KB (`files.textMaxBytes`) with a note |
+| `csv` | `text/csv` | Text, cut the same way |
+| `json` | `application/json` | Text, cut the same way |
+
+```json
+{
+  "title": "Upload a receipt",
+  "prompt": "Upload the receipt for your expense report.",
+  "accept": ["image", "pdf", "text", "csv"],
+  "maxFiles": 3,
+  "submitLabel": "Send receipt"
+}
+```
+
+Answer: `{"action": "accept", "content": {"files": [{"fileId": "66f0c0ffee0000000000000a", "filename": "receipt.png", "mimeType": "image/png", "size": 48213}]}}`.
+Each file (`askFileRefSchema`) names its bytes one of two ways:
+
+| Ref | When | Rule |
+| --- | --- | --- |
+| `{fileId}` | The host has file storage ([`FileStorageService`](ai.md), a GCS bucket) | The id `POST /files/upload` returns. It must name an upload of the caller that is not deleted (`FILE_NOT_OWNED`). |
+| `{url}` | The host has no file storage | A base64 `data:` URL whose media type is the declared `mimeType` (`MIME_MISMATCH`). The server never fetches a remote URL (`INVALID_FORMAT`). |
+
+| Answer field | Rule | Error |
+| --- | --- | --- |
+| `files` | Required, from `minFiles` to `maxFiles` files, in the order the user picked them | `MISSING_REQUIRED`, `FILE_COUNT` |
+| `files[].fileId`, `files[].url` | Exactly one of the two | `MISSING_REQUIRED`, `INVALID_FORMAT` |
+| `files[].filename` | 1–255 characters (`files.filenameMaxLength`) | `TOO_SHORT`, `TOO_LONG` |
+| `files[].mimeType` | One of the types `accept` allows | `FILE_TYPE_NOT_ACCEPTED` |
+| `files[].size` | Whole bytes, at most the host's cap (default 10 MB) | `FILE_TOO_LARGE` |
+
+Before it resumes the turn, the server loads each file's bytes: it decodes a data URL, or reads
+the caller's upload from storage. Then `checkAskFileBytes` sniffs the first bytes. Images and PDFs
+must carry their type's signature, and text, CSV, and JSON must be UTF-8 without NUL characters
+(JSON must also parse). A file declared as one type with the bytes of another fails with
+`MIME_MISMATCH`, and bytes over the cap with `FILE_TOO_LARGE`. Errors have paths such as
+`content.files[0].mimeType`. Any error returns 400, and the ask stays pending.
+
+The model gets the answer as a `content` tool result: the stored answer as JSON, then, for each
+file, a line such as `File 1 of 2: receipt.png (image/png, 48213 bytes)` followed by the file. A
+text file over 100 KB is cut on a character boundary and followed by
+`[The file is cut to its first N of M bytes.]`. Only the answering turn sends the bytes; see
+[Stored state](#stored-state).
+
 ## Simple cards
 
 Every ask comes with a simple card: short text and up to three buttons, each holding the exact
@@ -383,6 +447,15 @@ phone" on a `markdown` card instead of "Continue on your phone".
 A form card always hands off: filling in fields needs the full app. `SimpleAskCard` shows "Fill it
 in on your phone" on a `form` card.
 
+`files` card rule:
+
+| Case | Buttons | `handoff` |
+| --- | --- | --- |
+| Every `files` | `skip` (label "Skip", style `cancel`, response `{action: "decline"}`) when `allowDecline` is not `false`, else none | `true` |
+
+A files card always hands off: picking files needs the full app. `SimpleAskCard` shows "Upload on
+your phone" on a `files` card.
+
 Every button's `response` passes `validateAskResponse` for its ask. `simpleCardSchema` checks a
 card's shape, limits, and unique button ids.
 
@@ -402,7 +475,7 @@ the [`turn` action](#headless-endpoints). `surface` is `"full"` (the default) or
 (`ASK_SURFACES`). Any other value returns 400. On a compact turn:
 
 - The model is offered only the kinds in `COMPACT_ASK_KINDS` (`["choice", "confirm"]`) that `asks` enables,
-  each with its narrowed input schema (`compactAskInputSchemas`). `markdown` and `form` are never offered.
+  each with its narrowed input schema (`compactAskInputSchemas`). `markdown`, `form`, and `files` are never offered.
 - The asks section of the system prompt is `askPromptSection({kinds, surface: "compact"})`, which
   states the narrowed limits.
 - `COMPACT_SURFACE_SYSTEM_PROMPT` is appended to the system prompt, even when asks are off: "The
@@ -437,7 +510,8 @@ The model's ask and the user's answer are checked with pure functions from `@ter
 | Function | Checks | Where it runs |
 | --- | --- | --- |
 | `validateAskInput({kind, input, surface?})` | The ask against its schema and rules: unique option ids, the `select` bounds, Other fields only on `"many"` asks, defaults among the options and within the bounds, `confirm` labels that fit a button and differ, `markdown` length bounds, `form` field ids, bounds, and defaults, and with `surface: "compact"` the [compact rules](#compact-surface) | The same schema is the tool's `inputSchema`, so the AI SDK checks every ask call. An invalid ask goes back to the model as a tool error and never reaches the client. |
-| `validateAskResponse({kind, input, response})` | The answer envelope, then the kind's answer against the ask | The server, before it resumes the turn. Clients can run it before they enable Submit. |
+| `validateAskResponse({kind, input, response, maxFileSizeBytes?})` | The answer envelope, then the kind's answer against the ask. For `files`, the declared types, sizes, and data URL media types; `maxFileSizeBytes` defaults to 10 MB. | The server, before it resumes the turn. Clients can run it before they enable Submit. |
+| `checkAskFileBytes({bytes, index, mimeType, maxFileSizeBytes})` | One file's bytes of a `files` answer against its declared type and the cap | The server, after it loads the file |
 
 Both return `AskValidationError[]`, empty when valid, sorted by path and then code:
 
@@ -458,13 +532,18 @@ Both return `AskValidationError[]`, empty when valid, sorted by path and then co
 | `CHANGED_MISMATCH` | A markdown answer's changed flag does not match whether its text differs from the draft. | `validateAskResponse` |
 | `DECLINE_NOT_ALLOWED` | The answer skips an ask that does not allow skipping. | `validateAskResponse` |
 | `DEFAULT_NOT_IN_OPTIONS` | A default names an option id that the ask does not offer. | `validateAskInput` |
-| `DUPLICATE_ID` | An id appears twice where ids must be unique: options, default, or an answer. | Both |
+| `DUPLICATE_ID` | An id appears twice where ids must be unique: options, default, accept, or an answer. | Both |
 | `DUPLICATE_LABEL` | Two buttons would share a label: options of a compact ask, or a confirm's approve and deny. | `validateAskInput` (a `choice` only with `surface: "compact"`) |
 | `FIELD_TYPE_MISMATCH` | A form value or default does not fit its field's type: the wrong JSON type, not a whole number, or not a valid email, URL, or phone number. | Both |
+| `FILE_COUNT` | A files answer has fewer files than minFiles or more than maxFiles. | `validateAskResponse` |
+| `FILE_NOT_OWNED` | A files answer names a fileId that is not an upload of the caller, or the host has no file storage. | The server, when it loads an upload (`fileNotOwnedError`) |
+| `FILE_TOO_LARGE` | A file is larger than the host's per-file upload cap. | `validateAskResponse` and the server byte check (`checkAskFileBytes`) |
+| `FILE_TYPE_NOT_ACCEPTED` | A file's declared type is not one the ask's accept list allows. | `validateAskResponse` |
 | `INVALID_DATE` | A form date, time, or datetime value or default is not a real ISO 8601 value in the field's format. | Both |
 | `INVALID_ENUM` | A value is not one of the allowed values. | Both |
-| `INVALID_FORMAT` | A string does not match its required format. | `validateAskInput` |
+| `INVALID_FORMAT` | A string does not match its required format. | Both |
 | `INVALID_TYPE` | A value has the wrong type. | Both |
+| `MIME_MISMATCH` | A file's bytes, or its data URL's media type, do not match the type the answer declares. | `validateAskResponse` (data URL media type) and the server byte check (`checkAskFileBytes`) |
 | `MISSING_REQUIRED` | A required field is missing. | Both |
 | `OPTION_NOT_OFFERED` | The answer selects an option id that the ask did not offer. | `validateAskResponse` |
 | `OTHER_NOT_ALLOWED` | An ask or an answer uses Other where the ask does not allow it. | Both |
@@ -499,6 +578,11 @@ read it. Keys are paths into `ASK_LIMITS`. A doc-parity test fails when this tab
 | `choice.optionsMin` | 2 | `options`, and a form field's `options` |
 | `choice.otherMaxLength` | 500 | `content.other` |
 | `confirm.labelMaxLength` | 20 | `confirmLabel` and `denyLabel`, in UTF-16 code units |
+| `files.defaultMaxFileSizeBytes` | 10485760 | Each file of a `files` answer (10 MB) when the host sets no `asks.maxFileSizeBytes` |
+| `files.filenameMaxLength` | 255 | `content.files[].filename` |
+| `files.maxFiles` | 10 | `maxFiles` and `minFiles` on a `files` ask, and the default `maxFiles` |
+| `files.minFiles` | 1 | `maxFiles` and `minFiles` on a `files` ask, and the default `minFiles` |
+| `files.textMaxBytes` | 100000 | A text, CSV, or JSON file as the model sees it (100 KB) |
 | `form.fieldsMax` | 8 | `fields` on a `form` ask |
 | `form.fieldsMin` | 1 | `fields` on a `form` ask |
 | `form.helperTextMaxLength` | 280 | `fields[].helperText` |
@@ -552,8 +636,9 @@ result as JSON.
 
 1. Loads the history and checks that it belongs to the caller (403) and waits on this
    `toolCallId` (409).
-2. Checks the answer with `validateAskResponse`. An invalid answer returns 400 with `fields`, and
-   the model is not called.
+2. Checks the answer with `validateAskResponse`. For a `files` answer it then loads and checks
+   each file's bytes ([files](#files)). An invalid answer returns 400 with `fields`, and the model
+   is not called.
 3. In one atomic update, stores the answer as a `tool-result` row, marks the ask's row
    `answered` (`cancelled` for a `cancel` answer), and clears `pendingAsk`. When two answers race,
    one resumes the turn and the other gets 409.
@@ -735,6 +820,14 @@ Rows in `GptHistory.prompts`:
 | Ask call | `type: "tool-call"`, `toolName: "ask_choice"`, `toolCallId`, `args` (the ask input), `ask: {kind, status}`. `status` is `pending` until the ask is answered (`answered`) or cancelled (`cancelled`). |
 | Ask answer | `type: "tool-result"`, `toolName`, `toolCallId`, `result` (the answer envelope) |
 
+A `files` answer is stored without its bytes: `result` is
+`{action: "accept", content: {files: [{fileId?, filename, mimeType, size}]}}`, with `size` the real
+byte count and no `url`. The `AIRequest` log holds the same answer. So a data URL never reaches
+the database, and later turns replay only these names, types, and sizes as a JSON tool result:
+the model sees the files themselves only on the turn that answers. The stored answer is a valid
+`askResponseSchema` envelope but not a valid `filesAnswerSchema` answer, which requires `fileId`
+or `url`. Uploads stay in storage as `FileAttachment` rows.
+
 The history REST API (`/gpt/histories`) drops `pendingAsk` from create and update bodies, so only
 a chat turn writes it. Its OpenAPI spec marks `pendingAsk` `readOnly` on create and update, so
 generated SDKs leave it out of their request types.
@@ -835,19 +928,22 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 
 | Export | Description |
 | --- | --- |
-| `ASK_KINDS`, `AskKind` | The ask kinds (`["choice", "confirm", "markdown", "form"]`) |
+| `ASK_KINDS`, `AskKind` | The ask kinds (`["choice", "confirm", "markdown", "form", "files"]`) |
 | `ASK_SURFACES`, `AskSurface`, `askSurfaceSchema` | The surfaces (`["full", "compact"]`) and the schema of a request's `surface` |
 | `COMPACT_ASK_KINDS`, `CompactAskKind`, `isCompactAskKind(kind)`, `askKindsForSurface({kinds, surface})` | The kinds the compact surface offers (`["choice", "confirm"]`), whether it offers a kind, and the ones a surface offers from a list |
 | `choiceAskInputSchema`, `compactChoiceAskInputSchema`, `choiceOptionSchema`, `choiceAnswerSchema`, `choiceAskResponseSchema` | `choice` schemas and their types (`ChoiceAskInput`, `ChoiceOption`, `ChoiceAnswer`, `ChoiceAskResponse`) |
 | `confirmAskInputSchema`, `compactConfirmAskInputSchema`, `confirmAnswerSchema`, `confirmAskResponseSchema` | `confirm` schemas and their types (`ConfirmAskInput`, `ConfirmAnswer`, `ConfirmAskResponse`) |
 | `markdownAskInputSchema`, `markdownAnswerSchema`, `markdownAskResponseSchema`, `markdownLengthBounds(input)` | `markdown` schemas and their types (`MarkdownAskInput`, `MarkdownAnswer`, `MarkdownAskResponse`), and the `{min, max}` length an answer must meet |
 | `formAskInputSchema`, `formFieldSchema`, `formAnswerSchema`, `formAskResponseSchema`, `FORM_FIELD_TYPES`, `formDefaultValues(input)`, `formTextMaxLength(field)` | `form` schemas and their types (`FormAskInput`, `FormField`, `FormFieldType`, `FormAnswer`, `FormAskResponse`, `FormValue`), the field types, the defaults keyed by field id, and a field's longest string value |
+| `filesAskInputSchema`, `askFileRefSchema`, `filesAnswerSchema`, `filesAskResponseSchema`, `filesCountBounds(input)` | `files` schemas and their types (`FilesAskInput`, `AskFileRef`, `FilesAnswer`, `FilesAskResponse`), and the `{min, max}` files an answer must hold |
+| `ASK_FILE_ACCEPT`, `ASK_FILE_ACCEPT_MIME_TYPES`, `acceptedFileMimeTypes(accept)`, `isTextFileMimeType(mimeType)` | The `accept` values (`AskFileAccept`), the MIME types each allows (`AskFileMimeType`), the types an `accept` list allows, and whether a type reaches the model as text |
+| `parseAskDataUrl(url)`, `sniffFileBytes(bytes)`, `checkAskFileBytes(...)`, `fileNotOwnedError({index})` | The media type and payload of a base64 data URL, the type a file's first bytes show (`SniffedFileType`), the server byte check, and the `FILE_NOT_OWNED` error |
 | `confirmButtonLabels(input)` | The `{confirm, deny}` labels of a `confirm` ask, with the defaults `"Confirm"` and `"Cancel"` |
 | `askAllowsDecline(ask)` | Whether an ask accepts `decline`: `confirm` defaults to no, other kinds to yes |
 | `CHOICE_SELECT_MODES`, `ChoiceSelectMode`, `choiceSelectionBounds(input)` | The `select` values (`["one", "many"]`), and the `{min, max}` choices an answer to a `choice` ask must hold |
 | `askInputSchemas`, `compactAskInputSchemas`, `askOutputSchemas`, `askInputSchemaFor({kind, surface?})` | Input and answer envelope schemas by kind, and the input schema for a kind on a surface |
 | `askResponseSchema`, `askAcceptResponseSchema`, `askDeclineResponseSchema`, `askCancelResponseSchema`, `AskResponse` | The answer envelope |
-| `Ask`, `ChoiceAsk`, `ConfirmAsk`, `MarkdownAsk`, `FormAsk` | A validated ask: `{kind, input}` |
+| `Ask`, `ChoiceAsk`, `ConfirmAsk`, `MarkdownAsk`, `FormAsk`, `FilesAsk` | A validated ask: `{kind, input}` |
 | `ASK_CANCEL_REASONS` | Reasons the server records with `cancel` |
 | `validateAskInput`, `validateAskResponse`, `AskValidationError`, `AskErrorCode` | Validators and their errors |
 | `toSimpleCard`, `resolveButtonAnswer`, `simpleCardSchema`, `simpleCardButtonSchema`, `SIMPLE_CARD_BUTTON_STYLES`, `SimpleCard`, `SimpleCardButton` | Simple cards, and the answer a card's button sends |
@@ -864,7 +960,9 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 | `TERRENO_ASKS_SYSTEM_PROMPT` | System prompt text added when asks are on, before the `askPromptSection` |
 | `COMPACT_SURFACE_SYSTEM_PROMPT` | System prompt line added on compact turns |
 | `GptHistoryRouteOptions.chat` | Chat options for `addGptHistoryRoutes`. When they turn `asks` on, it adds the headless endpoints; otherwise it adds neither. |
-| `AsksOptions` | `{kinds?: AskKind[]}` |
+| `AsksOptions` | `{kinds?: AskKind[], maxFileSizeBytes?: number}` |
+| `GptRouteOptions.fileStorageService` | Loads the uploads a `files` answer names (`AskFileDownloader`: `{download(gcsKey)}`). `AiApp` passes its `FileStorageService` when `gcsBucket` is set. Without it, a `fileId` fails with `FILE_NOT_OWNED` and answers must use data URLs. |
+| `FileStorageService.download(gcsKey)`, `upload(...)` | `download` returns an upload's bytes. `upload` now also returns the `FileAttachment` `id`, which `POST /files/upload` sends back for a `files` answer. |
 | `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus` | Stored ask types |
 | `Ask`, `AskKind`, `AskResponse`, `AskValidationError`, `SimpleCard`, `SimpleCardButton` | Re-exported from `@terreno/blocks` |
 
@@ -876,4 +974,5 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 | `SimpleAskCard`, `SimpleAskCardProps` | Any ask's simple card, for narrow layouts ([props](ui.md#simpleaskcard)) |
 | `ChatAsk`, `ChatAskState`, `ChatAskStatus` | An ask as the chat shows it: the ask, its `toolCallId`, `status`, and optional `response` and `simple` |
 | `AskSubmission`, `AskSubmitHandler` | What `onAskSubmit` and `AskCard`'s `onSubmit` receive: `{toolCallId, response}` |
-| `GPTChatMessage.ask`, `GPTChatProps.onAskSubmit`, `GPTChatProps.askErrors` | Asks in `GPTChat` |
+| `GPTChatMessage.ask`, `GPTChatProps.onAskSubmit`, `GPTChatProps.askErrors`, `GPTChatProps.resolveAskFiles` | Asks in `GPTChat` |
+| `AskFilesResolver`, `resolveAskFilesAsDataUrls`, `selectedFileToDataUrlRef(file)`, `normalizeMimeType(mimeType)` | How picked files become `files` refs: the resolver type, the default that sends data URLs, one file as a data URL ref, and a MIME type without parameters |

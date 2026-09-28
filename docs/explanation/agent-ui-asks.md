@@ -6,9 +6,10 @@ calls on the existing chat stream, how one round trip works, how a watch or anot
 answers them, and how asks and Agent UI Blocks divide the work. Fields, limits, events, and error
 codes are in the [reference](../reference/agent-ui-asks.md).
 
-Asks ship today as four kinds: `choice`, to pick one option or several with an optional answer
+Asks ship today as five kinds: `choice`, to pick one option or several with an optional answer
 of the user's own (Other), `confirm`, to approve or deny one action, `markdown`, to edit a draft
-the agent wrote and send it back, and `form`, to fill in a few typed fields at once. The chat asks
+the agent wrote and send it back, `form`, to fill in a few typed fields at once, and `files`, to
+send images or documents the agent reads in the same turn. The chat asks
 on `POST /gpt/prompt` and shows asks in `GPTChat`. Watches and other small clients answer
 select-one choices and confirms on two JSON endpoints with the compact surface, and can approve a
 markdown draft or submit a form's defaults as is. The
@@ -177,6 +178,15 @@ offset) so the agent never has to guess a time zone. Each error names its field
 (`content.values.<id>`), so the card shows it where the user can fix it. A small screen cannot
 fill in fields, so the compact surface never offers `form`; a watch can still send the defaults
 when every required field has one, and otherwise hands off to the phone.
+
+A `files` ask gets the user's files to the model as the model's own input types: images as image
+parts, PDFs as file parts, and text, CSV, and JSON as text cut at 100 KB. The declared type is not
+trusted. The server reads the bytes and rejects a file whose bytes are another type, so a renamed
+file cannot reach the model as something it is not. Files travel as uploads when the host has
+file storage and as data URLs when it does not, so an app without a bucket still works. Either
+way the history keeps only each file's name, type, and size: the bytes reach the model once, on
+the answering turn, and a long conversation does not grow by the size of its files. Picking files
+needs a phone or a computer, so the compact surface never offers `files`.
 
 After an ask ends, the card collapses to one line, such as "You chose: Team" or "You declined:
 Keep them". A long conversation

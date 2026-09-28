@@ -1,5 +1,5 @@
 import {describe, expect, it} from "bun:test";
-import type {AskSubmission, GPTChatMessage} from "@terreno/ui";
+import type {AskSubmission, GPTChatMessage, SelectedFile} from "@terreno/ui";
 
 import type {GptHistory} from "@/store/sdk";
 
@@ -8,7 +8,9 @@ import {
   askErrorsFromBody,
   askFromHistoryPrompt,
   askMessage,
+  createAskFilesResolver,
   errorDetailFromBody,
+  uploadedFileFromBody,
   withoutEmptyAssistant,
   withResolvedAsk,
 } from "./gptAsks";
@@ -243,5 +245,74 @@ describe("errorDetailFromBody", () => {
       "This ask is no longer pending"
     );
     expect(errorDetailFromBody(undefined)).toBeUndefined();
+  });
+});
+
+const RECEIPT: SelectedFile = {mimeType: "image/png", name: "receipt.png", uri: "blob:receipt"};
+const ITEMS: SelectedFile = {
+  mimeType: "text/csv; charset=utf-8",
+  name: "items.csv",
+  uri: "blob:items",
+};
+
+describe("createAskFilesResolver", () => {
+  it("uploads each file and answers with file ids", async () => {
+    const uploaded: string[] = [];
+    const resolve = createAskFilesResolver({
+      toDataUrlRefs: async () => expect.unreachable("a server with file routes needs no data URLs"),
+      upload: async (file) => {
+        uploaded.push(file.name);
+        return {id: `id-${file.name}`, size: file.name.length};
+      },
+    });
+
+    expect(await resolve([RECEIPT, ITEMS])).toEqual([
+      {fileId: "id-receipt.png", filename: "receipt.png", mimeType: "image/png", size: 11},
+      {fileId: "id-items.csv", filename: "items.csv", mimeType: "text/csv", size: 9},
+    ]);
+    expect(uploaded).toEqual(["receipt.png", "items.csv"]);
+  });
+
+  it("sends data URLs when the server has no file routes, and stops trying to upload", async () => {
+    let uploads = 0;
+    const dataUrlRef = {
+      filename: "receipt.png",
+      mimeType: "image/png",
+      size: 4,
+      url: "data:image/png;base64,iVBORw==",
+    };
+    const resolve = createAskFilesResolver({
+      toDataUrlRefs: async (files) => files.map(() => dataUrlRef),
+      upload: async () => {
+        uploads += 1;
+        return undefined;
+      },
+    });
+
+    expect(await resolve([RECEIPT, ITEMS])).toEqual([dataUrlRef, dataUrlRef]);
+    expect(await resolve([RECEIPT])).toEqual([dataUrlRef]);
+    expect(uploads).toBe(1);
+  });
+
+  it("keeps the ask open when an upload fails", async () => {
+    const resolve = createAskFilesResolver({
+      upload: async () => {
+        throw new Error("HTTP 500");
+      },
+    });
+
+    await expect(resolve([RECEIPT])).rejects.toThrow("HTTP 500");
+  });
+});
+
+describe("uploadedFileFromBody", () => {
+  it("reads the id and size of an upload response", () => {
+    expect(
+      uploadedFileFromBody({
+        data: {filename: "a.png", gcsKey: "k", id: "66f0c0ffee", mimeType: "image/png", size: 12},
+      })
+    ).toEqual({id: "66f0c0ffee", size: 12});
+    expect(uploadedFileFromBody({data: {gcsKey: "k"}})).toBeUndefined();
+    expect(uploadedFileFromBody(undefined)).toBeUndefined();
   });
 });

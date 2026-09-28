@@ -155,6 +155,35 @@ describe("askSummary", () => {
     );
   });
 
+  it("names the files a files answer sent", () => {
+    const filesAsk = (files: unknown): ChatAsk =>
+      ({
+        input: {accept: ["image", "text"], prompt: "Upload the receipt."},
+        kind: "files",
+        response: {action: "accept", content: {files}},
+        status: "answered",
+        toolCallId: "call_1",
+      }) as ChatAsk;
+
+    assert.equal(
+      askSummary(
+        filesAsk([
+          {filename: "receipt.png", mimeType: "image/png", size: 12},
+          {filename: "items.txt", mimeType: "text/plain", size: 25},
+        ])
+      ),
+      "You sent 2 files: receipt.png, items.txt"
+    );
+    assert.equal(
+      askSummary(
+        filesAsk([{fileId: "f1", filename: "receipt.png", mimeType: "image/png", size: 1}])
+      ),
+      "You sent 1 file: receipt.png"
+    );
+    assert.equal(askSummary(filesAsk([])), "You sent 0 files");
+    assert.equal(askSummary(filesAsk("not files")), "You answered this question.");
+  });
+
   it("counts the fields a form answer filled in", () => {
     const formAsk = (values: unknown): ChatAsk =>
       ({

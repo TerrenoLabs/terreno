@@ -100,7 +100,7 @@ export interface SetAdminUserPasswordRequest {
 
 // GptHistory endpoints are hand-maintained: nested modelRouter mounts under /gpt/histories
 // are not always present in the generated OpenAPI SDK after regen.
-type GptHistoryAskKind = "choice" | "confirm" | "markdown" | "form";
+type GptHistoryAskKind = "choice" | "confirm" | "markdown" | "form" | "files";
 
 interface GptHistoryPromptAsk {
   kind: GptHistoryAskKind;

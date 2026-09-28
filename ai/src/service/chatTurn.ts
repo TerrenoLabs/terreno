@@ -7,12 +7,13 @@ import {
   type AskResponse,
   type AskSurface,
   askKindsForSurface,
+  type FilesAnswer,
   type SimpleCard,
   type TurnResult,
   toSimpleCard,
   validateAskResponse,
 } from "@terreno/blocks";
-import type {ModelMessage, Tool} from "ai";
+import type {ModelMessage, Tool, ToolResultPart} from "ai";
 import {stepCountIs, streamText} from "ai";
 import type express from "express";
 import {DateTime} from "luxon";
@@ -31,6 +32,12 @@ import type {
 } from "../types";
 import {AIService} from "./aiService";
 import {
+  askFilesModelOutput,
+  invalidAskResponseError,
+  resolveAskFiles,
+  storedFilesAnswer,
+} from "./askFiles";
+import {
   askKindFromToolName,
   askToolName,
   buildAsksSystemPrompt,
@@ -38,6 +45,7 @@ import {
   createAskTools,
   parseAsk,
   resolveAskKinds,
+  resolveMaxFileSizeBytes,
   toStoredMessages,
   withoutReservedToolNames,
 } from "./asks";
@@ -589,6 +597,36 @@ const buildContentParts = (prompt: string, attachments: unknown): MessageContent
 };
 
 /**
+ * The answer as the conversation stores it, and the tool result the model sees this turn. An
+ * accepted `files` answer has its files loaded and checked: the model sees them, and the stored
+ * answer keeps only their metadata.
+ */
+const prepareAnswer = async ({
+  answer,
+  fileStorageService,
+  kind,
+  maxFileSizeBytes,
+  userId,
+}: {
+  answer: AskResponse;
+  fileStorageService: GptRouteOptions["fileStorageService"];
+  kind: AskKind;
+  maxFileSizeBytes: number;
+  userId: mongoose.Types.ObjectId | undefined;
+}): Promise<{answerOutput?: ToolResultPart["output"]; storedAnswer: AskResponse}> => {
+  if (kind !== "files" || answer.action !== "accept") {
+    return {storedAnswer: answer};
+  }
+  const files = await resolveAskFiles({
+    fileStorageService,
+    files: (answer.content as FilesAnswer).files,
+    maxFileSizeBytes,
+    userId,
+  });
+  return {answerOutput: askFilesModelOutput(files), storedAnswer: storedFilesAnswer(files)};
+};
+
+/**
  * Loads the history and prepares the turn's messages. A new prompt first cancels any pending
  * ask. An answer resolves the pending ask and replays the paused turn with the answer appended.
  */
@@ -596,11 +634,13 @@ const startTurn = async ({
   aiService,
   askAnswer,
   body,
+  options,
   userId,
 }: {
   aiService: AIService;
   askAnswer: AskAnswer | undefined;
   body: Record<string, unknown>;
+  options: GptRouteOptions;
   userId: mongoose.Types.ObjectId | undefined;
 }): Promise<TurnStart> => {
   const {attachments, historyId, projectId, prompt} = body;
@@ -613,24 +653,28 @@ const startTurn = async ({
     if (!pending || pending.toolCallId !== askAnswer.toolCallId) {
       throw staleAskError(askAnswer.toolCallId);
     }
+    const maxFileSizeBytes = resolveMaxFileSizeBytes(options.asks);
     const fields = validateAskResponse({
       input: pending.input,
       kind: pending.kind,
+      maxFileSizeBytes,
       response: askAnswer.response,
     });
     if (fields.length > 0) {
-      throw new APIError({
-        detail: "The answer does not match the ask. See fields.",
-        meta: {fields},
-        status: 400,
-        title: "Invalid askResponse",
-      });
+      throw invalidAskResponseError(fields);
     }
     const answer = askAnswer.response as AskResponse;
     const {kind, promptIndex, responseMessages, toolCallId} = pending;
+    const {answerOutput, storedAnswer} = await prepareAnswer({
+      answer,
+      fileStorageService: options.fileStorageService,
+      kind,
+      maxFileSizeBytes,
+      userId,
+    });
     const resolved = await resolvePendingAsk({
       history,
-      result: answer,
+      result: storedAnswer,
       status: answer.action === "cancel" ? "cancelled" : "answered",
       toolCallId,
       toolName: askToolName(kind),
@@ -639,12 +683,19 @@ const startTurn = async ({
       throw staleAskError(toolCallId);
     }
     const turnHistory = resolved.prompts.slice(0, promptIndex);
-    const replayedMessages = completePausedTurn({answer, responseMessages, toolCallId});
+    const replayedMessages = completePausedTurn({
+      answer: storedAnswer,
+      responseMessages,
+      toolCallId,
+    });
+    const modelMessages = answerOutput
+      ? completePausedTurn({answer: storedAnswer, answerOutput, responseMessages, toolCallId})
+      : replayedMessages;
     return {
       history: resolved,
       isNewHistory: false,
-      logPrompt: JSON.stringify(answer),
-      messages: [...aiService.buildMessages(turnHistory), ...replayedMessages],
+      logPrompt: JSON.stringify(storedAnswer),
+      messages: [...aiService.buildMessages(turnHistory), ...modelMessages],
       promptIndex,
       replayedMessages,
       resolvedAsk: {action: answer.action, kind, toolCallId},
@@ -1071,7 +1122,7 @@ export const runChatTurn = async ({
     return;
   }
 
-  const turn = await startTurn({aiService, askAnswer, body, userId});
+  const turn = await startTurn({aiService, askAnswer, body, options, userId});
   const {isNewHistory, logPrompt, messages, replayedMessages, resolvedAsk, titlePrompt} = turn;
   let {history} = turn;
   const effectiveSystemPrompt = await buildSystemPrompt({

@@ -7,6 +7,9 @@ import {
   AskCardConfirmReadOnly,
   AskCardDemo,
   AskCardError,
+  AskCardFiles,
+  AskCardFilesAnswered,
+  AskCardFilesError,
   AskCardForm,
   AskCardFormAnswered,
   AskCardFormError,
@@ -24,6 +27,7 @@ export const AskCardConfiguration: DemoConfiguration = {
   a11yNotes: [
     "GPTChat moves focus to a pending ask so keyboard and screen reader users land on it.",
     "Every control is a labeled Button, RadioField, SelectField, MultiselectField, TextField, TextArea, DateTimeField, BooleanField, or MarkdownEditorField, so each answer is reachable by keyboard.",
+    "A files ask picks with a labeled FilePickerButton, and each picked file has a Remove button named for the file.",
   ],
   additionalDocumentation: [],
   category: "Pattern",
@@ -36,8 +40,10 @@ export const AskCardConfiguration: DemoConfiguration = {
   name: "AskCard",
   props: {},
   related: [
+    "AttachmentPreview",
     "BooleanField",
     "DateTimeField",
+    "FilePickerButton",
     "GPTChat",
     "MarkdownEditorField",
     "MultiselectField",
@@ -73,6 +79,18 @@ export const AskCardConfiguration: DemoConfiguration = {
     "Confirm read only": {
       description: "No onSubmit: both confirm buttons are disabled.",
       render: () => <AskCardConfirmReadOnly />,
+    },
+    Files: {
+      description: "files: pick files of the accepted types and send them.",
+      render: () => <AskCardFiles />,
+    },
+    "Files answered": {
+      description: "Sent and skipped files asks, naming the files sent.",
+      render: () => <AskCardFilesAnswered />,
+    },
+    "Files error": {
+      description: "Server errors for a file whose bytes or owner do not match.",
+      render: () => <AskCardFilesError />,
     },
     Form: {
       description: "form: typed fields filled in and submitted at once.",
@@ -123,6 +141,7 @@ export const AskCardConfiguration: DemoConfiguration = {
     do: [
       "Let GPTChat render asks: set `ask` on the tool-call message and pass `onAskSubmit`.",
       "Show server validation errors with `errors` (GPTChat: `askErrors`) so the user can fix the answer.",
+      "Pass `resolveAskFiles` when the host has file storage, so files asks send uploads instead of data URLs.",
     ],
     doNot: [
       "Do not render your own buttons for an ask; the card picks buttons, radio, select, or checkboxes from the options.",

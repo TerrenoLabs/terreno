@@ -26,7 +26,8 @@
               "choice",
               "confirm",
               "markdown",
-              "form"
+              "form",
+              "files"
             ]
           },
           "simple": {
@@ -133,7 +134,8 @@
                   "choice",
                   "confirm",
                   "markdown",
-                  "form"
+                  "form",
+                  "files"
                 ]
               },
               "text": {

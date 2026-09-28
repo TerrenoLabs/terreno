@@ -13,6 +13,7 @@ import {
   uploadedFileFromBody,
   withoutEmptyAssistant,
   withResolvedAsk,
+  withToolResult,
 } from "./gptAsks";
 
 const PLAN_INPUT = {
@@ -209,6 +210,67 @@ describe("withoutEmptyAssistant", () => {
       HELLO_MESSAGE,
       imageReply,
       fileReply,
+    ]);
+  });
+});
+
+describe("withToolResult", () => {
+  const DELETE_RESULT = {
+    result: {deleted: 2, titles: ["Buy milk", "File taxes"]},
+    toolCallId: "call_delete",
+    toolName: "deleteCompletedTodos",
+  };
+  const DELETE_RESULT_MESSAGE: GPTChatMessage = {
+    content: "Tool result: deleteCompletedTodos",
+    role: "tool-result",
+    toolResult: DELETE_RESULT,
+  };
+  const DELETE_CALL_MESSAGE: GPTChatMessage = {
+    content: "Tool call: deleteCompletedTodos",
+    role: "tool-call",
+    toolCall: {args: {}, toolCallId: "call_delete", toolName: "deleteCompletedTodos"},
+  };
+
+  it("puts the result before the empty reply its tool call opened", () => {
+    const messages: GPTChatMessage[] = [
+      HELLO_MESSAGE,
+      DELETE_CALL_MESSAGE,
+      {content: "", role: "assistant"},
+    ];
+
+    expect(withToolResult({messages, toolResult: DELETE_RESULT})).toEqual([
+      HELLO_MESSAGE,
+      DELETE_CALL_MESSAGE,
+      DELETE_RESULT_MESSAGE,
+      {content: "", role: "assistant"},
+    ]);
+  });
+
+  it("adds the result of a tool an answered approval ran, which streams no tool call", () => {
+    const approvalAsk = askMessage({
+      input: {prompt: "Delete all of your completed todos?"},
+      kind: "confirm",
+      toolCallId: "call_approval",
+    });
+    const messages = withResolvedAsk({
+      action: "accept",
+      messages: [HELLO_MESSAGE, approvalAsk],
+      toolCallId: "call_approval",
+    });
+
+    expect(withToolResult({messages, toolResult: DELETE_RESULT})).toEqual([
+      ...messages,
+      DELETE_RESULT_MESSAGE,
+    ]);
+  });
+
+  it("adds the result after a reply that already has text", () => {
+    const reply: GPTChatMessage = {content: "Deleting them now.", role: "assistant"};
+
+    expect(withToolResult({messages: [HELLO_MESSAGE, reply], toolResult: DELETE_RESULT})).toEqual([
+      HELLO_MESSAGE,
+      reply,
+      DELETE_RESULT_MESSAGE,
     ]);
   });
 });

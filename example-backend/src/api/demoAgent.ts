@@ -8,6 +8,8 @@ import {
 } from "@terreno/ai";
 import type {LanguageModel} from "ai";
 
+import {DELETE_COMPLETED_TODOS_TOOL} from "./todoTools";
+
 /** The AI SDK language model spec (v3) that the demo agent implements. */
 type DemoLanguageModel = Extract<LanguageModel, {specificationVersion: "v3"}>;
 type DemoCallOptions = Parameters<DemoLanguageModel["doStream"]>[0];
@@ -65,11 +67,12 @@ type DemoAskScenario = {
   };
 }[Ask["kind"]];
 
-interface DemoAskTurn {
-  input: DemoAskScenario["input"];
+/** A call of an ask tool, or of a host tool such as deleteCompletedTodos. */
+interface DemoToolCallTurn {
+  input: unknown;
   toolCallId: string;
   toolName: string;
-  type: "ask";
+  type: "tool-call";
 }
 
 interface DemoTextTurn {
@@ -77,7 +80,7 @@ interface DemoTextTurn {
   type: "text";
 }
 
-type DemoTurn = DemoAskTurn | DemoTextTurn;
+type DemoTurn = DemoToolCallTurn | DemoTextTurn;
 
 const PLAN_OPTIONS = [
   {description: "Free for one person", id: "starter", label: "Starter"},
@@ -491,6 +494,48 @@ const DEMO_SCENARIOS: DemoAskScenario[] = [
   },
 ];
 
+const DEMO_CLEANUP_TITLE = "Cleaning up todos";
+
+/** "delete", "clear", or "remove", then "completed" later in the same sentence. */
+const CLEANUP_TRIGGER = /\b(clear|delete|remove)\b[^.?!]*\bcompleted\b/i;
+
+const CLEANUP_NO_TOOL_REPLY = `This server did not give me the ${DELETE_COMPLETED_TODOS_TOOL} tool, so I cannot delete your todos.`;
+
+const CLEANUP_ASKS_OFF_REPLY =
+  "Deleting todos needs your approval, but asks are turned off on this server, so I did nothing.";
+
+const CLEANUP_DENIED_REPLY: DemoReply = {
+  compact: "OK, I kept your completed todos.",
+  full: 'OK, I kept your completed todos. Say "delete my completed todos" to try another answer.',
+};
+
+/**
+ * Replies to the deleteCompletedTodos result. The server runs the tool only after the user
+ * approves; a deny, a cancel, or a new message reaches the model as `execution-denied`.
+ */
+const cleanupReply = (output: DemoToolOutput, isCompact: boolean): string => {
+  if (output.type === "execution-denied") {
+    return isCompact ? CLEANUP_DENIED_REPLY.compact : CLEANUP_DENIED_REPLY.full;
+  }
+  if (output.type !== "json") {
+    return "Deleting your completed todos failed, so some may remain.";
+  }
+  const {deleted, titles} = (output.value ?? {}) as {deleted?: unknown; titles?: unknown};
+  const count = typeof deleted === "number" ? deleted : 0;
+  if (count === 0) {
+    return "You had no completed todos, so I deleted nothing.";
+  }
+  const summary = `Deleted ${count} completed ${count === 1 ? "todo" : "todos"}`;
+  if (isCompact) {
+    return `${summary}.`;
+  }
+  const names = Array.isArray(titles)
+    ? titles.filter((title): title is string => typeof title === "string")
+    : [];
+  const listed = names.length > 0 ? `: ${joinWithAnd(names.map((name) => `**${name}**`))}` : "";
+  return `${summary}${listed}. ${count === 1 ? "It is" : "They are"} gone from the Todos tab too.`;
+};
+
 const DEMO_HELP_REPLY: DemoReply = {
   compact: `I'm the Terreno demo agent. Say "help me pick a plan" or "archive old chats" to try an ask.`,
   full: [
@@ -500,6 +545,7 @@ const DEMO_HELP_REPLY: DemoReply = {
     'Say "draft an announcement" and I will ask you to edit my draft in a markdown editor, then send it back.',
     'Say "invoice details" and I will ask you to check a short form, with a date, a number, and a few other field types, then send it.',
     'Say "upload a receipt" and I will ask you for a photo, a PDF, or a text or CSV file, then tell you what arrived.',
+    'Say "delete my completed todos" and I will call a real tool that deletes them. The server asks you to approve first and never runs the tool without your approval.',
     "To talk to a real model, set GEMINI_API_KEY on the server or save a Gemini API key on the Profile tab.",
   ].join("\n\n"),
 };
@@ -609,6 +655,41 @@ const lastAskAnswer = (prompt: DemoPrompt): (DemoToolAnswer & {toolCallId: strin
   return undefined;
 };
 
+/** The deleteCompletedTodos result when the conversation ends with it. */
+const lastCleanupOutput = (prompt: DemoPrompt): DemoToolOutput | undefined => {
+  const message = prompt.at(-1);
+  if (message?.role !== "tool") {
+    return undefined;
+  }
+  const result = message.content.find(
+    (part) => part.type === "tool-result" && part.toolName === DELETE_COMPLETED_TODOS_TOOL
+  );
+  return result?.type === "tool-result" ? result.output : undefined;
+};
+
+const offeredToolNames = (tools: DemoCallOptions["tools"]): string[] =>
+  (tools ?? []).flatMap((tool) => (tool.type === "function" ? [tool.name] : []));
+
+/**
+ * Calls deleteCompletedTodos, a host tool with `needsApproval`. The server pauses on an approval
+ * ask and runs the tool only after the user approves, so the demo needs the tool and asks on.
+ */
+const cleanupTurn = (tools: DemoCallOptions["tools"]): DemoTurn => {
+  const names = offeredToolNames(tools);
+  if (!names.includes(DELETE_COMPLETED_TODOS_TOOL)) {
+    return {text: CLEANUP_NO_TOOL_REPLY, type: "text"};
+  }
+  if (!names.some((name) => name.startsWith("ask_"))) {
+    return {text: CLEANUP_ASKS_OFF_REPLY, type: "text"};
+  }
+  return {
+    input: {},
+    toolCallId: `demo_cleanup_${randomUUID()}`,
+    toolName: DELETE_COMPLETED_TODOS_TOOL,
+    type: "tool-call",
+  };
+};
+
 const scenarioForToolCall = (toolCallId: string): DemoAskScenario | undefined => {
   const id = TOOL_CALL_ID_PATTERN.exec(toolCallId)?.[1];
   return DEMO_SCENARIOS.find((scenario) => scenario.id === id);
@@ -643,15 +724,23 @@ const planDemoTurn = ({prompt, tools}: Pick<DemoCallOptions, "prompt" | "tools">
     };
   }
 
-  const scenario = matchScenario(lastUserText(prompt));
+  const cleanupOutput = lastCleanupOutput(prompt);
+  if (cleanupOutput) {
+    return {text: cleanupReply(cleanupOutput, isCompact), type: "text"};
+  }
+
+  const userText = lastUserText(prompt);
+  if (CLEANUP_TRIGGER.test(userText)) {
+    return cleanupTurn(tools);
+  }
+
+  const scenario = matchScenario(userText);
   if (!scenario) {
     return replyFor(DEMO_HELP_REPLY);
   }
 
   const toolName = `ask_${scenario.kind}`;
-  const offeredAskTools = (tools ?? []).flatMap((tool) =>
-    tool.type === "function" && tool.name.startsWith("ask_") ? [tool.name] : []
-  );
+  const offeredAskTools = offeredToolNames(tools).filter((name) => name.startsWith("ask_"));
   if (offeredAskTools.length === 0) {
     return replyFor(DEMO_ASKS_OFF_REPLY);
   }
@@ -665,7 +754,7 @@ const planDemoTurn = ({prompt, tools}: Pick<DemoCallOptions, "prompt" | "tools">
     input: scenario.input,
     toolCallId: `demo_${scenario.id}_${randomUUID()}`,
     toolName,
-    type: "ask",
+    type: "tool-call",
   };
 };
 
@@ -673,6 +762,9 @@ const planDemoTurn = ({prompt, tools}: Pick<DemoCallOptions, "prompt" | "tools">
 const demoTitle = (prompt: DemoPrompt): string => {
   const snippet = lastUserText(prompt);
   const userText = /^User: ([\s\S]*?)\nAssistant:/.exec(snippet)?.[1] ?? snippet;
+  if (CLEANUP_TRIGGER.test(userText)) {
+    return DEMO_CLEANUP_TITLE;
+  }
   return matchScenario(userText)?.title ?? DEMO_DEFAULT_TITLE;
 };
 
@@ -687,7 +779,7 @@ const ZERO_USAGE: DemoGenerateResult["usage"] = {
 };
 
 const toStreamParts = (turn: DemoTurn): DemoStreamPart[] => {
-  if (turn.type === "ask") {
+  if (turn.type === "tool-call") {
     return [
       {type: "stream-start", warnings: []},
       {

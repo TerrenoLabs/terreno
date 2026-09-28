@@ -2621,13 +2621,16 @@ describe("/gpt/prompt asks", () => {
     });
 
     const PENDING_ASK_FIELDS = [
+      "approvalId",
       "created",
       "input",
       "kind",
+      "origin",
       "promptIndex",
       "responseMessages",
       "simple",
       "toolCallId",
+      "toolName",
     ];
 
     const requestBodyProperties = (operation: {

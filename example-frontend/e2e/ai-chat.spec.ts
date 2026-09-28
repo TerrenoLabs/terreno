@@ -393,6 +393,59 @@ test.describe("AI Chat", () => {
     });
   });
 
+  test("shows the result card of a host tool as soon as its approval runs it", async ({page}) => {
+    const historyId = `mock-history-${Date.now()}`;
+    const approvalAsk = {
+      input: {
+        confirmLabel: "Delete",
+        denyLabel: "Keep them",
+        destructive: true,
+        prompt: "Delete all of your completed todos? You can't undo this.",
+        title: "Delete completed todos",
+      },
+      kind: "confirm",
+      origin: "approval",
+      toolCallId: "call_approval",
+      toolName: "deleteCompletedTodos",
+    };
+    const requests = await mockGptTurns(page, [
+      [
+        {ask: approvalAsk, historyId},
+        {done: true, historyId, pendingAsk: approvalAsk, title: "Cleaning up todos"},
+      ],
+      // A resumed approval streams no {toolCall}: the call was streamed by the turn that paused.
+      [
+        {askResolved: {action: "accept", toolCallId: "call_approval"}},
+        {
+          toolResult: {
+            result: {deleted: 2, titles: ["Buy milk", "File taxes"]},
+            toolCallId: "call_delete",
+            toolName: "deleteCompletedTodos",
+          },
+        },
+        {text: "Deleted 2 completed todos: Buy milk, File taxes."},
+        {done: true, historyId, title: "Cleaning up todos"},
+      ],
+    ]);
+
+    await page.getByTestId("gpt-input").fill("Delete my completed todos");
+    await page.getByTestId("gpt-submit").click();
+    await page.getByTestId("gpt-ask-call_approval-button-approve").click();
+
+    await expect(page.getByText("Deleted 2 completed todos: Buy milk, File taxes.")).toBeVisible();
+    const resultCard = page.getByLabel("Result: deleteCompletedTodos");
+    await expect(resultCard).toBeVisible();
+    await resultCard.click();
+    await expect(page.getByText(/"deleted": 2/)).toBeVisible();
+    await expect(page.getByTestId("gpt-ask-call_approval-summary")).toContainText(
+      "You confirmed: Delete"
+    );
+    expect(requests[1]).toMatchObject({
+      askResponse: {action: "accept", content: {confirmed: true}, toolCallId: "call_approval"},
+      historyId,
+    });
+  });
+
   test("sends picked files as data URLs when the server has no file storage, after a rejected file", async ({
     page,
     consoleGuard,

@@ -69,7 +69,7 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
   - Docs: `docs/reference/agent-ui-asks.md` (`files`, storage modes), `docs/how-to/agent-ui-asks.md` ("accept uploads with or without GCS").
   - Acceptance: AC10; AC1, AC2 (`FILE_TYPE_NOT_ACCEPTED`, `FILE_TOO_LARGE`, `FILE_COUNT`, `FILE_NOT_OWNED`, `MIME_MISMATCH`), AC9, and AC15 for `files`.
 
-- [ ] **Task 2.6**: Server-enforced approval for host tools
+- [x] **Task 2.6**: Server-enforced approval for host tools
   - Delivers: host tools with AI SDK `needsApproval` pause on `tool-approval-request` as a server-made `confirm` ask (`origin: "approval"`, `toolName`, `approvalId`); `AsksOptions.approvals[toolName]` customizes the prompt and labels, with a default "Allow &lt;toolName&gt;?"; the answer appends `tool-approval-response` and resumes, so the SDK runs or denies the tool; works through `/gpt/prompt` and `turn`; `AIRequest.metadata.ask.origin`. example-backend adds a `deleteCompletedTodos` tool with `needsApproval: true` and a destructive approval prompt.
   - Files: `ai/src/service/asks.ts`, `ai/src/service/chatTurn.ts`, `ai/src/types/index.ts`, `ai/src/routes/gpt.test.ts`, `ai/src/routes/gptHistories.test.ts`; `example-backend/src/api/ai.ts`.
   - Blocked by: 2.2

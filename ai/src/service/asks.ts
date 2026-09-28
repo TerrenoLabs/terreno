@@ -13,12 +13,16 @@ import {
   askOutputSchemas,
   askPromptSection,
   type CompactAskKind,
+  type ConfirmAnswer,
+  type ConfirmAskInput,
   isCompactAskKind,
 } from "@terreno/blocks";
 import {
   type JSONValue,
   type ModelMessage,
   type Tool,
+  type ToolApprovalRequest,
+  type ToolApprovalResponse,
   type ToolCallPart,
   type ToolResultPart,
   tool,
@@ -160,6 +164,124 @@ export const buildAsksSystemPrompt = ({
 export const toStoredMessages = (messages: ModelMessage[]): ModelMessage[] =>
   JSON.parse(JSON.stringify(messages)) as ModelMessage[];
 
+/** Why an approval was denied, as the model sees it in the tool's `execution-denied` result. */
+const APPROVAL_DENIAL_REASONS = {
+  cancelled: "user_cancelled",
+  declined: "user_declined",
+  denied: "user_denied",
+} as const;
+
+const truncate = (text: string, maxLength: number): string =>
+  text.length <= maxLength ? text : `${text.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+
+/** "Allow <toolName>?" with the tool's description, and Allow / Deny buttons. */
+const defaultApprovalAskInput = ({
+  description,
+  toolName,
+}: {
+  description?: string;
+  toolName: string;
+}): ConfirmAskInput => {
+  const question = `Allow ${toolName}?`;
+  const detail = description?.trim();
+  return {
+    confirmLabel: "Allow",
+    denyLabel: "Deny",
+    prompt: truncate(detail ? `${question} ${detail}` : question, ASK_LIMITS.promptMaxLength),
+  };
+};
+
+/**
+ * The `confirm` input of the approval ask for one host tool call: the host's
+ * `asks.approvals[toolName]`, or the default when it has none, throws, or returns an input that
+ * is not a valid `confirm` input.
+ */
+export const approvalAskInput = ({
+  asks,
+  description,
+  input,
+  surface,
+  toolName,
+}: {
+  asks: boolean | AsksOptions | undefined;
+  description?: string;
+  input: unknown;
+  surface: AskSurface;
+  toolName: string;
+}): ConfirmAskInput => {
+  const fallback = defaultApprovalAskInput({description, toolName});
+  const approval = typeof asks === "object" ? asks.approvals?.[toolName] : undefined;
+  if (!approval) {
+    return fallback;
+  }
+  try {
+    const parsed = askInputSchemaFor({kind: "confirm", surface}).safeParse(approval(input));
+    if (parsed.success) {
+      return parsed.data as ConfirmAskInput;
+    }
+    logger.warn("asks.approvals returned an invalid confirm input; using the default approval", {
+      issues: parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`),
+      toolName,
+    });
+  } catch (error) {
+    logger.warn("asks.approvals threw; using the default approval", {
+      error: error instanceof Error ? error.message : String(error),
+      toolName,
+    });
+  }
+  return fallback;
+};
+
+/** The approval an answer to an approval ask gives: only an accepted `{confirmed: true}` approves. */
+const approvalResponseOf = (
+  answer: AskResponse
+): Pick<ToolApprovalResponse, "approved" | "reason"> => {
+  if (answer.action === "accept") {
+    return (answer.content as ConfirmAnswer).confirmed
+      ? {approved: true}
+      : {approved: false, reason: APPROVAL_DENIAL_REASONS.denied};
+  }
+  if (answer.action === "decline") {
+    return {approved: false, reason: APPROVAL_DENIAL_REASONS.declined};
+  }
+  return {approved: false, reason: answer.reason ?? APPROVAL_DENIAL_REASONS.cancelled};
+};
+
+/**
+ * The reason each denied approval in the messages' last tool message gives, by the tool call it
+ * denied, so the turn can show why a tool did not run.
+ */
+export const deniedApprovalReasons = (
+  messages: ModelMessage[]
+): Map<string, string | undefined> => {
+  const lastMessage = messages.at(-1);
+  if (lastMessage?.role !== "tool") {
+    return new Map();
+  }
+  const toolCallIds = new Map<string, string>();
+  for (const message of messages) {
+    if (message.role !== "assistant" || typeof message.content === "string") {
+      continue;
+    }
+    for (const part of message.content) {
+      if (part.type === "tool-approval-request") {
+        toolCallIds.set(part.approvalId, part.toolCallId);
+      }
+    }
+  }
+  return new Map(
+    lastMessage.content.flatMap((part) => {
+      const toolCallId =
+        part.type === "tool-approval-response" && !part.approved
+          ? toolCallIds.get(part.approvalId)
+          : undefined;
+      return toolCallId && part.type === "tool-approval-response"
+        ? [[toolCallId, part.reason] as const]
+        : [];
+    })
+  );
+};
+
 const outputForUnansweredCall = ({
   answer,
   answerOutput,
@@ -183,22 +305,30 @@ const outputForUnansweredCall = ({
 /**
  * The paused turn's messages plus a result for every tool call its last step left without one:
  * the user's answer for the pending ask, `cancel` for asks dropped because the model asked more
- * than once, and an error for any other tool that did not run. Results join the step's tool
- * message, in call order, so providers see one tool message per assistant message.
- * `answerOutput` replaces the answer's JSON result, such as a `files` answer with its files.
+ * than once, and an error for any other tool that did not run. A call waiting on approval gets a
+ * `tool-approval-response` instead of a result, so the AI SDK runs or denies it when the turn
+ * resumes: the user's answer decides the pending approval, `approvalId`, and every other
+ * approval in the step is denied with `one_ask_at_a_time`. The
+ * parts join the step's tool message, results in call order, so providers see one tool message
+ * per assistant message. `answerOutput` replaces the answer's JSON result, such as a `files`
+ * answer with its files.
  */
 export const completePausedTurn = ({
   answer,
   answerOutput,
+  approvalId,
   responseMessages,
   toolCallId,
 }: {
   answer: AskResponse;
   answerOutput?: ToolResultPart["output"];
+  /** Set when the pending ask is an approval: the approval request the answer decides. */
+  approvalId?: string;
   responseMessages: ModelMessage[];
   toolCallId: string;
 }): ModelMessage[] => {
   const answeredIds = new Set<string>();
+  const respondedApprovalIds = new Set<string>();
   for (const message of responseMessages) {
     if (typeof message.content === "string" || message.role === "system") {
       continue;
@@ -206,19 +336,29 @@ export const completePausedTurn = ({
     for (const part of message.content) {
       if (part.type === "tool-result") {
         answeredIds.add(part.toolCallId);
+      } else if (part.type === "tool-approval-response") {
+        respondedApprovalIds.add(part.approvalId);
       }
     }
   }
 
   const lastAssistant = responseMessages.findLast((message) => message.role === "assistant");
-  const stepCalls =
-    lastAssistant && typeof lastAssistant.content !== "string"
-      ? lastAssistant.content.filter(
-          (part): part is ToolCallPart => part.type === "tool-call" && !part.providerExecuted
-        )
-      : [];
+  const stepParts =
+    lastAssistant && typeof lastAssistant.content !== "string" ? lastAssistant.content : [];
+  const stepApprovalRequests = stepParts.filter(
+    (part): part is ToolApprovalRequest => part.type === "tool-approval-request"
+  );
+  const awaitingApprovalIds = new Set(stepApprovalRequests.map((request) => request.toolCallId));
+  const approvalRequests = stepApprovalRequests.filter(
+    (request) => !respondedApprovalIds.has(request.approvalId)
+  );
+  const stepCalls = stepParts.filter(
+    (part): part is ToolCallPart => part.type === "tool-call" && !part.providerExecuted
+  );
   const newResults = stepCalls
-    .filter((call) => !answeredIds.has(call.toolCallId))
+    .filter(
+      (call) => !answeredIds.has(call.toolCallId) && !awaitingApprovalIds.has(call.toolCallId)
+    )
     .map(
       (call): ToolResultPart => ({
         output: outputForUnansweredCall({answer, answerOutput, call, toolCallId}),
@@ -227,7 +367,16 @@ export const completePausedTurn = ({
         type: "tool-result",
       })
     );
-  if (newResults.length === 0) {
+  const approvalResponses = approvalRequests.map(
+    (request): ToolApprovalResponse => ({
+      approvalId: request.approvalId,
+      type: "tool-approval-response",
+      ...(approvalId !== undefined && request.approvalId === approvalId
+        ? approvalResponseOf(answer)
+        : {approved: false, reason: ASK_CANCEL_REASONS.oneAskAtATime}),
+    })
+  );
+  if (newResults.length === 0 && approvalResponses.length === 0) {
     return responseMessages;
   }
 
@@ -246,9 +395,13 @@ export const completePausedTurn = ({
       ...responseMessages.slice(0, -1),
       {
         ...lastMessage,
-        content: [...[...existingResults, ...newResults].sort(byCallOrder), ...otherParts],
+        content: [
+          ...[...existingResults, ...newResults].sort(byCallOrder),
+          ...otherParts,
+          ...approvalResponses,
+        ],
       },
     ];
   }
-  return [...responseMessages, {content: newResults, role: "tool"}];
+  return [...responseMessages, {content: [...newResults, ...approvalResponses], role: "tool"}];
 };

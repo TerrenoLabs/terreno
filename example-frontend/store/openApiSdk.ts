@@ -1517,12 +1517,16 @@ export type GpthistoriesPendingAsksArgs = undefined;
 export type PostGptHistoriesRes = /** status 201 Successful create */ {
   /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
   pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
     /** When the model asked */
     created: string;
     /** The validated ask input the model sent */
     input: any;
     /** Ask kind; the model asked with the tool ask_<kind> */
     kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
     /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
     promptIndex: number;
     /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
@@ -1531,6 +1535,8 @@ export type PostGptHistoriesRes = /** status 201 Successful create */ {
     simple: any;
     /** Tool call id of the ask; an answer must name it */
     toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
   };
   /** Project this conversation belongs to */
   projectId?: string;
@@ -1542,6 +1548,8 @@ export type PostGptHistoriesRes = /** status 201 Successful create */ {
     ask?: {
       /** Ask kind; the model asked with the tool ask_<kind> */
       kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
       /** pending while the user can answer; answered or cancelled once the ask is resolved */
       status: "pending" | "answered" | "cancelled";
     };
@@ -1597,6 +1605,8 @@ export type PostGptHistoriesArgs = {
     ask?: {
       /** Ask kind; the model asked with the tool ask_<kind> */
       kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
       /** pending while the user can answer; answered or cancelled once the ask is resolved */
       status: "pending" | "answered" | "cancelled";
     };
@@ -1645,12 +1655,16 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
   data?: {
     /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
     pendingAsk?: {
+      /** AI SDK approval request an approval ask answers; the same as toolCallId */
+      approvalId?: string;
       /** When the model asked */
       created: string;
       /** The validated ask input the model sent */
       input: any;
       /** Ask kind; the model asked with the tool ask_<kind> */
       kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
       /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
       promptIndex: number;
       /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
@@ -1659,6 +1673,8 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
       simple: any;
       /** Tool call id of the ask; an answer must name it */
       toolCallId: string;
+      /** Host tool an approval ask asks to run */
+      toolName?: string;
     };
     /** Project this conversation belongs to */
     projectId?: string;
@@ -1670,6 +1686,8 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
       ask?: {
         /** Ask kind; the model asked with the tool ask_<kind> */
         kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+        origin?: "approval";
         /** pending while the user can answer; answered or cancelled once the ask is resolved */
         status: "pending" | "answered" | "cancelled";
       };
@@ -1740,12 +1758,16 @@ export type GetGptHistoriesArgs = {
 export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
   /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
   pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
     /** When the model asked */
     created: string;
     /** The validated ask input the model sent */
     input: any;
     /** Ask kind; the model asked with the tool ask_<kind> */
     kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
     /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
     promptIndex: number;
     /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
@@ -1754,6 +1776,8 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
     simple: any;
     /** Tool call id of the ask; an answer must name it */
     toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
   };
   /** Project this conversation belongs to */
   projectId?: string;
@@ -1765,6 +1789,8 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
     ask?: {
       /** Ask kind; the model asked with the tool ask_<kind> */
       kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
       /** pending while the user can answer; answered or cancelled once the ask is resolved */
       status: "pending" | "answered" | "cancelled";
     };
@@ -1813,12 +1839,16 @@ export type GetGptHistoriesByIdArgs = string;
 export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
   /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
   pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
     /** When the model asked */
     created: string;
     /** The validated ask input the model sent */
     input: any;
     /** Ask kind; the model asked with the tool ask_<kind> */
     kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
     /** Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume */
     promptIndex: number;
     /** AI SDK response messages of the paused turn, replayed verbatim with the answer on resume */
@@ -1827,6 +1857,8 @@ export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
     simple: any;
     /** Tool call id of the ask; an answer must name it */
     toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
   };
   /** Project this conversation belongs to */
   projectId?: string;
@@ -1838,6 +1870,8 @@ export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
     ask?: {
       /** Ask kind; the model asked with the tool ask_<kind> */
       kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
       /** pending while the user can answer; answered or cancelled once the ask is resolved */
       status: "pending" | "answered" | "cancelled";
     };
@@ -1895,6 +1929,8 @@ export type PatchGptHistoriesByIdArgs = {
       ask?: {
         /** Ask kind; the model asked with the tool ask_<kind> */
         kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+        origin?: "approval";
         /** pending while the user can answer; answered or cancelled once the ask is resolved */
         status: "pending" | "answered" | "cancelled";
       };

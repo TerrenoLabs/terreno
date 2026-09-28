@@ -100,11 +100,18 @@ const withStrippedJsonFencesModel = (model: LanguageModel): LanguageModel => {
   }) as LanguageModel;
 };
 
-/** Result rows of ask tool calls, by tool call id. */
+/**
+ * True for the call row of an ask the model made. Approval asks are display-only: the model did
+ * not call a tool by that name with those arguments, so they are not replayed.
+ */
+const isModelAskCall = (prompt: GptHistoryPrompt): boolean =>
+  prompt.type === "tool-call" && prompt.ask !== undefined && prompt.ask.origin !== "approval";
+
+/** Result rows of the model's ask tool calls, by tool call id. */
 const collectAskResults = (prompts: GptHistoryPrompt[]): Map<string, GptHistoryPrompt> => {
   const askCallIds = new Set(
     prompts
-      .filter((prompt) => prompt.type === "tool-call" && prompt.ask && prompt.toolCallId)
+      .filter((prompt) => isModelAskCall(prompt) && prompt.toolCallId)
       .map((prompt) => prompt.toolCallId)
   );
   return new Map(
@@ -533,8 +540,8 @@ export class AIService {
 
   /**
    * Converts history rows to model messages. Ask call/result pairs are kept so the model sees what
-   * it asked and how the user answered; other tool rows, and asks still waiting for an answer, are
-   * skipped. Consecutive ask calls came from one step and share one assistant message.
+   * it asked and how the user answered; other tool rows, approval asks, and asks still waiting for
+   * an answer are skipped. Consecutive ask calls came from one step and share one assistant message.
    */
   buildMessages(prompts: GptHistoryPrompt[]): ModelMessage[] {
     const messages: ModelMessage[] = [];
@@ -542,7 +549,7 @@ export class AIService {
     let askStep: {calls: ToolCallPart[]; results: ToolResultPart[]} | undefined;
 
     for (const prompt of prompts) {
-      if (prompt.type === "tool-call" && prompt.ask) {
+      if (isModelAskCall(prompt)) {
         const askResult = prompt.toolCallId ? askResults.get(prompt.toolCallId) : undefined;
         if (!askResult || !prompt.toolCallId || !prompt.toolName) {
           continue;

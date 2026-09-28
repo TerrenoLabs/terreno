@@ -2,9 +2,17 @@ import {createdUpdatedPlugin, findExactlyOne, findOneOrNone, isDeletedPlugin} fr
 import {ASK_KINDS} from "@terreno/blocks";
 import mongoose from "mongoose";
 
-import type {GptHistoryAskStatus, GptHistoryDocument, GptHistoryModel} from "../types";
+import type {AskOrigin, GptHistoryAskStatus, GptHistoryDocument, GptHistoryModel} from "../types";
 
 const ASK_STATUSES: GptHistoryAskStatus[] = ["pending", "answered", "cancelled"];
+const ASK_ORIGINS: AskOrigin[] = ["approval"];
+
+const askOriginField = {
+  description:
+    "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+  enum: ASK_ORIGINS,
+  type: String,
+};
 
 const promptAskSchema = new mongoose.Schema(
   {
@@ -14,6 +22,7 @@ const promptAskSchema = new mongoose.Schema(
       required: true,
       type: String,
     },
+    origin: askOriginField,
     status: {
       description:
         "pending while the user can answer; answered or cancelled once the ask is resolved",
@@ -27,6 +36,10 @@ const promptAskSchema = new mongoose.Schema(
 
 const pendingAskSchema = new mongoose.Schema(
   {
+    approvalId: {
+      description: "AI SDK approval request an approval ask answers; the same as toolCallId",
+      type: String,
+    },
     created: {description: "When the model asked", required: true, type: Date},
     input: {
       description: "The validated ask input the model sent",
@@ -39,6 +52,7 @@ const pendingAskSchema = new mongoose.Schema(
       required: true,
       type: String,
     },
+    origin: askOriginField,
     promptIndex: {
       description:
         "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
@@ -62,6 +76,7 @@ const pendingAskSchema = new mongoose.Schema(
       required: true,
       type: String,
     },
+    toolName: {description: "Host tool an approval ask asks to run", type: String},
   },
   // `minimize` would drop empty objects the AI SDK requires on replay, such as a tool call's `input: {}`.
   {_id: false, minimize: false, strict: "throw"}

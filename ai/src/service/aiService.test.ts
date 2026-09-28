@@ -758,6 +758,33 @@ describe("AIService", () => {
         expect(messages).toEqual([{content: "Set up my workspace", role: "user"}]);
       });
 
+      it("skips approval asks, which are display-only", () => {
+        const messages = buildMessages([
+          {text: "Delete my completed todos", type: "user"},
+          {
+            args: {prompt: "Allow deleteCompletedTodos?"},
+            ask: {kind: "confirm", origin: "approval", status: "answered"},
+            text: "Tool call: deleteCompletedTodos",
+            toolCallId: "approval_delete",
+            toolName: "deleteCompletedTodos",
+            type: "tool-call",
+          },
+          {
+            result: {action: "accept", content: {confirmed: true}},
+            text: "Tool result: deleteCompletedTodos",
+            toolCallId: "approval_delete",
+            toolName: "deleteCompletedTodos",
+            type: "tool-result",
+          },
+          {text: "Deleted 2 todos.", type: "assistant"},
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Delete my completed todos", role: "user"},
+          {content: "Deleted 2 todos.", role: "assistant"},
+        ]);
+      });
+
       it("skips ask rows without a tool call id or tool name, and sends null for a missing result", () => {
         const messages = buildMessages([
           {text: "Set up my workspace", type: "user"},

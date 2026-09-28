@@ -24,6 +24,7 @@ import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
 import {Project} from "../models/project";
 import type {
+  AskOrigin,
   GptHistoryAskStatus,
   GptHistoryDocument,
   GptHistoryPrompt,
@@ -38,11 +39,13 @@ import {
   storedFilesAnswer,
 } from "./askFiles";
 import {
+  approvalAskInput,
   askKindFromToolName,
   askToolName,
   buildAsksSystemPrompt,
   completePausedTurn,
   createAskTools,
+  deniedApprovalReasons,
   parseAsk,
   resolveAskKinds,
   resolveMaxFileSizeBytes,
@@ -55,7 +58,7 @@ export const DEMO_RESPONSE =
   "This is demo mode. To use AI features, paste your Gemini API key in Settings.";
 
 interface ChatTurnAskEvent {
-  ask: Ask & {simple: SimpleCard; toolCallId: string};
+  ask: AskCall & {simple: SimpleCard};
   /** The conversation that waits on the ask, so a client can answer before `{done}` arrives. */
   historyId: string;
 }
@@ -134,12 +137,19 @@ interface AskAnswer {
   toolCallId: string;
 }
 
-type AskCall = Ask & {toolCallId: string};
+/**
+ * An ask the turn can pause on. An approval ask (`origin: "approval"`) is made by the server for
+ * a host tool call that needs approval: its `toolCallId` is the AI SDK `approvalId` and
+ * `toolName` is the host tool.
+ */
+type AskCall = Ask & {origin?: AskOrigin; toolCallId: string; toolName?: string};
 
 interface ResolvedAsk {
   action: AskResponse["action"];
   kind: AskKind;
+  origin?: AskOrigin;
   toolCallId: string;
+  toolName?: string;
 }
 
 interface TurnStart {
@@ -181,6 +191,17 @@ const isGeneratedImageFile = (value: unknown): value is GeneratedImageFile =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** The tool name an ask's rows store: the host tool for an approval ask, else `ask_<kind>`. */
+const askRowToolName = (ask: {kind: AskKind; toolName?: string}): string =>
+  ask.toolName ?? askToolName(ask.kind);
+
+/** The fields that mark an ask as an approval, or none for an ask the model made. */
+const approvalFieldsOf = (ask: {
+  origin?: AskOrigin;
+  toolName?: string;
+}): {origin?: AskOrigin; toolName?: string} =>
+  ask.origin === "approval" ? {origin: ask.origin, toolName: ask.toolName} : {};
 
 // Strip model reasoning that leaks as JSON action blobs
 const cleanStepText = (text: string): string =>
@@ -426,16 +447,20 @@ const cancelPendingAsk = async (
 ): Promise<{history: GptHistoryDocument; resolvedAsk?: ResolvedAsk}> => {
   let history = loaded;
   for (let attempt = 0; attempt < MAX_CANCEL_ATTEMPTS && history.pendingAsk; attempt++) {
-    const {kind, toolCallId} = history.pendingAsk;
+    const pending = history.pendingAsk;
+    const {kind, toolCallId} = pending;
     const cancelled = await resolvePendingAsk({
       history,
       result: {action: "cancel", reason: ASK_CANCEL_REASONS.userSentMessage},
       status: "cancelled",
       toolCallId,
-      toolName: askToolName(kind),
+      toolName: askRowToolName(pending),
     });
     if (cancelled) {
-      return {history: cancelled, resolvedAsk: {action: "cancel", kind, toolCallId}};
+      return {
+        history: cancelled,
+        resolvedAsk: {action: "cancel", kind, toolCallId, ...approvalFieldsOf(pending)},
+      };
     }
     const reloaded = await GptHistory.findById(history._id);
     if (!reloaded) {
@@ -533,6 +558,7 @@ const claimPendingAsk = async ({
 }): Promise<boolean> => {
   const {input, kind, simple, toolCallId} = ask;
   const waitsOnNoAsk = {$eq: [{$ifNull: ["$pendingAsk", null]}, null]};
+  const approval = approvalFieldsOf(ask);
   const pendingAsk = {
     created: {$literal: DateTime.now().toJSDate()},
     input: {$literal: input},
@@ -541,12 +567,19 @@ const claimPendingAsk = async ({
     responseMessages: {$literal: responseMessages},
     simple: {$literal: simple},
     toolCallId: {$literal: toolCallId},
+    ...(approval.origin
+      ? {
+          approvalId: {$literal: toolCallId},
+          origin: {$literal: approval.origin},
+          toolName: {$literal: approval.toolName},
+        }
+      : {}),
   };
   const cancelledPrompts = promptsWithAskResult({
     result: {action: "cancel", reason: ASK_CANCEL_REASONS.oneAskAtATime},
     status: "cancelled",
     toolCallId,
-    toolName: askToolName(kind),
+    toolName: askRowToolName(ask),
   });
   const saved = await GptHistory.findOneAndUpdate(
     {_id: history._id},
@@ -664,7 +697,7 @@ const startTurn = async ({
       throw invalidAskResponseError(fields);
     }
     const answer = askAnswer.response as AskResponse;
-    const {kind, promptIndex, responseMessages, toolCallId} = pending;
+    const {approvalId, kind, promptIndex, responseMessages, toolCallId} = pending;
     const {answerOutput, storedAnswer} = await prepareAnswer({
       answer,
       fileStorageService: options.fileStorageService,
@@ -677,7 +710,7 @@ const startTurn = async ({
       result: storedAnswer,
       status: answer.action === "cancel" ? "cancelled" : "answered",
       toolCallId,
-      toolName: askToolName(kind),
+      toolName: askRowToolName(pending),
     });
     if (!resolved) {
       throw staleAskError(toolCallId);
@@ -685,11 +718,18 @@ const startTurn = async ({
     const turnHistory = resolved.prompts.slice(0, promptIndex);
     const replayedMessages = completePausedTurn({
       answer: storedAnswer,
+      approvalId,
       responseMessages,
       toolCallId,
     });
     const modelMessages = answerOutput
-      ? completePausedTurn({answer: storedAnswer, answerOutput, responseMessages, toolCallId})
+      ? completePausedTurn({
+          answer: storedAnswer,
+          answerOutput,
+          approvalId,
+          responseMessages,
+          toolCallId,
+        })
       : replayedMessages;
     return {
       history: resolved,
@@ -698,7 +738,7 @@ const startTurn = async ({
       messages: [...aiService.buildMessages(turnHistory), ...modelMessages],
       promptIndex,
       replayedMessages,
-      resolvedAsk: {action: answer.action, kind, toolCallId},
+      resolvedAsk: {action: answer.action, kind, toolCallId, ...approvalFieldsOf(pending)},
       rows: [],
       titlePrompt: lastUserText(turnHistory),
     };
@@ -859,23 +899,39 @@ const withTurnSystemPrompt = ({
   return [systemPrompt, ...sections].filter(Boolean).join("\n\n");
 };
 
+/** What the turn needs to turn a host tool's approval request into an approval ask. */
+interface ApprovalContext {
+  asks: GptRouteOptions["asks"];
+  surface: AskSurface;
+  tools: Record<string, Tool>;
+}
+
 /**
  * Forwards the model stream to the sink and records what it sent in `record`, which stays valid
  * when the stream fails partway. Ask calls are collected, not forwarded: an invalid one goes back
- * to the model as a tool error, and a valid one pauses the turn.
+ * to the model as a tool error, and a valid one pauses the turn. So is each approval request for
+ * a host tool, as an approval ask; without `approvals` (asks are off) the tool just does not run.
+ * The collected asks keep the order of their tool calls, so the first one the model made pauses
+ * the turn. `deniedReasons` holds why each approval this turn resumes with was denied.
  */
 const consumeStream = async ({
+  approvals,
   askKinds,
+  deniedReasons,
   record,
   result,
   sink,
 }: {
+  approvals?: ApprovalContext;
   askKinds: AskKind[];
+  deniedReasons: Map<string, string | undefined>;
   record: TurnRecord;
   result: ReturnType<typeof streamText>;
   sink: ChatTurnSink;
 }): Promise<void> => {
   const {askCalls, generatedImages} = record;
+  const callOrder = new Map<string, number>();
+  const askOrder = new Map<string, number>();
   let partCount = 0;
   // Buffer text per step so we can discard reasoning text when a tool call follows
   let stepTextBuffer = "";
@@ -941,6 +997,8 @@ const consumeStream = async ({
       stepHasToolCall = true;
       const toolName = part.toolName as string;
       const toolCallId = part.toolCallId as string;
+      const order = callOrder.size;
+      callOrder.set(toolCallId, order);
       const askKind = askKindFromToolName(toolName, askKinds);
       if (askKind) {
         if (part.invalid) {
@@ -949,6 +1007,7 @@ const consumeStream = async ({
             toolName,
           });
         } else {
+          askOrder.set(toolCallId, order);
           askCalls.push({...parseAsk({input: part.input, kind: askKind}), toolCallId});
         }
         continue;
@@ -960,6 +1019,42 @@ const consumeStream = async ({
         toolCallId,
         toolName,
         type: "tool-call",
+      });
+    } else if (part.type === "tool-approval-request") {
+      const approvalId = part.approvalId as string;
+      const toolCall = part.toolCall as {input: unknown; toolCallId: string; toolName: string};
+      if (!approvals) {
+        logger.warn("A host tool needs approval, but asks are off, so it did not run", {
+          toolName: toolCall.toolName,
+        });
+        continue;
+      }
+      askOrder.set(approvalId, callOrder.get(toolCall.toolCallId) ?? callOrder.size);
+      askCalls.push({
+        input: approvalAskInput({
+          asks: approvals.asks,
+          description: approvals.tools[toolCall.toolName]?.description,
+          input: toolCall.input,
+          surface: approvals.surface,
+          toolName: toolCall.toolName,
+        }),
+        kind: "confirm",
+        origin: "approval",
+        toolCallId: approvalId,
+        toolName: toolCall.toolName,
+      });
+    } else if (part.type === "tool-output-denied") {
+      const toolName = part.toolName as string;
+      const toolCallId = part.toolCallId as string;
+      const reason = deniedReasons.get(toolCallId);
+      const denied = {approved: false, ...(reason ? {reason} : {})};
+      sink.emit({toolResult: {result: denied, toolCallId, toolName}});
+      record.rows.push({
+        result: denied,
+        text: `Tool result: ${toolName}`,
+        toolCallId,
+        toolName,
+        type: "tool-result",
       });
     } else if (part.type === "tool-result") {
       const toolResult = part.output as Record<string, unknown> | undefined;
@@ -1004,6 +1099,10 @@ const consumeStream = async ({
   }
 
   logger.debug("Stream completed", {fullResponseLength: record.fullResponse.length, partCount});
+  askCalls.sort(
+    (a, b) =>
+      (askOrder.get(a.toolCallId) ?? askOrder.size) - (askOrder.get(b.toolCallId) ?? askOrder.size)
+  );
 
   // Check for generated images (e.g. from gemini-2.5-flash-image)
   try {
@@ -1055,18 +1154,18 @@ const assistantRows = ({
 
 const askCallRow = (call: AskCall, status: GptHistoryAskStatus): GptHistoryPrompt => ({
   args: call.input,
-  ask: {kind: call.kind, status},
-  text: `Tool call: ${askToolName(call.kind)}`,
+  ask: {kind: call.kind, status, ...(call.origin ? {origin: call.origin} : {})},
+  text: `Tool call: ${askRowToolName(call)}`,
   toolCallId: call.toolCallId,
-  toolName: askToolName(call.kind),
+  toolName: askRowToolName(call),
   type: "tool-call",
 });
 
 const droppedAskResultRow = (call: AskCall): GptHistoryPrompt => ({
   result: {action: "cancel", reason: ASK_CANCEL_REASONS.oneAskAtATime},
-  text: `Tool result: ${askToolName(call.kind)}`,
+  text: `Tool result: ${askRowToolName(call)}`,
   toolCallId: call.toolCallId,
-  toolName: askToolName(call.kind),
+  toolName: askRowToolName(call),
   type: "tool-result",
 });
 
@@ -1078,6 +1177,7 @@ const answeredAskMetadata = (resolvedAsk: ResolvedAsk | undefined): Record<strin
           kind: resolvedAsk.kind,
           phase: "answered",
           toolCallId: resolvedAsk.toolCallId,
+          ...approvalFieldsOf(resolvedAsk),
         },
       }
     : {};
@@ -1197,11 +1297,23 @@ export const runChatTurn = async ({
       tools: allTools,
     });
 
-    await consumeStream({askKinds: offeredAskKinds, record, result, sink});
+    await consumeStream({
+      approvals:
+        askKinds.length > 0 && allTools
+          ? {asks: options.asks, surface, tools: allTools}
+          : undefined,
+      askKinds: offeredAskKinds,
+      deniedReasons: deniedApprovalReasons(messages),
+      record,
+      result,
+      sink,
+    });
     const {askCalls, fullResponse, generatedImages} = record;
 
-    // The first valid ask in the step pauses the turn; any other ask in that step is cancelled.
-    const [asked, ...droppedAsks] = askCalls;
+    // The first ask in the step pauses the turn. Any other ask the model made in that step is
+    // cancelled now; any other approval is denied when the turn resumes, so its tool never runs.
+    const [asked, ...otherAsks] = askCalls;
+    const droppedAsks = otherAsks.filter((call) => call.origin !== "approval");
     const ask = asked ? {...asked, simple: toSimpleCard(asked)} : undefined;
     const firstRowIndex = await saveRows([
       ...record.rows,
@@ -1245,6 +1357,7 @@ export const runChatTurn = async ({
               kind: pausedAsk.kind,
               phase: "asked",
               toolCallId: pausedAsk.toolCallId,
+              ...approvalFieldsOf(pausedAsk),
             },
           }
         : {}),

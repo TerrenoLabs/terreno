@@ -25,7 +25,9 @@ import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
 
+import type {UserDocument} from "../types/models/userTypes";
 import {createDemoAgentService} from "./demoAgent";
+import {createTodoTools, todoToolApprovals} from "./todoTools";
 
 /** A provider that creates language models and image models from model IDs. */
 interface AIProvider {
@@ -590,7 +592,11 @@ const createImageTool = (apiKey?: string): Tool => {
 };
 
 const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
-  const tools: Record<string, Tool> = {...getMCPTools(req.user as User | undefined)};
+  const user = req.user as UserDocument | undefined;
+  const tools: Record<string, Tool> = {
+    ...getMCPTools(req.user as User | undefined),
+    ...createTodoTools({userId: user?._id}),
+  };
 
   const apiKey = req.headers["x-ai-api-key"] as string | undefined;
   if (apiKey) {
@@ -736,7 +742,7 @@ export const addAiRoutes = (
 
   const chat: GptRouteOptions = {
     aiService: aiService ?? createDemoAgentService(),
-    asks: true,
+    asks: {approvals: todoToolApprovals},
     createModelFn: createModelFromKey,
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,

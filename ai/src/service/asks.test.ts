@@ -1,14 +1,16 @@
 import {describe, expect, it} from "bun:test";
-import {type AskKind, askPromptSection} from "@terreno/blocks";
+import {ASK_LIMITS, type AskKind, type AskResponse, askPromptSection} from "@terreno/blocks";
 import {asSchema, jsonSchema, type ModelMessage, type Tool, tool} from "ai";
 
 import {
+  approvalAskInput,
   askKindFromToolName,
   askToolName,
   assertNoReservedToolNames,
   buildAsksSystemPrompt,
   completePausedTurn,
   createAskTools,
+  deniedApprovalReasons,
   parseAsk,
   resolveAskKinds,
   toStoredMessages,
@@ -685,6 +687,227 @@ describe("asks", () => {
       expect(
         completePausedTurn({answer: TEAM_ANSWER, responseMessages, toolCallId: "call_plan"})
       ).toBe(responseMessages);
+    });
+  });
+
+  describe("completePausedTurn approvals", () => {
+    const deleteCall = {
+      input: {},
+      toolCallId: "call_delete",
+      toolName: "deleteTodos",
+      type: "tool-call" as const,
+    };
+    const approvalRequest = (approvalId: string, toolCallId: string) => ({
+      approvalId,
+      toolCallId,
+      type: "tool-approval-request" as const,
+    });
+    const approvalResponse = (approvalId: string, approved: boolean, reason?: string) => ({
+      approvalId,
+      approved,
+      type: "tool-approval-response" as const,
+      ...(reason ? {reason} : {}),
+    });
+
+    it("answers the pending approval and adds no result for its call", () => {
+      const assistant: ModelMessage = {
+        content: [deleteCall, approvalRequest("approval_delete", "call_delete")],
+        role: "assistant",
+      };
+
+      expect(
+        completePausedTurn({
+          answer: {action: "accept", content: {confirmed: true}},
+          approvalId: "approval_delete",
+          responseMessages: [assistant],
+          toolCallId: "approval_delete",
+        })
+      ).toEqual([assistant, {content: [approvalResponse("approval_delete", true)], role: "tool"}]);
+    });
+
+    it("denies every other approval with one_ask_at_a_time and answers the pending ask", () => {
+      const assistant: ModelMessage = {
+        content: [
+          askCall("call_plan"),
+          deleteCall,
+          approvalRequest("approval_delete", "call_delete"),
+        ],
+        role: "assistant",
+      };
+
+      expect(
+        completePausedTurn({
+          answer: TEAM_ANSWER,
+          responseMessages: [assistant],
+          toolCallId: "call_plan",
+        })
+      ).toEqual([
+        assistant,
+        {
+          content: [
+            answerResult("call_plan", TEAM_ANSWER),
+            approvalResponse("approval_delete", false, "one_ask_at_a_time"),
+          ],
+          role: "tool",
+        },
+      ]);
+    });
+
+    it("adds the approval response to the step's tool message after its results", () => {
+      const assistant: ModelMessage = {
+        content: [lookupCall, deleteCall, approvalRequest("approval_delete", "call_delete")],
+        role: "assistant",
+      };
+
+      expect(
+        completePausedTurn({
+          answer: {action: "accept", content: {confirmed: false}},
+          approvalId: "approval_delete",
+          responseMessages: [assistant, {content: [lookupResult], role: "tool"}],
+          toolCallId: "approval_delete",
+        })
+      ).toEqual([
+        assistant,
+        {
+          content: [lookupResult, approvalResponse("approval_delete", false, "user_denied")],
+          role: "tool",
+        },
+      ]);
+    });
+
+    it("leaves an approval that already has a response alone", () => {
+      const responseMessages: ModelMessage[] = [
+        {
+          content: [deleteCall, approvalRequest("approval_delete", "call_delete")],
+          role: "assistant",
+        },
+        {content: [approvalResponse("approval_delete", true)], role: "tool"},
+      ];
+
+      expect(
+        completePausedTurn({
+          answer: {action: "decline"},
+          approvalId: "approval_delete",
+          responseMessages,
+          toolCallId: "approval_delete",
+        })
+      ).toBe(responseMessages);
+    });
+  });
+
+  describe("completePausedTurn approval responses", () => {
+    it.each([
+      [{action: "accept", content: {confirmed: true}}, {approved: true}],
+      [
+        {action: "accept", content: {confirmed: false}},
+        {approved: false, reason: "user_denied"},
+      ],
+      [{action: "decline"}, {approved: false, reason: "user_declined"}],
+      [{action: "cancel"}, {approved: false, reason: "user_cancelled"}],
+      [
+        {action: "cancel", reason: "closed"},
+        {approved: false, reason: "closed"},
+      ],
+    ] as const)("answers %j with %j", (answer, expected) => {
+      const assistant: ModelMessage = {
+        content: [
+          {input: {}, toolCallId: "call_delete", toolName: "deleteTodos", type: "tool-call"},
+          {approvalId: "approval_delete", toolCallId: "call_delete", type: "tool-approval-request"},
+        ],
+        role: "assistant",
+      };
+
+      expect(
+        completePausedTurn({
+          answer: answer as AskResponse,
+          approvalId: "approval_delete",
+          responseMessages: [assistant],
+          toolCallId: "approval_delete",
+        })
+      ).toEqual([
+        assistant,
+        {
+          content: [{approvalId: "approval_delete", type: "tool-approval-response", ...expected}],
+          role: "tool",
+        },
+      ]);
+    });
+  });
+
+  describe("approvalAskInput", () => {
+    it("defaults to Allow <toolName>? with the description, cut to the prompt limit", () => {
+      const input = approvalAskInput({
+        asks: true,
+        description: "x".repeat(600),
+        input: {},
+        surface: "full",
+        toolName: "deleteTodos",
+      });
+
+      expect(input).toMatchObject({confirmLabel: "Allow", denyLabel: "Deny"});
+      expect(input.prompt.startsWith("Allow deleteTodos? xxx")).toBe(true);
+      expect(input.prompt).toHaveLength(ASK_LIMITS.promptMaxLength);
+      expect(input.prompt.endsWith("…")).toBe(true);
+    });
+
+    it("asks without a description when the tool has none", () => {
+      expect(
+        approvalAskInput({asks: {}, input: {}, surface: "compact", toolName: "deleteTodos"})
+      ).toEqual({confirmLabel: "Allow", denyLabel: "Deny", prompt: "Allow deleteTodos?"});
+    });
+
+    it("uses the host's input for the tool and passes it the call's input", () => {
+      const calls: unknown[] = [];
+      const input = approvalAskInput({
+        asks: {
+          approvals: {
+            deleteTodos: (callInput) => {
+              calls.push(callInput);
+              return {destructive: true, prompt: "Delete 3 todos?"};
+            },
+          },
+        },
+        input: {count: 3},
+        surface: "full",
+        toolName: "deleteTodos",
+      });
+
+      expect(input).toEqual({destructive: true, prompt: "Delete 3 todos?"});
+      expect(calls).toEqual([{count: 3}]);
+    });
+  });
+
+  describe("deniedApprovalReasons", () => {
+    it("maps each denied approval in the last tool message to its call and reason", () => {
+      const messages: ModelMessage[] = [
+        {
+          content: [
+            {input: {}, toolCallId: "call_a", toolName: "a", type: "tool-call"},
+            {approvalId: "approval_a", toolCallId: "call_a", type: "tool-approval-request"},
+            {input: {}, toolCallId: "call_b", toolName: "b", type: "tool-call"},
+            {approvalId: "approval_b", toolCallId: "call_b", type: "tool-approval-request"},
+          ],
+          role: "assistant",
+        },
+        {
+          content: [
+            {approvalId: "approval_a", approved: true, type: "tool-approval-response"},
+            {
+              approvalId: "approval_b",
+              approved: false,
+              reason: "one_ask_at_a_time",
+              type: "tool-approval-response",
+            },
+          ],
+          role: "tool",
+        },
+      ];
+
+      expect(deniedApprovalReasons(messages)).toEqual(new Map([["call_b", "one_ask_at_a_time"]]));
+    });
+
+    it("is empty when the last message is not a tool message", () => {
+      expect(deniedApprovalReasons([{content: "Hi", role: "user"}])).toEqual(new Map());
     });
   });
 });

@@ -14,7 +14,9 @@ answer), the `confirm` kind (approve or deny, optionally destructive), the `mark
 (edit a draft and send it back), the `form` kind (a few typed fields, one submit), and the
 `files` kind (upload images or documents that the model then reads), asked and answered
 through `POST /gpt/prompt`
-and shown in `GPTChat` ([props and controls](ui.md#asks)), and the small-screen path: the
+and shown in `GPTChat` ([props and controls](ui.md#asks)),
+[approval asks](#approval-asks) that the server makes before a host tool with `needsApproval`
+runs, and the small-screen path: the
 [compact surface](#compact-surface), the [headless endpoints](#headless-endpoints),
 [JSON Schemas](#json-schemas-and-fixtures), and [`SimpleAskCard`](ui.md#simpleaskcard). The other
 kinds are planned in the [implementation plan](../implementationPlans/agent-ui-asks.md).
@@ -29,6 +31,7 @@ kinds are planned in the [implementation plan](../implementationPlans/agent-ui-a
 - [markdown](#markdown)
 - [form](#form)
 - [files](#files)
+- [Approval asks](#approval-asks)
 - [Simple cards](#simple-cards)
 - [Compact surface](#compact-surface)
 - [Validation](#validation)
@@ -92,7 +95,7 @@ The server sends `cancel` for the user in two cases (`ASK_CANCEL_REASONS`):
 | `reason` | When |
 | --- | --- |
 | `user_sent_message` | The user sent a `prompt` while the ask was pending. |
-| `one_ask_at_a_time` | The model called more than one ask tool in one step: the first ask pauses the turn, and each later one is cancelled. Also sent when a turn asks while another turn's ask on the same history is already pending: that ask stays pending, and the new one is cancelled. |
+| `one_ask_at_a_time` | The model called more than one ask tool in one step: the first ask pauses the turn, and each later one is cancelled. Also sent when a turn asks while another turn's ask on the same history is already pending: that ask stays pending, and the new one is cancelled. [Approval asks](#approval-asks) share the one slot: an extra approval in the step is denied with this reason. |
 
 ## Shared ask fields
 
@@ -385,6 +388,55 @@ text file over 100 KB is cut on a character boundary and followed by
 `[The file is cut to its first N of M bytes.]`. Only the answering turn sends the bytes; see
 [Stored state](#stored-state).
 
+## Approval asks
+
+A host tool with the AI SDK's `needsApproval` never runs before the user approves it. When the
+model calls one, the SDK emits `tool-approval-request` and stops without calling `execute`. The
+server then pauses the turn on a `confirm` ask it makes itself, not one the model wrote:
+
+```typescript
+import {tool, zodSchema} from "ai";
+
+const deleteCompletedTodos = tool({
+  description: "Delete all of the signed-in user's completed todos.",
+  execute: async () => deleteTodos(),
+  inputSchema: zodSchema(z.object({}).strict()),
+  needsApproval: true,
+});
+
+const chat = {
+  aiService,
+  asks: {
+    approvals: {
+      deleteCompletedTodos: () => ({
+        confirmLabel: "Delete",
+        denyLabel: "Keep them",
+        destructive: true,
+        prompt: "Delete all of your completed todos? You can't undo this.",
+      }),
+    },
+  },
+  tools: {deleteCompletedTodos},
+};
+```
+
+| Rule | Behavior |
+| --- | --- |
+| Input | `asks.approvals[toolName](input)` returns the `confirm` input, from the call's input. Without an entry, or when it throws or returns an input that fails `confirm` validation, the input is `{prompt: "Allow <toolName>? <description>", confirmLabel: "Allow", denyLabel: "Deny"}` (the prompt cut to 500 characters). Set `destructive: true` for a tool that deletes data, so the approve button shows as destructive (D26). |
+| Ask | `kind: "confirm"`, `origin: "approval"`, `toolName` (the host tool), and `toolCallId` equal to the SDK's `approvalId`. The ask works on both surfaces, including [compact](#compact-surface), because a confirm always fits a simple card. |
+| Needs | Asks on (`asks: true` or an object). The offered `kinds` do not matter. With asks off the tool does not run, the SDK stops the step, and the server logs a warning. |
+| Approve | `{action: "accept", content: {confirmed: true}}`, or the `approve` button. The SDK runs the tool once and the model gets its result. |
+| Deny | `{confirmed: false}` or the `deny` button (`user_denied`), `decline` (`user_declined`; only when the input sets `allowDecline: true`), or `cancel` (its `reason`, else `user_cancelled`). The tool does not run. The model gets `{type: "execution-denied", reason}` as the tool's result, and the stream sends `{toolResult: {toolCallId, toolName, result: {approved: false, reason}}}`. |
+| New message | A `prompt` sent while an approval is pending cancels it with `user_sent_message`, like any ask. The tool does not run. |
+| One slot | An approval shares the single pending ask with model asks. In one step the first ask or approval pauses the turn. Every other approval is denied with `one_ask_at_a_time` when the turn resumes, and every other model ask is cancelled as before. |
+| Trust | The approval request and the answer live only in the server's stored `responseMessages`. A client names only the pending ask's `toolCallId`, and the server matches it against `pendingAsk.approvalId`; a crafted `tool-approval-response` or another tool's id gets 400 or 409. |
+
+The answer is stored like any ask answer: the approval's row is a `tool-call` with the host
+`toolName`, `args` (the confirm input), and `ask: {kind: "confirm", origin: "approval", status}`,
+and its `tool-result` row holds the answer envelope. The host tool's own call and result rows are
+stored as they are for any host tool. Approval rows are for display only: like host tool rows,
+later turns do not replay them to the model.
+
 ## Simple cards
 
 Every ask comes with a simple card: short text and up to three buttons, each holding the exact
@@ -609,12 +661,14 @@ With asks on, `POST /gpt/prompt` adds these events to the stream. The full event
 
 | Event | When | Shape |
 | --- | --- | --- |
-| `{ask}` | The turn paused on a valid ask. Sent after the turn is saved, just before `{done}`. `historyId` names the conversation that waits on the ask, so a client can answer before `{done}` arrives, even on a new chat. | `{ask: {toolCallId, kind, input, simple}, historyId}` |
+| `{ask}` | The turn paused on a valid ask. Sent after the turn is saved, just before `{done}`. `historyId` names the conversation that waits on the ask, so a client can answer before `{done}` arrives, even on a new chat. | `{ask: {toolCallId, kind, input, simple, origin?, toolName?}, historyId}`. An [approval ask](#approval-asks) adds `origin: "approval"` and the host `toolName`. |
 | `{askResolved}` | First event of a turn that answered the pending ask or cancelled it with a new `prompt` | `{askResolved: {toolCallId, action}}` |
 | `pendingAsk` on `{done}` | The turn ended waiting on an answer | `{done: true, historyId, title?, pendingAsk: {toolCallId}}` |
 
 Ask tool calls never produce `{toolCall}` or `{toolResult}` events, and an invalid ask produces
-no event. Text the model writes in the same step as an ask is dropped, like text in any step that
+no event. A host tool that needs approval sends its `{toolCall}` when the model calls it, and its
+`{toolResult}` after the answer: the tool's output when approved, or
+`{approved: false, reason}` when denied. Text the model writes in the same step as an ask is dropped, like text in any step that
 calls a tool, so the question belongs in the ask's `prompt`.
 
 ## Answer an ask
@@ -718,6 +772,9 @@ turned asks on gets no new endpoints: `AiApp` registers them when its `asks` opt
 | `GET /gpt/histories/pendingAsks` | `IsAuthenticated` | The caller's pending asks, newest first: `[{historyId, title?, toolCallId, kind, simple, created}]`. `created` is an ISO 8601 UTC timestamp. Deleted conversations are left out. |
 | `POST /gpt/histories/:id/turn` | `IsOwner`. An admin who does not own the history gets 403, because a turn speaks as the conversation's owner. | `{historyId, text, title?, pendingAsk?: {toolCallId, kind, simple}, error?}`, once the turn finishes |
 
+An [approval ask](#approval-asks) appears here as a plain `confirm` with its simple card; these
+summaries leave out `origin` and `toolName`, so the published JSON Schemas are unchanged.
+
 The `turn` body holds exactly one of three shapes, plus an optional `surface`
 ([compact surface](#compact-surface)). Any other field returns 400.
 
@@ -812,12 +869,15 @@ The ask fixtures are published too, for testing a client's rendering and validat
 | `promptIndex` | How many leading `prompts` rows are replayed before `responseMessages`: every row up to and including the paused turn's user message |
 | `responseMessages` | The paused turn's AI SDK messages, replayed verbatim when the user answers |
 | `created` | When the ask was made |
+| `origin` | `"approval"` for an [approval ask](#approval-asks); unset when the model asked |
+| `approvalId` | An approval ask's AI SDK approval id, the same as `toolCallId`. The resume answers only this approval. |
+| `toolName` | An approval ask's host tool |
 
 Rows in `GptHistory.prompts`:
 
 | Row | Fields |
 | --- | --- |
-| Ask call | `type: "tool-call"`, `toolName: "ask_choice"`, `toolCallId`, `args` (the ask input), `ask: {kind, status}`. `status` is `pending` until the ask is answered (`answered`) or cancelled (`cancelled`). |
+| Ask call | `type: "tool-call"`, `toolName: "ask_choice"`, `toolCallId`, `args` (the ask input), `ask: {kind, status}`. `status` is `pending` until the ask is answered (`answered`) or cancelled (`cancelled`). An approval ask's row has the host `toolName` and `ask: {kind: "confirm", origin: "approval", status}`. |
 | Ask answer | `type: "tool-result"`, `toolName`, `toolCallId`, `result` (the answer envelope) |
 
 A `files` answer is stored without its bytes: `result` is
@@ -839,6 +899,8 @@ generated SDKs leave it out of their request types.
 | `ask` | The turn asked | `{kind, phase: "asked", toolCallId}` |
 | `ask` | The turn answered an ask | `{action, kind, phase: "answered", toolCallId}`. `prompt` is the answer envelope as JSON. |
 | `nextAsk` | The turn answered one ask and asked another | `{kind, phase: "asked", toolCallId}` |
+
+For an approval ask, each of these values adds `origin: "approval"` and the host `toolName`.
 
 ## Wire example
 
@@ -960,7 +1022,8 @@ user message, the ask call (`status: "answered"`), the ask answer, and the assis
 | `TERRENO_ASKS_SYSTEM_PROMPT` | System prompt text added when asks are on, before the `askPromptSection` |
 | `COMPACT_SURFACE_SYSTEM_PROMPT` | System prompt line added on compact turns |
 | `GptHistoryRouteOptions.chat` | Chat options for `addGptHistoryRoutes`. When they turn `asks` on, it adds the headless endpoints; otherwise it adds neither. |
-| `AsksOptions` | `{kinds?: AskKind[], maxFileSizeBytes?: number}` |
+| `AsksOptions` | `{approvals?: Record<string, ApprovalAskInput>, kinds?: AskKind[], maxFileSizeBytes?: number}` |
+| `ApprovalAskInput`, `AskOrigin` | `(input: unknown) => ConfirmAskInput`, the [approval ask](#approval-asks) input for one host tool call; and `"approval"`, the `origin` of an ask the server made |
 | `GptRouteOptions.fileStorageService` | Loads the uploads a `files` answer names (`AskFileDownloader`: `{download(gcsKey)}`). `AiApp` passes its `FileStorageService` when `gcsBucket` is set. Without it, a `fileId` fails with `FILE_NOT_OWNED` and answers must use data URLs. |
 | `FileStorageService.download(gcsKey)`, `upload(...)` | `download` returns an upload's bytes. `upload` now also returns the `FileAttachment` `id`, which `POST /files/upload` sends back for a `files` answer. |
 | `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus` | Stored ask types |

@@ -355,6 +355,28 @@ addGptRoutes(router, {
 | Integrity | The approval request and response live only in server-stored messages, so a client cannot forge an approval; the client only sends the answer envelope for the pending ask. |
 | Later turns | The approval row is display-only, like other server tool rows today (D14). |
 
+Revised in Pick (Task 2.6):
+
+- The approval ask's `toolCallId` is the SDK `approvalId`. `pendingAsk` stores it again as
+  `approvalId`, and the resume answers only that approval, never an id from the client.
+- Because approval rows and host tool rows are both skipped on replay, a `prompt` that cancels a
+  pending approval leaves no trace of the call for the model: it sees only the user's messages.
+  The paused step's messages are dropped with the pending ask, as for a model ask.
+- Extra approvals in a step get no rows at pause time. On resume they are denied with
+  `one_ask_at_a_time`, which stores and streams `{approved: false, reason}` tool results.
+- Approvals work whenever asks are on, even when the surface's offered kinds leave out
+  `confirm`. With asks off, a `needsApproval` tool never runs: the SDK stops the step and the
+  server logs a warning.
+- `decline` is accepted only when the approval input sets `allowDecline: true`, because a
+  `confirm` refuses Skip by default. Denial reasons are `user_denied`, `user_declined`, and
+  `user_cancelled` (or the cancel's own reason).
+- The `{ask}` event and `AIRequest.metadata.ask` carry `origin` and `toolName`, but the headless
+  summaries (`turn` and `pendingAsks`) do not, so the published JSON Schemas are unchanged.
+- The approval route tests live in a new `ai/src/routes/gptApprovals.test.ts` instead of
+  `gpt.test.ts` and `gptHistories.test.ts`; the example tool lives in
+  `example-backend/src/api/todoTools.ts`, and the keyless demo agent calls it for "delete my
+  completed todos".
+
 ## Simple cards for small screens
 
 Every ask carries a simple card, the lowest common denominator a client can render

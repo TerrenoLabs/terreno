@@ -40,6 +40,12 @@ The example backend uses a scripted demo agent, `terreno-demo-agent`, when no mo
     the first line of each text or CSV file. The card collapses to "You sent 2 files: …". Without
     `GCS_BUCKET`, the files travel as data URLs; see
     [Accept uploads with or without GCS](#accept-uploads-with-or-without-gcs).
+12. On the Todos tab, add two todos and check both. On the AI tab, send "Delete my completed
+    todos". The agent calls the real `deleteCompletedTodos` tool, and the server pauses on an
+    approval card: a red "Delete" button first and "Keep them" last. Press "Keep them": the agent
+    says it kept your todos, and the Todos tab still shows them. Send the message again and press
+    "Delete": the agent names the deleted todos, and they are gone from the Todos tab. See
+    [Require approval before a tool runs](#require-approval-before-a-tool-runs).
 
 | You send | The demo agent |
 | --- | --- |
@@ -49,6 +55,7 @@ The example backend uses a scripted demo agent, `terreno-demo-agent`, when no mo
 | A message with the word announcement, such as "draft an announcement" | Asks `ask_markdown` with a launch announcement draft as `initial`, `minLength: 40`, `maxLength: 2000`, and "Post it" as `submitLabel` |
 | A message with the word invoice or form, such as "invoice details" or "fill out a form" | Asks `ask_form` "Invoice details" with eight fields: company name and billing email (required, with defaults), callback phone, seats (a whole number from 1 to 500, default 5), start date, region (select, default United States), "Email me the invoice" (default on), and notes |
 | A message with the word receipt or receipts, or "upload" followed by file, document, photo, or image (optionally after a, an, my, some, or the), such as "upload a receipt" or "upload a file". "I uploaded the slides" does not match. | Asks `ask_files` "Upload a receipt" for up to 3 images, PDFs, text, or CSV files, with "Send receipt" as `submitLabel` |
+| "delete", "clear", or "remove", then "completed" later in the same sentence, such as "delete my completed todos" or "clear the completed ones". "I completed the report, please delete the draft" does not match. | Calls the host tool `deleteCompletedTodos` (`needsApproval: true`). The server asks "Delete all of your completed todos? You can't undo this." with "Delete" (destructive) and "Keep them". After Delete, the agent names the deleted todos; after Keep them or a cancel, it says it kept them. Without the tool, or with asks off, it says why it did nothing. |
 | Any other message with a word like pick, choose, or plan, such as "choose between several plans" | Asks "Which plan should I set up for your workspace?" with Starter, Team (the default), and Enterprise |
 | The same kind of message, on routes without `asks` | Says asks are turned off and how to turn them on |
 | An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, says whether it would send the report or archive the chats, quotes an edited draft or says you approved it, lists the invoice details you sent, names the files you sent, or says it skipped the question |
@@ -82,12 +89,82 @@ pauses until the user presses a button.
    ```
 
 2. Check the rule in the tool too. The model decides when to ask, so a tool that must never run
-   unconfirmed should refuse on its own, for example by requiring an id list the user saw.
+   unconfirmed should refuse on its own, or let the server enforce it with `needsApproval`; see
+   [Require approval before a tool runs](#require-approval-before-a-tool-runs).
 
 The card shows `confirmLabel` first and `denyLabel` last. With `destructive: true` the approve
 button uses the destructive style, and a watch never makes it the Double Tap button. A deny sends
 `{"confirmed": false}`, so the model hears "no" and skips the action. Skip appears only when the
 ask sets `allowDecline: true`. See [confirm](../reference/agent-ui-asks.md#confirm).
+
+## Require approval before a tool runs
+
+`ask_confirm` relies on the model to ask first. When a tool must never run without the user's
+yes, set the AI SDK's `needsApproval: true` on it. The server then pauses the turn on a `confirm`
+card of its own before the tool runs, whatever the model does. The example backend does this in
+`example-backend/src/api/todoTools.ts`.
+
+1. Build the tool per request, so it acts only on the caller's data, and mark it
+   `needsApproval`:
+
+   ```typescript
+   import {tool, zodSchema} from "ai";
+
+   export const createTodoTools = ({userId}) => ({
+     deleteCompletedTodos: tool({
+       description: "Delete all of the signed-in user's completed todos.",
+       execute: async () => {
+         const todos = await Todo.find({completed: true, ownerId: userId});
+         for (const todo of todos) {
+           todo.deleted = true;
+           await todo.save();
+         }
+         return {deleted: todos.length, titles: todos.map((todo) => todo.title)};
+       },
+       inputSchema: zodSchema(z.object({}).strict()),
+       needsApproval: true,
+     }),
+   });
+   ```
+
+   `Todo` is synced, and `syncPlugin` refuses bulk writes, so the tool saves each soft delete.
+   Each save reaches open Todos screens through sync.
+
+2. Word the card with `asks.approvals`, and pass the tool with `createRequestTools`:
+
+   ```typescript
+   addGptRoutes(router, {
+     aiService,
+     asks: {
+       approvals: {
+         deleteCompletedTodos: () => ({
+           confirmLabel: "Delete",
+           denyLabel: "Keep them",
+           destructive: true,
+           prompt: "Delete all of your completed todos? You can't undo this.",
+           title: "Delete completed todos",
+         }),
+       },
+     },
+     createRequestTools: (req) => createTodoTools({userId: req.user?._id}),
+   });
+   ```
+
+   The function gets the call's input, so the prompt can name what the call changes. Without an
+   entry the card says "Allow deleteCompletedTodos?" with the tool's description and Allow / Deny
+   buttons. Set `destructive: true` for a tool that deletes data, so the approve button is red and a
+   watch never makes it the Double Tap button.
+
+3. Show the card like any ask. `GPTChat` renders it as a `confirm`; the `{ask}` event adds
+   `origin: "approval"` and the host `toolName`. A watch answers it with the `approve` or `deny`
+   button through `turn`.
+
+Approve runs the tool once and the model gets its result. Deny or a cancel never runs it, and the
+model gets a denial with a reason such as `user_denied`. A new message also cancels the approval
+without running the tool; the model then sees only the new message. Asks must be on: with
+them off, the tool never runs. When the model calls two approval tools in one step, the user
+approves the first, and the second is denied with `one_ask_at_a_time`. See
+[Approval asks](../reference/agent-ui-asks.md#approval-asks).
 
 ## Have the user edit a draft
 
@@ -628,9 +705,11 @@ in `@terreno/ui` draws the same card in React Native ([props](../reference/ui.md
 
 | Test | Covers |
 | --- | --- |
-| `example-frontend/e2e/ai-chat.spec.ts` | Against a mocked stream: a quick-reply answer, a radio answer after a rejected one, an answer another tab sent first, a turn that streams only `{done}`, a message that goes through after another tab answered the ask, an ask on a new chat answered before `{done}`, and a receipt sent as data URLs after a rejected answer and as uploads |
-| `example-frontend/lib/gptAsks.test.ts` | Stream events and saved rows mapped to messages, image-only replies kept, the conversation an answer goes to, and the upload resolver with its data URL fallback |
+| `example-frontend/e2e/ai-chat.spec.ts` | Against a mocked stream: a quick-reply answer, a radio answer after a rejected one, an answer another tab sent first, a turn that streams only `{done}`, a message that goes through after another tab answered the ask, an ask on a new chat answered before `{done}`, the result card of a tool an approval ran shown live, and a receipt sent as data URLs after a rejected answer and as uploads |
+| `example-frontend/lib/gptAsks.test.ts` | Stream events and saved rows mapped to messages, tool results placed with and without a streamed tool call, image-only replies kept, the conversation an answer goes to, and the upload resolver with its data URL fallback |
 | `example-backend/src/api/demoAgent.test.ts` | The demo agent's ask, answers, and replies on both surfaces, a plan ask answered over HTTP with a button of its simple card, an announcement draft edited in chat and approved as is with its card's Approve draft button, and a receipt upload rejected for a wrong file and then named file by file |
+| `ai/src/routes/gptApprovals.test.ts` | Approval asks: the pause without running the tool, the host and default approval inputs, the compact surface, approve running the tool once, deny, decline, and cancel never running it, a prompt that cancels it, extra approvals denied with `one_ask_at_a_time`, `turn` buttons, and crafted answers refused |
+| `example-backend/src/api/todoTools.test.ts`, `demoAgent.test.ts` (cleanup) | `deleteCompletedTodos` soft-deletes only the caller's completed todos, and the demo agent's approval flow over `/gpt/prompt` and `turn` |
 | `ai/src/routes/gptFiles.test.ts` | `ask_files` answers with data URLs and with uploads: the bytes the model gets, the metadata-only stored answer, and each error code |
 | `ui/src/GPTChat.test.tsx`, `ui/src/asks/AskCard.test.tsx` | Rendering, focus, answers, errors, and summaries |
 | `ai/src/routes/gptHistories.test.ts`, `ai/src/aiApp.test.ts` | `turn` and `pendingAsks`: a pressed button, a full answer, a prompt that cancels the ask, a failed turn, a stream that fails mid-reply, a client that disconnects, the 400, 403, 404, and 409 responses, response bodies that match the published JSON Schemas, and neither endpoint when asks are off |

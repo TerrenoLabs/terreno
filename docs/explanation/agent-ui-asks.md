@@ -12,7 +12,8 @@ the agent wrote and send it back, `form`, to fill in a few typed fields at once,
 send images or documents the agent reads in the same turn. The chat asks
 on `POST /gpt/prompt` and shows asks in `GPTChat`. Watches and other small clients answer
 select-one choices and confirms on two JSON endpoints with the compact surface, and can approve a
-markdown draft or submit a form's defaults as is. The
+markdown draft or submit a form's defaults as is. A host tool can also require an approval that
+the server enforces, shown as a `confirm`. The
 other kinds follow the [implementation plan](../implementationPlans/agent-ui-asks.md).
 
 ## The problem
@@ -100,6 +101,31 @@ Turns never write back a whole copy of the conversation. Each turn appends its r
 atomic update when it ends, and ratings set one field, so two turns or a rating racing a turn
 cannot drop each other's rows. A paused turn remembers how many rows come before and include its
 own user message, and its resume replays exactly those.
+
+## Approvals the server enforces
+
+`ask_confirm` works only when the model remembers to call it. A prompt injection, or a model that
+skips the step, can still call a destructive tool directly. So a host tool can set the AI SDK's
+`needsApproval: true`, and the server, not the model, makes the confirm.
+
+When the model calls such a tool, the AI SDK stops before `execute` and emits a
+`tool-approval-request`. The server turns it into a `confirm` ask with `origin: "approval"` and
+pauses the turn exactly as for a model ask: same pending slot, same simple card, same answers
+through `/gpt/prompt` and `turn`. The answer becomes the SDK's `tool-approval-response`. On
+resume the SDK runs the tool once when approved, or gives the model a denial when not, so the
+tool's own code never has to check.
+
+The approval uses the one pending slot rather than a second one. A client then has one question
+to show and one way to answer, and a watch needs no new card type. When a step holds a model ask
+and an approval, or two approvals, the first pauses the turn and each other approval is denied
+with `one_ask_at_a_time`. The model sees the denial and can ask again in its next turn.
+
+The host words the card with `asks.approvals`, because only the host knows what a call changes.
+The default, "Allow &lt;toolName&gt;?" with the tool's description, is safe but vague, so a
+destructive tool should name the effect and set `destructive: true`.
+
+Approval rows are for display. Later turns do not replay them, just as they do not replay host
+tool rows: the model's memory of the call is what it wrote in its reply.
 
 ## Strict by design
 
@@ -258,6 +284,11 @@ plain text, so an ask cannot show a chart or table above its control yet. Both l
 - **A button id answers only with the stored card.** The server resolves `buttonId` on the card
   it saved when the ask was made. An id that is not on the card gets 400 `UNKNOWN_BUTTON`, and the
   ask stays pending.
+- **A client can only answer an approval, never make one.** The approval request and the
+  `tool-approval-response` live only in the server's stored messages. A client sends the answer
+  envelope for the pending ask's `toolCallId`, and the server builds the response for the
+  `approvalId` it stored. A crafted approval response in the body gets 400, and another tool
+  call's id gets 409.
 - **A turn speaks as the conversation's owner.** Only the owner can send a `turn`. An admin gets
   403, because the model would read the admin's message or answer as the owner's.
 - **Asks do not collect secrets.** The system prompt tells the model never to ask for passwords,

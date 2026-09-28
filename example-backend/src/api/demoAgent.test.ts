@@ -17,9 +17,11 @@ import {generateText, type ModelMessage, streamText} from "ai";
 import express from "express";
 import supertest from "supertest";
 
+import {Todo} from "../models/todo";
 import {User as UserModel} from "../models/user";
 import type {UserDocument} from "../types/models/userTypes";
 import {createDemoAgentModel, createDemoAgentService, DEMO_AGENT_MODEL_ID} from "./demoAgent";
+import {createTodoTools, DELETE_COMPLETED_TODOS_TOOL, todoToolApprovals} from "./todoTools";
 
 const ASK_TOOLS = createAskTools({kinds: ["choice", "confirm", "markdown", "form", "files"]});
 const COMPACT_ASK_TOOLS = createAskTools({
@@ -807,10 +809,160 @@ describe("demo agent on the compact surface", () => {
   });
 });
 
+describe("demo agent cleaning up completed todos", () => {
+  const TODO_TOOLS = createTodoTools({userId: undefined});
+  const CLEANUP_CALL_ID = "demo_cleanup_call";
+
+  const cleanupReply = async (
+    output: ToolResultOutput,
+    {isCompact = false}: SurfaceOptions = {}
+  ): Promise<string> => {
+    const result = streamText({
+      messages: [
+        {content: "Delete my completed todos", role: "user"},
+        {
+          content: [
+            {
+              input: {},
+              toolCallId: CLEANUP_CALL_ID,
+              toolName: DELETE_COMPLETED_TODOS_TOOL,
+              type: "tool-call",
+            },
+          ],
+          role: "assistant",
+        },
+        {
+          content: [
+            {
+              output,
+              toolCallId: CLEANUP_CALL_ID,
+              toolName: DELETE_COMPLETED_TODOS_TOOL,
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        },
+      ],
+      model: createDemoAgentModel(),
+      system: isCompact ? COMPACT_SURFACE_SYSTEM_PROMPT : undefined,
+      tools: {...(isCompact ? COMPACT_ASK_TOOLS : ASK_TOOLS), ...TODO_TOOLS},
+    });
+    return result.text;
+  };
+
+  it.each([
+    "Delete my completed todos",
+    "Please clear all the completed ones",
+    "remove completed tasks",
+  ])("calls the host tool, which needs approval, for %p", async (prompt) => {
+    const result = streamText({
+      model: createDemoAgentModel(),
+      prompt,
+      tools: {...ASK_TOOLS, ...TODO_TOOLS},
+    });
+
+    const [approval] = (await result.content).filter(
+      (part) => part.type === "tool-approval-request"
+    );
+    expect(approval?.toolCall).toMatchObject({input: {}, toolName: DELETE_COMPLETED_TODOS_TOOL});
+    expect(approval?.toolCall.toolCallId).toStartWith("demo_cleanup_");
+    expect(await result.text).toBe("");
+  });
+
+  it.each([
+    "Which todos did I complete?",
+    "Delete this chat",
+    "I completed the report, please delete the draft.",
+  ])("does not clean up for %p", async (prompt) => {
+    const result = streamText({
+      model: createDemoAgentModel(),
+      prompt,
+      tools: {...ASK_TOOLS, ...TODO_TOOLS},
+    });
+
+    expect((await result.toolCalls).map((call) => call.toolName)).not.toContain(
+      DELETE_COMPLETED_TODOS_TOOL
+    );
+  });
+
+  it("explains that the tool is missing when the route does not offer it", async () => {
+    const {text, toolCalls} = await askFor("Delete my completed todos");
+
+    expect(toolCalls).toHaveLength(0);
+    expect(text).toBe(
+      "This server did not give me the deleteCompletedTodos tool, so I cannot delete your todos."
+    );
+  });
+
+  it("says approvals need asks when the route offers no ask tool", async () => {
+    const result = streamText({
+      model: createDemoAgentModel(),
+      prompt: "Delete my completed todos",
+      tools: TODO_TOOLS,
+    });
+
+    expect(await result.toolCalls).toHaveLength(0);
+    expect(await result.text).toBe(
+      "Deleting todos needs your approval, but asks are turned off on this server, so I did nothing."
+    );
+  });
+
+  it.each([
+    {
+      expected:
+        "Deleted 2 completed todos: **Buy milk** and **File taxes**. They are gone from the Todos tab too.",
+      isCompact: false,
+      output: {type: "json", value: {deleted: 2, titles: ["Buy milk", "File taxes"]}},
+    },
+    {
+      expected: "Deleted 1 completed todo: **Buy milk**. It is gone from the Todos tab too.",
+      isCompact: false,
+      output: {type: "json", value: {deleted: 1, titles: ["Buy milk"]}},
+    },
+    {
+      expected: "Deleted 2 completed todos.",
+      isCompact: true,
+      output: {type: "json", value: {deleted: 2, titles: ["Buy milk", "File taxes"]}},
+    },
+    {
+      expected: "You had no completed todos, so I deleted nothing.",
+      isCompact: false,
+      output: {type: "json", value: {deleted: 0, titles: []}},
+    },
+    {
+      expected:
+        'OK, I kept your completed todos. Say "delete my completed todos" to try another answer.',
+      isCompact: false,
+      output: {reason: "user_denied", type: "execution-denied"},
+    },
+    {
+      expected: "OK, I kept your completed todos.",
+      isCompact: true,
+      output: {reason: "user_cancelled", type: "execution-denied"},
+    },
+    {
+      expected: "Deleting your completed todos failed, so some may remain.",
+      isCompact: false,
+      output: {type: "error-text", value: "Database unavailable"},
+    },
+  ] as const)(
+    "replies to a $output.type result (compact: $isCompact)",
+    async ({expected, isCompact, output}) => {
+      expect(await cleanupReply(output as ToolResultOutput, {isCompact})).toBe(expected);
+    }
+  );
+
+  it("titles a cleanup conversation from the user's message", async () => {
+    expect(await titleFor("User: Delete my completed todos\nAssistant: OK.")).toBe(
+      "Cleaning up todos"
+    );
+  });
+});
+
 describe("demo agent through the chat routes", () => {
   let app: ReturnType<TerrenoApp["build"]>;
 
-  const signIn = async (): Promise<string> => {
+  const signInUser = async (): Promise<{token: string; user: UserDocument}> => {
     const email = `demo-agent-${crypto.randomUUID()}@example.com`;
     const user = (await UserModel.register(
       {admin: false, email, name: email} as never,
@@ -820,8 +972,10 @@ describe("demo agent through the chat routes", () => {
     if (!token) {
       throw new Error("No token generated");
     }
-    return token;
+    return {token, user};
   };
+
+  const signIn = async (): Promise<string> => (await signInUser()).token;
 
   beforeAll(() => {
     process.env.TOKEN_SECRET = process.env.TOKEN_SECRET || "test-secret";
@@ -831,7 +985,13 @@ describe("demo agent through the chat routes", () => {
       .register({
         register: (expressApp, openApi) => {
           const router = express.Router();
-          const chat = {aiService: createDemoAgentService(), asks: true, openApiOptions: {openApi}};
+          const chat = {
+            aiService: createDemoAgentService(),
+            asks: {approvals: todoToolApprovals},
+            createRequestTools: (req: express.Request) =>
+              createTodoTools({userId: (req.user as UserDocument | undefined)?._id}),
+            openApiOptions: {openApi},
+          };
           addGptHistoryRoutes(router, {chat, openApiOptions: {openApi}});
           addGptRoutes(router, chat);
           expressApp.use(router);
@@ -1454,5 +1614,146 @@ describe("demo agent through the chat routes", () => {
     });
     const remaining = await supertest(app).get("/gpt/histories/pendingAsks").set(auth);
     expect(remaining.body.data).toEqual([]);
+  });
+
+  const createTodos = async (user: UserDocument): Promise<void> => {
+    await Todo.create([
+      {completed: true, ownerId: user._id, title: "Buy milk"},
+      {completed: true, ownerId: user._id, title: "File taxes"},
+      {completed: false, ownerId: user._id, title: "Walk the dog"},
+    ]);
+  };
+
+  const todoTitles = async (user: UserDocument): Promise<string[]> =>
+    (await Todo.find({ownerId: user._id}).sort({title: 1})).map((todo) => todo.title);
+
+  it("asks for approval before deleting completed todos, keeps them on deny, and deletes them on approve", async () => {
+    const {token, user} = await signInUser();
+    const auth = {Authorization: `Bearer ${token}`};
+    await createTodos(user);
+
+    const askApproval = async (historyId?: string) => {
+      const res = await supertest(app)
+        .post("/gpt/prompt")
+        .set(auth)
+        .send({prompt: "Delete my completed todos", ...(historyId ? {historyId} : {})});
+      expect(res.status).toBe(200);
+      const events = parseEvents(res.text);
+      const ask = events.find((event) => "ask" in event)?.ask as {
+        input: Record<string, unknown>;
+        kind: string;
+        origin: string;
+        simple: {buttons: {id: string; label: string; style: string}[]};
+        toolCallId: string;
+        toolName: string;
+      };
+      const done = events.at(-1) as {historyId: string; pendingAsk: {toolCallId: string}};
+      return {ask, done};
+    };
+
+    const first = await askApproval();
+    expect(first.ask).toMatchObject({
+      input: {confirmLabel: "Delete", denyLabel: "Keep them", destructive: true},
+      kind: "confirm",
+      origin: "approval",
+      toolName: DELETE_COMPLETED_TODOS_TOOL,
+    });
+    expect(first.ask.simple.buttons.map(({id, label, style}) => ({id, label, style}))).toEqual([
+      {id: "approve", label: "Delete", style: "destructive"},
+      {id: "deny", label: "Keep them", style: "cancel"},
+    ]);
+    expect(first.done.pendingAsk).toEqual({toolCallId: first.ask.toolCallId});
+    expect(await todoTitles(user)).toEqual(["Buy milk", "File taxes", "Walk the dog"]);
+    const {historyId} = first.done;
+
+    const denied = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({
+        askResponse: {
+          action: "accept",
+          content: {confirmed: false},
+          toolCallId: first.ask.toolCallId,
+        },
+        historyId,
+      });
+    expect(denied.status).toBe(200);
+    const deniedText = parseEvents(denied.text)
+      .map((event) => (typeof event.text === "string" ? event.text : ""))
+      .join("");
+    expect(deniedText).toBe(
+      'OK, I kept your completed todos. Say "delete my completed todos" to try another answer.'
+    );
+    expect(await todoTitles(user)).toEqual(["Buy milk", "File taxes", "Walk the dog"]);
+
+    const second = await askApproval(historyId);
+    const approved = await supertest(app)
+      .post("/gpt/prompt")
+      .set(auth)
+      .send({
+        askResponse: {
+          action: "accept",
+          content: {confirmed: true},
+          toolCallId: second.ask.toolCallId,
+        },
+        historyId,
+      });
+    expect(approved.status).toBe(200);
+    const approvedEvents = parseEvents(approved.text);
+    const approvedText = approvedEvents
+      .map((event) => (typeof event.text === "string" ? event.text : ""))
+      .join("");
+    expect(approvedText).toBe(
+      "Deleted 2 completed todos: **Buy milk** and **File taxes**. They are gone from the Todos tab too."
+    );
+    expect(approvedEvents.at(-1)).toEqual({done: true, historyId, title: "Cleaning up todos"});
+    expect(await todoTitles(user)).toEqual(["Walk the dog"]);
+
+    const history = await GptHistory.findById(historyId).lean();
+    const approvalRows = history?.prompts.filter((row) => row.ask?.origin === "approval");
+    expect(approvalRows?.map((row) => row.ask)).toEqual([
+      {kind: "confirm", origin: "approval", status: "answered"},
+      {kind: "confirm", origin: "approval", status: "answered"},
+    ]);
+  });
+
+  it("deletes completed todos from a small screen with the approval card's approve button", async () => {
+    const {token, user} = await signInUser();
+    const auth = {Authorization: `Bearer ${token}`};
+    await createTodos(user);
+    const created = await supertest(app).post("/gpt/histories").set(auth).send({});
+    const historyId = created.body.data._id as string;
+    const turnPath = `/gpt/histories/${historyId}/turn`;
+
+    const asked = await supertest(app)
+      .post(turnPath)
+      .set(auth)
+      .send({prompt: "Delete my completed todos", surface: "compact"});
+    expect(asked.status).toBe(200);
+    const {pendingAsk} = asked.body.data as {
+      pendingAsk: {
+        kind: string;
+        simple: {buttons: {id: string; style: string}[]};
+        toolCallId: string;
+      };
+    };
+    expect(pendingAsk.kind).toBe("confirm");
+    expect(pendingAsk.simple.buttons.map(({id, style}) => ({id, style}))).toEqual([
+      {id: "approve", style: "destructive"},
+      {id: "deny", style: "cancel"},
+    ]);
+    expect(await todoTitles(user)).toEqual(["Buy milk", "File taxes", "Walk the dog"]);
+
+    const answered = await supertest(app)
+      .post(turnPath)
+      .set(auth)
+      .send({buttonId: "approve", surface: "compact", toolCallId: pendingAsk.toolCallId});
+    expect(answered.status).toBe(200);
+    expect(answered.body.data).toEqual({
+      historyId,
+      text: "Deleted 2 completed todos.",
+      title: "Cleaning up todos",
+    });
+    expect(await todoTitles(user)).toEqual(["Walk the dog"]);
   });
 });

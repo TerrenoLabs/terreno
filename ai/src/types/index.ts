@@ -1,5 +1,5 @@
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin} from "@terreno/api";
-import type {Ask, AskKind, SimpleCard} from "@terreno/blocks";
+import type {Ask, AskKind, ConfirmAskInput, SimpleCard} from "@terreno/blocks";
 import type {LanguageModel, ModelMessage, StopCondition, ToolSet} from "ai";
 import type mongoose from "mongoose";
 
@@ -99,9 +99,14 @@ export type MessageContentPart = TextContentPart | ImageContentPart | FileConten
 
 export type GptHistoryAskStatus = "pending" | "answered" | "cancelled";
 
+/** Set on asks the server makes itself: `approval` asks before a host tool with `needsApproval` runs. */
+export type AskOrigin = "approval";
+
 /** Marks a `tool-call` row as an ask and records whether the user has answered it. */
 export interface GptHistoryPromptAsk {
   kind: AskKind;
+  /** `approval` when the server asked before a host tool runs; the row is then display-only. */
+  origin?: AskOrigin;
   status: GptHistoryAskStatus;
 }
 
@@ -119,13 +124,18 @@ export interface GptHistoryPrompt {
 }
 
 interface GptHistoryPendingAskState {
+  /** The AI SDK approval request an `approval` ask answers. It is also the ask's `toolCallId`. */
+  approvalId?: string;
   created: Date;
+  origin?: AskOrigin;
   /** Number of leading `prompts` rows that form the paused turn's history. */
   promptIndex: number;
   /** AI SDK messages the paused turn produced, replayed verbatim when the user answers. */
   responseMessages: ModelMessage[];
   simple: SimpleCard;
   toolCallId: string;
+  /** The host tool an `approval` ask asks to run. */
+  toolName?: string;
 }
 
 /** The ask a history is waiting on. At most one per history. */
@@ -272,7 +282,16 @@ export interface GenerateJsonArrayOptions<ELEMENT> {
 // Route Option Types
 // ============================================================
 
+/** Makes the `confirm` input of the approval ask for one call of a host tool, from the call's input. */
+export type ApprovalAskInput = (input: unknown) => ConfirmAskInput;
+
 export interface AsksOptions {
+  /**
+   * The approval ask for host tools with `needsApproval`, by tool name. Without an entry, or when
+   * it throws or returns an input that is not a valid `confirm` input, the ask is "Allow
+   * <toolName>?" with the tool's description and Allow / Deny buttons.
+   */
+  approvals?: Record<string, ApprovalAskInput>;
   /** Ask kinds offered to the model, each as the tool `ask_<kind>`. Defaults to every kind. */
   kinds?: AskKind[];
   /**

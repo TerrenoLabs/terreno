@@ -37,6 +37,30 @@ export const withoutEmptyAssistant = (messages: GPTChatMessage[]): GPTChatMessag
   );
 
 /**
+ * Applies a `{toolResult}` event. A tool call opens an empty reply for the text that follows its
+ * result, so the result goes before that reply. A tool run by an answered approval streams no tool
+ * call, so its result goes last, after the ask's own result row, as the server saves it.
+ */
+export const withToolResult = ({
+  messages,
+  toolResult,
+}: {
+  messages: GPTChatMessage[];
+  toolResult: NonNullable<GPTChatMessage["toolResult"]>;
+}): GPTChatMessage[] => {
+  const resultMessage: GPTChatMessage = {
+    content: `Tool result: ${toolResult.toolName}`,
+    role: "tool-result",
+    toolResult,
+  };
+  const last = messages.at(-1);
+  if (last && withoutEmptyAssistant([last]).length === 0) {
+    return [...messages.slice(0, -1), resultMessage, last];
+  }
+  return [...messages, resultMessage];
+};
+
+/**
  * The conversation an answer goes to: the one the ask's `{ask}` event named, so an ask on a new
  * chat can be answered before `{done}` opens it, else the open conversation.
  */

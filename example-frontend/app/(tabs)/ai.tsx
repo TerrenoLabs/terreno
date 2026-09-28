@@ -30,6 +30,7 @@ import {
   uploadedFileFromBody,
   withoutEmptyAssistant,
   withResolvedAsk,
+  withToolResult,
 } from "@/lib/gptAsks";
 import {selectGptMascotIndex} from "@/lib/gptMascot";
 import {useAppDispatch} from "@/store/index";
@@ -447,23 +448,10 @@ const AiScreen: React.FC = () => {
               setCurrentMessages((prev) => [...prev, {content: "", role: "assistant"}]);
             } else if (data.toolResult) {
               hasVisibleEvents = true;
-              // Insert tool result before the last empty assistant message
-              setCurrentMessages((prev) => {
-                const updated = [...prev];
-                const lastIdx = updated.length - 1;
-                if (
-                  lastIdx >= 0 &&
-                  updated[lastIdx].role === "assistant" &&
-                  !updated[lastIdx].content
-                ) {
-                  updated.splice(lastIdx, 0, {
-                    content: `Tool result: ${data.toolResult.toolName}`,
-                    role: "tool-result",
-                    toolResult: data.toolResult,
-                  });
-                }
-                return updated;
-              });
+              const {toolResult} = data;
+              // Text after a result that lands last starts a new reply instead of repeating the old one.
+              assistantText = "";
+              setCurrentMessages((prev) => withToolResult({messages: prev, toolResult}));
             } else if (data.ask) {
               hasAskEvents = true;
               hasVisibleEvents = true;

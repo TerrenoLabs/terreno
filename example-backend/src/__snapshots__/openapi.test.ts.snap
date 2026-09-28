@@ -14770,6 +14770,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "pendingAsk": {
                             "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
                             "properties": {
+                              "approvalId": {
+                                "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                                "type": "string",
+                              },
                               "created": {
                                 "description": "When the model asked",
                                 "format": "date-time",
@@ -14789,6 +14793,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 ],
                                 "type": "string",
                               },
+                              "origin": {
+                                "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                "enum": [
+                                  "approval",
+                                ],
+                                "type": "string",
+                              },
                               "promptIndex": {
                                 "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
                                 "type": "number",
@@ -14801,6 +14812,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                               },
                               "toolCallId": {
                                 "description": "Tool call id of the ask; an answer must name it",
+                                "type": "string",
+                              },
+                              "toolName": {
+                                "description": "Host tool an approval ask asks to run",
                                 "type": "string",
                               },
                             },
@@ -14838,6 +14853,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                         "markdown",
                                         "form",
                                         "files",
+                                      ],
+                                      "type": "string",
+                                    },
+                                    "origin": {
+                                      "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                      "enum": [
+                                        "approval",
                                       ],
                                       "type": "string",
                                     },
@@ -15057,6 +15079,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                   "pendingAsk": {
                     "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
                     "properties": {
+                      "approvalId": {
+                        "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                        "type": "string",
+                      },
                       "created": {
                         "description": "When the model asked",
                         "format": "date-time",
@@ -15076,6 +15102,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         ],
                         "type": "string",
                       },
+                      "origin": {
+                        "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                        "enum": [
+                          "approval",
+                        ],
+                        "type": "string",
+                      },
                       "promptIndex": {
                         "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
                         "type": "number",
@@ -15088,6 +15121,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       },
                       "toolCallId": {
                         "description": "Tool call id of the ask; an answer must name it",
+                        "type": "string",
+                      },
+                      "toolName": {
+                        "description": "Host tool an approval ask asks to run",
                         "type": "string",
                       },
                     },
@@ -15126,6 +15163,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "markdown",
                                 "form",
                                 "files",
+                              ],
+                              "type": "string",
+                            },
+                            "origin": {
+                              "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                              "enum": [
+                                "approval",
                               ],
                               "type": "string",
                             },
@@ -15274,6 +15318,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "pendingAsk": {
                       "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
                       "properties": {
+                        "approvalId": {
+                          "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                          "type": "string",
+                        },
                         "created": {
                           "description": "When the model asked",
                           "format": "date-time",
@@ -15293,6 +15341,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           ],
                           "type": "string",
                         },
+                        "origin": {
+                          "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                          "enum": [
+                            "approval",
+                          ],
+                          "type": "string",
+                        },
                         "promptIndex": {
                           "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
                           "type": "number",
@@ -15305,6 +15360,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                         "toolCallId": {
                           "description": "Tool call id of the ask; an answer must name it",
+                          "type": "string",
+                        },
+                        "toolName": {
+                          "description": "Host tool an approval ask asks to run",
                           "type": "string",
                         },
                       },
@@ -15343,6 +15402,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                   "markdown",
                                   "form",
                                   "files",
+                                ],
+                                "type": "string",
+                              },
+                              "origin": {
+                                "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                "enum": [
+                                  "approval",
                                 ],
                                 "type": "string",
                               },
@@ -15871,6 +15937,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "pendingAsk": {
                       "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
                       "properties": {
+                        "approvalId": {
+                          "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                          "type": "string",
+                        },
                         "created": {
                           "description": "When the model asked",
                           "format": "date-time",
@@ -15890,6 +15960,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           ],
                           "type": "string",
                         },
+                        "origin": {
+                          "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                          "enum": [
+                            "approval",
+                          ],
+                          "type": "string",
+                        },
                         "promptIndex": {
                           "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
                           "type": "number",
@@ -15902,6 +15979,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                         "toolCallId": {
                           "description": "Tool call id of the ask; an answer must name it",
+                          "type": "string",
+                        },
+                        "toolName": {
+                          "description": "Host tool an approval ask asks to run",
                           "type": "string",
                         },
                       },
@@ -15939,6 +16020,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                   "markdown",
                                   "form",
                                   "files",
+                                ],
+                                "type": "string",
+                              },
+                              "origin": {
+                                "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                "enum": [
+                                  "approval",
                                 ],
                                 "type": "string",
                               },
@@ -16151,6 +16239,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                   "pendingAsk": {
                     "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
                     "properties": {
+                      "approvalId": {
+                        "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                        "type": "string",
+                      },
                       "created": {
                         "description": "When the model asked",
                         "format": "date-time",
@@ -16170,6 +16262,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         ],
                         "type": "string",
                       },
+                      "origin": {
+                        "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                        "enum": [
+                          "approval",
+                        ],
+                        "type": "string",
+                      },
                       "promptIndex": {
                         "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
                         "type": "number",
@@ -16182,6 +16281,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       },
                       "toolCallId": {
                         "description": "Tool call id of the ask; an answer must name it",
+                        "type": "string",
+                      },
+                      "toolName": {
+                        "description": "Host tool an approval ask asks to run",
                         "type": "string",
                       },
                     },
@@ -16220,6 +16323,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "markdown",
                                 "form",
                                 "files",
+                              ],
+                              "type": "string",
+                            },
+                            "origin": {
+                              "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                              "enum": [
+                                "approval",
                               ],
                               "type": "string",
                             },
@@ -16368,6 +16478,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "pendingAsk": {
                       "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
                       "properties": {
+                        "approvalId": {
+                          "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                          "type": "string",
+                        },
                         "created": {
                           "description": "When the model asked",
                           "format": "date-time",
@@ -16387,6 +16501,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           ],
                           "type": "string",
                         },
+                        "origin": {
+                          "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                          "enum": [
+                            "approval",
+                          ],
+                          "type": "string",
+                        },
                         "promptIndex": {
                           "description": "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
                           "type": "number",
@@ -16399,6 +16520,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                         "toolCallId": {
                           "description": "Tool call id of the ask; an answer must name it",
+                          "type": "string",
+                        },
+                        "toolName": {
+                          "description": "Host tool an approval ask asks to run",
                           "type": "string",
                         },
                       },
@@ -16437,6 +16562,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                   "markdown",
                                   "form",
                                   "files",
+                                ],
+                                "type": "string",
+                              },
+                              "origin": {
+                                "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                "enum": [
+                                  "approval",
                                 ],
                                 "type": "string",
                               },

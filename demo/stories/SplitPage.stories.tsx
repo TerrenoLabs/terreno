@@ -55,6 +55,29 @@ export const SplitPageDemo: React.FC = (): React.ReactElement => {
   );
 };
 
+export const SplitPageOptInLayouts: React.FC = (): React.ReactElement => {
+  return (
+    <Box height={400} width="100%">
+      <SplitPage
+        desktopChildrenMinWidth={240}
+        listViewData={LIST_ITEMS}
+        mobileChildLabels={["Summary", "Notes"]}
+        mobileListButtonLabel="Back to list"
+        renderListViewItem={renderListItem}
+      >
+        <Box gap={2} padding={3}>
+          <Heading size="sm">Summary</Heading>
+          <Text>First child. On a wide screen this column stays at least 240 pixels.</Text>
+        </Box>
+        <Box gap={2} padding={3}>
+          <Heading size="sm">Notes</Heading>
+          <Text>Second child. On a narrow screen these children page one at a time.</Text>
+        </Box>
+      </SplitPage>
+    </Box>
+  );
+};
+
 export const SplitPageLoading: React.FC = (): React.ReactElement => {
   const renderContent = useCallback((): React.ReactElement => {
     return <Text>Detail</Text>;

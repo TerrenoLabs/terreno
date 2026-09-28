@@ -1207,6 +1207,39 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
   listViewMaxWidth?: number;
   renderChild?: () => ReactChild;
   onSelectionChange?: (value?: ListRenderItemInfo<TItem>) => void | Promise<void>;
+  /**
+   * Minimum width, in pixels, of each child in the desktop side-by-side layout.
+   * Applies only when the viewport is not the narrow layout and there are 1 or 2
+   * non-null children. When omitted, that layout stays a flex row. When there are
+   * more than 2 children, the segmented-control layout is used and this prop is ignored.
+   */
+  desktopChildrenMinWidth?: number;
+  /**
+   * Opt-in labels for the narrow full-width pager, one per non-null child, in child order.
+   * The pager is active only when the viewport is the narrow layout, a detail view is active,
+   * there is more than one non-null child, and this array's length equals that child count.
+   * Otherwise the dotted swiper is used. A length mismatch is ignored and falls back to the
+   * dotted swiper.
+   */
+  mobileChildLabels?: string[];
+  /**
+   * When true, the narrow detail view is active even if the internal list selection is unset.
+   * Detail is active when the internal selection is set or this flag is true.
+   * Showing the list clears only the internal selection. The parent turns this flag off.
+   */
+  mobileSelectionActive?: boolean;
+  /**
+   * Identity of the record the parent selected.
+   * When this string changes, the narrow pager resets to the first child.
+   * Width and layout measurement changes do not reset it.
+   */
+  mobileSelectionKey?: string;
+  /**
+   * When set on the opt-in narrow pager, show a return-to-list button that clears the
+   * internal selection and calls onSelectionChange with undefined.
+   * When omitted, that button is not rendered.
+   */
+  mobileListButtonLabel?: string;
 }
 
 export type PermissionKind =
@@ -2334,6 +2367,12 @@ export interface IconButtonProps extends WithTestID {
    * @default "primary"
    */
   variant?: "primary" | "secondary" | "muted" | "destructive" | "navigation" | "ghost";
+
+  /**
+   * When set, the variant background is passed through applyColorOpacity and the icon color
+   * stays the opaque variant color. When omitted, the background is unchanged.
+   */
+  backgroundOpacity?: number;
 
   /**
    * If true, a confirmation modal will be shown before the onClick action.

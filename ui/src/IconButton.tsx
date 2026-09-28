@@ -11,7 +11,7 @@ import {Text} from "./Text";
 import {useTheme} from "./Theme";
 import {Tooltip} from "./Tooltip";
 import {Unifier} from "./Unifier";
-import {isNative} from "./Utilities";
+import {applyColorOpacity, isNative} from "./Utilities";
 
 interface ConfirmationModalProps {
   visible: boolean;
@@ -56,6 +56,7 @@ const IconButtonComponent: FC<IconButtonProps> = ({
   indicator,
   indicatorText,
   loading: propsLoading = false,
+  backgroundOpacity,
   size = "default",
   state = "default",
   testID,
@@ -107,6 +108,10 @@ const IconButtonComponent: FC<IconButtonProps> = ({
       backgroundColor = theme.surface.primary;
       color = theme.text.inverted;
     }
+  }
+
+  if (typeof backgroundOpacity === "number") {
+    backgroundColor = applyColorOpacity({color: backgroundColor, opacity: backgroundOpacity});
   }
 
   const indicatorColor = indicator ? theme.surface[indicator] : undefined;

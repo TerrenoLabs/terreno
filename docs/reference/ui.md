@@ -320,8 +320,13 @@ images once per mount.
 ### SplitPage
 
 Master-detail layout. Pass `listViewData` plus `renderListViewItem` for the list, and
-`renderContent` for the detail pane. On large screens both panes stay visible. On small
+`renderContent` or children for the detail pane. On large screens both panes stay visible. On small
 screens the detail replaces the list until the user goes back.
+
+`desktopChildrenMinWidth` opts into a minimum pixel width for each desktop child when there
+are one or two children. `mobileChildLabels` opts into a labeled full-width pager on the
+narrow layout. See `SplitPageProps` for when each prop applies and what is ignored.
+`IconButton`'s `backgroundOpacity` tints only that button's background.
 
 ```typescript
 import {SplitPage, Text} from "@terreno/ui";

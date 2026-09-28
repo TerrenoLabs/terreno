@@ -1,5 +1,5 @@
 import type {DemoConfiguration} from "@config";
-import {SplitPageDemo, SplitPageLoading} from "@stories/SplitPage.stories";
+import {SplitPageDemo, SplitPageLoading, SplitPageOptInLayouts} from "@stories/SplitPage.stories";
 import {SplitPage} from "@terreno/ui";
 
 export const SplitPageConfiguration: DemoConfiguration = {
@@ -7,7 +7,7 @@ export const SplitPageConfiguration: DemoConfiguration = {
   component: SplitPage,
   related: ["Page", "Box"],
   description:
-    "Master-detail layout. On large screens the list and detail sit side by side. On small screens, selecting a list item replaces the list with the detail pane.",
+    "Master-detail layout. On large screens the list and detail sit side by side. On small screens, selecting a list item replaces the list with the detail pane. Opt in to a minimum column width for the desktop side-by-side children, and to a labeled pager on the narrow layout.",
   a11yNotes: ["List items must be activatable. The mobile back control must remain labeled."],
   category: "Component",
   status: {
@@ -33,6 +33,11 @@ export const SplitPageConfiguration: DemoConfiguration = {
     Loading: {
       description: "Loading spinner instead of list and detail.",
       render: () => <SplitPageLoading />,
+    },
+    OptInLayouts: {
+      description:
+        "Desktop children keep a minimum column width. The narrow layout uses a labeled pager with a return-to-list button.",
+      render: () => <SplitPageOptInLayouts />,
     },
   },
 };

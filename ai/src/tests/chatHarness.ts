@@ -4,6 +4,7 @@ import type {AddressInfo} from "node:net";
 import {TerrenoApp} from "@terreno/api";
 import {jsonSchema, type LanguageModel, tool} from "ai";
 import type express from "express";
+import mongoose from "mongoose";
 
 import {GptHistory} from "../models/gptHistory";
 import {addGptRoutes} from "../routes/gpt";
@@ -459,7 +460,7 @@ export const failNextAskClaim = (): {mockRestore: () => void} => {
   return spyOn(GptHistory, "findOneAndUpdate").mockImplementation(((...args: unknown[]) => {
     if (!hasFailed && isAskClaim(args[1])) {
       hasFailed = true;
-      throw new Error("Primary stepped down");
+      throw new mongoose.Error("Primary stepped down");
     }
     return findOneAndUpdate(...args);
   }) as never);

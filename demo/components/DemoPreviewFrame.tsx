@@ -5,7 +5,11 @@ import type React from "react";
 import {useCallback, useEffect} from "react";
 
 import {DemoPreviewContext} from "../previewContext";
-import {type DemoPreviewState, previewQueryFromState, previewStateFromQuery} from "../previewState";
+import {
+  type DemoPreviewState,
+  previewParamsFromState,
+  previewStateFromQuery,
+} from "../previewState";
 import {DemoPreviewBar} from "./DemoPreviewBar";
 import {DARK_THEME_CONFIG} from "./palette/darkTheme";
 
@@ -15,30 +19,36 @@ export const DemoPreviewFrame: React.FC<{children: React.ReactNode}> = ({childre
   const state = previewStateFromQuery(params);
   const {resetTheme, setTheme} = useTheme();
 
-  // Keep the live theme aligned with the shareable preview query.
+  // Keep the live theme aligned with the shareable preview query, and restore the app theme on leave.
   useEffect(() => {
     if (state.theme === "dark") {
       setTheme(DARK_THEME_CONFIG);
-      return;
+    } else {
+      resetTheme();
     }
-    resetTheme();
+    return () => {
+      resetTheme();
+    };
   }, [resetTheme, setTheme, state.theme]);
 
   const handleChange = useCallback((next: DemoPreviewState): void => {
-    const query = previewQueryFromState(next);
-    router.setParams(Object.fromEntries(new URLSearchParams(query)));
+    router.setParams(previewParamsFromState(next));
   }, []);
 
   const frameWidth = state.viewport === "full" ? "100%" : Number(state.viewport);
   const background = state.background === "inverse" ? "primary" : "base";
 
-  // Reflect direction and motion on web so the query is visible outside React state.
+  // Reflect direction and motion on web, and restore document defaults when leaving the preview.
   useEffect(() => {
     if (typeof document === "undefined") {
       return;
     }
     document.documentElement.dir = state.rtl ? "rtl" : "ltr";
     document.documentElement.dataset.reducedMotion = state.reducedMotion ? "1" : "0";
+    return () => {
+      document.documentElement.dir = "ltr";
+      delete document.documentElement.dataset.reducedMotion;
+    };
   }, [state.reducedMotion, state.rtl]);
 
   return (

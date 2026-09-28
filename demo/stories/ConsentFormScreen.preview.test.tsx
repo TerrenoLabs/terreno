@@ -13,6 +13,6 @@ describe("ConsentFormScreen preview locale", () => {
         <ConsentFormScreenDemo />
       </DemoPreviewContext.Provider>
     );
-    assert.equal(getByTestId("consent-preview-locale").props.children, "en-US");
+    assert.equal(getByTestId("consent-preview-locale").props.accessibilityLabel, "en-US");
   });
 });

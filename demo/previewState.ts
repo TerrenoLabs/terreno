@@ -55,23 +55,22 @@ export const previewStateFromQuery = (
 
 export const previewQueryFromState = (state: DemoPreviewState): string => {
   const params = new URLSearchParams();
-  if (state.theme !== "light") {
-    params.set("theme", state.theme);
-  }
-  if (state.viewport !== "full") {
-    params.set("viewport", state.viewport);
-  }
-  if (state.background !== "default") {
-    params.set("background", state.background);
-  }
-  if (state.locale !== "en") {
-    params.set("locale", state.locale);
-  }
-  if (state.rtl) {
-    params.set("rtl", "1");
-  }
-  if (state.reducedMotion) {
-    params.set("reducedMotion", "1");
+  for (const [key, value] of Object.entries(previewParamsFromState(state))) {
+    if (value) {
+      params.set(key, value);
+    }
   }
   return params.toString();
+};
+
+/** Every preview key, with "" for defaults so router.setParams can clear a merged query. */
+export const previewParamsFromState = (state: DemoPreviewState): Record<string, string> => {
+  return {
+    background: state.background === "default" ? "" : state.background,
+    locale: state.locale === "en" ? "" : state.locale,
+    reducedMotion: state.reducedMotion ? "1" : "",
+    rtl: state.rtl ? "1" : "",
+    theme: state.theme === "light" ? "" : state.theme,
+    viewport: state.viewport === "full" ? "" : state.viewport,
+  };
 };

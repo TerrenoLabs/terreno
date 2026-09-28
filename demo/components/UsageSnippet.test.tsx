@@ -21,6 +21,19 @@ describe("UsageSnippet", () => {
     });
     assert.equal(getByText("Copied").props.children, "Copied");
   });
+
+  it("returns the button to Copy when the example changes", async () => {
+    const {getByTestId, getByText, queryByText, rerender} = renderWithTheme(
+      <UsageSnippet example={EXAMPLE} />
+    );
+    await act(async () => {
+      fireEvent.press(getByTestId("usage-copy"));
+    });
+    assert.equal(getByText("Copied").props.children, "Copied");
+    rerender(<UsageSnippet example={'import {Card} from "@terreno/ui";\n\n<Card />'} />);
+    assert.equal(queryByText("Copied"), null);
+    assert.equal(getByText("Copy").props.children, "Copy");
+  });
 });
 
 describe("RelatedComponents", () => {

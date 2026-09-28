@@ -1,4 +1,4 @@
-import {ConsentFormScreen, Text} from "@terreno/ui";
+import {Box, ConsentFormScreen} from "@terreno/ui";
 import type React from "react";
 import {type ReactElement, useCallback, useContext} from "react";
 
@@ -33,7 +33,7 @@ export const ConsentFormScreenDemo: React.FC = (): ReactElement => {
 
   return (
     <>
-      <Text testID="consent-preview-locale">{preview.locale}</Text>
+      <Box accessibilityLabel={preview.locale} height={0} testID="consent-preview-locale" />
       <ConsentFormScreen
         form={consentForm}
         locale={preview.locale}

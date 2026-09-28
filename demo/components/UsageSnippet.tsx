@@ -4,11 +4,12 @@ import type React from "react";
 import {useCallback, useState} from "react";
 
 export const UsageSnippet: React.FC<{example: string}> = ({example}) => {
-  const [copied, setCopied] = useState(false);
+  const [copiedExample, setCopiedExample] = useState<string | null>(null);
+  const copied = copiedExample === example;
 
   const handleCopy = useCallback(async (): Promise<void> => {
     await Clipboard.setStringAsync(example);
-    setCopied(true);
+    setCopiedExample(example);
   }, [example]);
 
   return (

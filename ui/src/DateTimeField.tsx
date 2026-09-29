@@ -1,4 +1,4 @@
-import {FontAwesome6} from "@expo/vector-icons";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {DateTime} from "luxon";
 import React, {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Pressable, TextInput, View} from "react-native";

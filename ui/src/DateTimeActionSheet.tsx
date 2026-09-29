@@ -1,4 +1,4 @@
-import {FontAwesome6} from "@expo/vector-icons";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {Picker} from "@react-native-picker/picker";
 import {getCalendars} from "expo-localization";
 import range from "lodash/range";

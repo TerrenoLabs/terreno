@@ -3,6 +3,7 @@ import {TableTitleDemo, TableTitleExample} from "@stories/TableTitle.stories";
 import {TableTitle} from "@terreno/ui";
 
 export const TableTitleConfiguration: DemoConfiguration = {
+  usageExample: "import {TableTitle} from \"@terreno/ui\";\n\n<TableTitle />",
   name: "Table title",
   component: TableTitle, // Replace with actual component reference
   related: ["Table"],

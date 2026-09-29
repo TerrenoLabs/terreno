@@ -3,6 +3,7 @@ import {SplitPageDemo, SplitPageLoading, SplitPageOptInLayouts} from "@stories/S
 import {SplitPage} from "@terreno/ui";
 
 export const SplitPageConfiguration: DemoConfiguration = {
+  usageExample: "import {SplitPage} from \"@terreno/ui\";\n\n<SplitPage />",
   name: "SplitPage",
   component: SplitPage,
   related: ["Page", "Box"],

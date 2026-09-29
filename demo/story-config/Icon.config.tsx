@@ -3,6 +3,7 @@ import {CustomIcons, IconDemo, IconSizes, IconStyles, SolidIcons} from "@stories
 import {Icon} from "@terreno/ui";
 
 export const IconConfiguration: DemoConfiguration = {
+  usageExample: "import {Icon} from \"@terreno/ui\";\n\n<Icon />",
   name: "Icon",
   related: [],
   description:

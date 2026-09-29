@@ -3,6 +3,7 @@ import {AccordionDemo, AccordionDevDemo, AccordionOnToggleDemo} from "@stories/A
 import {Accordion} from "@terreno/ui";
 
 export const AccordionConfiguration: DemoConfiguration = {
+  usageExample: "import {Accordion} from \"@terreno/ui\";\n\n<Accordion />",
   name: "Accordion",
   component: Accordion,
   related: [],

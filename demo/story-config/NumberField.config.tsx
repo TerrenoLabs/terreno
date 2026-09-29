@@ -9,12 +9,13 @@ import {
 import {NumberField} from "@terreno/ui";
 
 export const NumberFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {NumberField} from \"@terreno/ui\";\n\n<NumberField />",
   name: "Number field",
   component: NumberField, // Replace with actual component reference
   related: ["Text area"],
   description: "Use the number field to allow a user to input numerical values.",
   a11yNotes: ["The user should be able to use tab to navigate between elements."],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

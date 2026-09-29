@@ -7,6 +7,7 @@ import {
 import {DonutChart} from "@terreno/ui";
 
 export const DonutChartConfiguration: DemoConfiguration = {
+  usageExample: "import {DonutChart} from \"@terreno/ui\";\n\n<DonutChart />",
   name: "DonutChart",
   component: DonutChart,
   related: ["LineChart", "BarChart", "DashboardGrid"],

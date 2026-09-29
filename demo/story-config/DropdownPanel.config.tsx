@@ -7,10 +7,15 @@ import {
 import {DropdownPanel} from "@terreno/ui";
 import React from "react";
 
+const DROPDOWN_PANEL_USAGE_EXAMPLE = `import {DropdownPanel} from "@terreno/ui";
+
+<DropdownPanel />`;
+
 export const DropdownPanelConfiguration: DemoConfiguration = {
+  usageExample: DROPDOWN_PANEL_USAGE_EXAMPLE,
   name: "DropdownPanel",
   component: DropdownPanel,
-  related: ["SelectField", "BooleanField", "Accordion"],
+  related: ["Select field", "Boolean field", "Accordion"],
   description:
     "A compositional dropdown panel: a trigger that opens an anchored panel of composed content with an optional Apply/Clear/Cancel footer. Built for filters (combine the select menu, boolean, and accordion sub-components) but usable for any panel content. The panel escapes ancestor clipping, right-aligns rather than running off screen, and flips above the trigger when there is no room below.",
   a11yNotes: [

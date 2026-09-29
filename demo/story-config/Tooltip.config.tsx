@@ -3,6 +3,7 @@ import {IncludesArrow, ToolTipPositions, TooltipDemo, TooltipOverText} from "@st
 import {Tooltip} from "@terreno/ui";
 
 export const TooltipConfiguration: DemoConfiguration = {
+  usageExample: "import {Tooltip} from \"@terreno/ui\";\n\n<Tooltip />",
   name: "Tooltip",
   component: Tooltip, // Replace with actual component reference
   related: [],

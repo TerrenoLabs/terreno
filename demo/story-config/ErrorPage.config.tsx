@@ -3,6 +3,7 @@ import {ErrorPageDemo, ErrorPageNetwork} from "@stories/ErrorPage.stories";
 import {ErrorPage} from "@terreno/ui";
 
 export const ErrorPageConfiguration: DemoConfiguration = {
+  usageExample: "import {ErrorPage} from \"@terreno/ui\";\n\n<ErrorPage />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

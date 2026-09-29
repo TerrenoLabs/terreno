@@ -3,6 +3,7 @@ import {AIRequestExplorerDemo, AIRequestExplorerLoading} from "@stories/AIReques
 import {AIRequestExplorer} from "@terreno/ui";
 
 export const AIRequestExplorerConfiguration: DemoConfiguration = {
+  usageExample: "import {AIRequestExplorer} from \"@terreno/ui\";\n\n<AIRequestExplorer />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

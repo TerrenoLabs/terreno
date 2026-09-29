@@ -3,9 +3,10 @@ import {SpinnerDemo, SpinnerVariations} from "@stories/Spinner.stories";
 import {Spinner} from "@terreno/ui";
 
 export const SpinnerConfiguration: DemoConfiguration = {
+  usageExample: "import {Spinner} from \"@terreno/ui\";\n\n<Spinner />",
   name: "Spinner",
   component: Spinner,
-  related: ["Activity Indicator", "Loading"],
+  related: ["Page"],
   description:
     "This is a microcomponent that’s used to indicate that the system is loading information. It can be used on a loading surface or on a button.",
   a11yNotes: [],

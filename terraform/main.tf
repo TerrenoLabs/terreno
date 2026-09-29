@@ -218,6 +218,27 @@ resource "google_secret_manager_secret_version" "better_auth_secret" {
   secret_data = random_password.better_auth_secret.result
 }
 
+module "backend_secret_announcements_upload" {
+  source = "./modules/secret"
+
+  project_id = var.project_id
+  secret_id  = "${var.backend_service_name}-announcements-upload-token"
+  labels     = local.common_labels
+
+  accessor_members = {
+    api-runtime = "serviceAccount:${google_service_account.backend_runtime.email}"
+  }
+
+  depends_on = [module.bootstrap]
+}
+
+# The example app documents this value so release-pack uploads can be tested
+# against the deployed backend. It is not a pattern for production apps.
+resource "google_secret_manager_secret_version" "announcements_upload_token" {
+  secret      = module.backend_secret_announcements_upload.name
+  secret_data = var.announcements_upload_token
+}
+
 module "backend_service" {
   source = "./modules/cloud_run_service"
 
@@ -242,6 +263,7 @@ module "backend_service" {
     module.backend_secret_langfuse_secret_key,
     module.backend_secret_langfuse_public_key,
     module.backend_secret_better_auth,
+    module.backend_secret_announcements_upload,
   ]
 }
 

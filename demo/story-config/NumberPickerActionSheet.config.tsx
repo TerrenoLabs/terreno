@@ -6,9 +6,10 @@ import {
 import {NumberPickerActionSheet} from "@terreno/ui";
 
 export const NumberPickerActionSheetConfiguration: DemoConfiguration = {
+  usageExample: "import {NumberPickerActionSheet} from \"@terreno/ui\";\n\n<NumberPickerActionSheet />",
   a11yNotes: ["Open from the button; the sheet starts closed."],
   additionalDocumentation: [],
-  category: "Component",
+  category: ["Component", "Form"],
   component: NumberPickerActionSheet,
   demo: () => <NumberPickerActionSheetDemo />,
   demoOptions: {size: "lg"},
@@ -16,7 +17,7 @@ export const NumberPickerActionSheetConfiguration: DemoConfiguration = {
   interfaceName: "NumberPickerActionSheetProps",
   name: "NumberPickerActionSheet",
   props: {},
-  related: ["ActionSheet", "NumberField"],
+  related: ["ActionSheet", "Number field"],
   status: {
     android: "ready",
     documentation: "ready",

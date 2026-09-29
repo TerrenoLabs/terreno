@@ -75,6 +75,7 @@ const PLUGIN_APP_SKILL_DIRECTORIES = [
   "building-terreno-apps",
   "debug-syncdb-with-mcp",
   "deploy-gcp",
+  "generate-release-announcements",
   "generate-sdk",
   "mongoose-schema-safety",
   "terreno-backend-api",

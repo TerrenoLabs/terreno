@@ -3,6 +3,7 @@ import {MarkdownEditorDemo, MarkdownEditorDisabled} from "@stories/MarkdownEdito
 import {MarkdownEditor} from "@terreno/ui";
 
 export const MarkdownEditorConfiguration: DemoConfiguration = {
+  usageExample: "import {MarkdownEditor} from \"@terreno/ui\";\n\n<MarkdownEditor />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",
@@ -14,7 +15,7 @@ export const MarkdownEditorConfiguration: DemoConfiguration = {
   interfaceName: "MarkdownEditorProps",
   name: "MarkdownEditor",
   props: {},
-  related: ["MarkdownEditorField", "MarkdownView"],
+  related: ["Markdown editor field", "MarkdownView"],
   status: {
     android: "ready",
     documentation: "ready",

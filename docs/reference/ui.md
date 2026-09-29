@@ -324,8 +324,9 @@ Master-detail layout. Pass `listViewData` plus `renderListViewItem` for the list
 screens the detail replaces the list until the user goes back.
 
 `desktopChildrenMinWidth` opts into a minimum pixel width for each desktop child when there
-are one or two children. `mobileChildLabels` opts into a labeled full-width pager on the
-narrow layout. See `SplitPageProps` for when each prop applies and what is ignored.
+are one or two children. `narrowViewportChildLabels` opts into a labeled full-width pager on
+the narrow viewport. Both are web only; the native `SplitPage` ignores them. See
+`SplitPageProps` for when each prop applies and what is ignored.
 `IconButton`'s `backgroundOpacity` tints only that button's background.
 
 ```typescript
@@ -632,7 +633,7 @@ import {
   mediaQuery,
   mediaQueryLargerThan,
   mediaQuerySmallerThan,
-  isMobileDevice,
+  isNarrowViewport,
 } from "@terreno/ui";
 
 // Read the current breakpoint
@@ -650,9 +651,9 @@ if (mediaQuerySmallerThan("lg")) {
   console.log("Smaller than large");
 }
 
-// Detect mobile
-if (isMobileDevice()) {
-  console.info("Running on mobile device");
+// Current window is below the desktop breakpoint
+if (isNarrowViewport()) {
+  console.info("Narrow viewport");
 }
 ``````
 
@@ -678,7 +679,7 @@ Web (desktop staff):
 
 On web, `sm` (320) and `md` (375) still classify widths below 1024 so layouts can remain accessible.
 
-`isMobileDevice()` is true below the supported desktop floor: native width < 1024 (`xl`), web width < 1024 (`lg`).
+`isNarrowViewport()` is true below the supported desktop floor: native width < 1024 (`xl`), web width < 1024 (`lg`). `isMobileDevice()` is the same check and is deprecated in favor of `isNarrowViewport`.
 
 Responsive `Box` direction props update automatically when the window resizes or a device rotates:
 

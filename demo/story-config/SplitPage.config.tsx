@@ -8,8 +8,8 @@ export const SplitPageConfiguration: DemoConfiguration = {
   component: SplitPage,
   related: ["Page", "Box"],
   description:
-    "Master-detail layout. On large screens the list and detail sit side by side. On small screens, selecting a list item replaces the list with the detail pane. Opt in to a minimum column width for the desktop side-by-side children, and to a labeled pager on the narrow layout.",
-  a11yNotes: ["List items must be activatable. The mobile back control must remain labeled."],
+    "Master-detail layout. On large screens the list and detail sit side by side. On small screens, selecting a list item replaces the list with the detail pane. On web, opt in to a minimum column width for the desktop side-by-side children, and to a labeled pager on the narrow viewport.",
+  a11yNotes: ["List items must be activatable. The narrow-viewport back control must remain labeled."],
   category: "Component",
   status: {
     documentation: "ready",
@@ -37,7 +37,7 @@ export const SplitPageConfiguration: DemoConfiguration = {
     },
     OptInLayouts: {
       description:
-        "Desktop children keep a minimum column width. The narrow layout uses a labeled pager with a return-to-list button.",
+        "Web only. Desktop children keep a minimum column width. The narrow viewport uses a labeled pager with a return-to-list button.",
       render: () => <SplitPageOptInLayouts />,
     },
   },

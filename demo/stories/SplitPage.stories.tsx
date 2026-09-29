@@ -61,8 +61,8 @@ export const SplitPageOptInLayouts: React.FC = (): React.ReactElement => {
       <SplitPage
         desktopChildrenMinWidth={240}
         listViewData={LIST_ITEMS}
-        mobileChildLabels={["Summary", "Notes"]}
-        mobileListButtonLabel="Back to list"
+        narrowViewportChildLabels={["Summary", "Notes"]}
+        narrowViewportListButtonLabel="Back to list"
         renderListViewItem={renderListItem}
       >
         <Box gap={2} padding={3}>

@@ -77,7 +77,7 @@ const styleWidth = (style: unknown): unknown => StyleSheet.flatten(style)?.width
 
 const setDesktop = () => {
   mock.module("./MediaQuery", () => ({
-    isMobileDevice: () => false,
+    isNarrowViewport: () => false,
     mediaQuery: () => "lg" as const,
     mediaQueryLargerThan: () => true,
     mediaQuerySmallerThan: () => false,
@@ -86,7 +86,7 @@ const setDesktop = () => {
 
 const setMobile = () => {
   mock.module("./MediaQuery", () => ({
-    isMobileDevice: () => true,
+    isNarrowViewport: () => true,
     mediaQuery: () => "xs" as const,
     mediaQueryLargerThan: () => false,
     mediaQuerySmallerThan: () => true,
@@ -94,10 +94,10 @@ const setMobile = () => {
 };
 
 // Restore MediaQuery to bunSetup defaults after all tests to prevent cross-file pollution.
-// bunSetup mocks: isMobileDevice → false, mediaQueryLargerThan → false.
+// bunSetup mocks: isNarrowViewport → false, mediaQueryLargerThan → false.
 const restoreDefault = () => {
   mock.module("./MediaQuery", () => ({
-    isMobileDevice: mock(() => false),
+    isNarrowViewport: mock(() => false),
     mediaQueryLargerThan: mock(() => false),
   }));
 };
@@ -761,7 +761,7 @@ describe("SplitPage", () => {
     it("renders the labeled narrow pager with a next control on the first child", async () => {
       setMobile();
       const {getAllByLabelText, getByTestId, queryByTestId, UNSAFE_root} = renderWithTheme(
-        <SplitPage {...defaultProps} mobileChildLabels={["Summary", "Notes"]}>
+        <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary", "Notes"]}>
           <View testID="child-1" />
           <View testID="child-2" />
         </SplitPage>
@@ -785,7 +785,7 @@ describe("SplitPage", () => {
     it("scrolls to the next child without an unanimated snap from the index change", async () => {
       setMobile();
       const {getAllByLabelText, getByTestId} = renderWithTheme(
-        <SplitPage {...defaultProps} mobileChildLabels={["Summary", "Notes"]}>
+        <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary", "Notes"]}>
           <View testID="child-1" />
           <View testID="child-2" />
         </SplitPage>
@@ -804,7 +804,7 @@ describe("SplitPage", () => {
     it("shows only previous on the last of two children", async () => {
       setMobile();
       const two = renderWithTheme(
-        <SplitPage {...defaultProps} mobileChildLabels={["Summary", "Notes"]}>
+        <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary", "Notes"]}>
           <View testID="child-1" />
           <View testID="child-2" />
         </SplitPage>
@@ -822,7 +822,7 @@ describe("SplitPage", () => {
       const three = renderWithTheme(
         <SplitPage
           {...defaultProps}
-          mobileChildLabels={["Summary", "Notes", "History"]}
+          narrowViewportChildLabels={["Summary", "Notes", "History"]}
           tabs={["Summary", "Notes", "History"]}
         >
           <View testID="child-1" />
@@ -859,8 +859,8 @@ describe("SplitPage", () => {
       const {getAllByLabelText, getByTestId} = renderWithTheme(
         <SplitPage
           {...defaultProps}
-          mobileChildLabels={["Summary", "Notes"]}
-          mobileListButtonLabel="Back to list"
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportListButtonLabel="Back to list"
           onSelectionChange={onSelectionChange}
         >
           <View testID="child-1" />
@@ -874,10 +874,14 @@ describe("SplitPage", () => {
       expect(onSelectionChange).toHaveBeenCalledWith(undefined);
     });
 
-    it("shows the labeled pager when mobileSelectionActive is set without a list selection", () => {
+    it("shows the labeled pager when narrowViewportSelectionActive is set without a list selection", () => {
       setMobile();
       const {getByTestId, queryByLabelText} = renderWithTheme(
-        <SplitPage {...defaultProps} mobileChildLabels={["Summary", "Notes"]} mobileSelectionActive>
+        <SplitPage
+          {...defaultProps}
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportSelectionActive
+        >
           <View testID="child-1" />
           <View testID="child-2" />
         </SplitPage>
@@ -886,14 +890,14 @@ describe("SplitPage", () => {
       expect(queryByLabelText("Select")).toBeNull();
     });
 
-    it("resets the narrow pager to the first child when mobileSelectionKey changes", async () => {
+    it("resets the narrow pager to the first child when narrowViewportSelectionKey changes", async () => {
       setMobile();
       const view = renderWithTheme(
         <SplitPage
           {...defaultProps}
-          mobileChildLabels={["Summary", "Notes"]}
-          mobileSelectionActive
-          mobileSelectionKey="record-a"
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportSelectionActive
+          narrowViewportSelectionKey="record-a"
         >
           <View testID="child-1" />
           <View testID="child-2" />
@@ -908,9 +912,9 @@ describe("SplitPage", () => {
         view.rerender(
           <SplitPage
             {...defaultProps}
-            mobileChildLabels={["Summary", "Notes"]}
-            mobileSelectionActive
-            mobileSelectionKey="record-b"
+            narrowViewportChildLabels={["Summary", "Notes"]}
+            narrowViewportSelectionActive
+            narrowViewportSelectionKey="record-b"
           >
             <View testID="child-1" />
             <View testID="child-2" />
@@ -928,9 +932,9 @@ describe("SplitPage", () => {
       const view = renderWithTheme(
         <SplitPage
           {...defaultProps}
-          mobileChildLabels={["Summary", "Notes"]}
-          mobileSelectionActive
-          mobileSelectionKey="record-a"
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportSelectionActive
+          narrowViewportSelectionKey="record-a"
         >
           <View testID="child-1" />
           <View testID="child-2" />
@@ -953,9 +957,9 @@ describe("SplitPage", () => {
         view.rerender(
           <SplitPage
             {...defaultProps}
-            mobileChildLabels={["Summary", "Notes"]}
-            mobileSelectionActive
-            mobileSelectionKey="record-a"
+            narrowViewportChildLabels={["Summary", "Notes"]}
+            narrowViewportSelectionActive
+            narrowViewportSelectionKey="record-a"
           >
             <View testID="child-1" />
             <View testID="child-2" />
@@ -968,18 +972,18 @@ describe("SplitPage", () => {
       restoreWidth();
     });
 
-    it("falls back to the dotted swiper when mobileChildLabels does not match the children", async () => {
+    it("falls back to the dotted swiper when narrowViewportChildLabels does not match the children", async () => {
       setMobile();
       const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
       const {getAllByLabelText, queryByTestId, UNSAFE_root} = renderWithTheme(
-        <SplitPage {...defaultProps} mobileChildLabels={["Summary"]}>
+        <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary"]}>
           <View testID="child-1" />
           <View testID="child-2" />
         </SplitPage>
       );
       await selectFirst(getAllByLabelText);
       expect(warnSpy).toHaveBeenCalledWith(
-        "mobileChildLabels must have one entry per child. Falling back to the default mobile pager."
+        "narrowViewportChildLabels must have one entry per child. Falling back to the default narrow pager."
       );
       expect(queryByTestId("split-page-mobile-children")).toBeNull();
       const paginated = UNSAFE_root.findAll(

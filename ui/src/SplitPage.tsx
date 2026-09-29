@@ -20,15 +20,15 @@ import {Box} from "./Box";
 import type {SplitPageListItem, SplitPageProps} from "./Common";
 import {FlatList} from "./FlatList";
 import {IconButton} from "./IconButton";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {SegmentedControl} from "./SegmentedControl";
 import {Spinner} from "./Spinner";
 import {useTheme} from "./Theme";
 
 // A component for rendering a list on one side and a details view on the right for large screens,
 // and a scrollable list where clicking an item takes you the details view.
-// Opt in to minimum widths for the desktop side-by-side children, or a labeled pager on the
-// narrow layout.
+// On web, opt in to minimum widths for the desktop side-by-side children, or a labeled pager
+// on the narrow viewport. The native SplitPage ignores those props.
 export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   tabs = [],
@@ -45,10 +45,10 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   listViewMaxWidth,
   bottomNavBarHeight,
   desktopChildrenMinWidth,
-  mobileChildLabels,
-  mobileListButtonLabel,
-  mobileSelectionActive,
-  mobileSelectionKey,
+  narrowViewportChildLabels,
+  narrowViewportListButtonLabel,
+  narrowViewportSelectionActive,
+  narrowViewportSelectionKey,
   showItemList,
 }: SplitPageProps<TItem>) => {
   const {theme} = useTheme();
@@ -62,8 +62,8 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   const [desktopScrollWidth, setDesktopScrollWidth] = useState(0);
   const [measuredPageWidth, setMeasuredPageWidth] = useState(0);
 
-  const isMobileLayout = isMobileDevice();
-  const isDetailActive = selectedId !== undefined || mobileSelectionActive === true;
+  const isNarrowLayout = isNarrowViewport();
+  const isDetailActive = selectedId !== undefined || narrowViewportSelectionActive === true;
 
   const elementArray = Children.toArray(children).filter((c) => c !== null);
 
@@ -93,7 +93,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   useEffect(() => {
     setActiveChildIndex(0);
     swiperRef.current?.scrollToIndex({animated: false, index: 0});
-  }, [isDetailActive, isMobileLayout, mobileSelectionKey, selectedId]);
+  }, [isDetailActive, isNarrowLayout, narrowViewportSelectionKey, selectedId]);
 
   // Keep the current child aligned after the page width changes, without snapping over a chevron animation.
   // biome-ignore lint/correctness/useExhaustiveDependencies: widths are the realign triggers; the index is read from a ref.
@@ -118,9 +118,12 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
     console.warn("desktopChildrenMinWidth applies only when SplitPage has two or fewer children.");
   }
 
-  if (mobileChildLabels !== undefined && mobileChildLabels.length !== elementArray.length) {
+  if (
+    narrowViewportChildLabels !== undefined &&
+    narrowViewportChildLabels.length !== elementArray.length
+  ) {
     console.warn(
-      "mobileChildLabels must have one entry per child. Falling back to the default mobile pager."
+      "narrowViewportChildLabels must have one entry per child. Falling back to the default narrow pager."
     );
   }
 
@@ -293,7 +296,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   };
 
   const renderMobileList = () => {
-    if (isMobileLayout && isDetailActive) {
+    if (isNarrowLayout && isDetailActive) {
       return null;
     }
 
@@ -322,13 +325,13 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   };
 
   const renderMobileListContent = () => {
-    if (isMobileLayout && !isDetailActive) {
+    if (isNarrowLayout && !isDetailActive) {
       return null;
     }
 
     return (
       <Box flex="grow" padding={2}>
-        {isMobileLayout && (
+        {isNarrowLayout && (
           <Box width="100%">
             <IconButton
               accessibilityHint="close split page"
@@ -392,7 +395,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
             );
           })}
         </SwiperFlatList>
-        {mobileListButtonLabel ? (
+        {narrowViewportListButtonLabel ? (
           <View
             style={{
               bottom: controlBottom,
@@ -402,8 +405,8 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
             }}
           >
             <IconButton
-              accessibilityHint={mobileListButtonLabel}
-              accessibilityLabel={mobileListButtonLabel}
+              accessibilityHint={narrowViewportListButtonLabel}
+              accessibilityLabel={narrowViewportListButtonLabel}
               backgroundOpacity={0.88}
               iconName="arrow-left"
               onClick={() => onItemDeselect()}
@@ -456,12 +459,12 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
       return null;
     }
     if (
-      isMobileLayout &&
+      isNarrowLayout &&
       elementArray.length > 1 &&
-      mobileChildLabels !== undefined &&
-      mobileChildLabels.length === elementArray.length
+      narrowViewportChildLabels !== undefined &&
+      narrowViewportChildLabels.length === elementArray.length
     ) {
-      return renderLabeledMobilePager(mobileChildLabels);
+      return renderLabeledMobilePager(narrowViewportChildLabels);
     }
     return (
       <SwiperFlatList
@@ -507,12 +510,12 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   };
 
   const isLabeledPagerBody =
-    isMobileLayout &&
+    isNarrowLayout &&
     isDetailActive &&
     !renderContent &&
     elementArray.length > 1 &&
-    mobileChildLabels !== undefined &&
-    mobileChildLabels.length === elementArray.length;
+    narrowViewportChildLabels !== undefined &&
+    narrowViewportChildLabels.length === elementArray.length;
 
   return (
     <Box
@@ -531,7 +534,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
           size="md"
         />
       )}
-      {isMobileLayout ? renderMobileSplitPage() : renderSplitPage()}
+      {isNarrowLayout ? renderMobileSplitPage() : renderSplitPage()}
     </Box>
   );
 };

@@ -1,4 +1,4 @@
-import {Box, isMobileDevice, MultiselectField, type MultiselectFieldProps} from "@terreno/ui";
+import {Box, isNarrowViewport, MultiselectField, type MultiselectFieldProps} from "@terreno/ui";
 
 export const MultiselectFieldDemo = (props: Partial<MultiselectFieldProps>) => {
   return (
@@ -21,7 +21,7 @@ export const MultiselectFieldDemo = (props: Partial<MultiselectFieldProps>) => {
 };
 
 export const MultiselectVariants = () => {
-  const isMobile = isMobileDevice();
+  const isMobile = isNarrowViewport();
   return (
     <Box width={isMobile ? undefined : "30%"}>
       <Box padding={3}>

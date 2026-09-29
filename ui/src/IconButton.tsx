@@ -5,7 +5,7 @@ import {ActivityIndicator, Text as NativeText, Pressable, View} from "react-nati
 
 import type {IconButtonProps} from "./Common";
 import {useCustomIcon} from "./IconRegistry";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {Modal} from "./Modal";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
@@ -223,7 +223,7 @@ const IconButtonComponent: FC<IconButtonProps> = ({
 
 export const IconButton: FC<IconButtonProps> = (props) => {
   const {tooltipText, tooltipIdealPosition, tooltipIncludeArrow = false} = props;
-  const isMobileOrNative = isMobileDevice() || isNative();
+  const isMobileOrNative = isNarrowViewport() || isNative();
 
   if (tooltipText && !isMobileOrNative) {
     return (

@@ -2001,13 +2001,14 @@ jobs:
             fi
             scripts/ci/publish-package.sh "$package" "$version" latest manual
 
+  # Tagged commits already passed CI on master, so release only compiles once
+  # and publishes; no per-package tests, so no Mongo sidecar.
   publish-release:
-    executor: node22_mongo
+    executor: node22
     resource_class: large
     steps:
       - checkout
       - install_bun_and_deps
-      - wait_for_mongo
       - run:
           name: Validate release tag and upgrade notes
           command: |
@@ -2017,9 +2018,24 @@ jobs:
             fi
             bun run check:upgrade-docs "$CIRCLE_TAG"
       - run:
-          name: Publish packages in dependency order
-          no_output_timeout: 20m
+          name: Compile release packages once
           command: |
+            set -euo pipefail
+            packages=(
+              api test ui rtk admin-backend admin-frontend admin-spa ai
+              api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
+            )
+            filters=()
+            for package in "${packages[@]}"; do
+              filters+=(--filter "$(node -p "require('./${package}/package.json').name")")
+            done
+            # bun --filter runs compile in workspace dependency order.
+            TERRENO_SKIP_WORKSPACE_DEPS=1 bun run "${filters[@]}" compile
+      - run:
+          name: Publish packages
+          no_output_timeout: 10m
+          command: |
+            set -euo pipefail
             version="$CIRCLE_TAG"
             if [[ "$version" == *-* ]]; then
               prerelease="${version#*-}"
@@ -2031,10 +2047,12 @@ jobs:
               api test ui rtk admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
-            for package in "${packages[@]}"; do
-              echo "=== Publishing ${package}@${version} ==="
-              scripts/ci/publish-package.sh "$package" "$version" "$npm_tag" release
-            done
+            export TERRENO_PUBLISH_PREBUILT=1
+            # npm does not resolve dependencies at publish time, so order does not
+            # matter; xargs exits non-zero if any package fails.
+            printf '%s\n' "${packages[@]}" | xargs -P 8 -I{} bash -c \
+              'scripts/ci/publish-package.sh "$1" "$2" "$3" release 2>&1 | sed "s/^/[$1] /"; exit "${PIPESTATUS[0]}"' \
+              _ {} "$version" "$npm_tag"
       - run:
           name: Update stable package versions on master
           command: |
@@ -2477,11 +2495,10 @@ workflows:
               ignore: /.*/
             tags:
               only: /^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$/
+      # Builds from source, not npm, so it runs alongside publish-release.
       - deploy-demo:
           context: [terreno-netlify, terreno-github-deployments]
           serial-group: << pipeline.project.slug >>/netlify-demo-production
-          requires:
-            - publish-release
           filters:
             branches:
               ignore: /.*/

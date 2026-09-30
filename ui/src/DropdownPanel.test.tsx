@@ -295,6 +295,18 @@ describe("DropdownPanel trigger", () => {
     expect(getByTestId("f.panel")).toBeTruthy();
   });
 
+  it("hugs the trigger so the panel anchors to it, not to the surrounding row", () => {
+    // The wrapper is what gets measured. A stretched wrapper starts at the edge of the
+    // whole row, which anchors the panel far from a trigger aligned anywhere else.
+    const {getByTestId} = renderWithTheme(
+      <DropdownPanel testID="f">
+        <Text>Body</Text>
+      </DropdownPanel>
+    );
+    const wrapper = getByTestId("f").props.children[0];
+    expect(wrapper.props.style.alignSelf).toBe("flex-start");
+  });
+
   it("stretches the trigger wrapper when fullWidth is set", () => {
     const {getByTestId} = renderWithTheme(
       <DropdownPanel fullWidth testID="f">

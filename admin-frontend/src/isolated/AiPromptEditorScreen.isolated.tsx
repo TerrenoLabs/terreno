@@ -2,9 +2,12 @@ import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import type {PlaygroundRunResult, PromptDetail} from "./promptTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import type {
+  PlaygroundRunResult,
+  PromptDetail,
+} from "../widgets/aiObservability/prompts/promptTypes";
 
 let promptName = "summarize";
 
@@ -13,7 +16,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({name: promptName}),
 }));
 
-import {AiPromptEditorScreenWidget} from "./AiPromptEditorScreen";
+import {AiPromptEditorScreenWidget} from "../widgets/aiObservability/prompts/AiPromptEditorScreen";
 
 const statusData = {
   localOn: true,

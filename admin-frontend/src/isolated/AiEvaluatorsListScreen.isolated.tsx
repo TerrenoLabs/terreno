@@ -2,9 +2,9 @@ import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import type {EvaluatorRecord} from "./evaluatorTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import type {EvaluatorRecord} from "../widgets/aiObservability/evaluators/evaluatorTypes";
 
 const routerPush = mock(() => {});
 
@@ -13,7 +13,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-import {AiEvaluatorsScreenWidget} from "./AiEvaluatorsListScreen";
+import {AiEvaluatorsScreenWidget} from "../widgets/aiObservability/evaluators/AiEvaluatorsListScreen";
 
 const statusData = {
   localOn: true,

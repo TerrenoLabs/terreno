@@ -1,8 +1,8 @@
 import {describe, expect, it, mock} from "bun:test";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import {AiExperimentsListView} from "./AiExperimentsListView";
-import type {ExperimentRecord} from "./experimentTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import {AiExperimentsListView} from "../widgets/aiObservability/experiments/AiExperimentsListView";
+import type {ExperimentRecord} from "../widgets/aiObservability/experiments/experimentTypes";
 
 mock.module("expo-router", () => ({
   router: {push: mock(() => {})},

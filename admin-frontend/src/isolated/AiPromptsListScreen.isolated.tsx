@@ -2,9 +2,9 @@ import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import type {PromptListItem} from "./promptTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import type {PromptListItem} from "../widgets/aiObservability/prompts/promptTypes";
 
 const routerPush = mock(() => {});
 
@@ -13,7 +13,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-import {AiPromptsScreenWidget} from "./AiPromptsListScreen";
+import {AiPromptsScreenWidget} from "../widgets/aiObservability/prompts/AiPromptsListScreen";
 
 const loaded: PromptListItem[] = [
   {

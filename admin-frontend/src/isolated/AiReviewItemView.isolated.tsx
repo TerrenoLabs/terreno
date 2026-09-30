@@ -2,9 +2,9 @@ import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import {AiReviewItemView} from "./AiReviewItemView";
-import type {ReviewDetail} from "./reviewTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import {AiReviewItemView} from "../widgets/aiObservability/review/AiReviewItemView";
+import type {ReviewDetail} from "../widgets/aiObservability/review/reviewTypes";
 
 mock.module("expo-router", () => ({
   router: {push: mock(() => undefined)},

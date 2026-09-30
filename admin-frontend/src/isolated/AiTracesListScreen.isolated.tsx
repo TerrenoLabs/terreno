@@ -3,9 +3,9 @@ import {Modal, SelectField} from "@terreno/ui";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import type {TraceListItem} from "./traceTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import type {TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
 
 const routerPush = mock(() => {});
 
@@ -14,7 +14,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-import {AiTracesScreenWidget} from "./AiTracesListScreen";
+import {AiTracesScreenWidget} from "../widgets/aiObservability/traces/AiTracesListScreen";
 
 const loaded: TraceListItem[] = [
   {

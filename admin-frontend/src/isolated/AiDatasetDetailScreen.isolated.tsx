@@ -2,9 +2,12 @@ import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import type {DatasetItemRecord, DatasetRecord} from "./datasetTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import type {
+  DatasetItemRecord,
+  DatasetRecord,
+} from "../widgets/aiObservability/datasets/datasetTypes";
 
 const routerPush = mock(() => {});
 
@@ -13,7 +16,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({id: datasetId}),
 }));
 
-import {AiDatasetDetailScreenWidget} from "./AiDatasetDetailScreen";
+import {AiDatasetDetailScreenWidget} from "../widgets/aiObservability/datasets/AiDatasetDetailScreen";
 
 let datasetId = "ds-1";
 

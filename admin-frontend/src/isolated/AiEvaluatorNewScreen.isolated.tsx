@@ -3,8 +3,8 @@ import {SelectField} from "@terreno/ui";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
 
 const routerPush = mock(() => {});
 
@@ -13,7 +13,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-import {AiEvaluatorNewScreenWidget} from "./AiEvaluatorNewScreen";
+import {AiEvaluatorNewScreenWidget} from "../widgets/aiObservability/evaluators/AiEvaluatorNewScreen";
 
 const statusData = {
   localOn: true,

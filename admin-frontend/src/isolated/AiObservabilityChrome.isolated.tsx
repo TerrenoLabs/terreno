@@ -2,17 +2,17 @@ import {describe, expect, it, mock} from "bun:test";
 import {Text} from "@terreno/ui";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import {AiObservabilityChrome} from "./AiObservabilityChrome";
-import {AI_OBSERVABILITY_WIDGETS} from "./AiObservabilityScreenWidgets";
-import {AiObservabilityStatusChip} from "./AiObservabilityStatusChip";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import {AiObservabilityChrome} from "../widgets/aiObservability/shell/AiObservabilityChrome";
+import {AI_OBSERVABILITY_WIDGETS} from "../widgets/aiObservability/shell/AiObservabilityScreenWidgets";
+import {AiObservabilityStatusChip} from "../widgets/aiObservability/shell/AiObservabilityStatusChip";
 import {
   buildAiObservabilityBreadcrumbs,
   formatObservabilityStatusChip,
   type ObservabilityStatusPayload,
   unwrapObservabilityStatus,
-} from "./aiObservabilityNav";
+} from "../widgets/aiObservability/shell/aiObservabilityNav";
 
 mock.module("expo-router", () => ({
   router: {push: mock(() => {})},

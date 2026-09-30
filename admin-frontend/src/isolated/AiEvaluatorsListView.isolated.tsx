@@ -1,9 +1,9 @@
 import {describe, expect, it, mock} from "bun:test";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import {AiEvaluatorsListView} from "./AiEvaluatorsListView";
-import type {EvaluatorRecord} from "./evaluatorTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import {AiEvaluatorsListView} from "../widgets/aiObservability/evaluators/AiEvaluatorsListView";
+import type {EvaluatorRecord} from "../widgets/aiObservability/evaluators/evaluatorTypes";
 
 mock.module("expo-router", () => ({
   router: {push: mock(() => {})},

@@ -2,9 +2,9 @@ import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import type {TraceDetail} from "./traceTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import type {TraceDetail} from "../widgets/aiObservability/traces/traceTypes";
 
 const routerPush = mock(() => {});
 
@@ -13,7 +13,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({id: traceId}),
 }));
 
-import {AiTraceDetailScreenWidget} from "./AiTraceDetailScreen";
+import {AiTraceDetailScreenWidget} from "../widgets/aiObservability/traces/AiTraceDetailScreen";
 
 let traceId = "trace-1";
 

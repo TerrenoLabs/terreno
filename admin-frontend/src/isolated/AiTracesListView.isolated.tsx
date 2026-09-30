@@ -3,9 +3,9 @@ import {SelectField} from "@terreno/ui";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import {AiTracesListView} from "./AiTracesListView";
-import {emptyTraceFilters, type TraceListItem} from "./traceTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import {AiTracesListView} from "../widgets/aiObservability/traces/AiTracesListView";
+import {emptyTraceFilters, type TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
 
 mock.module("expo-router", () => ({
   router: {push: mock(() => {})},

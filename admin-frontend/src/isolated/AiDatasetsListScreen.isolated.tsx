@@ -3,9 +3,9 @@ import {Modal} from "@terreno/ui";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import type {DatasetRecord} from "./datasetTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import type {DatasetRecord} from "../widgets/aiObservability/datasets/datasetTypes";
 
 const routerPush = mock(() => {});
 
@@ -14,7 +14,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-import {AiDatasetsScreenWidget} from "./AiDatasetsListScreen";
+import {AiDatasetsScreenWidget} from "../widgets/aiObservability/datasets/AiDatasetsListScreen";
 
 const statusData = {
   localOn: true,

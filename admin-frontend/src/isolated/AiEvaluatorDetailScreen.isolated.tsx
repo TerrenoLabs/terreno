@@ -2,10 +2,10 @@ import {describe, expect, it, mock} from "bun:test";
 import {assert} from "chai";
 import {DateTime} from "luxon";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import type {ExperimentRecord} from "../experiments/experimentTypes";
-import type {EvaluatorRecord} from "./evaluatorTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import type {EvaluatorRecord} from "../widgets/aiObservability/evaluators/evaluatorTypes";
+import type {ExperimentRecord} from "../widgets/aiObservability/experiments/experimentTypes";
 
 let evaluatorId = "eval-1";
 
@@ -14,7 +14,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({id: evaluatorId}),
 }));
 
-import {AiEvaluatorDetailScreenWidget} from "./AiEvaluatorDetailScreen";
+import {AiEvaluatorDetailScreenWidget} from "../widgets/aiObservability/evaluators/AiEvaluatorDetailScreen";
 
 const statusData = {
   localOn: true,

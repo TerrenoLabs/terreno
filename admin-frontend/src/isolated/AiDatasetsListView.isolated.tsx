@@ -3,9 +3,9 @@ import {Modal} from "@terreno/ui";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import {AiDatasetsListView} from "./AiDatasetsListView";
-import type {DatasetRecord} from "./datasetTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import {AiDatasetsListView} from "../widgets/aiObservability/datasets/AiDatasetsListView";
+import type {DatasetRecord} from "../widgets/aiObservability/datasets/datasetTypes";
 
 mock.module("expo-router", () => ({
   router: {push: mock(() => {})},

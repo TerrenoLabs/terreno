@@ -2,9 +2,9 @@ import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../../../types";
-import type {ExperimentRecord} from "./experimentTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi, AdminConfigResponse} from "../types";
+import type {ExperimentRecord} from "../widgets/aiObservability/experiments/experimentTypes";
 
 let experimentId = "exp-1";
 
@@ -13,7 +13,7 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({id: experimentId}),
 }));
 
-import {AiExperimentResultsScreenWidget} from "./AiExperimentResultsScreen";
+import {AiExperimentResultsScreenWidget} from "../widgets/aiObservability/experiments/AiExperimentResultsScreen";
 
 const statusData = {
   localOn: true,

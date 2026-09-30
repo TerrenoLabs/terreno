@@ -4,9 +4,9 @@ import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import {DateTime} from "luxon";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import {AiPromptEditorView} from "./AiPromptEditorView";
-import type {PromptDetail} from "./promptTypes";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import {AiPromptEditorView} from "../widgets/aiObservability/prompts/AiPromptEditorView";
+import type {PromptDetail} from "../widgets/aiObservability/prompts/promptTypes";
 
 mock.module("expo-router", () => ({
   router: {push: mock(() => {})},

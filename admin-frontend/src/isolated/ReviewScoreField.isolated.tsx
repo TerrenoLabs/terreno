@@ -2,8 +2,8 @@ import {describe, expect, it, mock} from "bun:test";
 import SliderComponent from "@react-native-community/slider";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
-import {renderWithTheme} from "../../../../../ui/src/test-utils";
-import {ReviewScoreField} from "./ReviewScoreField";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import {ReviewScoreField} from "../widgets/aiObservability/review/ReviewScoreField";
 
 mock.module("expo-router", () => ({
   router: {push: mock(() => undefined)},

@@ -515,7 +515,8 @@ detail screen. LLM judge schema feedback stays idle until a prompt is selected, 
 loading/error states and only checks dimensions after its production schema loads.
 `ai-evaluator-detail?id=` leads with the evaluator name, description, and type/target/run-mode
 badges, then explains the saved scores, how scoring works, where it runs, and a **Used by** list
-derived from recent experiments. Its dimension and usage rows use the shared `ObservabilityTable` instead of
+derived from recent experiments. A failed experiments request shows **Could not load experiments.**
+instead of an empty 30-day list. Its dimension and usage rows use the shared `ObservabilityTable` instead of
 `DataTable`, which sizes to a height-constrained parent and collapses inside a scrolling page. LLM
 judge details show loading or load-failed feedback while resolving the judge prompt; schema
 mismatches appear only after its production schema loads.
@@ -524,8 +525,9 @@ mismatches appear only after its production schema loads.
 time. **New dataset** creates a dataset; **Import** on each row accepts `.json` or `.csv` via
 `FilePickerButton` (local URI read) or paste, posting `{rows}` for JSON or `{format:'csv',content}`
 for CSV. `ai-dataset-detail?id=` shows counts, schema binding, tabs **All / Human / Auto / Needs
-review**, an items table (input, expected, provenance, trace link), **Add item**, and **Run
-experiment** navigation. The items table uses `ObservabilityTable`: rows grow with their content
+review**. Human is proofread items. Auto is unreviewed trace or synthetic items, so a proofread
+trace is not listed in both tabs. The screen includes an items table (input, expected, provenance,
+trace link), **Add item**, and **Run experiment**. The items table uses `ObservabilityTable`: rows grow with their content
 and cells wrap to three lines before truncating, so long inputs and expected outputs no longer
 overlap adjacent rows. Input and Expected receive 2.5× the flexible width of metadata columns.
 Selecting a row opens a scrollable modal with the complete input, expected output, provenance,

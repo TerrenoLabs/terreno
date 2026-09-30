@@ -21,7 +21,7 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
   const {useListQuery: useExperimentsQuery} = useAiObservabilityExperimentsApi(api);
   const {useDetailQuery: usePromptDetailQuery} = useAiObservabilityPromptsApi(api);
   const {data, isError, isLoading} = useDetailQuery(id ?? "", {skip: !id});
-  const {data: experimentsRaw} = useExperimentsQuery();
+  const {data: experimentsRaw, isError: isExperimentsError} = useExperimentsQuery();
   const evaluator = useMemo(() => unwrapEvaluatorRecord(data), [data]);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const backHref = `${prefix}/ai-evaluators`;
@@ -111,6 +111,7 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
         judgeOutputSchema={judgeOutputSchema}
         judgePromptStatus={judgePromptStatus}
         routeBase={prefix}
+        usageError={isExperimentsError ? "Could not load experiments." : undefined}
         usageRows={usageRows}
       />
     </AiObservabilityChrome>

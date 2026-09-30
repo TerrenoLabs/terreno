@@ -58,6 +58,10 @@ describe("datasetTypes helpers", () => {
       formatProvenanceBar({auto: 2, human: 1, needsReview: 0, total: 3}),
       "33% human · 67% auto"
     );
+    assert.equal(
+      formatProvenanceBar({auto: 1, human: 1, needsReview: 0, total: 1}),
+      "100% human · 0% auto"
+    );
   });
 
   it("filters items by tab", () => {
@@ -73,6 +77,13 @@ describe("datasetTypes helpers", () => {
     );
     assert.deepEqual(
       filterDatasetItemsByTab(items, "auto").map((row) => row.id),
+      ["auto"]
+    );
+    assert.deepEqual(
+      filterDatasetItemsByTab(
+        [...items, item({id: "reviewed-trace", origin: "trace", proofread: true})],
+        "auto"
+      ).map((row) => row.id),
       ["auto"]
     );
     assert.deepEqual(

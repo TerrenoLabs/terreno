@@ -150,6 +150,7 @@ const computeDatasetCounts = async (datasetId: string): Promise<DatasetCounts> =
     ObsDatasetItem.countDocuments({
       datasetId: objectId,
       origin: {$in: ["synthetic", "trace"]},
+      proofread: false,
     }),
     ObsDatasetItem.countDocuments({datasetId: objectId, proofread: false}),
   ]);

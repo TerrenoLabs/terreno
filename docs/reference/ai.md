@@ -472,7 +472,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET/POST | `/ai/observability/datasets` | List (includes `humanCount`, `autoCount`, `needsReviewCount`) / create |
+| GET/POST | `/ai/observability/datasets` | List (includes `humanCount` for proofread items, `autoCount` for unreviewed trace or synthetic items, `needsReviewCount`) / create |
 | GET/PATCH/DELETE | `/ai/observability/datasets/:id` | Detail (with counts) / update / soft-delete. PATCH `null` clears optional dataset fields; omitted fields stay unchanged |
 | GET/POST | `/ai/observability/datasets/:id/items` | List / create items |
 | PATCH/DELETE | `/ai/observability/datasets/:id/items/:itemId` | Update labels (`expectedOutput`, `proofread`, `tags`, `outcomeClass`) / delete (does not touch the source trace). PATCH `null` clears optional item fields |

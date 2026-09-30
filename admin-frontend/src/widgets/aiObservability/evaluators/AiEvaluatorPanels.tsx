@@ -1,5 +1,5 @@
 import {Badge, Box, Button, Heading, Link, SelectField, Text, TextField} from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
 import {
   ObservabilityTable,
   type ObservabilityTableColumn,
@@ -116,6 +116,7 @@ export interface AiEvaluatorDetailViewProps {
   judgePromptStatus?: JudgePromptStatus;
   onOpenPrompt?: (name: string) => void;
   routeBase: string;
+  usageError?: string;
   usageRows: EvaluatorUsageRow[];
 }
 
@@ -330,6 +331,7 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
   judgePromptStatus,
   onOpenPrompt,
   routeBase,
+  usageError,
   usageRows,
 }) => {
   const dimensionRows: ObservabilityTableRow[] = useMemo(() => {
@@ -415,7 +417,11 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
       </Box>
       <Box gap={2}>
         <Heading size="sm">Used by (30 days)</Heading>
-        {usageRows.length === 0 ? (
+        {usageError ? (
+          <Text color="error" testID="ai-evaluator-used-by-error">
+            {usageError}
+          </Text>
+        ) : usageRows.length === 0 ? (
           <Text color="secondaryDark" testID="ai-evaluator-used-by-empty">
             No experiments in the last 30 days.
           </Text>
@@ -447,6 +453,13 @@ const DimensionScaleFields: React.FC<DimensionScaleFieldsProps> = ({
   const [min, setMin] = useState(bounds.min);
   const [max, setMax] = useState(bounds.max);
   const categories = parseCategories(dimension.range);
+
+  // Parent range changes (type switch or row reorder) must replace the draft
+  // bounds; useState only reads the initial range.
+  useEffect(() => {
+    setMin(bounds.min);
+    setMax(bounds.max);
+  }, [bounds.max, bounds.min]);
 
   const handleMinChange = useCallback(
     (value: string): void => {

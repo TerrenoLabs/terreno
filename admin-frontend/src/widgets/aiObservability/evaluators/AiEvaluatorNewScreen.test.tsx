@@ -27,6 +27,8 @@ const statusData = {
 };
 
 let createShouldFail = false;
+let judgePromptLoading = false;
+let judgePromptError = false;
 
 const createMutation = mock((_body?: unknown) => ({
   unwrap: async () => {
@@ -39,24 +41,27 @@ const createMutation = mock((_body?: unknown) => ({
 
 const injectedHooks = {
   useAiObservabilityPromptQuery: () => ({
-    data: {
-      folder: "ops",
-      labels: [{label: "production", version: 1}],
-      name: "judge",
-      tags: [],
-      versions: [
-        {
-          outputSchema: {properties: {quality: {type: "number"}}},
-          sensitive: false,
-          template: "Judge",
-          type: "text",
-          variables: [],
-          version: 1,
-        },
-      ],
-    },
-    isError: false,
-    isLoading: false,
+    data:
+      judgePromptLoading || judgePromptError
+        ? undefined
+        : {
+            folder: "ops",
+            labels: [{label: "production", version: 1}],
+            name: "judge",
+            tags: [],
+            versions: [
+              {
+                outputSchema: {properties: {quality: {type: "number"}}},
+                sensitive: false,
+                template: "Judge",
+                type: "text",
+                variables: [],
+                version: 1,
+              },
+            ],
+          },
+    isError: judgePromptError,
+    isLoading: judgePromptLoading,
   }),
   useAiObservabilityPromptsQuery: () => ({
     data: {
@@ -249,5 +254,132 @@ describe("AiEvaluatorNewScreenWidget", () => {
       | undefined;
     assert.equal(createBody?.description, "Use when a person must judge answer quality.");
     assert.equal(createBody?.runModes?.liveSampleRate, 0);
+  });
+
+  it("rejects incomplete numeric and categorical scores and samples live traffic", async () => {
+    createShouldFail = false;
+    routerPush.mockClear();
+    const view = renderWithTheme(
+      <AiEvaluatorNewScreenWidget
+        api={stableApi}
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="ai-evaluator-new"
+      />
+    );
+    fireEvent.changeText(view.getByTestId("ai-evaluator-name"), "bounds");
+    setDimensionKey(view, "score");
+    await act(async () => {
+      fireEvent.press(view.getAllByText("Remove")[0]!);
+      await Promise.resolve();
+    });
+    assert.isOk(view.getByTestId("ai-evaluator-dimension-0-key"));
+
+    await act(async () => {
+      fireEvent.press(view.getAllByText("numeric")[0]!);
+      await Promise.resolve();
+    });
+    fireEvent.changeText(view.getByTestId("ai-evaluator-dimension-0-min"), "8");
+    await act(async () => {
+      fireEvent.press(view.getAllByText("boolean")[0]!);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.press(view.getAllByText("numeric")[0]!);
+      await Promise.resolve();
+    });
+    assert.equal(view.getByTestId("ai-evaluator-dimension-0-min").props.value, "0");
+    fireEvent.changeText(view.getByTestId("ai-evaluator-dimension-0-min"), "5");
+    fireEvent.changeText(view.getByTestId("ai-evaluator-dimension-0-max"), "1");
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-evaluator-submit"));
+      await Promise.resolve();
+    });
+    expect(
+      view.getByText(
+        "Each numeric score needs a min and a max, with min less than or equal to max."
+      )
+    ).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(view.getAllByText("categorical")[0]!);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-evaluator-submit"));
+      await Promise.resolve();
+    });
+    expect(view.getByText("Add at least one category for each categorical score.")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(view.getAllByText("boolean")[0]!);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-evaluator-type-json-assert"));
+      await Promise.resolve();
+    });
+    fireEvent.changeText(view.getByTestId("ai-evaluator-live-sample"), "25");
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-evaluator-submit"));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    assert.equal(routerPush.mock.calls.length, 1);
+    const createBody = createMutation.mock.calls.at(-1)?.[0] as
+      | {runModes?: {liveSampleRate?: number}}
+      | undefined;
+    assert.equal(createBody?.runModes?.liveSampleRate, 25);
+  });
+
+  it("waits for the judge prompt and reports a schema load failure", async () => {
+    createShouldFail = false;
+    judgePromptLoading = true;
+    judgePromptError = false;
+    const view = renderWithTheme(
+      <AiEvaluatorNewScreenWidget
+        api={stableApi}
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="ai-evaluator-new"
+      />
+    );
+    fireEvent.changeText(view.getByTestId("ai-evaluator-name"), "judge-check");
+    setDimensionKey(view, "quality");
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-evaluator-type-llm-judge"));
+      await Promise.resolve();
+    });
+    const judgeSelect = view.UNSAFE_root.findAllByType(SelectField).find((field) => {
+      return field.props.testID === "ai-evaluator-judge-prompt";
+    });
+    assert.ok(judgeSelect);
+    fireEvent(judgeSelect, "onChange", "judge");
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-evaluator-submit"));
+      await Promise.resolve();
+    });
+    expect(view.getByText("Wait for the judge prompt schema to load.")).toBeTruthy();
+    expect(view.getByTestId("ai-evaluator-schema-loading")).toBeTruthy();
+
+    judgePromptLoading = false;
+    judgePromptError = true;
+    view.rerender(
+      <AiEvaluatorNewScreenWidget
+        api={stableApi}
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="ai-evaluator-new"
+      />
+    );
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-evaluator-submit"));
+      await Promise.resolve();
+    });
+    assert.include(
+      String(view.getByTestId("ai-evaluator-create-error").props.children),
+      "could not be loaded"
+    );
+    expect(view.getByTestId("ai-evaluator-schema-error")).toBeTruthy();
+    judgePromptError = false;
   });
 });

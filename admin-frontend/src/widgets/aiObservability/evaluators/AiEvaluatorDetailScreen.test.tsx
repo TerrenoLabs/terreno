@@ -211,4 +211,28 @@ describe("AiEvaluatorDetailScreenWidget", () => {
     detailState.isError = false;
     detailState.data = evaluator;
   });
+
+  it("shows an experiments load error instead of an empty usage list", () => {
+    detailState.data = evaluator;
+    detailState.isError = false;
+    detailState.isLoading = false;
+    experimentsState.isError = true;
+    experimentsState.data = [];
+    const view = renderWithTheme(
+      <AiEvaluatorDetailScreenWidget
+        api={createApi()}
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="ai-evaluator-detail"
+      />
+    );
+    expect(view.getByTestId("ai-evaluator-used-by-error")).toBeTruthy();
+    assert.equal(
+      view.getByTestId("ai-evaluator-used-by-error").props.children,
+      "Could not load experiments."
+    );
+    assert.isNull(view.queryByTestId("ai-evaluator-used-by-empty"));
+    experimentsState.isError = false;
+    experimentsState.data = [recentExperiment, oldExperiment];
+  });
 });

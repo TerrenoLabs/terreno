@@ -754,6 +754,66 @@ describe("AiEvaluatorNewView score fields", () => {
     });
     assert.equal(onDimensionChange.mock.calls.at(-1)?.[1].range, "warm|cold");
   });
+
+  it("replaces numeric bounds when the parent range changes", () => {
+    const dimensions = [{dataType: "numeric" as const, key: "score", range: "5-9", required: true}];
+    const view = renderWithTheme(
+      <AiEvaluatorNewView
+        assertionConstraint="exists"
+        assertionPath="output"
+        dimensions={dimensions}
+        instructions=""
+        isCreating={false}
+        judgePromptName=""
+        judgePromptOptions={[]}
+        name="quality"
+        onAddDimension={() => undefined}
+        onAssertionConstraintChange={() => undefined}
+        onAssertionPathChange={() => undefined}
+        onCreate={() => undefined}
+        onDimensionChange={() => undefined}
+        onInstructionsChange={() => undefined}
+        onJudgePromptNameChange={() => undefined}
+        onLiveSampleRateChange={() => undefined}
+        onNameChange={() => undefined}
+        onRemoveDimension={() => undefined}
+        onTypeChange={() => undefined}
+        runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
+        target="full trace"
+        type="human"
+      />
+    );
+    assert.equal(view.getByTestId("ai-evaluator-dimension-0-min").props.value, "5");
+    assert.equal(view.getByTestId("ai-evaluator-dimension-0-max").props.value, "9");
+    view.rerender(
+      <AiEvaluatorNewView
+        assertionConstraint="exists"
+        assertionPath="output"
+        dimensions={[{dataType: "numeric", key: "score", range: "0-1", required: true}]}
+        instructions=""
+        isCreating={false}
+        judgePromptName=""
+        judgePromptOptions={[]}
+        name="quality"
+        onAddDimension={() => undefined}
+        onAssertionConstraintChange={() => undefined}
+        onAssertionPathChange={() => undefined}
+        onCreate={() => undefined}
+        onDimensionChange={() => undefined}
+        onInstructionsChange={() => undefined}
+        onJudgePromptNameChange={() => undefined}
+        onLiveSampleRateChange={() => undefined}
+        onNameChange={() => undefined}
+        onRemoveDimension={() => undefined}
+        onTypeChange={() => undefined}
+        runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
+        target="full trace"
+        type="human"
+      />
+    );
+    assert.equal(view.getByTestId("ai-evaluator-dimension-0-min").props.value, "0");
+    assert.equal(view.getByTestId("ai-evaluator-dimension-0-max").props.value, "1");
+  });
 });
 
 describe("AiEvaluatorPanels helpers", () => {

@@ -83,7 +83,11 @@ export const formatProvenanceBar = (counts: DatasetCounts): string => {
     return "—";
   }
   const humanPct = Math.round((counts.human / counts.total) * 100);
-  const autoPct = Math.round((counts.auto / counts.total) * 100);
+  // Auto is the unreviewed trace/synthetic share. A stale payload that also
+  // counts those items as human must not render both shares at 100%.
+  const nonHuman = Math.max(0, counts.total - counts.human);
+  const autoCount = Math.min(Math.max(0, counts.auto), nonHuman);
+  const autoPct = Math.round((autoCount / counts.total) * 100);
   return `${humanPct}% human · ${autoPct}% auto`;
 };
 
@@ -101,7 +105,7 @@ export const filterDatasetItemsByTab = (
     return items.filter((item) => item.proofread);
   }
   return items.filter((item) => {
-    return item.origin === "trace" || item.origin === "synthetic";
+    return !item.proofread && (item.origin === "trace" || item.origin === "synthetic");
   });
 };
 

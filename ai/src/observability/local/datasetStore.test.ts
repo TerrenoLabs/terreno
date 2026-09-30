@@ -114,9 +114,14 @@ describe("LocalDatasetStore", () => {
       origin: "synthetic",
       proofread: false,
     });
+    await store.createItem(dataset.id, {
+      input: {a: 4},
+      origin: "trace",
+      proofread: true,
+    });
     const detail = await store.get(dataset.id);
-    assert.equal(detail.counts.total, 3);
-    assert.equal(detail.counts.human, 1);
+    assert.equal(detail.counts.total, 4);
+    assert.equal(detail.counts.human, 2);
     assert.equal(detail.counts.auto, 1);
     assert.equal(detail.counts.needsReview, 2);
     const listed = await store.list();

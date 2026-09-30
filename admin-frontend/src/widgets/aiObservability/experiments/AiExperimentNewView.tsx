@@ -240,6 +240,7 @@ export const AiExperimentNewView: React.FC<AiExperimentNewViewProps> = ({
           <TextField
             helperText="Optional override for generation model"
             onChange={onModelOverrideChange}
+            testID="ai-experiment-model-override"
             title="Model override"
             value={modelOverride}
           />

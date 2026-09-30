@@ -138,7 +138,8 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
     return true;
   }, [datasetId, evaluatorIds.length, name, promptName, versions.length]);
 
-  // Refresh the cost estimate whenever the review step is shown with a valid selection.
+  // Refresh the cost estimate on the review step. Drop responses after the
+  // selection changes so a slower request cannot replace a newer estimate.
   useEffect(() => {
     if (step !== 4) {
       return;
@@ -146,6 +147,7 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
     if (!datasetId || versions.length < 2 || evaluatorIds.length === 0) {
       return;
     }
+    let isCurrent = true;
     estimateExperiment({
       datasetId,
       evaluatorIds,
@@ -155,12 +157,21 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
     })
       .unwrap()
       .then((result) => {
+        if (!isCurrent) {
+          return;
+        }
         setEstimate(unwrapObservabilityPayload<ExperimentEstimate>(result) ?? result);
         setEstimateError("");
       })
       .catch(() => {
+        if (!isCurrent) {
+          return;
+        }
         setEstimateError("Could not estimate experiment cost.");
       });
+    return (): void => {
+      isCurrent = false;
+    };
   }, [
     datasetId,
     estimateExperiment,

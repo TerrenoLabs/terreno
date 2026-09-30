@@ -545,7 +545,7 @@ into the following section.
 
 `ai-experiments` lists experiments with status, running progress, and cost. **New experiment**
 opens a four-step wizard (dataset with counts, prompt versions tagged latest/production/superseded,
-llm-judge and json-assert evaluators, review & run with estimate). Human evaluators are omitted. On the prompt-versions step, **Next** and the later
+llm-judge and json-assert evaluators, review & run with estimate). A slower in-flight estimate is ignored after the selection changes, so it cannot replace a newer estimate or its error. Human evaluators are omitted. On the prompt-versions step, **Next** and the later
 wizard rail buttons stay disabled until 2–3 versions are selected. `includeUnproofread` and optional model override are on
 the wizard. `ai-experiment-results?id=` polls while pending/running, shows gate tiles per version,
 failing gate count, outliers, a side-by-side per-item output table (failed rows first from the

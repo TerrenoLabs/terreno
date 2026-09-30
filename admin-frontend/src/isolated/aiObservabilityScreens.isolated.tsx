@@ -1805,9 +1805,23 @@ describe("AiEvaluatorsListView", () => {
 });
 
 describe("AiExperimentNewScreen", () => {
+  interface PendingEstimate {
+    reject: (error: Error) => void;
+    resolve: (value: {costUsd: number; generations: number; wallClockSeconds: number}) => void;
+  }
+
+  let estimateShouldFail = false;
+  let createShouldFail = false;
+  let holdEstimates = false;
+  const pendingEstimates: PendingEstimate[] = [];
+
   beforeEach(() => {
     setExpoSearchParams(() => ({datasetId: "ds-1"}));
     routerPush.mockClear();
+    estimateShouldFail = false;
+    createShouldFail = false;
+    holdEstimates = false;
+    pendingEstimates.length = 0;
   });
   const statusData = {
     localOn: true,
@@ -1820,13 +1834,17 @@ describe("AiExperimentNewScreen", () => {
     },
   };
 
-  let estimateShouldFail = false;
-  let createShouldFail = false;
-
   const estimateMutation = mock(() => ({
     unwrap: async () => {
       if (estimateShouldFail) {
         throw new Error("estimate failed");
+      }
+      if (holdEstimates) {
+        return await new Promise<{costUsd: number; generations: number; wallClockSeconds: number}>(
+          (resolve, reject) => {
+            pendingEstimates.push({reject, resolve});
+          }
+        );
       }
       return {
         costUsd: 0.1,
@@ -2021,6 +2039,77 @@ describe("AiExperimentNewScreen", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       assert.equal(routerPush.mock.calls.length, 1);
+    });
+
+    it("keeps the newer estimate when an older request finishes later", async () => {
+      holdEstimates = true;
+      const view = renderWithTheme(
+        <AiExperimentNewScreenWidget
+          api={stableApi}
+          config={emptyConfig}
+          routeBase="/admin"
+          screenName="ai-experiment-new"
+        />
+      );
+      await advanceToReview(view);
+      assert.equal(pendingEstimates.length, 1);
+
+      await act(async () => {
+        fireEvent.changeText(view.getByTestId("ai-experiment-model-override"), "gpt-test");
+        await Promise.resolve();
+      });
+      assert.equal(pendingEstimates.length, 2);
+      const stale = pendingEstimates[0];
+      const fresh = pendingEstimates[1];
+      assert.exists(stale);
+      assert.exists(fresh);
+
+      await act(async () => {
+        fresh.resolve({costUsd: 0.2, generations: 8, wallClockSeconds: 120});
+        await Promise.resolve();
+      });
+      await waitFor(() => {
+        assert.include(
+          view.getByTestId("ai-experiment-estimate").props.children.join(""),
+          "~$0.20"
+        );
+      });
+
+      await act(async () => {
+        stale.resolve({costUsd: 9.99, generations: 1, wallClockSeconds: 60});
+        await Promise.resolve();
+      });
+      assert.include(view.getByTestId("ai-experiment-estimate").props.children.join(""), "~$0.20");
+      assert.notInclude(view.getByTestId("ai-experiment-estimate").props.children.join(""), "9.99");
+
+      await act(async () => {
+        fireEvent.changeText(view.getByTestId("ai-experiment-model-override"), "gpt-next");
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.changeText(view.getByTestId("ai-experiment-model-override"), "gpt-latest");
+        await Promise.resolve();
+      });
+      assert.equal(pendingEstimates.length, 4);
+      const staleError = pendingEstimates[2];
+      const newest = pendingEstimates[3];
+      assert.exists(staleError);
+      assert.exists(newest);
+      await act(async () => {
+        newest.resolve({costUsd: 0.3, generations: 6, wallClockSeconds: 60});
+        await Promise.resolve();
+      });
+      await act(async () => {
+        staleError.reject(new Error("late failure"));
+        await Promise.resolve();
+      });
+      await waitFor(() => {
+        assert.include(
+          view.getByTestId("ai-experiment-estimate").props.children.join(""),
+          "~$0.30"
+        );
+      });
+      assert.isNull(view.queryByText("Could not estimate experiment cost."));
     });
 
     it("blocks run when fewer than two prompt versions are selected", async () => {

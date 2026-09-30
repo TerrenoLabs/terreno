@@ -860,6 +860,9 @@ export class AIService {
           }
         }
         messages.push({content: parts, role: "user"} as ModelMessage);
+      } else if (!prompt.text && prompt.content?.length) {
+        // Providers reject empty assistant turns; stand in for an image-only response
+        messages.push({content: "[Generated image]", role});
       } else {
         messages.push({content: prompt.text, role});
       }

@@ -401,6 +401,15 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
 
         let fullResponse = "";
         const generatedImages: Array<{mimeType: string; url: string}> = [];
+        // Stream file parts and result.files report the same images; emit each data URL once.
+        const sendGeneratedImage = (file: GeneratedImageFile): void => {
+          const url = `data:${file.mediaType};base64,${file.base64}`;
+          if (generatedImages.some((img) => img.url === url)) {
+            return;
+          }
+          generatedImages.push({mimeType: file.mediaType, url});
+          res.write(`data: ${JSON.stringify({image: {mimeType: file.mediaType, url}})}\n\n`);
+        };
         const startTime = DateTime.now().toMillis();
         const pendingToolCalls = new Map<string, PendingToolCall>();
         const toolSpans: SpanRecord[] = [];
@@ -487,13 +496,7 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
             }
             if (part.type === "file") {
               if (isGeneratedImageFile(part.file)) {
-                const dataUrl = `data:${part.file.mediaType};base64,${part.file.base64}`;
-                generatedImages.push({mimeType: part.file.mediaType, url: dataUrl});
-                res.write(
-                  `data: ${JSON.stringify({
-                    image: {mimeType: part.file.mediaType, url: dataUrl},
-                  })}\n\n`
-                );
+                sendGeneratedImage(part.file);
                 logger.debug("Sent inline image from stream");
               }
               continue;
@@ -604,22 +607,16 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
 
           logger.debug("Stream completed", {fullResponseLength: fullResponse.length, partCount});
 
-          // Check for generated images (e.g. from gemini-2.5-flash-image)
+          // Catch generated images the stream did not report as file parts
           try {
             const files = await result.files;
             if (files && files.length > 0) {
               for (const file of files) {
-                if (file.mediaType.startsWith("image/")) {
-                  const dataUrl = `data:${file.mediaType};base64,${file.base64}`;
-                  generatedImages.push({mimeType: file.mediaType, url: dataUrl});
-                  res.write(
-                    `data: ${JSON.stringify({
-                      image: {mimeType: file.mediaType, url: dataUrl},
-                    })}\n\n`
-                  );
+                if (isGeneratedImageFile(file)) {
+                  sendGeneratedImage(file);
                 }
               }
-              logger.debug("Sent generated images", {count: files.length});
+              logger.debug("Sent generated images", {count: generatedImages.length});
             }
           } catch (fileErr) {
             logger.debug("No files in response", {
@@ -636,7 +633,7 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
             }));
             const assistantPrompt: GptHistoryPrompt = {
               model: aiService.modelId,
-              text: fullResponse || "(image)",
+              text: fullResponse,
               type: "assistant",
               ...(contentParts.length > 0 ? {content: contentParts} : {}),
             };

@@ -529,6 +529,24 @@ describe("AIService", () => {
       expect(messages[2]).toEqual({content: "How are you?", role: "user"});
     });
 
+    it("should give image-only assistant prompts stand-in text", () => {
+      const model = createMockModel();
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const messages = service.buildMessages([
+        {text: "Make an image", type: "user"},
+        {
+          content: [
+            {mimeType: "image/png", type: "image" as const, url: "data:image/png;base64,aGVsbG8="},
+          ],
+          text: "",
+          type: "assistant",
+        },
+      ]);
+
+      expect(messages[1]).toEqual({content: "[Generated image]", role: "assistant"});
+    });
+
     it("should convert multi-modal user prompts with image content", () => {
       const model = createMockModel();
       const service = new AIService({model: model as unknown as LanguageModel});

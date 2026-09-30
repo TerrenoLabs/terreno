@@ -353,19 +353,34 @@ a closed PR.
 `manual-publish-package` also accepts `feature-flags`. Versions must be semver.
 Semver git tags (`57.3.0`, `57.3.0-beta.1`) automatically start
 `publish-release`; prereleases publish to their prerelease npm dist-tag.
-`scripts/ci/publish-package.sh` pins `workspace:*` to the tag version for the
-tarball, then compiles and tests against the root workspace install. It must
-not `bun install` after that pin: sibling `@terreno/*` packages are not on npm
-yet, so bun would look up `@terreno/test@X.Y.Z` (and similar) on the registry
-and fail the whole job. Tests use `test:ci` when that script exists, not
-`test`. `@terreno/ui`'s `test` is `bun test --watch` and would hang the
-publish step after the suite finishes. `publish-release` uses a 20-minute
-no-output timeout as a backstop. If a package's tag version is already on npm,
-`publish-package.sh` skips it so a recut of the same tag can finish the rest.
+`publish-release` compiles the 16 lockstep packages once with
+`bun run --filter ... compile` (dependency order), then runs
+`scripts/ci/publish-package.sh` for all of them in parallel with
+`TERRENO_PUBLISH_PREBUILT=1`. It does not rerun tests: the tagged commit
+already passed CI on master, and rerunning every suite per package made
+releases take 20+ minutes. The job has no Mongo sidecar. Each publish writes
+its own temporary npmrc (`NPM_CONFIG_USERCONFIG`) so parallel publishes do not
+remove each other's token.
 
-Only stable tags (`57.3.0`) run `deploy-demo` after publish. Use
+`publish-package.sh` pins `workspace:*` to the tag version for the tarball.
+It must not `bun install` after that pin: sibling `@terreno/*` packages are
+not on npm yet, so bun would look up `@terreno/test@X.Y.Z` (and similar) on
+the registry and fail the whole job. Without `TERRENO_PUBLISH_PREBUILT` (the
+manual single-package publish), it compiles the package and its workspace
+dependencies and runs `test:ci` when that script exists, not `test`.
+`@terreno/ui`'s `test` is `bun test --watch` and would hang. If a package's
+tag version is already on npm, `publish-package.sh` skips it so a recut of
+the same tag can finish the rest.
+
+Only stable tags (`57.3.0`) run `deploy-demo`. It builds the demo from source,
+so it runs alongside `publish-release` instead of waiting for it. Use
 `{"run-demo-deploy":true}` on `master` if a prerelease must also refresh the
 demo site.
+
+`scripts/ci/netlify-deploy.sh` builds each site itself and calls
+`netlify deploy --no-build`. Without `--no-build`, netlify-cli runs the root
+`netlify.toml` docs build (wipe `node_modules`, reinstall, full Docusaurus),
+which added about 3.5 minutes to every demo and frontend deploy.
 
 CircleCI does not receive GitHub `pull_request.closed` events, so
 `.github/workflows/preview-cleanup.yml` forwards them: it runs master's

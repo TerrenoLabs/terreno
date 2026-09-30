@@ -173,6 +173,10 @@ describe("netlify-deploy.sh monorepo filter", () => {
         target
       );
     }
-    assert.include(netlifyScript, 'args=(deploy --filter "$netlify_filter"');
+    assert.include(netlifyScript, 'args=(deploy --no-build --filter "$netlify_filter"');
+  });
+
+  it("skips netlify-cli's netlify.toml build because the script already built publish_dir", () => {
+    assert.include(netlifyScript, "args=(deploy --no-build ");
   });
 });

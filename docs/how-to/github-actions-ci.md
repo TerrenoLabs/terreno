@@ -1,8 +1,9 @@
 # GitHub Actions CI (Terreno)
 
-GitHub Actions is the CI of record. Operator map for the expensive jobs:
-[GitHub Actions CI](github-actions-ci.md). CircleCI twins are parked; see
-[CircleCI](circleci.md).
+CircleCI is the CI/CD of record; see [CircleCI](circleci.md). The GitHub
+Actions CI and deploy workflows below are disabled
+(`push.branches-ignore: ["**"]`) and kept only for rollback. This page
+describes how they behaved if one is ever re-enabled.
 
 ## Docs site (`docs-deploy.yml`)
 

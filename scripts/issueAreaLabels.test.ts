@@ -3,8 +3,10 @@ import {assert} from "chai";
 import {
   AREA_BY_PACKAGE,
   KIND_BY_VALUE,
+  parseIssueLabels,
   parseKindTypeFromIssueBody,
   parsePackageAreaFromIssueBody,
+  resolveTriageLabels,
 } from "./issueAreaLabels.ts";
 
 describe("parsePackageAreaFromIssueBody", () => {
@@ -150,5 +152,47 @@ describe("dropdown coverage", (): void => {
       [],
       `type labels missing from labels.yml: ${unknownTypes.join(", ")}`
     );
+  });
+});
+
+describe("resolveTriageLabels", (): void => {
+  const formBody = "### Affected package\n\n@terreno/ui\n\n### Kind\n\nBug";
+
+  it("keeps an area label the issue was opened with", (): void => {
+    const resolved = resolveTriageLabels({
+      body: "Roadmap summary with no issue-form sections.",
+      existingLabels: ["area:ai", "type:feature", "roadmap"],
+    });
+    assert.deepEqual(resolved, {area: "area:ai", type: "type:feature"});
+  });
+
+  it("prefers existing labels over the form dropdowns", (): void => {
+    const resolved = resolveTriageLabels({body: formBody, existingLabels: ["area:api"]});
+    assert.equal(resolved.area, "area:api");
+    assert.equal(resolved.type, parseKindTypeFromIssueBody(formBody) ?? "");
+  });
+
+  it("falls back to the form when the issue has no labels", (): void => {
+    const resolved = resolveTriageLabels({body: formBody, existingLabels: []});
+    assert.equal(resolved.area, parsePackageAreaFromIssueBody(formBody) ?? "");
+  });
+
+  it("returns empty values when neither source names an area", (): void => {
+    assert.deepEqual(resolveTriageLabels({body: "", existingLabels: ["roadmap"]}), {
+      area: "",
+      type: "",
+    });
+  });
+});
+
+describe("parseIssueLabels", (): void => {
+  it("reads a JSON array of names", (): void => {
+    assert.deepEqual(parseIssueLabels('["area:ui","roadmap"]'), ["area:ui", "roadmap"]);
+  });
+
+  it("treats missing or malformed input as no labels", (): void => {
+    assert.deepEqual(parseIssueLabels(undefined), []);
+    assert.deepEqual(parseIssueLabels("not json"), []);
+    assert.deepEqual(parseIssueLabels('{"a":1}'), []);
   });
 });

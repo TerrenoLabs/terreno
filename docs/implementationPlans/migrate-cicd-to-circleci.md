@@ -214,7 +214,7 @@ are ported.
 | `codeql-analysis` | CircleCI job uploading SARIF to GitHub Code Scanning API **or** third-party SAST orb; preserve Security tab if possible |
 | `dependabot-auto-merge` | Keep Dependabot PRs on GitHub; auto-merge via CircleCI on Dependabot branches **or** Renovate on CircleCI |
 | `triage.yml` | CircleCI pipeline trigger on `issues` via GitHub Apps webhook → CircleCI API, or GitHub Action **stub** only if product accepts residual GHA (conflicts with CC1 — prefer webhook) |
-| `roadmap-generate` | Scheduled CircleCI job with `ROADMAP_PROJECT_TOKEN` |
+| `roadmap-generate`, `roadmap-sync`, `roadmap-reconcile` | **Stay on GitHub Actions** (decided 2026-09-26). They only talk to GitHub (issues, Projects v2, `master` commits via `ROADMAP_PROJECT_TOKEN`), so moving them buys nothing. Exception to CC1. |
 | `architectural-pr-review` | Implemented: CircleCI job + `CURSOR_API_KEY` / `GITHUB_TOKEN`. Checks out `origin/master`, skips forks. GHA workflow is `push.branches-ignore: ["**"]`. |
 | Cursor Approval / Security / Bugbot | **Cannot move.** Cursor GitHub App automations, not repo workflows. |
 | `agentics-maintenance` + `*.lock.yml` gh-aw | Re-home to CircleCI scheduled pipelines calling the same scripts **or** retire features; do not leave gh-aw as the only runner if CC1 holds |

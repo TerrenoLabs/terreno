@@ -57,6 +57,42 @@ export const parseKindTypeFromIssueBody = (body: string): string | null => {
 };
 
 /**
+ * Labels already on the issue win over the body. Issues opened by
+ * `roadmap:sync` (and anyone using `gh issue create --label`) carry their
+ * `area:*` / `type:*` at creation and have no issue-form body to parse, so
+ * reading only the body made triage ask for an area the issue already had.
+ */
+export const resolveTriageLabels = ({
+  body,
+  existingLabels,
+}: {
+  body: string;
+  existingLabels: string[];
+}): {area: string; type: string} => {
+  const existingArea = existingLabels.find((label) => label.startsWith("area:"));
+  const existingType = existingLabels.find((label) => label.startsWith("type:"));
+  return {
+    area: existingArea ?? parsePackageAreaFromIssueBody(body) ?? "",
+    type: existingType ?? parseKindTypeFromIssueBody(body) ?? "",
+  };
+};
+
+/** Reads the `ISSUE_LABELS` JSON array of names; anything malformed is no labels. */
+export const parseIssueLabels = (raw: string | undefined): string[] => {
+  if (raw === undefined || raw.trim() === "") {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((label): label is string => typeof label === "string")
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+/**
  * Writes `area=<label>` to the file named by GITHUB_OUTPUT so the triage
  * workflow can read it in a later step. An unrecognized package yields an
  * empty value, which the workflow treats as "ask the reporter".
@@ -64,8 +100,10 @@ export const parseKindTypeFromIssueBody = (body: string): string | null => {
 export const main = async (): Promise<void> => {
   const body = process.env.ISSUE_BODY ?? "";
   const outputPath = process.env.GITHUB_OUTPUT;
-  const area = parsePackageAreaFromIssueBody(body) ?? "";
-  const type = parseKindTypeFromIssueBody(body) ?? "";
+  const {area, type} = resolveTriageLabels({
+    body,
+    existingLabels: parseIssueLabels(process.env.ISSUE_LABELS),
+  });
 
   if (outputPath === undefined || outputPath === "") {
     console.info(area);

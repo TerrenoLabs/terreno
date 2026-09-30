@@ -4,6 +4,7 @@ import {TableMockupPreview} from "@stories/TableMockupPreview";
 import {Table} from "@terreno/ui";
 
 export const TableConfiguration: DemoConfiguration = {
+  usageExample: "import {Table} from \"@terreno/ui\";\n\n<Table />",
   name: "Table",
   component: Table,
   related: [
@@ -12,7 +13,7 @@ export const TableConfiguration: DemoConfiguration = {
     "Table date",
     "Table icon button",
     "Table number",
-    "Table text field",
+    "Table Text",
   ],
   description:
     "In this case, Table is a pattern, not a component. Build a table by sorting the table component items into rows. Each row should have an alternating color.",

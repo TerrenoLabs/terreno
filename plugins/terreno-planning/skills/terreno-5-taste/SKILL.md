@@ -1,6 +1,6 @@
 ---
 name: terreno-5-taste
-description: "Perform one reactive iteration against the PR's current head. Wait through provider CLI hooks until async review bots and product CI finish (GitHub CLI or CircleCI CLI in a watch loop), inspect every discovered host, mergeability, and reviews, act on what is actionable. Record failed tests from the last CI run. Before any push: always pull latest master, re-verify those last-run failed tests locally, then run the repository's prepush script when present (otherwise lint and typecheck affected packages) in a no-context subagent, then push and watch CI. Emit state and exit."
+description: "Perform one reactive iteration against the PR's current head. Wait through provider CLI hooks until async review bots and product CI finish (GitHub CLI or CircleCI CLI in a watch loop), inspect every discovered host, mergeability, and reviews, act on what is actionable. Record failed tests from the last CI run. Before any push: fetch latest master (merge only when needed), re-verify those last-run failed tests locally, then run the repository's prepush script when present (otherwise lint and typecheck affected packages) in a no-context subagent, then push and watch CI. Emit state and exit. Invoked directly by a human, it repeats bounded reactions itself until PASS, BLOCKED, or FAIL and never hands a wait back to the human."
 ---
 
 # Taste — react
@@ -23,7 +23,9 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 
 - A PR exists.
 - Current repository/PR access and prior execution state are available.
-- This invocation handles one reactive iteration only.
+- This invocation handles one reactive iteration only. Under an outer loop, that is
+  the whole invocation. Under standalone entry (see below), the invocation repeats
+  reactions itself.
 
 ## Inputs
 
@@ -77,11 +79,18 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
    - For a mechanical conflict, integrate the latest base using repository policy,
      preserve both intended changes, and never rewrite pushed history unless allowed.
    - Do not push speculative code for unrelated/flaky/external failures.
-9. **Before any push, in this order: pull latest master, re-verify last-run failed tests, run the local pre-push gate, then watch.**
-   1. Always fetch and merge the latest `master` into this branch (use the PR base if it
-      is not `master`). Do this even when git reports no conflict. Preserve both intended
-      changes. Never rewrite pushed history unless allowed. A merge that needs a
-      design/behavior choice is `BLOCKED`.
+9. **Before any push, in this order: fetch latest master, re-verify last-run failed tests, run the local pre-push gate, then watch.**
+   1. Always fetch the latest `master` (use the PR base if it is not `master`). Merge it
+      into this branch only when one of these holds:
+      - the PR conflicts with the base;
+      - a failure traces to base drift (a check that is green on the base but red here
+        from code this branch did not touch);
+      - review and CI are otherwise done and the branch is behind the base, as the final
+        pre-merge update.
+      Otherwise skip the merge. Every merge commit starts a full CI run, and a branch
+      that merges the base on every reaction piles up merge commits without new
+      signal. Preserve both intended changes. Never rewrite pushed history unless
+      allowed. A merge that needs a design/behavior choice is `BLOCKED`.
    2. Re-verify last-run failed tests locally with the exact recorded commands. Do this
       even when a root `prepush` script exists; `prepush` is not a substitute. A still
       failing test is `FAIL`; do not push it. If the environment cannot run a recorded
@@ -140,6 +149,34 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
    Update execution state and emit the structured result collapsed per the lifecycle
    contract. Close the chat with PR deployment URLs when the PR has them. Then exit.
 
+## Standalone entry
+
+Taste is in standalone entry when a human invoked it directly, or when Brew started it
+as the human's next stage, with no outer loop (`terreno-planning-loop`,
+`terreno-taste-sweep`, or similar) to consume `PENDING`. A `PENDING` returned to a
+human only tells them to come back later. Never hand a wait back to the human.
+
+Under standalone entry, when step 13 would emit `PENDING`:
+
+1. Record the `PENDING` result in execution state as an intermediate reaction, not the
+   terminal result.
+2. Wait for the requested `wait` in-process. Prefer the harness's native mechanisms: a
+   blocking provider watch (`gh pr checks <pr> --watch`, `circleci run watch --sha
+   <sha>`), a background command that exits when CI is terminal, or a scheduled wakeup.
+   Use a plain timer only as a fallback.
+3. Start the next reaction at step 1 against the current head. Do not reuse
+   conclusions from the previous reaction.
+
+Stop only on `PASS`, `BLOCKED`, or `FAIL` without a new evidence-based hypothesis, or
+when a bound is reached:
+
+- at most 3 fix pushes across all reactions;
+- at most 3 hours of total waiting on CI and review bots.
+
+A reached bound is `BLOCKED` (`kind: external`), naming the head, the jobs still
+pending or failing, and the one action a human should take. Never end with "run Taste
+later". The final chat message gives the terminal verdict and PR deployment URLs.
+
 ## Supporting skills
 
 Follow the shared discovery procedure. Project skills own CI tooling for each host
@@ -197,6 +234,7 @@ required.
 ## Recommended next stage
 
 - `PASS` → merge-ready; outer loop stops
-- `PENDING` → outer loop waits for the requested interval, then invokes fresh Taste
+- `PENDING` → outer loop waits for the requested interval, then invokes fresh Taste.
+  Under standalone entry Taste never emits a terminal `PENDING`; see Standalone entry.
 - `FAIL` → outer loop invokes fresh Taste only with a new evidence-based approach
 - `BLOCKED` → outer loop routes the named human/external gate

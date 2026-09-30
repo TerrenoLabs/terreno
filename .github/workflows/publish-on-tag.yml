@@ -1740,33 +1740,34 @@ jobs:
   trigger-demo-deploy:
     name: Trigger demo deploy
     needs: update-version-on-master
-    # `always()` avoids the skip propagating from earlier publish-* jobs — see the same
-    # note in demo-deploy.yml. The version bump commit doesn't reliably re-trigger
-    # demo-deploy.yml's path-filtered push trigger (tag pushes carry no file diff, and a
-    # skipped/failed package doesn't touch ui/package.json), so force a redeploy here to
-    # guarantee the public demo always matches the latest release.
+    # `always()` avoids the skip propagating from earlier publish-* jobs. The demo
+    # deploys from CircleCI, so start its `run-demo-deploy` pipeline on master
+    # (which now carries the version bump). Do not trigger on the release tag:
+    # a CircleCI tag pipeline would also start `publish-release`.
     if: always() && needs.update-version-on-master.result == 'success'
     runs-on: ubuntu-latest
     permissions:
-      actions: write
+      contents: read
     steps:
-      - name: Dispatch demo-deploy workflow
-        uses: actions/github-script@v9.0.0
-        # Dispatch against the release tag itself (not master), so the demo is pinned to
-        # exactly what was published rather than whatever master happens to be at the
-        # moment this runs (which may include later, unreleased commits). This requires
-        # demo-deploy.yml to already have the workflow_dispatch trigger at the tagged
-        # commit, which holds for any tag cut from master after this change lands.
+      - uses: actions/checkout@v6.0.3
+      - name: Validate required secrets
         env:
-          RELEASE_TAG: ${{ inputs.version }}
-        with:
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: "demo-deploy.yml",
-              ref: process.env.RELEASE_TAG,
-            });
+          CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_TOKEN }}
+          CIRCLECI_PIPELINE_DEFINITION_ID: ${{ vars.CIRCLECI_PIPELINE_DEFINITION_ID }}
+        run: |
+          missing=()
+          if [ -z "$CIRCLECI_TOKEN" ]; then missing+=("CIRCLECI_TOKEN (secret)"); fi
+          if [ -z "$CIRCLECI_PIPELINE_DEFINITION_ID" ]; then missing+=("CIRCLECI_PIPELINE_DEFINITION_ID (variable)"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+      - name: Trigger CircleCI demo deploy
+        env:
+          CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_TOKEN }}
+          CIRCLECI_PIPELINE_DEFINITION_ID: ${{ vars.CIRCLECI_PIPELINE_DEFINITION_ID }}
+          CIRCLECI_PROJECT_SLUG: ${{ vars.CIRCLECI_PROJECT_SLUG }}
+        run: scripts/ci/trigger-circleci-pipeline.sh '{"run-demo-deploy":true}'
 
   cut-docs-version:
     needs: [check-changes, update-version-on-master]

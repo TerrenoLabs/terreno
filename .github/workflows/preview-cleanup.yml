@@ -1,89 +1,46 @@
 name: Preview Cleanup
 
-# GitHub still receives pull_request.closed; CircleCI cleanup stays manual.
+# CircleCI owns preview cleanup (`preview-cleanup` job) but never receives
+# GitHub pull_request.closed events. This workflow only forwards the event as
+# a CircleCI pipeline with {"run-preview-cleanup": "<PR number>"}.
 on:
   pull_request:
     types: [closed]
 
-env:
-  GCP_PROJECT_ID: flourish-terreno
-  GCP_REGION: us-central1
-  GCP_SERVICE_NAME: terreno-backend-example
-  GCP_TASKS_SERVICE: terreno-backend-example-tasks
-
 jobs:
   cleanup:
-    name: Clean Up Preview Resources
+    name: Trigger CircleCI preview cleanup
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
       deployments: write
-      id-token: write
     steps:
-      - name: Validate required repository variables
+      # Run master's trigger script, not the PR's copy, since it handles CIRCLECI_TOKEN.
+      - uses: actions/checkout@v6.0.3
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Validate required secrets
         env:
-          GCP_SERVICE_ACCOUNT: ${{ vars.GCP_CD_DEPLOYER_SA_PROD }}
-          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WIF_PROVIDER_PROD }}
+          CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_TOKEN }}
+          CIRCLECI_PIPELINE_DEFINITION_ID: ${{ vars.CIRCLECI_PIPELINE_DEFINITION_ID }}
         run: |
           missing=()
-          if [ -z "$GCP_SERVICE_ACCOUNT" ]; then missing+=("GCP_CD_DEPLOYER_SA_PROD"); fi
-          if [ -z "$GCP_WORKLOAD_IDENTITY_PROVIDER" ]; then missing+=("GCP_WIF_PROVIDER_PROD"); fi
+          if [ -z "$CIRCLECI_TOKEN" ]; then missing+=("CIRCLECI_TOKEN (secret)"); fi
+          if [ -z "$CIRCLECI_PIPELINE_DEFINITION_ID" ]; then missing+=("CIRCLECI_PIPELINE_DEFINITION_ID (variable)"); fi
           if [ ${#missing[@]} -ne 0 ]; then
-            echo "::error::Missing required repository variables: ${missing[*]}"
+            echo "::error::Missing required secrets: ${missing[*]}"
             exit 1
           fi
 
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER_PROD }}
-          service_account: ${{ vars.GCP_CD_DEPLOYER_SA_PROD }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v3
-        with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
-
-      - uses: actions/checkout@v6.0.3
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.0
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Remove Cloud Run preview tags
-        run: |
-          gcloud run services update-traffic ${{ env.GCP_SERVICE_NAME }} \
-            --remove-tags=pr-${{ github.event.pull_request.number }} \
-            --region=${{ env.GCP_REGION }} || true
-          gcloud run services update-traffic ${{ env.GCP_TASKS_SERVICE }} \
-            --remove-tags=pr-${{ github.event.pull_request.number }} \
-            --region=${{ env.GCP_REGION }} || true
-
-      - name: Drop preview database
+      - name: Trigger CircleCI preview-cleanup pipeline
         env:
-          MONGO_DB_NAME: terreno-example-pr-${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          export MONGO_URI
-          MONGO_URI="$(gcloud secrets versions access latest \
-            --secret="${GCP_SERVICE_NAME}-mongodb-uri" \
-            --project="${GCP_PROJECT_ID}")"
-          node --input-type=module -e '
-            import("mongodb").then(async ({MongoClient}) => {
-              const client = new MongoClient(process.env.MONGO_URI);
-              await client.connect();
-              await client.db(process.env.MONGO_DB_NAME).dropDatabase();
-              await client.close();
-              console.info(`Dropped preview database ${process.env.MONGO_DB_NAME}`);
-            });
-          '
-        working-directory: example-backend
+          CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_TOKEN }}
+          CIRCLECI_PIPELINE_DEFINITION_ID: ${{ vars.CIRCLECI_PIPELINE_DEFINITION_ID }}
+          CIRCLECI_PROJECT_SLUG: ${{ vars.CIRCLECI_PROJECT_SLUG }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: scripts/ci/trigger-circleci-pipeline.sh "{\"run-preview-cleanup\":\"${PR_NUMBER}\"}"
 
       - name: Deactivate deployments
         uses: actions/github-script@v9.0.0
@@ -94,6 +51,7 @@ jobs:
               `demo-preview-pr-${pr}`,
               `example-frontend-preview-pr-${pr}`,
               `example-backend-preview-pr-${pr}`,
+              `docs-preview-pr-${pr}`,
               // Legacy environment names from before pr-N naming convention
               `frontend-example-preview-pr-${pr}`,
               'demo-preview',

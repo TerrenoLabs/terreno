@@ -1,6 +1,6 @@
 # Implementation Plan: Comms admin dashboard (errors, retries, log digging)
 
-**Status:** Approved
+**Status:** Complete
 **Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1091
 **Priority:** High
 **Effort:** Medium batch

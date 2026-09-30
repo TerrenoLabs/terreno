@@ -49,6 +49,7 @@
   "name": "@terreno/example-backend",
   "private": true,
   "scripts": {
+    "announcements:pack": "bun run src/scripts/announcement-pack.ts",
     "build": "bun build src/index.ts --outdir ./dist --target bun --packages external",
     "compile": "tsc",
     "compile:watch": "tsc -w",

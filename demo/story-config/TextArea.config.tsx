@@ -3,12 +3,13 @@ import {TextAreaDisabled, TextAreaErrored, TextAreas, WithLabelTextArea} from "@
 import {TextArea} from "@terreno/ui";
 
 export const TextAreaConfiguration: DemoConfiguration = {
+  usageExample: "import {TextArea} from \"@terreno/ui\";\n\n<TextArea />",
   name: "Text area",
   component: TextArea, // Replace with actual component reference
   related: ["Text field"],
   description: "Use the text area form field to allow the user to enter multiple lines of text.",
   a11yNotes: ["The user should be able to use tab to navigate between elements."],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

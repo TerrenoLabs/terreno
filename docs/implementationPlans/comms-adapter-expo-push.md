@@ -1,6 +1,6 @@
 # Implementation Plan: Comms adapter — Expo push notifications
 
-**Status:** In progress
+**Status:** Complete — shipped in #1204
 **Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1019
 **Priority:** High
 **Effort:** Small batch

@@ -8,7 +8,28 @@ the example-backend **dev** server need a replica-set `mongod` (see
 [AGENTS.md](https://github.com/TerrenoLabs/terreno/blob/master/AGENTS.md) Cursor Cloud
 section).
 
-## Do now — package tests
+## Do now — prepush mirrors CI
+
+```bash
+bun run prepush            # lint, compile, then every CI job this branch triggers
+bun run prepush --dry-run  # print the plan only
+bun run prepush --all      # every check, regardless of changed files
+```
+
+`prepush` diffs committed, staged, unstaged, and untracked files against the merge-base
+with `origin/master`. It applies the CircleCI path-filter mapping in
+`.circleci/config.yml`, then runs the local command for each triggered job: package
+`test:coverage` plus the 90% new-file LCOV gate, `ui` types, demo typecheck,
+example-backend and example-frontend tests, every `repo-policies` step, rulesync drift,
+and the typedoc API reference when `api/src` or `rtk/src` changes. Every step runs even
+after a failure, so a single pass lists every problem. Fix them all, then push once.
+
+Jobs that need infrastructure (Playwright e2e, Maestro, admin-spa integration, Docker)
+are listed at the end with the command to run by hand. A test in
+`scripts/ci/prepush/plan.test.ts` fails when the mapping gains a parameter that
+`prepush` neither runs nor lists.
+
+## Package tests
 
 From the repo root after `bun bootstrap`:
 
@@ -39,7 +60,7 @@ bun test --only-failures <path>
 | `example-frontend-ci` | `bun run frontend:test` |
 | `ui-demo-ci` | `cd demo && bun run test:ci` then `bun run check:demo-coverage` |
 | `new-file-coverage` | `bun run check:new-file-coverage --base=origin/master --threshold=90` |
-| `repo-policies` | `bun run prepush` (lint, compile, `analyze:full`) |
+| `repo-policies` | `bun run prepush` (runs every repo-policies step) |
 
 Coverage gate for a published package: `cd <package> && bun run test:coverage`.
 

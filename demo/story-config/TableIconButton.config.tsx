@@ -3,6 +3,7 @@ import {TableIconButtonDemo, TableIconButtonStates} from "@stories/TableIconButt
 import {TableIconButton} from "@terreno/ui";
 
 export const TableIconButtonConfiguration: DemoConfiguration = {
+  usageExample: "import {TableIconButton} from \"@terreno/ui\";\n\n<TableIconButton />",
   name: "Table icon button",
   component: TableIconButton, // Replace with actual component reference
   related: ["Table"],

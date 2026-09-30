@@ -5,9 +5,10 @@ import {SideDrawer} from "@terreno/ui";
 import React from "react";
 
 export const SideDrawerConfiguration: DemoConfiguration = {
+  usageExample: "import {SideDrawer} from \"@terreno/ui\";\n\n<SideDrawer />",
   name: "Side drawer",
   component: SideDrawer,
-  related: ["Modals"],
+  related: ["Modal"],
   description:
     "Side drawers function like the Material navigation drawer. They open up a surface that allows the system to display information, navigation, or other content.",
   a11yNotes: [

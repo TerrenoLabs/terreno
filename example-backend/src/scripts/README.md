@@ -7,6 +7,19 @@ Scripts can be run with:
 bun run src/scripts/yourScript.ts
 ```
 
+## Release announcement packs
+
+[`announcement-pack.ts`](./announcement-pack.ts) turns a pack directory such as
+`announcements/releases/1.14.0/` into the `POST /announcements/import-release` body.
+
+```bash
+bun run announcements:pack announcements/releases/1.14.0                  # print JSON
+bun run announcements:pack announcements/releases/1.14.0 --upload http://localhost:4000
+```
+
+Add `--publish` to import live instead of as drafts. See
+[Announcement release packs](../../../docs/reference/announcement-release-packs.md).
+
 ## Admin scripts as a CLI
 
 Every script registered on the admin panel (see [`../adminScripts.ts`](../adminScripts.ts))

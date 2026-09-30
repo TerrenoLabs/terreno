@@ -25,6 +25,7 @@ import {DecimalRangeActionSheetConfiguration} from "@story-config/DecimalRangeAc
 import {DismissButtonConfiguration} from "@story-config/DismissButton.config";
 import {DonutChartConfiguration} from "@story-config/DonutChart.config";
 import {DraggableListConfiguration} from "@story-config/DraggableList.config";
+import {DropdownPanelConfiguration} from "@story-config/DropdownPanel.config";
 import {EditableCardConfiguration} from "@story-config/EditableCard.config";
 import {EmailFieldConfiguration} from "@story-config/EmailField.config";
 import {EmojiSelectorConfiguration} from "@story-config/EmojiSelector.config";
@@ -32,7 +33,6 @@ import {ErrorBoundaryConfiguration} from "@story-config/ErrorBoundary.config";
 import {ErrorPageConfiguration} from "@story-config/ErrorPage.config";
 import {FieldConfiguration} from "@story-config/Field.config";
 import {FilePickerButtonConfiguration} from "@story-config/FilePickerButton.config";
-import {FilterConfiguration} from "@story-config/Filter.config";
 import {GPTChatConfiguration} from "@story-config/GPTChat.config";
 import {GPTMemoryModalConfiguration} from "@story-config/GPTMemoryModal.config";
 import {HeadingConfiguration} from "@story-config/Heading.config";
@@ -107,6 +107,8 @@ import {UserInactivityConfiguration} from "@story-config/UserInactivity.config";
 import {WebAddressAutocompleteConfiguration} from "@story-config/WebAddressAutocomplete.config";
 import type {FieldProps} from "@terreno/ui";
 import type React from "react";
+import type {DemoInteractionStep} from "./catalogContract";
+import {catalogIssues} from "./catalogContract";
 import {OpenAPIContextDemo, OpenAPIContextStories} from "./stories/OpenAPIContext.stories";
 
 export type DemoConfigStatus = "planned" | "inProgress" | "ready" | "notSupported";
@@ -119,7 +121,7 @@ interface TypedocNode {
 }
 const PropsJSON: {children: TypedocNode[]} = require("./ui-types-documentation.json");
 
-type Categories = "Foundation" | "Component" | "Pattern" | "Data Entry" | "Form";
+type Categories = "Foundation" | "Component" | "Pattern" | "Form";
 
 interface DemoConfigurationBase {
   name: string;
@@ -162,11 +164,15 @@ interface DemoConfigurationBase {
       >;
     };
   };
+  usageExample?: string;
   // Stories represent different states of the component and different examples of using it.
   stories: {
     [name: string]: {
       description?: string;
-      showInDemo?: boolean; // TODO filter in Demo site
+      excludeReason?: string;
+      interactions?: DemoInteractionStep[];
+      showInDemo?: boolean;
+      stability?: "stable" | "exclude";
       render: () => React.ReactElement | null;
     };
   };
@@ -244,7 +250,7 @@ const OpenAPIContextConfiguration: DemoConfigurationBase = {
     "Loads backend OpenAPI metadata and exposes model field descriptions through useOpenAPISpec.",
   interfaceName: "OpenAPIProviderProps",
   name: "OpenAPI Context",
-  related: ["TerrenoProvider"],
+  related: ["Theme"],
   status: {
     android: "ready",
     documentation: "ready",
@@ -261,6 +267,9 @@ const OpenAPIContextConfiguration: DemoConfigurationBase = {
     ],
     doNot: ["Fetch OpenAPI specs manually in every field component."],
   },
+  usageExample: `import {OpenAPIProvider, useOpenAPISpec} from "@terreno/ui";
+
+<OpenAPIProvider url="/openapi.json">{children}</OpenAPIProvider>`,
 };
 
 const Config: DemoConfigurationBase[] = [
@@ -278,7 +287,6 @@ const Config: DemoConfigurationBase[] = [
   BodyConfiguration,
   BooleanFieldConfiguration,
   BoxConfiguration,
-  FilterConfiguration,
   ButtonConfiguration,
   CardConfiguration,
   // ChatBubbleConfiguration,
@@ -293,6 +301,7 @@ const Config: DemoConfigurationBase[] = [
   DismissButtonConfiguration,
   DonutChartConfiguration,
   DraggableListConfiguration,
+  DropdownPanelConfiguration,
   EditableCardConfiguration,
   EmailFieldConfiguration,
   EmojiSelectorConfiguration,
@@ -400,3 +409,6 @@ export const findDemoConfig = (component?: string): DemoConfiguration | undefine
   const normalized = normalizeComponentName(component);
   return DemoConfig.find((c) => normalizeComponentName(c.name) === normalized);
 };
+
+/** Catalog contract validation for the demo workshop and CI health checks. */
+export const getDemoCatalogIssues = (): string[] => catalogIssues(DemoConfig);

@@ -38,7 +38,9 @@ must follow the [`GitHub attention contract`](../../references/github-attention-
    implementation. Behavioral changes after Roast return to Roast.
 2. **Discover supporting skills.** Load applicable submission, documentation, commit,
    changelog, security, and repository verification skills.
-3. **Run final gates.** Execute repository-required pre-submit checks. Confirm docs
+3. **Run final gates.** Execute repository-required pre-submit checks. When the root
+   `package.json` defines a `prepush` script, run it in a fresh subagent with no parent
+   conversation before the first push. A red local gate is `FAIL`; do not push it. Confirm docs
    follow the documentation contract, generated files are current, changelog/release
    notes exist when required, and verification artifacts are complete. Ship without
    matching docs is `FAIL`.
@@ -49,9 +51,10 @@ must follow the [`GitHub attention contract`](../../references/github-attention-
 5. **Check hygiene.** Review status/diff; exclude loop-owned execution state, debug output,
    secrets, credentials, customer data, and unrelated files.
 6. **Commit.** Follow repository commit and DCO/sign-off policy. Preserve the existing
-   prohibition on AI attribution. Use behavior-scoped commits; do not rewrite pushed
-   history unless explicitly allowed.
-7. **Push.** Push with upstream. Resolve only mechanical conflicts needed to update the PR,
+   prohibition on AI attribution. Use behavior-scoped commits, one per roasted task,
+   with no bookkeeping-only commits; do not rewrite pushed history unless explicitly
+   allowed.
+7. **Push.** Push once with upstream. Resolve only mechanical conflicts needed to update the PR,
    using repository conflict guidance and rerunning affected checks. A conflict requiring
    a design/behavior choice is `BLOCKED`.
 8. **Create/update PR.** Apply the GitHub attention contract and any stricter repository
@@ -83,7 +86,11 @@ must follow the [`GitHub attention contract`](../../references/github-attention-
     - required host untriggered after grace → `FAIL` with `next: brew`
     - otherwise `PASS` with the PR/head, bot outcomes, and `next: taste`
     Collapse per the lifecycle contract. Close the chat with PR deployment URLs when
-    the PR has them. Brew itself never executes Taste.
+    the PR has them. Brew itself never executes Taste inline.
+12. **Hand off.** When an outer loop invoked Brew, exit; the outer loop runs Taste.
+    When a human invoked Brew directly and the result is `PASS` or `PENDING` with
+    `next: taste`, start the Taste skill as the next stage in standalone entry. Do
+    not end the session by telling the human to run Taste later.
 
 ## Supporting skills
 

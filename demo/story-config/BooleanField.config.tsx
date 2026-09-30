@@ -11,9 +11,10 @@ import {BooleanField} from "@terreno/ui";
 import React from "react";
 
 export const BooleanFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {BooleanField} from \"@terreno/ui\";\n\n<BooleanField />",
   name: "Boolean field",
   component: BooleanField,
-  related: ["Switch", "Checkbox", "Radio"],
+  related: ["CheckBox", "Radio"],
   description:
     "Use the Boolean field for single cell options that can be turned on and off only. Also called 'toggle fields' and 'switch fields'.",
   a11yNotes: [
@@ -21,7 +22,7 @@ export const BooleanFieldConfiguration: DemoConfiguration = {
     "Switches should have labels that can be read by screen readers.",
     "Users should be able to click the labels to interact with the toggle.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

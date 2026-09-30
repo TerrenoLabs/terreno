@@ -1,7 +1,7 @@
 # Implementation Plan: @terreno/syncdb-codegen
 
 **Status:** Complete — shipped as `syncdb/src/codegen` + `terreno-syncdb-codegen`
-**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1087
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1110
 **Branch:** cursor/syncdb-codegen-in-package-746d
 **Owner:**
 **Created:** 2026-07-08

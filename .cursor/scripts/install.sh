@@ -20,6 +20,24 @@ bun --version
 bun install
 bun run compile
 
+# 2b. Install the git pre-commit hook and make `bun` resolvable from it. Git runs
+#     hooks with the agent's PATH, which often lacks ~/.bun/bin; a missing `bun`
+#     fails every commit and pushes agents toward --no-verify, which skips the
+#     Biome check and produces follow-up "fix formatting" commits.
+if sudo -n true 2>/dev/null; then
+  sudo ln -sf "$HOME/.bun/bin/bun" /usr/local/bin/bun
+  sudo ln -sf "$HOME/.bun/bin/bunx" /usr/local/bin/bunx
+fi
+bunx simple-git-hooks
+if [ ! -x "$(git rev-parse --git-path hooks/pre-commit)" ]; then
+  echo "ERROR: pre-commit hook was not installed" >&2
+  exit 1
+fi
+if ! env -i PATH=/usr/local/bin:/usr/bin:/bin sh -c 'command -v bun' >/dev/null; then
+  echo "WARNING: bun is not on the default PATH, so git hooks cannot run it." >&2
+  echo "WARNING: add $HOME/.bun/bin to PATH for the agent process or grant sudo." >&2
+fi
+
 # 3. Cache a standalone mongod binary at a stable path. mongodb-memory-server
 #    downloads the exact pinned version the test suites use; MongoBinary.getPath
 #    returns the real executable path (downloading it if needed) regardless of the

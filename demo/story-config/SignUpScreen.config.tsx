@@ -3,9 +3,10 @@ import {SignUpScreenDemo, SignUpScreenWithOauth} from "@stories/SignUpScreen.sto
 import {SignUpScreen} from "@terreno/ui";
 
 export const SignUpScreenConfiguration: DemoConfiguration = {
+  usageExample: "import {SignUpScreen} from \"@terreno/ui\";\n\n<SignUpScreen />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
-  category: "Component",
+  category: ["Component", "Form"],
   component: SignUpScreen,
   demo: () => <SignUpScreenDemo />,
   demoOptions: {size: "lg"},

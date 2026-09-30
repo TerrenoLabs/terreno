@@ -19,6 +19,7 @@ import type {
   FontAwesome6RegularNames,
   FontAwesome6SolidNames,
 } from "./CommonIconTypes";
+import type {DropdownPanelAlign} from "./dropdownPanelLayout";
 import type {
   DataTableTestIDs,
   FieldTestIDs,
@@ -488,8 +489,22 @@ export interface FilterAccordionProps extends WithTestID {
   showChangesBadge?: boolean;
 }
 
-export interface FilterProps extends WithTestID {
-  /** Composed filter controls rendered inside the dropdown panel. */
+/**
+ * Trigger and Apply button styling, mirroring `ButtonProps["variant"]` so a dropdown
+ * trigger can use any button style in the design system.
+ */
+export type DropdownPanelVariant = NonNullable<ButtonProps["variant"]>;
+
+export interface DropdownPanelProps extends WithTestID {
+  /** Horizontal alignment of the panel against its trigger.
+   * `auto` left-aligns and flips to right-aligned when the panel would overflow the
+   * right edge of the viewport.
+   * @default "auto"
+   */
+  align?: DropdownPanelAlign;
+  /** Variant for the footer's Apply button. Defaults to `variant`. */
+  applyButtonVariant?: DropdownPanelVariant;
+  /** Composed controls rendered inside the dropdown panel. */
   children: React.ReactNode;
   /** Trigger button label. */
   label?: string;
@@ -502,8 +517,21 @@ export interface FilterProps extends WithTestID {
    * Use for dense chrome such as table column headers. `label` is ignored.
    */
   iconOnly?: boolean;
-  /** Trigger size when `iconOnly` is set. Defaults to `sm`. */
+  /**
+   * Trigger size. Labeled triggers default to the standard `Button` size; icon-only
+   * triggers default to `sm` (a 24px hit target, 32px at `default`).
+   */
   triggerSize?: "sm" | "default";
+  /** Variant for the trigger button. Defaults to `variant`. */
+  triggerVariant?: DropdownPanelVariant;
+  /**
+   * Replaces the built-in trigger. Use when the trigger needs styling the `Button`
+   * variants do not cover. The returned node is measured to anchor the panel, so it
+   * must render something visible.
+   */
+  renderTrigger?: (props: {isOpen: boolean; toggle: () => void}) => React.ReactNode;
+  /** Stretch the trigger (and its wrapper) to the width of the container. */
+  fullWidth?: boolean;
   /** Controlled open state. Omit to use `defaultOpen`. */
   isOpen?: boolean;
   /** Initial open state when uncontrolled. */
@@ -523,15 +551,25 @@ export interface FilterProps extends WithTestID {
   cancelButtonText?: string;
   /** Called when Apply is pressed. The dropdown then closes. */
   onApply?: () => void;
-  /** Called when Clear is pressed. The dropdown then closes. */
+  /** Called when Clear is pressed. The panel stays open. */
   onClear?: () => void;
   /** Called when Cancel or a click-outside closes the dropdown. */
   onCancel?: () => void;
   /** Primary theming for the trigger and Apply button. */
-  variant?: "primary" | "secondary";
+  variant?: DropdownPanelVariant;
   /** Panel width in pixels. Defaults to 320 per the design spec. */
   width?: number;
+  /**
+   * Ceiling for the panel height. The panel never exceeds the space available on
+   * screen regardless of this value; content beyond it scrolls.
+   */
+  maxPanelHeight?: number;
 }
+
+/**
+ * @deprecated Renamed to {@link DropdownPanelProps}. Removed in Terreno 58.
+ */
+export type FilterProps = DropdownPanelProps;
 
 export type AlignContent = "start" | "end" | "center" | "between" | "around" | "stretch";
 export type AlignSelf = "auto" | "start" | "end" | "center" | "baseline" | "stretch";

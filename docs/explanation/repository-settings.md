@@ -51,11 +51,18 @@ as GitHub App checks; they are not CircleCI jobs.
 
 **Path:** Settings → Environments
 
-Same-repo PR jobs in `cd.yml` (`Terraform preview`, `Tasks deploy (preview)`,
-`Backend deploy (preview)`) skip when `head.repo.full_name != github.repository`.
-Also restrict the `gcp-cd-preview` environment (create it on first deploy if missing) with a
-**deployment branch policy** or **required reviewers** so a fork that edits
-`cd.yml` cannot mint a prod WIF token.
+`cd.yml` is disabled; CircleCI `gcp-cd-preview` performs GCP previews and
+halts on fork PRs. While the GitHub WIF provider still exists, keep the
+`gcp-cd-preview` environment restricted with a **deployment branch policy** or
+**required reviewers** so a fork that re-enables `cd.yml` cannot mint a prod
+WIF token.
+
+### Actions secrets for CircleCI hooks
+
+`preview-cleanup.yml` (PR close) and `publish-on-tag.yml` (manual publish demo
+redeploy) start CircleCI pipelines. Set the secret `CIRCLECI_TOKEN` and the
+variable `CIRCLECI_PIPELINE_DEFINITION_ID` under Settings → Secrets and
+variables → Actions.
 
 ## Merge settings
 

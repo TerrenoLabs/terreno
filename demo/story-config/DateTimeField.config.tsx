@@ -5,16 +5,17 @@ import {DateTimeFieldDemo, DateTimeFieldStory, DateTimeFieldTypes} from "../stor
 
 // TODO: Update with the notes from TimeField and DateField.
 export const DateTimeFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {DateTimeField} from \"@terreno/ui\";\n\n<DateTimeField />",
   name: "Date & Time field",
   component: DateTimeField,
-  related: ["Date / time modal"],
+  related: ["Modal"],
   description:
     "This form field allows the user to select a date and a time. Used in conjunction with the date & time modal in this pattern.",
   a11yNotes: [
     "Users should be able to use the tab key to navigate between fields.",
     "Users should be able to use the enter/space keys to open up the date/time modal.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

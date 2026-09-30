@@ -1,6 +1,7 @@
 # Implementation Plan: Migrate built-in admin to syncdb
 
-**Status:** Approved
+**Status:** Complete
+**Roadmap:** Area=`admin`, Target=`Released`, Impact=`Improvement`  
 **Branch:** `cursor/migrate-admin-to-syncdb-de61`
 **Owner:** Josh Gachnang
 **Created:** 2026-09-01

@@ -49,7 +49,7 @@ the inner loop until the approved task list is done. Roast never invokes Pick. B
 Taste additionally wait while async review bots are running, preferring provider CLI
 watch hooks or harness event subscriptions over timer polling. Taste also waits in a
 loop for product CI with `gh` or `circleci` until jobs are terminal or the wait times
-out. Before any push it always pulls latest `master`, then records last-run failed tests
+out. Before any push it fetches latest `master` (merging it only when needed), then records last-run failed tests
 and re-verifies them locally, then runs the repository's root
 `prepush` package script in a no-context subagent when present (falling back to affected
 package lint, typecheck, and tests), then pushes and watches CI.
@@ -82,8 +82,8 @@ acceptance criteria. Taste is one reactive iteration, not an unbounded fix-until
 daemon. It waits until async review bots (Bugbot, CodeQL, and similar) on the current
 head have reported, then waits in a loop for product CI using GitHub CLI
 (`gh pr checks --watch`, `gh run watch`) or CircleCI CLI (`circleci run watch`) until
-jobs are terminal or the wait times out. Before any push it always pulls latest
-`master`, records last-run failed tests and re-verifies them locally, then runs root
+jobs are terminal or the wait times out. Before any push it fetches latest
+`master` (merging it only when needed), records last-run failed tests and re-verifies them locally, then runs root
 `prepush` when present in a fresh subagent with no parent
 conversation. If absent, it proves affected-package lint, typecheck, and tests instead.
 It then pushes and watches CI, emits `PASS`, `FAIL`, `BLOCKED`, or `PENDING`, and exits.
@@ -138,6 +138,35 @@ The fallback state location is `.terreno/pipeline/<slug>.json`; the outer loop p
 or transports it and Brew excludes it from commits unless repository policy says
 otherwise. Stage results follow the plugin's JSON-schema-backed YAML contract and never
 contain chain-of-thought or transcripts.
+
+## Commits and pushes
+
+Every pushed commit starts a full CI run. Harnesses such as Cursor cloud agents push
+every commit automatically, so commit count turns directly into CI runs. Before these
+rules, one 30-commit dashboard PR had ten "mark slice roasted" commits and ten "harden"
+follow-ups, and `ui-ci` stayed red on every commit after the first.
+
+- One behavior-scoped commit per task, after Roast `PASS`: code, tests, docs, and the
+  task-file mark together. Roast-driven fixes fold into that commit.
+- Progress lives in execution state, not in standalone task-file commits.
+- Pick and Roast never push. Brew pushes once. Taste pushes at most once per reaction.
+- Pick does not continue on a head whose product CI shows a branch-caused failure.
+- Pick lists a behavior's edge cases before coding, so Roast proves them instead of
+  discovering them.
+- Roast runs the gate CI will run (root `prepush`, which mirrors the triggered CI jobs),
+  not only the task's test file.
+- Taste fetches `master` before every push but merges it only when the PR conflicts, a
+  failure traces to base drift, or the branch is otherwise merge-ready.
+
+## Direct invocation
+
+Outer loops (`terreno-planning-loop`, `terreno-taste-sweep`) consume Taste `PENDING`
+and invoke Taste again. When a human invokes Taste directly, no loop is waiting, so a
+`PENDING` would only tell them to come back later. In that case Taste uses
+**standalone entry**: it waits in-process with native watches and reacts again. It
+stops on `PASS`, `BLOCKED`, or `FAIL`, or after 3 fix pushes or 3 hours of waiting,
+which ends as `BLOCKED` with one concrete human action. A directly invoked Brew
+starts Taste as its next stage instead of exiting.
 
 ## Retry and stop rules
 

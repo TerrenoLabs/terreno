@@ -1,6 +1,7 @@
 # Implementation Plan: App MCP server
 
 **Status:** Draft  
+**Roadmap:** Area=`mcp`, Target=`Future`, Impact=`Feature`  
 **Created:** 2026-08-24  
 **Owner:** unassigned  
 **Depends on:** [model-router-mcp.md](model-router-mcp.md) (shipped), [mcp-boost-parity.md](mcp-boost-parity.md) (dev-time MCP — sibling, not a blocker)  

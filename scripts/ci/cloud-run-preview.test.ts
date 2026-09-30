@@ -11,17 +11,18 @@ const deployRetryAction = readFileSync(
   join(repoRoot, ".github/actions/deploy-cloudrun-wif-retry/action.yml"),
   "utf8"
 );
-const frontendDeployWorkflow = readFileSync(
-  join(repoRoot, ".github/workflows/frontend-example-deploy.yml"),
-  "utf8"
-);
+const netlifyScript = readFileSync(join(import.meta.dir, "netlify-deploy.sh"), "utf8");
+const setupConfig = readFileSync(join(repoRoot, ".circleci/config.yml"), "utf8");
+const continueConfig = readFileSync(join(repoRoot, ".circleci/continue-config.yml"), "utf8");
+// CircleCI path-filtering regexes that rebuild the example frontend preview.
 const FRONTEND_PREVIEW_PATHS = [
-  "example-frontend/**",
-  "ui/**",
-  "rtk/**",
-  "admin-frontend/**",
-  "bun.lock",
-  ".github/workflows/frontend-example-deploy.yml",
+  "example-frontend/.*",
+  "ui/.*",
+  "rtk/.*",
+  "admin-frontend/.*",
+  "ai/.*",
+  "syncdb/.*",
+  "bun\\.lock",
 ];
 
 interface WaitResult {
@@ -93,18 +94,7 @@ describe("Cloud Run preview readiness", (): void => {
     assert.include(result.stderr, '"status":"starting"');
   });
 
-  it("keeps CPU allocated and gates both preview deployment paths", (): void => {
-    const previewJob = cdWorkflow.slice(
-      cdWorkflow.indexOf("  backend-deploy-preview:"),
-      cdWorkflow.indexOf("  # ───────────────────────────── Backend tasks worker")
-    );
-
-    assert.include(previewJob, "--no-cpu-throttling");
-    assert.include(previewJob, "scripts/ci/wait-cloud-run-health.sh");
-    assert.isBelow(
-      previewJob.indexOf("scripts/ci/wait-cloud-run-health.sh"),
-      previewJob.indexOf("Set deployment status to success")
-    );
+  it("keeps CPU allocated and gates the preview deployment on health", (): void => {
     assert.match(
       deployScript,
       /if \[ "\$tag" = "prod" \]; then[\s\S]*else[\s\S]*--no-cpu-throttling/
@@ -113,6 +103,18 @@ describe("Cloud Run preview readiness", (): void => {
       deployScript,
       /if \[\[ "\$tag" == pr-\* \]\]; then[\s\S]*wait-cloud-run-health\.sh/
     );
+  });
+
+  it("prunes not-Ready traffic and tags the new preview revision after deploy", (): void => {
+    const pruneAt = deployScript.indexOf("rebuild-cloud-run-ready-traffic.sh");
+    const deployAt = deployScript.indexOf('gcloud "${args[@]}"');
+    const tagAt = deployScript.indexOf(
+      "--update-tags=${tag}=${GCP_BACKEND_SERVICE}-${revision_suffix}"
+    );
+    assert.isAbove(pruneAt, -1);
+    assert.isBelow(pruneAt, deployAt);
+    assert.isAbove(tagAt, deployAt);
+    assert.include(deployScript, '"--revision-suffix=$revision_suffix"');
   });
 
   it("selectively retries WIF timeouts for every GitHub Cloud Run deploy", (): void => {
@@ -131,41 +133,49 @@ describe("Cloud Run preview readiness", (): void => {
   });
 
   it("deploys an isolated backend for every frontend PR preview", (): void => {
-    const pullRequestPaths = cdWorkflow.slice(
-      cdWorkflow.indexOf("  pull_request:"),
-      cdWorkflow.indexOf("  workflow_dispatch:")
-    );
-    const backendPaths = cdWorkflow.slice(
-      cdWorkflow.indexOf("            backend:"),
-      cdWorkflow.indexOf("            tasks:")
-    );
-
     for (const path of FRONTEND_PREVIEW_PATHS) {
-      assert.include(pullRequestPaths, path);
-      assert.include(backendPaths, path);
+      assert.include(setupConfig, `            ${path} run-deploy-frontend true`, path);
+      assert.include(setupConfig, `            ${path} run-cd-backend true`, path);
     }
 
-    assert.match(
-      frontendDeployWorkflow,
-      /URL="https:\/\/pr-\$\{\{ github\.event\.pull_request\.number \}\}---terreno-backend-example-7knxlrnpqq-uc\.a\.run\.app"/
-    );
-    const frontendPreviewJob = frontendDeployWorkflow.slice(
-      frontendDeployWorkflow.indexOf("  deploy-preview:"),
-      frontendDeployWorkflow.length
-    );
-    assert.include(frontendPreviewJob, "scripts/ci/wait-cloud-run-health.sh");
-    assert.isBelow(
-      frontendPreviewJob.indexOf("scripts/ci/wait-cloud-run-health.sh"),
-      frontendPreviewJob.indexOf("nwtgck/actions-netlify")
-    );
-    assert.notInclude(frontendDeployWorkflow, "HAS_BACKEND_CHANGES");
-    assert.match(
-      frontendDeployWorkflow,
-      /group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}/
+    const frontendPreviewJob = continueConfig.slice(
+      continueConfig.indexOf("  deploy-frontend-preview:"),
+      continueConfig.indexOf("  deploy-docs-preview:")
     );
     assert.include(
-      frontendDeployWorkflow,
-      "cancel-in-progress: ${{ github.event_name == 'pull_request' }}"
+      frontendPreviewJob,
+      'export EXPO_PUBLIC_API_URL="https://pr-${PR_NUMBER}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"'
     );
+    assert.include(frontendPreviewJob, 'export NETLIFY_WAIT_FOR_HEALTH_URL="$EXPO_PUBLIC_API_URL"');
+    assert.isBelow(
+      netlifyScript.indexOf("wait-cloud-run-health.sh"),
+      netlifyScript.indexOf("args=(deploy")
+    );
+  });
+});
+
+describe("netlify-deploy.sh monorepo filter", () => {
+  it("filters each target to a real workspace package so netlify-cli does not prompt", () => {
+    const targets = {
+      demo: "demo",
+      docs: "website",
+      frontend: "example-frontend",
+    };
+    for (const [target, packageDir] of Object.entries(targets)) {
+      const packageName = JSON.parse(
+        readFileSync(join(repoRoot, packageDir, "package.json"), "utf8")
+      ).name;
+      const block = netlifyScript.slice(netlifyScript.indexOf(`  ${target})\n    site_id=`));
+      assert.include(
+        block.slice(0, block.indexOf(";;")),
+        `netlify_filter="${packageName}"`,
+        target
+      );
+    }
+    assert.include(netlifyScript, 'args=(deploy --no-build --filter "$netlify_filter"');
+  });
+
+  it("skips netlify-cli's netlify.toml build because the script already built publish_dir", () => {
+    assert.include(netlifyScript, "args=(deploy --no-build ");
   });
 });

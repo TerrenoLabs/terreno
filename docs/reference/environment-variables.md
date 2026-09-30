@@ -239,6 +239,7 @@ secrets and `PUBLIC_API_URL` / `COMMS_WEBHOOK_PUBLIC_URL` as above. See
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
 | `ADMIN_SPA_ENABLED` | example-backend | ❌ | — | No | server |
+| `ANNOUNCEMENTS_UPLOAD_TOKEN` | example-backend `AnnouncementsApp` | ❌ | example deploy: `terreno-example-announcement-upload` | Yes outside the example app | server |
 | `ADMIN_SPA_DIST_DIR` | example-backend Dockerfile | ❌ | — | No | server |
 | `ADMIN_SPA_DEV_PROXY` | admin-spa plugin | ❌ | — | No | server |
 | `ADMIN_SPA_BACKEND_URL` | admin-spa tests | ❌ | — | No | tooling |

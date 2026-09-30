@@ -18,7 +18,7 @@ It is applied by **[Google Cloud Infrastructure Manager](https://cloud.google.co
   OIDC service account. The private tasks Cloud Run service executes callbacks;
   Cloud Run worker pools are not used because they have no HTTP ingress. The
   project default Compute Engine SA is not an enqueuer.
-- Secret Manager containers for backend sensitive env vars. Values are seeded out-of-band; CircleCI deploy jobs mount them by secret reference.
+- Secret Manager containers for backend sensitive env vars. Values are seeded out-of-band; CircleCI deploy jobs mount them by secret reference. `terreno-backend-example-announcements-upload-token` is the exception: Terraform writes the default `terreno-example-announcement-upload` so the example import API can be tested without a manual seed.
 
 The pre-existing `EXAMPLE_*` Secret Manager secrets (`EXAMPLE_MONGO_CONNECTION`, `EXAMPLE_TOKEN_SECRET`, `EXAMPLE_REFRESH_TOKEN_SECRET`) feeding `MONGO_URI`/`TOKEN_SECRET`/`REFRESH_TOKEN_SECRET` are not yet Terraform-managed but already use proper SM mounts. Terraform grants the backend runtime access to the two legacy JWT secrets because Cloud Run validates existing mounts before it applies a revised template. The secret containers can be imported in a follow-up. The MCP server's `SENTRY_DSN` is also still inline-from-GH-secret and could be migrated.
 
@@ -175,18 +175,17 @@ terraform import google_service_account.jobs_tasks_invoker \
 The API and private tasks service run the same image and register the same job handlers.
 The API persists a `Job`, then Cloud Tasks sends an OIDC-authenticated
 `POST /jobs/execute` to the tasks service. Queue rate limits cap the dispatch pool at 20
-callbacks and 20 dispatches per second by default. Keep `.github/workflows/cd.yml`
-`tasks-deploy-prod` on a 30-minute timeout, concurrency 20, and
-`--no-allow-unauthenticated` so a GitHub Actions roll cannot reopen the worker.
+callbacks and 20 dispatches per second by default. Keep `scripts/ci/gcp-deploy.sh`
+`deploy_tasks` on a 30-minute timeout, concurrency 20, and
+`--no-allow-unauthenticated` so a CircleCI roll cannot reopen the worker.
 
-PR previews do not create global infrastructure. GitHub Actions (`tasks-deploy-preview`
-before `backend-deploy-preview`) and CircleCI (`backend-preview`) both deploy matching
-`pr-<number>` tags for the tasks service before the API preview, then configure the API
-to target that exact tasks tag. GitHub Actions production deploys overwrite Cloud Run
-env vars (same as CircleCI `--set-env-vars`) so preview `MONGO_DB_NAME` / `PR_NUMBER`
-do not merge into production. Each tag also uses `terreno-example-pr-<number>`, so concurrent PRs share neither
-workers nor job rows. CircleCI cleanup and `.github/workflows/preview-cleanup.yml`
-both remove the API and tasks tags.
+PR previews do not create global infrastructure. CircleCI (`gcp-deploy.sh backend-preview`)
+deploys a matching `pr-<number>` tag for the tasks service before the API preview, then
+configures the API to target that exact tasks tag. Production deploys overwrite Cloud Run
+env vars (`--set-env-vars`) so preview `MONGO_DB_NAME` / `PR_NUMBER` do not merge into
+production. Each tag also uses `terreno-example-pr-<number>`, so concurrent PRs share neither
+workers nor job rows. CircleCI `preview-cleanup` (started on PR close by
+`.github/workflows/preview-cleanup.yml`) removes the API and tasks tags.
 
 ## Adding a third service account
 
@@ -199,15 +198,15 @@ The recommended two-PR flow (avoids a broken first deploy):
 **PR 1 — infrastructure only:**
 
 1. Add a `module "..." { source = "./modules/secret" ... }` block to `main.tf` (the module is already shipped). Grant accessor IAM to the relevant runtime SA.
-2. Commit, merge. `cd.yml`'s `terraform-apply` job creates the empty SM container. Backend/MCP deploys skip (no code changes).
+2. Commit, merge. CircleCI `gcp-cd-prod` (terraform apply) creates the empty SM container. Backend/MCP deploys skip (no code changes).
 3. Seed the value: `echo -n 'value' | gcloud secrets versions add <secret-id> --project=flourish-terreno --data-file=-`.
 
 **PR 2 — wire it up:**
 
-4. Add the `KEY=<secret-id>:latest` line to the workflow's `secrets:` block in `cd.yml`. Remove the old `KEY=${{ secrets.X }}` line from `env_vars:` if migrating.
-5. Commit, merge. `cd.yml`'s deploy job rolls a new Cloud Run revision that mounts the (already-populated) secret.
+4. Add `KEY=<secret-id>:latest` to the `secrets=` list in `scripts/ci/gcp-deploy.sh`. Remove any plain env-var copy of the value if migrating.
+5. Commit, merge. `gcp-cd-prod` rolls a new Cloud Run revision that mounts the (already-populated) secret.
 
-**Why two PRs?** The merged `cd.yml` guarantees terraform-apply finishes before any deploy, but it can't seed values — `gcloud secrets versions add` is a manual step. Doing it in one PR means the first deploy mounts an empty secret and Cloud Run rejects the revision.
+**Why two PRs?** `gcp-cd-prod` runs terraform apply before any deploy, but it can't seed values — `gcloud secrets versions add` is a manual step. Doing it in one PR means the first deploy mounts an empty secret and Cloud Run rejects the revision.
 
 For rotating a value of an already-set-up secret, no PR needed — just `gcloud secrets versions add`. Cloud Run re-reads `:latest` on every cold start.
 

@@ -15,12 +15,21 @@ cd "$repo_root"
 case "$target" in
   demo)
     site_id="${NETLIFY_DEMO_SITE_ID:-}"
+    site_name="terreno-demo"
+    netlify_filter="terreno-demo"
+    deployment_env="demo"
     ;;
   frontend)
     site_id="${NETLIFY_FRONTEND_EXAMPLE_SITE_ID:-}"
+    site_name="terreno-frontend"
+    netlify_filter="@terreno/example-frontend"
+    deployment_env="example-frontend"
     ;;
   docs)
     site_id="${NETLIFY_DOCS_SITE_ID:-}"
+    site_name="terreno-docs"
+    netlify_filter="@terreno/website"
+    deployment_env="docs"
     ;;
   *)
     echo "Unknown Netlify target: $target" >&2
@@ -39,9 +48,8 @@ fi
 
 export NETLIFY_SITE_ID="$site_id"
 if [ -z "${NETLIFY_AUTH_TOKEN:-}" ] || [ -z "${NETLIFY_SITE_ID:-}" ]; then
-  echo "Skipping Netlify ${target} ${mode} deploy: terreno-netlify is missing NETLIFY_AUTH_TOKEN or the site id."
-  echo "GitHub Actions still owns live deploys until that CircleCI context is populated."
-  exit 0
+  echo "Cannot run Netlify ${target} ${mode} deploy: terreno-netlify is missing NETLIFY_AUTH_TOKEN or the site id." >&2
+  exit 1
 fi
 
 case "$target" in
@@ -80,11 +88,29 @@ case "$target" in
     ;;
 esac
 
-args=(deploy --dir "$publish_dir" --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN")
-if [ "$mode" = "production" ]; then
-  args+=(--prod)
-else
-  args+=(--alias "$alias_name")
+# gcp-cd-preview runs in a separate workflow; publish only once its backend answers.
+if [ -n "${NETLIFY_WAIT_FOR_HEALTH_URL:-}" ]; then
+  scripts/ci/wait-cloud-run-health.sh "$NETLIFY_WAIT_FOR_HEALTH_URL" 1200
 fi
 
-bunx --bun netlify-cli@latest "${args[@]}"
+# netlify-cli sees the Bun workspace as a monorepo and refuses to guess a package in CI.
+# Absolute --dir keeps the publish path independent of the filtered package's base dir.
+# --no-build: this script already built publish_dir. Without it netlify-cli runs the root
+# netlify.toml docs build (wipe node_modules, reinstall, full Docusaurus) on every deploy.
+args=(deploy --no-build --filter "$netlify_filter" --dir "$repo_root/$publish_dir" --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN")
+if [ "$mode" = "production" ]; then
+  args+=(--prod)
+  deployment_url="https://${site_name}.netlify.app"
+  deployment_description="${target} production deploy"
+else
+  args+=(--alias "$alias_name")
+  # Aliases are pr-N (docs: docs-pr-N); GitHub environments are <env>-preview-pr-N.
+  deployment_env="${deployment_env}-preview-pr-${alias_name##*pr-}"
+  deployment_url="https://${alias_name}--${site_name}.netlify.app"
+  deployment_description="${target} preview ${alias_name}"
+fi
+
+# shellcheck source=scripts/ci/github-deployment-lib.sh
+source scripts/ci/github-deployment-lib.sh
+with_github_deployment "$deployment_env" "$deployment_description" "$deployment_url" \
+  bunx --bun netlify-cli@latest "${args[@]}"

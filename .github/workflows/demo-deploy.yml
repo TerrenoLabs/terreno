@@ -1,20 +1,12 @@
 name: Demo Deploy
 
-# Dual-run with CircleCI until `terreno-netlify` has NETLIFY_* values.
+# Disabled after CD moved to CircleCI (deploy-*, gcp-cd-*); retained for rollback.
+# Never re-enable alongside CircleCI: both would deploy and apply terraform.
 on:
+  # Retained for rollback without registering failed zero-job runs.
   push:
-    branches:
-      - master
-    paths:
-      - "demo/**"
-      - "ui/**"
-      - ".github/workflows/demo-deploy.yml"
-  pull_request:
-    paths:
-      - "demo/**"
-      - "ui/**"
-      - ".github/workflows/demo-deploy.yml"
-  workflow_dispatch:
+    branches-ignore:
+      - "**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

@@ -1,16 +1,19 @@
 import {describe, it} from "bun:test";
 import assert from "node:assert/strict";
-
 import {
   applyStatusFixes,
+  buildSeedSection,
   collectFindings,
   type IpRecord,
+  inferArea,
+  insertSeedSections,
   isSubDocument,
   parseIpRecord,
   parseTaskProgress,
   type TaskProgress,
   toBoardStatus,
 } from "./reconcileIps.ts";
+import {parseSeedIssues} from "./seedIssues.ts";
 
 const ip = (overrides: Partial<IpRecord> & {slug: string}): IpRecord => ({
   boardStatus: null,
@@ -188,22 +191,25 @@ describe("collectFindings", () => {
     assert.equal(findings[0]?.type, "declined-but-ip-open");
   });
 
-  it("flags an approved plan that has no roadmap entry", () => {
+  it("scaffolds an entry for an approved plan that has none", () => {
     const findings = collectFindings({
       ips: [ip({boardStatus: "Planned", rawStatus: "Approved", slug: "a"})],
       seedStatuses: new Map(),
       taskProgress: noTasks,
     });
     assert.equal(findings[0]?.type, "missing-roadmap-entry");
+    assert.equal(findings[0]?.kind, "fix");
+    assert.equal(findings[0]?.expected, "Planned");
   });
 
-  it("stays quiet about a draft plan with no roadmap entry", () => {
+  it("puts a draft plan on the roadmap as Shaping", () => {
     const findings = collectFindings({
       ips: [ip({boardStatus: "Shaping", rawStatus: "Draft", slug: "a"})],
       seedStatuses: new Map(),
       taskProgress: noTasks,
     });
-    assert.deepEqual(findings, []);
+    assert.equal(findings[0]?.type, "missing-roadmap-entry");
+    assert.equal(findings[0]?.expected, "Shaping");
   });
 
   it("flags a roadmap entry whose plan was deleted", () => {
@@ -273,13 +279,29 @@ describe("collectFindings", () => {
 });
 
 describe("applyStatusFixes", () => {
+  it("moves shipped work to the Released target", () => {
+    const section =
+      "**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`a`, Status=`Planned`";
+    const row =
+      "| `a` | https://github.com/o/r/issues/1 | `Planned` | `api` | `Next` | `Feature` | `type:feature` |";
+    const updated = applyStatusFixes({
+      contents: `${section}\n\n${row}\n`,
+      fixes: [{slug: "a", status: "Shipped"}],
+    });
+    assert.match(updated, /Target=`Released`, Impact=`Feature`, IP=`a`, Status=`Shipped`/);
+    assert.match(updated, /\| `Shipped` \| `api` \| `Released` \|/);
+  });
+
   it("rewrites the Status of a section without touching its other fields", () => {
     const before =
       "**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`alpha`, Status=`Planned`";
-    const after = applyStatusFixes({contents: before, fixes: [{slug: "alpha", status: "Shipped"}]});
+    const after = applyStatusFixes({
+      contents: before,
+      fixes: [{slug: "alpha", status: "In review"}],
+    });
     assert.equal(
       after,
-      "**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`alpha`, Status=`Shipped`"
+      "**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`alpha`, Status=`In review`"
     );
   });
 
@@ -310,5 +332,123 @@ describe("applyStatusFixes", () => {
       applyStatusFixes({contents: before, fixes: [{slug: "beta", status: "Shipped"}]}),
       before
     );
+  });
+});
+
+describe("buildSeedSection", () => {
+  const plan = [
+    "# Implementation Plan: Widget exports",
+    "",
+    "**Status:** Approved  ",
+    "**Primary packages:** `@terreno/ui`",
+    "",
+    "## Goal",
+    "",
+    "Let apps export widgets",
+    "as CSV.",
+    "",
+    "More detail.",
+  ].join("\n");
+
+  it("produces a section the seed parser reads back with IP and task links", () => {
+    const section = buildSeedSection({
+      contents: plan,
+      hasTasks: true,
+      slug: "widget-exports",
+      status: "Planned",
+    });
+    const [seed] = parseSeedIssues(`# Roadmap seed issues\n\n---\n\n${section}`);
+    assert.equal(seed?.title, "Widget exports");
+    assert.equal(seed?.area, "ui");
+    assert.equal(seed?.target, "Next");
+    assert.equal(seed?.impact, "Feature");
+    assert.equal(seed?.ip, "widget-exports");
+    assert.equal(seed?.status, "Planned");
+    assert.match(seed?.body ?? "", /Let apps export widgets as CSV\./);
+    assert.match(seed?.body ?? "", /docs\/implementationPlans\/widget-exports\.md/);
+    assert.match(seed?.body ?? "", /docs\/tasks\/widget-exports\.md/);
+  });
+
+  it("omits the task link when no task list exists", () => {
+    const section = buildSeedSection({
+      contents: plan,
+      hasTasks: false,
+      slug: "widget-exports",
+      status: "Planned",
+    });
+    assert.doesNotMatch(section, /docs\/tasks\//);
+  });
+
+  it("prefers the Roadmap header over inference", () => {
+    const declared = plan.replace(
+      "**Primary packages:**",
+      "**Roadmap:** Area=`dx`, Target=`58`, Impact=`Breaking`  \n**Primary packages:**"
+    );
+    const [seed] = parseSeedIssues(
+      buildSeedSection({contents: declared, hasTasks: false, slug: "w", status: "Planned"}).replace(
+        /^/,
+        "# x\n\n"
+      )
+    );
+    assert.equal(seed?.area, "dx");
+    assert.equal(seed?.target, "58");
+    assert.equal(seed?.impact, "Breaking");
+  });
+
+  it("puts shipped work under Released even when the header declares a target", () => {
+    const declared = plan.replace(
+      "**Primary packages:**",
+      "**Roadmap:** Area=`api`, Target=`Next`, Impact=`Feature`  \n**Primary packages:**"
+    );
+    assert.match(
+      buildSeedSection({contents: declared, hasTasks: false, slug: "w", status: "Shipped"}),
+      /Target=`Released`/
+    );
+  });
+
+  it("keeps the list a goal paragraph introduces", () => {
+    const listPlan = plan.replace(
+      "Let apps export widgets\nas CSV.\n\nMore detail.",
+      "Apps can:\n\n- export widgets\n- import widgets\n\nMore detail."
+    );
+    const section = buildSeedSection({
+      contents: listPlan,
+      hasTasks: false,
+      slug: "w",
+      status: "Planned",
+    });
+    assert.match(section, /Apps can:\n\n- export widgets\n- import widgets\n/);
+    assert.doesNotMatch(section, /More detail/);
+  });
+
+  it("targets Released for shipped work and Future for drafts", () => {
+    assert.match(
+      buildSeedSection({contents: plan, hasTasks: false, slug: "w", status: "Shipped"}),
+      /Target=`Released`/
+    );
+    assert.match(
+      buildSeedSection({contents: plan, hasTasks: false, slug: "w", status: "Shaping"}),
+      /Target=`Future`/
+    );
+  });
+});
+
+describe("inferArea", () => {
+  it("falls back to dx when the header names no package", () => {
+    assert.equal(
+      inferArea("# Plan\n\n**Status:** Draft\n\n## Goal\n\n@terreno/ui everywhere"),
+      "dx"
+    );
+  });
+});
+
+describe("insertSeedSections", () => {
+  it("inserts above the backfill table", () => {
+    const updated = insertSeedSections({
+      contents: "# Seed\n\n## a\n\n---\n\n# Shipped, umbrella, and declined IPs\n\n| table |\n",
+      sections: ["## b\n\nbody\n\n---\n"],
+    });
+    assert.ok(updated.indexOf("## b") < updated.indexOf("# Shipped, umbrella"));
+    assert.ok(updated.indexOf("## a") < updated.indexOf("## b"));
   });
 });

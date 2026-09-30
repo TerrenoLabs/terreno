@@ -1,6 +1,6 @@
 # Implementation Plan: In-app notification center
 
-**Status:** Approved  
+**Status:** Complete — shipped in #1307  
 **Branch:** `cursor/notification-center-ip-b11f`  
 **Owner:** —  
 **Created:** 2026-09-10  

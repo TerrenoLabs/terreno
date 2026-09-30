@@ -103,19 +103,21 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
   - Files: `.circleci/continue-config.yml`
   - Depends on: Task 0.2, Task 1.3
   - Acceptance: preview deploy URL posted or visible; prod deploy on master path filter.
-  - Note: Path filters and preview jobs exist. Live Netlify still runs on GHA until `terreno-netlify` is filled; CircleCI skips. Cleanup on PR close is GHA `preview-cleanup.yml`.
+  - Note: CircleCI is the only Netlify deployer; jobs fail when `terreno-netlify` is empty. PR close triggers CircleCI `preview-cleanup` through `preview-cleanup.yml`.
 
 - [ ] **Task 4.2**: Preview cleanup port
   - Description: On PR close, clean Netlify/GCP preview resources from CircleCI (webhook or GitHub App → pipeline). Prefer OIDC over `GCP_SA_KEY`.
   - Files: `.circleci/continue-config.yml`
   - Depends on: Task 4.1
   - Acceptance: closing a PR removes preview resources; no orphaned Cloud Run `pr-N` services in a test PR.
+  - Note: Cutover code landed on branch `move-cd-to-circleci` (GHA deploy workflows disabled; CircleCI deploy jobs fail on empty contexts). Check off after contexts are filled and the acceptance is observed.
 
 - [ ] **Task 4.3**: Dual-run cutover for Netlify
   - Description: Delete GHA deploy workflows after CircleCI trusted.
   - Files: `.github/workflows/demo-deploy.yml`, `frontend-example-deploy.yml`, `docs-deploy.yml`, `preview-cleanup.yml`
   - Depends on: Task 4.1, Task 4.2
   - Acceptance: GHA deploy twins deleted.
+  - Note: Cutover code landed on branch `move-cd-to-circleci` (GHA deploy workflows disabled; CircleCI deploy jobs fail on empty contexts). Check off after contexts are filled and the acceptance is observed.
 
 ## Phase 5: EAS + fingerprint
 
@@ -150,13 +152,14 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
   - Files: `.circleci/continue-config.yml`
   - Depends on: Task 6.1
   - Acceptance: terraform preview on PR; apply+deploy on master for a safe test path; GitHub Deployment records optional but documented.
-  - Note: Path filters exist. Live GCP still runs on GHA until `terreno-gcp` is filled; CircleCI skips apply.
+  - Note: CircleCI is the only GCP deployer; jobs fail when `terreno-gcp` is empty. `gcp-cd-prod` runs MCP `test:ci` before the MCP deploy.
 
 - [ ] **Task 6.3**: Dual-run cutover for CD
   - Description: Single deployer: disable GHA `cd.yml` when CircleCI CD is required; remove GitHub OIDC provider only after GHA CD is gone (or keep read-only if other repos need it — document).
   - Files: `.github/workflows/cd.yml`, terraform OIDC
   - Depends on: Task 6.2
   - Acceptance: only CircleCI performs terreno CD; no double apply.
+  - Note: Cutover code landed on branch `move-cd-to-circleci` (GHA deploy workflows disabled; CircleCI deploy jobs fail on empty contexts). Check off after contexts are filled and the acceptance is observed.
 
 ## Phase 7: npm publish
 
@@ -200,7 +203,7 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
   - Depends on: Task 0.2
   - Acceptance: Security tab still receives results **or** explicit maintainer sign-off on alternative.
 
-- [ ] **Task 9.2**: Replace Dependabot auto-merge + triage + roadmap-generate + docs-audit
+- [ ] **Task 9.2**: Replace Dependabot auto-merge + triage + docs-audit (roadmap workflows stay on GitHub Actions, decided 2026-09-26)
   - Description: Implement CircleCI (or Renovate) equivalents; wire issue/schedule triggers without leaving required logic on GHA.
   - Files: `.circleci/continue-config.yml`, corresponding GHA deletions
   - Depends on: Task 0.2

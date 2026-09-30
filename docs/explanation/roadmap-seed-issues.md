@@ -137,7 +137,7 @@ support, organized around batteries included, universal by default, and AI-nativ
 **Title:** `Reference documentation coverage`
 
 **Labels:** `area:docs`, `type:docs`  
-**Project fields:** Area=`docs`, Target=`Next`, Impact=`Improvement`, IP=`docs-reference-coverage`, Status=`In progress`
+**Project fields:** Area=`docs`, Target=`Released`, Impact=`Improvement`, IP=`docs-reference-coverage`, Status=`Shipped`
 
 Gives every published Terreno package a real README and a public docs/reference page instead
 of stubs. Adds missing reference pages, de-stubs package READMEs, sanitizes internal
@@ -209,7 +209,7 @@ websocket verification. Requires a spike on backend hosting options.
 **Title:** `Upgrade guides and upgrading-terreno skill`
 
 **Labels:** `area:mcp`, `type:docs`  
-**Project fields:** Area=`mcp`, Target=`Next`, Impact=`Improvement`, IP=`upgrade-guides-and-skill`, Status=`Planned`
+**Project fields:** Area=`mcp`, Target=`Released`, Impact=`Improvement`, IP=`upgrade-guides-and-skill`, Status=`Shipped`
 
 Makes upgrading Terreno across lockstep-published packages a documented, repeatable process.
 Backfills upgrade notes, adds versioning policy, ships an upgrading-terreno skill, and
@@ -262,7 +262,7 @@ using only public docs and skills, then publishes a friction log and blog post.
 **Title:** `Examples, demo, and test coverage`
 
 **Labels:** `area:examples`, `type:chore`  
-**Project fields:** Area=`examples`, Target=`Future`, Impact=`Improvement`, IP=`examples-demo-coverage`, Status=`Planned`
+**Project fields:** Area=`examples`, Target=`Released`, Impact=`Improvement`, IP=`examples-demo-coverage`, Status=`Shipped`
 
 Closes credibility gaps in examples, the UI demo app, and CI coverage gates. Adds missing demo
 stories, extends coverage enforcement, and publishes an example-app feature matrix.
@@ -352,7 +352,7 @@ roadmap item, so apps only install the SDKs they use.
 **Title:** `Comms adapter — Expo push notifications`
 
 **Labels:** `area:api`, `type:feature`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`comms-adapter-expo-push`, Status=`In progress`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`comms-adapter-expo-push`, Status=`Shipped`
 
 Implements the `@terreno/comms` push provider on Expo's push service using
 `expo-server-sdk` (already a dependency of `@terreno/api`, currently unused). Covers token
@@ -371,7 +371,7 @@ half — `getExpoPushTokenAsync` registration — already exists in example-fron
 **Title:** `Comms adapter — Twilio SMS`
 
 **Labels:** `area:api`, `type:feature`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`comms-adapter-twilio-sms`, Status=`Planned`
+**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`comms-adapter-twilio-sms`, Status=`In progress`
 
 Implements the `@terreno/comms` SMS provider on Twilio Programmable Messaging: send via
 messaging service or from-number, delivery status callbacks through the inbound-webhook
@@ -390,7 +390,7 @@ catalog.
 **Title:** `Comms adapter — Twilio Verify (OTP)`
 
 **Labels:** `area:api`, `type:feature`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`comms-adapter-twilio-verify`, Status=`Shipped`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`comms-adapter-twilio-verify`, Status=`Shipped`
 
 Implements the `@terreno/comms` verification provider on Twilio Verify for SMS and email
 one-time codes. This is the delivery channel for phone verification and for the future MFA
@@ -427,7 +427,7 @@ SES, SMTP) get their own items when demand appears.
 **Title:** `Comms admin dashboard (errors, retries, log digging)`
 
 **Labels:** `area:admin`, `type:feature`
-**Project fields:** Area=`admin`, Target=`Next`, Impact=`Feature`, IP=`comms-admin-dashboard`, Status=`Planned`
+**Project fields:** Area=`admin`, Target=`Released`, Impact=`Feature`, IP=`comms-admin-dashboard`, Status=`Shipped`
 
 Makes the admin panel the operations surface for the `@terreno/comms` layer: filterable
 delivery logs (channel, provider, status, error code/class, recipient, date range, free
@@ -448,7 +448,7 @@ comms abstraction.
 **Title:** `Password reset and email verification`
 
 **Labels:** `area:auth`, `type:feature`
-**Project fields:** Area=`auth`, Target=`Next`, Impact=`Feature`, IP=`password-reset-and-email-verification`, Status=`Planned`
+**Project fields:** Area=`auth`, Target=`Released`, Impact=`Feature`, IP=`password-reset-and-email-verification`, Status=`Shipped`
 
 Closes a functional hole: the `@terreno/rtk` client already exposes a `resetPassword`
 endpoint but no backend route implements it, and there is no email verification flow.
@@ -467,7 +467,7 @@ equivalents, and sends the emails through `@terreno/comms`.
 **Title:** `Inbound webhook framework`
 
 **Labels:** `area:api`, `type:feature`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`inbound-webhooks`, Status=`Planned`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`inbound-webhooks`, Status=`Shipped`
 
 **GitHub:** https://github.com/TerrenoLabs/terreno/issues/1172
 
@@ -545,7 +545,7 @@ billing can later enforce. Emails go through `@terreno/comms`.
 **Title:** `Organizations as a first-class primitive (admin UI + RBAC)`
 
 **Labels:** `area:api`, `type:feature`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`org-management-ui`, Status=`Planned`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`org-management-ui`, Status=`Shipped`
 
 Native Organization and Membership models, RBAC (`org-admin`, `operator`, `superadmin`),
 and admin-panel directory / switcher / members / settings. Operators manage all orgs;
@@ -585,7 +585,7 @@ are a separate item.
 **Title:** `Native module baseline for the next major release`
 
 **Labels:** `area:ui`, `type:chore`, `breaking`
-**Project fields:** Area=`ui`, Target=`Next`, Impact=`Breaking`, IP=*(not yet written)*, Status=`Planned`
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Breaking`, IP=`native-module-baseline`, Status=`Shaping`
 
 Adding a native module to a Terreno app forces a new dev-client/store binary, so every
 native dependency the B2B program needs lands in one major release: Stripe payment sheet,
@@ -663,7 +663,7 @@ root views and system chrome follow the scheme.
 **Title:** `DataTable server-side filtering and search`
 
 **Labels:** `area:ui`, `type:feature`
-**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`datatable-server-side-filtering`, Status=`Planned`
+**Project fields:** Area=`ui`, Target=`Released`, Impact=`Feature`, IP=`datatable-server-side-filtering`, Status=`Shipped`
 
 DataTable sorts and paginates but has no filter UI. Adds per-column filter controls and a
 search box that emit modelRouter-compatible query params (`queryFields`, `$and`/`$or`), so
@@ -700,7 +700,7 @@ native module baseline regardless, so this lands as a JS/OTA feature when schedu
 **Title:** `In-app notification center`
 
 **Labels:** `area:ui`, `type:feature`
-**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`notification-center` (Approved), Status=`Planned`
+**Project fields:** Area=`ui`, Target=`Released`, Impact=`Feature`, IP=`notification-center` (Approved), Status=`Shipped`
 
 Adds a Notification model with per-user preferences, realtime delivery over the existing
 change-stream socket layer, and a bell/inbox UI in `@terreno/ui` with read/unread state —
@@ -827,7 +827,7 @@ enforcement hooks in the permission layer.
 **Title:** `Framework-level audit log`
 
 **Labels:** `area:api`, `type:feature`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`framework-audit-log`, Status=`Planned`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`framework-audit-log`, Status=`Shipped`
 
 Generalizes the admin/consent audit patterns into a first-class audit log: an AuditEvent
 model, modelRouter hooks that record who changed what (with before/after diffs), org
@@ -849,7 +849,7 @@ Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1186
 **Title:** `API rate limiting`
 
 **Labels:** `area:api`, `type:feature`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`rate-limiting`, Status=`Planned`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`rate-limiting`, Status=`Shipped`
 
 Adds opt-in HTTP rate limiting to `@terreno/api`: per-user or per-IP keys, stricter
 auth/OTP buckets (including login), memory Redis or Mongo stores, and 429 rate-limit
@@ -892,7 +892,7 @@ Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1188
 **Title:** `MongoDB migrations tooling`
 
 **Labels:** `area:api`, `type:feature`  
-**Project fields:** Area=`api`, Target=`Future`, Impact=`Feature`, IP=`mongodb-migrations-tooling`, Status=`Planned`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`mongodb-migrations-tooling`, Status=`Shipped`
 
 A migrations runner for Terreno apps: versioned migration files, up/down with a lock
 collection, CI checks, CLI generate-from-schema-diff, optional boot apply, and an admin
@@ -937,7 +937,7 @@ permission, hook, field-view, or soft-delete fix lands once instead of twice.
 **Title:** `[Roadmap] One collection registry`
 
 **Labels:** `area:api`, `type:chore`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Improvement`, IP=`collection-registry`, Status=`Planned`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Improvement`, IP=`collection-registry`, Status=`Shipped`
 
 Registers a `modelRouter` collection once. MCP, realtime, and Sync each keep a process-global
 array plus an `update*RegistryOptions` call today, so every RBAC or MCP change has to touch
@@ -956,7 +956,7 @@ options, surfaces}` and the existing per-surface lookups become views over it.
 **Title:** `[Roadmap] can() as the permission seam`
 
 **Labels:** `area:api`, `type:chore`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Improvement`, IP=`can-as-permission-seam`, Status=`Planned`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Improvement`, IP=`can-as-permission-seam`, Status=`Shipped`
 
 Finishes the RBAC work by making `accessControl.can()` the enforcement engine wherever a
 router declares `access`. Today RBAC roles and statements are compiled down into legacy
@@ -975,7 +975,7 @@ must pass both `access` and `permissions` and the two can disagree.
 **Title:** `[Roadmap] describeModel() schema metadata`
 
 **Labels:** `area:api`, `type:chore`
-**Project fields:** Area=`api`, Target=`Next`, Impact=`Improvement`, IP=`describe-model-schema`, Status=`Planned`
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Improvement`, IP=`describe-model-schema`, Status=`Shipped`
 
 Walks each Mongoose schema once into a shared `ModelDescription`. OpenAPI generation, the
 admin field-widget extractor, and the MCP Zod tool generator each re-interpret `schema.paths`
@@ -1009,6 +1009,268 @@ stay gated behind capability flags.
 
 ---
 
+## mcp-doc-sync-off-compile-path
+
+**Title:** `Move mcp-server doc-sync off the compile path`
+
+**Labels:** `area:dx`, `type:chore`  
+**Project fields:** Area=`dx`, Target=`Released`, Impact=`Improvement`, IP=`mcp-doc-sync-off-compile-path`, Status=`Shipped`
+
+Take the three doc-sync scripts and the `cp` off mcp-server's `compile` script so a normal `bun run compile` type-checks only. This removes ~5s of fixed I/O from every cold build and — critically — eliminates a Bun `cpSync` race in `sync-versioned-docs` that intermittently fails the full concurrent build (observed 1/3 runs once Slice B raises build concurrency).
+
+- **Implementation plan:** [mcp-doc-sync-off-compile-path.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/mcp-doc-sync-off-compile-path.md)
+- **Tasks:** [mcp-doc-sync-off-compile-path.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/mcp-doc-sync-off-compile-path.md)
+
+---
+
+## admin-scripts-durable-jobs
+
+**Title:** `Admin scripts via durable jobs`
+
+**Labels:** `area:admin`, `type:chore`  
+**Project fields:** Area=`admin`, Target=`Released`, Impact=`Improvement`, IP=`admin-scripts-durable-jobs`, Status=`Shipped`
+
+Admin HTTP script runs (`POST /admin/scripts/:name/run`) enqueue `@terreno/jobs` job `admin/script` when `JobsApp` is registered, while the Scripts UI keeps polling `BackgroundTask` by `taskId`.
+
+- **Implementation plan:** [admin-scripts-durable-jobs.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/admin-scripts-durable-jobs.md)
+- **Tasks:** [admin-scripts-durable-jobs.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/admin-scripts-durable-jobs.md)
+
+---
+
+## announcements
+
+**Title:** `Product Update Announcements — In-App Core Feature`
+
+**Labels:** `area:api`, `type:feature`  
+**Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`announcements`, Status=`Shipped`
+
+Ship a **core Terreno feature** for admin-managed, in-app product update announcements — similar in scope to feature flags and consent forms. Admins create markdown announcements with scheduling, targeting metadata, and lifecycle controls. Authenticated users see a **priority-ordered modal queue** (one at a time) and can browse a **changelog feed**. Consumers (e.g. Flourish) configure audience matching and acknowledgement policy without forking the package.
+
+- **Implementation plan:** [announcements.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/announcements.md)
+- **Tasks:** [announcements.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/announcements.md)
+
+---
+
+## gpt-chat-mascot
+
+**Title:** `GPTChat optional mascot`
+
+**Labels:** `area:ui`, `type:feature`  
+**Project fields:** Area=`ui`, Target=`Released`, Impact=`Feature`, IP=`gpt-chat-mascot`, Status=`Shipped`
+
+Let consuming apps brand the GPT screen with their own mascot. Terreno does not ship a default character.
+
+- **Implementation plan:** [gpt-chat-mascot.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/gpt-chat-mascot.md)
+- **Tasks:** [gpt-chat-mascot.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/gpt-chat-mascot.md)
+
+---
+
+## knip-cleanup
+
+**Title:** `Remove the Knip baseline`
+
+**Labels:** `area:dx`, `type:chore`  
+**Project fields:** Area=`dx`, Target=`Released`, Impact=`Improvement`, IP=`knip-cleanup`, Status=`Shipped`
+
+`bun run analyze:full` stays green and Knip has no baseline file. Every finding that existed on 2026-09-08 (~1076 fingerprints: 529 default + 547 production) is either **gone from the live Knip report** (fixed) or **declared in `knip.jsonc` with a one-line reason** (disabled).
+
+- **Implementation plan:** [knip-cleanup.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/knip-cleanup.md)
+- **Tasks:** [knip-cleanup.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/knip-cleanup.md)
+
+---
+
+## agent-ui-blocks
+
+**Title:** `Agent UI Blocks — a strict YAML DSL for agent-rendered Terreno components`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`agent-ui-blocks`, Status=`Planned`
+
+Let an agent answer with **components, not just prose**. When UI blocks are enabled for a chat, **every assistant reply is one YAML document**: a short, ordered list of **blocks** (heading, text, metric, chart, table, actions, columns, card, …) plus named **datasets** that charts and tables bind to. Prose is a `text` block. Terreno owns the grammar, the validator, and the renderer, so the agent can only ever produce `@terreno/ui` components painted from the app theme — never HTML, JSX, or hex colors.
+
+- **Implementation plan:** [agent-ui-blocks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-blocks.md)
+- **Tasks:** [agent-ui-blocks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/agent-ui-blocks.md)
+
+---
+
+## app-mcp-server
+
+**Title:** `App MCP server`
+
+**Labels:** `area:mcp`, `type:feature`  
+**Project fields:** Area=`mcp`, Target=`Future`, Impact=`Feature`, IP=`app-mcp-server`, Status=`Shaping`
+
+A Terreno backend exposes a complete MCP product surface — tools, prompts, resources, named HTTP servers, OAuth 2.1 for remote clients, Inspector/test DX, a Streamable HTTP client, and hosted generators for those primitives — without giving up generated CRUD tools that stay aligned with `modelRouter` permissions.
+
+- **Implementation plan:** [app-mcp-server.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/app-mcp-server.md)
+- **Tasks:** [app-mcp-server.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/app-mcp-server.md)
+
+---
+
+## migrate-admin-to-syncdb
+
+**Title:** `Migrate built-in admin to syncdb`
+
+**Labels:** `area:admin`, `type:chore`  
+**Project fields:** Area=`admin`, Target=`Released`, Impact=`Improvement`, IP=`migrate-admin-to-syncdb`, Status=`Shipped`
+
+Move **built-in admin model list/read/create/update/delete** for collections that already use **String `_id`** onto **windowed local-first syncdb**, with **REST remaining the membership source** (search, sort, pagination, RBAC). Remaining admin RPC (config, scripts, roles, comms, AI, consent, documents, version-config, background-tasks) leaves RTK `injectEndpoints` for a **tiny native `fetch` wrapper** with **host-injected auth**.
+
+- **Implementation plan:** [migrate-admin-to-syncdb.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/migrate-admin-to-syncdb.md)
+- **Tasks:** [migrate-admin-to-syncdb.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/migrate-admin-to-syncdb.md)
+
+---
+
+## remove-legacy-realtime
+
+**Title:** `Remove legacy RTK realtime in Terreno 58`
+
+**Labels:** `area:api`, `type:feature`  
+**Project fields:** Area=`api`, Target=`58`, Impact=`Breaking`, IP=`remove-legacy-realtime`, Status=`Planned`
+
+Delete the **legacy RTK cache-patching realtime path** in Terreno 58. Collection live updates go through `@terreno/syncdb` (`sync` on `modelRouter` + `sync:delta`). This IP does **not** remove `RealtimeApp`: that plugin still hosts Socket.io, change streams, and the syncdb socket channel.
+
+- **Implementation plan:** [remove-legacy-realtime.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/remove-legacy-realtime.md)
+- **Tasks:** [remove-legacy-realtime.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/remove-legacy-realtime.md)
+
+---
+
+## ai-observability
+
+**Title:** `AI observability (Langfuse-light, pluggable)`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Shaping`
+
+Ship **Langfuse-like** prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
+
+- **Implementation plan:** [ai-observability.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/ai-observability.md)
+- **Tasks:** [ai-observability.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/ai-observability.md)
+
+---
+
+## better-auth-strict-oauth-provider
+
+**Title:** `Better Auth sync omits unset oauthProvider`
+
+**Labels:** `area:auth`, `type:bug`  
+**Project fields:** Area=`auth`, Target=`Released`, Impact=`Fix`, IP=`better-auth-strict-oauth-provider`, Status=`Shipped`
+
+Email/password Better Auth users sync into a consumer `User` model that uses `strict: "throw"` and does **not** declare `oauthProvider`. The first authenticated `modelRouter` request after sign-up populates `req.user` (not 401).
+
+- **Implementation plan:** [better-auth-strict-oauth-provider.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/better-auth-strict-oauth-provider.md)
+- **Tasks:** [better-auth-strict-oauth-provider.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/better-auth-strict-oauth-provider.md)
+
+---
+
+## mcp-service-tokens
+
+**Title:** `MCP service tokens`
+
+**Labels:** `area:mcp`, `type:feature`  
+**Project fields:** Area=`mcp`, Target=`Released`, Impact=`Feature`, IP=`mcp-service-tokens`, Status=`Shipped`
+
+Authenticated users mint **personal MCP service tokens** that act as that user on the consumer app's `POST /mcp` endpoint only. They copy an **MCP URL** plus a **Bearer `mcp_…` key** into external clients (Perplexity custom connectors, Claude Code, Cursor, Inspector) without pasting a session JWT. Admins list and revoke any user's tokens from the admin panel.
+
+- **Implementation plan:** [mcp-service-tokens.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/mcp-service-tokens.md)
+- **Tasks:** [mcp-service-tokens.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/mcp-service-tokens.md)
+
+---
+
+## compile-pipeline-dedup
+
+**Title:** `Compile pipeline dedup (remove redundant recompiles)`
+
+**Labels:** `area:dx`, `type:chore`  
+**Project fields:** Area=`dx`, Target=`Released`, Impact=`Improvement`, IP=`compile-pipeline-dedup`, Status=`Shipped`
+
+Make each `@terreno/*` package compile **exactly once** per cold `bun run compile` by relying on Bun's built-in workspace dependency ordering, instead of the current pipeline that recompiles shared packages many times. Target contribution to the scan goal: ~60–90s.
+
+- **Implementation plan:** [compile-pipeline-dedup.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/compile-pipeline-dedup.md)
+- **Tasks:** [compile-pipeline-dedup.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/compile-pipeline-dedup.md)
+
+---
+
+## support-agent
+
+**Title:** `Support answering agent (@terreno/support)`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`support-agent`, Status=`Shaping`
+
+Ship `@terreno/support`, a `TerrenoPlugin` that:
+
+1. **Ingests knowledge** from pluggable `KnowledgeSource` adapters into a Mongo-backed,
+   chunked, searchable index. Built in: announcements, markdown docs folder, and a generic
+   Mongoose-model adapter.
+2. **Answers support questions** with `@terreno/ai`'s `AIService`, grounded only in
+   retrieved chunks, returning `answer`, `sources`, `confidence`, and `shouldEscalate`.
+3. **Exposes the agent as MCP tools** on the app's existing `/mcp` server
+   (`support_ask`, `support_search`, `support_get_document`, `support_list_sources`) and
+   as REST `modelRouter` actions, so ChatGPT, Claude, Cursor, an in-app widget, or a
+   human-support tool can all call the same agent.
+4. **Closes the loop for AI authors**: a `support/kb/` docs convention, a
+   `write-support-docs` skill, a `terreno-support check` validator, and a
+   "knowledge gaps" report (low-confidence / thumbs-down questions) that tells agents which
+   doc to write next.
+
+- **Implementation plan:** [support-agent.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/support-agent.md)
+- **Tasks:** [support-agent.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/support-agent.md)
+
+---
+
+## ai-agents-and-failover
+
+**Title:** `AI agents and provider failover`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-agents-and-failover`, Status=`Shaping`
+
+Add two additive library seams to `@terreno/ai` so app code can:
+
+1. Define a reusable **Agent** (`name`, `instructions`, `tools`, optional `schema`, optional `middleware`) that runs through existing `AIService` logging.
+2. Wrap one or more Vercel AI SDK `LanguageModel`s in **`createFailoverModel`** so 429/502/503/overloaded failures try the next model. Every `AIService` method inherits failover without per-method changes.
+
+- **Implementation plan:** [ai-agents-and-failover.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/ai-agents-and-failover.md)
+- **Tasks:** [ai-agents-and-failover.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/ai-agents-and-failover.md)
+
+---
+
+## terreno-58
+
+**Title:** `Terreno 58`
+
+**Labels:** `area:dx`, `type:chore`, `breaking`  
+**Project fields:** Area=`dx`, Target=`58`, Impact=`Breaking`, IP=*(not yet written)*, Status=`Planned`
+
+Umbrella for the Terreno 58 / Expo SDK 58 major release: every breaking change that was
+deprecated during 57.x lands together so consumers upgrade once. Each change keeps its own
+IP and tracking issue; this entry is the release checklist, not a plan.
+
+- Remove legacy RTK realtime (`modelRouter` `realtime`, RTK cache patching) — [remove-legacy-realtime](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/remove-legacy-realtime.md)
+- Remove admin `api` / `injectEndpoints` and `useAdminApi`; admin runs on syncdb — follow-up to [migrate-admin-to-syncdb](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/migrate-admin-to-syncdb.md)
+- Native module baseline (new dev-client binary) — [native-module-baseline](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/native-module-baseline.md)
+- HTTP rate limiting on by default — [rate-limiting](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/rate-limiting.md)
+- Expo SDK 58 upgrade — release PR [#1310](https://github.com/TerrenoLabs/terreno/pull/1310)
+- **RTK flag:** Breaking
+- **Depends on:** remove-legacy-realtime, migrate-admin-to-syncdb, native-module-baseline
+
+---
+
+## demo-workshop
+
+**Title:** `Demo workshop`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`demo-workshop`, Status=`Planned`
+
+Turn the Expo demo into the workshop for `@terreno/ui`: a person can find a component, copy a usage snippet, change theme and viewport from the URL, and see whether every stable story passes interaction, accessibility, and visual checks on web and Android.
+
+- **Implementation plan:** [demo-workshop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/demo-workshop.md)
+- **Tasks:** [demo-workshop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/demo-workshop.md)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.
@@ -1035,20 +1297,21 @@ this table supplies only the issue number.
 | `design-blend-skill` | https://github.com/TerrenoLabs/terreno/issues/1083 | `Shipped` | `dx` | `Released` | `Feature` | `type:feature` |
 | `ModularAPI` | https://github.com/TerrenoLabs/terreno/issues/1084 | `Shipped` | `api` | `Released` | `Feature` | `type:feature` |
 | `mcp-boost-parity` | https://github.com/TerrenoLabs/terreno/issues/1085 | `In progress` | `mcp` | `Next` | `Feature` | `type:feature` |
-| `docs-site-and-versioning` | https://github.com/TerrenoLabs/terreno/issues/1086 | `Planned` | `docs` | `Next` | `Feature` | `type:docs` |
+| `docs-site-and-versioning` | https://github.com/TerrenoLabs/terreno/issues/1086 | `Shipped` | `docs` | `Released` | `Feature` | `type:docs` |
 | `syncdb-codegen` | https://github.com/TerrenoLabs/terreno/issues/1110 | `Shipped` | `syncdb` | `Released` | `Feature` | `type:feature` |
 | `migrate-cicd-to-circleci` | https://github.com/TerrenoLabs/terreno/issues/1088 | `In progress` | `dx` | `Next` | `Improvement` | `type:chore` |
 | `rbac-permissions` | https://github.com/TerrenoLabs/terreno/issues/1089 | `Shipped` | `api` | `Released` | `Feature` | `type:feature` |
 | `infra-mcp` | https://github.com/TerrenoLabs/terreno/issues/1090 | `Planned` | `mcp` | `Future` | `Feature` | `type:feature` |
-| `comms-admin-dashboard` | https://github.com/TerrenoLabs/terreno/issues/1091 | `Planned` | `admin` | `Next` | `Feature` | `type:feature` |
+| `comms-admin-dashboard` | https://github.com/TerrenoLabs/terreno/issues/1091 | `Shipped` | `admin` | `Released` | `Feature` | `type:feature` |
 | `model-router-mcp` | https://github.com/TerrenoLabs/terreno/issues/1092 | `Shipped` | `mcp` | `Released` | `Feature` | `type:feature` |
-| `terreno-langfuse-integration` | https://github.com/TerrenoLabs/terreno/issues/1093 | `Planned` | `ai` | `Future` | `Feature` | `type:feature` |
+| `terreno-langfuse-integration` | https://github.com/TerrenoLabs/terreno/issues/1093 | `Shipped` | `ai` | `Released` | `Feature` | `type:feature` |
 | `oss-launch-program` | https://github.com/TerrenoLabs/terreno/issues/1094 | `In progress` | `dx` | `Next` | `Improvement` | `type:chore` |
 | `b2b-platform-program` | https://github.com/TerrenoLabs/terreno/issues/1095 | `Planned` | `api` | `Next` | `Feature` | `type:feature` |
 | `offline-mode` | https://github.com/TerrenoLabs/terreno/issues/1096 | `Declined` | `syncdb` | `Future` | `Feature` | `type:feature` |
 | `model-router-actions` | https://github.com/TerrenoLabs/terreno/issues/1097 | `Declined` | `api` | `Future` | `Feature` | `type:feature` |
 | `feature-flags` | https://github.com/TerrenoLabs/terreno/issues/1098 | `Declined` | `api` | `Future` | `Feature` | `type:feature` |
 | `admin-improvements` | https://github.com/TerrenoLabs/terreno/issues/1099 | `Declined` | `admin` | `Future` | `Improvement` | `type:feature` |
+| `better-auth-strict-oauth-provider` | https://github.com/TerrenoLabs/terreno/issues/1218 | `Shipped` | `auth` | `Released` | `Fix` | `type:bug` |
 
 **Duplicate to retire:** [#1087](https://github.com/TerrenoLabs/terreno/issues/1087)
 covers the same `syncdb-codegen` IP as [#1110](https://github.com/TerrenoLabs/terreno/issues/1110).

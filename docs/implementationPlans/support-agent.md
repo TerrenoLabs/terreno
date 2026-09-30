@@ -1,6 +1,7 @@
 # Implementation Plan: Support answering agent (`@terreno/support`)
 
 **Status:** Draft — awaiting approval (Grow ran unattended; every Decisions row marked `assumed` is a recommended default the reviewer can change before Approve)  
+**Roadmap:** Area=`ai`, Target=`Future`, Impact=`Feature`  
 **Branch:** `cursor/support-agent-grow-fd63`  
 **Owner:** unassigned  
 **Created:** 2026-09-15  

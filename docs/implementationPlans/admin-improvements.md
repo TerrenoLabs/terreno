@@ -1,6 +1,6 @@
 # Implementation Plan: Admin Improvements (post–Admin UI v2)
 
-**Status:** Approved  
+**Status:** Deferred — roadmap declined #1099; Phase 7 (rules, MCP generator, migration guide, telemetry) not started  
 **Branch:** (implementation TBD)  
 **Owner:** Josh Gachnang  
 **Created:** 2026-06-01 (original); revised 2026-08-20 post–v2 gap analysis  

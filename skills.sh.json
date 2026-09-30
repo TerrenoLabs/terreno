@@ -56,6 +56,7 @@
         "work-github-issues",
         "fix-conflicts",
         "release",
+        "generate-release-announcements",
         "update-dependencies",
         "upgrading-terreno",
         "deploy-gcp"

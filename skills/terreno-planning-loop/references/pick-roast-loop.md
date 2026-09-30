@@ -65,6 +65,23 @@ continuing. The invocation emits one terminal stage result: the last cycle that 
 the loop. Intermediate cycle results live in execution state, not as extra human-facing
 YAML dumps.
 
+## Commits and pushes
+
+Every commit a harness pushes starts a full CI run, so commits track proven behavior,
+not loop bookkeeping:
+
+- One behavior-scoped commit per task, made after that task's Roast `PASS`. It carries
+  the code, tests, docs, and task-file mark together.
+- Roast-driven fixes amend or squash into the task's unpushed commit. Do not add
+  "harden", "strengthen", "prove", or "mark roasted" follow-up commits.
+- Progress lives in execution state (`.terreno/pipeline/<slug>.json`), which is
+  git-ignored. Do not commit task-file checkbox edits on their own.
+- Pick and Roast do not push. Brew pushes once after the whole list has Roast `PASS`.
+  Taste pushes at most once per reaction.
+- Do not start the next task while product CI on the pushed head reports a
+  branch-caused failure. Fix it first. Never wait on pending CI, and record
+  failures the branch did not cause for Taste instead of blocking on them.
+
 ## Independence
 
 Roast remains the authoritative verifier. Pick's internal reviews are not proof. Roast

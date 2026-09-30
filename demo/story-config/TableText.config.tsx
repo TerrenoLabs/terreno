@@ -3,6 +3,7 @@ import {TableTextDemo, TableTextVariants} from "@stories/TableText.stories";
 import {TableText} from "@terreno/ui";
 
 export const TableTextConfiguration: DemoConfiguration = {
+  usageExample: "import {TableText} from \"@terreno/ui\";\n\n<TableText />",
   name: "Table Text",
   component: TableText,
   related: ["Table"],

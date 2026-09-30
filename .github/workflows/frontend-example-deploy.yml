@@ -1,28 +1,12 @@
 name: Example Frontend Deploy
 
-# Dual-run with CircleCI until `terreno-netlify` has NETLIFY_* values.
+# Disabled after CD moved to CircleCI (deploy-*, gcp-cd-*); retained for rollback.
+# Never re-enable alongside CircleCI: both would deploy and apply terraform.
 on:
+  # Retained for rollback without registering failed zero-job runs.
   push:
-    branches:
-      - master
-    paths:
-      - "example-frontend/**"
-      - "ui/**"
-      - "rtk/**"
-      - "ai/**"
-      - "admin-frontend/**"
-      - "bun.lock"
-      - ".github/workflows/frontend-example-deploy.yml"
-  pull_request:
-    paths:
-      - "example-frontend/**"
-      - "ui/**"
-      - "rtk/**"
-      - "ai/**"
-      - "admin-frontend/**"
-      - "bun.lock"
-      - ".github/workflows/frontend-example-deploy.yml"
-  workflow_dispatch:
+    branches-ignore:
+      - "**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

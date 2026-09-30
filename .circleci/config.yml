@@ -287,6 +287,8 @@ workflows:
             rtk/.* run-deploy-frontend true
             admin-frontend/.* run-deploy-frontend true
             bun\.lock run-deploy-frontend true
+            ai/.* run-deploy-frontend true
+            syncdb/.* run-deploy-frontend true
             docs/.* run-deploy-docs true
             website/.* run-deploy-docs true
             api/src/.* run-deploy-docs true
@@ -303,7 +305,17 @@ workflows:
             ai/.* run-cd-backend true
             comms/.* run-cd-backend true
             jobs/.* run-cd-backend true
+            announcements/.* run-cd-backend true
+            feature-flags/.* run-cd-backend true
+            admin-spa/.* run-cd-backend true
+            admin-frontend/.* run-cd-backend true
+            ui/.* run-cd-backend true
+            rtk/.* run-cd-backend true
+            syncdb/.* run-cd-backend true
+            bun\.lock run-cd-backend true
+            example-frontend/.* run-cd-backend true
             mcp-server/.* run-cd-mcp true
+            ui/.* run-cd-mcp true
 
   # Manual/scheduled trigger: {"run-e2e-load": true} on the setup pipeline.
   # Continuation uses a differently named parameter so CircleCI does not treat

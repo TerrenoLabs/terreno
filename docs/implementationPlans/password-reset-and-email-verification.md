@@ -1,6 +1,6 @@
 # Implementation Plan: Password reset and email verification
 
-**Status:** Approved
+**Status:** Complete
 **Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1023
 **Priority:** High
 **Effort:** Big batch

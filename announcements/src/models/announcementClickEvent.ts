@@ -1,10 +1,6 @@
 import {createdUpdatedPlugin, findExactlyOne, findOneOrNone, isDeletedPlugin} from "@terreno/api";
 import mongoose from "mongoose";
-import type {
-  AnnouncementClickAction,
-  AnnouncementClickEventDocument,
-  AnnouncementClickEventModel,
-} from "../types";
+import type {AnnouncementClickEventDocument, AnnouncementClickEventModel} from "../types";
 
 const announcementClickEventSchema = new mongoose.Schema<
   AnnouncementClickEventDocument,
@@ -64,6 +60,3 @@ export const AnnouncementClickEvent =
     announcementClickEventSchema,
     "announcementclickevents"
   );
-
-export const isValidClickAction = (value: unknown): value is AnnouncementClickAction =>
-  value === "primaryAction";

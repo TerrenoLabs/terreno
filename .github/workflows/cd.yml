@@ -1,36 +1,12 @@
 name: CD
 
-# Dual-run with CircleCI until `terreno-gcp` has WIF/OIDC values.
-# Do not leave both applying terraform once CircleCI GCP deploys succeed.
+# Disabled after CD moved to CircleCI (deploy-*, gcp-cd-*); retained for rollback.
+# Never re-enable alongside CircleCI: both would deploy and apply terraform.
 on:
+  # Retained for rollback without registering failed zero-job runs.
   push:
-    branches:
-      - master
-  pull_request:
-    paths:
-      - "terraform/**"
-      - "example-backend/**"
-      - "example-frontend/**"
-      - "api/**"
-      - "api-health/**"
-      - "admin-backend/**"
-      - "admin-frontend/**"
-      - "ai/**"
-      - "comms/**"
-      - "jobs/**"
-      - "mcp-server/**"
-      - "rtk/**"
-      - "ui/**"
-      - "bun.lock"
-      - ".github/workflows/cd.yml"
-      - ".github/workflows/frontend-example-deploy.yml"
-  workflow_dispatch:
-    inputs:
-      run_terraform:
-        description: "Force-run terraform jobs even if terraform/ unchanged"
-        required: false
-        type: boolean
-        default: false
+    branches-ignore:
+      - "**"
 
 # Fork PRs still receive repository variables and can request an OIDC token.
 # Do not grant id-token at the workflow; only jobs that mint GCP identity
@@ -351,6 +327,24 @@ jobs:
           else
             echo "flag=" >> "$GITHUB_OUTPUT"
           fi
+      - name: Resolve announcement upload token
+        id: announcements
+        run: |
+          set -euo pipefail
+          SECRET_NAME="${{ env.GCP_BACKEND_SERVICE }}-announcements-upload-token"
+          if gcloud secrets versions access latest --secret="$SECRET_NAME" --project="${{ env.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Announcement upload secret found; mounting it on this revision."
+            echo "secrets=ANNOUNCEMENTS_UPLOAD_TOKEN=$SECRET_NAME:latest" >> "$GITHUB_OUTPUT"
+            echo "env_vars=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Announcement upload secret '$SECRET_NAME' is not accessible yet; using the documented example default."
+            echo "secrets=" >> "$GITHUB_OUTPUT"
+            {
+              echo "env_vars<<ANNOUNCEMENTS_EOF"
+              echo "ANNOUNCEMENTS_UPLOAD_TOKEN=terreno-example-announcement-upload"
+              echo "ANNOUNCEMENTS_EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
       - name: Deploy to Cloud Run
         id: deploy
         uses: ./.github/actions/deploy-cloudrun-wif-retry
@@ -368,11 +362,13 @@ jobs:
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
+            ${{ steps.announcements.outputs.env_vars }}
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
             LANGFUSE_SECRET_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-secret-key:latest
             LANGFUSE_PUBLIC_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-public-key:latest
             ${{ steps.better-auth.outputs.secrets }}
+            ${{ steps.announcements.outputs.secrets }}
           flags: |
             --port=3000
             --memory=512Mi
@@ -551,6 +547,24 @@ jobs:
           else
             echo "flag=" >> "$GITHUB_OUTPUT"
           fi
+      - name: Resolve announcement upload token
+        id: announcements
+        run: |
+          set -euo pipefail
+          SECRET_NAME="${{ env.GCP_BACKEND_SERVICE }}-announcements-upload-token"
+          if gcloud secrets versions access latest --secret="$SECRET_NAME" --project="${{ env.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Announcement upload secret found; mounting it on this revision."
+            echo "secrets=ANNOUNCEMENTS_UPLOAD_TOKEN=$SECRET_NAME:latest" >> "$GITHUB_OUTPUT"
+            echo "env_vars=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Announcement upload secret '$SECRET_NAME' is not accessible yet; using the documented example default."
+            echo "secrets=" >> "$GITHUB_OUTPUT"
+            {
+              echo "env_vars<<ANNOUNCEMENTS_EOF"
+              echo "ANNOUNCEMENTS_UPLOAD_TOKEN=terreno-example-announcement-upload"
+              echo "ANNOUNCEMENTS_EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
       - name: Rebuild traffic without not-ready preview tags
         run: |
           chmod +x .github/workflows/scripts/rebuild-cloud-run-ready-traffic.sh
@@ -576,10 +590,12 @@ jobs:
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
+            ${{ steps.announcements.outputs.env_vars }}
           secrets_update_strategy: overwrite
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
             ${{ steps.better-auth.outputs.secrets }}
+            ${{ steps.announcements.outputs.secrets }}
           flags: |
             --port=3000
             --memory=1Gi

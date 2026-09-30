@@ -1,6 +1,7 @@
 # Implementation Plan: Compile pipeline dedup (remove redundant recompiles)
 
-**Status:** Approved (2026-09-22)
+**Status:** Complete — shipped in #1360
+**Roadmap:** Area=`dx`, Target=`Released`, Impact=`Improvement`  
 **Scan goal:** reduce-cold-compile-time ([charter](../scans/reduce-cold-compile-time/charter.md)) — cold `bun run compile` 305s → 214s
 **Slice:** pipeline-ordering-dedup (round 1, top slice)
 **Findings:** redundant-explicit-prefix (high, S), compile-workspace-deps-overlap (high, M)

@@ -1,6 +1,6 @@
 # Implementation Plan: Reference Documentation Coverage
 
-**Status:** In progress — remaining README, sanitization, and docs-audit work
+**Status:** Complete
 **Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1009
 **Priority:** High
 **Effort:** Big batch

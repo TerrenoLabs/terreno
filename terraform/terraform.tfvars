@@ -6,6 +6,10 @@ state_bucket_name = "flourish-terreno-tfstate-prod"
 github_owner = "TerrenoLabs"
 github_repos = ["TerrenoLabs/terreno"]
 
+circleci_org_id         = "2c4d130b-de0a-4573-929f-c67df7521643"
+circleci_project_id     = "9efeb72f-2b3b-4944-a8b4-2ea54ef0d9bb"
+circleci_gcp_context_id = "faca9f1b-fbfd-442b-94a0-27b6d475b1a2"
+
 backend_region       = "us-central1"
 mcp_region           = "us-east1"
 backend_service_name = "terreno-backend-example"

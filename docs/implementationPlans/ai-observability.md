@@ -1,6 +1,7 @@
 # Implementation Plan: AI observability (Langfuse replacement, pluggable)
 
 **Status:** Approved  
+**Roadmap:** Area=`ai`, Target=`Future`, Impact=`Feature`  
 **Created:** 2026-08-24  
 **Updated:** 2026-08-31 (re-scoped to three phases against the Claude design)  
 **Owner:** unassigned  

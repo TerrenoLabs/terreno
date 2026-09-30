@@ -48,15 +48,12 @@ describe("lifecycle skill architecture", (): void => {
     assert.deepEqual(validateLifecyclePlugin({rootDirectory: ROOT_DIRECTORY}), []);
   });
 
-  it("defines the Terreno prepush gate with lint, typecheck, and static analysis", (): void => {
+  it("defines the Terreno prepush gate as the local mirror of CI", (): void => {
     const packageJson = JSON.parse(
       readFileSync(resolve(ROOT_DIRECTORY, "package.json"), "utf8")
     ) as {scripts?: Record<string, string>};
 
-    assert.equal(
-      packageJson.scripts?.prepush,
-      "bun run lint && bun run compile && bun run analyze:full"
-    );
+    assert.equal(packageJson.scripts?.prepush, "bun run scripts/ci/prepush/run.ts");
   });
 
   it("validates the Claude Code plugin host", (): void => {
@@ -120,6 +117,24 @@ describe("lifecycle skill architecture", (): void => {
     });
 
     assert.isTrue(errors.some((error) => error.includes("unbounded waiting/loop")));
+  });
+
+  it("rejects Taste that hands a wait back to a directly invoking human", (): void => {
+    const errors = validateStageContent({
+      content: readStage("terreno-5-taste")
+        .replaceAll("## Standalone entry", "## Exit")
+        .replaceAll("Never hand a wait back to the human", "Tell the human to run Taste later")
+        .replaceAll("at most 3 fix pushes", "any number of fix pushes"),
+      definition: {
+        directory: "terreno-5-taste",
+        nextMarkers: ["next: taste", "next: null"],
+        stage: "taste",
+      },
+    });
+
+    assert.isTrue(errors.some((error) => error.includes("standalone entry for direct human")));
+    assert.isTrue(errors.some((error) => error.includes("must not return PENDING to a human")));
+    assert.isTrue(errors.some((error) => error.includes("bounded by pushes and wait time")));
   });
 
   it("rejects Taste without a no-push emit path", (): void => {
@@ -298,7 +313,7 @@ describe("lifecycle skill architecture", (): void => {
 
   it("rejects Pick that skips Roast or the inner loop", (): void => {
     const content = readStage("terreno-2-pick")
-      .replace("../../references/pick-roast-loop.md", "missing-loop")
+      .replaceAll("../../references/pick-roast-loop.md", "missing-loop")
       .replaceAll("Do not start the next task until Roast PASS", "Start the next task immediately")
       .replaceAll("Pick never skips Roast", "Pick may skip Roast");
     const errors = validateStageContent({

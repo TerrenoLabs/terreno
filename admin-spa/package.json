@@ -104,5 +104,5 @@
     "web": "expo start --web --port 8083"
   },
   "types": "./src/dist/index.d.ts",
-  "version": "57.6.0"
+  "version": "57.7.0"
 }

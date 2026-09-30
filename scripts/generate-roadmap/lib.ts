@@ -88,10 +88,13 @@ export const renderRoadmapMarkdown = ({
   generatedAtIso,
   items,
   projectUrl,
+  taskSlugs = new Set<string>(),
 }: {
   generatedAtIso: string;
   items: RoadmapItem[];
   projectUrl: string;
+  /** IP slugs that have a `docs/tasks/<slug>.md` list, so the entry can link it. */
+  taskSlugs?: Set<string>;
 }): string => {
   const lines: string[] = [
     "# Terreno roadmap",
@@ -143,8 +146,12 @@ export const renderRoadmapMarkdown = ({
           item.ipSlug === null || item.ipSlug === ""
             ? ""
             : ` — IP: [${item.ipSlug}](docs/implementationPlans/${item.ipSlug}.md)`;
+        const tasksLink =
+          item.ipSlug !== null && taskSlugs.has(item.ipSlug)
+            ? ` · Tasks: [${item.ipSlug}](docs/tasks/${item.ipSlug}.md)`
+            : "";
         lines.push(
-          `- [${displayTitle(item.title)}](${item.url}) (${item.impact}, ${item.status})${ipLink}`
+          `- [${displayTitle(item.title)}](${item.url}) (${item.impact}, ${item.status})${ipLink}${tasksLink}`
         );
       }
       lines.push("");

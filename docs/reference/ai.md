@@ -211,7 +211,7 @@ Conversation history with multi-modal prompts.
 | `userId` | ObjectId | Owner (required) |
 | `title` | string? | Auto-generated on first `/gpt/prompt` response when empty |
 | `projectId` | ObjectId? | Optional project association |
-| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields |
+| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields. `text` is required unless `content` has parts; an image-only assistant response saves `text: ""` |
 
 **Virtual:** `ownerId` aliases `userId` for `Permissions.IsOwner`.
 
@@ -253,6 +253,8 @@ GPT project with persistent context and memories.
 | `/gpt/remix` | POST | `IsAuthenticated` | Non-streaming text remix; body: `{text}` |
 | `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null}` |
 | `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools |
+
+Generated images (image-output models such as `gemini-3-pro-image`) arrive as SSE `image` events: `{image: {mimeType, url}}` with a base64 data URL. Each image is sent once, even when the model reports it both as a stream file part and in the final `result.files`. The saved assistant prompt stores one `image` content part per image. On later turns, `buildMessages` sends an image-only assistant prompt to the model as the text `[Generated image]`, because providers reject empty assistant turns.
 
 AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerModelFn(modelId)` → configured `aiService` → demo SSE response when `demoMode` and none available.
 

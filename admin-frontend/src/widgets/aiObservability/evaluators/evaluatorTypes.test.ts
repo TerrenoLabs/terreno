@@ -2,11 +2,17 @@ import {describe, it} from "bun:test";
 import {assert} from "chai";
 import type {EvaluatorRecord} from "./evaluatorTypes";
 import {
+  dimensionForDataType,
   emptyDimension,
+  formatCategories,
   formatDimensionSummary,
+  formatNumericRange,
   formatRunModeChips,
+  isCompleteNumericRange,
   judgeSchemaMissingDimensions,
   parseApiErrorTitle,
+  parseCategories,
+  parseNumericBounds,
   unwrapEvaluatorList,
   unwrapEvaluatorRecord,
 } from "./evaluatorTypes";
@@ -59,5 +65,29 @@ describe("evaluatorTypes helpers", () => {
 
   it("creates an empty dimension template", () => {
     assert.deepEqual(emptyDimension(), {dataType: "boolean", key: "", required: true});
+  });
+
+  it("formats numeric bounds and category lists", () => {
+    assert.deepEqual(parseNumericBounds("0-1"), {max: "1", min: "0"});
+    assert.deepEqual(parseNumericBounds("warm|cold"), {max: "1", min: "0"});
+    assert.equal(formatNumericRange("0", "5"), "0-5");
+    assert.isTrue(isCompleteNumericRange("0-1"));
+    assert.isFalse(isCompleteNumericRange("2-1"));
+    assert.deepEqual(parseCategories("warm|neutral|cold"), ["warm", "neutral", "cold"]);
+    assert.deepEqual(parseCategories("0-1"), []);
+    assert.equal(formatCategories(["pass", " fail "]), "pass|fail");
+    assert.isUndefined(formatCategories(["  "]));
+    assert.deepEqual(
+      dimensionForDataType(
+        {dataType: "numeric", key: "score", range: "0-1", required: true},
+        "boolean"
+      ),
+      {dataType: "boolean", key: "score", required: true}
+    );
+    assert.equal(
+      dimensionForDataType({dataType: "boolean", key: "score", required: true}, "categorical")
+        .range,
+      undefined
+    );
   });
 });

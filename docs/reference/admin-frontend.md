@@ -503,16 +503,16 @@ dimensions (numeric slider, boolean Pass / Fail, categorical pills). Actions are
 or **Queue clear**.
 
 `ai-evaluators` lists evaluators with type badge, dimension summary, target, and run-mode chips.
-**Create evaluator** opens `ai-evaluator-new` as a six-step scoring setup: choose how scoring
-happens (human / JSON assert / LLM judge), choose what context the evaluator sees, define the saved
-score fields, configure the selected method, choose where it runs, then name and describe it.
-Decision-focused helper text explains the outcome and tradeoffs of each choice instead of exposing
-framework terminology alone. Human setup points operators to **Send to human review** and omits
-live sampling because it never applies; automatic evaluators explain experiment/manual availability
-and production sampling, while LLM judges call out the billed model-call impact. The optional
-purpose is saved as the evaluator
-description and appears on its detail screen. LLM judge schema feedback stays idle until a prompt is
-named, then shows loading/error states and only checks dimensions after its production schema loads.
+**Create evaluator** opens `ai-evaluator-new` with the name and optional purpose first, then how
+scoring happens (human / JSON assert / LLM judge). New evaluators score a **full trace** only;
+generation span and dataset item targets are not offered yet. Score fields depend on data type:
+boolean has no extra control, numeric asks for min and max, and categorical is a list you add to.
+LLM judge picks the judge prompt from the existing prompt list. Human setup points operators to
+**Send to human review** and omits live sampling because it never applies; automatic evaluators
+explain experiment/manual availability and production sampling, while LLM judges call out the billed
+model-call impact. The optional purpose is saved as the evaluator description and appears on its
+detail screen. LLM judge schema feedback stays idle until a prompt is selected, then shows
+loading/error states and only checks dimensions after its production schema loads.
 `ai-evaluator-detail?id=` leads with the evaluator name, description, and type/target/run-mode
 badges, then explains the saved scores, how scoring works, where it runs, and a **Used by** list
 derived from recent experiments. Its dimension and usage rows use the shared `ObservabilityTable` instead of
@@ -543,7 +543,7 @@ into the following section.
 
 `ai-experiments` lists experiments with status, running progress, and cost. **New experiment**
 opens a four-step wizard (dataset with counts, prompt versions tagged latest/production/superseded,
-evaluators, review & run with estimate). On the prompt-versions step, **Next** and the later
+llm-judge and json-assert evaluators, review & run with estimate). Human evaluators are omitted. On the prompt-versions step, **Next** and the later
 wizard rail buttons stay disabled until 2–3 versions are selected. `includeUnproofread` and optional model override are on
 the wizard. `ai-experiment-results?id=` polls while pending/running, shows gate tiles per version,
 failing gate count, outliers, a side-by-side per-item output table (failed rows first from the

@@ -144,6 +144,31 @@ describe("LocalExperimentRunner", () => {
     assert.equal(v2Gate?.passed, true);
   });
 
+  it("rejects human evaluators when creating an experiment", async () => {
+    const human = await evaluatorStore.create({
+      dimensions: [{dataType: "boolean", key: "pass", required: true}],
+      instructions: "Review the answer.",
+      name: "human-review",
+      target: "full trace",
+      type: "human",
+    });
+    try {
+      await runner.create({
+        datasetId: "missing-dataset",
+        evaluatorIds: [human.id],
+        name: "human-run",
+        promptName: "exp-prompt",
+        versions: [1, 2],
+      });
+      assert.fail("expected human evaluator rejection");
+    } catch (error) {
+      assert.equal(
+        (error as Error).message,
+        "Experiments only accept llm-judge and json-assert evaluators"
+      );
+    }
+  });
+
   it("excludes unproofread items unless includeUnproofread is true", async () => {
     const dataset = await datasetStore.create({name: "filter-dataset"});
     await datasetStore.createItem(dataset.id, {input: {question: "kept"}, proofread: true});

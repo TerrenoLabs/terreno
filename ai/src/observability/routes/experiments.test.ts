@@ -113,7 +113,7 @@ describe("observability experiment routes", () => {
       assertion: {constraint: "exists", path: "answer"},
       dimensions: [{dataType: "boolean", key: "correct", required: true}],
       name: "route-correctness",
-      target: "generation span",
+      target: "full trace",
       type: "json-assert",
     });
 
@@ -193,5 +193,28 @@ describe("observability experiment routes", () => {
     });
     expect(estimate.status).toBe(200);
     expect(estimate.body.data.generations).toBeGreaterThan(0);
+  });
+
+  it("rejects human evaluators when creating an experiment", async () => {
+    const admin = await authAsUser(app, "admin");
+    const fixtures = await seedExperimentFixtures(admin);
+    const human = await admin.post("/ai/observability/evaluators").send({
+      dimensions: [{dataType: "boolean", key: "pass", required: true}],
+      instructions: "Review the answer.",
+      name: "human-review",
+      target: "full trace",
+      type: "human",
+    });
+    expect(human.status).toBe(201);
+
+    const created = await admin.post("/ai/observability/experiments").send({
+      datasetId: fixtures.datasetId,
+      evaluatorIds: [human.body.data.id],
+      name: "human-run",
+      promptName: fixtures.promptName,
+      versions: [1, 2],
+    });
+    expect(created.status).toBe(400);
+    expect(created.body.title).toBe("Experiments only accept llm-judge and json-assert evaluators");
   });
 });

@@ -234,6 +234,10 @@ updating, and removing array items:
 | `PATCH` | `/:id/:field/:itemId` | Replace or merge an item |
 | `DELETE` | `/:id/:field/:itemId` | Remove an item |
 
+`:id` must be an ObjectId. Any other id leaves this router so a later route on the same
+prefix can handle it. `POST /ai/observability/evaluators` is not an array push on a model
+mounted at `/ai`.
+
 The `field` path must resolve to an array on the document. Requests for scalar, object,
 or unknown fields run the normal update transform and `preUpdate` hook first so consumer
 authorization remains authoritative, then return `400` with code

@@ -11,6 +11,7 @@ import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {AiExperimentNewView, type ExperimentWizardStep} from "./AiExperimentNewView";
 import {
   type ExperimentEstimate,
+  isAutomaticExperimentEvaluator,
   isValidExperimentVersionCount,
   unwrapObservabilityPayload,
 } from "./experimentTypes";
@@ -33,7 +34,9 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
   const {data: evaluatorsRaw} = useEvaluatorsQuery();
   const datasets = useMemo(() => unwrapDatasetList(datasetsRaw), [datasetsRaw]);
   const prompts = useMemo(() => unwrapPromptList(promptsRaw), [promptsRaw]);
-  const evaluators = useMemo(() => unwrapEvaluatorList(evaluatorsRaw), [evaluatorsRaw]);
+  const evaluators = useMemo(() => {
+    return unwrapEvaluatorList(evaluatorsRaw).filter(isAutomaticExperimentEvaluator);
+  }, [evaluatorsRaw]);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const backHref = `${prefix}/ai-experiments`;
 

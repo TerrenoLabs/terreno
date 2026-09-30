@@ -1,4 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
+import {SelectField} from "@terreno/ui";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
@@ -57,6 +58,21 @@ const injectedHooks = {
     isError: false,
     isLoading: false,
   }),
+  useAiObservabilityPromptsQuery: () => ({
+    data: {
+      data: [
+        {
+          folder: "ops",
+          latestVersion: 1,
+          name: "judge",
+          production: 1,
+          type: "text",
+        },
+      ],
+    },
+    isError: false,
+    isLoading: false,
+  }),
   useAiObservabilityStatusQuery: () => ({
     data: statusData,
     isError: false,
@@ -76,9 +92,9 @@ const stableApi: AdminApi = {
 const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
 
 const setDimensionKey = (view: ReturnType<typeof renderWithTheme>, key: string): void => {
-  const emptyInputs = view.queryAllByDisplayValue("");
-  if (emptyInputs.length > 0) {
-    fireEvent.changeText(emptyInputs[0], key);
+  const scoreName = view.queryByTestId("ai-evaluator-dimension-0-key");
+  if (scoreName) {
+    fireEvent.changeText(scoreName, key);
     return;
   }
   fireEvent.changeText(view.getByDisplayValue("wrong-key"), key);
@@ -112,9 +128,13 @@ describe("AiEvaluatorNewScreenWidget", () => {
       fireEvent.press(view.getByTestId("ai-evaluator-submit"));
       await Promise.resolve();
     });
-    expect(view.getByText("Judge prompt name is required.")).toBeTruthy();
+    expect(view.getByText("Select a judge prompt.")).toBeTruthy();
     expect(view.getByTestId("ai-evaluator-schema-idle")).toBeTruthy();
-    fireEvent.changeText(view.getByTestId("ai-evaluator-judge-prompt"), "judge");
+    const judgeSelect = view.UNSAFE_root.findAllByType(SelectField).find((field) => {
+      return field.props.testID === "ai-evaluator-judge-prompt";
+    });
+    assert.ok(judgeSelect);
+    fireEvent(judgeSelect, "onChange", "judge");
     await act(async () => {
       fireEvent.press(view.getByTestId("ai-evaluator-submit"));
       await Promise.resolve();

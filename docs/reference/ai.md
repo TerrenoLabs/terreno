@@ -461,7 +461,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 | --- | --- | --- |
 | GET | `/ai/observability/evaluators/templates` | Seeded templates: `llm-judge` (`correctness`, `hallucination`, `helpfulness`, `toxicity`), `json-assert` (`schema-assert`), and human queue variants (`correctness-human`, …) |
 | POST | `/ai/observability/evaluators/templates/:name` | Install a template by name as an immutable-named evaluator |
-| GET/POST | `/ai/observability/evaluators` | List / create. `llm-judge` requires `judgePromptName`; create rejects when the judge prompt `outputSchema` omits a required dimension (400 names the key). `json-assert` supports `assertion` (`path` + `constraint`) or built-in output-schema mode. Human + `liveSampleRate > 0` → 400 |
+| GET/POST | `/ai/observability/evaluators` | List / create. Create accepts `target: "full trace"` only (`generation span` and `dataset item` → 400). Seeded template install can still store other targets. `llm-judge` requires `judgePromptName`; create rejects when the judge prompt `outputSchema` omits a required dimension (400 names the key). `json-assert` supports `assertion` (`path` + `constraint`) or built-in output-schema mode. Human + `liveSampleRate > 0` → 400. Numeric dimension `range` is `min-max` (for example `0-1`); categorical `range` is `label|label` |
 | GET/PATCH/DELETE | `/ai/observability/evaluators/:id` | Read / update / soft-delete |
 | POST | `/ai/observability/traces/review` | Enqueue one or many traces against a human evaluator (`reason: "manual"`) |
 | GET | `/ai/observability/review` | Queue by `status` with counts; oldest-first. Response includes `more: false` so RTK preserves the count envelope. Rows include `traceName`, `promptName`, assignee, reason, and enqueue time |
@@ -482,7 +482,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 | Method | Path | Behavior |
 | --- | --- | --- |
 | POST | `/ai/observability/experiments/estimate` | `{datasetId, promptName, versions[], evaluatorIds[], modelOverride?}` → generation count, USD, wall-clock estimate |
-| GET/POST | `/ai/observability/experiments` | List / create. Body: dataset, 2–3 version numbers, evaluator ids, optional `thresholds[]` (defaults to `SOP_DEFAULT_THRESHOLDS`), `modelOverride`, `includeUnproofread` (default false). Local primary always enqueues `BackgroundTask` (even one item) |
+| GET/POST | `/ai/observability/experiments` | List / create. Body: dataset, 2–3 version numbers, evaluator ids, optional `thresholds[]` (defaults to `SOP_DEFAULT_THRESHOLDS`), `modelOverride`, `includeUnproofread` (default false). Evaluator ids must be `llm-judge` or `json-assert` (human → 400). Local primary always enqueues `BackgroundTask` (even one item) |
 | GET | `/ai/observability/experiments/:id` | Status, progress, per-version aggregates, gate pass/fail (`gates[].version`), `outlierItemIds`, `lowConfidenceItemIds`, per-item side-by-side (**failed rows first**) |
 | POST | `/ai/observability/experiments/:id/promote` | `{version}` moves the `production` label when **that version's** gates pass; **409** while any gate for the selected version fails |
 

@@ -216,10 +216,23 @@ export class LocalExperimentRunner {
     };
   }
 
+  private async assertAutomaticEvaluators(evaluatorIds: string[]): Promise<void> {
+    for (const id of evaluatorIds) {
+      const evaluator = await this.deps.evaluatorStore.get(id);
+      if (evaluator.type !== "llm-judge" && evaluator.type !== "json-assert") {
+        throw new APIError({
+          status: 400,
+          title: "Experiments only accept llm-judge and json-assert evaluators",
+        });
+      }
+    }
+  }
+
   async create(input: ExperimentCreateInput): Promise<ExperimentView> {
     if (input.versions.length < 2 || input.versions.length > 3) {
       throw new APIError({status: 400, title: "experiments must compare 2–3 prompt versions"});
     }
+    await this.assertAutomaticEvaluators(input.evaluatorIds);
     this.resolveAiClient(input.modelOverride);
     await this.deps.datasetStore.get(input.datasetId);
     const estimate = await this.estimate({

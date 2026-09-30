@@ -42,11 +42,30 @@ const evaluators: EvaluatorRecord[] = [
   {
     confidenceAlertBelow: 0.5,
     dimensions: [{dataType: "boolean", key: "correct", required: true}],
+    id: "eval-human",
+    name: "review queue",
+    runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+    target: "full trace",
+    type: "human",
+  },
+  {
+    confidenceAlertBelow: 0.5,
+    dimensions: [{dataType: "boolean", key: "correct", required: true}],
     id: "eval-1",
     name: "quality",
     runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
     target: "full trace",
-    type: "human",
+    type: "json-assert",
+  },
+  {
+    confidenceAlertBelow: 0.5,
+    dimensions: [{dataType: "numeric", key: "score", range: "0-1", required: true}],
+    id: "eval-judge",
+    judgePromptName: "judge",
+    name: "judge",
+    runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+    target: "full trace",
+    type: "llm-judge",
   },
 ];
 
@@ -78,7 +97,9 @@ const baseProps = {
 
 describe("AiExperimentNewView wizard steps", () => {
   it("renders all four wizard step panels", () => {
-    const {getByTestId, rerender} = renderWithTheme(<AiExperimentNewView {...baseProps} />);
+    const {getByLabelText, getByTestId, queryByLabelText, rerender} = renderWithTheme(
+      <AiExperimentNewView {...baseProps} />
+    );
     expect(getByTestId("ai-experiment-step-dataset")).toBeTruthy();
 
     rerender(<AiExperimentNewView {...baseProps} step={2} />);
@@ -86,6 +107,9 @@ describe("AiExperimentNewView wizard steps", () => {
 
     rerender(<AiExperimentNewView {...baseProps} step={3} />);
     expect(getByTestId("ai-experiment-step-evaluators")).toBeTruthy();
+    expect(getByLabelText("quality")).toBeTruthy();
+    expect(getByLabelText("judge")).toBeTruthy();
+    expect(queryByLabelText("review queue")).toBeNull();
 
     rerender(
       <AiExperimentNewView

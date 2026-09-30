@@ -133,6 +133,10 @@ export const parsePromoteBlockedTitle = (error: unknown): string | undefined => 
 const MIN_EXPERIMENT_VERSIONS = 2;
 const MAX_EXPERIMENT_VERSIONS = 3;
 
+export const isAutomaticExperimentEvaluator = (evaluator: {type: string}): boolean => {
+  return evaluator.type === "llm-judge" || evaluator.type === "json-assert";
+};
+
 export const isValidExperimentVersionCount = (count: number): boolean => {
   return count >= MIN_EXPERIMENT_VERSIONS && count <= MAX_EXPERIMENT_VERSIONS;
 };

@@ -1,4 +1,4 @@
-import type {BlocksDocument} from "@terreno/blocks";
+import type {BlocksDocument, InlineDataset} from "@terreno/blocks";
 import type {CountryCode} from "libphonenumber-js";
 import type React from "react";
 import type {FC, ReactElement, ReactNode} from "react";
@@ -1951,6 +1951,12 @@ export type BannerProps =
 export interface BlocksViewProps extends WithTestID {
   /** A whole-reply YAML or JSON string, or a document that already parsed. */
   document: string | BlocksDocument;
+  /** Loads a `ref` dataset. Inline datasets do not call this. */
+  resolveDataset?: (ref: {
+    grain?: "day" | "hour" | "month" | "week";
+    id: string;
+    limit?: number;
+  }) => Promise<InlineDataset | undefined>;
 }
 
 export interface BodyProps {

@@ -2,6 +2,17 @@ import {BlocksView, Box} from "@terreno/ui";
 import type React from "react";
 
 const SAMPLE = `v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+      - [Mar, 90]
 blocks:
   - type: heading
     size: lg
@@ -27,6 +38,19 @@ blocks:
       - type: context
         text: February was the strongest month.
       - type: divider
+  - type: chart
+    kind: bar
+    title: Signups by month
+    data: signups
+    x: month
+    y: count
+  - type: chart
+    kind: donut
+    points:
+      - label: Web
+        value: 70
+      - label: Mobile
+        value: 30
 `;
 
 const INVALID = `v: 1

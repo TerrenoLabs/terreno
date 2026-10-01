@@ -142,7 +142,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/ui.md`, `docs/explanation/agent-ui-blocks.md`.
   - Acceptance: Blocks AC5 for the covered blocks; Blocks AC6; `bun run check:demo-coverage`; screenshot under `/opt/cursor/artifacts/`.
 
-- [ ] **Task B2.2**: Chart and table blocks bound to datasets
+- [x] **Task B2.2**: Chart and table blocks bound to datasets
   - Delivers: `chart` and `table` renderers; `resolveDataset` / `useResolvedDatasets`; no per-point `color` for the agent.
   - Files: `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/datasetToPoints.ts`, `ui/src/blocks/useResolvedDatasets.ts`, tests, demo story.
   - Blocked by: B1.2, B2.1

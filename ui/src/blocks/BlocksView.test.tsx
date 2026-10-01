@@ -1,4 +1,4 @@
-import {describe, expect, it} from "bun:test";
+import {describe, expect, it, mock} from "bun:test";
 import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
@@ -79,6 +79,73 @@ describe("BlocksView", () => {
     await waitFor(() => {
       expect(getByText("Hello from the model")).toBeTruthy();
     });
+  });
+
+  it("renders a bar chart and a table from an inline dataset, and a donut from points", async () => {
+    const document = `v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+blocks:
+  - type: chart
+    kind: bar
+    title: Signups by month
+    data: signups
+    x: month
+    y: count
+  - type: chart
+    kind: donut
+    points:
+      - label: Web
+        value: 10
+      - label: Mobile
+        value: 4
+  - type: table
+    data: signups
+    columns: [month, count]
+`;
+    const {getAllByText, getByText} = renderWithTheme(<BlocksView document={document} />);
+    await waitFor(() => {
+      expect(getAllByText("Jan").length).toBeGreaterThan(0);
+      expect(getByText("Web")).toBeTruthy();
+      expect(getAllByText("180").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("loads a ref dataset through resolveDataset", async () => {
+    const document = `v: 1
+datasets:
+  signups:
+    source: ref
+    id: ds_signups
+blocks:
+  - type: chart
+    kind: bar
+    data: signups
+    x: month
+    y: count
+`;
+    const resolveDataset = mock(async () => ({
+      columns: [
+        {name: "month", type: "string" as const},
+        {name: "count", type: "number" as const},
+      ],
+      rows: [["Mar", 9]],
+    }));
+    const {getByText} = renderWithTheme(
+      <BlocksView document={document} resolveDataset={resolveDataset} />
+    );
+    await waitFor(() => {
+      expect(getByText("Mar")).toBeTruthy();
+    });
+    expect(resolveDataset).toHaveBeenCalledWith({id: "ds_signups"});
   });
 
   it("does not use raw react-native views in the blocks folder", () => {

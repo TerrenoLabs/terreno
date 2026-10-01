@@ -325,8 +325,10 @@ screens the detail replaces the list until the user goes back.
 
 `desktopChildrenMinWidth` opts into a minimum pixel width for each desktop child when there
 are one or two children. `narrowViewportChildLabels` opts into a labeled full-width pager on
-the narrow viewport. Both are web only; the native `SplitPage` ignores them. See
-`SplitPageProps` for when each prop applies and what is ignored.
+the narrow viewport. `narrowBelow` chooses that viewport with `mediaQuerySmallerThan`; when
+omitted, the narrow viewport follows `isNarrowViewport()`. These props are web only; the
+native `SplitPage` ignores them. See `SplitPageProps` for when each prop applies and what
+is ignored.
 `IconButton`'s `backgroundOpacity` tints only that button's background.
 
 ```typescript

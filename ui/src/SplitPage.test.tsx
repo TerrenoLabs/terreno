@@ -50,12 +50,14 @@ const setWindowWidth = (width: number): (() => void) => {
 
 const styleWidth = (style: unknown): unknown => StyleSheet.flatten(style)?.width;
 
+let isSmallerThanMatch = false;
+
 const setDesktop = () => {
   mock.module("./MediaQuery", () => ({
     isNarrowViewport: () => false,
     mediaQuery: () => "lg" as const,
     mediaQueryLargerThan: () => true,
-    mediaQuerySmallerThan: () => false,
+    mediaQuerySmallerThan: () => isSmallerThanMatch,
   }));
 };
 
@@ -64,16 +66,17 @@ const setMobile = () => {
     isNarrowViewport: () => true,
     mediaQuery: () => "xs" as const,
     mediaQueryLargerThan: () => false,
-    mediaQuerySmallerThan: () => true,
+    mediaQuerySmallerThan: () => isSmallerThanMatch,
   }));
 };
 
 // Restore MediaQuery to bunSetup defaults after all tests to prevent cross-file pollution.
-// bunSetup mocks: isNarrowViewport → false, mediaQueryLargerThan → false.
+// bunSetup mocks: isNarrowViewport → false, mediaQueryLargerThan → false, mediaQuerySmallerThan → false.
 const restoreDefault = () => {
   mock.module("./MediaQuery", () => ({
     isNarrowViewport: mock(() => false),
     mediaQueryLargerThan: mock(() => false),
+    mediaQuerySmallerThan: mock(() => false),
   }));
 };
 
@@ -128,10 +131,12 @@ describe("SplitPage", () => {
   };
 
   beforeEach(() => {
+    isSmallerThanMatch = false;
     setDesktop();
   });
 
   afterEach(() => {
+    isSmallerThanMatch = false;
     setDesktop();
   });
 
@@ -676,6 +681,32 @@ describe("SplitPage", () => {
         nativeEvent: {layout: {height: 400, width, x: 0, y: 0}},
       });
     };
+
+    it("shrinks at narrowBelow and keeps the default desktop layout when that check is false", async () => {
+      isSmallerThanMatch = true;
+      setDesktop();
+      const shrunk = renderWithTheme(
+        <SplitPage {...defaultProps} narrowBelow="md">
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      expect(shrunk.queryByTestId("child-1")).toBeNull();
+      expect(shrunk.queryByTestId("swiper-flatlist")).toBeNull();
+      await selectFirst(shrunk.getAllByLabelText);
+      expect(shrunk.getByTestId("swiper-flatlist")).toBeTruthy();
+
+      isSmallerThanMatch = false;
+      setMobile();
+      const sideBySide = renderWithTheme(
+        <SplitPage {...defaultProps} narrowBelow="xl">
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      expect(sideBySide.getByTestId("child-1")).toBeTruthy();
+      expect(sideBySide.queryByTestId("swiper-flatlist")).toBeNull();
+    });
 
     it("keeps the desktop flex row and the narrow dotted swiper without the new props", async () => {
       setDesktop();

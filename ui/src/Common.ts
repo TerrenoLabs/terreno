@@ -20,6 +20,7 @@ import type {
   FontAwesome6SolidNames,
 } from "./CommonIconTypes";
 import type {DropdownPanelAlign} from "./dropdownPanelLayout";
+import type {ResponsiveBreakpoint} from "./ResponsiveBreakpoint";
 import type {
   DataTableTestIDs,
   FieldTestIDs,
@@ -1209,6 +1210,13 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
   onSelectionChange?: (value?: ListRenderItemInfo<TItem>) => void | Promise<void>;
   /**
    * Web only. The native SplitPage ignores this prop.
+   * Use the narrow layout when `mediaQuerySmallerThan` is true for this breakpoint.
+   * That comparison is true at this size and below. When omitted, the narrow layout
+   * follows `isNarrowViewport()`.
+   */
+  narrowBelow?: ResponsiveBreakpoint;
+  /**
+   * Web only. The native SplitPage ignores this prop.
    * Minimum width, in pixels, of each child in the desktop side-by-side layout.
    * Applies only when the viewport is not narrow and there are 1 or 2 non-null children.
    * When omitted, that layout stays a flex row. When there are more than 2 children, the
@@ -1218,7 +1226,7 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
   /**
    * Web only. The native SplitPage ignores this prop.
    * Opt-in labels for the narrow-viewport full-width pager, one per non-null child, in child
-   * order. The pager is active only when `isNarrowViewport()` is true, a detail view is active,
+   * order. The pager is active only when the narrow layout is active, a detail view is active,
    * there is more than one non-null child, and this array's length equals that child count.
    * Otherwise the dotted swiper is used. A length mismatch is ignored and falls back to the
    * dotted swiper.

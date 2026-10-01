@@ -35,11 +35,12 @@ const setMobile = () => {
 };
 
 // Restore MediaQuery to bunSetup defaults after all tests to prevent cross-file pollution.
-// bunSetup mocks: isNarrowViewport → false, mediaQueryLargerThan → false.
+// bunSetup mocks: isNarrowViewport → false, mediaQueryLargerThan → false, mediaQuerySmallerThan → false.
 const restoreDefault = () => {
   mock.module("./MediaQuery", () => ({
     isNarrowViewport: mock(() => false),
     mediaQueryLargerThan: mock(() => false),
+    mediaQuerySmallerThan: mock(() => false),
   }));
 };
 

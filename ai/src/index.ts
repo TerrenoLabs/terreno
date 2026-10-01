@@ -36,6 +36,7 @@ export type {
   TraceListItem,
 } from "./langfuseTypes";
 export {createTelemetryConfig, preparePromptForAI} from "./langfuseVercelAi";
+export {AIDataset} from "./models/aiDataset";
 export {AIRequest} from "./models/aiRequest";
 export {FileAttachment} from "./models/fileAttachment";
 export {GptHistory} from "./models/gptHistory";
@@ -46,6 +47,7 @@ export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";
 export {addProjectRoutes} from "./routes/projects";
+export {configureAiDatasets, registerAiDataset} from "./service/aiDatasets";
 export {AIService, TemperaturePresets} from "./service/aiService";
 export {createAskTools} from "./service/asks";
 export {FileStorageService} from "./service/fileStorage";

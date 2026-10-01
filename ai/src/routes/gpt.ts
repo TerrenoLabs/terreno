@@ -12,9 +12,11 @@ import type express from "express";
 import type mongoose from "mongoose";
 
 import {GptHistory} from "../models/gptHistory";
+import {configureAiDatasets} from "../service/aiDatasets";
 import {assertNoReservedToolNames, resolveAskKinds} from "../service/asks";
 import {type ChatTurnSink, DEMO_RESPONSE, resolveAiService, runChatTurn} from "../service/chatTurn";
 import type {GptRouteOptions} from "../types";
+import {addGptDatasetRoutes} from "./gptDatasets";
 
 const ASK_RESPONSE_BODY: OpenApiSchemaProperty = {
   description:
@@ -58,6 +60,14 @@ const createSseSink = (res: express.Response): SseSink => {
 export const addGptRoutes = (router: express.Router, options: GptRouteOptions): void => {
   const {mcpService, tools: routeTools, createRequestTools} = options;
   const askKinds = resolveAskKinds(options.asks);
+  if (options.uiBlocks) {
+    const uiBlocks = options.uiBlocks === true ? {} : options.uiBlocks;
+    configureAiDatasets({
+      datasetMaxRows: uiBlocks.datasetMaxRows,
+      datasetTtlDays: uiBlocks.datasetTtlDays,
+    });
+    addGptDatasetRoutes(router, {openApiOptions: options.openApiOptions});
+  }
   if (askKinds.length > 0) {
     assertNoReservedToolNames(routeTools);
   }

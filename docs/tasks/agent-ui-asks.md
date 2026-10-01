@@ -170,7 +170,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/ai.md`, `docs/how-to/agent-ui-blocks.md`.
   - Acceptance: Blocks AC9; Blocks AC18 (`UNKNOWN_HOST_ACTION` half); prompt constant at top of `prompts.ts`; no change when `uiBlocks` is off.
 
-- [ ] **Task B3.4**: `AIDataset`, `registerAiDataset`, `GET /gpt/datasets/:id`
+- [x] **Task B3.4**: `AIDataset`, `registerAiDataset`, `GET /gpt/datasets/:id`
   - Delivers: model, TTL, row cap, grain bucketing, LTTB, pagination, `IsOwner`.
   - Files: `ai/src/models/aiDataset.ts`, `ai/src/service/aiDatasets.ts`, `ai/src/routes/gptDatasets.ts`, `ai/src/routes/gpt.ts`, tests.
   - Blocked by: B1.2

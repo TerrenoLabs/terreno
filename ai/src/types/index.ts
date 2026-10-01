@@ -1,5 +1,5 @@
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin} from "@terreno/api";
-import type {Ask, AskKind, ConfirmAskInput, SimpleCard} from "@terreno/blocks";
+import type {Ask, AskKind, ConfirmAskInput, DatasetColumn, SimpleCard} from "@terreno/blocks";
 import type {LanguageModel, ModelMessage, StopCondition, ToolSet} from "ai";
 import type mongoose from "mongoose";
 
@@ -308,6 +308,10 @@ export interface AskFileDownloader {
 
 /** `addGptRoutes` `uiBlocks`. `true` checks every assistant reply. `hostActions` names the callbacks the model may emit. */
 export interface UiBlocksOptions {
+  /** Rows stored by `registerAiDataset`. Default 50,000. A larger write returns 413. */
+  datasetMaxRows?: number;
+  /** Days before a stored dataset expires. `0` (the default) keeps it. */
+  datasetTtlDays?: number;
   hostActions?: Record<string, {payload?: unknown}>;
   repair?: boolean;
 }
@@ -343,8 +347,9 @@ export interface GptRouteOptions {
   titleModelId?: string;
   /**
    * Assistant replies are whole-reply block documents. Off by default; when off, the system
-   * prompt and SSE events are unchanged. `true` validates the final text and emits `{blocks}`
-   * before `{done}`. `{repair: true}` runs one repair call when that check fails.
+   * prompt, SSE events, and `/gpt/datasets` are unchanged. `true` validates the final text,
+   * emits `{blocks}` before `{done}`, and mounts `GET /gpt/datasets/:id`. `{repair: true}` runs
+   * one repair call when that check fails.
    */
   uiBlocks?: boolean | UiBlocksOptions;
   /** Langfuse prompt name to load and use as the system prompt. Compiled with no variables.
@@ -381,6 +386,39 @@ export interface McpRouteOptions {
 // ============================================================
 // File Attachment Types
 // ============================================================
+
+// ============================================================
+// AIDataset Types
+// ============================================================
+
+export type AIDatasetColumn = DatasetColumn;
+
+export type AIDatasetCell = string | number | null;
+
+/** No instance methods. `ownerId` is a virtual of `userId`. */
+export type AIDatasetMethods = Record<string, never>;
+
+export interface AIDatasetDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  columns: AIDatasetColumn[];
+  created: Date;
+  deleted: boolean;
+  expiresAt?: Date;
+  historyId: mongoose.Types.ObjectId;
+  rowCount: number;
+  rows: AIDatasetCell[][];
+  updated: Date;
+  userId: mongoose.Types.ObjectId;
+}
+
+export interface AIDatasetStatics
+  extends FindExactlyOnePlugin<AIDatasetDocument>,
+    FindOneOrNonePlugin<AIDatasetDocument> {}
+
+export interface AIDatasetModel
+  extends mongoose.Model<AIDatasetDocument, object, AIDatasetMethods>,
+    AIDatasetStatics {}
+
+export type AIDatasetSchema = mongoose.Schema<AIDatasetDocument, AIDatasetModel, AIDatasetMethods>;
 
 export interface FileAttachmentDocument extends mongoose.Document<mongoose.Types.ObjectId> {
   created: Date;

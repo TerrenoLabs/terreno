@@ -78,13 +78,13 @@ export const SplitPageOptInLayouts: React.FC = (): React.ReactElement => {
   );
 };
 
-export const SplitPageNarrowBelowSmall: React.FC = (): React.ReactElement => {
+export const SplitPageNarrowBelowMedium: React.FC = (): React.ReactElement => {
   return (
     <Box height={400} width="100%">
       <SplitPage
         desktopChildrenMinWidth={200}
         listViewData={LIST_ITEMS}
-        narrowBelow="sm"
+        narrowBelow="md"
         narrowViewportChildLabels={["Summary", "Notes"]}
         narrowViewportListButtonLabel="Back to list"
         renderListViewItem={renderListItem}
@@ -93,12 +93,12 @@ export const SplitPageNarrowBelowSmall: React.FC = (): React.ReactElement => {
           <Heading size="sm">Summary</Heading>
           <Text>
             First child. The list and children stay side by side until the window is narrower than
-            375 pixels.
+            1024 pixels.
           </Text>
         </Box>
         <Box gap={2} padding={3}>
           <Heading size="sm">Notes</Heading>
-          <Text>Second child. Below 375 pixels these children page one at a time.</Text>
+          <Text>Second child. Below 1024 pixels these children page one at a time.</Text>
         </Box>
       </SplitPage>
     </Box>

@@ -132,6 +132,24 @@ describe("IconButton", () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
+  it("uses the supplied accessibility hint without announcing a confirmation dialog", async () => {
+    // bunSetup replaces ./IconButton with a null mock; the query suffix loads the real module.
+    const actualIconButtonPath = "./IconButton.tsx?accessibility";
+    const {IconButton: ActualIconButton} = (await import(
+      actualIconButtonPath
+    )) as typeof import("./IconButton");
+    const {getByLabelText} = renderWithTheme(
+      <ActualIconButton
+        accessibilityHint="Back to list"
+        accessibilityLabel="Back to list"
+        iconName="arrow-left"
+        onClick={() => {}}
+      />
+    );
+
+    expect(getByLabelText("Back to list").props.accessibilityHint).toBe("Back to list");
+  });
+
   it("renders with confirmation props", () => {
     const {toJSON} = renderWithTheme(
       <IconButton

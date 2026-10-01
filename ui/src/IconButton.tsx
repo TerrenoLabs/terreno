@@ -119,9 +119,9 @@ const IconButtonComponent: FC<IconButtonProps> = ({
   return (
     <Pressable
       accessibilityHint={
-        (accessibilityHint ?? withConfirmation)
+        withConfirmation
           ? `Opens a confirmation dialog to confirm ${accessLabel}`
-          : `Press to perform ${accessLabel} action`
+          : (accessibilityHint ?? `Press to perform ${accessLabel} action`)
       }
       aria-label={accessLabel}
       aria-role="button"

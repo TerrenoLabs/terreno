@@ -8,6 +8,16 @@ import * as terrenoBlocks from "./index";
  */
 describe("@terreno/blocks public exports", () => {
   const expectedExports = [
+    "BADGE_STATUSES",
+    "BLOCK_ERROR_CODES",
+    "BLOCK_LIMITS",
+    "HEADING_SIZES",
+    "METRIC_TRENDS",
+    "blocksSchema",
+    "parseBlocks",
+    "validateBlocks",
+    "wrapAsTextDocument",
+
     "ASK_ERROR_CODES",
 
     "ASK_FILE_ACCEPT",

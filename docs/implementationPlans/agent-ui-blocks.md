@@ -1,6 +1,6 @@
 # Agent UI Blocks — a strict YAML DSL for agent-rendered Terreno components
 
-**Status:** Approved 2026-09-15 (grilling rounds 1–2 closed: D1, D2, D4, D6, D8, D15, D17, D18 confirmed; remaining `assumed` rows are engineering defaults Pick may revise with a note)  
+**Status:** Folded into [Agent UI Asks](./agent-ui-asks.md) on 2026-10-01. This file remains the design record. Pick executes Phase 5 tasks B1.1–B4.2 in [`docs/tasks/agent-ui-asks.md`](../tasks/agent-ui-asks.md). Decisions D1–D20 here are BD1–BD20 there.  
 **Roadmap:** Area=`ai`, Target=`Next`, Impact=`Feature`  
 **Branch:** `cursor/agent-ui-blocks-grow-e5c0`  
 **Owner:** unassigned  

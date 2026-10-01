@@ -260,8 +260,9 @@ returns at once instead of waiting for the agent, and Wear OS.
 
 ## Asks and blocks
 
-Asks and [Agent UI Blocks](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-blocks.md) split the work by where the
-result goes:
+Asks and [UI blocks](agent-ui-blocks.md) split the work by where the
+result goes. Body components are Phase 5 of the asks plan; the design record remains
+[agent-ui-blocks](../implementationPlans/agent-ui-blocks.md).
 
 | Need | Mechanism |
 | --- | --- |

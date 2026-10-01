@@ -1,6 +1,6 @@
 # Agent UI Asks — agents ask the user for a typed answer inside the chat
 
-**Status:** In progress — Phases 1–2 shipped for review 2026-09-28; Phase 3 (Tasks 3.1, 3.2) waits on Agent UI Blocks Tasks 1.1 and 2.1 (D28). Approved 2026-09-27 (Q1–Q12 confirmed; `assumed` rows are engineering defaults Pick may revise with a note)  
+**Status:** In progress — Phases 1–2 shipped for review 2026-09-28. On 2026-10-01 this plan also owns the body-component contract (the former Agent UI Blocks IP). Pick executes Phase 5 tasks B1.1–B4.2 from [`docs/tasks/agent-ui-asks.md`](../tasks/agent-ui-asks.md). Asks Tasks 3.1 and 3.2 start after B1.1 and B2.1. The design record stays in [`agent-ui-blocks.md`](./agent-ui-blocks.md). Approved 2026-09-27 (Q1–Q12 confirmed; `assumed` rows are engineering defaults Pick may revise with a note)  
 **Roadmap:** Area=`ai`, Target=`Next`, Impact=`Feature`  
 **Branch:** `cursor/agent-ui-asks-grow-a1e2`  
 **Owner:** unassigned  
@@ -42,7 +42,7 @@ PR #1302.
 
 | Plan | Status | Already covers | This plan adds |
 | --- | --- | --- | --- |
-| [Agent UI Blocks](./agent-ui-blocks.md) | Approved 2026-09-15, no tasks started | Display catalog (heading, text, metric, badge, divider, context, chart, table, columns, card), whole-reply YAML, `@terreno/blocks`, `BlocksView`, `GPTChat.uiBlocks`, button actions `reply` / `open` / `select` / `callback`, `POST /gpt/actions` host callbacks | Its deferred "form elements with a submit action" (Future Work) and file upload and HTML (Non-Goals). Answers go **to the agent**, not to host code. |
+| [Agent UI Blocks](./agent-ui-blocks.md) | Folded into this plan 2026-10-01 (design record; execution is Phase 5 here) | Display catalog, whole-reply YAML, `BlocksView`, `GPTChat.uiBlocks`, button actions, `POST /gpt/actions` | Owned here as [body components](#body-components-agent-ui-blocks). Asks still add the answer path plus `html`, `callout`, `image`, and `details`. |
 | [Charts and dashboards](./charts-and-dashboards.md) | Chart components shipped | `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, `DashboardGrid` | Nothing. Charts reach the chat through Agent UI Blocks. |
 | [AI agents and failover](./ai-agents-and-failover.md) | Draft | Server-executed tools in `Agent` | It lists human-in-the-loop approval/resume as a non-goal. Asks are that capability for chat. |
 | [App MCP server](./app-mcp-server.md) | Draft | Runtime MCP tools, prompts, resources | It defers MCP Apps (`ui://` HTML apps). This plan's HTML is display-only and does not implement MCP Apps. |
@@ -54,9 +54,9 @@ How asks and blocks divide the work:
 
 | Need | Mechanism | Owner |
 | --- | --- | --- |
-| Show data (chart, table, metric, callout, image, HTML preview) | Block in the reply document | Agent UI Blocks (+ `html`, `callout`, `image`, `details` from this plan) |
-| Suggest a follow-up message | `actions` button with `reply` | Agent UI Blocks |
-| Run host code (export, open a record) | `actions` button with `callback` → `POST /gpt/actions` | Agent UI Blocks |
+| Show data (chart, table, metric, callout, image, HTML preview) | Block in the reply document | This plan, Phase 5 (design record: Agent UI Blocks) plus `html`, `callout`, `image`, `details` (Tasks 3.1, 3.2) |
+| Suggest a follow-up message | `actions` button with `reply` | This plan, Phase 5 |
+| Run host code (export, open a record) | `actions` button with `callback` → `POST /gpt/actions` | This plan, Phase 5 |
 | Get an answer the agent needs to continue | Ask tool call → pause → answer → resume | This plan |
 | Answer from a watch, notification, or other small client | Simple card + headless turn endpoint | This plan |
 
@@ -86,7 +86,7 @@ How asks and blocks divide the work:
 
 | ID | Question | Decision | Status |
 | --- | --- | --- | --- |
-| D1 | How does this plan relate to Agent UI Blocks? (Q1) | Companion plan. Agent UI Blocks stays approved as written for display. Ask schemas live in its `@terreno/blocks` package under `src/asks/`; whichever plan starts first creates the package scaffold listed in Agent UI Blocks Task 1.1. This plan adds the `html`, `callout`, `image`, and `details` blocks to the blocks catalog (D3, D7). | **confirmed** (Q1 = A) |
+| D1 | How does this plan relate to Agent UI Blocks? (Q1) | One plan as of 2026-10-01. Ask schemas stay in `@terreno/blocks` under `src/asks/`. The body-component contract (whole-reply YAML, catalog, `BlocksView`, datasets, actions) is Phase 5 of this plan. `html`, `callout`, `image`, and `details` stay Tasks 3.1 and 3.2 (D3, D7). The original design record remains [`agent-ui-blocks.md`](./agent-ui-blocks.md). | **confirmed** (Q1 = A, revised 2026-10-01) |
 | D2 | How does the answer get back to the agent? (Q2) | Approach A: client-side ask tools, pause at the tool call, resume via `POST /gpt/prompt` with `askResponse` (chat) or the `turn` action (small clients, D24). | **confirmed** (Q2 = A) |
 | D3 | Full HTML? (Q3) | Display-only `html` block, opt-in per app (`uiBlocks.html: true` on the server, `allowHtml` on the client). Server-sanitized, rendered in a sandboxed iframe (web) or a JavaScript-disabled WebView (native), no scripts, no network, no links, at most 100 KB. | **confirmed** (Q3 = A) |
 | D4 | Which ask kinds ship in v1? (Q4) | `choice` (one or many, optional "Other"), `files` (images and documents), `markdown` (edit a draft), `confirm` (approve/deny, destructive style), `form` (1–8 flat fields). Rating scale and signature are deferred. | **confirmed**: `choice`, `files`, `markdown` (original request), `confirm` (follow-up: "simple approve/cancel buttons"), `form` (Q4 = form). Rating scale and signature **deferred** (Q4). |
@@ -98,7 +98,7 @@ How asks and blocks divide the work:
 | D9 | Can a host tool require an approval the server enforces? (Q10) | Yes, through AI SDK tool approval. A host tool sets `needsApproval` (boolean or a function of its input). The server turns each approval request into a server-made `confirm` ask with Approve / Deny, so the model cannot skip it and a watch can answer it. Details in [Server-enforced approval](#server-enforced-approval-q10). | **confirmed** (Q10 = A) |
 | D21 | How do small screens (Apple Watch, notifications, voice, Slack) render asks? (Q6) | The server derives a **simple card** for every ask with a pure function: text ≤ 140 chars and up to 3 buttons, each carrying its exact answer. Asks that cannot shrink set `handoff: true` ("Continue on your phone"). Small clients also send `surface: "compact"` so the agent only asks button-sized questions (D25). | **confirmed** (Q6 = A) |
 | D22 | How much Apple Watch support ships in this plan? (Q7) | Protocol-ready only: simple cards, a pending-asks list, and a non-streaming turn endpoint any native client can call, plus a watch-sized preview in the demo and a SwiftUI client sketch in the how-to. Actionable push notifications and a sample watchOS app stay in Future Work; no follow-up plan is committed. | **confirmed** (Q7 = "just A") |
-| D28 | Phase 3 needs Agent UI Blocks' block schema and renderer, which are not built. Ship Phases 1–2 now, build those prerequisites here, or move the blocks into Agent UI Blocks? (Q13) | Ship Phases 1–2 now. Tasks 3.1 and 3.2 stay in this plan and land after Agent UI Blocks Tasks 1.1 and 2.1 merge. | **confirmed** (Q13 = A, 2026-09-28) |
+| D28 | Phase 3 needs the block schema and renderer. Ship Phases 1–2 now, build those prerequisites here, or leave them on a separate blocks branch? (Q13) | Revised 2026-10-01: this plan implements the full body-component IP. Tasks B1.1–B4.2 are the former Agent UI Blocks tasks. Tasks 3.1 and 3.2 stay here and start after B1.1 and B2.1. Phases 1–2 already shipped. | **confirmed** (user directive 2026-10-01; supersedes Q13 = A) |
 | D10 | Tool shape | One tool per kind: `ask_choice`, `ask_confirm`, `ask_markdown`, `ask_form`, `ask_files`. Each input root is an object (OpenAI strict mode and Gemini function declarations require it). Every schema is `.strict()`. Host tools whose names start with `ask_` fail at startup. | assumed |
 | D11 | Pause semantics | Ask tools have no `execute`, so the AI SDK step loop ends with finishReason `tool-calls`. One pending ask per history, held in `GptHistory.pendingAsk`. If one step emits two ask calls, the first becomes pending and the second gets a stored `cancel` answer with `reason: "one_ask_at_a_time"`, which the model sees on resume. Revised in Pick: two turns on one history that pause at the same time follow the same rule; `pendingAsk` is set with a conditional update only when empty, and the losing turn's ask is stored as that `cancel`. Approvals (D9) share the one slot: in a step with several approval requests, or an ask plus an approval request, the first becomes the pending ask and every extra approval request is answered `approved: false` with reason `one_ask_at_a_time`, so the tool never runs unapproved and the model can request it again later. | assumed |
 | D12 | Answer envelope | `{action: "accept", content}` \| `{action: "decline"}` \| `{action: "cancel", reason?}` — the MCP elicitation shape. `decline` means the user pressed Skip. `cancel` means the ask was superseded (D6) or dropped (D11). | assumed |
@@ -457,8 +457,8 @@ Display (the reply document):
 
 | Block | Component | Source |
 | --- | --- | --- |
-| `heading`, `text`, `metric`, `badge`, `divider`, `context`, `table`, `actions`, `columns`, `card` | `Heading`, `MarkdownView`, `Card`, `Badge`, `SectionDivider`, `Text`, `DataTable`, `Button` / `SegmentedControl`, `Box` | Agent UI Blocks D5 |
-| `chart` (`line`, `bar`, `area`, `donut`; inline or `ref` datasets) | `LineChart`, `BarChart`, `AreaChart`, `DonutChart` | Agent UI Blocks D4, D15 |
+| `heading`, `text`, `metric`, `badge`, `divider`, `context`, `table`, `actions`, `columns`, `card` | `Heading`, `MarkdownView`, `Card`, `Badge`, `SectionDivider`, `Text`, `DataTable`, `Button` / `SegmentedControl`, `Box` | This plan, Phase 5 (BD5) |
+| `chart` (`line`, `bar`, `area`, `donut`; inline or `ref` datasets) | `LineChart`, `BarChart`, `AreaChart`, `DonutChart` | This plan, Phase 5 (BD4, BD15). Chart components shipped in PR #1302. |
 | `html` | `HtmlFrame` (new) | This plan (D3) |
 | `callout`, `image`, `details` | `Banner`, `Image`, `Accordion` | This plan (D7, D27) |
 | Not recommended | `Avatar`, `Tooltip`, `Popover`, `SelectBadge`, `TapToEdit`, `DraggableList` | Poor fit for a transcript |
@@ -543,8 +543,9 @@ Error shape matches Agent UI Blocks: `{path, code, message, fix}`. Codes include
 | --- | --- | --- |
 | 1 | Tracer: `choice` (select one) end to end, then the small-screen path | Mock-model supertest: pause → SSE `ask` → answer → resumed model call sees the tool result; `GPTChat` renders and submits; example app e2e with mocked SSE; a simple-card `buttonId` sent to `turn` resumes the same way |
 | 2 | Remaining kinds: `choice` many + Other, `confirm`, `markdown`, `form`, `files` | One vertical slice per kind: schema, answer validation, simple-card rule, renderer, docs, tests |
-| 3 | `html`, `callout`, `image`, and `details` blocks (after Agent UI Blocks Tasks 1.1 and 2.1) | Sanitizer and frame security tests; image host rule; `BlocksView` renders; demo screenshots |
-| 4 | Wrap-up | Changelog, rules, docs indexes, `bun run prepush` |
+| 3 | `html`, `callout`, `image`, and `details` blocks (after B1.1 and B2.1) | Sanitizer and frame security tests; image host rule; `BlocksView` renders; demo screenshots |
+| 4 | Asks wrap-up for Phases 1–2 | Changelog, rules, docs indexes (shipped 2026-09-27; Tasks 3.1 and 3.2 add their own lines) |
+| 5 | Body components: contract, renderer, producer, examples | Whole-reply YAML, `BlocksView`, `uiBlocks`, datasets, actions. See [Body components](#body-components-agent-ui-blocks). Blocks AC1–AC20 |
 
 ## Feature Flags & Migrations
 
@@ -580,6 +581,82 @@ None beyond `AIRequest` metadata (D19).
 | `example-frontend/` | `app/(tabs)/ai.tsx`, `e2e/helpers/mockGpt.ts`, `e2e/ai-chat.spec.ts` |
 | root | `package.json` (catalog `sanitize-html`), `knip.jsonc`, `changelog/unreleased/agent-ui-asks.md` |
 | docs | `docs/explanation/agent-ui-asks.md` (new), `docs/reference/agent-ui-asks.md` (new), `docs/how-to/agent-ui-asks.md` (new), `docs/reference/ai.md`, `docs/reference/ui.md`, `docs/explanation/example-coverage.md`, `docs/explanation/README.md`, `docs/reference/README.md`, `docs/how-to/README.md`, `.rulesync/rules/ai/00-ai.md`, `.rulesync/rules/ui/00-ui.md` |
+
+## Body components (Agent UI Blocks)
+
+On 2026-10-01 the user directed Pick to roll the body-component IP into this plan.
+[`agent-ui-blocks.md`](./agent-ui-blocks.md) stays the design record (goal, approaches,
+grammar examples, architecture diagram, models, and the original AC wording). This
+section is the execution source: decisions BD1–BD20 are that plan's D1–D20, and tasks
+B1.1–B4.2 in [`docs/tasks/agent-ui-asks.md`](../tasks/agent-ui-asks.md) are that plan's
+tasks. `@terreno/blocks` already exists for asks; Phase 5 extends it. It does not
+create a second package.
+
+When `uiBlocks` is on, every assistant reply is one YAML document: `v`, then optional
+`datasets`, then `blocks`. Prose is a `text` block. The agent can only emit the closed
+catalog. Charts bind to named datasets (`inline` ≤ 500 rows, or `ref` to an `AIDataset`
+handle a tool returned). Buttons use `reply`, `open`, `select`, or `callback`.
+
+| ID | Decision | Status |
+| --- | --- | --- |
+| BD1 | Own the grammar (Approach A). Contract lives in `@terreno/blocks`. | confirmed |
+| BD2 | The whole assistant reply is one YAML document (`v` → `datasets` → `blocks`). A leading or trailing fence is stripped. JSON is accepted. A non-document is wrapped as one `text` block and reported as `NOT_A_DOCUMENT`. | confirmed |
+| BD3 | Nested, depth ≤ 2 (`blocks` → `columns`/`card` → leaf). Ids optional except on interactive blocks. | assumed |
+| BD4 | Datasets are `inline` (typed columns + rows, ≤ 500) or `ref` (`{source: ref, id, grain?, limit?}`). Charts and tables use `data` plus column names. One-off charts may use `points`. | confirmed |
+| BD5 | v1 catalog: `heading`, `text`, `metric`, `badge`, `divider`, `context`, `chart`, `table`, `actions`, `columns`, `card`. Asks Tasks 3.1 and 3.2 add `html`, `callout`, `image`, `details`. | assumed |
+| BD6 | Actions: `reply`, `open`, `select`, `callback`. `callback` posts `POST /gpt/actions`; hosts register `hostActions` with a Zod payload. Unknown names fail `UNKNOWN_HOST_ACTION`. | confirmed |
+| BD7 | Unknown keys fail. ≤ 50 blocks, depth ≤ 2, ≤ 25 action elements, ≤ 4 columns, ≤ 8 datasets, inline ≤ 500×12, `ref` limit ≤ 1,000 rendered rows (≤ 60 bar/donut categories), ≤ 8 donut slices, text ≤ 4,000 per block, ≤ 20,000 per document. | assumed |
+| BD8 | Contract package is the existing `blocks/` (`zod` catalog, `yaml` catalog). No React, no Express. | confirmed |
+| BD9 | Styling is semantic enums already on `@terreno/ui` (`size`, `status`, `variant`, `trend`). No hex, no spacing numbers. | assumed |
+| BD10 | `parseBlocksPartial` returns completed top-level blocks while streaming; `GPTChat` shows a `Spinner` for the tail. Full validation replaces that render on `{done}`. | assumed |
+| BD11 | One `validateBlocks`: post-stream SSE `{blocks}`, optional one repair pass, MCP `terreno_validate_ui_blocks`, `AIService.generateBlocks`, CLI `terreno-blocks validate`. | assumed |
+| BD12 | Errors are `{path, code, message, fix}` sorted by path. Warnings share the shape and do not block rendering. | assumed |
+| BD13 | Required `v: 1`. Unknown major → `UNSUPPORTED_VERSION`. | assumed |
+| BD14 | Demo `BlocksView` story and Blocks Playground; example AI tab turns `uiBlocks` on; example-backend registers one host action and one dataset tool. | assumed |
+| BD15 | `chart` targets the shipped single-series chart components (PR #1302). Multi-series stays rejected. | confirmed |
+| BD16 | One document per assistant message, stored as the raw string. | assumed |
+| BD17 | Only server tools call `registerAiDataset`. The agent cannot mint handles. `GET /gpt/datasets/:id` is `IsOwner`. | confirmed |
+| BD18 | `AIDataset` retention defaults to unlimited (`datasetTtlDays: 0`). Cap `datasetMaxRows` default 50,000. `grain` buckets dates; line/area over `limit` uses LTTB. | confirmed |
+| BD19 | `POST /gpt/actions` body `{historyId, messageId, blockId, elementId, name, payload}`; owner check; 10 s handler timeout; `requestType: "ui_action"`. | assumed |
+| BD20 | No prose before tool calls. Only the final step's text is the document. | assumed |
+
+Block reference (field tables land in `docs/reference/blocks.md` with B1.1 and later tasks):
+
+| Block | Required | Renders | Task |
+| --- | --- | --- | --- |
+| `heading`, `text`, `metric`, `badge`, `divider`, `context`, `columns`, `card` | See design record | `@terreno/ui` equivalents | B1.1 schema, B2.1 renderer |
+| `chart`, `table`, datasets | `kind` + `data` or `points`; `data` for tables | Chart components, `DataTable` | B1.2, B2.2 |
+| `actions` | `id`, `elements` | `Button`, `SegmentedControl` | B1.3, B2.3 |
+| `html`, `callout`, `image`, `details` | Asks D3, D7, D27 | `HtmlFrame`, `Banner`, `Image`, `Accordion` | Tasks 3.1, 3.2 after B1.1 and B2.1 |
+
+`parseBlocks` strips an optional fence, parses YAML or JSON (`schema: "core"`, unique keys, no anchors or custom tags), and returns `NOT_A_DOCUMENT` when the value is not a mapping with `v`. `wrapAsTextDocument` builds the display fallback. `validateBlocks` is pure and sync: Zod `strict()` structure, then semantic lint (lint starts in B1.2).
+
+### Body component acceptance
+
+These ids are **Blocks AC**. They do not renumber the asks AC table below.
+
+| # | Criterion | Verification |
+| --- | --- | --- |
+| Blocks AC1 | Every fixture under `blocks/src/fixtures/valid/` validates with zero errors; every fixture under `invalid/` fails with exactly the expected `{path, code}` pairs | `bun test blocks/` golden test |
+| Blocks AC2 | Unknown keys, wrong enums, wrong key order, missing dataset/column refs, non-document input, and each BD7 limit produce a distinct documented error code | `blocks/src/validate.test.ts`; `docs/reference/blocks.md` lists the same codes |
+| Blocks AC3 | `validateBlocks` on a 50-block, 8-dataset document completes in < 5 ms median | `blocks/src/validate.perf.test.ts` |
+| Blocks AC4 | `blocksJsonSchema` accepts and rejects the same fixtures as the Zod schema | ajv round-trip |
+| Blocks AC5 | `BlocksView` renders every v1 block type with `@terreno/ui` components only | `BlocksView.test.tsx` + `rg` guard |
+| Blocks AC6 | Invalid document → error `Banner` and collapsed raw YAML; non-document text → one `text` block | `BlocksView.test.tsx` |
+| Blocks AC7 | `reply` calls `onSubmit`; `open` reaches `onBlockAction`; `callback` reaches `onBlockCallback` | `GPTChat.test.tsx` |
+| Blocks AC8 | `segmented` switches the target chart's dataset and reports `select` | `BlocksView.test.tsx` |
+| Blocks AC9 | `/gpt/prompt` with `uiBlocks` appends the prompt, treats the final step as the document, and emits SSE `{blocks}` before `{done}`; `repair: true` runs one repair call | `ai/src/routes/gpt.test.ts` |
+| Blocks AC10 | `generateBlocks` returns a validated document; one repair call includes the error codes | `aiService.test.ts` |
+| Blocks AC11 | MCP `terreno_validate_ui_blocks` matches the CLI report | mcp-server test + CLI test |
+| Blocks AC12 | Demo `BlocksView` story and Blocks Playground; demo coverage passes | CI + screenshots |
+| Blocks AC13 | example-frontend renders a bar chart from a mocked document and a follow-up reply | e2e + recording |
+| Blocks AC14 | Explanation, reference, and how-to pages exist and are linked; `ai.md`, `ui.md`, `mcp-server.md` updated | `bun run website:build` |
+| Blocks AC15 | `bun run prepush` green | CI |
+| Blocks AC16 | `GET /gpt/datasets/:id` buckets, downsamples, and paginates; TTL 0 vs 7 | dataset tests |
+| Blocks AC17 | `POST /gpt/actions` rejects unknown name, bad payload, and non-owner; a valid call returns `{blocks, replace}` | `gptActions.test.ts` |
+| Blocks AC18 | Over-cap `ref` limit → `TOO_MANY_POINTS`; unregistered callback → `UNKNOWN_HOST_ACTION` | lint + gpt tests |
+| Blocks AC19 | Callback button shows `loading`; `replace: "block"` replaces that block; `{text}` appends a message | `GPTChat.test.tsx` |
+| Blocks AC20 | Streaming renders completed top-level blocks plus a `Spinner` tail | `parsePartial.test.ts`, `GPTChat.test.tsx` |
 
 ## Task List
 

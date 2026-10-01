@@ -4,9 +4,10 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
+    "yaml": "catalog:",
     "zod": "catalog:"
   },
-  "description": "Shared contracts for agent-driven UI: ask schemas, answer validation, and simple cards — part of Terreno, the batteries-included TypeScript framework for universal apps.",
+  "description": "Shared contracts for agent-driven UI: ask schemas, simple cards, and whole-reply block documents — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@types/bun": "catalog:",

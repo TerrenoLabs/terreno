@@ -115,6 +115,7 @@
     "typedoc": "^0.28.17",
     "typescript": "~6.0.3",
     "winston": "^3.18.3",
+    "yaml": "^2.4.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

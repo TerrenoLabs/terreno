@@ -116,3 +116,28 @@ export {
 } from "./asks/simpleCard";
 export {validateAskInput} from "./asks/validateInput";
 export {validateAskResponse} from "./asks/validateResponse";
+export type {BlockError, BlockErrorCode} from "./errors";
+export {BLOCK_ERROR_CODES} from "./errors";
+export {BLOCK_LIMITS} from "./limits";
+export {parseBlocks} from "./parse";
+export type {
+  BadgeBlock,
+  Block,
+  BlocksDocument,
+  CardBlock,
+  ColumnsBlock,
+  ContextBlock,
+  DividerBlock,
+  HeadingBlock,
+  LeafBlock,
+  MetricBlock,
+  TextBlock,
+} from "./schema";
+export {
+  BADGE_STATUSES,
+  blocksSchema,
+  HEADING_SIZES,
+  METRIC_TRENDS,
+  wrapAsTextDocument,
+} from "./schema";
+export {validateBlocks} from "./validate";

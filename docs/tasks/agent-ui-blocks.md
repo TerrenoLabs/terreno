@@ -1,6 +1,6 @@
 # Task List: Agent UI Blocks
 
-**Status:** Approved 2026-09-15 — ready for Pick (`docs/implementationPlans/agent-ui-blocks.md`). Wire format is whole-reply YAML (D2 = b): no fences anywhere in this list.
+**Status:** Folded into [`docs/tasks/agent-ui-asks.md`](./agent-ui-asks.md) Phase 5 on 2026-10-01. Do not Pick from this file. Task 1.1 here is B1.1 there. Wire format is whole-reply YAML (D2 = b).
 **Supporting skills:** `terreno-ui`, `ai-prompt-governance`, `update-docs`, `verify-ui-changes`, `backend-test-env`, `terreno-backend-api`.
 
 Every task is a vertical slice: contract + renderer or producer + docs + Bun tests. Work

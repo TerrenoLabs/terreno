@@ -18,7 +18,8 @@ const yamlFeatureDisallowed = (): BlockError => ({
   path: "",
 });
 
-const stripFence = (text: string): string => {
+/** Drops one surrounding markdown fence so a model that adds one still parses. */
+export const stripBlocksFence = (text: string): string => {
   const trimmed = text.trim();
   const match = FENCE.exec(trimmed);
   if (match?.[1] !== undefined) {
@@ -76,7 +77,7 @@ export type ParseBlocksResult = {errors: BlockError[]; ok: false} | {ok: true; v
  * Anything that is not a mapping with `v` is `NOT_A_DOCUMENT`.
  */
 export const parseBlocks = (text: string): ParseBlocksResult => {
-  const stripped = stripFence(text);
+  const stripped = stripBlocksFence(text);
   if (stripped.trim() === "") {
     return {errors: [notADocument()], ok: false};
   }

@@ -1,5 +1,8 @@
 {
   "author": "Josh Gachnang",
+  "bin": {
+    "terreno-blocks": "./dist/cli.js"
+  },
   "bugs": {
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
@@ -11,6 +14,7 @@
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@types/bun": "catalog:",
+    "ajv": "8.20.0",
     "typescript": "catalog:"
   },
   "exports": {

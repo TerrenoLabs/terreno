@@ -118,14 +118,22 @@ export {validateAskInput} from "./asks/validateInput";
 export {validateAskResponse} from "./asks/validateResponse";
 export type {BlockError, BlockErrorCode, BlockWarningCode} from "./errors";
 export {BLOCK_ERROR_CODES, BLOCK_WARNING_CODES} from "./errors";
+export {blocksJsonSchema} from "./jsonSchema";
 export {BLOCK_LIMITS} from "./limits";
 export type {KnownDataset, LintBlocksOptions} from "./lint";
 export type {ParseBlocksResult} from "./parse";
 export {parseBlocks} from "./parse";
+export type {ParseBlocksPartialResult} from "./parsePartial";
+export {parseBlocksPartial} from "./parsePartial";
+export {blocksPromptSection} from "./prompt";
 export type {
+  ActionsBlock,
   BadgeBlock,
   Block,
+  BlockAction,
   BlocksDocument,
+  ButtonElement,
+  CallbackAction,
   CardBlock,
   ChartBlock,
   ColumnsBlock,
@@ -137,12 +145,17 @@ export type {
   InlineDataset,
   LeafBlock,
   MetricBlock,
+  OpenAction,
   RefDataset,
+  ReplyAction,
+  SegmentedElement,
+  SelectAction,
   TableBlock,
   TextBlock,
 } from "./schema";
 export {
   BADGE_STATUSES,
+  BUTTON_VARIANTS,
   blocksSchema,
   CHART_HEIGHTS,
   CHART_KINDS,

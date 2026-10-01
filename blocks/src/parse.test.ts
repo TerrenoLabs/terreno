@@ -20,6 +20,9 @@ const expectedInvalid: Record<string, {code: string; path: string}[]> = {
   "missing-required.yaml": [{code: "MISSING_REQUIRED", path: "blocks[0].markdown"}],
   "not-a-document.txt": [{code: "NOT_A_DOCUMENT", path: ""}],
   "row-arity.yaml": [{code: "ROW_ARITY_MISMATCH", path: "datasets.signups.rows[0]"}],
+  "select-target.yaml": [
+    {code: "SELECT_TARGET_INVALID", path: "blocks[0].elements[0].action.target"},
+  ],
   "table-too-wide.yaml": [{code: "TABLE_TOO_WIDE", path: "blocks[0].columns"}],
   "too-many-points.yaml": [{code: "TOO_MANY_POINTS", path: "datasets.signups.limit"}],
   "unknown-key.yaml": [{code: "UNKNOWN_KEY", path: "blocks[0].color"}],

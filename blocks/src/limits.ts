@@ -2,6 +2,7 @@
  * Caps shared by the schema, the prompt, and the reference page.
  */
 export const BLOCK_LIMITS = {
+  actionElementsMax: 25,
   badgeTextMaxLength: 80,
   barCategoryWarning: 60,
   blockTextMaxLength: 4_000,

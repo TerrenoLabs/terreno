@@ -128,7 +128,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/blocks.md` (dataset sources, chart, table, warning codes).
   - Acceptance: Blocks AC2 semantic codes (`DATASET_NOT_FOUND`, `COLUMN_NOT_FOUND`, `COLUMN_TYPE_MISMATCH`, `ROW_ARITY_MISMATCH`, `DUPLICATE_ID`, `DATASET_TOO_LARGE`, `TABLE_TOO_WIDE`, `TOO_MANY_POINTS`) and warnings (`BAR_TOO_MANY_CATEGORIES`, `DONUT_TOO_MANY_SLICES`, `LINE_SINGLE_POINT`); Blocks AC18 (`ref` half); Blocks AC3; doc-code parity test.
 
-- [ ] **Task B1.3**: Actions schema, partial parser, JSON Schema, prompt section, CLI
+- [x] **Task B1.3**: Actions schema, partial parser, JSON Schema, prompt section, CLI
   - Delivers: `actions` with `button`/`segmented` and `reply` / `open` / `select` / `callback`; `UNKNOWN_HOST_ACTION` when an allowlist is supplied; `parseBlocksPartial`; `blocksJsonSchema`; `blocksPromptSection`; `terreno-blocks validate` CLI.
   - Files: `blocks/src/schema.ts`, `blocks/src/parsePartial.ts`, `blocks/src/jsonSchema.ts`, `blocks/src/prompt.ts`, `blocks/src/cli.ts`, `blocks/package.json` (`bin`), `blocks/src/fixtures/partial/*.yaml`, tests.
   - Blocked by: B1.2

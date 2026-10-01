@@ -14,8 +14,8 @@ Phase 5 of [Agent UI Asks](../implementationPlans/agent-ui-asks.md).
 
 An agent that can emit arbitrary components can also emit styles, scripts, and layout the
 app theme does not own. The catalog is the list of `@terreno/ui` components the chat can
-paint: heading, text, metric, badge, divider, context, and the two layout blocks `columns`
-and `card`. Charts, tables, and buttons join the same document in later tasks. Unknown
+paint: heading, text, metric, badge, divider, context, chart, table, actions, and the two
+layout blocks `columns` and `card`. Unknown
 keys and unknown block types fail validation, so a reply cannot smuggle a `style` object
 or a hex color.
 
@@ -31,8 +31,9 @@ JSON is accepted because it is a YAML 1.2 subset and is what a structured-output
 emits.
 
 Key order is `v`, then `datasets`, then `blocks`. Datasets come first so a streaming
-renderer can know the data before the first block. This slice parses and validates the
-finished document. Partial parsing is a later task.
+renderer can know the data before the first block. `parseBlocksPartial` returns the
+top-level blocks that have already finished and marks the cut tail pending. The finished
+document is still checked with `validateBlocks`.
 
 A reply that is not a mapping with `v` is not a document. The chat can still show it:
 `wrapAsTextDocument` turns the raw text into one `text` block. The error
@@ -46,7 +47,7 @@ another, which makes a small document able to expand in ways the limits cannot s
 
 | Layer | Owns |
 | --- | --- |
-| `@terreno/blocks` | Schema, parse, validate, limits, error codes |
+| `@terreno/blocks` | Schema, parse, partial parse, validate, JSON Schema, prompt section, CLI, limits, error codes |
 | `@terreno/ui` | `BlocksView` (not in this slice) |
 | `@terreno/ai` | Prompt, post-stream check, datasets, callbacks (not in this slice) |
 

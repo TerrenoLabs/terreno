@@ -114,6 +114,55 @@ export interface TableBlock {
   type: "table";
 }
 
+export const BUTTON_VARIANTS = ["primary", "secondary", "outline", "ghost", "destructive"] as const;
+
+export interface ReplyAction {
+  kind: "reply";
+  text: string;
+}
+
+export interface OpenAction {
+  kind: "open";
+  route?: string;
+  url?: string;
+}
+
+export interface SelectAction {
+  data: string;
+  kind: "select";
+  target: string;
+}
+
+export interface CallbackAction {
+  kind: "callback";
+  name: string;
+  payload?: Record<string, unknown>;
+}
+
+export type BlockAction = ReplyAction | OpenAction | SelectAction | CallbackAction;
+
+export interface ButtonElement {
+  action: BlockAction;
+  iconName?: string;
+  id: string;
+  text: string;
+  type: "button";
+  variant?: (typeof BUTTON_VARIANTS)[number];
+}
+
+export interface SegmentedElement {
+  id: string;
+  options: {data: string; label: string}[];
+  target: string;
+  type: "segmented";
+}
+
+export interface ActionsBlock {
+  elements: (ButtonElement | SegmentedElement)[];
+  id: string;
+  type: "actions";
+}
+
 export interface ColumnsBlock {
   children: Block[];
   id?: string;
@@ -135,7 +184,8 @@ export type LeafBlock =
   | DividerBlock
   | ContextBlock
   | ChartBlock
-  | TableBlock;
+  | TableBlock
+  | ActionsBlock;
 
 export type Block = LeafBlock | ColumnsBlock | CardBlock;
 
@@ -234,6 +284,85 @@ const tableSchema = z
   })
   .strict();
 
+const replyActionSchema = z
+  .object({
+    kind: z.literal("reply"),
+    text: visibleText(BLOCK_LIMITS.blockTextMaxLength),
+  })
+  .strict();
+
+const openActionSchema = z
+  .object({
+    kind: z.literal("open"),
+    route: z.string().min(1).max(200).optional(),
+    url: z.string().min(1).max(2_000).optional(),
+  })
+  .strict();
+
+const selectActionSchema = z
+  .object({
+    data: z.string().min(1).max(64),
+    kind: z.literal("select"),
+    target: z.string().min(1).max(64),
+  })
+  .strict();
+
+const callbackActionSchema = z
+  .object({
+    kind: z.literal("callback"),
+    name: z.string().regex(/^[a-z][A-Za-z0-9_]{0,63}$/),
+    payload: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+
+const actionSchema = z.discriminatedUnion("kind", [
+  replyActionSchema,
+  openActionSchema,
+  selectActionSchema,
+  callbackActionSchema,
+]);
+
+const buttonElementSchema = z
+  .object({
+    action: actionSchema,
+    iconName: z.string().min(1).max(40).optional(),
+    id: blockIdSchema,
+    text: visibleText(80),
+    type: z.literal("button"),
+    variant: z.enum(BUTTON_VARIANTS).optional(),
+  })
+  .strict();
+
+const segmentedElementSchema = z
+  .object({
+    id: blockIdSchema,
+    options: z
+      .array(
+        z
+          .object({
+            data: z.string().min(1).max(64),
+            label: visibleText(40),
+          })
+          .strict()
+      )
+      .min(2)
+      .max(8),
+    target: z.string().min(1).max(64),
+    type: z.literal("segmented"),
+  })
+  .strict();
+
+const actionsSchema = z
+  .object({
+    elements: z
+      .array(z.discriminatedUnion("type", [buttonElementSchema, segmentedElementSchema]))
+      .min(1)
+      .max(BLOCK_LIMITS.actionElementsMax),
+    id: blockIdSchema,
+    type: z.literal("actions"),
+  })
+  .strict();
+
 const blockSchema: z.ZodType<Block> = z.lazy(() =>
   z.discriminatedUnion("type", [
     headingSchema,
@@ -244,6 +373,7 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
     contextSchema,
     chartSchema,
     tableSchema,
+    actionsSchema,
     z
       .object({
         ...sharedBlockFields,

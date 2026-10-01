@@ -297,6 +297,9 @@
     "blocks": {
       "name": "@terreno/blocks",
       "version": "57.6.1",
+      "bin": {
+        "terreno-blocks": "./dist/cli.js",
+      },
       "dependencies": {
         "yaml": "catalog:",
         "zod": "catalog:",
@@ -304,6 +307,7 @@
       "devDependencies": {
         "@biomejs/biome": "catalog:",
         "@types/bun": "catalog:",
+        "ajv": "8.20.0",
         "typescript": "catalog:",
       },
     },

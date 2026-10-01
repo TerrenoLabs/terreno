@@ -30,6 +30,62 @@ const inline = {
 };
 
 describe("lintDocument", () => {
+  it("rejects a callback that is not in the host allowlist", () => {
+    const doc = documentWith({
+      blocks: [
+        {
+          elements: [
+            {
+              action: {kind: "callback", name: "exportDataset"},
+              id: "export",
+              text: "Export",
+              type: "button",
+            },
+          ],
+          id: "followups",
+          type: "actions",
+        },
+      ],
+    });
+    const allowed = validateBlocks(doc, {hostActions: ["exportDataset"]});
+    expect(allowed.ok).toBe(true);
+
+    const rejected = validateBlocks(doc, {hostActions: ["other"]});
+    expect(rejected.ok).toBe(false);
+    if (rejected.ok) {
+      return;
+    }
+    expect(rejected.errors.map((error) => error.code)).toEqual(["UNKNOWN_HOST_ACTION"]);
+
+    const unchecked = validateBlocks(doc);
+    expect(unchecked.ok).toBe(true);
+  });
+
+  it("requires an open action to set url or route, not both", () => {
+    const open = (action: Record<string, unknown>): Record<string, unknown> =>
+      documentWith({
+        blocks: [
+          {
+            elements: [{action, id: "go", text: "Go", type: "button"}],
+            id: "followups",
+            type: "actions",
+          },
+        ],
+      });
+    expect(validateBlocks(open({kind: "open", route: "/reports"})).ok).toBe(true);
+    expect(validateBlocks(open({kind: "open", url: "https://example.com"})).ok).toBe(true);
+    const neither = validateBlocks(open({kind: "open"}));
+    expect(neither.ok).toBe(false);
+    if (!neither.ok) {
+      expect(neither.errors.map((error) => ({code: error.code, path: error.path}))).toEqual([
+        {code: "MISSING_REQUIRED", path: "blocks[0].elements[0].action"},
+      ]);
+    }
+    expect(
+      validateBlocks(open({kind: "open", route: "/reports", url: "https://example.com"})).ok
+    ).toBe(false);
+  });
+
   it("warns when a bar, donut, or line chart is a poor fit", () => {
     const rows = Array.from({length: 61}, (_unused, index) => [`m${index}`, index]);
     const bar = validateBlocks(

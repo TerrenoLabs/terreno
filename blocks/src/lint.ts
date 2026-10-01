@@ -7,6 +7,7 @@ export interface KnownDataset {
 }
 
 export interface LintBlocksOptions {
+  hostActions?: readonly string[];
   knownDatasets?: Record<string, KnownDataset>;
 }
 
@@ -165,7 +166,14 @@ export const lintDocument = (
   }
 
   const seenIds = new Set<string>();
-  for (const {block, path} of walk(doc.blocks, "blocks")) {
+  const selectableIds = new Set<string>();
+  const walked = walk(doc.blocks, "blocks");
+  for (const {block} of walked) {
+    if ((block.type === "chart" || block.type === "table") && block.id !== undefined) {
+      selectableIds.add(block.id);
+    }
+  }
+  for (const {block, path} of walked) {
     if (block.id !== undefined) {
       if (seenIds.has(block.id)) {
         errors.push(
@@ -294,6 +302,64 @@ export const lintDocument = (
           })
         );
       }
+    }
+    if (block.type === "actions") {
+      block.elements.forEach((element, index) => {
+        const elementPath = `${path}.elements[${index}]`;
+        if (element.type === "segmented" && !selectableIds.has(element.target)) {
+          errors.push(
+            issue({
+              code: "SELECT_TARGET_INVALID",
+              fix: "Set target to the id of a chart or table in this document.",
+              message: BLOCK_ERROR_CODES.SELECT_TARGET_INVALID,
+              path: `${elementPath}.target`,
+            })
+          );
+        }
+        if (
+          element.type === "button" &&
+          element.action.kind === "select" &&
+          !selectableIds.has(element.action.target)
+        ) {
+          errors.push(
+            issue({
+              code: "SELECT_TARGET_INVALID",
+              fix: "Set target to the id of a chart or table in this document.",
+              message: BLOCK_ERROR_CODES.SELECT_TARGET_INVALID,
+              path: `${elementPath}.action.target`,
+            })
+          );
+        }
+        if (
+          element.type === "button" &&
+          element.action.kind === "callback" &&
+          options?.hostActions !== undefined &&
+          !options.hostActions.includes(element.action.name)
+        ) {
+          errors.push(
+            issue({
+              code: "UNKNOWN_HOST_ACTION",
+              fix: `Use one of: ${options.hostActions.join(", ") || "(none registered)"}.`,
+              message: BLOCK_ERROR_CODES.UNKNOWN_HOST_ACTION,
+              path: `${elementPath}.action.name`,
+            })
+          );
+        }
+        if (element.type === "button" && element.action.kind === "open") {
+          const hasRoute = element.action.route !== undefined;
+          const hasUrl = element.action.url !== undefined;
+          if (hasRoute === hasUrl) {
+            errors.push(
+              issue({
+                code: "MISSING_REQUIRED",
+                fix: "Set either url or route on an open action.",
+                message: BLOCK_ERROR_CODES.MISSING_REQUIRED,
+                path: `${elementPath}.action`,
+              })
+            );
+          }
+        }
+      });
     }
     if (block.type === "table") {
       const dataset = datasets[block.data];

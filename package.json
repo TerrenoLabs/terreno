@@ -122,7 +122,6 @@
     "@playwright/test": "catalog:",
     "@rtk-query/codegen-openapi": "catalog:",
     "@types/chai": "^5.2.3",
-    "@types/pixelmatch": "^7.1.0",
     "@types/pngjs": "^6.0.5",
     "bun-types": "^1.4.0",
     "chai": "catalog:",

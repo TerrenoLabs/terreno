@@ -346,7 +346,14 @@ export const DropdownPanel: FC<DropdownPanelProps> = ({
 
   return (
     <View style={{position: "relative", width: fullWidth ? "100%" : undefined}} testID={testID}>
-      <View collapsable={false} ref={triggerRef}>
+      {/* The wrapper is what gets measured, so it must hug the trigger. A stretched
+          wrapper anchors the panel to the start of the whole row instead — which looks
+          right only while the trigger happens to sit at that edge. */}
+      <View
+        collapsable={false}
+        ref={triggerRef}
+        style={{alignSelf: fullWidth ? "stretch" : "flex-start"}}
+      >
         {renderTrigger ? renderTrigger({isOpen: Boolean(open), toggle}) : renderDefaultTrigger()}
       </View>
       {Boolean(open) && renderOverlay()}

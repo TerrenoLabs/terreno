@@ -1,4 +1,5 @@
-import {logger} from "@terreno/api";
+import {APIError, logger} from "@terreno/api";
+import {type BlocksDocument, blocksJsonSchema, validateBlocks} from "@terreno/blocks";
 import type {
   DataContent,
   JSONValue,
@@ -9,6 +10,7 @@ import type {
 } from "ai";
 import {
   generateText as aiGenerateText,
+  jsonSchema,
   NoObjectGeneratedError,
   Output,
   stepCountIs,
@@ -38,6 +40,7 @@ import {
   DEFAULT_GPT_MEMORY,
   JSON_VALUE_SYSTEM_PROMPT,
   REMIX_PROMPT,
+  TERRENO_UI_BLOCKS_SYSTEM_PROMPT,
   TRANSLATION_PROMPT,
 } from "./prompts";
 
@@ -290,6 +293,113 @@ export class AIService {
       });
       throw error;
     }
+  }
+
+  /**
+   * One block document. Uses deterministic temperature. A failed check is repaired once unless
+   * `repair` is false. A second failure throws 422 and logs `metadata.errorCodes`.
+   */
+  async generateBlocks(options: {
+    prompt: string;
+    repair?: boolean;
+    systemPrompt?: string;
+    userId?: mongoose.Types.ObjectId;
+  }): Promise<BlocksDocument> {
+    const {prompt, repair = true, systemPrompt, userId} = options;
+    const system = systemPrompt ?? TERRENO_UI_BLOCKS_SYSTEM_PROMPT;
+    const startTime = DateTime.now().toMillis();
+
+    const requestDocument = async (
+      userPrompt: string
+    ): Promise<{document?: BlocksDocument; error?: string}> => {
+      try {
+        const result = await aiGenerateText({
+          experimental_telemetry: {functionId: "generate-blocks", isEnabled: true},
+          model: this.getModelForStructuredJson(),
+          output: Output.object({
+            schema: jsonSchema<BlocksDocument>(blocksJsonSchema as never),
+          }),
+          prompt: userPrompt,
+          system,
+          temperature: TemperaturePresets.DETERMINISTIC,
+        });
+        return {document: result.output};
+      } catch (error) {
+        return {error: error instanceof Error ? error.message : String(error)};
+      }
+    };
+
+    const finish = async ({
+      error,
+      errorCodes,
+      response,
+    }: {
+      error?: string;
+      errorCodes?: string[];
+      response?: string;
+    }): Promise<void> => {
+      await this.logRequest({
+        aiModel: getModelId(this.model),
+        error,
+        metadata: errorCodes ? {errorCodes} : undefined,
+        prompt,
+        requestType: "ui_blocks",
+        response,
+        responseTime: DateTime.now().toMillis() - startTime,
+        userId,
+      });
+    };
+
+    const first = await requestDocument(prompt);
+    const firstCheck = first.document ? validateBlocks(first.document) : undefined;
+    if (first.document && firstCheck?.ok) {
+      await finish({response: JSON.stringify(first.document)});
+      return first.document;
+    }
+
+    const firstCodes =
+      firstCheck && !firstCheck.ok ? firstCheck.errors.map((error) => error.code) : [];
+    const firstDetail =
+      firstCheck && !firstCheck.ok
+        ? firstCheck.errors
+            .map((error) => `${error.path} ${error.code} ${error.message}`)
+            .join("\n")
+        : first.error;
+    if (!repair) {
+      await finish({
+        error: firstDetail ?? "Block document failed validation",
+        errorCodes: firstCodes,
+      });
+      throw new APIError({
+        meta: {fields: Object.fromEntries(firstCodes.map((code) => [code, code]))},
+        status: 422,
+        title: "Block document failed validation",
+      });
+    }
+
+    const second = await requestDocument(
+      `${prompt}\n\nErrors:\n${firstDetail ?? "invalid document"}`
+    );
+    const secondCheck = second.document ? validateBlocks(second.document) : undefined;
+    if (second.document && secondCheck?.ok) {
+      await finish({response: JSON.stringify(second.document)});
+      return second.document;
+    }
+    const errorCodes =
+      secondCheck && !secondCheck.ok ? secondCheck.errors.map((error) => error.code) : firstCodes;
+    await finish({
+      error: "Block document failed validation",
+      errorCodes,
+    });
+    throw new APIError({
+      meta: {
+        fields: Object.fromEntries(
+          (errorCodes.length > 0 ? errorCodes : ["invalid"]).map((code) => [code, code])
+        ),
+      },
+      status: 422,
+      title: "Block document failed validation",
+    });
   }
 
   /** Any JSON value (object, array, primitive, or null) via the AI SDK `Output.json()` parser. */

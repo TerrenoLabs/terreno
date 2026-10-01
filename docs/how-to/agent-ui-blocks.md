@@ -34,6 +34,8 @@ addGptRoutes(router, {
 
 `hostActions` is the callback allowlist. A callback outside it fails with `UNKNOWN_HOST_ACTION`. `repair: true` runs one repair call and stores that document. A document that is still invalid is stored with a `Block validation errors:` note so the next turn sees the codes.
 
+Outside a chat turn, `AIService.generateBlocks({prompt})` returns one validated document. Temperature is 0. A failed check is repaired once. Pass `repair: false` to skip that retry. A second failure throws 422 and logs `metadata.errorCodes`.
+
 ## Store rows for a ref chart
 
 1. Turn `uiBlocks` on. `addGptRoutes` then mounts `GET /gpt/datasets/:id`.

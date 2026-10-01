@@ -49,7 +49,7 @@ another, which makes a small document able to expand in ways the limits cannot s
 | --- | --- |
 | `@terreno/blocks` | Schema, parse, partial parse, validate, JSON Schema, prompt section, CLI, limits, error codes |
 | `@terreno/ui` | `BlocksView` for heading, text, metric, badge, divider, context, chart, table, actions, columns, and card. A select action changes the target chart's dataset in that view. A callback stays disabled when `hostActions` is set and does not include its name. `GPTChat` `uiBlocks` renders assistant messages through `BlocksView`, including a spinner while the reply is still streaming. |
-| `@terreno/ai` | When `uiBlocks` is on: the chat system prompt, the post-stream `{blocks}` check, `AIDataset` storage, and `POST /gpt/actions`. |
+| `@terreno/ai` | When `uiBlocks` is on: the chat system prompt, the post-stream `{blocks}` check, `AIDataset` storage, and `POST /gpt/actions`. `AIService.generateBlocks` returns one validated document outside a chat turn. |
 
 Asks use the same package under `src/asks/`. A block shows something. An ask collects an
 answer and returns it to the agent.

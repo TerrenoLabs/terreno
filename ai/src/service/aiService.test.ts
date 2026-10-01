@@ -935,6 +935,64 @@ describe("AIService", () => {
     });
   });
 
+  describe("generateBlocks", () => {
+    const validDocument = '{"v":1,"blocks":[{"type":"heading","text":"Hello"}]}';
+    const overLimitDocument =
+      '{"v":1,"datasets":{"signups":{"source":"ref","id":"ds1","limit":5000}},"blocks":[{"type":"heading","text":"Hello"}]}';
+
+    it("returns a validated document at deterministic temperature and logs ui_blocks", async () => {
+      const model = createMockModel(validDocument);
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const result = await service.generateBlocks({prompt: "Say hello"});
+
+      expect(result.blocks[0]).toMatchObject({text: "Hello", type: "heading"});
+      expect(model.doGenerate).toHaveBeenCalledTimes(1);
+      const call = model.doGenerate.mock.calls[0]?.[0] as {temperature?: number} | undefined;
+      expect(call?.temperature).toBe(0);
+      expect(JSON.stringify(call)).toContain("Your entire reply is one document");
+      const logs = await AIRequest.find({requestType: "ui_blocks"});
+      expect(logs).toHaveLength(1);
+      expect(logs[0].error).toBeUndefined();
+    });
+
+    it("repairs once and puts the error code in the second prompt", async () => {
+      const model = createMockModel(overLimitDocument);
+      let calls = 0;
+      model.doGenerate = mock(async () => {
+        calls += 1;
+        const text = calls === 1 ? overLimitDocument : validDocument;
+        return {
+          content: [{text, type: "text" as const}],
+          finishReason: "stop" as const,
+          usage: {inputTokens: 5, outputTokens: 10},
+        };
+      });
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const result = await service.generateBlocks({prompt: "Chart signups"});
+
+      expect(result.blocks[0]).toMatchObject({text: "Hello", type: "heading"});
+      expect(model.doGenerate).toHaveBeenCalledTimes(2);
+      const second = JSON.stringify(model.doGenerate.mock.calls[1]?.[0]);
+      expect(second).toContain("TOO_MANY_POINTS");
+    });
+
+    it("throws 422 and logs error codes when the repair still fails", async () => {
+      const model = createMockModel(overLimitDocument);
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await expect(service.generateBlocks({prompt: "Still too big"})).rejects.toMatchObject({
+        status: 422,
+      });
+
+      expect(model.doGenerate).toHaveBeenCalledTimes(2);
+      const logs = await AIRequest.find({requestType: "ui_blocks"});
+      expect(logs).toHaveLength(1);
+      expect(logs[0].metadata?.errorCodes).toEqual(["TOO_MANY_POINTS"]);
+    });
+  });
+
   describe("TemperaturePresets", () => {
     it("should have correct values", () => {
       expect(TemperaturePresets.DETERMINISTIC).toBe(0);

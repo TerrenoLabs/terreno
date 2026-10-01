@@ -134,6 +134,7 @@ const aiService = new AIService({
 | `generateText(options)` | Non-streaming text generation; logs as `requestType: "general"` |
 | `generateJsonValue(options)` | Any JSON value via `Output.json()`; logs as `"json_value"` |
 | `generateJsonObject(options)` | Typed object from schema/Zod via `Output.object()`; logs as `"json_object"` |
+| `generateBlocks(options)` | One block document via `Output.object(blocksJsonSchema)`, then `validateBlocks`. Temperature is always `TemperaturePresets.DETERMINISTIC` (0). Logs as `"ui_blocks"`. |
 | `generateJsonArray(options)` | Typed array via `Output.array()`; logs as `"json_array"` |
 | `generateTextStream(options)` | Async generator of text chunks; logs full response after stream completes |
 | `generateRemix(options)` | Reword text using `REMIX_PROMPT` at `TemperaturePresets.BALANCED` |
@@ -145,6 +146,13 @@ const aiService = new AIService({
 All generation methods log to `AIRequest` via private `logRequest()`. Logging failures never throw.
 
 ## Structured JSON output
+
+`generateBlocks({prompt, systemPrompt?, userId?, repair?})` asks for one block document:
+
+- Uses `TERRENO_UI_BLOCKS_SYSTEM_PROMPT` when `systemPrompt` is omitted.
+- Temperature is `TemperaturePresets.DETERMINISTIC` (0).
+- Checks the object with `validateBlocks`. When `repair` is omitted or true, one retry appends the error list to the user prompt. `repair: false` skips that retry.
+- A second failure throws `APIError` 422 (`title: "Block document failed validation"`, `meta.fields` keyed by error code) and stores `metadata.errorCodes` on the `AIRequest`.
 
 `generateJsonValue`, `generateJsonObject`, and `generateJsonArray`:
 
@@ -189,7 +197,7 @@ Logs all AI calls for monitoring and admin explorer.
 |-------|------|-------------|
 | `aiModel` | string | Model identifier (field name avoids Mongoose `model` conflict) |
 | `prompt` | string | Input prompt |
-| `requestType` | string | e.g. `general`, `remix`, `summarization`, `translation`, `json_value`, `json_object`, `json_array` |
+| `requestType` | string | e.g. `general`, `remix`, `summarization`, `translation`, `json_value`, `json_object`, `json_array`, `ui_action`, `ui_blocks` |
 | `response` | string? | Response text |
 | `responseTime` | number? | Milliseconds |
 | `tokensUsed` | number? | Total tokens |

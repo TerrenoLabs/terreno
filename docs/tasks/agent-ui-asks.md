@@ -184,7 +184,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/ai.md`, `docs/how-to/agent-ui-blocks.md`, `docs/explanation/agent-ui-blocks.md`.
   - Acceptance: Blocks AC17.
 
-- [ ] **Task B3.2**: `AIService.generateBlocks`
+- [x] **Task B3.2**: `AIService.generateBlocks`
   - Delivers: object output, `validateBlocks`, one repair retry, `requestType: "ui_blocks"`.
   - Files: `ai/src/service/aiService.ts`, `ai/src/types/index.ts`, `ai/src/service/aiService.test.ts`.
   - Blocked by: B3.1

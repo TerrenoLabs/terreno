@@ -102,6 +102,7 @@ describe("@terreno/ai public exports", () => {
       "summarization",
       "translation",
       "ui_action",
+      "ui_blocks",
     ]);
   });
 });

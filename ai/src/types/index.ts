@@ -16,6 +16,7 @@ export const DEFAULT_AI_REQUEST_TYPES = [
   "summarization",
   "translation",
   "ui_action",
+  "ui_blocks",
 ] as const;
 export type DefaultAIRequestType = (typeof DEFAULT_AI_REQUEST_TYPES)[number];
 export type AIRequestType = DefaultAIRequestType | (string & {});

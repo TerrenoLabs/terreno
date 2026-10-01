@@ -198,7 +198,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/mcp-server.md`, `.rulesync/rules/mcp-server/00-mcp-server.md`.
   - Acceptance: Blocks AC11.
 
-- [ ] **Task B4.1**: example-frontend renders blocks and handles actions
+- [x] **Task B4.1**: example-frontend renders blocks and handles actions
   - Delivers: AI tab `uiBlocks`, dataset and action wiring, e2e mock document.
   - Files: `example-frontend/app/(tabs)/ai.tsx`, `example-frontend/store/openApiSdk.ts`, `example-frontend/e2e/helpers/mockGpt.ts`, `example-frontend/e2e/ai-chat.spec.ts`.
   - Blocked by: B2.4, B3.1, B3.4, B3.5

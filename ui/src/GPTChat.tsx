@@ -103,6 +103,8 @@ export interface GPTChatMessage {
    * instead of the tool call, and hides the ask's `tool-result` message.
    */
   ask?: ChatAsk;
+  /** Subtle caption under a block reply, such as "3 components". */
+  blockNote?: string;
   content: string;
   /** Stable id for block actions. Falls back to the message index. */
   id?: string;
@@ -1028,6 +1030,11 @@ const MessageList = ({
                 role={message.role}
                 uiBlocks={uiBlocks}
               />
+              {message.blockNote ? (
+                <Text color="secondaryLight" size="sm" testID={`gpt-block-note-${messageId}`}>
+                  {message.blockNote}
+                </Text>
+              ) : null}
               <AssistantActions
                 handleCopyMessage={handleCopyMessage}
                 index={index}

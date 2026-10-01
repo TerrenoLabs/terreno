@@ -753,6 +753,7 @@ export const addAiRoutes = (
     openApiOptions: options,
     toolChoice: "auto",
     tools: getDemoTools() as unknown as GptRouteOptions["tools"],
+    uiBlocks: true,
   };
   addGptHistoryRoutes(router, {...options, chat});
   addGptRoutes(router, chat);

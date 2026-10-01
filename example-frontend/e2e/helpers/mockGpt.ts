@@ -319,6 +319,127 @@ export const mockFileUploads = async (
   return filenames;
 };
 
+const SIGNUPS_DOCUMENT = `v: 1
+datasets:
+  mix:
+    columns:
+      - name: source
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Web, 40]
+      - [Mobile, 60]
+  signups:
+    source: ref
+    id: ds_signups
+blocks:
+  - type: chart
+    id: mix_chart
+    kind: donut
+    data: mix
+    x: source
+    y: count
+  - type: chart
+    id: signups_chart
+    kind: bar
+    data: signups
+    x: month
+    y: count
+    title: Signups
+  - type: actions
+    id: followups
+    elements:
+      - type: button
+        id: export_btn
+        text: Export
+        action:
+          kind: callback
+          name: export_csv
+      - type: button
+        id: weekly
+        text: Show weekly
+        action:
+          kind: reply
+          text: Show weekly signups
+`;
+
+const chunkText = (text: string, size: number): SseEvent[] => {
+  const events: SseEvent[] = [];
+  for (let index = 0; index < text.length; index += size) {
+    events.push({text: text.slice(index, index + size)});
+  }
+  return events;
+};
+
+/** Whole-reply document in chunks, plus the dataset and action routes the chart needs. */
+export const mockGptBlocks = async (page: Page): Promise<void> => {
+  const historyId = "mock-history-blocks";
+  let prompts = 0;
+  await page.route(`${API_URL}/gpt/prompt`, (route) => {
+    prompts += 1;
+    if (prompts === 1) {
+      return fulfillSse(route, [
+        ...chunkText(SIGNUPS_DOCUMENT, 48),
+        {blocks: {errors: [], ok: true, warnings: []}},
+        {done: true, historyId, title: "Signups"},
+      ]);
+    }
+    return fulfillSse(route, [
+      ...textEvents("Here is the weekly view."),
+      {done: true, historyId, title: "Signups"},
+    ]);
+  });
+  await page.route(/\/gpt\/datasets\/ds_signups/, (route) =>
+    route.fulfill({
+      body: JSON.stringify({
+        data: {
+          columns: [
+            {name: "month", type: "string"},
+            {name: "count", type: "number"},
+          ],
+          more: false,
+          page: 1,
+          rowCount: 2,
+          rows: [
+            ["Jan", 120],
+            ["Feb", 180],
+          ],
+        },
+      }),
+      contentType: "application/json",
+      status: 200,
+    })
+  );
+  await page.route(/\/gpt\/actions$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const replacement = {
+      blocks: [
+        {
+          elements: [
+            {
+              action: {kind: "reply", text: "Show weekly signups"},
+              id: "weekly",
+              text: "Show weekly",
+              type: "button",
+            },
+          ],
+          id: "followups",
+          type: "actions",
+        },
+      ],
+      v: 1,
+    };
+    return route.fulfill({
+      body: JSON.stringify({data: {blocks: replacement, replace: "block"}}),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+};
+
 export const unmockGptStream = async (page: Page): Promise<void> => {
   await page.unroute(`${API_URL}/gpt/prompt`);
+  await page.unroute(/\/gpt\/datasets\/ds_signups/);
+  await page.unroute(/\/gpt\/actions$/);
 };

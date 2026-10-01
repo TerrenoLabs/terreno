@@ -70,6 +70,16 @@ addGptRoutes(router, {
 
 The path is `/gpt/actions`, so a limiter on `/gpt` covers it. Each call is stored as an `AIRequest` with `requestType: "ui_action"`.
 
+## Wire the example chat
+
+1. Turn `uiBlocks` on in `addGptRoutes` so `GET /gpt/datasets/:id` and `POST /gpt/actions` are in the OpenAPI spec.
+2. Regenerate the frontend SDK: `cd example-frontend && bun run sdk`.
+3. Set `uiBlocks` and `hostActions` on `GPTChat`. `reply` already calls `onSubmit`.
+4. `onBlockCallback` calls `usePostGptActionsMutation`. Return that result so a `{replace: "block"}` swaps the block.
+5. `resolveDataset` calls `useLazyGetGptDatasetsByIdQuery` and returns `{columns, rows, source: "inline"}`.
+6. An `open` action uses `router.push` for a `/…` route and `Linking.openURL` for an `https` URL.
+7. When the `{blocks}` event is `ok`, set `blockNote` to the top-level block count, such as `3 components`.
+
 ## Render documents in chat
 
 Set `uiBlocks` on `GPTChat`. Assistant `content` is the YAML document. While `isStreaming`

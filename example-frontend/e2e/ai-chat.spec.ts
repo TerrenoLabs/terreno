@@ -9,6 +9,7 @@ import {
   type MockAsk,
   mockFileUploads,
   mockGptAskStream,
+  mockGptBlocks,
   mockGptStream,
   mockGptTurns,
   mockSavedHistory,
@@ -553,6 +554,39 @@ test.describe("AI Chat", () => {
         ],
       },
       toolCallId: "call_receipt",
+    });
+  });
+
+  test("renders a ref bar chart and sends a follow-up reply", async ({page}) => {
+    await mockGptBlocks(page);
+
+    await page.getByTestId("gpt-input").fill("Show signups");
+    await page.getByTestId("gpt-submit").click();
+
+    await expect(page.getByText("Jan")).toBeVisible();
+    await expect(page.getByText("Feb")).toBeVisible();
+    await expect(page.getByText("Web")).toBeVisible();
+    await expect(page.getByText("3 components")).toBeVisible();
+    await page.getByTestId("blocks-2-export_btn").scrollIntoViewIfNeeded();
+    await page.screenshot({
+      fullPage: true,
+      path: "/opt/cursor/artifacts/screenshots/blocks-chat-chart.png",
+    });
+
+    await page.getByTestId("blocks-2-export_btn").click();
+    await expect(page.getByTestId("blocks-2-export_btn")).toHaveCount(0);
+    await page.getByTestId("blocks-2-weekly").click();
+
+    await expect(page.getByText("Show weekly signups")).toBeVisible();
+    await expect(page.getByText("Here is the weekly view.")).toBeVisible();
+    const scrollToBottom = page.getByText("Scroll to bottom");
+    if (await scrollToBottom.isVisible()) {
+      await scrollToBottom.click();
+      await scrollToBottom.waitFor({state: "hidden"});
+    }
+    await page.screenshot({
+      fullPage: true,
+      path: "/opt/cursor/artifacts/screenshots/blocks-chat-reply.png",
     });
   });
 });

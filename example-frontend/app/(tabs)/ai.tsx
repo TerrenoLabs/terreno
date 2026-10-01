@@ -1,6 +1,8 @@
+import {type BlocksDocument, parseBlocks} from "@terreno/blocks";
 import {baseUrl, selectBetterAuthUserId, useMCPTools} from "@terreno/rtk";
 import {
   type AskSubmission,
+  type BlockChatEvent,
   Box,
   GPTChat,
   type GPTChatHistory,
@@ -14,10 +16,12 @@ import {
   selectedFileMimeType,
   useStoredState,
 } from "@terreno/ui";
+import type {Href} from "expo-router";
+import {router} from "expo-router";
 import {DateTime} from "luxon";
 import type React from "react";
 import {useCallback, useMemo, useRef, useState} from "react";
-import {type ImageSourcePropType, Platform, Image as RNImage} from "react-native";
+import {type ImageSourcePropType, Linking, Platform, Image as RNImage} from "react-native";
 import {useSelector} from "react-redux";
 import {getSessionToken} from "@/lib/betterAuth";
 import {
@@ -37,15 +41,35 @@ import {selectGptMascotIndex} from "@/lib/gptMascot";
 import {useAppDispatch} from "@/store/index";
 import {
   type GptHistory,
+  openapi,
   terrenoApi,
   useDeleteGptHistoriesByIdMutation,
   useGetAiModelsQuery,
   useGetGptHistoriesQuery,
   usePatchGptHistoriesByIdMutation,
   usePostFilesUploadMutation,
+  usePostGptActionsMutation,
 } from "@/store/sdk";
 
 type AskErrors = NonNullable<GPTChatProps["askErrors"]>;
+
+const componentCaption = (text: string): string | undefined => {
+  const parsed = parseBlocks(text);
+  if (!parsed.ok) {
+    return undefined;
+  }
+  const value = parsed.value;
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("blocks" in value) ||
+    !Array.isArray(value.blocks)
+  ) {
+    return undefined;
+  }
+  const count = value.blocks.length;
+  return count === 1 ? "1 component" : `${count} components`;
+};
 
 interface TurnRequest {
   body: Record<string, unknown>;
@@ -166,6 +190,8 @@ const AiScreen: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_VALUE);
   const [mascotIndex] = useState<number>(() => selectGptMascotIndex(Math.random()));
   const [postFilesUpload] = usePostFilesUploadMutation();
+  const [postGptActions] = usePostGptActionsMutation();
+  const [fetchDataset] = openapi.useLazyGetGptDatasetsByIdQuery();
   // Uploads each file picked for a `files` ask; without a GCS bucket the server has no file
   // routes, and the resolver sends data URLs instead.
   const resolveAskFiles = useMemo(
@@ -484,6 +510,19 @@ const AiScreen: React.FC = () => {
                 }
                 return updated;
               });
+            } else if (data.blocks) {
+              hasVisibleEvents = true;
+              const note = data.blocks.ok ? componentCaption(assistantText) : undefined;
+              if (note) {
+                setCurrentMessages((prev) => {
+                  const updated = [...prev];
+                  const lastIdx = updated.length - 1;
+                  if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                    updated[lastIdx] = {...updated[lastIdx], blockNote: note};
+                  }
+                  return updated;
+                });
+              }
             } else if (data.done) {
               finishedHistoryId = data.historyId;
               pendingAskId = data.pendingAsk?.toolCallId;
@@ -667,6 +706,67 @@ const AiScreen: React.FC = () => {
     [currentHistoryId, refreshHistories, runTurn, selectedModel, syncConversation]
   );
 
+  const handleBlockAction = useCallback((event: BlockChatEvent): void => {
+    if (event.action.kind !== "open") {
+      return;
+    }
+    if (event.action.route?.startsWith("/")) {
+      router.push(event.action.route as Href);
+      return;
+    }
+    if (event.action.url?.startsWith("https://")) {
+      void Linking.openURL(event.action.url);
+    }
+  }, []);
+
+  const handleBlockCallback = useCallback(
+    async (event: BlockChatEvent) => {
+      if (event.action.kind !== "callback" || !currentHistoryId) {
+        return undefined;
+      }
+      const body = await postGptActions({
+        blockId: event.blockId,
+        elementId: event.elementId,
+        historyId: currentHistoryId,
+        messageId: event.messageId,
+        name: event.action.name,
+        payload: event.action.payload,
+      }).unwrap();
+      const payload = body as {
+        blocks?: BlocksDocument;
+        data?: {blocks?: BlocksDocument; replace?: "block"; text?: string};
+        replace?: "block";
+        text?: string;
+      };
+      return payload.data ?? payload;
+    },
+    [currentHistoryId, postGptActions]
+  );
+
+  const resolveDataset = useCallback(
+    async (ref: {grain?: "day" | "hour" | "month" | "week"; id: string; limit?: number}) => {
+      const body = await fetchDataset({
+        grain: ref.grain,
+        id: ref.id,
+        limit: ref.limit,
+      }).unwrap();
+      const payload = body as {
+        columns?: {name: string; type: "date" | "number" | "string"}[];
+        data?: {
+          columns: {name: string; type: "date" | "number" | "string"}[];
+          rows: unknown[][];
+        };
+        rows?: unknown[][];
+      };
+      const dataset = payload.data ?? payload;
+      if (!dataset.columns || !dataset.rows) {
+        return undefined;
+      }
+      return {columns: dataset.columns, rows: dataset.rows, source: "inline" as const};
+    },
+    [fetchDataset]
+  );
+
   if (isLoading) {
     return (
       <Box alignItems="center" flex="grow" justifyContent="center">
@@ -684,11 +784,14 @@ const AiScreen: React.FC = () => {
       currentMessages={currentMessages}
       geminiApiKey={geminiApiKey}
       histories={histories}
+      hostActions={["export_csv"]}
       isStreaming={isStreaming}
       mascot={mascot}
       mcpTools={mcpTools}
       onAskSubmit={handleAskSubmit}
       onAttachFiles={handleAttachFiles}
+      onBlockAction={handleBlockAction}
+      onBlockCallback={handleBlockCallback}
       onCreateHistory={handleCreateHistory}
       onDeleteHistory={handleDeleteHistory}
       onGeminiApiKeyChange={setGeminiApiKey}
@@ -699,6 +802,7 @@ const AiScreen: React.FC = () => {
       onSubmit={handleSubmit}
       onUpdateTitle={handleUpdateTitle}
       resolveAskFiles={resolveAskFiles}
+      resolveDataset={resolveDataset}
       selectedModel={selectedModel}
       suggestedPrompts={[
         "Tell me a dad joke about TypeScript",
@@ -711,6 +815,7 @@ const AiScreen: React.FC = () => {
         "Upload a receipt",
       ]}
       testID="chat"
+      uiBlocks
     />
   );
 };

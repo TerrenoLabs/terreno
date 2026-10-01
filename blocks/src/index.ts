@@ -119,6 +119,7 @@ export {validateAskResponse} from "./asks/validateResponse";
 export type {BlockError, BlockErrorCode} from "./errors";
 export {BLOCK_ERROR_CODES} from "./errors";
 export {BLOCK_LIMITS} from "./limits";
+export type {ParseBlocksResult} from "./parse";
 export {parseBlocks} from "./parse";
 export type {
   BadgeBlock,
@@ -140,4 +141,5 @@ export {
   METRIC_TRENDS,
   wrapAsTextDocument,
 } from "./schema";
+export type {ValidateBlocksResult} from "./validate";
 export {validateBlocks} from "./validate";

@@ -149,7 +149,7 @@ const contextSchema = z
   })
   .strict();
 
-export const blockSchema: z.ZodType<Block> = z.lazy(() =>
+const blockSchema: z.ZodType<Block> = z.lazy(() =>
   z.discriminatedUnion("type", [
     headingSchema,
     textSchema,

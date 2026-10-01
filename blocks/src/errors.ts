@@ -51,7 +51,7 @@ const pathIndex = (segment: string): number | string => {
 };
 
 /** Splits `blocks[0].text` into comparable pieces so indexes sort numerically. */
-export const blockPathSegments = (path: string): readonly (string | number)[] => {
+const blockPathSegments = (path: string): readonly (string | number)[] => {
   const parts: (string | number)[] = [];
   const pattern = /([^[\].]+)|\[(\d+)\]/g;
   for (const match of path.matchAll(pattern)) {
@@ -68,7 +68,7 @@ export const blockPathSegments = (path: string): readonly (string | number)[] =>
   return parts;
 };
 
-export const compareBlockPaths = (left: string, right: string): number => {
+const compareBlockPaths = (left: string, right: string): number => {
   const leftParts = blockPathSegments(left);
   const rightParts = blockPathSegments(right);
   const length = Math.max(leftParts.length, rightParts.length);

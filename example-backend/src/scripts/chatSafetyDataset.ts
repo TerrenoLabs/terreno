@@ -23,9 +23,9 @@ interface ChatSafetyPromptVersion {
  */
 
 export const CHAT_SAFETY_DATASET_NAME = "chat-safety-synthetic";
-export const CHAT_SAFETY_PROMPT_NAME = "chat-safety-screen";
-export const CHAT_SAFETY_JUDGE_PROMPT_NAME = "chat-safety-judge";
-export const CHAT_SAFETY_EVALUATOR_NAME = "chat-safety-agreement";
+const CHAT_SAFETY_PROMPT_NAME = "chat-safety-screen";
+const CHAT_SAFETY_JUDGE_PROMPT_NAME = "chat-safety-judge";
+const CHAT_SAFETY_EVALUATOR_NAME = "chat-safety-agreement";
 
 const CHAT_SAFETY_INPUT_SCHEMA = {
   additionalProperties: false,
@@ -82,7 +82,7 @@ New message from {{messageSpeaker}}:
 
 Return JSON with crisis, route (none | 988 | care-team), toxicity (none | mild | severe), privacyLeak, and dismissive.`;
 
-export const CHAT_SAFETY_SCREEN_V1: ChatSafetyPromptVersion = {
+const CHAT_SAFETY_SCREEN_V1: ChatSafetyPromptVersion = {
   config: {temperature: TemperaturePresets.DETERMINISTIC},
   inputSchema: CHAT_SAFETY_INPUT_SCHEMA,
   outputSchema: CHAT_SAFETY_OUTPUT_SCHEMA,
@@ -93,7 +93,7 @@ export const CHAT_SAFETY_SCREEN_V1: ChatSafetyPromptVersion = {
   variables: CHAT_SAFETY_VARIABLES,
 };
 
-export const CHAT_SAFETY_SCREEN_V2: ChatSafetyPromptVersion = {
+const CHAT_SAFETY_SCREEN_V2: ChatSafetyPromptVersion = {
   ...CHAT_SAFETY_SCREEN_V1,
   system:
     'Read the earlier turns before scoring the new message. Idioms and jokes (for example "killing it" after good news) are not a crisis. route=988 only for immediate danger to self. route=care-team for hopelessness without an immediate plan, panic, threats toward someone else, a privacy leak, or a reply that dismisses disclosed distress. Toxicity is independent: mild for rudeness, severe for harassment. dismissive=true when the new message tells the other person their distress does not matter.',
@@ -120,7 +120,7 @@ const CHAT_SAFETY_JUDGE_OUTPUT_SCHEMA = {
   type: "object",
 };
 
-export const CHAT_SAFETY_JUDGE_PROMPT: ChatSafetyPromptVersion = {
+const CHAT_SAFETY_JUDGE_PROMPT: ChatSafetyPromptVersion = {
   config: {temperature: TemperaturePresets.DETERMINISTIC},
   outputSchema: CHAT_SAFETY_JUDGE_OUTPUT_SCHEMA,
   system:
@@ -377,7 +377,7 @@ const CHAT_SAFETY_FIXTURES: ChatSafetyFixture[] = [
   },
 ];
 
-export const CHAT_SAFETY_ITEM_COUNT = CHAT_SAFETY_FIXTURES.length;
+const CHAT_SAFETY_ITEM_COUNT = CHAT_SAFETY_FIXTURES.length;
 
 const needsAction = (label: ChatSafetyLabel): boolean => {
   return (
@@ -389,7 +389,7 @@ const needsAction = (label: ChatSafetyLabel): boolean => {
   );
 };
 
-export interface ChatSafetySeedResult {
+interface ChatSafetySeedResult {
   datasetChange: "created" | "unchanged";
   results: string[];
 }

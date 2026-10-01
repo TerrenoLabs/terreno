@@ -10,6 +10,7 @@ import {AvatarConfiguration} from "@story-config/Avatar.config";
 import {BadgeConfiguration} from "@story-config/Badge.config";
 import {BannerConfiguration} from "@story-config/Banner.config";
 import {BarChartConfiguration} from "@story-config/BarChart.config";
+import {BlocksPlaygroundConfiguration} from "@story-config/BlocksPlayground.config";
 import {BlocksViewConfiguration} from "@story-config/BlocksView.config";
 import {BodyConfiguration} from "@story-config/Body.config";
 import {BooleanFieldConfiguration} from "@story-config/BooleanField.config";
@@ -288,6 +289,7 @@ const Config: DemoConfigurationBase[] = [
   BadgeConfiguration,
   BannerConfiguration,
   BarChartConfiguration,
+  BlocksPlaygroundConfiguration,
   BlocksViewConfiguration,
   BodyConfiguration,
   BooleanFieldConfiguration,

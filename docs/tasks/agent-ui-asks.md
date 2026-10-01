@@ -156,7 +156,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/ui.md`, `docs/explanation/agent-ui-blocks.md`.
   - Acceptance: Blocks AC8; Blocks AC19 (`BlocksView` half).
 
-- [ ] **Task B2.4**: `GPTChat` `uiBlocks` mode and Blocks Playground
+- [x] **Task B2.4**: `GPTChat` `uiBlocks` mode and Blocks Playground
   - Delivers: `uiBlocks` renders assistant messages through `BlocksView` (partial while streaming); `onBlockAction`, `onBlockCallback`, `resolveDataset`; playground story.
   - Files: `ui/src/GPTChat.tsx`, `ui/src/GPTChat.test.tsx`, `ui/src/Common.ts`, `demo/stories/BlocksPlayground.stories.tsx`, `demo/story-config/BlocksPlayground.config.tsx`, `demo/demoConfig.tsx`.
   - Blocked by: B2.3

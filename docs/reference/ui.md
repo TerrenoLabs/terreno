@@ -326,7 +326,31 @@ The composer row (attachment picker, tools, input, Send) is vertically centered,
 />
 ```
 
+Pass `uiBlocks` to render each assistant message through `BlocksView`. A streaming message
+shows each finished top-level block and a spinner for the block still arriving. `reply`
+calls `onSubmit` with the button text. `open` and `select` call `onBlockAction`. `callback`
+calls `onBlockCallback` and the button stays loading until that promise settles. Return
+`{replace: "block", blocks}` to swap that block, or `{text}` to append an assistant message.
+`hostActions` disables callback names the host did not list. `resolveDataset` loads `ref`
+datasets.
+
+```tsx
+<GPTChat
+  currentMessages={messages}
+  histories={histories}
+  hostActions={["export_csv"]}
+  onBlockAction={handleBlockAction}
+  onBlockCallback={handleBlockCallback}
+  onCreateHistory={onCreateHistory}
+  onDeleteHistory={onDeleteHistory}
+  onSelectHistory={onSelectHistory}
+  onSubmit={onSubmit}
+  uiBlocks
+/>
+```
+
 Operator steps: [Add a GPT chat mascot](../how-to/add-gpt-chat-mascot.md). Demo story: `GPTChat` → `Mascot`.
+Blocks playground: `BlocksPlayground`.
 The example AI screen demonstrates a consumer selecting one of four bundled mascot
 images once per mount.
 

@@ -3,7 +3,7 @@ import type {ChoiceAskInput} from "@terreno/blocks";
 import {act, fireEvent, render, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {AccessibilityInfo, Platform, Pressable, ScrollView} from "react-native";
+import {AccessibilityInfo, ActivityIndicator, Platform, Pressable, ScrollView} from "react-native";
 
 import type {AskSubmission, ChatAsk} from "./asks/askTypes";
 import type {SelectedFile} from "./FilePickerButton";
@@ -49,6 +49,49 @@ const press = async (element: Parameters<typeof fireEvent.press>[0]): Promise<vo
     fireEvent.press(element);
   });
 };
+
+// Block buttons await a haptic call before onClick.
+const pressControl = async (element: Parameters<typeof fireEvent.press>[0]): Promise<void> => {
+  await act(async () => {
+    fireEvent.press(element);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+};
+
+const BLOCKS_REPLY = `v: 1
+blocks:
+  - type: heading
+    text: Quarter heading
+  - type: actions
+    id: row
+    elements:
+      - type: button
+        id: reply_btn
+        text: Ask again
+        action:
+          kind: reply
+          text: Show the weekly numbers
+      - type: button
+        id: open_btn
+        text: Open
+        action:
+          kind: open
+          route: /reports
+      - type: button
+        id: run_btn
+        text: Export
+        action:
+          kind: callback
+          name: export_csv
+`;
+
+const BLOCKS_STREAMING = `v: 1
+blocks:
+  - type: heading
+    text: Done heading
+  - type: heading
+    text: "Still typ
+`;
 
 const histories: GPTChatHistory[] = [
   {id: "h1", prompts: [], title: "First chat"},
@@ -1272,5 +1315,111 @@ describe("GPTChat asks", () => {
 
     assert.isOk(getByLabelText("Choose a plan"));
     assert.deepEqual(focus.mock.calls, [[{preventScroll: true}]]);
+  });
+
+  it("leaves assistant markdown in place when uiBlocks is off", async () => {
+    const {queryByTestId, toJSON} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+    });
+    assert.isNull(queryByTestId("gpt-blocks-m1"));
+    await waitFor(() => {
+      assert.include(JSON.stringify(toJSON()), "Quarter heading");
+    });
+  });
+
+  it("sends a reply and reports open from a block document", async () => {
+    const onSubmit = mock(() => {});
+    const onBlockAction = mock(() => {});
+    const {getByText} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      onBlockAction,
+      onSubmit,
+      uiBlocks: true,
+    });
+    assert.isOk(getByText("Quarter heading"));
+    await pressControl(getByText("Ask again"));
+    await pressControl(getByText("Open"));
+    assert.deepEqual(onSubmit.mock.calls[0], ["Show the weekly numbers"]);
+    assert.deepEqual(onBlockAction.mock.calls[0], [
+      {
+        action: {kind: "open", route: "/reports"},
+        blockId: "row",
+        elementId: "open_btn",
+        messageId: "m1",
+      },
+    ]);
+  });
+
+  it("shows a callback as loading, then replaces that block", async () => {
+    let finish: (result: {
+      blocks: {blocks: {status: "info"; text: string; type: "badge"}[]; v: 1};
+      replace: "block";
+    }) => void = () => {};
+    const onBlockCallback = mock(
+      () =>
+        new Promise<{
+          blocks: {blocks: {status: "info"; text: string; type: "badge"}[]; v: 1};
+          replace: "block";
+        }>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const {getByTestId, getByText, queryByText} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      uiBlocks: true,
+    });
+    await pressControl(getByText("Export"));
+    await waitFor(() => {
+      assert.equal(getByTestId("blocks-1-run_btn").props.accessibilityState.disabled, true);
+    });
+    assert.deepEqual(onBlockCallback.mock.calls[0], [
+      {
+        action: {kind: "callback", name: "export_csv"},
+        blockId: "row",
+        elementId: "run_btn",
+        messageId: "m1",
+      },
+    ]);
+    await act(async () => {
+      finish({
+        blocks: {blocks: [{status: "info", text: "Exporting", type: "badge"}], v: 1},
+        replace: "block",
+      });
+    });
+    await waitFor(() => {
+      assert.isOk(getByText("Exporting"));
+    });
+    assert.isNull(queryByText("Export"));
+  });
+
+  it("appends an assistant message when a callback returns text", async () => {
+    const onBlockCallback = mock(async () => ({text: "Export started"}));
+    const {getByText} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      uiBlocks: true,
+    });
+    await pressControl(getByText("Export"));
+    await waitFor(() => {
+      assert.isOk(getByText("Export started"));
+    });
+  });
+
+  it("renders finished blocks and a spinner while a document is streaming", async () => {
+    const {getByTestId, getByText, queryByTestId, queryByText, UNSAFE_getAllByType} = renderChat({
+      currentMessages: [{content: BLOCKS_STREAMING, id: "m1", role: "assistant"}],
+      isStreaming: true,
+      uiBlocks: true,
+    });
+    assert.isOk(getByText("Done heading"));
+    assert.isNull(queryByText("Still typ"));
+    assert.isOk(getByTestId("gpt-blocks-pending"));
+    assert.isNull(queryByTestId("gpt-streaming-indicator"));
+    await waitFor(() => {
+      assert.isAtLeast(UNSAFE_getAllByType(ActivityIndicator).length, 1);
+    });
   });
 });

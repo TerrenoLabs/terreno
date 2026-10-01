@@ -1,4 +1,11 @@
-import {type AskValidationError, askResponseSchema} from "@terreno/blocks";
+import {
+  type AskValidationError,
+  askResponseSchema,
+  type Block,
+  type BlockAction,
+  type BlocksDocument,
+  parseBlocksPartial,
+} from "@terreno/blocks";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {
   AccessibilityInfo,
@@ -17,6 +24,8 @@ import type {AskFilesResolver} from "./asks/askFileRefs";
 import type {AskSubmitHandler, ChatAsk} from "./asks/askTypes";
 import {Box} from "./Box";
 import {Button} from "./Button";
+import {BlocksView} from "./blocks/BlocksView";
+import type {BlocksViewProps} from "./Common";
 import type {SelectedFile} from "./FilePickerButton";
 import {FilePickerButton} from "./FilePickerButton";
 import {Heading} from "./Heading";
@@ -74,6 +83,20 @@ export interface ToolResultInfo {
 // Message Types
 // ============================================================
 
+export interface BlockChatEvent {
+  action: BlockAction;
+  blockId: string;
+  elementId: string;
+  messageId: string;
+}
+
+/** What `onBlockCallback` returns. `replace: "block"` swaps that block. `text` appends a message. */
+export interface BlockCallbackResult {
+  blocks?: Block | BlocksDocument;
+  replace?: "block";
+  text?: string;
+}
+
 export interface GPTChatMessage {
   /**
    * Set on a `tool-call` message when the tool call is an agent ask. The chat renders an `AskCard`
@@ -81,6 +104,8 @@ export interface GPTChatMessage {
    */
   ask?: ChatAsk;
   content: string;
+  /** Stable id for block actions. Falls back to the message index. */
+  id?: string;
   contentParts?: MessageContentPart[];
   rating?: "up" | "down";
   role: "user" | "assistant" | "system" | "tool-call" | "tool-result";
@@ -114,6 +139,8 @@ export interface GPTChatProps {
   currentMessages: GPTChatMessage[];
   geminiApiKey?: string;
   histories: GPTChatHistory[];
+  /** Callback names the host will run. A callback outside this list is disabled. */
+  hostActions?: readonly string[];
   isStreaming?: boolean;
   /** Available MCP tools to display in the tools panel. */
   mcpTools?: MCPToolDetail[];
@@ -123,6 +150,12 @@ export interface GPTChatProps {
    * the returned promise settles. Without it, asks are shown but cannot be answered.
    */
   onAskSubmit?: AskSubmitHandler;
+  /** `open` and `select`. `reply` calls `onSubmit`. `callback` calls `onBlockCallback`. */
+  onBlockAction?: (event: BlockChatEvent) => void;
+  /** Runs a callback button. The button stays loading until the promise settles. */
+  onBlockCallback?: (
+    event: BlockChatEvent
+  ) => BlockCallbackResult | Promise<BlockCallbackResult | undefined> | undefined;
   onAttachFiles?: (files: SelectedFile[]) => void;
   onCreateHistory: () => void;
   onDeleteHistory: (id: string) => void;
@@ -139,6 +172,8 @@ export interface GPTChatProps {
    * URLs (`{url}`). Defaults to data URLs. Throw to keep the ask open.
    */
   resolveAskFiles?: AskFilesResolver;
+  /** Loads a `ref` dataset while `uiBlocks` is on. */
+  resolveDataset?: BlocksViewProps["resolveDataset"];
   selectedModel?: string;
   /**
    * Optional consumer-owned character for an empty chat. Terreno does not ship a
@@ -149,6 +184,11 @@ export interface GPTChatProps {
   suggestedPrompts?: string[];
   systemMemory?: string;
   testID?: string;
+  /**
+   * Assistant messages are whole-reply documents. A streaming message renders each finished
+   * top-level block and a spinner for the block still arriving.
+   */
+  uiBlocks?: boolean;
 }
 
 // ============================================================
@@ -549,7 +589,127 @@ const ContentPartsPreview = ({
   );
 };
 
-const MessageText = ({content, role}: {content: string; role: string}): React.ReactElement => {
+const replacementBlock = (blocks: Block | BlocksDocument): Block | undefined => {
+  if ("type" in blocks) {
+    return blocks;
+  }
+  return blocks.blocks[0];
+};
+
+const documentFromPartial = (partial: ReturnType<typeof parseBlocksPartial>): BlocksDocument => {
+  const doc = {v: 1} as BlocksDocument;
+  if (partial.datasets !== undefined) {
+    doc.datasets = partial.datasets as BlocksDocument["datasets"];
+  }
+  doc.blocks = partial.blocks as Block[];
+  return doc;
+};
+
+const AssistantBlocks = ({
+  content,
+  hostActions,
+  isPartial,
+  messageId,
+  onBlockEvent,
+  overrides,
+  pendingElementIds,
+  resolveDataset,
+}: {
+  content: string;
+  hostActions?: readonly string[];
+  isPartial: boolean;
+  messageId: string;
+  onBlockEvent: (event: BlockChatEvent) => void;
+  overrides?: Record<string, Block>;
+  pendingElementIds?: readonly string[];
+  resolveDataset?: BlocksViewProps["resolveDataset"];
+}): React.ReactElement => {
+  if (isPartial) {
+    const partial = parseBlocksPartial(content);
+    return (
+      <Box gap={2} testID={`gpt-blocks-${messageId}`}>
+        {partial.blocks.length > 0 ? (
+          <BlocksView
+            document={documentFromPartial(partial)}
+            hostActions={hostActions}
+            onAction={(event) =>
+              onBlockEvent({
+                action: event.action,
+                blockId: event.blockId,
+                elementId: event.elementId,
+                messageId,
+              })
+            }
+            overrides={overrides}
+            pendingElementIds={pendingElementIds}
+            resolveDataset={resolveDataset}
+          />
+        ) : null}
+        {partial.pending ? (
+          <Box testID="gpt-blocks-pending">
+            <Spinner size="sm" />
+          </Box>
+        ) : null}
+      </Box>
+    );
+  }
+  return (
+    <BlocksView
+      document={content}
+      hostActions={hostActions}
+      onAction={(event) =>
+        onBlockEvent({
+          action: event.action,
+          blockId: event.blockId,
+          elementId: event.elementId,
+          messageId,
+        })
+      }
+      overrides={overrides}
+      pendingElementIds={pendingElementIds}
+      resolveDataset={resolveDataset}
+      testID={`gpt-blocks-${messageId}`}
+    />
+  );
+};
+
+const MessageText = ({
+  content,
+  hostActions,
+  isPartial,
+  messageId,
+  onBlockEvent,
+  overrides,
+  pendingElementIds,
+  resolveDataset,
+  role,
+  uiBlocks,
+}: {
+  content: string;
+  hostActions?: readonly string[];
+  isPartial: boolean;
+  messageId: string;
+  onBlockEvent: (event: BlockChatEvent) => void;
+  overrides?: Record<string, Block>;
+  pendingElementIds?: readonly string[];
+  resolveDataset?: BlocksViewProps["resolveDataset"];
+  role: string;
+  uiBlocks: boolean;
+}): React.ReactElement => {
+  if (role === "assistant" && uiBlocks) {
+    return (
+      <AssistantBlocks
+        content={content}
+        hostActions={hostActions}
+        isPartial={isPartial}
+        messageId={messageId}
+        onBlockEvent={onBlockEvent}
+        overrides={overrides}
+        pendingElementIds={pendingElementIds}
+        resolveDataset={resolveDataset}
+      />
+    );
+  }
   if (role === "assistant") {
     return <MarkdownView>{content}</MarkdownView>;
   }
@@ -755,19 +915,35 @@ const AskTranscriptItem = ({
 };
 
 const MessageList = ({
+  appendedMessages,
   askErrors,
+  blockOverrides,
   currentMessages,
   handleCopyMessage,
+  hostActions,
+  isStreaming,
   onAskSubmit,
+  onBlockEvent,
   onRateFeedback,
+  pendingElements,
   resolveAskFiles,
+  resolveDataset,
+  uiBlocks,
 }: {
+  appendedMessages: GPTChatMessage[];
   askErrors?: Record<string, AskValidationError[]>;
+  blockOverrides: Record<string, Record<string, Block>>;
   currentMessages: GPTChatMessage[];
   handleCopyMessage: (text: string) => void;
+  hostActions?: readonly string[];
+  isStreaming: boolean;
   onAskSubmit?: AskSubmitHandler;
+  onBlockEvent: (event: BlockChatEvent) => void;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
+  pendingElements: Record<string, readonly string[]>;
   resolveAskFiles?: AskFilesResolver;
+  resolveDataset?: BlocksViewProps["resolveDataset"];
+  uiBlocks: boolean;
 }): React.ReactElement => {
   const askToolCallIds = new Set<string>();
   const toolResults = new Map<string, unknown>();
@@ -780,9 +956,16 @@ const MessageList = ({
     }
   }
 
+  const streamingIndex =
+    uiBlocks && isStreaming
+      ? currentMessages.findLastIndex((message) => message.role === "assistant")
+      : -1;
+  const messages =
+    appendedMessages.length === 0 ? currentMessages : [...currentMessages, ...appendedMessages];
+
   return (
     <>
-      {currentMessages.map((message, index) => {
+      {messages.map((message, index) => {
         if (message.role === "tool-call" && message.ask) {
           return (
             <AskTranscriptItem
@@ -817,8 +1000,12 @@ const MessageList = ({
         }
 
         const hasImages = message.contentParts?.some((p) => p.type === "image");
+        const messageId = message.id ?? `msg-${index}`;
         return (
-          <Box alignItems={message.role === "user" ? "end" : "start"} key={`msg-${index}`}>
+          <Box
+            alignItems={message.role === "user" ? "end" : "start"}
+            key={message.id ?? `msg-${index}`}
+          >
             <Box
               color={message.role === "user" ? "primary" : "neutralLight"}
               maxWidth={hasImages ? "90%" : "80%"}
@@ -829,7 +1016,18 @@ const MessageList = ({
                 hasContent={Boolean(message.content)}
                 parts={message.contentParts}
               />
-              <MessageText content={message.content} role={message.role} />
+              <MessageText
+                content={message.content}
+                hostActions={hostActions}
+                isPartial={index === streamingIndex}
+                messageId={messageId}
+                onBlockEvent={onBlockEvent}
+                overrides={blockOverrides[messageId]}
+                pendingElementIds={pendingElements[messageId]}
+                resolveDataset={resolveDataset}
+                role={message.role}
+                uiBlocks={uiBlocks}
+              />
               <AssistantActions
                 handleCopyMessage={handleCopyMessage}
                 index={index}
@@ -1004,10 +1202,13 @@ export const GPTChat = ({
   currentMessages,
   geminiApiKey,
   histories,
+  hostActions,
   isStreaming = false,
   mcpTools,
   mcpServers,
   onAskSubmit,
+  onBlockAction,
+  onBlockCallback,
   onAttachFiles,
   onCreateHistory,
   onDeleteHistory,
@@ -1020,11 +1221,13 @@ export const GPTChat = ({
   onSubmit,
   onUpdateTitle,
   resolveAskFiles,
+  resolveDataset,
   selectedModel,
   mascot,
   suggestedPrompts,
   systemMemory,
   testID,
+  uiBlocks = false,
 }: GPTChatProps): React.ReactElement => {
   const [inputValue, setInputValue] = useState("");
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -1038,6 +1241,71 @@ export const GPTChat = ({
   const [isApiKeyModalVisible, setIsApiKeyModalVisible] = useState(false);
   const [isToolsModalVisible, setIsToolsModalVisible] = useState(false);
   const [apiKeyDraft, setApiKeyDraft] = useState(geminiApiKey ?? "");
+  const [blockOverrides, setBlockOverrides] = useState<Record<string, Record<string, Block>>>({});
+  const [pendingElements, setPendingElements] = useState<Record<string, string[]>>({});
+  const [appendedMessages, setAppendedMessages] = useState<GPTChatMessage[]>([]);
+  const [blockHistoryId, setBlockHistoryId] = useState(currentHistoryId);
+  if (blockHistoryId !== currentHistoryId) {
+    setBlockHistoryId(currentHistoryId);
+    setBlockOverrides({});
+    setPendingElements({});
+    setAppendedMessages([]);
+  }
+
+  const runBlockCallback = useCallback(
+    async (event: BlockChatEvent): Promise<void> => {
+      setPendingElements((current) => ({
+        ...current,
+        [event.messageId]: [...(current[event.messageId] ?? []), event.elementId],
+      }));
+      try {
+        const result = await onBlockCallback?.(event);
+        if (result?.text) {
+          const text = result.text;
+          setAppendedMessages((current) => [
+            ...current,
+            {
+              content: text,
+              id: `block-text-${event.messageId}-${event.elementId}-${current.length}`,
+              role: "assistant",
+            },
+          ]);
+        }
+        if (result?.replace === "block" && result.blocks !== undefined) {
+          const block = replacementBlock(result.blocks);
+          if (block !== undefined) {
+            setBlockOverrides((current) => ({
+              ...current,
+              [event.messageId]: {...(current[event.messageId] ?? {}), [event.blockId]: block},
+            }));
+          }
+        }
+      } finally {
+        setPendingElements((current) => ({
+          ...current,
+          [event.messageId]: (current[event.messageId] ?? []).filter(
+            (id) => id !== event.elementId
+          ),
+        }));
+      }
+    },
+    [onBlockCallback]
+  );
+
+  const handleBlockEvent = useCallback(
+    (event: BlockChatEvent): void => {
+      if (event.action.kind === "reply") {
+        onSubmit(event.action.text);
+        return;
+      }
+      if (event.action.kind === "callback") {
+        void runBlockCallback(event);
+        return;
+      }
+      onBlockAction?.(event);
+    },
+    [onBlockAction, onSubmit, runBlockCallback]
+  );
 
   const handleSubmit = useCallback(() => {
     const trimmed = inputValue.trim();
@@ -1273,14 +1541,30 @@ export const GPTChat = ({
               ) : (
                 <>
                   <MessageList
+                    appendedMessages={appendedMessages}
                     askErrors={askErrors}
+                    blockOverrides={blockOverrides}
                     currentMessages={currentMessages}
                     handleCopyMessage={handleCopyMessage}
+                    hostActions={hostActions}
+                    isStreaming={isStreaming}
                     onAskSubmit={onAskSubmit}
+                    onBlockEvent={handleBlockEvent}
                     onRateFeedback={onRateFeedback}
+                    pendingElements={pendingElements}
                     resolveAskFiles={resolveAskFiles}
+                    resolveDataset={resolveDataset}
+                    uiBlocks={uiBlocks}
                   />
-                  <StreamingIndicator isStreaming={isStreaming} />
+                  <StreamingIndicator
+                    isStreaming={
+                      isStreaming &&
+                      !(
+                        uiBlocks &&
+                        currentMessages[currentMessages.length - 1]?.role === "assistant"
+                      )
+                    }
+                  />
                 </>
               )}
             </Box>

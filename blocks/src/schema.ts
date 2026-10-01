@@ -67,6 +67,53 @@ export interface ContextBlock {
   type: "context";
 }
 
+export const CHART_KINDS = ["line", "bar", "area", "donut"] as const;
+export const CHART_HEIGHTS = ["sm", "md", "lg"] as const;
+export const DATASET_COLUMN_TYPES = ["string", "number", "date"] as const;
+export const DATASET_GRAINS = ["hour", "day", "week", "month"] as const;
+
+export interface DatasetColumn {
+  name: string;
+  type: (typeof DATASET_COLUMN_TYPES)[number];
+}
+
+export interface InlineDataset {
+  columns: DatasetColumn[];
+  rows: unknown[][];
+  source?: "inline";
+}
+
+export interface RefDataset {
+  grain?: (typeof DATASET_GRAINS)[number];
+  id: string;
+  limit?: number;
+  source: "ref";
+}
+
+export type Dataset = InlineDataset | RefDataset;
+
+export interface ChartBlock {
+  data?: string;
+  emptyText?: string;
+  height?: (typeof CHART_HEIGHTS)[number];
+  id?: string;
+  kind: (typeof CHART_KINDS)[number];
+  legend?: boolean;
+  points?: {label: string; value: number}[];
+  title?: string;
+  type: "chart";
+  x?: string;
+  y?: string;
+}
+
+export interface TableBlock {
+  columns?: string[];
+  data: string;
+  id?: string;
+  title?: string;
+  type: "table";
+}
+
 export interface ColumnsBlock {
   children: Block[];
   id?: string;
@@ -86,13 +133,15 @@ export type LeafBlock =
   | MetricBlock
   | BadgeBlock
   | DividerBlock
-  | ContextBlock;
+  | ContextBlock
+  | ChartBlock
+  | TableBlock;
 
 export type Block = LeafBlock | ColumnsBlock | CardBlock;
 
 export interface BlocksDocument {
   blocks: Block[];
-  datasets?: Record<string, unknown>;
+  datasets?: Record<string, Dataset>;
   v: 1;
 }
 
@@ -149,6 +198,42 @@ const contextSchema = z
   })
   .strict();
 
+const chartSchema = z
+  .object({
+    ...sharedBlockFields,
+    data: z.string().min(1).max(64).optional(),
+    emptyText: visibleText(BLOCK_LIMITS.contextTextMaxLength).optional(),
+    height: z.enum(CHART_HEIGHTS).optional(),
+    kind: z.enum(CHART_KINDS),
+    legend: z.boolean().optional(),
+    points: z
+      .array(
+        z
+          .object({
+            label: visibleText(BLOCK_LIMITS.metricLabelMaxLength),
+            value: z.number().finite(),
+          })
+          .strict()
+      )
+      .max(BLOCK_LIMITS.datasetRowMax)
+      .optional(),
+    title: visibleText(BLOCK_LIMITS.cardTitleMaxLength).optional(),
+    type: z.literal("chart"),
+    x: z.string().min(1).max(64).optional(),
+    y: z.string().min(1).max(64).optional(),
+  })
+  .strict();
+
+const tableSchema = z
+  .object({
+    ...sharedBlockFields,
+    columns: z.array(z.string().min(1).max(64)).min(1).optional(),
+    data: z.string().min(1).max(64),
+    title: visibleText(BLOCK_LIMITS.cardTitleMaxLength).optional(),
+    type: z.literal("table"),
+  })
+  .strict();
+
 const blockSchema: z.ZodType<Block> = z.lazy(() =>
   z.discriminatedUnion("type", [
     headingSchema,
@@ -157,6 +242,8 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
     badgeSchema,
     dividerSchema,
     contextSchema,
+    chartSchema,
+    tableSchema,
     z
       .object({
         ...sharedBlockFields,
@@ -175,11 +262,37 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
   ])
 );
 
-/** Structural document schema. Dataset contents are checked in task B1.2. */
+const datasetColumnSchema = z
+  .object({
+    name: z.string().regex(/^[a-z][a-z0-9_]{0,63}$/),
+    type: z.enum(DATASET_COLUMN_TYPES),
+  })
+  .strict();
+
+const inlineDatasetSchema = z
+  .object({
+    columns: z.array(datasetColumnSchema).min(1),
+    rows: z.array(z.array(z.union([z.string(), z.number(), z.null()]))),
+    source: z.literal("inline").optional(),
+  })
+  .strict();
+
+const refDatasetSchema = z
+  .object({
+    grain: z.enum(DATASET_GRAINS).optional(),
+    id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
+    limit: z.number().int().positive().optional(),
+    source: z.literal("ref"),
+  })
+  .strict();
+
+const datasetSchema = z.union([refDatasetSchema, inlineDatasetSchema]);
+
+/** Document schema. Semantic dataset and chart checks run in `lintDocument`. */
 export const blocksSchema = z
   .object({
     blocks: z.array(blockSchema).min(1).max(BLOCK_LIMITS.maxBlocks),
-    datasets: z.record(z.string(), z.unknown()).optional(),
+    datasets: z.record(z.string().regex(/^[a-z][a-z0-9_]{0,63}$/), datasetSchema).optional(),
     v: z.literal(1),
   })
   .strict();

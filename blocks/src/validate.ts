@@ -8,6 +8,7 @@ import {
   sortBlockErrors,
 } from "./errors";
 import {BLOCK_LIMITS} from "./limits";
+import {type LintBlocksOptions, lintDocument} from "./lint";
 import {type BlocksDocument, blocksSchema, LAYOUT_BLOCK_TYPES} from "./schema";
 
 const TOP_LEVEL_ORDER = ["v", "datasets", "blocks"] as const;
@@ -304,10 +305,10 @@ const dropVersionIssues = (issues: readonly z.core.$ZodIssue[]): z.core.$ZodIssu
   issues.filter((issue) => !(issue.path.length === 1 && issue.path[0] === "v"));
 
 /**
- * Checks structure for leaf and layout blocks.
- * Returns every error at once. Warnings stay empty until semantic lint lands.
+ * Checks structure, then dataset, chart, and table lint.
+ * Returns every error at once. Warnings do not block a valid document.
  */
-export const validateBlocks = (doc: unknown): ValidateBlocksResult => {
+export const validateBlocks = (doc: unknown, options?: LintBlocksOptions): ValidateBlocksResult => {
   const structural: BlockError[] = [];
   if (isPlainMapping(doc)) {
     const order = keyOrderError(doc);
@@ -343,5 +344,13 @@ export const validateBlocks = (doc: unknown): ValidateBlocksResult => {
   if (structural.length > 0 || !parsed.success) {
     return {errors: sortBlockErrors(structural), ok: false, warnings: []};
   }
-  return {doc: parsed.data, ok: true, warnings: []};
+  const linted = lintDocument(parsed.data, options);
+  if (linted.errors.length > 0) {
+    return {
+      errors: sortBlockErrors(linted.errors),
+      ok: false,
+      warnings: sortBlockErrors(linted.warnings),
+    };
+  }
+  return {doc: parsed.data, ok: true, warnings: sortBlockErrors(linted.warnings)};
 };

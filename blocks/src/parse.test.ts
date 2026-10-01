@@ -9,11 +9,19 @@ import {validateBlocks} from "./validate";
 const fixturesDir = join(import.meta.dir, "fixtures");
 
 const expectedInvalid: Record<string, {code: string; path: string}[]> = {
+  "column-not-found.yaml": [{code: "COLUMN_NOT_FOUND", path: "blocks[0].x"}],
+  "column-type.yaml": [{code: "COLUMN_TYPE_MISMATCH", path: "blocks[0].y"}],
+  "dataset-not-found.yaml": [{code: "DATASET_NOT_FOUND", path: "blocks[0].data"}],
+  "dataset-too-large.yaml": [{code: "DATASET_TOO_LARGE", path: "datasets.signups.columns"}],
   "depth-exceeded.yaml": [{code: "DEPTH_EXCEEDED", path: "blocks[0].children[0]"}],
+  "duplicate-id.yaml": [{code: "DUPLICATE_ID", path: "blocks[1].id"}],
   "invalid-enum.yaml": [{code: "INVALID_ENUM", path: "blocks[0].size"}],
   "key-order.yaml": [{code: "KEY_ORDER", path: "blocks"}],
   "missing-required.yaml": [{code: "MISSING_REQUIRED", path: "blocks[0].markdown"}],
   "not-a-document.txt": [{code: "NOT_A_DOCUMENT", path: ""}],
+  "row-arity.yaml": [{code: "ROW_ARITY_MISMATCH", path: "datasets.signups.rows[0]"}],
+  "table-too-wide.yaml": [{code: "TABLE_TOO_WIDE", path: "blocks[0].columns"}],
+  "too-many-points.yaml": [{code: "TOO_MANY_POINTS", path: "datasets.signups.limit"}],
   "unknown-key.yaml": [{code: "UNKNOWN_KEY", path: "blocks[0].color"}],
   "unsupported-version.yaml": [{code: "UNSUPPORTED_VERSION", path: "v"}],
   "yaml-anchor.yaml": [{code: "YAML_FEATURE_DISALLOWED", path: ""}],

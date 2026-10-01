@@ -121,7 +121,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/blocks.md` (new: grammar tables, limits, error codes for this slice), `docs/explanation/agent-ui-blocks.md` (new: why a closed catalog, why whole-reply YAML, ownership), `docs/reference/README.md`, `docs/explanation/README.md`.
   - Acceptance: Blocks AC1 for the leaf + layout blocks, including a prose-only `text` document; Blocks AC2 for structural codes (`UNKNOWN_KEY`, `INVALID_ENUM`, `MISSING_REQUIRED`, `UNSUPPORTED_VERSION`, `DEPTH_EXCEEDED`, `TOO_MANY_BLOCKS`, `KEY_ORDER`, `NOT_A_DOCUMENT`); YAML anchors/tags rejected (`YAML_FEATURE_DISALLOWED`); `bun test blocks/` green.
 
-- [ ] **Task B1.2**: Datasets, chart and table schema, semantic lint
+- [x] **Task B1.2**: Datasets, chart and table schema, semantic lint
   - Delivers: `datasets` map with `inline` and `ref`; `chart` and `table` blocks; lint for dataset refs, column existence/type, row arity, id uniqueness, BD7 limits, chart heuristics as warnings.
   - Files: `blocks/src/schema.ts`, `blocks/src/lint.ts`, `blocks/src/validate.ts`, `blocks/src/fixtures/**`, `blocks/src/lint.test.ts`, `blocks/src/validate.perf.test.ts`.
   - Blocked by: B1.1

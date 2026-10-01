@@ -1,27 +1,44 @@
-/** Structural error codes for whole-reply documents. Semantic codes land with task B1.2. */
+/** Error codes for whole-reply documents. Warnings never block rendering. */
 export const BLOCK_ERROR_CODES = {
+  COLUMN_NOT_FOUND: "A chart or table names a column the dataset does not have.",
+  COLUMN_TYPE_MISMATCH: "A column value does not match the column type.",
+  DATASET_NOT_FOUND: "A chart or table names a dataset the document does not define.",
+  DATASET_TOO_LARGE: "A dataset has more rows or columns than allowed.",
   DEPTH_EXCEEDED: "A columns or card block is nested inside another columns or card block.",
+  DUPLICATE_ID: "An id or a column name is used more than once.",
   INVALID_ENUM: "A value is not one of the allowed values.",
   INVALID_FORMAT: "A string does not match its required format.",
   INVALID_TYPE: "A value has the wrong type.",
   KEY_ORDER: "Top-level keys are not in the order v, datasets, blocks.",
   MISSING_REQUIRED: "A required field is missing.",
   NOT_A_DOCUMENT: "The reply is not one YAML or JSON mapping with a v field.",
+  ROW_ARITY_MISMATCH: "A dataset row does not have one value per column.",
+  TABLE_TOO_WIDE: "A table lists more columns than allowed.",
   TOO_FEW: "A list has fewer items than allowed.",
   TOO_LONG: "A string is longer than allowed.",
   TOO_MANY: "A list has more items than allowed.",
   TOO_MANY_BLOCKS: "The document has more than the maximum number of blocks.",
+  TOO_MANY_POINTS: "A ref dataset asks for more rendered rows than allowed.",
   TOO_SHORT: "A string is empty or only whitespace.",
   UNKNOWN_KEY: "An object has a field that its schema does not define.",
   UNSUPPORTED_VERSION: "The document version is not 1.",
   YAML_FEATURE_DISALLOWED: "The document uses a YAML anchor, alias, or custom tag.",
 } as const;
 
+/** Chart heuristics. They ride along on a valid document and do not block rendering. */
+export const BLOCK_WARNING_CODES = {
+  BAR_TOO_MANY_CATEGORIES: "A bar chart has more categories than fit comfortably.",
+  DONUT_TOO_MANY_SLICES: "A donut chart has more slices than fit comfortably.",
+  LINE_SINGLE_POINT: "A line chart has only one point.",
+} as const;
+
+export type BlockWarningCode = keyof typeof BLOCK_WARNING_CODES;
+
 export type BlockErrorCode = keyof typeof BLOCK_ERROR_CODES;
 
 export interface BlockError {
-  /** A key of `BLOCK_ERROR_CODES`. */
-  code: BlockErrorCode;
+  /** A key of `BLOCK_ERROR_CODES` or `BLOCK_WARNING_CODES`. */
+  code: BlockErrorCode | BlockWarningCode;
   /** One instruction that fixes the error. */
   fix: string;
   /** What is wrong, in one sentence. */

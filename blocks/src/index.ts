@@ -116,9 +116,10 @@ export {
 } from "./asks/simpleCard";
 export {validateAskInput} from "./asks/validateInput";
 export {validateAskResponse} from "./asks/validateResponse";
-export type {BlockError, BlockErrorCode} from "./errors";
-export {BLOCK_ERROR_CODES} from "./errors";
+export type {BlockError, BlockErrorCode, BlockWarningCode} from "./errors";
+export {BLOCK_ERROR_CODES, BLOCK_WARNING_CODES} from "./errors";
 export {BLOCK_LIMITS} from "./limits";
+export type {KnownDataset, LintBlocksOptions} from "./lint";
 export type {ParseBlocksResult} from "./parse";
 export {parseBlocks} from "./parse";
 export type {
@@ -126,17 +127,27 @@ export type {
   Block,
   BlocksDocument,
   CardBlock,
+  ChartBlock,
   ColumnsBlock,
   ContextBlock,
+  Dataset,
+  DatasetColumn,
   DividerBlock,
   HeadingBlock,
+  InlineDataset,
   LeafBlock,
   MetricBlock,
+  RefDataset,
+  TableBlock,
   TextBlock,
 } from "./schema";
 export {
   BADGE_STATUSES,
   blocksSchema,
+  CHART_HEIGHTS,
+  CHART_KINDS,
+  DATASET_COLUMN_TYPES,
+  DATASET_GRAINS,
   HEADING_SIZES,
   METRIC_TRENDS,
   wrapAsTextDocument,

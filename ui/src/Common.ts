@@ -1207,6 +1207,50 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
   listViewMaxWidth?: number;
   renderChild?: () => ReactChild;
   onSelectionChange?: (value?: ListRenderItemInfo<TItem>) => void | Promise<void>;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Use the narrow layout when the window width is less than or equal to this many pixels.
+   * When omitted, the narrow layout follows `isNarrowViewport()`.
+   */
+  narrowBelowWidth?: number;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Minimum width, in pixels, of each child in the desktop side-by-side layout.
+   * Applies only when the viewport is not narrow and there are 1 or 2 non-null children.
+   * When omitted, that layout stays a flex row. When there are more than 2 children, the
+   * segmented-control layout is used and this prop is ignored.
+   */
+  desktopChildrenMinWidth?: number;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Opt-in labels for the narrow-viewport full-width pager, one per non-null child, in child
+   * order. The pager is active only when the narrow layout is active, a detail view is active,
+   * there is more than one non-null child, and this array's length equals that child count.
+   * Otherwise the dotted swiper is used. A length mismatch is ignored and falls back to the
+   * dotted swiper.
+   */
+  narrowViewportChildLabels?: string[];
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * When true, the narrow detail view is active even if the internal list selection is unset.
+   * Detail is active when the internal selection is set or this flag is true.
+   * Showing the list clears only the internal selection. The parent turns this flag off.
+   */
+  narrowViewportSelectionActive?: boolean;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Identity of the record the parent selected.
+   * When this string changes, the narrow pager resets to the first child.
+   * Width and layout measurement changes do not reset it.
+   */
+  narrowViewportSelectionKey?: string;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * When set on the opt-in narrow pager, show a return-to-list button that clears the
+   * internal selection and calls onSelectionChange with undefined.
+   * When omitted, that button is not rendered.
+   */
+  narrowViewportListButtonLabel?: string;
 }
 
 export type PermissionKind =
@@ -2334,6 +2378,12 @@ export interface IconButtonProps extends WithTestID {
    * @default "primary"
    */
   variant?: "primary" | "secondary" | "muted" | "destructive" | "navigation" | "ghost";
+
+  /**
+   * When set, the variant background is passed through applyColorOpacity and the icon color
+   * stays the opaque variant color. When omitted, the background is unchanged.
+   */
+  backgroundOpacity?: number;
 
   /**
    * If true, a confirmation modal will be shown before the onClick action.

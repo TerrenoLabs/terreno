@@ -320,8 +320,16 @@ images once per mount.
 ### SplitPage
 
 Master-detail layout. Pass `listViewData` plus `renderListViewItem` for the list, and
-`renderContent` for the detail pane. On large screens both panes stay visible. On small
+`renderContent` or children for the detail pane. On large screens both panes stay visible. On small
 screens the detail replaces the list until the user goes back.
+
+`desktopChildrenMinWidth` opts into a minimum pixel width for each desktop child when there
+are one or two children. `narrowViewportChildLabels` opts into a labeled full-width pager on
+the narrow viewport. `narrowBelowWidth` uses that viewport when the window is at or below the
+given pixel width; when omitted, the narrow viewport follows `isNarrowViewport()`. These props
+are web only; the native `SplitPage` ignores them. See `SplitPageProps` for when each prop
+applies and what is ignored.
+`IconButton`'s `backgroundOpacity` tints only that button's background.
 
 ```typescript
 import {SplitPage, Text} from "@terreno/ui";
@@ -627,7 +635,7 @@ import {
   mediaQuery,
   mediaQueryLargerThan,
   mediaQuerySmallerThan,
-  isMobileDevice,
+  isNarrowViewport,
 } from "@terreno/ui";
 
 // Read the current breakpoint
@@ -645,9 +653,9 @@ if (mediaQuerySmallerThan("lg")) {
   console.log("Smaller than large");
 }
 
-// Detect mobile
-if (isMobileDevice()) {
-  console.info("Running on mobile device");
+// Current window is below the desktop breakpoint
+if (isNarrowViewport()) {
+  console.info("Narrow viewport");
 }
 ``````
 
@@ -673,7 +681,7 @@ Web (desktop staff):
 
 On web, `sm` (320) and `md` (375) still classify widths below 1024 so layouts can remain accessible.
 
-`isMobileDevice()` is true below the supported desktop floor: native width < 1024 (`xl`), web width < 1024 (`lg`).
+`isNarrowViewport()` is true below the supported desktop floor: native width < 1024 (`xl`), web width < 1024 (`lg`). `isMobileDevice()` is the same check and is deprecated in favor of `isNarrowViewport`.
 
 Responsive `Box` direction props update automatically when the window resizes or a device rotates:
 

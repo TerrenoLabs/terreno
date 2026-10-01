@@ -78,27 +78,24 @@ export const SplitPageOptInLayouts: React.FC = (): React.ReactElement => {
   );
 };
 
-export const SplitPageNarrowBelowMedium: React.FC = (): React.ReactElement => {
+export const SplitPageNarrowBelowWidth: React.FC = (): React.ReactElement => {
   return (
     <Box height={400} width="100%">
       <SplitPage
         desktopChildrenMinWidth={200}
         listViewData={LIST_ITEMS}
-        narrowBelow="md"
+        narrowBelowWidth={500}
         narrowViewportChildLabels={["Summary", "Notes"]}
         narrowViewportListButtonLabel="Back to list"
         renderListViewItem={renderListItem}
       >
         <Box gap={2} padding={3}>
           <Heading size="sm">Summary</Heading>
-          <Text>
-            The md breakpoint starts at 375 pixels. Because narrowBelow includes the selected
-            breakpoint, this layout shrinks throughout md and below: any width under 1024 pixels.
-          </Text>
+          <Text>This layout uses the narrow pager at 500 pixels and below.</Text>
         </Box>
         <Box gap={2} padding={3}>
           <Heading size="sm">Notes</Heading>
-          <Text>At 1024 pixels and above, the list and both children stay side by side.</Text>
+          <Text>Above 500 pixels, the list and both children stay side by side.</Text>
         </Box>
       </SplitPage>
     </Box>

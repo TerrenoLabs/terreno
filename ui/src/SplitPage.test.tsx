@@ -50,14 +50,12 @@ const setWindowWidth = (width: number): (() => void) => {
 
 const styleWidth = (style: unknown): unknown => StyleSheet.flatten(style)?.width;
 
-let isSmallerThanMatch = false;
-
 const setDesktop = () => {
   mock.module("./MediaQuery", () => ({
     isNarrowViewport: () => false,
     mediaQuery: () => "lg" as const,
     mediaQueryLargerThan: () => true,
-    mediaQuerySmallerThan: () => isSmallerThanMatch,
+    mediaQuerySmallerThan: () => false,
   }));
 };
 
@@ -66,7 +64,7 @@ const setMobile = () => {
     isNarrowViewport: () => true,
     mediaQuery: () => "xs" as const,
     mediaQueryLargerThan: () => false,
-    mediaQuerySmallerThan: () => isSmallerThanMatch,
+    mediaQuerySmallerThan: () => false,
   }));
 };
 
@@ -131,12 +129,10 @@ describe("SplitPage", () => {
   };
 
   beforeEach(() => {
-    isSmallerThanMatch = false;
     setDesktop();
   });
 
   afterEach(() => {
-    isSmallerThanMatch = false;
     setDesktop();
   });
 
@@ -682,11 +678,11 @@ describe("SplitPage", () => {
       });
     };
 
-    it("shrinks at narrowBelow and keeps the default desktop layout when that check is false", async () => {
-      isSmallerThanMatch = true;
+    it("shrinks at narrowBelowWidth and keeps the desktop layout above that width", async () => {
       setDesktop();
+      const restoreNarrow = setWindowWidth(500);
       const shrunk = renderWithTheme(
-        <SplitPage {...defaultProps} narrowBelow="md">
+        <SplitPage {...defaultProps} narrowBelowWidth={500}>
           <View testID="child-1" />
           <View testID="child-2" />
         </SplitPage>
@@ -695,17 +691,19 @@ describe("SplitPage", () => {
       expect(shrunk.queryByTestId("swiper-flatlist")).toBeNull();
       await selectFirst(shrunk.getAllByLabelText);
       expect(shrunk.getByTestId("swiper-flatlist")).toBeTruthy();
+      restoreNarrow();
 
-      isSmallerThanMatch = false;
       setMobile();
+      const restoreWide = setWindowWidth(501);
       const sideBySide = renderWithTheme(
-        <SplitPage {...defaultProps} narrowBelow="xl">
+        <SplitPage {...defaultProps} narrowBelowWidth={500}>
           <View testID="child-1" />
           <View testID="child-2" />
         </SplitPage>
       );
       expect(sideBySide.getByTestId("child-1")).toBeTruthy();
       expect(sideBySide.queryByTestId("swiper-flatlist")).toBeNull();
+      restoreWide();
     });
 
     it("keeps the desktop flex row and the narrow dotted swiper without the new props", async () => {

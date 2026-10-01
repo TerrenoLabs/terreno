@@ -20,7 +20,6 @@ import type {
   FontAwesome6SolidNames,
 } from "./CommonIconTypes";
 import type {DropdownPanelAlign} from "./dropdownPanelLayout";
-import type {ResponsiveBreakpoint} from "./ResponsiveBreakpoint";
 import type {
   DataTableTestIDs,
   FieldTestIDs,
@@ -1210,11 +1209,10 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
   onSelectionChange?: (value?: ListRenderItemInfo<TItem>) => void | Promise<void>;
   /**
    * Web only. The native SplitPage ignores this prop.
-   * Use the narrow layout when `mediaQuerySmallerThan` is true for this breakpoint.
-   * That comparison is true at this size and below. When omitted, the narrow layout
-   * follows `isNarrowViewport()`.
+   * Use the narrow layout when the window width is less than or equal to this many pixels.
+   * When omitted, the narrow layout follows `isNarrowViewport()`.
    */
-  narrowBelow?: ResponsiveBreakpoint;
+  narrowBelowWidth?: number;
   /**
    * Web only. The native SplitPage ignores this prop.
    * Minimum width, in pixels, of each child in the desktop side-by-side layout.

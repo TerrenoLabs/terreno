@@ -20,7 +20,7 @@ import {Box} from "./Box";
 import type {SplitPageListItem, SplitPageProps} from "./Common";
 import {FlatList} from "./FlatList";
 import {IconButton} from "./IconButton";
-import {isNarrowViewport, mediaQuerySmallerThan} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {SegmentedControl} from "./SegmentedControl";
 import {Spinner} from "./Spinner";
 import {useTheme} from "./Theme";
@@ -28,8 +28,8 @@ import {useTheme} from "./Theme";
 // A component for rendering a list on one side and a details view on the right for large screens,
 // and a scrollable list where clicking an item takes you the details view.
 // On web, opt in to minimum widths for the desktop side-by-side children, or a labeled pager
-// on the narrow viewport. `narrowBelow` chooses that viewport; otherwise it follows
-// `isNarrowViewport()`. The native SplitPage ignores those props.
+// on the narrow viewport. `narrowBelowWidth` chooses that viewport from the window width;
+// otherwise it follows `isNarrowViewport()`. The native SplitPage ignores those props.
 export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   tabs = [],
@@ -46,7 +46,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   listViewMaxWidth,
   bottomNavBarHeight,
   desktopChildrenMinWidth,
-  narrowBelow,
+  narrowBelowWidth,
   narrowViewportChildLabels,
   narrowViewportListButtonLabel,
   narrowViewportSelectionActive,
@@ -65,7 +65,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   const [measuredPageWidth, setMeasuredPageWidth] = useState(0);
 
   const isNarrowLayout =
-    narrowBelow === undefined ? isNarrowViewport() : mediaQuerySmallerThan(narrowBelow);
+    narrowBelowWidth === undefined ? isNarrowViewport() : windowWidth <= narrowBelowWidth;
   const isDetailActive = selectedId !== undefined || narrowViewportSelectionActive === true;
 
   const elementArray = Children.toArray(children).filter((c) => c !== null);

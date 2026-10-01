@@ -384,7 +384,7 @@ collapsed `Accordion`.
 <BlocksView document={reply} testID="assistant-blocks" />
 ```
 
-Charts, tables, and actions render in later tasks. Demo story: `BlocksView`.
+Actions render in a later task. Demo story: `BlocksView`.
 
 ### AskCard
 

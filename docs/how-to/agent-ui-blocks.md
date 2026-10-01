@@ -80,6 +80,14 @@ The path is `/gpt/actions`, so a limiter on `/gpt` covers it. Each call is store
 6. An `open` action uses `router.push` for a `/…` route and `Linking.openURL` for an `https` URL.
 7. When the `{blocks}` event is `ok`, set `blockNote` to the top-level block count, such as `3 components`.
 
+## Turn blocks on in the example backend
+
+`example-backend` passes `uiBlocks` with `repair: true` and one host callback, `exportDataset`. Its payload is `{dataset: string}`. The handler returns `{replace: "block", blocks}` with a badge that names that dataset. Dataset TTL stays at the default, so stored rows are kept.
+
+The per-request tool `todoStats` counts the signed-in user's open and completed todos, calls `registerAiDataset`, and returns `datasetId`. A chart dataset uses `source: ref` and that id. Columns are `status` and `count`.
+
+`GPTChat` lists `exportDataset` in `hostActions`, so that callback stays enabled. The e2e mock also allows `export_csv`.
+
 ## Render documents in chat
 
 Set `uiBlocks` on `GPTChat`. Assistant `content` is the YAML document. While `isStreaming`

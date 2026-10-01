@@ -205,7 +205,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/how-to/agent-ui-blocks.md`, `docs/explanation/example-coverage.md`.
   - Acceptance: Blocks AC13; recording under `/opt/cursor/artifacts/`.
 
-- [ ] **Task B4.2**: example-backend enable, changelog, docs sweep
+- [x] **Task B4.2**: example-backend enable, changelog, docs sweep
   - Delivers: `uiBlocks` host action and `todoStats` dataset tool; changelog; indexes; rules.
   - Files: `example-backend/src/server.ts`, `example-backend/src/ai/hostActions.ts`, `example-backend/src/ai/tools.ts`, `changelog/unreleased/agent-ui-blocks.md`, docs READMEs, `.rulesync/rules/ui/00-ui.md`.
   - Blocked by: B4.1, B3.2, B3.3

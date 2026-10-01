@@ -24,7 +24,8 @@ import type express from "express";
 import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
-
+import {exampleUiBlocksOptions} from "../ai/hostActions";
+import {createTodoStatsTool} from "../ai/tools";
 import type {UserDocument} from "../types/models/userTypes";
 import {createDemoAgentService} from "./demoAgent";
 import {createTodoTools, todoToolApprovals} from "./todoTools";
@@ -596,6 +597,7 @@ const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
   const tools: Record<string, Tool> = {
     ...getMCPTools(req.user as User | undefined),
     ...createTodoTools({userId: user?._id}),
+    ...createTodoStatsTool({userId: user?._id}),
   };
 
   const apiKey = req.headers["x-ai-api-key"] as string | undefined;
@@ -753,7 +755,7 @@ export const addAiRoutes = (
     openApiOptions: options,
     toolChoice: "auto",
     tools: getDemoTools() as unknown as GptRouteOptions["tools"],
-    uiBlocks: true,
+    uiBlocks: exampleUiBlocksOptions,
   };
   addGptHistoryRoutes(router, {...options, chat});
   addGptRoutes(router, chat);

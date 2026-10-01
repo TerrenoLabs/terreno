@@ -234,6 +234,28 @@ Human docs: `docs/reference/ui.md` (GPTChat → Asks, AskCard, SimpleAskCard) an
 - Ask controls are built from Terreno components (`RadioField`, `SelectField`,
   `MultiselectField`, `TextField`, `Button` with `wrapText`) — keep it that way.
 
+## Blocks (GPTChat, BlocksView)
+
+Human docs: `docs/reference/ui.md` (GPTChat, BlocksView),
+`docs/reference/blocks.md`, and `docs/how-to/agent-ui-blocks.md`.
+
+```tsx
+<GPTChat
+  hostActions={["exportDataset"]}      // callbacks this host runs; others stay disabled
+  onBlockAction={handleBlockAction}    // open and select
+  onBlockCallback={handleBlockCallback} // callback; return {replace: "block", blocks} or {text}
+  resolveDataset={resolveDataset}      // load a ref dataset as {columns, rows, source: "inline"}
+  uiBlocks
+  {...otherChatProps}
+/>
+// Set GPTChatMessage.blockNote for a caption such as "3 components".
+
+<BlocksView document={yaml} hostActions={hostActions} resolveDataset={resolveDataset} />
+```
+
+- Assistant `content` is one whole-reply YAML document. `reply` calls `onSubmit`.
+- Render with `@terreno/ui` components only. Do not paint blocks with raw `View` or `Text`.
+
 ## SocialLoginButton
 
 Branded OAuth login button for Better Auth integration. Supports Google, GitHub, and Apple with appropriate brand colors and icons.

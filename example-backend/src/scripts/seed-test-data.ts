@@ -47,6 +47,7 @@ import type {UserDocument} from "../types/models/userTypes";
 import {getAuthProvider} from "../utils/betterAuthConfig";
 import {seedBetterAuthUserInProcess} from "../utils/betterAuthUserSeed";
 import {connectToMongoDB} from "../utils/database";
+import {CHAT_SAFETY_DATASET_NAME, seedChatSafetyDataset} from "./chatSafetyDataset";
 import {seedAnnouncements} from "./seed-announcements";
 import {seedFeatureFlags} from "./seed-feature-flags";
 
@@ -770,6 +771,14 @@ const seedObservability = async (context: SeedContext): Promise<void> => {
       ]);
     }
   }
+
+  const safety = await seedChatSafetyDataset({dryRun: context.dryRun});
+  context.changes.push({
+    change: safety.datasetChange,
+    count: 1,
+    key: JSON.stringify({name: CHAT_SAFETY_DATASET_NAME}),
+    model: "ObsDataset",
+  });
 };
 
 export const seedSteps: SeedStep[] = [

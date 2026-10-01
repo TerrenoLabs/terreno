@@ -44,7 +44,9 @@ That loop is the product requirement, not an optional dashboard. Operator steps:
 The example backend always registers the local plugin. Its idempotent seed creates
 `examples/example-summarize` with production on v1 and an experimental v2, the human
 `correctness-human` evaluator, the automatic `schema-assert` evaluator, and a two-item
-`example-gold` dataset. This makes the review and experiment loops walkable without Langfuse:
+`example-gold` dataset. It also creates `chat-safety-synthetic`, a proofread set of
+two-person chats for routing, toxicity, privacy, and dismissive-reply experiments.
+This makes the review and experiment loops walkable without Langfuse:
 resolve the production prompt → emit a trace → inspect spans and sensitive I/O → send the
 trace to Review → record a human score.
 

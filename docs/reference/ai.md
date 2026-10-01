@@ -384,7 +384,14 @@ The example backend always registers `createLocalObservabilityPlugin()` and pass
 validated `AI_OBS_PRICE_MAP_JSON` object as `priceMap`. `bun run backend:seed` idempotently
 creates `examples/example-summarize` with production on v1 and an experimental v2, installs
 `correctness-human` and `schema-assert`, and creates a two-item proofread `example-gold`
-dataset bound to the prompt input schema. Invalid price JSON or negative/non-numeric prices
+dataset bound to the prompt input schema. The same seed creates `examples/chat-safety-screen`
+(production v1 scores the new message alone; v2 reads earlier turns), `examples/chat-safety-judge`,
+the `chat-safety-agreement` llm-judge, and the 12-item proofread synthetic dataset
+`chat-safety-synthetic`. Each row is one new message plus earlier turns from a two-person chat,
+labeled for 988 vs care-team routing, toxicity, a privacy leak, and a dismissive reply.
+Admin → Scripts → `seedChatSafetyDataset`, or `bun run script seedChatSafetyDataset --wet` from
+`example-backend`, loads that set into an already-running database. `SEED_DEFAULTS=true` loads
+it on boot, including PR preview. Invalid price JSON or negative/non-numeric prices
 fail startup with `AI_OBS_PRICE_MAP_JSON` in the error.
 
 `POST /ai/example-summarize` (example backend) runs that seeded prompt with

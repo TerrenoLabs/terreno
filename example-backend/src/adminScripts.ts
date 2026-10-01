@@ -15,6 +15,7 @@ import {consentDefinitions} from "./consentDefinitions";
 import {Project} from "./models/project";
 import {Todo} from "./models/todo";
 import {User} from "./models/user";
+import {seedChatSafetyDataset} from "./scripts/chatSafetyDataset";
 import {seedFeatureFlags} from "./scripts/seed-feature-flags";
 import {seedDefaultData} from "./scripts/seed-test-data";
 
@@ -211,6 +212,15 @@ export const adminScripts: AdminScriptConfig[] = [
       "Reset example application data and restore defaults. Preserves users, authentication, RBAC roles, and script history.",
     name: "resetDatabase",
     runner: resetExampleDatabase,
+  },
+  {
+    description:
+      "Load the synthetic chat-safety dataset (12 proofread two-person chats), screen prompt v1 and v2, judge prompt, and agreement evaluator. Idempotent. Also loads on boot when SEED_DEFAULTS=true. CLI: bun run script seedChatSafetyDataset --wet",
+    name: "seedChatSafetyDataset",
+    runner: async (wetRun) => {
+      const result = await seedChatSafetyDataset({dryRun: !wetRun});
+      return {results: result.results, success: true};
+    },
   },
   {
     description:

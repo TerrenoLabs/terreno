@@ -107,6 +107,38 @@ describe("seedDefaultData", () => {
     assert.equal(dataset?.counts.total, 2);
     assert.equal(dataset?.counts.human, 2);
     assert.equal(dataset?.inputSchemaPromptName, "example-summarize");
+    const screen = (await promptStore.list({search: "chat-safety-screen"})).find(
+      (entry) => entry.name === "chat-safety-screen"
+    );
+    assert.equal(screen?.latestVersion, 2);
+    assert.equal(screen?.production, 1);
+    const judge = (await promptStore.list({search: "chat-safety-judge"})).find(
+      (entry) => entry.name === "chat-safety-judge"
+    );
+    assert.equal(judge?.production, 1);
+    const safetyEvaluator = (await new LocalEvaluatorStore().list()).find(
+      (entry) => entry.name === "chat-safety-agreement"
+    );
+    assert.equal(safetyEvaluator?.type, "llm-judge");
+    assert.equal(safetyEvaluator?.judgePromptName, "chat-safety-judge");
+    assert.equal(safetyEvaluator?.dimensions.length, 5);
+    assert.equal(safetyEvaluator?.target, "generation span");
+    const safetyDataset = (await new LocalDatasetStore(promptStore).list()).find(
+      (entry) => entry.name === "chat-safety-synthetic"
+    );
+    assert.equal(safetyDataset?.counts.total, 12);
+    assert.equal(safetyDataset?.counts.human, 12);
+    assert.equal(safetyDataset?.inputSchemaPromptName, "chat-safety-screen");
+    if (!safetyDataset) {
+      assert.fail("chat-safety-synthetic was not seeded");
+    }
+    const safetyItems = await new LocalDatasetStore(promptStore).listItems(safetyDataset.id);
+    assert.equal(safetyItems.length, 12);
+    assert.isTrue(
+      safetyItems.every((item) => {
+        return item.origin === "synthetic" && item.proofread;
+      })
+    );
     assert.equal(
       await CommsMessage.countDocuments({
         "metadata.demoSeed": true,

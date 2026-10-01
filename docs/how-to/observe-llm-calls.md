@@ -85,7 +85,11 @@ that key exists.
 2. Run `bun run backend:seed`. The idempotent seed creates `examples/example-summarize`
    v1 with `production` pointing to v1 and candidate v2, plus the human
    `correctness-human` evaluator, automatic `schema-assert` evaluator, and
-   two-item `example-gold` dataset.
+   two-item `example-gold` dataset. It also creates `chat-safety-synthetic` (12 proofread
+   two-person chats), `chat-safety-screen` v1 and v2, and the `chat-safety-agreement`
+   evaluator. On a database that already booted, run Admin → Scripts →
+   `seedChatSafetyDataset` as a wet run, or
+   `cd example-backend && bun run script seedChatSafetyDataset --wet`.
 3. Start `bun run backend:dev` and `bun run frontend:web`, then sign in as the seeded
    admin.
 4. Open **AI Observability → Prompts** to inspect or save a new immutable version. Move

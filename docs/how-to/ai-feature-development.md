@@ -9,7 +9,15 @@ Volume targets (how many gold items, class balance) live in the operator spreads
 For a walkable example, run `bun run backend:seed`: it installs
 `examples/example-summarize` with production on v1 and candidate v2, the human
 `correctness-human` and automatic `schema-assert` evaluators, and the proofread
-`example-gold` dataset.
+`example-gold` dataset. It also installs `chat-safety-synthetic`, twelve proofread
+synthetic chats between two people. Each item is the new message plus a few earlier
+turns. Gold labels cover 988 (immediate danger to self), care-team follow-up,
+toxicity, a privacy leak, and a dismissive reply. Compare `chat-safety-screen` v1
+(new message only) with v2 (earlier turns) using evaluator `chat-safety-agreement`.
+These fixtures are proofread on purpose so experiments include them. The Generate
+button still lands drafts as `proofread: false` until a human accepts them. Load the
+same set into a running database, including a PR preview, with Admin → Scripts →
+`seedChatSafetyDataset` (wet run).
 
 ## 1. Gather a gold dataset
 

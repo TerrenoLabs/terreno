@@ -8,7 +8,12 @@ import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
 import {AIService} from "../service/aiService";
 import type {MCPService} from "../service/mcpService";
-import {COMPACT_SURFACE_SYSTEM_PROMPT, TERRENO_ASKS_SYSTEM_PROMPT} from "../service/prompts";
+import {
+  COMPACT_SURFACE_SYSTEM_PROMPT,
+  TERRENO_ASKS_SYSTEM_PROMPT,
+  TERRENO_UI_BLOCKS_SYSTEM_PROMPT,
+  UI_BLOCKS_REPAIR_SYSTEM_PROMPT,
+} from "../service/prompts";
 import {
   type Agent,
   buildApp,
@@ -2908,5 +2913,117 @@ describe("/gpt/prompt asks", () => {
       expect(history.title).toBe("Plans (edited)");
       expect(history.pendingAsk).toBeUndefined();
     });
+  });
+});
+
+const VALID_BLOCKS = `v: 1
+blocks:
+  - type: heading
+    text: Hello
+`;
+
+const UNKNOWN_CALLBACK = `v: 1
+blocks:
+  - type: actions
+    id: row
+    elements:
+      - type: button
+        id: run_btn
+        text: Export
+        action:
+          kind: callback
+          name: export_csv
+`;
+
+describe("/gpt/prompt uiBlocks", () => {
+  beforeAll(async () => {
+    await ensureTestUsers();
+  });
+
+  afterEach(async () => {
+    await AIRequest.deleteMany({});
+    await GptHistory.deleteMany({});
+  });
+
+  it("leaves the prompt and the event list unchanged when uiBlocks is off", async () => {
+    const model = createScriptedModel({steps: [textStep("Hello")]});
+    const agent = await authAsUser(buildApp({model}), "notAdmin");
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    expect(systemPromptOf(modelCall(model, 0))).toBeUndefined();
+    expect(events.some((event) => "blocks" in event)).toBe(false);
+    expect(events.map((event) => Object.keys(event)[0])).toEqual(["text", "done"]);
+  });
+
+  it("appends the blocks prompt and emits {blocks} before {done} for a valid document", async () => {
+    const model = createScriptedModel({steps: [textStep(VALID_BLOCKS)]});
+    const agent = await authAsUser(buildApp({model, uiBlocks: true}), "notAdmin");
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    expect(systemPromptOf(modelCall(model, 0))).toContain(TERRENO_UI_BLOCKS_SYSTEM_PROMPT);
+    const keys = events.map((event) => Object.keys(event)[0]);
+    expect(keys).toEqual(["text", "blocks", "done"]);
+    expect(events[1]).toEqual({blocks: {errors: [], ok: true, warnings: []}});
+    const history = await loadHistory(await onlyHistoryId());
+    expect(rowsOf(history).find((row) => row.type === "assistant")?.text).toBe(
+      VALID_BLOCKS.trimEnd()
+    );
+  });
+
+  it("rejects an unregistered callback and stores the error on the assistant turn", async () => {
+    const model = createScriptedModel({steps: [textStep(UNKNOWN_CALLBACK)]});
+    const agent = await authAsUser(
+      buildApp({model, uiBlocks: {hostActions: {approve: {}}}}),
+      "notAdmin"
+    );
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    const blocks = events.find((event) => "blocks" in event)?.blocks as {
+      errors: {code: string}[];
+      ok: boolean;
+    };
+    expect(blocks.ok).toBe(false);
+    expect(blocks.errors.map((error) => error.code)).toContain("UNKNOWN_HOST_ACTION");
+    expect(systemPromptOf(modelCall(model, 0))).toContain("approve");
+    const history = await loadHistory(await onlyHistoryId());
+    expect(String(rowsOf(history).find((row) => row.type === "assistant")?.text)).toContain(
+      "UNKNOWN_HOST_ACTION"
+    );
+    expect(model.doGenerate).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs one repair call and stores the repaired document", async () => {
+    const model = createScriptedModel({steps: [textStep(UNKNOWN_CALLBACK)]});
+    model.doGenerate.mockImplementation(async (options: {prompt?: unknown}) => {
+      const raw = JSON.stringify(options);
+      const text = raw.includes("UNKNOWN_HOST_ACTION") ? VALID_BLOCKS : "Workspace setup";
+      return {
+        content: [{text, type: "text" as const}],
+        finishReason: "stop" as const,
+        usage: {inputTokens: 1, outputTokens: 1, totalTokens: 2},
+      };
+    });
+    const agent = await authAsUser(
+      buildApp({model, uiBlocks: {hostActions: {approve: {}}, repair: true}}),
+      "notAdmin"
+    );
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    expect(events.map((event) => Object.keys(event)[0])).toEqual(["text", "blocks", "done"]);
+    expect(events[1]).toMatchObject({blocks: {ok: true}});
+    const repairCall = model.doGenerate.mock.calls.find((call) =>
+      JSON.stringify(call[0]).includes("UNKNOWN_HOST_ACTION")
+    );
+    expect(repairCall).toBeDefined();
+    expect(JSON.stringify(repairCall?.[0])).toContain(UI_BLOCKS_REPAIR_SYSTEM_PROMPT);
+    expect(model.doGenerate).toHaveBeenCalledTimes(2);
+    const history = await loadHistory(await onlyHistoryId());
+    expect(rowsOf(history).find((row) => row.type === "assistant")?.text).toBe(
+      VALID_BLOCKS.trimEnd()
+    );
   });
 });

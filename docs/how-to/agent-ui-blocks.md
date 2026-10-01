@@ -18,6 +18,22 @@ The same check is `validateBlocks` in `@terreno/blocks`. Field tables are in the
 3. The preview updates as you type. An invalid document shows the error banner and keeps
    the raw text collapsed.
 
+## Require documents from the model
+
+Pass `uiBlocks: true` to `addGptRoutes`. The model is told that its whole reply is one document. When the turn's text finishes, the route checks it and sends `{blocks: {ok, errors, warnings}}` before `{done}`.
+
+```ts
+addGptRoutes(router, {
+  aiService,
+  uiBlocks: {
+    hostActions: {export_csv: {}},
+    repair: true,
+  },
+});
+```
+
+`hostActions` is the callback allowlist. A callback outside it fails with `UNKNOWN_HOST_ACTION`. `repair: true` runs one repair call and stores that document. A document that is still invalid is stored with a `Block validation errors:` note so the next turn sees the codes.
+
 ## Render documents in chat
 
 Set `uiBlocks` on `GPTChat`. Assistant `content` is the YAML document. While `isStreaming`

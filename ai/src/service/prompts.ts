@@ -1,3 +1,23 @@
+import {blocksPromptSection} from "@terreno/blocks";
+
+/**
+ * Whole-reply document instructions, with no host callbacks registered.
+ * `uiBlocksSystemPrompt` rebuilds this when the host lists callback names.
+ */
+export const TERRENO_UI_BLOCKS_SYSTEM_PROMPT = blocksPromptSection();
+
+/** Tells the model to return only a corrected document. The failed document and its errors are the user prompt. */
+export const UI_BLOCKS_REPAIR_SYSTEM_PROMPT =
+  "The document you wrote failed validation. Reply with only the corrected document. Do not explain the changes.";
+
+/** The blocks prompt for this host's callback names. */
+export const uiBlocksSystemPrompt = (hostActions: readonly string[]): string => {
+  if (hostActions.length === 0) {
+    return TERRENO_UI_BLOCKS_SYSTEM_PROMPT;
+  }
+  return blocksPromptSection({hostActions});
+};
+
 /**
  * Appended to the chat system prompt when a route enables asks. The enabled ask tools and their
  * limits follow it at call time (`askPromptSection` from @terreno/blocks), so the numbers stay in

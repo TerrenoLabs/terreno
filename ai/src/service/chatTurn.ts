@@ -7,11 +7,14 @@ import {
   type AskResponse,
   type AskSurface,
   askKindsForSurface,
+  type BlockError,
   type FilesAnswer,
+  parseBlocks,
   type SimpleCard,
   type TurnResult,
   toSimpleCard,
   validateAskResponse,
+  validateBlocks,
 } from "@terreno/blocks";
 import type {ModelMessage, Tool, ToolResultPart} from "ai";
 import {stepCountIs, streamText} from "ai";
@@ -31,6 +34,7 @@ import type {
   GptHistoryPrompt,
   GptRouteOptions,
   MessageContentPart,
+  UiBlocksOptions,
 } from "../types";
 import {AIService} from "./aiService";
 import {
@@ -53,7 +57,12 @@ import {
   toStoredMessages,
   withoutReservedToolNames,
 } from "./asks";
-import {COMPACT_SURFACE_SYSTEM_PROMPT, TITLE_GENERATION_PROMPT} from "./prompts";
+import {
+  COMPACT_SURFACE_SYSTEM_PROMPT,
+  TITLE_GENERATION_PROMPT,
+  UI_BLOCKS_REPAIR_SYSTEM_PROMPT,
+  uiBlocksSystemPrompt,
+} from "./prompts";
 
 export const DEMO_RESPONSE =
   "This is demo mode. To use AI features, paste your Gemini API key in Settings.";
@@ -87,6 +96,10 @@ interface ChatTurnImageEvent {
   image: {mimeType: string; url: string};
 }
 
+interface ChatTurnBlocksEvent {
+  blocks: {errors: BlockError[]; ok: boolean; warnings: BlockError[]};
+}
+
 interface ChatTurnTextEvent {
   text: string;
 }
@@ -102,6 +115,7 @@ interface ChatTurnToolResultEvent {
 type ChatTurnEvent =
   | ChatTurnAskEvent
   | ChatTurnAskResolvedEvent
+  | ChatTurnBlocksEvent
   | ChatTurnDoneEvent
   | ChatTurnErrorEvent
   | ChatTurnFileEvent
@@ -1008,27 +1022,91 @@ const collectTools = async ({
   return {...withoutReservedToolNames(allTools), ...createAskTools({kinds: askKinds, surface})};
 };
 
+const resolveUiBlocks = (uiBlocks: GptRouteOptions["uiBlocks"]): UiBlocksOptions | undefined => {
+  if (!uiBlocks) {
+    return undefined;
+  }
+  if (uiBlocks === true) {
+    return {};
+  }
+  return uiBlocks;
+};
+
 /**
- * The system prompt with the asks section when asks are offered and the compact line on the
- * compact surface. Without either, it is the request's system prompt unchanged.
+ * The system prompt plus the asks section, the blocks document section, and the compact line
+ * when those options are on. With none of them, it is the request's system prompt unchanged.
  */
 const withTurnSystemPrompt = ({
   askKinds,
+  blocksPrompt,
   surface,
   systemPrompt,
 }: {
   askKinds: AskKind[];
+  blocksPrompt?: string;
   surface: AskSurface;
   systemPrompt: string | undefined;
 }): string | undefined => {
   const sections = [
     ...(askKinds.length > 0 ? [buildAsksSystemPrompt({kinds: askKinds, surface})] : []),
+    ...(blocksPrompt ? [blocksPrompt] : []),
     ...(surface === "compact" ? [COMPACT_SURFACE_SYSTEM_PROMPT] : []),
   ];
   if (sections.length === 0) {
     return systemPrompt;
   }
   return [systemPrompt, ...sections].filter(Boolean).join("\n\n");
+};
+
+const checkBlockDocument = (
+  text: string,
+  hostActions: readonly string[] | undefined
+): {errors: BlockError[]; ok: boolean; warnings: BlockError[]} => {
+  const parsed = parseBlocks(text);
+  if (!parsed.ok) {
+    return {errors: parsed.errors, ok: false, warnings: []};
+  }
+  const validated = validateBlocks(parsed.value, {
+    ...(hostActions ? {hostActions} : {}),
+  });
+  return {
+    errors: validated.ok ? [] : validated.errors,
+    ok: validated.ok,
+    warnings: validated.warnings,
+  };
+};
+
+const storedBlockText = (text: string, errors: BlockError[]): string => {
+  if (errors.length === 0) {
+    return text;
+  }
+  const lines = errors.map((error) => `- ${error.path} ${error.code} ${error.message}`);
+  return `${text}\n\nBlock validation errors:\n${lines.join("\n")}`;
+};
+
+const repairBlockDocument = async ({
+  aiService,
+  errors,
+  text,
+}: {
+  aiService: AIService;
+  errors: BlockError[];
+  text: string;
+}): Promise<string | undefined> => {
+  try {
+    const errorLines = errors.map((error) => `- ${error.path} ${error.code} ${error.message}`);
+    const repaired = await aiService.generateText({
+      prompt: `Document:\n${text}\n\nErrors:\n${errorLines.join("\n")}`,
+      systemPrompt: UI_BLOCKS_REPAIR_SYSTEM_PROMPT,
+    });
+    const trimmed = repaired.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  } catch (error) {
+    logger.warn("Block document repair failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
 };
 
 /** What the turn needs to turn a host tool's approval request into an approval ask. */
@@ -1383,8 +1461,12 @@ export const runChatTurn = async ({
     supportsTools,
     surface,
   });
+  const uiBlocks = resolveUiBlocks(options.uiBlocks);
   const system = withTurnSystemPrompt({
     askKinds: offeredAskKinds,
+    blocksPrompt: uiBlocks
+      ? uiBlocksSystemPrompt(Object.keys(uiBlocks.hostActions ?? {}))
+      : undefined,
     surface,
     systemPrompt: effectiveSystemPrompt,
   });
@@ -1540,7 +1622,31 @@ export const runChatTurn = async ({
       await endFailedTurn({errorMessage: record.streamError, isErrorSent: true});
       return;
     }
-    const {askCalls, fullResponse, generatedImages} = record;
+    const {askCalls, generatedImages} = record;
+    let {fullResponse} = record;
+    const hostActionNames =
+      uiBlocks?.hostActions === undefined ? undefined : Object.keys(uiBlocks.hostActions);
+    let blocksCheck =
+      uiBlocks && fullResponse.trim() !== ""
+        ? checkBlockDocument(fullResponse, hostActionNames)
+        : undefined;
+    let repaired = false;
+    if (blocksCheck && !blocksCheck.ok && uiBlocks?.repair === true) {
+      const next = await repairBlockDocument({
+        aiService,
+        errors: blocksCheck.errors,
+        text: fullResponse,
+      });
+      if (next !== undefined) {
+        fullResponse = next;
+        repaired = true;
+        blocksCheck = checkBlockDocument(fullResponse, hostActionNames);
+      }
+    }
+    const storedResponse =
+      blocksCheck && !blocksCheck.ok
+        ? storedBlockText(fullResponse, blocksCheck.errors)
+        : fullResponse;
 
     // The first ask in the step pauses the turn. Any other ask the model made in that step is
     // cancelled now; any other approval is denied when the turn resumes, so its tool never runs.
@@ -1549,7 +1655,7 @@ export const runChatTurn = async ({
     const ask = asked ? {...asked, simple: toSimpleCard(asked)} : undefined;
     const firstRowIndex = await saveRows([
       ...record.rows,
-      ...assistantRows({fullResponse, generatedImages, modelId: aiService.modelId}),
+      ...assistantRows({fullResponse: storedResponse, generatedImages, modelId: aiService.modelId}),
       ...(ask
         ? [
             askCallRow(ask, "pending"),
@@ -1595,13 +1701,23 @@ export const runChatTurn = async ({
             },
           }
         : {}),
+      ...(blocksCheck
+        ? {
+            uiBlocks: {
+              errorCodes: blocksCheck.errors.map((error) => error.code),
+              ok: blocksCheck.ok,
+              repaired,
+              warningCodes: blocksCheck.warnings.map((error) => error.code),
+            },
+          }
+        : {}),
     };
     try {
       await AIRequest.logRequest({
         aiModel: modelId ?? "unknown",
         prompt: logPrompt,
         requestType: "general",
-        response: fullResponse,
+        response: storedResponse,
         responseTime: DateTime.now().toMillis() - startTime,
         userId: userId ?? undefined,
         ...(Object.keys(metadata).length > 0 ? {metadata} : {}),
@@ -1632,6 +1748,9 @@ export const runChatTurn = async ({
       fullResponseLength: fullResponse.length,
       historyId: history._id.toString(),
     });
+    if (blocksCheck) {
+      sink.emit({blocks: blocksCheck});
+    }
     sink.emit({
       done: true,
       historyId: history._id.toString(),

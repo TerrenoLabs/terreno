@@ -163,7 +163,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/ui.md`, `docs/how-to/agent-ui-blocks.md`.
   - Acceptance: Blocks AC7; Blocks AC19 (`GPTChat` half); Blocks AC20 (`GPTChat` half); `uiBlocks` off regression; playground recording.
 
-- [ ] **Task B3.1**: `uiBlocks` route option, prompt, post-stream validation, repair
+- [x] **Task B3.1**: `uiBlocks` route option, prompt, post-stream validation, repair
   - Delivers: `addGptRoutes` `uiBlocks` option; final-step document; SSE `{blocks}` before `{done}`; optional one repair pass; errors stored for the next turn.
   - Files: `ai/package.json`, `ai/src/service/prompts.ts`, `ai/src/routes/gpt.ts`, `ai/src/types/index.ts`, `ai/src/routes/gpt.test.ts`.
   - Blocked by: B1.3

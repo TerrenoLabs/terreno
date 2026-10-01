@@ -306,6 +306,12 @@ export interface AskFileDownloader {
   download: (gcsKey: string) => Promise<Buffer>;
 }
 
+/** `addGptRoutes` `uiBlocks`. `true` checks every assistant reply. `hostActions` names the callbacks the model may emit. */
+export interface UiBlocksOptions {
+  hostActions?: Record<string, {payload?: unknown}>;
+  repair?: boolean;
+}
+
 export interface GptRouteOptions {
   /** Pre-configured AIService. Optional when using per-request keys or demo mode. */
   aiService?: import("../service/aiService").AIService;
@@ -335,6 +341,12 @@ export interface GptRouteOptions {
   maxSteps?: number;
   /** Cheap model ID used for generating conversation titles (e.g. "gemini-2.0-flash-lite"). Falls back to the main model if not set. */
   titleModelId?: string;
+  /**
+   * Assistant replies are whole-reply block documents. Off by default; when off, the system
+   * prompt and SSE events are unchanged. `true` validates the final text and emits `{blocks}`
+   * before `{done}`. `{repair: true}` runs one repair call when that check fails.
+   */
+  uiBlocks?: boolean | UiBlocksOptions;
   /** Langfuse prompt name to load and use as the system prompt. Compiled with no variables.
    * Falls back gracefully if Langfuse is not configured or the prompt is not found. */
   langfuseSystemPromptName?: string;

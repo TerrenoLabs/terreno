@@ -95,6 +95,8 @@ export class AiApp implements TerrenoPlugin {
       createModelFn,
       createServerModelFn,
       demoMode,
+      // Attachments are only uploaded when the file routes are mounted too
+      fileStorageService: fileStorageService && gcsBucket ? fileStorageService : undefined,
       maxSteps,
       mcpService,
       openApiOptions,

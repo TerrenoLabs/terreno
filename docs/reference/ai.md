@@ -211,7 +211,9 @@ Conversation history with multi-modal prompts.
 | `userId` | ObjectId | Owner (required) |
 | `title` | string? | Auto-generated on first `/gpt/prompt` response when empty |
 | `projectId` | ObjectId? | Optional project association |
-| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields. `text` is required unless `content` has parts; an image-only assistant response saves `text: ""` |
+| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields, `status`, `streamId`. `text` is required unless `content` has parts or `status` is set; an image-only assistant response saves `text: ""` |
+
+Assistant replies from `/gpt/prompt` carry `streamId` and `status`: `streaming` while partial text is persisted, then `complete` or `error`. `buildMessages` skips `streaming` replies and `error` replies with no output. Attachment `content` parts carry an optional `gcsKey` when the file was uploaded to durable storage.
 
 **Virtual:** `ownerId` aliases `userId` for `Permissions.IsOwner`.
 
@@ -252,9 +254,33 @@ GPT project with persistent context and memories.
 | `/gpt/prompt` | POST | `IsAuthenticated` | SSE streaming chat; body: `prompt`, optional `historyId`, `systemPrompt`, `attachments`, `model`, `projectId` |
 | `/gpt/remix` | POST | `IsAuthenticated` | Non-streaming text remix; body: `{text}` |
 | `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null}` |
+| `/gpt/histories/:id/stream` | GET | `IsAuthenticated` (owner) | SSE resume of an in-flight reply; query: optional `streamId`, `offset` |
 | `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools |
 
 Generated images (image-output models such as `gemini-3-pro-image`) arrive as SSE `image` events: `{image: {mimeType, url}}` with a base64 data URL. Each image is sent once, even when the model reports it both as a stream file part and in the final `result.files`. The saved assistant prompt stores one `image` content part per image. On later turns, `buildMessages` sends an image-only assistant prompt to the model as the text `[Generated image]`, because providers reject empty assistant turns.
+
+#### Attachments
+
+Each `attachments` item is `{type: "image" | "file", url, mimeType, filename?}`. The `url` must be `http(s):` or `data:`. Client-only URLs (`blob:`, `file:`, `content:`, `ph:`) return `400` before streaming starts, because neither the model provider nor a later page load can read them. Upload the file with `POST /files/upload` first, or send it as a `data:` URL.
+
+When `fileStorageService` is set, `data:` attachments are uploaded with `FileStorageService.upload`. The saved user prompt then stores the storage `url` plus `gcsKey`, not the base64 payload. The model still receives the original data for that turn. On later turns, parts with a `gcsKey` are sent to the model as 1-hour signed URLs. A failed upload returns `502 Attachment upload failed`. Without storage, attachments are saved as sent.
+
+#### Stream events and resume
+
+`/gpt/prompt` saves the user turn and a `status: "streaming"` assistant placeholder before streaming. While the reply streams, partial text is persisted about every second (`streamPersistIntervalMs`), plus a heartbeat every 10 seconds. The final reply replaces the placeholder with `status: "complete"`. On failure, partial text is kept with `status: "error"`; an empty placeholder is removed.
+
+| Event | Sent by | Meaning |
+|-------|---------|---------|
+| `{historyId, started: true, streamId}` | prompt | First event; the turn is saved and resumable |
+| `{historyId, resumed: true, streamId?}` | resume | First event; `streamId` is absent when nothing is streaming |
+| `{text}` | both | Text delta |
+| `{replace: true, text}` | resume | Persisted text was rewritten (a step became a tool call); `text` is the whole reply |
+| `{image: {mimeType, url}}` | both | Generated image |
+| `{file}`, `{toolCall}`, `{toolResult}` | prompt | File and tool events |
+| `{error}` | both | Error; resume sends it when the reply ended as `error` or went stale |
+| `{done: true, historyId, title?}` | both | Reply finished |
+
+`GET /gpt/histories/:id/stream` re-attaches after a reload or remount. Pass `offset` as the number of characters the client already shows, usually the stored placeholder `text`. The endpoint polls the stored history (`streamResumePollIntervalMs`, default 500 ms), so it works across server instances. A `streaming` reply with no update for `streamStaleAfterMs` (default 60 s) is marked `error`.
 
 AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerModelFn(modelId)` → configured `aiService` → demo SSE response when `demoMode` and none available.
 
@@ -331,7 +357,7 @@ new AiApp({
 | `createModelFn` | Build model from per-request `x-ai-api-key` |
 | `createServerModelFn` | Server-side model factory (e.g. Vertex ADC) without per-request key |
 | `demoMode` | Return canned responses when no AI service resolves |
-| `fileStorageService` + `gcsBucket` | Enable file upload routes |
+| `fileStorageService` + `gcsBucket` | Enable file upload routes and durable `/gpt/prompt` attachments |
 | `mcpService` | Enable MCP routes and tool discovery in chat |
 | `tools` | Static Vercel AI SDK tool definitions for chat |
 | `toolChoice` | `"auto"` \| `"none"` \| `"required"` (default `"auto"` when tools present) |

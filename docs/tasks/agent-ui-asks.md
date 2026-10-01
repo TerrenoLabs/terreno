@@ -191,7 +191,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/ai.md`.
   - Acceptance: Blocks AC10.
 
-- [ ] **Task B3.3**: MCP validator tool
+- [x] **Task B3.3**: MCP validator tool
   - Delivers: `terreno_validate_ui_blocks`.
   - Files: `mcp-server/package.json`, `mcp-server/src/tools.ts`, `mcp-server/src/tools.test.ts`.
   - Blocked by: B1.3

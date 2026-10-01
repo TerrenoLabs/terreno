@@ -45,6 +45,7 @@ src/
 | `terreno_generate_screen` | Creates React Native screens (list, detail, form, empty types) |
 | `terreno_generate_form_fields` | Generates form field components with validation |
 | `terreno_validate_model_schema` | Validates schemas against Terreno conventions |
+| `terreno_validate_ui_blocks` | Validates a whole-reply block document; same report as `terreno-blocks validate` |
 | `terreno_install_admin` | Generates admin panel integration files and instructions |
 
 Each tool returns generated code wrapped with file path instructions and additional setup steps.

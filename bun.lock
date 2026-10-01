@@ -623,6 +623,7 @@
         "@modelcontextprotocol/server": "catalog:",
         "@sentry/bun": "catalog:",
         "@terreno/api": "workspace:*",
+        "@terreno/blocks": "workspace:*",
         "express": "catalog:",
         "luxon": "catalog:",
         "minisearch": "^7.2.0",

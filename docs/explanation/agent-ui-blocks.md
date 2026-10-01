@@ -48,7 +48,7 @@ another, which makes a small document able to expand in ways the limits cannot s
 | Layer | Owns |
 | --- | --- |
 | `@terreno/blocks` | Schema, parse, partial parse, validate, JSON Schema, prompt section, CLI, limits, error codes |
-| `@terreno/ui` | `BlocksView` (not in this slice) |
+| `@terreno/ui` | `BlocksView` for heading, text, metric, badge, divider, context, columns, and card. Charts, tables, and actions render in later tasks. |
 | `@terreno/ai` | Prompt, post-stream check, datasets, callbacks (not in this slice) |
 
 Asks use the same package under `src/asks/`. A block shows something. An ask collects an

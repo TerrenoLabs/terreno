@@ -4,6 +4,7 @@ import type {AreaChart as AreaChartComponent} from "../AreaChart";
 import type {AttachmentPreview as AttachmentPreviewComponent} from "../AttachmentPreview";
 import type {AskCard as AskCardComponent} from "../asks/AskCard";
 import type {BarChart as BarChartComponent} from "../BarChart";
+import type {BlocksView as BlocksViewComponent} from "../blocks/BlocksView";
 import type {ConflictSheet as ConflictSheetComponent} from "../ConflictSheet";
 import type {ConsentFormScreen as ConsentFormScreenComponent} from "../ConsentFormScreen";
 import type {ConsentNavigator as ConsentNavigatorComponent} from "../ConsentNavigator";
@@ -26,6 +27,7 @@ export const heavyOptionalModuleFactories = {
   AskCard: () => import("../asks/AskCard"),
   AttachmentPreview: () => import("../AttachmentPreview"),
   BarChart: () => import("../BarChart"),
+  BlocksView: () => import("../blocks/BlocksView"),
   ConflictSheet: () => import("../ConflictSheet"),
   ConsentFormScreen: () => import("../ConsentFormScreen"),
   ConsentNavigator: () => import("../ConsentNavigator"),
@@ -80,6 +82,11 @@ export const BarChart = createLazyNamedExport(
   heavyOptionalModuleFactories.BarChart,
   "BarChart"
 ) as unknown as typeof BarChartComponent;
+
+export const BlocksView = createLazyNamedExport(
+  heavyOptionalModuleFactories.BlocksView,
+  "BlocksView"
+) as unknown as typeof BlocksViewComponent;
 
 export const ConflictSheet = createLazyNamedExport(
   heavyOptionalModuleFactories.ConflictSheet,

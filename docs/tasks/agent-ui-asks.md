@@ -135,7 +135,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/blocks.md` (actions, partial parsing, CLI), `docs/how-to/agent-ui-blocks.md` ("validate a document locally" only).
   - Acceptance: Blocks AC4; Blocks AC20 (`parsePartial` half); `SELECT_TARGET_INVALID`; CLI exit codes 0/1; prompt snapshot equals `BLOCK_LIMITS`.
 
-- [ ] **Task B2.1**: `BlocksView` for leaf and layout blocks
+- [x] **Task B2.1**: `BlocksView` for leaf and layout blocks
   - Delivers: `BlocksView` renders heading/text/metric/badge/divider/context/columns/card; invalid → `Banner` + collapsed raw YAML; non-document → `wrapAsTextDocument`; `columns` stacks on `sm`.
   - Files: `ui/package.json`, `ui/src/blocks/BlocksView.tsx`, `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/BlocksError.tsx`, `ui/src/Common.ts`, `ui/src/lazyBoundaries/heavyOptionalExports.tsx`, `ui/src/index.tsx`, tests, `demo/stories/BlocksView.stories.tsx`, `demo/story-config/BlocksView.config.tsx`, `demo/demoConfig.tsx`.
   - Blocked by: B1.1

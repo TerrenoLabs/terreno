@@ -10,7 +10,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 - Actions: `Button`, `IconButton`, `Link`
 - Feedback: `Spinner`, `Modal`, `Toast`
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
-- AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts)
+- AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts), `BlocksView` (a whole-reply YAML document)
 - Authentication: `SocialLoginButton`, `LoginScreen`, `SignUpScreen`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
@@ -33,7 +33,7 @@ supported and is convenient when startup cost is not material:
 import {Box, DataTable, Icon} from "@terreno/ui";
 ```
 
-Heavy optional widgets (`GPTChat`, `AskCard`, `EmojiSelector`, `MarkdownEditor`, consent flows, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, and related admin tools) are
+Heavy optional widgets (`GPTChat`, `AskCard`, `BlocksView`, `EmojiSelector`, `MarkdownEditor`, consent flows, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, and related admin tools) are
 re-exported from the root entry through lazy boundaries. Importing them from `@terreno/ui` stays type-compatible, but
 their implementation modules load on first render instead of during the initial root import. `DashboardGrid` stays eager.
 their implementation modules load on first render instead of during the initial root import. `MarkdownView` and
@@ -364,6 +364,23 @@ the ask's `tool-call` message and pass `onAskSubmit`:
 
 The example AI screen, `example-frontend/app/(tabs)/ai.tsx`, handles the stream events, saved
 rows, answers, and errors. Steps: [Add agent asks to a chat](../how-to/agent-ui-asks.md).
+
+### BlocksView
+
+`BlocksView` paints a whole-reply document from `@terreno/blocks`. Pass the assistant text
+as `document`. Leaf blocks in this slice are `heading`, `text`, `metric`, `badge`,
+`divider`, and `context`. `columns` is a row from the `md` breakpoint and a stack on `sm`.
+`card` groups children under an optional title.
+
+A string that is not a document becomes one `text` block. A document that fails
+`validateBlocks` shows a `Banner` with the first three errors and the raw text inside a
+collapsed `Accordion`.
+
+```tsx
+<BlocksView document={reply} testID="assistant-blocks" />
+```
+
+Charts, tables, and actions render in later tasks. Demo story: `BlocksView`.
 
 ### AskCard
 

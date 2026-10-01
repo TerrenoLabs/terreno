@@ -78,6 +78,7 @@ export {
   AskCard,
   AttachmentPreview,
   BarChart,
+  BlocksView,
   ConflictSheet,
   ConsentFormScreen,
   ConsentNavigator,

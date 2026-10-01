@@ -42,6 +42,32 @@ addGptRoutes(router, {
 4. The owner reads rows with `GET /gpt/datasets/:id?grain=week&limit=40`. Leave `page` off to downsample a line or area with LTTB. Pass `page` to paginate a table; `more` is true when another page remains.
 5. `datasetTtlDays: 0` (the default) stores no `expiresAt`. `7` sets `expiresAt` to seven days after `created`. More than `datasetMaxRows` (default 50,000) returns 413. Another user's id returns 404.
 
+## Register a server callback
+
+1. Pass `hostActions` on `uiBlocks`. Each name has a Zod `payload` and a `handler`.
+2. The client posts `{historyId, messageId, blockId, elementId, name, payload}` to `POST /gpt/actions`.
+3. Return `{replace: "block", blocks}` to swap the block, or `{text}` to append an assistant message. `blocks` must be a valid document (`v` then `blocks`).
+4. An unknown name is 404. A payload that fails the schema is 400 with `meta.fields`. Another user's history is 403. The handler stops at 10 seconds with 504. An invalid document from the handler is 500.
+
+```ts
+addGptRoutes(router, {
+  aiService,
+  uiBlocks: {
+    hostActions: {
+      export_csv: {
+        payload: z.object({format: z.literal("csv")}).strict(),
+        handler: async () => ({
+          replace: "block",
+          blocks: {v: 1, blocks: [{type: "badge", text: "Exporting", status: "info"}]},
+        }),
+      },
+    },
+  },
+});
+```
+
+The path is `/gpt/actions`, so a limiter on `/gpt` covers it. Each call is stored as an `AIRequest` with `requestType: "ui_action"`.
+
 ## Render documents in chat
 
 Set `uiBlocks` on `GPTChat`. Assistant `content` is the YAML document. While `isStreaming`

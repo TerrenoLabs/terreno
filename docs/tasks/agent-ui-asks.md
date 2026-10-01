@@ -177,7 +177,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/ai.md`, `docs/explanation/agent-ui-blocks.md`, `docs/how-to/agent-ui-blocks.md`.
   - Acceptance: Blocks AC16; mongoose-schema-safety on the new model.
 
-- [ ] **Task B3.5**: `POST /gpt/actions`
+- [x] **Task B3.5**: `POST /gpt/actions`
   - Delivers: host callback route, payload validation, 10 s timeout, `ui_action` log.
   - Files: `ai/src/routes/gptActions.ts`, `ai/src/routes/gpt.ts`, `ai/src/types/index.ts`, `ai/src/routes/gptActions.test.ts`, `ai/src/models/aiRequest.ts`.
   - Blocked by: B3.1

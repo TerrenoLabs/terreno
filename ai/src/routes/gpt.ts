@@ -16,6 +16,7 @@ import {configureAiDatasets} from "../service/aiDatasets";
 import {assertNoReservedToolNames, resolveAskKinds} from "../service/asks";
 import {type ChatTurnSink, DEMO_RESPONSE, resolveAiService, runChatTurn} from "../service/chatTurn";
 import type {GptRouteOptions} from "../types";
+import {addGptActionRoutes} from "./gptActions";
 import {addGptDatasetRoutes} from "./gptDatasets";
 
 const ASK_RESPONSE_BODY: OpenApiSchemaProperty = {
@@ -67,6 +68,7 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
       datasetTtlDays: uiBlocks.datasetTtlDays,
     });
     addGptDatasetRoutes(router, {openApiOptions: options.openApiOptions});
+    addGptActionRoutes(router, options);
   }
   if (askKinds.length > 0) {
     assertNoReservedToolNames(routeTools);

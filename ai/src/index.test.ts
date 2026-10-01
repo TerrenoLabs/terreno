@@ -101,6 +101,7 @@ describe("@terreno/ai public exports", () => {
       "remix",
       "summarization",
       "translation",
+      "ui_action",
     ]);
   });
 });

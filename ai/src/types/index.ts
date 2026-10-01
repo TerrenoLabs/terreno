@@ -15,6 +15,7 @@ export const DEFAULT_AI_REQUEST_TYPES = [
   "remix",
   "summarization",
   "translation",
+  "ui_action",
 ] as const;
 export type DefaultAIRequestType = (typeof DEFAULT_AI_REQUEST_TYPES)[number];
 export type AIRequestType = DefaultAIRequestType | (string & {});
@@ -306,13 +307,48 @@ export interface AskFileDownloader {
   download: (gcsKey: string) => Promise<Buffer>;
 }
 
+/** What a host callback may return. `blocks` is a whole-reply document. */
+export interface HostActionResult {
+  blocks?: unknown;
+  replace?: "block" | "message";
+  text?: string;
+}
+
+/** A Zod schema's `safeParse`, so hosts can pass `z.object(...)` without this package depending on a Zod version. */
+export interface HostPayloadSchema {
+  safeParse: (
+    value: unknown
+  ) =>
+    | {data: unknown; success: true}
+    | {error: {issues: {message: string; path: PropertyKey[]}[]}; success: false};
+}
+
+export interface HostActionContext {
+  blockId: string;
+  elementId: string;
+  history: GptHistoryDocument;
+  messageId: string;
+  payload: unknown;
+  user: {_id?: mongoose.Types.ObjectId};
+}
+
 /** `addGptRoutes` `uiBlocks`. `true` checks every assistant reply. `hostActions` names the callbacks the model may emit. */
 export interface UiBlocksOptions {
+  /** Milliseconds before a host callback returns 504. Default 10 seconds. */
+  actionTimeoutMs?: number;
   /** Rows stored by `registerAiDataset`. Default 50,000. A larger write returns 413. */
   datasetMaxRows?: number;
   /** Days before a stored dataset expires. `0` (the default) keeps it. */
   datasetTtlDays?: number;
-  hostActions?: Record<string, {payload?: unknown}>;
+  hostActions?: Record<
+    string,
+    {
+      handler?: (
+        context: HostActionContext
+      ) => Promise<HostActionResult | undefined> | HostActionResult | undefined;
+      payload?: HostPayloadSchema;
+    }
+  >;
   repair?: boolean;
 }
 
@@ -347,9 +383,9 @@ export interface GptRouteOptions {
   titleModelId?: string;
   /**
    * Assistant replies are whole-reply block documents. Off by default; when off, the system
-   * prompt, SSE events, and `/gpt/datasets` are unchanged. `true` validates the final text,
-   * emits `{blocks}` before `{done}`, and mounts `GET /gpt/datasets/:id`. `{repair: true}` runs
-   * one repair call when that check fails.
+   * prompt, SSE events, `/gpt/datasets`, and `/gpt/actions` are unchanged. `true` validates the
+   * final text, emits `{blocks}` before `{done}`, and mounts `GET /gpt/datasets/:id` and
+   * `POST /gpt/actions`. `{repair: true}` runs one repair call when that check fails.
    */
   uiBlocks?: boolean | UiBlocksOptions;
   /** Langfuse prompt name to load and use as the system prompt. Compiled with no variables.

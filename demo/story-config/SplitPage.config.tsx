@@ -1,5 +1,10 @@
 import type {DemoConfiguration} from "@config";
-import {SplitPageDemo, SplitPageLoading, SplitPageOptInLayouts} from "@stories/SplitPage.stories";
+import {
+  SplitPageDemo,
+  SplitPageLoading,
+  SplitPageNarrowBelowSmall,
+  SplitPageOptInLayouts,
+} from "@stories/SplitPage.stories";
 import {SplitPage} from "@terreno/ui";
 
 export const SplitPageConfiguration: DemoConfiguration = {
@@ -39,6 +44,11 @@ export const SplitPageConfiguration: DemoConfiguration = {
       description:
         "Web only. Desktop children keep a minimum column width. The narrow viewport uses a labeled pager with a return-to-list button.",
       render: () => <SplitPageOptInLayouts />,
+    },
+    NarrowBelowSmall: {
+      description:
+        'Web only. narrowBelow="sm" keeps the side-by-side layout down to 375 pixels, then shrinks to the labeled narrow pager.',
+      render: () => <SplitPageNarrowBelowSmall />,
     },
   },
 };

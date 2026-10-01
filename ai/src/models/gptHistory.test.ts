@@ -45,6 +45,32 @@ describe("GptHistory Model", () => {
       expect(history.prompts[1].model).toBe("gpt-4");
     });
 
+    it("should require prompt text when the prompt has no content parts", async () => {
+      const userId = new mongoose.Types.ObjectId();
+      await expect(
+        GptHistory.create({prompts: [{text: "", type: "assistant"}], userId})
+      ).rejects.toThrow();
+    });
+
+    it("should allow empty prompt text on an image-only response", async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const history = await GptHistory.create({
+        prompts: [
+          {
+            content: [
+              {mimeType: "image/png", type: "image", url: "data:image/png;base64,aGVsbG8="},
+            ],
+            text: "",
+            type: "assistant",
+          },
+        ],
+        userId,
+      });
+
+      expect(history.prompts[0].text).toBe("");
+      expect(history.prompts[0].content).toHaveLength(1);
+    });
+
     it("should require userId", async () => {
       await expect(GptHistory.create({prompts: []})).rejects.toThrow();
     });

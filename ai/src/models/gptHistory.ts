@@ -113,7 +113,15 @@ const gptHistoryPromptSchema = new mongoose.Schema(
       type: String,
     },
     result: {description: "Result returned from a tool call", type: mongoose.Schema.Types.Mixed},
-    text: {description: "Text content of the prompt or response", required: true, type: String},
+    text: {
+      default: "",
+      description: "Text content of the prompt or response",
+      // Image-only responses carry their payload in content, not text
+      required: function (this: {content?: unknown[]}): boolean {
+        return !this.content?.length;
+      },
+      type: String,
+    },
     toolCallId: {
       description: "Identifier linking a tool result to its originating call",
       type: String,

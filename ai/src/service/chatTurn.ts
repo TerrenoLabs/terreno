@@ -1064,6 +1064,15 @@ const consumeStream = async ({
   const {askCalls, generatedImages} = record;
   const callOrder = new Map<string, number>();
   const askOrder = new Map<string, number>();
+  // Stream file parts and result.files report the same images; emit each data URL once.
+  const sendGeneratedImage = (file: GeneratedImageFile): void => {
+    const url = `data:${file.mediaType};base64,${file.base64}`;
+    if (generatedImages.some((img) => img.url === url)) {
+      return;
+    }
+    generatedImages.push({mimeType: file.mediaType, url});
+    sink.emit({image: {mimeType: file.mediaType, url}});
+  };
   let partCount = 0;
   // Buffer text per step so we can discard reasoning text when a tool call follows
   let stepTextBuffer = "";
@@ -1114,9 +1123,7 @@ const consumeStream = async ({
     }
     if (part.type === "file") {
       if (isGeneratedImageFile(part.file)) {
-        const dataUrl = `data:${part.file.mediaType};base64,${part.file.base64}`;
-        generatedImages.push({mimeType: part.file.mediaType, url: dataUrl});
-        sink.emit({image: {mimeType: part.file.mediaType, url: dataUrl}});
+        sendGeneratedImage(part.file);
         logger.debug("Sent inline image from stream");
       }
       continue;
@@ -1242,13 +1249,11 @@ const consumeStream = async ({
     const files = await result.files;
     if (files && files.length > 0) {
       for (const file of files) {
-        if (file.mediaType.startsWith("image/")) {
-          const dataUrl = `data:${file.mediaType};base64,${file.base64}`;
-          generatedImages.push({mimeType: file.mediaType, url: dataUrl});
-          sink.emit({image: {mimeType: file.mediaType, url: dataUrl}});
+        if (isGeneratedImageFile(file)) {
+          sendGeneratedImage(file);
         }
       }
-      logger.debug("Sent generated images", {count: files.length});
+      logger.debug("Sent generated images", {count: generatedImages.length});
     }
   } catch (fileErr) {
     logger.debug("No files in response", {
@@ -1278,7 +1283,7 @@ const assistantRows = ({
   return [
     {
       model: modelId,
-      text: fullResponse || "(image)",
+      text: fullResponse,
       type: "assistant",
       ...(contentParts.length > 0 ? {content: contentParts} : {}),
     },

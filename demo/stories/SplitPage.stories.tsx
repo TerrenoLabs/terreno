@@ -92,13 +92,13 @@ export const SplitPageNarrowBelowMedium: React.FC = (): React.ReactElement => {
         <Box gap={2} padding={3}>
           <Heading size="sm">Summary</Heading>
           <Text>
-            First child. The list and children stay side by side until the window is narrower than
-            1024 pixels.
+            The md breakpoint starts at 375 pixels. Because narrowBelow includes the selected
+            breakpoint, this layout shrinks throughout md and below: any width under 1024 pixels.
           </Text>
         </Box>
         <Box gap={2} padding={3}>
           <Heading size="sm">Notes</Heading>
-          <Text>Second child. Below 1024 pixels these children page one at a time.</Text>
+          <Text>At 1024 pixels and above, the list and both children stay side by side.</Text>
         </Box>
       </SplitPage>
     </Box>

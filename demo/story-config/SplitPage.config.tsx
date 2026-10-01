@@ -47,7 +47,7 @@ export const SplitPageConfiguration: DemoConfiguration = {
     },
     NarrowBelowMedium: {
       description:
-        'Web only. narrowBelow="md" keeps the side-by-side layout until the window is narrower than 1024 pixels, then shrinks to the labeled narrow pager.',
+        'Web only. The md range starts at 375 pixels. narrowBelow="md" includes that range, so SplitPage uses the narrow layout below 1024 pixels.',
       render: () => <SplitPageNarrowBelowMedium />,
     },
   },

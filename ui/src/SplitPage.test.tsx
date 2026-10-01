@@ -1,33 +1,8 @@
 import {afterAll, afterEach, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {forwardRef, type ReactNode, type Ref, useImperativeHandle} from "react";
-import {Pressable, type ScaledSize, StyleSheet, useWindowDimensions, View} from "react-native";
+import {type ScaledSize, StyleSheet, useWindowDimensions, View} from "react-native";
 import type {ReactTestInstance} from "react-test-renderer";
-
-// bunSetup mocks IconButton to render null. Render a pressable host that keeps the testID,
-// label, and onClick so the pager controls can be found and pressed.
-mock.module("./IconButton", () => ({
-  IconButton: ({
-    accessibilityHint,
-    accessibilityLabel,
-    iconName,
-    onClick,
-    testID,
-  }: {
-    accessibilityHint?: string;
-    accessibilityLabel?: string;
-    iconName: string;
-    onClick?: () => void;
-    testID?: string;
-  }) => (
-    <Pressable
-      accessibilityHint={accessibilityHint}
-      accessibilityLabel={accessibilityLabel}
-      onPress={onClick}
-      testID={testID ?? `icon-button-${iconName}`}
-    />
-  ),
-}));
 
 import {SplitPage} from "./SplitPage";
 import {renderWithTheme} from "./test-utils";
@@ -104,9 +79,6 @@ const restoreDefault = () => {
 
 afterAll(() => {
   restoreDefault();
-  mock.module("./IconButton", () => ({
-    IconButton: mock(() => null),
-  }));
 });
 
 const findAncestor = (
@@ -121,6 +93,27 @@ const findAncestor = (
     current = current.parent;
   }
   return undefined;
+};
+
+const getIconButtonByTestId = (root: ReactTestInstance, testID: string): ReactTestInstance => {
+  const iconButton = root.findAll(
+    (node: ReactTestInstance) =>
+      node.props?.testID === testID && typeof node.props?.onClick === "function"
+  )[0];
+  if (!iconButton) {
+    throw new Error(`Unable to find IconButton with testID: ${testID}`);
+  }
+  return iconButton;
+};
+
+const queryIconButtonByTestId = (
+  root: ReactTestInstance,
+  testID: string
+): ReactTestInstance | undefined => {
+  return root.findAll(
+    (node: ReactTestInstance) =>
+      node.props?.testID === testID && typeof node.props?.onClick === "function"
+  )[0];
 };
 
 describe("SplitPage", () => {
@@ -760,7 +753,7 @@ describe("SplitPage", () => {
 
     it("renders the labeled narrow pager with a next control on the first child", async () => {
       setMobile();
-      const {getAllByLabelText, getByTestId, queryByTestId, UNSAFE_root} = renderWithTheme(
+      const {getAllByLabelText, getByTestId, UNSAFE_root} = renderWithTheme(
         <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary", "Notes"]}>
           <View testID="child-1" />
           <View testID="child-2" />
@@ -768,9 +761,9 @@ describe("SplitPage", () => {
       );
       await selectFirst(getAllByLabelText);
       expect(getByTestId("split-page-mobile-children")).toBeTruthy();
-      expect(getByTestId("split-page-column-next")).toBeTruthy();
-      expect(queryByTestId("split-page-column-previous")).toBeNull();
-      expect(queryByTestId("split-page-back-to-list")).toBeNull();
+      expect(getIconButtonByTestId(UNSAFE_root, "split-page-column-next")).toBeTruthy();
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-previous")).toBeUndefined();
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-back-to-list")).toBeUndefined();
       const paginated = UNSAFE_root.findAll(
         (node: ReactTestInstance) => node.props?.showPagination === true
       );
@@ -784,7 +777,7 @@ describe("SplitPage", () => {
 
     it("scrolls to the next child without an unanimated snap from the index change", async () => {
       setMobile();
-      const {getAllByLabelText, getByTestId} = renderWithTheme(
+      const {getAllByLabelText, UNSAFE_root} = renderWithTheme(
         <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary", "Notes"]}>
           <View testID="child-1" />
           <View testID="child-2" />
@@ -793,7 +786,7 @@ describe("SplitPage", () => {
       await selectFirst(getAllByLabelText);
       swiperScrollToIndex.mockClear();
       await act(async () => {
-        fireEvent.press(getByTestId("split-page-column-next"));
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.onClick();
       });
       expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: true, index: 1});
       expect(swiperScrollToIndex.mock.calls.some((call) => call[0]?.animated === false)).toBe(
@@ -811,10 +804,10 @@ describe("SplitPage", () => {
       );
       await selectFirst(two.getAllByLabelText);
       await act(async () => {
-        fireEvent.press(two.getByTestId("split-page-column-next"));
+        getIconButtonByTestId(two.UNSAFE_root, "split-page-column-next").props.onClick();
       });
-      expect(two.getByTestId("split-page-column-previous")).toBeTruthy();
-      expect(two.queryByTestId("split-page-column-next")).toBeNull();
+      expect(getIconButtonByTestId(two.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
+      expect(queryIconButtonByTestId(two.UNSAFE_root, "split-page-column-next")).toBeUndefined();
     });
 
     it("shows both directions on a middle child and walks previous back to the first", async () => {
@@ -832,31 +825,33 @@ describe("SplitPage", () => {
       );
       await selectFirst(three.getAllByLabelText);
       await act(async () => {
-        fireEvent.press(three.getByTestId("split-page-column-next"));
+        getIconButtonByTestId(three.UNSAFE_root, "split-page-column-next").props.onClick();
       });
-      expect(three.getByTestId("split-page-column-previous")).toBeTruthy();
-      expect(three.getByTestId("split-page-column-next")).toBeTruthy();
+      expect(getIconButtonByTestId(three.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
+      expect(getIconButtonByTestId(three.UNSAFE_root, "split-page-column-next")).toBeTruthy();
       await act(async () => {
-        fireEvent.press(three.getByTestId("split-page-column-next"));
+        getIconButtonByTestId(three.UNSAFE_root, "split-page-column-next").props.onClick();
       });
-      expect(three.queryByTestId("split-page-column-next")).toBeNull();
+      expect(queryIconButtonByTestId(three.UNSAFE_root, "split-page-column-next")).toBeUndefined();
       swiperScrollToIndex.mockClear();
       await act(async () => {
-        fireEvent.press(three.getByTestId("split-page-column-previous"));
+        getIconButtonByTestId(three.UNSAFE_root, "split-page-column-previous").props.onClick();
       });
       await act(async () => {
-        fireEvent.press(three.getByTestId("split-page-column-previous"));
+        getIconButtonByTestId(three.UNSAFE_root, "split-page-column-previous").props.onClick();
       });
       expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: true, index: 1});
       expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: true, index: 0});
-      expect(three.queryByTestId("split-page-column-previous")).toBeNull();
-      expect(three.getByTestId("split-page-column-next")).toBeTruthy();
+      expect(
+        queryIconButtonByTestId(three.UNSAFE_root, "split-page-column-previous")
+      ).toBeUndefined();
+      expect(getIconButtonByTestId(three.UNSAFE_root, "split-page-column-next")).toBeTruthy();
     });
 
     it("returns to the list when the labeled back button is pressed", async () => {
       setMobile();
       const onSelectionChange = mock(async () => {});
-      const {getAllByLabelText, getByTestId} = renderWithTheme(
+      const {getAllByLabelText, UNSAFE_root} = renderWithTheme(
         <SplitPage
           {...defaultProps}
           narrowViewportChildLabels={["Summary", "Notes"]}
@@ -869,7 +864,7 @@ describe("SplitPage", () => {
       );
       await selectFirst(getAllByLabelText);
       await act(async () => {
-        fireEvent.press(getByTestId("split-page-back-to-list"));
+        getIconButtonByTestId(UNSAFE_root, "split-page-back-to-list").props.onClick();
       });
       expect(onSelectionChange).toHaveBeenCalledWith(undefined);
     });
@@ -904,9 +899,9 @@ describe("SplitPage", () => {
         </SplitPage>
       );
       await act(async () => {
-        fireEvent.press(view.getByTestId("split-page-column-next"));
+        getIconButtonByTestId(view.UNSAFE_root, "split-page-column-next").props.onClick();
       });
-      expect(view.getByTestId("split-page-column-previous")).toBeTruthy();
+      expect(getIconButtonByTestId(view.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
       swiperScrollToIndex.mockClear();
       await act(async () => {
         view.rerender(
@@ -922,8 +917,10 @@ describe("SplitPage", () => {
         );
       });
       expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: false, index: 0});
-      expect(view.queryByTestId("split-page-column-previous")).toBeNull();
-      expect(view.getByTestId("split-page-column-next")).toBeTruthy();
+      expect(
+        queryIconButtonByTestId(view.UNSAFE_root, "split-page-column-previous")
+      ).toBeUndefined();
+      expect(getIconButtonByTestId(view.UNSAFE_root, "split-page-column-next")).toBeTruthy();
     });
 
     it("realigns the current child when the page width changes", async () => {
@@ -941,15 +938,15 @@ describe("SplitPage", () => {
         </SplitPage>
       );
       await act(async () => {
-        fireEvent.press(view.getByTestId("split-page-column-next"));
+        getIconButtonByTestId(view.UNSAFE_root, "split-page-column-next").props.onClick();
       });
       swiperScrollToIndex.mockClear();
       await act(async () => {
         layoutWidth(view.getByTestId("split-page-mobile-children"), 280);
       });
       expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: false, index: 1});
-      expect(view.getByTestId("split-page-column-previous")).toBeTruthy();
-      expect(view.queryByTestId("split-page-column-next")).toBeNull();
+      expect(getIconButtonByTestId(view.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
+      expect(queryIconButtonByTestId(view.UNSAFE_root, "split-page-column-next")).toBeUndefined();
 
       swiperScrollToIndex.mockClear();
       setWindowWidth(420);
@@ -968,7 +965,7 @@ describe("SplitPage", () => {
       });
       expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: false, index: 1});
       expect(swiperScrollToIndex.mock.calls.some((call) => call[0]?.index === 0)).toBe(false);
-      expect(view.getByTestId("split-page-column-previous")).toBeTruthy();
+      expect(getIconButtonByTestId(view.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
       restoreWidth();
     });
 

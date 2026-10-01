@@ -5,6 +5,7 @@ import {Box} from "../Box";
 import type {BlocksViewProps} from "../Common";
 import {BlocksError} from "./BlocksError";
 import {type BlockRenderContext, renderBlock} from "./blockRenderers";
+import {useBlockSelections} from "./useBlockSelections";
 import {useResolvedDatasets} from "./useResolvedDatasets";
 
 export type {BlocksViewProps} from "../Common";
@@ -31,7 +32,15 @@ const renderBlocks = (
  * A reply that is not a document becomes one text block. An invalid document shows
  * the first errors and keeps the raw text collapsed.
  */
-export const BlocksView: React.FC<BlocksViewProps> = ({document, resolveDataset, testID}) => {
+export const BlocksView: React.FC<BlocksViewProps> = ({
+  document,
+  hostActions,
+  onAction,
+  overrides,
+  pendingElementIds,
+  resolveDataset,
+  testID,
+}) => {
   const parsed =
     typeof document === "string" ? parseBlocks(document) : {ok: true as const, value: document};
   const validated = parsed.ok ? validateBlocks(parsed.value) : undefined;
@@ -39,7 +48,17 @@ export const BlocksView: React.FC<BlocksViewProps> = ({document, resolveDataset,
     datasets: validated?.ok ? validated.doc.datasets : undefined,
     resolveDataset,
   });
-  const context: BlockRenderContext = {loadingIds, resolved};
+  const {selections, setSelection} = useBlockSelections();
+  const context: BlockRenderContext = {
+    hostActions,
+    loadingIds,
+    onAction,
+    overrides,
+    pendingElementIds: pendingElementIds === undefined ? undefined : new Set(pendingElementIds),
+    resolved,
+    selections,
+    setSelection,
+  };
 
   if (typeof document === "string" && !parsed.ok) {
     const isNonDocument = parsed.errors.every((error) => error.code === "NOT_A_DOCUMENT");

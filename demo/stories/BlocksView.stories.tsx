@@ -68,6 +68,68 @@ export const BlocksViewDemo: React.FC = () => {
   );
 };
 
+const ACTIONS = `v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+  signups_weekly:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [W1, 40]
+      - [W2, 55]
+blocks:
+  - type: chart
+    id: signups_chart
+    kind: bar
+    title: Signups
+    data: signups
+    x: month
+    y: count
+  - type: actions
+    id: chart_actions
+    elements:
+      - type: segmented
+        id: grain
+        target: signups_chart
+        options:
+          - label: Month
+            data: signups
+          - label: Week
+            data: signups_weekly
+      - type: button
+        id: reply_btn
+        text: Reply
+        action:
+          kind: reply
+          text: Thanks
+      - type: button
+        id: open_btn
+        text: Open report
+        variant: outline
+        action:
+          kind: open
+          url: https://example.com
+`;
+
+export const BlocksViewActions: React.FC = () => {
+  return (
+    <Box padding={4} width="100%">
+      <BlocksView document={ACTIONS} hostActions={["export_csv"]} />
+    </Box>
+  );
+};
+
 export const BlocksViewInvalid: React.FC = () => {
   return (
     <Box padding={4} width="100%">

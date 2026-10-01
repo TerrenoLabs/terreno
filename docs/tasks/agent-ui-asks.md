@@ -149,7 +149,7 @@ Wire format is whole-reply YAML (BD2): no fences required.
   - Docs: `docs/reference/ui.md`, `docs/how-to/charts-and-dashboards.md` (one paragraph).
   - Acceptance: Blocks AC5 for chart/table; `datasetToPoints` and `useResolvedDatasets` tests; screenshot of bar + donut.
 
-- [ ] **Task B2.3**: Actions, `onAction`, segmented dataset switch
+- [x] **Task B2.3**: Actions, `onAction`, segmented dataset switch
   - Delivers: `Button` / `SegmentedControl`; `onAction`; local `select`; disabled unknown callbacks; `pendingElementIds`; `overrides`.
   - Files: `ui/src/blocks/BlocksView.tsx`, `ui/src/blocks/useBlockSelections.ts`, `ui/src/Common.ts`, tests, story.
   - Blocked by: B1.3, B2.2

@@ -380,11 +380,23 @@ A string that is not a document becomes one `text` block. A document that fails
 `validateBlocks` shows a `Banner` with the first three errors and the raw text inside a
 collapsed `Accordion`.
 
+An `actions` block draws `Button` and `SegmentedControl`. `onAction` receives
+`{action, blockId, elementId}` for reply, open, select, and callback. A `select`
+action also stores the chosen dataset on the target chart for this view. Pass
+`hostActions` to disable callback buttons whose names are not in that list. Omit
+`hostActions` and every callback stays enabled. `pendingElementIds` shows those
+buttons as loading. `overrides` replaces a block by id.
+
 ```tsx
-<BlocksView document={reply} testID="assistant-blocks" />
+<BlocksView
+  document={reply}
+  hostActions={["export_csv"]}
+  onAction={handleAction}
+  testID="assistant-blocks"
+/>
 ```
 
-Actions render in a later task. Demo story: `BlocksView`.
+Demo story: `BlocksView`.
 
 ### AskCard
 

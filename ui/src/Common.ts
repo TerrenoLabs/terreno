@@ -1,4 +1,4 @@
-import type {BlocksDocument, InlineDataset} from "@terreno/blocks";
+import type {Block, BlockAction, BlocksDocument, InlineDataset} from "@terreno/blocks";
 import type {CountryCode} from "libphonenumber-js";
 import type React from "react";
 import type {FC, ReactElement, ReactNode} from "react";
@@ -1951,6 +1951,14 @@ export type BannerProps =
 export interface BlocksViewProps extends WithTestID {
   /** A whole-reply YAML or JSON string, or a document that already parsed. */
   document: string | BlocksDocument;
+  /** Names the host will run. A callback outside this list is disabled. Omit to leave callbacks enabled. */
+  hostActions?: readonly string[];
+  /** Called for reply, open, select, and callback. Select also updates the target chart locally. */
+  onAction?: (event: {action: BlockAction; blockId: string; elementId: string}) => void;
+  /** Block ids replaced in place. The key is the original block id. */
+  overrides?: Record<string, Block>;
+  /** Element ids whose buttons show a loading state. */
+  pendingElementIds?: readonly string[];
   /** Loads a `ref` dataset. Inline datasets do not call this. */
   resolveDataset?: (ref: {
     grain?: "day" | "hour" | "month" | "week";

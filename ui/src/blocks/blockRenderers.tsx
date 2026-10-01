@@ -1,10 +1,11 @@
-import type {Block, InlineDataset} from "@terreno/blocks";
+import type {Block, BlockAction, InlineDataset} from "@terreno/blocks";
 import type React from "react";
 
 import {AreaChart} from "../AreaChart";
 import {Badge} from "../Badge";
 import {BarChart} from "../BarChart";
 import {Box} from "../Box";
+import {Button} from "../Button";
 import {Card} from "../Card";
 import {DataTable} from "../DataTable";
 import {DonutChart} from "../DonutChart";
@@ -12,15 +13,27 @@ import {Heading} from "../Heading";
 import {LineChart} from "../LineChart";
 import {MarkdownView} from "../MarkdownView";
 import {SectionDivider} from "../SectionDivider";
+import {SegmentedControl} from "../SegmentedControl";
 import {Text} from "../Text";
 import {chartHeight, chartPoints, datasetToPoints} from "./datasetToPoints";
 
 export interface BlockRenderContext {
+  hostActions?: readonly string[];
   loadingIds: ReadonlySet<string>;
+  onAction?: (event: {action: BlockAction; blockId: string; elementId: string}) => void;
+  overrides?: Record<string, Block>;
+  pendingElementIds?: ReadonlySet<string>;
   resolved: Record<string, InlineDataset | undefined>;
+  selections: Record<string, string>;
+  setSelection: (target: string, data: string) => void;
 }
 
-const EMPTY_CONTEXT: BlockRenderContext = {loadingIds: new Set(), resolved: {}};
+const EMPTY_CONTEXT: BlockRenderContext = {
+  loadingIds: new Set(),
+  resolved: {},
+  selections: {},
+  setSelection: () => {},
+};
 
 const trendMark = {
   down: "▼",
@@ -46,8 +59,12 @@ const chartFor = {
 export const renderBlock = (
   block: Block,
   path: string,
-  context: BlockRenderContext = EMPTY_CONTEXT
+  context: BlockRenderContext = EMPTY_CONTEXT,
+  allowOverride = true
 ): React.ReactElement => {
+  if (allowOverride && block.id !== undefined && context.overrides?.[block.id] !== undefined) {
+    return renderBlock(context.overrides[block.id], path, context, false);
+  }
   switch (block.type) {
     case "heading":
       return (
@@ -105,7 +122,9 @@ export const renderBlock = (
       );
     case "chart": {
       const Chart = chartFor[block.kind];
-      const dataset = block.data === undefined ? undefined : context.resolved[block.data];
+      const dataName =
+        (block.id !== undefined ? context.selections[block.id] : undefined) ?? block.data;
+      const dataset = dataName === undefined ? undefined : context.resolved[dataName];
       const points =
         block.points !== undefined
           ? chartPoints(block.points)
@@ -120,7 +139,7 @@ export const renderBlock = (
             emptyText={block.emptyText}
             height={chartHeight(block.height)}
             legendLabel={block.legend ? block.title : undefined}
-            loading={block.data !== undefined && context.loadingIds.has(block.data)}
+            loading={dataName !== undefined && context.loadingIds.has(dataName)}
             testID={`${path}-chart`}
           />
         </Box>
@@ -145,6 +164,68 @@ export const renderBlock = (
         </Box>
       );
     }
+    case "actions":
+      return (
+        <Box direction="row" gap={2} key={path} testID={path} wrap>
+          {block.elements.map((element) => {
+            if (element.type === "segmented") {
+              const selectedData = context.selections[element.target];
+              const selectedIndex = Math.max(
+                0,
+                element.options.findIndex((option) => option.data === selectedData)
+              );
+              return (
+                <SegmentedControl
+                  items={element.options.map((option) => option.label)}
+                  key={element.id}
+                  onChange={(index) => {
+                    const option = element.options[index];
+                    if (option === undefined) {
+                      return;
+                    }
+                    context.setSelection(element.target, option.data);
+                    context.onAction?.({
+                      action: {data: option.data, kind: "select", target: element.target},
+                      blockId: block.id,
+                      elementId: element.id,
+                    });
+                  }}
+                  selectedIndex={selectedData === undefined ? 0 : selectedIndex}
+                  testID={`${path}-${element.id}`}
+                />
+              );
+            }
+            const action = element.action;
+            const disabled =
+              action.kind === "callback" &&
+              context.hostActions !== undefined &&
+              !context.hostActions.includes(action.name);
+            return (
+              <Button
+                disabled={disabled}
+                key={element.id}
+                loading={context.pendingElementIds?.has(element.id) === true}
+                onClick={() => {
+                  if (disabled) {
+                    return;
+                  }
+                  if (action.kind === "select") {
+                    context.setSelection(action.target, action.data);
+                  }
+                  context.onAction?.({
+                    action,
+                    blockId: block.id,
+                    elementId: element.id,
+                  });
+                }}
+                testID={`${path}-${element.id}`}
+                text={element.text}
+                variant={element.variant ?? "primary"}
+              />
+            );
+          })}
+        </Box>
+      );
     default:
       return <Box key={path} testID={path} />;
   }

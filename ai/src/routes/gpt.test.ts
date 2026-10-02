@@ -3013,8 +3013,16 @@ describe("/gpt/prompt uiBlocks", () => {
 
     const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
 
-    expect(events.map((event) => Object.keys(event)[0])).toEqual(["text", "blocks", "done"]);
-    expect(events[1]).toMatchObject({blocks: {ok: true}});
+    expect(events.map((event) => Object.keys(event)[0])).toEqual([
+      "text",
+      "replace",
+      "blocks",
+      "done",
+    ]);
+    expect(events.find((event) => "replace" in event)).toMatchObject({
+      text: VALID_BLOCKS.trim(),
+    });
+    expect(events.find((event) => "blocks" in event)).toMatchObject({blocks: {ok: true}});
     const repairCall = model.doGenerate.mock.calls.find((call) =>
       JSON.stringify(call[0]).includes("UNKNOWN_HOST_ACTION")
     );
@@ -3025,6 +3033,97 @@ describe("/gpt/prompt uiBlocks", () => {
     expect(rowsOf(history).find((row) => row.type === "assistant")?.text).toBe(
       VALID_BLOCKS.trimEnd()
     );
+  });
+
+  it("fills a missing actions id and replaces the streamed joke document", async () => {
+    const joke = `v: 1
+blocks:
+  - type: text
+    markdown: Why did the developer quit? Because they couldn't find their MongoDB!
+  - type: actions
+    elements:
+      - type: button
+        id: list_todos_button
+        text: List all todos
+        action:
+          kind: reply
+          text: list all the todos
+`;
+    const model = createScriptedModel({steps: [textStep(joke)]});
+    const agent = await authAsUser(buildApp({model, uiBlocks: true}), "notAdmin");
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    expect(events.map((event) => Object.keys(event)[0])).toEqual([
+      "text",
+      "replace",
+      "blocks",
+      "done",
+    ]);
+    const replaced = events.find((event) => "replace" in event) as {text?: string};
+    expect(replaced.text).toContain("MongoDB!");
+    expect(replaced.text).toContain('"id":"actions"');
+    expect(events.find((event) => "blocks" in event)).toMatchObject({blocks: {ok: true}});
+    expect(model.doGenerate).toHaveBeenCalledTimes(1);
+    const history = await loadHistory(await onlyHistoryId());
+    expect(rowsOf(history).find((row) => row.type === "assistant")?.text).toBe(replaced.text);
+  });
+
+  it("keeps a joke document written beside the tool call when the next step is empty", async () => {
+    const joke = `v: 1
+blocks:
+  - type: text
+    markdown: Why did the developer quit? Because they couldn't find their MongoDB!
+  - type: actions
+    elements:
+      - type: button
+        id: list_todos_button
+        text: List all todos
+        action:
+          kind: reply
+          text: list all the todos
+`;
+    const model = createScriptedModel({
+      steps: [[...textStep(joke).slice(0, -1), ...toolCallStep(LOOKUP_CALL)], textStep("")],
+    });
+    const agent = await authAsUser(
+      buildApp({model, tools: {lookupPlans}, uiBlocks: true}),
+      "notAdmin"
+    );
+
+    const {events} = await streamPrompt(agent, {prompt: "Tell me a witty joke about MongoDB"});
+
+    const streamed = events.find((event) => Object.keys(event)[0] === "text") as {text?: string};
+    expect(streamed.text).toContain("MongoDB!");
+    const replaced = events.find((event) => "replace" in event) as {text?: string};
+    expect(replaced.text).toContain('"id":"actions"');
+    expect(events.find((event) => "blocks" in event)).toMatchObject({blocks: {ok: true}});
+    expect(events.some((event) => "toolCall" in event)).toBe(true);
+  });
+
+  it("drops tool-step prose and a tool-step document when a later step writes the reply", async () => {
+    const early = `v: 1
+blocks:
+  - type: text
+    markdown: Earlier joke
+`;
+    const model = createScriptedModel({
+      steps: [
+        [...textStep(`I'll look that up.\n${early}`).slice(0, -1), ...toolCallStep(LOOKUP_CALL)],
+        textStep(VALID_BLOCKS),
+      ],
+    });
+    const agent = await authAsUser(
+      buildApp({model, tools: {lookupPlans}, uiBlocks: true}),
+      "notAdmin"
+    );
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    const streamed = events.find((event) => Object.keys(event)[0] === "text") as {text?: string};
+    expect(streamed.text).toBe(VALID_BLOCKS.trim());
+    expect(JSON.stringify(events)).not.toContain("Earlier joke");
+    expect(JSON.stringify(events)).not.toContain("I'll look that up.");
   });
 
   it("rejects an html block unless uiBlocks.html is on", async () => {

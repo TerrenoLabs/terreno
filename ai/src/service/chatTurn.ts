@@ -57,6 +57,7 @@ import {
   toStoredMessages,
   withoutReservedToolNames,
 } from "./asks";
+import {fillMissingActionIds} from "./fillActionIds";
 import {
   COMPACT_SURFACE_SYSTEM_PROMPT,
   TITLE_GENERATION_PROMPT,
@@ -1163,9 +1164,27 @@ const consumeStream = async ({
     sink.emit({image: {mimeType: file.mediaType, url}});
   };
   let partCount = 0;
-  // Buffer text per step so we can discard reasoning text when a tool call follows
+  // Buffer text per step so we can discard reasoning text when a tool call follows.
+  // A block document in that step is kept only when the turn would otherwise have no text:
+  // models often write the reply beside the tool call and then stop.
   let stepTextBuffer = "";
   let stepHasToolCall = false;
+  let toolStepDocument = "";
+
+  const commitStepText = (): void => {
+    const cleaned = cleanStepText(stepTextBuffer);
+    if (!stepHasToolCall) {
+      if (cleaned) {
+        toolStepDocument = "";
+        record.fullResponse += cleaned;
+        sink.emit({text: cleaned});
+      }
+      return;
+    }
+    if (cleaned && parseBlocks(cleaned).ok) {
+      toolStepDocument = cleaned;
+    }
+  };
 
   for await (const part of result.fullStream as AsyncIterable<StreamPart>) {
     partCount++;
@@ -1187,14 +1206,7 @@ const consumeStream = async ({
       continue;
     }
     if (part.type === "finish-step") {
-      // Only emit buffered text if no tool call happened in this step
-      if (!stepHasToolCall && stepTextBuffer) {
-        const cleaned = cleanStepText(stepTextBuffer);
-        if (cleaned) {
-          record.fullResponse += cleaned;
-          sink.emit({text: cleaned});
-        }
-      }
+      commitStepText();
       stepTextBuffer = "";
       stepHasToolCall = false;
       continue;
@@ -1319,12 +1331,10 @@ const consumeStream = async ({
   }
 
   // Flush any remaining buffered text from the last step
-  if (!stepHasToolCall && stepTextBuffer) {
-    const cleaned = cleanStepText(stepTextBuffer);
-    if (cleaned) {
-      record.fullResponse += cleaned;
-      sink.emit({text: cleaned});
-    }
+  commitStepText();
+  if (record.fullResponse.trim() === "" && toolStepDocument) {
+    record.fullResponse = toolStepDocument;
+    sink.emit({text: toolStepDocument});
   }
 
   logger.debug("Stream completed", {fullResponseLength: record.fullResponse.length, partCount});
@@ -1639,10 +1649,17 @@ export const runChatTurn = async ({
     }
     const {askCalls, generatedImages} = record;
     let {fullResponse} = record;
+    const streamedResponse = fullResponse;
     const hostActionNames =
       uiBlocks?.hostActions === undefined ? undefined : Object.keys(uiBlocks.hostActions);
     const allowHtml = uiBlocks?.html === true;
     const imageHosts = uiBlocks?.imageHosts;
+    if (uiBlocks && fullResponse.trim() !== "") {
+      const filled = fillMissingActionIds(fullResponse);
+      if (filled !== undefined) {
+        fullResponse = filled;
+      }
+    }
     let blocksCheck =
       uiBlocks && fullResponse.trim() !== ""
         ? checkBlockDocument(fullResponse, hostActionNames, allowHtml, imageHosts)
@@ -1660,12 +1677,10 @@ export const runChatTurn = async ({
         blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml, imageHosts);
       }
     }
-    let replacedText = false;
     if (allowHtml && blocksCheck?.ok) {
       const sanitized = sanitizeBlocksText(fullResponse);
       if (sanitized.changed) {
         fullResponse = sanitized.text;
-        replacedText = true;
         blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml, imageHosts);
       }
     }
@@ -1774,7 +1789,7 @@ export const runChatTurn = async ({
       fullResponseLength: fullResponse.length,
       historyId: history._id.toString(),
     });
-    if (replacedText) {
+    if (fullResponse !== streamedResponse) {
       sink.emit({replace: "text", text: fullResponse});
     }
     if (blocksCheck) {

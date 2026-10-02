@@ -15,7 +15,7 @@ export const BlocksError: React.FC<{
 }> = ({errors, raw, testID}) => {
   const summary = errors
     .slice(0, VISIBLE_ERRORS)
-    .map((error) => error.message)
+    .map((error) => (error.path === "" ? error.message : `${error.path}: ${error.message}`))
     .join(" ");
   return (
     <Box gap={2} testID={testID}>

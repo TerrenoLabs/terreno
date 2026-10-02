@@ -35,6 +35,8 @@ renderer can know the data before the first block. `parseBlocksPartial` returns 
 top-level blocks that have already finished and marks the cut tail pending. The finished
 document is still checked with `validateBlocks`.
 
+Text in the same step as a tool call is not the reply, except when that text is a block document and no later step has text. An actions block that left off `id` receives one before storage, and the chat is sent the corrected document.
+
 A reply that is not a mapping with `v` is not a document. The chat can still show it:
 `wrapAsTextDocument` turns the raw text into one `text` block. The error
 `NOT_A_DOCUMENT` is how the caller tells that case apart from a document that failed a

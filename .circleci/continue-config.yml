@@ -1358,7 +1358,6 @@ jobs:
 
   # Trusted-base architectural review: checkout master (not the PR head) then
   # fetch the PR via GitHub API. Matches GHA pull_request_target. Skip forks.
-  # Attach terreno-github-api + terreno-agentic once those contexts exist.
   architectural-pr-review:
     executor: node22
     resource_class: medium
@@ -2114,19 +2113,14 @@ jobs:
               "$ZOOM_WEBHOOK_URL"
 
 workflows:
-  # Attach terreno-e2e / terreno-github-api / terreno-agentic in the CircleCI
-  # project once Phase 0 contexts exist. Do not put GITHUB_TOKEN or
-  # CURSOR_API_KEY in project env vars (injected into every job). Missing named
-  # contexts fail the pipeline, so they are not hard-required in this file until
-  # created; then attach:
-  #   - dco:
-  #       context: [terreno-github-api]
-  #   - architectural-pr-review:
-  #       context: [terreno-github-api, terreno-agentic]
+  # Never put GITHUB_TOKEN or CURSOR_API_KEY in project env vars (injected into
+  # every job); scope them to these two jobs through contexts.
   always:
     jobs:
-      - dco
-      - architectural-pr-review
+      - dco:
+          context: [terreno-github-api]
+      - architectural-pr-review:
+          context: [terreno-github-api, terreno-agentic]
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>

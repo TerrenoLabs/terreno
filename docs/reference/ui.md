@@ -4,9 +4,9 @@ React Native UI component library (a large component library). Layout (Box, Page
 
 ## Key exports
 
-- Layout: `Box`, `Page`, `SplitPage`, `Card`, `DashboardGrid`
+- Layout: `Box`, `Page`, `SplitPage`, `Card`, `ChartCard`, `DashboardGrid`, `DashboardGridItem`
 - Forms: `TextField`, `SelectField`, `DateTimeField`, `CheckBox`
-- Display: `Text`, `Heading`, `Badge`, `DataTable`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`
+- Display: `Text`, `Heading`, `Badge`, `DataTable`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`
 - Actions: `Button`, `IconButton`, `Link`
 - Feedback: `Spinner`, `Modal`, `Toast`
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
@@ -32,11 +32,11 @@ supported and is convenient when startup cost is not material:
 import {Box, DataTable, Icon} from "@terreno/ui";
 ```
 
-Heavy optional widgets (`GPTChat`, `EmojiSelector`, `MarkdownEditor`, consent flows, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, and related admin tools) are
+Heavy optional widgets (`GPTChat`, `EmojiSelector`, `MarkdownEditor`, consent flows, `ChartCard`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, and related admin tools) are
 re-exported from the root entry through lazy boundaries. Importing them from `@terreno/ui` stays type-compatible, but
 their implementation modules load on first render instead of during the initial root import. `DashboardGrid` stays eager.
-their implementation modules load on first render instead of during the initial root import. `MarkdownView` and
-`DataTable` header info defer `react-native-markdown-display`; `EmojiSelector` defers `emoji-datasource` until open.
+`MarkdownView` and `DataTable` header info defer `react-native-markdown-display`;
+`EmojiSelector` defers `emoji-datasource` until open.
 
 For the smallest cold-start graph, keep using subpaths for screens that only need a few primitives (for example
 `import {Button} from "@terreno/ui/Button"`).
@@ -60,21 +60,72 @@ const customStyle: StyleProp<ViewStyle> = {
 - Ensures type compatibility when passing styles to @terreno/ui components
 - Simplifies imports (one package instead of two)
 
-### DashboardGrid
+### DashboardGrid and DashboardGridItem
 
 Eager layout-only wrapping grid. Default columns `{sm: 1, md: 2, lg: 3}`. Children stay caller-supplied `Card`s. Cell width is `(rowWidth - gap × (columns - 1)) / columns` so flex `gap` does not wrap extra columns.
+Wrap a child in `DashboardGridItem` when it must span more than one responsive column.
+Plain children remain one column.
 
 ```tsx
-<DashboardGrid>
+<DashboardGrid columns={{sm: 1, md: 2, lg: 4}}>
+  <DashboardGridItem span={{sm: 1, md: 2, lg: 2}}>
+    <Card>
+      <LineChart data={points} legendLabel="Signups" />
+    </Card>
+  </DashboardGridItem>
   <Card>
     <LineChart data={points} legendLabel="Signups" />
   </Card>
 </DashboardGrid>
 ```
 
+### ChartCard
+
+Card chrome for a chart or table: title, optional filter summary, and an optional period
+badge. Pass `onPeriodPress` to make the badge a button; omit it for display-only copy.
+
+```tsx
+<ChartCard title="Cost by Device" periodLabel="Last 30 days">
+  <DonutChart data={points} />
+</ChartCard>
+```
+
+### Scorecard
+
+Compact KPI tile with a title, formatted value, and optional current/comparison
+sparkline. Numeric values use `formatValue`; string values render unchanged.
+
+```tsx
+<Scorecard
+  title="Cost"
+  value={569}
+  formatValue={(value) => `$${value}`}
+  sparklineData={current}
+  comparisonData={previous}
+/>
+```
+
+### SparklineChart
+
+Plot-only line chart for compact metrics. `data` draws the current solid line;
+`comparisonData` draws a dotted previous-period line on the same scale. It has no axes,
+grid, legend, tooltip row, or empty-state copy.
+
+```tsx
+<SparklineChart
+  data={[{label: "Mon", value: 3}, {label: "Tue", value: 5}]}
+  comparisonData={[{label: "Mon", value: 4}, {label: "Tue", value: 4}]}
+/>
+```
+
 ### LineChart
 
-Single-series line chart drawn with `react-native-svg`. Empty data shows `emptyText` (default `"No data"`). `loading` shows a `Spinner`. Press or hover a point for `{label}: {value}`.
+Line chart drawn with `react-native-svg`. Keep the simple `data` + `legendLabel` path for
+one series, or pass named `series` for multiple lines and legend items.
+`comparisonData` adds a dotted previous-period overlay on the shared scale. Empty data
+shows `emptyText` (default `"No data"`). `loading` shows a `Spinner`.
+Set `xTickPolicy` to `auto` (default), `rotate`, or `truncate`. `title`,
+`periodLabel`, and `onPeriodPress` use the same header chrome as `ChartCard`.
 
 ```tsx
 <LineChart
@@ -88,7 +139,10 @@ Hit targets use `Box` `onClick`, so testIDs are `{testID}.point.{index}-clickabl
 
 ### BarChart
 
-Single-series bar chart on the same owned-SVG contract as `LineChart` (empty, loading, legend, tooltip).
+Bar chart on the same owned-SVG contract as `LineChart` (empty, loading, legend,
+tooltip, tick policy, and header shortcuts). `comparisonData` paints lighter bars behind
+the current period. When `series` is passed in this facade, its first entry supplies the
+bars and legend; grouped bars remain future work.
 
 ```tsx
 <BarChart
@@ -101,6 +155,8 @@ Single-series bar chart on the same owned-SVG contract as `LineChart` (empty, lo
 ### AreaChart
 
 Filled area plus line on the same owned-SVG contract as `LineChart`.
+Named `series` render one fill/line pair and legend item each; `comparisonData` stays a
+dotted line rather than a filled area.
 
 ```tsx
 <AreaChart
@@ -112,11 +168,16 @@ Filled area plus line on the same owned-SVG contract as `LineChart`.
 
 ### DonutChart
 
-One slice per `{label, value}` point. Per-slice `color` overrides the theme paint. Legend is one row per slice (`legendLabel` is ignored).
+One slice per `{label, value}` point. Per-slice `color` overrides the theme paint.
+Legend rows show label + percent by default; customize with `formatShare`.
+`centerValue` and `centerTitle` put an aggregate in the donut hole. `title` /
+`periodLabel` use `ChartCard` chrome (`legendLabel` remains ignored).
 
 ```tsx
 <DonutChart
   data={[{label: "Open", value: 3}, {color: "#112233", label: "Closed", value: 5}]}
+  centerValue="8"
+  centerTitle="Total"
   testID="status-donut"
 />
 ```

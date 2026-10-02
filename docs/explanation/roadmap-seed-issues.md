@@ -639,6 +639,26 @@ docs are the proof; comms admin stats consume these primitives later.
 
 ---
 
+## dashboard-chart-parity
+
+**Title:** `Ops dashboard chart parity`
+
+**Labels:** `area:ui`, `type:feature`
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`dashboard-chart-parity`, Status=`Shaping`
+
+Follow-up to charts-and-dashboards: scorecards with comparison sparklines, `ChartCard`
+period badges, additive multi-series facades, donut hole labels, spanning `DashboardGrid`
+items, and DataTable period headers / totals / range status so apps can compose a
+“How’s it going?”-class ops dashboard. Terreno theme defaults; no Looker preset. Grammar
+not required.
+
+- **Implementation plan:** [dashboard-chart-parity.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/dashboard-chart-parity.md)
+- **Tasks:** [dashboard-chart-parity.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/dashboard-chart-parity.md)
+- **RTK flag:** None
+- **Depends on:** charts-and-dashboards
+
+---
+
 ## dark-mode-theme
 
 **Title:** `First-class dark mode`

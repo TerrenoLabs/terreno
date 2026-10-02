@@ -412,22 +412,22 @@ const AiScreen: React.FC = () => {
 
   // Reopen the chat that was open before a reload, once the stored id and histories are loaded
   useEffect(() => {
-    if (hasRestoredHistoryRef.current || isStoredHistoryIdLoading || isLoading) {
+    if (!userId || hasRestoredHistoryRef.current || isStoredHistoryIdLoading || isLoading) {
       return;
     }
     hasRestoredHistoryRef.current = true;
     if (storedHistoryId) {
       handleSelectHistory(storedHistoryId);
     }
-  }, [handleSelectHistory, isLoading, isStoredHistoryIdLoading, storedHistoryId]);
+  }, [handleSelectHistory, isLoading, isStoredHistoryIdLoading, storedHistoryId, userId]);
 
   // Persist the open chat id after the restore above has run
   useEffect(() => {
-    if (!hasRestoredHistoryRef.current) {
+    if (!userId || !hasRestoredHistoryRef.current) {
       return;
     }
     void setStoredHistoryId(currentHistoryId);
-  }, [currentHistoryId, setStoredHistoryId]);
+  }, [currentHistoryId, setStoredHistoryId, userId]);
 
   // Stop following a resumed reply when leaving the screen
   useEffect(() => stopResume, [stopResume]);

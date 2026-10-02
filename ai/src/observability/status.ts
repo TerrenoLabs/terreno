@@ -1,4 +1,5 @@
 import type {RegisteredObservabilityApp} from "./observabilityAppRegistry";
+import type {ObservabilityPermissions} from "./permissions";
 import type {ObservabilityCapability, ObservabilityControlConfig} from "./types";
 
 export interface ObservabilityPluginStatus {
@@ -14,6 +15,7 @@ export interface PlaygroundAiStatus {
 
 export interface ObservabilityStatus {
   localOn: boolean;
+  permissions: ObservabilityPermissions;
   playgroundAi: PlaygroundAiStatus;
   plugins: ObservabilityPluginStatus[];
   primaries: ObservabilityControlConfig;
@@ -35,9 +37,13 @@ export const isLocalObservabilityPluginOn = (plugins: ReadonlyArray<{id: string}
   });
 };
 
-export const buildObservabilityStatus = (app: RegisteredObservabilityApp): ObservabilityStatus => {
+export const buildObservabilityStatus = (
+  app: RegisteredObservabilityApp,
+  permissions: ObservabilityPermissions
+): ObservabilityStatus => {
   return {
     localOn: isLocalObservabilityPluginOn(app.plugins),
+    permissions,
     playgroundAi: buildPlaygroundAiStatus(app),
     plugins: app.plugins.map((plugin) => {
       return {

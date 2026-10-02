@@ -1,11 +1,12 @@
 import {Box, Button, Spinner, Text} from "@terreno/ui";
-import {useLocalSearchParams} from "expo-router";
+import {router, useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {resolveAiRunBlockedMessage, resolveAiRunError} from "../shell/aiRunAccess";
-import {AiPromptEditorView} from "./AiPromptEditorView";
+import {resolvePromptActionPermissions} from "../shell/observabilityPermissions";
+import {AiPromptHubView} from "./AiPromptHubView";
 import {
   latestVersionFromDetail,
   type PlaygroundRunResult,
@@ -42,9 +43,9 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
   const [runPlayground, playgroundState] = usePlaygroundMutation();
   const [selectedVersion, setSelectedVersion] = useState<number | undefined>(undefined);
 
+  const prefix = (routeBase ?? "").replace(/\/$/, "");
   const detail = useMemo(() => unwrapPromptDetail(data), [data]);
   const version = selectedVersion ?? (detail ? latestVersionFromDetail(detail) : 1);
-  const prefix = (routeBase ?? "").replace(/\/$/, "");
   const backHref = `${prefix}/ai-prompts`;
 
   const handleSaveVersion = useCallback(
@@ -77,6 +78,15 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
   const observabilityStatus = useMemo(
     () => unwrapObservabilityStatus(statusQuery.data),
     [statusQuery.data]
+  );
+  const promptPermissions = useMemo(
+    () =>
+      resolvePromptActionPermissions({
+        status: observabilityStatus,
+        statusError: statusQuery.isError,
+        statusLoading: statusQuery.isLoading,
+      }),
+    [observabilityStatus, statusQuery.isError, statusQuery.isLoading]
   );
   const playgroundAiSource = observabilityStatus?.playgroundAi?.source;
   const isPlaygroundAccessLoading = apiKeyLoading || statusQuery.isLoading;
@@ -144,16 +154,23 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
 
   return (
     <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-prompt-editor">
-      <AiPromptEditorView
+      <AiPromptHubView
         detail={detail}
         isApiKeyLoading={isPlaygroundAccessLoading}
         isRunningPlayground={playgroundState.isLoading}
         isSaving={createState.isLoading}
         isSettingProduction={labelState.isLoading}
+        onOpenExperiment={(experimentId) => {
+          router.push(`${prefix}/ai-experiment-results?id=${encodeURIComponent(experimentId)}`);
+        }}
+        onOpenTrace={(traceId) => {
+          router.push(`${prefix}/ai-trace-detail?id=${encodeURIComponent(traceId)}`);
+        }}
         onRunPlayground={handleRunPlayground}
         onSaveVersion={handleSaveVersion}
         onSelectVersion={setSelectedVersion}
         onSetProduction={handleSetProduction}
+        permissions={promptPermissions}
         playgroundBlockedMessage={playgroundBlockedMessage}
         playgroundError={playgroundError}
         playgroundResult={playgroundResult}

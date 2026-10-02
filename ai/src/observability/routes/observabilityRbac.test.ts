@@ -346,14 +346,6 @@ describe("observability route RBAC", () => {
         resource: "aiTrace",
       },
       {
-        allowAction: "list",
-        denyAction: "read",
-        label: "aiTrace:list (status)",
-        method: "get",
-        path: "/ai/observability/status",
-        resource: "aiTrace",
-      },
-      {
         allowAction: "read",
         denyAction: "list",
         label: "aiTrace:read (detail)",
@@ -638,6 +630,111 @@ describe("observability route RBAC", () => {
       },
     ];
   };
+
+  describe("GET /status permissions", () => {
+    const NO_SHELL_EMAIL = "obs-no-shell@example.com";
+    const NO_SHELL_PASSWORD = "obs-no-shell-password";
+
+    const ensureNoShellUser = async (): Promise<void> => {
+      await UserModel.deleteMany({email: NO_SHELL_EMAIL});
+      const doc = await UserModel.create({
+        admin: false,
+        email: NO_SHELL_EMAIL,
+        name: "Obs No Shell",
+      });
+      await (doc as unknown as PasswordedUser).setPassword(NO_SHELL_PASSWORD);
+      await doc.save();
+    };
+
+    const authAsNoShell = async (app: express.Application): Promise<TestAgent> => {
+      return authAsUserWithCredentials(app, {
+        email: NO_SHELL_EMAIL,
+        password: NO_SHELL_PASSWORD,
+      });
+    };
+
+    it("returns 403 without admin:access even when observability list is granted", async () => {
+      await ensureNoShellUser();
+      const app = buildRbacObservabilityApp({
+        [NO_SHELL_EMAIL]: {
+          aiPrompt: ["list", "read"],
+        },
+      });
+      const agent = await authAsNoShell(app);
+      await agent.get("/ai/observability/status").expect(403);
+    });
+
+    it("returns all observability actions false for admin shell without resource grants", async () => {
+      const app = buildRbacObservabilityApp({
+        [RBAC_OPERATOR_EMAIL]: ADMIN_SHELL,
+      });
+      const agent = await authAsRbacOperator(app);
+      const response = await agent.get("/ai/observability/status").expect(200);
+      const observabilityResources = [
+        "aiDataset",
+        "aiEvaluator",
+        "aiExperiment",
+        "aiPrompt",
+        "aiReview",
+        "aiTrace",
+      ] as const;
+      for (const resource of observabilityResources) {
+        for (const action of terrenoStatements[resource]) {
+          expect(response.body.data.permissions[resource]?.[action]).toBe(false);
+        }
+      }
+    });
+
+    it("is available with admin shell access and returns effective action flags", async () => {
+      const app = buildRbacObservabilityApp({
+        [RBAC_OPERATOR_EMAIL]: {
+          ...ADMIN_SHELL,
+          aiPrompt: ["list", "read"],
+        },
+      });
+      const agent = await authAsRbacOperator(app);
+      const response = await agent.get("/ai/observability/status").expect(200);
+      expect(response.body.data.permissions.aiPrompt).toEqual({
+        create: false,
+        list: true,
+        playground: false,
+        promote: false,
+        read: true,
+        update: false,
+      });
+      expect(response.body.data.permissions.aiTrace?.list).toBe(false);
+    });
+
+    it("does not grant writes: status create false and POST prompts returns 403", async () => {
+      const app = buildRbacObservabilityApp({
+        [RBAC_OPERATOR_EMAIL]: {
+          ...ADMIN_SHELL,
+          aiPrompt: ["list", "read"],
+        },
+      });
+      const agent = await authAsRbacOperator(app);
+      const status = await agent.get("/ai/observability/status").expect(200);
+      expect(status.body.data.permissions.aiPrompt?.create).toBe(false);
+
+      await agent
+        .post("/ai/observability/prompts")
+        .send({
+          folder: "examples",
+          name: `rbac-deny-${Date.now()}`,
+          template: "Hello",
+          type: "chat",
+        })
+        .expect(403);
+    });
+
+    it("grants every action for legacy admin callers", async () => {
+      const app = buildObservabilityApp();
+      const agent = await authAsUser(app, "admin");
+      const response = await agent.get("/ai/observability/status").expect(200);
+      expect(response.body.data.permissions.aiPrompt?.playground).toBe(true);
+      expect(response.body.data.permissions.aiExperiment?.promote).toBe(true);
+    });
+  });
 
   describe("route action mapping", () => {
     it("returns 403 when only the neighboring action is granted", async () => {

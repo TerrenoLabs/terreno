@@ -20,6 +20,38 @@ export interface PromptVariable {
   reviewerNote?: string;
 }
 
+export interface PromptRelatedExperimentSummary {
+  created: string;
+  id: string;
+  name: string;
+  promptName: string;
+  status: "completed" | "failed" | "pending" | "running";
+  versions: number[];
+}
+
+export interface PromptRelatedTraceSummary {
+  id: string;
+  name: string;
+  promptName: string;
+  promptVersion: number;
+  sensitive: boolean;
+  startedAt: string;
+  status: "error" | "ok";
+}
+
+export interface PromptRelationships {
+  experiments: {
+    items: PromptRelatedExperimentSummary[];
+    limit: number;
+    total: number;
+  };
+  traces: {
+    items: PromptRelatedTraceSummary[];
+    limit: number;
+    total: number;
+  };
+}
+
 export interface PromptVersionDetail {
   config?: Record<string, unknown>;
   created?: string;
@@ -35,12 +67,26 @@ export interface PromptVersionDetail {
 }
 
 export interface PromptDetail {
+  description?: string;
   folder: string;
   labels: Array<{label: string; version: number}>;
   name: string;
+  relationships: PromptRelationships;
   tags: string[];
   versions: PromptVersionDetail[];
 }
+
+const emptyRelationships = (): PromptRelationships => ({
+  experiments: {items: [], limit: 20, total: 0},
+  traces: {items: [], limit: 20, total: 0},
+});
+
+export const normalizePromptDetail = (detail: PromptDetail): PromptDetail => {
+  return {
+    ...detail,
+    relationships: detail.relationships ?? emptyRelationships(),
+  };
+};
 
 export interface PlaygroundRunResult {
   compiledMessages: Array<{content: string; role: "system" | "user"}>;
@@ -92,7 +138,7 @@ export const unwrapPromptDetail = (raw: unknown): PromptDetail | undefined => {
   if (!payload || typeof payload !== "object" || !("name" in payload)) {
     return undefined;
   }
-  return payload;
+  return normalizePromptDetail(payload);
 };
 
 export const folderCounts = (prompts: PromptListItem[]): FolderCount[] => {

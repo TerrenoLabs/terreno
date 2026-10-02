@@ -24,6 +24,7 @@ export interface ObsPromptRef {
 export interface ObsPromptDocument extends mongoose.Document<mongoose.Types.ObjectId> {
   created: Date;
   deleted: boolean;
+  description?: string;
   folder: string;
   name: string;
   tags: string[];

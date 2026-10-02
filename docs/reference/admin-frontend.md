@@ -448,12 +448,29 @@ Every observability screen wraps `AiObservabilityChrome`: breadcrumbs
 `GET /ai/observability/status` (`Local on|off` plus active primaries). Review queue nav and the
 review screen body hide when `localOn` is false.
 
+Each observability list screen is contributed with `adminAccess: {resource, action: "list"}` so
+`/admin/config` omits screens the caller cannot list (`aiPrompt`, `aiTrace`, `aiEvaluator`,
+`aiDataset`, `aiExperiment`, `aiReview`). Detail routes stay registered on the host; route
+handlers still enforce Task 4.1 RBAC.
+
+`GET /ai/observability/status` includes a `permissions` map (per observability resource and
+action). Legacy admin users and apps without `accessControl` receive all actions `true`. RBAC
+callers receive effective flags for the signed-in user. Pass the same `accessControl` to
+`ObservabilityApp` and `AdminApp` so status permissions match sidebar filtering. Admin widgets
+read the payload through `resolvePromptActionPermissions` (fail closed while status is loading,
+errored, or missing `permissions`; list screens gate **Create prompt** on
+`permissions.aiPrompt.create`) without coupling to host Redux.
+
 `ai-prompts` lists prompts with a folder rail, search, type badge, latest vs production columns
-(tooltips), 7-day usage, and **Create prompt**. `ai-prompt-editor?name=` is the versioned editor:
-full-width version history rows show `vN`, every label attached to that version, and its creation
-time on one line. The selected row is highlighted. The editor keeps Editor / Playground tabs,
-**Save as vN+1**, and **Set vN as production…** (modal names the outgoing version). Playground
-**Run once** does not create a version; hosts may pass `apiKey` to
+(tooltips), 7-day usage, and **Create prompt** when `aiPrompt:create` is allowed. `ai-prompt-editor?name=`
+is a prompt hub with **Overview**, **Versions**, **Traces**, and **Experiments** tabs. Overview
+shows optional description, folder, tags, and latest vs production badges. Traces and Experiments
+render bounded relationship rows from prompt detail (no full-list fetches). The **Versions** tab
+hosts the versioned editor: full-width version history rows show `vN`, every label attached to
+that version, and its creation time on one line. The selected row is highlighted. Editor /
+Playground tabs appear on Versions when allowed; **Save as vN+1**, **Set vN as production…**, and
+playground **Run once** hide when `aiPrompt:update`, `aiPrompt:promote`, or `aiPrompt:playground`
+is denied (fields stay read-only). Playground **Run once** does not create a version; hosts may pass `apiKey` to
 `AiPromptEditorScreenWidget`, which forwards it as `x-ai-api-key` without putting the key in the
 request body. Pass `apiKeyLoading` while the host reads a saved key (for example from
 `useStoredState`) so the playground waits instead of showing a missing-key message. Pass

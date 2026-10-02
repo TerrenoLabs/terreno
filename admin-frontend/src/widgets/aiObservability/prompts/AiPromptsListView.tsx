@@ -46,6 +46,7 @@ const TypeBadgeCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => (
 );
 
 export interface AiPromptsListViewProps {
+  canCreate?: boolean;
   createError?: string;
   createFolder: string;
   createName: string;
@@ -72,6 +73,7 @@ export interface AiPromptsListViewProps {
 }
 
 export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
+  canCreate = true,
   createError,
   createFolder,
   createName,
@@ -172,7 +174,9 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
                 value={search}
               />
             </Box>
-            <Button onClick={onOpenCreate} testID="ai-prompts-create" text="Create prompt" />
+            {canCreate ? (
+              <Button onClick={onOpenCreate} testID="ai-prompts-create" text="Create prompt" />
+            ) : undefined}
           </Box>
           {loadError ? (
             <Box gap={2} testID="ai-prompts-load-error">

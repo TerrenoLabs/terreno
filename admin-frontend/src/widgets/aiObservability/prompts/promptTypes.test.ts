@@ -41,13 +41,18 @@ const version = (
 });
 
 const detail: PromptDetail = {
+  description: "Summarize user text",
   folder: "examples",
   labels: [
     {label: "latest", version: 2},
     {label: "production", version: 1},
   ],
   name: "summarize",
-  tags: [],
+  relationships: {
+    experiments: {items: [], limit: 20, total: 0},
+    traces: {items: [], limit: 20, total: 0},
+  },
+  tags: ["ops"],
   versions: [version({version: 1}), version({system: "Be brief", version: 2})],
 };
 

@@ -1,6 +1,7 @@
 import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
 import {getObservabilityApp} from "../observabilityAppRegistry";
+import {resolveObservabilityPermissions} from "../permissions";
 import {buildObservabilityStatus} from "../status";
 import {
   type ObservabilityRouteAccessOptions,
@@ -24,19 +25,23 @@ export const addObservabilityStatusRoutes = (
     `${BASE_PATH}/status`,
     observabilityRouteMiddleware(
       options.accessControl,
-      {action: "list", resource: "aiTrace"},
+      undefined,
       builder()
         .withTags(["observability"])
         .withSummary("Observability plugin status for admin chrome")
         .withResponse(200, {data: {type: "object"}})
         .build()
     ),
-    asyncHandler(async (_req, res) => {
+    asyncHandler(async (req, res) => {
       const app = getObservabilityApp();
       if (!app) {
         throw new APIError({status: 503, title: "ObservabilityApp is not registered"});
       }
-      return res.json({data: buildObservabilityStatus(app)});
+      const permissions = await resolveObservabilityPermissions({
+        accessControl: options.accessControl,
+        user: req.user,
+      });
+      return res.json({data: buildObservabilityStatus(app, permissions)});
     })
   );
 };

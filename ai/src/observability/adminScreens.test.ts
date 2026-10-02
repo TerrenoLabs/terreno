@@ -26,4 +26,46 @@ describe("observabilityAdminScreens", () => {
       "ai-review",
     ]);
   });
+
+  it("declares list permissions per observability resource", () => {
+    const screens = observabilityAdminScreens({localOn: true});
+    expect(screens).toEqual([
+      {
+        adminAccess: {action: "list", resource: "aiPrompt"},
+        displayName: "Prompts",
+        group: AI_OBSERVABILITY_GROUP,
+        name: "ai-prompts",
+      },
+      {
+        adminAccess: {action: "list", resource: "aiTrace"},
+        displayName: "Traces",
+        group: AI_OBSERVABILITY_GROUP,
+        name: "ai-traces",
+      },
+      {
+        adminAccess: {action: "list", resource: "aiEvaluator"},
+        displayName: "Evaluators",
+        group: AI_OBSERVABILITY_GROUP,
+        name: "ai-evaluators",
+      },
+      {
+        adminAccess: {action: "list", resource: "aiDataset"},
+        displayName: "Datasets",
+        group: AI_OBSERVABILITY_GROUP,
+        name: "ai-datasets",
+      },
+      {
+        adminAccess: {action: "list", resource: "aiExperiment"},
+        displayName: "Experiments",
+        group: AI_OBSERVABILITY_GROUP,
+        name: "ai-experiments",
+      },
+      {
+        adminAccess: {action: "list", resource: "aiReview"},
+        displayName: "Review queue",
+        group: AI_OBSERVABILITY_GROUP,
+        name: "ai-review",
+      },
+    ]);
+  });
 });

@@ -2933,6 +2933,11 @@ describe("AiPromptEditorScreen", () => {
     },
   };
 
+  const emptyPromptRelationships = {
+    experiments: {items: [], limit: 20, total: 0},
+    traces: {items: [], limit: 20, total: 0},
+  };
+
   const detail: PromptDetail = {
     folder: "examples",
     labels: [
@@ -2940,6 +2945,7 @@ describe("AiPromptEditorScreen", () => {
       {label: "production", version: 1},
     ],
     name: "summarize",
+    relationships: emptyPromptRelationships,
     tags: [],
     versions: [
       {
@@ -3036,7 +3042,7 @@ describe("AiPromptEditorScreen", () => {
   };
 
   describe("AiPromptEditorScreenWidget", () => {
-    it("shows loading then editor and playground tabs", () => {
+    it("shows loading then hub overview and versions playground tabs", () => {
       detailState.isLoading = true;
       const loading = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
       expect(loading.getByTestId("ai-prompt-editor-loading")).toBeTruthy();
@@ -3045,6 +3051,8 @@ describe("AiPromptEditorScreen", () => {
       detailState.isLoading = false;
       detailState.data = detail;
       const loaded = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+      expect(loaded.getByTestId("ai-prompt-overview")).toBeTruthy();
+      fireEvent.press(loaded.getByText("Versions"));
       expect(loaded.getByTestId("ai-prompt-save-next")).toBeTruthy();
       fireEvent.press(loaded.getByText("Playground"));
       expect(loaded.getByTestId("ai-prompt-playground")).toBeTruthy();
@@ -3060,6 +3068,7 @@ describe("AiPromptEditorScreen", () => {
           playgroundApiKeyHint="Save a Gemini API key on Profile."
         />
       );
+      fireEvent.press(view.getByText("Versions"));
       fireEvent.press(view.getByText("Playground"));
       expect(view.getByTestId("ai-prompt-playground-blocked")).toHaveTextContent(
         "Save a Gemini API key on Profile."
@@ -3074,6 +3083,7 @@ describe("AiPromptEditorScreen", () => {
       const loading = renderWithTheme(
         <AiPromptEditorScreenWidget {...widgetProps} apiKeyLoading={true} />
       );
+      fireEvent.press(loading.getByText("Versions"));
       fireEvent.press(loading.getByText("Playground"));
       expect(loading.getByTestId("ai-prompt-run-once")).toHaveTextContent("Loading API key…");
       loading.unmount();
@@ -3081,6 +3091,7 @@ describe("AiPromptEditorScreen", () => {
       const ready = renderWithTheme(
         <AiPromptEditorScreenWidget {...widgetProps} apiKey="saved-key" />
       );
+      fireEvent.press(ready.getByText("Versions"));
       fireEvent.press(ready.getByText("Playground"));
       expect(ready.queryByTestId("ai-prompt-playground-blocked")).toBeNull();
     });
@@ -3092,6 +3103,7 @@ describe("AiPromptEditorScreen", () => {
       const view = renderWithTheme(
         <AiPromptEditorScreenWidget {...widgetProps} apiKey="saved-key" />
       );
+      fireEvent.press(view.getByText("Versions"));
       fireEvent.press(view.getByText("Playground"));
       fireEvent.changeText(view.getByTestId("ai-prompt-var-text"), "hello");
       await act(async () => {
@@ -3136,6 +3148,7 @@ describe("AiPromptEditorScreen", () => {
       detailState.data = detail;
       detailState.isError = false;
       const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+      fireEvent.press(view.getByText("Versions"));
       await act(async () => {
         fireEvent.press(view.getByTestId("ai-prompt-set-production"));
         await Promise.resolve();
@@ -3164,6 +3177,7 @@ describe("AiPromptEditorScreen", () => {
       const view = renderWithTheme(
         <AiPromptEditorScreenWidget {...widgetProps} apiKey="saved-key" />
       );
+      fireEvent.press(view.getByText("Versions"));
       expect(view.getByText("Could not save a new version.")).toBeTruthy();
       expect(view.getByText("Could not set production.")).toBeTruthy();
       fireEvent.press(view.getByText("Playground"));
@@ -3190,6 +3204,7 @@ describe("AiPromptEditorScreen", () => {
           playgroundApiKeyHint="Save a Gemini API key on Profile."
         />
       );
+      fireEvent.press(view.getByText("Versions"));
       fireEvent.press(view.getByText("Playground"));
       expect(view.getByTestId("ai-prompt-playground-blocked")).toHaveTextContent(
         "Save a Gemini API key on Profile."
@@ -3216,6 +3231,11 @@ describe("AiPromptEditorView", () => {
     onSetProduction: async () => undefined,
   };
 
+  const emptyPromptRelationships = {
+    experiments: {items: [], limit: 20, total: 0},
+    traces: {items: [], limit: 20, total: 0},
+  };
+
   const detail: PromptDetail = {
     folder: "examples",
     labels: [
@@ -3224,6 +3244,7 @@ describe("AiPromptEditorView", () => {
       {label: "staging", version: 1},
     ],
     name: "summarize",
+    relationships: emptyPromptRelationships,
     tags: [],
     versions: [
       {

@@ -26,7 +26,7 @@
     },
     "admin-backend": {
       "name": "@terreno/admin-backend",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@google-cloud/storage": "catalog:",
         "@terreno/api": "workspace:*",
@@ -52,7 +52,7 @@
     },
     "admin-frontend": {
       "name": "@terreno/admin-frontend",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@terreno/ui": "workspace:*",
         "expo-router": "catalog:",
@@ -88,7 +88,7 @@
     },
     "admin-spa": {
       "name": "@terreno/admin-spa",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@expo/vector-icons": "catalog:",
         "@react-native-async-storage/async-storage": "catalog:",
@@ -139,7 +139,7 @@
     },
     "ai": {
       "name": "@terreno/ai",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@ai-sdk/mcp": "^1.0.21",
         "@google-cloud/storage": "catalog:",
@@ -156,6 +156,7 @@
       },
       "devDependencies": {
         "@biomejs/biome": "catalog:",
+        "@terreno/admin-backend": "workspace:*",
         "@terreno/api": "workspace:*",
         "@terreno/test": "workspace:*",
         "@types/bun": "catalog:",
@@ -181,7 +182,7 @@
     },
     "announcements": {
       "name": "@terreno/announcements",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -204,7 +205,7 @@
     },
     "api": {
       "name": "@terreno/api",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "bin": {
         "terreno-migrate": "./src/migrations/cli.ts",
       },
@@ -283,7 +284,7 @@
     },
     "api-health": {
       "name": "@terreno/api-health",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -317,7 +318,7 @@
     },
     "comms": {
       "name": "@terreno/comms",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "libphonenumber-js": "catalog:",
@@ -348,7 +349,7 @@
     },
     "create-terreno-app": {
       "name": "create-terreno-app",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "bin": {
         "create-terreno-app": "./dist/cli.js",
       },
@@ -544,7 +545,7 @@
     },
     "feature-flags": {
       "name": "@terreno/feature-flags",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@openfeature/server-sdk": "catalog:",
         "@terreno/api": "workspace:*",
@@ -567,7 +568,7 @@
     },
     "jobs": {
       "name": "@terreno/jobs",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "cron": "^4.3.4",
@@ -597,7 +598,7 @@
     },
     "mcp-server": {
       "name": "@terreno/mcp",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "bin": {
         "terreno-mcp": "./dist/index.js",
         "terreno-mcp-local": "./dist/local/index.js",
@@ -625,7 +626,7 @@
     },
     "rtk": {
       "name": "@terreno/rtk",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@ai-sdk/react": "^3.0.118",
         "@better-auth/expo": "^1.6.25",
@@ -672,7 +673,7 @@
     },
     "syncdb": {
       "name": "@terreno/syncdb",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "bin": {
         "terreno-syncdb-codegen": "./src/codegen/cli.ts",
       },
@@ -706,7 +707,7 @@
     },
     "test": {
       "name": "@terreno/test",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "express": "catalog:",
         "luxon": "catalog:",
@@ -732,7 +733,7 @@
     },
     "ui": {
       "name": "@terreno/ui",
-      "version": "57.6.0",
+      "version": "57.7.0",
       "dependencies": {
         "@expo-google-fonts/caveat": "^0.4.2",
         "@expo-google-fonts/dancing-script": "^0.4.2",

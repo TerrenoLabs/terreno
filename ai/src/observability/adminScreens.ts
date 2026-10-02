@@ -2,16 +2,41 @@ import type {AdminCustomScreen} from "@terreno/api";
 
 export const AI_OBSERVABILITY_GROUP = "AI Observability";
 
+const observabilityScreen = ({
+  displayName,
+  name,
+  resource,
+}: {
+  displayName: string;
+  name: string;
+  resource: string;
+}): AdminCustomScreen => ({
+  adminAccess: {action: "list", resource},
+  displayName,
+  group: AI_OBSERVABILITY_GROUP,
+  name,
+});
+
 export const observabilityAdminScreens = ({localOn}: {localOn: boolean}): AdminCustomScreen[] => {
   const screens: AdminCustomScreen[] = [
-    {displayName: "Prompts", group: AI_OBSERVABILITY_GROUP, name: "ai-prompts"},
-    {displayName: "Traces", group: AI_OBSERVABILITY_GROUP, name: "ai-traces"},
-    {displayName: "Evaluators", group: AI_OBSERVABILITY_GROUP, name: "ai-evaluators"},
-    {displayName: "Datasets", group: AI_OBSERVABILITY_GROUP, name: "ai-datasets"},
-    {displayName: "Experiments", group: AI_OBSERVABILITY_GROUP, name: "ai-experiments"},
+    observabilityScreen({displayName: "Prompts", name: "ai-prompts", resource: "aiPrompt"}),
+    observabilityScreen({displayName: "Traces", name: "ai-traces", resource: "aiTrace"}),
+    observabilityScreen({
+      displayName: "Evaluators",
+      name: "ai-evaluators",
+      resource: "aiEvaluator",
+    }),
+    observabilityScreen({displayName: "Datasets", name: "ai-datasets", resource: "aiDataset"}),
+    observabilityScreen({
+      displayName: "Experiments",
+      name: "ai-experiments",
+      resource: "aiExperiment",
+    }),
   ];
   if (localOn) {
-    screens.push({displayName: "Review queue", group: AI_OBSERVABILITY_GROUP, name: "ai-review"});
+    screens.push(
+      observabilityScreen({displayName: "Review queue", name: "ai-review", resource: "aiReview"})
+    );
   }
   return screens;
 };

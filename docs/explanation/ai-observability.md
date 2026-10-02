@@ -26,10 +26,11 @@ That split is the two planes:
 Telemetry sinks still fan out even when a control primary is local-only.
 
 Admin chrome lives in `admin-frontend`. One sidebar group **AI Observability** holds Prompts,
-Traces, and Review (Review is omitted when the local plugin is off). Existing **AI Requests**
-stays under **Screens**. Every observability screen shows breadcrumbs
-`Admin / AI Observability / <Section> / <leaf>` and a status chip from `GET /ai/observability/status`.
-Prompts are edited as immutable versions in admin (`Save as vN+1`); apps never inline the string.
+Traces, Evaluators, Datasets, Experiments, and Review (Review is omitted when the local plugin is
+off). Existing **AI Requests** stays under **Screens**. Every observability screen shows
+breadcrumbs `Admin / AI Observability / <Section> / <leaf>` and a status chip from
+`GET /ai/observability/status`. Prompt detail is a hub (Overview, Versions, Traces, Experiments);
+versions are immutable in admin (`Save as vN+1`); apps never inline the string.
 
 ## Why this shape for product work
 
@@ -41,8 +42,10 @@ That loop is the product requirement, not an optional dashboard. Operator steps:
 
 Observability HTTP routes use Terreno RBAC resources (`aiPrompt`, `aiTrace`, `aiReview`,
 `aiDataset`, `aiExperiment`, `aiEvaluator`) instead of domain-specific approval vocabulary.
-Pass `accessControl` on `ObservabilityApp` to enforce grants on the server; UI hiding ships in
-a later phase. Seeded `admin` receives every observability action; `auditor` receives `list` and
+Pass the same `accessControl` instance on `ObservabilityApp` and `AdminApp` so
+`GET /ai/observability/status` permissions match `/admin/config` screen filtering. Admin widgets
+hide write controls from status flags (fail closed while status is loading or errored). Seeded
+`admin` receives every observability action; `auditor` receives `list` and
 `read` on each observability resource through the read-only sentinel (but not `admin:access` —
 pair auditor with a shell grant in a composed consumer role); `superadmin` receives `*`. Existing
 customized `admin` and `auditor` roles gain only missing observability actions on re-seed. Legacy

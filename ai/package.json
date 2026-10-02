@@ -20,6 +20,7 @@
   "description": "Provider-agnostic AI service with streaming chat, request logging, and admin tools — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/admin-backend": "workspace:*",
     "@terreno/api": "workspace:*",
     "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",

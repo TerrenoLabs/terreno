@@ -25,6 +25,9 @@ import {
 } from "./promptTypes";
 
 export interface AiPromptEditorViewProps {
+  canPlayground?: boolean;
+  canPromote?: boolean;
+  canUpdate?: boolean;
   detail: PromptDetail;
   isApiKeyLoading?: boolean;
   isRunningPlayground: boolean;
@@ -96,6 +99,8 @@ const parseVariables = (text: string): Array<{key: string; required: boolean}> =
 };
 
 const AiPromptEditorForm: React.FC<{
+  canPromote: boolean;
+  canUpdate: boolean;
   current: PromptVersionDetail;
   isSaving: boolean;
   isSettingProduction: boolean;
@@ -105,6 +110,8 @@ const AiPromptEditorForm: React.FC<{
   productionError?: string;
   saveError?: string;
 }> = ({
+  canPromote,
+  canUpdate,
   current,
   isSaving,
   isSettingProduction,
@@ -137,6 +144,7 @@ const AiPromptEditorForm: React.FC<{
   return (
     <Box gap={3} testID="ai-prompt-editor-form">
       <SelectField
+        disabled={!canUpdate}
         onChange={(value) => {
           setType(value as "chat" | "text");
         }}
@@ -148,6 +156,7 @@ const AiPromptEditorForm: React.FC<{
       />
       {type === "chat" ? (
         <TextArea
+          disabled={!canUpdate}
           onChange={setSystem}
           rows={6}
           testID="ai-prompt-system"
@@ -156,6 +165,7 @@ const AiPromptEditorForm: React.FC<{
         />
       ) : undefined}
       <TextArea
+        disabled={!canUpdate}
         onChange={setTemplate}
         rows={10}
         testID="ai-prompt-template"
@@ -163,6 +173,7 @@ const AiPromptEditorForm: React.FC<{
         value={template}
       />
       <TextField
+        disabled={!canUpdate}
         helperText="Comma-separated names. Schema summary of the selected version is read-only below."
         onChange={setVariablesText}
         testID="ai-prompt-variables"
@@ -173,6 +184,7 @@ const AiPromptEditorForm: React.FC<{
         {schemaSummary(current)}
       </Text>
       <SelectField
+        disabled={!canUpdate}
         onChange={setTemperature}
         options={TEMPERATURE_PRESETS}
         requireValue
@@ -186,27 +198,36 @@ const AiPromptEditorForm: React.FC<{
       </Text>
       {saveError ? <Text color="error">{saveError}</Text> : undefined}
       {productionError ? <Text color="error">{productionError}</Text> : undefined}
-      <Box direction="row" gap={2} wrap>
-        <Button
-          disabled={isSaving || !template.trim()}
-          iconName="floppy-disk"
-          onClick={handleSaveAsNext}
-          testID="ai-prompt-save-next"
-          text={`Save as v${nextVersion}`}
-        />
-        <Button
-          disabled={isSettingProduction}
-          onClick={onOpenProduction}
-          testID="ai-prompt-set-production"
-          text={`Set v${current.version} as production…`}
-          variant="secondary"
-        />
-      </Box>
+      {canUpdate || canPromote ? (
+        <Box direction="row" gap={2} wrap>
+          {canUpdate ? (
+            <Button
+              disabled={isSaving || !template.trim()}
+              iconName="floppy-disk"
+              onClick={handleSaveAsNext}
+              testID="ai-prompt-save-next"
+              text={`Save as v${nextVersion}`}
+            />
+          ) : undefined}
+          {canPromote ? (
+            <Button
+              disabled={isSettingProduction}
+              onClick={onOpenProduction}
+              testID="ai-prompt-set-production"
+              text={`Set v${current.version} as production…`}
+              variant="secondary"
+            />
+          ) : undefined}
+        </Box>
+      ) : undefined}
     </Box>
   );
 };
 
 export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
+  canPlayground = true,
+  canPromote = true,
+  canUpdate = true,
   detail,
   isApiKeyLoading = false,
   isRunningPlayground,
@@ -243,6 +264,7 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
   }
 
   const outgoingCopy = outgoingProductionCopy({detail, selectedVersion});
+  const editorTabItems = canPlayground ? ["Editor", "Playground"] : ["Editor"];
 
   return (
     <Box flex="grow" gap={4} testID="ai-prompt-editor">
@@ -310,12 +332,12 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
           {outgoingCopy}
         </Text>
         <SegmentedControl
-          items={["Editor", "Playground"]}
+          items={editorTabItems}
           onChange={setTabIndex}
           selectedIndex={tabIndex}
           testID="ai-prompt-editor-tabs"
         />
-        {tabIndex === 1 ? (
+        {canPlayground && tabIndex === 1 ? (
           <AiPromptPlaygroundView
             blockedMessage={playgroundBlockedMessage}
             detail={detail}
@@ -328,6 +350,8 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
           />
         ) : (
           <AiPromptEditorForm
+            canPromote={canPromote}
+            canUpdate={canUpdate}
             current={current}
             isSaving={isSaving}
             isSettingProduction={isSettingProduction}
@@ -342,22 +366,24 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
           />
         )}
       </Box>
-      <Modal
-        onDismiss={() => {
-          setConfirmProduction(false);
-        }}
-        primaryButtonOnClick={handleConfirmProduction}
-        primaryButtonText="Set production"
-        secondaryButtonOnClick={() => {
-          setConfirmProduction(false);
-        }}
-        secondaryButtonText="Cancel"
-        testID="ai-prompt-production-modal"
-        title="Set production version"
-        visible={confirmProduction}
-      >
-        <Text testID="ai-prompt-production-modal-copy">{outgoingCopy}</Text>
-      </Modal>
+      {canPromote ? (
+        <Modal
+          onDismiss={() => {
+            setConfirmProduction(false);
+          }}
+          primaryButtonOnClick={handleConfirmProduction}
+          primaryButtonText="Set production"
+          secondaryButtonOnClick={() => {
+            setConfirmProduction(false);
+          }}
+          secondaryButtonText="Cancel"
+          testID="ai-prompt-production-modal"
+          title="Set production version"
+          visible={confirmProduction}
+        >
+          <Text testID="ai-prompt-production-modal-copy">{outgoingCopy}</Text>
+        </Modal>
+      ) : undefined}
     </Box>
   );
 };

@@ -1,5 +1,6 @@
 import {afterEach, describe, expect, it} from "bun:test";
 
+import {observabilityAdminScreens} from "./adminScreens";
 import {ObservabilityApp, resetObservabilityApp} from "./observabilityApp";
 import type {ObservabilityPlugin} from "./types";
 
@@ -72,14 +73,7 @@ describe("ObservabilityApp config", () => {
   it("contributes an AI Observability screen group including review when local is on", () => {
     const app = new ObservabilityApp({plugins: [createLocalPlugin()]});
     expect(app.adminContribution()).toEqual({
-      customScreens: [
-        {displayName: "Prompts", group: "AI Observability", name: "ai-prompts"},
-        {displayName: "Traces", group: "AI Observability", name: "ai-traces"},
-        {displayName: "Evaluators", group: "AI Observability", name: "ai-evaluators"},
-        {displayName: "Datasets", group: "AI Observability", name: "ai-datasets"},
-        {displayName: "Experiments", group: "AI Observability", name: "ai-experiments"},
-        {displayName: "Review queue", group: "AI Observability", name: "ai-review"},
-      ],
+      customScreens: observabilityAdminScreens({localOn: true}),
     });
   });
 

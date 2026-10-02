@@ -3,6 +3,8 @@ import {router} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
+import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
+import {resolvePromptActionPermissions} from "../shell/observabilityPermissions";
 import {AiPromptsListView} from "./AiPromptsListView";
 import {
   ALL_FOLDERS,
@@ -14,8 +16,9 @@ import {useAiObservabilityPromptsApi} from "./useAiObservabilityPromptsApi";
 
 export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {api, routeBase} = props;
-  const {useCreateMutation, useListQuery} = useAiObservabilityPromptsApi(api);
+  const {useCreateMutation, useListQuery, useStatusQuery} = useAiObservabilityPromptsApi(api);
   const {data, error, isError, isLoading, refetch} = useListQuery({include: "usage7d"});
+  const statusQuery = useStatusQuery();
   const [createPrompt, createState] = useCreateMutation();
   const [search, setSearch] = useState("");
   const [folder, setFolder] = useState(ALL_FOLDERS);
@@ -28,6 +31,13 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
 
   const prompts = useMemo(() => unwrapPromptList(data), [data]);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
+  const canCreatePrompt = useMemo(() => {
+    return resolvePromptActionPermissions({
+      status: unwrapObservabilityStatus(statusQuery.data),
+      statusError: statusQuery.isError,
+      statusLoading: statusQuery.isLoading,
+    }).canCreate;
+  }, [statusQuery.data, statusQuery.isError, statusQuery.isLoading]);
 
   const handleOpen = useCallback(
     (name: string): void => {
@@ -68,6 +78,7 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
         </Box>
       ) : (
         <AiPromptsListView
+          canCreate={canCreatePrompt}
           createError={createError}
           createFolder={createFolder}
           createName={createName}

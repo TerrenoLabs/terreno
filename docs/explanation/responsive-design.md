@@ -129,6 +129,13 @@ Audited against this policy. Pixel cutoffs that were not a breakpoint token were
 | `MarkdownEditor` | Fixed. Side-by-side edit/preview used a 768pt cutoff. It now follows the desktop floor. |
 | `AdminShell` | Fixed. The sidebar became a hamburger drawer below 768pt. It now does that below the desktop floor. |
 | `AdminFilterDrawer` | Fixed. The bottom sheet used the same 768pt cutoff. It now follows the desktop floor. `ADMIN_FILTER_MOBILE_BREAKPOINT` is 1024. |
+| `AdminHome` | Fixed. Main and sidebar stay side by side only at or above the desktop floor, and only when the dashboard is not embedded. Below the floor they stack. |
+| Admin SPA shell | Compliant. It wraps `AdminShell`, so it uses the same floor. |
+| Example app screens | Compliant. `maxWidth={800}` is a content measure. Toolbars that sit in a row also wrap. No second pixel cutoff. |
+| Sync debugger | Fixed. The event list and JSON inspector stack below the desktop floor. The screen still uses raw `View` and `Text` on purpose. |
+| Demo headers | Fixed. Back-button visibility and header margin followed `isNarrowViewport()` once at module load. They now follow the desktop floor and update when the window resizes. |
+| Demo stories (Tooltip, Multiselect, Accordion) | Fixed. Width switches followed a one-time `isNarrowViewport()` read. They now follow the desktop floor and update on resize. |
+| Admin action rows | Partial. Some rows (`ConsentHistory`, consent editors) stay in one row without `wrap`. They are not a second breakpoint. |
 | `DateTimeField` | Partial. Inline controls switch to an action sheet when the parent is narrower than 395pt, and also when `isNarrowViewport()` is true. 395pt is the field's own minimum, not a viewport token. |
 | `Image` (`fullWidth`) | Gap. Width is read from `Dimensions` once at module load, so it does not track resize or rotation. |
 | `SideDrawer` | Partial. Width is 40% on web and 95% on native, by platform rather than by breakpoint token. |

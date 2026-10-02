@@ -1,6 +1,11 @@
-import {Accordion, Box, Heading, isNarrowViewport, Text} from "@terreno/ui";
+import {Accordion, Box, Heading, isSupportedDesktopWidth, Text} from "@terreno/ui";
 import React from "react";
-import {View} from "react-native";
+import {useWindowDimensions, View} from "react-native";
+
+const useDemoIsMobile = (): boolean => {
+  const {width} = useWindowDimensions();
+  return !isSupportedDesktopWidth({width});
+};
 
 export const AccordionDemo = () => {
   return (
@@ -19,8 +24,8 @@ export const AccordionDemo = () => {
   );
 };
 
-export const AccordionDevDemo = () => {
-  const isMobile = isNarrowViewport();
+export const AccordionDevDemo = (): React.ReactElement => {
+  const isMobile = useDemoIsMobile();
   const InfoChild = () => {
     return (
       <Box>
@@ -48,10 +53,10 @@ export const AccordionDevDemo = () => {
   );
 };
 
-export const AccordionOnToggleDemo = () => {
+export const AccordionOnToggleDemo = (): React.ReactElement => {
   const [isCollapsed, setIsCollapsed] = React.useState(true);
   const [title, setTitle] = React.useState("Sm Title");
-  const isMobile = isNarrowViewport();
+  const isMobile = useDemoIsMobile();
 
   return (
     <View style={{backgroundColor: "white", width: isMobile ? "100%" : isCollapsed ? 150 : 450}}>

@@ -1,3 +1,4 @@
+import {existsSync} from "node:fs";
 import type {Page} from "@playwright/test";
 
 import {expect, test} from "./fixtures/test";
@@ -568,10 +569,7 @@ test.describe("AI Chat", () => {
     await expect(page.getByText("Web")).toBeVisible();
     await expect(page.getByText("3 components")).toBeVisible();
     await page.getByTestId("blocks-2-export_btn").scrollIntoViewIfNeeded();
-    await page.screenshot({
-      fullPage: true,
-      path: "/opt/cursor/artifacts/screenshots/blocks-chat-chart.png",
-    });
+    await saveChatShot(page, "blocks-chat-chart.png");
 
     await page.getByTestId("blocks-2-export_btn").click();
     await expect(page.getByTestId("blocks-2-export_btn")).toHaveCount(0);
@@ -584,9 +582,15 @@ test.describe("AI Chat", () => {
       await scrollToBottom.click();
       await scrollToBottom.waitFor({state: "hidden"});
     }
-    await page.screenshot({
-      fullPage: true,
-      path: "/opt/cursor/artifacts/screenshots/blocks-chat-reply.png",
-    });
+    await saveChatShot(page, "blocks-chat-reply.png");
   });
 });
+
+/** Cloud agents attach these shots to the PR. CircleCI has no such directory. */
+const saveChatShot = async (page: Page, name: string): Promise<void> => {
+  const dir = "/opt/cursor/artifacts/screenshots";
+  if (!existsSync(dir)) {
+    return;
+  }
+  await page.screenshot({fullPage: true, path: `${dir}/${name}`});
+};

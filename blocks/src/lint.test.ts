@@ -189,4 +189,74 @@ describe("lintDocument", () => {
     ]);
     expect(validated.errors[0]?.fix).toContain("500");
   });
+
+  it("rejects dataset, chart, table, and image mistakes the schema still allows", () => {
+    const datasets: Record<string, unknown> = {};
+    for (let index = 0; index < 9; index += 1) {
+      datasets[`set${index}`] = {
+        columns: [
+          {name: "month", type: "string"},
+          {name: "month", type: "string"},
+        ],
+        rows: [["Jan", "Jan"]],
+      };
+    }
+    datasets.signups = {
+      columns: [
+        {name: "n", type: "number"},
+        {name: "count", type: "number"},
+      ],
+      rows: [[1, 2]],
+    };
+    const validated = validateBlocks(
+      documentWith({
+        blocks: [
+          {alt: "Chart", src: "not a url", type: "image"},
+          {
+            data: "signups",
+            kind: "bar",
+            points: [{label: "Jan", value: 1}],
+            type: "chart",
+            x: "month",
+            y: "count",
+          },
+          {kind: "line", type: "chart"},
+          {data: "signups", kind: "bar", type: "chart", x: "n", y: "count"},
+          {data: "signups", kind: "bar", type: "chart", x: "n", y: "missing"},
+          {
+            elements: [
+              {
+                id: "grain",
+                options: [
+                  {data: "signups", label: "Month"},
+                  {data: "other", label: "Week"},
+                ],
+                target: "missing_chart",
+                type: "segmented",
+              },
+            ],
+            id: "row",
+            type: "actions",
+          },
+          {data: "missing", type: "table"},
+          {columns: ["missing"], data: "signups", type: "table"},
+        ],
+        datasets,
+      })
+    );
+    expect(validated.ok).toBe(false);
+    if (validated.ok) {
+      return;
+    }
+    const codes = new Set(validated.errors.map((error) => error.code));
+    expect(codes.has("TOO_MANY")).toBe(true);
+    expect(codes.has("DUPLICATE_ID")).toBe(true);
+    expect(codes.has("IMAGE_HOST_NOT_ALLOWED")).toBe(true);
+    expect(codes.has("INVALID_TYPE")).toBe(true);
+    expect(codes.has("MISSING_REQUIRED")).toBe(true);
+    expect(codes.has("COLUMN_TYPE_MISMATCH")).toBe(true);
+    expect(codes.has("COLUMN_NOT_FOUND")).toBe(true);
+    expect(codes.has("SELECT_TARGET_INVALID")).toBe(true);
+    expect(codes.has("DATASET_NOT_FOUND")).toBe(true);
+  });
 });

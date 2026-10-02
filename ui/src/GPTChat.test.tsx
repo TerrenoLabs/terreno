@@ -1422,4 +1422,22 @@ describe("GPTChat asks", () => {
       assert.isAtLeast(UNSAFE_getAllByType(ActivityIndicator).length, 1);
     });
   });
+
+  it("keeps a finished reply intact while the next turn is still sending", () => {
+    const finished = `v: 1
+blocks:
+  - type: html
+    html: "<p>Invoice</p>"
+`;
+    const {getByText, queryByText} = renderChat({
+      currentMessages: [
+        {content: finished, id: "m1", role: "assistant"},
+        {content: "Send another", id: "m2", role: "user"},
+      ],
+      isStreaming: true,
+      uiBlocks: true,
+    });
+    assert.isOk(getByText("HTML preview is turned off."));
+    assert.isNull(queryByText("The preview appears when this reply finishes."));
+  });
 });

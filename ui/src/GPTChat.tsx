@@ -981,10 +981,9 @@ const MessageList = ({
     }
   }
 
+  const lastIndex = currentMessages.length - 1;
   const streamingIndex =
-    uiBlocks && isStreaming
-      ? currentMessages.findLastIndex((message) => message.role === "assistant")
-      : -1;
+    uiBlocks && isStreaming && currentMessages[lastIndex]?.role === "assistant" ? lastIndex : -1;
   const messages =
     appendedMessages.length === 0 ? currentMessages : [...currentMessages, ...appendedMessages];
 

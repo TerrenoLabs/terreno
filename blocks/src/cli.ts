@@ -53,7 +53,13 @@ const main = (): void => {
   process.exit(result.code);
 };
 
-const entry = basename(process.argv[1] ?? "");
-if (entry === "cli.ts" || entry === "cli.js") {
-  main();
-}
+/** Runs validate when the process was started as the `terreno-blocks` bin. */
+export const launchBlocksCli = (argv1: string | undefined): void => {
+  const entry = basename(argv1 ?? "");
+  // npm links the bin as `terreno-blocks`, so argv[1] is that name rather than cli.js.
+  if (entry === "cli.ts" || entry === "cli.js" || entry === "terreno-blocks") {
+    main();
+  }
+};
+
+launchBlocksCli(process.argv[1]);

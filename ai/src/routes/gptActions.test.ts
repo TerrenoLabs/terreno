@@ -180,4 +180,62 @@ describe("POST /gpt/actions", () => {
     expect(res.body.title).toBe("Action returned an invalid document");
     expect(res.body.meta.fields["blocks[0].color"]).toEqual(expect.stringContaining("UNKNOWN_KEY"));
   });
+
+  it("rejects a missing body, a bad history id, and a history that does not exist", async () => {
+    await ensureTestUsers();
+    const app = buildApp({
+      model,
+      uiBlocks: {hostActions: {export_csv: {handler: async () => ({text: "ok"})}}},
+    });
+    const agent = await authAsUser(app, "notAdmin");
+    const missingBody = await agent.post("/gpt/actions").send({});
+    expect(missingBody.status).toBe(400);
+
+    const body = {
+      blockId: "row",
+      elementId: "run_btn",
+      historyId: "not-an-id",
+      messageId: "m1",
+      name: "export_csv",
+    };
+    const badId = await agent.post("/gpt/actions").send(body);
+    expect(badId.status).toBe(400);
+    expect(badId.body.title).toBe("historyId is not valid");
+
+    const missing = await agent.post("/gpt/actions").send({
+      ...body,
+      historyId: "000000000000000000000000",
+    });
+    expect(missing.status).toBe(404);
+    expect(missing.body.title).toBe("History not found");
+  });
+
+  it("rejects a replace value the client does not understand", async () => {
+    const created = await ensureTestUsers();
+    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const history = await GptHistory.create({
+      prompts: [{text: "Hello", type: "user"}],
+      userId,
+    });
+    const app = buildApp({
+      model,
+      uiBlocks: {
+        hostActions: {
+          export_csv: {
+            handler: async () => ({replace: "page" as "block", text: "nope"}),
+          },
+        },
+      },
+    });
+    const agent = await authAsUser(app, "notAdmin");
+    const res = await agent.post("/gpt/actions").send({
+      blockId: "row",
+      elementId: "run_btn",
+      historyId: history._id.toString(),
+      messageId: "m1",
+      name: "export_csv",
+    });
+    expect(res.status).toBe(500);
+    expect(res.body.title).toBe("Action returned an unknown replace value");
+  });
 });

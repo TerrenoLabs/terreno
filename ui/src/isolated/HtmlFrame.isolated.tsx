@@ -1,8 +1,8 @@
 import {describe, expect, it, mock} from "bun:test";
 import {Platform, View} from "react-native";
 
-import {HtmlFrame, htmlFrameSrcDoc} from "./HtmlFrame";
-import {renderWithTheme} from "./test-utils";
+import {HtmlFrame, htmlFrameSrcDoc} from "../HtmlFrame";
+import {renderWithTheme} from "../test-utils";
 
 mock.module("react-native-webview", () => ({
   default: ({

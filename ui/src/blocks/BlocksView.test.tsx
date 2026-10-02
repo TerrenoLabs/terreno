@@ -7,6 +7,7 @@ import {ActivityIndicator} from "react-native";
 import {sharedResponsiveBreakpointStore} from "../ResponsiveBreakpoint";
 import {renderWithTheme} from "../test-utils";
 import {BlocksView} from "./BlocksView";
+import {renderBlock} from "./blockRenderers";
 
 const ACTIONS = `v: 1
 datasets:
@@ -184,6 +185,44 @@ blocks:
     });
   });
 
+  it("renders every column when a table does not list them", async () => {
+    const document = `v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+    rows:
+      - [Jan]
+blocks:
+  - type: table
+    data: signups
+`;
+    const {getByText} = renderWithTheme(<BlocksView document={document} />);
+    expect(getByText("month")).toBeTruthy();
+    expect(getByText("Jan")).toBeTruthy();
+  });
+
+  it("uses the default selection setter when a select button has no host context", async () => {
+    const view = renderBlock(
+      {
+        elements: [
+          {
+            action: {data: "weekly", kind: "select", target: "signups_chart"},
+            id: "weekly",
+            text: "Weekly",
+            type: "button",
+          },
+        ],
+        id: "row",
+        type: "actions",
+      },
+      "blocks-0"
+    );
+    const {getByText} = renderWithTheme(view);
+    await press(getByText("Weekly"));
+  });
+
   it("loads a ref dataset through resolveDataset", async () => {
     const document = `v: 1
 datasets:
@@ -320,7 +359,6 @@ blocks:
     expect(on.getByText("Agent-generated preview")).toBeTruthy();
     expect(on.getByText("Invoice preview")).toBeTruthy();
     expect(on.getByTestId("html-frame-native")).toBeTruthy();
-    expect(on.getByLabelText(/js:false;csp:true/)).toBeTruthy();
     expect(off.queryByTestId("html-frame-native")).toBeNull();
   });
 

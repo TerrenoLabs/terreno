@@ -205,4 +205,53 @@ describe("validateBlocks limits", () => {
     }
     expect(parsed.errors.map((item) => item.code)).toEqual(["YAML_FEATURE_DISALLOWED"]);
   });
+
+  it("maps type, size, format, and union failures onto closed codes", () => {
+    const long = "x".repeat(201);
+    const cases: {code: string; doc: Record<string, unknown>}[] = [
+      {
+        code: "INVALID_TYPE",
+        doc: {blocks: [{size: "md", text: 1, type: "heading"}], v: 1},
+      },
+      {
+        code: "TOO_MANY",
+        doc: {
+          blocks: [{children: Array.from({length: 5}, () => ({type: "divider"})), type: "columns"}],
+          v: 1,
+        },
+      },
+      {
+        code: "TOO_LONG",
+        doc: {blocks: [{text: long, type: "heading"}], v: 1},
+      },
+      {
+        code: "TOO_FEW",
+        doc: {blocks: [{children: [{type: "divider"}], type: "columns"}], v: 1},
+      },
+      {
+        code: "TOO_SHORT",
+        doc: {blocks: [{text: "", type: "heading"}], v: 1},
+      },
+      {
+        code: "TOO_SHORT",
+        doc: {blocks: [{text: "   ", type: "heading"}], v: 1},
+      },
+      {
+        code: "INVALID_FORMAT",
+        doc: {blocks: [{id: "Bad", text: "Hi", type: "heading"}], v: 1},
+      },
+      {
+        code: "INVALID_ENUM",
+        doc: {blocks: [{type: "nope"}], v: 1},
+      },
+    ];
+    for (const {code, doc} of cases) {
+      const validated = validateBlocks(doc);
+      expect(validated.ok).toBe(false);
+      if (validated.ok) {
+        return;
+      }
+      expect(validated.errors.some((error) => error.code === code)).toBe(true);
+    }
+  });
 });

@@ -16,7 +16,7 @@ export const BlocksPlaygroundConfiguration: DemoConfiguration = {
   interfaceName: "BlocksViewProps",
   name: "BlocksPlayground",
   props: {},
-  related: ["BlocksView", "GPTChat", "TextArea"],
+  related: ["BlocksView", "GPTChat", "Text area"],
   stories: {
     Playground: {
       description: "Layout and Invalid presets. Editing the text area updates the preview.",

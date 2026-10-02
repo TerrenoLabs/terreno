@@ -3061,11 +3061,30 @@ describe("/gpt/prompt uiBlocks", () => {
       "done",
     ]);
     const replaced = events.find((event) => "replace" in event) as {text?: string};
-    expect(replaced.text).not.toContain("<script");
+    expect(replaced.text).toBe('{"v":1,"blocks":[{"html":"<p>Hi</p>","type":"html"}]}');
     expect(systemPromptOf(modelCall(model, 0))).toContain("card, html");
     const history = await loadHistory(await onlyHistoryId());
-    expect(String(rowsOf(history).find((row) => row.type === "assistant")?.text)).not.toContain(
-      "<script"
+    expect(rowsOf(history).find((row) => row.type === "assistant")?.text).toBe(replaced.text);
+  });
+
+  it("returns only the sanitized document from a headless turn", async () => {
+    const model = createScriptedModel({
+      steps: [
+        textStep('v: 1\nblocks:\n  - type: html\n    html: "<p>Hi</p><script>alert(1)</script>"\n'),
+      ],
+    });
+    const agent = await authAsUser(
+      buildApp({asks: true, model, uiBlocks: {html: true}}),
+      "notAdmin"
     );
+    const created = await agent.post("/gpt/histories").send({});
+    expect(created.status).toBe(201);
+
+    const res = await agent
+      .post(`/gpt/histories/${created.body.data._id}/turn`)
+      .send({prompt: USER_PROMPT});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.text).toBe('{"v":1,"blocks":[{"html":"<p>Hi</p>","type":"html"}]}');
   });
 });

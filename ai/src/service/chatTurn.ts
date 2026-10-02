@@ -1817,7 +1817,9 @@ export const runBufferedChatTurn = async ({
     req,
     sink: {
       emit: (event) => {
-        if ("text" in event) {
+        if ("replace" in event && event.replace === "text") {
+          turn.texts = [event.text];
+        } else if ("text" in event) {
           turn.texts.push(event.text);
         } else if ("error" in event) {
           turn.errors.push(event.error);

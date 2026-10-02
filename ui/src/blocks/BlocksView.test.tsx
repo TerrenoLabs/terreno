@@ -313,10 +313,15 @@ blocks:
 
     const streaming = renderWithTheme(<BlocksView allowHtml document={document} streaming />);
     expect(streaming.getByText("The preview appears when this reply finishes.")).toBeTruthy();
+    expect(streaming.queryByText("Invoice #1042")).toBeNull();
+    expect(streaming.queryByTestId("html-frame-native")).toBeNull();
 
     const on = renderWithTheme(<BlocksView allowHtml document={document} />);
     expect(on.getByText("Agent-generated preview")).toBeTruthy();
     expect(on.getByText("Invoice preview")).toBeTruthy();
+    expect(on.getByTestId("html-frame-native")).toBeTruthy();
+    expect(on.getByLabelText(/js:false;csp:true/)).toBeTruthy();
+    expect(off.queryByTestId("html-frame-native")).toBeNull();
   });
 
   it("does not use raw react-native views in the blocks folder", () => {

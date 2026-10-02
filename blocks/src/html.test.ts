@@ -32,10 +32,12 @@ describe("html blocks", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("rejects html over 100,000 bytes", () => {
-    const html = `<p>${"a".repeat(BLOCK_LIMITS.htmlMaxBytes)}</p>`;
-    const result = validateBlocks(htmlDocument(html), {allowHtml: true});
+  it("accepts html at 100,000 bytes and rejects one more byte", () => {
+    const atLimit = "a".repeat(BLOCK_LIMITS.htmlMaxBytes);
+    const over = `${atLimit}b`;
 
+    expect(validateBlocks(htmlDocument(atLimit), {allowHtml: true}).ok).toBe(true);
+    const result = validateBlocks(htmlDocument(over), {allowHtml: true});
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.errors.map((error) => error.code)).toContain("HTML_TOO_LARGE");

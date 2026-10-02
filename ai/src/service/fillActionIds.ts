@@ -89,10 +89,10 @@ export const fillMissingActionIds = (text: string): string | undefined => {
   if (!assignIds(parsed.value.blocks, ids)) {
     return undefined;
   }
-  const ordered: BlocksDocument = {v: 1};
-  if (parsed.value.datasets !== undefined) {
-    ordered.datasets = parsed.value.datasets;
-  }
-  ordered.blocks = parsed.value.blocks as BlocksDocument["blocks"];
+  const ordered: BlocksDocument = {
+    v: 1,
+    ...(parsed.value.datasets !== undefined ? {datasets: parsed.value.datasets} : {}),
+    blocks: parsed.value.blocks as BlocksDocument["blocks"],
+  };
   return JSON.stringify(ordered);
 };

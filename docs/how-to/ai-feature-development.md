@@ -48,7 +48,7 @@ Skip unlabeled items in experiments unless you only need generation smoke (still
 3. On **Versions**, edit system/template/variables/temperature when `aiPrompt:update` is allowed, then **Save as vN+1**. There is no in-place save. **Playground → Run once** (when `aiPrompt:playground` is allowed) compiles and calls the model; it does **not** create a version. **Traces** and **Experiments** show recent items for this prompt from prompt detail relationships.
 4. Do not paste that string into app routes. Apps call `AIService` with `promptName` + `promptLabel` (step 6).
 
-Read-only auditors with `aiPrompt:list` and `read` can review overview metadata and relationship tabs but do not see create, save, promote, or playground controls. Operators with the full `aiPrompt` action set see those controls. UI gating follows `permissions` on `GET /ai/observability/status`; assign roles in **Admin → Roles** per [AI reference](../reference/ai.md#rbac).
+Read-only auditors with `aiPrompt:list` and `read` can review overview metadata and relationship tabs but do not see create, save, promote, or playground controls. Operators with the full `aiPrompt` action set see those controls. UI gating follows `permissions` on `GET /ai/observability/status`; assign roles in **Admin → Roles** per [API reference — AI observability RBAC](../reference/api.md#ai-observability-rbac).
 
 Judge prompts for evaluators are named constants or registry prompts — never inline in `AIService`.
 

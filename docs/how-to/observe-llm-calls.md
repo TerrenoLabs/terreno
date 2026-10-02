@@ -5,9 +5,12 @@ Register observability on the backend. Registration **is** the feature flag. The
 ## Register
 
 ```typescript
+import {access} from "./access";
+
 const priceMap = parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON);
 
 server.register(new ObservabilityApp({
+  accessControl: access,
   aiService,
   plugins: [localPlugin, langfuseAdapter, otelSink].filter(Boolean),
   control: {
@@ -36,6 +39,25 @@ variable name.
 Keep existing `LangfuseApp` if you already use Langfuse keys. The Langfuse **adapter** must reuse `getLangfuseClient()` and must not start a second OpenTelemetry SDK.
 
 Boot **fails** if `experiments.primary !== datasets.primary`, if `reviewQueue` is `langfuse`, or if a primary’s plugin is missing.
+
+Pass the same `access` object you use for `TerrenoApp` and `AdminApp` so
+`GET /ai/observability/status` permissions match `/admin/config` screen filtering and every
+observability route enforces RBAC.
+
+### Example consumer roles
+
+The example backend seeds two optional roles in `example-backend/src/rbacRoles.ts`. They are
+**not** assigned automatically — attach them in the admin **Roles** UI or on `User.roles`.
+
+| Role | Grants |
+| --- | --- |
+| `aiObservabilityViewer` | `admin:access` plus `list` and `read` on all six observability resources |
+| `aiObservabilityOperator` | `admin:access` plus every approved action on those resources |
+
+Compose your own roles the same way: grant `admin: ["access"]` for the admin shell, then add
+only the `aiPrompt` / `aiTrace` / `aiReview` / `aiDataset` / `aiEvaluator` / `aiExperiment`
+actions each persona needs. Prompt `folder` and `description` stay consumer-defined metadata —
+Terreno does not ship domain-specific folder names or an in-app approval workflow.
 
 ## Env
 

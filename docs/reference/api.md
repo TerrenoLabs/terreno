@@ -861,6 +861,8 @@ Human-readable labels for the admin role editor live in `terrenoStatementDescrip
 | `superadmin` | `*` (every action on every resource) |
 | `admin` (seeded) | Full grants on all six resources |
 | `auditor` | Read-only sentinel expands to `list` and `read` on each observability resource (no `admin:access`) |
+| `aiObservabilityViewer` (example-backend only) | `admin:access` plus `list` and `read` on each observability resource |
+| `aiObservabilityOperator` (example-backend only) | `admin:access` plus full grants on each observability resource |
 
 The seeded `auditor` role does **not** include `admin:access`. Observability `list` / `read`
 grants alone do not open the admin shell — compose a consumer role (for example

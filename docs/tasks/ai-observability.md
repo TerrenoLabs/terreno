@@ -256,8 +256,8 @@ in-app approval workflow. Supporting skills: `building-admin-interfaces`,
   - Acceptance: admin-config tests cover mixed grants; widget tests prove a read-only prompt hub shows relationships and no write controls; an operator sees all controls; `verify-ui-changes` captures both roles
 
 - [ ] **Task 4.4**: Phase-4 integration and documentation gate
-  - Delivers: example roles demonstrating read-only and operator composition; all architecture/reference/how-to pages aligned; generated SDK updated only if the public OpenAPI shape requires it
-  - Files: `example-backend` access/seed files, docs named above, generated SDK when required
+  - Delivers: `ObservabilityApp({accessControl: access})` in example-backend; example roles demonstrating read-only and operator composition; integration tests for admin vs viewer HTTP; all architecture/reference/how-to pages aligned; generated SDK and `verify-ui-changes` walkthrough when the parent closes UI gates
+  - Files: `example-backend` access/seed files, `observabilityRbac.integration.test.ts`, docs named above, generated SDK when required
   - Blocked by: 4.3
   - Docs: (this task)
-  - Acceptance: example boots with existing admin access intact; a consumer can configure a domain-neutral read-only role from docs; focused package tests, compile, lint, static analysis, and mandatory UI walkthrough pass
+  - Acceptance: example boots with existing admin access intact; a consumer can configure a domain-neutral read-only role from docs; example-backend RBAC unit + integration tests, compile, and lint pass; parent runs SDK regen and mandatory UI walkthrough before checking this task complete

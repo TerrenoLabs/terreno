@@ -500,11 +500,15 @@ clinical, finance, or other domain vocabulary.
 
 `example-backend`:
 
-- Register `ObservabilityApp` with the **local plugin always** (phase 1).
+- Register `ObservabilityApp` with the **local plugin always** (phase 1) and pass the same
+  `accessControl: access` object as `TerrenoApp` / `AdminApp` (phase 4).
 - Seed prompt `example-summarize` v1 labelled production, in folder `examples`.
 - Seed the human evaluator template so the review queue is walkable on a fresh DB (phase 1).
 - Seed the judge/assert evaluator templates and one dataset `example-gold` (phase 2).
 - Add Langfuse sinks when `LANGFUSE_*` is set and `OtelTraceSink` when `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is set (phase 3).
+- Seed optional example roles `aiObservabilityViewer` and `aiObservabilityOperator` in
+  `rbacRoles.ts` without auto-assigning them (phase 4); integration tests prove seeded `admin` /
+  `superadmin` observability access and that the viewer role is read-only on HTTP.
 
 `example-frontend`: admin-only; regenerate the SDK only if it ends up calling new routes.
 

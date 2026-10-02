@@ -50,7 +50,9 @@ hide write controls from status flags (fail closed while status is loading or er
 pair auditor with a shell grant in a composed consumer role); `superadmin` receives `*`. Existing
 customized `admin` and `auditor` roles gain only missing observability actions on re-seed. Legacy
 `user.admin` remains a full-access fallback when RBAC is enabled. See
-[API reference](../reference/api.md#ai-observability-rbac).
+[API reference](../reference/api.md#ai-observability-rbac). The example backend registers
+`accessControl: access` on `ObservabilityApp` and seeds optional `aiObservabilityViewer` and
+`aiObservabilityOperator` roles (not auto-assigned) in `example-backend/src/rbacRoles.ts`.
 
 `AIRequest` remains the cheap per-call log. Observability traces are the nested, scored, user/session/cost record used in the SOP.
 

@@ -438,6 +438,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
 
       .register(
         new ObservabilityApp({
+          accessControl: access,
           aiService: getAiService(),
           aiServiceFactory: (modelId) => {
             const model = createServerModel(modelId);

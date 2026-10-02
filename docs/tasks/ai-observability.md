@@ -241,7 +241,7 @@ in-app approval workflow. Supporting skills: `building-admin-interfaces`,
   - Docs: `docs/reference/api.md`, `docs/reference/ai.md`, `docs/explanation/ai-observability.md`
   - Acceptance: catalog and role tests prove exact actions; a read-only RBAC caller can GET but receives 403 for writes; denied mutations fail even when called directly; legacy admin tests remain green
 
-- [ ] **Task 4.2**: Prompt descriptions and prompt-scoped relationship APIs
+- [x] **Task 4.2**: Prompt descriptions and prompt-scoped relationship APIs
   - Delivers: optional prompt `description` in Mongo/types/create/detail/list; trace list accepts prompt version in addition to name; experiment list accepts `promptName`; prompt detail API composes bounded recent traces and experiments for the selected prompt without client-side full-list scans
   - Files: prompt/trace/experiment models, stores, routes, types, tests
   - Blocked by: 4.1

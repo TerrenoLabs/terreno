@@ -19,6 +19,7 @@ import type {
   FontAwesome6RegularNames,
   FontAwesome6SolidNames,
 } from "./CommonIconTypes";
+import type {ChartPoint, ChartSeries} from "./charts/types/chartTypes";
 import type {DropdownPanelAlign} from "./dropdownPanelLayout";
 import type {
   DataTableTestIDs,
@@ -2739,8 +2740,10 @@ export interface PaginationProps extends WithTestID {
 export interface LineChartProps extends WithTestID {
   /** Summary announced for the whole chart. */
   accessibilityLabel?: string;
+  /** Optional previous-period values drawn as a dotted overlay. */
+  comparisonData?: ChartPoint[];
   /** Single series of labeled numeric points. */
-  data: Array<{color?: string; label: string; value: number}>;
+  data: ChartPoint[];
   /** Copy shown when `data` is empty. */
   emptyText?: string;
   /** Formats the numeric value in tooltips. */
@@ -2751,18 +2754,77 @@ export interface LineChartProps extends WithTestID {
   legendLabel?: string;
   /** When true, shows a spinner instead of the plot. */
   loading?: boolean;
+  /** Makes `periodLabel` pressable when provided. */
+  onPeriodPress?: () => void;
+  /** Relative or absolute reporting period shown with `title`. */
+  periodLabel?: string;
+  /** Named series. When non-empty, these replace the single `data` series. */
+  series?: ChartSeries[];
+  /** Optional chart-card title shortcut. */
+  title?: string;
+  /** X-label collision policy. `auto` rotates when more than seven labels are present. */
+  xTickPolicy?: "auto" | "rotate" | "truncate";
+}
+
+export interface SparklineChartProps extends WithTestID {
+  /** Summary announced for the whole sparkline. */
+  accessibilityLabel?: string;
+  /** Optional previous-period values drawn as a dotted line. */
+  comparisonData?: Array<{label: string; value: number}>;
+  /** Current labeled numeric values. */
+  data: Array<{label: string; value: number}>;
+  /** Whole sparkline height in pixels. */
+  height?: number;
+}
+
+export interface ChartCardProps extends WithTestID {
+  children: React.ReactNode;
+  /** Optional context shown below the title row. */
+  filterSummary?: string;
+  /** Makes the period badge pressable when provided. */
+  onPeriodPress?: () => void;
+  /** Date range or relative period shown in the header. */
+  periodLabel?: string;
+  /** Card heading. */
+  title: string;
+}
+
+export interface ScorecardProps extends WithTestID {
+  /** Optional previous-period sparkline values. */
+  comparisonData?: Array<{label: string; value: number}>;
+  /** Formats numeric values. String values render unchanged. */
+  formatValue?: (value: number) => string;
+  onPeriodPress?: () => void;
+  periodLabel?: string;
+  /** Current-period sparkline values. */
+  sparklineData?: Array<{label: string; value: number}>;
+  title: string;
+  value: number | string;
 }
 
 export interface AreaChartProps extends LineChartProps {}
 export interface BarChartProps extends LineChartProps {}
 
-export interface DonutChartProps extends LineChartProps {}
+export interface DonutChartProps extends LineChartProps {
+  /** Small copy below the center value. */
+  centerTitle?: string;
+  /** Primary copy inside the donut hole. */
+  centerValue?: string;
+  /** Formats each slice's legend share. Defaults to a rounded percentage. */
+  formatShare?: (value: number, total: number) => string;
+}
 
 export interface DashboardGridProps extends WithTestID {
   children?: React.ReactNode;
   /** Column counts by breakpoint. Defaults to `{sm: 1, md: 2, lg: 3}`. */
   columns?: {lg: number; md: number; sm: number};
   gap?: UnsignedUpTo12;
+}
+
+export interface DashboardGridItemProps extends WithTestID {
+  children?: React.ReactNode;
+  /** Number of grid columns occupied at each breakpoint. Defaults to one. */
+  span?: {lg?: number; md?: number; sm?: number};
 }
 
 /**

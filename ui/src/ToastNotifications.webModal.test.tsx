@@ -216,6 +216,36 @@ describe("Toast above an open web modal", () => {
     expect(backdrop).toBeTruthy();
     expect(isInside(toastText, backdrop as ReactTestInstance)).toBe(false);
   });
+
+  // Static export pre-renders in Node, where Dimensions reports a 0x0 window; a measured
+  // pixel width would bake a 0px container into the HTML and push the toast off-screen.
+  it("sizes the fixed container to the viewport instead of the measured window", async () => {
+    let toastRef: ToastType | null = null;
+    const Harness = (): ReactElement => {
+      toastRef = useToastNotifications();
+      return <Text>App</Text>;
+    };
+
+    const {getByText, UNSAFE_getAllByType} = renderWithTheme(
+      <ToastProvider swipeEnabled={false}>
+        <Harness />
+      </ToastProvider>
+    );
+
+    await waitFor(() => {
+      expect(toastRef?.show).toBeDefined();
+    });
+    await act(async () => {
+      toastRef?.show(TOAST_MESSAGE, {duration: 0, id: "static-export"});
+    });
+    await flushFrames();
+
+    const toastText = getByText(TOAST_MESSAGE);
+    const toastHost = UNSAFE_getAllByType(KeyboardAvoidingView).find((node) =>
+      isInside(toastText, node)
+    );
+    expect((StyleSheet.flatten(toastHost?.props.style) as {width?: unknown}).width).toBe("100%");
+  });
 });
 
 describe("Toast container on native", () => {

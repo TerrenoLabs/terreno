@@ -366,7 +366,7 @@ Disabled and loading buttons use a non-interactive pressable regardless of the s
 
 `TerrenoProvider` mounts the toast container. Call `useToast()` for `success`, `info`, `warn`, `error`, `show`, `hide`, and `catch`.
 
-On web, that container is portaled to `document.body` (`position: fixed`, `z-index: 999999`, `pointerEvents: "box-none"`), so a toast stays above an open `Modal` and its backdrop. Native iOS and Android keep the in-tree absolute container.
+On web, that container is portaled to `document.body` (`position: fixed`, `z-index: 999999`, `pointerEvents: "box-none"`), so a toast stays above an open `Modal` and its backdrop. The web container is sized with `100%` rather than the measured window, so statically exported pages (where `Dimensions` reports 0×0 at build time) still center the toast on screen. Native iOS and Android keep the in-tree absolute container sized to the window.
 
 ## Authentication Components
 

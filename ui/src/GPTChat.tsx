@@ -1047,10 +1047,7 @@ const MessageList = ({
         const hasImages = message.contentParts?.some((p) => p.type === "image");
         const messageId = messageKey;
         return (
-          <Box
-            alignItems={message.role === "user" ? "end" : "start"}
-            key={message.id ?? `msg-${index}`}
-          >
+          <Box alignItems={message.role === "user" ? "end" : "start"} key={messageKey}>
             <Box
               color={message.role === "user" ? "primary" : "neutralLight"}
               maxWidth={hasImages ? "90%" : "80%"}

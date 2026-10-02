@@ -1,6 +1,7 @@
 import {afterAll, afterEach, describe, it, mock} from "bun:test";
 import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
+import {setImageAsync, setStringAsync} from "expo-clipboard";
 import React from "react";
 import {Platform, Pressable, ScrollView} from "react-native";
 
@@ -11,9 +12,8 @@ import {Text} from "./Text";
 import {ThemeProvider} from "./Theme";
 import {renderWithTheme} from "./test-utils";
 
-const setStringAsync = mock(async (_text: string) => {});
-const setImageAsync = mock(async (_base64: string) => {});
-mock.module("expo-clipboard", () => ({setImageAsync, setStringAsync}));
+const mockedSetImageAsync = setImageAsync as unknown as ReturnType<typeof mock>;
+const mockedSetStringAsync = setStringAsync as unknown as ReturnType<typeof mock>;
 
 const pickedDocument = {mimeType: "text/plain", name: "notes.txt", uri: "file:///notes.txt"};
 mock.module("expo-document-picker", () => ({
@@ -587,7 +587,7 @@ describe("GPTChat", () => {
   });
 
   it("copies an assistant message to the clipboard", async () => {
-    setStringAsync.mockClear();
+    mockedSetStringAsync.mockClear();
     const {getByTestId} = renderChat({
       currentMessages: [{content: "Copy me", role: "assistant"}],
     });
@@ -596,12 +596,12 @@ describe("GPTChat", () => {
       fireEvent.press(getByTestId("gpt-copy-msg-0"));
     });
 
-    assert.deepEqual(setStringAsync.mock.calls, [["Copy me"]]);
+    assert.deepEqual(mockedSetStringAsync.mock.calls, [["Copy me"]]);
   });
 
   it("copies the image, not placeholder text, for an image-only reply", async () => {
-    setStringAsync.mockClear();
-    setImageAsync.mockClear();
+    mockedSetStringAsync.mockClear();
+    mockedSetImageAsync.mockClear();
     const {getByTestId} = renderChat({
       currentMessages: [
         {
@@ -614,12 +614,12 @@ describe("GPTChat", () => {
 
     await press(getByTestId("gpt-copy-msg-0"));
 
-    assert.deepEqual(setImageAsync.mock.calls, [["AAAA"]]);
-    assert.equal(setStringAsync.mock.calls.length, 0);
+    assert.deepEqual(mockedSetImageAsync.mock.calls, [["AAAA"]]);
+    assert.equal(mockedSetStringAsync.mock.calls.length, 0);
   });
 
   it("offers a copy-image action on generated images", async () => {
-    setImageAsync.mockClear();
+    mockedSetImageAsync.mockClear();
     const {getByTestId} = renderChat({
       currentMessages: [
         {
@@ -632,7 +632,7 @@ describe("GPTChat", () => {
 
     await press(getByTestId("gpt-copy-image"));
 
-    assert.deepEqual(setImageAsync.mock.calls, [["BBBB"]]);
+    assert.deepEqual(mockedSetImageAsync.mock.calls, [["BBBB"]]);
   });
 
   it("grows the composer up to a maximum height and resets after sending", async () => {

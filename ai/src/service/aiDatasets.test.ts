@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it} from "bun:test";
-import {DateTime} from "luxon";
+import {DateTime, Settings} from "luxon";
 import mongoose from "mongoose";
 
 import {AIDataset} from "../models/aiDataset";
@@ -84,6 +84,18 @@ describe("ai datasets", () => {
     expect(bucketed).toHaveLength(1);
     expect(bucketed[0]?.[1]).toBe(5);
     expect(String(bucketed[0]?.[0])).toContain("2026-03-01");
+  });
+
+  it("keeps a date-only value on that UTC day when the host zone is ahead of UTC", () => {
+    const previous = Settings.defaultZone;
+    Settings.defaultZone = "Asia/Tokyo";
+    try {
+      const bucketed = bucketByGrain(columns, [["2026-03-01", 2]], "day");
+      expect(String(bucketed[0]?.[0])).toContain("2026-03-01");
+      expect(String(bucketed[0]?.[0])).not.toContain("2026-02-28");
+    } finally {
+      Settings.defaultZone = previous;
+    }
   });
 
   it("buckets a date column by week", () => {

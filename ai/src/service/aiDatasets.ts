@@ -153,15 +153,20 @@ export const registerAiDataset = async ({
   };
 };
 
+const hasExplicitZone = (value: string): boolean => /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value.trim());
+
 const bucketKey = (value: AIDatasetCell, grain: DatasetGrain): string => {
   if (typeof value !== "string") {
     return "";
   }
-  const parsed = DateTime.fromISO(value, {setZone: true});
+  // Offset strings keep their instant, then bucket in UTC. A date with no zone is that UTC day.
+  const parsed = hasExplicitZone(value)
+    ? DateTime.fromISO(value, {setZone: true}).toUTC()
+    : DateTime.fromISO(value, {zone: "utc"});
   if (!parsed.isValid) {
     return value;
   }
-  return parsed.toUTC().startOf(grain).toUTC().toISO() ?? value;
+  return parsed.startOf(grain).toUTC().toISO() ?? value;
 };
 
 /**

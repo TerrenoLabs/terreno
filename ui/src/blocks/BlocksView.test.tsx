@@ -339,6 +339,48 @@ blocks:
     expect(resolveImage).toHaveBeenCalledWith("6710c2a4f1");
   });
 
+  it("keeps the alt text when resolveImage fails", async () => {
+    const document = `v: 1
+blocks:
+  - type: card
+    children:
+      - type: image
+        alt: Receipt
+        src: file:6710c2a4f1
+`;
+    const resolveImage = mock(async () => {
+      throw new Error("offline");
+    });
+    const view = renderWithTheme(<BlocksView document={document} resolveImage={resolveImage} />);
+    await waitFor(() => {
+      expect(resolveImage).toHaveBeenCalledWith("6710c2a4f1");
+    });
+    expect(view.getByText("Receipt")).toBeTruthy();
+    expect(view.UNSAFE_queryAllByType(NativeImage)).toHaveLength(0);
+  });
+
+  it("drops a file url that arrives after the view unmounts", async () => {
+    const document = `v: 1
+blocks:
+  - type: image
+    alt: Receipt
+    src: file:6710c2a4f1
+`;
+    let finish: (url: string) => void = () => {};
+    const resolveImage = mock(
+      () =>
+        new Promise<string>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const view = renderWithTheme(<BlocksView document={document} resolveImage={resolveImage} />);
+    view.unmount();
+    finish("https://cdn.example/late.png");
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+  });
+
   it("loads a ref dataset through resolveDataset", async () => {
     const document = `v: 1
 datasets:

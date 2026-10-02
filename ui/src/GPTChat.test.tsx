@@ -1408,6 +1408,20 @@ describe("GPTChat asks", () => {
     });
   });
 
+  it("shows callback text when the source message has no id", async () => {
+    const onBlockCallback = mock(async () => ({text: "Export started"}));
+    const {getByText} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, role: "assistant"}],
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      uiBlocks: true,
+    });
+    await pressControl(getByText("Export"));
+    await waitFor(() => {
+      assert.isOk(getByText("Export started"));
+    });
+  });
+
   it("keeps callback text after the message that started it", async () => {
     const onBlockCallback = mock(async () => ({text: "Export started"}));
     const {getByText, toJSON} = renderChat({

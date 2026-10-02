@@ -996,13 +996,21 @@ const MessageList = ({
   const streamingIndex =
     uiBlocks && isStreaming && currentMessages[lastIndex]?.role === "assistant" ? lastIndex : -1;
   const rows = currentMessages.flatMap((message, sourceIndex) => {
-    const extras = message.id === undefined ? [] : (appendedByMessage[message.id] ?? []);
-    return [{message, sourceIndex}, ...extras.map((extra) => ({message: extra, sourceIndex: -1}))];
+    const messageKey = message.id ?? `msg-${sourceIndex}`;
+    const extras = appendedByMessage[messageKey] ?? [];
+    return [
+      {message, messageKey, sourceIndex},
+      ...extras.map((extra) => ({
+        message: extra,
+        messageKey: extra.id ?? `${messageKey}-extra`,
+        sourceIndex: -1 as const,
+      })),
+    ];
   });
 
   return (
     <>
-      {rows.map(({message, sourceIndex}, index) => {
+      {rows.map(({message, messageKey, sourceIndex}, index) => {
         if (message.role === "tool-call" && message.ask) {
           return (
             <AskTranscriptItem
@@ -1037,7 +1045,7 @@ const MessageList = ({
         }
 
         const hasImages = message.contentParts?.some((p) => p.type === "image");
-        const messageId = message.id ?? `msg-${index}`;
+        const messageId = messageKey;
         return (
           <Box
             alignItems={message.role === "user" ? "end" : "start"}

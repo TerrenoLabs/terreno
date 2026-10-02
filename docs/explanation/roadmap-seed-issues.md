@@ -644,7 +644,7 @@ docs are the proof; comms admin stats consume these primitives later.
 **Title:** `Ops dashboard chart parity`
 
 **Labels:** `area:ui`, `type:feature`
-**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`dashboard-chart-parity`, Status=`Shaping`
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`dashboard-chart-parity`, Status=`Planned`
 
 Follow-up to charts-and-dashboards: scorecards with comparison sparklines, `ChartCard`
 period badges, additive multi-series facades, donut hole labels, spanning `DashboardGrid`

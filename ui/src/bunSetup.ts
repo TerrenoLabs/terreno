@@ -848,9 +848,11 @@ mock.module("react-native-actions-sheet", () => ({
   }),
 }));
 
-// Mock MediaQuery
+// Mock MediaQuery. Desktop floor is 1024pt on web and native; keep this aligned with
+// isSupportedDesktopWidth in ResponsiveBreakpoint.tsx.
 mock.module("./MediaQuery", () => ({
   isNarrowViewport: mock(() => false),
+  isSupportedDesktopWidth: ({width}: {width: number}): boolean => width >= 1024,
   mediaQueryLargerThan: mock(() => false),
   mediaQuerySmallerThan: mock(() => false),
 }));

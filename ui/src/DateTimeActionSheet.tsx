@@ -11,7 +11,7 @@ import {Calendar} from "react-native-calendars";
 import {Box} from "./Box";
 import type {DateTimeActionSheetProps, IconName} from "./Common";
 import {Heading} from "./Heading";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {Modal} from "./Modal";
 import {SelectField} from "./SelectField";
 import {useTheme} from "./Theme";
@@ -591,14 +591,14 @@ export const DateTimeActionSheet = ({
     >
       <View style={{display: "flex", justifyContent: "center", width: "100%"}}>
         {Boolean(type === "date") && <DateCalendar {...dateProps} />}
-        {Boolean(type === "time" && isMobileDevice()) && <MobileTime {...timeProps} />}
-        {Boolean(type === "time" && !isMobileDevice()) && <WebTime {...timeProps} />}
+        {Boolean(type === "time" && isNarrowViewport()) && <MobileTime {...timeProps} />}
+        {Boolean(type === "time" && !isNarrowViewport()) && <WebTime {...timeProps} />}
         {Boolean(type === "datetime") && (
           <Box>
             <Box marginBottom={2}>
               <DateCalendar {...dateProps} />
             </Box>
-            {isMobileDevice() ? <MobileTime {...timeProps} /> : <WebTime {...timeProps} />}
+            {isNarrowViewport() ? <MobileTime {...timeProps} /> : <WebTime {...timeProps} />}
           </Box>
         )}
       </View>

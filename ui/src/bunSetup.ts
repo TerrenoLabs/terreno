@@ -850,8 +850,9 @@ mock.module("react-native-actions-sheet", () => ({
 
 // Mock MediaQuery
 mock.module("./MediaQuery", () => ({
-  isMobileDevice: mock(() => false),
+  isNarrowViewport: mock(() => false),
   mediaQueryLargerThan: mock(() => false),
+  mediaQuerySmallerThan: mock(() => false),
 }));
 
 // Mock expo-image-manipulator

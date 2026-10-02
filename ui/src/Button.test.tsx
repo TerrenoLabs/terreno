@@ -4,7 +4,7 @@ import {assert} from "chai";
 
 import {Button} from "./Button";
 import type {ButtonProps} from "./Common";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import * as ThemeModule from "./Theme";
 import {renderWithIcons, renderWithTheme, TEST_CUSTOM_ICON_TEST_ID} from "./test-utils";
 import {Unifier} from "./Unifier";
@@ -228,7 +228,7 @@ describe("Button", () => {
 
   it("skips equivalent parent updates and redraws changed props", () => {
     const handleClick = mock(() => Promise.resolve());
-    const mobileDeviceMock = isMobileDevice as ReturnType<typeof mock>;
+    const mobileDeviceMock = isNarrowViewport as ReturnType<typeof mock>;
     mobileDeviceMock.mockClear();
     const {rerender} = renderWithTheme(<Button onClick={handleClick} text="Stable" />);
     const initialRenderCalls = mobileDeviceMock.mock.calls.length;
@@ -615,9 +615,9 @@ describe("Button", () => {
     expect(tree).toBeTruthy();
   });
 
-  it("does not render tooltip wrapper when isMobileDevice is true", () => {
+  it("does not render tooltip wrapper when isNarrowViewport is true", () => {
     const nativeSpy = spyOn(Utilities, "isNative").mockReturnValue(false);
-    (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => true);
+    (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => true);
 
     const {getByText, toJSON} = renderWithTheme(
       <Button onClick={() => {}} text="No Tooltip" tooltipText="Should not wrap" />
@@ -627,12 +627,12 @@ describe("Button", () => {
     const tree = JSON.stringify(toJSON());
     expect(tree).not.toContain("Should not wrap");
     nativeSpy.mockRestore();
-    (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => false);
+    (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => false);
   });
 
   it("renders tooltip wrapper when tooltipText is provided and not native", () => {
     const nativeSpy = spyOn(Utilities, "isNative").mockReturnValue(false);
-    (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => false);
+    (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => false);
 
     const {getByText} = renderWithTheme(
       <Button onClick={() => {}} text="With Tooltip" tooltipText="Helpful tip" />
@@ -640,7 +640,7 @@ describe("Button", () => {
 
     expect(getByText("With Tooltip")).toBeTruthy();
     nativeSpy.mockRestore();
-    (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => false);
+    (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => false);
   });
 
   it("resets loading and rethrows when onClick rejects", async () => {

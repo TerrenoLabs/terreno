@@ -1,7 +1,10 @@
 import {describe, expect, it, mock} from "bun:test";
+import type {ReactTestInstance} from "react-test-renderer";
 
 import {IconButton} from "./IconButton";
+import {useTheme} from "./Theme";
 import {renderWithIcons, renderWithTheme} from "./test-utils";
+import {applyColorOpacity} from "./Utilities";
 
 describe("IconButton", () => {
   it("renders correctly with default props", () => {
@@ -129,6 +132,24 @@ describe("IconButton", () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
+  it("uses the supplied accessibility hint without announcing a confirmation dialog", async () => {
+    // bunSetup replaces ./IconButton with a null mock; the query suffix loads the real module.
+    const actualIconButtonPath = "./IconButton.tsx?accessibility";
+    const {IconButton: ActualIconButton} = (await import(
+      actualIconButtonPath
+    )) as typeof import("./IconButton");
+    const {getByLabelText} = renderWithTheme(
+      <ActualIconButton
+        accessibilityHint="Back to list"
+        accessibilityLabel="Back to list"
+        iconName="arrow-left"
+        onClick={() => {}}
+      />
+    );
+
+    expect(getByLabelText("Back to list").props.accessibilityHint).toBe("Back to list");
+  });
+
   it("renders with confirmation props", () => {
     const {toJSON} = renderWithTheme(
       <IconButton
@@ -181,6 +202,48 @@ describe("IconButton", () => {
       />
     );
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it("keeps a translucent muted background and an opaque icon", async () => {
+    // bunSetup replaces ./IconButton with a null mock; the query suffix loads the real module.
+    const actualIconButtonPath = "./IconButton.tsx?actual";
+    const {IconButton: ActualIconButton} = (await import(
+      actualIconButtonPath
+    )) as typeof import("./IconButton");
+    let inverted = "";
+    const CaptureTheme = (): null => {
+      const {theme} = useTheme();
+      inverted = theme.text.inverted;
+      return null;
+    };
+    const {getByLabelText, UNSAFE_root} = renderWithTheme(
+      <>
+        <CaptureTheme />
+        <ActualIconButton
+          accessibilityLabel="muted background solid"
+          iconName="check"
+          onClick={() => {}}
+          variant="muted"
+        />
+        <ActualIconButton
+          accessibilityLabel="muted background translucent"
+          backgroundOpacity={0.88}
+          iconName="check"
+          onClick={() => {}}
+          variant="muted"
+        />
+      </>
+    );
+
+    expect(getByLabelText("muted background solid")).toHaveStyle({backgroundColor: inverted});
+    expect(getByLabelText("muted background translucent")).toHaveStyle({
+      backgroundColor: applyColorOpacity({color: inverted, opacity: 0.88}),
+    });
+    const icons = UNSAFE_root.findAll(
+      (node: ReactTestInstance) => node.props?.name === "check" && Boolean(node.props?.color)
+    );
+    expect(icons).toHaveLength(2);
+    expect(icons[0].props.color).toBe(icons[1].props.color);
   });
 
   describe("custom icons", () => {

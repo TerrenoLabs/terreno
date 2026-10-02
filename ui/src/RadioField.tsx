@@ -3,7 +3,7 @@ import {TouchableOpacity, View} from "react-native";
 
 import type {RadioFieldProps} from "./Common";
 import {Heading} from "./Heading";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {Radio} from "./Radio";
 import {Text} from "./Text";
 
@@ -15,7 +15,7 @@ export const RadioField = ({
   variant = "rightText",
 }: RadioFieldProps): React.ReactElement => {
   return (
-    <View style={{gap: isMobileDevice() ? 16 : 8}}>
+    <View style={{gap: isNarrowViewport() ? 16 : 8}}>
       <Heading size="sm">{title}</Heading>
       {options.map((option) => (
         <TouchableOpacity

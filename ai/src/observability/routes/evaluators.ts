@@ -1,14 +1,16 @@
-import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
+import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
 
-import {requireAdmin} from "../../langfuseRoutesMiddleware";
 import {EVALUATOR_TEMPLATES} from "../evaluatorTemplates";
 import type {EvaluatorWriteInput, LocalEvaluatorStore} from "../local/evaluatorStore";
+import {
+  type ObservabilityRouteAccessOptions,
+  observabilityRouteMiddleware,
+} from "./observabilityRouteAccess";
 
 const BASE_PATH = "/ai/observability";
 
-export interface ObservabilityEvaluatorRouteOptions {
-  openApi?: unknown;
+export interface ObservabilityEvaluatorRouteOptions extends ObservabilityRouteAccessOptions {
   store: LocalEvaluatorStore;
 }
 
@@ -71,15 +73,15 @@ export const addObservabilityEvaluatorRoutes = (
 
   router.get(
     `${BASE_PATH}/evaluators/templates`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "list", resource: "aiEvaluator"},
       builder()
         .withTags(["observability"])
         .withSummary("List seeded evaluator templates")
         .withResponse(200, {data: {type: "array"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (_req, res) => {
       return res.json({data: EVALUATOR_TEMPLATES});
     })
@@ -87,16 +89,16 @@ export const addObservabilityEvaluatorRoutes = (
 
   router.post(
     `${BASE_PATH}/evaluators/templates/:name`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "create", resource: "aiEvaluator"},
       builder()
         .withTags(["observability"])
         .withSummary("Install a seeded evaluator template")
         .withPathParameter("name", {type: "string"})
         .withResponse(201, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const data = await options.store.installTemplate(req.params.name);
       return res.status(201).json({data});
@@ -105,15 +107,15 @@ export const addObservabilityEvaluatorRoutes = (
 
   router.get(
     `${BASE_PATH}/evaluators`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "list", resource: "aiEvaluator"},
       builder()
         .withTags(["observability"])
         .withSummary("List evaluators")
         .withResponse(200, {data: {type: "array"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (_req, res) => {
       return res.json({data: await options.store.list()});
     })
@@ -121,15 +123,15 @@ export const addObservabilityEvaluatorRoutes = (
 
   router.post(
     `${BASE_PATH}/evaluators`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "create", resource: "aiEvaluator"},
       builder()
         .withTags(["observability"])
         .withSummary("Create an evaluator")
         .withResponse(201, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const input = writeFromBody(
         req.body as Record<string, unknown>,
@@ -149,16 +151,16 @@ export const addObservabilityEvaluatorRoutes = (
 
   router.get(
     `${BASE_PATH}/evaluators/:id`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "read", resource: "aiEvaluator"},
       builder()
         .withTags(["observability"])
         .withSummary("Get an evaluator")
         .withPathParameter("id", {type: "string"})
         .withResponse(200, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       return res.json({data: await options.store.get(req.params.id)});
     })
@@ -166,16 +168,16 @@ export const addObservabilityEvaluatorRoutes = (
 
   router.patch(
     `${BASE_PATH}/evaluators/:id`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "update", resource: "aiEvaluator"},
       builder()
         .withTags(["observability"])
         .withSummary("Update an evaluator")
         .withPathParameter("id", {type: "string"})
         .withResponse(200, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const data = await options.store.update(
         req.params.id,
@@ -187,16 +189,16 @@ export const addObservabilityEvaluatorRoutes = (
 
   router.delete(
     `${BASE_PATH}/evaluators/:id`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "delete", resource: "aiEvaluator"},
       builder()
         .withTags(["observability"])
         .withSummary("Delete an evaluator")
         .withPathParameter("id", {type: "string"})
         .withResponse(204, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       await options.store.remove(req.params.id);
       return res.status(204).end();

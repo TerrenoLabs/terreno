@@ -1,15 +1,16 @@
-import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
+import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
-
-import {requireAdmin} from "../../langfuseRoutesMiddleware";
 import type {LocalTraceStore} from "../local/traceStore";
 import {getObservabilityApp} from "../observabilityAppRegistry";
 import type {ScoreRecord, ScoreSink} from "../types";
+import {
+  type ObservabilityRouteAccessOptions,
+  observabilityRouteMiddleware,
+} from "./observabilityRouteAccess";
 
 const BASE_PATH = "/ai/observability";
 
-export interface ObservabilityTraceRouteOptions {
-  openApi?: unknown;
+export interface ObservabilityTraceRouteOptions extends ObservabilityRouteAccessOptions {
   store: LocalTraceStore;
 }
 
@@ -48,15 +49,15 @@ export const addObservabilityTraceRoutes = (
 
   router.get(
     `${BASE_PATH}/traces`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "list", resource: "aiTrace"},
       builder()
         .withTags(["observability"])
         .withSummary("List observability traces")
         .withResponse(200, {data: {type: "array"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const listed = await options.store.list({
         flaggedForDataset: parseBoolean(req.query.flaggedForDataset),
@@ -85,16 +86,16 @@ export const addObservabilityTraceRoutes = (
 
   router.get(
     `${BASE_PATH}/traces/:id`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "read", resource: "aiTrace"},
       builder()
         .withTags(["observability"])
         .withSummary("Get an observability trace")
         .withPathParameter("id", {type: "string"})
         .withResponse(200, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const data = await options.store.getDetail(req.params.id);
       return res.json({data});
@@ -103,16 +104,16 @@ export const addObservabilityTraceRoutes = (
 
   router.post(
     `${BASE_PATH}/traces/:id/scores`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "score", resource: "aiReview"},
       builder()
         .withTags(["observability"])
         .withSummary("Add a score to a trace")
         .withPathParameter("id", {type: "string"})
         .withResponse(201, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       await options.store.getDetail(req.params.id);
       const body = req.body as Partial<ScoreRecord>;

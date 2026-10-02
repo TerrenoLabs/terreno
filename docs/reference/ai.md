@@ -380,6 +380,18 @@ In-app prompt versions, nested traces, evaluators, datasets, experiments, review
 
 Register `ObservabilityApp` with at least a local plugin. Construction throws if `experiments.primary !== datasets.primary`, if `reviewQueue` is not `local`, or if a control primary has no matching plugin. Defaults for all four primaries are `local`. Construction also registers the app as the process singleton (`getObservabilityApp()`) through the dependency-free observability registry, so routes do not import the plugin class that registers them. Call `resetObservabilityApp()` in tests. `createLocalObservabilityPlugin()` registers the local Mongo models (`ObsPrompt`, `ObsPromptVersion`, `ObsPromptLabel`, `ObsTrace`, `ObsSpan`, `ObsScore`) on the default connection.
 
+Optional `accessControl` (from `createAccess`) turns on fine-grained RBAC for every
+`/ai/observability/*` route. Without it, routes require legacy `user.admin`. With it, callers
+need `admin:access` plus the resource action for that route unless `user.admin` is true
+(full-access fallback). Resources: `aiPrompt`, `aiTrace`, `aiReview`, `aiDataset`,
+`aiEvaluator`, `aiExperiment` — see [API reference — AI observability RBAC](api.md#ai-observability-rbac).
+Examples: `GET /prompts` → `aiPrompt:list`; `POST /prompts/:name/labels` → `aiPrompt:promote`;
+`POST /review/:id` with `action: "submit"` → `aiReview:score`; `POST /traces/review` →
+`aiReview:assign`; `POST /experiments/:id/promote` → `aiExperiment:promote`;
+`GET /status` → `aiTrace:list`; `POST /traces/:id/scores` → `aiReview:score`. The seeded
+`auditor` role receives observability `list` / `read` only; compose it with `admin:access` in a
+consumer role when operators should enter the admin shell.
+
 The example backend always registers `createLocalObservabilityPlugin()` and passes the
 validated `AI_OBS_PRICE_MAP_JSON` object as `priceMap`. `bun run backend:seed` idempotently
 creates `examples/example-summarize` with production on v1 and an experimental v2, installs

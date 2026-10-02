@@ -2,13 +2,16 @@ import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} fr
 import type expressTypes from "express";
 import express from "express";
 
-import {requireAdmin} from "../../langfuseRoutesMiddleware";
 import {type LocalDatasetStore, throwOnDatasetImportErrors} from "../local/datasetStore";
+import {
+  type ObservabilityRouteAccessOptions,
+  observabilityAccessMiddleware,
+  observabilityRouteMiddleware,
+} from "./observabilityRouteAccess";
 
 const BASE_PATH = "/ai/observability";
 
-export interface ObservabilityDatasetRouteOptions {
-  openApi?: unknown;
+export interface ObservabilityDatasetRouteOptions extends ObservabilityRouteAccessOptions {
   store: LocalDatasetStore;
 }
 
@@ -23,15 +26,15 @@ export const addObservabilityDatasetRoutes = (
 
   router.get(
     `${BASE_PATH}/datasets`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "list", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("List datasets")
         .withResponse(200, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (_req, res) => {
       return res.json({data: await options.store.list()});
     })
@@ -39,15 +42,15 @@ export const addObservabilityDatasetRoutes = (
 
   router.post(
     `${BASE_PATH}/datasets`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "create", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("Create a dataset")
         .withResponse(201, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const data = await options.store.create(req.body);
       return res.status(201).json({data});
@@ -56,16 +59,16 @@ export const addObservabilityDatasetRoutes = (
 
   router.get(
     `${BASE_PATH}/datasets/:id`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "read", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("Get a dataset")
         .withPathParameter("id", {type: "string"})
         .withResponse(200, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       return res.json({data: await options.store.get(req.params.id)});
     })
@@ -73,16 +76,16 @@ export const addObservabilityDatasetRoutes = (
 
   router.patch(
     `${BASE_PATH}/datasets/:id`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "update", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("Update a dataset")
         .withPathParameter("id", {type: "string"})
         .withResponse(200, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       return res.json({data: await options.store.update(req.params.id, req.body)});
     })
@@ -90,16 +93,16 @@ export const addObservabilityDatasetRoutes = (
 
   router.delete(
     `${BASE_PATH}/datasets/:id`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "delete", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("Delete a dataset")
         .withPathParameter("id", {type: "string"})
         .withResponse(204, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       await options.store.remove(req.params.id);
       return res.status(204).end();
@@ -108,16 +111,16 @@ export const addObservabilityDatasetRoutes = (
 
   router.get(
     `${BASE_PATH}/datasets/:id/items`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "read", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("List dataset items")
         .withPathParameter("id", {type: "string"})
         .withResponse(200, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       return res.json({data: await options.store.listItems(req.params.id)});
     })
@@ -125,16 +128,16 @@ export const addObservabilityDatasetRoutes = (
 
   router.post(
     `${BASE_PATH}/datasets/:id/items`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "update", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("Create a dataset item")
         .withPathParameter("id", {type: "string"})
         .withResponse(201, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const data = await options.store.createItem(req.params.id, req.body);
       return res.status(201).json({data});
@@ -143,17 +146,17 @@ export const addObservabilityDatasetRoutes = (
 
   router.patch(
     `${BASE_PATH}/datasets/:id/items/:itemId`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "update", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("Update a dataset item")
         .withPathParameter("id", {type: "string"})
         .withPathParameter("itemId", {type: "string"})
         .withResponse(200, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const data = await options.store.updateItem(req.params.id, req.params.itemId, req.body);
       return res.json({data});
@@ -162,17 +165,17 @@ export const addObservabilityDatasetRoutes = (
 
   router.delete(
     `${BASE_PATH}/datasets/:id/items/:itemId`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "delete", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("Delete a dataset item")
         .withPathParameter("id", {type: "string"})
         .withPathParameter("itemId", {type: "string"})
         .withResponse(204, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       await options.store.removeItem(req.params.id, req.params.itemId);
       return res.status(204).end();
@@ -184,7 +187,10 @@ export const addObservabilityDatasetRoutes = (
     [
       express.text({type: ["text/csv", "text/plain"]}),
       authenticateMiddleware(),
-      requireAdmin,
+      observabilityAccessMiddleware(options.accessControl, {
+        action: "update",
+        resource: "aiDataset",
+      }),
       builder()
         .withTags(["observability"])
         .withSummary("Import dataset items from JSON or CSV")
@@ -218,15 +224,15 @@ export const addObservabilityDatasetRoutes = (
 
   router.post(
     `${BASE_PATH}/traces/add-to-dataset`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "update", resource: "aiDataset"},
       builder()
         .withTags(["observability"])
         .withSummary("Copy one or many traces into a dataset")
         .withResponse(201, {})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const body = req.body as {datasetId?: string; traceId?: string; traceIds?: string[]};
       if (!body.datasetId) {

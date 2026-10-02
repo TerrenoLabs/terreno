@@ -1,4 +1,4 @@
-import {APIError, logger} from "@terreno/api";
+import {type AnyTerrenoAccess, APIError, logger} from "@terreno/api";
 
 export type ObservabilityCapability =
   | "datasets"
@@ -162,6 +162,7 @@ export type ObservabilityRequestAiServiceFactory = (params: {
 }) => ObservabilityGenerateClient | undefined;
 
 export interface ObservabilityAppOptions {
+  accessControl?: AnyTerrenoAccess;
   aiService?: ObservabilityGenerateClient;
   aiServiceFactory?: ObservabilityAiServiceFactory;
   control?: {

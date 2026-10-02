@@ -1,15 +1,15 @@
-import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
+import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
-
-import {requireAdmin} from "../../langfuseRoutesMiddleware";
 import {getObservabilityApp} from "../observabilityAppRegistry";
 import {buildObservabilityStatus} from "../status";
+import {
+  type ObservabilityRouteAccessOptions,
+  observabilityRouteMiddleware,
+} from "./observabilityRouteAccess";
 
 const BASE_PATH = "/ai/observability";
 
-export interface ObservabilityStatusRouteOptions {
-  openApi?: unknown;
-}
+export interface ObservabilityStatusRouteOptions extends ObservabilityRouteAccessOptions {}
 
 export const addObservabilityStatusRoutes = (
   router: express.Application,
@@ -22,15 +22,15 @@ export const addObservabilityStatusRoutes = (
 
   router.get(
     `${BASE_PATH}/status`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "list", resource: "aiTrace"},
       builder()
         .withTags(["observability"])
         .withSummary("Observability plugin status for admin chrome")
         .withResponse(200, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (_req, res) => {
       const app = getObservabilityApp();
       if (!app) {

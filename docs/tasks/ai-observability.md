@@ -234,7 +234,7 @@ in-app approval workflow. Supporting skills: `building-admin-interfaces`,
 `terreno-backend-api`, `terreno-ui`, `terreno-data-fetching`, `mongoose-schema-safety`,
 `update-docs`, and `verify-ui-changes`.
 
-- [ ] **Task 4.1**: Observability RBAC vocabulary, compatibility grants, and route enforcement
+- [x] **Task 4.1**: Observability RBAC vocabulary, compatibility grants, and route enforcement
   - Delivers: resources `aiPrompt`, `aiTrace`, `aiReview`, `aiDataset`, `aiExperiment`, `aiEvaluator` with the actions approved in Q62/Q63; statement descriptions; full seeded Admin grants, read-only Auditor expansion, Super Admin wildcard; existing stored Admin roles gain only missing observability grants; optional `accessControl` on `ObservabilityApp`; every route maps to one resource/action while legacy admin fallback remains
   - Files: `api/src/rbac/statements.ts`, `api/src/rbac/roleModel.ts`, `ai/src/observability/observabilityApp.ts`, `ai/src/observability/routes/*.ts`, route/RBAC tests, public exports as needed
   - Blocked by: none

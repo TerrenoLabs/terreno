@@ -37,6 +37,18 @@ Flourish AI features follow an 8-step loop: gold dataset → labels → prompt v
 
 That loop is the product requirement, not an optional dashboard. Operator steps: [Develop an AI feature](../how-to/ai-feature-development.md). Registration and env: [Observe LLM calls](../how-to/observe-llm-calls.md). Models and routes: [AI reference](../reference/ai.md). Design lock: [implementation plan](../implementationPlans/ai-observability.md).
 
+## RBAC (domain-neutral)
+
+Observability HTTP routes use Terreno RBAC resources (`aiPrompt`, `aiTrace`, `aiReview`,
+`aiDataset`, `aiExperiment`, `aiEvaluator`) instead of domain-specific approval vocabulary.
+Pass `accessControl` on `ObservabilityApp` to enforce grants on the server; UI hiding ships in
+a later phase. Seeded `admin` receives every observability action; `auditor` receives `list` and
+`read` on each observability resource through the read-only sentinel (but not `admin:access` —
+pair auditor with a shell grant in a composed consumer role); `superadmin` receives `*`. Existing
+customized `admin` and `auditor` roles gain only missing observability actions on re-seed. Legacy
+`user.admin` remains a full-access fallback when RBAC is enabled. See
+[API reference](../reference/api.md#ai-observability-rbac).
+
 `AIRequest` remains the cheap per-call log. Observability traces are the nested, scored, user/session/cost record used in the SOP.
 
 ## Phase 1 reference loop

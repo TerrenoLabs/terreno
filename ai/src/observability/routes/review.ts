@@ -1,14 +1,17 @@
 import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
 
-import {requireAdmin} from "../../langfuseRoutesMiddleware";
 import type {LocalReviewStore, ReviewStatus} from "../local/reviewStore";
 import {getObservabilityApp} from "../observabilityAppRegistry";
+import {
+  type ObservabilityRouteAccessOptions,
+  observabilityReviewMutationMiddleware,
+  observabilityRouteMiddleware,
+} from "./observabilityRouteAccess";
 
 const BASE_PATH = "/ai/observability";
 
-export interface ObservabilityReviewRouteOptions {
-  openApi?: unknown;
+export interface ObservabilityReviewRouteOptions extends ObservabilityRouteAccessOptions {
   store: LocalReviewStore;
 }
 
@@ -23,15 +26,15 @@ export const addObservabilityReviewRoutes = (
 
   router.post(
     `${BASE_PATH}/traces/review`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "assign", resource: "aiReview"},
       builder()
         .withTags(["observability"])
         .withSummary("Enqueue traces for human review")
         .withResponse(201, {data: {type: "array"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const body = req.body as {evaluatorId?: string; reason?: "manual"; traceIds?: string[]};
       if (!body.evaluatorId || !body.traceIds) {
@@ -48,15 +51,15 @@ export const addObservabilityReviewRoutes = (
 
   router.get(
     `${BASE_PATH}/review`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "list", resource: "aiReview"},
       builder()
         .withTags(["observability"])
         .withSummary("List the review queue")
         .withResponse(200, {data: {type: "array"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const status = req.query.status as ReviewStatus | undefined;
       return res.json({...(await options.store.list(status)), more: false});
@@ -65,16 +68,16 @@ export const addObservabilityReviewRoutes = (
 
   router.get(
     `${BASE_PATH}/review/:id`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "read", resource: "aiReview"},
       builder()
         .withTags(["observability"])
         .withSummary("Get a review item")
         .withPathParameter("id", {type: "string"})
         .withResponse(200, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       return res.json({data: await options.store.getDetail(req.params.id)});
     })
@@ -84,7 +87,7 @@ export const addObservabilityReviewRoutes = (
     `${BASE_PATH}/review/:id`,
     [
       authenticateMiddleware(),
-      requireAdmin,
+      observabilityReviewMutationMiddleware(options.accessControl),
       builder()
         .withTags(["observability"])
         .withSummary("Submit, skip, or assign a review item")

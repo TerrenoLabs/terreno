@@ -1911,3 +1911,75 @@ jobs:
             -H "Authorization: ${{ secrets.ZOOM_WEBHOOK_TOKEN }}" \
             -H "Content-Type: text/plain" \
             --data-raw "$MESSAGE"
+
+  slack-notify-start:
+    name: Slack - release started
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          missing=()
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then missing+=("SLACK_WEBHOOK_URL"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Post start message
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAG_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MESSAGE=$(printf '🚀 Publishing release %s started\nCommit: %s\n<%s|View run>' \
+            "$TAG_NAME" "${COMMIT_SHA:0:7}" "$RUN_URL")
+          jq -n --arg text "$MESSAGE" '{text: $text}' \
+            | curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              --data-binary @-
+
+  slack-notify-result:
+    name: Slack - release result
+    needs: [breaking-change-documentation, check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-ai, publish-api-health, publish-feature-flags, publish-mcp, update-version-on-master, trigger-demo-deploy, cut-docs-version, notify]
+    # Run regardless of upstream results so failures are reported too
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          missing=()
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then missing+=("SLACK_WEBHOOK_URL"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Post result message
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          TAG_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+        run: |
+          FAILED=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | "• \(.key) (\(.value.result))"')
+          PUBLISHED=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select((.key | startswith("publish-")) and .value.result == "success") | .key | sub("^publish-"; "@terreno/")' | paste -sd ',' - | sed 's/,/, /g')
+
+          if [ -n "$FAILED" ]; then
+            MESSAGE=$(printf '❌ Release %s failed\nFailed jobs:\n%s\nPublished: %s\nCommit: %s\n<%s|View run>' \
+              "$TAG_NAME" "$FAILED" "${PUBLISHED:-none}" "${COMMIT_SHA:0:7}" "$RUN_URL")
+          else
+            MESSAGE=$(printf '✅ Release %s published successfully\nPublished: %s\nCommit: %s\n<%s|View release> · <%s|View run>' \
+              "$TAG_NAME" "${PUBLISHED:-none (no changes)}" "${COMMIT_SHA:0:7}" "$RELEASE_URL" "$RUN_URL")
+          fi
+
+          jq -n --arg text "$MESSAGE" '{text: $text}' \
+            | curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              --data-binary @-

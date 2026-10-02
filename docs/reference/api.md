@@ -41,7 +41,7 @@ REST API framework built on Express and Mongoose. Provides modelRouter (CRUD end
 - Validation: `configureOpenApiValidator`, `validateRequestBody`, `validateQueryParams`, `createValidator`
 - Middleware: `openApiEtagMiddleware`, `sentryAppVersionMiddleware`
 - Extensibility: `TerrenoPlugin` interface
-- Notifiers: `sendToSlack`, `formatSlackUserMention`, `lookupSlackUserIdByEmail`, `sendToGoogleChat`, `sendToZoom`
+- Notifiers: `sendToSlack`, `formatSlackUserMention`, `lookupSlackUserIdByEmail`, `createSlackPrivateChannel`, `inviteSlackUsersToChannel`, `postSlackMessage`, `findSlackChannelByName`, `sendToGoogleChat`, `sendToZoom`
 - HTTP client: `createAuthenticatedClient`, `withApiErrorHandling`, `normalizeApiError`, `markRetryUnsafe`
 
 ## Server Setup
@@ -1535,6 +1535,44 @@ await sendToSlack(`${formatSlackUserMention("U012ABCDEF")} Deployment complete`,
 });
 ``````
 
+Incoming webhooks are fixed to the channel chosen when the webhook was created.
+Private channels, invites, and messages to a channel id use the bot token for
+one Slack workspace (`SLACK_BOT_TOKEN`):
+
+| Function | Slack method | Bot scopes |
+| --- | --- | --- |
+| `createSlackPrivateChannel` | `conversations.create`, `conversations.invite`, `chat.postMessage` | `groups:write`, `groups:write.invites`, `chat:write` |
+| `inviteSlackUsersToChannel` | `conversations.invite` | `groups:write.invites` for private channels, `channels:write.invites` for public |
+| `postSlackMessage` | `chat.postMessage` | `chat:write` |
+| `findSlackChannelByName` | `conversations.list` | `channels:read`, `groups:read` |
+| `lookupSlackUserIdByEmail` | `users.lookupByEmail` | `users:read.email` |
+
+The bot can post and invite only in channels it belongs to. Creating a private
+channel makes the bot a member. An existing private channel must already
+include the app; a bot cannot join a private channel by itself. Store the
+returned channel id. Names are unique, mutable, and limited to lowercase
+letters, numbers, hyphens, and underscores.
+
+``````typescript
+import {createSlackPrivateChannel, inviteSlackUsersToChannel} from "@terreno/api";
+
+const channel = await createSlackPrivateChannel({
+  name: "case-12345",
+  userIds: ["U012ABCDEF"],
+  initialMessage: "Case opened.",
+  mentionUserIds: ["U012ABCDEF"],
+});
+
+await inviteSlackUsersToChannel({
+  channelId: channel.channelId,
+  userIds: ["U098765432"],
+});
+``````
+
+A taken name throws status 409. `findSlackChannelByName({name})` returns a
+public channel, or a private channel the bot is already in. It returns
+`undefined` when that channel is not visible to the bot.
+
 ### Google Chat Notifications
 
 ``````typescript
@@ -1867,7 +1905,7 @@ Complete reference of environment variables used by @terreno/api:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `SLACK_WEBHOOKS` | No | — | JSON object mapping names to Slack webhook URLs: `{"default":"https://..."}` |
-| `SLACK_BOT_TOKEN` | No | — | Bot token (`xoxb-…`) with `users:read.email` for `lookupSlackUserIdByEmail` |
+| `SLACK_BOT_TOKEN` | No | — | Bot token (`xoxb-…`) for one workspace. Scopes: `users:read.email`, `groups:write`, `groups:write.invites`, `channels:write.invites`, `chat:write`, `channels:read`, `groups:read` |
 | `GOOGLE_CHAT_WEBHOOKS` | No | — | JSON object mapping names to Google Chat webhook URLs |
 | `ZOOM_CHAT_WEBHOOKS` | No | — | JSON object mapping names to Zoom webhook URLs |
 | `WEBHOOK_SECRET` | No | — | Secret for validating incoming webhook signatures |

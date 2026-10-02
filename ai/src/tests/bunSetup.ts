@@ -1,11 +1,11 @@
-import {registerSimpleMongoPreload} from "@terreno/test";
+import {registerBackendPreload} from "@terreno/test";
 
-if (!process.env.TERRENO_TEST_MONGODB_URI?.trim()) {
-  process.env.TERRENO_TEST_USE_MEMORY_MONGO = "true";
-}
-
-registerSimpleMongoPreload({
-  defaultLocalMongoUri: "mongodb://127.0.0.1/terreno-ai-test?&connectTimeoutMS=360000",
+// A single-node replica set: the durable harness commits checkpoints and audit spans
+// in Mongo transactions, which standalone servers reject. `TERRENO_TEST_MONGODB_URI`
+// still overrides the in-memory server (it must point at a replica set).
+registerBackendPreload({
+  connectMongoInBeforeAll: true,
+  mongo: {baseDatabaseName: "terreno-ai-test", useReplSet: true},
   onBeforeEach: async () => {
     const {shutdownLangfuseClient} = await import("../langfuseClient");
     await shutdownLangfuseClient();

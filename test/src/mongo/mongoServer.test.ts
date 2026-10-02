@@ -2,7 +2,7 @@ import {describe, expect, it} from "bun:test";
 import mongoose from "mongoose";
 
 import {ensureTestMongooseConnected} from "./connection";
-import {initializeModels, waitForDatabaseReady} from "./mongoServer";
+import {initializeModels, resolveMongoLaunchTimeoutMs, waitForDatabaseReady} from "./mongoServer";
 
 describe("mongoServer", () => {
   it("pings the connected database", async () => {
@@ -29,6 +29,31 @@ describe("mongoServer", () => {
     const second = await initializeModels();
     expect(second.modelCount).toBe(first.modelCount);
     expect(second.modelInitMs).toBe(0);
+  });
+});
+
+describe("resolveMongoLaunchTimeoutMs", () => {
+  it("defaults to 60 seconds", () => {
+    Reflect.deleteProperty(process.env, "TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS");
+    expect(resolveMongoLaunchTimeoutMs()).toBe(60000);
+  });
+
+  it("reads a positive integer override", () => {
+    process.env.TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS = "90000";
+    try {
+      expect(resolveMongoLaunchTimeoutMs()).toBe(90000);
+    } finally {
+      Reflect.deleteProperty(process.env, "TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS");
+    }
+  });
+
+  it.each(["0", "-5", "1.5", "999", "soon"])("ignores the invalid override %p", (value) => {
+    process.env.TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS = value;
+    try {
+      expect(resolveMongoLaunchTimeoutMs()).toBe(60000);
+    } finally {
+      Reflect.deleteProperty(process.env, "TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS");
+    }
   });
 });
 

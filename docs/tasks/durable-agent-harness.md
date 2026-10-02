@@ -11,7 +11,7 @@ created in 1.1 and extended by every later task — never deferred.
 
 ## Phase 1 — Durable clinical tracer
 
-- [ ] **Task 1.1**: Harness subpath + `defineTask` + transactional checkpoint/span (tracer)
+- [x] **Task 1.1**: Harness subpath + `defineTask` + transactional checkpoint/span (tracer)
   - Delivers: `@terreno/ai/harness` export; `HarnessTask` model; `defineTask` with phases; `InProcessRunner` (no lease yet) runs a two-phase task to `completed`; `rt.commit` writes task + `ObsSpan` + root `ObsTrace` in one transaction; `Harness.open` throws without local observability plugin or without a replica set
   - Files: `ai/package.json`, `ai/src/harness/harness.ts`, `defineTask.ts`, `runtime.ts`, `commit.ts`, `runners/inProcessRunner.ts`, `models/harnessTask.ts`, `ai/src/types/harness.ts`, tests
   - Blocked by: none

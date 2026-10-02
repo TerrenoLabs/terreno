@@ -1,0 +1,40 @@
+import type {HarnessTaskDefinition, HarnessTaskDefinitionInput} from "../types/harness";
+
+/** Registry key that pins a run to one definition version. */
+export const taskDefinitionKey = ({name, version}: {name: string; version: number}): string =>
+  `${name}@${version}`;
+
+/**
+ * Declare a durable, multi-phase task. Each phase does work and calls `rt.commit()`
+ * with the next phase or a terminal outcome; a committed phase is the resume point.
+ */
+export const defineTask = <In, State, Out>(
+  definition: HarnessTaskDefinitionInput<In, State, Out>
+): HarnessTaskDefinition<In, State, Out> => {
+  if (!definition.name?.trim()) {
+    throw new Error("defineTask: name is required");
+  }
+  if (!Number.isInteger(definition.version) || definition.version < 1) {
+    throw new Error(`defineTask(${definition.name}): version must be a positive integer`);
+  }
+  const phaseNames = Object.keys(definition.phases ?? {});
+  if (phaseNames.length === 0) {
+    throw new Error(`defineTask(${definition.name}): at least one phase is required`);
+  }
+  for (const phaseName of phaseNames) {
+    const phase = definition.phases[phaseName];
+    if (typeof phase?.run !== "function") {
+      throw new Error(`defineTask(${definition.name}): phase "${phaseName}" needs a run function`);
+    }
+    if (phase.replay !== undefined && phase.replay !== "safe" && phase.replay !== "never") {
+      throw new Error(
+        `defineTask(${definition.name}): phase "${phaseName}" replay must be "safe" or "never"`
+      );
+    }
+  }
+  return Object.freeze({
+    ...definition,
+    key: taskDefinitionKey(definition),
+    kind: "task" as const,
+  });
+};

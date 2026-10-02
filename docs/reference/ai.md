@@ -16,6 +16,7 @@ AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI 
 - [AiApp plugin](#aiapp-plugin)
 - [LangfuseApp plugin](#langfuseapp-plugin)
 - [Observability](#observability)
+- [Durable agent harness](#durable-agent-harness)
 - [Langfuse integration](#langfuse-integration)
 - [FileStorageService](#filestorageservice)
 - [MCPService](#mcpservice)
@@ -95,6 +96,7 @@ src/
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
 - **Prompts:** `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
 - **Web search:** `WebSearchProvider`, `WebSearchResult` types
+- **Harness (subpath `@terreno/ai/harness`):** `Harness`, `defineTask`, `InProcessRunner`, `HarnessCommitConflictError` — see [AI harness reference](ai-harness.md)
 
 ## AIService
 
@@ -497,6 +499,13 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 
 Authenticated `POST /ai/observability/traces/:id/feedback` records thumbs, outcome class, and flag-for-dataset (phase 2.6).
 
+## Durable agent harness
+
+`@terreno/ai/harness` runs multi-phase tasks that survive restarts. Each phase commits a
+checkpoint and its `ObsSpan` audit record in one Mongo transaction, so it needs a replica
+set and `createLocalObservabilityPlugin()`. API: [AI harness reference](ai-harness.md).
+Why: [Durable agent harness](../explanation/durable-agent-harness.md).
+
 ## Langfuse integration
 
 Low-level exports (also used by `addGptRoutes` when `langfuseSystemPromptName` is set):
@@ -628,7 +637,7 @@ GCS credentials use standard Google Cloud Application Default Credentials for `F
 
 - Framework: `bun test` with preload `./src/tests/bunSetup.ts`
 - HTTP: supertest against real routes
-- DB: memory Mongo via `@terreno/test` (`TERRENO_TEST_USE_MEMORY_MONGO` or `TERRENO_TEST_MONGODB_URI`)
+- DB: in-memory single-node replica set via `@terreno/test` (transactions work); `TERRENO_TEST_MONGODB_URI` overrides it and must point at a replica set
 - Mock AI model: implement `doGenerate` and `doStream` on a fake `LanguageModel`
 
 ```typescript

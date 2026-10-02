@@ -20,6 +20,30 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.8.0] - 2026-10-02
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.8.0.md`](mcp-server/src/docs/upgrades/57.8.0.md).
+
+### Added
+
+- `@terreno/announcements` imports a versioned release pack (`pack.yaml` plus one Markdown file per announcement) through idempotent `POST /announcements/import-release`. Imports default to drafts; pass `publish: true` to publish on import. Re-importing the same product, release version, channel, and slug updates the existing row, and a matching soft-deleted row is restored. Admin auth or `ANNOUNCEMENTS_UPLOAD_TOKEN` can call the route. Request bodies for the import and for impression and click events are strict Zod schemas.
+- `SplitPage` accepts opt-in web layout props. `desktopChildrenMinWidth` keeps one or two desktop children at least that many pixels wide and scrolls horizontally when the row is tighter. `narrowViewportChildLabels`, `narrowViewportSelectionActive`, `narrowViewportSelectionKey`, and `narrowViewportListButtonLabel` replace the dotted narrow swiper with a labeled pager. `narrowBelowWidth` uses the narrow layout at or below that pixel width; omit it to keep `isNarrowViewport()`. Native `SplitPage` ignores these props. `IconButton` accepts `backgroundOpacity` to tint only the button background.
+
+### Changed
+
+- CircleCI `publish-release` compiles every lockstep package once and publishes them in parallel instead of recompiling and retesting each package in turn. Tagged commits already passed CI on master. Releases drop from 25+ minutes to about 4.
+- `deploy-demo` runs alongside `publish-release` instead of after it.
+- `scripts/ci/netlify-deploy.sh` passes `--no-build`, so Netlify deploys no longer rerun the root `netlify.toml` docs build (about 3.5 minutes per demo and frontend deploy).
+
+### Deprecated
+
+- `isMobileDevice` is deprecated. Call `isNarrowViewport` instead. The old function stays exported and returns the same result until it is removed.
+
+### Fixed
+
+- `DropdownPanel` now anchors to its trigger rather than to the row around it. The measured wrapper stretched to fill its container, so the panel opened at the start of that row — visible whenever the trigger is not at the start edge, such as a right-aligned button or a right-to-left layout, where the panel appeared on the opposite side of the screen.
+- `/gpt/prompt` sends each generated image once. Image-output models no longer duplicate the SSE `image` event and saved content part, and image-only responses save empty text instead of the `(image)` placeholder. `GptHistory` prompt `text` is now required only when the prompt has no `content` parts.
+
 ## [57.7.0] - 2026-09-28
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.7.0.md`](mcp-server/src/docs/upgrades/57.7.0.md).

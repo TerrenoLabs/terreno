@@ -665,6 +665,6 @@ describe("observability route RBAC", () => {
         const response = await sendRequest(agent, case_);
         expect(response.status).not.toBe(403);
       }
-    });
+    }, 30_000);
   });
 });

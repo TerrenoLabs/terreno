@@ -45,6 +45,30 @@ interface ChildrenProps {
   onHoverOut?: () => void;
 }
 
+const isPositiveFinite = (value: unknown): boolean =>
+  typeof value === "number" && Number.isFinite(value) && value > 0;
+
+const isFiniteNumber = (value: unknown): boolean =>
+  typeof value === "number" && Number.isFinite(value);
+
+// A detached or collapsed trigger measures as zero-sized at (0, 0), which would place the
+// tooltip in the top left corner of the screen on top of whatever is there.
+export const isValidTooltipMeasurement = ({
+  children,
+  tooltip,
+}: Pick<Measurement, "children" | "tooltip">): boolean => {
+  const {width, height, pageX, pageY} = children as Partial<ChildrenMeasurement>;
+  const {width: tooltipWidth, height: tooltipHeight} = tooltip as Partial<LayoutRectangle>;
+  return (
+    isPositiveFinite(width) &&
+    isPositiveFinite(height) &&
+    isFiniteNumber(pageX) &&
+    isFiniteNumber(pageY) &&
+    isPositiveFinite(tooltipWidth) &&
+    isPositiveFinite(tooltipHeight)
+  );
+};
+
 export const getTooltipPosition = ({
   children,
   tooltip,
@@ -53,6 +77,9 @@ export const getTooltipPosition = ({
 }: Measurement): Partial<TooltipPlacement> => {
   if (!measured) {
     console.debug("No measurements for child yet, cannot show tooltip yet.");
+    return {};
+  }
+  if (!isValidTooltipMeasurement({children, tooltip})) {
     return {};
   }
 
@@ -255,31 +282,35 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
 
   const handleOnLayout = useCallback(
     ({nativeEvent: {layout}}: LayoutChangeEvent) => {
-      if (childrenWrapperRef?.current && !childrenWrapperRef?.current?.measure) {
-        console.error("Tooltip: childrenWrapperRef does not have a measure method.");
+      if (!childrenWrapperRef?.current) {
+        console.error("Tooltip: childrenWrapperRef is null, hiding tooltip.");
+        hideTooltip();
         return;
-      } else if (!childrenWrapperRef?.current) {
-        console.error("Tooltip: childrenWrapperRef is null.");
+      }
+      if (!childrenWrapperRef.current.measure) {
+        console.error(
+          "Tooltip: childrenWrapperRef does not have a measure method, hiding tooltip."
+        );
+        hideTooltip();
+        return;
       }
 
-      childrenWrapperRef?.current?.measure((_x, _y, width, height, pageX, pageY) => {
-        setMeasurement({
-          children: {height, pageX, pageY, width},
-          measured: true,
-          tooltip: {...layout},
-        });
-        const position = getTooltipPosition({
-          children: {height, pageX, pageY, width},
-          idealPosition,
-          measured: true,
-          tooltip: {...layout},
-        });
+      childrenWrapperRef.current.measure((_x, _y, width, height, pageX, pageY) => {
+        const children = {height, pageX, pageY, width};
+        const tooltip = {...layout};
+        if (!isValidTooltipMeasurement({children, tooltip})) {
+          console.error("Tooltip: invalid measurements, hiding tooltip.", {children, tooltip});
+          hideTooltip();
+          return;
+        }
+        setMeasurement({children, measured: true, tooltip});
+        const position = getTooltipPosition({children, idealPosition, measured: true, tooltip});
         if (position.finalPosition) {
           setFinalPosition(position.finalPosition);
         }
       });
     },
-    [idealPosition]
+    [hideTooltip, idealPosition]
   );
 
   const handleTouchStart = useCallback(() => {

@@ -1,4 +1,4 @@
-import {Box, Button, Modal, type ModalProps, Text} from "@terreno/ui";
+import {Box, Button, Modal, type ModalProps, Text, useToast} from "@terreno/ui";
 import {useState} from "react";
 
 export const ModalDemo = (props: Partial<ModalProps>) => {
@@ -24,6 +24,7 @@ export const ModalDemo = (props: Partial<ModalProps>) => {
 
 export const Modals = () => {
   const [modalToShow, setModalToShow] = useState<string>("");
+  const toast = useToast();
   let size = "sm";
   if (modalToShow === "md") {
     size = "md";
@@ -68,7 +69,15 @@ export const Modals = () => {
           modalToShow === "persist"
         }
       >
-        <Text>Children inside the modal.</Text>
+        <Box gap={2}>
+          <Text>Children inside the modal.</Text>
+          <Button
+            onClick={() => {
+              toast.error("Saved above the modal");
+            }}
+            text="Show toast"
+          />
+        </Box>
       </Modal>
     </>
   );

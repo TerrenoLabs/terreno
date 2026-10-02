@@ -362,6 +362,12 @@ Buttons use a scale animation by default. Set `pressAnimation="opacity"` for an 
 
 Disabled and loading buttons use a non-interactive pressable regardless of the selected animation.
 
+### Toast
+
+`TerrenoProvider` mounts the toast container. Call `useToast()` for `success`, `info`, `warn`, `error`, `show`, `hide`, and `catch`.
+
+On web, that container is portaled to `document.body` (`position: fixed`, `z-index: 999999`, `pointerEvents: "box-none"`), so a toast stays above an open `Modal` and its backdrop. Native iOS and Android keep the in-tree absolute container.
+
 ## Authentication Components
 
 ### SocialLoginButton

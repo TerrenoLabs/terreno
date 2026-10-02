@@ -57,6 +57,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import type {ToastProps as TerrenoToastPayload} from "./Common";
+import {createWebPortal} from "./createWebPortal";
+import {resolveDocumentBodyPortalTarget} from "./resolveDocumentBodyPortalTarget";
 
 // ============================================================================
 // useDimensions hook
@@ -703,13 +705,28 @@ const ToastContainer = forwardRef<ToastContainerRef, ToastContainerProps>((props
     );
   }, [toasts, offset, offsetTop]);
 
-  return (
+  const toastStack = (
     <>
       {renderTopToasts()}
       {renderBottomToasts()}
       {renderCenterToasts()}
     </>
   );
+
+  // react-native-web Modal appends its own node to document.body (z-index 9999).
+  // A position:fixed toast left in the app tree stays behind that layer and inherits
+  // the backdrop dim. Portal the same container to document.body so its z-index wins.
+  // Native keeps the in-tree absolute container.
+  if (Platform.OS !== "web") {
+    return toastStack;
+  }
+
+  const portalTarget = resolveDocumentBodyPortalTarget();
+  if (!portalTarget) {
+    return toastStack;
+  }
+
+  return createWebPortal({children: toastStack, container: portalTarget});
 });
 
 ToastContainer.displayName = "ToastContainer";

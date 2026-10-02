@@ -57,6 +57,7 @@ interface RouteMappingCase {
 
 interface FixtureIds {
   datasetId: string;
+  datasetItemId: string;
   evaluatorId: string;
   reviewItemId: string;
   traceId: string;
@@ -161,7 +162,9 @@ const seedFixtures = async (): Promise<FixtureIds> => {
     type: "text",
   });
 
-  const dataset = await new LocalDatasetStore().create({name: "rbac-dataset"});
+  const datasetStore = new LocalDatasetStore();
+  const dataset = await datasetStore.create({name: "rbac-dataset"});
+  const datasetItem = await datasetStore.createItem(dataset.id, {input: {text: "fixture"}});
   const evaluator = await new LocalEvaluatorStore().create({
     dimensions: [{dataType: "boolean", key: "ok", required: true}],
     name: "rbac-human",
@@ -196,6 +199,7 @@ const seedFixtures = async (): Promise<FixtureIds> => {
 
   return {
     datasetId: dataset.id,
+    datasetItemId: datasetItem.id,
     evaluatorId: evaluator.id,
     reviewItemId,
     traceId: trace.id,
@@ -237,6 +241,26 @@ describe("observability route RBAC", () => {
     });
     const agent = await authAsRbacOperator(app);
     await agent.get("/ai/observability/prompts").expect(403);
+  });
+
+  it("allows composed read-only shell with admin:access and aiPrompt list/read only", async () => {
+    await seedFixtures();
+    const app = buildRbacObservabilityApp({
+      [RBAC_OPERATOR_EMAIL]: {
+        admin: ["access"],
+        aiPrompt: ["list", "read"],
+      },
+    });
+    const agent = await authAsRbacOperator(app);
+    await agent.get("/ai/observability/prompts").expect(200);
+    const createResponse = await agent.post("/ai/observability/prompts").send({
+      folder: "rbac",
+      name: "read-only-shell-deny",
+      system: "s",
+      template: "t",
+      type: "text",
+    });
+    expect(createResponse.status).toBe(403);
   });
 
   it("keeps legacy user.admin as full access when accessControl is configured", async () => {
@@ -452,6 +476,40 @@ describe("observability route RBAC", () => {
         label: "aiDataset:update (add-to-dataset)",
         method: "post",
         path: "/ai/observability/traces/add-to-dataset",
+        resource: "aiDataset",
+      },
+      {
+        allowAction: "read",
+        denyAction: "list",
+        label: "aiDataset:read (items list)",
+        method: "get",
+        path: `/ai/observability/datasets/${fixtures.datasetId}/items`,
+        resource: "aiDataset",
+      },
+      {
+        allowAction: "update",
+        body: {input: {text: "rbac-new-item"}},
+        denyAction: "read",
+        label: "aiDataset:update (create item)",
+        method: "post",
+        path: `/ai/observability/datasets/${fixtures.datasetId}/items`,
+        resource: "aiDataset",
+      },
+      {
+        allowAction: "update",
+        body: {input: {text: "rbac-patched-item"}},
+        denyAction: "create",
+        label: "aiDataset:update (patch item)",
+        method: "patch",
+        path: `/ai/observability/datasets/${fixtures.datasetId}/items/${fixtures.datasetItemId}`,
+        resource: "aiDataset",
+      },
+      {
+        allowAction: "delete",
+        denyAction: "update",
+        label: "aiDataset:delete (item)",
+        method: "delete",
+        path: `/ai/observability/datasets/${fixtures.datasetId}/items/${fixtures.datasetItemId}`,
         resource: "aiDataset",
       },
       {

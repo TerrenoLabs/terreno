@@ -220,6 +220,8 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
   const hideTooltipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const childrenWrapperRef = useRef<View>(null);
   const touched = useRef(false);
+  // Bumped on every hide so async measure callbacks from an earlier show are ignored.
+  const showGeneration = useRef(0);
   const isWeb = Platform.OS === "web";
   const resetMeasurement = useCallback(() => {
     setMeasurement({
@@ -236,6 +238,7 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
       clearTimeout(hideTooltipTimer.current);
     }
 
+    showGeneration.current += 1;
     touched.current = false;
     setVisible(false);
     resetMeasurement();
@@ -282,6 +285,11 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
 
   const handleOnLayout = useCallback(
     ({nativeEvent: {layout}}: LayoutChangeEvent) => {
+      // An empty first layout pass is followed by another onLayout once the content has size.
+      if (!isPositiveFinite(layout.width) || !isPositiveFinite(layout.height)) {
+        console.debug("Tooltip: tooltip has no size yet, waiting for next layout.");
+        return;
+      }
       if (!childrenWrapperRef?.current) {
         console.error("Tooltip: childrenWrapperRef is null, hiding tooltip.");
         hideTooltip();
@@ -295,7 +303,11 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
         return;
       }
 
+      const generation = showGeneration.current;
       childrenWrapperRef.current.measure((_x, _y, width, height, pageX, pageY) => {
+        if (generation !== showGeneration.current) {
+          return;
+        }
         const children = {height, pageX, pageY, width};
         const tooltip = {...layout};
         if (!isValidTooltipMeasurement({children, tooltip})) {

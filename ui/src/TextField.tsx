@@ -1,5 +1,5 @@
 import {getCalendars} from "expo-localization";
-import {type FC, useCallback, useMemo, useRef, useState} from "react";
+import {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   type DimensionValue,
   type KeyboardTypeOptions,
@@ -113,6 +113,13 @@ export const TextField: FC<TextFieldProps> = ({
   const [height, setHeight] = useState(rows * 40);
   const [isValueRevealed, setIsValueRevealed] = useState(false);
   const textInputRef = useRef<TextInput | null>(null);
+
+  // Clear stale measured height so the next typed character starts at the default row height.
+  useEffect(() => {
+    if (grow && !value) {
+      setHeight(rows * 40);
+    }
+  }, [grow, rows, value]);
 
   const isPasswordField = type === "password";
   const hasVisibilityToggle = isPasswordField && showVisibilityToggle;

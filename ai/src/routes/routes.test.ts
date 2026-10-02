@@ -1572,8 +1572,24 @@ describe("AI Routes", () => {
         .buffer(true)
         .parse(sseCollect);
       const body = (res as SseResponse).body;
-      expect(body).toContain('"text":" world"');
-      expect(body).not.toContain('"text":"Hello');
+      assert.include(body, '"replace":true,"text":"Hello world"');
+    });
+
+    it("replaces a stale client placeholder on the first resume poll", async () => {
+      const history = await GptHistory.create({
+        prompts: [
+          {text: "Q", type: "user"},
+          {status: "complete", streamId: "s2", text: "Answer", type: "assistant"},
+        ],
+        userId: await getNotAdminId(),
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .get(`/gpt/histories/${history._id}/stream?streamId=s2&offset=12`)
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.include((res as SseResponse).body, '"replace":true,"text":"Answer"');
     });
 
     it("sends a replace event when persisted text is rewritten", async () => {

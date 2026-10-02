@@ -437,6 +437,8 @@ const AiScreen: React.FC = () => {
       try {
         await deleteHistory({id}).unwrap();
         if (currentHistoryId === id) {
+          stopResume();
+          setIsStreaming(false);
           setCurrentHistoryId(undefined);
           setCurrentMessages([]);
         }
@@ -444,7 +446,7 @@ const AiScreen: React.FC = () => {
         console.error("Error deleting history:", err);
       }
     },
-    [deleteHistory, currentHistoryId]
+    [deleteHistory, currentHistoryId, stopResume]
   );
 
   const handleUpdateTitle = useCallback(

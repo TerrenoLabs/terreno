@@ -932,6 +932,7 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         isClosed = true;
       });
 
+      let isInitialPoll = true;
       let sentText: string | undefined;
       let sentLength = offset;
       try {
@@ -946,12 +947,16 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
             : undefined;
           const text = currentReply?.text ?? "";
 
-          if (sentText !== undefined && !text.startsWith(sentText)) {
+          if (isInitialPoll && offset > 0) {
+            // The client can have loaded a stale placeholder before reconnecting.
+            res.write(sseEvent({replace: true, text}));
+          } else if (sentText !== undefined && !text.startsWith(sentText)) {
             // Text from a step that turned into a tool call was discarded; resend the reply
             res.write(sseEvent({replace: true, text}));
           } else if (text.length > sentLength) {
             res.write(sseEvent({text: text.slice(sentLength)}));
           }
+          isInitialPoll = false;
           sentText = text;
           sentLength = text.length;
 

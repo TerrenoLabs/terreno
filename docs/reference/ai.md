@@ -274,7 +274,7 @@ When `fileStorageService` is set, `data:` attachments are uploaded with `FileSto
 | `{historyId, started: true, streamId}` | prompt | First event; the turn is saved and resumable |
 | `{historyId, resumed: true, streamId?}` | resume | First event; `streamId` is absent when nothing is streaming |
 | `{text}` | both | Text delta |
-| `{replace: true, text}` | resume | Persisted text was rewritten (a step became a tool call); `text` is the whole reply |
+| `{replace: true, text}` | resume | Authoritative whole reply: sent first when the client provides `offset`, and whenever persisted text was rewritten (for example, a step became a tool call) |
 | `{image: {mimeType, url}}` | both | Generated image |
 | `{file}`, `{toolCall}`, `{toolResult}` | prompt | File and tool events |
 | `{error}` | both | Error; resume sends it when the reply ended as `error` or went stale |

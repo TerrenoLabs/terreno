@@ -1978,6 +1978,11 @@ export interface BlocksViewProps extends WithTestID {
     id: string;
     limit?: number;
   }) => Promise<InlineDataset | undefined>;
+  /**
+   * Turns a `file:` image id into a URL. Until it resolves, the image is omitted and the alt
+   * text stays. Data and https sources do not call this.
+   */
+  resolveImage?: (fileId: string) => Promise<string | undefined>;
   /** While a reply is still streaming, `html` stays a placeholder. */
   streaming?: boolean;
 }

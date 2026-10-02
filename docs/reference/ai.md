@@ -152,7 +152,7 @@ All generation methods log to `AIRequest` via private `logRequest()`. Logging fa
 - Uses `TERRENO_UI_BLOCKS_SYSTEM_PROMPT` when `systemPrompt` is omitted.
 - Temperature is `TemperaturePresets.DETERMINISTIC` (0).
 - Checks the object with `validateBlocks`. When `repair` is omitted or true, one retry appends the error list to the user prompt. `repair: false` skips that retry.
-- A second failure throws `APIError` 422 (`title: "Block document failed validation"`, `meta.fields` keyed by error code) and stores `metadata.errorCodes` on the `AIRequest`.
+- A second validation failure throws `APIError` 422 (`title: "Block document failed validation"`, `meta.fields` keyed by error code) and stores `metadata.errorCodes` on the `AIRequest`. A model or network error throws 502 (`title: "Block generation failed"`) and is not repaired.
 
 `generateJsonValue`, `generateJsonObject`, and `generateJsonArray`:
 
@@ -265,7 +265,7 @@ GPT project with persistent context and memories.
 | `/gpt/remix` | POST | `IsAuthenticated` | Non-streaming text remix; body: `{text}` |
 | `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null}` |
 | `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools (ask tools are not listed) |
-| `/gpt/datasets/:id` | GET | owner (`IsOwner`; another user is 404) | Read a stored dataset. Mounted only when `uiBlocks` is on. Query: `grain` (`hour` \| `day` \| `week` \| `month`), `limit` (default 500, max 1000), `page`. Response `data`: `{columns, rows, rowCount, page, more}`. `grain` buckets the first date column (number columns are summed). Without `page`, a series longer than `limit` is LTTB-downsampled and `more` is false. With `page`, rows are a page and `more` is true when another page remains. |
+| `/gpt/datasets/:id` | GET | owner (`IsOwner`; another user is 404) | Read a stored dataset. Mounted only when `uiBlocks` is on. Query: `grain` (`hour` \| `day` \| `week` \| `month`), `limit` (default 500, max 1000), `page`. Response `data`: `{columns, rows, rowCount, page, more}`. `grain` buckets the first date column in UTC (an offset is converted before `startOf`; null date cells are skipped; number columns are summed). Without `page`, a series longer than `limit` is LTTB-downsampled and `more` is false. With `page`, rows are a page and `more` is true when another page remains. |
 | `/gpt/actions` | POST | `IsAuthenticated` plus history owner (another user is 403) | Run a host callback. Mounted only when `uiBlocks` is on, on the `/gpt` path. Body: `{historyId, messageId, blockId, elementId, name, payload?}`. Unknown `name` is 404. A payload that fails the host schema is 400 with `meta.fields`. The handler has 10 seconds (`actionTimeoutMs` can set another cap) and then 504. Response `data`: `{text?, blocks?, replace?}`. An invalid `blocks` document is 500. Logged as `AIRequest` `requestType: "ui_action"`. |
 
 Generated images (image-output models such as `gemini-3-pro-image`) arrive as SSE `image` events: `{image: {mimeType, url}}` with a base64 data URL. Each image is sent once, even when the model reports it both as a stream file part and in the final `result.files`. The saved assistant prompt stores one `image` content part per image and `text: ""` when there is no text. On later turns, `buildMessages` sends an image-only assistant prompt to the model as the text `[Generated image]`, because providers reject empty assistant turns.

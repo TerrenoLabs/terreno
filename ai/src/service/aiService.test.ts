@@ -978,6 +978,20 @@ describe("AIService", () => {
       expect(second).toContain("TOO_MANY_POINTS");
     });
 
+    it("throws 502 when the model fails before a document exists", async () => {
+      const model = createMockModel(validDocument);
+      model.doGenerate = mock(async () => {
+        throw new Error("model unavailable");
+      });
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await expect(service.generateBlocks({prompt: "Say hello"})).rejects.toMatchObject({
+        status: 502,
+        title: "Block generation failed",
+      });
+      expect(model.doGenerate).toHaveBeenCalledTimes(1);
+    });
+
     it("throws 422 and logs error codes when the repair still fails", async () => {
       const model = createMockModel(overLimitDocument);
       const service = new AIService({model: model as unknown as LanguageModel});

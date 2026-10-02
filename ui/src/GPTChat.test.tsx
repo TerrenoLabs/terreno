@@ -1408,6 +1408,57 @@ describe("GPTChat asks", () => {
     });
   });
 
+  it("keeps callback text after the message that started it", async () => {
+    const onBlockCallback = mock(async () => ({text: "Export started"}));
+    const {getByText, toJSON} = renderChat({
+      currentMessages: [
+        {content: BLOCKS_REPLY, id: "m1", role: "assistant"},
+        {content: "Next question", id: "m2", role: "user"},
+      ],
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      uiBlocks: true,
+    });
+    await pressControl(getByText("Export"));
+    await waitFor(() => {
+      const tree = JSON.stringify(toJSON());
+      const statusAt = tree.indexOf("Export started");
+      const nextAt = tree.indexOf("Next question");
+      assert.isAtLeast(statusAt, 0);
+      assert.isBelow(statusAt, nextAt);
+    });
+  });
+
+  it("drops a callback result after the history changes", async () => {
+    let finish: (result: {text: string}) => void = () => {};
+    const onBlockCallback = mock(
+      () =>
+        new Promise<{text: string}>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const props = {
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      histories,
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      onCreateHistory: () => {},
+      onDeleteHistory: () => {},
+      onSelectHistory: () => {},
+      onSubmit: () => {},
+      uiBlocks: true,
+    };
+    const {getByText, queryByText, rerender} = renderWithTheme(
+      <GPTChat {...props} currentHistoryId="h1" />
+    );
+    await pressControl(getByText("Export"));
+    rerender(<GPTChat {...props} currentHistoryId="h2" />);
+    await act(async () => {
+      finish({text: "Export started"});
+    });
+    assert.isNull(queryByText("Export started"));
+  });
+
   it("renders finished blocks and a spinner while a document is streaming", async () => {
     const {getByTestId, getByText, queryByTestId, queryByText, UNSAFE_getAllByType} = renderChat({
       currentMessages: [{content: BLOCKS_STREAMING, id: "m1", role: "assistant"}],

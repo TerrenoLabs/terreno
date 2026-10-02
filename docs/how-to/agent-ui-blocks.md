@@ -36,7 +36,7 @@ addGptRoutes(router, {
 
 An actions block that omits `id` gets one before storage. A block document written in the same step as a tool call is kept when no later step has text, so the first reply still shows. When the stored document differs from the text already streamed, the chat receives `{replace: "text"}`.
 
-Outside a chat turn, `AIService.generateBlocks({prompt})` returns one validated document. Temperature is 0. A failed check is repaired once. Pass `repair: false` to skip that retry. A second failure throws 422 and logs `metadata.errorCodes`.
+Outside a chat turn, `AIService.generateBlocks({prompt})` returns one validated document. Temperature is 0. A failed check is repaired once. Pass `repair: false` to skip that retry. A second validation failure throws 422 and logs `metadata.errorCodes`. A model or network error throws 502 and is not repaired.
 
 ## Store rows for a ref chart
 
@@ -80,13 +80,13 @@ The path is `/gpt/actions`, so a limiter on `/gpt` covers it. Each call is store
 4. `onBlockCallback` calls `usePostGptActionsMutation`. Return that result so a `{replace: "block"}` swaps the block.
 5. `resolveDataset` calls `useLazyGetGptDatasetsByIdQuery` and returns `{columns, rows, source: "inline"}`.
 6. An `open` action uses `router.push` for a `/…` route and `Linking.openURL` for an `https` URL.
-7. When the `{blocks}` event is `ok`, set `blockNote` to the top-level block count, such as `3 components`.
+7. When the `{blocks}` event is `ok`, set `blockNote` to the top-level block count, such as `3 components`. Recompute that caption from stored assistant YAML when a history is loaded again.
 
 ## Turn blocks on in the example backend
 
 `example-backend` passes `uiBlocks` with `repair: true` and one host callback, `exportDataset`. Its payload is `{dataset: string}`. The handler returns `{replace: "block", blocks}` with a badge that names that dataset. Dataset TTL stays at the default, so stored rows are kept.
 
-The per-request tool `todoStats` counts the signed-in user's open and completed todos, calls `registerAiDataset`, and returns `datasetId`. A chart dataset uses `source: ref` and that id. Columns are `status` and `count`.
+The per-request tool `todoStats` counts the signed-in user's open and completed todos, calls `registerAiDataset`, and returns `datasetId`. It stores the rows on `req.body.historyId` when that id belongs to the caller. With no history id it uses the caller's newest history, and with no history it returns `{datasetId: null, rowCount: 0}`. A chart dataset uses `source: ref` and that id. Columns are `status` and `count`.
 
 `GPTChat` lists `exportDataset` in `hostActions`, so that callback stays enabled. The e2e mock also allows `export_csv`.
 
@@ -100,5 +100,5 @@ is true, finished top-level blocks render and a spinner marks the block still ar
 - `callback` calls `onBlockCallback`. Return `{replace: "block", blocks}` to swap that
   block, or `{text}` to append an assistant message. The button shows loading until the
   promise settles.
-- Pass `hostActions` to disable callbacks the host does not run, and `resolveDataset` to
-  load `ref` datasets.
+- Pass `hostActions` to disable callbacks the host does not run, `resolveDataset` to
+  load `ref` datasets, and `resolveImage` to turn a `file:` image id into a URL.

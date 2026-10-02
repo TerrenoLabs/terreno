@@ -30,6 +30,33 @@ const inline = {
 };
 
 describe("lintDocument", () => {
+  it("rejects an element id that matches another id in the document", () => {
+    const validated = validateBlocks(
+      documentWith({
+        blocks: [
+          {
+            elements: [
+              {
+                action: {kind: "reply", text: "Again"},
+                id: "followups",
+                text: "Again",
+                type: "button",
+              },
+            ],
+            id: "followups",
+            type: "actions",
+          },
+        ],
+      })
+    );
+    expect(validated.ok).toBe(false);
+    if (validated.ok) {
+      return;
+    }
+    expect(validated.errors.map((error) => error.code)).toEqual(["DUPLICATE_ID"]);
+    expect(validated.errors[0]?.path).toBe("blocks[0].elements[0].id");
+  });
+
   it("rejects a callback that is not in the host allowlist", () => {
     const doc = documentWith({
       blocks: [

@@ -157,11 +157,11 @@ const bucketKey = (value: AIDatasetCell, grain: DatasetGrain): string => {
   if (typeof value !== "string") {
     return "";
   }
-  const parsed = DateTime.fromISO(value, {zone: "utc"});
+  const parsed = DateTime.fromISO(value, {setZone: true});
   if (!parsed.isValid) {
     return value;
   }
-  return parsed.startOf(grain).toUTC().toISO() ?? value;
+  return parsed.toUTC().startOf(grain).toUTC().toISO() ?? value;
 };
 
 /**
@@ -179,6 +179,9 @@ export const bucketByGrain = (
   }
   const grouped = new Map<string, AIDatasetCell[]>();
   for (const row of rows) {
+    if (row[dateIndex] === null || row[dateIndex] === undefined) {
+      continue;
+    }
     const key = bucketKey(row[dateIndex], grain);
     const existing = grouped.get(key);
     if (!existing) {

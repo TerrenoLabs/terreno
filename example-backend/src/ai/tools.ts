@@ -23,8 +23,10 @@ const columns = [
  * The model puts the returned `datasetId` on a chart dataset with `source: ref`.
  */
 export const createTodoStatsTool = ({
+  historyId,
   userId,
 }: {
+  historyId?: mongoose.Types.ObjectId | string;
   userId: mongoose.Types.ObjectId | string | undefined;
 }): Record<string, Tool> => ({
   [TODO_STATS_TOOL]: tool({
@@ -38,8 +40,13 @@ export const createTodoStatsTool = ({
       }
       const open = await Todo.countDocuments({completed: false, ownerId: userId});
       const done = await Todo.countDocuments({completed: true, ownerId: userId});
-      const [latest] = await GptHistory.find({deleted: false, userId}).sort({created: -1}).limit(1);
-      const history = latest ?? (await GptHistory.create({prompts: [], userId}));
+      const history = historyId
+        ? await GptHistory.findOneOrNone({_id: historyId, deleted: false, userId})
+        : ((await GptHistory.find({deleted: false, userId}).sort({created: -1}).limit(1))[0] ??
+          null);
+      if (!history) {
+        return {datasetId: null, rowCount: 0};
+      }
       const registered = await registerAiDataset({
         columns,
         historyId: history._id,

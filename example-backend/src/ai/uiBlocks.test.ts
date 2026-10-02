@@ -61,6 +61,19 @@ describe("example ui blocks", () => {
 
     expect(stored?.userId.toString()).toBe(user._id.toString());
     expect(stored?.historyId.toString()).toBe(history._id.toString());
+
+    const olderStats = createTodoStatsTool({
+      historyId: older._id.toString(),
+      userId: user._id as mongoose.Types.ObjectId,
+    })[TODO_STATS_TOOL];
+    const olderResult = (await olderStats?.execute?.(
+      {},
+      {messages: [], toolCallId: "call_old"}
+    )) as {
+      datasetId: string;
+    };
+    const olderStored = await AIDataset.findById(olderResult.datasetId);
+    expect(olderStored?.historyId.toString()).toBe(older._id.toString());
     expect(stored?.columns.map((column) => ({name: column.name, type: column.type}))).toEqual([
       {name: "status", type: "string"},
       {name: "count", type: "number"},

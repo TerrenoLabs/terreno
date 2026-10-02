@@ -2,7 +2,7 @@ import {describe, expect, it, mock} from "bun:test";
 import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
-import {ActivityIndicator} from "react-native";
+import {ActivityIndicator, Image as NativeImage} from "react-native";
 
 import {sharedResponsiveBreakpointStore} from "../ResponsiveBreakpoint";
 import {renderWithTheme} from "../test-utils";
@@ -221,6 +221,122 @@ blocks:
     );
     const {getByText} = renderWithTheme(view);
     await press(getByText("Weekly"));
+  });
+
+  it("highlights the segment that matches the chart and switches a table", async () => {
+    const document = `v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Jan, 12]
+  weekly:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [W1, 4]
+blocks:
+  - type: chart
+    id: signups_chart
+    kind: bar
+    data: weekly
+    x: month
+    y: count
+  - type: table
+    id: signups_table
+    data: signups
+  - type: actions
+    id: row
+    elements:
+      - type: segmented
+        id: grain
+        target: signups_chart
+        options:
+          - label: Month
+            data: signups
+          - label: Week
+            data: weekly
+      - type: button
+        id: show_week
+        text: Show week
+        action:
+          kind: select
+          target: signups_table
+          data: weekly
+`;
+    const {getAllByText, getByText, queryByText} = renderWithTheme(
+      <BlocksView document={document} />
+    );
+    const segmentStyle = (label: string): {backgroundColor?: string} | undefined => {
+      let node = getByText(label).parent;
+      for (let depth = 0; depth < 4 && node; depth += 1) {
+        const style = node.props?.style as {backgroundColor?: string} | undefined;
+        if (style && "backgroundColor" in style) {
+          return style;
+        }
+        node = node.parent;
+      }
+      return undefined;
+    };
+    expect(segmentStyle("Week")?.backgroundColor).toBeTruthy();
+    expect(segmentStyle("Month")?.backgroundColor).toBeUndefined();
+    expect(getByText("Jan")).toBeTruthy();
+    await press(getByText("Show week"));
+    expect(queryByText("Jan")).toBeNull();
+    expect(getAllByText("W1").length).toBe(2);
+  });
+
+  it("clears a ref spinner when the host fetch fails", async () => {
+    const document = `v: 1
+datasets:
+  signups:
+    source: ref
+    id: ds_signups
+blocks:
+  - type: chart
+    kind: bar
+    data: signups
+    x: month
+    y: count
+`;
+    const resolveDataset = mock(async () => {
+      throw new Error("offline");
+    });
+    const {UNSAFE_queryAllByType} = renderWithTheme(
+      <BlocksView document={document} resolveDataset={resolveDataset} />
+    );
+    await waitFor(() => {
+      expect(UNSAFE_queryAllByType(ActivityIndicator)).toHaveLength(0);
+    });
+  });
+
+  it("keeps a file ref off Image until resolveImage returns a url", async () => {
+    const document = `v: 1
+blocks:
+  - type: image
+    alt: Receipt
+    src: file:6710c2a4f1
+`;
+    const unresolved = renderWithTheme(<BlocksView document={document} />);
+    expect(unresolved.getByText("Receipt")).toBeTruthy();
+    expect(unresolved.UNSAFE_queryAllByType(NativeImage)).toHaveLength(0);
+    unresolved.unmount();
+
+    const resolveImage = mock(async () => "https://cdn.example/receipt.png");
+    const loaded = renderWithTheme(<BlocksView document={document} resolveImage={resolveImage} />);
+    await waitFor(() => {
+      expect(loaded.UNSAFE_getAllByType(NativeImage)[0]?.props.source.uri).toBe(
+        "https://cdn.example/receipt.png"
+      );
+    });
+    expect(resolveImage).toHaveBeenCalledWith("6710c2a4f1");
   });
 
   it("loads a ref dataset through resolveDataset", async () => {

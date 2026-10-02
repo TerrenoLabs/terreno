@@ -238,6 +238,16 @@ const mapIssue = (issue: z.core.$ZodIssue, root: unknown): BlockError[] => {
     ];
   }
   if (issue.code === "too_small") {
+    if (issue.origin === "number" || issue.origin === "int") {
+      return [
+        error({
+          code: "INVALID_TYPE",
+          fix: `Set ${subject(path)} to an integer of at least ${String(issue.minimum)}.`,
+          message: `${subject(path)} must be an integer of at least ${String(issue.minimum)}.`,
+          path,
+        }),
+      ];
+    }
     if (issue.origin === "array") {
       return [
         error({
@@ -258,10 +268,13 @@ const mapIssue = (issue: z.core.$ZodIssue, root: unknown): BlockError[] => {
     ];
   }
   if (issue.code === "invalid_format") {
+    const isRefId = /^datasets\.[^.]+\.id$/.test(path);
     return [
       error({
         code: "INVALID_FORMAT",
-        fix: "Use a lowercase id starting with a letter, then letters, digits, or underscores.",
+        fix: isRefId
+          ? "Use 1 to 80 letters, digits, underscores, or hyphens."
+          : "Use a lowercase id starting with a letter, then letters, digits, or underscores.",
         message: `${subject(path)} does not match the required format.`,
         path,
       }),

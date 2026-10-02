@@ -351,7 +351,11 @@ export class AIService {
     };
 
     const first = await requestDocument(prompt);
-    const firstCheck = first.document ? validateBlocks(first.document) : undefined;
+    if (!first.document) {
+      await finish({error: first.error ?? "Block generation failed"});
+      throw new APIError({status: 502, title: "Block generation failed"});
+    }
+    const firstCheck = validateBlocks(first.document);
     if (first.document && firstCheck?.ok) {
       await finish({response: JSON.stringify(first.document)});
       return first.document;
@@ -380,7 +384,11 @@ export class AIService {
     const second = await requestDocument(
       `${prompt}\n\nErrors:\n${firstDetail ?? "invalid document"}`
     );
-    const secondCheck = second.document ? validateBlocks(second.document) : undefined;
+    if (!second.document) {
+      await finish({error: second.error ?? "Block generation failed"});
+      throw new APIError({status: 502, title: "Block generation failed"});
+    }
+    const secondCheck = validateBlocks(second.document);
     if (second.document && secondCheck?.ok) {
       await finish({response: JSON.stringify(second.document)});
       return second.document;

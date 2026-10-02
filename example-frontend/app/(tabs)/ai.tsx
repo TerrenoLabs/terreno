@@ -91,8 +91,10 @@ const mapHistoryToChat = (history: GptHistory): GPTChatHistory => ({
   id: history.id,
   prompts: history.prompts.map((p) => {
     const ask = askFromHistoryPrompt({pendingAsk: history.pendingAsk, prompt: p});
+    const blockNote = p.type === "assistant" ? componentCaption(p.text) : undefined;
     return {
       ...(ask ? {ask} : {}),
+      ...(blockNote ? {blockNote} : {}),
       content: p.text,
       contentParts: p.content?.map((c): MessageContentPart => {
         if (c.type === "text") {

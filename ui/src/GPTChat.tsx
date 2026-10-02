@@ -176,6 +176,8 @@ export interface GPTChatProps {
   resolveAskFiles?: AskFilesResolver;
   /** Loads a `ref` dataset while `uiBlocks` is on. */
   resolveDataset?: BlocksViewProps["resolveDataset"];
+  /** Turns a `file:` image id into a URL while `uiBlocks` is on. */
+  resolveImage?: BlocksViewProps["resolveImage"];
   selectedModel?: string;
   /**
    * Optional consumer-owned character for an empty chat. Terreno does not ship a
@@ -622,6 +624,7 @@ const AssistantBlocks = ({
   overrides,
   pendingElementIds,
   resolveDataset,
+  resolveImage,
 }: {
   allowHtml?: boolean;
   content: string;
@@ -633,6 +636,7 @@ const AssistantBlocks = ({
   overrides?: Record<string, Block>;
   pendingElementIds?: readonly string[];
   resolveDataset?: BlocksViewProps["resolveDataset"];
+  resolveImage?: BlocksViewProps["resolveImage"];
 }): React.ReactElement => {
   if (isPartial) {
     const partial = parseBlocksPartial(content);
@@ -655,6 +659,7 @@ const AssistantBlocks = ({
             overrides={overrides}
             pendingElementIds={pendingElementIds}
             resolveDataset={resolveDataset}
+            resolveImage={resolveImage}
             streaming
           />
         ) : null}
@@ -683,6 +688,7 @@ const AssistantBlocks = ({
       overrides={overrides}
       pendingElementIds={pendingElementIds}
       resolveDataset={resolveDataset}
+      resolveImage={resolveImage}
       testID={`gpt-blocks-${messageId}`}
     />
   );
@@ -699,6 +705,7 @@ const MessageText = ({
   overrides,
   pendingElementIds,
   resolveDataset,
+  resolveImage,
   role,
   uiBlocks,
 }: {
@@ -712,6 +719,7 @@ const MessageText = ({
   overrides?: Record<string, Block>;
   pendingElementIds?: readonly string[];
   resolveDataset?: BlocksViewProps["resolveDataset"];
+  resolveImage?: BlocksViewProps["resolveImage"];
   role: string;
   uiBlocks: boolean;
 }): React.ReactElement => {
@@ -728,6 +736,7 @@ const MessageText = ({
         overrides={overrides}
         pendingElementIds={pendingElementIds}
         resolveDataset={resolveDataset}
+        resolveImage={resolveImage}
       />
     );
   }
@@ -937,7 +946,7 @@ const AskTranscriptItem = ({
 
 const MessageList = ({
   allowHtml,
-  appendedMessages,
+  appendedByMessage,
   askErrors,
   blockOverrides,
   currentMessages,
@@ -951,10 +960,11 @@ const MessageList = ({
   pendingElements,
   resolveAskFiles,
   resolveDataset,
+  resolveImage,
   uiBlocks,
 }: {
   allowHtml?: boolean;
-  appendedMessages: GPTChatMessage[];
+  appendedByMessage: Record<string, GPTChatMessage[]>;
   askErrors?: Record<string, AskValidationError[]>;
   blockOverrides: Record<string, Record<string, Block>>;
   currentMessages: GPTChatMessage[];
@@ -968,6 +978,7 @@ const MessageList = ({
   pendingElements: Record<string, readonly string[]>;
   resolveAskFiles?: AskFilesResolver;
   resolveDataset?: BlocksViewProps["resolveDataset"];
+  resolveImage?: BlocksViewProps["resolveImage"];
   uiBlocks: boolean;
 }): React.ReactElement => {
   const askToolCallIds = new Set<string>();
@@ -984,12 +995,14 @@ const MessageList = ({
   const lastIndex = currentMessages.length - 1;
   const streamingIndex =
     uiBlocks && isStreaming && currentMessages[lastIndex]?.role === "assistant" ? lastIndex : -1;
-  const messages =
-    appendedMessages.length === 0 ? currentMessages : [...currentMessages, ...appendedMessages];
+  const rows = currentMessages.flatMap((message, sourceIndex) => {
+    const extras = message.id === undefined ? [] : (appendedByMessage[message.id] ?? []);
+    return [{message, sourceIndex}, ...extras.map((extra) => ({message: extra, sourceIndex: -1}))];
+  });
 
   return (
     <>
-      {messages.map((message, index) => {
+      {rows.map(({message, sourceIndex}, index) => {
         if (message.role === "tool-call" && message.ask) {
           return (
             <AskTranscriptItem
@@ -1045,12 +1058,13 @@ const MessageList = ({
                 content={message.content}
                 hostActions={hostActions}
                 imageHosts={imageHosts}
-                isPartial={index === streamingIndex}
+                isPartial={streamingIndex >= 0 && sourceIndex === streamingIndex}
                 messageId={messageId}
                 onBlockEvent={onBlockEvent}
                 overrides={blockOverrides[messageId]}
                 pendingElementIds={pendingElements[messageId]}
                 resolveDataset={resolveDataset}
+                resolveImage={resolveImage}
                 role={message.role}
                 uiBlocks={uiBlocks}
               />
@@ -1061,9 +1075,9 @@ const MessageList = ({
               ) : null}
               <AssistantActions
                 handleCopyMessage={handleCopyMessage}
-                index={index}
+                index={sourceIndex}
                 message={message}
-                onRateFeedback={onRateFeedback}
+                onRateFeedback={sourceIndex >= 0 ? onRateFeedback : undefined}
               />
             </Box>
           </Box>
@@ -1253,6 +1267,7 @@ export const GPTChat = ({
   onUpdateTitle,
   resolveAskFiles,
   resolveDataset,
+  resolveImage,
   selectedModel,
   mascot,
   suggestedPrompts,
@@ -1276,13 +1291,15 @@ export const GPTChat = ({
   const [apiKeyDraft, setApiKeyDraft] = useState(geminiApiKey ?? "");
   const [blockOverrides, setBlockOverrides] = useState<Record<string, Record<string, Block>>>({});
   const [pendingElements, setPendingElements] = useState<Record<string, string[]>>({});
-  const [appendedMessages, setAppendedMessages] = useState<GPTChatMessage[]>([]);
+  const [appendedByMessage, setAppendedByMessage] = useState<Record<string, GPTChatMessage[]>>({});
   const [blockHistoryId, setBlockHistoryId] = useState(currentHistoryId);
+  const historyIdRef = useRef(currentHistoryId);
+  historyIdRef.current = currentHistoryId;
   if (blockHistoryId !== currentHistoryId) {
     setBlockHistoryId(currentHistoryId);
     setBlockOverrides({});
     setPendingElements({});
-    setAppendedMessages([]);
+    setAppendedByMessage({});
   }
 
   const runBlockCallback = useCallback(
@@ -1291,18 +1308,28 @@ export const GPTChat = ({
         ...current,
         [event.messageId]: [...(current[event.messageId] ?? []), event.elementId],
       }));
+      const historyAtStart = historyIdRef.current;
       try {
         const result = await onBlockCallback?.(event);
+        if (historyIdRef.current !== historyAtStart) {
+          return;
+        }
         if (result?.text) {
           const text = result.text;
-          setAppendedMessages((current) => [
-            ...current,
-            {
-              content: text,
-              id: `block-text-${event.messageId}-${event.elementId}-${current.length}`,
-              role: "assistant",
-            },
-          ]);
+          setAppendedByMessage((current) => {
+            const existing = current[event.messageId] ?? [];
+            return {
+              ...current,
+              [event.messageId]: [
+                ...existing,
+                {
+                  content: text,
+                  id: `block-text-${event.messageId}-${event.elementId}-${existing.length}`,
+                  role: "assistant",
+                },
+              ],
+            };
+          });
         }
         if (result?.replace === "block" && result.blocks !== undefined) {
           const block = replacementBlock(result.blocks);
@@ -1575,7 +1602,7 @@ export const GPTChat = ({
                 <>
                   <MessageList
                     allowHtml={allowHtml}
-                    appendedMessages={appendedMessages}
+                    appendedByMessage={appendedByMessage}
                     askErrors={askErrors}
                     blockOverrides={blockOverrides}
                     currentMessages={currentMessages}
@@ -1589,6 +1616,7 @@ export const GPTChat = ({
                     pendingElements={pendingElements}
                     resolveAskFiles={resolveAskFiles}
                     resolveDataset={resolveDataset}
+                    resolveImage={resolveImage}
                     uiBlocks={uiBlocks}
                   />
                   <StreamingIndicator

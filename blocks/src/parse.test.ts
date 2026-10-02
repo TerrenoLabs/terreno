@@ -206,6 +206,30 @@ describe("validateBlocks limits", () => {
     expect(parsed.errors.map((item) => item.code)).toEqual(["YAML_FEATURE_DISALLOWED"]);
   });
 
+  it("describes a ref id and a zero limit with the rules those fields use", () => {
+    const refDocument: Record<string, unknown> = {v: 1};
+    refDocument.datasets = {signups: {id: "bad.id", source: "ref"}};
+    refDocument.blocks = [{type: "divider"}];
+    const refId = validateBlocks(refDocument);
+    expect(refId.ok).toBe(false);
+    if (!refId.ok) {
+      const idError = refId.errors.find((error) => error.path === "datasets.signups.id");
+      expect(idError?.code).toBe("INVALID_FORMAT");
+      expect(idError?.fix).toContain("hyphens");
+    }
+
+    const limitDocument: Record<string, unknown> = {v: 1};
+    limitDocument.datasets = {signups: {id: "ds_signups", limit: 0, source: "ref"}};
+    limitDocument.blocks = [{type: "divider"}];
+    const limit = validateBlocks(limitDocument);
+    expect(limit.ok).toBe(false);
+    if (!limit.ok) {
+      const limitError = limit.errors.find((error) => error.path === "datasets.signups.limit");
+      expect(limitError?.code).toBe("INVALID_TYPE");
+      expect(limitError?.fix).toContain("integer");
+    }
+  });
+
   it("maps type, size, format, and union failures onto closed codes", () => {
     const long = "x".repeat(201);
     const cases: {code: string; doc: Record<string, unknown>}[] = [

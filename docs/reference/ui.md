@@ -330,9 +330,11 @@ Pass `uiBlocks` to render each assistant message through `BlocksView`. A streami
 shows each finished top-level block and a spinner for the block still arriving. `reply`
 calls `onSubmit` with the button text. `open` and `select` call `onBlockAction`. `callback`
 calls `onBlockCallback` and the button stays loading until that promise settles. Return
-`{replace: "block", blocks}` to swap that block, or `{text}` to append an assistant message.
-`hostActions` disables callback names the host did not list. `resolveDataset` loads `ref`
-datasets.
+`{replace: "block", blocks}` to swap that block, or `{text}` to place an assistant message
+immediately after the message that started the callback. A result that arrives after
+`currentHistoryId` changes is dropped. `hostActions` disables callback names the host did
+not list. `resolveDataset` loads `ref` datasets. `resolveImage` turns a `file:` image id
+into a URL.
 
 ```tsx
 <GPTChat
@@ -398,7 +400,11 @@ as `document`. Leaf blocks in this slice are `heading`, `text`, `metric`, `badge
 `AreaChart`, or `DonutChart` from an inline dataset or from `points`. The series is only
 `{label, value}` — a point color in the document is not passed through. A `table` draws
 `DataTable`. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the
-chart shows `loading` while that promise is in flight.
+chart shows `loading` while that promise is in flight. A rejected fetch clears that
+loading state. A segmented control highlights the option whose `data` matches the target
+chart or table. A `select` action switches a table the same way it switches a chart.
+An image `file:` ref is not passed to `Image` until `resolveImage` returns a URL; the
+alt text still shows.
 
 A string that is not a document becomes one `text` block. A document that fails
 `validateBlocks` shows a `Banner` with the first three errors and the raw text inside a

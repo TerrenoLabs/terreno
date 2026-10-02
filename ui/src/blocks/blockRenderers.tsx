@@ -20,6 +20,7 @@ import {SectionDivider} from "../SectionDivider";
 import {SegmentedControl} from "../SegmentedControl";
 import {Text} from "../Text";
 import {chartHeight, chartPoints, datasetToPoints} from "./datasetToPoints";
+import {fileRefId} from "./useResolvedImages";
 
 export interface BlockRenderContext {
   allowHtml?: boolean;
@@ -30,6 +31,10 @@ export interface BlockRenderContext {
   overrides?: Record<string, Block>;
   pendingElementIds?: ReadonlySet<string>;
   resolved: Record<string, InlineDataset | undefined>;
+  /** URLs for `file:` image ids. An unset id is not passed to `Image`. */
+  resolvedImages?: Record<string, string | undefined>;
+  /** Dataset name currently bound on a chart or table id, before any local selection. */
+  boundData?: Record<string, string>;
   selections: Record<string, string>;
   setSelection: (target: string, data: string) => void;
 }
@@ -127,13 +132,16 @@ export const renderBlock = (
           <Banner dismissible={false} status={block.status ?? "info"} text={block.text} />
         </Box>
       );
-    case "image":
+    case "image": {
+      const fileId = fileRefId(block.src);
+      const src = fileId === undefined ? block.src : context.resolvedImages?.[fileId];
       return (
         <Box key={path} testID={path}>
-          <Image alt={block.alt} color="transparent" naturalWidth={320} src={block.src} />
+          {src ? <Image alt={block.alt} color="transparent" naturalWidth={320} src={src} /> : null}
           <Text size="sm">{block.alt}</Text>
         </Box>
       );
+    }
     case "details":
       return (
         <Accordion isCollapsed={false} key={path} title={block.title}>
@@ -191,7 +199,9 @@ export const renderBlock = (
       );
     }
     case "table": {
-      const dataset = context.resolved[block.data];
+      const dataName =
+        (block.id !== undefined ? context.selections[block.id] : undefined) ?? block.data;
+      const dataset = dataName === undefined ? undefined : context.resolved[dataName];
       const names = block.columns ?? dataset?.columns.map((column) => column.name) ?? [];
       const indexes = names.map(
         (name) => dataset?.columns.findIndex((column) => column.name === name) ?? -1
@@ -214,7 +224,8 @@ export const renderBlock = (
         <Box direction="row" gap={2} key={path} testID={path} wrap>
           {block.elements.map((element) => {
             if (element.type === "segmented") {
-              const selectedData = context.selections[element.target];
+              const selectedData =
+                context.selections[element.target] ?? context.boundData?.[element.target];
               const selectedIndex = Math.max(
                 0,
                 element.options.findIndex((option) => option.data === selectedData)

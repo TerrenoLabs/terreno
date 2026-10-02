@@ -597,7 +597,10 @@ const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
   const tools: Record<string, Tool> = {
     ...getMCPTools(req.user as User | undefined),
     ...createTodoTools({userId: user?._id}),
-    ...createTodoStatsTool({userId: user?._id}),
+    ...createTodoStatsTool({
+      historyId: typeof req.body?.historyId === "string" ? req.body.historyId : undefined,
+      userId: user?._id,
+    }),
   };
 
   const apiKey = req.headers["x-ai-api-key"] as string | undefined;

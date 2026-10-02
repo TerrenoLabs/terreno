@@ -371,6 +371,17 @@ export const lintDocument = (
     if (block.type === "actions") {
       block.elements.forEach((element, index) => {
         const elementPath = `${path}.elements[${index}]`;
+        if (seenIds.has(element.id)) {
+          errors.push(
+            issue({
+              code: "DUPLICATE_ID",
+              fix: `Give ${elementPath} a unique id.`,
+              message: BLOCK_ERROR_CODES.DUPLICATE_ID,
+              path: `${elementPath}.id`,
+            })
+          );
+        }
+        seenIds.add(element.id);
         if (element.type === "segmented" && !selectableIds.has(element.target)) {
           errors.push(
             issue({

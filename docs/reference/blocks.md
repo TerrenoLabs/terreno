@@ -54,7 +54,7 @@ A dataset name matches `^[a-z][a-z0-9_]{0,63}$`. A document has at most 8 datase
 | `image` | `alt`, `src` | `id` |
 | `details` | `title`, `text` | `id` |
 
-`src` is a `data:image` URL, a `file:` ref, or an `https` URL. `https` is allowed only when the hostname is in `validateBlocks` `imageHosts` (the server option is `uiBlocks.imageHosts`). Anything else is `IMAGE_HOST_NOT_ALLOWED`. An empty list rejects every `https` image.
+`src` is a `data:image` URL, a `file:` ref (`file:` plus an id), or an `https` URL. `https` is allowed only when the hostname is in `validateBlocks` `imageHosts` (the server option is `uiBlocks.imageHosts`). Anything else is `IMAGE_HOST_NOT_ALLOWED`. An empty list rejects every `https` image. A ref dataset `id` uses 1–80 letters, digits, underscores, or hyphens. A block or action-element `id` stays lowercase and starts with a letter. `limit` of `0` is `INVALID_TYPE` (an integer of at least 1), not `TOO_SHORT`.
 
 Warnings do not block rendering:
 
@@ -137,13 +137,13 @@ heuristics and does not fail `ok`.
 | `DATASET_NOT_FOUND` | A chart or table names a dataset the document does not define. |
 | `DATASET_TOO_LARGE` | A dataset has more than 500 rows or 12 columns. |
 | `DEPTH_EXCEEDED` | A `columns` or `card` block is nested inside another layout block. |
-| `DUPLICATE_ID` | An id or a column name is used more than once. |
+| `DUPLICATE_ID` | A block id, an action-element id, or a column name is used more than once. |
 | `HTML_DISABLED` | An html block is present and this host has not turned HTML on. |
 | `HTML_TOO_LARGE` | An html block is larger than 100,000 bytes. |
 | `IMAGE_HOST_NOT_ALLOWED` | An image URL is not a `data:image` URL, a `file:` ref, or an `https` URL on an allowed host. |
 | `INVALID_ENUM` | A value is not one of the allowed values. |
 | `INVALID_FORMAT` | A string does not match its required format. |
-| `INVALID_TYPE` | A value has the wrong type. |
+| `INVALID_TYPE` | A value has the wrong type, including a numeric field below its minimum. |
 | `KEY_ORDER` | Top-level keys are not in the order `v`, `datasets`, `blocks`. |
 | `MISSING_REQUIRED` | A required field is missing. |
 | `NOT_A_DOCUMENT` | The reply is not one YAML or JSON mapping with a `v` field. |

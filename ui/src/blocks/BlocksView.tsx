@@ -7,6 +7,7 @@ import {BlocksError} from "./BlocksError";
 import {type BlockRenderContext, renderBlock} from "./blockRenderers";
 import {useBlockSelections} from "./useBlockSelections";
 import {useResolvedDatasets} from "./useResolvedDatasets";
+import {useResolvedImages} from "./useResolvedImages";
 
 export type {BlocksViewProps} from "../Common";
 
@@ -41,6 +42,7 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
   overrides,
   pendingElementIds,
   resolveDataset,
+  resolveImage,
   streaming = false,
   testID,
 }) => {
@@ -57,14 +59,38 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
     resolveDataset,
   });
   const {selections, setSelection} = useBlockSelections();
+  const resolvedImages = useResolvedImages({
+    blocks: validated?.ok ? validated.doc.blocks : undefined,
+    resolveImage,
+  });
+  const boundData: Record<string, string> = {};
+  if (validated?.ok) {
+    const visit = (blocks: readonly Block[]): void => {
+      for (const block of blocks) {
+        if (
+          (block.type === "chart" || block.type === "table") &&
+          block.id !== undefined &&
+          block.data !== undefined
+        ) {
+          boundData[block.id] = block.data;
+        }
+        if (block.type === "columns" || block.type === "card") {
+          visit(block.children);
+        }
+      }
+    };
+    visit(validated.doc.blocks);
+  }
   const context: BlockRenderContext = {
     allowHtml,
+    boundData,
     hostActions,
     loadingIds,
     onAction,
     overrides,
     pendingElementIds: pendingElementIds === undefined ? undefined : new Set(pendingElementIds),
     resolved,
+    resolvedImages,
     selections,
     setSelection,
     streaming,

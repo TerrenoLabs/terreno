@@ -51,8 +51,12 @@ export const useResolvedDatasets = ({
     setLoadingIds(new Set(currentRefs.map((ref) => ref.name)));
     void Promise.all(
       currentRefs.map(async (ref) => {
-        const rows = await resolveDataset({grain: ref.grain, id: ref.id, limit: ref.limit});
-        return [ref.name, rows] as const;
+        try {
+          const rows = await resolveDataset({grain: ref.grain, id: ref.id, limit: ref.limit});
+          return [ref.name, rows] as const;
+        } catch {
+          return [ref.name, undefined] as const;
+        }
       })
     ).then((pairs) => {
       if (cancelled) {

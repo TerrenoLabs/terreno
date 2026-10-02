@@ -67,6 +67,25 @@ describe("ai datasets", () => {
     ).rejects.toMatchObject({status: 413});
   });
 
+  it("buckets an offset timestamp into the same UTC day as a Z timestamp and skips null dates", () => {
+    const columns = [
+      {name: "at", type: "date" as const},
+      {name: "count", type: "number" as const},
+    ];
+    const bucketed = bucketByGrain(
+      columns,
+      [
+        ["2026-03-01T23:30:00.000Z", 1],
+        ["2026-03-02T01:30:00.000+02:00", 4],
+        [null, 9],
+      ],
+      "day"
+    );
+    expect(bucketed).toHaveLength(1);
+    expect(bucketed[0]?.[1]).toBe(5);
+    expect(String(bucketed[0]?.[0])).toContain("2026-03-01");
+  });
+
   it("buckets a date column by week", () => {
     const rows = hourlyRows(24 * 14);
     const bucketed = bucketByGrain(columns, rows, "week");

@@ -1,6 +1,7 @@
 import {afterEach, beforeEach, describe, it} from "bun:test";
 import {BackgroundTask} from "@terreno/api";
 import {assert} from "chai";
+import mongoose from "mongoose";
 
 import {ObservabilityApp, resetObservabilityApp} from "../observabilityApp";
 import {LocalDatasetStore} from "./datasetStore";
@@ -385,7 +386,7 @@ describe("LocalExperimentRunner", () => {
       detail = await defaultRunner.get(experiment.id);
     }
     const listed = await defaultRunner.list();
-    assert.isAtLeast(listed.length, 1);
+    assert.isAtLeast(listed.data.length, 1);
     assert.equal(detail.status, "completed");
     assert.equal(detail.results?.gates[0]?.aggregate, "mean");
   });
@@ -429,5 +430,60 @@ describe("LocalExperimentRunner", () => {
     const task = await BackgroundTask.findExactlyOne({_id: detail.backgroundTaskId});
     assert.equal(task.status, "failed");
     assert.include(task.error ?? "", "generation failed");
+  });
+
+  it("lists experiment summaries without hydrating per-item results", async () => {
+    const dataset = await datasetStore.create({name: "list-summary-dataset"});
+    await datasetStore.createItem(dataset.id, {
+      input: {question: "1"},
+      proofread: true,
+    });
+    const created = await runner.create({
+      datasetId: dataset.id,
+      evaluatorIds: [],
+      name: "list-summary-run",
+      promptName: "exp-prompt",
+      versions: [1, 2],
+    });
+    let detail = await runner.get(created.id);
+    for (let attempt = 0; attempt < 20 && detail.status === "running"; attempt += 1) {
+      await new Promise((resolvePromise) => {
+        setTimeout(resolvePromise, 25);
+      });
+      detail = await runner.get(created.id);
+    }
+    assert.isAbove(detail.items.length, 0);
+
+    const listed = await runner.list({promptName: "exp-prompt"});
+    const summary = listed.data.find((row) => row.id === created.id);
+    assert.isDefined(summary);
+    assert.deepEqual(summary?.items, []);
+    assert.equal(listed.meta.total, 1);
+  });
+
+  it("filters and paginates experiment list by promptName", async () => {
+    const datasetId = new mongoose.Types.ObjectId();
+    await registerObsExperiment().create({
+      datasetId,
+      evaluatorIds: [],
+      name: "alpha",
+      promptName: "filter-prompt",
+      status: "completed",
+      thresholds: [],
+      versions: [1, 2],
+    });
+    await registerObsExperiment().create({
+      datasetId,
+      evaluatorIds: [],
+      name: "beta",
+      promptName: "other-prompt",
+      status: "pending",
+      thresholds: [],
+      versions: [1, 2],
+    });
+
+    const filtered = await runner.list({promptName: "filter-prompt"});
+    assert.equal(filtered.meta.total, 1);
+    assert.equal(filtered.data[0]?.name, "alpha");
   });
 });

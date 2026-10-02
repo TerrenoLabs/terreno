@@ -121,6 +121,7 @@ export const addObservabilityPromptRoutes = (
         .withTags(["observability"])
         .withSummary("Create an observability prompt")
         .withRequestBody({
+          description: {required: false, type: "string"},
           folder: {required: true, type: "string"},
           name: {required: true, type: "string"},
         })
@@ -131,6 +132,7 @@ export const addObservabilityPromptRoutes = (
       const body = req.body as Record<string, unknown>;
       const created = await options.store.create({
         ...versionFieldsFromBody(body),
+        description: typeof body.description === "string" ? body.description : undefined,
         folder: String(body.folder ?? ""),
         name: String(body.name ?? ""),
         tags: body.tags as string[] | undefined,

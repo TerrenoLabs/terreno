@@ -7,6 +7,7 @@ import type {
   ExperimentEstimate,
   ExperimentGateResult,
   ExperimentVersionResult,
+  ObsExperimentDocument,
   ScoreThreshold,
 } from "../../types/observability";
 import {compileTemplate} from "../compileTemplate";
@@ -58,6 +59,14 @@ export interface ExperimentItemView {
   failed: boolean;
   id: string;
   versionResults: Record<string, ExperimentVersionResult>;
+}
+
+export const EXPERIMENT_LIST_DEFAULT_LIMIT = 50;
+export const EXPERIMENT_LIST_MAX_LIMIT = 100;
+
+export interface ExperimentListResult {
+  data: ExperimentView[];
+  meta: {limit: number; page: number; total: number};
 }
 
 export interface BackgroundTaskRunner {
@@ -269,13 +278,32 @@ export class LocalExperimentRunner {
     return this.get(String(experiment._id));
   }
 
-  async list(): Promise<ExperimentView[]> {
-    const rows = await registerObsExperiment().find({}).sort({created: -1});
-    return Promise.all(
-      rows.map((row) => {
-        return this.get(String(row._id));
-      })
-    );
+  async list(params?: {
+    limit?: number;
+    page?: number;
+    promptName?: string;
+  }): Promise<ExperimentListResult> {
+    const page = params?.page && params.page > 0 ? params.page : 1;
+    const limit =
+      params?.limit && params.limit > 0
+        ? Math.min(params.limit, EXPERIMENT_LIST_MAX_LIMIT)
+        : EXPERIMENT_LIST_DEFAULT_LIMIT;
+    const filter: Record<string, unknown> = {};
+    if (params?.promptName) {
+      filter.promptName = params.promptName;
+    }
+    const ObsExperiment = registerObsExperiment();
+    const total = await ObsExperiment.countDocuments(filter);
+    const rows = await ObsExperiment.find(filter)
+      .sort({created: -1})
+      .skip((page - 1) * limit)
+      .limit(limit);
+    return {
+      data: rows.map((row) => {
+        return this.toSummaryView(row);
+      }),
+      meta: {limit, page, total},
+    };
   }
 
   async get(id: string): Promise<ExperimentView> {
@@ -291,6 +319,20 @@ export class LocalExperimentRunner {
       return left.created.getTime() - right.created.getTime();
     });
     return {
+      ...this.toSummaryView(experiment),
+      items: sortedItems.map((row) => {
+        return {
+          datasetItemId: String(row.datasetItemId),
+          failed: row.failed,
+          id: String(row._id),
+          versionResults: row.versionResults,
+        };
+      }),
+    };
+  }
+
+  private toSummaryView(experiment: ObsExperimentDocument): ExperimentView {
+    return {
       backgroundTaskId: experiment.backgroundTaskId
         ? String(experiment.backgroundTaskId)
         : undefined,
@@ -300,14 +342,7 @@ export class LocalExperimentRunner {
       evaluatorIds: experiment.evaluatorIds.map((value) => String(value)),
       id: String(experiment._id),
       includeUnproofread: experiment.includeUnproofread,
-      items: sortedItems.map((row) => {
-        return {
-          datasetItemId: String(row.datasetItemId),
-          failed: row.failed,
-          id: String(row._id),
-          versionResults: row.versionResults,
-        };
-      }),
+      items: [],
       modelOverride: experiment.modelOverride,
       name: experiment.name,
       promptName: experiment.promptName,

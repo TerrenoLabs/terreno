@@ -51,6 +51,10 @@ customized `admin` and `auditor` roles gain only missing observability actions o
 
 `AIRequest` remains the cheap per-call log. Observability traces are the nested, scored, user/session/cost record used in the SOP.
 
+## Prompt hub relationships (phase 4)
+
+Prompts may carry an optional domain-neutral `description` (folder semantics stay consumer-defined). `GET /ai/observability/prompts/:name` composes bounded recent **traces** and **experiments** for that prompt name so the admin hub does not scan full trace or experiment lists on the client. Trace evidence is version-aware: list filters accept `prompt` plus optional `promptVersion`, and relationship trace rows include the matching `promptVersion` from `ObsTrace.prompts[]`. Experiment relationships filter server-side by `promptName` on `GET /ai/observability/experiments?promptName=…` (omit or pass an empty value for no filter). The experiment list endpoint returns summary rows without per-item hydration; use experiment detail for full item results. Reading relationships uses the same `aiPrompt:read` grant as prompt detail.
+
 ## Phase 1 reference loop
 
 The example backend always registers the local plugin. Its idempotent seed creates

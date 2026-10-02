@@ -184,6 +184,20 @@ describe("LocalTraceStore", () => {
     const page = await store.list({limit: 1, page: 2});
     expect(page.meta).toEqual({limit: 1, page: 2, total: 2});
     expect(page.data).toHaveLength(1);
+
+    const byPromptVersion = await store.list({prompt: "summarize", promptVersion: 2});
+    expect(byPromptVersion.data).toHaveLength(0);
+    await store.exportTrace(
+      baseTrace({
+        name: "summarize-v2",
+        prompts: [{name: "summarize", version: 2}],
+        startedAt: iso(500),
+      })
+    );
+    const v2Only = await store.list({prompt: "summarize", promptVersion: 2});
+    expect(v2Only.data.map((row) => row.name)).toEqual(["summarize-v2"]);
+    const v1Only = await store.list({prompt: "summarize", promptVersion: 1});
+    expect(v1Only.data.map((row) => row.id)).toEqual([older.id]);
   });
 
   it("returns score metadata on trace detail and exports through the sink wrapper", async () => {

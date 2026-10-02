@@ -27,6 +27,20 @@ const parseBoolean = (value: unknown): boolean | undefined => {
   throw new APIError({status: 400, title: "boolean query must be true or false"});
 };
 
+const parsePromptVersion = (value: unknown, prompt?: string): number | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new APIError({status: 400, title: "promptVersion must be a positive integer"});
+  }
+  if (!prompt) {
+    throw new APIError({status: 400, title: "prompt is required when promptVersion is set"});
+  }
+  return parsed;
+};
+
 const parsePositiveInt = (value: unknown, fallback: number): number => {
   if (value === undefined) {
     return fallback;
@@ -55,17 +69,21 @@ export const addObservabilityTraceRoutes = (
       builder()
         .withTags(["observability"])
         .withSummary("List observability traces")
+        .withQueryParameter("prompt", {type: "string"}, {required: false})
+        .withQueryParameter("promptVersion", {type: "number"}, {required: false})
         .withResponse(200, {data: {type: "array"}})
         .build()
     ),
     asyncHandler(async (req, res) => {
+      const prompt = typeof req.query.prompt === "string" ? req.query.prompt : undefined;
       const listed = await options.store.list({
         flaggedForDataset: parseBoolean(req.query.flaggedForDataset),
         from: typeof req.query.from === "string" ? req.query.from : undefined,
         hasScore: parseBoolean(req.query.hasScore),
         limit: parsePositiveInt(req.query.limit, 20),
         page: parsePositiveInt(req.query.page, 1),
-        prompt: typeof req.query.prompt === "string" ? req.query.prompt : undefined,
+        prompt,
+        promptVersion: parsePromptVersion(req.query.promptVersion, prompt),
         sensitive: parseBoolean(req.query.sensitive),
         sessionId: typeof req.query.sessionId === "string" ? req.query.sessionId : undefined,
         status:

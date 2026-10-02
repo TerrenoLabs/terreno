@@ -14,6 +14,7 @@ export interface TraceListQuery {
   limit?: number;
   page?: number;
   prompt?: string;
+  promptVersion?: number;
   sensitive?: boolean;
   sessionId?: string;
   status?: "error" | "ok";
@@ -220,7 +221,14 @@ export class LocalTraceStore {
     if (query.sessionId) {
       filter.sessionId = query.sessionId;
     }
-    if (query.prompt) {
+    if (query.promptVersion !== undefined && !query.prompt) {
+      throw new APIError({status: 400, title: "prompt is required when promptVersion is set"});
+    }
+    if (query.prompt && query.promptVersion !== undefined) {
+      filter.prompts = {
+        $elemMatch: {name: query.prompt, version: query.promptVersion},
+      };
+    } else if (query.prompt) {
       filter["prompts.name"] = query.prompt;
     }
     if (query.sensitive !== undefined) {

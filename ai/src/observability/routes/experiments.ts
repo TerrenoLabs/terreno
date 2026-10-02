@@ -1,7 +1,7 @@
-import {asyncHandler, createOpenApiBuilder} from "@terreno/api";
+import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
 
-import type {LocalExperimentRunner} from "../local/experimentRunner";
+import {EXPERIMENT_LIST_DEFAULT_LIMIT, type LocalExperimentRunner} from "../local/experimentRunner";
 import {
   type ObservabilityRouteAccessOptions,
   observabilityRouteMiddleware,
@@ -12,6 +12,31 @@ const BASE_PATH = "/ai/observability";
 export interface ObservabilityExperimentRouteOptions extends ObservabilityRouteAccessOptions {
   runner: LocalExperimentRunner;
 }
+
+const parseOptionalPromptName = (value: unknown): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  return trimmed;
+};
+
+const parsePositiveInt = (value: unknown, fallback: number): number => {
+  if (value === undefined) {
+    return fallback;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new APIError({status: 400, title: "page and limit must be positive integers"});
+  }
+  return parsed;
+};
 
 export const addObservabilityExperimentRoutes = (
   router: express.Application,
@@ -47,11 +72,26 @@ export const addObservabilityExperimentRoutes = (
       builder()
         .withTags(["observability"])
         .withSummary("List experiments")
+        .withQueryParameter("promptName", {type: "string"}, {required: false})
+        .withQueryParameter("page", {type: "number"}, {required: false})
+        .withQueryParameter("limit", {type: "number"}, {required: false})
         .withResponse(200, {})
         .build()
     ),
-    asyncHandler(async (_req, res) => {
-      return res.json({data: await options.runner.list()});
+    asyncHandler(async (req, res) => {
+      const listed = await options.runner.list({
+        limit: parsePositiveInt(req.query.limit, EXPERIMENT_LIST_DEFAULT_LIMIT),
+        page: parsePositiveInt(req.query.page, 1),
+        promptName: parseOptionalPromptName(req.query.promptName),
+      });
+      const {limit, page, total} = listed.meta;
+      return res.json({
+        data: listed.data,
+        limit,
+        more: page * limit < total,
+        page,
+        total,
+      });
     })
   );
 

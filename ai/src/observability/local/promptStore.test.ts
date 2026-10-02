@@ -1,14 +1,16 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {assert} from "chai";
 import {DateTime} from "luxon";
+import mongoose from "mongoose";
 
 import {ObservabilityApp, resetObservabilityApp} from "../observabilityApp";
 import {createLocalObservabilityPlugin} from "./localPlugin";
+import {registerObsExperiment} from "./models/obsExperiment";
 import {registerObsPrompt} from "./models/obsPrompt";
 import {registerObsPromptLabel} from "./models/obsPromptLabel";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
 import {registerObsTrace} from "./models/obsTrace";
-import {LocalPromptStore} from "./promptStore";
+import {LocalPromptStore, PROMPT_RELATIONSHIP_LIMIT} from "./promptStore";
 
 describe("LocalPromptStore", () => {
   let store: LocalPromptStore;
@@ -24,6 +26,125 @@ describe("LocalPromptStore", () => {
     await registerObsPromptVersion().deleteMany({});
     await registerObsPromptLabel().deleteMany({});
     await registerObsTrace().deleteMany({});
+    await registerObsExperiment().deleteMany({});
+  });
+
+  it("round-trips an optional description on create, list, and detail", async () => {
+    await store.create({
+      description: "Summarizes user notes for clinicians",
+      folder: "examples",
+      name: "summarize",
+      system: "Summarize",
+      type: "text",
+    });
+    await store.create({
+      folder: "examples",
+      name: "legacy-no-description",
+      system: "Legacy",
+      type: "text",
+    });
+
+    const listed = await store.list({folder: "examples"});
+    expect(listed.find((row) => row.name === "summarize")?.description).toBe(
+      "Summarizes user notes for clinicians"
+    );
+    expect(listed.find((row) => row.name === "legacy-no-description")?.description).toBeUndefined();
+
+    const detail = await store.getDetail("summarize");
+    expect(detail.description).toBe("Summarizes user notes for clinicians");
+    const legacy = await store.getDetail("legacy-no-description");
+    expect(legacy.description).toBeUndefined();
+  });
+
+  it("composes bounded relationships with only this prompt's traces and experiments", async () => {
+    await store.create({
+      folder: "examples",
+      name: "hub-prompt",
+      system: "v1",
+      type: "text",
+    });
+    await store.createVersion("hub-prompt", {system: "v2", type: "text"});
+    const ObsTrace = registerObsTrace();
+    await ObsTrace.create({
+      name: "hub-v1",
+      prompts: [{name: "hub-prompt", version: 1}],
+      startedAt: DateTime.utc().minus({minutes: 2}).toJSDate(),
+      status: "ok",
+    });
+    await ObsTrace.create({
+      name: "hub-v2",
+      prompts: [{name: "hub-prompt", version: 2}],
+      startedAt: DateTime.utc().minus({minutes: 1}).toJSDate(),
+      status: "error",
+    });
+    await ObsTrace.create({
+      name: "other-prompt",
+      prompts: [{name: "other", version: 1}],
+      startedAt: DateTime.utc().toJSDate(),
+      status: "ok",
+    });
+    const ObsExperiment = registerObsExperiment();
+    await ObsExperiment.create({
+      datasetId: new mongoose.Types.ObjectId(),
+      evaluatorIds: [],
+      name: "hub-run",
+      promptName: "hub-prompt",
+      status: "completed",
+      thresholds: [],
+      versions: [1, 2],
+    });
+    await ObsExperiment.create({
+      datasetId: new mongoose.Types.ObjectId(),
+      evaluatorIds: [],
+      name: "foreign-run",
+      promptName: "other",
+      status: "pending",
+      thresholds: [],
+      versions: [1, 2],
+    });
+
+    const detail = await store.getDetail("hub-prompt");
+    expect(detail.relationships.experiments.total).toBe(1);
+    expect(detail.relationships.experiments.items).toEqual([
+      expect.objectContaining({name: "hub-run", promptName: "hub-prompt"}),
+    ]);
+    expect(detail.relationships.traces.total).toBe(2);
+    expect(detail.relationships.traces.items.map((row) => row.name).sort()).toEqual([
+      "hub-v1",
+      "hub-v2",
+    ]);
+    expect(
+      detail.relationships.traces.items.every((row) => {
+        return row.promptName === "hub-prompt";
+      })
+    ).toBe(true);
+    expect(
+      detail.relationships.traces.items.find((row) => row.name === "hub-v2")?.promptVersion
+    ).toBe(2);
+  });
+
+  it("caps relationship traces at PROMPT_RELATIONSHIP_LIMIT while reporting total", async () => {
+    await store.create({
+      folder: "examples",
+      name: "bounded-traces",
+      system: "v1",
+      type: "text",
+    });
+    const ObsTrace = registerObsTrace();
+    const seedCount = PROMPT_RELATIONSHIP_LIMIT + 5;
+    for (let index = 0; index < seedCount; index += 1) {
+      await ObsTrace.create({
+        name: `trace-${index}`,
+        prompts: [{name: "bounded-traces", version: 1}],
+        startedAt: DateTime.utc().minus({minutes: index}).toJSDate(),
+        status: "ok",
+      });
+    }
+
+    const detail = await store.getDetail("bounded-traces");
+    expect(detail.relationships.traces.total).toBe(seedCount);
+    expect(detail.relationships.traces.limit).toBe(PROMPT_RELATIONSHIP_LIMIT);
+    expect(detail.relationships.traces.items).toHaveLength(PROMPT_RELATIONSHIP_LIMIT);
   });
 
   it("leaves v1 unchanged after creating v2 and resolves production by label", async () => {

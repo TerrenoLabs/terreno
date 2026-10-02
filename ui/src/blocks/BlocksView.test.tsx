@@ -324,6 +324,47 @@ blocks:
     expect(off.queryByTestId("html-frame-native")).toBeNull();
   });
 
+  it("renders a callout, an image, and a details block", () => {
+    const callout: Record<string, string> = {};
+    callout.type = "callout";
+    callout.status = "warning";
+    callout.text = "Seats renew on Friday.";
+    const picture: Record<string, string> = {};
+    picture.type = "image";
+    picture.alt = "Receipt";
+    picture.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    const details: Record<string, string> = {};
+    details.type = "details";
+    details.title = "Invoice notes";
+    details.text = "Twelve seats, billed monthly.";
+    const document: Record<string, unknown> = {};
+    document.v = 1;
+    document.blocks = [callout, picture, details];
+
+    const {getByText} = renderWithTheme(<BlocksView document={document} />);
+
+    expect(getByText("Seats renew on Friday.")).toBeTruthy();
+    expect(getByText("Receipt")).toBeTruthy();
+    expect(getByText("Invoice notes")).toBeTruthy();
+    expect(getByText("Twelve seats, billed monthly.")).toBeTruthy();
+  });
+
+  it("rejects an https image whose host is not allowed", () => {
+    const block: Record<string, string> = {};
+    block.type = "image";
+    block.alt = "Pixel";
+    block.src = "https://evil.test/pixel.png";
+    const document: Record<string, unknown> = {};
+    document.v = 1;
+    document.blocks = [block];
+
+    const blocked = renderWithTheme(<BlocksView document={document} />);
+    expect(blocked.getByText(/IMAGE_HOST_NOT_ALLOWED|allowed host/)).toBeTruthy();
+
+    const allowed = renderWithTheme(<BlocksView document={document} imageHosts={["evil.test"]} />);
+    expect(allowed.getByText("Pixel")).toBeTruthy();
+  });
+
   it("does not use raw react-native views in the blocks folder", () => {
     const dir = import.meta.dir;
     const files = readdirSync(dir).filter(

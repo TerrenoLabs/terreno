@@ -1,8 +1,10 @@
 import type {Block, BlockAction, InlineDataset} from "@terreno/blocks";
 import type React from "react";
 
+import {Accordion} from "../Accordion";
 import {AreaChart} from "../AreaChart";
 import {Badge} from "../Badge";
+import {Banner} from "../Banner";
 import {BarChart} from "../BarChart";
 import {Box} from "../Box";
 import {Button} from "../Button";
@@ -11,6 +13,7 @@ import {DataTable} from "../DataTable";
 import {DonutChart} from "../DonutChart";
 import {Heading} from "../Heading";
 import {HtmlFrame} from "../HtmlFrame";
+import {Image} from "../Image";
 import {LineChart} from "../LineChart";
 import {MarkdownView} from "../MarkdownView";
 import {SectionDivider} from "../SectionDivider";
@@ -117,6 +120,25 @@ export const renderBlock = (
           {block.title ? <Heading size="sm">{block.title}</Heading> : null}
           <HtmlFrame height={block.height} html={block.html} title={block.title} />
         </Card>
+      );
+    case "callout":
+      return (
+        <Box key={path} testID={path}>
+          <Banner dismissible={false} status={block.status ?? "info"} text={block.text} />
+        </Box>
+      );
+    case "image":
+      return (
+        <Box key={path} testID={path}>
+          <Image alt={block.alt} color="transparent" naturalWidth={320} src={block.src} />
+          <Text size="sm">{block.alt}</Text>
+        </Box>
+      );
+    case "details":
+      return (
+        <Accordion isCollapsed={false} key={path} title={block.title}>
+          <Text>{block.text}</Text>
+        </Accordion>
       );
     case "divider":
       return (

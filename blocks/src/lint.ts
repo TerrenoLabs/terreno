@@ -10,10 +10,44 @@ export interface LintBlocksOptions {
   /** When false or omitted, an `html` block fails with `HTML_DISABLED`. */
   allowHtml?: boolean;
   hostActions?: readonly string[];
+  /** Hostnames allowed on `https` image `src` values. Empty means no https images. */
+  imageHosts?: readonly string[];
   knownDatasets?: Record<string, KnownDataset>;
 }
 
 const issue = ({code, fix, message, path}: BlockError): BlockError => ({code, fix, message, path});
+
+const imageSourceIssue = (
+  src: string,
+  hosts: readonly string[] | undefined,
+  path: string
+): BlockError | undefined => {
+  if (src.startsWith("file:") && src.slice("file:".length).trim().length > 0) {
+    return undefined;
+  }
+  if (/^data:image\//i.test(src)) {
+    return undefined;
+  }
+  let hostname = "";
+  try {
+    const url = new URL(src);
+    if (url.protocol === "https:") {
+      hostname = url.hostname.toLowerCase();
+    }
+  } catch {
+    hostname = "";
+  }
+  const allowed = (hosts ?? []).some((host) => host.toLowerCase() === hostname);
+  if (hostname !== "" && allowed) {
+    return undefined;
+  }
+  return issue({
+    code: "IMAGE_HOST_NOT_ALLOWED",
+    fix: "Use a data:image URL, a file: ref, or an https URL whose host is in uiBlocks.imageHosts.",
+    message: BLOCK_ERROR_CODES.IMAGE_HOST_NOT_ALLOWED,
+    path: `${path}.src`,
+  });
+};
 
 const isInline = (dataset: Dataset): dataset is InlineDataset => dataset.source !== "ref";
 
@@ -197,6 +231,12 @@ export const lintDocument = (
             path: `${path}.html`,
           })
         );
+      }
+    }
+    if (block.type === "image") {
+      const imageIssue = imageSourceIssue(block.src, options?.imageHosts, path);
+      if (imageIssue) {
+        errors.push(imageIssue);
       }
     }
     if (block.id !== undefined) {

@@ -394,7 +394,7 @@ rows, answers, and errors. Steps: [Add agent asks to a chat](../how-to/agent-ui-
 `BlocksView` paints a whole-reply document from `@terreno/blocks`. Pass the assistant text
 as `document`. Leaf blocks in this slice are `heading`, `text`, `metric`, `badge`,
 `divider`, and `context`. `columns` is a row from the `md` breakpoint and a stack on `sm`.
-`card` groups children under an optional title. A `chart` draws `LineChart`, `BarChart`,
+`card` groups children under an optional title. A `callout` draws `Banner` and is not dismissible. An `image` draws `Image` and requires `alt`; pass `imageHosts` to allow `https` hosts. A `details` block draws `Accordion`. A `chart` draws `LineChart`, `BarChart`,
 `AreaChart`, or `DonutChart` from an inline dataset or from `points`. The series is only
 `{label, value}` — a point color in the document is not passed through. A `table` draws
 `DataTable`. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the

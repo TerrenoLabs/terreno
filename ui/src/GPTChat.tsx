@@ -193,6 +193,8 @@ export interface GPTChatProps {
   uiBlocks?: boolean;
   /** Renders `html` blocks in a sandboxed frame. Off until the host turns it on. */
   allowHtml?: boolean;
+  /** Hostnames allowed on https image sources. Empty rejects every https image. */
+  imageHosts?: readonly string[];
 }
 
 // ============================================================
@@ -613,6 +615,7 @@ const AssistantBlocks = ({
   allowHtml,
   content,
   hostActions,
+  imageHosts,
   isPartial,
   messageId,
   onBlockEvent,
@@ -623,6 +626,7 @@ const AssistantBlocks = ({
   allowHtml?: boolean;
   content: string;
   hostActions?: readonly string[];
+  imageHosts?: readonly string[];
   isPartial: boolean;
   messageId: string;
   onBlockEvent: (event: BlockChatEvent) => void;
@@ -639,6 +643,7 @@ const AssistantBlocks = ({
             allowHtml={allowHtml}
             document={documentFromPartial(partial)}
             hostActions={hostActions}
+            imageHosts={imageHosts}
             onAction={(event) =>
               onBlockEvent({
                 action: event.action,
@@ -666,6 +671,7 @@ const AssistantBlocks = ({
       allowHtml={allowHtml}
       document={content}
       hostActions={hostActions}
+      imageHosts={imageHosts}
       onAction={(event) =>
         onBlockEvent({
           action: event.action,
@@ -686,6 +692,7 @@ const MessageText = ({
   allowHtml,
   content,
   hostActions,
+  imageHosts,
   isPartial,
   messageId,
   onBlockEvent,
@@ -698,6 +705,7 @@ const MessageText = ({
   allowHtml?: boolean;
   content: string;
   hostActions?: readonly string[];
+  imageHosts?: readonly string[];
   isPartial: boolean;
   messageId: string;
   onBlockEvent: (event: BlockChatEvent) => void;
@@ -713,6 +721,7 @@ const MessageText = ({
         allowHtml={allowHtml}
         content={content}
         hostActions={hostActions}
+        imageHosts={imageHosts}
         isPartial={isPartial}
         messageId={messageId}
         onBlockEvent={onBlockEvent}
@@ -934,6 +943,7 @@ const MessageList = ({
   currentMessages,
   handleCopyMessage,
   hostActions,
+  imageHosts,
   isStreaming,
   onAskSubmit,
   onBlockEvent,
@@ -950,6 +960,7 @@ const MessageList = ({
   currentMessages: GPTChatMessage[];
   handleCopyMessage: (text: string) => void;
   hostActions?: readonly string[];
+  imageHosts?: readonly string[];
   isStreaming: boolean;
   onAskSubmit?: AskSubmitHandler;
   onBlockEvent: (event: BlockChatEvent) => void;
@@ -1034,6 +1045,7 @@ const MessageList = ({
                 allowHtml={allowHtml}
                 content={message.content}
                 hostActions={hostActions}
+                imageHosts={imageHosts}
                 isPartial={index === streamingIndex}
                 messageId={messageId}
                 onBlockEvent={onBlockEvent}
@@ -1249,6 +1261,7 @@ export const GPTChat = ({
   testID,
   uiBlocks = false,
   allowHtml = false,
+  imageHosts,
 }: GPTChatProps): React.ReactElement => {
   const [inputValue, setInputValue] = useState("");
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -1569,6 +1582,7 @@ export const GPTChat = ({
                     currentMessages={currentMessages}
                     handleCopyMessage={handleCopyMessage}
                     hostActions={hostActions}
+                    imageHosts={imageHosts}
                     isStreaming={isStreaming}
                     onAskSubmit={onAskSubmit}
                     onBlockEvent={handleBlockEvent}

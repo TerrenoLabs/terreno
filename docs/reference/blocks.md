@@ -46,6 +46,16 @@ A dataset name matches `^[a-z][a-z0-9_]{0,63}$`. A document has at most 8 datase
 
 `validateBlocks` returns `HTML_DISABLED` unless `options.allowHtml` is true. A host turns that on with `uiBlocks.html`. The server sanitizes the HTML before it is stored. The client renders it only when `allowHtml` is set.
 
+## Callout, image, and details
+
+| Block | Required | Optional |
+| --- | --- | --- |
+| `callout` | `text` | `id`, `status`: `info`, `warning`, `alert` |
+| `image` | `alt`, `src` | `id` |
+| `details` | `title`, `text` | `id` |
+
+`src` is a `data:image` URL, a `file:` ref, or an `https` URL. `https` is allowed only when the hostname is in `validateBlocks` `imageHosts` (the server option is `uiBlocks.imageHosts`). Anything else is `IMAGE_HOST_NOT_ALLOWED`. An empty list rejects every `https` image.
+
 Warnings do not block rendering:
 
 | Code | When |
@@ -130,6 +140,7 @@ heuristics and does not fail `ok`.
 | `DUPLICATE_ID` | An id or a column name is used more than once. |
 | `HTML_DISABLED` | An html block is present and this host has not turned HTML on. |
 | `HTML_TOO_LARGE` | An html block is larger than 100,000 bytes. |
+| `IMAGE_HOST_NOT_ALLOWED` | An image URL is not a `data:image` URL, a `file:` ref, or an `https` URL on an allowed host. |
 | `INVALID_ENUM` | A value is not one of the allowed values. |
 | `INVALID_FORMAT` | A string does not match its required format. |
 | `INVALID_TYPE` | A value has the wrong type. |

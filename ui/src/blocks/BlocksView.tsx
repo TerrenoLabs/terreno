@@ -36,6 +36,7 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
   allowHtml = false,
   document,
   hostActions,
+  imageHosts,
   onAction,
   overrides,
   pendingElementIds,
@@ -45,7 +46,12 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
 }) => {
   const parsed =
     typeof document === "string" ? parseBlocks(document) : {ok: true as const, value: document};
-  const validated = parsed.ok ? validateBlocks(parsed.value, {allowHtml: true}) : undefined;
+  const validated = parsed.ok
+    ? validateBlocks(parsed.value, {
+        allowHtml: true,
+        ...(imageHosts ? {imageHosts} : {}),
+      })
+    : undefined;
   const {loadingIds, resolved} = useResolvedDatasets({
     datasets: validated?.ok ? validated.doc.datasets : undefined,
     resolveDataset,

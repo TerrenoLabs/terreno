@@ -343,6 +343,8 @@ export interface UiBlocksOptions {
   datasetTtlDays?: number;
   /** When true, `html` blocks are allowed and sanitized before they are stored. */
   html?: boolean;
+  /** Hostnames allowed on `https` image sources. Empty rejects every https image. */
+  imageHosts?: readonly string[];
   hostActions?: Record<
     string,
     {

@@ -89,7 +89,7 @@ Deferred until B1.1 and B2.1 in this file are Roast-passed (D28, revised 2026-10
   - Docs: `docs/reference/blocks.md` (`html` row and `uiBlocks.html`; the page exists once Agent UI Blocks Task 1.1 lands), `docs/explanation/agent-ui-asks.md` (threat model: XSS, phishing, exfiltration, clickjacking), `docs/reference/ui.md` (`HtmlFrame`, `allowHtml`); regenerate component reference (`bun run website:generate`).
   - Acceptance: AC11; `bun run check:licenses` green with the new dependency; screenshot of a sanitized invoice preview on web.
 
-- [ ] **Task 3.2**: `callout`, `image`, and `details` blocks
+- [x] **Task 3.2**: `callout`, `image`, and `details` blocks
   - Delivers: three display blocks rendered with `Banner` (not dismissible), `Image` (`alt` required; sources per D27, including the `uiBlocks.imageHosts` allowlist and `IMAGE_HOST_NOT_ALLOWED`), and `Accordion`; schema, lint, renderer, fixtures.
   - Files: `blocks/src/schema.ts`, `blocks/src/errors.ts`, fixtures, tests; `ai/src/routes/gpt.ts` (`imageHosts` passed to validation), tests; `ui/src/blocks/blockRenderers.tsx`, tests; `demo/stories/BlocksView.stories.tsx`.
   - Blocked by: B1.1, B2.1

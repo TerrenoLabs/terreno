@@ -130,6 +130,27 @@ export const BlocksViewActions: React.FC = () => {
   );
 };
 
+const DISPLAY = `v: 1
+blocks:
+  - type: callout
+    status: warning
+    text: Seats renew on Friday.
+  - type: image
+    alt: Receipt
+    src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
+  - type: details
+    title: Invoice notes
+    text: Twelve seats, billed monthly.
+`;
+
+export const BlocksViewDisplay: React.FC = () => {
+  return (
+    <Box padding={4} width="100%">
+      <BlocksView document={DISPLAY} />
+    </Box>
+  );
+};
+
 export const BlocksViewInvalid: React.FC = () => {
   return (
     <Box padding={4} width="100%">

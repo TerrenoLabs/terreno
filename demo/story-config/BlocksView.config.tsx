@@ -1,5 +1,10 @@
 import type {DemoConfiguration} from "@config";
-import {BlocksViewActions, BlocksViewDemo, BlocksViewInvalid} from "@stories/BlocksView.stories";
+import {
+  BlocksViewActions,
+  BlocksViewDemo,
+  BlocksViewDisplay,
+  BlocksViewInvalid,
+} from "@stories/BlocksView.stories";
 import {BlocksView} from "@terreno/ui";
 
 export const BlocksViewConfiguration: DemoConfiguration = {
@@ -22,6 +27,10 @@ export const BlocksViewConfiguration: DemoConfiguration = {
       description:
         "Segmented control switches the chart dataset. Reply and open buttons stay in the document.",
       render: () => <BlocksViewActions />,
+    },
+    Display: {
+      description: "A warning callout, a receipt image, and invoice notes in an accordion.",
+      render: () => <BlocksViewDisplay />,
     },
     Invalid: {
       description: "An unknown field shows an error banner. The raw document stays collapsed.",

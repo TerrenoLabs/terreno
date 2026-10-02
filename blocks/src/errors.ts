@@ -8,6 +8,8 @@ export const BLOCK_ERROR_CODES = {
   DUPLICATE_ID: "An id or a column name is used more than once.",
   HTML_DISABLED: "An html block is present and this host has not turned HTML on.",
   HTML_TOO_LARGE: "An html block is larger than 100,000 bytes.",
+  IMAGE_HOST_NOT_ALLOWED:
+    "An image URL is not a data:image URL, a file: ref, or an https URL on an allowed host.",
   INVALID_ENUM: "A value is not one of the allowed values.",
   INVALID_FORMAT: "A string does not match its required format.",
   INVALID_TYPE: "A value has the wrong type.",

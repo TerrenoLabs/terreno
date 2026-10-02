@@ -4,6 +4,7 @@ import {BLOCK_LIMITS} from "./limits";
 
 export const HEADING_SIZES = ["sm", "md", "lg", "xl", "2xl"] as const;
 export const HTML_HEIGHTS = ["sm", "md", "lg"] as const;
+export const CALLOUT_STATUSES = ["info", "warning", "alert"] as const;
 export const BADGE_STATUSES = ["info", "error", "warning", "success", "neutral", "active"] as const;
 export const METRIC_TRENDS = ["up", "down", "flat"] as const;
 export const LAYOUT_BLOCK_TYPES = ["columns", "card"] as const;
@@ -172,6 +173,27 @@ export interface HtmlBlock {
   type: "html";
 }
 
+export interface CalloutBlock {
+  id?: string;
+  status?: (typeof CALLOUT_STATUSES)[number];
+  text: string;
+  type: "callout";
+}
+
+export interface ImageBlock {
+  alt: string;
+  id?: string;
+  src: string;
+  type: "image";
+}
+
+export interface DetailsBlock {
+  id?: string;
+  text: string;
+  title: string;
+  type: "details";
+}
+
 export interface ColumnsBlock {
   children: Block[];
   id?: string;
@@ -195,7 +217,10 @@ export type LeafBlock =
   | ChartBlock
   | TableBlock
   | ActionsBlock
-  | HtmlBlock;
+  | HtmlBlock
+  | CalloutBlock
+  | ImageBlock
+  | DetailsBlock;
 
 export type Block = LeafBlock | ColumnsBlock | CardBlock;
 
@@ -372,6 +397,33 @@ const htmlSchema = z
   })
   .strict();
 
+const calloutSchema = z
+  .object({
+    ...sharedBlockFields,
+    status: z.enum(CALLOUT_STATUSES).optional(),
+    text: visibleText(BLOCK_LIMITS.blockTextMaxLength),
+    type: z.literal("callout"),
+  })
+  .strict();
+
+const imageSchema = z
+  .object({
+    ...sharedBlockFields,
+    alt: visibleText(BLOCK_LIMITS.headingTextMaxLength),
+    src: z.string().min(1).max(BLOCK_LIMITS.htmlMaxBytes),
+    type: z.literal("image"),
+  })
+  .strict();
+
+const detailsSchema = z
+  .object({
+    ...sharedBlockFields,
+    text: visibleText(BLOCK_LIMITS.blockTextMaxLength),
+    title: visibleText(BLOCK_LIMITS.headingTextMaxLength),
+    type: z.literal("details"),
+  })
+  .strict();
+
 const actionsSchema = z
   .object({
     elements: z
@@ -395,6 +447,9 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
     tableSchema,
     actionsSchema,
     htmlSchema,
+    calloutSchema,
+    imageSchema,
+    detailsSchema,
     z
       .object({
         ...sharedBlockFields,

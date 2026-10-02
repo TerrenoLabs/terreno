@@ -1068,7 +1068,8 @@ const withTurnSystemPrompt = ({
 const checkBlockDocument = (
   text: string,
   hostActions: readonly string[] | undefined,
-  allowHtml: boolean
+  allowHtml: boolean,
+  imageHosts?: readonly string[]
 ): {errors: BlockError[]; ok: boolean; warnings: BlockError[]} => {
   const parsed = parseBlocks(text);
   if (!parsed.ok) {
@@ -1077,6 +1078,7 @@ const checkBlockDocument = (
   const validated = validateBlocks(parsed.value, {
     ...(allowHtml ? {allowHtml: true} : {}),
     ...(hostActions ? {hostActions} : {}),
+    ...(imageHosts ? {imageHosts} : {}),
   });
   return {
     errors: validated.ok ? [] : validated.errors,
@@ -1474,7 +1476,11 @@ export const runChatTurn = async ({
   const system = withTurnSystemPrompt({
     askKinds: offeredAskKinds,
     blocksPrompt: uiBlocks
-      ? uiBlocksSystemPrompt(Object.keys(uiBlocks.hostActions ?? {}), uiBlocks.html === true)
+      ? uiBlocksSystemPrompt(
+          Object.keys(uiBlocks.hostActions ?? {}),
+          uiBlocks.html === true,
+          uiBlocks.imageHosts ?? []
+        )
       : undefined,
     surface,
     systemPrompt: effectiveSystemPrompt,
@@ -1636,9 +1642,10 @@ export const runChatTurn = async ({
     const hostActionNames =
       uiBlocks?.hostActions === undefined ? undefined : Object.keys(uiBlocks.hostActions);
     const allowHtml = uiBlocks?.html === true;
+    const imageHosts = uiBlocks?.imageHosts;
     let blocksCheck =
       uiBlocks && fullResponse.trim() !== ""
-        ? checkBlockDocument(fullResponse, hostActionNames, allowHtml)
+        ? checkBlockDocument(fullResponse, hostActionNames, allowHtml, imageHosts)
         : undefined;
     let repaired = false;
     if (blocksCheck && !blocksCheck.ok && uiBlocks?.repair === true) {
@@ -1650,7 +1657,7 @@ export const runChatTurn = async ({
       if (next !== undefined) {
         fullResponse = next;
         repaired = true;
-        blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml);
+        blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml, imageHosts);
       }
     }
     let replacedText = false;
@@ -1659,7 +1666,7 @@ export const runChatTurn = async ({
       if (sanitized.changed) {
         fullResponse = sanitized.text;
         replacedText = true;
-        blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml);
+        blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml, imageHosts);
       }
     }
     const storedResponse =

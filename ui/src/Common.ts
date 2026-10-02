@@ -1964,6 +1964,8 @@ export interface BlocksViewProps extends WithTestID {
   document: string | BlocksDocument;
   /** Names the host will run. A callback outside this list is disabled. Omit to leave callbacks enabled. */
   hostActions?: readonly string[];
+  /** Hostnames allowed on https image sources. Empty rejects every https image. */
+  imageHosts?: readonly string[];
   /** Called for reply, open, select, and callback. Select also updates the target chart locally. */
   onAction?: (event: {action: BlockAction; blockId: string; elementId: string}) => void;
   /** Block ids replaced in place. The key is the original block id. */

@@ -3087,4 +3087,40 @@ describe("/gpt/prompt uiBlocks", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.text).toBe('{"v":1,"blocks":[{"html":"<p>Hi</p>","type":"html"}]}');
   });
+
+  it("rejects an https image unless its host is in uiBlocks.imageHosts", async () => {
+    const model = createScriptedModel({
+      steps: [
+        textStep(
+          "v: 1\nblocks:\n  - type: image\n    alt: Logo\n    src: https://evil.test/pixel.png\n"
+        ),
+      ],
+    });
+    const blocked = await authAsUser(buildApp({model, uiBlocks: true}), "notAdmin");
+    const blockedEvents = await streamPrompt(blocked, {prompt: USER_PROMPT});
+    const blockedBlocks = blockedEvents.events.find((event) => "blocks" in event)?.blocks as {
+      errors: {code: string}[];
+      ok: boolean;
+    };
+    expect(blockedBlocks.ok).toBe(false);
+    expect(blockedBlocks.errors.map((error) => error.code)).toContain("IMAGE_HOST_NOT_ALLOWED");
+
+    const allowedModel = createScriptedModel({
+      steps: [
+        textStep(
+          "v: 1\nblocks:\n  - type: image\n    alt: Logo\n    src: https://cdn.example.com/pixel.png\n"
+        ),
+      ],
+    });
+    const allowed = await authAsUser(
+      buildApp({model: allowedModel, uiBlocks: {imageHosts: ["cdn.example.com"]}}),
+      "notAdmin"
+    );
+    const allowedEvents = await streamPrompt(allowed, {prompt: USER_PROMPT});
+    const allowedBlocks = allowedEvents.events.find((event) => "blocks" in event)?.blocks as {
+      ok: boolean;
+    };
+    expect(allowedBlocks.ok).toBe(true);
+    expect(systemPromptOf(modelCall(allowedModel, 0))).toContain("cdn.example.com");
+  });
 });

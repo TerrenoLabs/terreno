@@ -248,7 +248,7 @@ in-app approval workflow. Supporting skills: `building-admin-interfaces`,
   - Docs: `docs/reference/ai.md`, `docs/explanation/ai-observability.md`
   - Acceptance: description round-trips; prompt v2 filtering excludes v1-only traces; prompt detail relationships contain only the named prompt's traces and experiments; old prompts without descriptions still load
 
-- [ ] **Task 4.3**: Caller-filtered navigation and read-only prompt hub
+- [x] **Task 4.3**: Caller-filtered navigation and read-only prompt hub
   - Delivers: each custom screen declares its read/list permission; unauthorized screens disappear from `/admin/config`; prompt detail renders Overview, Versions, Traces, and Experiments with description/folder/tags; controls are hidden independently for denied `update`, `promote`, and `playground`; direct API calls remain protected by Task 4.1
   - Files: `ai/src/observability/adminScreens.ts`, admin contribution tests, `admin-frontend/src/widgets/aiObservability/prompts/*`, permission helpers/tests
   - Blocked by: 4.1, 4.2

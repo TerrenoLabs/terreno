@@ -224,3 +224,40 @@ Ships design screens: Sessions, Session timeline, Users, User AI profile, Costs,
   - Blocked by: 3.1, 3.3, 3.4
   - Docs: (this task)
   - Acceptance: chip states covered by widget tests; a Langfuse-less boot shows no deep link; `verify-ui-changes` evidence attached
+
+---
+
+# Phase 4 — Domain-neutral RBAC and prompt relationship hub
+
+The user approved this phase on 2026-10-02. It adds no domain-specific vocabulary or
+in-app approval workflow. Supporting skills: `building-admin-interfaces`,
+`terreno-backend-api`, `terreno-ui`, `terreno-data-fetching`, `mongoose-schema-safety`,
+`update-docs`, and `verify-ui-changes`.
+
+- [ ] **Task 4.1**: Observability RBAC vocabulary, compatibility grants, and route enforcement
+  - Delivers: resources `aiPrompt`, `aiTrace`, `aiReview`, `aiDataset`, `aiExperiment`, `aiEvaluator` with the actions approved in Q62/Q63; statement descriptions; full seeded Admin grants, read-only Auditor expansion, Super Admin wildcard; existing stored Admin roles gain only missing observability grants; optional `accessControl` on `ObservabilityApp`; every route maps to one resource/action while legacy admin fallback remains
+  - Files: `api/src/rbac/statements.ts`, `api/src/rbac/roleModel.ts`, `ai/src/observability/observabilityApp.ts`, `ai/src/observability/routes/*.ts`, route/RBAC tests, public exports as needed
+  - Blocked by: none
+  - Docs: `docs/reference/api.md`, `docs/reference/ai.md`, `docs/explanation/ai-observability.md`
+  - Acceptance: catalog and role tests prove exact actions; a read-only RBAC caller can GET but receives 403 for writes; denied mutations fail even when called directly; legacy admin tests remain green
+
+- [ ] **Task 4.2**: Prompt descriptions and prompt-scoped relationship APIs
+  - Delivers: optional prompt `description` in Mongo/types/create/detail/list; trace list accepts prompt version in addition to name; experiment list accepts `promptName`; prompt detail API composes bounded recent traces and experiments for the selected prompt without client-side full-list scans
+  - Files: prompt/trace/experiment models, stores, routes, types, tests
+  - Blocked by: 4.1
+  - Docs: `docs/reference/ai.md`, `docs/explanation/ai-observability.md`
+  - Acceptance: description round-trips; prompt v2 filtering excludes v1-only traces; prompt detail relationships contain only the named prompt's traces and experiments; old prompts without descriptions still load
+
+- [ ] **Task 4.3**: Caller-filtered navigation and read-only prompt hub
+  - Delivers: each custom screen declares its read/list permission; unauthorized screens disappear from `/admin/config`; prompt detail renders Overview, Versions, Traces, and Experiments with description/folder/tags; controls are hidden independently for denied `update`, `promote`, and `playground`; direct API calls remain protected by Task 4.1
+  - Files: `ai/src/observability/adminScreens.ts`, admin contribution tests, `admin-frontend/src/widgets/aiObservability/prompts/*`, permission helpers/tests
+  - Blocked by: 4.1, 4.2
+  - Docs: `docs/reference/admin-frontend.md`, `docs/how-to/ai-feature-development.md`
+  - Acceptance: admin-config tests cover mixed grants; widget tests prove a read-only prompt hub shows relationships and no write controls; an operator sees all controls; `verify-ui-changes` captures both roles
+
+- [ ] **Task 4.4**: Phase-4 integration and documentation gate
+  - Delivers: example roles demonstrating read-only and operator composition; all architecture/reference/how-to pages aligned; generated SDK updated only if the public OpenAPI shape requires it
+  - Files: `example-backend` access/seed files, docs named above, generated SDK when required
+  - Blocked by: 4.3
+  - Docs: (this task)
+  - Acceptance: example boots with existing admin access intact; a consumer can configure a domain-neutral read-only role from docs; focused package tests, compile, lint, static analysis, and mandatory UI walkthrough pass

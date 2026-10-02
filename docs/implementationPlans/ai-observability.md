@@ -3,7 +3,7 @@
 **Status:** Approved  
 **Roadmap:** Area=`ai`, Target=`Future`, Impact=`Feature`  
 **Created:** 2026-08-24  
-**Updated:** 2026-08-31 (re-scoped to three phases against the Claude design)  
+**Updated:** 2026-10-02 (domain-neutral RBAC and prompt relationship hub approved)
 **Owner:** unassigned  
 **Branch:** `cursor/ai-observability-ip-64ca`  
 **Task list:** [docs/tasks/ai-observability.md](../tasks/ai-observability.md)  
@@ -99,6 +99,16 @@ schema or route is rewritten later.
 | Q55 | Evaluator templates | Seeded: `correctness`, `hallucination`, `helpfulness`, `toxicity` (llm-judge), `schema-assert` (json-assert, validates against the prompt version `outputSchema`, free/in-process), and one **human** review template. Custom evaluators still allowed |
 | Q56 | Trace errors | A failed trace shows `error` status plus a one-line human cause on the row (`failed at span 3 of 4 — escalation-notify timed out`), derived from the first failed span |
 | Q57 | Multi-prompt traces | A trace touching more than one prompt shows `N prompts` in the prompt column rather than one `name@version` |
+| Q58 | Domain language | Observability workflows stay domain-neutral. Consumers supply folder meanings, tags, roles, and descriptions |
+| Q59 | Approval workflow | Prompt approval remains outside Terreno for now. Terreno does not add an approval state or two-person promotion rule |
+| Q60 | RBAC shape | Separate resources for `aiPrompt`, `aiTrace`, `aiReview`, `aiDataset`, `aiExperiment`, and `aiEvaluator`; consumers compose roles from their actions |
+| Q61 | Read-only experience | A caller with read access sees the screen and data, while denied actions are hidden. A denied screen is omitted from admin config/navigation |
+| Q62 | Prompt actions | `list`, `read`, `create`, `update`, `promote`, `playground` |
+| Q63 | Other actions | Traces: `list`, `read`; reviews: `list`, `read`, `score`, `assign`; datasets/evaluators: CRUD; experiments: `list`, `read`, `create`, `promote` |
+| Q64 | Existing roles | Auditor receives read/list through the existing read-only sentinel; Super Admin receives all; Admin is seeded with full observability access |
+| Q65 | Existing admin users | Legacy `admin: true` remains a full-access fallback. RBAC-only users receive exactly their granted observability actions |
+| Q66 | Prompt description | Prompt metadata gains an optional consumer-authored description. Folder remains consumer-defined |
+| Q67 | Prompt hub | Prompt detail shows description plus related traces and experiments. Live relationships are derived from stored prompt name/version evidence rather than manually maintained usage records |
 
 ### Competitor coverage (why the SDK is split)
 
@@ -350,7 +360,7 @@ the local plugin is absent.
 
 | Model | Phase | Role |
 | --- | --- | --- |
-| `ObsPrompt` | 1 | Named prompt (`name` unique). **`folder`**, `tags[]`. |
+| `ObsPrompt` | 1 | Named prompt (`name` unique). **`folder`**, `tags[]`, optional domain-neutral `description`. |
 | `ObsPromptVersion` | 1 | Immutable version: `type` text\|chat, `system`, `template`, `variables[]` (`{key, required, label?, reviewerNote?}`), `inputSchema`/`outputSchema` (JSON Schema), `outputFieldNotes` (Q49), **`sensitive: boolean`** (default false, inherited by calls), `config` (temperature preset, model hint). |
 | `ObsPromptLabel` | 1 | Movable labels: `production`, `latest`, optional `staging`. Unique `(promptId, label)`. |
 | `ObsTrace` | 1 | Root trace: user, session, status, `errorSummary`, `sensitive`, usage, `prompts[]`, timestamps. |
@@ -371,8 +381,9 @@ No backfill: new collections. `AIRequest` unchanged.
 
 ## APIs
 
-Admin-only unless noted (`Permissions.IsAdmin`). OpenAPI via `createOpenApiBuilder`. Base path
-`/ai/observability`.
+OpenAPI uses `createOpenApiBuilder`. Base path is `/ai/observability`. When an
+`accessControl` is supplied, each route enforces the resource/action matrix in Q60–Q63. Without
+RBAC, the legacy `admin: true` check remains the compatibility path.
 
 ### Phase 1
 
@@ -467,6 +478,24 @@ palette is already the Terreno theme (`#2B6072` rail, `#0E9DCD` primary, Titilli
 
 Keep the existing **AI Requests** explorer as-is.
 
+### Domain-neutral access and prompt hub
+
+`ObservabilityApp` accepts the application's Terreno access object. Its admin contribution declares
+`adminAccess` per screen, so `/admin/config` and the sidebar omit resources the caller cannot list or
+read. Detail and mutation routes enforce the corresponding action independently; hiding a button is
+not authorization.
+
+The prompt detail screen is the relationship hub:
+
+- Overview shows folder, tags, optional description, and current production/latest versions.
+- Versions keeps the immutable editor and history.
+- Traces lists calls related to this prompt and supports version filtering.
+- Experiments lists runs related to this prompt without loading unrelated experiments.
+- Read-only callers see these tabs but no create-version, playground, or promote controls.
+
+Folders, descriptions, tags, and role names remain consumer-defined. Terreno introduces no
+clinical, finance, or other domain vocabulary.
+
 ## Example app
 
 `example-backend`:
@@ -556,6 +585,17 @@ health in the status chip.
 Exit: an existing Langfuse app can register both plugins, keep Langfuse as an extra sink or flip individual
 primaries to it, and a third-party collector receives OpenInference spans.
 
+### Phase 4 — Domain-neutral access and prompt relationships
+
+Add the six observability RBAC resources, route-level action enforcement, caller-filtered admin
+navigation, compatibility grants for existing Admin/Super Admin/admin-flag users, prompt
+descriptions, version-aware related traces, prompt-filtered experiments, and the read-only prompt
+hub. Approval workflows and domain-specific folder semantics remain outside Terreno.
+
+Exit: a consumer can compose a read-only observability role, a reviewer role, or an operator role;
+each user sees only authorized screens/actions, and opening a prompt explains its purpose and shows
+the traces and experiments that use it.
+
 ## Acceptance criteria
 
 ### Phase 1
@@ -589,6 +629,15 @@ primaries to it, and a third-party collector receives OpenInference spans.
 - [ ] The OTel sink's mock exporter receives an OpenInference `LLM` span carrying model and token attributes.
 - [ ] Costs shows `tokens only` for unpriced models; Users shows masked identifiers and no prompt content; Sessions renders a timeline.
 - [ ] The status chip reflects local state, Langfuse sink health, and active primaries, and **Open in Langfuse** appears only when the Langfuse plugin is registered.
+
+### Phase 4
+
+- [ ] The RBAC catalog exposes all six observability resources and their exact actions; Auditor gets only list/read, Super Admin gets all, and the seeded Admin role receives full observability access without deleting consumer-defined permissions.
+- [ ] Every observability HTTP route enforces its resource/action when access control is configured; legacy `admin: true` callers retain full access when RBAC is absent or the compatibility fallback applies.
+- [ ] `/admin/config` omits unauthorized observability screens. Read-only users can open granted screens but cannot see or invoke denied create, update, playground, scoring, assignment, or promotion actions.
+- [ ] Prompts store and return an optional description without changing folder semantics.
+- [ ] Prompt detail returns and renders related traces and experiments. Trace relationships can be filtered by prompt version; experiment relationships are filtered server-side by prompt name.
+- [ ] Public explanation, operator, AI reference, admin reference, and RBAC reference docs describe the domain-neutral permission and prompt-hub contracts.
 
 ## Risks
 

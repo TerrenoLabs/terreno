@@ -33,7 +33,7 @@ export interface AiAppOptions {
   openApiOptions?: Record<string, unknown>;
   /** Tool choice strategy for chat requests. Defaults to "auto" when tools are present. */
   toolChoice?: "auto" | "none" | "required";
-  /** Cheap model ID used for generating conversation titles (e.g. "gemini-2.0-flash-lite"). Falls back to the main model if not set. */
+  /** Cheap model ID used for generating conversation titles (e.g. "gemini-3.5-flash-lite"). Falls back to the main model if not set. */
   titleModelId?: string;
   /** Tool definitions available to the AI model during chat. */
   tools?: Record<string, Tool>;
@@ -52,7 +52,7 @@ export interface AiAppOptions {
  * import {AiApp, AIService} from "@terreno/ai";
  * import {google} from "@ai-sdk/google";
  *
- * const aiService = new AIService({model: google("gemini-2.5-flash")});
+ * const aiService = new AIService({model: google("gemini-3.8-flash")});
  * new AiApp({aiService, tools: myTools}).register(app);
  * ```
  *
@@ -60,7 +60,7 @@ export interface AiAppOptions {
  * ```typescript
  * // Demo mode with per-request key support (no server-side API key needed)
  * new AiApp({
- *   createModelFn: (key) => google("gemini-2.5-flash", {apiKey: key}),
+ *   createModelFn: (key) => google("gemini-3.8-flash", {apiKey: key}),
  *   demoMode: true,
  * }).register(app);
  * ```

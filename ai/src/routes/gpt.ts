@@ -466,7 +466,7 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         const messages = aiService.buildMessages([...earlierPrompts, modelUserPrompt]);
         logger.debug("Messages built", {messageCount: messages.length});
 
-        // Some models (e.g. gemini-2.5-flash-image) don't support tool calling
+        // Some models (e.g. gemini-3-pro-image) don't support tool calling
         const modelId = aiService.modelId;
         const supportsTools = !modelId?.includes("image");
 

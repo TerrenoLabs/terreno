@@ -104,7 +104,7 @@ import {AIService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
 const aiService = new AIService({
-  model: google("gemini-2.5-flash"),
+  model: google("gemini-3.8-flash"),
   defaultTemperature: 1.0,
 });
 ```
@@ -337,7 +337,7 @@ Requires `mcpService` (registered by `AiApp` when set).
 import {AiApp, AIService, FileStorageService, MCPService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
-const aiService = new AIService({model: google("gemini-2.5-flash")});
+const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 new AiApp({
   aiService,
@@ -346,7 +346,7 @@ new AiApp({
   mcpService: new MCPService([{name: "tools", transport: {type: "sse", url: "..."}}]),
   tools: myToolDefinitions,
   demoMode: false,
-  createModelFn: (apiKey, modelId) => google(modelId ?? "gemini-2.5-flash", {apiKey}),
+  createModelFn: (apiKey, modelId) => google(modelId ?? "gemini-3.8-flash", {apiKey}),
   openApiOptions: options,
 }).register(app);
 ```
@@ -473,10 +473,10 @@ import {
 } from "@terreno/ai";
 
 const vertex = await createVertexProvider({project: "my-gcp-project"});
-const model = vertex.languageModel("gemini-2.5-flash");
+const model = vertex.languageModel("gemini-3.8-flash");
 ```
 
-Env fallbacks: `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` (default `us-central1`).
+Env fallbacks: `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` (default `global`).
 
 ## Web search types
 
@@ -489,7 +489,7 @@ import {TerrenoApp} from "@terreno/api";
 import {AiApp, AIService, LangfuseApp} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
-const aiService = new AIService({model: google("gemini-2.5-flash")});
+const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 new TerrenoApp({userModel: User})
   .register(new AiApp({aiService, openApiOptions: {}}))
@@ -509,7 +509,7 @@ Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. i
 | Variable | Used by | Description |
 |----------|---------|-------------|
 | `GOOGLE_VERTEX_PROJECT` | `createVertexProvider` | GCP project for Vertex models |
-| `GOOGLE_VERTEX_LOCATION` | `createVertexProvider` | Vertex region (default `us-central1`) |
+| `GOOGLE_VERTEX_LOCATION` | `createVertexProvider` | Vertex region (default `global`) |
 | `LANGFUSE_PUBLIC_KEY` | `LangfuseApp` | Langfuse public key |
 | `LANGFUSE_SECRET_KEY` | `LangfuseApp` | Langfuse secret key |
 | `LANGFUSE_BASE_URL` | Langfuse client | Langfuse host URL |

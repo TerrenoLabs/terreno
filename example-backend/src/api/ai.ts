@@ -58,15 +58,20 @@ const getGoogleModule = (): GoogleModule | undefined => {
   }
 };
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
-const VERTEX_IMAGE_MODEL = "imagen-4.0-fast-generate-001";
+const DEFAULT_MODEL = "gemini-3.8-flash";
+const VERTEX_IMAGE_MODEL = "gemini-3-pro-image";
 
 /**
- * Curated fallback chat models, used only when the live Google model listing cannot be retrieved
- * (no provider/API key configured, or the request failed). Kept to current, generally-available
- * models so the picker never offers a retired model.
+ * Curated fallback chat models (Gemini 3 family), used only when the live Google model listing cannot be retrieved
+ * (no provider/API key configured, or the request failed). Kept to current Gemini 3
+ * models so the picker never offers retired models.
  */
-const DEFAULT_CHAT_MODEL_IDS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+const DEFAULT_CHAT_MODEL_IDS = [
+  "gemini-3.8-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-pro-preview",
+  "gemini-3-pro-image",
+];
 
 interface SelectableModel {
   label: string;

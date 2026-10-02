@@ -137,15 +137,14 @@ const findStreamingReply = (history?: GptHistory): {text: string} | undefined =>
  * fetched from GET /ai/models, which reflects the backend's allow-list and Vertex enabled models.
  */
 const FALLBACK_MODELS = [
-  {label: "Gemini 2.5 Pro", value: "gemini-2.5-pro"},
-  {label: "Gemini 2.5 Flash", value: "gemini-2.5-flash"},
-  {label: "Gemini 2.5 Flash Lite", value: "gemini-2.5-flash-lite"},
-  {label: "Gemini 2.0 Flash", value: "gemini-2.0-flash"},
-  {label: "Gemini 2.0 Flash Lite", value: "gemini-2.0-flash-lite"},
+  {label: "Gemini 3.8 Flash", value: "gemini-3.8-flash"},
+  {label: "Gemini 3.5 Flash Lite", value: "gemini-3.5-flash-lite"},
+  {label: "Gemini 3.1 Pro", value: "gemini-3.1-pro-preview"},
+  {label: "Gemini 3 Pro Image", value: "gemini-3-pro-image"},
 ];
 
 /** Default selection — a balanced model that matches the example backend's default. */
-const DEFAULT_MODEL_VALUE = "gemini-2.5-flash";
+const DEFAULT_MODEL_VALUE = "gemini-3.8-flash";
 
 /** RTK Query cache key for the default gpt histories list (must match useGetGptHistoriesQuery). */
 const gptHistoriesListQueryArgs = {};

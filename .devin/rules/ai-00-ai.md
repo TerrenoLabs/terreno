@@ -52,7 +52,7 @@ import {AIService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
 const aiService = new AIService({
-  model: google("gemini-2.5-flash"),
+  model: google("gemini-3.8-flash"),
   defaultTemperature: 1.0,  // optional
 });
 ```
@@ -176,7 +176,7 @@ Consuming apps wire up routes in their `setupServer` call:
 import {AIService, addGptRoutes, addGptHistoryRoutes, addAiRequestsExplorerRoutes} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
-const aiService = new AIService({model: google("gemini-2.5-flash")});
+const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 setupServer({
   addRoutes: (router, options) => {

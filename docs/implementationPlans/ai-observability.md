@@ -274,7 +274,7 @@ Env (example-backend):
 | `AI_OBS_DATASETS_PRIMARY` | default `local` |
 | `AI_OBS_EXPERIMENTS_PRIMARY` | must equal datasets |
 | `AI_OBS_SAMPLE_RATE` | `0`–`1`, default `0` |
-| `AI_OBS_PRICE_MAP_JSON` | `{ "gemini-2.5-flash": { "inputPerMTok": 0.1, "outputPerMTok": 0.4 } }` |
+| `AI_OBS_PRICE_MAP_JSON` | `{ "gemini-3.8-flash": { "inputPerMTok": 0.1, "outputPerMTok": 0.4 } }` |
 | existing Langfuse keys | unchanged |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | optional OTLP |
 

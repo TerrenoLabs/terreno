@@ -97,7 +97,7 @@ const createImageModel = () => ({
       },
     }),
   })),
-  modelId: "gemini-2.5-flash-image",
+  modelId: "gemini-3-pro-image",
   provider: "mock-provider",
   specificationVersion: "v2" as const,
   supportedUrls: {},
@@ -347,11 +347,11 @@ describe("AI Routes", () => {
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
         .post("/gpt/prompt")
-        .send({model: "gemini-2.5-pro", prompt: "Hi"})
+        .send({model: "gemini-3.1-pro-preview", prompt: "Hi"})
         .buffer(true)
         .parse(sseCollect);
       expect(res.status).toBe(200);
-      expect(createServerModelFn).toHaveBeenCalledWith("gemini-2.5-pro");
+      expect(createServerModelFn).toHaveBeenCalledWith("gemini-3.1-pro-preview");
     });
 
     it("falls back to default aiService when createServerModelFn returns null", async () => {

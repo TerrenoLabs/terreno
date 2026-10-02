@@ -275,7 +275,7 @@ export interface GptRouteOptions {
   tools?: Record<string, import("ai").Tool>;
   toolChoice?: "auto" | "none" | "required";
   maxSteps?: number;
-  /** Cheap model ID used for generating conversation titles (e.g. "gemini-2.0-flash-lite"). Falls back to the main model if not set. */
+  /** Cheap model ID used for generating conversation titles (e.g. "gemini-3.5-flash-lite"). Falls back to the main model if not set. */
   titleModelId?: string;
   /** Langfuse prompt name to load and use as the system prompt. Compiled with no variables.
    * Falls back gracefully if Langfuse is not configured or the prompt is not found. */

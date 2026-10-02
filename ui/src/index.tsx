@@ -61,6 +61,7 @@ export type * from "./GPTMemoryModal";
 export * from "./Heading";
 export * from "./HeightActionSheet";
 export * from "./HeightField";
+export * from "./HtmlFrame";
 export * from "./Icon";
 export * from "./IconButton";
 export * from "./IconRegistry";

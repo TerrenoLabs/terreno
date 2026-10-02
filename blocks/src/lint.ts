@@ -7,6 +7,8 @@ export interface KnownDataset {
 }
 
 export interface LintBlocksOptions {
+  /** When false or omitted, an `html` block fails with `HTML_DISABLED`. */
+  allowHtml?: boolean;
   hostActions?: readonly string[];
   knownDatasets?: Record<string, KnownDataset>;
 }
@@ -174,6 +176,29 @@ export const lintDocument = (
     }
   }
   for (const {block, path} of walked) {
+    if (block.type === "html") {
+      if (options?.allowHtml !== true) {
+        errors.push(
+          issue({
+            code: "HTML_DISABLED",
+            fix: "Turn on uiBlocks.html before sending an html block, or use a text block.",
+            message: BLOCK_ERROR_CODES.HTML_DISABLED,
+            path,
+          })
+        );
+      }
+      const bytes = new TextEncoder().encode(block.html).length;
+      if (bytes > BLOCK_LIMITS.htmlMaxBytes) {
+        errors.push(
+          issue({
+            code: "HTML_TOO_LARGE",
+            fix: `Keep the html field at or under ${BLOCK_LIMITS.htmlMaxBytes} bytes.`,
+            message: BLOCK_ERROR_CODES.HTML_TOO_LARGE,
+            path: `${path}.html`,
+          })
+        );
+      }
+    }
     if (block.id !== undefined) {
       if (seenIds.has(block.id)) {
         errors.push(

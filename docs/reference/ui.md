@@ -422,6 +422,14 @@ buttons as loading. `overrides` replaces a block by id.
 
 Demo story: `BlocksView`.
 
+### HtmlFrame
+
+`HtmlFrame` paints one `html` block. On web it is an `<iframe sandbox="" referrerpolicy="no-referrer">` whose `srcdoc` starts with a Content-Security-Policy meta tag (`default-src 'none'`). On native it is a WebView with JavaScript off, and navigation after the first load is rejected. `BlocksView` renders that frame only when `allowHtml` is true and `streaming` is false. Otherwise the block is a card that says the preview is off or still arriving. `GPTChat` passes `allowHtml` through.
+
+```tsx
+<HtmlFrame height="md" html="<h1>Invoice</h1>" title="Invoice preview" />
+```
+
 ### AskCard
 
 One agent ask in a chat transcript: controls while it is pending, a summary line after. `GPTChat`

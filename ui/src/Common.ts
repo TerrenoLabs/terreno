@@ -1115,6 +1115,15 @@ export interface HeadingProps extends WithTestID {
   truncate?: boolean; // default false
 }
 
+export interface HtmlFrameProps {
+  /** Frame height. `sm` is 240px, `md` is 400px, and `lg` is 640px. */
+  height?: "lg" | "md" | "sm";
+  /** Sanitized HTML. The frame prepends a Content-Security-Policy meta tag. */
+  html: string;
+  /** Accessible name for the frame. Defaults to Agent-generated preview. */
+  title?: string;
+}
+
 export interface MetaProps {
   itemProp?: string;
   content?: string;
@@ -1949,6 +1958,8 @@ export type BannerProps =
   | (BannerPropsBase & {buttonOnClick: () => void | Promise<void>} & BannerButtonProps);
 
 export interface BlocksViewProps extends WithTestID {
+  /** When true, an `html` block renders in a sandboxed frame. Otherwise it stays a placeholder. */
+  allowHtml?: boolean;
   /** A whole-reply YAML or JSON string, or a document that already parsed. */
   document: string | BlocksDocument;
   /** Names the host will run. A callback outside this list is disabled. Omit to leave callbacks enabled. */
@@ -1965,6 +1976,8 @@ export interface BlocksViewProps extends WithTestID {
     id: string;
     limit?: number;
   }) => Promise<InlineDataset | undefined>;
+  /** While a reply is still streaming, `html` stays a placeholder. */
+  streaming?: boolean;
 }
 
 export interface BodyProps {

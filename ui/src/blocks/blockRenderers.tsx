@@ -10,6 +10,7 @@ import {Card} from "../Card";
 import {DataTable} from "../DataTable";
 import {DonutChart} from "../DonutChart";
 import {Heading} from "../Heading";
+import {HtmlFrame} from "../HtmlFrame";
 import {LineChart} from "../LineChart";
 import {MarkdownView} from "../MarkdownView";
 import {SectionDivider} from "../SectionDivider";
@@ -18,7 +19,9 @@ import {Text} from "../Text";
 import {chartHeight, chartPoints, datasetToPoints} from "./datasetToPoints";
 
 export interface BlockRenderContext {
+  allowHtml?: boolean;
   hostActions?: readonly string[];
+  streaming?: boolean;
   loadingIds: ReadonlySet<string>;
   onAction?: (event: {action: BlockAction; blockId: string; elementId: string}) => void;
   overrides?: Record<string, Block>;
@@ -95,6 +98,26 @@ export const renderBlock = (
       );
     case "badge":
       return <Badge key={path} status={block.status ?? "info"} testID={path} value={block.text} />;
+    case "html":
+      if (context.streaming || context.allowHtml !== true) {
+        return (
+          <Card key={path} testID={path}>
+            <Text size="sm">Agent-generated preview</Text>
+            <Text>
+              {context.streaming
+                ? "The preview appears when this reply finishes."
+                : "HTML preview is turned off."}
+            </Text>
+          </Card>
+        );
+      }
+      return (
+        <Card key={path} testID={path}>
+          <Text size="sm">Agent-generated preview</Text>
+          {block.title ? <Heading size="sm">{block.title}</Heading> : null}
+          <HtmlFrame height={block.height} html={block.html} title={block.title} />
+        </Card>
+      );
     case "divider":
       return (
         <Box key={path} testID={path}>

@@ -27,5 +27,6 @@ export const exampleUiBlocksOptions: UiBlocksOptions = {
       payload: exportPayload,
     },
   },
+  html: true,
   repair: true,
 };

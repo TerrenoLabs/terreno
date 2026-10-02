@@ -431,7 +431,21 @@ const AiScreen: React.FC = () => {
           try {
             const data = JSON.parse(trimmed.slice(6));
 
-            if (data.text) {
+            if (data.replace === "text" && typeof data.text === "string") {
+              hasVisibleEvents = true;
+              assistantText = data.text;
+              const updatedText = assistantText;
+              setCurrentMessages((prev) => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                  updated[lastIdx] = {...updated[lastIdx], content: updatedText};
+                } else {
+                  updated.push({content: updatedText, role: "assistant"});
+                }
+                return updated;
+              });
+            } else if (data.text) {
               hasVisibleEvents = true;
               assistantText += data.text;
               const updatedText = assistantText;
@@ -777,6 +791,7 @@ const AiScreen: React.FC = () => {
 
   return (
     <GPTChat
+      allowHtml
       askErrors={askErrors}
       attachments={attachments}
       availableModels={availableModels}

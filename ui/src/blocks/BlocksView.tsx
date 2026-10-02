@@ -33,23 +33,26 @@ const renderBlocks = (
  * the first errors and keeps the raw text collapsed.
  */
 export const BlocksView: React.FC<BlocksViewProps> = ({
+  allowHtml = false,
   document,
   hostActions,
   onAction,
   overrides,
   pendingElementIds,
   resolveDataset,
+  streaming = false,
   testID,
 }) => {
   const parsed =
     typeof document === "string" ? parseBlocks(document) : {ok: true as const, value: document};
-  const validated = parsed.ok ? validateBlocks(parsed.value) : undefined;
+  const validated = parsed.ok ? validateBlocks(parsed.value, {allowHtml: true}) : undefined;
   const {loadingIds, resolved} = useResolvedDatasets({
     datasets: validated?.ok ? validated.doc.datasets : undefined,
     resolveDataset,
   });
   const {selections, setSelection} = useBlockSelections();
   const context: BlockRenderContext = {
+    allowHtml,
     hostActions,
     loadingIds,
     onAction,
@@ -58,6 +61,7 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
     resolved,
     selections,
     setSelection,
+    streaming,
   };
 
   if (typeof document === "string" && !parsed.ok) {

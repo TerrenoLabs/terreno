@@ -15,6 +15,7 @@ export const BLOCK_LIMITS = {
   documentTextMaxLength: 20_000,
   donutSliceWarning: 8,
   headingTextMaxLength: 200,
+  htmlMaxBytes: 100_000,
   maxBlocks: 50,
   maxDatasets: 8,
   maxDepth: 2,

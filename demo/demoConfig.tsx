@@ -40,6 +40,7 @@ import {GPTChatConfiguration} from "@story-config/GPTChat.config";
 import {GPTMemoryModalConfiguration} from "@story-config/GPTMemoryModal.config";
 import {HeadingConfiguration} from "@story-config/Heading.config";
 import {HeightFieldConfiguration} from "@story-config/HeightField.config";
+import {HtmlFrameConfiguration} from "@story-config/HtmlFrame.config";
 import {IconConfiguration} from "@story-config/Icon.config";
 import {IconButtonConfiguration} from "@story-config/IconButton.config";
 import {ImageConfiguration} from "@story-config/Image.config";
@@ -319,6 +320,7 @@ const Config: DemoConfigurationBase[] = [
   GPTChatConfiguration,
   GPTMemoryModalConfiguration,
   HeadingConfiguration,
+  HtmlFrameConfiguration,
   HeightFieldConfiguration,
   IconConfiguration,
   IconButtonConfiguration,

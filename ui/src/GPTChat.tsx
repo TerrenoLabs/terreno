@@ -191,6 +191,8 @@ export interface GPTChatProps {
    * top-level block and a spinner for the block still arriving.
    */
   uiBlocks?: boolean;
+  /** Renders `html` blocks in a sandboxed frame. Off until the host turns it on. */
+  allowHtml?: boolean;
 }
 
 // ============================================================
@@ -608,6 +610,7 @@ const documentFromPartial = (partial: ReturnType<typeof parseBlocksPartial>): Bl
 };
 
 const AssistantBlocks = ({
+  allowHtml,
   content,
   hostActions,
   isPartial,
@@ -617,6 +620,7 @@ const AssistantBlocks = ({
   pendingElementIds,
   resolveDataset,
 }: {
+  allowHtml?: boolean;
   content: string;
   hostActions?: readonly string[];
   isPartial: boolean;
@@ -632,6 +636,7 @@ const AssistantBlocks = ({
       <Box gap={2} testID={`gpt-blocks-${messageId}`}>
         {partial.blocks.length > 0 ? (
           <BlocksView
+            allowHtml={allowHtml}
             document={documentFromPartial(partial)}
             hostActions={hostActions}
             onAction={(event) =>
@@ -645,6 +650,7 @@ const AssistantBlocks = ({
             overrides={overrides}
             pendingElementIds={pendingElementIds}
             resolveDataset={resolveDataset}
+            streaming
           />
         ) : null}
         {partial.pending ? (
@@ -657,6 +663,7 @@ const AssistantBlocks = ({
   }
   return (
     <BlocksView
+      allowHtml={allowHtml}
       document={content}
       hostActions={hostActions}
       onAction={(event) =>
@@ -676,6 +683,7 @@ const AssistantBlocks = ({
 };
 
 const MessageText = ({
+  allowHtml,
   content,
   hostActions,
   isPartial,
@@ -687,6 +695,7 @@ const MessageText = ({
   role,
   uiBlocks,
 }: {
+  allowHtml?: boolean;
   content: string;
   hostActions?: readonly string[];
   isPartial: boolean;
@@ -701,6 +710,7 @@ const MessageText = ({
   if (role === "assistant" && uiBlocks) {
     return (
       <AssistantBlocks
+        allowHtml={allowHtml}
         content={content}
         hostActions={hostActions}
         isPartial={isPartial}
@@ -917,6 +927,7 @@ const AskTranscriptItem = ({
 };
 
 const MessageList = ({
+  allowHtml,
   appendedMessages,
   askErrors,
   blockOverrides,
@@ -932,6 +943,7 @@ const MessageList = ({
   resolveDataset,
   uiBlocks,
 }: {
+  allowHtml?: boolean;
   appendedMessages: GPTChatMessage[];
   askErrors?: Record<string, AskValidationError[]>;
   blockOverrides: Record<string, Record<string, Block>>;
@@ -1019,6 +1031,7 @@ const MessageList = ({
                 parts={message.contentParts}
               />
               <MessageText
+                allowHtml={allowHtml}
                 content={message.content}
                 hostActions={hostActions}
                 isPartial={index === streamingIndex}
@@ -1235,6 +1248,7 @@ export const GPTChat = ({
   systemMemory,
   testID,
   uiBlocks = false,
+  allowHtml = false,
 }: GPTChatProps): React.ReactElement => {
   const [inputValue, setInputValue] = useState("");
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -1548,6 +1562,7 @@ export const GPTChat = ({
               ) : (
                 <>
                   <MessageList
+                    allowHtml={allowHtml}
                     appendedMessages={appendedMessages}
                     askErrors={askErrors}
                     blockOverrides={blockOverrides}

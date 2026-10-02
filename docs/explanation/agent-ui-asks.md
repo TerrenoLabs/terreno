@@ -295,3 +295,4 @@ plain text, so an ask cannot show a chart or table above its control yet. Both l
   403, because the model would read the admin's message or answer as the owner's.
 - **Asks do not collect secrets.** The system prompt tells the model never to ask for passwords,
   payment card numbers, API keys, or other secrets.
+- **HTML is display-only and opt-in.** An `html` block can be used for XSS, phishing, exfiltration, or clickjacking if it runs as part of the host page. The server allows it only when `uiBlocks.html` is on, strips scripts, event handlers, forms, frames, `meta`/`base`/`link`, anchor `href`s, and every URL except `data:image`, then stores that cleaned document. The client draws it in a sandboxed frame with no JavaScript and no navigation, labeled as an agent-generated preview, and only after the reply has finished.

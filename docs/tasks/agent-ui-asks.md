@@ -82,7 +82,7 @@ Tracer: `ask_choice` (select one) through `/gpt/prompt` pause → `askResponse` 
 
 Deferred until B1.1 and B2.1 in this file are Roast-passed (D28, revised 2026-10-01).
 
-- [ ] **Task 3.1**: Sandboxed `html` block
+- [x] **Task 3.1**: Sandboxed `html` block
   - Delivers: `html` block schema (`title`, `height: sm|md|lg`, `html` ≤ 100,000 bytes) and `HTML_DISABLED` / `HTML_TOO_LARGE` in `@terreno/blocks`; `uiBlocks.html` server option; `sanitizeHtml` in `@terreno/ai` applied to the final document (re-sent with `{replace: text}` when changed); `HtmlFrame` (web `iframe sandbox=""` + injected CSP meta; native WebView with JavaScript and navigation off); `html` renderer in `BlocksView` with a streaming placeholder and an `allowHtml` gate.
   - Files: `blocks/src/schema.ts`, `blocks/src/errors.ts`, fixtures, tests; `root package.json` (catalog `sanitize-html`), `ai/package.json`, `ai/src/service/sanitizeHtml.ts`, `ai/src/routes/gpt.ts`, tests; `ui/src/HtmlFrame.tsx`, `ui/src/blocks/blockRenderers.tsx`, `ui/src/GPTChat.tsx`, tests; `demo/stories/HtmlFrame.stories.tsx`, `demo/story-config/HtmlFrame.config.tsx`, `demo/demoConfig.tsx`.
   - Blocked by: 1.1, B1.1, B2.1

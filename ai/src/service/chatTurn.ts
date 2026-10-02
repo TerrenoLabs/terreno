@@ -63,6 +63,7 @@ import {
   UI_BLOCKS_REPAIR_SYSTEM_PROMPT,
   uiBlocksSystemPrompt,
 } from "./prompts";
+import {sanitizeBlocksText} from "./sanitizeHtml";
 
 export const DEMO_RESPONSE =
   "This is demo mode. To use AI features, paste your Gemini API key in Settings.";
@@ -104,6 +105,11 @@ interface ChatTurnTextEvent {
   text: string;
 }
 
+interface ChatTurnReplaceTextEvent {
+  replace: "text";
+  text: string;
+}
+
 interface ChatTurnToolCallEvent {
   toolCall: {args: unknown; toolCallId: string; toolName: string};
 }
@@ -117,6 +123,7 @@ type ChatTurnEvent =
   | ChatTurnAskResolvedEvent
   | ChatTurnBlocksEvent
   | ChatTurnDoneEvent
+  | ChatTurnReplaceTextEvent
   | ChatTurnErrorEvent
   | ChatTurnFileEvent
   | ChatTurnImageEvent
@@ -1060,13 +1067,15 @@ const withTurnSystemPrompt = ({
 
 const checkBlockDocument = (
   text: string,
-  hostActions: readonly string[] | undefined
+  hostActions: readonly string[] | undefined,
+  allowHtml: boolean
 ): {errors: BlockError[]; ok: boolean; warnings: BlockError[]} => {
   const parsed = parseBlocks(text);
   if (!parsed.ok) {
     return {errors: parsed.errors, ok: false, warnings: []};
   }
   const validated = validateBlocks(parsed.value, {
+    ...(allowHtml ? {allowHtml: true} : {}),
     ...(hostActions ? {hostActions} : {}),
   });
   return {
@@ -1465,7 +1474,7 @@ export const runChatTurn = async ({
   const system = withTurnSystemPrompt({
     askKinds: offeredAskKinds,
     blocksPrompt: uiBlocks
-      ? uiBlocksSystemPrompt(Object.keys(uiBlocks.hostActions ?? {}))
+      ? uiBlocksSystemPrompt(Object.keys(uiBlocks.hostActions ?? {}), uiBlocks.html === true)
       : undefined,
     surface,
     systemPrompt: effectiveSystemPrompt,
@@ -1626,9 +1635,10 @@ export const runChatTurn = async ({
     let {fullResponse} = record;
     const hostActionNames =
       uiBlocks?.hostActions === undefined ? undefined : Object.keys(uiBlocks.hostActions);
+    const allowHtml = uiBlocks?.html === true;
     let blocksCheck =
       uiBlocks && fullResponse.trim() !== ""
-        ? checkBlockDocument(fullResponse, hostActionNames)
+        ? checkBlockDocument(fullResponse, hostActionNames, allowHtml)
         : undefined;
     let repaired = false;
     if (blocksCheck && !blocksCheck.ok && uiBlocks?.repair === true) {
@@ -1640,7 +1650,16 @@ export const runChatTurn = async ({
       if (next !== undefined) {
         fullResponse = next;
         repaired = true;
-        blocksCheck = checkBlockDocument(fullResponse, hostActionNames);
+        blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml);
+      }
+    }
+    let replacedText = false;
+    if (allowHtml && blocksCheck?.ok) {
+      const sanitized = sanitizeBlocksText(fullResponse);
+      if (sanitized.changed) {
+        fullResponse = sanitized.text;
+        replacedText = true;
+        blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml);
       }
     }
     const storedResponse =
@@ -1748,6 +1767,9 @@ export const runChatTurn = async ({
       fullResponseLength: fullResponse.length,
       historyId: history._id.toString(),
     });
+    if (replacedText) {
+      sink.emit({replace: "text", text: fullResponse});
+    }
     if (blocksCheck) {
       sink.emit({blocks: blocksCheck});
     }

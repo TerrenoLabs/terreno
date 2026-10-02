@@ -298,6 +298,27 @@ blocks:
     expect(queryByText("Original")).toBeNull();
   });
 
+  it("keeps html as a placeholder until the host allows it and the reply finishes", () => {
+    const block: Record<string, string> = {};
+    block.type = "html";
+    block.title = "Invoice preview";
+    block.html = "<h1>Invoice #1042</h1>";
+    const document: Record<string, unknown> = {};
+    document.v = 1;
+    document.blocks = [block];
+
+    const off = renderWithTheme(<BlocksView document={document} />);
+    expect(off.getByText("HTML preview is turned off.")).toBeTruthy();
+    expect(off.queryByText("Invoice #1042")).toBeNull();
+
+    const streaming = renderWithTheme(<BlocksView allowHtml document={document} streaming />);
+    expect(streaming.getByText("The preview appears when this reply finishes.")).toBeTruthy();
+
+    const on = renderWithTheme(<BlocksView allowHtml document={document} />);
+    expect(on.getByText("Agent-generated preview")).toBeTruthy();
+    expect(on.getByText("Invoice preview")).toBeTruthy();
+  });
+
   it("does not use raw react-native views in the blocks folder", () => {
     const dir = import.meta.dir;
     const files = readdirSync(dir).filter(

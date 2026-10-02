@@ -7,3 +7,4 @@ category: Added
 - `@terreno/ai` stores chart rows on `AIDataset` via `registerAiDataset`. `GET /gpt/datasets/:id` is owner-only and can bucket, downsample, or paginate them. `POST /gpt/actions` runs a named host callback after an owner check and a payload check.
 - `@terreno/ui` `BlocksView` paints a document. `GPTChat` `uiBlocks` renders assistant messages through that view, including a spinner while the reply is still streaming.
 - The example backend registers `exportDataset` and a `todoStats` tool that stores open and completed todo counts. The example AI tab loads `ref` charts and posts callbacks.
+- `html` blocks are opt-in (`uiBlocks.html` on the server, `allowHtml` on `GPTChat` or `BlocksView`). The server strips scripts, event handlers, forms, frames, and links, then stores the cleaned document. The client draws it in a sandboxed frame only after the reply finishes.

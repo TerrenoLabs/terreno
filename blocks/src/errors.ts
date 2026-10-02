@@ -6,6 +6,8 @@ export const BLOCK_ERROR_CODES = {
   DATASET_TOO_LARGE: "A dataset has more rows or columns than allowed.",
   DEPTH_EXCEEDED: "A columns or card block is nested inside another columns or card block.",
   DUPLICATE_ID: "An id or a column name is used more than once.",
+  HTML_DISABLED: "An html block is present and this host has not turned HTML on.",
+  HTML_TOO_LARGE: "An html block is larger than 100,000 bytes.",
   INVALID_ENUM: "A value is not one of the allowed values.",
   INVALID_FORMAT: "A string does not match its required format.",
   INVALID_TYPE: "A value has the wrong type.",

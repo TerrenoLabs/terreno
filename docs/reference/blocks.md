@@ -38,6 +38,14 @@ A dataset name matches `^[a-z][a-z0-9_]{0,63}$`. A document has at most 8 datase
 
 `x` is a string or date column. `y` is a number column. A table lists at most 12 columns.
 
+## HTML
+
+| Block | Required | Optional |
+| --- | --- | --- |
+| `html` | `html` (at most 100,000 bytes) | `id`, `title`, `height`: `sm`, `md`, `lg` |
+
+`validateBlocks` returns `HTML_DISABLED` unless `options.allowHtml` is true. A host turns that on with `uiBlocks.html`. The server sanitizes the HTML before it is stored. The client renders it only when `allowHtml` is set.
+
 Warnings do not block rendering:
 
 | Code | When |
@@ -120,6 +128,8 @@ heuristics and does not fail `ok`.
 | `DATASET_TOO_LARGE` | A dataset has more than 500 rows or 12 columns. |
 | `DEPTH_EXCEEDED` | A `columns` or `card` block is nested inside another layout block. |
 | `DUPLICATE_ID` | An id or a column name is used more than once. |
+| `HTML_DISABLED` | An html block is present and this host has not turned HTML on. |
+| `HTML_TOO_LARGE` | An html block is larger than 100,000 bytes. |
 | `INVALID_ENUM` | A value is not one of the allowed values. |
 | `INVALID_FORMAT` | A string does not match its required format. |
 | `INVALID_TYPE` | A value has the wrong type. |
@@ -146,11 +156,11 @@ heuristics and does not fail `ok`.
 | --- | --- |
 | `parseBlocks(text)` | Fence strip, YAML or JSON parse |
 | `parseBlocksPartial(text)` | Completed top-level blocks while a reply is still streaming |
-| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, and action lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names. |
+| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, action, and html lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names. `options.allowHtml` allows `html` blocks. |
 | `wrapAsTextDocument(text)` | Display fallback for a non-document |
 | `blocksSchema` | Zod schema |
 | `blocksJsonSchema` | JSON Schema for the same structure |
-| `blocksPromptSection({hostActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. |
+| `blocksPromptSection({hostActions, allowHtml})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. |
 | `BLOCK_LIMITS` | The numbers in the table above |
 | `BLOCK_ERROR_CODES` | The codes in the table above |
 | `BLOCK_WARNING_CODES` | `BAR_TOO_MANY_CATEGORIES`, `DONUT_TOO_MANY_SLICES`, `LINE_SINGLE_POINT` |

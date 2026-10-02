@@ -39,8 +39,10 @@ blocks:
  * Every cap is read from `BLOCK_LIMITS` so the prompt, the schema, and the reference stay aligned.
  */
 export const blocksPromptSection = ({
+  allowHtml = false,
   hostActions = [],
 }: {
+  allowHtml?: boolean;
   hostActions?: readonly string[];
 } = {}): string => {
   const callbacks =
@@ -51,7 +53,15 @@ export const blocksPromptSection = ({
     "Your entire reply is one document; no prose outside it; no text before tool calls.",
     "The document is YAML or JSON. Keys, when present, are in this order: v, datasets, blocks.",
     "v is 1.",
-    "Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card.",
+    allowHtml
+      ? "Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, html."
+      : "Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card. Do not emit type html.",
+    `An html field is at most ${BLOCK_LIMITS.htmlMaxBytes} bytes.`,
+    ...(allowHtml
+      ? [
+          "html requires html and may set title and height (sm, md, or lg). It is a display preview: no scripts, no links, no network.",
+        ]
+      : []),
     "heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.",
     "chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.",
     "table requires data, the name of a dataset. actions requires id and elements.",

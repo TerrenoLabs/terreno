@@ -11,11 +11,11 @@ export const UI_BLOCKS_REPAIR_SYSTEM_PROMPT =
   "The document you wrote failed validation. Reply with only the corrected document. Do not explain the changes.";
 
 /** The blocks prompt for this host's callback names. */
-export const uiBlocksSystemPrompt = (hostActions: readonly string[]): string => {
-  if (hostActions.length === 0) {
+export const uiBlocksSystemPrompt = (hostActions: readonly string[], allowHtml = false): string => {
+  if (hostActions.length === 0 && !allowHtml) {
     return TERRENO_UI_BLOCKS_SYSTEM_PROMPT;
   }
-  return blocksPromptSection({hostActions});
+  return blocksPromptSection({allowHtml, hostActions});
 };
 
 /**

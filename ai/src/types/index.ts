@@ -341,6 +341,8 @@ export interface UiBlocksOptions {
   datasetMaxRows?: number;
   /** Days before a stored dataset expires. `0` (the default) keeps it. */
   datasetTtlDays?: number;
+  /** When true, `html` blocks are allowed and sanitized before they are stored. */
+  html?: boolean;
   hostActions?: Record<
     string,
     {

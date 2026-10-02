@@ -3026,4 +3026,46 @@ describe("/gpt/prompt uiBlocks", () => {
       VALID_BLOCKS.trimEnd()
     );
   });
+
+  it("rejects an html block unless uiBlocks.html is on", async () => {
+    const model = createScriptedModel({
+      steps: [textStep("v: 1\nblocks:\n  - type: html\n    html: <p>Invoice</p>\n")],
+    });
+    const agent = await authAsUser(buildApp({model, uiBlocks: true}), "notAdmin");
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    const blocks = events.find((event) => "blocks" in event)?.blocks as {
+      errors: {code: string}[];
+      ok: boolean;
+    };
+    expect(blocks.ok).toBe(false);
+    expect(blocks.errors.map((error) => error.code)).toContain("HTML_DISABLED");
+    expect(systemPromptOf(modelCall(model, 0))).toContain("Do not emit type html");
+  });
+
+  it("stores sanitized html and sends it with {replace: text} before {blocks}", async () => {
+    const model = createScriptedModel({
+      steps: [
+        textStep('v: 1\nblocks:\n  - type: html\n    html: "<p>Hi</p><script>alert(1)</script>"\n'),
+      ],
+    });
+    const agent = await authAsUser(buildApp({model, uiBlocks: {html: true}}), "notAdmin");
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    expect(events.map((event) => Object.keys(event)[0])).toEqual([
+      "text",
+      "replace",
+      "blocks",
+      "done",
+    ]);
+    const replaced = events.find((event) => "replace" in event) as {text?: string};
+    expect(replaced.text).not.toContain("<script");
+    expect(systemPromptOf(modelCall(model, 0))).toContain("card, html");
+    const history = await loadHistory(await onlyHistoryId());
+    expect(String(rowsOf(history).find((row) => row.type === "assistant")?.text)).not.toContain(
+      "<script"
+    );
+  });
 });

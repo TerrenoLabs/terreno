@@ -3,6 +3,7 @@ import {z} from "zod";
 import {BLOCK_LIMITS} from "./limits";
 
 export const HEADING_SIZES = ["sm", "md", "lg", "xl", "2xl"] as const;
+export const HTML_HEIGHTS = ["sm", "md", "lg"] as const;
 export const BADGE_STATUSES = ["info", "error", "warning", "success", "neutral", "active"] as const;
 export const METRIC_TRENDS = ["up", "down", "flat"] as const;
 export const LAYOUT_BLOCK_TYPES = ["columns", "card"] as const;
@@ -163,6 +164,14 @@ export interface ActionsBlock {
   type: "actions";
 }
 
+export interface HtmlBlock {
+  height?: (typeof HTML_HEIGHTS)[number];
+  html: string;
+  id?: string;
+  title?: string;
+  type: "html";
+}
+
 export interface ColumnsBlock {
   children: Block[];
   id?: string;
@@ -185,7 +194,8 @@ export type LeafBlock =
   | ContextBlock
   | ChartBlock
   | TableBlock
-  | ActionsBlock;
+  | ActionsBlock
+  | HtmlBlock;
 
 export type Block = LeafBlock | ColumnsBlock | CardBlock;
 
@@ -352,6 +362,16 @@ const segmentedElementSchema = z
   })
   .strict();
 
+const htmlSchema = z
+  .object({
+    ...sharedBlockFields,
+    height: z.enum(HTML_HEIGHTS).optional(),
+    html: z.string().min(1),
+    title: visibleText(BLOCK_LIMITS.headingTextMaxLength).optional(),
+    type: z.literal("html"),
+  })
+  .strict();
+
 const actionsSchema = z
   .object({
     elements: z
@@ -374,6 +394,7 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
     chartSchema,
     tableSchema,
     actionsSchema,
+    htmlSchema,
     z
       .object({
         ...sharedBlockFields,

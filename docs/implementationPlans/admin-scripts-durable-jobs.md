@@ -1,6 +1,7 @@
 # Implementation Plan: Admin scripts via durable jobs
 
-**Status:** Approved (operator) — 2026-09-14
+**Status:** Complete
+**Roadmap:** Area=`admin`, Target=`Released`, Impact=`Improvement`  
 **Branch:** `cursor/scripts-via-durable-jobs-803d`
 **Task list:** [admin-scripts-durable-jobs.md](../tasks/admin-scripts-durable-jobs.md)
 **Depends on:** [job-queues.md](job-queues.md)

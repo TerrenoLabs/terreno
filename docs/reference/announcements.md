@@ -27,6 +27,7 @@ new TerrenoApp({ userModel: User })
 | `help.enabled` | `boolean` | `false` | Registers help search/detail routes for MCP and in-app help |
 | `matchAudience` | `(user, announcement) => boolean` | always `true` | Opaque audience JSON filter composed with `audienceType` via `matchAudienceByType` |
 | `isStaff` | `(user) => boolean` | `user.admin === true` | Staff check used by `matchAudienceByType` for `audienceType` |
+| `uploadToken` | `string` | unset | Dedicated bearer token for idempotent `POST /announcements/import-release` automation |
 | `permissions` | partial CRUD overrides | admin-only | Overrides default `IsAdmin` permissions on announcement CRUD |
 
 ## Acknowledgement policy
@@ -52,7 +53,7 @@ Legacy MongoDB documents that still store `requiresAcknowledgement: true` map to
 
 ## Models
 
-- **Announcement** — `title`, `body` (markdown), `status` (`draft` | `published` | `archived`), `version`, `priority`, `displayMode` (`modal` | `banner` | `feed`, default `modal`), `audienceType` (`staff` | `patient` | `all`, default `all`), `acknowledgementPolicy`, optional `minBuildNumber`, `audience` (Mixed), `publishAt`, `expiresAt`, `platforms`, `primaryAction`
+- **Announcement** — `title`, `body` (markdown), `status` (`draft` | `published` | `archived`), `version`, `priority`, `displayMode` (`modal` | `banner` | `feed`, default `modal`), `audienceType` (`staff` | `patient` | `all`, default `all`), `acknowledgementPolicy`, optional `minBuildNumber`, `audience` (Mixed), `publishAt`, `expiresAt`, `platforms`, `primaryAction`, and optional imported `release` metadata plus `releaseSlug`
 - **AnnouncementAcknowledgement** — per-user acknowledgement at a specific `version`
 - **AnnouncementImpression** — per-view analytics row
 - **AnnouncementClickEvent** — per-click analytics row (`action: "primaryAction"`, `version` at click time, optional `platform`)
@@ -83,7 +84,7 @@ The plugin applies `matchAudienceByType` before `matchAudience`. When `isStaff` 
 | GET | `/announcements/pending` | Current interrupt (`modal` or `banner` only) + `remainingCount` (`platform` query: `ios` \| `android` \| `web`; optional `version` build number) |
 | GET | `/announcements/feed` | Paginated published changelog — all display modes (`platform` and optional `version` as above) |
 | POST | `/announcements/:id/acknowledge` | Record acknowledgement (idempotent per version). Same visibility as pending/feed; **404** when not visible. |
-| POST | `/announcements/:id/impression` | Record a view. Same visibility as pending/feed; **404** when not visible. |
+| POST | `/announcements/:id/impression` | Record a view (`{ platform? }`). Same visibility as pending/feed; **404** when not visible. **400** for unknown keys or an invalid `platform`. |
 | POST | `/announcements/:id/click` | Record a primary-action click (`{ action: "primaryAction", platform? }`; optional `?version=` for min-build visibility). Returns **404** when not visible (checked before action/CTA validation). **400** when `action` is invalid, `primaryAction` is absent, or an explicit `platform` value is invalid. |
 
 `current` and feed items include resolved `requiresAcknowledgement` (boolean) and `displayMode` derived from policy resolution and stored fields above.
@@ -96,7 +97,7 @@ Optional integer build number on `GET /pending`, `GET /feed`, and help routes. W
 - `?version=10` (or higher) shows it
 - omitting `version` does **not** hide gated items
 
-`POST /announcements/:id/acknowledge`, `POST /announcements/:id/impression`, and `POST /announcements/:id/click` use the same visibility rules as pending/feed (schedule, expiry, platform, min build, `audienceType`, and `matchAudience`). All three return **404** when the announcement is not visible to the caller, so targeted IDs cannot be confirmed by writing event rows. Click checks visibility before action/CTA validation. Returns **400** when `action` is not `"primaryAction"`, the announcement has no `primaryAction`, or an explicit body `platform` is not `ios` / `android` / `web` (omit `platform` to use query/user-agent resolution). Each click inserts a new row (not idempotent). Acknowledge is idempotent per `(userId, announcementId, version)`.
+`POST /announcements/:id/acknowledge`, `POST /announcements/:id/impression`, and `POST /announcements/:id/click` use the same visibility rules as pending/feed (schedule, expiry, platform, min build, `audienceType`, and `matchAudience`). All three return **404** when the announcement is not visible to the caller, so targeted IDs cannot be confirmed by writing event rows. Impression and click bodies are validated with strict Zod schemas (`{ platform? }` and `{ action: "primaryAction", platform? }`); unknown keys or invalid values return **400** `Validation failed` with per-field messages in `meta.fields`. Click validates `platform` first, then checks visibility before validating `action` and the CTA. Returns **400** when `action` is not `"primaryAction"`, the announcement has no `primaryAction`, or an explicit body `platform` is not `ios` / `android` / `web` (omit `platform` to use query/user-agent resolution). Each click inserts a new row (not idempotent). Acknowledge is idempotent per `(userId, announcementId, version)`.
 
 ## Admin routes
 
@@ -104,8 +105,11 @@ Admin CRUD is on `/announcements` via `modelRouter`. Custom actions:
 
 - `GET /announcements/config` — returns `{ data: { defaultAcknowledgementPolicy } }` from the plugin constructor (admin only; defaults to `"dismiss-only"` when omitted). Used to pre-fill the admin editor acknowledgement policy field.
 - `GET /announcements/overview` — paginated admin dashboard with per-announcement metrics and aggregate totals. Access uses `adminOverviewPermissions` (defaults to `IsAdmin`). Query: `page` (default `1`), `limit` (default `20`, max `100`).
+- `POST /announcements/import-release` — idempotently imports up to 100 announcements keyed by release product/version/channel plus slug. Admin auth or the configured `uploadToken` bearer token is required. New items default to draft; request `publish: true` to publish them. The example deployment's token is `terreno-example-announcement-upload`, seeded by Terraform.
 - `POST /announcements/:id/publish` — draft → published
 - `POST /announcements/:id/archive` — published → archived
+
+See [Announcement release packs](announcement-release-packs.md) for the Markdown/frontmatter format, JSON request shape, version rules, and draft/live behavior.
 
 ### `GET /announcements/overview`
 

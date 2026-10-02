@@ -42,6 +42,16 @@ The demo serves on **port 8085**. Open the Expo web URL that the CLI prints (typ
 - From the repo root, `bun run check:demo-coverage` fails CI when a `@terreno/ui` export has no story and no allowlist reason
 - `bun run --filter terreno-demo test:ci` mounts every registered story with `renderWithTheme`
 
+## Catalog contract
+
+Each story config can set `usageExample` (copyable usage), `related` names that match another
+component's `name`, and per-story `showInDemo`, `stability` (`stable` or `exclude` with
+`excludeReason`), and `interactions`. Boolean controls without a default use `false`. Number
+controls without a default use `0`. Demo mode hides stories with `showInDemo: false`. The home grid and dev index filter by
+search text and category. The Form category is the input fields (text, select, checkbox,
+address, signature, markdown, and the login and consent screens). There is no separate Data Entry filter. Preview query params are documented in
+[preview-demo.md](../docs/how-to/preview-demo.md).
+
 ## Add a story
 
 1. Create `stories/MyComponent.stories.tsx` with a `React.FC` demo using `@terreno/ui`.

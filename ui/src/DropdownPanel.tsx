@@ -1,10 +1,16 @@
-import {type FC, type ReactNode, useEffect, useState} from "react";
-import {Platform, Pressable, View, type ViewStyle} from "react-native";
+import {type FC, type ReactNode, useContext, useEffect, useState} from "react";
+import {Dimensions, Platform, Pressable, ScrollView, View, type ViewStyle} from "react-native";
 
 import {Button} from "./Button";
-import type {FilterProps} from "./Common";
+import type {DropdownPanelProps} from "./Common";
 import {createWebPortal} from "./createWebPortal";
+import {
+  computeDropdownPanelLayout,
+  DROPDOWN_PANEL_GAP,
+  type DropdownPanelLayout,
+} from "./dropdownPanelLayout";
 import {Icon} from "./Icon";
+import {Portal, PortalContext} from "./PortalHost";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
 import {resolveTestID} from "./testing/resolveTestId";
@@ -12,27 +18,37 @@ import {createBoxShadow} from "./Utilities";
 import {useWebDropdownAnchor} from "./WebDropdownMenu";
 
 const DEFAULT_WIDTH = 320;
-const TRIGGER_OFFSET = 44;
-const PANEL_GAP = 4;
 const ICON_TRIGGER_SIZE = {default: 32, sm: 24} as const;
+/** Fallback trigger height for the inline overlay before the trigger has been measured. */
+const TRIGGER_OFFSET = 44;
 
 /**
- * Compositional filter dropdown. Renders a trigger button that opens a panel
- * containing composed filter controls (`FilterSelectMenu`, `FilterBoolean`,
- * `FilterAccordion`, or any custom content) plus an optional Apply / Clear /
- * Cancel footer. Clicking outside the panel closes it. Desktop web only.
+ * Compositional dropdown panel. Renders a trigger that opens a floating panel
+ * containing any composed content — the filter controls (`FilterSelectMenu`,
+ * `FilterBoolean`, `FilterAccordion`) it was designed for, or anything else that
+ * needs a panel with an optional Apply / Clear / Cancel footer. Clicking outside
+ * the panel closes it.
  *
- * On web the panel is rendered in a portal on `document.body` and anchored to
- * the trigger, so it floats above all page content instead of being trapped in
- * a React Native Web stacking context (which would let content bleed through).
+ * The panel always escapes its ancestors' clipping and stacking contexts: on web
+ * it renders in a portal on `document.body` with fixed positioning, and on native
+ * it renders through the `TerrenoProvider` portal host (falling back to an inline
+ * absolute overlay when no host is mounted). It is anchored to the trigger and
+ * kept inside the viewport — right-aligning rather than running off the right
+ * edge, flipping above the trigger when there is no room below, and scrolling its
+ * body when the content is taller than the space available.
  */
-export const Filter: FC<FilterProps> = ({
+export const DropdownPanel: FC<DropdownPanelProps> = ({
+  align = "auto",
+  applyButtonVariant,
   children,
   label = "Filter",
   triggerAccessibilityLabel,
   iconName = "bars-filter",
   iconOnly = false,
-  triggerSize = "sm",
+  triggerSize,
+  triggerVariant,
+  renderTrigger,
+  fullWidth = false,
   isOpen,
   defaultOpen = false,
   onOpenChange,
@@ -48,12 +64,16 @@ export const Filter: FC<FilterProps> = ({
   onCancel,
   variant = "primary",
   width = DEFAULT_WIDTH,
+  maxPanelHeight,
   testID,
 }) => {
   const {theme} = useTheme();
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const [anchorReady, setAnchorReady] = useState(false);
   const {anchor, cancelPendingMeasurement, measure, triggerRef} = useWebDropdownAnchor();
+  // Native portals need a host; without one the panel falls back to an inline overlay so
+  // apps (and tests) that render outside TerrenoProvider still get a usable dropdown.
+  const hasPortalHost = useContext(PortalContext) !== null;
 
   const isControlled = isOpen !== undefined;
   const open = isControlled ? isOpen : internalOpen;
@@ -99,8 +119,8 @@ export const Filter: FC<FilterProps> = ({
   };
 
   const handleClear = (): void => {
-    // Clearing resets the filter values but keeps the panel open so the user can
-    // immediately pick new filters without reopening it.
+    // Clearing resets the values but keeps the panel open so the user can
+    // immediately pick new ones without reopening it.
     onClear?.();
   };
 
@@ -110,7 +130,18 @@ export const Filter: FC<FilterProps> = ({
     restoreTriggerFocus();
   };
 
+  const toggle = (): void => setOpen(!open);
+
   const showFooter = showActionButtons && (showApplyButton || showClearButton || showCancelButton);
+
+  const layout: DropdownPanelLayout = computeDropdownPanelLayout({
+    align,
+    anchor,
+    maxPanelHeight,
+    panelWidth: width,
+    viewportHeight: Dimensions.get("window").height,
+    viewportWidth: Dimensions.get("window").width,
+  });
 
   const panelSurfaceStyle: ViewStyle = {
     backgroundColor: theme.surface.base,
@@ -123,12 +154,19 @@ export const Filter: FC<FilterProps> = ({
       offsetY: 4,
       opacity: 0.15,
     }),
-    width,
+    maxHeight: layout.maxHeight,
+    width: layout.width,
   };
 
   const panelBody: ReactNode = (
     <>
-      <View style={{padding: theme.spacing.sm}}>{children}</View>
+      <ScrollView
+        contentContainerStyle={{padding: theme.spacing.sm}}
+        keyboardShouldPersistTaps="handled"
+        style={{flexShrink: 1}}
+      >
+        {children}
+      </ScrollView>
       {showFooter && (
         <View
           style={{
@@ -173,7 +211,7 @@ export const Filter: FC<FilterProps> = ({
                 onClick={handleApply}
                 testID={testID ? resolveTestID(testID, "apply") : undefined}
                 text={applyButtonText}
-                variant={variant}
+                variant={applyButtonVariant ?? variant}
               />
             )}
           </View>
@@ -181,6 +219,15 @@ export const Filter: FC<FilterProps> = ({
       )}
     </>
   );
+
+  const positionedPanelStyle = (position: "absolute" | "fixed"): ViewStyle =>
+    ({
+      ...panelSurfaceStyle,
+      bottom: layout.bottom,
+      left: layout.left,
+      position,
+      top: layout.top,
+    }) as unknown as ViewStyle;
 
   const renderOverlay = (): ReactNode => {
     // Web: portal to document.body with fixed positioning so the panel escapes
@@ -209,15 +256,7 @@ export const Filter: FC<FilterProps> = ({
             testID={testID ? resolveTestID(testID, "backdrop") : undefined}
           />
           <View
-            style={
-              {
-                ...panelSurfaceStyle,
-                left: anchor.x,
-                position: "fixed",
-                top: anchor.y + anchor.height + PANEL_GAP,
-                zIndex: 2,
-              } as unknown as ViewStyle
-            }
+            style={{...positionedPanelStyle("fixed"), zIndex: 2}}
             testID={testID ? resolveTestID(testID, "panel") : undefined}
           >
             {panelBody}
@@ -229,8 +268,24 @@ export const Filter: FC<FilterProps> = ({
       return target ? createWebPortal({children: overlay, container: target}) : overlay;
     }
 
-    // Native fallback: anchored inline beneath the trigger.
-    return (
+    // Native: teleport to the portal host so the panel is not clipped by a scroll view or
+    // card, positioned from the window coordinates the host shares. Without a host the
+    // panel stays inline and is anchored directly beneath the trigger.
+    const panelStyle: ViewStyle = hasPortalHost
+      ? {...positionedPanelStyle("absolute"), zIndex: 11}
+      : {
+          ...panelSurfaceStyle,
+          left: 0,
+          position: "absolute",
+          top: (anchor.height || TRIGGER_OFFSET) + DROPDOWN_PANEL_GAP,
+          zIndex: 11,
+        };
+
+    if (hasPortalHost && !anchorReady) {
+      return null;
+    }
+
+    const nativeOverlay = (
       <>
         <Pressable
           aria-role="button"
@@ -238,60 +293,76 @@ export const Filter: FC<FilterProps> = ({
           style={{bottom: 0, left: 0, position: "absolute", right: 0, top: 0, zIndex: 10}}
           testID={testID ? resolveTestID(testID, "backdrop") : undefined}
         />
-        <View
-          style={{
-            ...panelSurfaceStyle,
-            left: 0,
-            position: "absolute",
-            top: TRIGGER_OFFSET,
-            zIndex: 11,
-          }}
-          testID={testID ? resolveTestID(testID, "panel") : undefined}
-        >
+        <View style={panelStyle} testID={testID ? resolveTestID(testID, "panel") : undefined}>
           {panelBody}
         </View>
       </>
     );
+
+    return hasPortalHost ? <Portal>{nativeOverlay}</Portal> : nativeOverlay;
+  };
+
+  const renderDefaultTrigger = (): ReactNode => {
+    if (iconOnly) {
+      return (
+        <Pressable
+          accessibilityLabel={triggerAccessibilityLabel ?? label ?? "Filter"}
+          accessibilityRole="button"
+          aria-label={triggerAccessibilityLabel ?? label ?? "Filter"}
+          hitSlop={8}
+          onPress={toggle}
+          style={{
+            alignItems: "center",
+            backgroundColor: open ? theme.surface.neutralLight : theme.surface.base,
+            borderRadius: theme.radius.rounded,
+            height: ICON_TRIGGER_SIZE[triggerSize ?? "sm"],
+            justifyContent: "center",
+            width: ICON_TRIGGER_SIZE[triggerSize ?? "sm"],
+          }}
+          testID={testID ? resolveTestID(testID, "trigger") : undefined}
+        >
+          <Icon
+            color="secondaryLight"
+            iconName={iconName}
+            size={(triggerSize ?? "sm") === "sm" ? "sm" : "md"}
+          />
+        </Pressable>
+      );
+    }
+
+    return (
+      <Button
+        accessibilityLabel={triggerAccessibilityLabel}
+        fullWidth={fullWidth}
+        iconName={iconName}
+        onClick={toggle}
+        size={triggerSize ?? "default"}
+        testID={testID ? resolveTestID(testID, "trigger") : undefined}
+        text={label}
+        variant={triggerVariant ?? variant}
+      />
+    );
   };
 
   return (
-    <View style={{position: "relative"}} testID={testID}>
-      <View ref={triggerRef}>
-        {iconOnly ? (
-          <Pressable
-            accessibilityLabel={triggerAccessibilityLabel ?? label ?? "Filter"}
-            accessibilityRole="button"
-            aria-label={triggerAccessibilityLabel ?? label ?? "Filter"}
-            hitSlop={8}
-            onPress={() => setOpen(!open)}
-            style={{
-              alignItems: "center",
-              backgroundColor: open ? theme.surface.neutralLight : theme.surface.base,
-              borderRadius: theme.radius.rounded,
-              height: ICON_TRIGGER_SIZE[triggerSize],
-              justifyContent: "center",
-              width: ICON_TRIGGER_SIZE[triggerSize],
-            }}
-            testID={testID ? resolveTestID(testID, "trigger") : undefined}
-          >
-            <Icon
-              color="secondaryLight"
-              iconName={iconName}
-              size={triggerSize === "sm" ? "sm" : "md"}
-            />
-          </Pressable>
-        ) : (
-          <Button
-            accessibilityLabel={triggerAccessibilityLabel}
-            iconName={iconName}
-            onClick={() => setOpen(!open)}
-            testID={testID ? resolveTestID(testID, "trigger") : undefined}
-            text={label}
-            variant={variant}
-          />
-        )}
+    <View style={{position: "relative", width: fullWidth ? "100%" : undefined}} testID={testID}>
+      {/* The wrapper is what gets measured, so it must hug the trigger. A stretched
+          wrapper anchors the panel to the start of the whole row instead — which looks
+          right only while the trigger happens to sit at that edge. */}
+      <View
+        collapsable={false}
+        ref={triggerRef}
+        style={{alignSelf: fullWidth ? "stretch" : "flex-start"}}
+      >
+        {renderTrigger ? renderTrigger({isOpen: Boolean(open), toggle}) : renderDefaultTrigger()}
       </View>
       {Boolean(open) && renderOverlay()}
     </View>
   );
 };
+
+/**
+ * @deprecated Renamed to {@link DropdownPanel} — the component is a general
+ * compositional dropdown, not filter-specific. Removed in Terreno 58.
+ */
+export const Filter = DropdownPanel;

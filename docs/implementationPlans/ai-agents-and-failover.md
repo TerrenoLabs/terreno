@@ -1,6 +1,7 @@
 # Implementation plan: AI agents and provider failover
 
 **Status:** Draft  
+**Roadmap:** Area=`ai`, Target=`Future`, Impact=`Feature`  
 **Branch:** `cursor/ai-agents-and-failover-ip-97fd`  
 **Owner:** unassigned  
 **Created:** 2026-08-24  

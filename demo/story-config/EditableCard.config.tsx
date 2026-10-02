@@ -7,6 +7,7 @@ import {
 import {EditableCard} from "@terreno/ui";
 
 export const EditableCardConfiguration: DemoConfiguration = {
+  usageExample: "import {EditableCard} from \"@terreno/ui\";\n\n<EditableCard />",
   name: "EditableCard",
   component: EditableCard,
   related: ["Card", "Badge", "IconButton"],

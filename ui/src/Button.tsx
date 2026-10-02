@@ -13,7 +13,7 @@ import {ActivityIndicator, Pressable, type PressableProps, Text, View} from "rea
 import {Box} from "./Box";
 import type {ButtonPressAnimation, ButtonProps} from "./Common";
 import {useCustomIcon} from "./IconRegistry";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {useTheme} from "./Theme";
 import {Tooltip} from "./Tooltip";
 import {Unifier} from "./Unifier";
@@ -307,7 +307,7 @@ const ConfirmationButton: React.FC<ButtonProps> = ({
 
 const ButtonRender: React.FC<ButtonProps> = (props) => {
   const {tooltipText, tooltipIdealPosition, tooltipIncludeArrow = false} = props;
-  const isMobileOrNative = isMobileDevice() || isNative();
+  const isMobileOrNative = isNarrowViewport() || isNative();
   const button = props.withConfirmation ? (
     <ConfirmationButton {...props} />
   ) : (

@@ -101,6 +101,36 @@ const createImageModel = () => ({
   supportedUrls: {},
 });
 
+// Mock model that emits one generated image and no text
+const createImageOnlyModel = () => ({
+  doGenerate: mock(async () => ({
+    content: [],
+    finishReason: "stop" as const,
+    usage: {inputTokens: 2, outputTokens: 2},
+  })),
+  doStream: mock(async () => ({
+    stream: new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          data: "aGVsbG8=",
+          mediaType: "image/png",
+          type: "file" as const,
+        });
+        controller.enqueue({
+          finishReason: "stop" as const,
+          type: "finish" as const,
+          usage: {inputTokens: 2, outputTokens: 2},
+        });
+        controller.close();
+      },
+    }),
+  })),
+  modelId: "gemini-3-pro-image",
+  provider: "mock-provider",
+  specificationVersion: "v2" as const,
+  supportedUrls: {},
+});
+
 // Mock model that emits text without a finish event (no finish-step → post-loop flush)
 const createNoFinishModel = () => ({
   doGenerate: mock(async () => ({
@@ -480,6 +510,34 @@ describe("AI Routes", () => {
       expect(body).toContain(
         '"image":{"mimeType":"image/png","url":"data:image/png;base64,aGVsbG8="}'
       );
+    });
+
+    it("emits and saves a generated image once, with no placeholder text", async () => {
+      const imageService = new AIService({
+        model: createImageOnlyModel() as unknown as LanguageModel,
+      });
+      const imgApp = new TerrenoApp({
+        configureApp: (router, options) => {
+          addGptRoutes(router, {aiService: imageService, openApiOptions: options});
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+      const agent = await authAsUser(imgApp, "notAdmin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Make an image"})
+        .buffer(true)
+        .parse(sseCollect);
+      expect(res.status).toBe(200);
+      const body = (res as SseResponse).body;
+      expect(body.match(/"image":\{/g)?.length).toBe(1);
+
+      const history = await GptHistory.findExactlyOne({"prompts.text": "Make an image"});
+      const assistant = history.prompts.find((p) => p.type === "assistant");
+      expect(assistant?.text).toBe("");
+      expect(assistant?.content).toHaveLength(1);
+      expect(assistant?.content?.[0]?.url).toBe("data:image/png;base64,aGVsbG8=");
     });
 
     it("writes an SSE error event when the model stream throws", async () => {

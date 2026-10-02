@@ -287,6 +287,69 @@ overrides it:
 | Helper | `{testID}.helper` |
 | Show/hide toggle | `{testID}.visibility-toggle` |
 
+### DropdownPanel
+
+`DropdownPanel` is the compositional dropdown behind the DataTable filter popovers. A
+trigger opens an anchored panel of arbitrary composed content with an optional
+Apply / Clear / Cancel footer, so it also fits non-filter panels (bulk actions, column
+pickers, sort menus).
+
+``````typescript
+<DropdownPanel
+  label="Filters"
+  onApply={applyDraft}
+  onCancel={resetDraft}
+  onClear={clearDraft}
+  onOpenChange={(isOpen) => isOpen && seedDraft()}
+  width={340}
+>
+  <FilterSelectMenu title="Due date" options={DUE_DATE_OPTIONS} value={dueDate} onChange={setDueDate} />
+  <FilterBoolean title="Urgent tasks only" value={urgentOnly} onChange={setUrgentOnly} />
+</DropdownPanel>
+``````
+
+> `Filter` is the former name and stays exported as a deprecated alias (with `FilterProps`)
+> until Terreno 58. The `FilterSelectMenu` / `FilterBoolean` / `FilterAccordion` /
+> `FilterChangesBadge` controls keep their names.
+
+#### Positioning
+
+The panel never renders inside its parent's clipping or stacking context: on web it is
+portaled to `document.body` with fixed positioning, and on native it is teleported to the
+`TerrenoProvider` portal host (falling back to an inline absolute overlay when no host is
+mounted). `computeDropdownPanelLayout` then anchors it to the measured trigger:
+
+| Situation | Behavior |
+| --- | --- |
+| Panel fits beside the trigger | Left edges line up (`align="start"`) |
+| Left-aligned panel would cross the right viewport edge | Right edges line up instead (`align="auto"`, the default) |
+| Panel is wider than the viewport | Narrowed to the viewport minus the 8px screen margins |
+| Less than 160px below the trigger, and more above | Flipped above the trigger |
+| Content taller than the space on screen | Panel body scrolls; the footer stays pinned |
+
+Pass `align="start"` or `align="end"` to pin the side explicitly, and `maxPanelHeight` to
+cap the height below what the viewport allows.
+
+#### Trigger
+
+The default trigger is a `Button` (or a compact icon trigger with `iconOnly`). Style it
+with `triggerVariant` (any `Button` variant), `triggerSize`, and `fullWidth`, or replace
+it entirely with `renderTrigger` when the design needs chrome the button variants do not
+cover:
+
+``````typescript
+<DropdownPanel
+  fullWidth
+  renderTrigger={({isOpen, toggle}) => <MyPill active={isOpen} onPress={toggle} />}
+  width={300}
+>
+  {fields}
+</DropdownPanel>
+``````
+
+`variant` still sets both the trigger and the Apply button; `triggerVariant` and
+`applyButtonVariant` override each independently.
+
 ### GPTChat
 
 Streaming chat surface for `@terreno/ai`. Histories, messages, submit, and optional MCP/tools stay under consumer control.
@@ -318,8 +381,16 @@ images once per mount.
 ### SplitPage
 
 Master-detail layout. Pass `listViewData` plus `renderListViewItem` for the list, and
-`renderContent` for the detail pane. On large screens both panes stay visible. On small
+`renderContent` or children for the detail pane. On large screens both panes stay visible. On small
 screens the detail replaces the list until the user goes back.
+
+`desktopChildrenMinWidth` opts into a minimum pixel width for each desktop child when there
+are one or two children. `narrowViewportChildLabels` opts into a labeled full-width pager on
+the narrow viewport. `narrowBelowWidth` uses that viewport when the window is at or below the
+given pixel width; when omitted, the narrow viewport follows `isNarrowViewport()`. These props
+are web only; the native `SplitPage` ignores them. See `SplitPageProps` for when each prop
+applies and what is ignored.
+`IconButton`'s `backgroundOpacity` tints only that button's background.
 
 ```typescript
 import {SplitPage, Text} from "@terreno/ui";
@@ -351,6 +422,12 @@ Buttons use a scale animation by default. Set `pressAnimation="opacity"` for an 
 ``````
 
 Disabled and loading buttons use a non-interactive pressable regardless of the selected animation.
+
+### Toast
+
+`TerrenoProvider` mounts the toast container. Call `useToast()` for `success`, `info`, `warn`, `error`, `show`, `hide`, and `catch`.
+
+On web, that container is portaled to `document.body` (`position: fixed`, `z-index: 999999`, `pointerEvents: "box-none"`), so a toast stays above an open `Modal` and its backdrop. The web container is sized with `100%` rather than the measured window, so statically exported pages (where `Dimensions` reports 0×0 at build time) still center the toast on screen. Native iOS and Android keep the in-tree absolute container sized to the window.
 
 ## Authentication Components
 
@@ -625,7 +702,7 @@ import {
   mediaQuery,
   mediaQueryLargerThan,
   mediaQuerySmallerThan,
-  isMobileDevice,
+  isNarrowViewport,
 } from "@terreno/ui";
 
 // Read the current breakpoint
@@ -643,9 +720,9 @@ if (mediaQuerySmallerThan("lg")) {
   console.log("Smaller than large");
 }
 
-// Detect mobile
-if (isMobileDevice()) {
-  console.info("Running on mobile device");
+// Current window is below the desktop breakpoint
+if (isNarrowViewport()) {
+  console.info("Narrow viewport");
 }
 ``````
 
@@ -671,7 +748,7 @@ Web (desktop staff):
 
 On web, `sm` (320) and `md` (375) still classify widths below 1024 so layouts can remain accessible.
 
-`isMobileDevice()` is true below the supported desktop floor: native width < 1024 (`xl`), web width < 1024 (`lg`).
+`isNarrowViewport()` is true below the supported desktop floor: native width < 1024 (`xl`), web width < 1024 (`lg`). `isMobileDevice()` is the same check and is deprecated in favor of `isNarrowViewport`.
 
 Responsive `Box` direction props update automatically when the window resizes or a device rotates:
 
@@ -872,10 +949,10 @@ columns; web shows one **More filters** popover and native includes them in the 
 
 | Platform | Chrome |
 | --- | --- |
-| Web | Toolbar search + per-column `Filter` popovers (`column.filter`) |
+| Web | Toolbar search + per-column `DropdownPanel` popovers (`column.filter`) |
 | Native | Toolbar search + one **Filters** sheet (`Modal`) with the same fields |
 
-Column headers use `Filter` with `iconOnly`, which renders a compact icon trigger
+Column headers use `DropdownPanel` with `iconOnly`, which renders a compact icon trigger
 (24px at the default `triggerSize="sm"`, 32px with `triggerSize="default"`) instead
 of a labeled button. Give it an accessible name with `triggerAccessibilityLabel`.
 

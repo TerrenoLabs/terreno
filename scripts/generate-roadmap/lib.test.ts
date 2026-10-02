@@ -55,6 +55,21 @@ describe("renderRoadmapMarkdown", () => {
     assert.include(markdown, "## Target: Future");
     assert.notInclude(markdown, "Declined item");
   });
+
+  it("links the task list only when one exists", (): void => {
+    const markdown = renderRoadmapMarkdown({
+      generatedAtIso: "2026-08-08T00:00:00.000Z",
+      items: sampleItems,
+      projectUrl: "https://github.com/orgs/FlourishHealth/projects/1",
+      taskSlugs: new Set(["oss-governance-baseline"]),
+    });
+
+    assert.include(
+      markdown,
+      "Tasks: [oss-governance-baseline](docs/tasks/oss-governance-baseline.md)"
+    );
+    assert.notInclude(markdown, "docs/tasks/docs-tutorials-ai-first.md");
+  });
 });
 
 describe("displayTitle", (): void => {

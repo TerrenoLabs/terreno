@@ -1,6 +1,6 @@
 # Announcement Surfaces, Targeting, and Click Tracking
 
-**Status:** Implementation complete — Phase 4 verified; Taste in progress
+**Status:** Complete — shipped with announcements
 **Parent IP:** [announcements](announcements.md)  
 **Branch:** `cursor/announcements-grow-bf9c`  
 **Owner:** Terreno  

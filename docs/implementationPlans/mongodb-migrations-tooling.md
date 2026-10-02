@@ -1,6 +1,6 @@
 # MongoDB migrations tooling
 
-**Status:** Approved — decisions 2026-09-10  
+**Status:** Complete  
 **Branch:** `cursor/mongodb-migrations-tooling-04f9`  
 **Owner:** —  
 **Created:** 2026-09-10  

@@ -1,6 +1,7 @@
 # Implementation Plan: AI observability (Langfuse-light, pluggable)
 
 **Status:** Draft  
+**Roadmap:** Area=`ai`, Target=`Future`, Impact=`Feature`  
 **Created:** 2026-08-24  
 **Owner:** unassigned  
 **Branch:** `cursor/ai-observability-ip-64ca`  

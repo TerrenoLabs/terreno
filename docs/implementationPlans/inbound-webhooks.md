@@ -1,6 +1,6 @@
 # Implementation Plan: Inbound webhook framework
 
-**Status:** Approved  
+**Status:** Complete — shipped in #1251  
 **Branch:** `cursor/inbound-webhooks-4945`  
 **Owner:** —  
 **Created:** 2026-09-01  

@@ -3,9 +3,10 @@ import {GPTChatDemo, GPTChatEmpty, GPTChatMascot, GPTChatStreaming} from "@stori
 import {GPTChat} from "@terreno/ui";
 
 export const GPTChatConfiguration: DemoConfiguration = {
+  usageExample: "import {GPTChat} from \"@terreno/ui\";\n\n<GPTChat />",
   name: "GPTChat",
   component: GPTChat,
-  related: ["AiSuggestionBox", "MarkdownView"],
+  related: ["AI Suggestion Box", "MarkdownView"],
   description:
     "Streaming chat surface for Terreno AI. This demo uses a static message list — it does not call a live backend.",
   a11yNotes: ["Chat history and message list should remain keyboard reachable."],

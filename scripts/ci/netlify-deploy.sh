@@ -95,7 +95,9 @@ fi
 
 # netlify-cli sees the Bun workspace as a monorepo and refuses to guess a package in CI.
 # Absolute --dir keeps the publish path independent of the filtered package's base dir.
-args=(deploy --filter "$netlify_filter" --dir "$repo_root/$publish_dir" --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN")
+# --no-build: this script already built publish_dir. Without it netlify-cli runs the root
+# netlify.toml docs build (wipe node_modules, reinstall, full Docusaurus) on every deploy.
+args=(deploy --no-build --filter "$netlify_filter" --dir "$repo_root/$publish_dir" --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN")
 if [ "$mode" = "production" ]; then
   args+=(--prod)
   deployment_url="https://${site_name}.netlify.app"

@@ -3,6 +3,7 @@ import {GPTMemoryModalDemo, GPTMemoryModalEmpty} from "@stories/GPTMemoryModal.s
 import {GPTMemoryModal} from "@terreno/ui";
 
 export const GPTMemoryModalConfiguration: DemoConfiguration = {
+  usageExample: "import {GPTMemoryModal} from \"@terreno/ui\";\n\n<GPTMemoryModal />",
   a11yNotes: ["The modal starts closed so it does not trap the demo page."],
   additionalDocumentation: [],
   category: "Pattern",

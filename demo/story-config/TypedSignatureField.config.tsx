@@ -10,6 +10,7 @@ import {
 } from "../stories/TypedSignatureField.stories";
 
 export const TypedSignatureFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {TypedSignatureField} from \"@terreno/ui\";\n\n<TypedSignatureField />",
   name: "Typed signature field",
   component: TypedSignatureField,
   related: ["Signature field"],
@@ -17,7 +18,7 @@ export const TypedSignatureFieldConfiguration: DemoConfiguration = {
     "Lets a user type their name and choose a signature font with a live preview. Works the " +
     "same on web and mobile, and emits a typed name plus a stable font key for persistence.",
   a11yNotes: [],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "planned",

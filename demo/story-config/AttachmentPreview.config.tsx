@@ -3,6 +3,7 @@ import {AttachmentPreviewDemo, AttachmentPreviewEmpty} from "@stories/Attachment
 import {AttachmentPreview} from "@terreno/ui";
 
 export const AttachmentPreviewConfiguration: DemoConfiguration = {
+  usageExample: "import {AttachmentPreview} from \"@terreno/ui\";\n\n<AttachmentPreview />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

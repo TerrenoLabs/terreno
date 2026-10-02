@@ -3,12 +3,13 @@ import {renderText, TextLinks, TextPreview, Texts, Truncate} from "@stories/Text
 import {Text, TextProps} from "@terreno/ui";
 
 export const TextConfiguration: DemoConfiguration = {
+  usageExample: "import {Text} from \"@terreno/ui\";\n\n<Text />",
   name: "Text",
   component: Text, // Replace with actual component reference
-  related: ["Paragraph"],
+  related: ["Heading"],
   description: "",
   a11yNotes: [""],
-  category: ["Data Entry", "Form"],
+  category: "Component",
   status: {
     documentation: "ready",
     figma: "inProgress",

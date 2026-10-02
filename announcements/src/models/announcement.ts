@@ -3,6 +3,7 @@ import {
   createdUpdatedPlugin,
   findExactlyOne,
   findOneOrNone,
+  findOneOrNoneFor,
   isDeletedPlugin,
 } from "@terreno/api";
 import mongoose from "mongoose";
@@ -94,6 +95,33 @@ const announcementSchema = new mongoose.Schema<AnnouncementDocument, Announcemen
       description: "When the announcement was first published",
       type: Date,
     },
+    release: {
+      buildNumber: {
+        description: "Client build number associated with the imported product release",
+        min: 1,
+        type: Number,
+      },
+      channel: {
+        description: "Release channel associated with the imported announcement",
+        trim: true,
+        type: String,
+      },
+      product: {
+        description: "Product identifier associated with the imported announcement",
+        trim: true,
+        type: String,
+      },
+      version: {
+        description: "User-facing product version associated with the imported announcement",
+        trim: true,
+        type: String,
+      },
+    },
+    releaseSlug: {
+      description: "Stable announcement identifier within an imported product release",
+      trim: true,
+      type: String,
+    },
     status: {
       default: "draft",
       description: "Lifecycle status: draft, published, or archived",
@@ -124,6 +152,18 @@ announcementSchema.plugin(findOneOrNone);
 
 announcementSchema.index({publishAt: 1, status: 1});
 announcementSchema.index({priority: -1, publishedAt: -1, status: 1});
+announcementSchema.index(
+  {"release.channel": 1, "release.product": 1, "release.version": 1, releaseSlug: 1},
+  {
+    partialFilterExpression: {
+      "release.channel": {$type: "string"},
+      "release.product": {$type: "string"},
+      "release.version": {$type: "string"},
+      releaseSlug: {$type: "string"},
+    },
+    unique: true,
+  }
+);
 
 announcementSchema.pre("save", async function bumpVersionOnPublishedEdit() {
   if (this.isNew) {
@@ -136,7 +176,12 @@ announcementSchema.pre("save", async function bumpVersionOnPublishedEdit() {
     return;
   }
 
-  const previous = await Announcement.findById(this._id).select("title body status version");
+  // A restored import clears `deleted` on this document while the stored row is still
+  // soft-deleted, so the default filter would hide the version being edited.
+  const previous = await findOneOrNoneFor(Announcement, {
+    _id: this._id,
+    deleted: {$in: [true, false]},
+  });
   if (previous?.status !== "published") {
     return;
   }

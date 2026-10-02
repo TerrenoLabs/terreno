@@ -3,6 +3,7 @@ import {CheckboxColors, CheckboxDemo, CheckboxSizes} from "@stories/CheckBox.sto
 import {CheckBox} from "@terreno/ui";
 
 export const CheckBoxConfiguration: DemoConfiguration = {
+  usageExample: "import {CheckBox} from \"@terreno/ui\";\n\n<CheckBox />",
   name: "CheckBox",
   component: CheckBox,
   related: ["Multiselect field", "Radio field"],
@@ -15,7 +16,7 @@ export const CheckBoxConfiguration: DemoConfiguration = {
     "Keyboards should be able to tab back and forth between the checkboxes.",
     "The checkboxes should have a focus state.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

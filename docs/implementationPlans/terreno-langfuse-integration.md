@@ -1,7 +1,7 @@
 # @terreno/langfuse
 
 **Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1093  
-**Status:** Approved
+**Status:** Complete
 
 > **See also:** Native in-app observability (prompts, traces, evals, experiments, review queue) is specified in [ai-observability.md](./ai-observability.md). This IP remains the **Langfuse Cloud/self-host vendor plugin**. Both plugins may be registered; traces/scores fan out (see that IP).
 

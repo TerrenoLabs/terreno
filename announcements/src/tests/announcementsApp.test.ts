@@ -1,5 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {
+  APIError,
   addAuthRoutes,
   apiErrorMiddleware,
   apiUnauthorizedMiddleware,
@@ -17,12 +18,14 @@ import {Announcement} from "../models/announcement";
 import {AnnouncementAcknowledgement} from "../models/announcementAcknowledgement";
 import {AnnouncementClickEvent} from "../models/announcementClickEvent";
 import {AnnouncementImpression} from "../models/announcementImpression";
+import {importAnnouncementRelease} from "../releaseImport";
 
 const buildApp = (options?: {
   basePath?: string;
   defaultAcknowledgementPolicy?: "required" | "dismiss-only";
   isStaff?: (user: unknown) => boolean;
   matchAudience?: (user: unknown, announcement: unknown) => boolean;
+  uploadToken?: string;
 }): express.Application => {
   const app = getBaseServer();
   setupAuth(app, UserModel as unknown as UserModelType);
@@ -97,6 +100,238 @@ describe("AnnouncementsApp", () => {
     expect(pendingRes.body.data.current?.id).toBe(announcementId);
     expect(pendingRes.body.data.current?.requiresAcknowledgement).toBe(true);
     expect(pendingRes.body.data.remainingCount).toBe(0);
+  });
+
+  it("imports multiple release announcements as idempotent drafts with a bearer token", async () => {
+    const uploadApp = buildApp({uploadToken: "release-upload-secret"});
+    const request = supertest(uploadApp);
+    const pack = {
+      announcements: [
+        {
+          acknowledgementPolicy: "required",
+          body: "Staff release details",
+          displayMode: "modal",
+          slug: "staff-release",
+          title: "Staff: version 1.14.0",
+        },
+        {
+          body: "Patient release details",
+          slug: "patient-release",
+          title: "New in version 1.14.0",
+        },
+      ],
+      defaults: {
+        audienceType: "patient",
+        platforms: ["ios", "android"],
+      },
+      release: {
+        buildNumber: 1842,
+        channel: "production",
+        product: "example",
+        version: "1.14.0",
+      },
+    };
+
+    const firstResponse = await request
+      .post("/announcements/import-release")
+      .set("Authorization", "Bearer release-upload-secret")
+      .send(pack)
+      .expect(200);
+    assert.equal(firstResponse.body.data.created, 2);
+    assert.equal(firstResponse.body.data.published, 0);
+
+    const imported = await Announcement.find({}).sort({releaseSlug: 1});
+    assert.lengthOf(imported, 2);
+    assert.equal(imported[0]?.status, "draft");
+    assert.equal(imported[0]?.minBuildNumber, 1842);
+    assert.deepEqual(imported[0]?.platforms, ["ios", "android"]);
+    assert.equal(imported[0]?.release?.version, "1.14.0");
+
+    const secondResponse = await request
+      .post("/announcements/import-release")
+      .set("Authorization", "Bearer release-upload-secret")
+      .send(pack)
+      .expect(200);
+    assert.equal(secondResponse.body.data.created, 0);
+    assert.equal(secondResponse.body.data.unchanged, 2);
+    assert.equal(secondResponse.body.data.updated, 0);
+    assert.equal(await Announcement.countDocuments({}), 2);
+  });
+
+  it("publishes a release pack only when publish is explicitly true", async () => {
+    const uploadApp = buildApp({uploadToken: "release-upload-secret"});
+    const response = await supertest(uploadApp)
+      .post("/announcements/import-release")
+      .set("Authorization", "Bearer release-upload-secret")
+      .send({
+        announcements: [
+          {
+            body: "Public release details",
+            displayMode: "feed",
+            slug: "changelog",
+            title: "Version 1.14.0",
+          },
+        ],
+        publish: true,
+        release: {
+          product: "example",
+          version: "1.14.0",
+        },
+      })
+      .expect(200);
+
+    assert.equal(response.body.data.published, 1);
+    const announcement = await Announcement.findExactlyOne({releaseSlug: "changelog"});
+    assert.equal(announcement.status, "published");
+    assert.exists(announcement.publishedAt);
+    assert.equal(announcement.release?.channel, "production");
+  });
+
+  it("restores a soft-deleted announcement when its release pack is re-imported", async () => {
+    const uploadApp = buildApp({uploadToken: "release-upload-secret"});
+    const pack = {
+      announcements: [{body: "Updated details", slug: "changelog", title: "Version 1.14.0"}],
+      release: {product: "example", version: "1.14.0"},
+    };
+    await supertest(uploadApp)
+      .post("/announcements/import-release")
+      .set("Authorization", "Bearer release-upload-secret")
+      .send(pack)
+      .expect(200);
+    const original = await Announcement.findExactlyOne({releaseSlug: "changelog"});
+    original.deleted = true;
+    await original.save();
+
+    const response = await supertest(uploadApp)
+      .post("/announcements/import-release")
+      .set("Authorization", "Bearer release-upload-secret")
+      .send(pack)
+      .expect(200);
+
+    assert.equal(response.body.data.updated, 1);
+    const restored = await Announcement.findExactlyOne({releaseSlug: "changelog"});
+    assert.equal(restored.deleted, false);
+    assert.equal(await Announcement.countDocuments({}), 1);
+  });
+
+  it("bumps the content version when a restored published import changes its body", async () => {
+    const uploadApp = buildApp({uploadToken: "release-upload-secret"});
+    const buildPack = (body: string): Record<string, unknown> => ({
+      announcements: [{body, slug: "changelog", title: "Version 1.14.0"}],
+      publish: true,
+      release: {product: "example", version: "1.14.0"},
+    });
+    await supertest(uploadApp)
+      .post("/announcements/import-release")
+      .set("Authorization", "Bearer release-upload-secret")
+      .send(buildPack("Original published details"))
+      .expect(200);
+    const original = await Announcement.findExactlyOne({releaseSlug: "changelog"});
+    original.deleted = true;
+    await original.save();
+
+    await supertest(uploadApp)
+      .post("/announcements/import-release")
+      .set("Authorization", "Bearer release-upload-secret")
+      .send(buildPack("Revised published details"))
+      .expect(200);
+
+    const restored = await Announcement.findExactlyOne({releaseSlug: "changelog"});
+    assert.equal(restored.version, 2);
+    assert.equal(restored.body, "Revised published details");
+  });
+
+  it("rejects release imports with an invalid upload token", async () => {
+    const uploadApp = buildApp({uploadToken: "release-upload-secret"});
+    await supertest(uploadApp)
+      .post("/announcements/import-release")
+      .set("Authorization", "Bearer wrong-secret")
+      .send({
+        announcements: [{body: "Details", slug: "changelog", title: "Version 1.14.0"}],
+        release: {product: "example", version: "1.14.0"},
+      })
+      .expect(401);
+    assert.equal(await Announcement.countDocuments({}), 0);
+  });
+
+  it("rejects duplicate slugs within one release pack", async () => {
+    const uploadApp = buildApp({uploadToken: "release-upload-secret"});
+    const response = await supertest(uploadApp)
+      .post("/announcements/import-release")
+      .set("Authorization", "Bearer release-upload-secret")
+      .send({
+        announcements: [
+          {body: "First", slug: "changelog", title: "First"},
+          {body: "Second", slug: "changelog", title: "Second"},
+        ],
+        release: {product: "example", version: "1.14.0"},
+      })
+      .expect(400);
+
+    assert.equal(response.body.title, "Validation failed");
+    assert.equal(
+      response.body.meta.fields.announcements,
+      "Release announcement slugs must be unique"
+    );
+    assert.equal(await Announcement.countDocuments({}), 0);
+  });
+
+  it("rejects release packs with unknown fields or malformed items", async () => {
+    const uploadApp = buildApp({uploadToken: "release-upload-secret"});
+    const invalidBodies = [
+      {
+        announcements: [{body: "Body", slug: "changelog", title: "Title"}],
+        release: {product: "example", version: "1.14.0"},
+        unexpected: true,
+      },
+      {
+        announcements: [{body: "Body", slug: "Not A Slug", title: "Title"}],
+        release: {product: "example", version: "1.14.0"},
+      },
+      {
+        announcements: [{body: "", slug: "changelog", title: "Title"}],
+        release: {product: "example", version: "1.14.0"},
+      },
+      {
+        announcements: [{body: "Body", displayMode: "popup", slug: "changelog", title: "Title"}],
+        release: {product: "example", version: "1.14.0"},
+      },
+      {
+        announcements: [{body: "Body", slug: "changelog", title: "Title"}],
+        release: {version: "1.14.0"},
+      },
+    ];
+
+    for (const invalidBody of invalidBodies) {
+      const response = await supertest(uploadApp)
+        .post("/announcements/import-release")
+        .set("Authorization", "Bearer release-upload-secret")
+        .send(invalidBody)
+        .expect(400);
+      assert.equal(response.body.title, "Validation failed");
+    }
+    assert.equal(await Announcement.countDocuments({}), 0);
+  });
+
+  it("validates release packs passed directly to importAnnouncementRelease", async () => {
+    let caught: unknown;
+    try {
+      await importAnnouncementRelease({
+        input: {
+          announcements: [
+            {body: "First", slug: "changelog", title: "First"},
+            {body: "Second", slug: "changelog", title: "Second"},
+          ],
+          release: {product: "example", version: "1.14.0"},
+        },
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    assert.instanceOf(caught, APIError);
+    assert.equal((caught as APIError).status, 400);
+    assert.equal(await Announcement.countDocuments({}), 0);
   });
 
   it("resolves requiresAcknowledgement on GET pending for each policy case", async () => {
@@ -591,6 +826,52 @@ describe("AnnouncementsApp", () => {
       .post(`/announcements/${withPrimary._id.toString()}/click`)
       .send({action: "secondaryAction"})
       .expect(400);
+  });
+
+  it("POST click and impression reject bodies that fail the Zod schema", async () => {
+    await Announcement.deleteMany({});
+    await AnnouncementClickEvent.deleteMany({});
+    await AnnouncementImpression.deleteMany({});
+
+    const announcement = await Announcement.create({
+      body: "Body",
+      primaryAction: {label: "Go", url: "https://example.com"},
+      publishedAt: DateTime.utc().toJSDate(),
+      status: "published",
+      title: "Strict bodies",
+      version: 1,
+    });
+    const announcementId = announcement._id.toString();
+
+    const missingAction = await userAgent
+      .post(`/announcements/${announcementId}/click`)
+      .send({platform: "web"})
+      .expect(400);
+    assert.equal(missingAction.body.title, "Validation failed");
+    assert.isString(missingAction.body.meta.fields.action);
+
+    await userAgent
+      .post(`/announcements/${announcementId}/click`)
+      .send({action: "primaryAction", extra: true})
+      .expect(400);
+
+    const badImpressionPlatform = await userAgent
+      .post(`/announcements/${announcementId}/impression`)
+      .send({platform: "desktop"})
+      .expect(400);
+    assert.isString(badImpressionPlatform.body.meta.fields.platform);
+
+    await userAgent
+      .post(`/announcements/${announcementId}/impression`)
+      .send({unexpected: "value"})
+      .expect(400);
+
+    await userAgent.post(`/announcements/${announcementId}/impression?platform=ios`).expect(200);
+
+    assert.lengthOf(await AnnouncementClickEvent.find({announcementId: announcement._id}), 0);
+    const impressions = await AnnouncementImpression.find({announcementId: announcement._id});
+    assert.lengthOf(impressions, 1);
+    assert.strictEqual(impressions[0]?.platform, "ios");
   });
 
   it("POST click returns 404 for non-visible announcements before validating action or CTA", async () => {

@@ -3,16 +3,17 @@ import {TapDemo, TapStory} from "@stories/TapToEdit.stories";
 import {TapToEdit} from "@terreno/ui";
 
 export const TapToEditConfiguration: DemoConfiguration = {
+  usageExample: "import {TapToEdit} from \"@terreno/ui\";\n\n<TapToEdit />",
   name: "Tap to edit",
   component: TapToEdit,
-  related: ["Tap to edit pattern", "Address tap-to-edit pattern"],
+  related: ["AddressField", "Text field"],
   description:
     "This element allows the user to see information and interact with an icon to edit it. See the pattern here.",
   a11yNotes: [
     "The user should be able to tab to the tap-to-edit icon and press enter/space to interact with it.",
     "The user should be able to tap the label as well to interact with the element.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",

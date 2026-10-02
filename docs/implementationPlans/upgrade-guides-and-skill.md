@@ -1,6 +1,6 @@
 # Implementation Plan: Upgrade Guides and the `upgrading-terreno` Skill
 
-**Status:** Approved
+**Status:** Complete
 **Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1013
 **Priority:** High
 **Effort:** Big batch

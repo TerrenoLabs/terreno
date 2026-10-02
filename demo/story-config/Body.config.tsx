@@ -3,6 +3,7 @@ import {BodyDemo, BodyLoading} from "@stories/Body.stories";
 import {Body} from "@terreno/ui";
 
 export const BodyConfiguration: DemoConfiguration = {
+  usageExample: "import {Body} from \"@terreno/ui\";\n\n<Body />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

@@ -3,6 +3,7 @@ import {TableBadgeDemo, TableBadgeStates} from "@stories/TableBadge.stories";
 import {Table} from "@terreno/ui";
 
 export const TableBadgeConfiguration: DemoConfiguration = {
+  usageExample: "import {Table} from \"@terreno/ui\";\n\n<Table />",
   name: "Table badge",
   component: Table,
   related: ["Table"],

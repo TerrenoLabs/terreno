@@ -4,6 +4,7 @@ import {Banner, Box} from "@terreno/ui";
 import React from "react";
 
 export const BannerConfiguration: DemoConfiguration = {
+  usageExample: "import {Banner} from \"@terreno/ui\";\n\n<Banner />",
   name: "Banner",
   component: Banner,
   related: ["Toast", "Modal"],

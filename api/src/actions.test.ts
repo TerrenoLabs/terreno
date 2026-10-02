@@ -367,6 +367,25 @@ describe("modelRouter actions", () => {
         expect(res.body.title).toBe("Unauthorized");
       });
 
+      it("allows one anonymous action without making the model router anonymous", async () => {
+        mountFoodRouter({
+          allowAnonymous: false,
+          collectionActions: {
+            ingest: {
+              allowAnonymous: true,
+              handler: async () => ({ok: true}),
+              method: "POST",
+              permissions: [Permissions.IsAny],
+            },
+          },
+          permissions: allPermissions,
+        });
+
+        const actionResponse = await server.post("/food/ingest").send({}).expect(200);
+        expect(actionResponse.body.data).toEqual({ok: true});
+        await server.get("/food").expect(401);
+      });
+
       it("returns 405 for collection action when pre-doc permission denied", async () => {
         mountFoodRouter({
           collectionActions: {

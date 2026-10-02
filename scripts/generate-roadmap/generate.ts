@@ -1,4 +1,4 @@
-import {writeFileSync} from "node:fs";
+import {existsSync, readdirSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 import {DateTime} from "luxon";
 
@@ -221,10 +221,20 @@ export const main = async (): Promise<void> => {
     process.exit(1);
   }
 
+  const tasksDirectory = join(process.cwd(), "docs/tasks");
+  const taskSlugs = new Set(
+    existsSync(tasksDirectory)
+      ? readdirSync(tasksDirectory)
+          .filter((file) => file.endsWith(".md") && file !== "README.md")
+          .map((file) => file.slice(0, -".md".length))
+      : []
+  );
+
   const markdown = renderRoadmapMarkdown({
     generatedAtIso: DateTime.utc().toISO() ?? DateTime.utc().toISODate(),
     items,
     projectUrl,
+    taskSlugs,
   });
 
   const outputPath = join(process.cwd(), "ROADMAP.md");

@@ -3,6 +3,7 @@ import {ConflictSheetDemo, ConflictSheetEmpty} from "@stories/ConflictSheet.stor
 import {ConflictSheet} from "@terreno/ui";
 
 export const ConflictSheetConfiguration: DemoConfiguration = {
+  usageExample: "import {ConflictSheet} from \"@terreno/ui\";\n\n<ConflictSheet />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

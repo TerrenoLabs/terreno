@@ -88,11 +88,10 @@ half applies:
 | 1 | Announcements | Announcement | Maintainers only | Official release notes, breaking changes, deprecations, and launch updates from the Terreno team. |
 | 2 | Q&A | Question / Answer | Anyone | Ask how to use Terreno. Search existing threads first; accepted answers may become how-to guides in `docs/how-to/`. |
 | 3 | Ideas | Open-ended | Anyone | Feature ideas and improvements before they are shaped. This is the intake funnel — do not open a tracking issue until a maintainer promotes your idea. |
-| 4 | Hacktoberfest | Open-ended | Anyone | Pitch something to build during Hacktoberfest and upvote the ideas you want. Popular, well-scoped ideas become `hacktoberfest` issues anyone can pick up. |
-| 5 | Agents & AI | Open-ended | Anyone | MCP setup, Cursor/Claude skills, agent workflows, and prompt patterns for building with Terreno. |
-| 6 | RFCs | Open-ended | Anyone | Substantial proposals that change public API or add packages. Use the RFC discussion template; accepted RFCs become IPs. |
-| 7 | Show and tell | Open-ended | Anyone | Apps and experiments built with Terreno. Share what you shipped and what friction you hit. |
-| 8 | Docs feedback | Open-ended | Anyone | Report missing or confusing documentation. Link the page URL; recurring feedback becomes docs PRs. |
+| 4 | Agents & AI | Open-ended | Anyone | MCP setup, Cursor/Claude skills, agent workflows, and prompt patterns for building with Terreno. |
+| 5 | RFCs | Open-ended | Anyone | Substantial proposals that change public API or add packages. Use the RFC discussion template; accepted RFCs become IPs. |
+| 6 | Show and tell | Open-ended | Anyone | Apps and experiments built with Terreno. Share what you shipped and what friction you hit. |
+| 7 | Docs feedback | Open-ended | Anyone | Report missing or confusing documentation. Link the page URL; recurring feedback becomes docs PRs. |
 
 ### Pinned posts
 
@@ -127,24 +126,29 @@ When an answer repeats, maintainers turn it into a how-to doc via PR.
 - Do **not** open a feature issue directly — maintainers promote accepted ideas to tracked issues on the [Terreno Roadmap](https://github.com/TerrenoLabs/terreno/projects) board.
 - For API/package-level design, use the **RFCs** category instead.
 - Bugs → [Bug report](https://github.com/TerrenoLabs/terreno/issues/new?template=bug_report.yml).
+- **Hacktoberfest pitches live here too.** Tick the Hacktoberfest box on the form; maintainers apply the [`hacktoberfest`](https://github.com/TerrenoLabs/terreno/discussions?discussions_q=label%3Ahacktoberfest) label. 👍 the pitches you want built.
 ```
 
-#### Hacktoberfest
+#### Hacktoberfest (inside Ideas)
 
-```markdown
-**Pitch Hacktoberfest ideas here, and 👍 the ones you want built.**
+Hacktoberfest does not get its own category. Pitches are Ideas discussions carrying the
+`hacktoberfest` label, so upvotes, promotion, and search all use the same path as any other
+idea.
 
-1. [Start a Hacktoberfest discussion](https://github.com/TerrenoLabs/terreno/discussions/new?category=hacktoberfest) — the form asks for the idea, area, rough size, and what "done" looks like.
-2. Upvote and comment on other pitches. Upvotes are how maintainers rank them.
-3. Maintainers turn popular, well-scoped ideas into issues labeled [`hacktoberfest`](https://github.com/TerrenoLabs/terreno/issues?q=is%3Aissue+is%3Aopen+label%3Ahacktoberfest) and link them back here. Pick one up by commenting on the issue.
+1. [Start an Ideas discussion](https://github.com/TerrenoLabs/terreno/discussions/new?category=ideas)
+   and tick **This is a Hacktoberfest pitch**. Give the area, rough size, and what "done" looks
+   like.
+2. A maintainer applies the [`hacktoberfest`](https://github.com/TerrenoLabs/terreno/discussions?discussions_q=label%3Ahacktoberfest)
+   label and the matching `area:*` label. Upvotes are how maintainers rank pitches.
+3. Popular, well-scoped pitches become issues labeled
+   [`hacktoberfest`](https://github.com/TerrenoLabs/terreno/issues?q=is%3Aissue+is%3Aopen+label%3Ahacktoberfest),
+   linked back to the discussion. Pick one up by commenting on the issue.
 
-Longer-term feature ideas → **Ideas**. Bugs → [Bug report](https://github.com/TerrenoLabs/terreno/issues/new?template=bug_report.yml).
-```
-
-Promotion follows the Ideas path, with one change: a Hacktoberfest idea small enough to finish
+Promotion follows the Ideas path, with one change: a Hacktoberfest pitch small enough to finish
 in a weekend becomes a `hacktoberfest` + `good first issue` work item directly (see
 [GitHub issue lifecycle](../how-to/github-issue-lifecycle.md)) instead of a `Shaping` roadmap
-item. Larger ones go through `roadmap-promote` like any other idea.
+item. Larger ones get `hacktoberfest` + `help wanted` and go through `roadmap-promote` like any
+other idea.
 
 #### Agents & AI
 
@@ -397,10 +401,10 @@ do not claim completion until done.
 
 | Workflow | Trigger | Purpose |
 | -------- | ------- | ------- |
-| [`.github/workflows/triage.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/triage.yml) | Issue opened | `status:needs-triage` + `area:*` from package dropdown + `type:*` from Kind when present |
+| [`.github/workflows/triage.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/triage.yml) | Issue opened | `status:needs-triage` + `area:*` from package dropdown + `type:*` from Kind when present; `area:*` / `type:*` labels the issue was opened with win, so `roadmap:sync` issues are not asked for an area |
 | [`.github/workflows/roadmap-generate.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-generate.yml) | Daily + manual | `roadmap:sync --check` for board drift, then regenerate `ROADMAP.md` from the board and open a pull request when it changes |
 | [`.github/workflows/roadmap-sync.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-sync.yml) | Taxonomy files change on `master` + manual | Apply labels and reconcile the board's fields and items |
-| [`.github/workflows/roadmap-reconcile.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-reconcile.yml) | IP or task files change on `master` + manual | Advance status from IP headers, push to the board, regenerate `ROADMAP.md` |
+| [`.github/workflows/roadmap-reconcile.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-reconcile.yml) | IP or task files change on `master` + manual | Advance status from IP headers, add an entry for every new IP, open its tracking issue, push to the board, regenerate `ROADMAP.md` |
 All three share the `roadmap` concurrency group. They write the same board, and interleaving
 them produces confusing partial states. After the group lock is acquired, each job refreshes
 to the latest branch HEAD so a queued `roadmap-sync` cannot overwrite statuses that
@@ -413,7 +417,7 @@ The full loop, each arrow with exactly one writer:
 
 ```
 docs/implementationPlans/*.md ──roadmap:reconcile──▶ roadmap-seed-issues.md
-docs/tasks/*.md                    (Status only)              │
+docs/tasks/*.md              (Status + new entries)           │
                                                          roadmap:sync
                                                               ▼
                                                         Project board
@@ -438,6 +442,24 @@ when the seed is strictly ahead (or Declined). A dragged Status that is ahead of
 reported by `--check` and is never overwritten. Cards that are not in
 [`roadmap-seed-issues.md`](roadmap-seed-issues.md) are also `--check` failures; apply does
 not delete them. Maintainers own the board's *state* and `Community interest`.
+
+**New IPs reach the roadmap on merge.** When a merged plan has no entry,
+`roadmap:reconcile --fix` scaffolds one: the title from the IP's H1, the summary from the first
+paragraph of `## Goal`, and links to the IP and its task list (when `docs/tasks/<slug>.md`
+exists). Area, Target, and Impact come from an optional IP header:
+
+```markdown
+**Roadmap:** Area=`api`, Target=`Next`, Impact=`Feature`
+```
+
+Without that header they are inferred: Area from the packages named in the header block
+(default `dx`); Target `Released` for shipped work, `Future` for drafts, `58` when a
+`**Target:**` line names 58, otherwise `Next`; Impact `Breaking` when the `**Target:**` line
+says so, otherwise `Feature`. Edit the scaffolded section afterward if a guess is wrong. The
+workflow then runs `roadmap:sync --create-missing-ip-issues`, which opens a tracking issue
+only for entries backed by an IP. Drafts land as `Shaping`. Moving an entry to `Shipped` also
+moves its Target to `Released`. `ROADMAP.md` links each entry's IP and, when one exists, its
+task list.
 
 **Status automation is monotonic.** `roadmap:reconcile --fix` advances status and applies
 supersessions, but never walks a status backwards and never revives declined work. IP headers

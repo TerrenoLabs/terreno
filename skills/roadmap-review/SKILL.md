@@ -47,8 +47,9 @@ It reports status drift between IP headers and the roadmap, plans that shipped w
 entry moving, entries whose IP file was deleted, task lists that disagree with the declared
 status, and plans with no roadmap entry at all. Treat its `Needs a human` section as the
 review's agenda; it deliberately refuses to guess on exactly the calls this skill exists to
-make. `--fix` applies only forward status moves and supersessions, never a revival or a
-backwards move.
+make. `--fix` applies forward status moves and supersessions, and scaffolds an entry for each
+plan that has none (fields from the IP's `**Roadmap:**` header, else inferred, so check the
+scaffolded Area / Target / Impact). It never applies a revival or a backwards move.
 
 ```bash
 # Board contents

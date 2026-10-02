@@ -7,6 +7,7 @@ import {
 import {OfflineBanner} from "@terreno/ui";
 
 export const OfflineBannerConfiguration: DemoConfiguration = {
+  usageExample: "import {OfflineBanner} from \"@terreno/ui\";\n\n<OfflineBanner />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

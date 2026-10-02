@@ -174,7 +174,8 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   },
   {
     name: "BarsFilterIcon",
-    reason: "SVG used inside Filter; the Icon and Filter stories already show the glyph",
+    reason:
+      "SVG used inside DropdownPanel; the Icon and DropdownPanel stories already show the glyph",
   },
   {
     name: "ConsentNavigator",
@@ -186,20 +187,24 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
     reason: "Imperative sheet opened by DateTimeField; DateTimeField stories already open it",
   },
   {
+    name: "Filter",
+    reason: "Deprecated alias of DropdownPanel, which has its own story; removed in Terreno 58",
+  },
+  {
     name: "FilterAccordion",
-    reason: "Filter story already mounts accordion sections",
+    reason: "DropdownPanel story already mounts accordion sections",
   },
   {
     name: "FilterBoolean",
-    reason: "Filter story already mounts boolean filter rows",
+    reason: "DropdownPanel story already mounts boolean filter rows",
   },
   {
     name: "FilterChangesBadge",
-    reason: "Filter story already shows the applied-filter count badge",
+    reason: "DropdownPanel story already shows the applied-filter count badge",
   },
   {
     name: "FilterSelectMenu",
-    reason: "Filter story already mounts select menus",
+    reason: "DropdownPanel story already mounts select menus",
   },
   {
     name: "FlatList",

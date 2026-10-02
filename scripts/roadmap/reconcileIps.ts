@@ -17,9 +17,12 @@
  *
  * An IP header owns `Status`. The seed document owns everything an IP does not
  * record (Area, Target, Impact, labels, the outside-reader summary). This script
- * only ever rewrites Status, and it reports — never guesses — the judgment calls:
- * a plan with no roadmap entry, an entry whose plan was deleted, or task
- * checkboxes that disagree with the declared status.
+ * rewrites Status and scaffolds a seed section for any plan that has none, so a
+ * newly merged IP reaches the board without a hand-written entry. The optional
+ * `**Roadmap:** Area=`x`, Target=`y`, Impact=`z`` IP header sets the scaffolded
+ * fields; without it they are inferred and the section can be edited later.
+ * It reports — never guesses — the other judgment calls: an entry whose plan was
+ * deleted, or task checkboxes that disagree with the declared status.
  *
  * Usage:
  *   bun run roadmap:reconcile            # report
@@ -29,7 +32,7 @@
 import {readdirSync} from "node:fs";
 import {parseArgs} from "node:util";
 
-import {SEED_ISSUES_PATH, parseSeedIssues} from "./seedIssues.ts";
+import {parseProjectFields, parseSeedIssues, SEED_ISSUES_PATH} from "./seedIssues.ts";
 
 export const IP_DIRECTORY = "docs/implementationPlans";
 export const TASKS_DIRECTORY = "docs/tasks";
@@ -64,11 +67,11 @@ const NON_PLAN_FILES = new Set(["IP_TEMPLATE.md", "README.md"]);
  * `Declined` sits outside the ladder because superseding is always allowed.
  */
 export const STATUS_RANK: Record<string, number> = {
-  Inbox: 0,
-  Shaping: 1,
-  Planned: 2,
   "In progress": 3,
   "In review": 4,
+  Inbox: 0,
+  Planned: 2,
+  Shaping: 1,
   Shipped: 5,
 };
 
@@ -178,7 +181,7 @@ export const parseTaskProgress = (contents: string): TaskProgress => {
   const status = headerValue({contents, key: "Status"});
   return {
     done: done.length,
-    isClosed: status !== null && status.toLowerCase().startsWith("closed"),
+    isClosed: status?.toLowerCase().startsWith("closed") ?? false,
     total: boxes.length,
   };
 };
@@ -188,7 +191,13 @@ export const parseTaskProgress = (contents: string): TaskProgress => {
  * `-research` / `-design` convention or pointing at a parent explicitly with a
  * `**Parent IP:**` header.
  */
-export const isSubDocument = ({parentIp, slug}: {parentIp?: string | null; slug: string}): boolean => {
+export const isSubDocument = ({
+  parentIp,
+  slug,
+}: {
+  parentIp?: string | null;
+  slug: string;
+}): boolean => {
   return /-(research|design)$/.test(slug) || (parentIp ?? null) !== null;
 };
 
@@ -236,14 +245,13 @@ export const collectFindings = ({
     const expected = ip.supersededBy === null ? ip.boardStatus : "Declined";
 
     if (seedStatus === undefined) {
-      if (expected !== "Shaping") {
-        findings.push({
-          detail: `IP is "${ip.rawStatus}" (board: ${expected}) but has no entry in ${SEED_ISSUES_PATH}. Add one with Area/Target/Impact, then run roadmap:sync.`,
-          kind: "review",
-          slug: ip.slug,
-          type: "missing-roadmap-entry",
-        });
-      }
+      findings.push({
+        detail: `IP is "${ip.rawStatus}" (board: ${expected}) but has no entry in ${SEED_ISSUES_PATH}; --fix scaffolds one from the IP header`,
+        expected,
+        kind: "fix",
+        slug: ip.slug,
+        type: "missing-roadmap-entry",
+      });
       continue;
     }
 
@@ -253,7 +261,8 @@ export const collectFindings = ({
       const expectedRank = STATUS_RANK[expected] ?? -1;
       // Declining is always allowed; reviving declined work is not. A plan whose
       // header still says "Approved" must not silently reopen a decision.
-      const isForward = expected === DECLINED || (seedStatus !== DECLINED && expectedRank > currentRank);
+      const isForward =
+        expected === DECLINED || (seedStatus !== DECLINED && expectedRank > currentRank);
 
       if (isForward) {
         findings.push({
@@ -318,8 +327,8 @@ export const collectFindings = ({
 
 /**
  * Rewrites Status in both seed-document shapes: the `**Project fields:**` line
- * of a `##` section and the Status column of the backfill table. Only the
- * Status token changes; nothing else in the document is touched.
+ * of a `##` section and the Status column of the backfill table. A move to
+ * Shipped also sets Target to Released; nothing else in the document is touched.
  */
 export const applyStatusFixes = ({
   contents,
@@ -344,9 +353,175 @@ export const applyStatusFixes = ({
       new RegExp(`(^\\| \`${escaped}\` \\| \\S+ \\| )\`[^\`]*\``, "m"),
       `$1\`${fix.status}\``
     );
+
+    // Shipped work lives under Released so it stops crowding an upcoming target.
+    if (fix.status === "Shipped") {
+      updated = updated.replace(
+        new RegExp(
+          `(\\*\\*Project fields:\\*\\*[^\\n]*Target=)\`[^\`]*\`([^\\n]*IP=\`${escaped}\`)`
+        ),
+        "$1`Released`$2"
+      );
+      updated = updated.replace(
+        new RegExp(
+          `(^\\| \`${escaped}\` \\| \\S+ \\| \`[^\`]*\` \\| \`[^\`]*\` \\| )\`[^\`]*\``,
+          "m"
+        ),
+        "$1`Released`"
+      );
+    }
   }
 
   return updated;
+};
+
+const REPO_BLOB_URL = "https://github.com/TerrenoLabs/terreno/blob/master";
+const BACKFILL_HEADING = "# Shipped, umbrella, and declined IPs";
+
+/**
+ * Package name → board Area, checked in order so the more specific packages
+ * win over `api`, which nearly every plan mentions.
+ */
+const PACKAGE_AREAS: [RegExp, string][] = [
+  [/@terreno\/admin|admin-(backend|frontend|spa)\//, "admin"],
+  [/@terreno\/syncdb|syncdb\//, "syncdb"],
+  [/@terreno\/mcp|mcp-server\//, "mcp"],
+  [/@terreno\/ai\b|langfuse/i, "ai"],
+  [/better auth|@terreno\/.*auth|oauth/i, "auth"],
+  [/terraform|cloud run|netlify|vercel/i, "deploy"],
+  [/@terreno\/ui|\bui\/src\//, "ui"],
+  [/@terreno\/(api|comms|jobs|announcements)|\bapi\/src\//, "api"],
+];
+
+const IMPACT_TYPE_LABELS: Record<string, string> = {
+  Breaking: "type:feature",
+  Feature: "type:feature",
+  Fix: "type:bug",
+  Improvement: "type:chore",
+};
+
+/**
+ * Picks the Area whose package the plan's header block names most often. Only
+ * the header is read: bodies reference half the monorepo in passing.
+ */
+export const inferArea = (contents: string): string => {
+  const goalIndex = contents.search(/^## /m);
+  const header = goalIndex === -1 ? contents : contents.slice(0, goalIndex);
+  let best = {area: "dx", count: 0};
+  for (const [pattern, area] of PACKAGE_AREAS) {
+    const count = (
+      header.match(new RegExp(pattern.source, `${pattern.flags.replace("g", "")}g`)) ?? []
+    ).length;
+    if (count > best.count) {
+      best = {area, count};
+    }
+  }
+  return best.area;
+};
+
+const inferTarget = ({contents, status}: {contents: string; status: string}): string => {
+  if (status === "Shipped") {
+    return "Released";
+  }
+  if (/^\*\*Target:\*\*[^\n]*\b58\b/m.test(contents)) {
+    return "58";
+  }
+  return status === "Shaping" ? "Future" : "Next";
+};
+
+const inferImpact = (contents: string): string => {
+  if (/^\*\*Target:\*\*[^\n]*breaking/im.test(contents)) {
+    return "Breaking";
+  }
+  return "Feature";
+};
+
+/** The IP's H1 with the conventional "Implementation plan:" prefix removed. */
+const planTitle = ({contents, slug}: {contents: string; slug: string}): string => {
+  const heading = contents.match(/^# (.+)$/m)?.[1]?.trim() ?? slug;
+  return heading.replace(/^implementation plan:\s*/i, "").trim() || slug;
+};
+
+/**
+ * First paragraph under `## Goal`, reflowed onto one line. A paragraph that
+ * introduces a list (ends with `:`) keeps that list, so the summary does not
+ * stop mid-sentence.
+ */
+const planSummary = (contents: string): string => {
+  const goal = contents.split(/^## Goal\s*$/m)[1]?.split(/^## /m)[0];
+  if (goal === undefined) {
+    return "";
+  }
+  const [first = "", next = ""] = goal.trim().split(/\n\s*\n/);
+  const paragraph = first.replace(/\s*\n\s*/g, " ").trim();
+  const isListNext = /^\s*(?:[-*]|\d+\.)\s/.test(next);
+  if (!paragraph.endsWith(":") || !isListNext) {
+    return paragraph;
+  }
+  return `${paragraph}\n\n${next.trimEnd()}`;
+};
+
+/**
+ * Builds the `##` seed section for a plan with no roadmap entry. Fields come
+ * from the plan's `**Roadmap:**` header when present, otherwise from inference.
+ */
+export const buildSeedSection = ({
+  contents,
+  hasTasks,
+  slug,
+  status,
+}: {
+  contents: string;
+  hasTasks: boolean;
+  slug: string;
+  status: string;
+}): string => {
+  const declared = parseProjectFields(headerValue({contents, key: "Roadmap"}) ?? "");
+  const area = declared.Area || inferArea(contents);
+  // Shipped work always lands under Released, whatever the header declared.
+  const target =
+    status === "Shipped" ? "Released" : declared.Target || inferTarget({contents, status});
+  const impact = declared.Impact || inferImpact(contents);
+  const typeLabel = IMPACT_TYPE_LABELS[impact] ?? "type:feature";
+  const summary = planSummary(contents);
+
+  const lines = [
+    `## ${slug}`,
+    "",
+    `**Title:** \`${planTitle({contents, slug}).replace(/`/g, "")}\``,
+    "",
+    `**Labels:** \`area:${area}\`, \`${typeLabel}\`  `,
+    `**Project fields:** Area=\`${area}\`, Target=\`${target}\`, Impact=\`${impact}\`, IP=\`${slug}\`, Status=\`${status}\``,
+    "",
+    ...(summary === "" ? [] : [summary, ""]),
+    `- **Implementation plan:** [${slug}.md](${REPO_BLOB_URL}/${IP_DIRECTORY}/${slug}.md)`,
+    ...(hasTasks
+      ? [`- **Tasks:** [${slug}.md](${REPO_BLOB_URL}/${TASKS_DIRECTORY}/${slug}.md)`]
+      : []),
+    "",
+    "---",
+    "",
+  ];
+  return lines.join("\n");
+};
+
+/** Inserts scaffolded sections just above the backfill table, or at the end. */
+export const insertSeedSections = ({
+  contents,
+  sections,
+}: {
+  contents: string;
+  sections: string[];
+}): string => {
+  if (sections.length === 0) {
+    return contents;
+  }
+  const block = sections.join("\n");
+  const index = contents.indexOf(BACKFILL_HEADING);
+  if (index === -1) {
+    return `${contents.trimEnd()}\n\n---\n\n${block}`;
+  }
+  return `${contents.slice(0, index)}${block}\n${contents.slice(index)}`;
 };
 
 const readPlans = async (): Promise<IpRecord[]> => {
@@ -429,15 +604,38 @@ export const main = async (): Promise<void> => {
 
   if (values.fix && fixable.length > 0) {
     const fixes = fixable.flatMap((finding) =>
-      finding.expected === undefined ? [] : [{slug: finding.slug, status: finding.expected}]
+      finding.type === "missing-roadmap-entry" || finding.expected === undefined
+        ? []
+        : [{slug: finding.slug, status: finding.expected}]
     );
-    const updated = applyStatusFixes({contents: seedContents, fixes});
+    const sections: string[] = [];
+    for (const finding of fixable) {
+      if (finding.type !== "missing-roadmap-entry" || finding.expected === undefined) {
+        continue;
+      }
+      sections.push(
+        buildSeedSection({
+          contents: await Bun.file(`${IP_DIRECTORY}/${finding.slug}.md`).text(),
+          hasTasks: taskProgress.has(finding.slug),
+          slug: finding.slug,
+          status: finding.expected,
+        })
+      );
+    }
+    const updated = insertSeedSections({
+      contents: applyStatusFixes({contents: seedContents, fixes}),
+      sections,
+    });
     if (updated === seedContents) {
-      console.error("\n--fix matched no Status values to rewrite; the seed document may have changed shape.");
+      console.error(
+        "\n--fix matched no Status values to rewrite; the seed document may have changed shape."
+      );
       process.exit(1);
     }
     await Bun.write(SEED_ISSUES_PATH, updated);
-    console.info(`\nRewrote ${fixes.length} Status values in ${SEED_ISSUES_PATH}. Run roadmap:sync next.`);
+    console.info(
+      `\nRewrote ${fixes.length} Status values and added ${sections.length} entries in ${SEED_ISSUES_PATH}. Run roadmap:sync next.`
+    );
     if (review.length === 0) {
       return;
     }

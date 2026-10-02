@@ -5,6 +5,14 @@ import {join} from "node:path";
 
 const scriptPath = join(import.meta.dir, "publish-package.sh");
 const script = readFileSync(scriptPath, "utf8");
+const circleConfig = readFileSync(
+  join(import.meta.dir, "../../.circleci/continue-config.yml"),
+  "utf8"
+);
+const publishReleaseJob = circleConfig.slice(
+  circleConfig.indexOf("\n  publish-release:\n"),
+  circleConfig.indexOf("\nworkflows:\n")
+);
 
 describe("publish-package.sh", () => {
   it("does not bun install after pinning workspace versions to the unpublished tag", () => {
@@ -42,5 +50,28 @@ describe("publish-package.sh", () => {
       /npm view "\$\{package_name\}@\$\{version\}" version/,
       "expected npm view guard"
     );
+  });
+
+  it("skips per-package compile and tests when the release job prebuilt everything", () => {
+    const gate = script.indexOf('if [ "${TERRENO_PUBLISH_PREBUILT:-}" != "1" ]; then');
+    assert.notEqual(gate, -1, "expected TERRENO_PUBLISH_PREBUILT gate");
+    assert.ok(gate < script.indexOf("compile-workspace-deps.js"));
+    assert.ok(gate < script.indexOf("bun run test:ci"));
+  });
+
+  it("writes a per-invocation npmrc so parallel publishes keep their token", () => {
+    assert.doesNotMatch(script, /\$HOME\/\.npmrc/);
+    assert.match(script, /NPM_CONFIG_USERCONFIG="\$npmrc" npm publish/);
+  });
+
+  it("compiles once and publishes in parallel without a Mongo sidecar in publish-release", () => {
+    assert.match(publishReleaseJob, /executor: node22\n/);
+    assert.ok(!publishReleaseJob.includes("wait_for_mongo"), "release no longer runs tests");
+    assert.match(
+      publishReleaseJob,
+      /TERRENO_SKIP_WORKSPACE_DEPS=1 bun run "\$\{filters\[@\]\}" compile/
+    );
+    assert.match(publishReleaseJob, /export TERRENO_PUBLISH_PREBUILT=1/);
+    assert.match(publishReleaseJob, /xargs -P \d+/);
   });
 });

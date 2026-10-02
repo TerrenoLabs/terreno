@@ -1,6 +1,6 @@
 # Implementation Plan: DataTable server-side filtering and search
 
-**Status:** Approved  
+**Status:** Complete — shipped in #1303  
 **Branch:** `cursor/datatable-server-side-filtering-191d`  
 **Owner:** —  
 **Created:** 2026-09-10  

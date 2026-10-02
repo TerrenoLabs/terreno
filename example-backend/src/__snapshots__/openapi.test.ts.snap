@@ -2165,6 +2165,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "format": "date-time",
                             "type": "string",
                           },
+                          "release": {
+                            "properties": {
+                              "buildNumber": {
+                                "description": "Client build number associated with the imported product release",
+                                "type": "number",
+                              },
+                              "channel": {
+                                "description": "Release channel associated with the imported announcement",
+                                "type": "string",
+                              },
+                              "product": {
+                                "description": "Product identifier associated with the imported announcement",
+                                "type": "string",
+                              },
+                              "version": {
+                                "description": "User-facing product version associated with the imported announcement",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "releaseSlug": {
+                            "description": "Stable announcement identifier within an imported product release",
+                            "type": "string",
+                          },
                           "status": {
                             "description": "Lifecycle status: draft, published, or archived",
                             "enum": [
@@ -2371,6 +2396,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "format": "date-time",
                     "type": "string",
                   },
+                  "release": {
+                    "properties": {
+                      "buildNumber": {
+                        "description": "Client build number associated with the imported product release",
+                        "type": "number",
+                      },
+                      "channel": {
+                        "description": "Release channel associated with the imported announcement",
+                        "type": "string",
+                      },
+                      "product": {
+                        "description": "Product identifier associated with the imported announcement",
+                        "type": "string",
+                      },
+                      "version": {
+                        "description": "User-facing product version associated with the imported announcement",
+                        "type": "string",
+                      },
+                    },
+                    "type": "object",
+                  },
+                  "releaseSlug": {
+                    "description": "Stable announcement identifier within an imported product release",
+                    "type": "string",
+                  },
                   "status": {
                     "description": "Lifecycle status: draft, published, or archived",
                     "enum": [
@@ -2502,6 +2552,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "publishedAt": {
                       "description": "When the announcement was first published",
                       "format": "date-time",
+                      "type": "string",
+                    },
+                    "release": {
+                      "properties": {
+                        "buildNumber": {
+                          "description": "Client build number associated with the imported product release",
+                          "type": "number",
+                        },
+                        "channel": {
+                          "description": "Release channel associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "product": {
+                          "description": "Product identifier associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "version": {
+                          "description": "User-facing product version associated with the imported announcement",
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "releaseSlug": {
+                      "description": "Stable announcement identifier within an imported product release",
                       "type": "string",
                     },
                     "status": {
@@ -2869,6 +2944,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "format": "date-time",
                       "type": "string",
                     },
+                    "release": {
+                      "properties": {
+                        "buildNumber": {
+                          "description": "Client build number associated with the imported product release",
+                          "type": "number",
+                        },
+                        "channel": {
+                          "description": "Release channel associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "product": {
+                          "description": "Product identifier associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "version": {
+                          "description": "User-facing product version associated with the imported announcement",
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "releaseSlug": {
+                      "description": "Stable announcement identifier within an imported product release",
+                      "type": "string",
+                    },
                     "status": {
                       "description": "Lifecycle status: draft, published, or archived",
                       "enum": [
@@ -3068,6 +3168,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "format": "date-time",
                     "type": "string",
                   },
+                  "release": {
+                    "properties": {
+                      "buildNumber": {
+                        "description": "Client build number associated with the imported product release",
+                        "type": "number",
+                      },
+                      "channel": {
+                        "description": "Release channel associated with the imported announcement",
+                        "type": "string",
+                      },
+                      "product": {
+                        "description": "Product identifier associated with the imported announcement",
+                        "type": "string",
+                      },
+                      "version": {
+                        "description": "User-facing product version associated with the imported announcement",
+                        "type": "string",
+                      },
+                    },
+                    "type": "object",
+                  },
+                  "releaseSlug": {
+                    "description": "Stable announcement identifier within an imported product release",
+                    "type": "string",
+                  },
                   "status": {
                     "description": "Lifecycle status: draft, published, or archived",
                     "enum": [
@@ -3199,6 +3324,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "publishedAt": {
                       "description": "When the announcement was first published",
                       "format": "date-time",
+                      "type": "string",
+                    },
+                    "release": {
+                      "properties": {
+                        "buildNumber": {
+                          "description": "Client build number associated with the imported product release",
+                          "type": "number",
+                        },
+                        "channel": {
+                          "description": "Release channel associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "product": {
+                          "description": "Product identifier associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "version": {
+                          "description": "User-facing product version associated with the imported announcement",
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "releaseSlug": {
+                      "description": "Stable announcement identifier within an imported product release",
                       "type": "string",
                     },
                     "status": {
@@ -11028,6 +11178,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "format": "date-time",
                             "type": "string",
                           },
+                          "release": {
+                            "properties": {
+                              "buildNumber": {
+                                "description": "Client build number associated with the imported product release",
+                                "type": "number",
+                              },
+                              "channel": {
+                                "description": "Release channel associated with the imported announcement",
+                                "type": "string",
+                              },
+                              "product": {
+                                "description": "Product identifier associated with the imported announcement",
+                                "type": "string",
+                              },
+                              "version": {
+                                "description": "User-facing product version associated with the imported announcement",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "releaseSlug": {
+                            "description": "Stable announcement identifier within an imported product release",
+                            "type": "string",
+                          },
                           "status": {
                             "description": "Lifecycle status: draft, published, or archived",
                             "enum": [
@@ -11234,6 +11409,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "format": "date-time",
                     "type": "string",
                   },
+                  "release": {
+                    "properties": {
+                      "buildNumber": {
+                        "description": "Client build number associated with the imported product release",
+                        "type": "number",
+                      },
+                      "channel": {
+                        "description": "Release channel associated with the imported announcement",
+                        "type": "string",
+                      },
+                      "product": {
+                        "description": "Product identifier associated with the imported announcement",
+                        "type": "string",
+                      },
+                      "version": {
+                        "description": "User-facing product version associated with the imported announcement",
+                        "type": "string",
+                      },
+                    },
+                    "type": "object",
+                  },
+                  "releaseSlug": {
+                    "description": "Stable announcement identifier within an imported product release",
+                    "type": "string",
+                  },
                   "status": {
                     "description": "Lifecycle status: draft, published, or archived",
                     "enum": [
@@ -11365,6 +11565,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "publishedAt": {
                       "description": "When the announcement was first published",
                       "format": "date-time",
+                      "type": "string",
+                    },
+                    "release": {
+                      "properties": {
+                        "buildNumber": {
+                          "description": "Client build number associated with the imported product release",
+                          "type": "number",
+                        },
+                        "channel": {
+                          "description": "Release channel associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "product": {
+                          "description": "Product identifier associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "version": {
+                          "description": "User-facing product version associated with the imported announcement",
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "releaseSlug": {
+                      "description": "Stable announcement identifier within an imported product release",
                       "type": "string",
                     },
                     "status": {
@@ -11522,6 +11747,286 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
           },
         },
         "summary": "Get announcement plugin configuration",
+        "tags": [
+          "announcements",
+        ],
+      },
+    },
+    "/announcements/import-release": {
+      "post": {
+        "description": "Idempotently create or update a release pack. Defaults to drafts; set publish=true to publish.",
+        "operationId": "announcements_import-release",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "announcements": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "acknowledgementPolicy": {
+                          "enum": [
+                            "required",
+                            "dismiss-only",
+                          ],
+                          "type": "string",
+                        },
+                        "audience": {
+                          "nullable": true,
+                        },
+                        "audienceType": {
+                          "enum": [
+                            "staff",
+                            "patient",
+                            "all",
+                          ],
+                          "type": "string",
+                        },
+                        "body": {
+                          "minLength": 1,
+                          "type": "string",
+                        },
+                        "displayMode": {
+                          "enum": [
+                            "modal",
+                            "banner",
+                            "feed",
+                          ],
+                          "type": "string",
+                        },
+                        "expiresAt": {
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "minBuildNumber": {
+                          "exclusiveMinimum": true,
+                          "minimum": 0,
+                          "type": "integer",
+                        },
+                        "platforms": {
+                          "items": {
+                            "enum": [
+                              "ios",
+                              "android",
+                              "web",
+                            ],
+                            "type": "string",
+                          },
+                          "minItems": 1,
+                          "type": "array",
+                        },
+                        "primaryAction": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "label": {
+                              "minLength": 1,
+                              "type": "string",
+                            },
+                            "url": {
+                              "format": "uri",
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "label",
+                            "url",
+                          ],
+                          "type": "object",
+                        },
+                        "priority": {
+                          "type": "number",
+                        },
+                        "publishAt": {
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "slug": {
+                          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                          "type": "string",
+                        },
+                        "title": {
+                          "minLength": 1,
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "body",
+                        "slug",
+                        "title",
+                      ],
+                      "type": "object",
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "type": "array",
+                  },
+                  "defaults": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "acknowledgementPolicy": {
+                        "enum": [
+                          "required",
+                          "dismiss-only",
+                        ],
+                        "type": "string",
+                      },
+                      "audience": {
+                        "nullable": true,
+                      },
+                      "audienceType": {
+                        "enum": [
+                          "staff",
+                          "patient",
+                          "all",
+                        ],
+                        "type": "string",
+                      },
+                      "displayMode": {
+                        "enum": [
+                          "modal",
+                          "banner",
+                          "feed",
+                        ],
+                        "type": "string",
+                      },
+                      "expiresAt": {
+                        "format": "date-time",
+                        "type": "string",
+                      },
+                      "minBuildNumber": {
+                        "exclusiveMinimum": true,
+                        "minimum": 0,
+                        "type": "integer",
+                      },
+                      "platforms": {
+                        "items": {
+                          "enum": [
+                            "ios",
+                            "android",
+                            "web",
+                          ],
+                          "type": "string",
+                        },
+                        "minItems": 1,
+                        "type": "array",
+                      },
+                      "priority": {
+                        "type": "number",
+                      },
+                      "publishAt": {
+                        "format": "date-time",
+                        "type": "string",
+                      },
+                    },
+                    "type": "object",
+                  },
+                  "publish": {
+                    "default": false,
+                    "type": "boolean",
+                  },
+                  "release": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "buildNumber": {
+                        "exclusiveMinimum": true,
+                        "minimum": 0,
+                        "type": "integer",
+                      },
+                      "channel": {
+                        "default": "production",
+                        "minLength": 1,
+                        "type": "string",
+                      },
+                      "product": {
+                        "minLength": 1,
+                        "type": "string",
+                      },
+                      "version": {
+                        "minLength": 1,
+                        "type": "string",
+                      },
+                    },
+                    "required": [
+                      "product",
+                      "version",
+                    ],
+                    "type": "object",
+                  },
+                },
+                "required": [
+                  "announcements",
+                  "release",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful response",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Import a product release announcement pack",
         "tags": [
           "announcements",
         ],
@@ -11879,6 +12384,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "format": "date-time",
                       "type": "string",
                     },
+                    "release": {
+                      "properties": {
+                        "buildNumber": {
+                          "description": "Client build number associated with the imported product release",
+                          "type": "number",
+                        },
+                        "channel": {
+                          "description": "Release channel associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "product": {
+                          "description": "Product identifier associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "version": {
+                          "description": "User-facing product version associated with the imported announcement",
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "releaseSlug": {
+                      "description": "Stable announcement identifier within an imported product release",
+                      "type": "string",
+                    },
                     "status": {
                       "description": "Lifecycle status: draft, published, or archived",
                       "enum": [
@@ -12078,6 +12608,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "format": "date-time",
                     "type": "string",
                   },
+                  "release": {
+                    "properties": {
+                      "buildNumber": {
+                        "description": "Client build number associated with the imported product release",
+                        "type": "number",
+                      },
+                      "channel": {
+                        "description": "Release channel associated with the imported announcement",
+                        "type": "string",
+                      },
+                      "product": {
+                        "description": "Product identifier associated with the imported announcement",
+                        "type": "string",
+                      },
+                      "version": {
+                        "description": "User-facing product version associated with the imported announcement",
+                        "type": "string",
+                      },
+                    },
+                    "type": "object",
+                  },
+                  "releaseSlug": {
+                    "description": "Stable announcement identifier within an imported product release",
+                    "type": "string",
+                  },
                   "status": {
                     "description": "Lifecycle status: draft, published, or archived",
                     "enum": [
@@ -12209,6 +12764,31 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "publishedAt": {
                       "description": "When the announcement was first published",
                       "format": "date-time",
+                      "type": "string",
+                    },
+                    "release": {
+                      "properties": {
+                        "buildNumber": {
+                          "description": "Client build number associated with the imported product release",
+                          "type": "number",
+                        },
+                        "channel": {
+                          "description": "Release channel associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "product": {
+                          "description": "Product identifier associated with the imported announcement",
+                          "type": "string",
+                        },
+                        "version": {
+                          "description": "User-facing product version associated with the imported announcement",
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "releaseSlug": {
+                      "description": "Stable announcement identifier within an imported product release",
                       "type": "string",
                     },
                     "status": {

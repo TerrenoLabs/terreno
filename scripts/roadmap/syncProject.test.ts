@@ -4,12 +4,14 @@ import assert from "node:assert/strict";
 import {parseFieldOptions, parseLabelNames} from "./checkRoadmapItem.ts";
 import {parseBackfillTable, parseProjectFields, parseSeedIssues} from "./seedIssues.ts";
 import {
+  attachIssuesByIp,
   buildDesiredFields,
   COMMUNITY_FIELD_NAME,
   collectPagedNodes,
   IP_FIELD_NAME,
   planFields,
   planItemSync,
+  planLabelWork,
   resolveSeedItems,
   shouldWriteBoardStatus,
   validateItems,
@@ -482,5 +484,62 @@ describe("resolveSeedItems with includeWithoutIp", () => {
     });
     assert.ok(items.some((item) => item.slug === "no-ip-yet"));
     assert.deepEqual(skipped, []);
+  });
+});
+
+describe("attachIssuesByIp", () => {
+  it("finds a renamed issue through the board's IP field", () => {
+    const items = [
+      {ip: "renamed-plan", issueNumber: null as number | null},
+      {ip: "", issueNumber: null as number | null},
+      {ip: "matched-plan", issueNumber: 7 as number | null},
+    ];
+    attachIssuesByIp({
+      boardItems: [
+        {fields: {IP: "renamed-plan"}, id: "a", issueNumber: 42},
+        {fields: {IP: "matched-plan"}, id: "b", issueNumber: 99},
+      ],
+      items,
+    });
+    assert.equal(items[0]?.issueNumber, 42);
+    assert.equal(items[1]?.issueNumber, null);
+    assert.equal(items[2]?.issueNumber, 7);
+  });
+
+  it("returns only the items it attached, so their labels can be planned", () => {
+    const items = [
+      {ip: "renamed-plan", issueNumber: null as number | null, labels: ["area:ai", "roadmap"]},
+      {ip: "matched-plan", issueNumber: 7 as number | null, labels: ["area:api"]},
+    ];
+    const attached = attachIssuesByIp({
+      boardItems: [{fields: {IP: "renamed-plan"}, id: "a", issueNumber: 42}],
+      items,
+    });
+    assert.deepEqual(
+      attached.map((item) => item.issueNumber),
+      [42]
+    );
+    assert.deepEqual(
+      planLabelWork({issueLabelsByNumber: new Map([[42, ["roadmap"]]]), items: attached}),
+      [{labels: ["area:ai"], number: 42}]
+    );
+  });
+});
+
+describe("planLabelWork", () => {
+  it("adds only missing labels and skips unknown or absent issues", () => {
+    const work = planLabelWork({
+      issueLabelsByNumber: new Map([
+        [1, ["area:api", "roadmap"]],
+        [2, ["roadmap"]],
+      ]),
+      items: [
+        {issueNumber: 1, labels: ["area:api", "roadmap"]},
+        {issueNumber: 2, labels: ["area:ui", "roadmap"]},
+        {issueNumber: 3, labels: ["area:ui"]},
+        {issueNumber: null, labels: ["area:ui"]},
+      ],
+    });
+    assert.deepEqual(work, [{labels: ["area:ui"], number: 2}]);
   });
 });

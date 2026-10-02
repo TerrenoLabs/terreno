@@ -26,7 +26,7 @@
     },
     "admin-backend": {
       "name": "@terreno/admin-backend",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "@google-cloud/storage": "catalog:",
         "@terreno/api": "workspace:*",
@@ -52,7 +52,7 @@
     },
     "admin-frontend": {
       "name": "@terreno/admin-frontend",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "@terreno/ui": "workspace:*",
         "expo-router": "catalog:",
@@ -87,7 +87,7 @@
     },
     "admin-spa": {
       "name": "@terreno/admin-spa",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "@expo/vector-icons": "catalog:",
         "@react-native-async-storage/async-storage": "catalog:",
@@ -138,7 +138,7 @@
     },
     "ai": {
       "name": "@terreno/ai",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "@ai-sdk/mcp": "^1.0.21",
         "@google-cloud/storage": "catalog:",
@@ -177,7 +177,7 @@
     },
     "announcements": {
       "name": "@terreno/announcements",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -200,7 +200,7 @@
     },
     "api": {
       "name": "@terreno/api",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "bin": {
         "terreno-migrate": "./src/migrations/cli.ts",
       },
@@ -279,7 +279,7 @@
     },
     "api-health": {
       "name": "@terreno/api-health",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -313,7 +313,7 @@
     },
     "comms": {
       "name": "@terreno/comms",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "libphonenumber-js": "catalog:",
@@ -344,16 +344,16 @@
     },
     "create-terreno-app": {
       "name": "create-terreno-app",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "bin": {
         "create-terreno-app": "./dist/cli.js",
       },
       "devDependencies": {
-        "@biomejs/biome": "^2.3.6",
-        "@types/bun": "^1.4.0",
-        "@types/node": "^25.3.0",
-        "chai": "^6.2.2",
-        "typescript": "~6.0.3",
+        "@biomejs/biome": "catalog:",
+        "@types/bun": "catalog:",
+        "@types/node": "catalog:",
+        "chai": "catalog:",
+        "typescript": "catalog:",
       },
     },
     "demo": {
@@ -540,22 +540,22 @@
     },
     "feature-flags": {
       "name": "@terreno/feature-flags",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
-        "@openfeature/server-sdk": "^1.22.0",
-        "@terreno/api": "57.4.0",
-        "express": "^5.2.1",
-        "lodash": "^4.18.1",
+        "@openfeature/server-sdk": "catalog:",
+        "@terreno/api": "workspace:*",
+        "express": "catalog:",
+        "lodash": "catalog:",
       },
       "devDependencies": {
-        "@biomejs/biome": "^2.3.6",
-        "@terreno/test": "57.4.0",
-        "@types/bun": "^1.4.0",
-        "@types/express": "^5.0.6",
-        "@types/lodash": "^4.17.17",
-        "@types/supertest": "^7.2.0",
-        "supertest": "^7.2.2",
-        "typescript": "~6.0.3",
+        "@biomejs/biome": "catalog:",
+        "@terreno/test": "workspace:*",
+        "@types/bun": "catalog:",
+        "@types/express": "catalog:",
+        "@types/lodash": "catalog:",
+        "@types/supertest": "catalog:",
+        "supertest": "catalog:",
+        "typescript": "catalog:",
       },
       "peerDependencies": {
         "mongoose": "^8.0.0 || ^9.0.0",
@@ -563,23 +563,23 @@
     },
     "jobs": {
       "name": "@terreno/jobs",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
-        "@terreno/api": "57.4.0",
+        "@terreno/api": "workspace:*",
         "cron": "^4.3.4",
-        "express": "^5.2.1",
-        "luxon": "^3.7.2",
+        "express": "catalog:",
+        "luxon": "catalog:",
       },
       "devDependencies": {
-        "@biomejs/biome": "^2.3.6",
-        "@terreno/test": "57.4.0",
-        "@types/bun": "^1.4.0",
-        "@types/express": "^5.0.6",
-        "@types/luxon": "^3.7.1",
-        "@types/supertest": "^7.2.0",
-        "chai": "^6.2.2",
-        "supertest": "^7.2.2",
-        "typescript": "~6.0.3",
+        "@biomejs/biome": "catalog:",
+        "@terreno/test": "workspace:*",
+        "@types/bun": "catalog:",
+        "@types/express": "catalog:",
+        "@types/luxon": "catalog:",
+        "@types/supertest": "catalog:",
+        "chai": "catalog:",
+        "supertest": "catalog:",
+        "typescript": "catalog:",
       },
       "peerDependencies": {
         "@google-cloud/tasks": "7.1.0",
@@ -593,7 +593,7 @@
     },
     "mcp-server": {
       "name": "@terreno/mcp",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "bin": {
         "terreno-mcp": "./dist/index.js",
         "terreno-mcp-local": "./dist/local/index.js",
@@ -607,7 +607,7 @@
         "express": "catalog:",
         "luxon": "catalog:",
         "minisearch": "^7.2.0",
-        "mongoose": "9.7.4",
+        "mongoose": "catalog:",
       },
       "devDependencies": {
         "@biomejs/biome": "catalog:",
@@ -621,7 +621,7 @@
     },
     "rtk": {
       "name": "@terreno/rtk",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "@ai-sdk/react": "^3.0.118",
         "@better-auth/expo": "^1.6.25",
@@ -668,32 +668,32 @@
     },
     "syncdb": {
       "name": "@terreno/syncdb",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "bin": {
         "terreno-syncdb-codegen": "./src/codegen/cli.ts",
       },
       "dependencies": {
-        "luxon": "^3.7.2",
-        "socket.io-client": "^4.8.1",
+        "luxon": "catalog:",
+        "socket.io-client": "catalog:",
         "tinybase": "^9.5.1",
       },
       "devDependencies": {
-        "@biomejs/biome": "^2.3.6",
-        "@testing-library/react-native": "^13.2.0",
-        "@types/bun": "^1.4.0",
-        "@types/luxon": "^3.7.1",
-        "@types/node": "^25.3.0",
-        "@types/react": "~19.2.14",
-        "expo-sqlite": "~57.0.1",
+        "@biomejs/biome": "catalog:",
+        "@testing-library/react-native": "catalog:",
+        "@types/bun": "catalog:",
+        "@types/luxon": "catalog:",
+        "@types/node": "catalog:",
+        "@types/react": "catalog:",
+        "expo-sqlite": "catalog:",
         "fake-indexeddb": "^6.0.0",
-        "react": "19.2.3",
-        "react-test-renderer": "19.2.3",
-        "socket.io": "^4.8.1",
-        "typescript": "~6.0.3",
+        "react": "catalog:",
+        "react-test-renderer": "catalog:",
+        "socket.io": "catalog:",
+        "typescript": "catalog:",
       },
       "peerDependencies": {
         "expo-sqlite": "*",
-        "react": "19.2.3",
+        "react": "catalog:",
       },
       "optionalPeers": [
         "expo-sqlite",
@@ -702,7 +702,7 @@
     },
     "test": {
       "name": "@terreno/test",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "express": "catalog:",
         "luxon": "catalog:",
@@ -728,7 +728,7 @@
     },
     "ui": {
       "name": "@terreno/ui",
-      "version": "57.4.0",
+      "version": "57.6.0",
       "dependencies": {
         "@expo-google-fonts/caveat": "^0.4.2",
         "@expo-google-fonts/dancing-script": "^0.4.2",

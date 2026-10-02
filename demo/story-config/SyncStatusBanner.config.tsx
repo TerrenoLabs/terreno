@@ -3,6 +3,7 @@ import {SyncStatusBannerDemo, SyncStatusBannerOffline} from "@stories/SyncStatus
 import {SyncStatusBanner} from "@terreno/ui";
 
 export const SyncStatusBannerConfiguration: DemoConfiguration = {
+  usageExample: "import {SyncStatusBanner} from \"@terreno/ui\";\n\n<SyncStatusBanner />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

@@ -8,6 +8,7 @@ import {Popover} from "@terreno/ui";
 import React from "react";
 
 export const PopoverConfiguration: DemoConfiguration = {
+  usageExample: "import {Popover} from \"@terreno/ui\";\n\n<Popover />",
   name: "Popover",
   related: ["Card", "Modal", "ThumbsUpDownFeedback"],
   description:

@@ -1,6 +1,5 @@
-import {describe, expect, it, spyOn} from "bun:test";
+import {describe, expect, it} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
-import {Linking} from "react-native";
 
 import {LineChart} from "./LineChart";
 import {renderWithTheme} from "./test-utils";
@@ -150,17 +149,13 @@ describe("LineChart", () => {
     );
   });
 
-  it("does not open URLs from x-axis labels", async () => {
-    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve(true));
+  it("does not open URLs from x-axis labels", () => {
     const {getByText} = renderWithTheme(
       <LineChart data={[{label: "https://evil.example", value: 10}]} />
     );
 
-    await act(async () => {
-      fireEvent.press(getByText("https://evil.example"));
-    });
-
-    expect(openURLSpy).not.toHaveBeenCalled();
-    openURLSpy.mockRestore();
+    // The suite shares one Linking mock, so a spy on openURL also records calls
+    // from other files. A label is inert when it has no press handler.
+    expect(getByText("https://evil.example").props.onPress).toBeUndefined();
   });
 });

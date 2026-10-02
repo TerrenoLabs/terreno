@@ -14,7 +14,10 @@ import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
 import type {GptRouteOptions, HostActionResult} from "../types";
 
-/** Host callbacks give up after this long unless `uiBlocks.actionTimeoutMs` sets another cap. */
+/**
+ * Host callbacks give up after this long unless `uiBlocks.actionTimeoutMs` sets another cap.
+ * @internal Test seam. Production reads it only inside this module.
+ */
 export const HOST_ACTION_TIMEOUT_MS = 10_000;
 
 const requestUserId = (req: express.Request): mongoose.Types.ObjectId | undefined =>

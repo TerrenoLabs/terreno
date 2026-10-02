@@ -34,6 +34,7 @@ allowedAttributes.img = ["alt", "height", "src", "width"];
 /**
  * Display-only HTML. Scripts, frames, forms, event handlers, and links are removed.
  * The only URL that remains is an image `data:` URL.
+ * @internal Test seam. Callers store the document from `sanitizeBlocksText`.
  */
 export const sanitizeHtmlFragment = (html: string): string =>
   sanitizeHtml(html, {

@@ -14,6 +14,7 @@ const PREVIEW_ROWS = 20;
 
 export type DatasetGrain = (typeof DATASET_GRAINS)[number];
 
+/** Handle returned by `registerAiDataset` for the tool result the model sees. */
 export interface RegisteredDataset {
   columns: DatasetColumn[];
   datasetId: string;
@@ -163,7 +164,10 @@ const bucketKey = (value: AIDatasetCell, grain: DatasetGrain): string => {
   return parsed.startOf(grain).toUTC().toISO() ?? value;
 };
 
-/** Sums number columns into one row per date bucket. The first date column is the bucket. */
+/**
+ * Sums number columns into one row per date bucket. The first date column is the bucket.
+ * @internal Test seam. Dataset reads call this before the response is built.
+ */
 export const bucketByGrain = (
   columns: DatasetColumn[],
   rows: AIDatasetCell[][],
@@ -250,6 +254,7 @@ const lttbIndexes = (points: {x: number; y: number}[], threshold: number): numbe
 /**
  * Largest-triangle-three-buckets downsample. Keeps the first and last points and at most
  * `threshold` points total.
+ * @internal Test seam. Row downsampling uses `lttbIndexes` in this module.
  */
 export const lttb = (
   points: {x: number; y: number}[],

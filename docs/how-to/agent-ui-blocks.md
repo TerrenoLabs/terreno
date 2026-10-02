@@ -39,7 +39,7 @@ Outside a chat turn, `AIService.generateBlocks({prompt})` returns one validated 
 ## Store rows for a ref chart
 
 1. Turn `uiBlocks` on. `addGptRoutes` then mounts `GET /gpt/datasets/:id`.
-2. From a server tool, call `registerAiDataset({userId, historyId, columns, rows})`.
+2. From a server tool, call `registerAiDataset({userId, historyId, columns, rows})`. The return type is `RegisteredDataset` (`datasetId`, `columns`, `rowCount`, `preview`, `stats`).
 3. Hand the model the returned `datasetId`. A `ref` dataset uses that id. The model cannot create one.
 4. The owner reads rows with `GET /gpt/datasets/:id?grain=week&limit=40`. Leave `page` off to downsample a line or area with LTTB. Pass `page` to paginate a table; `more` is true when another page remains.
 5. `datasetTtlDays: 0` (the default) stores no `expiresAt`. `7` sets `expiresAt` to seven days after `created`. More than `datasetMaxRows` (default 50,000) returns 413. Another user's id returns 404.

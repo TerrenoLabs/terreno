@@ -47,6 +47,7 @@ export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";
 export {addProjectRoutes} from "./routes/projects";
+export type {RegisteredDataset} from "./service/aiDatasets";
 export {configureAiDatasets, registerAiDataset} from "./service/aiDatasets";
 export {AIService, TemperaturePresets} from "./service/aiService";
 export {createAskTools} from "./service/asks";

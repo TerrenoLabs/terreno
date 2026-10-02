@@ -1,5 +1,5 @@
 import {EmbedModeProvider} from "@contexts/EmbedModeContext";
-import {isMobileDevice} from "@terreno/ui";
+import {isNarrowViewport} from "@terreno/ui";
 import {router, Stack, useGlobalSearchParams} from "expo-router";
 import {StatusBar} from "expo-status-bar";
 import {Pressable, StyleSheet, Text} from "react-native";
@@ -14,7 +14,7 @@ const Layout = () => {
       <Stack
         screenOptions={{
           headerBackTitle: "Back",
-          headerBackVisible: !isEmbedMode && isMobileDevice(),
+          headerBackVisible: !isEmbedMode && isNarrowViewport(),
           headerRight: isEmbedMode
             ? undefined
             : () => (
@@ -43,6 +43,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: "100%",
     justifyContent: "center",
-    marginRight: isMobileDevice() ? 0 : 16,
+    marginRight: isNarrowViewport() ? 0 : 16,
   },
 });

@@ -5,13 +5,13 @@ import {ActivityIndicator, Text as NativeText, Pressable, View} from "react-nati
 
 import type {IconButtonProps} from "./Common";
 import {useCustomIcon} from "./IconRegistry";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {Modal} from "./Modal";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
 import {Tooltip} from "./Tooltip";
 import {Unifier} from "./Unifier";
-import {isNative} from "./Utilities";
+import {applyColorOpacity, isNative} from "./Utilities";
 
 interface ConfirmationModalProps {
   visible: boolean;
@@ -56,6 +56,7 @@ const IconButtonComponent: FC<IconButtonProps> = ({
   indicator,
   indicatorText,
   loading: propsLoading = false,
+  backgroundOpacity,
   size = "default",
   state = "default",
   testID,
@@ -109,14 +110,18 @@ const IconButtonComponent: FC<IconButtonProps> = ({
     }
   }
 
+  if (typeof backgroundOpacity === "number") {
+    backgroundColor = applyColorOpacity({color: backgroundColor, opacity: backgroundOpacity});
+  }
+
   const indicatorColor = indicator ? theme.surface[indicator] : undefined;
 
   return (
     <Pressable
       accessibilityHint={
-        (accessibilityHint ?? withConfirmation)
+        withConfirmation
           ? `Opens a confirmation dialog to confirm ${accessLabel}`
-          : `Press to perform ${accessLabel} action`
+          : (accessibilityHint ?? `Press to perform ${accessLabel} action`)
       }
       aria-label={accessLabel}
       aria-role="button"
@@ -218,7 +223,7 @@ const IconButtonComponent: FC<IconButtonProps> = ({
 
 export const IconButton: FC<IconButtonProps> = (props) => {
   const {tooltipText, tooltipIdealPosition, tooltipIncludeArrow = false} = props;
-  const isMobileOrNative = isMobileDevice() || isNative();
+  const isMobileOrNative = isNarrowViewport() || isNative();
 
   if (tooltipText && !isMobileOrNative) {
     return (

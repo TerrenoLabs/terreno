@@ -28,7 +28,7 @@ const ControlledDateTimeField = ({
 
 const setDesktop = () => {
   mock.module("./MediaQuery", () => ({
-    isMobileDevice: () => false,
+    isNarrowViewport: () => false,
     mediaQuery: () => "lg" as const,
     mediaQueryLargerThan: () => true,
     mediaQuerySmallerThan: () => false,
@@ -37,7 +37,7 @@ const setDesktop = () => {
 
 const setMobile = () => {
   mock.module("./MediaQuery", () => ({
-    isMobileDevice: () => true,
+    isNarrowViewport: () => true,
     mediaQuery: () => "xs" as const,
     mediaQueryLargerThan: () => false,
     mediaQuerySmallerThan: () => true,
@@ -45,11 +45,12 @@ const setMobile = () => {
 };
 
 // Restore MediaQuery to bunSetup defaults after all tests to prevent cross-file pollution.
-// bunSetup mocks: isMobileDevice → false, mediaQueryLargerThan → false.
+// bunSetup mocks: isNarrowViewport → false, mediaQueryLargerThan → false, mediaQuerySmallerThan → false.
 const restoreDefault = () => {
   mock.module("./MediaQuery", () => ({
-    isMobileDevice: mock(() => false),
+    isNarrowViewport: mock(() => false),
     mediaQueryLargerThan: mock(() => false),
+    mediaQuerySmallerThan: mock(() => false),
   }));
 };
 

@@ -1,21 +1,58 @@
-import {afterAll, afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
-import {act} from "@testing-library/react-native";
-import {View} from "react-native";
+import {afterAll, afterEach, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
+import {act, fireEvent} from "@testing-library/react-native";
+import {forwardRef, type ReactNode, type Ref, useImperativeHandle} from "react";
+import {type ScaledSize, StyleSheet, useWindowDimensions, View} from "react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 
 import {SplitPage} from "./SplitPage";
 import {renderWithTheme} from "./test-utils";
 
-// Mock react-native-swiper-flatlist
+interface PagerScrollOptions {
+  animated?: boolean;
+  index: number;
+}
+
+const swiperScrollToIndex = mock((_options?: PagerScrollOptions) => {});
+
+// Mock react-native-swiper-flatlist. The host tree stays a View with testID "swiper-flatlist"
+// so existing snapshots keep matching. The ref exposes scrollToIndex for the opt-in pager tests.
 mock.module("react-native-swiper-flatlist", () => ({
-  SwiperFlatList: ({children}: {children: React.ReactNode}) => (
-    <View testID="swiper-flatlist">{children}</View>
+  SwiperFlatList: forwardRef(
+    (
+      {children}: {children?: ReactNode},
+      ref: Ref<{scrollToIndex: (options: PagerScrollOptions) => void}>
+    ) => {
+      useImperativeHandle(ref, () => ({scrollToIndex: swiperScrollToIndex}));
+      return <View testID="swiper-flatlist">{children}</View>;
+    }
   ),
 }));
 
+type WindowDimensionsImpl = () => ScaledSize;
+type MockableUseWindowDimensions = WindowDimensionsImpl & {
+  mockImplementation?: (impl: WindowDimensionsImpl) => void;
+};
+
+const setWindowWidth = (width: number): (() => void) => {
+  const useWindowDimensionsMock = useWindowDimensions as MockableUseWindowDimensions;
+  if (typeof useWindowDimensionsMock.mockImplementation !== "function") {
+    return (): void => {};
+  }
+  useWindowDimensionsMock.mockImplementation(
+    (): ScaledSize => ({fontScale: 1, height: 812, scale: 2, width})
+  );
+  return (): void => {
+    useWindowDimensionsMock.mockImplementation?.(
+      (): ScaledSize => ({fontScale: 1, height: 812, scale: 2, width: 375})
+    );
+  };
+};
+
+const styleWidth = (style: unknown): unknown => StyleSheet.flatten(style)?.width;
+
 const setDesktop = () => {
   mock.module("./MediaQuery", () => ({
-    isMobileDevice: () => false,
+    isNarrowViewport: () => false,
     mediaQuery: () => "lg" as const,
     mediaQueryLargerThan: () => true,
     mediaQuerySmallerThan: () => false,
@@ -24,25 +61,61 @@ const setDesktop = () => {
 
 const setMobile = () => {
   mock.module("./MediaQuery", () => ({
-    isMobileDevice: () => true,
+    isNarrowViewport: () => true,
     mediaQuery: () => "xs" as const,
     mediaQueryLargerThan: () => false,
-    mediaQuerySmallerThan: () => true,
+    mediaQuerySmallerThan: () => false,
   }));
 };
 
 // Restore MediaQuery to bunSetup defaults after all tests to prevent cross-file pollution.
-// bunSetup mocks: isMobileDevice → false, mediaQueryLargerThan → false.
+// bunSetup mocks: isNarrowViewport → false, mediaQueryLargerThan → false, mediaQuerySmallerThan → false.
 const restoreDefault = () => {
   mock.module("./MediaQuery", () => ({
-    isMobileDevice: mock(() => false),
+    isNarrowViewport: mock(() => false),
     mediaQueryLargerThan: mock(() => false),
+    mediaQuerySmallerThan: mock(() => false),
   }));
 };
 
 afterAll(() => {
   restoreDefault();
 });
+
+const findAncestor = (
+  node: ReactTestInstance,
+  predicate: (candidate: ReactTestInstance) => boolean
+): ReactTestInstance | undefined => {
+  let current = node.parent;
+  while (current) {
+    if (predicate(current)) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return undefined;
+};
+
+const getIconButtonByTestId = (root: ReactTestInstance, testID: string): ReactTestInstance => {
+  const iconButton = root.findAll(
+    (node: ReactTestInstance) =>
+      node.props?.testID === testID && typeof node.props?.onClick === "function"
+  )[0];
+  if (!iconButton) {
+    throw new Error(`Unable to find IconButton with testID: ${testID}`);
+  }
+  return iconButton;
+};
+
+const queryIconButtonByTestId = (
+  root: ReactTestInstance,
+  testID: string
+): ReactTestInstance | undefined => {
+  return root.findAll(
+    (node: ReactTestInstance) =>
+      node.props?.testID === testID && typeof node.props?.onClick === "function"
+  )[0];
+};
 
 describe("SplitPage", () => {
   const defaultProps = {
@@ -579,6 +652,371 @@ describe("SplitPage", () => {
         fireEvent.press(boxes[0]);
       });
       expect(root).toBeTruthy();
+    });
+  });
+
+  describe("opt-in layouts", () => {
+    const twoChildren = (
+      <SplitPage {...defaultProps}>
+        <View testID="child-1" />
+        <View testID="child-2" />
+      </SplitPage>
+    );
+
+    const selectFirst = async (
+      getAllByLabelText: (label: string) => ReactTestInstance[]
+    ): Promise<void> => {
+      const boxes = getAllByLabelText("Select");
+      await act(async () => {
+        fireEvent.press(boxes[0]);
+      });
+    };
+
+    const layoutWidth = (node: ReactTestInstance, width: number): void => {
+      node.props.onLayout({
+        nativeEvent: {layout: {height: 400, width, x: 0, y: 0}},
+      });
+    };
+
+    it("shrinks at narrowBelowWidth and keeps the desktop layout above that width", async () => {
+      setDesktop();
+      const restoreNarrow = setWindowWidth(500);
+      const shrunk = renderWithTheme(
+        <SplitPage {...defaultProps} narrowBelowWidth={500}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      expect(shrunk.queryByTestId("child-1")).toBeNull();
+      expect(shrunk.queryByTestId("swiper-flatlist")).toBeNull();
+      await selectFirst(shrunk.getAllByLabelText);
+      expect(shrunk.getByTestId("swiper-flatlist")).toBeTruthy();
+      restoreNarrow();
+
+      setMobile();
+      const restoreWide = setWindowWidth(501);
+      const sideBySide = renderWithTheme(
+        <SplitPage {...defaultProps} narrowBelowWidth={500}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      expect(sideBySide.getByTestId("child-1")).toBeTruthy();
+      expect(sideBySide.queryByTestId("swiper-flatlist")).toBeNull();
+      restoreWide();
+    });
+
+    it("keeps the desktop flex row and the narrow dotted swiper without the new props", async () => {
+      setDesktop();
+      const desktop = renderWithTheme(twoChildren);
+      expect(desktop.queryByTestId("split-page-desktop-children-scroll")).toBeNull();
+      const rowChild = findAncestor(
+        desktop.getByTestId("child-1"),
+        (candidate) => styleWidth(candidate.props.style) === "60%"
+      );
+      expect(rowChild).toBeDefined();
+      expect(StyleSheet.flatten(rowChild?.props.style)?.flex).toBe(1);
+
+      setMobile();
+      const mobile = renderWithTheme(twoChildren);
+      expect(mobile.queryByTestId("swiper-flatlist")).toBeNull();
+      await selectFirst(mobile.getAllByLabelText);
+      expect(mobile.getByTestId("swiper-flatlist")).toBeTruthy();
+      expect(mobile.queryByTestId("split-page-mobile-children")).toBeNull();
+      const paginated = mobile.UNSAFE_root.findAll(
+        (node: ReactTestInstance) => node.props?.showPagination === true
+      );
+      expect(paginated.length).toBeGreaterThan(0);
+    });
+
+    it("sizes desktop children from the minimum width until the row is measured", async () => {
+      setDesktop();
+      const {getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps} desktopChildrenMinWidth={200}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      const scroll = getByTestId("split-page-desktop-children-scroll");
+      expect(styleWidth(getByTestId("split-page-desktop-child-0").props.style)).toBe(200);
+      expect(styleWidth(getByTestId("split-page-desktop-child-1").props.style)).toBe(200);
+
+      await act(async () => {
+        layoutWidth(scroll, 1000);
+      });
+      expect(styleWidth(getByTestId("split-page-desktop-child-0").props.style)).toBe(500);
+      expect(styleWidth(getByTestId("split-page-desktop-child-1").props.style)).toBe(500);
+
+      await act(async () => {
+        layoutWidth(scroll, 300);
+      });
+      expect(styleWidth(getByTestId("split-page-desktop-child-0").props.style)).toBe(200);
+      expect(styleWidth(getByTestId("split-page-desktop-child-1").props.style)).toBe(200);
+      expect(scroll.props.contentContainerStyle.width).toBe(400);
+    });
+
+    it("keeps the segmented control when desktopChildrenMinWidth is set with three children", () => {
+      setDesktop();
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      const {queryByTestId, UNSAFE_root} = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          desktopChildrenMinWidth={200}
+          tabs={["Tab 1", "Tab 2", "Tab 3"]}
+        >
+          <View testID="child-1" />
+          <View testID="child-2" />
+          <View testID="child-3" />
+        </SplitPage>
+      );
+      const segmented = UNSAFE_root.findAll(
+        (node: ReactTestInstance) => node.props?.items && node.props?.onChange
+      );
+      expect(segmented.length).toBeGreaterThan(0);
+      expect(queryByTestId("split-page-desktop-children-scroll")).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        "desktopChildrenMinWidth applies only when SplitPage has two or fewer children."
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("renders the labeled narrow pager with a next control on the first child", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId, UNSAFE_root} = renderWithTheme(
+        <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary", "Notes"]}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      expect(getByTestId("split-page-mobile-children")).toBeTruthy();
+      expect(getIconButtonByTestId(UNSAFE_root, "split-page-column-next")).toBeTruthy();
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-previous")).toBeUndefined();
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-back-to-list")).toBeUndefined();
+      const paginated = UNSAFE_root.findAll(
+        (node: ReactTestInstance) => node.props?.showPagination === true
+      );
+      expect(paginated).toHaveLength(0);
+      const labeled = UNSAFE_root.findAll(
+        (node: ReactTestInstance) => typeof node.props?.getItemLayout === "function"
+      );
+      expect(labeled.length).toBeGreaterThan(0);
+      expect(labeled[0].props.showPagination).toBeUndefined();
+    });
+
+    it("scrolls to the next child without an unanimated snap from the index change", async () => {
+      setMobile();
+      const {getAllByLabelText, UNSAFE_root} = renderWithTheme(
+        <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary", "Notes"]}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      swiperScrollToIndex.mockClear();
+      await act(async () => {
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: true, index: 1});
+      expect(swiperScrollToIndex.mock.calls.some((call) => call[0]?.animated === false)).toBe(
+        false
+      );
+    });
+
+    it("shows only previous on the last of two children", async () => {
+      setMobile();
+      const two = renderWithTheme(
+        <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary", "Notes"]}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      await selectFirst(two.getAllByLabelText);
+      await act(async () => {
+        getIconButtonByTestId(two.UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      expect(getIconButtonByTestId(two.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
+      expect(queryIconButtonByTestId(two.UNSAFE_root, "split-page-column-next")).toBeUndefined();
+    });
+
+    it("shows both directions on a middle child and walks previous back to the first", async () => {
+      setMobile();
+      const three = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          narrowViewportChildLabels={["Summary", "Notes", "History"]}
+          tabs={["Summary", "Notes", "History"]}
+        >
+          <View testID="child-1" />
+          <View testID="child-2" />
+          <View testID="child-3" />
+        </SplitPage>
+      );
+      await selectFirst(three.getAllByLabelText);
+      await act(async () => {
+        getIconButtonByTestId(three.UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      expect(getIconButtonByTestId(three.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
+      expect(getIconButtonByTestId(three.UNSAFE_root, "split-page-column-next")).toBeTruthy();
+      await act(async () => {
+        getIconButtonByTestId(three.UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      expect(queryIconButtonByTestId(three.UNSAFE_root, "split-page-column-next")).toBeUndefined();
+      swiperScrollToIndex.mockClear();
+      await act(async () => {
+        getIconButtonByTestId(three.UNSAFE_root, "split-page-column-previous").props.onClick();
+      });
+      await act(async () => {
+        getIconButtonByTestId(three.UNSAFE_root, "split-page-column-previous").props.onClick();
+      });
+      expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: true, index: 1});
+      expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: true, index: 0});
+      expect(
+        queryIconButtonByTestId(three.UNSAFE_root, "split-page-column-previous")
+      ).toBeUndefined();
+      expect(getIconButtonByTestId(three.UNSAFE_root, "split-page-column-next")).toBeTruthy();
+    });
+
+    it("returns to the list when the labeled back button is pressed", async () => {
+      setMobile();
+      const onSelectionChange = mock(async () => {});
+      const {getAllByLabelText, UNSAFE_root} = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportListButtonLabel="Back to list"
+          onSelectionChange={onSelectionChange}
+        >
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      await act(async () => {
+        getIconButtonByTestId(UNSAFE_root, "split-page-back-to-list").props.onClick();
+      });
+      expect(onSelectionChange).toHaveBeenCalledWith(undefined);
+    });
+
+    it("shows the labeled pager when narrowViewportSelectionActive is set without a list selection", () => {
+      setMobile();
+      const {getByTestId, queryByLabelText} = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportSelectionActive
+        >
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      expect(getByTestId("split-page-mobile-children")).toBeTruthy();
+      expect(queryByLabelText("Select")).toBeNull();
+    });
+
+    it("resets the narrow pager to the first child when narrowViewportSelectionKey changes", async () => {
+      setMobile();
+      const view = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportSelectionActive
+          narrowViewportSelectionKey="record-a"
+        >
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      await act(async () => {
+        getIconButtonByTestId(view.UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      expect(getIconButtonByTestId(view.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
+      swiperScrollToIndex.mockClear();
+      await act(async () => {
+        view.rerender(
+          <SplitPage
+            {...defaultProps}
+            narrowViewportChildLabels={["Summary", "Notes"]}
+            narrowViewportSelectionActive
+            narrowViewportSelectionKey="record-b"
+          >
+            <View testID="child-1" />
+            <View testID="child-2" />
+          </SplitPage>
+        );
+      });
+      expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: false, index: 0});
+      expect(
+        queryIconButtonByTestId(view.UNSAFE_root, "split-page-column-previous")
+      ).toBeUndefined();
+      expect(getIconButtonByTestId(view.UNSAFE_root, "split-page-column-next")).toBeTruthy();
+    });
+
+    it("realigns the current child when the page width changes", async () => {
+      setMobile();
+      const restoreWidth = setWindowWidth(375);
+      const view = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportSelectionActive
+          narrowViewportSelectionKey="record-a"
+        >
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      await act(async () => {
+        getIconButtonByTestId(view.UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      swiperScrollToIndex.mockClear();
+      await act(async () => {
+        layoutWidth(view.getByTestId("split-page-mobile-children"), 280);
+      });
+      expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: false, index: 1});
+      expect(getIconButtonByTestId(view.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
+      expect(queryIconButtonByTestId(view.UNSAFE_root, "split-page-column-next")).toBeUndefined();
+
+      swiperScrollToIndex.mockClear();
+      setWindowWidth(420);
+      await act(async () => {
+        view.rerender(
+          <SplitPage
+            {...defaultProps}
+            narrowViewportChildLabels={["Summary", "Notes"]}
+            narrowViewportSelectionActive
+            narrowViewportSelectionKey="record-a"
+          >
+            <View testID="child-1" />
+            <View testID="child-2" />
+          </SplitPage>
+        );
+      });
+      expect(swiperScrollToIndex).toHaveBeenCalledWith({animated: false, index: 1});
+      expect(swiperScrollToIndex.mock.calls.some((call) => call[0]?.index === 0)).toBe(false);
+      expect(getIconButtonByTestId(view.UNSAFE_root, "split-page-column-previous")).toBeTruthy();
+      restoreWidth();
+    });
+
+    it("falls back to the dotted swiper when narrowViewportChildLabels does not match the children", async () => {
+      setMobile();
+      const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      const {getAllByLabelText, queryByTestId, UNSAFE_root} = renderWithTheme(
+        <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary"]}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      expect(warnSpy).toHaveBeenCalledWith(
+        "narrowViewportChildLabels must have one entry per child. Falling back to the default narrow pager."
+      );
+      expect(queryByTestId("split-page-mobile-children")).toBeNull();
+      const paginated = UNSAFE_root.findAll(
+        (node: ReactTestInstance) => node.props?.showPagination === true
+      );
+      expect(paginated.length).toBeGreaterThan(0);
+      warnSpy.mockRestore();
     });
   });
 });

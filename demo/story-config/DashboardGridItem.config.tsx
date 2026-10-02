@@ -9,6 +9,13 @@ export const DashboardGridItemConfiguration: DemoConfiguration = {
   name: "DashboardGridItem",
   component: DashboardGridItem,
   related: ["DashboardGrid", "Card"],
+  usageExample: `import {Card, DashboardGrid, DashboardGridItem} from "@terreno/ui";
+
+<DashboardGrid>
+  <DashboardGridItem span={{lg: 2, md: 2, sm: 1}}>
+    <Card>Wide dashboard tile</Card>
+  </DashboardGridItem>
+</DashboardGrid>`,
   description:
     "Optional child of DashboardGrid that occupies more than one column. Span is per breakpoint and plain children stay one column.",
   a11yNotes: [],

@@ -10,6 +10,14 @@ export const ScorecardConfiguration: DemoConfiguration = {
   name: "Scorecard",
   component: Scorecard,
   related: ["SparklineChart", "ChartCard", "DashboardGrid"],
+  usageExample: `import {Scorecard} from "@terreno/ui";
+
+<Scorecard
+  title="Cost"
+  value={569}
+  formatValue={(value) => \`$\${value}\`}
+  sparklineData={[{label: "Mon", value: 92}, {label: "Tue", value: 108}]}
+/>`,
   description:
     "Compact KPI tile with a formatted value and optional solid-current/dotted-comparison sparkline.",
   a11yNotes: [

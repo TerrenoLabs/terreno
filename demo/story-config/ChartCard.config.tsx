@@ -10,6 +10,11 @@ export const ChartCardConfiguration: DemoConfiguration = {
   name: "ChartCard",
   component: ChartCard,
   related: ["Scorecard", "DashboardGrid", "BarChart"],
+  usageExample: `import {ChartCard, Text} from "@terreno/ui";
+
+<ChartCard title="Conversions by day" periodLabel="Last 14 days">
+  <Text>Chart or table content</Text>
+</ChartCard>`,
   description:
     "Card chrome for a chart or table: title, optional filter summary, and optional period badge action.",
   a11yNotes: [

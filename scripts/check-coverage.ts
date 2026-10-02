@@ -18,6 +18,10 @@
  * reports are merged (only files with hits from an isolated pass) so the
  * reported percentage reflects the union of executed code.
  *
+ * `@terreno/blocks` runs this coverage pass with `--max-concurrency=1`.
+ * On a 2-vCPU CircleCI worker, Bun's default 20-way run exits 0 before the
+ * All files row while the last file is still printing.
+ *
  * Usage:
  *   bun run ../scripts/check-coverage.ts [--threshold=95]
  */
@@ -498,7 +502,11 @@ const runBunTest = async (
 
   // mcp-server: TERRENO_MCP_DOCS_DIR races across files.
   // admin-frontend: mock.module doubles leak across concurrently loaded files.
-  const serialPackage = ["mcp-server", "admin-frontend"].includes(basename(workingDirectory));
+  // blocks: the default 20-way coverage run exits 0 on a 2-vCPU worker before
+  // the All files row, while the last file is still running.
+  const serialPackage = ["mcp-server", "admin-frontend", "blocks"].includes(
+    basename(workingDirectory)
+  );
   const mcpServerConcurrency = serialPackage ? (["--max-concurrency=1"] as const) : [];
   return new Promise((resolvePromise, rejectPromise) => {
     const child = spawn("bun", ["test", ...mcpServerConcurrency, ...srcRootArg, ...args], {
@@ -560,15 +568,24 @@ const main = async (): Promise<void> => {
 
   if (isolated.length === 0) {
     const coverageDir = resolve(cwd, "coverage");
-    rmSync(coverageDir, {force: true, recursive: true});
-    const {exitCode, output} = await runBunTest([
+    const coverageArgs = [
       "--coverage",
       "--coverage-reporter=text",
       "--coverage-reporter=lcov",
       `--coverage-dir=${coverageDir}`,
-    ]);
-    failIfTestsFailed(exitCode, output, "bun test");
-    const summary = parseAllFilesRow(output);
+    ] as const;
+    const runCoverage = async (): Promise<{exitCode: number; output: string}> => {
+      rmSync(coverageDir, {force: true, recursive: true});
+      return runBunTest(coverageArgs);
+    };
+    let run = await runCoverage();
+    // Bun can close the process with status 0 before it prints the table.
+    if (run.exitCode === 0 && !parseAllFilesRow(run.output)) {
+      console.error("\nCoverage report was truncated. Retrying bun test --coverage once.");
+      run = await runCoverage();
+    }
+    failIfTestsFailed(run.exitCode, run.output, "bun test");
+    const summary = parseAllFilesRow(run.output);
     if (!summary) {
       console.error('\nCould not find an "All files" row in the coverage output.');
       process.exit(1);

@@ -1,5 +1,5 @@
 /** Boolean feature flag that turns user file uploads on and off. */
-export const FILE_UPLOADS_FLAG_KEY = "file-uploads";
+const FILE_UPLOADS_FLAG_KEY = "file-uploads";
 
 /**
  * Whether the upload UI should be shown.

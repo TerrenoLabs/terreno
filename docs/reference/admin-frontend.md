@@ -460,8 +460,9 @@ callers receive effective flags for the signed-in user. Pass the same `accessCon
 read the payload through `resolvePromptActionPermissions` and `observabilityActionAllowed` (fail
 closed while status is loading, errored, or missing `permissions`). List screens gate **Create
 prompt** on `aiPrompt:create`, **Create evaluator** on `aiEvaluator:create`, and **New dataset** on
-`aiDataset:create`. Dataset detail hides **Add item** without `aiDataset:update` and **Run
-experiment** without `aiExperiment:create`; dataset lists hide **Import** without
+`aiDataset:create`; experiment lists hide **New experiment** without `aiExperiment:create`.
+Dataset detail hides **Add item** without `aiDataset:update` and **Run experiment** without
+`aiExperiment:create`; dataset lists hide **Import** without
 `aiDataset:update`. Judge schema checks use the production prompt version, or the latest version
 when production is unset. Widgets do not couple to host Redux.
 

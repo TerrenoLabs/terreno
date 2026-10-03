@@ -1,5 +1,5 @@
 import {Badge, Box, Button, Heading, Link, SelectField, Text, TextField} from "@terreno/ui";
-import React, {useCallback, useEffect, useMemo, useState} from "react";
+import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   ObservabilityTable,
   type ObservabilityTableColumn,
@@ -452,19 +452,26 @@ const DimensionScaleFields: React.FC<DimensionScaleFieldsProps> = ({
   const bounds = parseNumericBounds(dimension.range);
   const [min, setMin] = useState(bounds.min);
   const [max, setMax] = useState(bounds.max);
+  const lastEmittedRange = useRef(dimension.range);
   const categories = parseCategories(dimension.range);
 
   // Parent range changes (type switch or row reorder) must replace the draft
   // bounds; useState only reads the initial range.
   useEffect(() => {
+    if (dimension.range === lastEmittedRange.current) {
+      return;
+    }
     setMin(bounds.min);
     setMax(bounds.max);
-  }, [bounds.max, bounds.min]);
+    lastEmittedRange.current = dimension.range;
+  }, [bounds.max, bounds.min, dimension.range]);
 
   const handleMinChange = useCallback(
     (value: string): void => {
       setMin(value);
-      onDimensionChange(index, {...dimension, range: formatNumericRange(value, max)});
+      const range = formatNumericRange(value, max);
+      lastEmittedRange.current = range;
+      onDimensionChange(index, {...dimension, range});
     },
     [dimension, index, max, onDimensionChange]
   );
@@ -472,7 +479,9 @@ const DimensionScaleFields: React.FC<DimensionScaleFieldsProps> = ({
   const handleMaxChange = useCallback(
     (value: string): void => {
       setMax(value);
-      onDimensionChange(index, {...dimension, range: formatNumericRange(min, value)});
+      const range = formatNumericRange(min, value);
+      lastEmittedRange.current = range;
+      onDimensionChange(index, {...dimension, range});
     },
     [dimension, index, min, onDimensionChange]
   );

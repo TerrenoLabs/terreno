@@ -1278,6 +1278,9 @@ describe("AiEvaluatorNewScreen", () => {
   });
   const statusData = {
     localOn: true,
+    permissions: {
+      aiExperiment: {create: true, list: true, read: true},
+    },
     plugins: [],
     primaries: {
       datasets: "local",
@@ -2581,6 +2584,9 @@ describe("AiExperimentsListScreen", () => {
   });
   const statusData = {
     localOn: true,
+    permissions: {
+      aiExperiment: {create: true, list: true, read: true},
+    },
     plugins: [],
     primaries: {
       datasets: "local",
@@ -2673,6 +2679,21 @@ describe("AiExperimentsListScreen", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       assert.include(String(routerPush.mock.calls[1]?.[0]), "ai-experiment-results");
+    });
+
+    it("hides create when the caller cannot create experiments", () => {
+      listState.isLoading = false;
+      statusData.permissions = {aiExperiment: {list: true, read: true}};
+      const view = renderWithTheme(
+        <AiExperimentsScreenWidget
+          api={createApi()}
+          config={emptyConfig}
+          routeBase="/admin"
+          screenName="ai-experiments"
+        />
+      );
+      expect(view.queryByTestId("ai-experiments-create")).toBeNull();
+      statusData.permissions = {aiExperiment: {create: true, list: true, read: true}};
     });
   });
 });

@@ -71,7 +71,8 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
     }
     setCachedDetail({detail, name});
   }, [detail, name]);
-  const visibleDetail = cachedDetail?.name === name ? (detail ?? cachedDetail.detail) : detail;
+  const samePromptCache = cachedDetail?.name === name ? cachedDetail : undefined;
+  const visibleDetail = detail ?? samePromptCache?.detail;
   const version = selectedVersion ?? (visibleDetail ? latestVersionFromDetail(visibleDetail) : 1);
 
   // Pin GET detail to latest promptVersion after bootstrap so relationship tabs filter server-side.

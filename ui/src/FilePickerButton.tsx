@@ -3,6 +3,7 @@ import React, {useCallback, useState} from "react";
 import {Platform} from "react-native";
 
 import {Box} from "./Box";
+import {Button} from "./Button";
 import {DropdownMenuItem} from "./DropdownMenuItem";
 import {DropdownPanel} from "./DropdownPanel";
 import {IconButton} from "./IconButton";
@@ -10,17 +11,31 @@ import {IconButton} from "./IconButton";
 export interface SelectedFile {
   mimeType: string;
   name: string;
+  /** The file's size in bytes, when the picker reports it. */
+  size?: number;
   uri: string;
 }
 
+const DEFAULT_DOCUMENT_TYPES = ["application/pdf", "text/plain", "text/csv", "application/json"];
+
 export interface FilePickerButtonProps {
   disabled?: boolean;
+  /**
+   * The MIME types the document picker offers. Defaults to PDF, text, CSV, and JSON. An empty list
+   * hides Document, so the button opens the photo library directly.
+   */
+  documentTypes?: string[];
+  /**
+   * Offer Photo Library. Defaults to true. When false, the button opens the document picker
+   * directly.
+   */
+  includeImages?: boolean;
   multiple?: boolean;
   onFilesSelected: (files: SelectedFile[]) => void;
   testID?: string;
+  /** Shows a labelled button, such as "Choose files", instead of the paperclip icon. */
+  text?: string;
 }
-
-const DOCUMENT_MIME_TYPES = ["application/pdf", "text/plain", "text/csv", "application/json"];
 
 const readFileAsDataUrl = (file: File): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -59,6 +74,7 @@ const pickFilesOnWeb = ({
           files.map(async (file) => ({
             mimeType: file.type || "application/octet-stream",
             name: file.name,
+            ...(file.size === undefined ? {} : {size: file.size}),
             uri: await readFileAsDataUrl(file),
           }))
         );
@@ -78,11 +94,15 @@ const pickFilesOnWeb = ({
 
 export const FilePickerButton = ({
   disabled = false,
+  documentTypes = DEFAULT_DOCUMENT_TYPES,
+  includeImages = true,
   multiple = false,
   onFilesSelected,
   testID,
+  text,
 }: FilePickerButtonProps): React.ReactElement => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const includeDocuments = documentTypes.length > 0;
   const triggerTestID = testID ?? "file-picker-button";
 
   const handleWebPick = useCallback(
@@ -112,6 +132,7 @@ export const FilePickerButton = ({
       const files: SelectedFile[] = result.assets.map((asset) => ({
         mimeType: asset.mimeType ?? "image/jpeg",
         name: asset.fileName ?? `image-${DateTime.now().toMillis()}.jpg`,
+        ...(asset.fileSize === undefined ? {} : {size: asset.fileSize}),
         uri: asset.uri,
       }));
       onFilesSelected(files);
@@ -121,39 +142,84 @@ export const FilePickerButton = ({
   const handlePickDocument = useCallback(async () => {
     setIsMenuOpen(false);
     if (Platform.OS === "web") {
-      await handleWebPick(DOCUMENT_MIME_TYPES.join(","));
+      await handleWebPick(documentTypes.join(","));
       return;
     }
     const DocumentPicker = await import("expo-document-picker");
-    const result = await DocumentPicker.getDocumentAsync({
-      multiple,
-      type: DOCUMENT_MIME_TYPES,
-    });
+    const result = await DocumentPicker.getDocumentAsync({multiple, type: documentTypes});
 
     if (!result.canceled && result.assets.length > 0) {
       const files: SelectedFile[] = result.assets.map((asset) => ({
         mimeType: asset.mimeType ?? "application/octet-stream",
         name: asset.name,
+        ...(asset.size === undefined ? {} : {size: asset.size}),
         uri: asset.uri,
       }));
       onFilesSelected(files);
     }
-  }, [handleWebPick, multiple, onFilesSelected]);
+  }, [documentTypes, handleWebPick, multiple, onFilesSelected]);
+
+  const handleOpen = useCallback((): void => {
+    if (!includeImages) {
+      void handlePickDocument();
+      return;
+    }
+    if (!includeDocuments) {
+      void handlePickImage();
+      return;
+    }
+    setIsMenuOpen(true);
+  }, [handlePickDocument, handlePickImage, includeDocuments, includeImages]);
+
+  const trigger =
+    text === undefined ? (
+      <IconButton
+        accessibilityLabel="Attach file"
+        disabled={disabled}
+        iconName="paperclip"
+        onClick={handleOpen}
+        testID={triggerTestID}
+      />
+    ) : (
+      <Button
+        disabled={disabled}
+        iconName="paperclip"
+        onClick={handleOpen}
+        testID={triggerTestID}
+        text={text}
+        variant="outline"
+      />
+    );
+
+  if (!includeImages || !includeDocuments) {
+    return trigger;
+  }
 
   return (
     <DropdownPanel
       align="auto"
       isOpen={isMenuOpen}
       onOpenChange={setIsMenuOpen}
-      renderTrigger={({toggle}) => (
-        <IconButton
-          accessibilityLabel="Attach file"
-          disabled={disabled}
-          iconName="paperclip"
-          onClick={toggle}
-          testID={triggerTestID}
-        />
-      )}
+      renderTrigger={({toggle}) =>
+        text === undefined ? (
+          <IconButton
+            accessibilityLabel="Attach file"
+            disabled={disabled}
+            iconName="paperclip"
+            onClick={toggle}
+            testID={triggerTestID}
+          />
+        ) : (
+          <Button
+            disabled={disabled}
+            iconName="paperclip"
+            onClick={toggle}
+            testID={triggerTestID}
+            text={text}
+            variant="outline"
+          />
+        )
+      }
       showActionButtons={false}
       testID={`${triggerTestID}-menu`}
       width={200}

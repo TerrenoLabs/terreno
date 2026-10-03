@@ -1,0 +1,36 @@
+{
+  "kind": "choice",
+  "input": {
+    "title": "Build your pizza",
+    "prompt": "Which toppings should I add? Pick up to three, or type your own.",
+    "select": "many",
+    "options": [
+      {"id": "cheese", "label": "Extra cheese"},
+      {"id": "mushrooms", "label": "Mushrooms"},
+      {"id": "olives", "label": "Olives"},
+      {"id": "peppers", "label": "Peppers", "description": "Green and red"},
+      {"id": "pineapple", "label": "Pineapple"}
+    ],
+    "default": ["cheese", "mushrooms"],
+    "maxSelected": 3,
+    "allowOther": true,
+    "otherLabel": "Another topping",
+    "submitLabel": "Add toppings"
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "title": "Build your pizza",
+    "text": "Which toppings should I add? Pick up to three, or type your own.",
+    "handoff": true,
+    "buttons": [
+      {
+        "id": "use-default",
+        "label": "Use suggested",
+        "style": "primary",
+        "response": {"action": "accept", "content": {"selected": ["cheese", "mushrooms"]}}
+      },
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

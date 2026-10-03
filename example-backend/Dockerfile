@@ -8,6 +8,7 @@ COPY . .
 RUN bun install --frozen-lockfile --ignore-scripts
 RUN bun run --filter "@terreno/api" compile
 RUN bun run --filter "@terreno/api-health" compile
+RUN bun run --filter "@terreno/blocks" compile
 RUN bun run --filter "@terreno/ai" compile
 RUN bun run --filter "@terreno/jobs" compile
 RUN bun run --filter "@terreno/admin-backend" compile

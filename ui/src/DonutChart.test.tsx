@@ -1,7 +1,6 @@
-import {describe, expect, it, spyOn} from "bun:test";
+import {describe, expect, it} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
-import {Linking} from "react-native";
 
 import {DonutChart} from "./DonutChart";
 import {renderWithTheme} from "./test-utils";
@@ -178,17 +177,13 @@ describe("DonutChart", () => {
     expect(queryByTestId("chart.tooltip")).toBeNull();
   });
 
-  it("does not open URLs from slice legend labels", async () => {
-    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve(true));
+  it("does not open URLs from slice legend labels", () => {
     const {getByText} = renderWithTheme(
       <DonutChart data={[{label: "https://evil.example", value: 10}]} />
     );
 
-    await act(async () => {
-      fireEvent.press(getByText("https://evil.example"));
-    });
-
-    expect(openURLSpy).not.toHaveBeenCalled();
-    openURLSpy.mockRestore();
+    // The suite shares one Linking mock, so a spy on openURL also records calls
+    // from other files. A label is inert when it has no press handler.
+    expect(getByText("https://evil.example").props.onPress).toBeUndefined();
   });
 });

@@ -1,3 +1,11 @@
+export type {
+  Ask,
+  AskKind,
+  AskResponse,
+  AskValidationError,
+  SimpleCard,
+  SimpleCardButton,
+} from "@terreno/blocks";
 export type {FlexibleSchema, JSONValue} from "ai";
 export {jsonSchema, Output} from "ai";
 export type {AIAdminAppOptions} from "./aiAdminApp";
@@ -28,6 +36,7 @@ export type {
   TraceListItem,
 } from "./langfuseTypes";
 export {createTelemetryConfig, preparePromptForAI} from "./langfuseVercelAi";
+export {AIDataset} from "./models/aiDataset";
 export {AIRequest} from "./models/aiRequest";
 export {FileAttachment} from "./models/fileAttachment";
 export {GptHistory} from "./models/gptHistory";
@@ -94,7 +103,10 @@ export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";
 export {addProjectRoutes} from "./routes/projects";
+export type {RegisteredDataset} from "./service/aiDatasets";
+export {configureAiDatasets, registerAiDataset} from "./service/aiDatasets";
 export {AIService, TemperaturePresets} from "./service/aiService";
+export {createAskTools} from "./service/asks";
 export {FileStorageService} from "./service/fileStorage";
 export type {ListGeminiApiModelsOptions} from "./service/gemini";
 export {
@@ -110,10 +122,12 @@ export {
   parseAiJson,
 } from "./service/parseAiJson";
 export {
+  COMPACT_SURFACE_SYSTEM_PROMPT,
   CONTENT_SUMMARY_PROMPT,
   DEFAULT_GPT_MEMORY,
   JSON_VALUE_SYSTEM_PROMPT,
   REMIX_PROMPT,
+  TERRENO_ASKS_SYSTEM_PROMPT,
   TITLE_GENERATION_PROMPT,
   TRANSLATION_PROMPT,
 } from "./service/prompts";

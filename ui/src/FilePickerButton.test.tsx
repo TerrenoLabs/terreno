@@ -1,5 +1,5 @@
 import {afterAll, beforeEach, describe, expect, it, mock} from "bun:test";
-import {fireEvent, waitFor} from "@testing-library/react-native";
+import {fireEvent, waitFor, within} from "@testing-library/react-native";
 import {Platform, Pressable} from "react-native";
 
 // Override the IconButton mock so the onClick fires when pressed.
@@ -35,12 +35,12 @@ import {FilePickerButton, type SelectedFile} from "./FilePickerButton";
 import {renderWithTheme} from "./test-utils";
 
 interface ImagePickerResult {
-  assets: Array<{fileName?: string; mimeType?: string; uri: string}>;
+  assets: Array<{fileName?: string; fileSize?: number; mimeType?: string; uri: string}>;
   canceled: boolean;
 }
 
 interface DocumentPickerResult {
-  assets: Array<{mimeType?: string; name: string; uri: string}>;
+  assets: Array<{mimeType?: string; name: string; size?: number; uri: string}>;
   canceled: boolean;
 }
 
@@ -166,6 +166,59 @@ describe("FilePickerButton", () => {
     fireEvent.press(empty.getByText("Document"));
     await waitFor(() => expect(getDocumentAsync).toHaveBeenCalledTimes(2));
     expect(empty.files).toHaveLength(0);
+  });
+
+  it("shows a labelled button when text is set", () => {
+    const {getByTestId} = renderWithTheme(
+      <FilePickerButton onFilesSelected={() => {}} text="Choose files" />
+    );
+    expect(within(getByTestId("file-picker-button")).getByText("Choose files")).toBeTruthy();
+  });
+
+  it("opens the document picker with the given types directly when images are off", async () => {
+    documentPickerResult = {
+      assets: [{mimeType: "text/csv", name: "day.csv", size: 42, uri: "file:///day.csv"}],
+      canceled: false,
+    };
+    const files: SelectedFile[][] = [];
+    const {getByTestId, queryByText} = renderWithTheme(
+      <FilePickerButton
+        documentTypes={["text/csv"]}
+        includeImages={false}
+        onFilesSelected={(selected) => files.push(selected)}
+        text="Choose files"
+      />
+    );
+
+    fireEvent.press(getByTestId("file-picker-button"));
+
+    await waitFor(() => expect(files).toHaveLength(1));
+    expect(queryByText("Photo Library")).toBeNull();
+    expect(getDocumentAsync).toHaveBeenCalledWith({multiple: false, type: ["text/csv"]});
+    expect(files[0]).toEqual([
+      {mimeType: "text/csv", name: "day.csv", size: 42, uri: "file:///day.csv"},
+    ]);
+  });
+
+  it("opens the photo library directly when there are no document types", async () => {
+    imagePickerResult = {
+      assets: [
+        {fileName: "pic.png", fileSize: 2048, mimeType: "image/png", uri: "file:///pic.png"},
+      ],
+      canceled: false,
+    };
+    const files: SelectedFile[][] = [];
+    const {getByTestId} = renderWithTheme(
+      <FilePickerButton documentTypes={[]} onFilesSelected={(selected) => files.push(selected)} />
+    );
+
+    fireEvent.press(getByTestId("file-picker-button"));
+
+    await waitFor(() => expect(files).toHaveLength(1));
+    expect(getDocumentAsync).not.toHaveBeenCalled();
+    expect(files[0]).toEqual([
+      {mimeType: "image/png", name: "pic.png", size: 2048, uri: "file:///pic.png"},
+    ]);
   });
 
   it("opens a browser file input for documents on web and returns data URLs", async () => {

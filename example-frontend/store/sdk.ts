@@ -4,7 +4,15 @@
 import {generateTags, realtimeDocument, realtimeList} from "@terreno/rtk";
 
 import {getAiSessionId} from "@/lib/aiSession";
-import {addTagTypes, openapi} from "./openApiSdk";
+import {
+  addTagTypes,
+  type GetGptHistoriesArgs,
+  type GetGptHistoriesByIdRes,
+  type GetGptHistoriesRes,
+  openapi,
+  type PatchGptHistoriesByIdArgs,
+  type PostGptHistoriesArgs,
+} from "./openApiSdk";
 
 /** Tag types used by generateTags — todos are excluded; their cache is websocket-only. */
 const CACHE_TAG_TYPES = addTagTypes.filter((tag) => tag !== "todos");
@@ -44,6 +52,10 @@ export interface ProfileResponse {
   emailVerified?: boolean;
   permissions?: Record<string, readonly string[]>;
   roles?: string[];
+}
+
+export interface SummarizeExampleTextResponse {
+  output: string;
 }
 
 // AI Request Explorer types
@@ -99,81 +111,51 @@ export interface SetAdminUserPasswordRequest {
   password: string;
 }
 
-// GptHistory endpoints are hand-maintained: nested modelRouter mounts under /gpt/histories
-// are not always present in the generated OpenAPI SDK after regen.
-interface GptHistoryPrompt {
-  args?: Record<string, unknown>;
-  content?: Array<{
-    filename?: string;
-    gcsKey?: string;
-    mimeType?: string;
-    text?: string;
-    type: string;
-    url?: string;
-  }>;
-  model?: string;
-  rating?: "up" | "down";
-  result?: unknown;
+// The generated GptHistory endpoints are overridden below to return `GptHistory`, which adds what
+// the generated types cannot express: the `id` virtual, `prompts` the server always sends, the
+// ask's input and card as objects, and the streaming reply's `status` and `streamId`. Their cache
+// tags come from `generateTags` at the end, under the generated `gpthistories` tag, so generated
+// mutations such as the headless `turn` action refresh them too.
+type GeneratedPendingAsk = NonNullable<GetGptHistoriesByIdRes["pendingAsk"]>;
+type GeneratedPrompt = NonNullable<GetGptHistoriesByIdRes["prompts"]>[number];
+
+/** The ask a conversation is waiting on. Only the chat turn writes it, so clients never send it. */
+interface GptHistoryPendingAsk extends Omit<GeneratedPendingAsk, "input" | "simple"> {
+  input: Record<string, unknown>;
+  simple: Record<string, unknown>;
+}
+
+interface GptHistoryPrompt extends GeneratedPrompt {
   /** "streaming" while /gpt/prompt is still writing this reply; resume via /gpt/histories/:id/stream. */
   status?: "streaming" | "complete" | "error";
   streamId?: string;
-  text: string;
-  toolCallId?: string;
-  toolName?: string;
-  type: "assistant" | "system" | "tool-call" | "tool-result" | "user";
 }
 
-export interface GptHistory {
-  _id: string;
-  created: string;
+export interface GptHistory extends Omit<GetGptHistoriesByIdRes, "pendingAsk" | "prompts"> {
   id: string;
+  pendingAsk?: GptHistoryPendingAsk;
   prompts: GptHistoryPrompt[];
-  title?: string;
-  updated: string;
-  userId: string;
 }
 
-export interface GptHistoriesListResponse {
+interface GptHistoriesListResponse extends Omit<GetGptHistoriesRes, "data"> {
   data: GptHistory[];
-  limit?: number;
-  more?: boolean;
-  page?: number;
-  total?: number;
 }
 
-export interface GptHistoryResponse {
-  data: GptHistory;
-}
-
-export interface CreateGptHistoryBody {
-  prompts?: GptHistoryPrompt[];
-  title?: string;
-}
-
-export interface UpdateGptHistoryBody {
-  prompts?: GptHistoryPrompt[];
-  title?: string;
-}
-
-export interface GetGptHistoriesArgs {
-  limit?: number;
-  page?: number;
-  sort?: string;
-}
-
-export interface SummarizeExampleTextResponse {
-  output: string;
+/** The `data` of a POST /files/upload response. */
+interface UploadedFileResponse {
+  filename: string;
+  gcsKey: string;
+  id: string;
+  mimeType: string;
+  size: number;
+  url: string;
 }
 
 export const terrenoApi = openapi
-  .enhanceEndpoints({addTagTypes: ["gptHistories", "profile"]})
+  .enhanceEndpoints({addTagTypes: ["profile"]})
   .injectEndpoints({
     endpoints: (builder) => ({
       deleteGptHistoriesById: builder.mutation<void, {id: string}>({
-        invalidatesTags: (_result, _error, {id}) => [
-          {id, type: "gptHistories" as const},
-          {id: "LIST", type: "gptHistories" as const},
-        ],
         query: ({id}) => ({
           method: "DELETE",
           url: `/gpt/histories/${id}`,
@@ -198,13 +180,6 @@ export const terrenoApi = openapi
         }),
       }),
       getGptHistories: builder.query<GptHistoriesListResponse, GetGptHistoriesArgs | undefined>({
-        providesTags: (result) =>
-          result?.data
-            ? [
-                ...result.data.map(({id}) => ({id, type: "gptHistories" as const})),
-                {id: "LIST", type: "gptHistories" as const},
-              ]
-            : [{id: "LIST", type: "gptHistories" as const}],
         query: (args) => ({
           params: {
             limit: args?.limit,
@@ -214,8 +189,9 @@ export const terrenoApi = openapi
           url: "/gpt/histories",
         }),
       }),
-      getGptHistoriesById: builder.query<GptHistoryResponse, {id: string}>({
-        providesTags: (_result, _error, {id}) => [{id, type: "gptHistories" as const}],
+      // The @terreno/rtk base query returns the `data` of single-document responses, so this
+      // endpoint and the GptHistory mutations below resolve to the history itself.
+      getGptHistoriesById: builder.query<GptHistory, {id: string}>({
         query: ({id}) => ({url: `/gpt/histories/${id}`}),
       }),
       // Get current user profile
@@ -226,14 +202,7 @@ export const terrenoApi = openapi
           url: "/auth/me",
         }),
       }),
-      patchGptHistoriesById: builder.mutation<
-        GptHistoryResponse,
-        {body: UpdateGptHistoryBody; id: string}
-      >({
-        invalidatesTags: (_result, _error, {id}) => [
-          {id, type: "gptHistories" as const},
-          {id: "LIST", type: "gptHistories" as const},
-        ],
+      patchGptHistoriesById: builder.mutation<GptHistory, PatchGptHistoriesByIdArgs>({
         query: ({body, id}) => ({
           body,
           method: "PATCH",
@@ -281,8 +250,21 @@ export const terrenoApi = openapi
           url: "/comms/dev/testPush",
         }),
       }),
-      postGptHistories: builder.mutation<GptHistoryResponse, {body: CreateGptHistoryBody}>({
-        invalidatesTags: [{id: "LIST", type: "gptHistories"}],
+      // Hand-written: `/files/*` exists only on a server with a GCS bucket, so the generated SDK
+      // has no file endpoints. The body is multipart form data with a `file` part; the base
+      // query sends FormData as is, and the fetch sets its multipart boundary. A server without
+      // the routes answers 404 in plain text, so parse by content type to keep that a 404.
+      postFilesUpload: builder.mutation<UploadedFileResponse, FormData>({
+        query: (body) => ({
+          body,
+          method: "POST",
+          responseHandler: "content-type",
+          url: "/files/upload",
+        }),
+        transformResponse: (response: {data: UploadedFileResponse}) => response.data,
+      }),
+      postGptHistories: builder.mutation<GptHistory, {body: PostGptHistoriesArgs}>({
+        invalidatesTags: ["gpthistories"],
         query: ({body}) => ({
           body,
           method: "POST",
@@ -316,9 +298,6 @@ export const terrenoApi = openapi
           url: `/users/${id}/password`,
         }),
       }),
-      // Runs the seeded `example-summarize` production prompt. Hand-maintained so the call
-      // carries `x-ai-session-id` (and the locally saved key), which the generated SDK
-      // mutation cannot send.
       summarizeExampleText: builder.mutation<
         SummarizeExampleTextResponse,
         {apiKey?: string; text: string}
@@ -332,6 +311,7 @@ export const terrenoApi = openapi
           method: "POST",
           url: "/ai/example-summarize",
         }),
+        transformResponse: (response: {data: SummarizeExampleTextResponse}) => response.data,
       }),
     }),
     overrideExisting: true,
@@ -344,7 +324,6 @@ export const terrenoApi = openapi
       "admin_scriptTask",
       "consentForms",
       "feature-flags",
-      "gptHistories",
       "profile",
       "PendingConsents",
     ],
@@ -365,6 +344,7 @@ export const {
   usePostAuthSendVerificationMutation,
   usePostAuthVerifyEmailMutation,
   usePostCommsDevTestPushMutation,
+  usePostFilesUploadMutation,
   usePostNotificationsDevNotifyMutation,
   useGetAiModelsQuery,
   useSetAdminUserPasswordMutation,

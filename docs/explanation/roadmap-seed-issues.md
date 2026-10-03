@@ -1291,6 +1291,20 @@ Turn the Expo demo into the workshop for `@terreno/ui`: a person can find a comp
 
 ---
 
+## agent-ui-asks
+
+**Title:** `Agent UI Asks — agents ask the user for a typed answer inside the chat`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`agent-ui-asks`, Status=`In progress`
+
+Let an agent **ask the user something and get a typed answer back in the same turn**. The agent calls an ask tool: pick one, pick many, upload images or files, edit a markdown draft, confirm an action, or fill a short form. `GPTChat` renders the matching `@terreno/ui` control inline. The user answers. The answer returns to the agent as a validated tool result and the turn continues from where it paused.
+
+- **Implementation plan:** [agent-ui-asks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-asks.md)
+- **Tasks:** [agent-ui-asks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/agent-ui-asks.md)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

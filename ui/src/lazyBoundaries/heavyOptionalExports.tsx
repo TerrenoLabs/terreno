@@ -2,7 +2,9 @@ import type {AIRequestExplorer as AIRequestExplorerComponent} from "../AIRequest
 import type {AiSuggestionBox as AiSuggestionBoxComponent} from "../AiSuggestionBox";
 import type {AreaChart as AreaChartComponent} from "../AreaChart";
 import type {AttachmentPreview as AttachmentPreviewComponent} from "../AttachmentPreview";
+import type {AskCard as AskCardComponent} from "../asks/AskCard";
 import type {BarChart as BarChartComponent} from "../BarChart";
+import type {BlocksView as BlocksViewComponent} from "../blocks/BlocksView";
 import type {ChartCard as ChartCardComponent} from "../ChartCard";
 import type {ConflictSheet as ConflictSheetComponent} from "../ConflictSheet";
 import type {ConsentFormScreen as ConsentFormScreenComponent} from "../ConsentFormScreen";
@@ -25,8 +27,10 @@ export const heavyOptionalModuleFactories = {
   AIRequestExplorer: () => import("../AIRequestExplorer"),
   AiSuggestionBox: () => import("../AiSuggestionBox"),
   AreaChart: () => import("../AreaChart"),
+  AskCard: () => import("../asks/AskCard"),
   AttachmentPreview: () => import("../AttachmentPreview"),
   BarChart: () => import("../BarChart"),
+  BlocksView: () => import("../blocks/BlocksView"),
   ChartCard: () => import("../ChartCard"),
   ConflictSheet: () => import("../ConflictSheet"),
   ConsentFormScreen: () => import("../ConsentFormScreen"),
@@ -70,6 +74,11 @@ export const AiSuggestionBox = createLazyNamedExport(
   "AiSuggestionBox"
 ) as unknown as typeof AiSuggestionBoxComponent;
 
+export const AskCard = createLazyNamedExport(
+  heavyOptionalModuleFactories.AskCard,
+  "AskCard"
+) as unknown as typeof AskCardComponent;
+
 export const AttachmentPreview = createLazyNamedExport(
   heavyOptionalModuleFactories.AttachmentPreview,
   "AttachmentPreview"
@@ -79,6 +88,11 @@ export const BarChart = createLazyNamedExport(
   heavyOptionalModuleFactories.BarChart,
   "BarChart"
 ) as unknown as typeof BarChartComponent;
+
+export const BlocksView = createLazyNamedExport(
+  heavyOptionalModuleFactories.BlocksView,
+  "BlocksView"
+) as unknown as typeof BlocksViewComponent;
 
 export const ChartCard = createLazyNamedExport(
   heavyOptionalModuleFactories.ChartCard,

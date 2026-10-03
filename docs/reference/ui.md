@@ -10,6 +10,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 - Actions: `Button`, `IconButton`, `Link`
 - Feedback: `Spinner`, `Modal`, `Toast`
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
+- AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts), `BlocksView` (a whole-reply YAML document)
 - Authentication: `SocialLoginButton`, `LoginScreen`, `SignUpScreen`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
@@ -32,7 +33,7 @@ supported and is convenient when startup cost is not material:
 import {Box, DataTable, Icon} from "@terreno/ui";
 ```
 
-Heavy optional widgets (`GPTChat`, `EmojiSelector`, `MarkdownEditor`, consent flows, `ChartCard`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, and related admin tools) are
+Heavy optional widgets (`GPTChat`, `AskCard`, `BlocksView`, `EmojiSelector`, `MarkdownEditor`, consent flows, `ChartCard`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, and related admin tools) are
 re-exported from the root entry through lazy boundaries. Importing them from `@terreno/ui` stays type-compatible, but
 their implementation modules load on first render instead of during the initial root import. `DashboardGrid` stays eager.
 `MarkdownView` and `DataTable` header info defer `react-native-markdown-display`;
@@ -250,6 +251,18 @@ Buttons automatically size to their content unless `fullWidth` is specified:
 
 Internally, Button sets `alignSelf: 'flex-start'` when `fullWidth={false}` to prevent stretching in column layouts.
 
+A label stays on one line by default, so a long label can make the button wider than its container.
+Set `wrapText` to keep the button inside its container instead: the label wraps onto centered lines
+and the button grows taller. A `size="sm"` button grows from its 28px height instead of clipping the
+second line. `SimpleAskCard` and `AskCard` set `wrapText` on their answer buttons, because their
+labels come from the agent.
+
+```tsx
+<Box direction="row" width={160}>
+  <Button onClick={handleSave} text="Save all changes now" wrapText />
+</Box>
+```
+
 ### TextField grow and maxHeight
 
 `grow` makes a multiline field expand with its content. Pair it with `maxHeight` (pixels) to cap the expansion; past the cap the content scrolls.
@@ -390,9 +403,320 @@ The attach control (`FilePickerButton`) opens an anchored dropdown with **Photo 
 />
 ```
 
+Pass `uiBlocks` to render each assistant message through `BlocksView`. A streaming message
+shows each finished top-level block and a spinner for the block still arriving. `reply`
+calls `onSubmit` with the button text. `open` and `select` call `onBlockAction`. `callback`
+calls `onBlockCallback` and the button stays loading until that promise settles. Return
+`{replace: "block", blocks}` to swap that block, or `{text}` to place an assistant message
+immediately after the message that started the callback. A result that arrives after
+`currentHistoryId` changes is dropped. `hostActions` disables callback names the host did
+not list. `resolveDataset` loads `ref` datasets. `resolveImage` turns a `file:` image id
+into a URL.
+
+```tsx
+<GPTChat
+  currentMessages={messages}
+  histories={histories}
+  hostActions={["export_csv"]}
+  onBlockAction={handleBlockAction}
+  onBlockCallback={handleBlockCallback}
+  onCreateHistory={onCreateHistory}
+  onDeleteHistory={onDeleteHistory}
+  onSelectHistory={onSelectHistory}
+  onSubmit={onSubmit}
+  uiBlocks
+/>
+```
+
 Operator steps: [Add a GPT chat mascot](../how-to/add-gpt-chat-mascot.md). Demo story: `GPTChat` → `Mascot`.
+Blocks playground: `BlocksPlayground`.
 The example AI screen demonstrates a consumer selecting one of four bundled mascot
 images once per mount.
+
+#### Asks
+
+`GPTChat` shows an [agent ask](agent-ui-asks.md) as an `AskCard` in the transcript. Set `ask` on
+the ask's `tool-call` message and pass `onAskSubmit`:
+
+```tsx
+<GPTChat
+  askErrors={askErrors}
+  currentMessages={currentMessages}
+  histories={histories}
+  onAskSubmit={handleAskSubmit}
+  onCreateHistory={onCreateHistory}
+  onDeleteHistory={onDeleteHistory}
+  onSelectHistory={onSelectHistory}
+  onSubmit={onSubmit}
+/>
+```
+
+| Prop or field | Type | Description |
+| --- | --- | --- |
+| `GPTChatMessage.ask` | `ChatAsk` | On a `tool-call` message: the ask (`kind`, `input`), its `toolCallId`, `status` (`pending`, `answered`, or `cancelled`), and optional `response` and `simple` card. The chat shows an `AskCard` instead of the tool call. |
+| `onAskSubmit` | `(submission: {toolCallId, response}) => void \| Promise<void>` | Called when the user answers a pending ask. `response` is the answer envelope. The pressed control shows a loading state until the promise settles. Without it, asks show but cannot be answered. |
+| `askErrors` | `Record<string, AskValidationError[]>` | Errors for the last answer to each ask, keyed by tool call id, such as the `fields` of a 400 `Invalid askResponse`. Shown inside the card. |
+| `resolveAskFiles` | `AskFilesResolver` | Turns the files picked for a `files` ask into the refs its answer sends. Defaults to `resolveAskFilesAsDataUrls`. Pass an uploader to send `{fileId}` refs; see [Accept uploads with or without GCS](../how-to/agent-ui-asks.md#accept-uploads-with-or-without-gcs). |
+
+- The ask's `tool-result` message stays in `currentMessages` but is not shown. Keep it: message
+  indexes must match the stored `prompts` rows that ratings use. When `ask.response` is unset, the
+  card reads the answer from that message.
+- A pending ask takes focus when it appears: DOM focus on the card, labelled with the ask's
+  `title`, on web; accessibility focus on the question, an accessibility header, on native.
+- Answered and cancelled asks collapse to a one-line summary.
+
+The example AI screen, `example-frontend/app/(tabs)/ai.tsx`, handles the stream events, saved
+rows, answers, and errors. Steps: [Add agent asks to a chat](../how-to/agent-ui-asks.md).
+
+### BlocksView
+
+`BlocksView` paints a whole-reply document from `@terreno/blocks`. Pass the assistant text
+as `document`. Leaf blocks in this slice are `heading`, `text`, `metric`, `badge`,
+`divider`, and `context`. `columns` is a row from the `md` breakpoint and a stack on `sm`.
+`card` groups children under an optional title. A `callout` draws `Banner` and is not dismissible. An `image` draws `Image` and requires `alt`; pass `imageHosts` to allow `https` hosts. A `details` block draws `Accordion`. A `chart` draws `LineChart`, `BarChart`,
+`AreaChart`, or `DonutChart` from an inline dataset or from `points`. The series is only
+`{label, value}` — a point color in the document is not passed through. A `table` draws
+`DataTable`. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the
+chart shows `loading` while that promise is in flight. A rejected fetch clears that
+loading state. A segmented control highlights the option whose `data` matches the target
+chart or table. A `select` action switches a table the same way it switches a chart.
+An image `file:` ref is not passed to `Image` until `resolveImage` returns a URL; the
+alt text still shows.
+
+A string that is not a document becomes one `text` block. A document that fails
+`validateBlocks` shows a `Banner` with the first three errors and the raw text inside a
+collapsed `Accordion`.
+
+An `actions` block draws `Button` and `SegmentedControl`. `onAction` receives
+`{action, blockId, elementId}` for reply, open, select, and callback. A `select`
+action also stores the chosen dataset on the target chart for this view. Pass
+`hostActions` to disable callback buttons whose names are not in that list. Omit
+`hostActions` and every callback stays enabled. `pendingElementIds` shows those
+buttons as loading. `overrides` replaces a block by id.
+
+```tsx
+<BlocksView
+  document={reply}
+  hostActions={["export_csv"]}
+  onAction={handleAction}
+  testID="assistant-blocks"
+/>
+```
+
+Demo story: `BlocksView`.
+
+### HtmlFrame
+
+`HtmlFrame` paints one `html` block. On web it is an `<iframe sandbox="" referrerpolicy="no-referrer">` whose `srcdoc` starts with a Content-Security-Policy meta tag (`default-src 'none'`). On native it is a WebView with JavaScript off, and navigation after the first load is rejected. `BlocksView` renders that frame only when `allowHtml` is true and `streaming` is false. Otherwise the block is a card that says the preview is off or still arriving. `GPTChat` passes `allowHtml` through.
+
+```tsx
+<HtmlFrame height="md" html="<h1>Invoice</h1>" title="Invoice preview" />
+```
+
+### AskCard
+
+One agent ask in a chat transcript: controls while it is pending, a summary line after. `GPTChat`
+renders it for messages with `ask`. Render it directly in a custom transcript. A saved ask whose
+input no longer validates, or whose `accept` answer has no `content` object, shows the generic
+line ("You answered this question.") and no sent values.
+
+```tsx
+<AskCard ask={ask} errors={errors} onSubmit={handleAskSubmit} testID="plan-ask" />
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `ask` | `ChatAsk` | The ask. Pending asks are interactive. Answered and cancelled asks show a summary. |
+| `errors` | `AskValidationError[]` | Errors for the last answer, shown under the controls |
+| `onSubmit` | `AskSubmitHandler` | Called with `{toolCallId, response}`. Without it, the card cannot be answered: buttons and the select are disabled, and radio and checkbox options show as plain text. When the promise it returns rejects, the ask stays open and the card shows "Your answer could not be sent. Try again." until the next answer. |
+| `promptRef` | `React.Ref<Text>` (React Native) | Receives the question's native text, which is an accessibility header. `GPTChat` uses it to move screen reader focus to a pending ask on native. |
+| `resolveAskFiles` | `AskFilesResolver` | For a `files` ask: turns the picked files into refs on Submit. Defaults to data URLs. `GPTChat` passes its own `resolveAskFiles`. |
+| `testID` | string | Defaults to `ask-card`. `GPTChat` passes `gpt-ask-<toolCallId>`. |
+
+A saved ask whose input no longer passes `validateAskInput` shows "This question cannot be shown.
+Send a message to continue." while pending, and "You answered this question." once answered.
+
+`choice` controls:
+
+| Ask | Controls |
+| --- | --- |
+| The simple card has a button for every option (`handoff: false`), and every option label is at most 20 characters | The card's buttons as quick replies, then Skip unless `allowDecline` is `false`. A tap answers. |
+| Up to 8 options | `RadioField`, then Submit (`submitLabel`) and Skip |
+| More than 8 options | Searchable `SelectField`, then Submit and Skip |
+| `select: "many"` | `MultiselectField` with a hint such as "Choose 1 to 3.", then a `TextField` titled `otherLabel` (default "Other") when `allowOther` is `true`, then Submit and Skip |
+
+The selection starts on the ask's `default`. Submit is enabled only when `validateAskResponse`
+accepts the selection. For `select: "many"`, the answer lists the checked ids in option order and
+sends the Other text trimmed, leaving `other` out when the field is blank. When the checked
+options and the Other text add up to more than `maxSelected`, the checkboxes say so ("You chose
+4. Choose at most 3."). An Other text over 500 characters, or a server error at `content.other`,
+shows on the Other field. When `ask.simple` is absent, the card derives it with `toSimpleCard`. An
+ask whose input fails `validateAskInput` shows "This question cannot be shown. Send a message to
+continue." instead of controls.
+
+`confirm` controls: the simple card's two buttons in its order, the approve button (`confirmLabel`,
+default "Confirm") first and the deny button (`denyLabel`, default "Cancel") last. The approve
+button uses the `destructive` variant when the ask sets `destructive: true`, else `primary`; the
+deny button uses `ghost`. Skip follows only when `allowDecline` is `true`. A tap answers
+`{"confirmed": true}` or `{"confirmed": false}`. Without `onSubmit`, both buttons are disabled.
+
+`markdown` controls: a `MarkdownEditorField` (edit and preview, at most 320 pt tall) that starts
+on the ask's `initial` draft and shows `placeholder` while empty, then Submit (`submitLabel`) and
+Skip unless `allowDecline` is `false`. Under the editor a hint gives the length and the bounds,
+such as "1,240 / 2,000 characters. At least 20." Submit is enabled only when
+`validateAskResponse` accepts the text, and it sends `{markdown, changed}` with `changed` true
+when the text differs from `initial`. Text over `maxLength`, or a server error at
+`content.markdown`, shows on the editor. Without `onSubmit`, the editor and both buttons are
+disabled. An answered markdown ask shows the sent text under its summary; text over 280
+characters shows a preview cut at a word, with Show all and Show less.
+
+`form` controls: one field per entry in `fields`, in order, titled with the field's `label`
+("(required)" appended for required fields) and its `helperText`, then Submit (`submitLabel`) and
+Skip unless `allowDecline` is `false`. Each field uses the `@terreno/ui` control for its type:
+
+| Field `type` | Control | Sends |
+| --- | --- | --- |
+| `text`, `email`, `url` | `TextField` (`text`, `email`, `url`) | The trimmed text |
+| `phone` | `TextField` (`phoneNumber`) | E.164, such as `+14155552671`, when the number parses (as a US number without a country code); else the trimmed text |
+| `number` | `TextField` | A number when the text is plain decimal notation; else the text, so validation says why |
+| `textarea` | `TextArea` | The trimmed text |
+| `date` | `DateTimeField` (`date`) | `YYYY-MM-DD` |
+| `time` | `DateTimeField` (`time`) with its time zone picker (the device's zone to start) | 24-hour `HH:mm` as shown; the zone is not sent |
+| `datetime` | `DateTimeField` (`datetime`) with a time zone picker | An ISO datetime with the chosen zone's offset, such as `2026-10-01T09:30:00-07:00` |
+| `boolean` | `BooleanField` | `true` or `false`, always |
+| `select` | `SelectField` | The option id |
+| `multiselect` | `MultiselectField` | The checked option ids |
+
+Fields start on their `default`. Blank fields are left out of `values`. Submit is enabled only
+when `validateAskResponse` accepts the values and no date, time, or datetime field holds an
+unfinished entry. `DateTimeField` reports that through `onEntryStatusChange`, such as
+"0 / 5 / 026": the field says "Enter a complete date, or clear it." until the user finishes it,
+and clearing every part leaves the field out. After the user edits a field, it says what is
+wrong in plain words, such as "Enter a number from 1 to 500." or "This field is required." A
+server error whose path is `content.values.<id>` (or an item under it) shows on that field until
+the user edits it; other errors show under the form. Without `onSubmit`, every field and both
+buttons are disabled. An answered form lists each sent field as its label and a readable value
+(Yes or No, option labels, "Oct 1, 2026", "9:30 AM", text shortened to one line of 80
+characters) under its summary.
+
+`files` controls: a hint built from the counts and types, such as "Up to 3 files: images, PDFs or
+text files.", then a "Choose files" `FilePickerButton` ("Add files" once some are picked), the
+picked files as an `AttachmentPreview` with a remove control on each, then Submit (`submitLabel`,
+default "Submit") and Skip unless `allowDecline` is `false`. The picker offers Photo Library only
+when `accept` has `image`, and its document picker offers only the accepted MIME types. It allows
+several files when `maxFiles` is more than 1 and is disabled once `maxFiles` files are picked.
+Submit is enabled only when `validateAskResponse` accepts the picked names, types, and sizes. On
+Submit, the card calls `resolveAskFiles` with the picked files and sends `{files: refs}`; Submit
+shows a spinner and Skip is disabled until the answer is sent. When the ask ends another way while
+the resolver runs, such as an answer from another tab, its refs are not sent. If the resolver throws, the ask
+stays open and the card shows "The files could not be sent. Try again, or pick them again." Server
+errors, such as `MIME_MISMATCH`, show under the picked files. Each file's type is
+`selectedFileMimeType(file)`, so a CSV a picker reports as `application/vnd.ms-excel` is sent as
+`text/csv`.
+
+| How the ask ended | Summary |
+| --- | --- |
+| `files` `accept` | You sent `<n>` files: `<filenames>`, or You sent 1 file: `<filename>` |
+| `form` `accept` | You sent the form (`<n>` fields) |
+| `markdown` `accept` | You approved the draft as is (`changed: false`), or You edited the draft (`<n>` characters) |
+| `confirm` `accept` | You confirmed: `<confirmLabel>`, or You declined: `<denyLabel>`, with the default labels when the ask sets none |
+| `choice` `accept` | You chose: `<option labels>`. With Other text, it adds "`<otherLabel>`: `<text>`" (the label defaults to "Other"), or shows only that when no option was checked. An empty `select: "many"` answer shows "You chose none of the options." |
+| `decline` | You skipped this question. |
+| `cancel` with `user_sent_message` | Not answered: you sent a message instead. |
+| `cancel` with `one_ask_at_a_time` | Not asked: the assistant asked another question first. |
+| Any other `cancel`, or status `cancelled` without a response | This question was cancelled. |
+| Status `answered` without a response | You answered this question. |
+
+| Element | testID |
+| --- | --- |
+| Card | `{testID}` |
+| Quick reply row | `{testID}-quick-replies` |
+| Quick reply or Skip button | `{testID}-button-<button id>`, such as `{testID}-button-option:team` or `{testID}-button-skip` |
+| Confirm button row | `{testID}-confirm-buttons` |
+| Confirm approve or deny button | `{testID}-button-approve`, `{testID}-button-deny` |
+| Radio options (up to 8) | `{testID}-radio` |
+| Select | `{testID}-select` |
+| Checkboxes (`select: "many"`) | `{testID}-multiselect` |
+| Other text field | `{testID}-other` |
+| Markdown editor, and its text input | `{testID}-editor`, `{testID}-editor-input` |
+| Sent markdown under an answered ask, and its Show all toggle | `{testID}-answer`, `{testID}-answer-toggle` |
+| Form field, and its wrapper | `{testID}-field-<field id>` (a `BooleanField` switch is `{testID}-field-<field id>.switch`), `{testID}-form-field-<field id>` |
+| Sent form values under an answered ask | `{testID}-answer` |
+| Files hint, picker, and picked files | `{testID}-hint`, `{testID}-picker`, `{testID}-selected` |
+| Files that could not be sent | `{testID}-resolve-error` |
+| Radio or checkbox options as plain text, without `onSubmit` | `{testID}-options` |
+| Submit | `{testID}-submit` |
+| Answer errors | `{testID}-errors` |
+| Summary | `{testID}-summary` |
+| Ask that cannot be shown | `{testID}-invalid` |
+| Answer that could not be sent | `{testID}-submit-error` |
+
+Types: `AskCardProps`, `ChatAsk`, `ChatAskState`, `ChatAskStatus`, `AskSubmission`,
+`AskSubmitHandler`, `AskFilesResolver`. Demo story: `AskCard`.
+
+File ref helpers:
+
+| Export | Description |
+| --- | --- |
+| `AskFilesResolver` | `(files: SelectedFile[]) => Promise<AskFileRef[]>`. Throw to keep the ask open. |
+| `resolveAskFilesAsDataUrls` | The default resolver: every file as a `{url}` data URL |
+| `selectedFileToDataUrlRef(file)` | One picked file as `{filename, mimeType, size, url}`. The data URL's media type is `selectedFileMimeType(file)`, and `size` is the decoded byte count. |
+| `selectedFileMimeType(file)` | The picked file's normalized type. When the picker reports none, `application/octet-stream`, or `application/vnd.ms-excel` (Windows reports CSV files so), the type comes from the extension: `.csv`, `.gif`, `.jpeg`, `.jpg`, `.json`, `.pdf`, `.png`, `.txt`, `.webp`. Otherwise the reported type is kept. |
+| `normalizeMimeType(mimeType)` | Drops parameters and lowercases: `Text/CSV; charset=utf-8` becomes `text/csv` |
+
+`FilePickerButton` props used by the files card, also available to any caller:
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `documentTypes` | `string[]` | MIME types the document picker offers. Defaults to PDF, text, CSV, and JSON. An empty list hides Document. |
+| `includeImages` | boolean | Offer Photo Library. Defaults to `true`. When `false`, the button opens the document picker directly. |
+| `text` | string | Shows an outline button with this label instead of the paperclip icon |
+
+`SelectedFile.size` is the file's size in bytes when the picker reports it.
+
+### SimpleAskCard
+
+Any agent ask as its [simple card](agent-ui-asks.md#simple-cards): the title, the question, and up
+to three full-width buttons that each send an exact answer. Use it in narrow layouts, such as a
+watch-sized preview. It reads the card's `kind` only to word the handoff line.
+
+```tsx
+const [runTurn] = useGpthistoriesTurnMutation();
+
+<SimpleAskCard
+  card={pendingAsk.simple}
+  onPress={(button) =>
+    runTurn({
+      body: {buttonId: button.id, surface: "compact", toolCallId: pendingAsk.toolCallId},
+      id: historyId,
+    })
+  }
+  pendingButtonId={sendingButtonId}
+/>
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `card` | `SimpleCard` | `pendingAsk.simple` from the server, or `simple` on an `{ask}` event |
+| `onPress` | `(button: SimpleCardButton) => void \| Promise<void>` | Called with the pressed button. Send `{toolCallId: card.toolCallId, buttonId: button.id}` to the history's [`turn` action](agent-ui-asks.md#headless-endpoints), or send `button.response` as the answer. |
+| `pendingButtonId` | string? | The button whose answer is still sending. It shows a spinner, the other buttons are disabled, and presses are ignored. |
+| `testID` | string? | Defaults to `simple-ask-card` |
+
+- A card with `handoff: true` shows "Continue on your phone" under the question, because its
+  buttons cannot give every answer. A `markdown` card shows "Edit on your phone" instead, a
+  `form` card "Fill it in on your phone", and a `files` card "Upload on your phone".
+- Button styles map to `Button` variants the same way as `AskCard` quick replies: `primary` to
+  `primary`, `default` to `outline`, `destructive` to `destructive`, and `cancel` to `ghost`.
+
+| Element | testID |
+| --- | --- |
+| Card | `{testID}` |
+| Continue on your phone, or Edit on your phone | `{testID}-handoff` |
+| Button | `{testID}-button-<button id>`, such as `{testID}-button-option:team` |
+
+Types: `SimpleAskCardProps`, and `SimpleCard` and `SimpleCardButton` from `@terreno/blocks`. Demo
+story: `SimpleAskCard`. Its demo answers a plan card on a watch-sized 198×242 pt screen, and its
+"Every fixture" story draws every valid fixture's card at that size.
 
 ### SplitPage
 

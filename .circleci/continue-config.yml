@@ -15,6 +15,9 @@ parameters:
   run-ai:
     type: boolean
     default: false
+  run-blocks:
+    type: boolean
+    default: false
   run-rtk:
     type: boolean
     default: false
@@ -246,10 +249,10 @@ commands:
             done
 
   demo_lint_and_typecheck:
-    description: Compile ui, then lint, typecheck, and smoke-test demo, then check story coverage
+    description: Compile blocks and ui, then lint, typecheck, and smoke-test demo, then check story coverage
     steps:
       - compile_packages:
-          packages: ui
+          packages: blocks ui
       - run:
           name: Lint and typecheck demo
           command: |
@@ -685,7 +688,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api admin-backend
+          packages: api admin-backend blocks
       - run:
           name: Lint / compile / test ai
           working_directory: ~/project/ai
@@ -700,13 +703,32 @@ jobs:
       - check_new_file_lcov:
           package: ai
 
+  blocks-ci:
+    executor: node22
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - run:
+          name: Lint / compile / test blocks
+          working_directory: ~/project/blocks
+          environment:
+            CI: "true"
+          command: |
+            set -euo pipefail
+            bun run lint
+            bun run compile
+            bun run test:coverage
+            bash ../scripts/upload-codecov.sh blocks
+      - check_new_file_lcov:
+          package: blocks
+
   rtk-ci:
     executor: node22
     steps:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: ui
+          packages: blocks ui
       - run:
           name: Lint / compile / test rtk
           working_directory: ~/project/rtk
@@ -726,6 +748,8 @@ jobs:
     steps:
       - checkout
       - install_bun_and_deps
+      - compile_packages:
+          packages: blocks
       - run:
           name: Lint / compile / types / test ui
           working_directory: ~/project/ui
@@ -770,7 +794,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: ui
+          packages: blocks ui
       - run:
           name: Lint / compile / test admin-frontend
           working_directory: ~/project/admin-frontend
@@ -824,7 +848,7 @@ jobs:
           name: Fetch coverage base
           command: git fetch origin master
       - compile_packages:
-          packages: api ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
+          packages: api blocks ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
       - run:
           name: Check new source file coverage
           command: |
@@ -841,6 +865,7 @@ jobs:
             add_skip "<< pipeline.parameters.run-ai >>" ai
             add_skip "<< pipeline.parameters.run-api >>" api
             add_skip "<< pipeline.parameters.run-api-health >>" api-health
+            add_skip "<< pipeline.parameters.run-blocks >>" blocks
             add_skip "<< pipeline.parameters.run-comms >>" comms
             add_skip "<< pipeline.parameters.run-create-terreno-app >>" create-terreno-app
             add_skip "<< pipeline.parameters.run-feature-flags >>" feature-flags
@@ -1001,7 +1026,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: ui rtk admin-frontend
+          packages: blocks ui rtk admin-frontend
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1086,7 +1111,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api ai api-health comms jobs admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
+          packages: api blocks ai api-health comms jobs admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
       - run:
           name: List admin scripts
           working_directory: ~/project/example-backend
@@ -1156,7 +1181,7 @@ jobs:
       - run:
           name: Compile admin-spa dependencies
           command: |
-            bun run --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
+            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
       - run:
           name: Lint / compile / types / unit / build / smoke
           working_directory: ~/project/admin-spa
@@ -2050,7 +2075,7 @@ jobs:
               npm_tag=latest
             fi
             packages=(
-              api test ui rtk admin-backend admin-frontend admin-spa ai
+              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             export TERRENO_PUBLISH_PREBUILT=1
@@ -2073,7 +2098,7 @@ jobs:
             # Publish rewrites catalog:/workspace:* specifiers in the working tree;
             # --force drops those edits so only the version bump is committed.
             git checkout --force -B release-master origin/master
-            for package in api test ui rtk admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
+            for package in api test blocks ui rtk admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
               [ -d "$package" ] || continue
               node -e "
                 const fs=require('fs');
@@ -2154,6 +2179,11 @@ workflows:
     when: << pipeline.parameters.run-ai >>
     jobs:
       - ai-ci
+
+  blocks:
+    when: << pipeline.parameters.run-blocks >>
+    jobs:
+      - blocks-ci
 
   rtk:
     when: << pipeline.parameters.run-rtk >>
@@ -2237,7 +2267,7 @@ workflows:
     jobs:
       - packages-ci:
           package: admin-frontend
-          compile-deps: ui
+          compile-deps: blocks ui
 
   api-health:
     when: << pipeline.parameters.run-api-health >>

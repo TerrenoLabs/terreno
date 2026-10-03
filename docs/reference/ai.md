@@ -15,7 +15,6 @@ AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI 
 - [Route registrars](#route-registrars)
 - [AiApp plugin](#aiapp-plugin)
 - [LangfuseApp plugin](#langfuseapp-plugin)
-- [Observability](#observability)
 - [Langfuse integration](#langfuse-integration)
 - [FileStorageService](#filestorageservice)
 - [MCPService](#mcpservice)
@@ -65,13 +64,15 @@ src/
     project.ts             # GPT project + memories
   routes/
     gpt.ts                 # Streaming chat, remix, tools, ratings
-    gptHistories.ts        # History CRUD
+    gptHistories.ts        # History CRUD, headless pendingAsks and turn actions
     aiRequestsExplorer.ts  # Admin request explorer
     files.ts               # File upload/signed URL/delete
     projects.ts            # Project CRUD + memories
     mcp.ts                 # MCP server status and tools
   service/
     aiService.ts           # Provider-agnostic AI service
+    asks.ts                # Ask tools, reserved ask_ names, paused-turn replay
+    chatTurn.ts            # Chat turn runner behind /gpt/prompt (SSE sink) and turn (buffered JSON)
     fileStorage.ts         # GCS upload helper
     getMCPTools.ts         # modelRouter MCP tools as Vercel AI SDK tools
     mcpService.ts          # MCP client connections
@@ -93,7 +94,8 @@ src/
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
 - **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
-- **Prompts:** `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
+- **Prompts:** `COMPACT_SURFACE_SYSTEM_PROMPT`, `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TERRENO_ASKS_SYSTEM_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
+- **Asks:** `createAskTools({kinds, surface?})`, `TERRENO_ASKS_SYSTEM_PROMPT`, `COMPACT_SURFACE_SYSTEM_PROMPT`, types `AsksOptions`, `ApprovalAskInput`, `AskOrigin`, `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus`, and `Ask`, `AskKind`, `AskResponse`, `AskValidationError`, `SimpleCard`, `SimpleCardButton` re-exported from `@terreno/blocks` ([Agent UI Asks](agent-ui-asks.md))
 - **Web search:** `WebSearchProvider`, `WebSearchResult` types
 
 ## AIService
@@ -132,17 +134,25 @@ const aiService = new AIService({
 | `generateText(options)` | Non-streaming text generation; logs as `requestType: "general"` |
 | `generateJsonValue(options)` | Any JSON value via `Output.json()`; logs as `"json_value"` |
 | `generateJsonObject(options)` | Typed object from schema/Zod via `Output.object()`; logs as `"json_object"` |
+| `generateBlocks(options)` | One block document via `Output.object(blocksJsonSchema)`, then `validateBlocks`. Temperature is always `TemperaturePresets.DETERMINISTIC` (0). Logs as `"ui_blocks"`. |
 | `generateJsonArray(options)` | Typed array via `Output.array()`; logs as `"json_array"` |
 | `generateTextStream(options)` | Async generator of text chunks; logs full response after stream completes |
 | `generateRemix(options)` | Reword text using `REMIX_PROMPT` at `TemperaturePresets.BALANCED` |
 | `generateSummary(options)` | Summarize text using `CONTENT_SUMMARY_PROMPT` at `TemperaturePresets.LOW` |
 | `translateText(options)` | Translate text using `TRANSLATION_PROMPT` at `TemperaturePresets.LOW` |
-| `buildMessages(prompts)` | Convert `GptHistoryPrompt[]` to Vercel AI SDK `ModelMessage[]` (skips tool-call/result entries) |
+| `buildMessages(prompts)` | Convert `GptHistoryPrompt[]` to Vercel AI SDK `ModelMessage[]`. Skips host tool-call/result rows and approval ask rows (`ask.origin: "approval"`). Keeps each answered or cancelled ask as an assistant tool call plus its tool result; consecutive ask calls share one assistant message. Skips asks still waiting for an answer. |
 | `generateChatStream(options)` | Stream multi-turn chat with optional tools; logs prompt as joined message text |
 
 All generation methods log to `AIRequest` via private `logRequest()`. Logging failures never throw.
 
 ## Structured JSON output
+
+`generateBlocks({prompt, systemPrompt?, userId?, repair?})` asks for one block document:
+
+- Uses `TERRENO_UI_BLOCKS_SYSTEM_PROMPT` when `systemPrompt` is omitted.
+- Temperature is `TemperaturePresets.DETERMINISTIC` (0).
+- Checks the object with `validateBlocks`. When `repair` is omitted or true, one retry appends the error list to the user prompt. `repair: false` skips that retry.
+- A second validation failure throws `APIError` 422 (`title: "Block document failed validation"`, `meta.fields` keyed by error code) and stores `metadata.errorCodes` on the `AIRequest`. A model or network error throws 502 (`title: "Block generation failed"`) and is not repaired.
 
 `generateJsonValue`, `generateJsonObject`, and `generateJsonArray`:
 
@@ -187,13 +197,13 @@ Logs all AI calls for monitoring and admin explorer.
 |-------|------|-------------|
 | `aiModel` | string | Model identifier (field name avoids Mongoose `model` conflict) |
 | `prompt` | string | Input prompt |
-| `requestType` | string | e.g. `general`, `remix`, `summarization`, `translation`, `json_value`, `json_object`, `json_array` |
+| `requestType` | string | e.g. `general`, `remix`, `summarization`, `translation`, `json_value`, `json_object`, `json_array`, `ui_action`, `ui_blocks` |
 | `response` | string? | Response text |
 | `responseTime` | number? | Milliseconds |
 | `tokensUsed` | number? | Total tokens |
 | `userId` | ObjectId? | Requesting user |
 | `error` | string? | Error message |
-| `metadata` | Mixed? | Extra data (e.g. structured-output debug) |
+| `metadata` | Mixed? | Extra data (e.g. structured-output debug; `ask` and `nextAsk` for [asks](agent-ui-asks.md#stored-state)) |
 | `parentRequestId` | ObjectId? | Parent in multi-agent workflow |
 | `subRequestIds` | ObjectId[]? | Child request refs |
 | `totalResponseTime` | number? | Combined sub-request time |
@@ -210,11 +220,12 @@ Conversation history with multi-modal prompts.
 | Field | Type | Description |
 |-------|------|-------------|
 | `userId` | ObjectId | Owner (required) |
-| `title` | string? | Auto-generated on first `/gpt/prompt` response when empty |
+| `title` | string? | Auto-generated on the first chat turn's reply (`/gpt/prompt` or `turn`) when empty |
 | `projectId` | ObjectId? | Optional project association |
-| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields, `status`, `streamId`. `text` is required unless `content` has parts or `status` is set; an image-only assistant response saves `text: ""` |
+| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields (`toolCallId`, `toolName`, `args`, `result`), `ask: {kind, status}` on ask `tool-call` rows (`status`: `pending` \| `answered` \| `cancelled`), and on assistant replies `status` (`streaming` \| `complete` \| `error`) plus `streamId`. `text` is required unless `content` has parts or `status` is set; an image-only assistant response saves `text: ""` |
+| `pendingAsk` | object? | The ask the conversation waits on: `toolCallId`, `kind`, `input`, `simple`, `promptIndex`, `responseMessages`, `created`, and for an approval ask `origin`, `approvalId`, `toolName`. `/gpt/histories` responses leave out `promptIndex` and `responseMessages`. Only a chat turn (`/gpt/prompt` or the `turn` action) sets and clears it; see [Agent UI Asks](agent-ui-asks.md#stored-state). |
 
-Assistant replies from `/gpt/prompt` carry `streamId` and `status`: `streaming` while partial text is persisted, then `complete` or `error`. `buildMessages` skips `streaming` replies and `error` replies with no output. Attachment `content` parts carry an optional `gcsKey` when the file was uploaded to durable storage.
+Assistant replies from `/gpt/prompt` carry `streamId` and `status`: `streaming` while partial text is persisted, then `complete` or `error`. A paused ask's reply is `complete`, and `pendingAsk` is set beside it. `buildMessages` skips `streaming` replies and `error` replies with no output. Attachment `content` parts carry an optional `gcsKey` when the file was uploaded to durable storage.
 
 **Virtual:** `ownerId` aliases `userId` for `Permissions.IsOwner`.
 
@@ -252,13 +263,61 @@ GPT project with persistent context and memories.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/gpt/prompt` | POST | `IsAuthenticated` | SSE streaming chat; body: `prompt`, optional `historyId`, `systemPrompt`, `attachments`, `model`, `projectId`, `promptName`, `promptLabel`, `sensitive`, `sessionId`. Also reads `x-ai-session-id`. Passes `userId` from `req.user` into `AIService`. Client prompt-registry selection is admin-only; app routes select production prompts server-side. Client `sensitive: true` may upgrade handling, but `false` never downgrades a sensitive prompt version. |
-| `/gpt/remix` | POST | `IsAuthenticated` | Non-streaming text remix. Client prompt-registry selection is admin-only and `sensitive: false` cannot downgrade a sensitive prompt. |
+| `/gpt/prompt` | POST | `IsAuthenticated` | SSE streaming chat turn; [body](#gptprompt-body) and [events](#sse-events) below |
+| `/gpt/remix` | POST | `IsAuthenticated` | Non-streaming text remix; body: `{text}` |
 | `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null}` |
 | `/gpt/histories/:id/stream` | GET | `IsAuthenticated` (owner) | SSE resume of an in-flight reply; query: optional `streamId`, `offset` |
-| `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools |
+| `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools (ask tools are not listed) |
+| `/gpt/datasets/:id` | GET | owner (`IsOwner`; another user is 404) | Read a stored dataset. Mounted only when `uiBlocks` is on. Query: `grain` (`hour` \| `day` \| `week` \| `month`), `limit` (default 500, max 1000), `page`. Response `data`: `{columns, rows, rowCount, page, more}`. `grain` buckets the first date column in UTC. An offset is converted before `startOf`. A date with no zone is that UTC day. Null date cells are skipped. Number columns are summed. Without `page`, a series longer than `limit` is LTTB-downsampled and `more` is false. With `page`, rows are a page and `more` is true when another page remains. |
+| `/gpt/actions` | POST | `IsAuthenticated` plus history owner (another user is 403) | Run a host callback. Mounted only when `uiBlocks` is on, on the `/gpt` path. Body: `{historyId, messageId, blockId, elementId, name, payload?}`. Unknown `name` is 404. A payload that fails the host schema is 400 with `meta.fields`. The handler has 10 seconds (`actionTimeoutMs` can set another cap) and then 504. Response `data`: `{text?, blocks?, replace?}`. An invalid `blocks` document is 500. Logged as `AIRequest` `requestType: "ui_action"`. |
 
-Generated images (image-output models such as `gemini-3-pro-image`) arrive as SSE `image` events: `{image: {mimeType, url}}` with a base64 data URL. Each image is sent once, even when the model reports it both as a stream file part and in the final `result.files`. The saved assistant prompt stores one `image` content part per image. On later turns, `buildMessages` sends an image-only assistant prompt to the model as the text `[Generated image]`, because providers reject empty assistant turns.
+Generated images (image-output models such as `gemini-3-pro-image`) arrive as SSE `image` events: `{image: {mimeType, url}}` with a base64 data URL. Each image is sent once, even when the model reports it both as a stream file part and in the final `result.files`. The saved assistant prompt stores one `image` content part per image and `text: ""` when there is no text. On later turns, `buildMessages` sends an image-only assistant prompt to the model as the text `[Generated image]`, because providers reject empty assistant turns.
+
+AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerModelFn(modelId)` → configured `aiService`. When none resolves, `/gpt/prompt` streams a canned demo reply and `/gpt/remix` returns it. This happens whether or not `demoMode` is set.
+
+Pass `asks: true` (or `{kinds: ["choice"]}`) to let the model ask the user typed questions in the chat. Asks are off by default; with them off, tools, system prompt, and SSE events are unchanged. See [Agent UI Asks](agent-ui-asks.md).
+
+Pass `uiBlocks: true` (or `{hostActions, html, imageHosts, repair, datasetTtlDays, datasetMaxRows}`) to require each assistant reply to be a block document. `html: true` allows `html` blocks and sanitizes them before they are stored. `imageHosts` lists hostnames allowed on `https` image sources. The client receives that document once, after missing action ids are filled, `repair: true` rewrites it, and html is sanitized, and before `{ask}`. `{replace: "text", text}` is sent only when text was already streamed and then changed. `datasetTtlDays` defaults to `0` (keep the dataset). `datasetMaxRows` defaults to 50,000. Off by default; with it off, the system prompt, SSE events, `/gpt/datasets`, and `/gpt/actions` are unchanged. When it is on, the system prompt gains `TERRENO_UI_BLOCKS_SYSTEM_PROMPT` (host callback names included when `hostActions` is set). After the final text, the route validates it and sends `{blocks: {ok, errors, warnings}}` before `{done}`. `hostActions` is the callback allowlist: a name outside it fails with `UNKNOWN_HOST_ACTION`. `{repair: true}` runs one repair call when validation fails and stores that reply. A document that is still invalid is stored with a `Block validation errors:` note so the next turn sees it. See [Validate a block document locally](../how-to/agent-ui-blocks.md).
+
+With asks on, a host tool with the AI SDK's `needsApproval: true` runs only after the user approves it: the turn pauses on a server-made `confirm` ask. `asks.approvals` sets that ask's input per tool name, as `(input) => ConfirmAskInput` (`ApprovalAskInput`); without an entry, the ask is "Allow &lt;toolName&gt;?" with the tool's description. With asks off, such a tool never runs. See [Approval asks](agent-ui-asks.md#approval-asks).
+
+With `asks` on, pass the same options to `addGptHistoryRoutes` as `chat` to add the non-streaming [headless endpoints](#addgpthistoryroutesrouter-options) for clients that do not read server-sent events.
+
+#### `/gpt/prompt` body
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prompt` | string | The user's message. Required unless `askResponse` is sent. |
+| `historyId` | string? | Continue this conversation; omit to start one. Required with `askResponse`. |
+| `askResponse` | object? | The answer to the pending ask: `{toolCallId, action, content?, reason?}`. Read only when `asks` is on. Send it instead of `prompt`, without `attachments`. See [Answer an ask](agent-ui-asks.md#answer-an-ask). |
+| `surface` | `"full"` \| `"compact"`? | Where the user reads and answers. Default `"full"`. `"compact"` is a watch or another small screen: the model gets only button-sized asks and is asked for replies of at most two short sentences. Any other value returns 400. See [Compact surface](agent-ui-asks.md#compact-surface). |
+| `systemPrompt` | string? | System prompt for this turn; project context and the Langfuse prompt are prepended |
+| `attachments` | array? | `{type: "image" \| "file", url, mimeType, filename?}` items added to the user message |
+| `model` | string? | Model id passed to `createModelFn` or `createServerModelFn` |
+| `projectId` | string? | Project whose context and memories are prepended to the system prompt; saved on a history that has none |
+
+#### SSE events
+
+`/gpt/prompt` streams `data: <json>` lines, one event object per line. `{askResolved}` is sent when an answer is stored, before the model runs. `{started}` is sent when the model produces its first part and the reply row is saved, before any text from that part. On a prompt that is not answering an ask, `{started}` is first. `{ask}` and `{done}` come last. With `uiBlocks` on, `{text}` is the finished document and comes before `{ask}`.
+
+| Event | Shape | When |
+|-------|-------|------|
+| `{started}` | `{started: true, historyId, streamId}` | Sent when the model produces its first part and the reply row is saved. A reload can resume this `streamId`. It comes before text from that part. A model that fails before any part sends no `{started}`. The demo reply does not send it. |
+| `{askResolved}` | `{askResolved: {toolCallId, action}}` | The turn answered the pending ask, or cancelled it because a new `prompt` arrived. Asks only. |
+| `{text}` | `{text: string}` | A step's text, sent when the step ends. Text from a step that calls a tool is dropped, unless that text parses as a block document and the turn has no other text. A trailing JSON `"action"` blob is stripped. With `uiBlocks` on, this is the final document: sent once, after id-fill, repair, and sanitizing, and before `{ask}`. |
+| `{toolCall}` | `{toolCall: {toolCallId, toolName, args}}` | The model called a host tool (route, request, or MCP). Never sent for ask tools. |
+| `{file}` | `{file: {filename, mimeType, url}}` | A host tool result had a `fileData` data URL. Sent before its `{toolResult}`. `filename` defaults to `document` and `mimeType` to `application/octet-stream`. |
+| `{toolResult}` | `{toolResult: {toolCallId, toolName, result}}` | A host tool returned. `fileData` is removed from `result`. For a tool whose approval was denied, `result` is `{approved: false, reason}`. Never sent for ask tools. |
+| `{image}` | `{image: {mimeType, url}}` | The model generated an image; `url` is a `data:` URL. Each data URL is sent once. |
+| `{ask}` | `{ask: {toolCallId, kind, input, simple, origin?, toolName?}, historyId}` | The turn paused on an ask. Sent after the turn is saved. `historyId` is the conversation that waits on the ask, so a new chat's ask can be answered before `{done}`. An [approval ask](agent-ui-asks.md#approval-asks) adds `origin: "approval"` and the host `toolName`. Asks only. |
+| `{error}` | `{error: string}` | The model stream reported an error, or the turn failed after the stream started. `{done}` still follows. |
+| `{replace}` | `{replace: "text", text}` | The assistant document after the server changed text the client already has: a missing actions `id` was filled in, `repair: true` rewrote the document, or `uiBlocks.html` sanitized it. Sent before `{blocks}`. With `uiBlocks` on, the first send is `{text}` of that finished document, so `{replace}` is not sent for it. |
+| `{blocks}` | `{blocks: {ok, errors, warnings}}` | The final assistant text checked as a block document. Sent after the text and before `{done}`, only when `uiBlocks` is on and the turn produced text. |
+| `{done}` | `{done: true, historyId?, title?, pendingAsk?}` | Last event of every turn that started streaming, also after `{error}`. `historyId` is missing only in the demo response and when a failed new chat could not be saved. `title` is set once the conversation has one. `pendingAsk: {toolCallId}` when the turn waits on an ask. |
+
+When a turn fails after the stream starts, before the model's first chunk or partway through, the stream sends `{error}` then `{done}` with `historyId`. The turn keeps what the client already saw: the user's message, host tool rows, and any partial assistant text, saved with `status: "error"`. An empty placeholder is removed. An ask the failed stream had started is dropped. When the model call after an answer fails before the client gets any text, tool result, or ask, the answer is undone: the stream is `{askResolved}`, `{error}`, `{done, pendingAsk}`, the ask is pending again, and the same answer can be sent again. When it fails later, the stream is `{askResolved}`, `{error}`, `{done}` and the answer is kept: the ask stays answered and sending it again returns 409. Send a new `prompt` to continue. See [Agent UI Asks](agent-ui-asks.md#answer-an-ask).
+
+Errors raised before the stream starts return JSON `{status, title, detail, fields?}` instead: 400 for an invalid body, 403 for another user's history, 404 for an unknown `historyId`, 409 for an answer to an ask that is not pending, and 500 otherwise. A `prompt` never gets 409: when another request resolved the ask it meant to cancel, it goes ahead as a normal message. [Agent UI Asks error responses](agent-ui-asks.md#error-responses) lists the ask cases.
 
 #### Attachments
 
@@ -270,11 +329,11 @@ When `fileStorageService` is set, `data:` attachments are uploaded with `FileSto
 
 #### Stream events and resume
 
-`/gpt/prompt` saves the user turn and a `status: "streaming"` assistant placeholder before streaming. While the reply streams, partial text is persisted about every second (`streamPersistIntervalMs`), plus a heartbeat every 10 seconds. The final reply replaces the placeholder with `status: "complete"`. On failure, partial text is kept with `status: "error"`; an empty placeholder is removed.
+`/gpt/prompt` saves the user turn and a `status: "streaming"` assistant placeholder when the model produces its first part. Waiting until then lets two turns on one history both load it before either writes. While the reply streams, partial text is persisted about every second (`streamPersistIntervalMs`), plus a heartbeat every 10 seconds. A text reply replaces that placeholder in place with `status: "complete"`. On failure, partial text is kept with `status: "error"`; an empty placeholder is removed.
 
 | Event | Sent by | Meaning |
 |-------|---------|---------|
-| `{historyId, started: true, streamId}` | prompt | First event; the turn is saved and resumable |
+| `{historyId, started: true, streamId}` | prompt | The reply row is saved and resumable; before any text from the model's first part |
 | `{historyId, resumed: true, streamId?}` | resume | First event; `streamId` is absent when nothing is streaming |
 | `{text}` | both | Text delta |
 | `{replace: true, text}` | resume | Authoritative whole reply: sent first when the client provides `offset`, and whenever persisted text was rewritten (for example, a step became a tool call) |
@@ -285,8 +344,6 @@ When `fileStorageService` is set, `data:` attachments are uploaded with `FileSto
 
 `GET /gpt/histories/:id/stream` re-attaches after a reload or remount. Pass `offset` as the number of characters the client already shows, usually the stored placeholder `text`. The endpoint polls the stored history (`streamResumePollIntervalMs`, default 500 ms), so it works across server instances. A `streaming` reply with no update for `streamStaleAfterMs` (default 60 s) is marked `error`.
 
-AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerModelFn(modelId)` → configured `aiService` → demo SSE response when `demoMode` and none available.
-
 ### addGptHistoryRoutes(router, options?)
 
 CRUD at `/gpt/histories` via `modelRouter`:
@@ -296,7 +353,16 @@ CRUD at `/gpt/histories` via `modelRouter`:
 | Create, List | `IsAuthenticated` |
 | Read, Update, Delete | `IsOwner` |
 
-Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`.
+Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`. Create sets `userId` to the caller, so `{}` is a valid create body even when the app validates request bodies. Create and update bodies drop `pendingAsk` (including dotted `pendingAsk.*` paths), so only a chat turn writes it; the OpenAPI spec marks it `readOnly` on create and update.
+
+Pass `chat`, the options given to `addGptRoutes`, to add two headless actions for clients that do not read server-sent events, such as a watch app. Both exist only when `chat` turns `asks` on: without `chat`, or with `asks` off, neither action exists, so a host that never turned asks on gets no new endpoints. `AiApp` adds them when its `asks` option is set.
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/gpt/histories/pendingAsks` | GET | `IsAuthenticated` | The caller's pending asks with their simple cards, newest first |
+| `/gpt/histories/:id/turn` | POST | `IsOwner`; admins who do not own the history get 403 | Runs one chat turn to completion with the `chat` options and returns it as JSON. Body: one of `{prompt}`, `{askResponse}`, or `{toolCallId, buttonId}`, plus `surface`. The turn finishes and saves even if the client disconnects. |
+
+Bodies, results, and errors: [Headless endpoints](agent-ui-asks.md#headless-endpoints).
 
 ### addProjectRoutes(router, options?)
 
@@ -312,9 +378,11 @@ Requires `fileStorageService` and `gcsBucket` (registered by `AiApp` when both a
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/files/upload` | POST | `IsAuthenticated` | Multipart upload (`file` field); allowed MIME: images, PDF, plain text, CSV, JSON. Returns `403` when `fileUploadsEnabled` is off |
-| `/files/*gcsKey` | GET | None | Returns signed read URL (1 hour) |
-| `/files/*gcsKey` | DELETE | `IsAuthenticated` (owner) | Soft-delete attachment and remove from GCS |
+| `/files/upload` | POST | `IsAuthenticated` | Multipart upload (`file` field); allowed MIME: images, PDF, plain text, CSV, JSON. Capped at `maxFileSize` (default 10 MB). Returns `403` when `fileUploadsEnabled` is off. Returns `{data: {id, filename, gcsKey, mimeType, size, url}}`; send `id` as the `fileId` of a [`files` ask](agent-ui-asks.md#files) answer. |
+| `/files/*gcsKey` | GET | `IsAuthenticated` (owner) | Returns `{data: {url}}`, a signed read URL (1 hour), for the caller's own upload. Another user's file returns 404, the same as a missing one, so keys cannot be probed; admins get no exception. |
+| `/files/*gcsKey` | DELETE | `IsAuthenticated` (owner) | Soft-delete attachment and remove from GCS. 404 for a missing file, 403 for another user's. |
+
+`*gcsKey` is the full key with its slashes, such as `uploads/<userId>/<ms>-<name>`.
 
 ### addMcpRoutes(router, options)
 
@@ -357,10 +425,11 @@ new AiApp({
 | Option | Description |
 |--------|-------------|
 | `aiService` | Pre-configured server-wide AI service |
+| `asks` | Let the model ask the user typed questions in chat: `true` or `{approvals, kinds, maxFileSizeBytes}`. `approvals` sets the [approval ask](agent-ui-asks.md#approval-asks) for host tools with `needsApproval`. Passed to `addGptRoutes`, and adds the headless `pendingAsks` and `turn` actions to `/gpt/histories`; see [Agent UI Asks](agent-ui-asks.md). `maxFileSizeBytes` also caps `/files/upload`. |
 | `createModelFn` | Build model from per-request `x-ai-api-key` |
 | `createServerModelFn` | Server-side model factory (e.g. Vertex ADC) without per-request key |
-| `demoMode` | Return canned responses when no AI service resolves |
-| `fileStorageService` + `gcsBucket` | Enable file upload routes and durable `/gpt/prompt` attachments |
+| `demoMode` | Not read. The routes send a canned demo reply whenever no AI service resolves |
+| `fileStorageService` + `gcsBucket` | Enable file upload routes, durable `/gpt/prompt` attachments, and `files` ask answers that name uploads by `fileId` |
 | `fileUploadsEnabled` | `false` or a function returning `false` rejects uploads and chat attachments with `403`. Omit to leave uploads enabled |
 | `mcpService` | Enable MCP routes and tool discovery in chat |
 | `tools` | Static Vercel AI SDK tool definitions for chat |
@@ -403,141 +472,6 @@ Client construction failures log a warning and skip the plugin so the API proces
 
 Calls `shutdownLangfuseClient()` and `shutdownTracing()` on `SIGTERM`.
 
-## Observability
-
-In-app prompt versions, nested traces, evaluators, datasets, experiments, review queue, and in-app feedback. Operator loop: [Develop an AI feature](../how-to/ai-feature-development.md). Register plugins: [Observe LLM calls](../how-to/observe-llm-calls.md). Why two planes: [AI observability](../explanation/ai-observability.md). Locked design: [implementation plan](../implementationPlans/ai-observability.md).
-
-Register `ObservabilityApp` with at least a local plugin. Construction throws if `experiments.primary !== datasets.primary`, if `reviewQueue` is not `local`, or if a control primary has no matching plugin. Defaults for all four primaries are `local`. Construction also registers the app as the process singleton (`getObservabilityApp()`) through the dependency-free observability registry, so routes do not import the plugin class that registers them. Call `resetObservabilityApp()` in tests. `createLocalObservabilityPlugin()` registers the local Mongo models (`ObsPrompt`, `ObsPromptVersion`, `ObsPromptLabel`, `ObsTrace`, `ObsSpan`, `ObsScore`) on the default connection.
-
-Optional `accessControl` (from `createAccess`) turns on fine-grained RBAC for every
-`/ai/observability/*` route. Without it, routes require legacy `user.admin`. With it, callers
-need `admin:access` plus the resource action for that route unless `user.admin` is true
-(full-access fallback). Resources: `aiPrompt`, `aiTrace`, `aiReview`, `aiDataset`,
-`aiEvaluator`, `aiExperiment` — see [API reference — AI observability RBAC](api.md#ai-observability-rbac).
-Examples: `GET /prompts` → `aiPrompt:list`; `POST /prompts/:name/labels` → `aiPrompt:promote`;
-`POST /review/:id` with `action: "submit"` → `aiReview:score`; `POST /traces/review` →
-`aiReview:assign`; `POST /experiments/:id/promote` → `aiExperiment:promote`;
-`GET /status` → `admin:access` (admin shell only, no resource action); `POST /traces/:id/scores` → `aiReview:score`. The seeded
-`auditor` role receives observability `list` / `read` only; compose it with `admin:access` in a
-consumer role when operators should enter the admin shell.
-
-The example backend always registers `createLocalObservabilityPlugin()` and passes the
-validated `AI_OBS_PRICE_MAP_JSON` object as `priceMap`. `bun run backend:seed` idempotently
-creates `examples/example-summarize` with production on v1 and an experimental v2, installs
-`correctness-human` and `schema-assert`, and creates a two-item proofread `example-gold`
-dataset bound to the prompt input schema. The same seed creates `examples/chat-safety-screen`
-(production v1 scores the new message alone; v2 reads earlier turns), `examples/chat-safety-judge`,
-the `chat-safety-agreement` llm-judge, and the 12-item proofread synthetic dataset
-`chat-safety-synthetic`. Each row is one new message plus earlier turns from a two-person chat,
-labeled for 988 vs care-team routing, toxicity, a privacy leak, and a dismissive reply.
-Admin → Scripts → `seedChatSafetyDataset`, or `bun run script seedChatSafetyDataset --wet` from
-`example-backend`, loads that set into an already-running database. `SEED_DEFAULTS=true` loads
-it on boot, including PR preview. Invalid price JSON or negative/non-numeric prices
-fail startup with `AI_OBS_PRICE_MAP_JSON` in the error.
-
-`POST /ai/example-summarize` (example backend) runs that seeded prompt with
-`promptLabel: "production"`, `userId`, and `sessionId` from `x-ai-session-id`. It uses the
-server `AIService` when configured, otherwise a request-scoped service built from
-`x-ai-api-key`, and returns **503** when neither exists. The example frontend calls it from
-**Todos → Summarize**.
-
-### Local observability models
-
-| Model | Role |
-| --- | --- |
-| `ObsPrompt` | Named prompt (`name` unique) with `folder`, optional `description`, and `tags[]` |
-| `ObsPromptVersion` | Immutable `vN` body, `variables[]`, schemas, `sensitive` (default false), `config` |
-| `ObsPromptLabel` | Movable labels; unique `(promptId, label)` |
-| `ObsTrace` | Root trace: user, session, status, `errorSummary`, `sensitive`, `prompts[]`, usage |
-| `ObsSpan` | Nested span with `kind`, `status`, optional `error`, offsets, usage |
-| `ObsScore` | Scores on a trace/span; many per trace, **no unique index** |
-| `ObsEvaluator` | Evaluator: `type` (`human` \| `llm-judge` \| `json-assert`), `target`, `dimensions[]`, `runModes`, `instructions`, `judgePromptName` (judge), `assertion` (json-assert), `confidenceAlertBelow` (default 0.7) |
-| `ObsReviewItem` | Review queue item: status, evaluator, trace, reason, scores, comment |
-| `ObsDataset` | Named dataset with optional `inputSchemaPromptName` and `expectedOutputSchema` |
-| `ObsDatasetItem` | Item with `input`, `expectedOutput`, `origin`, `proofread`, `tags`, `outcomeClass`, `sourceTraceId`, `metadata` |
-| `ObsExperiment` | Compares 2–3 prompt versions on a dataset with thresholds and aggregates |
-| `ObsExperimentItem` | Per dataset row: outputs per version, evaluator score maps, gate failure flags |
-
-`POST /ai/observability/traces/review` requires a `human` `ObsEvaluator`. Its
-`dimensions[]` render as reviewer score fields and `instructions` render above the review form.
-Automatic evaluator types return **400** instead of entering the human queue. Submitting a review
-requires every dimension marked `required`; omitted optional dimensions do not create empty score
-rows. The local score store remains the fallback when no external score sink is configured.
-
-`AIService` generate methods:
-
-| Option | Default | Behavior |
-| --- | --- | --- |
-| `promptName` | unset | Resolve `PromptRegistry.get({name, label})` **before** the model call, even when `skipTrace` is true |
-| `promptLabel` | `"production"` | Label used with `promptName` |
-| `skipTrace` | `false` | Skip `TraceSink.export` only; prompt resolve and `AIRequest` still run |
-| `sensitive` | inherited | Explicit value wins; otherwise the resolved prompt version's `sensitive` |
-| `sessionId` / `userId` | unset | Copied onto the exported trace |
-| `priceMap` | app `priceMap` | Per-call override; `costUsd` is omitted when the model is unpriced |
-
-Missing registry, missing prompt, or missing label throws `APIError` 400 and does not call the model. Sink `export` failures are logged and never fail generate.
-
-**GPT tool spans:** `/gpt/prompt` collects streamed `tool-call` / `tool-result` events into `TOOL` child spans (name = tool name, input = args, output = cleaned result with large `fileData` stripped). When any tool span is present, `AIService.recordGenerate` exports one trace with a `CHAIN` root plus `TOOL` children linked by `parentSpanId`. Ordinary `generateText` / JSON helpers without `childSpans` still emit a single `LLM` root span.
-
-`ObservabilityApp.exportTrace(trace)` fans out to every `TraceSink` (best-effort) and returns the first persisted `{id}` from sinks that support it (for example `LocalTraceSink`). `TraceSink.export` may return `TraceExportResult` (`{id?: string}`) or `void`; `MemoryTraceSink` remains in-memory only.
-
-When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only prompt routes at `/ai/observability`. Pass `aiService` on `ObservabilityApp` for playground runs and the multi-stage trace smoke endpoint. Apps that let an admin supply a per-request provider key may instead set `requestAiServiceFactory`; both the playground and the multi-stage smoke endpoint read the key from `x-ai-api-key`, while a configured server `aiService` remains preferred. `GET /ai/observability/status` is always mounted so admin chrome can read plugin ids, capabilities, primaries, `localOn`, `playgroundAi.source` (`server` \| `request-key` \| `unavailable`), and effective RBAC flags. With `accessControl` on `ObservabilityApp`, pass the same instance to `AdminApp` so status permissions align with `/admin/config` screen filtering. Legacy `user.admin` and apps without `accessControl` return every observability action as `true` under `permissions`; RBAC callers need `admin:access` for status (403 without it).
-
-| Method | Path | Behavior |
-| --- | --- | --- |
-| GET | `/ai/observability/status` | Admin chrome. `{plugins, primaries, localOn, playgroundAi, permissions}` — `permissions` is a map of observability resource → action → boolean (`aiPrompt`, `aiTrace`, `aiReview`, `aiDataset`, `aiExperiment`, `aiEvaluator`). Drives the status chip, Review visibility when `localOn` is false, playground AI source, and admin UI write-control gating (UI treats missing/loading status as deny). Status flags do not grant HTTP access; routes still enforce RBAC independently |
-
-| Method | Path | Behavior |
-| --- | --- | --- |
-| GET | `/ai/observability/prompts` | List. Query `folder`, `search`, `include=usage7d` (7-day calls/cost). `production` is `"—"` until a production label exists |
-| POST | `/ai/observability/prompts` | Create prompt in a folder as immutable v1 (`latest` label) |
-| GET | `/ai/observability/prompts/:name` | Prompt + versions + labels + bounded `relationships` (`traces` and `experiments` for this prompt name, each with `total`, `limit`, and summary `items`; trace rows include matching `promptVersion`). Optional query `promptVersion` (positive integer) filters hub traces with `$elemMatch` on name and version so a v2 filter excludes v1-only traces. Omit it for the unfiltered prompt-name match. Non-integers and values below 1 return **400** |
-| POST | `/ai/observability/prompts/:name/versions` | Create `vN+1`; never mutates an existing version |
-| POST | `/ai/observability/prompts/:name/labels` | Move `production` or `staging`; `outgoingVersion` is the previous pointer |
-| POST | `/ai/observability/prompts/:name/playground` | Compile `{{var}}` + one `AIService` call; returns compiled messages, output, latency, tokens, cost; creates no version. Uses `ObservabilityApp.aiService`, or `requestAiServiceFactory({apiKey, modelId})` when the server service is absent (`apiKey` comes from `x-ai-api-key`) |
-
-`PromptRegistry.get({name, label})` (default label `production`) reads the labelled local version. `createLocalObservabilityPlugin()` wires `LocalPromptStore` as that registry and local `TraceSink` / `ScoreSink`.
-
-| Method | Path | Behavior |
-| --- | --- | --- |
-| GET | `/ai/observability/traces` | Admin list. Query `from`, `to`, `prompt`, `promptVersion` (requires `prompt`), `status`, `userId`, `sessionId`, `hasScore`, `sensitive`, `flaggedForDataset`, `page`, `limit`. Body is `{data, page, limit, more, total}` so pagination survives RTK `{data}` unwrap. Each row includes `spanCount` and `scoreCount`. `prompts.length` is the `N prompts` count |
-| GET | `/ai/observability/traces/:id` | Span tree (kind, offsets, durations, I/O, cost) plus scores. `errorSummary` is the first span with `status: "error"` |
-| POST | `/ai/observability/traces/:id/scores` | Persist a score and fan out to every `ScoreSink` |
-| POST | `/ai/observability/traces/test-multi-stage` | Admin-only smoke workflow, registered only with the local trace sink. Uses `ObservabilityApp.aiService`, or `requestAiServiceFactory({apiKey})` when the server service is absent (`apiKey` comes from `x-ai-api-key`); answers **503** with the same missing-key title as playground when neither exists. Body `{input?: string}` (defaults to a built-in sample). Runs two `AIService.generateJsonObject` calls with `skipTrace: true` and named JSON output schemas (`obs-test-multi-stage-call-1` / `call-2`), a deterministic local `text-metrics` `TOOL` stage, then a final `generateJsonObject` synthesis against `obs-test-multi-stage-final`; exports exactly one parent trace with ordered child spans `LLM`, `LLM`, `TOOL`, `LLM` under a `CHAIN` root. LLM span input includes `outputSchema`. Returns `{traceId, output, stages[]}` where `output` is the final schema object (`sentence`, `phrase`, `keywords`, `metrics`). Child LLM failures export an error trace then rethrow |
-
-`createLocalObservabilityPlugin()` registers `ObsEvaluator` with the other local models.
-
-| Method | Path | Behavior |
-| --- | --- | --- |
-| GET | `/ai/observability/evaluators/templates` | Seeded templates: `llm-judge` (`correctness`, `hallucination`, `helpfulness`, `toxicity`), `json-assert` (`schema-assert`), and human queue variants (`correctness-human`, …) |
-| POST | `/ai/observability/evaluators/templates/:name` | Install a template by name as an immutable-named evaluator |
-| GET/POST | `/ai/observability/evaluators` | List / create. Create accepts `target: "full trace"` only (`generation span` and `dataset item` → 400). Seeded template install can still store other targets. `llm-judge` requires `judgePromptName`; create rejects when the judge prompt `outputSchema` omits a required dimension (400 names the key). `json-assert` supports `assertion` (`path` + `constraint`) or built-in output-schema mode. Human + `liveSampleRate > 0` → 400. Numeric dimension `range` is `min-max` (for example `0-1`); categorical `range` is `label|label` |
-| GET/PATCH/DELETE | `/ai/observability/evaluators/:id` | Read / update / soft-delete |
-| POST | `/ai/observability/traces/review` | Enqueue one or many traces against a human evaluator (`reason: "manual"`) |
-| GET | `/ai/observability/review` | Queue by `status` with counts; oldest-first. Response includes `more: false` so RTK preserves the count envelope. Rows include `traceName`, `promptName`, assignee, reason, and enqueue time |
-| GET | `/ai/observability/review/:id` | Item + evaluator dimensions + `given` / `wrote` panels and `rawInput` / `rawOutput` for the Raw JSON disclosure |
-| POST | `/ai/observability/review/:id` | `submit` (scores via ScoreSinks, status `done`), `skip`, or `assign` |
-
-`createLocalObservabilityPlugin()` wires `LocalDatasetStore` and `LocalExperimentRunner` when datasets/experiments primaries are `local`.
-
-| Method | Path | Behavior |
-| --- | --- | --- |
-| GET/POST | `/ai/observability/datasets` | List (includes `humanCount` for proofread items, `autoCount` for unreviewed trace or synthetic items, `needsReviewCount`) / create |
-| GET/PATCH/DELETE | `/ai/observability/datasets/:id` | Detail (with counts) / update / soft-delete. PATCH `null` clears optional dataset fields; omitted fields stay unchanged |
-| GET/POST | `/ai/observability/datasets/:id/items` | List / create items |
-| PATCH/DELETE | `/ai/observability/datasets/:id/items/:itemId` | Update labels (`expectedOutput`, `proofread`, `tags`, `outcomeClass`) / delete (does not touch the source trace). PATCH `null` clears optional item fields |
-| POST | `/ai/observability/datasets/:id/import` | **JSON:** body is an array of bare input objects, or structured rows with `input` / `expectedOutput` / `proofread` / `tags` / `outcomeClass` / `metadata`. **CSV:** `Content-Type: text/csv` with raw CSV body, or JSON `{format: "csv", content: "..."}`. Plain columns map to `input`; plain `input` / `expectedOutput` cells accept JSON values; `input.foo` and `expectedOutput.foo` nest fields; reserved `proofread`, `tags`, `outcomeClass` map metadata. Nested paths reject `__proto__`, `constructor`, and `prototype` segments. Rows validate against the dataset's bound prompt `inputSchema` when `inputSchemaPromptName` is set; 400 reports row number and JSON path |
-| POST | `/ai/observability/traces/add-to-dataset` | `{datasetId, traceId \| traceIds[]}`. Copies span I/O; `origin: "trace"`; `sourceTraceId` set; **sensitive traces always `proofread: false`** |
-
-| Method | Path | Behavior |
-| --- | --- | --- |
-| POST | `/ai/observability/experiments/estimate` | `{datasetId, promptName, versions[], evaluatorIds[], modelOverride?}` → generation count, USD, wall-clock estimate |
-| GET/POST | `/ai/observability/experiments` | List (query `promptName` — omit or blank for no filter; `page`, `limit` default 50 max 100) / create. List returns summary rows (`items: []`) plus `{page, limit, more, total}`; detail `GET /experiments/:id` hydrates items. Body: dataset, 2–3 version numbers, evaluator ids, optional `thresholds[]` (defaults to `SOP_DEFAULT_THRESHOLDS`), `modelOverride`, `includeUnproofread` (default false). Evaluator ids must be `llm-judge` or `json-assert` (human → 400). Local primary always enqueues `BackgroundTask` (even one item) |
-| GET | `/ai/observability/experiments/:id` | Status, progress, per-version aggregates, gate pass/fail (`gates[].version`), `outlierItemIds`, `lowConfidenceItemIds`, per-item side-by-side (**failed rows first**) |
-| POST | `/ai/observability/experiments/:id/promote` | `{version}` moves the `production` label when **that version's** gates pass; **409** while any gate for the selected version fails |
-
-Authenticated `POST /ai/observability/traces/:id/feedback` records thumbs, outcome class, and flag-for-dataset (phase 2.6).
-
 ## Langfuse integration
 
 Low-level exports (also used by `addGptRoutes` when `langfuseSystemPromptName` is set):
@@ -559,7 +493,8 @@ const storage = new FileStorageService({
   storageOptions: {}, // optional @google-cloud/storage options
 });
 
-await storage.upload({buffer, filename, mimeType, userId});
+await storage.upload({buffer, filename, mimeType, userId}); // {id, filename, gcsKey, mimeType, size, url}
+await storage.download(gcsKey);      // the upload's bytes, as a Buffer
 await storage.getSignedUrl(gcsKey);  // 1-hour v4 signed URL
 await storage.delete(gcsKey);        // GCS delete + soft-delete FileAttachment
 ```
@@ -641,7 +576,7 @@ new TerrenoApp({userModel: User})
   .start();
 ```
 
-Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. inside `addRoutes`.
+Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. inside `addRoutes`. With `asks` on, pass the chat options to `addGptHistoryRoutes` as `chat` to keep the headless endpoints.
 
 ## Environment variables
 
@@ -649,7 +584,6 @@ Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. i
 |----------|---------|-------------|
 | `GOOGLE_VERTEX_PROJECT` | `createVertexProvider` | GCP project for Vertex models |
 | `GOOGLE_VERTEX_LOCATION` | `createVertexProvider` | Vertex region (default `global`) |
-| `AI_OBS_PRICE_MAP_JSON` | `ObservabilityApp` | JSON model map with non-negative `inputPerMTok` / `outputPerMTok`; omitted models have tokens but no USD cost |
 | `LANGFUSE_PUBLIC_KEY` | `LangfuseApp` | Langfuse public key |
 | `LANGFUSE_SECRET_KEY` | `LangfuseApp` | Langfuse secret key |
 | `LANGFUSE_BASE_URL` | Langfuse client | Langfuse host URL |

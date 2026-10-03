@@ -100,6 +100,7 @@ Published together from [`.github/workflows/publish-on-tag.yml`](.github/workflo
 - **admin-frontend/** — Admin panel frontend screens for `@terreno/api` backends (published as `@terreno/admin-frontend`)
 - **admin-spa/** — Standalone admin SPA (Expo Router web) plus Express serve plugin (published as `@terreno/admin-spa`)
 - **ai/** — Provider-agnostic AI service with streaming chat, request logging, and admin tools (published as `@terreno/ai`)
+- **blocks/** — Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards, and JSON Schemas for native clients (published as `@terreno/blocks`)
 - **api-health/** — Health check plugin for `@terreno/api` (published as `@terreno/api-health`)
 - **comms/** — Pluggable mail, SMS, push, and verification providers (published as `@terreno/comms`)
 - **feature-flags/** — Feature flags and A/B testing plugin for `@terreno/api` (published as `@terreno/feature-flags`)

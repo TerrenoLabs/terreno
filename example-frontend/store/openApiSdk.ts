@@ -1,10 +1,9 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: types are generated from backend OpenAPI schemas
 import {emptySplitApi as api} from "./betterAuthApi";
 export const addTagTypes = [
-  "ai",
-  "observability",
   "gpthistories",
   "gpt",
+  "ai",
   "settings",
   "notifications",
   "todos",
@@ -121,36 +120,6 @@ const injectedRtkApi = api
         query: (queryArg) => ({
           method: "DELETE",
           url: `/admin/users/${queryArg}`,
-        }),
-      }),
-      deleteAiObservabilityDatasetsById: build.mutation<
-        DeleteAiObservabilityDatasetsByIdRes,
-        DeleteAiObservabilityDatasetsByIdArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "DELETE",
-          url: `/ai/observability/datasets/${queryArg}`,
-        }),
-      }),
-      deleteAiObservabilityDatasetsByIdItemsAndItemId: build.mutation<
-        DeleteAiObservabilityDatasetsByIdItemsAndItemIdRes,
-        DeleteAiObservabilityDatasetsByIdItemsAndItemIdArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "DELETE",
-          url: `/ai/observability/datasets/${queryArg.id}/items/${queryArg.itemId}`,
-        }),
-      }),
-      deleteAiObservabilityEvaluatorsById: build.mutation<
-        DeleteAiObservabilityEvaluatorsByIdRes,
-        DeleteAiObservabilityEvaluatorsByIdArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "DELETE",
-          url: `/ai/observability/evaluators/${queryArg}`,
         }),
       }),
       deleteAnnouncementsById: build.mutation<
@@ -543,139 +512,6 @@ const injectedRtkApi = api
         providesTags: ["users"],
         query: (queryArg) => ({url: `/admin/users/${queryArg}`}),
       }),
-      getAiObservabilityDatasets: build.query<
-        GetAiObservabilityDatasetsRes,
-        GetAiObservabilityDatasetsArgs
-      >({
-        providesTags: ["observability"],
-        query: () => ({url: `/ai/observability/datasets`}),
-      }),
-      getAiObservabilityDatasetsById: build.query<
-        GetAiObservabilityDatasetsByIdRes,
-        GetAiObservabilityDatasetsByIdArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({
-          url: `/ai/observability/datasets/${queryArg}`,
-        }),
-      }),
-      getAiObservabilityDatasetsByIdItems: build.query<
-        GetAiObservabilityDatasetsByIdItemsRes,
-        GetAiObservabilityDatasetsByIdItemsArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({
-          url: `/ai/observability/datasets/${queryArg}/items`,
-        }),
-      }),
-      getAiObservabilityEvaluators: build.query<
-        GetAiObservabilityEvaluatorsRes,
-        GetAiObservabilityEvaluatorsArgs
-      >({
-        providesTags: ["observability"],
-        query: () => ({url: `/ai/observability/evaluators`}),
-      }),
-      getAiObservabilityEvaluatorsById: build.query<
-        GetAiObservabilityEvaluatorsByIdRes,
-        GetAiObservabilityEvaluatorsByIdArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({
-          url: `/ai/observability/evaluators/${queryArg}`,
-        }),
-      }),
-      getAiObservabilityEvaluatorsTemplates: build.query<
-        GetAiObservabilityEvaluatorsTemplatesRes,
-        GetAiObservabilityEvaluatorsTemplatesArgs
-      >({
-        providesTags: ["observability"],
-        query: () => ({url: `/ai/observability/evaluators/templates`}),
-      }),
-      getAiObservabilityExperiments: build.query<
-        GetAiObservabilityExperimentsRes,
-        GetAiObservabilityExperimentsArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({
-          params: {
-            limit: queryArg.limit,
-            page: queryArg.page,
-            promptName: queryArg.promptName,
-          },
-          url: `/ai/observability/experiments`,
-        }),
-      }),
-      getAiObservabilityExperimentsById: build.query<
-        GetAiObservabilityExperimentsByIdRes,
-        GetAiObservabilityExperimentsByIdArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({
-          url: `/ai/observability/experiments/${queryArg}`,
-        }),
-      }),
-      getAiObservabilityPrompts: build.query<
-        GetAiObservabilityPromptsRes,
-        GetAiObservabilityPromptsArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({
-          params: {
-            folder: queryArg.folder,
-            include: queryArg.include,
-            search: queryArg.search,
-          },
-          url: `/ai/observability/prompts`,
-        }),
-      }),
-      getAiObservabilityPromptsByName: build.query<
-        GetAiObservabilityPromptsByNameRes,
-        GetAiObservabilityPromptsByNameArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({url: `/ai/observability/prompts/${queryArg}`}),
-      }),
-      getAiObservabilityReview: build.query<
-        GetAiObservabilityReviewRes,
-        GetAiObservabilityReviewArgs
-      >({
-        providesTags: ["observability"],
-        query: () => ({url: `/ai/observability/review`}),
-      }),
-      getAiObservabilityReviewById: build.query<
-        GetAiObservabilityReviewByIdRes,
-        GetAiObservabilityReviewByIdArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({url: `/ai/observability/review/${queryArg}`}),
-      }),
-      getAiObservabilityStatus: build.query<
-        GetAiObservabilityStatusRes,
-        GetAiObservabilityStatusArgs
-      >({
-        providesTags: ["observability"],
-        query: () => ({url: `/ai/observability/status`}),
-      }),
-      getAiObservabilityTraces: build.query<
-        GetAiObservabilityTracesRes,
-        GetAiObservabilityTracesArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({
-          params: {
-            prompt: queryArg.prompt,
-            promptVersion: queryArg.promptVersion,
-          },
-          url: `/ai/observability/traces`,
-        }),
-      }),
-      getAiObservabilityTracesById: build.query<
-        GetAiObservabilityTracesByIdRes,
-        GetAiObservabilityTracesByIdArgs
-      >({
-        providesTags: ["observability"],
-        query: (queryArg) => ({url: `/ai/observability/traces/${queryArg}`}),
-      }),
       getAnnouncements: build.query<GetAnnouncementsRes, GetAnnouncementsArgs>({
         providesTags: ["announcements"],
         query: (queryArg) => ({
@@ -794,6 +630,17 @@ const injectedRtkApi = api
       >({
         providesTags: ["featureflags"],
         query: (queryArg) => ({url: `/feature-flags/flags/${queryArg}`}),
+      }),
+      getGptDatasetsById: build.query<GetGptDatasetsByIdRes, GetGptDatasetsByIdArgs>({
+        providesTags: ["gpt"],
+        query: (queryArg) => ({
+          params: {
+            grain: queryArg.grain,
+            limit: queryArg.limit,
+            page: queryArg.page,
+          },
+          url: `/gpt/datasets/${queryArg.id}`,
+        }),
       }),
       getGptHistories: build.query<GetGptHistoriesRes, GetGptHistoriesArgs>({
         providesTags: ["gpthistories"],
@@ -958,6 +805,20 @@ const injectedRtkApi = api
         providesTags: ["users"],
         query: (queryArg) => ({url: `/users/${queryArg}`}),
       }),
+      gpthistoriesPendingAsks: build.query<GpthistoriesPendingAsksRes, GpthistoriesPendingAsksArgs>(
+        {
+          providesTags: ["gpthistories"],
+          query: () => ({url: `/gpt/histories/pendingAsks`}),
+        }
+      ),
+      gpthistoriesTurn: build.mutation<GpthistoriesTurnRes, GpthistoriesTurnArgs>({
+        invalidatesTags: ["gpthistories"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/gpt/histories/${queryArg.id}/turn`,
+        }),
+      }),
       listMcpServiceTokens: build.query<ListMcpServiceTokensRes, ListMcpServiceTokensArgs>({
         providesTags: ["mcp"],
         query: (queryArg) => ({
@@ -1038,36 +899,6 @@ const injectedRtkApi = api
           body: queryArg.body,
           method: "PATCH",
           url: `/admin/users/${queryArg.id}`,
-        }),
-      }),
-      patchAiObservabilityDatasetsById: build.mutation<
-        PatchAiObservabilityDatasetsByIdRes,
-        PatchAiObservabilityDatasetsByIdArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "PATCH",
-          url: `/ai/observability/datasets/${queryArg}`,
-        }),
-      }),
-      patchAiObservabilityDatasetsByIdItemsAndItemId: build.mutation<
-        PatchAiObservabilityDatasetsByIdItemsAndItemIdRes,
-        PatchAiObservabilityDatasetsByIdItemsAndItemIdArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "PATCH",
-          url: `/ai/observability/datasets/${queryArg.id}/items/${queryArg.itemId}`,
-        }),
-      }),
-      patchAiObservabilityEvaluatorsById: build.mutation<
-        PatchAiObservabilityEvaluatorsByIdRes,
-        PatchAiObservabilityEvaluatorsByIdArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "PATCH",
-          url: `/ai/observability/evaluators/${queryArg}`,
         }),
       }),
       patchAnnouncementsById: build.mutation<PatchAnnouncementsByIdRes, PatchAnnouncementsByIdArgs>(
@@ -1348,180 +1179,6 @@ const injectedRtkApi = api
           url: `/admin/users/bulk-patch`,
         }),
       }),
-      postAiExampleSummarize: build.mutation<PostAiExampleSummarizeRes, PostAiExampleSummarizeArgs>(
-        {
-          invalidatesTags: ["ai", "observability"],
-          query: (queryArg) => ({
-            body: queryArg,
-            method: "POST",
-            url: `/ai/example-summarize`,
-          }),
-        }
-      ),
-      postAiObservabilityDatasets: build.mutation<
-        PostAiObservabilityDatasetsRes,
-        PostAiObservabilityDatasetsArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: () => ({method: "POST", url: `/ai/observability/datasets`}),
-      }),
-      postAiObservabilityDatasetsByIdImport: build.mutation<
-        PostAiObservabilityDatasetsByIdImportRes,
-        PostAiObservabilityDatasetsByIdImportArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "POST",
-          url: `/ai/observability/datasets/${queryArg}/import`,
-        }),
-      }),
-      postAiObservabilityDatasetsByIdItems: build.mutation<
-        PostAiObservabilityDatasetsByIdItemsRes,
-        PostAiObservabilityDatasetsByIdItemsArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "POST",
-          url: `/ai/observability/datasets/${queryArg}/items`,
-        }),
-      }),
-      postAiObservabilityEvaluators: build.mutation<
-        PostAiObservabilityEvaluatorsRes,
-        PostAiObservabilityEvaluatorsArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: () => ({method: "POST", url: `/ai/observability/evaluators`}),
-      }),
-      postAiObservabilityEvaluatorsTemplatesByName: build.mutation<
-        PostAiObservabilityEvaluatorsTemplatesByNameRes,
-        PostAiObservabilityEvaluatorsTemplatesByNameArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "POST",
-          url: `/ai/observability/evaluators/templates/${queryArg}`,
-        }),
-      }),
-      postAiObservabilityExperiments: build.mutation<
-        PostAiObservabilityExperimentsRes,
-        PostAiObservabilityExperimentsArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: () => ({method: "POST", url: `/ai/observability/experiments`}),
-      }),
-      postAiObservabilityExperimentsByIdPromote: build.mutation<
-        PostAiObservabilityExperimentsByIdPromoteRes,
-        PostAiObservabilityExperimentsByIdPromoteArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "POST",
-          url: `/ai/observability/experiments/${queryArg}/promote`,
-        }),
-      }),
-      postAiObservabilityExperimentsEstimate: build.mutation<
-        PostAiObservabilityExperimentsEstimateRes,
-        PostAiObservabilityExperimentsEstimateArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: () => ({
-          method: "POST",
-          url: `/ai/observability/experiments/estimate`,
-        }),
-      }),
-      postAiObservabilityPrompts: build.mutation<
-        PostAiObservabilityPromptsRes,
-        PostAiObservabilityPromptsArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          body: queryArg,
-          method: "POST",
-          url: `/ai/observability/prompts`,
-        }),
-      }),
-      postAiObservabilityPromptsByNameLabels: build.mutation<
-        PostAiObservabilityPromptsByNameLabelsRes,
-        PostAiObservabilityPromptsByNameLabelsArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          body: queryArg.body,
-          method: "POST",
-          url: `/ai/observability/prompts/${queryArg.name}/labels`,
-        }),
-      }),
-      postAiObservabilityPromptsByNamePlayground: build.mutation<
-        PostAiObservabilityPromptsByNamePlaygroundRes,
-        PostAiObservabilityPromptsByNamePlaygroundArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "POST",
-          url: `/ai/observability/prompts/${queryArg}/playground`,
-        }),
-      }),
-      postAiObservabilityPromptsByNameVersions: build.mutation<
-        PostAiObservabilityPromptsByNameVersionsRes,
-        PostAiObservabilityPromptsByNameVersionsArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "POST",
-          url: `/ai/observability/prompts/${queryArg}/versions`,
-        }),
-      }),
-      postAiObservabilityReviewById: build.mutation<
-        PostAiObservabilityReviewByIdRes,
-        PostAiObservabilityReviewByIdArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "POST",
-          url: `/ai/observability/review/${queryArg}`,
-        }),
-      }),
-      postAiObservabilityTracesAddToDataset: build.mutation<
-        PostAiObservabilityTracesAddToDatasetRes,
-        PostAiObservabilityTracesAddToDatasetArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: () => ({
-          method: "POST",
-          url: `/ai/observability/traces/add-to-dataset`,
-        }),
-      }),
-      postAiObservabilityTracesByIdScores: build.mutation<
-        PostAiObservabilityTracesByIdScoresRes,
-        PostAiObservabilityTracesByIdScoresArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          method: "POST",
-          url: `/ai/observability/traces/${queryArg}/scores`,
-        }),
-      }),
-      postAiObservabilityTracesReview: build.mutation<
-        PostAiObservabilityTracesReviewRes,
-        PostAiObservabilityTracesReviewArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: () => ({
-          method: "POST",
-          url: `/ai/observability/traces/review`,
-        }),
-      }),
-      postAiObservabilityTracesTestMultiStage: build.mutation<
-        PostAiObservabilityTracesTestMultiStageRes,
-        PostAiObservabilityTracesTestMultiStageArgs
-      >({
-        invalidatesTags: ["observability"],
-        query: (queryArg) => ({
-          body: queryArg,
-          method: "POST",
-          url: `/ai/observability/traces/test-multi-stage`,
-        }),
-      }),
       postAnnouncements: build.mutation<PostAnnouncementsRes, PostAnnouncementsArgs>({
         invalidatesTags: ["announcements"],
         query: (queryArg) => ({
@@ -1576,6 +1233,14 @@ const injectedRtkApi = api
           body: queryArg,
           method: "POST",
           url: `/feature-flags/flags/`,
+        }),
+      }),
+      postGptActions: build.mutation<PostGptActionsRes, PostGptActionsArgs>({
+        invalidatesTags: ["gpt"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/gpt/actions`,
         }),
       }),
       postGptHistories: build.mutation<PostGptHistoriesRes, PostGptHistoriesArgs>({
@@ -1763,21 +1428,157 @@ const injectedRtkApi = api
   });
 
 export {injectedRtkApi as openapi};
-export type PostAiExampleSummarizeRes = /** status 200 Success */ {
-  data?: {
-    output?: string;
+export type GpthistoriesTurnRes = /** status 200 Successful response */ {
+  data: {
+    /** Set when the turn failed after it started. text holds what the agent said before the error. */
+    error?: string;
+    /** The conversation's id. */
+    historyId: string;
+    /** The ask the turn paused on. Answer it with its toolCallId and the id of one of simple.buttons. */
+    pendingAsk?: {
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      simple: {
+        buttons: {
+          id: string;
+          label: string;
+          response:
+            | {
+                action: "accept";
+                content: {
+                  [key: string]: any | null;
+                };
+              }
+            | {
+                action: "decline";
+              }
+            | {
+                action: "cancel";
+                reason?: string;
+              };
+          style: "default" | "primary" | "destructive" | "cancel";
+        }[];
+        handoff: boolean;
+        kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        text: string;
+        title?: string;
+        toolCallId: string;
+      };
+      toolCallId: string;
+    };
+    /** The agent's reply, or an empty string when it only asked. */
+    text: string;
+    /** The conversation's title, once it has one. */
+    title?: string;
   };
 };
-export type PostAiExampleSummarizeArgs = {
-  text?: string;
+export type GpthistoriesTurnArgs = {
+  id: string;
+  body: {
+    /** A full answer to the pending ask, as a client that renders the ask sends it. */
+    askResponse?:
+      | {
+          action: "accept";
+          content: {
+            [key: string]: any | null;
+          };
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        }
+      | {
+          action: "decline";
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        }
+      | {
+          action: "cancel";
+          reason?: string;
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        };
+    /** The id of the simple card button the user pressed. Send it with toolCallId. */
+    buttonId?: string;
+    /** A new message from the user. It cancels the pending ask, if there is one. */
+    prompt?: string;
+    /** Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full". */
+    surface?: "full" | "compact";
+    /** The pending ask's toolCallId. */
+    toolCallId?: string;
+  };
 };
+export type GpthistoriesPendingAsksRes = /** status 200 Successful response */ {
+  data: {
+    /** When the agent asked, as an ISO 8601 UTC timestamp. */
+    created: string;
+    /** The conversation the ask belongs to. */
+    historyId: string;
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    simple: {
+      buttons: {
+        id: string;
+        label: string;
+        response:
+          | {
+              action: "accept";
+              content: {
+                [key: string]: any | null;
+              };
+            }
+          | {
+              action: "decline";
+            }
+          | {
+              action: "cancel";
+              reason?: string;
+            };
+        style: "default" | "primary" | "destructive" | "cancel";
+      }[];
+      handoff: boolean;
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      text: string;
+      title?: string;
+      toolCallId: string;
+    };
+    /** The conversation's title, once it has one. */
+    title?: string;
+    toolCallId: string;
+  }[];
+};
+export type GpthistoriesPendingAsksArgs = undefined;
 export type PostGptHistoriesRes = /** status 201 Successful create */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1826,6 +1627,15 @@ export type PostGptHistoriesArgs = {
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1869,12 +1679,40 @@ export type PostGptHistoriesArgs = {
 };
 export type GetGptHistoriesRes = /** status 200 Successful list */ {
   data?: {
+    /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+    pendingAsk?: {
+      /** AI SDK approval request an approval ask answers; the same as toolCallId */
+      approvalId?: string;
+      /** When the model asked */
+      created: string;
+      /** The validated ask input the model sent */
+      input: any;
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** Simple card (short text and up to three answer buttons) made when the ask was made */
+      simple: any;
+      /** Tool call id of the ask; an answer must name it */
+      toolCallId: string;
+      /** Host tool an approval ask asks to run */
+      toolName?: string;
+    };
     /** Project this conversation belongs to */
     projectId?: string;
     /** Ordered list of messages in this conversation */
     prompts?: {
       /** Arguments passed to a tool call */
       args?: any;
+      /** Set on tool-call rows where the model asked the user a question */
+      ask?: {
+        /** Ask kind; the model asked with the tool ask_<kind> */
+        kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+        origin?: "approval";
+        /** pending while the user can answer; answered or cancelled once the ask is resolved */
+        status: "pending" | "answered" | "cancelled";
+      };
       /** Multipart content attached to this prompt */
       content?: {
         /** Original filename of the attached file */
@@ -1940,12 +1778,40 @@ export type GetGptHistoriesArgs = {
   limit?: number;
 };
 export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1989,12 +1855,40 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
 };
 export type GetGptHistoriesByIdArgs = string;
 export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -2045,6 +1939,15 @@ export type PatchGptHistoriesByIdArgs = {
     prompts?: {
       /** Arguments passed to a tool call */
       args?: any;
+      /** Set on tool-call rows where the model asked the user a question */
+      ask?: {
+        /** Ask kind; the model asked with the tool ask_<kind> */
+        kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+        origin?: "approval";
+        /** pending while the user can answer; answered or cancelled once the ask is resolved */
+        status: "pending" | "answered" | "cancelled";
+      };
       /** Multipart content attached to this prompt */
       content?: {
         /** Original filename of the attached file */
@@ -2089,10 +1992,46 @@ export type PatchGptHistoriesByIdArgs = {
 };
 export type DeleteGptHistoriesByIdRes = unknown;
 export type DeleteGptHistoriesByIdArgs = string;
+export type GetGptDatasetsByIdRes = /** status 200 Success */ {
+  columns?: object[];
+  more?: boolean;
+  page?: number;
+  rowCount?: number;
+  rows?: any[];
+};
+export type GetGptDatasetsByIdArgs = {
+  id: string;
+  grain?: "hour" | "day" | "week" | "month";
+  limit?: number;
+  page?: number;
+};
+export type PostGptActionsRes = /** status 200 Success */ {
+  blocks?: object;
+  replace?: string;
+  text?: string;
+};
+export type PostGptActionsArgs = {
+  blockId?: string;
+  elementId?: string;
+  historyId?: string;
+  messageId?: string;
+  name?: string;
+  payload?: object;
+};
 export type PostGptPromptRes = /** status 200 Success */ {
   data?: string;
 };
 export type PostGptPromptArgs = {
+  /** The user's answer to the conversation's pending ask. Send it with historyId instead of prompt. */
+  askResponse?: {
+    action?: "accept" | "decline" | "cancel";
+    /** The answer, when action is accept */
+    content?: object;
+    /** Why the ask was cancelled, when action is cancel */
+    reason?: string;
+    /** The pending ask's toolCallId */
+    toolCallId?: string;
+  };
   attachments?: {
     filename?: string;
     mimeType?: string;
@@ -2103,10 +2042,8 @@ export type PostGptPromptArgs = {
   model?: string;
   projectId?: string;
   prompt?: string;
-  promptLabel?: string;
-  promptName?: string;
-  sensitive?: boolean;
-  sessionId?: string;
+  /** Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full". */
+  surface?: "full" | "compact";
   systemPrompt?: string;
 };
 export type PatchGptHistoriesByIdRatingRes = /** status 200 Success */ {
@@ -2123,10 +2060,6 @@ export type PostGptRemixRes = /** status 200 Success */ {
   data?: string;
 };
 export type PostGptRemixArgs = {
-  promptLabel?: string;
-  promptName?: string;
-  sensitive?: boolean;
-  sessionId?: string;
   text?: string;
 };
 export type GetGptToolsRes = /** status 200 Success */ {
@@ -3231,165 +3164,6 @@ export type PostJobsByIdCancelRes = /** status 200 Success */ {
   data?: object;
 };
 export type PostJobsByIdCancelArgs = string;
-export type GetAiObservabilityStatusRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityStatusArgs = undefined;
-export type GetAiObservabilityPromptsRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityPromptsArgs = {
-  folder?: string;
-  search?: string;
-  include?: string;
-};
-export type PostAiObservabilityPromptsRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityPromptsArgs = {
-  description?: string;
-  folder: string;
-  name: string;
-};
-export type GetAiObservabilityPromptsByNameRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityPromptsByNameArgs = string;
-export type PostAiObservabilityPromptsByNameVersionsRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityPromptsByNameVersionsArgs = string;
-export type PostAiObservabilityPromptsByNameLabelsRes = /** status 200 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityPromptsByNameLabelsArgs = {
-  name: string;
-  body: {
-    label: string;
-    version: number;
-  };
-};
-export type PostAiObservabilityPromptsByNamePlaygroundRes = /** status 200 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityPromptsByNamePlaygroundArgs = string;
-export type GetAiObservabilityEvaluatorsTemplatesRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityEvaluatorsTemplatesArgs = undefined;
-export type PostAiObservabilityEvaluatorsTemplatesByNameRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityEvaluatorsTemplatesByNameArgs = string;
-export type GetAiObservabilityEvaluatorsRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityEvaluatorsArgs = undefined;
-export type PostAiObservabilityEvaluatorsRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityEvaluatorsArgs = undefined;
-export type GetAiObservabilityEvaluatorsByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityEvaluatorsByIdArgs = string;
-export type PatchAiObservabilityEvaluatorsByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type PatchAiObservabilityEvaluatorsByIdArgs = string;
-export type DeleteAiObservabilityEvaluatorsByIdRes = /** status 204 Success */ {};
-export type DeleteAiObservabilityEvaluatorsByIdArgs = string;
-export type PostAiObservabilityTracesReviewRes = /** status 201 Success */ {
-  data?: any;
-};
-export type PostAiObservabilityTracesReviewArgs = undefined;
-export type GetAiObservabilityReviewRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityReviewArgs = undefined;
-export type GetAiObservabilityReviewByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityReviewByIdArgs = string;
-export type PostAiObservabilityReviewByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityReviewByIdArgs = string;
-export type GetAiObservabilityDatasetsRes = /** status 200 Success */ {};
-export type GetAiObservabilityDatasetsArgs = undefined;
-export type PostAiObservabilityDatasetsRes = /** status 201 Success */ {};
-export type PostAiObservabilityDatasetsArgs = undefined;
-export type GetAiObservabilityDatasetsByIdRes = /** status 200 Success */ {};
-export type GetAiObservabilityDatasetsByIdArgs = string;
-export type PatchAiObservabilityDatasetsByIdRes = /** status 200 Success */ {};
-export type PatchAiObservabilityDatasetsByIdArgs = string;
-export type DeleteAiObservabilityDatasetsByIdRes = /** status 204 Success */ {};
-export type DeleteAiObservabilityDatasetsByIdArgs = string;
-export type GetAiObservabilityDatasetsByIdItemsRes = /** status 200 Success */ {};
-export type GetAiObservabilityDatasetsByIdItemsArgs = string;
-export type PostAiObservabilityDatasetsByIdItemsRes = /** status 201 Success */ {};
-export type PostAiObservabilityDatasetsByIdItemsArgs = string;
-export type PatchAiObservabilityDatasetsByIdItemsAndItemIdRes = /** status 200 Success */ {};
-export type PatchAiObservabilityDatasetsByIdItemsAndItemIdArgs = {
-  id: string;
-  itemId: string;
-};
-export type DeleteAiObservabilityDatasetsByIdItemsAndItemIdRes = /** status 204 Success */ {};
-export type DeleteAiObservabilityDatasetsByIdItemsAndItemIdArgs = {
-  id: string;
-  itemId: string;
-};
-export type PostAiObservabilityDatasetsByIdImportRes = /** status 200 Success */ {};
-export type PostAiObservabilityDatasetsByIdImportArgs = string;
-export type PostAiObservabilityTracesAddToDatasetRes = /** status 201 Success */ {};
-export type PostAiObservabilityTracesAddToDatasetArgs = undefined;
-export type PostAiObservabilityExperimentsEstimateRes = /** status 200 Success */ {};
-export type PostAiObservabilityExperimentsEstimateArgs = undefined;
-export type GetAiObservabilityExperimentsRes = /** status 200 Success */ {};
-export type GetAiObservabilityExperimentsArgs = {
-  promptName?: string;
-  page?: number;
-  limit?: number;
-};
-export type PostAiObservabilityExperimentsRes = /** status 201 Success */ {};
-export type PostAiObservabilityExperimentsArgs = undefined;
-export type GetAiObservabilityExperimentsByIdRes = /** status 200 Success */ {};
-export type GetAiObservabilityExperimentsByIdArgs = string;
-export type PostAiObservabilityExperimentsByIdPromoteRes = /** status 200 Success */ {};
-export type PostAiObservabilityExperimentsByIdPromoteArgs = string;
-export type GetAiObservabilityTracesRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityTracesArgs = {
-  prompt?: string;
-  promptVersion?: number;
-};
-export type GetAiObservabilityTracesByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityTracesByIdArgs = string;
-export type PostAiObservabilityTracesByIdScoresRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityTracesByIdScoresArgs = string;
-export type PostAiObservabilityTracesTestMultiStageRes = /** status 200 Success */ {
-  data?: {
-    output?: {
-      keywords?: string[];
-      metrics?: object;
-      phrase?: string;
-      sentence?: string;
-    };
-    stages?: {
-      name?: string;
-      status?: string;
-    }[];
-    traceId?: string;
-  };
-};
-export type PostAiObservabilityTracesTestMultiStageArgs = {
-  input?: string;
-};
 export type GetAdminConfigRes = /** status 200 Success */ {
   capabilities?: {
     actions?: boolean;
@@ -6726,12 +6500,15 @@ export type ApiError = {
   title?: string;
 };
 export const {
-  usePostAiExampleSummarizeMutation,
+  useGpthistoriesTurnMutation,
+  useGpthistoriesPendingAsksQuery,
   usePostGptHistoriesMutation,
   useGetGptHistoriesQuery,
   useGetGptHistoriesByIdQuery,
   usePatchGptHistoriesByIdMutation,
   useDeleteGptHistoriesByIdMutation,
+  useGetGptDatasetsByIdQuery,
+  usePostGptActionsMutation,
   usePostGptPromptMutation,
   usePatchGptHistoriesByIdRatingMutation,
   usePostGptRemixMutation,
@@ -6786,44 +6563,6 @@ export const {
   usePostJobsByIdRetryMutation,
   usePostJobsByIdRequeueMutation,
   usePostJobsByIdCancelMutation,
-  useGetAiObservabilityStatusQuery,
-  useGetAiObservabilityPromptsQuery,
-  usePostAiObservabilityPromptsMutation,
-  useGetAiObservabilityPromptsByNameQuery,
-  usePostAiObservabilityPromptsByNameVersionsMutation,
-  usePostAiObservabilityPromptsByNameLabelsMutation,
-  usePostAiObservabilityPromptsByNamePlaygroundMutation,
-  useGetAiObservabilityEvaluatorsTemplatesQuery,
-  usePostAiObservabilityEvaluatorsTemplatesByNameMutation,
-  useGetAiObservabilityEvaluatorsQuery,
-  usePostAiObservabilityEvaluatorsMutation,
-  useGetAiObservabilityEvaluatorsByIdQuery,
-  usePatchAiObservabilityEvaluatorsByIdMutation,
-  useDeleteAiObservabilityEvaluatorsByIdMutation,
-  usePostAiObservabilityTracesReviewMutation,
-  useGetAiObservabilityReviewQuery,
-  useGetAiObservabilityReviewByIdQuery,
-  usePostAiObservabilityReviewByIdMutation,
-  useGetAiObservabilityDatasetsQuery,
-  usePostAiObservabilityDatasetsMutation,
-  useGetAiObservabilityDatasetsByIdQuery,
-  usePatchAiObservabilityDatasetsByIdMutation,
-  useDeleteAiObservabilityDatasetsByIdMutation,
-  useGetAiObservabilityDatasetsByIdItemsQuery,
-  usePostAiObservabilityDatasetsByIdItemsMutation,
-  usePatchAiObservabilityDatasetsByIdItemsAndItemIdMutation,
-  useDeleteAiObservabilityDatasetsByIdItemsAndItemIdMutation,
-  usePostAiObservabilityDatasetsByIdImportMutation,
-  usePostAiObservabilityTracesAddToDatasetMutation,
-  usePostAiObservabilityExperimentsEstimateMutation,
-  useGetAiObservabilityExperimentsQuery,
-  usePostAiObservabilityExperimentsMutation,
-  useGetAiObservabilityExperimentsByIdQuery,
-  usePostAiObservabilityExperimentsByIdPromoteMutation,
-  useGetAiObservabilityTracesQuery,
-  useGetAiObservabilityTracesByIdQuery,
-  usePostAiObservabilityTracesByIdScoresMutation,
-  usePostAiObservabilityTracesTestMultiStageMutation,
   useGetAdminConfigQuery,
   usePostAdminBackgroundTasksMutation,
   usePostAdminMcpServiceTokensBulkPatchMutation,

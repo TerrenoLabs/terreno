@@ -102,6 +102,11 @@ describe("OpenAPI spec generation", () => {
     expect(res.body.paths["/gpt/histories/"]).toBeDefined();
     expect(res.body.paths["/gpt/histories/"].get).toBeDefined();
     expect(res.body.paths["/gpt/histories/{id}"]).toBeDefined();
+    expect(res.body.paths["/gpt/histories/pendingAsks"].get.operationId).toBe(
+      "gpthistories_pendingAsks"
+    );
+    expect(res.body.paths["/gpt/histories/{id}/turn"].post.operationId).toBe("gpthistories_turn");
+    expect(res.body.paths["/gpt/histories/{id}/stream"].get).toBeDefined();
   });
 
   it("boots local observability and documents the seeded summarize route", async () => {

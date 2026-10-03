@@ -18,23 +18,19 @@ import {
   verifyVertexModelsEnabled,
 } from "@terreno/ai";
 import type {ModelRouterOptions, User} from "@terreno/api";
-import {
-  APIError,
-  asyncHandler,
-  authenticateMiddleware,
-  createOpenApiBuilder,
-  logger,
-  modelRouter,
-  Permissions,
-} from "@terreno/api";
+import {APIError, logger, modelRouter, Permissions} from "@terreno/api";
 import type {ImageModel, LanguageModel, Tool} from "ai";
 import {generateImage, tool, zodSchema} from "ai";
 import type express from "express";
 import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
-
+import {exampleUiBlocksOptions} from "../ai/hostActions";
+import {createTodoStatsTool} from "../ai/tools";
+import type {UserDocument} from "../types/models/userTypes";
+import {createDemoAgentService} from "./demoAgent";
 import {fileUploadsEnabledForRequest} from "./fileUploads";
+import {createTodoTools, todoToolApprovals} from "./todoTools";
 
 /** A provider that creates language models and image models from model IDs. */
 interface AIProvider {
@@ -270,7 +266,7 @@ export const aiModelsRouter = modelRouter("/ai", GptHistory, {
   permissions: disabledCrud,
 });
 
-export const getAiService = (): AIService | undefined => {
+const getAiService = (): AIService | undefined => {
   if (aiServiceInstance) {
     return aiServiceInstance;
   }
@@ -303,7 +299,7 @@ export const getAiService = (): AIService | undefined => {
 };
 
 /** Create a LanguageModel on the server side (Vertex AI / Gemini Enterprise Agent Platform or Gemini API key). Returns undefined if no provider is configured (falls through to demo mode). Throws if the requested model is not in the configured allow-list. */
-export const createServerModel = (modelId?: string): LanguageModel | undefined => {
+const createServerModel = (modelId?: string) => {
   const vertexProvider = getVertexProvider();
   if (vertexProvider) {
     return vertexProvider.languageModel(modelId ?? resolveDefaultVertexModel(vertexProvider));
@@ -320,7 +316,7 @@ export const createServerModel = (modelId?: string): LanguageModel | undefined =
 };
 
 /** Create a LanguageModel from a per-request API key (always uses Gemini API). */
-export const createModelFromKey = (apiKey: string, modelId?: string) => {
+const createModelFromKey = (apiKey: string, modelId?: string) => {
   const google = getGoogleModule();
   if (!google) {
     throw new APIError({status: 500, title: "Missing @ai-sdk/google dependency."});
@@ -604,7 +600,15 @@ const createImageTool = (apiKey?: string): Tool => {
 };
 
 const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
-  const tools: Record<string, Tool> = {...getMCPTools(req.user as User | undefined)};
+  const user = req.user as UserDocument | undefined;
+  const tools: Record<string, Tool> = {
+    ...getMCPTools(req.user as User | undefined),
+    ...createTodoTools({userId: user?._id}),
+    ...createTodoStatsTool({
+      historyId: typeof req.body?.historyId === "string" ? req.body.historyId : undefined,
+      userId: user?._id,
+    }),
+  };
 
   const apiKey = req.headers["x-ai-api-key"] as string | undefined;
   if (apiKey) {
@@ -760,8 +764,6 @@ export const addAiRoutes = (
       })
       .build(),
     asyncHandler(async (req, res) => {
-      // Prefer the server-wide service; fall back to the caller's own key so the example app
-      // still traces real runs when the backend has no provider credentials.
       const requestApiKey = req.header("x-ai-api-key");
       const effectiveAiService =
         aiService ??
@@ -789,12 +791,20 @@ export const addAiRoutes = (
     }),
   ]);
 
-  addGptHistoryRoutes(router, options);
-  addGptRoutes(router, {
-    aiService,
+  if (!aiService) {
+    logger.info(
+      "No AI model configured (GEMINI_API_KEY or GOOGLE_VERTEX_PROJECT); chat uses the scripted " +
+        "Terreno demo agent unless a request sends x-ai-api-key."
+    );
+  }
+
+  const chat: GptRouteOptions = {
+    aiService: aiService ?? createDemoAgentService(),
+    asks: {approvals: todoToolApprovals},
     createModelFn: createModelFromKey,
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,
+    ...(fileStorageService ? {fileStorageService} : {}),
     demoMode: !aiService,
     fileUploadsEnabled: fileUploadsEnabledForRequest,
     langfuseSystemPromptName: "chat-assistant",
@@ -803,7 +813,10 @@ export const addAiRoutes = (
     openApiOptions: options,
     toolChoice: "auto",
     tools: getDemoTools() as unknown as GptRouteOptions["tools"],
-  });
+    uiBlocks: exampleUiBlocksOptions,
+  };
+  addGptHistoryRoutes(router, {...options, chat});
+  addGptRoutes(router, chat);
   if (fileStorageService) {
     addFileRoutes(router, {
       fileStorageService,

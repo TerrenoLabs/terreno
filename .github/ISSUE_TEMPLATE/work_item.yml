@@ -26,6 +26,7 @@ body:
         - "@terreno/admin-frontend"
         - "@terreno/admin-spa"
         - "@terreno/ai"
+        - "@terreno/blocks"
         - "@terreno/api-health"
         - "@terreno/comms"
         - "@terreno/feature-flags"

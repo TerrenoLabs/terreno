@@ -1,10 +1,10 @@
 import {afterEach, beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
 import {z} from "@terreno/api";
 import type {LanguageModel} from "ai";
-
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {withGenerateStreaming} from "../tests/generateStream";
 import type {HarnessAgentDefinition, HarnessReplayPolicy} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {AGENT_TOOL_TASK_NAME, defineAgent, defineTool, Harness, InProcessRunner} from "./harness";
@@ -44,40 +44,38 @@ type Reply = {
 };
 
 /** LanguageModelV2 mock answering each request with the next reply; `hang` blocks it first. */
-const scriptedModel = (replies: Reply[]) => ({
-  doGenerate: mock(async () => {
-    const reply = replies.shift();
-    if (!reply) {
-      throw new Error("script exhausted");
-    }
-    reply.started?.release();
-    if (reply.hang) {
-      await reply.hang.promise;
-    }
-    return {
-      content: reply.toolCall
-        ? [
-            {
-              input: "{}",
-              toolCallId: reply.toolCall.id,
-              toolName: reply.toolCall.name,
-              type: "tool-call" as const,
-            },
-          ]
-        : [{text: reply.text ?? "", type: "text" as const}],
-      finishReason: reply.toolCall ? ("tool-calls" as const) : ("stop" as const),
-      usage: {inputTokens: 1, outputTokens: 1, totalTokens: 2},
-      warnings: [],
-    };
-  }),
-  doStream: mock(async () => {
-    throw new Error("streaming is not used by the turn");
-  }),
-  modelId: "mock-model",
-  provider: "mock",
-  specificationVersion: "v2" as const,
-  supportedUrls: {},
-});
+const scriptedModel = (replies: Reply[]) =>
+  withGenerateStreaming({
+    doGenerate: mock(async () => {
+      const reply = replies.shift();
+      if (!reply) {
+        throw new Error("script exhausted");
+      }
+      reply.started?.release();
+      if (reply.hang) {
+        await reply.hang.promise;
+      }
+      return {
+        content: reply.toolCall
+          ? [
+              {
+                input: "{}",
+                toolCallId: reply.toolCall.id,
+                toolName: reply.toolCall.name,
+                type: "tool-call" as const,
+              },
+            ]
+          : [{text: reply.text ?? "", type: "text" as const}],
+        finishReason: reply.toolCall ? ("tool-calls" as const) : ("stop" as const),
+        usage: {inputTokens: 1, outputTokens: 1, totalTokens: 2},
+        warnings: [],
+      };
+    }),
+    modelId: "mock-model",
+    provider: "mock",
+    specificationVersion: "v2" as const,
+    supportedUrls: {},
+  });
 
 interface ProcessHandle {
   die: () => void;
@@ -106,7 +104,7 @@ const openProcess = async ({
   const harness = await Harness.open({
     // A dead process must not consume the shared script: its model calls fail at once.
     models: () =>
-      ({
+      withGenerateStreaming({
         ...model,
         doGenerate: async (options: unknown) => {
           if (isDead) {

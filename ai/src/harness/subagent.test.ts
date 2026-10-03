@@ -10,10 +10,10 @@ import {
 } from "bun:test";
 import {z} from "@terreno/api";
 import type {LanguageModel} from "ai";
-
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {generateToStream, withGenerateStreaming} from "../tests/generateStream";
 import type {HarnessAgentDefinition, HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {
@@ -102,9 +102,9 @@ const scriptedModel = (steps: ScriptStep[]) => {
         warnings: [],
       };
     }),
-    doStream: mock(async () => {
-      throw new Error("streaming is not used by the turn");
-    }),
+    doStream: mock(async (options: GenerateCall) =>
+      generateToStream(await model.doGenerate(options))
+    ),
     modelId: "mock-model",
     provider: "mock",
     specificationVersion: "v2" as const,
@@ -165,7 +165,7 @@ const openProcess = async ({
   };
   const harness = await Harness.open({
     models: () =>
-      ({
+      withGenerateStreaming({
         ...model,
         doGenerate: async (options: GenerateCall) => {
           if (isDead) {

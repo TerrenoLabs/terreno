@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 
 import {
   HARNESS_CONVERSATION_STATUSES,
+  HARNESS_WHEN_BUSY,
   type HarnessConversationDocument,
   type HarnessConversationModel,
 } from "../../types/harness";
@@ -68,7 +69,8 @@ const harnessConversationSchema = new mongoose.Schema<
     },
     queued: {
       default: [],
-      description: "Submissions waiting for the current turn (whenBusy: queue, Task 1.9)",
+      description:
+        "Submissions waiting on the active turn, oldest first: queued for a later turn, or steering the active one",
       type: [
         new mongoose.Schema(
           {
@@ -78,6 +80,12 @@ const harnessConversationSchema = new mongoose.Schema<
             },
             requestId: {description: "Caller idempotency key of the submission", type: String},
             submittedAt: {description: "When the submission arrived", type: Date},
+            whenBusy: {
+              description:
+                "queue: run as its own turn later; steer: join the active turn's next model request",
+              enum: Object.values(HARNESS_WHEN_BUSY),
+              type: String,
+            },
           },
           {_id: false, strict: "throw"}
         ),
@@ -109,6 +117,14 @@ harnessConversationSchema.plugin(findOneOrNone);
 harnessConversationSchema.plugin(findExactlyOne);
 harnessConversationSchema.index({created: -1, userId: 1});
 harnessConversationSchema.index({"ownership.id": 1, "ownership.kind": 1});
+// The sweep finds busy conversations whose active turn already ended.
+// biome-ignore assist/source/useSortedKeys: status leads; the sweep matches busy first
+harnessConversationSchema.index({status: 1, activeTurnTaskId: 1});
+// The queue sweep finds idle conversations that still have queued submissions.
+harnessConversationSchema.index(
+  {"queued.requestId": 1, status: 1},
+  {partialFilterExpression: {"queued.requestId": {$exists: true}}}
+);
 // One subagent conversation per rt.runAgent call, however often the phase re-runs.
 harnessConversationSchema.index(
   {ownerKey: 1, "ownership.id": 1},

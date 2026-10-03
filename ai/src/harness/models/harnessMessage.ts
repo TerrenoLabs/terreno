@@ -25,6 +25,11 @@ const harnessMessageSchema = new mongoose.Schema<HarnessMessageDocument, Harness
       description: "Content parts: an array of text, tool-call, or tool-result objects",
       type: mongoose.Schema.Types.Mixed,
     },
+    requestId: {
+      description:
+        "Submitter's idempotency key on user messages from submit or send; unique per conversation",
+      type: String,
+    },
     role: {
       description: "Who produced the message: system, user, assistant, or tool",
       enum: Object.values(HARNESS_MESSAGE_ROLES),
@@ -63,6 +68,10 @@ harnessMessageSchema.plugin(isDeletedPlugin);
 harnessMessageSchema.plugin(findOneOrNone);
 harnessMessageSchema.plugin(findExactlyOne);
 harnessMessageSchema.index({conversationId: 1, seq: 1}, {unique: true});
+harnessMessageSchema.index(
+  {conversationId: 1, requestId: 1},
+  {partialFilterExpression: {requestId: {$type: "string"}}, unique: true}
+);
 
 export const registerHarnessMessage = (): HarnessMessageModel => {
   if (mongoose.models.HarnessMessage) {

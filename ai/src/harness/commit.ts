@@ -8,6 +8,8 @@ import type {
   HarnessCommit,
   HarnessConversationModel,
   HarnessCreateTaskOptions,
+  HarnessEventModel,
+  HarnessEventStreamModel,
   HarnessInboxEventModel,
   HarnessLeaseSettings,
   HarnessMemoModel,
@@ -32,10 +34,15 @@ import {
   HARNESS_WAIT_KINDS,
 } from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
+import {AGENT_TURN_TASK_NAME} from "./agentTaskNames";
+import {appendTaskTransitionEvents} from "./events";
+import {inTransaction} from "./transaction";
 
 export interface HarnessModels {
   approval: HarnessApprovalModel;
   conversation: HarnessConversationModel;
+  event: HarnessEventModel;
+  eventStream: HarnessEventStreamModel;
   inbox: HarnessInboxEventModel;
   memo: HarnessMemoModel;
   message: HarnessMessageModel;
@@ -86,22 +93,6 @@ const taskSpanIdentity = (
   kind: definition.spanKind ?? "CHAIN",
   name: definition.spanName ? definition.spanName(input) : definition.key,
 });
-
-/** Run `work` in one Mongo transaction; every write inside must pass `session`. */
-export const inTransaction = async <T>(
-  work: (session: ClientSession) => Promise<T>
-): Promise<T> => {
-  const session = await mongoose.connection.startSession();
-  try {
-    let result: T | undefined;
-    await session.withTransaction(async () => {
-      result = await work(session);
-    });
-    return result as T;
-  } finally {
-    await session.endSession();
-  }
-};
 
 /** Fresh lease fields for a phase that starts now under `lease.owner`. */
 export const newTaskLease = (
@@ -229,6 +220,7 @@ export const createTaskRecords = async ({
         {session}
       );
       await writes?.({session, task, traceStartedAt});
+      await appendTaskTransitionEvents({after: task, models, session});
       return task;
     });
   } catch (error: unknown) {
@@ -340,6 +332,7 @@ export const createChildTaskRecords = async ({
         [
           {
             _id: taskId,
+            ancestorIds: [...(parent.ancestorIds ?? []), parent._id],
             background: options.background ?? false,
             input,
             name: definition.name,
@@ -359,6 +352,7 @@ export const createChildTaskRecords = async ({
         {session}
       );
       await writes?.({session, task, traceStartedAt: DateTime.fromJSDate(trace.startedAt)});
+      await appendTaskTransitionEvents({after: task, models, session});
       return task;
     });
   } catch (error: unknown) {
@@ -487,9 +481,39 @@ const commitTransition = async ({
     }
 
     await writes?.({session, task: updated, traceStartedAt});
+    await appendTaskTransitionEvents({after: updated, before: task, models, session});
+    await releaseTurnConversation({models, session, task: updated});
     await testHooks?.beforeCommitEnd?.({phase: task.phase, session, taskId});
     return updated;
   });
+};
+
+/**
+ * Free the conversation of a turn that just became terminal, in the same transaction, on
+ * every terminal path (answer, failure, abort, interruption, resolution). Fenced on the
+ * turn, so a conversation that already moved on is untouched.
+ */
+const releaseTurnConversation = async ({
+  models,
+  session,
+  task,
+}: {
+  models: HarnessModels;
+  session: ClientSession;
+  task: HarnessTaskDocument;
+}): Promise<void> => {
+  if (task.name !== AGENT_TURN_TASK_NAME || !HARNESS_TERMINAL_STATUSES.has(task.status)) {
+    return;
+  }
+  const conversationId = (task.input as {conversationId?: unknown} | undefined)?.conversationId;
+  if (typeof conversationId !== "string") {
+    return;
+  }
+  await models.conversation.updateOne(
+    {_id: conversationId, activeTurnTaskId: task._id, status: "busy"},
+    {$set: {status: "idle"}, $unset: {activeTurnTaskId: 1}},
+    {session}
+  );
 };
 
 /** Fence for every commit made by the run that holds `task`'s current lease. */
@@ -693,12 +717,15 @@ export const commitWaiting = async ({
       if (buffered === 0) {
         return;
       }
-      await models.task.updateOne(
+      const woken = await models.task.findOneAndUpdate(
         {_id: task._id},
         {$set: {status: HARNESS_TASK_STATUSES.pending}, $unset: {waiting: 1}},
-        {session}
+        {returnDocument: "after", session}
       );
       isWoken = true;
+      if (woken) {
+        await appendTaskTransitionEvents({after: woken, before: context.task, models, session});
+      }
     },
   });
   return {isWoken, task: committed};

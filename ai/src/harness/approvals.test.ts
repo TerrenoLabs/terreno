@@ -19,6 +19,7 @@ import type TestAgent from "supertest/lib/agent";
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {withGenerateStreaming} from "../tests/generateStream";
 import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
 import type {
   HarnessApprovalDocument,
@@ -849,7 +850,7 @@ describe("Harness approvals", () => {
       const prompts: unknown[] = [];
       let calls = 0;
       return {
-        model: {
+        model: withGenerateStreaming({
           doGenerate: async (options: {prompt: unknown}) => {
             prompts.push(JSON.parse(JSON.stringify(options.prompt)));
             calls += 1;
@@ -871,14 +872,11 @@ describe("Harness approvals", () => {
               warnings: [],
             };
           },
-          doStream: async () => {
-            throw new Error("not used");
-          },
           modelId: "mock-model",
           provider: "mock",
           specificationVersion: "v2" as const,
           supportedUrls: {},
-        },
+        }),
         prompts,
       };
     };

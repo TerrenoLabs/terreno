@@ -14,6 +14,7 @@ import {
   HarnessCommitConflictError,
   InProcessRunner,
 } from "./harness";
+import {registerHarnessEvent, registerHarnessEventStream} from "./models/harnessEvent";
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
 import {type HarnessEngine, sweepWaitingTasks} from "./ownership";
@@ -393,6 +394,7 @@ describe("Harness ownership tree", () => {
       expect(runs.count).toBe(2);
     });
 
+    // Retry backoff plus two child runs on a replica set can pass the 5 s default.
     it("creates fresh children on a retry, and reuses them on a wake", async () => {
       let childRuns = 0;
       const flakyChild = defineTask<unknown, unknown, unknown>({
@@ -437,7 +439,7 @@ describe("Harness ownership tree", () => {
       expect(done.outcome?.result).toBe("second child ok");
       const children = await childrenOf(done._id);
       expect(children.map((task) => task.status)).toEqual(["failed", "completed"]);
-    });
+    }, 20_000);
 
     it("failFast: the first failed child aborts its in-flight siblings (with their subtrees)", async () => {
       const handlerOrder: string[] = [];
@@ -935,12 +937,14 @@ describe("Harness ownership tree", () => {
       definitions: ReadonlyArray<AnyHarnessTaskDefinition> = []
     ): {engine: HarnessEngine; wakes: {count: number}} => {
       const wakes = {count: 0};
-      const models: HarnessModels = {
+      const models = {
+        event: registerHarnessEvent(),
+        eventStream: registerHarnessEventStream(),
         owner: OwnerModel,
         span: SpanModel,
         task: TaskModel,
         trace: TraceModel,
-      };
+      } as unknown as HarnessModels;
       return {
         engine: {
           controllers: new Map(),

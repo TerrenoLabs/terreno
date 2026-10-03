@@ -15,14 +15,17 @@ import type {
 } from "../types/harness";
 import {
   HARNESS_APPROVAL_STATUSES,
+  HARNESS_EVENT_TYPES,
   HARNESS_TERMINAL_STATUSES,
   HARNESS_WAIT_KINDS,
 } from "../types/harness";
-import {type HarnessModels, inTransaction} from "./commit";
+import type {HarnessModels} from "./commit";
 import {taskDefinitionKey} from "./defineTask";
 import {HarnessDefinitionError} from "./definitionError";
+import {appendTaskEvents} from "./events";
 import {defineExtension, hook} from "./extensions";
 import {registerHarnessTask} from "./models/harnessTask";
+import {inTransaction} from "./transaction";
 import {
   appendInboxEvent,
   HarnessWaitRaceError,
@@ -192,6 +195,20 @@ export interface ApprovalWaitPlan extends WaitCallPlan {
  * finds the same approval. A decision sends the approval's own event; a timeout marks
  * it `expired` and writes its span in the timeout's transaction.
  */
+/** What `approval.*` events carry: enough to render the request and its decision. */
+const approvalEventPayload = (approval: HarnessApprovalDocument): Record<string, unknown> => ({
+  approvalId: String(approval._id),
+  decidedAt: approval.decidedAt?.toISOString(),
+  decidedBy: approval.decidedBy ? String(approval.decidedBy) : undefined,
+  expiresAt: approval.expiresAt?.toISOString(),
+  key: approval.key,
+  reason: approval.reason,
+  status: approval.status,
+  summary: approval.summary,
+  taskId: String(approval.taskId),
+  title: approval.title,
+});
+
 export const approvalWaitPlan = ({
   callKey,
   extension,
@@ -250,6 +267,20 @@ export const approvalWaitPlan = ({
         {session, upsert: true}
       );
       isInserted = written.upsertedCount > 0;
+      if (isInserted) {
+        const [approval] = await models.approval.find(filter, null, {session});
+        await appendTaskEvents({
+          events: [
+            {
+              payload: approval ? approvalEventPayload(approval) : {key},
+              type: HARNESS_EVENT_TYPES.approvalRequested,
+            },
+          ],
+          models,
+          session,
+          task,
+        });
+      }
     },
     request: {
       duration: timeout,
@@ -270,6 +301,14 @@ export const approvalWaitPlan = ({
           // A decision committed first; its event is in the inbox.
           throw new HarnessWaitRaceError();
         }
+        await appendTaskEvents({
+          events: [
+            {payload: approvalEventPayload(expired), type: HARNESS_EVENT_TYPES.approvalDecided},
+          ],
+          models,
+          session,
+          task: current,
+        });
         await createApprovalSpan({
           approval: expired,
           decision: "expired",
@@ -451,6 +490,14 @@ export const decideApprovalRecords = async ({
       if (!decided) {
         throw notDecidable("is no longer pending");
       }
+      await appendTaskEvents({
+        events: [
+          {payload: approvalEventPayload(decided), type: HARNESS_EVENT_TYPES.approvalDecided},
+        ],
+        models,
+        session,
+        task,
+      });
       const sent = await appendInboxEvent({
         event: approval.event,
         models,

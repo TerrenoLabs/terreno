@@ -11,10 +11,12 @@ import type {
   HarnessDecideApprovalOptions,
   HarnessExtensionDefinition,
   HarnessInboxEventDocument,
+  HarnessLeaseSettings,
   HarnessModelResolver,
   HarnessResolveInterruptedOptions,
   HarnessRunner,
   HarnessSendEventOptions,
+  HarnessStreamingOptions,
   HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTestHooks,
@@ -41,16 +43,23 @@ import {
 } from "./conversation";
 import {extensionName} from "./defineAgent";
 import {taskDefinitionKey} from "./defineTask";
+import {resolveStreamingOptions} from "./events";
 import type {ExecutionEnv} from "./executionEnv";
 import {acquireOwnerLease, releaseOwnerLease} from "./leases";
 import {registerHarnessApproval} from "./models/harnessApproval";
 import {registerHarnessConversation} from "./models/harnessConversation";
+import {registerHarnessEvent, registerHarnessEventStream} from "./models/harnessEvent";
 import {registerHarnessInboxEvent} from "./models/harnessInboxEvent";
 import {registerHarnessMemo} from "./models/harnessMemo";
 import {registerHarnessMessage} from "./models/harnessMessage";
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
-import {abortTaskTree, type HarnessEngine, settleTaskOwner} from "./ownership";
+import {
+  abortTaskTree,
+  type HarnessEngine,
+  settleTaskOwner,
+  sweepQueuedConversations,
+} from "./ownership";
 import {
   type AnyHarnessTaskDefinition,
   assertInFlightVersionsRegistered,
@@ -84,6 +93,8 @@ export type {
   HarnessConversationStatus,
   HarnessCreateTaskOptions,
   HarnessDecideApprovalOptions,
+  HarnessEventDocument,
+  HarnessEventType,
   HarnessExtensionDefinition,
   HarnessExtensionDefinitionInput,
   HarnessHook,
@@ -114,7 +125,11 @@ export type {
   HarnessSection,
   HarnessSectionInput,
   HarnessSendEventOptions,
+  HarnessSendOptions,
+  HarnessStreamingOptions,
+  HarnessSubmitDisposition,
   HarnessSubmitOptions,
+  HarnessSubmitResult,
   HarnessSystemPromptPart,
   HarnessTaskDefinition,
   HarnessTaskDefinitionInput,
@@ -142,23 +157,27 @@ export type {
   HarnessWaitKind,
   HarnessWaitPolicy,
   HarnessWaitResolution,
+  HarnessWhenBusy,
 } from "../types/harness";
 export {
   HARNESS_AGENT_DEFAULT_MAX_STEPS,
   HARNESS_APPROVAL_STATUSES,
   HARNESS_CONVERSATION_STATUSES,
+  HARNESS_EVENT_TYPES,
   HARNESS_HOOK_KINDS,
   HARNESS_INTERRUPT_ACTIONS,
   HARNESS_MESSAGE_ROLES,
   HARNESS_MODEL_RETRY_DEFAULTS,
   HARNESS_RESOLVE_ACTIONS,
   HARNESS_RETRY_DEFAULTS,
+  HARNESS_SUBMIT_DISPOSITIONS,
   HARNESS_TASK_STATUSES,
   HARNESS_WAIT_KINDS,
   HARNESS_WAIT_POLICIES,
   HARNESS_WAIT_RESOLUTIONS,
+  HARNESS_WHEN_BUSY,
 } from "../types/harness";
-export {AGENT_TOOL_TASK_NAME, AGENT_TURN_TASK_NAME} from "./agentLoop";
+export {AGENT_TOOL_TASK_NAME, AGENT_TURN_TASK_NAME} from "./agentTaskNames";
 export {
   type ApprovalGateOptions,
   approvalGate,
@@ -167,7 +186,11 @@ export {
   HarnessApprovalConflictError,
 } from "./approvals";
 export {HarnessCommitConflictError} from "./commit";
-export {HarnessConversationBusyError, HarnessConversationHandle} from "./conversation";
+export {
+  HarnessConversationBusyError,
+  HarnessConversationHandle,
+  HarnessConversationOwnedError,
+} from "./conversation";
 export {defineAgent} from "./defineAgent";
 export {defineTask} from "./defineTask";
 export {defineTool} from "./defineTool";
@@ -220,6 +243,8 @@ export interface HarnessOpenOptions {
   registry: ReadonlyArray<HarnessRegistryEntry>;
   /** Defaults to a new `InProcessRunner`. */
   runner?: HarnessRunner;
+  /** How streamed model text is coalesced into `delta` events. */
+  streaming?: HarnessStreamingOptions;
   /** Test-only seams; never set in production code. */
   testHooks?: HarnessTestHooks;
 }
@@ -228,6 +253,9 @@ export interface HarnessWaitOptions {
   pollInterval?: DurationLike;
   timeout?: DurationLike;
 }
+
+/** How often an idle owner looks for queued submissions stranded by a crash. */
+const QUEUE_SWEEP_INTERVAL = Duration.fromObject({seconds: 1});
 
 const assertReplicaSet = async (): Promise<void> => {
   const db = mongoose.connection.db;
@@ -266,6 +294,7 @@ export class Harness {
   private readonly engine: HarnessEngine;
   private readonly extensions: Map<string, HarnessExtensionDefinition>;
   private isStarted = false;
+  private nextQueueSweepAt = DateTime.fromMillis(0);
   private readonly models: HarnessModels;
   private readonly runner: HarnessRunner;
   private readonly testHooks: HarnessTestHooks | undefined;
@@ -322,6 +351,8 @@ export class Harness {
     const models: HarnessModels = {
       approval: registerHarnessApproval(),
       conversation: registerHarnessConversation(),
+      event: registerHarnessEvent(),
+      eventStream: registerHarnessEventStream(),
       inbox: registerHarnessInboxEvent(),
       memo: registerHarnessMemo(),
       message: registerHarnessMessage(),
@@ -337,6 +368,7 @@ export class Harness {
       priceMap: () => options.priceMap ?? getObservabilityApp()?.priceMap,
       random: options.testHooks?.random,
       resolveModel: options.models,
+      streaming: resolveStreamingOptions(options.streaming),
     });
     // The built-in agent tasks are always registered, so in-flight turns resume anywhere.
     const definitions = buildTaskRegistry([
@@ -379,11 +411,29 @@ export class Harness {
     }
     await this.runner.start({
       acquireOwnerLease: (lease) => acquireOwnerLease({lease, models, testHooks}),
-      claimNext: (lease) => claimNextTask({definitions, lease, models}),
+      claimNext: (lease) => this.claimNextOrSweep(lease),
       recoverExpired: () => recoverExpiredTasks(engine),
       releaseOwnerLease: (lease) => releaseOwnerLease({lease, models}),
       runTask: (task, lease) => runClaimedTask({engine, lease, task}),
     });
+  }
+
+  /**
+   * Claim the next runnable task. When there is none, at most once per
+   * `QUEUE_SWEEP_INTERVAL`, start queued submissions stranded on idle conversations (a
+   * process died between a turn's end and starting the next queued turn) and claim again.
+   */
+  private async claimNextOrSweep(lease: HarnessLeaseSettings): Promise<HarnessTaskDocument | null> {
+    const {definitions, engine, models} = this;
+    const task = await claimNextTask({definitions, lease, models});
+    if (task || DateTime.now() < this.nextQueueSweepAt) {
+      return task;
+    }
+    this.nextQueueSweepAt = DateTime.now().plus(QUEUE_SWEEP_INTERVAL);
+    if ((await sweepQueuedConversations(engine)) === 0) {
+      return null;
+    }
+    return claimNextTask({definitions, lease, models});
   }
 
   /** Stop claiming work and wait for the phase in flight to settle. */

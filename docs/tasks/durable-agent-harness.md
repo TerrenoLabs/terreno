@@ -75,7 +75,7 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: reference approvals + routes; how-to section "Require human approval"
   - Acceptance: AC7 — supertest: unpermitted user gets 403 and an empty list; permitted user approves; span `output.decidedBy` equals user id; reject without reason → 400
 
-- [ ] **Task 1.9**: SSE event stream + submit
+- [x] **Task 1.9**: SSE event stream + submit
   - Delivers: `HarnessEvent` log (coalesced deltas with TTL, committed events permanent); `rt.output`; `GET /harness/conversations/:id/events` + `/harness/tasks/:id/events` SSE with `Last-Event-ID` replay then change-stream tail; `submit` instanceAction (`requestId` idempotent, `whenBusy: queue | steer`)
   - Files: `events.ts`, `models/harnessEvent.ts`, `routes/events.ts`, `routes/conversations.ts`, tests
   - Blocked by: 1.4

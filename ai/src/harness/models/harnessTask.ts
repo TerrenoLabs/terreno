@@ -22,6 +22,13 @@ const harnessTaskSchema = new mongoose.Schema<HarnessTaskDocument, HarnessTaskMo
         type: mongoose.Schema.Types.ObjectId,
       },
     },
+    ancestorIds: {
+      default: () => [],
+      description:
+        "Owning tasks from the root down to the parent (empty for a root task); scopes task event streams to a subtree",
+      ref: "HarnessTask",
+      type: [mongoose.Schema.Types.ObjectId],
+    },
     attempt: {
       default: 0,
       description: "Failed attempts consumed by the current phase",

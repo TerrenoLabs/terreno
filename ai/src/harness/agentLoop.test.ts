@@ -11,10 +11,10 @@ import {
 import {z} from "@terreno/api";
 import {APICallError, type LanguageModel} from "ai";
 import mongoose from "mongoose";
-
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {generateToStream} from "../tests/generateStream";
 import type {HarnessAgentDefinition, HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import type {ExecutionEnv} from "./executionEnv";
@@ -75,9 +75,9 @@ const scriptedModel = (modelId: string, steps: ScriptStep[]) => {
         warnings: [],
       };
     }),
-    doStream: mock(async () => {
-      throw new Error("streaming is not used by the turn");
-    }),
+    doStream: mock(async (options: GenerateCall) =>
+      generateToStream(await model.doGenerate(options))
+    ),
     modelId,
     provider: "mock",
     specificationVersion: "v2" as const,

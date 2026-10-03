@@ -37,6 +37,7 @@ import {
 - [Require human approval](#require-human-approval)
 - [approvalGate](#approvalgate)
 - [HarnessApp and HTTP routes](#harnessapp-and-http-routes)
+- [Event stream (SSE)](#event-stream-sse)
 - [abort](#abort)
 - [Versioning](#versioning)
 - [Agents and conversations](#agents-and-conversations)
@@ -60,6 +61,7 @@ import {
 - [HarnessMemo model](#harnessmemo-model)
 - [HarnessInboxEvent model](#harnessinboxevent-model)
 - [HarnessApproval model](#harnessapproval-model)
+- [HarnessEvent model](#harnessevent-model)
 - [Audit spans](#audit-spans)
 - [Errors](#errors)
 - [Testing](#testing)
@@ -133,7 +135,7 @@ The `task` view passed to `run`: `{id, name, version, input, state, phase, attem
 
 | Method | Description |
 | --- | --- |
-| `Harness.open({registry, runner?, models?, env?, priceMap?, testHooks?})` | Checks requirements, rejects a duplicate `name@version` or agent name, ensures collections and indexes exist. `runner` defaults to `new InProcessRunner()`. See [open options](#open-options). |
+| `Harness.open({registry, runner?, models?, env?, priceMap?, streaming?, testHooks?})` | Checks requirements, rejects a duplicate `name@version` or agent name, ensures collections and indexes exist. `runner` defaults to `new InProcessRunner()`. See [open options](#open-options). |
 | `start()` | Throws, claiming nothing, when any non-terminal task uses a `name@version` missing from the registry (see [Versioning](#versioning)). Then starts the runner. Throws when already started. The runner recovers expired tasks once it owns execution. |
 | `stop()` | Stops claiming work, waits (without a time limit) for the phase in flight while still renewing the owner lease, then releases it. No-op when not started. |
 | `createTask(definition, input, {requestId?, userId?})` | Inserts a `pending` task, its `ObsTrace`, and its root span in one transaction. Wakes the runner. The definition must be in the registry. |
@@ -161,6 +163,7 @@ some), throws. A soft-deleted task still owns its `requestId`.
 | `env` | `ExecutionEnv` | Handed to phases as `rt.env` and to tools as `api.env`. Optional. |
 | `priceMap` | `Record<modelId, {inputPerMTok, outputPerMTok}>` | Prices LLM spans (`usage.costUsd`). Defaults to the registered `ObservabilityApp`'s `priceMap`, read at call time. |
 | `runner` | `HarnessRunner` | Default `new InProcessRunner()`. |
+| `streaming` | `{deltaFlushChars?, deltaFlushInterval?, deltaTtl?}` | How streamed model text becomes `delta` events. Defaults: 200 characters, `{milliseconds: 250}`, `{hours: 1}`. Non-positive values throw. See [Event stream (SSE)](#event-stream-sse). |
 | `testHooks` | `HarnessTestHooks` | Test-only. See [Testing](#testing). |
 
 ```typescript
@@ -215,6 +218,7 @@ A custom runner implements `HarnessRunner` (`start(context)`, `stop()`, `wake()`
 | `rt.waitFor(event, {timeout?})` | Return the payload of the next `event` sent to this task, or `undefined` once `timeout` passes; until then the task waits. See [Events, waits, and sleep](#events-waits-and-sleep). |
 | `rt.sleep(duration)` | Return once `duration` has passed; until then the task waits. See [Events, waits, and sleep](#events-waits-and-sleep). |
 | `rt.approval(key, {title, summary?, payload?, timeout?, notify?})` | Ask a human to approve; return the decision. Until then the task waits. See [Approvals](#approvals). |
+| `rt.output(text)` | Append an `output` event (permanent) to the task's event stream. Empty text is ignored; a non-string throws. A phase that re-runs (after a wait, retry, or replay) sends its output again. See [Event stream (SSE)](#event-stream-sse). |
 
 Rules:
 
@@ -222,7 +226,7 @@ Rules:
 - `phase` must exist in `phases`. An unknown phase fails the task.
 - A phase that returns without committing fails the task (no retry).
 - A phase that throws before committing is retried under the task's `retry` policy; see [Retries](#retries).
-- After `rt.commit` or a wait that started waiting, `rt.createTask`, `rt.waitForTasks`, `rt.runAgent`, `rt.waitFor`, `rt.sleep`, `rt.approval`, and memo writes throw. Memo reads still work.
+- After `rt.commit` or a wait that started waiting, `rt.createTask`, `rt.waitForTasks`, `rt.runAgent`, `rt.waitFor`, `rt.sleep`, `rt.approval`, `rt.output`, and memo writes throw. Memo reads still work.
 
 ## Leases
 
@@ -712,9 +716,46 @@ is not offered to sections, `beforeModelRequest`, or `afterTool` (the tool alrea
 
 ## HarnessApp and HTTP routes
 
-`new HarnessApp({harness, basePath?})` is a `TerrenoPlugin`. `basePath` defaults to
-`/harness`; it must start with `/` and not end with `/`. Routes are a `modelRouter` on
-`HarnessApproval` with instance actions, so they appear in `/openapi.json` (tag `harness`).
+`new HarnessApp({harness, basePath?, heartbeatInterval?})` is a `TerrenoPlugin`. Its `eventHub` is the change stream its SSE connections share.
+`basePath` defaults to `/harness`; it must start with `/` and not end with `/`.
+`heartbeatInterval` (default `{seconds: 15}`, must be positive) paces SSE heartbeats.
+Conversation, task, and approval routes are `modelRouter`s with instance actions, so they
+appear in `/openapi.json` (tag `harness`). The two SSE routes are plain Express routes
+(the listed exception to modelRouter actions) and are not in the OpenAPI spec.
+
+### Conversation routes
+
+| Method | Path | Permissions | Behavior |
+| --- | --- | --- | --- |
+| GET | `/harness/conversations` | `IsAuthenticated` | The caller's own conversations (`userId` = caller, admins included), newest first. |
+| GET | `/harness/conversations/:id` | Owner (`userId`) or admin | One conversation. Others: 403. |
+| POST | `/harness/conversations/:id/submit` | Owner only | Body `{content, requestId, whenBusy?}` (strict; `whenBusy` is `"queue"` (default) or `"steer"`). Returns `{conversationId, disposition, requestId, turnTaskId?}`; see [send](#send-queue-and-steer). Admins cannot submit: messages are sent as the conversation's user. |
+| GET | `/harness/conversations/:id/events` | Owner or admin | SSE. See [Event stream (SSE)](#event-stream-sse). |
+| POST / PATCH / DELETE | `/harness/conversations[/:id]` | — | 405. Conversations are created with `harness.createConversation`. |
+
+| Status | When |
+| --- | --- |
+| 400 | Blank `content` or `requestId`, unknown `whenBusy`, unknown keys. |
+| 403 | Not the owner (submit), or neither owner nor admin (read). |
+| 409 | Submit to a subagent conversation: `code: "harness-conversation-owned"`. |
+
+### Task routes
+
+| Method | Path | Permissions | Behavior |
+| --- | --- | --- | --- |
+| GET | `/harness/tasks/:id` | Owner (`userId`) or admin | One task. Others: 403. |
+| POST | `/harness/tasks/:id/abort` | Owner or admin | Body `{reason}` (required, non-blank). Runs `harness.abort` with the caller as `userId`; returns the aborted task. |
+| POST | `/harness/tasks/:id/resolveInterrupted` | Admin | Body `{action: "retry" \| "abort" \| "complete", reason, result?}`. Runs `harness.resolveInterrupted` with the caller as `userId`; returns the task. |
+| GET | `/harness/tasks/:id/events` | Owner or admin | SSE for the task and its descendants. See [Event stream (SSE)](#event-stream-sse). |
+| GET (list) / POST / PATCH / DELETE | `/harness/tasks[/:id]` | — | 405. |
+
+| Status | When |
+| --- | --- |
+| 400 | Missing or blank `reason`, unknown `action`, unknown keys. |
+| 403 | abort: neither owner nor admin. resolveInterrupted: not an admin. |
+| 409 | abort: the task already ended (`code: "harness-task-terminal"`). resolveInterrupted: the task is not `interrupted` (`"harness-task-not-interrupted"`), or `retry` on a task being aborted (`"harness-task-aborting"`). |
+
+### Approval routes
 
 | Method | Path | Permissions | Behavior |
 | --- | --- | --- | --- |
@@ -732,6 +773,95 @@ is not offered to sections, `beforeModelRequest`, or `afterTool` (the tool alrea
 | 409 | Already decided, expired, or its task ended. `code: "harness-approval-not-pending"`; `detail` names the cause. |
 
 `decidedBy` is the caller's user id (`req.user.id`).
+
+## Event stream (SSE)
+
+Every conversation and every task tree has an append-only event log (`HarnessEvent`).
+Two SSE routes serve it:
+
+| Route | Stream | Contents |
+| --- | --- | --- |
+| `GET /harness/conversations/:id/events` | The conversation's own stream (`streamId` = conversation id) | Conversation events: transcript, deltas, turns, tool calls, queued submissions. |
+| `GET /harness/tasks/:id/events` | The task tree's stream (`streamId` = root task id), narrowed to events whose `taskPath` includes `:id` | Task events of the task and every task below it (children, grandchildren, subagent turns, tool calls). Not the task's ancestors or siblings. |
+
+A subagent's transcript is on its own conversation stream; its turn's `task.status` events
+are on the caller's task stream.
+
+### Event types
+
+| Type | Stream | Written | Payload |
+| --- | --- | --- | --- |
+| `message.created` | Conversation | With the message, in its commit | `{message}`: the stored `HarnessMessage` (`_id`, `seq`, `role`, `parts`, `turnTaskId`, `requestId?`, `toolCallId?`, `toolName?`, `status?`). Every role, including recorded system prompts. |
+| `message.queued` | Conversation | With the queue entry | `{content, requestId, whenBusy}` |
+| `turn.started` | Conversation | With the turn task | `{turnTaskId, status}` |
+| `turn.finished` | Conversation | With the turn's terminal commit (completed, failed, or aborted) | `{turnTaskId, status, outcome: {status, result?, error?}}` |
+| `tool.started` | Conversation | With the tool-call task | `{taskId, toolCallId, toolName, turnTaskId, status}` |
+| `tool.finished` | Conversation | With the tool-call task's terminal commit | `{taskId, toolCallId, toolName, turnTaskId, status, outcome}` |
+| `delta` | Conversation | While a model request streams, outside any commit; expires | `{turnTaskId, step, requestKey, text}` |
+| `task.status` | Task | With the task's creation, and with every commit that changes its `status` or `phase` | `{taskId, name, version, status, phase, parentTaskId?, outcome?}` |
+| `output` | Task | `rt.output(text)`, in its own transaction | `{phase, attempt, text}`. At least once per phase run: a re-run sends it again; `attempt` tells retries apart. |
+| `approval.requested` | Task | With the waiting commit that creates the approval | `{approvalId, key, title, summary?, status, expiresAt?, taskId}` |
+| `approval.decided` | Task | With the decision (or expiry) | `{approvalId, key, title, status: approved \| rejected \| expired, decidedBy?, decidedAt?, reason?, taskId}` |
+
+Every event except `delta` and `output` commits in the same transaction as the change it
+reports, so a client never sees an event for a change that rolled back. `task.status` is
+not written for claims (`pending` → `running`) or for wakes from outside the task
+(`sendEvent`, a settled child, a decided approval); the next commit reports the task's
+state. A wait that finds its event already buffered commits `waiting` and `pending` in one
+transaction and writes both.
+
+### Frames and ids
+
+```
+id: 7
+event: message.created
+data: {"seq":7,"type":"message.created","created":"2026-10-03T12:00:00.000Z","taskId":"...","payload":{...}}
+
+: heartbeat
+```
+
+| Rule | Detail |
+| --- | --- |
+| `id` | The event's `seq`: strictly increasing from 1 per stream, unique (`{streamId, seq}` index). A task stream's ids are the tree's seqs, so a narrowed stream has gaps. |
+| Order | A stream's events commit in `seq` order: each writer increments the stream's counter (`HarnessEventStream`) in its transaction, so concurrent writers serialize on it. |
+| Resume | Send the last id received as `Last-Event-ID` (browsers' `EventSource` does on reconnect) or `?after=<seq>`. The header wins. Neither: from the start. A non-integer is 400. |
+| Exactly once | A connection subscribes to the app's shared tail before it queries the replay. The tail starts at a cluster time read when its first subscriber registers, and every subscriber waits for the tail to start before it queries its replay, so the start time precedes every replay query. The tail delivers every insert after it, so every event is in the replay, the tail, or both; frames with `seq` at or below the last one sent are dropped. Each event reaches a client once, in order, across a reconnect to any instance. |
+| Heartbeat | A `: heartbeat` comment every `heartbeatInterval` (default 15 s) keeps proxies from closing an idle stream. |
+| Close | The connection is tracked from the first middleware, so a client that leaves during auth, the lookups, or the replay releases its subscription and heartbeat timer. A tail error closes every stream of the app; clients reconnect with `Last-Event-ID`. |
+| Auth | `authenticateMiddleware` (401 without a user), then owner (`userId`) or admin (403). Unknown or malformed id: 404. Errors are JSON, sent before the stream starts. |
+| 503 | The server could not read a cluster time to start the tail (not a replica set). |
+| Cost | One change stream per `HarnessApp` instance (`harnessApp.eventHub`), opened with the first viewer and closed with the last, fanned out in memory by stream and task path. Viewers do not hold pooled Mongo connections; each reconnect runs its replay queries. |
+
+### Deltas
+
+A turn's `request` phase streams the model (`streamText`). Text is buffered and written as
+one `delta` event once `streaming.deltaFlushChars` characters accumulate or
+`streaming.deltaFlushInterval` passes, and once more when the response ends, before the
+commit. So a request's deltas precede its `message.created`. Delta rows get
+`expiresAt = now + streaming.deltaTtl`; a TTL index deletes them. A delta write that fails
+is logged and dropped.
+
+The committed message is authoritative. A client concatenates `delta.text` per
+`(turnTaskId, step, requestKey)` and replaces it with the assistant `message.created` of
+that step. `requestKey` is fresh for every model attempt: a retried, fallen-back, or
+crash-replayed request streams under a new key, so a client drops the text of an older
+key for the same step. A crash mid-stream leaves that attempt's deltas (until they
+expire) and no message; recovery re-requests.
+
+Requests with structured output (`rt.runAgent` with an `output` schema) do not stream: they
+use `generateText` and write no deltas.
+
+### Latency
+
+A committed event reaches connected clients when its transaction commits plus change-stream
+delivery (typically milliseconds). Deltas add up to `deltaFlushInterval`. A reconnect
+replays from Mongo first, in pages of 500.
+
+```typescript
+const source = new EventSource(`/harness/conversations/${id}/events`); // cookies or a proxy add auth
+source.addEventListener("delta", (event) => appendDraft(JSON.parse(event.data).payload));
+source.addEventListener("message.created", (event) => commitMessage(JSON.parse(event.data).payload));
+```
 
 ## abort
 
@@ -927,7 +1057,8 @@ conversation stable when the agent definition changes; tool code, `modelRetry`, 
 | `harness.conversation(id)` | Loads a handle. |
 | `handle.id`, `handle.document` | Id and the conversation as loaded. |
 | `handle.messages()` | Every `HarnessMessage`, in `seq` order. |
-| `handle.submit({content, requestId})` | Starts a turn. See below. |
+| `handle.submit({content, requestId})` | Starts a turn now, or throws while one runs. See below. |
+| `handle.send({content, requestId, whenBusy})` | Starts a turn, or queues or steers the message while one runs. See [send](#send-queue-and-steer). |
 
 `submit`, in one transaction:
 
@@ -939,16 +1070,52 @@ conversation stable when the agent definition changes; tool code, `modelRetry`, 
 | Case | Result |
 | --- | --- |
 | Repeated `requestId` | Returns the turn it started; appends nothing. Keys are per conversation. |
-| Another turn is running | Throws `HarnessConversationBusyError` (`activeTurnTaskId` set). Queueing and steering (`whenBusy`) ship with the submit endpoint. |
+| Another turn is running, or submissions are queued | Throws `HarnessConversationBusyError` (`activeTurnTaskId` set). Use `send` to queue or steer. |
 | Lost a race to another submit | Re-reads the conversation: still busy → `HarnessConversationBusyError` naming the winning turn; idle again (the winner already finished) → claims it and starts its own turn. Up to 3 claims. |
 | Blank `content` / `requestId` | Throws `submit requires non-empty content` / `submit requires a requestId`. |
-| Subagent (task-owned) conversation | Throws: only `rt.runAgent` runs its turns. |
+| Subagent (task-owned) conversation | Throws `HarnessConversationOwnedError`: only `rt.runAgent` runs its turns. |
 
-When a turn ends (completed, failed, or aborted) the conversation goes back to `idle`:
-in the terminal commit itself when the turn ends normally or the model call fails, right
-after the commit otherwise (a thrown phase, an abort, an interruption). If the process
+When a turn ends (completed, failed, or aborted) the conversation goes back to `idle` in
+the turn's terminal commit itself, on every path (an answer, a failed model call, a
+thrown phase, an abort, an interruption, a resolution). If the process
 dies before that write, the next `submit` sees the turn is terminal and frees the
 conversation itself. Two concurrent submits with one `requestId` both get the same turn.
+Right after a turn ends, the next queued submission starts (see below).
+
+### send, queue, and steer
+
+`handle.send({content, requestId, whenBusy})` (the HTTP `submit` action) returns
+`{conversationId, disposition, requestId, turnTaskId?}`:
+
+| Conversation | `whenBusy` | `disposition` | What happens |
+| --- | --- | --- | --- |
+| Idle, nothing queued | either | `started` | A turn starts now, as `submit` does. `turnTaskId` is the new turn. |
+| Busy | `queue` | `queued` | Appended to `queued` (with a `message.queued` event). It runs as its own turn after the active turn and every earlier queued submission. No `turnTaskId` yet. |
+| Busy | `steer` | `steered` | Appended to `queued` as a steering entry. The active turn's **next model request** (the `request` phase after the current tool round, or a re-requested one) sends it after the stored transcript, and that request's commit stores it as a user message (before the answer) and removes it from `queued`. `turnTaskId` is the active turn. |
+| Idle with a backlog | either | `queued` | Joins the back of the queue; the oldest queued submission starts. |
+
+Rules:
+
+- Queued submissions start one per turn, oldest first, when a turn ends (completed,
+  failed, or aborted). A start is one transaction: claim the idle conversation (fenced on
+  the entry being first), remove the entry, insert the user message, create the turn.
+- A steer that arrives after the active turn's last model request started (the model is
+  already answering without tools) is left in `queued` and runs as the next turn. So is a
+  steer when the turn fails or is aborted.
+- A steering entry joins whichever turn makes the next model request, ahead of older
+  `queue` entries: steering is for the conversation in progress.
+- Idempotent on `requestId` (per conversation): a repeat returns where the first
+  submission is now (`started` with its turn once a queued submission ran, `steered` once
+  a steering message was stored) and adds nothing. User messages carry `requestId`
+  (unique per conversation).
+- Every terminal commit of a turn (answer, failure, abort, interruption, resolution)
+  frees its conversation in the same transaction. If the process dies before the next
+  queued submission starts, the runner that owns execution starts it: its recovery pass
+  (at takeover and every heartbeat) and, while idle, a sweep at most once per second first
+  free any conversation still `busy` on a finished or missing turn (queue or no queue),
+  then start the oldest submission of each idle conversation with a queue. The conversation's next `send` also
+  starts it. The start is fenced on the entry being first in an idle conversation, so it
+  runs once however many sweeps race.
 
 ## The agent turn task
 
@@ -990,8 +1157,9 @@ CHAIN terreno.agent.turn@1                  (turn root span; closes with the tur
 | `usage` | `{inputTokens, outputTokens, model, costUsd?}`; `costUsd` only when `priceMap` prices the model |
 | `status` / `error` | `error` and the failure message when no model answered; `output` is then `{attempts}` and the turn fails in the same commit |
 
-Requests are non-streaming (`generateText`) in this slice. Token streaming ships with the
-event stream.
+`request` streams the model with `streamText` and writes coalesced `delta` events while
+it answers; the assistant message and span commit only when the response is complete.
+Requests with structured output use `generateText`. See [Deltas](#deltas).
 
 ## Model-call resilience
 
@@ -1312,6 +1480,7 @@ empty objects are kept (`minimize: false`), so an initial state `{}` is stored a
 | `retry` | `{maxAttempts, backoffMs, maxBackoffMs}` | Copied from the definition. |
 | `ownership` | `{kind: root \| task \| conversation, id}` | Default `root`. `rt.createTask` children are `{kind: "task", id: <parent>}`; agent turns are `{kind: "conversation", id}`, except subagent turns, which are `{kind: "task", id: <caller>}`. |
 | `rootTaskId` | ObjectId | Top of the ownership tree; equals `_id` for root tasks. |
+| `ancestorIds` | [ObjectId] | Owning tasks from the root down to the parent; empty for a root task. Set at create; scopes task event streams. |
 | `traceId`, `rootSpanId` | ObjectId | Audit trace and its root `CHAIN` span. |
 | `requestId` | String | Idempotency key; unique sparse index. |
 | `userId` | ObjectId | Optional initiating user. Also set on the `ObsTrace`. |
@@ -1347,12 +1516,12 @@ Collection `harnessconversations`. Every field has a schema `description`; `stri
 | `ownerKey` | String | Subagent conversations only: which `rt.runAgent` call created it (`<step>:<attempt>:agent:<n>`). |
 | `status` | `idle` \| `busy` (`HARNESS_CONVERSATION_STATUSES`) | `busy` while a turn runs. |
 | `activeTurnTaskId` | ObjectId | The running turn. |
-| `queued` | `[{content, requestId, submittedAt}]` | Reserved for `whenBusy: "queue"`. Empty today. |
+| `queued` | `[{content, requestId, submittedAt, whenBusy}]` | Submissions waiting on the active turn, oldest first: `whenBusy: "queue"` runs later as its own turn, `"steer"` joins the active turn's next model request. See [send](#send-queue-and-steer). |
 | `userId` | ObjectId | Turns run as this user. |
 | `seq` | Number | Highest message `seq` handed out. Default 0. |
 | `created`, `updated`, `deleted` | | Plugins. |
 
-Indexes: `{userId, created}`, `{ownership.id, ownership.kind}`, `{ownership.id, ownerKey}` unique (partial: `ownerKey` set).
+Indexes: `{userId, created}`, `{ownership.id, ownership.kind}`, `{ownership.id, ownerKey}` unique (partial: `ownerKey` set), `{queued.requestId, status}` (partial: a queued submission exists; the queue sweep), `{status, activeTurnTaskId}` (the sweep for conversations busy on a finished turn).
 
 ## HarnessMessage model
 
@@ -1368,9 +1537,10 @@ empty objects are kept (`minimize: false`), so `{}` tool arguments survive.
 | `status` | `ok` \| `error` | Tool messages only. |
 | `toolCallId`, `toolName` | String | Tool messages only. |
 | `turnTaskId` | ObjectId | Turn that wrote the message. |
-| `aborted` | Boolean | Partial message cut off mid-stream (event stream slice). Skipped when building the next prompt. |
+| `requestId` | String | User messages from `submit` / `send`: the submitter's idempotency key. |
+| `aborted` | Boolean | Marks a partial message; skipped when building the next prompt. The turn never stores partial text (it streams as `delta` events and commits only complete messages), so it is `false` today. |
 
-Index: `{conversationId, seq}` unique.
+Indexes: `{conversationId, seq}` unique; `{conversationId, requestId}` unique (partial: `requestId` set).
 
 ## HarnessMemo model
 
@@ -1434,6 +1604,28 @@ empty objects are kept.
 Indexes: `{callKey, taskId}` unique; `{status, created}`. Rows are not deleted with their
 task.
 
+## HarnessEvent model
+
+Collection `harnessevents`: the SSE log. Every field has a schema `description`;
+`strict: "throw"`. Rows are never updated.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `streamId` | ObjectId | Conversation id, or root task id for a task tree. Required. |
+| `seq` | Number | Position in the stream; strictly increasing from 1. Required. |
+| `type` | `HARNESS_EVENT_TYPES` value | See [Event types](#event-types). |
+| `payload` | Mixed | Event body. |
+| `taskId` | ObjectId | The task the event is about, when there is one. |
+| `taskPath` | [ObjectId] | Task-stream events: the task's `ancestorIds` plus the task. Empty on conversation events. |
+| `expiresAt` | Date | `delta` rows only: `created + streaming.deltaTtl`. |
+| `created` | Date | Write time. |
+
+Indexes: `{streamId, seq}` unique, `{streamId, taskPath, seq}`, `{expiresAt}` TTL
+(`expireAfterSeconds: 0`).
+
+`HarnessEventStream` (collection `harnesseventstreams`) holds one counter per stream:
+`_id` = `streamId`, `seq` = the highest seq handed out. Created on the stream's first event.
+
 ## Audit spans
 
 | When | Write (same transaction) |
@@ -1486,7 +1678,12 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 | `decideApproval requires approved: true or false` / `decideApproval: a rejection requires a reason` | `decideApproval` misuse. |
 | `<label>: approvals must be an object keyed by approval key` / `approval keys must be non-empty` / `approvals.<key>.approvers must be an array of permission functions` | Invalid `approvals` on `defineTask` or `defineExtension`. |
 | `approvalGate: tools must list at least one tool` / `every tool must be a defineTool tool or a tool name` / `title must be a string or a function` | Invalid `approvalGate` options. |
-| `HarnessApp basePath must start with "/" and not end with "/"` / `HarnessApp requires an opened Harness` | Invalid `HarnessApp` options. |
+| `HarnessApp basePath must start with "/" and not end with "/"` / `HarnessApp requires an opened Harness` / `HarnessApp heartbeatInterval must be positive` | Invalid `HarnessApp` options. |
+| `HarnessConversationBusyError` | `submit` while a turn runs or submissions are queued. `activeTurnTaskId` names the turn. |
+| `HarnessConversationOwnedError` | `submit` / `send` on a subagent conversation (409 over HTTP). |
+| `send whenBusy must be one of queue, steer` | `send` with another `whenBusy`. |
+| `<key>: rt.output takes a string` | `rt.output` with a non-string; fails the task (no retry). |
+| `Harness streaming.deltaFlushChars must be a positive integer` / `Harness streaming.deltaFlushInterval and deltaTtl must be positive` | Invalid `Harness.open({streaming})`. |
 | `defineTask(...)` validation errors | Empty name, non-positive or fractional version, no phases, a phase without `run`, an invalid `replay`. |
 
 ## Testing
@@ -1504,9 +1701,17 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 - `testHooks.random()` replaces `Math.random` for retry jitter, including model-call
   backoff. Test-only.
 - Agents: pass a mock `LanguageModel` through `models` (an object with `doGenerate`,
-  `doStream`, `specificationVersion`, `provider`, `modelId`, `supportedUrls`). Throw an
-  `APICallError` with `statusCode` from `doGenerate` to exercise retries and fallbacks;
-  set `modelRetry: {backoffMs: 0}` for speed.
+  `doStream`, `specificationVersion`, `provider`, `modelId`, `supportedUrls`). Turns
+  stream, so `doStream` must answer (a LanguageModelV2 stream: `stream-start`,
+  `text-start` / `text-delta` / `text-end`, `tool-call`, `finish`); only structured-output
+  requests call `doGenerate`. The ai tests' `withGenerateStreaming` (`ai/src/tests/generateStream.ts`)
+  answers `doStream` from a scripted `doGenerate`, and `gatedStreamingModel`
+  (`ai/src/tests/harnessStreaming.ts`) lets a test feed text into a live request. Throw an
+  `APICallError` with `statusCode` from the mock to exercise retries and fallbacks; set
+  `modelRetry: {backoffMs: 0}` for speed.
+- SSE: `listen(app)` and `openSse(url, {headers})` in `ai/src/tests/harnessStreaming.ts`
+  run an app on a free port and parse frames as they arrive. Pass `heartbeatInterval` to
+  `HarnessApp` and small `streaming` settings to `Harness.open` to keep tests fast.
 - Assert on plain copies (`JSON.parse(JSON.stringify(doc.field))`), never on mongoose
   subdocuments directly: Bun's matchers can loop forever walking them.
 - `testHooks.isHeartbeatSuspended()`: while it returns true, owner acquisition fails and
@@ -1528,6 +1733,15 @@ Low-risk choices made in the first slice:
 | A safe-replay recovery goes back to `pending` instead of running in place | One claim path (and one place that issues tokens) for fresh, retried, and replayed work. |
 | The start-time version check is one `$group` aggregate over non-terminal rows | One round trip; the error names every missing key with a count instead of failing on the first. |
 | Recovery also runs on every owner heartbeat, not only at takeover | A dead owner's task lease can outlive its owner lease by up to one heartbeat; a takeover-only scan would miss it. |
+| Event `seq`s come from a per-stream counter document incremented in the writer's transaction | The counter write serializes a stream's writers, so `seq` order is commit order and a resuming reader never skips an event committed late. |
+| Task-tree events share the root task's stream, scoped by `taskPath` | One `Last-Event-ID` covers a whole subtree; a per-task stream could not be resumed across children. |
+| Each event lives on exactly one stream: conversation events on the conversation, task events on the tree | No duplicate writes; a subagent's transcript is watched on its own conversation stream. |
+| `delta` and `output` writes run in their own small transaction, not the phase commit | Streamed text must reach clients before the commit; the committed message remains authoritative. |
+| Steering messages are stored by the request commit that sent them | The transcript keeps provider order (tool results directly after their calls); a steer that never reached a request stays queued and becomes a turn. |
+| The SSE tail starts at a cluster time read before any subscriber's replay query | No gap between replay and tail; overlap is removed by `seq`. |
+| One shared change stream per `HarnessApp`, not one per connection | A change stream holds a pooled connection while it waits; per-connection streams let a few dozen viewers starve commits and lease renewals. |
+| Queue recovery is a sweep by the execution owner, not part of the turn's terminal commit | Starting a turn is its own transaction; the sweep (fenced, idempotent) covers the crash window between the two. |
+| Writers to one stream conflict on its counter document | The price of commit-ordered `seq`s. `withTransaction` retries the loser. `InProcessRunner` runs one task at a time, so only HTTP submits, approvals, and deltas contend; a parallel runner fanning out many children of one tree will see retries. |
 | Interruption spans start at `lease.acquiredAt` | Records when the cut-off phase began. |
 | `resolveInterrupted({action: "abort"})` closes the trace as `error` | `ObsTrace.status` is `ok` or `error`; an abort is not a success. |
 | `requestId` replays are scoped to the same `userId` | Stops one caller from reading another user's task through a shared key. |

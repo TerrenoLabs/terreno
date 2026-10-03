@@ -3,12 +3,8 @@ import type mongoose from "mongoose";
 
 import type {HarnessLeaseSettings, HarnessMemo} from "../types/harness";
 import {HARNESS_TASK_STATUSES} from "../types/harness";
-import {
-  HarnessCommitConflictError,
-  type HarnessModels,
-  inTransaction,
-  isDuplicateKeyError,
-} from "./commit";
+import {HarnessCommitConflictError, type HarnessModels, isDuplicateKeyError} from "./commit";
+import {inTransaction} from "./transaction";
 
 /** The run allowed to write: its task, phase, and lease token. */
 export interface MemoFence {

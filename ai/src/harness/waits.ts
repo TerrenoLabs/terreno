@@ -20,10 +20,10 @@ import {
   HarnessCommitConflictError,
   type HarnessCommitWrites,
   type HarnessModels,
-  inTransaction,
   isDuplicateKeyError,
 } from "./commit";
 import {HarnessDefinitionError} from "./definitionError";
+import {inTransaction} from "./transaction";
 
 /** Most object keys a resume span lists for a delivered payload. */
 const PAYLOAD_SUMMARY_KEYS = 20;

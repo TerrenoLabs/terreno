@@ -245,8 +245,10 @@ turn: request ──tx──> assistant message + LLM span ──┐ tool calls?
 ### Two phases, both safe to replay
 
 - **`request`** calls the model. A model call has no side effect, so if the process dies
-  mid-call the phase simply runs again. Nothing from the cut-off call was written: the
-  assistant message is only stored in the same transaction as the checkpoint.
+  mid-call the phase simply runs again. Nothing from the cut-off call reached the
+  transcript: the assistant message is only stored in the same transaction as the
+  checkpoint. (Its streamed text did reach the event log as expiring deltas; see
+  [Watching runs live](#watching-runs-live).)
 - **`tools`** starts one child task per tool call and waits for all of them. Children
   are found again by key on a re-run, so a replay never doubles a call.
 
@@ -434,3 +436,67 @@ a replayed call does not ask twice, and a rejection reaches the model as the too
 result, like any other block.
 
 API: [Approvals](../reference/ai-harness.md#approvals), [approvalGate](../reference/ai-harness.md#approvalgate), [HarnessApp and HTTP routes](../reference/ai-harness.md#harnessapp-and-http-routes).
+
+## Watching runs live
+
+People watch agents work: a clinician sees the summary being written, an operator follows
+a long task tree. Clients watch over Server-Sent Events, and every SSE stream is served
+from one durable log, `HarnessEvent`, rather than from the process running the work.
+
+```
+commit tx ── message / status / approval change ──+── event (same tx, next seq)
+model stream ── text ── coalesce ~250 ms ── delta (own tx, expires)
+rt.output ── output (own tx)
+                                   │
+            HarnessEvent ── change stream ──> SSE on any instance
+                         └─ replay after Last-Event-ID
+```
+
+### Why a log, not a socket
+
+The process that runs a turn and the process holding a client's connection are rarely
+the same: runners are leased, HTTP is load-balanced, and both restart. Writing events to
+Mongo lets any instance serve any stream. A client that drops reconnects with
+`Last-Event-ID` (browsers resend it automatically), the instance it lands on replays what
+it missed from the log, then tails new events through a change stream. Replica sets are
+already required, so change streams cost nothing extra. Each `HarnessApp` keeps one
+change stream and fans it out to its viewers in memory, so a hundred viewers cost one
+pooled connection, not a hundred.
+
+### Committed events share the commit
+
+`message.created`, `task.status`, `turn.*`, `tool.*`, and `approval.*` are written in the
+same transaction as the change they describe, like the audit span. A client therefore
+never sees a message that was rolled back, and never misses one that committed. Each
+stream hands out `seq` from a counter document inside that transaction; two writers to one
+stream serialize on the counter, so `seq` order is commit order. That is what makes
+`Last-Event-ID` safe: a reader that has seen `seq` 41 has seen everything before it.
+
+### Deltas are a preview; the message is the record
+
+Tokens arrive far faster than commits should happen, so streamed text is buffered and
+written as one `delta` roughly every 250 ms, outside the checkpoint transaction, with a
+TTL. Deltas exist so a reconnecting client (on any instance) can catch up on a reply that
+is still being written. They are not the transcript: when the request completes, the
+assistant message commits with the checkpoint and supersedes them. If the process dies
+mid-stream, the deltas of that attempt stay until they expire, no message is stored, and
+recovery asks the model again under a new `requestKey`, so a client discards the old
+preview.
+
+### One stream per conversation, one per task tree
+
+Conversation events (transcript, deltas, turns, tool calls) go to the conversation's
+stream. Task events (status, `rt.output`, approvals) go to the stream of the tree's root
+task, tagged with the task's path. Watching a task narrows that stream to the task and its
+descendants, so one `Last-Event-ID` resumes a whole subtree. Each event is written once.
+
+### Sending while a turn runs
+
+Messages arrive while the agent is still working. `submit` takes `whenBusy`: `queue` keeps
+the message for its own turn after the current one; `steer` adds it to the current turn.
+A steering message waits on the conversation until the turn's next model request picks it
+up, and that request's commit stores it in the transcript. Storing it then, not on
+arrival, keeps the transcript in the order the model saw it (tool results directly after
+their calls). A steer that arrives after the last request started becomes the next turn.
+
+API: [Event stream (SSE)](../reference/ai-harness.md#event-stream-sse), [send, queue, and steer](../reference/ai-harness.md#send-queue-and-steer).

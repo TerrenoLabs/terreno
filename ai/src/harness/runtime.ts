@@ -19,12 +19,13 @@ import type {
   HarnessWaitForTasksOptions,
 } from "../types/harness";
 import {
+  HARNESS_EVENT_TYPES,
   HARNESS_TASK_STATUSES,
   HARNESS_TERMINAL_STATUSES,
   HARNESS_WAIT_KINDS,
   HARNESS_WAIT_POLICIES,
 } from "../types/harness";
-import {AGENT_TURN_TASK_NAME} from "./agentLoop";
+import {AGENT_TURN_TASK_NAME} from "./agentTaskNames";
 import {type ApprovalWaitPlan, approvalWaitPlan, parseApprovalRequest} from "./approvals";
 import {
   commitInterruption,
@@ -41,6 +42,7 @@ import {
 } from "./commit";
 import {taskDefinitionKey} from "./defineTask";
 import {HarnessDefinitionError} from "./definitionError";
+import {appendTaskEvents} from "./events";
 import {HARNESS_INTERNAL_RUNTIME} from "./internalRuntime";
 import {startTaskHeartbeat} from "./leases";
 import {createMemo} from "./memo";
@@ -51,6 +53,7 @@ import {
   type HarnessEngine,
   settleChildren,
   settleTaskOwner,
+  sweepQueuedConversations,
   sweepWaitingTasks,
   toTaskView,
 } from "./ownership";
@@ -186,7 +189,7 @@ export const recoverExpiredTasks = async (engine: HarnessEngine): Promise<number
       logger.error(`Harness could not recover task ${task._id}: ${errorMessage(error)}`);
     }
   }
-  return runnable + (await sweepWaitingTasks(engine));
+  return runnable + (await sweepWaitingTasks(engine)) + (await sweepQueuedConversations(engine));
 };
 
 const INTERRUPTION_LOG: Record<HarnessInterruptionAction, string> = {
@@ -614,6 +617,26 @@ const runPhase = async ({
       scopeTaskId: toObjectId(scopeTaskId),
     });
 
+  const output = async (text: string): Promise<void> => {
+    assertOpen("rt.output");
+    if (typeof text !== "string") {
+      throw new HarnessDefinitionError(`${definition.key}: rt.output takes a string`);
+    }
+    if (!text) {
+      return;
+    }
+    await appendTaskEvents({
+      events: [
+        {
+          payload: {attempt: task.attempt, phase: task.phase, text},
+          type: HARNESS_EVENT_TYPES.output,
+        },
+      ],
+      models,
+      task,
+    });
+  };
+
   const phase = definition.phases[task.phase];
   if (!phase) {
     return failOrRetry({
@@ -634,6 +657,7 @@ const runPhase = async ({
     createTask: createTask as HarnessTaskRuntime<unknown, unknown>["createTask"],
     env: engine.env,
     memo: memoFor(task._id),
+    output,
     runAgent: runAgent as HarnessTaskRuntime<unknown, unknown>["runAgent"],
     signal: controller.signal,
     sleep,

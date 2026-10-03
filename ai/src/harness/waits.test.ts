@@ -9,6 +9,7 @@ import type {HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {commitWaiting, type HarnessModels} from "./commit";
 import {type AnyHarnessTaskDefinition, defineTask, Harness, InProcessRunner} from "./harness";
+import {registerHarnessEvent, registerHarnessEventStream} from "./models/harnessEvent";
 import {registerHarnessInboxEvent} from "./models/harnessInboxEvent";
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
@@ -657,6 +658,8 @@ describe("Harness events, waits, and sleep", () => {
     );
     await InboxModel.create({name: "approved", payload: 1, seq: 1, taskId: created._id});
     const models = {
+      event: registerHarnessEvent(),
+      eventStream: registerHarnessEventStream(),
       inbox: InboxModel,
       span: SpanModel,
       task: TaskModel,

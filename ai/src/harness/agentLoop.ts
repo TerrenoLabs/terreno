@@ -1,12 +1,15 @@
+import {randomUUID} from "node:crypto";
 import {
   tool as aiTool,
   generateText,
   type JSONValue,
   jsonSchema,
+  type LanguageModel,
   type ModelMessage,
   NoObjectGeneratedError,
   NoOutputGeneratedError,
   Output,
+  streamText,
   type TextPart,
   type ToolCallPart,
   type ToolContent,
@@ -28,6 +31,7 @@ import type {
   HarnessMessageDocument,
   HarnessMessagePart,
   HarnessModelResolver,
+  HarnessQueuedSubmission,
   HarnessReplayPolicy,
   HarnessSystemPromptPart,
   HarnessTaskDefinition,
@@ -37,9 +41,11 @@ import type {
   HarnessToolResultPart,
   HarnessTurnResult,
 } from "../types/harness";
-import {HARNESS_MESSAGE_ROLES} from "../types/harness";
+import {HARNESS_MESSAGE_ROLES, HARNESS_WHEN_BUSY} from "../types/harness";
+import {AGENT_TOOL_TASK_NAME, AGENT_TURN_TASK_NAME} from "./agentTaskNames";
 import type {HarnessCommitWrites, HarnessModels} from "./commit";
 import {defineTask} from "./defineTask";
+import {HarnessDeltaWriter, insertMessages, type ResolvedStreamingOptions} from "./events";
 import {
   buildSystemPrompt,
   HarnessExtensionError,
@@ -54,11 +60,6 @@ import {internalRuntime} from "./internalRuntime";
 import {callModelWithFallback, HarnessModelCallError} from "./modelCall";
 import {isHarnessSuspendSignal} from "./suspend";
 
-/** Name of the built-in task that runs one agent turn on a conversation. */
-export const AGENT_TURN_TASK_NAME = "terreno.agent.turn";
-/** Name of the built-in task that runs one tool call of a turn. */
-export const AGENT_TOOL_TASK_NAME = "terreno.agent.tool";
-
 /** Everything the built-in agent tasks need from their harness. */
 export interface AgentLoopContext {
   agents: Map<string, HarnessAgentDefinition>;
@@ -68,6 +69,7 @@ export interface AgentLoopContext {
   priceMap: () => Record<string, ModelPrice> | undefined;
   random?: () => number;
   resolveModel?: HarnessModelResolver;
+  streaming: ResolvedStreamingOptions;
 }
 
 export interface AgentTurnInput {
@@ -300,18 +302,19 @@ const promptRecord = ({
     write: async ({session, task}) => {
       const seq = await allocateSeqs({conversationId, count: 1, models, session});
       const part: HarnessSystemPromptPart = {hash, sections, text: system, type: "system-prompt"};
-      await models.message.create(
-        [
+      await insertMessages({
+        messages: [
           {
-            conversationId,
+            conversationId: conversation._id,
             parts: [part],
             role: HARNESS_MESSAGE_ROLES.system,
             seq,
             turnTaskId: task._id,
           },
         ],
-        {session}
-      );
+        models,
+        session,
+      });
       span.messageSeq = seq;
     },
   };
@@ -377,6 +380,125 @@ const loadConversation = (
   conversationId: string
 ): Promise<HarnessConversationDocument> =>
   models.conversation.findExactlyOne({_id: conversationId});
+
+/**
+ * Steering submissions waiting for this turn's next model request, and the commit write
+ * that stores them as user messages (before the assistant answer) and removes them from
+ * the queue. Entries whose message already exists are only removed.
+ */
+const pendingSteering = async ({
+  conversation,
+  models,
+}: {
+  conversation: HarnessConversationDocument;
+  models: HarnessModels;
+}): Promise<{entries: HarnessQueuedSubmission[]; write: HarnessCommitWrites}> => {
+  const steer = conversation.queued.filter(
+    (entry) => entry.whenBusy === HARNESS_WHEN_BUSY.steer && entry.requestId
+  );
+  if (steer.length === 0) {
+    return {entries: [], write: async () => {}};
+  }
+  const requestIds = steer.map((entry) => entry.requestId as string);
+  const delivered = new Set(
+    (
+      await models.message
+        .find({conversationId: conversation._id, requestId: {$in: requestIds}})
+        .select({requestId: 1})
+        .lean()
+    ).map((message) => message.requestId)
+  );
+  const entries = steer.filter((entry) => !delivered.has(entry.requestId));
+  const conversationId = String(conversation._id);
+  return {
+    entries,
+    write: async ({session, task}) => {
+      if (entries.length > 0) {
+        const first = await allocateSeqs({conversationId, count: entries.length, models, session});
+        await insertMessages({
+          messages: entries.map((entry, index) => ({
+            conversationId: conversation._id,
+            parts: [{text: String(entry.content ?? ""), type: "text"}],
+            requestId: entry.requestId,
+            role: HARNESS_MESSAGE_ROLES.user,
+            seq: first + index,
+            turnTaskId: task._id,
+          })),
+          models,
+          session,
+        });
+      }
+      await models.conversation.updateOne(
+        {_id: conversation._id},
+        {$pull: {queued: {requestId: {$in: requestIds}}}},
+        {session}
+      );
+    },
+  };
+};
+
+/**
+ * Stream one model request, writing its text as coalesced `delta` events on the
+ * conversation stream while it arrives. Each attempt streams under a fresh `requestKey`,
+ * so a client can drop the text of an attempt that failed. Deltas are flushed before the
+ * response returns, so they precede the commit's `message.created`.
+ */
+const streamModelRequest = async ({
+  context,
+  conversationId,
+  messages,
+  model,
+  rt,
+  step,
+  system,
+  tools,
+}: {
+  context: AgentLoopContext;
+  conversationId: string;
+  messages: ModelMessage[];
+  model: LanguageModel;
+  rt: HarnessTaskRuntime<AgentTurnState, HarnessTurnResult>;
+  step: number;
+  system: string | undefined;
+  tools: ToolSet | undefined;
+}): Promise<ModelResponse> => {
+  const deltas = new HarnessDeltaWriter({
+    models: context.models,
+    options: context.streaming,
+    source: {conversationId, requestKey: randomUUID(), step, turnTaskId: rt.taskId},
+  });
+  try {
+    const streamed = streamText({
+      abortSignal: rt.signal,
+      // Retries and fallbacks are the harness's; the SDK must not retry on its own.
+      maxRetries: 0,
+      messages,
+      model,
+      // Errors are rethrown below, where the harness classifies and retries them.
+      onError: () => {},
+      system,
+      tools,
+    });
+    for await (const part of streamed.fullStream) {
+      if (part.type === "text-delta") {
+        deltas.push(part.text);
+      } else if (part.type === "error") {
+        throw part.error;
+      } else if (part.type === "abort") {
+        throw rt.signal.reason ?? new Error("Model request aborted");
+      }
+    }
+    const [text, toolCalls, finishReason, usage] = await Promise.all([
+      streamed.text,
+      streamed.toolCalls,
+      streamed.finishReason,
+      streamed.usage,
+    ]);
+    return {finishReason, text, toolCalls, usage};
+  } finally {
+    await deltas.close();
+  }
+};
 
 /**
  * Build the built-in `terreno.agent.turn@1` and `terreno.agent.tool@1` task definitions.
@@ -555,7 +677,15 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
     const extensions = conversationExtensions(conversation);
     const history = await models.message.find({conversationId}).sort({seq: 1});
     const tools = buildToolSet(resolveTools(agent, extensions), conversation.agent.tools);
-    const transcript = toModelMessages(history);
+    const steering = await pendingSteering({conversation, models});
+    // Steering messages join this request after the stored transcript; the commit stores them.
+    const transcript = [
+      ...toModelMessages(history),
+      ...steering.entries.map(
+        (entry): ModelMessage => ({content: String(entry.content ?? ""), role: "user"})
+      ),
+    ];
+    const step = task.state.step + 1;
     const internals = internalRuntime(rt as HarnessTaskRuntime<unknown, unknown>);
     const api: HarnessHookApi = {
       conversationId,
@@ -571,7 +701,7 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
         agentName: agent.name,
         conversationId,
         messages: [...transcript],
-        step: task.state.step + 1,
+        step,
       },
       instructions: conversation.agent.instructions,
     });
@@ -613,6 +743,18 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
     const requestModel = () =>
       callModelWithFallback({
         call: async (model): Promise<ModelResponse> => {
+          if (!output) {
+            return streamModelRequest({
+              context,
+              conversationId,
+              messages,
+              model,
+              rt,
+              step,
+              system,
+              tools,
+            });
+          }
           try {
             const generated = await generateText({
               abortSignal: rt.signal,
@@ -689,7 +831,6 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
       return;
     }
     const {result} = call;
-    const step = task.state.step + 1;
     const text = result.text ?? "";
     const toolCalls: PendingToolCall[] = result.toolCalls.map((toolCall) => ({
       input: toolCall.input,
@@ -703,20 +844,22 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
 
     const writes: HarnessCommitWrites = async (writeContext) => {
       const {session, task: turn, traceStartedAt} = writeContext;
+      await steering.write(writeContext);
       await prompt.write(writeContext);
       const seq = await allocateSeqs({conversationId, count: 1, models, session});
-      await models.message.create(
-        [
+      await insertMessages({
+        messages: [
           {
-            conversationId,
+            conversationId: conversation._id,
             parts,
             role: HARNESS_MESSAGE_ROLES.assistant,
             seq,
             turnTaskId: turn._id,
           },
         ],
-        {session}
-      );
+        models,
+        session,
+      });
       const endedAt = DateTime.now();
       const {inputTokens, outputTokens} = result.usage;
       await models.span.create(
@@ -836,9 +979,9 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
         return;
       }
       const first = await allocateSeqs({conversationId, count: results.length, models, session});
-      await models.message.create(
-        results.map((part, index) => ({
-          conversationId,
+      await insertMessages({
+        messages: results.map((part, index) => ({
+          conversationId: conversation._id,
           parts: [part],
           role: HARNESS_MESSAGE_ROLES.tool,
           seq: first + index,
@@ -847,8 +990,9 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
           toolName: part.toolName,
           turnTaskId: turn._id,
         })),
-        {ordered: true, session}
-      );
+        models,
+        session,
+      });
     };
 
     const commit = internalRuntime(rt as HarnessTaskRuntime<unknown, unknown>).commitWithWrites;

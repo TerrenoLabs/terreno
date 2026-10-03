@@ -146,6 +146,8 @@ export interface HarnessOutcome {
 
 export interface HarnessTaskDocument extends mongoose.Document<mongoose.Types.ObjectId> {
   abortRequested?: HarnessAbortRequest;
+  /** Owning tasks from the root down to the parent; empty for a root task. */
+  ancestorIds?: mongoose.Types.ObjectId[];
   attempt: number;
   background: boolean;
   created: Date;
@@ -324,6 +326,11 @@ export interface HarnessTaskRuntime<State, Out> {
    * concurrent calls, replays, and restarts.
    */
   memo: HarnessMemo;
+  /**
+   * Append `text` to the task's event stream as an `output` event (permanent). A phase
+   * that re-runs (replay, retry) sends its output again.
+   */
+  output: (text: string) => Promise<void>;
   /** Aborted when the task is aborted or this run loses its lease; stop work promptly. */
   signal: AbortSignal;
   /**
@@ -810,10 +817,22 @@ export interface HarnessConversationAgent {
   tools: string[];
 }
 
+/** What `send` does with a message that arrives while a turn is running. */
+export const HARNESS_WHEN_BUSY = {
+  /** Run it as its own turn once the active turn (and any earlier queued ones) finish. */
+  queue: "queue",
+  /** Add it to the active turn: its next model request includes the message. */
+  steer: "steer",
+} as const;
+
+export type HarnessWhenBusy = (typeof HARNESS_WHEN_BUSY)[keyof typeof HARNESS_WHEN_BUSY];
+
+/** A submission waiting on a conversation: queued for a later turn, or steering the active one. */
 export interface HarnessQueuedSubmission {
   content?: unknown;
   requestId?: string;
   submittedAt?: Date;
+  whenBusy?: HarnessWhenBusy;
 }
 
 export interface HarnessConversationDocument extends mongoose.Document<mongoose.Types.ObjectId> {
@@ -843,6 +862,8 @@ export interface HarnessMessageDocument extends mongoose.Document<mongoose.Types
   created: Date;
   deleted: boolean;
   parts: HarnessMessagePart[];
+  /** Submitter's idempotency key, on user messages that came from `submit` / `send`. */
+  requestId?: string;
   role: HarnessMessageRole;
   seq: number;
   status?: "error" | "ok";
@@ -873,6 +894,100 @@ export interface HarnessSubmitOptions {
   content: string;
   /** Idempotency key: a repeated submit returns the turn task it started. */
   requestId: string;
+}
+
+export interface HarnessSendOptions extends HarnessSubmitOptions {
+  /** What to do when a turn is already running. */
+  whenBusy: HarnessWhenBusy;
+}
+
+/** How `send` handled a submission. */
+export const HARNESS_SUBMIT_DISPOSITIONS = {
+  /** Waiting for the active turn (and earlier queued submissions) to finish. */
+  queued: "queued",
+  /** Started a new turn. */
+  started: "started",
+  /** Joined the active turn; its next model request includes the message. */
+  steered: "steered",
+} as const;
+
+export type HarnessSubmitDisposition =
+  (typeof HARNESS_SUBMIT_DISPOSITIONS)[keyof typeof HARNESS_SUBMIT_DISPOSITIONS];
+
+export interface HarnessSubmitResult {
+  conversationId: string;
+  disposition: HarnessSubmitDisposition;
+  requestId: string;
+  /** The turn that runs (or ran) the message; unset while it is queued. */
+  turnTaskId?: string;
+}
+
+// ---------------------------------------------------------------------------------------
+// Event log (SSE source)
+// ---------------------------------------------------------------------------------------
+
+/** Every `HarnessEvent` type. Conversation streams and task streams carry different ones. */
+export const HARNESS_EVENT_TYPES = {
+  /** Task stream: an approval was approved, rejected, or expired. */
+  approvalDecided: "approval.decided",
+  /** Task stream: `rt.approval` created a pending approval. */
+  approvalRequested: "approval.requested",
+  /** Conversation stream: coalesced model text while a request streams; expires. */
+  delta: "delta",
+  /** Conversation stream: a transcript message was committed. */
+  messageCreated: "message.created",
+  /** Conversation stream: `send` queued a message or added it to the active turn. */
+  messageQueued: "message.queued",
+  /** Task stream: text a phase sent with `rt.output`. */
+  output: "output",
+  /** Task stream: a task was created or committed a new status or phase. */
+  taskStatus: "task.status",
+  /** Conversation stream: a tool call's task ended. */
+  toolFinished: "tool.finished",
+  /** Conversation stream: a tool call's task was created. */
+  toolStarted: "tool.started",
+  /** Conversation stream: a turn task ended. */
+  turnFinished: "turn.finished",
+  /** Conversation stream: a turn task was created. */
+  turnStarted: "turn.started",
+} as const;
+
+export type HarnessEventType = (typeof HARNESS_EVENT_TYPES)[keyof typeof HARNESS_EVENT_TYPES];
+
+/** One entry of a conversation's or task tree's event log. */
+export interface HarnessEventDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  created: Date;
+  /** Set on `delta` events only; Mongo deletes the row after it. */
+  expiresAt?: Date;
+  payload?: unknown;
+  /** Position in the stream: strictly increasing from 1, unique per stream. */
+  seq: number;
+  /** Conversation id, or root task id for a task tree. */
+  streamId: mongoose.Types.ObjectId;
+  /** Task the event is about, when there is one. */
+  taskId?: mongoose.Types.ObjectId;
+  /** On task-stream events: the task and every task above it. */
+  taskPath: mongoose.Types.ObjectId[];
+  type: HarnessEventType;
+}
+
+export interface HarnessEventModel extends mongoose.Model<HarnessEventDocument> {}
+
+/** Hands out a stream's event `seq`s. */
+export interface HarnessEventStreamDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  seq: number;
+}
+
+export interface HarnessEventStreamModel extends mongoose.Model<HarnessEventStreamDocument> {}
+
+/** How a streaming model request is written to the event log. */
+export interface HarnessStreamingOptions {
+  /** Flush a delta once this many characters are buffered. Default 200. */
+  deltaFlushChars?: number;
+  /** Flush buffered text at least this often while a request streams. Default 250 ms. */
+  deltaFlushInterval?: DurationLike;
+  /** How long `delta` events are kept. Default 1 hour. */
+  deltaTtl?: DurationLike;
 }
 
 // ---------------------------------------------------------------------------------------

@@ -19,7 +19,7 @@ import {
   HARNESS_WAIT_KINDS,
   HARNESS_WAIT_POLICIES,
 } from "../types/harness";
-import {AGENT_TURN_TASK_NAME} from "./agentLoop";
+import {AGENT_TURN_TASK_NAME} from "./agentTaskNames";
 import {
   claimAbortHandler,
   commitAbort,
@@ -28,6 +28,7 @@ import {
   type HarnessModels,
   wakeWaitingTask,
 } from "./commit";
+import {startNextQueuedTurn} from "./conversation";
 import {taskDefinitionKey} from "./defineTask";
 import type {ExecutionEnv} from "./executionEnv";
 
@@ -465,9 +466,107 @@ const turnConversationId = (task: HarnessTaskDocument): string | undefined => {
   return typeof conversationId === "string" ? conversationId : undefined;
 };
 
+/** Registry key of the built-in agent turn. */
+const AGENT_TURN_KEY = taskDefinitionKey({name: AGENT_TURN_TASK_NAME, version: 1});
+
+/**
+ * Run the conversation's next queued submission now that its turn ended. A failure here
+ * leaves the submission queued; the owner's queue sweep (or the next `send`) starts it.
+ */
+const startQueuedTurn = async ({
+  conversationId,
+  engine,
+}: {
+  conversationId: mongoose.Types.ObjectId;
+  engine: HarnessEngine;
+}): Promise<boolean> => {
+  const turn = engine.definitions.get(AGENT_TURN_KEY);
+  if (!turn) {
+    return false;
+  }
+  try {
+    const started = await startNextQueuedTurn({
+      context: {models: engine.models, turn, wake: engine.wake},
+      conversationId,
+    });
+    return started !== null;
+  } catch (error: unknown) {
+    logger.error(
+      `Harness could not start the next queued turn of conversation ${conversationId}: ${errorMessage(error)}`
+    );
+    return false;
+  }
+};
+
+/**
+ * Free `busy` conversations whose active turn is terminal or gone. Every terminal turn
+ * commit frees its conversation in the same transaction; this repairs conversations left
+ * busy by data written before that, or by a write that failed. Fenced on the stale turn,
+ * so a conversation that moved on is untouched. Returns how many were freed.
+ */
+const releaseStaleConversations = async (engine: HarnessEngine): Promise<number> => {
+  const {conversation, task} = engine.models;
+  const stale = await conversation.aggregate<{
+    _id: mongoose.Types.ObjectId;
+    activeTurnTaskId?: mongoose.Types.ObjectId;
+  }>([
+    {$match: {status: "busy"}},
+    {
+      $lookup: {
+        as: "turn",
+        foreignField: "_id",
+        from: task.collection.name,
+        localField: "activeTurnTaskId",
+        pipeline: [{$project: {status: 1}}],
+      },
+    },
+    {
+      $match: {
+        $or: [{"turn.0": {$exists: false}}, {"turn.status": {$in: [...HARNESS_TERMINAL_STATUSES]}}],
+      },
+    },
+    {$limit: QUEUE_SWEEP_BATCH_SIZE},
+    {$project: {activeTurnTaskId: 1}},
+  ]);
+  let released = 0;
+  for (const {_id, activeTurnTaskId} of stale) {
+    const result = await conversation.updateOne(
+      {_id, activeTurnTaskId: activeTurnTaskId ?? null, status: "busy"},
+      {$set: {status: "idle"}, $unset: {activeTurnTaskId: 1}}
+    );
+    released += result.modifiedCount;
+  }
+  return released;
+};
+
+/** Most idle conversations with a backlog one sweep starts. */
+const QUEUE_SWEEP_BATCH_SIZE = 100;
+
+/**
+ * Start the next queued submission of every conversation that still has one, after
+ * freeing conversations stuck `busy` on a finished turn. A turn frees its conversation in
+ * its terminal commit and starts the next queued turn right after; this covers a process
+ * that died between the two. Returns how many turns started.
+ */
+export const sweepQueuedConversations = async (engine: HarnessEngine): Promise<number> => {
+  await releaseStaleConversations(engine);
+  const stranded = await engine.models.conversation
+    .find({"queued.requestId": {$exists: true}, status: "idle"})
+    .select({_id: 1})
+    .limit(QUEUE_SWEEP_BATCH_SIZE)
+    .lean();
+  let started = 0;
+  for (const {_id} of stranded) {
+    if (await startQueuedTurn({conversationId: _id, engine})) {
+      started += 1;
+    }
+  }
+  return started;
+};
+
 /**
  * Wake whatever owns a task that just settled: a waiting parent task re-checks its wait;
- * a conversation whose turn ended goes back to `idle`.
+ * a conversation whose turn ended goes back to `idle` and starts its next queued submission.
  */
 export const settleTaskOwner = async ({
   engine,
@@ -478,6 +577,7 @@ export const settleTaskOwner = async ({
 }): Promise<void> => {
   if (task.ownership?.kind === "conversation" && task.ownership.id) {
     await releaseConversation({engine, task});
+    await startQueuedTurn({conversationId: task.ownership.id, engine});
     return;
   }
   // A subagent turn frees its conversation, then wakes the task waiting on it.

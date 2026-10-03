@@ -15,6 +15,7 @@ import {HARNESS_CONVERSATION_STATUSES, HARNESS_MESSAGE_ROLES} from "../types/har
 import type {AgentTurnInput} from "./agentLoop";
 import {createChildTaskRecords, type HarnessModels} from "./commit";
 import {conversationAgentSnapshot} from "./conversation";
+import {insertMessages} from "./events";
 
 /** A subagent run by `rt.runAgent` did not produce a usable answer. */
 export class HarnessSubagentError extends Error {
@@ -131,8 +132,8 @@ export const startSubagentTurn = async ({
         ],
         {session}
       );
-      await models.message.create(
-        [
+      await insertMessages({
+        messages: [
           {
             conversationId: newConversationId,
             parts: [{text: content, type: "text"}],
@@ -141,8 +142,9 @@ export const startSubagentTurn = async ({
             turnTaskId: task._id,
           },
         ],
-        {session}
-      );
+        models,
+        session,
+      });
     },
   });
   // An existing turn carries the conversation created with it.

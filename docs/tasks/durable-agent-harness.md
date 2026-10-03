@@ -91,7 +91,7 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: reference "Versioning"; how-to "Ship a new task version"
   - Acceptance: AC10
 
-- [ ] **Task 1.11**: Approvals inbox (admin-frontend)
+- [x] **Task 1.11**: Approvals inbox (admin-frontend)
   - Delivers: `admin-frontend/src/widgets/harness/HarnessApprovalInbox.tsx` (list, detail, approve/reject with reason, loading/empty/error states) via `adminRequest`; admin custom screen `harness-approvals` (group "AI Harness"); standalone export; example-frontend admin route; `bun run sdk`
   - Files: `admin-frontend/src/widgets/harness/*`, `ai/src/harness/adminScreens.ts`, `example-frontend/app/admin/*`, tests
   - Blocked by: 1.8

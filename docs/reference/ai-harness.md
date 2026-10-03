@@ -676,8 +676,10 @@ trimmed; a blank reason is not stored.
    new TerrenoApp({userModel: User}).register(new HarnessApp({harness})).start();
    ```
 
-4. Approvers list `GET /harness/approvals` and call
-   `POST /harness/approvals/:id/approve` or `/reject` with `{reason}`.
+4. Approvers decide in the admin **AI Harness → Approvals** inbox
+   ([admin-frontend](admin-frontend.md#ai-harness-approvals-inbox)), or list
+   `GET /harness/approvals` and call `POST /harness/approvals/:id/approve` or `/reject` with
+   `{reason}`.
 5. To gate agent tool calls instead of a phase, add [`approvalGate`](#approvalgate) to the agent.
 
 ## approvalGate
@@ -773,6 +775,18 @@ appear in `/openapi.json` (tag `harness`). The two SSE routes are plain Express 
 | 409 | Already decided, expired, or its task ended. `code: "harness-approval-not-pending"`; `detail` names the cause. |
 
 `decidedBy` is the caller's user id (`req.user.id`).
+
+Approvers decide in the admin approvals inbox: `HarnessApp.adminContribution()` adds custom
+screen `harness-approvals` (group "AI Harness") to `AdminApp`, rendered by
+`@terreno/admin-frontend`'s `HarnessApprovalInbox`, which can also be mounted outside admin
+chrome. `harnessAdminScreens()`, `HARNESS_APPROVALS_SCREEN`, and `AI_HARNESS_GROUP` are exported
+from `@terreno/ai/harness`. See
+[AI Harness approvals inbox](admin-frontend.md#ai-harness-approvals-inbox).
+
+The example backend mounts `HarnessApp` only when Mongo is a replica set (`Harness.open`
+requires one). Its unit tests run on a standalone memory server, so the example-backend
+OpenAPI snapshot excludes the `/harness/*` routes; the generated example-frontend SDK
+(`bun run sdk` against a replica-set backend) includes them.
 
 ## Event stream (SSE)
 

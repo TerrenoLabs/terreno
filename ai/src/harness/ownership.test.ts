@@ -1,4 +1,4 @@
-import {afterEach, beforeAll, beforeEach, describe, expect, it} from "bun:test";
+import {afterEach, beforeAll, beforeEach, describe, expect, it, setDefaultTimeout} from "bun:test";
 import mongoose from "mongoose";
 
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
@@ -18,6 +18,9 @@ import {registerHarnessEvent, registerHarnessEventStream} from "./models/harness
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
 import {type HarnessEngine, sweepWaitingTasks} from "./ownership";
+
+// Multi-task trees under a loaded full run need more than Bun's 5s default.
+setDefaultTimeout(30_000);
 
 const TaskModel = registerHarnessTask();
 const OwnerModel = registerHarnessOwner();

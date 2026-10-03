@@ -411,6 +411,12 @@ inbox (approver) ── approve/reject ──> one transaction: approval decided
 phase re-runs ──> rt.approval returns the decision
 ```
 
+The approver's side is an inbox in `@terreno/admin-frontend`, not a bespoke screen per app.
+`HarnessApp` contributes it to the admin sidebar, and the same component mounts on a
+clinician-facing screen. It lists only what the viewer may decide, so the inbox and the
+approve route answer the same permission question. See
+[the inbox reference](../reference/admin-frontend.md#ai-harness-approvals-inbox).
+
 ### Approvers are code, looked up by name
 
 Who may approve is a list of permission functions in the same shape as modelRouter

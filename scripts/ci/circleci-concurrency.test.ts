@@ -24,6 +24,7 @@ const E2E_SHARDS: Record<string, string[]> = {
     "admin-table-bulk-actions",
     "admin-custom-screens",
     "admin-comms-back",
+    "harness-approvals",
   ],
   app: ["todos", "profile", "realtime", "ai-chat", "pdf", "notifications"],
   auth: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],

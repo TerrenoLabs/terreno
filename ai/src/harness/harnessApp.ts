@@ -1,7 +1,8 @@
-import type {TerrenoPlugin} from "@terreno/api";
+import type {AdminContribution, TerrenoPlugin} from "@terreno/api";
 import type express from "express";
 import type {DurationLike} from "luxon";
 
+import {harnessAdminScreens} from "./adminScreens";
 import {HarnessEventHub} from "./eventHub";
 import type {Harness} from "./harness";
 import {addHarnessApprovalRoutes, assertValidBasePath} from "./routes/approvals";
@@ -28,6 +29,9 @@ export interface HarnessAppOptions {
  *
  * The SSE routes only read Mongo, so any instance serves any stream. All of an app's SSE
  * connections share one change stream (`eventHub`), so viewers cost no pooled connections.
+ *
+ * With `AdminApp` registered on the same app, it adds the approvals inbox custom screen
+ * (`harness-approvals`, group "AI Harness") to the admin sidebar.
  *
  * @example
  * ```typescript
@@ -63,5 +67,9 @@ export class HarnessApp implements TerrenoPlugin {
     addHarnessConversationRoutes(app, {basePath, harness, openApi});
     addHarnessTaskRoutes(app, {basePath, harness, openApi});
     addHarnessApprovalRoutes(app, {basePath, harness, openApi});
+  }
+
+  adminContribution(): AdminContribution {
+    return {customScreens: harnessAdminScreens()};
   }
 }

@@ -12,6 +12,7 @@ import {getJobsService} from "@terreno/jobs";
 import mongoose from "mongoose";
 
 import {consentDefinitions} from "./consentDefinitions";
+import {startApprovalDemo} from "./harness/startApprovalDemo";
 import {Project} from "./models/project";
 import {Todo} from "./models/todo";
 import {User} from "./models/user";
@@ -242,5 +243,27 @@ export const adminScripts: AdminScriptConfig[] = [
         success: true,
       };
     },
+  },
+  {
+    args: [
+      {
+        default: 2,
+        description: "How many demo approvals to request (1-20)",
+        example: "2",
+        name: "count",
+        type: "number",
+      },
+      {
+        default: "Demo approval",
+        description: "Title prefix; each approval is titled '<prefix> <n> of <count>'",
+        example: "Demo approval",
+        name: "prefix",
+        type: "string",
+      },
+    ],
+    description:
+      "Start demo.approvalDemo harness tasks; each waits for an admin decision in AI Harness > Approvals.",
+    name: "startHarnessApprovalDemo",
+    runner: startApprovalDemo,
   },
 ];

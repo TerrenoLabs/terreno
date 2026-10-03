@@ -185,7 +185,7 @@ describe("Harness phase retries", () => {
   });
 
   it("schedules each retry with exponential backoff and does not run it before runAt", async () => {
-    const start = DateTime.fromISO("2026-10-03T12:00:00.000Z");
+    const start = DateTime.now();
     let clock = start;
     Settings.now = () => clock.toMillis();
 

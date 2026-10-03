@@ -21,7 +21,9 @@ let SpanModel: ObsSpanModel;
 let TraceModel: ObsTraceModel;
 const openHarnesses: Harness[] = [];
 
-const START = DateTime.fromISO("2026-10-03T12:00:00.000Z");
+// Frozen per test at the real current time: a fixed date would put leases and timestamps
+// written in real time by earlier tests in this process "in the future" once that date passes.
+let START = DateTime.now();
 let clock = START;
 
 const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -97,6 +99,7 @@ describe("Harness events, waits, and sleep", () => {
   });
 
   beforeEach(async () => {
+    START = DateTime.now();
     clock = START;
     Settings.now = () => clock.toMillis();
     await Promise.all([

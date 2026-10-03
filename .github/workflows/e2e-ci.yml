@@ -62,6 +62,7 @@ jobs:
           - admin-table-bulk-actions
           - admin-custom-screens
           - admin-comms-back
+          - harness-approvals
           - consents
           - forgot-password
           - reset-password

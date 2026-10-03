@@ -8,6 +8,7 @@ import {
   LangfuseApp,
   ObservabilityApp,
 } from "@terreno/ai";
+import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
   AuditApp,
@@ -71,6 +72,7 @@ import {bindPortEarly, closeEarlyListenHolder} from "./bindPortEarly";
 import {isDeployed, isWebsocketService, WEBSOCKETS_DEBUG} from "./conf";
 import {consentDefinitions} from "./consentDefinitions";
 import {exampleAdminHome} from "./exampleAdminConfig";
+import {openExampleHarness, startExampleHarness} from "./harness/exampleHarness";
 import {createExampleJobsApp} from "./jobs/createExampleJobsApp";
 import {shouldStartJobsWorkerInApiProcess} from "./jobs/jobsStartWorker";
 import {registerJobsWorkerShutdown} from "./jobs/shutdownJobsWorker";
@@ -434,28 +436,35 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     const exampleJobsApp = createExampleJobsApp({accessControl: access});
     terraApp.register(exampleJobsApp);
 
-    terraApp
+    terraApp.register(
+      new ObservabilityApp({
+        aiService: getAiService(),
+        aiServiceFactory: (modelId) => {
+          const model = createServerModel(modelId);
+          if (!model) {
+            return undefined;
+          }
+          return new AIService({model});
+        },
+        plugins: [createLocalObservabilityPlugin()],
+        priceMap: parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON),
+        requestAiServiceFactory: ({apiKey, modelId}) => {
+          if (!apiKey) {
+            return undefined;
+          }
+          return new AIService({model: createModelFromKey(apiKey, modelId)});
+        },
+      })
+    );
 
-      .register(
-        new ObservabilityApp({
-          aiService: getAiService(),
-          aiServiceFactory: (modelId) => {
-            const model = createServerModel(modelId);
-            if (!model) {
-              return undefined;
-            }
-            return new AIService({model});
-          },
-          plugins: [createLocalObservabilityPlugin()],
-          priceMap: parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON),
-          requestAiServiceFactory: ({apiKey, modelId}) => {
-            if (!apiKey) {
-              return undefined;
-            }
-            return new AIService({model: createModelFromKey(apiKey, modelId)});
-          },
-        })
-      )
+    // Before AdminApp, so HarnessApp's approvals inbox joins the admin sidebar. Skipped
+    // (with a warning) when Mongo is not a replica set, as in the unit tests.
+    const exampleHarness = await openExampleHarness();
+    if (exampleHarness) {
+      terraApp.register(new HarnessApp({harness: exampleHarness}));
+    }
+
+    terraApp
       .register(
         new AdminApp({
           accessControl: access,
@@ -569,6 +578,10 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       logger.info(
         "[jobs] API-process worker disabled (JOBS_START_WORKER=false); use bun run jobs:worker if needed"
       );
+    }
+
+    if (!skipListen) {
+      await startExampleHarness();
     }
 
     // Log total boot time

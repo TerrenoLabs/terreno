@@ -281,6 +281,8 @@ describe("Harness approvals", () => {
         title: "Sign off intake summary",
         traceId: String(created.traceId),
       });
+      // notify runs after the commit that parks the task, so `waiting` can be seen first.
+      await waitUntil(async () => notify.mock.calls.length > 0, "notify after commit");
       expect(notify).toHaveBeenCalledTimes(1);
       expect(String(notify.mock.calls[0]?.[0]._id)).toBe(String(approval._id));
 
@@ -468,7 +470,7 @@ describe("Harness approvals", () => {
 
   describe("expiry, abort, and restart", () => {
     it("expires an undecided approval at its timeout and refuses later decisions", async () => {
-      const start = DateTime.fromISO("2026-10-03T12:00:00.000Z");
+      const start = DateTime.now();
       let clock = start;
       Settings.now = () => clock.toMillis();
       const definition = asksApproval({name: "test.expires", timeout: {hours: 1}});
@@ -561,7 +563,7 @@ describe("Harness approvals", () => {
   describe("races and forged events", () => {
     /** Past the approval's timeout with the runner stopped, so the next owner resolves it. */
     const parkThenPassTimeout = async (definition: AnyHarnessTaskDefinition) => {
-      const start = DateTime.fromISO("2026-10-03T12:00:00.000Z");
+      const start = DateTime.now();
       Settings.now = () => start.toMillis();
       const first = await openHarness([definition]);
       const created = await first.createTask(definition, {patientId: "r1"});
@@ -609,7 +611,7 @@ describe("Harness approvals", () => {
     });
 
     it("treats a decision that beat the timeout as the answer", async () => {
-      const start = DateTime.fromISO("2026-10-03T12:00:00.000Z");
+      const start = DateTime.now();
       Settings.now = () => start.toMillis();
       const definition = asksApproval({name: "test.decisionWins", timeout: {hours: 1}});
       const first = await openHarness([definition]);
@@ -955,6 +957,7 @@ describe("Harness approvals", () => {
         title: 'Run tool "writeNote"',
       });
       expect(executed).toEqual([]);
+      await waitUntil(async () => notify.mock.calls.length > 0, "notify after commit");
       expect(notify).toHaveBeenCalledTimes(1);
 
       const admin = await authAsUser(app, "admin");
@@ -1001,7 +1004,7 @@ describe("Harness approvals", () => {
     });
 
     it("blocks the tool when nobody approves before the timeout", async () => {
-      const start = DateTime.fromISO("2026-10-03T12:00:00.000Z");
+      const start = DateTime.now();
       Settings.now = () => start.toMillis();
       const {executed, harness, prompts, toolTask, turn} = await setup({timeout: {hours: 1}});
       expect((await approvalOf(toolTask._id)).expiresAt?.getTime()).toBe(

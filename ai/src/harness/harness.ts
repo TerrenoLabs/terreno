@@ -177,6 +177,7 @@ export {
   HARNESS_WAIT_RESOLUTIONS,
   HARNESS_WHEN_BUSY,
 } from "../types/harness";
+export {AI_HARNESS_GROUP, HARNESS_APPROVALS_SCREEN, harnessAdminScreens} from "./adminScreens";
 export {AGENT_TOOL_TASK_NAME, AGENT_TURN_TASK_NAME} from "./agentTaskNames";
 export {
   type ApprovalGateOptions,

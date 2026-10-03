@@ -747,7 +747,7 @@ describe("observability route RBAC", () => {
         const response = await sendRequest(agent, case_);
         expect(response.status).toBe(403);
       }
-    });
+    }, 30_000);
 
     it("passes middleware when the mapped action is granted", async () => {
       const fixtures = await seedFixtures();

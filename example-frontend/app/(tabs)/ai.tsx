@@ -1,4 +1,4 @@
-import {baseUrl, selectBetterAuthUserId, useMCPTools} from "@terreno/rtk";
+import {baseUrl, selectBetterAuthUserId, useFeatureFlags, useMCPTools} from "@terreno/rtk";
 import {
   Box,
   GPTChat,
@@ -17,6 +17,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {type ImageSourcePropType, Image as RNImage} from "react-native";
 import {useDispatch, useSelector} from "react-redux";
 import {getSessionToken} from "@/lib/betterAuth";
+import {fileUploadsEnabledFromFlags} from "@/lib/fileUploads";
 import {selectGptMascotIndex} from "@/lib/gptMascot";
 import {
   type GptHistory,
@@ -191,6 +192,16 @@ const AiScreen: React.FC = () => {
 
   const dispatch = useDispatch();
   const userId = useSelector(selectBetterAuthUserId);
+  const {flags, isLoading: isFlagsLoading} = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  const fileUploadsEnabled = fileUploadsEnabledFromFlags({flags, isLoading: isFlagsLoading});
+
+  // Drop staged files when an admin turns the file-uploads flag off.
+  useEffect(() => {
+    if (!fileUploadsEnabled) {
+      setAttachments([]);
+    }
+  }, [fileUploadsEnabled]);
+
   const {data: modelsData} = useGetAiModelsQuery(undefined, {skip: !userId});
 
   // Prefer the live model list from the backend; fall back to the static list until it loads.
@@ -502,7 +513,7 @@ const AiScreen: React.FC = () => {
 
   const handleSubmit = useCallback(
     async (prompt: string) => {
-      const currentAttachments = [...attachments];
+      const currentAttachments = fileUploadsEnabled ? [...attachments] : [];
       setAttachments([]);
 
       // Build content parts for display in the chat from attached files
@@ -569,7 +580,14 @@ const AiScreen: React.FC = () => {
         setIsStreaming(false);
       }
     },
-    [attachments, createStreamEventHandler, currentHistoryId, geminiApiKey, selectedModel]
+    [
+      attachments,
+      createStreamEventHandler,
+      currentHistoryId,
+      fileUploadsEnabled,
+      geminiApiKey,
+      selectedModel,
+    ]
   );
 
   if (isLoading) {
@@ -582,7 +600,7 @@ const AiScreen: React.FC = () => {
 
   return (
     <GPTChat
-      attachments={attachments}
+      attachments={fileUploadsEnabled ? attachments : []}
       availableModels={availableModels}
       currentHistoryId={currentHistoryId}
       currentMessages={currentMessages}
@@ -591,7 +609,7 @@ const AiScreen: React.FC = () => {
       isStreaming={isStreaming}
       mascot={mascot}
       mcpTools={mcpTools}
-      onAttachFiles={handleAttachFiles}
+      onAttachFiles={fileUploadsEnabled ? handleAttachFiles : undefined}
       onCreateHistory={handleCreateHistory}
       onDeleteHistory={handleDeleteHistory}
       onGeminiApiKeyChange={setGeminiApiKey}

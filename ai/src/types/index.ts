@@ -282,6 +282,11 @@ export interface GptRouteOptions {
   langfuseSystemPromptName?: string;
   /** When set, `data:` attachments are uploaded to durable storage and history stores the reference. */
   fileStorageService?: import("../service/fileStorage").FileStorageService;
+  /**
+   * When `false` or the function returns `false`, prompts that include attachments are rejected.
+   * Omit or pass `true` to leave uploads enabled.
+   */
+  fileUploadsEnabled?: import("../service/fileUploadsGate").FileUploadsEnabled;
   /** How often partial assistant output is persisted while streaming. Defaults to 1000ms. */
   streamPersistIntervalMs?: number;
   /** How often the resume endpoint polls for new partial output. Defaults to 500ms. */
@@ -302,6 +307,11 @@ export interface FileRouteOptions {
   gcsBucket: string;
   maxFileSize?: number;
   openApiOptions?: Record<string, unknown>;
+  /**
+   * When `false` or the function returns `false`, `POST /files/upload` is rejected.
+   * Reads and deletes stay available. Omit or pass `true` to leave uploads enabled.
+   */
+  fileUploadsEnabled?: import("../service/fileUploadsGate").FileUploadsEnabled;
 }
 
 export interface McpRouteOptions {

@@ -63,6 +63,16 @@ const SEED_FLAGS = [
     ],
   },
   {
+    defaultVariant: "on",
+    description: "Allow users to upload files to chat and document storage",
+    enabled: true,
+    key: "file-uploads",
+    name: "File Uploads",
+    rolloutPercentage: 100,
+    rules: [],
+    type: "boolean" as const,
+  },
+  {
     defaultVariant: "off",
     description: "Show the AI features tab in the main navigation",
     enabled: false,

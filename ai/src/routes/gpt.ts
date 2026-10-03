@@ -18,6 +18,7 @@ import {GptHistory} from "../models/gptHistory";
 import {Project} from "../models/project";
 import {AIService} from "../service/aiService";
 import type {FileStorageService} from "../service/fileStorage";
+import {assertFileUploadsEnabled} from "../service/fileUploadsGate";
 import {TITLE_GENERATION_PROMPT} from "../service/prompts";
 import type {
   GptHistoryDocument,
@@ -340,6 +341,9 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
 
         if (!prompt || typeof prompt !== "string") {
           throw new APIError({status: 400, title: "prompt is required"});
+        }
+        if (Array.isArray(attachments) && attachments.length > 0) {
+          await assertFileUploadsEnabled(req, options.fileUploadsEnabled);
         }
         const validAttachments = validateAttachments(attachments);
 

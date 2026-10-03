@@ -150,7 +150,7 @@ addGptRoutes(router, {aiService, openApiOptions: options});
 | `/gpt/remix` | POST | Non-streaming text remix |
 | `/gpt/histories/:id/stream` | GET | SSE resume of an in-flight `/gpt/prompt` reply |
 
-All require authentication. `/gpt/prompt` accepts `{prompt, historyId?, systemPrompt?, attachments?}` and streams via Server-Sent Events. Attachment URLs must be `http(s):` or `data:` (client-only `blob:`/`file:` URLs get 400); with `fileStorageService`, `data:` attachments are uploaded and history stores `url` + `gcsKey`. The reply is persisted as a `status: "streaming"` assistant prompt with throttled partial text, so clients can resume after a reload. See `docs/reference/ai.md`.
+All require authentication. `/gpt/prompt` accepts `{prompt, historyId?, systemPrompt?, attachments?}` and streams via Server-Sent Events. Attachment URLs must be `http(s):` or `data:` (client-only `blob:`/`file:` URLs get 400); with `fileStorageService`, `data:` attachments are uploaded and history stores `url` + `gcsKey`. `fileUploadsEnabled: false` (or a function that returns false) rejects uploads and attachments with 403. The reply is persisted as a `status: "streaming"` assistant prompt with throttled partial text, so clients can resume after a reload. See `docs/reference/ai.md`.
 
 ### addGptHistoryRoutes(router, options)
 

@@ -25,6 +25,11 @@ export interface AiAppOptions {
   fileStorageService?: FileStorageService;
   /** GCS bucket name for file uploads. Required alongside fileStorageService. */
   gcsBucket?: string;
+  /**
+   * When `false` or the function returns `false`, file uploads and chat attachments are rejected.
+   * Omit or pass `true` to leave uploads enabled whenever storage is configured.
+   */
+  fileUploadsEnabled?: import("./service/fileUploadsGate").FileUploadsEnabled;
   /** Maximum number of tool-calling steps per chat request. Defaults to 5 when tools are present. */
   maxSteps?: number;
   /** MCP service for connecting to external tool servers. */
@@ -80,6 +85,7 @@ export class AiApp implements TerrenoPlugin {
       createServerModelFn,
       demoMode,
       fileStorageService,
+      fileUploadsEnabled,
       gcsBucket,
       maxSteps,
       mcpService,
@@ -97,6 +103,7 @@ export class AiApp implements TerrenoPlugin {
       demoMode,
       // Attachments are only uploaded when the file routes are mounted too
       fileStorageService: fileStorageService && gcsBucket ? fileStorageService : undefined,
+      fileUploadsEnabled,
       maxSteps,
       mcpService,
       openApiOptions,
@@ -110,6 +117,7 @@ export class AiApp implements TerrenoPlugin {
     if (fileStorageService && gcsBucket) {
       addFileRoutes(router, {
         fileStorageService,
+        fileUploadsEnabled,
         gcsBucket,
         openApiOptions,
       });

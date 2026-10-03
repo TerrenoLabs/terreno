@@ -1293,6 +1293,18 @@ describe("AI Routes", () => {
         userModel: UserModel,
       }).build();
 
+    it("rejects attachments when file uploads are disabled", async () => {
+      const gated = buildApp({fileUploadsEnabled: async () => false});
+      const agent = await authAsUser(gated, "notAdmin");
+      const res = await agent.post("/gpt/prompt").send({
+        attachments: [{mimeType: "image/png", type: "image", url: "data:image/png;base64,aGk="}],
+        prompt: "What is this?",
+      });
+      expect(res.status).toBe(403);
+      expect(res.body.title).toBe("File uploads are disabled");
+      expect(await GptHistory.countDocuments({})).toBe(0);
+    });
+
     it("rejects client-only attachment URLs before streaming", async () => {
       const agent = await authAsUser(app, "notAdmin");
       const res = await agent.post("/gpt/prompt").send({

@@ -48,6 +48,7 @@ import {access} from "./access";
 import {adminScripts} from "./adminScripts";
 import {addAiRoutes, aiModelsRouter} from "./api/ai";
 import {commsDevRouter} from "./api/commsDev";
+import {fileUploadsEnabledForRequest} from "./api/fileUploads";
 import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
 import {addDevNotificationRoutes} from "./api/notificationsDev";
 import {projectOrgContextPlugin, projectRouter} from "./api/projects";
@@ -59,6 +60,7 @@ import {bindPortEarly, closeEarlyListenHolder} from "./bindPortEarly";
 import {isDeployed, isWebsocketService, WEBSOCKETS_DEBUG} from "./conf";
 import {consentDefinitions} from "./consentDefinitions";
 import {exampleAdminHome} from "./exampleAdminConfig";
+import {exampleFeatureFlagSegments} from "./featureFlagSegments";
 import {createExampleJobsApp} from "./jobs/createExampleJobsApp";
 import {shouldStartJobsWorkerInApiProcess} from "./jobs/jobsStartWorker";
 import {registerJobsWorkerShutdown} from "./jobs/shutdownJobsWorker";
@@ -401,18 +403,14 @@ export const start = async (skipListen = false): Promise<express.Application> =>
           liveUpdates: {
             socketIoServer: () => io,
           },
-          segments: {
-            "admin-users": (user: unknown) => (user as {admin?: boolean}).admin === true,
-            "has-name": (user: unknown) => Boolean((user as {name?: string}).name),
-            "oauth-users": (user: unknown) =>
-              Boolean((user as {oauthProvider?: string}).oauthProvider),
-          },
+          segments: exampleFeatureFlagSegments,
         })
       )
       .register(
         new DocumentStorageApp({
           basePath: "/documents",
           bucketName: process.env.GCS_BUCKET ?? "",
+          fileUploadsEnabled: fileUploadsEnabledForRequest,
         })
       )
       .register(new AuditApp())

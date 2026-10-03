@@ -265,6 +265,8 @@ Each `attachments` item is `{type: "image" | "file", url, mimeType, filename?}`.
 
 When `fileStorageService` is set, `data:` attachments are uploaded with `FileStorageService.upload`. The saved user prompt then stores the storage `url` plus `gcsKey`, not the base64 payload. The model still receives the original data for that turn. On later turns, parts with a `gcsKey` are sent to the model as 1-hour signed URLs. A failed upload returns `502 Attachment upload failed`. Without storage, attachments are saved as sent.
 
+`fileUploadsEnabled` turns uploads off without removing storage. Pass `false`, or a function that returns `false`, and any prompt that includes attachments returns `403 File uploads are disabled` before streaming. Omit it, or pass `true`, to leave uploads enabled. The example app wires this to the `file-uploads` feature flag.
+
 #### Stream events and resume
 
 `/gpt/prompt` saves the user turn and a `status: "streaming"` assistant placeholder before streaming. While the reply streams, partial text is persisted about every second (`streamPersistIntervalMs`), plus a heartbeat every 10 seconds. The final reply replaces the placeholder with `status: "complete"`. On failure, partial text is kept with `status: "error"`; an empty placeholder is removed.
@@ -309,7 +311,7 @@ Requires `fileStorageService` and `gcsBucket` (registered by `AiApp` when both a
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/files/upload` | POST | `IsAuthenticated` | Multipart upload (`file` field); allowed MIME: images, PDF, plain text, CSV, JSON |
+| `/files/upload` | POST | `IsAuthenticated` | Multipart upload (`file` field); allowed MIME: images, PDF, plain text, CSV, JSON. Returns `403` when `fileUploadsEnabled` is off |
 | `/files/*gcsKey` | GET | None | Returns signed read URL (1 hour) |
 | `/files/*gcsKey` | DELETE | `IsAuthenticated` (owner) | Soft-delete attachment and remove from GCS |
 
@@ -358,6 +360,7 @@ new AiApp({
 | `createServerModelFn` | Server-side model factory (e.g. Vertex ADC) without per-request key |
 | `demoMode` | Return canned responses when no AI service resolves |
 | `fileStorageService` + `gcsBucket` | Enable file upload routes and durable `/gpt/prompt` attachments |
+| `fileUploadsEnabled` | `false` or a function returning `false` rejects uploads and chat attachments with `403`. Omit to leave uploads enabled |
 | `mcpService` | Enable MCP routes and tool discovery in chat |
 | `tools` | Static Vercel AI SDK tool definitions for chat |
 | `toolChoice` | `"auto"` \| `"none"` \| `"required"` (default `"auto"` when tools present) |

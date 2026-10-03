@@ -123,10 +123,15 @@ export class FeatureFlagsApp implements TerrenoPlugin {
         }
 
         const targetingKey = String(user._id ?? user.id);
-        const flags = await FeatureFlag.find({archived: {$ne: true}, enabled: true});
+        const flags = await FeatureFlag.find({archived: {$ne: true}});
         const config: Record<string, FlagDefinition> = {};
 
         for (const flag of flags) {
+          // Disabled boolean flags are sent as `off` so clients can tell a turned-off
+          // flag from one that was never created. Disabled variant flags stay omitted.
+          if (!flag.enabled && flag.type !== "boolean") {
+            continue;
+          }
           config[flag.key] = buildFlagDefinition(flag, targetingKey, user, this.segments);
         }
 

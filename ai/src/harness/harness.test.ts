@@ -311,7 +311,7 @@ describe("Harness", () => {
   });
 
   describe("phase failures", () => {
-    it("fails the task with an error span when a phase throws", async () => {
+    it("fails the task with an error span when a phase throws with no retries left", async () => {
       const throwing = defineTask<unknown, unknown, unknown>({
         initial: () => ({phase: "explode"}),
         name: "test.throwing",
@@ -322,6 +322,7 @@ describe("Harness", () => {
             },
           },
         },
+        retry: {maxAttempts: 1},
         version: 1,
       });
       const harness = await openHarness({registry: [throwing]});

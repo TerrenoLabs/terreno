@@ -1,4 +1,5 @@
 import type {HarnessTaskDefinition, HarnessTaskDefinitionInput} from "../types/harness";
+import {assertValidRetryPolicy} from "./retryBackoff";
 
 /** Registry key that pins a run to one definition version. */
 export const taskDefinitionKey = ({name, version}: {name: string; version: number}): string =>
@@ -31,6 +32,12 @@ export const defineTask = <In, State, Out>(
         `defineTask(${definition.name}): phase "${phaseName}" replay must be "safe" or "never"`
       );
     }
+  }
+  if (definition.retry !== undefined) {
+    assertValidRetryPolicy(definition.name, definition.retry);
+  }
+  if (definition.abort !== undefined && typeof definition.abort !== "function") {
+    throw new Error(`defineTask(${definition.name}): abort must be a function`);
   }
   return Object.freeze({
     ...definition,

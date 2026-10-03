@@ -719,7 +719,12 @@ describe("Harness leases and crash recovery", () => {
       expect((await findTask(created._id)).status).toBe("aborted");
       expect(writes).toBe(0);
       expect(await resolutionSpan(done)).toEqual({
-        output: {action: "abort", phase: "write", reason: "Duplicate intake"},
+        output: {
+          abortHandler: {status: "none"},
+          action: "abort",
+          phase: "write",
+          reason: "Duplicate intake",
+        },
         status: "ok",
       });
       const trace = await TraceModel.findExactlyOne({_id: done.traceId});

@@ -2,6 +2,7 @@ import {DateTime, Duration, type DurationLike} from "luxon";
 import mongoose from "mongoose";
 
 import type {
+  HarnessAbortOptions,
   HarnessCreateTaskOptions,
   HarnessResolveInterruptedOptions,
   HarnessRunner,
@@ -20,10 +21,15 @@ import {taskDefinitionKey} from "./defineTask";
 import {acquireOwnerLease, releaseOwnerLease} from "./leases";
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
+import {abortTaskTree, type HarnessEngine, settleTaskOwner} from "./ownership";
 import {InProcessRunner} from "./runners/inProcessRunner";
 import {claimNextTask, recoverExpiredTasks, runClaimedTask} from "./runtime";
 
 export type {
+  HarnessAbortOptions,
+  HarnessAbortRuntime,
+  HarnessChildOutcome,
+  HarnessChildTaskOptions,
   HarnessCommit,
   HarnessCreateTaskOptions,
   HarnessLeaseSettings,
@@ -44,8 +50,18 @@ export type {
   HarnessTaskView,
   HarnessTerminalCommit,
   HarnessTestHooks,
+  HarnessWaitForTasksOptions,
+  HarnessWaiting,
+  HarnessWaitKind,
+  HarnessWaitPolicy,
 } from "../types/harness";
-export {HARNESS_RESOLVE_ACTIONS, HARNESS_TASK_STATUSES} from "../types/harness";
+export {
+  HARNESS_RESOLVE_ACTIONS,
+  HARNESS_RETRY_DEFAULTS,
+  HARNESS_TASK_STATUSES,
+  HARNESS_WAIT_KINDS,
+  HARNESS_WAIT_POLICIES,
+} from "../types/harness";
 export {HarnessCommitConflictError} from "./commit";
 export {defineTask} from "./defineTask";
 export {
@@ -117,6 +133,7 @@ const buildRegistry = (
  */
 export class Harness {
   private readonly definitions: Map<string, HarnessTaskDefinition>;
+  private readonly engine: HarnessEngine;
   private isStarted = false;
   private readonly models: HarnessModels;
   private readonly runner: HarnessRunner;
@@ -137,6 +154,13 @@ export class Harness {
     this.models = models;
     this.runner = runner;
     this.testHooks = testHooks;
+    this.engine = {
+      controllers: new Map(),
+      definitions,
+      models,
+      testHooks,
+      wake: () => runner.wake(),
+    };
   }
 
   /**
@@ -168,13 +192,13 @@ export class Harness {
       throw new Error("Harness is already started");
     }
     this.isStarted = true;
-    const {definitions, models, testHooks} = this;
+    const {definitions, engine, models, testHooks} = this;
     await this.runner.start({
       acquireOwnerLease: (lease) => acquireOwnerLease({lease, models, testHooks}),
       claimNext: (lease) => claimNextTask({definitions, lease, models}),
-      recoverExpired: () => recoverExpiredTasks({definitions, models, testHooks}),
+      recoverExpired: () => recoverExpiredTasks(engine),
       releaseOwnerLease: (lease) => releaseOwnerLease({lease, models}),
-      runTask: (task, lease) => runClaimedTask({definitions, lease, models, task, testHooks}),
+      runTask: (task, lease) => runClaimedTask({engine, lease, task}),
     });
   }
 
@@ -211,10 +235,37 @@ export class Harness {
   }
 
   /**
+   * Abort a task and every non-terminal task it owns, deepest first. Each task's running
+   * phase (in this process, or elsewhere within one heartbeat) sees `rt.signal` abort; its
+   * `abort` handler runs; then it is committed `aborted` with an `abort` audit span. A
+   * failing handler is recorded on that span and the abort proceeds. Throws when `reason`
+   * is blank or the task is already terminal.
+   */
+  async abort(
+    taskId: mongoose.Types.ObjectId | string,
+    options: HarnessAbortOptions
+  ): Promise<HarnessTaskDocument> {
+    if (typeof options?.reason !== "string" || !options.reason.trim()) {
+      throw new Error("abort requires a reason");
+    }
+    const task = await this.models.task.findExactlyOne({_id: taskId});
+    if (HARNESS_TERMINAL_STATUSES.has(task.status)) {
+      throw new Error(`Task ${taskId} is already ${task.status}`);
+    }
+    return abortTaskTree({
+      engine: this.engine,
+      reason: options.reason,
+      top: task,
+      userId: options.userId === undefined ? undefined : String(options.userId),
+    });
+  }
+
+  /**
    * Decide what happens to an `interrupted` task: `retry` re-queues the same phase,
-   * `abort` ends it `aborted`, `complete` ends it `completed` with `result`. The decision
-   * and its reason are audited in a `resolveInterrupted` span. Throws when the task is
-   * not `interrupted` or `reason` is empty.
+   * `abort` runs its abort handler (after aborting every task it owns) and ends it
+   * `aborted`, `complete` ends it `completed` with `result`. The decision and its reason
+   * are audited in a `resolveInterrupted` span. Throws when the task is not
+   * `interrupted` or `reason` is empty.
    */
   async resolveInterrupted(
     taskId: mongoose.Types.ObjectId | string,
@@ -232,14 +283,34 @@ export class Harness {
     if (task.status !== HARNESS_TASK_STATUSES.interrupted) {
       throw new Error(`Task ${taskId} is ${task.status}, not interrupted`);
     }
+    if (options.action === HARNESS_RESOLVE_ACTIONS.retry && task.abortRequested?.at) {
+      throw new Error(`Task ${taskId} is being aborted; resolve it with abort, not retry`);
+    }
+    const decidedBy = options.userId === undefined ? undefined : String(options.userId);
+    if (options.action === HARNESS_RESOLVE_ACTIONS.abort) {
+      return abortTaskTree({
+        engine: this.engine,
+        override: {
+          error: `Aborted after interruption: ${options.reason}`,
+          filter: {phase: task.phase, status: HARNESS_TASK_STATUSES.interrupted},
+          output: {action: options.action, decidedBy, phase: task.phase, reason: options.reason},
+          spanName: "resolveInterrupted",
+        },
+        reason: options.reason,
+        top: task,
+        userId: decidedBy,
+      });
+    }
     const resolved = await commitResolution({
       models: this.models,
-      options,
+      options: {...options, action: options.action},
       task,
       testHooks: this.testHooks,
     });
     if (options.action === HARNESS_RESOLVE_ACTIONS.retry) {
       this.runner.wake();
+    } else {
+      await settleTaskOwner({engine: this.engine, task: resolved});
     }
     return resolved;
   }

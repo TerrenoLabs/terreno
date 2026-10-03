@@ -39,7 +39,9 @@ phase runs twice?" A phase declares the answer with `replay` (`"safe"` or the de
 | **Runner** | Decides who executes runnable tasks and when. |
 
 Shipped today: tasks, phases, checkpoints, the transactional audit span, the
-`InProcessRunner` with owner and task leases, crash resume, and `resolveInterrupted`. The other rows are the planned shape for later Phase 1 slices.
+`InProcessRunner` with owner and task leases, crash resume, `resolveInterrupted`, phase
+retries, child tasks with `rt.waitForTasks`, and `harness.abort` over the ownership tree.
+The other rows are the planned shape for later Phase 1 slices.
 
 ## Why the audit span shares the checkpoint transaction
 
@@ -109,6 +111,75 @@ any other step.
 
 Every interruption also writes an error `CHAIN` span in the same transaction as the status
 change, so the trace shows exactly which phase was cut off and what happened next.
+
+## Retries: a thrown phase is not a crash
+
+A crash and a throw look different to the harness. A crash (expired lease) means "we do
+not know how far the phase got", so `replay` decides. A throw means the phase code itself
+said "this attempt failed", so the task's `retry` policy decides: back to `pending` at the
+same checkpoint, with `runAt` pushed out by exponential backoff and jitter, until
+`maxAttempts` runs are used up and the task ends `failed`.
+
+Jitter matters because failures cluster. When an EHR goes down, every task that called it
+fails within the same second. Without jitter they would all retry at the same instant and
+knock it over again. Each retry waits a random delay between half and all of its backoff.
+
+A retry re-runs the whole phase, so a phase that throws after a side effect repeats it.
+Throw before the side effect, or make it idempotent. Programming errors (committing to an
+unknown phase, forgetting to commit) fail at once: retrying cannot fix them.
+
+## The ownership tree
+
+Tasks form a tree. A phase calls `rt.createTask` to start a child. The child records
+`ownership: {kind: "task", id: parent}` and shares the parent's `rootTaskId` and trace, so
+its spans nest under the parent's span and the whole tree reads as one trace.
+
+```
+root task (trace)
+├── child A ── grandchild A1
+└── child B
+```
+
+### Waiting on children without holding a lease
+
+A parent that needs its children's results calls `rt.waitForTasks(ids)`. The harness
+does not keep the parent's phase suspended in memory. That would hold a lease for as long
+as the children take, and a crash would lose the in-memory continuation anyway. Instead
+the parent commits `waiting`, gives up its lease, and its phase stops. When the children
+settle, the parent goes back to `pending` and its phase **runs again from its
+checkpoint**. This time `waitForTasks` finds the children settled and returns their
+outcomes at once.
+
+That re-run is why `rt.createTask` is idempotent within one attempt of a phase visit: the
+second run gets the children the first run created, not duplicates. A retry is a fresh
+attempt, so it starts fresh children. It also means work before the
+wait runs twice, so keep it to reads and child creation, and do side effects in a later
+phase. Events and sleeps (a later slice) use the same "commit `waiting`, re-run on wake"
+shape.
+
+`policy: "failFast"` resolves at the first failed or aborted child and aborts the
+siblings still in flight. Use it when one failure makes the rest pointless (for example,
+the allergy check failed, so the dosing calculation should stop).
+
+### Abort runs bottom-up
+
+`harness.abort(taskId)` stops a task and everything it owns. Order matters for
+compensation: a parent's `abort` handler often undoes what it set up for its children, so
+it must run after they have stopped and undone their own work. The harness:
+
+1. Fences the whole subtree, top-down. Aborting tasks are never claimed again, and a
+   running phase loses its lease token, so nothing it does afterwards can commit. Its
+   `rt.signal` aborts so it can stop early.
+2. Walks the tree **deepest first**. For each task it runs the `abort` handler, then
+   commits `aborted` with an audit span.
+
+Concurrent aborts of one task (an operator and a `failFast` sibling abort, say) run its
+handler once. A failing handler does not stop the abort. A half-aborted tree would be worse than a
+missed compensation, and the span records the failure for a human to follow up.
+
+`background: true` marks a child that belongs to its owner but not to the owner's current
+conversation turn. Conversations (a later slice) use it so that aborting a turn leaves
+background work running.
 
 ## Runners
 

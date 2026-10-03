@@ -27,7 +27,7 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: reference "Replay and interruption" table; explanation section on leases
   - Acceptance: AC2 + AC3 (phase rows) — simulate death by abandoning a harness mid-phase with an expired lease; new harness resumes safe phase and parks `never` phase as `interrupted`; stale-token commit rejected
 
-- [ ] **Task 1.3**: Retries, failure, abort + ownership tree
+- [x] **Task 1.3**: Retries, failure, abort + ownership tree
   - Delivers: task `retry` policy with backoff+jitter (Luxon), `failed` after `maxAttempts`; `rt.createTask` child ownership; `harness.abort` bottom-up with `abort` handlers; `rt.waitForTasks` (`all` / `failFast`); `background` flag
   - Files: `runtime.ts`, `retryBackoff.ts`, `ownership.ts`, tests
   - Blocked by: 1.2

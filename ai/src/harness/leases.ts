@@ -67,17 +67,20 @@ export interface TaskHeartbeat {
 /**
  * Renew one task lease every `lease.heartbeat` while a phase runs. Renewal is fenced on
  * the lease token; once it no longer matches (another runner took the task) renewal
- * stops and the phase's eventual commit is rejected.
+ * stops, `onLost` fires, and the phase's eventual commit is rejected.
  */
 export const startTaskHeartbeat = ({
   lease,
   models,
+  onLost,
   taskId,
   testHooks,
   token,
 }: {
   lease: HarnessLeaseSettings;
   models: HarnessModels;
+  /** Called once when renewal finds the lease gone (taken over, aborted, or settled). */
+  onLost?: () => void;
   taskId: mongoose.Types.ObjectId;
   testHooks?: HarnessTestHooks;
   token: string | undefined;
@@ -99,6 +102,7 @@ export const startTaskHeartbeat = ({
       if (result.matchedCount === 0) {
         logger.warn(`Harness task ${taskId} lost its lease; the running phase cannot commit`);
         isStopped = true;
+        onLost?.();
         return;
       }
     } catch (error: unknown) {

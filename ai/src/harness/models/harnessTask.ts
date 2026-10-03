@@ -9,6 +9,19 @@ import {
 
 const harnessTaskSchema = new mongoose.Schema<HarnessTaskDocument, HarnessTaskModel>(
   {
+    abortRequested: {
+      at: {description: "When an abort of this task was requested", type: Date},
+      handlerClaimExpiresAt: {
+        description: "Until when one aborter holds the right to run the abort handler",
+        type: Date,
+      },
+      reason: {description: "Why the abort was requested", type: String},
+      userId: {
+        description: "Who requested the abort",
+        ref: "User",
+        type: mongoose.Schema.Types.ObjectId,
+      },
+    },
     attempt: {
       default: 0,
       description: "Failed attempts consumed by the current phase",
@@ -82,6 +95,12 @@ const harnessTaskSchema = new mongoose.Schema<HarnessTaskDocument, HarnessTaskMo
       required: true,
       type: String,
     },
+    step: {
+      default: 0,
+      description:
+        "Phase commits so far; names the current phase visit for idempotent child creation",
+      type: Number,
+    },
     traceId: {
       description: "ObsTrace that audits this task tree",
       ref: "ObsTrace",
@@ -129,6 +148,13 @@ harnessTaskSchema.index(
   ])
 );
 harnessTaskSchema.index({rootTaskId: 1});
+// Owned-task lookups for abort and child waits.
+harnessTaskSchema.index(
+  Object.fromEntries([
+    ["ownership.id", 1],
+    ["ownership.kind", 1],
+  ])
+);
 // Expired-lease recovery scan.
 harnessTaskSchema.index(
   Object.fromEntries([

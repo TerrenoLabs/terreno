@@ -273,6 +273,7 @@ describe("Tooltip", () => {
             },
           });
         });
+        break;
       }
     }
   });
@@ -339,6 +340,169 @@ describe("Tooltip", () => {
     expect(afterLayout?.top).toBe(300 - 30 - 6);
     expect(afterLayout?.left).toBe(200 + 100 / 2 - 150 / 2);
     expect(getByTestId("tooltip-container")).toBeTruthy();
+  });
+
+  it("logs an error and hides the tooltip when the trigger measures as zero-sized", async () => {
+    const consoleError = mock(() => {});
+    const originalError = console.error;
+    console.error = consoleError;
+    try {
+      const {queryByTestId, UNSAFE_getAllByType, toJSON} = renderWithTheme(
+        <Tooltip idealPosition="top" text="Bad measurement">
+          <Text>Trigger</Text>
+        </Tooltip>
+      );
+
+      const root = (toJSON() as TestNode).children?.[0] as TestNode;
+      await act(async () => {
+        root.props.onTouchStart?.({nativeEvent: {}});
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      });
+      expect(queryByTestId("tooltip-container")).toBeTruthy();
+
+      const {View: ViewComp} = await import("react-native");
+      const wrapper = UNSAFE_getAllByType(ViewComp).find((node: {props: {hitSlop?: object}}) =>
+        Boolean(node.props.hitSlop)
+      );
+      const fiber = (wrapper as unknown as {_fiber?: {ref?: {current: unknown}}})?._fiber;
+      if (fiber?.ref && typeof fiber.ref === "object") {
+        (fiber.ref as {current: unknown}).current = {
+          measure: (callback: MeasureCallback) => {
+            callback(0, 0, 0, 0, 0, 0);
+          },
+        };
+      }
+      const positionedView = UNSAFE_getAllByType(ViewComp).find(
+        (node: {props: {onLayout?: unknown}}) => Boolean(node.props.onLayout)
+      ) as {props: TestNode["props"]} | undefined;
+
+      await act(async () => {
+        positionedView?.props.onLayout?.({
+          nativeEvent: {layout: {height: 30, width: 150, x: 0, y: 0}},
+        });
+      });
+
+      expect(queryByTestId("tooltip-container")).toBeNull();
+      expect(consoleError).toHaveBeenCalled();
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  describe("measurement lifecycle", () => {
+    const showByTouch = async (root: TestNode): Promise<void> => {
+      await act(async () => {
+        root.props.onTouchStart?.({nativeEvent: {}});
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      });
+    };
+
+    const setup = async (measure: (callback: MeasureCallback) => void) => {
+      const utils = renderWithTheme(
+        <Tooltip idealPosition="top" text="Lifecycle">
+          <Text>Trigger</Text>
+        </Tooltip>
+      );
+      const {View: ViewComp} = await import("react-native");
+      const getWrapper = () =>
+        utils
+          .UNSAFE_getAllByType(ViewComp)
+          .find((node: {props: {hitSlop?: object}}) => Boolean(node.props.hitSlop)) as unknown as {
+          _fiber?: {ref?: {current: unknown}};
+          props: TestNode["props"];
+        };
+      const fiber = getWrapper()._fiber;
+      if (fiber?.ref && typeof fiber.ref === "object") {
+        (fiber.ref as {current: unknown}).current = {measure};
+      }
+      const layoutTooltip = async (width: number, height: number): Promise<void> => {
+        const positionedView = utils
+          .UNSAFE_getAllByType(ViewComp)
+          .find((node: {props: {onLayout?: unknown}}) => Boolean(node.props.onLayout)) as
+          | {props: TestNode["props"]}
+          | undefined;
+        await act(async () => {
+          positionedView?.props.onLayout?.({nativeEvent: {layout: {height, width, x: 0, y: 0}}});
+        });
+      };
+      return {...utils, getWrapper, layoutTooltip};
+    };
+
+    it("waits for a sized layout instead of hiding on an empty first layout", async () => {
+      const {getWrapper, layoutTooltip, queryByTestId} = await setup((callback) => {
+        callback(0, 0, 100, 40, 200, 300);
+      });
+
+      await showByTouch(getWrapper() as unknown as TestNode);
+      await layoutTooltip(0, 0);
+      expect(queryByTestId("tooltip-container")).toBeTruthy();
+
+      await layoutTooltip(150, 30);
+      expect(queryByTestId("tooltip-container")).toBeTruthy();
+    });
+
+    it("ignores a stale invalid measure result from an earlier show", async () => {
+      let pendingCallback: MeasureCallback | undefined;
+      const consoleError = mock(() => {});
+      const originalError = console.error;
+      console.error = consoleError;
+      try {
+        const {getWrapper, layoutTooltip, queryByTestId} = await setup((callback) => {
+          pendingCallback = callback;
+        });
+
+        await showByTouch(getWrapper() as unknown as TestNode);
+        await layoutTooltip(150, 30);
+        const staleCallback = pendingCallback;
+
+        // Hide, then show again before the first measure resolves.
+        await act(async () => {
+          getWrapper().props.onTouchStart?.({nativeEvent: {}});
+        });
+        expect(queryByTestId("tooltip-container")).toBeNull();
+        await showByTouch(getWrapper() as unknown as TestNode);
+        expect(queryByTestId("tooltip-container")).toBeTruthy();
+
+        await act(async () => {
+          staleCallback?.(0, 0, 0, 0, 0, 0);
+        });
+        expect(queryByTestId("tooltip-container")).toBeTruthy();
+        const tooltipErrors = (consoleError.mock.calls as unknown[][]).filter((args) =>
+          String(args[0]).startsWith("Tooltip:")
+        );
+        expect(tooltipErrors).toHaveLength(0);
+      } finally {
+        console.error = originalError;
+      }
+    });
+  });
+
+  it("getTooltipPosition returns empty for zero-sized or non-finite measurements", () => {
+    expect(
+      getTooltipPosition({
+        children: {height: 0, pageX: 0, pageY: 0, width: 0},
+        measured: true,
+        tooltip: {height: 30, width: 150, x: 0, y: 0},
+      })
+    ).toEqual({});
+    expect(
+      getTooltipPosition({
+        children: {height: 40, pageX: Number.NaN, pageY: 100, width: 100},
+        measured: true,
+        tooltip: {height: 30, width: 150, x: 0, y: 0},
+      })
+    ).toEqual({});
+    expect(
+      getTooltipPosition({
+        children: {height: 40, pageX: 100, pageY: 100, width: 100},
+        measured: true,
+        tooltip: {height: 0, width: 0, x: 0, y: 0},
+      })
+    ).toEqual({});
   });
 
   it("getTooltipPosition returns empty when not measured", () => {
@@ -640,6 +804,7 @@ describe("Tooltip", () => {
             },
           });
         });
+        break;
       }
     }
   });
@@ -682,6 +847,7 @@ describe("Tooltip", () => {
               },
             });
           });
+          break;
         }
       }
       unmount();
@@ -899,6 +1065,7 @@ describe("Tooltip", () => {
                 nativeEvent: {layout: {height: 30, width: 80, x: 0, y: 0}},
               });
             });
+            break;
           }
         }
         unmount();
@@ -946,6 +1113,7 @@ describe("Tooltip", () => {
               nativeEvent: {layout: {height: 900, width: 900, x: 0, y: 0}},
             });
           });
+          break;
         }
       }
       unmount();
@@ -1092,6 +1260,7 @@ describe("Tooltip", () => {
             nativeEvent: {layout: {height: 40, width: 200, x: 0, y: 0}},
           });
         });
+        break;
       }
     }
   });
@@ -1145,6 +1314,7 @@ describe("Tooltip", () => {
               nativeEvent: {layout: {height: 40, width: 200, x: 0, y: 0}},
             });
           });
+          break;
         }
       }
 
@@ -1202,6 +1372,7 @@ describe("Tooltip", () => {
             nativeEvent: {layout: {height: 40, width: 200, x: 0, y: 0}},
           });
         });
+        break;
       }
     }
 

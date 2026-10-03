@@ -3,6 +3,7 @@ import {DateTime, Duration} from "luxon";
 import mongoose, {type ClientSession} from "mongoose";
 
 import type {
+  HarnessApprovalModel,
   HarnessChildTaskOptions,
   HarnessCommit,
   HarnessConversationModel,
@@ -33,6 +34,7 @@ import {
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 
 export interface HarnessModels {
+  approval: HarnessApprovalModel;
   conversation: HarnessConversationModel;
   inbox: HarnessInboxEventModel;
   memo: HarnessMemoModel;
@@ -639,6 +641,7 @@ export const commitWaiting = async ({
   testHooks,
   waitCall,
   waiting,
+  writes,
 }: {
   models: HarnessModels;
   phaseStartedAt: DateTime;
@@ -646,6 +649,8 @@ export const commitWaiting = async ({
   testHooks?: HarnessTestHooks;
   waitCall?: {entry: HarnessWaitCall; key: string};
   waiting: HarnessWaiting;
+  /** Extra rows committed with the wait (an approval request). */
+  writes?: HarnessCommitWrites;
 }): Promise<{isWoken: boolean; task: HarnessTaskDocument}> => {
   let isWoken = false;
   const committed = await commitTransition({
@@ -674,8 +679,10 @@ export const commitWaiting = async ({
       },
       $unset: {lease: 1},
     },
-    writes: async ({session}) => {
+    writes: async (context) => {
+      const {session} = context;
       isWoken = false;
+      await writes?.(context);
       if (waiting.kind !== HARNESS_WAIT_KINDS.event || !waiting.key) {
         return;
       }

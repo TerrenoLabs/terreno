@@ -3,6 +3,8 @@ import {createHash} from "node:crypto";
 import type {
   AnyHarnessToolDefinition,
   HarnessAgentDefinition,
+  HarnessApprovalPolicy,
+  HarnessApprovalRequest,
   HarnessBeforeToolResult,
   HarnessExtensionDefinition,
   HarnessExtensionDefinitionInput,
@@ -18,9 +20,18 @@ import type {
   HarnessToolWrap,
 } from "../types/harness";
 import {HARNESS_HOOK_KINDS} from "../types/harness";
+import {assertValidApprovalPolicies} from "./approvalPolicy";
+import {isHarnessSuspendSignal} from "./suspend";
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+/** A hook that parked its task (an approval wait) must stop the phase, not fail it. */
+const rethrowSuspend = (error: unknown): void => {
+  if (isHarnessSuspendSignal(error)) {
+    throw error;
+  }
+};
 
 /**
  * A hook, a section, or a wrap threw. The step it ran in fails with this message: the
@@ -123,7 +134,19 @@ export const defineExtension = (
   if (wraps.some((entry) => entry?.kind !== "wrap")) {
     throw new Error(`defineExtension(${name}): every wrap must come from wrapTool()`);
   }
-  return Object.freeze({hooks, kind: "extension" as const, name, sections, tools, wraps});
+  const approvals: Readonly<Record<string, HarnessApprovalPolicy>> = Object.freeze({
+    ...(definition.approvals ?? {}),
+  });
+  assertValidApprovalPolicies(`defineExtension(${name})`, definition.approvals);
+  return Object.freeze({
+    approvals,
+    hooks,
+    kind: "extension" as const,
+    name,
+    sections,
+    tools,
+    wraps,
+  });
 };
 
 /** The extensions named by `names`, in order. Throws for a name the registry lacks. */
@@ -209,6 +232,7 @@ export const buildSystemPrompt = async ({
       try {
         text = await entry.build(input, api);
       } catch (error: unknown) {
+        rethrowSuspend(error);
         throw new HarnessExtensionError(extension.name, `section "${entry.name}"`, error);
       }
       if (text === undefined || text === null || !String(text).trim()) {
@@ -256,6 +280,7 @@ export const runBeforeModelRequest = async ({
     try {
       next = await run(current, api);
     } catch (error: unknown) {
+      rethrowSuspend(error);
       throw new HarnessExtensionError(extension, "beforeModelRequest hook", error);
     }
     if (next === undefined) {
@@ -275,13 +300,19 @@ export const runBeforeModelRequest = async ({
 /** Result of the `beforeTool` hooks: the call is blocked, or runs with these args. */
 export type BeforeToolOutcome = {args: unknown; blocked?: undefined} | {blocked: string};
 
-/** Run every `beforeTool` hook in order. The first `{block}` stops the rest. */
+/**
+ * Run every `beforeTool` hook in order. The first `{block}` stops the rest. Each hook's
+ * `api.approval` resolves approvers from that hook's own extension. A hook waiting on an
+ * approval suspends the tool call (the suspend signal passes through untouched).
+ */
 export const runBeforeTool = async ({
   api,
+  approvalFor,
   call,
   extensions,
 }: {
   api: HarnessHookApi;
+  approvalFor: (extension: string) => HarnessApprovalRequest;
   call: HarnessToolCall;
   extensions: ReadonlyArray<HarnessExtensionDefinition>;
 }): Promise<BeforeToolOutcome> => {
@@ -289,8 +320,9 @@ export const runBeforeTool = async ({
   for (const {extension, run} of hooksOf(extensions, HARNESS_HOOK_KINDS.beforeTool)) {
     let decision: HarnessBeforeToolResult;
     try {
-      decision = await run({...call, args}, api);
+      decision = await run({...call, args}, {...api, approval: approvalFor(extension)});
     } catch (error: unknown) {
+      rethrowSuspend(error);
       throw new HarnessExtensionError(extension, "beforeTool hook", error);
     }
     if (decision === undefined) {

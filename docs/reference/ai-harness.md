@@ -6,11 +6,13 @@ agent conversations built on them. Concepts:
 
 ```typescript
 import {
+  approvalGate,
   defineAgent,
   defineExtension,
   defineTask,
   defineTool,
   Harness,
+  HarnessApp,
   hook,
   InProcessRunner,
   section,
@@ -31,6 +33,10 @@ import {
 - [Retries](#retries)
 - [Child tasks and waitForTasks](#child-tasks-and-waitfortasks)
 - [Events, waits, and sleep](#events-waits-and-sleep)
+- [Approvals](#approvals)
+- [Require human approval](#require-human-approval)
+- [approvalGate](#approvalgate)
+- [HarnessApp and HTTP routes](#harnessapp-and-http-routes)
 - [abort](#abort)
 - [Versioning](#versioning)
 - [Agents and conversations](#agents-and-conversations)
@@ -53,6 +59,7 @@ import {
 - [HarnessMessage model](#harnessmessage-model)
 - [HarnessMemo model](#harnessmemo-model)
 - [HarnessInboxEvent model](#harnessinboxevent-model)
+- [HarnessApproval model](#harnessapproval-model)
 - [Audit spans](#audit-spans)
 - [Errors](#errors)
 - [Testing](#testing)
@@ -116,6 +123,7 @@ const task = await harness.createTask(intakeSummary, {patientId}, {requestId: `i
 | `onInterrupt` | `"park" \| "fail"` (`HARNESS_INTERRUPT_ACTIONS`) | No | Default `"park"`. What an interrupted `replay: "never"` phase does: `park` sets `interrupted`; `fail` ends the task `failed` with `Interrupted, not retried: ...` and wakes its owner. The built-in tool task uses `fail`. |
 | `spanKind` | `"AGENT" \| "CHAIN" \| "TOOL"` | No | Kind of the task's own span. Default `CHAIN`. |
 | `spanName` | `(input) => string` | No | Name of the task's own span. Default `name@version`. |
+| `approvals` | `Record<key, {approvers}>` | No | Who may decide each `rt.approval(key)`. A key left out uses `[Permissions.IsAdmin]`. See [Approvals](#approvals). |
 
 Returns the definition plus `kind: "task"` and `key: "name@version"`.
 
@@ -131,6 +139,9 @@ The `task` view passed to `run`: `{id, name, version, input, state, phase, attem
 | `createTask(definition, input, {requestId?, userId?})` | Inserts a `pending` task, its `ObsTrace`, and its root span in one transaction. Wakes the runner. The definition must be in the registry. |
 | `resolveInterrupted(id, {action, reason, result?, userId?})` | Resolve an `interrupted` task. See [resolveInterrupted](#resolveinterrupted). |
 | `abort(id, {reason, userId?})` | Abort a task and every non-terminal task it owns, bottom-up. See [abort](#abort). |
+| `decideApproval(approvalId, {approved, reason?, userId?})` | Approve or reject a pending approval without checking approvers. See [Approvals](#approvals). |
+| `mayApprove({approval, user, method?})` | Whether `user` passes the approval's approvers. `method` defaults to `"update"`. |
+| `approvableApprovals({user})` | Pending, unexpired approvals of live tasks that `user` may approve, oldest first. |
 | `sendEvent(id, event, payload?, {requestId?})` | Store an event in the task's inbox and wake the task when it waits on it. Works without a running runner. See [Events, waits, and sleep](#events-waits-and-sleep). |
 | `createConversation({agent, userId?})` | Start a conversation with a registered agent. See [Conversations](#conversations). |
 | `conversation(id)` | Load a conversation handle. Throws when it does not exist. |
@@ -203,6 +214,7 @@ A custom runner implements `HarnessRunner` (`start(context)`, `stop()`, `wake()`
 | `rt.memo(key)` / `rt.memo(key, value)` | Read, or first-write, a durable value scoped to this task. See [Memos](#memos). |
 | `rt.waitFor(event, {timeout?})` | Return the payload of the next `event` sent to this task, or `undefined` once `timeout` passes; until then the task waits. See [Events, waits, and sleep](#events-waits-and-sleep). |
 | `rt.sleep(duration)` | Return once `duration` has passed; until then the task waits. See [Events, waits, and sleep](#events-waits-and-sleep). |
+| `rt.approval(key, {title, summary?, payload?, timeout?, notify?})` | Ask a human to approve; return the decision. Until then the task waits. See [Approvals](#approvals). |
 
 Rules:
 
@@ -210,7 +222,7 @@ Rules:
 - `phase` must exist in `phases`. An unknown phase fails the task.
 - A phase that returns without committing fails the task (no retry).
 - A phase that throws before committing is retried under the task's `retry` policy; see [Retries](#retries).
-- After `rt.commit` or a wait that started waiting, `rt.createTask`, `rt.waitForTasks`, `rt.runAgent`, `rt.waitFor`, `rt.sleep`, and memo writes throw. Memo reads still work.
+- After `rt.commit` or a wait that started waiting, `rt.createTask`, `rt.waitForTasks`, `rt.runAgent`, `rt.waitFor`, `rt.sleep`, `rt.approval`, and memo writes throw. Memo reads still work.
 
 ## Leases
 
@@ -478,7 +490,7 @@ phase visit returns the same results.
 
 ### harness.sendEvent(taskId, event, payload?, {requestId?})
 
-1. Throws when `event` is blank, the task does not exist, or it is `completed`,
+1. Throws when `event` is blank or starts with the reserved `terreno.` prefix, the task does not exist, or it is `completed`,
    `failed`, or `aborted` (`Task <id> is already <status>; it cannot receive event "<event>"`).
 2. With `requestId`, an earlier event of this task with that key is returned as is (a
    no-op). The key is unique per task; reusing it for another event name throws.
@@ -517,6 +529,209 @@ runAt <= now}`).
 | An event is delivered | `CHAIN` `wait:<event>`, `input: {event, kind, startedAt, timeoutAt?}`, `output: {event, eventId, seq, payload, timedOut: false}`. `payload` is a summary (`{type, keys?, keyCount?, length?}`), never the values. `durationMs` is the time since the call first ran. |
 | An event wait times out | `CHAIN` `wait:<event>`, `output: {event, timedOut: true}`. |
 | A sleep ends | `CHAIN` `sleep`, `output: {elapsed: true}`. |
+
+## Approvals
+
+`rt.approval(key, options)` asks a human to approve, waits for the decision, and returns it.
+It is an [event wait](#events-waits-and-sleep) on a dedicated event plus a
+`HarnessApproval` row.
+
+```typescript
+const intakeSummary = defineTask<{patientId: string}, IntakeState, {status: string}>({
+  name: "clinic.intakeSummary",
+  version: 1,
+  approvals: {
+    "clinician-signoff": {approvers: [Permissions.IsAuthenticated, isClinician]},
+  },
+  initial: () => ({phase: "review"}),
+  phases: {
+    review: {
+      replay: "safe",
+      run: async (task, rt) => {
+        const decision = await rt.approval("clinician-signoff", {
+          title: "Sign off intake summary",
+          summary: `Patient ${task.input.patientId}`,
+          payload: task.state.summary,
+          timeout: {hours: 24},
+          notify: (approval) => comms.send({template: "approval-requested", data: {id: approval.id}}),
+        });
+        await rt.commit(decision.approved ? {phase: "write"} : {terminal: {status: "completed", result: {status: "rejected"}}});
+      },
+    },
+    // ...
+  },
+});
+```
+
+### rt.approval(key, options)
+
+| Argument | Type | Description |
+| --- | --- | --- |
+| `key` | `string` | Non-empty. Selects the approvers policy (`approvals[key]`). |
+| `title` | `string` | Required. What the approver is asked to approve. |
+| `summary` | `string` | Optional. Shown under the title. |
+| `payload` | JSON | Optional. What the approver reviews. Stored on the approval. |
+| `timeout` | Luxon `DurationLike` | Optional, positive. Expire the approval when nobody decides in time. Omitted: wait forever. |
+| `notify` | `(approval) => void \| Promise<void>` | Optional. Called once after the approval is first stored. |
+
+Returns `HarnessApprovalResult`:
+
+| Outcome | Result |
+| --- | --- |
+| Approved | `{approvalId, approved: true, decidedAt, decidedBy?, reason?}` |
+| Rejected | `{approvalId, approved: false, decidedAt, decidedBy?, reason}` |
+| Expired | `{approvalId, approved: false, expired: true}` |
+
+`decidedAt` is an ISO string. `decidedBy` is the deciding user's id; it is unset when
+`harness.decideApproval` was called without `userId`.
+
+Misuse (blank key, no title, non-string `summary`, non-function `notify`, a timeout that is
+not positive, an `approvers` option) fails the task without a retry. Approvers go on the
+definition, never on the call; see [Approvers](#approvers).
+
+### How an approval runs
+
+1. The call takes the next wait key `<step>:<n>` (shared with `rt.waitFor` and `rt.sleep`).
+   Its event is `terreno.approval:<key>:<step>:<n>`.
+2. When the call already resolved in this phase visit, it returns the stored decision.
+3. Otherwise the task parks `waiting` on that event. The same transaction upserts the
+   `HarnessApproval` (unique per `{taskId, callKey}`, `status: "pending"`,
+   `expiresAt` = `timeoutAt`). A re-run of the phase visit finds the same row; nothing is
+   duplicated. `notify` runs once, after the commit that inserted the row.
+4. A decision (`approve` / `reject` route or `harness.decideApproval`) runs one
+   transaction: sets `status`, `decidedBy`, `decidedAt`, `reason`; appends the event to the
+   task's inbox (waking it); and writes the `approval:<key>` span.
+5. The phase runs again and the call returns the decision, read from the approval row.
+6. When `timeoutAt` passes first, the runner resumes the task; the same transaction that
+   records the timeout sets the approval `expired` and writes its `approval:<key>` span.
+
+| Rule | Behavior |
+| --- | --- |
+| Decide after `expiresAt` | Refused (409 / `HarnessApprovalConflictError` `has expired`), even before the runner records the expiry. |
+| Decision and expiry race | Both write the task row, so one transaction retries. The expiry only applies to a `pending` approval; when a decision won, the call takes the decision instead. |
+| Decide twice | The second call is refused: `Approval <id> is already <status>`. Exactly one of two concurrent decisions wins. |
+| Task aborted, failed, or completed | The approval stays `pending` but leaves the inbox; deciding it is refused: `belongs to a task that is already <status>`. |
+| Owner down | The decision is stored and the task set `pending`; the next owner resumes it. |
+| `harness.sendEvent` to a `terreno.`-prefixed event | Throws: the prefix is reserved, so approval events come only from decisions. |
+| An approval event written below the public API | Cannot approve: the call reads the approval row and fails the task with `received its event without a recorded decision`. |
+| `notify` throws | Logged with `logger.error`; the approval stands. A crash between the commit and `notify` skips it. |
+
+### Approvers
+
+Approvers live in code, never in Mongo. The approval stores `definitionKey`
+(`name@version:key`) and, for hook approvals, `extension`. At request time the process
+serving HTTP looks the policy up in its own registry:
+
+| Approval | Policy |
+| --- | --- |
+| From `rt.approval` | `definitions["name@version"].approvals[key]` |
+| From a `beforeTool` hook (`api.approval`) | `extensions[extension].approvals[key]` |
+| Policy key not declared | `HARNESS_DEFAULT_APPROVERS` = `[Permissions.IsAdmin]` |
+| `name@version` or extension not registered in this process | Nobody may decide it (fail closed). Register the same definitions in the API process. |
+
+An approver is a `@terreno/api` permission function, the modelRouter shape:
+
+```typescript
+type HarnessApprover = (method: RESTMethod, user?: User, approval?: HarnessApprovalDocument) => boolean | Promise<boolean>;
+```
+
+| Rule | Detail |
+| --- | --- |
+| Combination | Every approver must return true (AND), like modelRouter `permissions`. An empty list means nobody. |
+| `method` | `"update"` for the inbox, `approve` / `reject`, and the `mayApprove` default (so the inbox lists exactly what the caller can decide); `"read"` for `GET /:id`. |
+| `approval` | Always passed (the inbox evaluates each approval). |
+| Task input | `await approvalTaskInput(approval)` loads the requesting task's `input`. For hook approvals that is the tool call's task input; the tool arguments are in `payload.args`. |
+| A throwing approver | Denies, with a `logger.warn`. |
+
+```typescript
+const isClinician: HarnessApprover = async (_method, user, approval) => {
+  const {clinicId} = await approvalTaskInput<{clinicId: string}>(approval as HarnessApprovalDocument);
+  return Boolean(user && (await Staff.exists({clinicId, role: "clinician", userId: user.id})));
+};
+```
+
+### harness.decideApproval(approvalId, {approved, reason?, userId?})
+
+Decides without checking approvers (for trusted server code; the routes check first).
+Returns the updated `HarnessApproval`. Throws `decideApproval requires approved: true or
+false`, `decideApproval: a rejection requires a reason`, or
+`HarnessApprovalConflictError` (already decided, expired, or task ended). `reason` is
+trimmed; a blank reason is not stored.
+
+## Require human approval
+
+1. Declare who may decide, per approval key, on the task definition:
+   `approvals: {"clinician-signoff": {approvers: [Permissions.IsAuthenticated, isClinician]}}`.
+2. Call `rt.approval("clinician-signoff", {title, payload, timeout})` in a `replay: "safe"`
+   phase and branch on `approved` (and `expired`).
+3. Register `HarnessApp` with the same `Harness` (or one opened with the same registry):
+
+   ```typescript
+   const harness = await Harness.open({registry: [intakeSummary]});
+   await harness.start();
+   new TerrenoApp({userModel: User}).register(new HarnessApp({harness})).start();
+   ```
+
+4. Approvers list `GET /harness/approvals` and call
+   `POST /harness/approvals/:id/approve` or `/reject` with `{reason}`.
+5. To gate agent tool calls instead of a phase, add [`approvalGate`](#approvalgate) to the agent.
+
+## approvalGate
+
+`approvalGate(options)` returns an extension whose `beforeTool` hook requires an approval
+before every call of the named tools.
+
+```typescript
+const writeGate = approvalGate({tools: [writeNote], approvers: [isClinician], timeout: {hours: 4}});
+const charter = defineAgent({name: "clinic.charter", tools: [writeNote], extensions: [writeGate], ...});
+const harness = await Harness.open({models, registry: [charter, writeGate]});
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `tools` | — | Required, non-empty. `defineTool` tools or tool names. |
+| `approvers` | `[Permissions.IsAdmin]` | Who may approve calls of these tools. |
+| `name` | `approvalGate:<tool names joined by ",">` | Extension name; must be unique in the registry. |
+| `title` | `Run tool "<toolName>"` | A string, or `({toolName, args}) => string`. |
+| `timeout` | none | Expire the approval (blocking the call) when nobody decides in time. |
+| `notify` | none | As in `rt.approval`. |
+
+| Step | Behavior |
+| --- | --- |
+| A gated call arrives | The hook reads the turn memo `approvalGate:<name>:<toolCallId>`. When unset, it calls `api.approval(<toolName>, {title, payload: {toolName, toolCallId, args}})`. The tool call's task waits; its turn waits on it. |
+| Decided | The call runs again from the top, gets the decision, and stores `{approved, decidedBy?, reason?, expired?}` in the memo. |
+| Approved | The hook returns `undefined`; `execute` runs. |
+| Rejected | `{block: 'Approval to run "<tool>" was rejected: <reason>'}`; the model gets it as the tool's error result. |
+| Expired | `{block: 'Approval to run "<tool>" expired before anyone decided'}`. |
+
+The memo is scoped to the turn, so a replayed call (`replay: "safe"` tool, restart) reuses
+the decision instead of asking again. The approval's `definitionKey` is
+`terreno.agent.tool@1:<toolName>` and its `extension` is the gate's name. Other tools pass
+through. A wait inside any `beforeTool` hook suspends the call the same way; `api.approval`
+is not offered to sections, `beforeModelRequest`, or `afterTool` (the tool already ran).
+
+## HarnessApp and HTTP routes
+
+`new HarnessApp({harness, basePath?})` is a `TerrenoPlugin`. `basePath` defaults to
+`/harness`; it must start with `/` and not end with `/`. Routes are a `modelRouter` on
+`HarnessApproval` with instance actions, so they appear in `/openapi.json` (tag `harness`).
+
+| Method | Path | Permissions | Behavior |
+| --- | --- | --- | --- |
+| GET | `/harness/approvals` | `IsAuthenticated` | Pending, unexpired approvals of live tasks whose approvers pass for the caller (`method: "update"`), oldest first. `limit`, `page`, `total`, and `more` apply after the filter. Query fields: `taskId`, `rootTaskId`. Nothing to approve: `{data: []}`. |
+| GET | `/harness/approvals/:id` | `IsAuthenticated` + approvers (`"read"`) | One approval in any status. Others: 403. |
+| POST | `/harness/approvals/:id/approve` | `IsAuthenticated` + approvers (`"update"`) | Body `{reason?}` (strict; a blank `reason` is 400). Returns the approval. |
+| POST | `/harness/approvals/:id/reject` | `IsAuthenticated` + approvers (`"update"`) | Body `{reason}`, required, non-blank (400 otherwise). Returns the approval. |
+| POST / PATCH / DELETE | `/harness/approvals[/:id]` | — | 405. Approvals are created only by `rt.approval`. |
+
+| Status | When |
+| --- | --- |
+| 400 | Body fails the schema (missing or blank reject `reason`, unknown keys). |
+| 403 | The caller does not pass the approval's approvers (also when this process does not register its definition or extension). |
+| 404 | No approval with that id. |
+| 409 | Already decided, expired, or its task ended. `code: "harness-approval-not-pending"`; `detail` names the cause. |
+
+`decidedBy` is the caller's user id (`req.user.id`).
 
 ## abort
 
@@ -926,7 +1141,7 @@ const harness = await Harness.open({models, registry: [summarizer, clinicPolicy]
 
 | Builder | Signature | Notes |
 | --- | --- | --- |
-| `defineExtension` | `({name, sections?, tools?, hooks?, wraps?}) => HarnessExtensionDefinition` | Validates and freezes. `name` required; no duplicate section or tool names. |
+| `defineExtension` | `({name, sections?, tools?, hooks?, wraps?, approvals?}) => HarnessExtensionDefinition` | Validates and freezes. `name` required; no duplicate section or tool names. `approvals`: who may decide each `api.approval(key)` its `beforeTool` hooks request (default `[Permissions.IsAdmin]`). |
 | `section` | `(name, (input, api) => string \| undefined \| Promise<...>)` | A named piece of the system prompt. See [Sections](#sections-and-the-recorded-system-prompt). |
 | `hook` | `(kind, fn)` | `kind`: `beforeModelRequest`, `beforeTool`, `afterTool` (`HARNESS_HOOK_KINDS`). An extension may list several hooks of one kind; they run in list order. |
 | `wrapTool` | `(toolOrName, (tool) => tool)` | Decorates the winning tool of that name. See [Tool wraps and precedence](#tool-wraps-and-precedence). |
@@ -954,6 +1169,7 @@ Every hook gets an `api`:
 | `conversationId` | The conversation. |
 | `signal` | Aborts with the turn or when the run loses its lease. |
 | `memo` | [Memo](#memos) scoped to the turn task (from tool hooks too). |
+| `approval(key, options)` | `beforeTool` only. `rt.approval` of the tool call's task; approvers come from this hook's extension `approvals[key]`. The call waits until it is decided, then runs again from the top, so memoize the decision by `toolCallId`. See [approvalGate](#approvalgate). |
 
 | Hook | Runs | Returns | Effect |
 | --- | --- | --- | --- |
@@ -1190,6 +1406,34 @@ Indexes: `{taskId, name, consumedKey, seq}`; `{requestId, taskId}` unique where
 `requestId` exists; `{consumedKey, taskId}` unique where `consumedKey` exists (one event
 per wait call).
 
+## HarnessApproval model
+
+Collection `harnessapprovals`. Every field has a schema `description`; `strict: "throw"`;
+empty objects are kept.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `taskId` | ObjectId | Required. Task that waits on the decision. |
+| `rootTaskId` | ObjectId | Required. Root of its ownership tree. |
+| `traceId` | ObjectId | Required. The requesting task's `ObsTrace`. |
+| `callKey` | String | Required. `<step>:<n>` of the wait call. |
+| `event` | String | Required. Inbox event the decision sends. |
+| `definitionKey` | String | Required. `name@version:key` of the requesting task. |
+| `key` | String | Required. Approval key; selects the approvers policy. |
+| `extension` | String | Extension whose `approvals` hold the approvers (hook approvals only). |
+| `title` | String | Required. |
+| `summary` | String | |
+| `payload` | Mixed | What the approver reviews (JSON). |
+| `status` | `pending` \| `approved` \| `rejected` \| `expired` | Required. Default `pending` (`HARNESS_APPROVAL_STATUSES`). |
+| `decidedBy` | ObjectId (User) | Who approved or rejected. |
+| `decidedAt` | Date | When. |
+| `reason` | String | Why. |
+| `expiresAt` | Date | `timeoutAt` of the wait; unset means never. |
+| `created`, `updated` | | Plugin. |
+
+Indexes: `{callKey, taskId}` unique; `{status, created}`. Rows are not deleted with their
+task.
+
 ## Audit spans
 
 | When | Write (same transaction) |
@@ -1202,6 +1446,7 @@ per wait call).
 | `rt.createTask` | The child's `CHAIN` span (`name@version`), parented to the parent's span. |
 | `rt.waitForTasks` / `rt.waitFor` / `rt.sleep` starts waiting | One `CHAIN` span named after the phase, `output: {waiting: {...}}`. |
 | `rt.waitFor` / `rt.sleep` resolves | One `CHAIN` span `wait:<event>` or `sleep`. See [Events, waits, and sleep](#spans). |
+| `rt.approval` decided or expired | One `CHAIN` span `approval:<key>` under the requesting task's span, in the decision's (or expiry's) transaction. `input: {approvalId, definitionKey, title}`; `output: {decision: "approved" \| "rejected" \| "expired", decidedBy?, reason?}`. Starts when the approval was created. |
 | `harness.abort` | One `abort` span per aborted task; closes that task's span (and the trace for a root task). |
 | Agent `request` commit | One `LLM` span parented to the turn's span, with the assistant message (and a `system` message when the system prompt changed). See [The agent turn task](#the-agent-turn-task). |
 | Tool call | The tool task's own span has kind `TOOL` and the tool's name; it closes with the tool's outcome. |
@@ -1222,7 +1467,7 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 | `<key>: rt.waitFor requires an event name` / `rt.waitFor timeout ...` / `rt.sleep duration must be a valid, non-negative duration` | Misuse; fails the task (no retry). |
 | `<key>: wait call <step>:<n> was rt.waitFor("a") on an earlier run and is ...` | Wait calls changed order between runs of a phase. Fails the task. |
 | `Task <id> is already <status>; it cannot receive event "<event>"` | `sendEvent` to a terminal task. |
-| `sendEvent requires an event name` / `requestId "<id>" already sent event "<name>" to task ...` | `sendEvent` misuse. |
+| `sendEvent requires an event name` / `requestId "<id>" already sent event "<name>" to task ...` / `sendEvent: event names starting with "terreno." are reserved for the harness ...` | `sendEvent` misuse. |
 | `Child key "<key>" already belongs to task ...` | Two `rt.createTask` calls in one phase visit used the same `key` for different definitions. |
 | `defineTask(...): retry.* ...` / `abort must be a function` | Invalid `retry` policy or `abort` handler. |
 | `InProcessRunner heartbeatInterval must be positive and shorter than leaseDuration` | Invalid lease options. |
@@ -1235,6 +1480,13 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 | `HarnessExtensionError` | A section, hook, or wrap threw. `message`: `Extension "<name>" <what> failed: <cause>`; `extension`: the extension name. Fails the turn or the tool call; see [Hooks](#hooks). |
 | `HarnessSubagentError` | `rt.runAgent`: the subagent's turn failed or was aborted, or its output did not match the schema. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
 | `<key>: rt.runAgent agent "<name>" is not in this harness registry` / `rt.runAgent requires non-empty input` / `rt.runAgent output for "<name>" cannot be expressed as JSON Schema` | Misuse; fails the caller (no retry). |
+| `<key>: rt.approval requires a key` / `rt.approval("<key>") requires a title` / `... does not take approvers; declare them in defineTask(...)` / `... summary must be a string` / `... notify must be a function` / `... timeout must be positive` | Misuse; fails the task (no retry). |
+| `Approval <id> received its event without a recorded decision` | The approval's event was sent by hand. Fails the phase. |
+| `HarnessApprovalConflictError` | `decideApproval` (409 over HTTP): `Approval <id> is already <status>`, `has expired`, `is no longer pending`, or `belongs to a task that is already <status>`. |
+| `decideApproval requires approved: true or false` / `decideApproval: a rejection requires a reason` | `decideApproval` misuse. |
+| `<label>: approvals must be an object keyed by approval key` / `approval keys must be non-empty` / `approvals.<key>.approvers must be an array of permission functions` | Invalid `approvals` on `defineTask` or `defineExtension`. |
+| `approvalGate: tools must list at least one tool` / `every tool must be a defineTool tool or a tool name` / `title must be a string or a function` | Invalid `approvalGate` options. |
+| `HarnessApp basePath must start with "/" and not end with "/"` / `HarnessApp requires an opened Harness` | Invalid `HarnessApp` options. |
 | `defineTask(...)` validation errors | Empty name, non-positive or fractional version, no phases, a phase without `run`, an invalid `replay`. |
 
 ## Testing
@@ -1335,3 +1587,13 @@ Low-risk choices made in the first slice:
 | LLM span `input.system` is `{hash, messageSeq, sections}`, not the text | Same bounded-span rule as `messages`; the text is one transcript lookup away. |
 | Tools are resolved per request and per call, not cached | Wraps and overrides stay consistent with the registry the process runs; wraps must be pure. |
 | Tool resolution failures in a tool call are reported to the model | Same treatment as any tool error; the turn keeps going. |
+| Approvers are declared on the definition (`defineTask({approvals})`, extension `approvals`), not passed to `rt.approval` | The API process must evaluate approvers without running the phase, including after a restart; functions cannot be stored, so they are looked up by `name@version` + `key` in the registry. |
+| An approval is an event wait plus a row upserted in the waiting commit | Reuses wait idempotency (`<step>:<n>`), wake, timeout, and restart behavior; the row and the wait can never disagree. |
+| The call returns the approval row's decision, not the event payload | Only a recorded decision can approve; a hand-sent event cannot. |
+| Expiry is written in the timeout's transaction and is conditional on `pending` | A decision and an expiry can never both apply; the loser retries (`HarnessWaitRaceError`, at most 3 times). |
+| Decisions after `expiresAt` are refused before the runner records the expiry | What the approver sees matches what the task will do. |
+| An unregistered `name@version` or extension denies everyone | Fail closed; a stale API process must not fall back to a looser default. |
+| The inbox evaluates approvers in memory, then pages with `{_id: {$in}}` | Approvers are code; pending sets are small; `total`, `page`, and `more` stay correct. |
+| Approvals of terminal tasks stay `pending` but are hidden and undecidable | Nothing consumes them; the abort or failure is already audited. |
+| Gate decisions are memoized in the turn by `toolCallId` | A replayed or re-run call does not ask twice. |
+| `api.approval` exists only in `beforeTool` | Sections and `beforeModelRequest` re-run on every request; `afterTool` runs after the side effect. |

@@ -52,6 +52,7 @@ import {
 } from "./extensions";
 import {internalRuntime} from "./internalRuntime";
 import {callModelWithFallback, HarnessModelCallError} from "./modelCall";
+import {isHarnessSuspendSignal} from "./suspend";
 
 /** Name of the built-in task that runs one agent turn on a conversation. */
 export const AGENT_TURN_TASK_NAME = "terreno.agent.turn";
@@ -468,6 +469,7 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
       const api = await toolHookApi({conversationId, extensions, rt});
       const before = await runBeforeTool({
         api,
+        approvalFor: internalRuntime(rt as HarnessTaskRuntime<unknown, unknown>).approvalFor,
         call: {args: parsed.data, toolCallId, toolName},
         extensions,
       });
@@ -505,8 +507,9 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
         })
       );
     } catch (error: unknown) {
-      // An abort is the harness's business; any other throw is reported to the model.
-      if (rt.signal.aborted) {
+      // An abort or an approval wait is the harness's business; any other throw is
+      // reported to the model.
+      if (rt.signal.aborted || isHarnessSuspendSignal(error)) {
         throw error;
       }
       await fail(

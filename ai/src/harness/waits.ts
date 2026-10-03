@@ -1,5 +1,6 @@
 import {DateTime, Duration, type DurationLike} from "luxon";
 import type mongoose from "mongoose";
+import type {ClientSession} from "mongoose";
 
 import type {
   HarnessInboxEventDocument,
@@ -17,6 +18,7 @@ import {
 import {
   commitWaitResolution,
   HarnessCommitConflictError,
+  type HarnessCommitWrites,
   type HarnessModels,
   inTransaction,
   isDuplicateKeyError,
@@ -33,6 +35,34 @@ export interface WaitRequest {
   /** Event name; absent for a sleep. */
   event?: string;
   kind: "event" | "sleep";
+  /**
+   * Extra writes committed with a timeout resolution. Throw `HarnessWaitRaceError` from
+   * them when an event that should win landed concurrently: the call then resolves again.
+   */
+  timeoutWrites?: HarnessCommitWrites;
+}
+
+/**
+ * Thrown from `WaitRequest.timeoutWrites` when the timeout lost a race with a matching
+ * event; the timeout transaction rolls back and the call is resolved again.
+ */
+export class HarnessWaitRaceError extends Error {
+  constructor() {
+    super("A matching event raced the wait's timeout");
+    this.name = "HarnessWaitRaceError";
+  }
+}
+
+/** Times a call re-resolves after losing a timeout race before giving up. */
+const MAX_WAIT_RACE_RETRIES = 3;
+
+/** What one wait call needs: its request, plus writes and work around parking on it. */
+export interface WaitCallPlan {
+  /** Runs after the waiting commit, before the phase stops. */
+  afterPark?: () => Promise<void>;
+  /** Extra rows committed with the waiting commit. */
+  onPark?: HarnessCommitWrites;
+  request: WaitRequest;
 }
 
 /** A wait call either has its result, or must park the task on `entry`. */
@@ -100,7 +130,21 @@ const resumeSpanInput = (entry: HarnessWaitCall): Record<string, unknown> => ({
  * Each resolution is recorded on the task with a resume span in one fenced transaction.
  * Otherwise returns the record to park the task on.
  */
-export const resolveWaitCall = async ({
+export const resolveWaitCall = async (
+  args: Parameters<typeof resolveWaitCallOnce>[0]
+): Promise<WaitCallResult> => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await resolveWaitCallOnce(args);
+    } catch (error: unknown) {
+      if (!(error instanceof HarnessWaitRaceError) || attempt >= MAX_WAIT_RACE_RETRIES) {
+        throw error;
+      }
+    }
+  }
+};
+
+const resolveWaitCallOnce = async ({
   callKey,
   label,
   lease,
@@ -189,7 +233,8 @@ export const resolveWaitCall = async ({
     const isEvent = request.kind === HARNESS_WAIT_KINDS.event;
     await resolve(
       {resolution: isEvent ? HARNESS_WAIT_RESOLUTIONS.timeout : HARNESS_WAIT_RESOLUTIONS.elapsed},
-      isEvent ? {event: request.event, timedOut: true} : {elapsed: true}
+      isEvent ? {event: request.event, timedOut: true} : {elapsed: true},
+      request.timeoutWrites
     );
     return {isResolved: true};
   }
@@ -206,6 +251,53 @@ const assertSameEvent = (
     );
   }
   return existing;
+};
+
+/**
+ * Inside `session`'s transaction: count the event on the task (`eventSeq`), insert it into
+ * the task's inbox, and, when the task is waiting on that event name, return it to
+ * `pending`. Throws when the task is terminal. Returns whether the task was woken.
+ */
+export const appendInboxEvent = async ({
+  event,
+  models,
+  payload,
+  requestId,
+  session,
+  taskId,
+}: {
+  event: string;
+  models: HarnessModels;
+  payload: unknown;
+  requestId?: string;
+  session: ClientSession;
+  taskId: mongoose.Types.ObjectId;
+}): Promise<{event: HarnessInboxEventDocument; isWoken: boolean}> => {
+  const counted = await models.task.findOneAndUpdate(
+    {_id: taskId, status: {$nin: [...HARNESS_TERMINAL_STATUSES]}},
+    {$inc: {eventSeq: 1}},
+    {returnDocument: "after", session}
+  );
+  if (!counted) {
+    throw new Error(`Task ${taskId} is already terminal; it cannot receive event "${event}"`);
+  }
+  const [created] = await models.inbox.create(
+    [{name: event, payload, requestId, seq: counted.eventSeq, taskId}],
+    {session}
+  );
+  if (
+    counted.status !== HARNESS_TASK_STATUSES.waiting ||
+    counted.waiting?.kind !== HARNESS_WAIT_KINDS.event ||
+    counted.waiting.key !== event
+  ) {
+    return {event: created, isWoken: false};
+  }
+  const woken = await models.task.updateOne(
+    {_id: taskId, status: HARNESS_TASK_STATUSES.waiting},
+    {$set: {status: HARNESS_TASK_STATUSES.pending}, $unset: {waiting: 1}},
+    {session}
+  );
+  return {event: created, isWoken: woken.modifiedCount > 0};
 };
 
 /**
@@ -242,33 +334,9 @@ export const sendEventRecords = async ({
   }
 
   try {
-    return await inTransaction(async (session) => {
-      const counted = await models.task.findOneAndUpdate(
-        {_id: task._id, status: {$nin: [...HARNESS_TERMINAL_STATUSES]}},
-        {$inc: {eventSeq: 1}},
-        {returnDocument: "after", session}
-      );
-      if (!counted) {
-        throw terminalError("terminal");
-      }
-      const [created] = await models.inbox.create(
-        [{name: event, payload, requestId, seq: counted.eventSeq, taskId: task._id}],
-        {session}
-      );
-      if (
-        counted.status !== HARNESS_TASK_STATUSES.waiting ||
-        counted.waiting?.kind !== HARNESS_WAIT_KINDS.event ||
-        counted.waiting.key !== event
-      ) {
-        return {event: created, isWoken: false};
-      }
-      const woken = await models.task.updateOne(
-        {_id: task._id, status: HARNESS_TASK_STATUSES.waiting},
-        {$set: {status: HARNESS_TASK_STATUSES.pending}, $unset: {waiting: 1}},
-        {session}
-      );
-      return {event: created, isWoken: woken.modifiedCount > 0};
-    });
+    return await inTransaction((session) =>
+      appendInboxEvent({event, models, payload, requestId, session, taskId: task._id})
+    );
   } catch (error: unknown) {
     // A concurrent send with the same requestId won.
     if (requestId !== undefined && isDuplicateKeyError(error)) {

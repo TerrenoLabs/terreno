@@ -1,4 +1,5 @@
 import type {HarnessTaskDefinition, HarnessTaskDefinitionInput} from "../types/harness";
+import {assertValidApprovalPolicies} from "./approvalPolicy";
 import {assertValidRetryPolicy} from "./retryBackoff";
 
 /** Registry key that pins a run to one definition version. */
@@ -55,6 +56,7 @@ export const defineTask = <In, State, Out>(
   if (definition.abort !== undefined && typeof definition.abort !== "function") {
     throw new Error(`defineTask(${definition.name}): abort must be a function`);
   }
+  assertValidApprovalPolicies(`defineTask(${definition.name})`, definition.approvals);
   return Object.freeze({
     ...definition,
     key: taskDefinitionKey(definition),

@@ -1,12 +1,14 @@
+import type {RESTMethod, User} from "@terreno/api";
 import {DateTime, Duration, type DurationLike} from "luxon";
 import mongoose from "mongoose";
-
 import {getObservabilityApp} from "../observability/observabilityAppRegistry";
 import type {ModelPrice} from "../observability/types";
 import type {
   HarnessAbortOptions,
   HarnessAgentDefinition,
+  HarnessApprovalDocument,
   HarnessCreateTaskOptions,
+  HarnessDecideApprovalOptions,
   HarnessExtensionDefinition,
   HarnessInboxEventDocument,
   HarnessModelResolver,
@@ -24,6 +26,13 @@ import {
 } from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {type AgentTasks, createAgentTasks} from "./agentLoop";
+import {
+  type ApprovalRegistry,
+  decideApprovalRecords,
+  HARNESS_RESERVED_EVENT_PREFIX,
+  listApprovableApprovals,
+  userMayApprove,
+} from "./approvals";
 import {commitResolution, createTaskRecords, type HarnessModels} from "./commit";
 import {
   type ConversationContext,
@@ -34,6 +43,7 @@ import {extensionName} from "./defineAgent";
 import {taskDefinitionKey} from "./defineTask";
 import type {ExecutionEnv} from "./executionEnv";
 import {acquireOwnerLease, releaseOwnerLease} from "./leases";
+import {registerHarnessApproval} from "./models/harnessApproval";
 import {registerHarnessConversation} from "./models/harnessConversation";
 import {registerHarnessInboxEvent} from "./models/harnessInboxEvent";
 import {registerHarnessMemo} from "./models/harnessMemo";
@@ -58,6 +68,13 @@ export type {
   HarnessAbortRuntime,
   HarnessAgentDefinition,
   HarnessAgentDefinitionInput,
+  HarnessApprovalDocument,
+  HarnessApprovalOptions,
+  HarnessApprovalPolicy,
+  HarnessApprovalRequest,
+  HarnessApprovalResult,
+  HarnessApprovalStatus,
+  HarnessApprover,
   HarnessBeforeToolResult,
   HarnessChildOutcome,
   HarnessChildTaskOptions,
@@ -66,6 +83,7 @@ export type {
   HarnessConversationDocument,
   HarnessConversationStatus,
   HarnessCreateTaskOptions,
+  HarnessDecideApprovalOptions,
   HarnessExtensionDefinition,
   HarnessExtensionDefinitionInput,
   HarnessHook,
@@ -113,6 +131,7 @@ export type {
   HarnessToolCallPart,
   HarnessToolDefinition,
   HarnessToolDefinitionInput,
+  HarnessToolHookApi,
   HarnessToolResultPart,
   HarnessToolWrap,
   HarnessTurnResult,
@@ -126,6 +145,7 @@ export type {
 } from "../types/harness";
 export {
   HARNESS_AGENT_DEFAULT_MAX_STEPS,
+  HARNESS_APPROVAL_STATUSES,
   HARNESS_CONVERSATION_STATUSES,
   HARNESS_HOOK_KINDS,
   HARNESS_INTERRUPT_ACTIONS,
@@ -139,6 +159,13 @@ export {
   HARNESS_WAIT_RESOLUTIONS,
 } from "../types/harness";
 export {AGENT_TOOL_TASK_NAME, AGENT_TURN_TASK_NAME} from "./agentLoop";
+export {
+  type ApprovalGateOptions,
+  approvalGate,
+  approvalTaskInput,
+  HARNESS_DEFAULT_APPROVERS,
+  HarnessApprovalConflictError,
+} from "./approvals";
 export {HarnessCommitConflictError} from "./commit";
 export {HarnessConversationBusyError, HarnessConversationHandle} from "./conversation";
 export {defineAgent} from "./defineAgent";
@@ -157,6 +184,7 @@ export {
   section,
   wrapTool,
 } from "./extensions";
+export {HarnessApp, type HarnessAppOptions} from "./harnessApp";
 export {
   HarnessModelCallError,
   isRetryableModelError,
@@ -292,6 +320,7 @@ export class Harness {
       throw new Error("Harness.open: the registry lists agents; pass `models` to resolve them");
     }
     const models: HarnessModels = {
+      approval: registerHarnessApproval(),
       conversation: registerHarnessConversation(),
       inbox: registerHarnessInboxEvent(),
       memo: registerHarnessMemo(),
@@ -432,6 +461,11 @@ export class Harness {
     if (typeof event !== "string" || !event.trim()) {
       throw new Error("sendEvent requires an event name");
     }
+    if (event.startsWith(HARNESS_RESERVED_EVENT_PREFIX)) {
+      throw new Error(
+        `sendEvent: event names starting with "${HARNESS_RESERVED_EVENT_PREFIX}" are reserved for the harness (approval decisions use decideApproval)`
+      );
+    }
     const sent = await sendEventRecords({
       event,
       models: this.models,
@@ -443,6 +477,60 @@ export class Harness {
       this.runner.wake();
     }
     return sent.event;
+  }
+
+  /**
+   * Approve or reject a pending approval as `userId`, without checking approvers (the
+   * `HarnessApp` routes check them first). In one transaction: the approval's status,
+   * `decidedBy`, `decidedAt`, `reason`; the event that wakes the waiting `rt.approval`;
+   * and the `approval:<key>` audit span. Throws `HarnessApprovalConflictError` when it is
+   * already decided or expired, or its task ended.
+   */
+  async decideApproval(
+    approvalId: mongoose.Types.ObjectId | string,
+    options: HarnessDecideApprovalOptions
+  ): Promise<HarnessApprovalDocument> {
+    if (typeof options?.approved !== "boolean") {
+      throw new Error("decideApproval requires approved: true or false");
+    }
+    if (!options.approved && !options.reason?.trim()) {
+      throw new Error("decideApproval: a rejection requires a reason");
+    }
+    const {approval, isWoken} = await decideApprovalRecords({
+      approvalId,
+      models: this.models,
+      options,
+    });
+    if (isWoken) {
+      this.runner.wake();
+    }
+    return approval;
+  }
+
+  /**
+   * Whether `user` passes every approver of `approval` (its definition's or extension's
+   * `approvals[key]`, default `[Permissions.IsAdmin]`), called with `method`. False when
+   * this registry lacks the approval's `name@version` or extension.
+   */
+  async mayApprove({
+    approval,
+    method = "update",
+    user,
+  }: {
+    approval: HarnessApprovalDocument;
+    method?: RESTMethod;
+    user?: User;
+  }): Promise<boolean> {
+    return userMayApprove({approval, method, registry: this.approvalRegistry(), user});
+  }
+
+  /** Pending, unexpired approvals of live tasks that `user` may approve, oldest first. */
+  async approvableApprovals({user}: {user?: User}): Promise<HarnessApprovalDocument[]> {
+    return listApprovableApprovals({models: this.models, registry: this.approvalRegistry(), user});
+  }
+
+  private approvalRegistry(): ApprovalRegistry {
+    return {definitions: this.definitions, extensions: this.extensions};
   }
 
   /**

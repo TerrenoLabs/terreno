@@ -1,6 +1,11 @@
 import type mongoose from "mongoose";
 
-import type {HarnessCommit, HarnessMemo, HarnessTaskRuntime} from "../types/harness";
+import type {
+  HarnessApprovalRequest,
+  HarnessCommit,
+  HarnessMemo,
+  HarnessTaskRuntime,
+} from "../types/harness";
 import type {HarnessCommitWrites} from "./commit";
 
 /** Key of the engine-only runtime surface; never part of the public `rt`. */
@@ -8,6 +13,8 @@ export const HARNESS_INTERNAL_RUNTIME = Symbol("terreno.harness.internalRuntime"
 
 /** Engine-only extras built-in tasks (the agent turn) need beyond the public runtime. */
 export interface HarnessInternalRuntime {
+  /** `rt.approval` whose approvers come from `extension`'s `approvals` (tool hooks). */
+  approvalFor: (extension: string) => HarnessApprovalRequest;
   /** `rt.commit` plus extra rows written in the same transaction. */
   commitWithWrites: (
     next: HarnessCommit<unknown, unknown>,

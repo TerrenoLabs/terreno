@@ -67,8 +67,8 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: reference waits/events
   - Acceptance: bun test with frozen Luxon clock — event before timeout resumes with payload; timeout path; event sent while owner is down is delivered after restart
 
-- [ ] **Task 1.8**: Approvals backend
-  - Delivers: `HarnessApproval` model; `rt.approval(key, {title, summary, payload, approvers, timeout, notify?})`; `approvalGate({tools, approvers})` extension (memo-backed); `HarnessApp` routes `GET /harness/approvals` (filtered by `approvers`), `approve` / `reject` instanceActions with reason; decision span with `decidedBy`
+- [x] **Task 1.8**: Approvals backend
+  - Delivers: `HarnessApproval` model; `rt.approval(key, {title, summary, payload, timeout, notify?})` with approvers declared per key on `defineTask({approvals})`; `approvalGate({tools, approvers})` extension (memo-backed); `HarnessApp` routes `GET /harness/approvals` (filtered by `approvers`), `approve` / `reject` instanceActions with reason; decision span with `decidedBy`
   - Files: `approvals.ts`, `models/harnessApproval.ts`, `harnessApp.ts`, `routes/approvals.ts`, tests
   - Blocked by: 1.6, 1.7
   - Skills: `terreno-backend-api`, `model-router-actions`

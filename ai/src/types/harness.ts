@@ -1,4 +1,4 @@
-import type {FindExactlyOnePlugin, FindOneOrNonePlugin, z} from "@terreno/api";
+import type {FindExactlyOnePlugin, FindOneOrNonePlugin, PermissionMethod, z} from "@terreno/api";
 import type {LanguageModel, ModelMessage} from "ai";
 import type {Duration, DurationLike} from "luxon";
 import type mongoose from "mongoose";
@@ -280,8 +280,16 @@ export interface HarnessWaitForTasksOptions {
   policy?: HarnessWaitPolicy;
 }
 
-/** Runtime surface handed to phases. Later slices add memo, events, agents, approvals. */
+/** Runtime surface handed to phases. */
 export interface HarnessTaskRuntime<State, Out> {
+  /**
+   * Ask a human to approve. Creates a `HarnessApproval` (once per call per phase visit) in
+   * the same transaction that parks the task `waiting` on the approval's own event, then
+   * returns the decision once a permitted user approves or rejects it, or
+   * `{approved: false, expired: true}` once `timeout` passes. Who may decide comes from the
+   * definition's `approvals[key].approvers` (default `[Permissions.IsAdmin]`).
+   */
+  approval: HarnessApprovalRequest;
   /** Persist the checkpoint (or terminal outcome) and its audit span in one transaction. */
   commit: (next: HarnessCommit<State, Out>) => Promise<void>;
   /** Create a child task owned by this task, in the same trace. Returns the child id. */
@@ -382,6 +390,12 @@ export interface HarnessPhaseDefinition<In, State, Out> {
 }
 
 export interface HarnessTaskDefinitionInput<In, State, Out> {
+  /**
+   * Who may decide each `rt.approval(key)` of this definition, by key. A key left out
+   * defaults to `[Permissions.IsAdmin]`. Kept in code, never stored: the HTTP routes look
+   * the policy up by the approval's `name@version` and `key` at request time.
+   */
+  approvals?: Readonly<Record<string, HarnessApprovalPolicy>>;
   /**
    * Compensation handler run before the task is marked `aborted`, after every task it
    * owns is already aborted. A throw is recorded on the abort span; the abort proceeds.
@@ -604,6 +618,17 @@ export interface HarnessHookApi {
   turnTaskId: string;
 }
 
+/** What a `beforeTool` hook receives: the hook api plus approvals. */
+export interface HarnessToolHookApi extends HarnessHookApi {
+  /**
+   * `rt.approval` of the tool call's task. Approvers come from the hook's own extension
+   * (`approvals[key]`, default `[Permissions.IsAdmin]`). Until the decision the tool call
+   * waits; the call (and this hook) re-runs from the top once it is decided, so memoize
+   * the decision by `toolCallId`.
+   */
+  approval: HarnessApprovalRequest;
+}
+
 /** The request a `beforeModelRequest` hook may rewrite. */
 export interface HarnessModelRequest {
   /** AI SDK messages built from the transcript. */
@@ -634,7 +659,10 @@ export interface HarnessHookHandlers {
     api: HarnessHookApi
   ) => MaybePromise<HarnessModelRequest | undefined>;
   /** `{block}` refuses the call (the reason is the model's error result); `{args}` rewrites. */
-  beforeTool: (call: HarnessToolCall, api: HarnessHookApi) => MaybePromise<HarnessBeforeToolResult>;
+  beforeTool: (
+    call: HarnessToolCall,
+    api: HarnessToolHookApi
+  ) => MaybePromise<HarnessBeforeToolResult>;
 }
 
 export const HARNESS_HOOK_KINDS = {
@@ -675,6 +703,8 @@ export interface HarnessToolWrap {
 }
 
 export interface HarnessExtensionDefinitionInput {
+  /** Who may decide each `api.approval(key)` this extension's `beforeTool` hooks request. */
+  approvals?: Readonly<Record<string, HarnessApprovalPolicy>>;
   hooks?: ReadonlyArray<HarnessHook>;
   /** Unique within a harness registry; agents and conversations reference it by name. */
   name: string;
@@ -685,6 +715,7 @@ export interface HarnessExtensionDefinitionInput {
 }
 
 export interface HarnessExtensionDefinition {
+  approvals: Readonly<Record<string, HarnessApprovalPolicy>>;
   hooks: ReadonlyArray<HarnessHook>;
   kind: "extension";
   name: string;
@@ -842,4 +873,107 @@ export interface HarnessSubmitOptions {
   content: string;
   /** Idempotency key: a repeated submit returns the turn task it started. */
   requestId: string;
+}
+
+// ---------------------------------------------------------------------------------------
+// Approvals
+// ---------------------------------------------------------------------------------------
+
+/** Lifecycle of a `HarnessApproval`. */
+export const HARNESS_APPROVAL_STATUSES = {
+  approved: "approved",
+  expired: "expired",
+  pending: "pending",
+  rejected: "rejected",
+} as const;
+
+export type HarnessApprovalStatus =
+  (typeof HARNESS_APPROVAL_STATUSES)[keyof typeof HARNESS_APPROVAL_STATUSES];
+
+/** A human decision requested by `rt.approval` (or a `beforeTool` hook's `api.approval`). */
+export interface HarnessApprovalDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  /** `<step>:<n>` of the wait call that requested it; unique per task. */
+  callKey: string;
+  created: Date;
+  decidedAt?: Date;
+  decidedBy?: mongoose.Types.ObjectId;
+  /** `name@version:key` of the requesting task definition and approval key. */
+  definitionKey: string;
+  /** Inbox event the decision sends to the task. */
+  event: string;
+  expiresAt?: Date;
+  /** Extension whose `approvals` hold the approvers (hook approvals only). */
+  extension?: string;
+  /** Approval key; selects the approvers policy. */
+  key: string;
+  payload?: unknown;
+  reason?: string;
+  rootTaskId: mongoose.Types.ObjectId;
+  status: HarnessApprovalStatus;
+  summary?: string;
+  taskId: mongoose.Types.ObjectId;
+  title: string;
+  traceId: mongoose.Types.ObjectId;
+  updated: Date;
+}
+
+export interface HarnessApprovalModel
+  extends mongoose.Model<HarnessApprovalDocument>,
+    FindExactlyOnePlugin<HarnessApprovalDocument>,
+    FindOneOrNonePlugin<HarnessApprovalDocument> {}
+
+/**
+ * One approver check, in the `@terreno/api` permission shape: `(method, user, approval)`.
+ * `method` is `list`, `read`, or `update` (approve / reject). Every check of a policy must
+ * pass (AND), like modelRouter permissions.
+ */
+export type HarnessApprover = PermissionMethod<HarnessApprovalDocument>;
+
+/** Who may decide one approval key. An empty `approvers` list means nobody (over HTTP). */
+export interface HarnessApprovalPolicy {
+  approvers: ReadonlyArray<HarnessApprover>;
+}
+
+/** Options for `rt.approval` / `api.approval`. */
+export interface HarnessApprovalOptions {
+  /**
+   * Called once, after the approval is first stored, with the stored document (send an
+   * email or push with `@terreno/comms`). Best-effort: a throw is logged and ignored, and a
+   * crash right after the commit skips it.
+   */
+  notify?: (approval: HarnessApprovalDocument) => Promise<void> | void;
+  /** What the approver reviews (JSON). */
+  payload?: unknown;
+  /** Short explanation shown under the title. */
+  summary?: string;
+  /** Expire the approval when nobody decides within this long. Must be positive. */
+  timeout?: DurationLike;
+  title: string;
+}
+
+/** What `rt.approval` returns. */
+export interface HarnessApprovalResult {
+  approvalId: string;
+  approved: boolean;
+  /** ISO time of the decision; unset when expired. */
+  decidedAt?: string;
+  /** User id of the decider; unset when expired or decided without a user. */
+  decidedBy?: string;
+  /** True when `timeout` passed before a decision. */
+  expired?: boolean;
+  reason?: string;
+}
+
+export type HarnessApprovalRequest = (
+  key: string,
+  options: HarnessApprovalOptions
+) => Promise<HarnessApprovalResult>;
+
+/** Options for `harness.decideApproval`. */
+export interface HarnessDecideApprovalOptions {
+  approved: boolean;
+  /** Why; recorded on the approval and its span. */
+  reason?: string;
+  /** Who decided; recorded as `decidedBy`. */
+  userId?: mongoose.Types.ObjectId | string;
 }

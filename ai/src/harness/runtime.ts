@@ -5,6 +5,8 @@ import mongoose from "mongoose";
 
 import type {
   HarnessAgentDefinition,
+  HarnessApprovalOptions,
+  HarnessApprovalResult,
   HarnessChildOutcome,
   HarnessChildTaskOptions,
   HarnessCommit,
@@ -23,6 +25,7 @@ import {
   HARNESS_WAIT_POLICIES,
 } from "../types/harness";
 import {AGENT_TURN_TASK_NAME} from "./agentLoop";
+import {type ApprovalWaitPlan, approvalWaitPlan, parseApprovalRequest} from "./approvals";
 import {
   commitInterruption,
   commitPhase,
@@ -58,21 +61,14 @@ import {
   subagentContent,
   subagentResult,
 } from "./subagent";
-import {parseWaitDuration, resolveWaitCall, type WaitRequest, waitCallKey} from "./waits";
+import {HarnessSuspendSignal} from "./suspend";
+import {parseWaitDuration, resolveWaitCall, type WaitCallPlan, waitCallKey} from "./waits";
 
 /** Registry key of the built-in agent turn every subagent runs. */
 const AGENT_TURN_KEY = taskDefinitionKey({name: AGENT_TURN_TASK_NAME, version: 1});
 
 /** Most expired tasks one recovery pass handles; the next pass picks up the rest. */
 const RECOVERY_BATCH_SIZE = 100;
-
-/** Unwinds a phase that committed `waiting`; the runner stops the task without failing it. */
-class HarnessSuspendSignal extends Error {
-  constructor(taskId: string) {
-    super(`Harness task ${taskId} is waiting; the phase re-runs when the wait is satisfied`);
-    this.name = "HarnessSuspendSignal";
-  }
-}
 
 const assertValidNext = (
   definition: HarnessTaskDefinition,
@@ -413,12 +409,19 @@ const runPhase = async ({
     throw new HarnessSuspendSignal(taskId);
   };
 
-  /** Shared by `rt.waitFor` and `rt.sleep`: resolve the call now, or park the task on it. */
-  const waitCall = async (method: string, request: WaitRequest): Promise<unknown> => {
+  /**
+   * Shared by `rt.waitFor`, `rt.sleep`, and `rt.approval`: resolve the call now, or park the
+   * task on it. `plan` builds the request from the call's key.
+   */
+  const waitCall = async (
+    method: string,
+    plan: (callKey: string) => WaitCallPlan
+  ): Promise<unknown> => {
     assertOpen(method);
     // Taken before any await, so the call's key depends only on its order in the phase.
     const callKey = waitCallKey({index: waitIndex, task});
     waitIndex += 1;
+    const {afterPark, onPark, request} = plan(callKey);
     let result: Awaited<ReturnType<typeof resolveWaitCall>>;
     try {
       result = await resolveWaitCall({
@@ -451,6 +454,7 @@ const runPhase = async ({
         testHooks,
         waitCall: {entry, key: callKey},
         waiting: {key: entry.key, kind: entry.kind, timeoutAt: entry.timeoutAt},
+        writes: onPark,
       });
       isWoken = parked.isWoken;
       return parked.task;
@@ -459,7 +463,23 @@ const runPhase = async ({
     if (isWoken) {
       engine.wake();
     }
+    await afterPark?.();
     throw new HarnessSuspendSignal(taskId);
+  };
+
+  const requestApproval = async (
+    key: string,
+    options: HarnessApprovalOptions,
+    extension?: string
+  ): Promise<HarnessApprovalResult> => {
+    assertOpen("rt.approval");
+    const timeout = parseApprovalRequest({key, label: definition.key, options});
+    let approval: ApprovalWaitPlan | undefined;
+    await waitCall("rt.approval", (callKey) => {
+      approval = approvalWaitPlan({callKey, extension, key, models, options, task, timeout});
+      return approval;
+    });
+    return (approval as ApprovalWaitPlan).result();
   };
 
   const waitFor = async (event: string, options: HarnessWaitForOptions = {}): Promise<unknown> => {
@@ -471,12 +491,16 @@ const runPhase = async ({
       options?.timeout === undefined
         ? undefined
         : parseWaitDuration(options.timeout, `${definition.key}: rt.waitFor timeout`);
-    return waitCall("rt.waitFor", {duration: timeout, event, kind: HARNESS_WAIT_KINDS.event});
+    return waitCall("rt.waitFor", () => ({
+      request: {duration: timeout, event, kind: HARNESS_WAIT_KINDS.event},
+    }));
   };
 
   const sleep = async (duration: DurationLike): Promise<void> => {
     const length = parseWaitDuration(duration, `${definition.key}: rt.sleep duration`);
-    await waitCall("rt.sleep", {duration: length, kind: HARNESS_WAIT_KINDS.sleep});
+    await waitCall("rt.sleep", () => ({
+      request: {duration: length, kind: HARNESS_WAIT_KINDS.sleep},
+    }));
   };
 
   const runAgent = async <Result>(
@@ -599,7 +623,13 @@ const runPhase = async ({
   }
 
   const rt: HarnessTaskRuntime<unknown, unknown> & {[HARNESS_INTERNAL_RUNTIME]: unknown} = {
-    [HARNESS_INTERNAL_RUNTIME]: {commitWithWrites, memoFor},
+    [HARNESS_INTERNAL_RUNTIME]: {
+      approvalFor: (extension: string) => (key, options) =>
+        requestApproval(key, options, extension),
+      commitWithWrites,
+      memoFor,
+    },
+    approval: (key, options) => requestApproval(key, options),
     commit,
     createTask: createTask as HarnessTaskRuntime<unknown, unknown>["createTask"],
     env: engine.env,

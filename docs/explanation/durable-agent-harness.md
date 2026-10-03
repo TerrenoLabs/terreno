@@ -388,3 +388,49 @@ decision still keeps it. Hook memos are scoped to the turn task: the turn outliv
 request re-runs and its tool calls, so their decisions are found again.
 
 API: [Extensions](../reference/ai-harness.md#extensions), [Hooks](../reference/ai-harness.md#hooks), [Memos](../reference/ai-harness.md#memos).
+
+## Human approvals
+
+Regulated work needs a person to sign off before the irreversible step: a clinician
+approves the note before it is written to the EHR. The harness treats an approval as a
+wait, not a new mechanism. `rt.approval` parks the task on an event that only a decision
+sends, and writes the `HarnessApproval` row in the same commit that parks it. Everything
+waits already guarantee carries over: the task holds no lease while a person thinks, a
+decision made while every runner is down is stored and delivered on restart, and a re-run
+of the phase finds the same approval instead of asking again.
+
+```
+phase: rt.approval ──commit──> task waiting + HarnessApproval(pending)
+                                          │
+inbox (approver) ── approve/reject ──> one transaction: approval decided
+                                          + inbox event (task -> pending)
+                                          + approval:<key> span (decidedBy)
+                                          │
+phase re-runs ──> rt.approval returns the decision
+```
+
+### Approvers are code, looked up by name
+
+Who may approve is a list of permission functions in the same shape as modelRouter
+permissions, so an app reuses its existing checks (`IsAdmin`, "is a clinician at this
+clinic"). Functions cannot be stored, and the process answering the approver's HTTP
+request did not run the phase, so the policy is declared on the task definition (or the
+extension, for tool gates) and found again by `name@version` and key. A process that does
+not register that version denies everyone rather than guessing.
+
+### The decision and its audit are one write
+
+The approver's decision, the event that wakes the task, and the span that records who
+decided commit together. There is no window in which the task proceeds without an audit
+record, or an audit record exists for a decision the task never saw. Expiry follows the
+same rule from the other side: it is written with the wait's timeout, only while the
+approval is still pending, so a late decision and an expiry can never both apply.
+
+### Gating tools
+
+`approvalGate` puts the same wait inside a `beforeTool` hook. The tool call's task waits;
+the turn waits on the tool call. The decision is memoized by tool call id in the turn, so
+a replayed call does not ask twice, and a rejection reaches the model as the tool's error
+result, like any other block.
+
+API: [Approvals](../reference/ai-harness.md#approvals), [approvalGate](../reference/ai-harness.md#approvalgate), [HarnessApp and HTTP routes](../reference/ai-harness.md#harnessapp-and-http-routes).

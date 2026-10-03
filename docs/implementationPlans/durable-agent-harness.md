@@ -211,10 +211,10 @@ const intakeSummary = defineTask<{patientId: string}, IntakeState, {status: stri
     review: {
       replay: "safe",
       run: async (task, rt) => {
+        // Approvers are declared on the definition: approvals: {"clinician-signoff": {approvers: [Permissions.IsAdmin, isClinician]}}
         const decision = await rt.approval("clinician-signoff", {
           title: "Sign off intake summary",
           payload: task.state.summary,
-          approvers: [Permissions.IsAdmin, isClinician],
           timeout: {hours: 24},
         });
         await rt.commit(decision.approved ? {phase: "write"} : {terminal: {status: "completed", result: {status: "rejected"}}});

@@ -10,6 +10,7 @@ import {AiPromptHubView} from "./AiPromptHubView";
 import {
   latestVersionFromDetail,
   type PlaygroundRunResult,
+  type PromptDetail,
   unwrapPromptDetail,
   unwrapPromptPayload,
 } from "./promptTypes";
@@ -38,6 +39,9 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
   } = useAiObservabilityPromptsApi(api);
   const [selectedVersion, setSelectedVersion] = useState<number | undefined>(undefined);
   const [pinnedQueryVersion, setPinnedQueryVersion] = useState<number | undefined>(undefined);
+  const [cachedDetail, setCachedDetail] = useState<
+    {detail: PromptDetail; name: string} | undefined
+  >(undefined);
 
   const detailQueryArg = useMemo(() => {
     if (!name) {
@@ -59,7 +63,16 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
 
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const detail = useMemo(() => unwrapPromptDetail(data), [data]);
-  const version = selectedVersion ?? (detail ? latestVersionFromDetail(detail) : 1);
+  // Keep the last loaded hub when a version pin changes the RTK cache key.
+  // A fresh query starts with empty `data` and `isLoading`, which would unmount the hub.
+  useEffect(() => {
+    if (!detail || !name) {
+      return;
+    }
+    setCachedDetail({detail, name});
+  }, [detail, name]);
+  const visibleDetail = cachedDetail?.name === name ? (detail ?? cachedDetail.detail) : detail;
+  const version = selectedVersion ?? (visibleDetail ? latestVersionFromDetail(visibleDetail) : 1);
 
   // Pin GET detail to latest promptVersion after bootstrap so relationship tabs filter server-side.
   useEffect(() => {
@@ -152,11 +165,11 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
       })
     : undefined;
 
-  const isInitialLoad = isLoading && !detail;
-  const isRelationshipsLoading = Boolean(detail && isFetching);
+  const isInitialLoad = isLoading && !visibleDetail;
+  const isRelationshipsLoading = Boolean(visibleDetail && (isFetching || (isLoading && !detail)));
   const relationshipsError =
-    isError && detail ? "Could not refresh related traces and experiments." : undefined;
-  const isFatalLoadError = isError && !detail;
+    isError && visibleDetail ? "Could not refresh related traces and experiments." : undefined;
+  const isFatalLoadError = isError && !visibleDetail;
 
   if (!name) {
     return (
@@ -178,7 +191,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
     );
   }
 
-  if (isFatalLoadError || !detail) {
+  if (isFatalLoadError || !visibleDetail) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-prompt-editor">
         <Box gap={2} padding={4}>
@@ -192,7 +205,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
   return (
     <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-prompt-editor">
       <AiPromptHubView
-        detail={detail}
+        detail={visibleDetail}
         isApiKeyLoading={isPlaygroundAccessLoading}
         isRelationshipsLoading={isRelationshipsLoading}
         isRunningPlayground={playgroundState.isLoading}

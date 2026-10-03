@@ -240,6 +240,23 @@ describe("AiPromptEditorScreenWidget", () => {
     await waitForDetailArg({name: "summarize", promptVersion: 2});
   });
 
+  it("keeps the hub mounted when a version pin drops the detail cache", async () => {
+    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    await waitForDetailArg({name: "summarize", promptVersion: 2});
+    fireEvent.press(view.getByText("Versions"));
+    expect(view.getByTestId("ai-prompt-version-1")).toBeTruthy();
+
+    detailState.data = undefined;
+    detailState.isLoading = true;
+    detailState.isFetching = true;
+    fireEvent.press(view.getByTestId("ai-prompt-version-1"));
+
+    expect(view.queryByTestId("ai-prompt-editor-loading")).toBeNull();
+    expect(view.getByTestId("ai-prompt-hub")).toBeTruthy();
+    expect(view.getByTestId("ai-prompt-version-1")).toBeTruthy();
+    await waitForDetailArg({name: "summarize", promptVersion: 1});
+  });
+
   it("refetches detail with the selected promptVersion when another version is chosen", async () => {
     const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
     await waitForDetailArg({name: "summarize", promptVersion: 2});

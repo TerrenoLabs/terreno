@@ -35,3 +35,4 @@ Understanding-oriented documentation: concepts, architecture, and context.
 - [Example app coverage](example-coverage.md) — Which framework capabilities the example apps exercise
 - [Repository settings](repository-settings.md) — Maintainer GitHub settings that cannot be committed
 - [Why Terreno owns chart SVG](charts.md) — Owned `react-native-svg` vs victory-native
+- [Responsive design](responsive-design.md) — Support levels, breakpoints, and the desktop floor

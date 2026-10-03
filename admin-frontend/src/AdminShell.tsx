@@ -1,4 +1,4 @@
-import {Box, Heading, Icon, Spinner, Text, useTheme} from "@terreno/ui";
+import {Box, Heading, Icon, isSupportedDesktopWidth, Spinner, Text, useTheme} from "@terreno/ui";
 import type {Href} from "expo-router";
 import {router} from "expo-router";
 import React, {useCallback, useEffect, useState} from "react";
@@ -12,11 +12,8 @@ import type {AdminApi, AdminConfigResponse, AdminCustomScreen, AdminModelConfig}
 import {resolveAdminBases} from "./types";
 import {useAdminConfig} from "./useAdminConfig";
 
-/** Sidebar chrome: matches Flourish admin v2 prototype (`adminv2` HTML shell). */
+/** Sidebar chrome for the admin shell. */
 export type AdminShellSidebarVariant = "clinical" | "colorful";
-
-/** Viewport widths below this use the hamburger + drawer navigation. */
-const ADMIN_SHELL_MOBILE_BREAKPOINT = 768;
 
 export interface AdminShellProps {
   /** @deprecated Use `apiBase`/`routeBase`. */
@@ -355,8 +352,8 @@ const AdminShellSidebarNav: React.FC<AdminShellSidebarNavProps> = ({
  * Intended for standalone admin SPA or embedded admin: pair with list/table/form screens
  * as `children`. Fetches `/admin/config` once for the sidebar (Platform, grouped Models, Screens).
  *
- * Below {@link ADMIN_SHELL_MOBILE_BREAKPOINT}px, the fixed sidebar becomes a hamburger-triggered
- * left slide-over drawer.
+ * Below the desktop floor (web `lg` / native `xl`, 1024pt), the fixed sidebar becomes a
+ * hamburger-triggered left slide-over drawer.
  *
  * For Expo Router admin roots, prefer {@link AdminShellLayout}: it wraps `children` in a flex
  * main column so a nested `<Stack />` fills the area beside the sidebar without repeating layout
@@ -382,7 +379,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({
 }) => {
   const {theme} = useTheme();
   const {width: windowWidth} = useWindowDimensions();
-  const isMobileLayout = windowWidth < ADMIN_SHELL_MOBILE_BREAKPOINT;
+  const isMobileLayout = !isSupportedDesktopWidth({width: windowWidth});
   const [isNavOpen, setIsNavOpen] = useState(false);
   const {apiBase: resolvedApiBase, routeBase: resolvedRouteBase} = resolveAdminBases({
     apiBase,

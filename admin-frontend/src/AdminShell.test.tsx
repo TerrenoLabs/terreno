@@ -113,6 +113,20 @@ describe("AdminShell", () => {
     restoreWindowWidth = undefined;
   });
 
+  it("keeps the hamburger header between the old 768 cutoff and the desktop floor", () => {
+    restoreWindowWidth?.();
+    restoreWindowWidth = setWindowWidth(800);
+
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+        <React.Fragment />
+      </AdminShell>
+    );
+
+    expect(queryByTestId("admin-shell-sidebar")).toBeNull();
+    expect(getByTestId("admin-shell-mobile-header")).toBeTruthy();
+  });
+
   it("shows the fixed sidebar on desktop widths", () => {
     restoreWindowWidth?.();
     restoreWindowWidth = setWindowWidth(1024);
@@ -197,7 +211,7 @@ describe("AdminShell", () => {
     expect(rendered.getByTestId("admin-shell-error")).toBeTruthy();
   });
 
-  it("hides the fixed sidebar and shows a hamburger header below 768px", () => {
+  it("hides the fixed sidebar and shows a hamburger header below the desktop floor", () => {
     const {getByTestId, getByLabelText, queryByTestId, UNSAFE_root} = renderWithTheme(
       <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
         <React.Fragment />

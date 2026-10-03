@@ -6,6 +6,7 @@ import {
   DateTimeField,
   Heading,
   IconButton,
+  isSupportedDesktopWidth,
   Modal,
   SelectField,
   Text,
@@ -20,7 +21,6 @@ import {
   adminFilterStateHasValues,
   areAdminFilterStatesEqual,
 } from "./adminModelListQueryParams";
-import {ADMIN_FILTER_MOBILE_BREAKPOINT} from "./Constants";
 import type {AdminApi, AdminFieldConfig, AdminModelConfig} from "./types";
 
 interface AdminFilterDrawerProps {
@@ -194,7 +194,7 @@ export const AdminFilterDrawer: React.FC<AdminFilterDrawerProps> = ({
   onApply,
 }) => {
   const {width: windowWidth} = useWindowDimensions();
-  const isMobileLayout = windowWidth < ADMIN_FILTER_MOBILE_BREAKPOINT;
+  const isMobileLayout = !isSupportedDesktopWidth({width: windowWidth});
   const [isExpanded, setIsExpanded] = useState(true);
   const [draftState, setDraftState] = useState<AdminListFilterState>(appliedFilterState);
   const [isSheetOpen, setIsSheetOpen] = useState(false);

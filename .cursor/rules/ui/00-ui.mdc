@@ -389,6 +389,7 @@ const [value, setValue, isLoading] = useStoredState<string>("key", "default");
 - Use spacing props (`padding`, `margin`, `gap`) — not `style={{padding: 16}}`
 - Icons use FontAwesome 6 names via `iconName` props
 - Always support React Native Web — no platform-specific code without fallbacks
+- Width-dependent layout uses breakpoint tokens or `isSupportedDesktopWidth`. Do not add a raw pixel cutoff. See `01-responsive-design.md` and `docs/explanation/responsive-design.md`
 - Use inline styles over `StyleSheet.create`
 - Declare `pointerEvents` through `StyleSheet.create` — react-native-web drops it from inline styles, so `box-none` / `box-only` containers silently become event-swallowing overlays on web
 - Use Luxon for all date operations

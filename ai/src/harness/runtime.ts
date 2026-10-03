@@ -38,6 +38,7 @@ import {
 import {taskDefinitionKey} from "./defineTask";
 import {HARNESS_INTERNAL_RUNTIME} from "./internalRuntime";
 import {startTaskHeartbeat} from "./leases";
+import {createMemo} from "./memo";
 import {
   checkTaskWait,
   childOutcomes,
@@ -444,6 +445,7 @@ const runPhase = async ({
       agent,
       callIndex,
       content,
+      extensions: engine.extensions,
       instructions: options.instructions,
       lease,
       models,
@@ -506,6 +508,15 @@ const runPhase = async ({
     }
   };
 
+  const memoFor = (scopeTaskId: mongoose.Types.ObjectId | string) =>
+    createMemo({
+      assertWritable: () => assertOpen("rt.memo"),
+      fence: {phase: task.phase, taskId: task._id, token: task.lease?.token},
+      lease,
+      models,
+      scopeTaskId: toObjectId(scopeTaskId),
+    });
+
   const phase = definition.phases[task.phase];
   if (!phase) {
     return failOrRetry({
@@ -515,10 +526,11 @@ const runPhase = async ({
   }
 
   const rt: HarnessTaskRuntime<unknown, unknown> & {[HARNESS_INTERNAL_RUNTIME]: unknown} = {
-    [HARNESS_INTERNAL_RUNTIME]: {commitWithWrites},
+    [HARNESS_INTERNAL_RUNTIME]: {commitWithWrites, memoFor},
     commit,
     createTask: createTask as HarnessTaskRuntime<unknown, unknown>["createTask"],
     env: engine.env,
+    memo: memoFor(task._id),
     runAgent: runAgent as HarnessTaskRuntime<unknown, unknown>["runAgent"],
     signal: controller.signal,
     taskId,

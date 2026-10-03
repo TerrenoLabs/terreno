@@ -7,6 +7,7 @@ import type {
   HarnessAbortOptions,
   HarnessAgentDefinition,
   HarnessCreateTaskOptions,
+  HarnessExtensionDefinition,
   HarnessModelResolver,
   HarnessResolveInterruptedOptions,
   HarnessRunner,
@@ -27,10 +28,12 @@ import {
   conversationAgentSnapshot,
   HarnessConversationHandle,
 } from "./conversation";
+import {extensionName} from "./defineAgent";
 import {taskDefinitionKey} from "./defineTask";
 import type {ExecutionEnv} from "./executionEnv";
 import {acquireOwnerLease, releaseOwnerLease} from "./leases";
 import {registerHarnessConversation} from "./models/harnessConversation";
+import {registerHarnessMemo} from "./models/harnessMemo";
 import {registerHarnessMessage} from "./models/harnessMessage";
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
@@ -39,6 +42,7 @@ import {
   type AnyHarnessTaskDefinition,
   assertInFlightVersionsRegistered,
   buildTaskRegistry,
+  type HarnessRegistryEntry,
   splitRegistry,
 } from "./registry";
 import {InProcessRunner} from "./runners/inProcessRunner";
@@ -50,6 +54,7 @@ export type {
   HarnessAbortRuntime,
   HarnessAgentDefinition,
   HarnessAgentDefinitionInput,
+  HarnessBeforeToolResult,
   HarnessChildOutcome,
   HarnessChildTaskOptions,
   HarnessCommit,
@@ -57,12 +62,21 @@ export type {
   HarnessConversationDocument,
   HarnessConversationStatus,
   HarnessCreateTaskOptions,
+  HarnessExtensionDefinition,
+  HarnessExtensionDefinitionInput,
+  HarnessHook,
+  HarnessHookApi,
+  HarnessHookHandlers,
+  HarnessHookKind,
   HarnessInterruptAction,
   HarnessLeaseSettings,
+  HarnessMemo,
+  HarnessMemoDocument,
   HarnessMessageDocument,
   HarnessMessagePart,
   HarnessMessageRole,
   HarnessModelRef,
+  HarnessModelRequest,
   HarnessModelResolver,
   HarnessOutcome,
   HarnessPhaseCommit,
@@ -74,7 +88,10 @@ export type {
   HarnessRunAgentOptions,
   HarnessRunner,
   HarnessRunnerContext,
+  HarnessSection,
+  HarnessSectionInput,
   HarnessSubmitOptions,
+  HarnessSystemPromptPart,
   HarnessTaskDefinition,
   HarnessTaskDefinitionInput,
   HarnessTaskDocument,
@@ -86,10 +103,12 @@ export type {
   HarnessTestHooks,
   HarnessTextPart,
   HarnessToolApi,
+  HarnessToolCall,
   HarnessToolCallPart,
   HarnessToolDefinition,
   HarnessToolDefinitionInput,
   HarnessToolResultPart,
+  HarnessToolWrap,
   HarnessTurnResult,
   HarnessWaitForTasksOptions,
   HarnessWaiting,
@@ -99,6 +118,7 @@ export type {
 export {
   HARNESS_AGENT_DEFAULT_MAX_STEPS,
   HARNESS_CONVERSATION_STATUSES,
+  HARNESS_HOOK_KINDS,
   HARNESS_INTERRUPT_ACTIONS,
   HARNESS_MESSAGE_ROLES,
   HARNESS_MODEL_RETRY_DEFAULTS,
@@ -121,11 +141,18 @@ export type {
   ExecutionEnvExecResult,
 } from "./executionEnv";
 export {
+  defineExtension,
+  HarnessExtensionError,
+  hook,
+  section,
+  wrapTool,
+} from "./extensions";
+export {
   HarnessModelCallError,
   isRetryableModelError,
   type ModelCallAttempt,
 } from "./modelCall";
-export type {AnyHarnessTaskDefinition} from "./registry";
+export type {AnyHarnessTaskDefinition, HarnessRegistryEntry} from "./registry";
 export {
   IN_PROCESS_RUNNER_ROLES,
   InProcessRunner,
@@ -148,10 +175,11 @@ export interface HarnessOpenOptions {
    */
   priceMap?: Record<string, ModelPrice>;
   /**
-   * Every task definition (and version) this process may create or resume, and every
-   * agent (`defineAgent`) its conversations may use.
+   * Every task definition (and version) this process may create or resume, every agent
+   * (`defineAgent`) its conversations may use, and every extension (`defineExtension`)
+   * those agents and conversations name.
    */
-  registry: ReadonlyArray<AnyHarnessTaskDefinition | HarnessAgentDefinition>;
+  registry: ReadonlyArray<HarnessRegistryEntry>;
   /** Defaults to a new `InProcessRunner`. */
   runner?: HarnessRunner;
   /** Test-only seams; never set in production code. */
@@ -198,6 +226,7 @@ export class Harness {
   private readonly agentTasks: AgentTasks;
   private readonly definitions: Map<string, HarnessTaskDefinition>;
   private readonly engine: HarnessEngine;
+  private readonly extensions: Map<string, HarnessExtensionDefinition>;
   private isStarted = false;
   private readonly models: HarnessModels;
   private readonly runner: HarnessRunner;
@@ -208,6 +237,7 @@ export class Harness {
     agentTasks,
     definitions,
     env,
+    extensions,
     models,
     runner,
     testHooks,
@@ -216,6 +246,7 @@ export class Harness {
     agentTasks: AgentTasks;
     definitions: Map<string, HarnessTaskDefinition>;
     env?: ExecutionEnv;
+    extensions: Map<string, HarnessExtensionDefinition>;
     models: HarnessModels;
     runner: HarnessRunner;
     testHooks?: HarnessTestHooks;
@@ -223,6 +254,7 @@ export class Harness {
     this.agents = agents;
     this.agentTasks = agentTasks;
     this.definitions = definitions;
+    this.extensions = extensions;
     this.models = models;
     this.runner = runner;
     this.testHooks = testHooks;
@@ -231,6 +263,7 @@ export class Harness {
       controllers: new Map(),
       definitions,
       env,
+      extensions,
       models,
       testHooks,
       wake: () => runner.wake(),
@@ -244,12 +277,13 @@ export class Harness {
   static async open(options: HarnessOpenOptions): Promise<Harness> {
     const {span, trace} = resolveObservabilityModels();
     await assertReplicaSet();
-    const {agents, tasks} = splitRegistry(options.registry);
+    const {agents, extensions, tasks} = splitRegistry(options.registry);
     if (agents.size > 0 && !options.models) {
       throw new Error("Harness.open: the registry lists agents; pass `models` to resolve them");
     }
     const models: HarnessModels = {
       conversation: registerHarnessConversation(),
+      memo: registerHarnessMemo(),
       message: registerHarnessMessage(),
       owner: registerHarnessOwner(),
       span,
@@ -258,6 +292,7 @@ export class Harness {
     };
     const agentTasks = createAgentTasks({
       agents,
+      extensions,
       models,
       priceMap: () => options.priceMap ?? getObservabilityApp()?.priceMap,
       random: options.testHooks?.random,
@@ -276,6 +311,7 @@ export class Harness {
       agentTasks,
       definitions,
       env: options.env,
+      extensions,
       models,
       runner: options.runner ?? new InProcessRunner(),
       testHooks: options.testHooks,
@@ -432,21 +468,34 @@ export class Harness {
   }
 
   /**
-   * Start a conversation with a registered agent. Its config (model, instructions, tool
-   * names, fallbacks, `maxSteps`) is snapshotted onto the conversation.
+   * Start a conversation with a registered agent. Its config (model, instructions,
+   * extension names, the tool names they resolve to, fallbacks, `maxSteps`) is
+   * snapshotted onto the conversation. `extensions` replaces the agent's extension list
+   * for this conversation; each must be registered.
    */
   async createConversation({
     agent,
+    extensions,
     userId,
   }: {
     agent: HarnessAgentDefinition;
+    extensions?: ReadonlyArray<HarnessExtensionDefinition | string>;
     userId?: mongoose.Types.ObjectId | string;
   }): Promise<HarnessConversationHandle> {
     if (this.agents.get(agent?.name) !== agent) {
       throw new Error(`Agent "${agent?.name}" is not in this harness registry`);
     }
+    const extensionNames = extensions?.map((entry) => extensionName("createConversation", entry));
+    if (extensionNames && new Set(extensionNames).size !== extensionNames.length) {
+      throw new Error("createConversation: an extension is listed more than once");
+    }
+    for (const name of extensionNames ?? []) {
+      if (!this.extensions.has(name)) {
+        throw new Error(`Extension "${name}" is not in this harness registry`);
+      }
+    }
     const document = await this.models.conversation.create({
-      agent: conversationAgentSnapshot(agent),
+      agent: conversationAgentSnapshot({agent, extensionNames, extensions: this.extensions}),
       ownership: {kind: "root"},
       userId,
     });

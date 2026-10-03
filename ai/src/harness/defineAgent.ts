@@ -1,6 +1,7 @@
 import type {
   HarnessAgentDefinition,
   HarnessAgentDefinitionInput,
+  HarnessExtensionDefinition,
   HarnessModelRef,
 } from "../types/harness";
 import {HARNESS_AGENT_DEFAULT_MAX_STEPS} from "../types/harness";
@@ -10,6 +11,18 @@ const assertModelRef = (agent: string, label: string, ref: HarnessModelRef | und
   if (!ref?.provider?.trim() || !ref.modelId?.trim()) {
     throw new Error(`defineAgent(${agent}): ${label} needs a provider and a modelId`);
   }
+};
+
+/** An extension reference (definition or name) as its name. */
+export const extensionName = (
+  owner: string,
+  entry: HarnessExtensionDefinition | string
+): string => {
+  const name = typeof entry === "string" ? entry : entry?.kind === "extension" ? entry.name : "";
+  if (!name?.trim()) {
+    throw new Error(`${owner}: every extension must be a defineExtension result or its name`);
+  }
+  return name;
 };
 
 /**
@@ -50,5 +63,11 @@ export const defineAgent = (definition: HarnessAgentDefinitionInput): HarnessAge
   if (definition.output !== undefined && typeof definition.output.safeParse !== "function") {
     throw new Error(`defineAgent(${name}): output must be a zod schema`);
   }
-  return Object.freeze({...definition, kind: "agent" as const, maxSteps, tools});
+  const extensions = (definition.extensions ?? []).map((entry) =>
+    extensionName(`defineAgent(${name})`, entry)
+  );
+  if (new Set(extensions).size !== extensions.length) {
+    throw new Error(`defineAgent(${name}): an extension is listed more than once`);
+  }
+  return Object.freeze({...definition, extensions, kind: "agent" as const, maxSteps, tools});
 };

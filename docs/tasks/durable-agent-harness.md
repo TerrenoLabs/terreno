@@ -51,7 +51,7 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: reference `runAgent`; explanation subagents
   - Acceptance: bun test — crash between child creation and completion resumes the same child conversation (no duplicate); abort of parent aborts child
 
-- [ ] **Task 1.6**: Extensions, hooks, wraps, memos
+- [x] **Task 1.6**: Extensions, hooks, wraps, memos
   - Delivers: `defineExtension({name, sections, tools, hooks, wraps})`; `section` rebuilt per request and recorded in transcript; hooks `beforeModelRequest` / `beforeTool` (rewrite or `{block}`) / `afterTool`; `wrapTool`; `rt.memo(key, value?)` via `HarnessMemo`
   - Files: `extensions.ts`, `models/harnessMemo.ts`, `agentLoop.ts`, tests
   - Blocked by: 1.4

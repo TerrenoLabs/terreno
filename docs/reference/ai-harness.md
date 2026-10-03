@@ -5,7 +5,17 @@ agent conversations built on them. Concepts:
 [Durable agent harness](../explanation/durable-agent-harness.md).
 
 ```typescript
-import {defineAgent, defineTask, defineTool, Harness, InProcessRunner} from "@terreno/ai/harness";
+import {
+  defineAgent,
+  defineExtension,
+  defineTask,
+  defineTool,
+  Harness,
+  hook,
+  InProcessRunner,
+  section,
+  wrapTool,
+} from "@terreno/ai/harness";
 ```
 
 ## Table of Contents
@@ -29,12 +39,18 @@ import {defineAgent, defineTask, defineTool, Harness, InProcessRunner} from "@te
 - [The agent turn task](#the-agent-turn-task)
 - [Model-call resilience](#model-call-resilience)
 - [Subagents (rt.runAgent)](#subagents-rtrunagent)
+- [Extensions](#extensions)
+- [Hooks](#hooks)
+- [Sections and the recorded system prompt](#sections-and-the-recorded-system-prompt)
+- [Tool wraps and precedence](#tool-wraps-and-precedence)
+- [Memos](#memos)
 - [ExecutionEnv](#executionenv)
 - [Task statuses](#task-statuses)
 - [HarnessTask model](#harnesstask-model)
 - [HarnessOwner model](#harnessowner-model)
 - [HarnessConversation model](#harnessconversation-model)
 - [HarnessMessage model](#harnessmessage-model)
+- [HarnessMemo model](#harnessmemo-model)
 - [Audit spans](#audit-spans)
 - [Errors](#errors)
 - [Testing](#testing)
@@ -181,6 +197,7 @@ A custom runner implements `HarnessRunner` (`start(context)`, `stop()`, `wake()`
 | `rt.createTask(definition, input, {background?, key?})` | Create a child task. Returns its id. See [Child tasks and waitForTasks](#child-tasks-and-waitfortasks). |
 | `rt.waitForTasks(ids, {policy?})` | Return child outcomes once they settle; until then the task waits. See [Child tasks and waitForTasks](#child-tasks-and-waitfortasks). |
 | `rt.runAgent(agent, {input, output?, instructions?})` | Run a registered agent as a subagent and return its answer; until it finishes the task waits. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
+| `rt.memo(key)` / `rt.memo(key, value)` | Read, or first-write, a durable value scoped to this task. See [Memos](#memos). |
 
 Rules:
 
@@ -188,7 +205,7 @@ Rules:
 - `phase` must exist in `phases`. An unknown phase fails the task.
 - A phase that returns without committing fails the task (no retry).
 - A phase that throws before committing is retried under the task's `retry` policy; see [Retries](#retries).
-- After `rt.commit` or a `waitForTasks` that started waiting, `rt.createTask`, `rt.waitForTasks`, and `rt.runAgent` throw.
+- After `rt.commit` or a `waitForTasks` that started waiting, `rt.createTask`, `rt.waitForTasks`, `rt.runAgent`, and memo writes throw. Memo reads still work.
 
 ## Leases
 
@@ -558,6 +575,7 @@ A failing tool is never retried: the error goes to the model, which decides what
 | `model` | `{provider, modelId}` | Yes | Resolved by `Harness.open({models})`. |
 | `instructions` | `string` | Yes | System prompt for every request. |
 | `tools` | `defineTool` results | No | Default `[]`. No duplicate names. |
+| `extensions` | `Array<defineExtension result \| string>` | No | Extensions every conversation with this agent uses, in order. Stored as names; each must be in the registry (`Harness.open` throws otherwise). No duplicates. See [Extensions](#extensions). |
 | `maxSteps` | positive integer | No | Model requests one turn may make. Default `10` (`HARNESS_AGENT_DEFAULT_MAX_STEPS`). |
 | `fallbackModels` | `Array<{provider, modelId}>` | No | Tried in order after the primary model's retryable failures run out. |
 | `modelRetry` | `{maxAttempts?, backoffMs?, maxBackoffMs?}` | No | Retries per model. Defaults `HARNESS_MODEL_RETRY_DEFAULTS`: 3 attempts, 500 ms base, 8 s cap. |
@@ -565,14 +583,15 @@ A failing tool is never retried: the error goes to the model, which decides what
 
 ## Conversations
 
-A conversation stores a snapshot of the agent's config (model, instructions, tool names,
-fallbacks, `maxSteps`) and an ordered transcript. The snapshot keeps a running
+A conversation stores a snapshot of the agent's config (model, instructions, extension
+names, the tool names the agent and those extensions resolve to, fallbacks, `maxSteps`)
+and an ordered transcript. The snapshot keeps a running
 conversation stable when the agent definition changes; tool code, `modelRetry`, and
 `output` come from the registered agent at run time.
 
 | Member | Description |
 | --- | --- |
-| `harness.createConversation({agent, userId?})` | Creates an `idle` conversation. `agent` must be the registered definition. Returns a `HarnessConversationHandle`. |
+| `harness.createConversation({agent, extensions?, userId?})` | Creates an `idle` conversation. `agent` must be the registered definition. `extensions` (definitions or names) replaces the agent's extension list for this conversation; each must be registered. Returns a `HarnessConversationHandle`. |
 | `harness.conversation(id)` | Loads a handle. |
 | `handle.id`, `handle.document` | Id and the conversation as loaded. |
 | `handle.messages()` | Every `HarnessMessage`, in `seq` order. |
@@ -634,7 +653,7 @@ CHAIN terreno.agent.turn@1                  (turn root span; closes with the tur
 | `LLM` span field | Value |
 | --- | --- |
 | `name` | `<provider>/<modelId>` of the model that answered |
-| `input` | `{messages: {count, fromSeq, toSeq}, system, tools, models}`: the transcript slice sent (the messages themselves are in `HarnessMessage`), so span size stays bounded |
+| `input` | `{messages: {count, fromSeq, toSeq, hash?}, system: {hash, messageSeq?, sections}, tools, models, rewrittenBy?}` (`messages.hash`, the sha256 of the JSON messages sent, only when a `beforeModelRequest` hook rewrote the request): the transcript slice sent and the system prompt by hash (the texts themselves are in `HarnessMessage`), so span size stays bounded. See [Sections and the recorded system prompt](#sections-and-the-recorded-system-prompt). |
 | `output` | `{text, toolCalls, finishReason, attempts}`; `attempts` lists every try (`{provider, modelId, attempt, error?, statusCode?, retryable?}`) |
 | `usage` | `{inputTokens, outputTokens, model, costUsd?}`; `costUsd` only when `priceMap` prices the model |
 | `status` / `error` | `error` and the failure message when no model answered; `output` is then `{attempts}` and the turn fails in the same commit |
@@ -760,6 +779,166 @@ CHAIN test.parent@1                   (caller's span)
 └── CHAIN summarize                   (terminal)
 ```
 
+## Extensions
+
+An extension is a named bundle of prompt sections, tools, hooks, and tool wraps. Agents
+and conversations use extensions by name; list each one in `Harness.open({registry})`.
+
+```typescript
+const clinicPolicy = defineExtension({
+  name: "clinic.policy",
+  sections: [section("rules", () => "Never prescribe. Cite chart sources.")],
+  tools: [pageNurse],
+  hooks: [
+    hook("beforeTool", async (call, api) => {
+      if (call.toolName !== "writeNote") {
+        return undefined;
+      }
+      const key = `allow:${call.toolCallId}`;
+      // Ask the policy service once; a replay reads the stored decision.
+      const allowed = (await api.memo<boolean>(key)) ?? (await api.memo(key, await policy.allows(call.args)));
+      return allowed ? undefined : {block: "Writing notes needs clinician sign-off"};
+    }),
+  ],
+  wraps: [wrapTool("lookupChart", withAuditLog)],
+});
+
+const summarizer = defineAgent({name: "clinic.summarizer", extensions: [clinicPolicy], ...});
+const harness = await Harness.open({models, registry: [summarizer, clinicPolicy]});
+```
+
+| Builder | Signature | Notes |
+| --- | --- | --- |
+| `defineExtension` | `({name, sections?, tools?, hooks?, wraps?}) => HarnessExtensionDefinition` | Validates and freezes. `name` required; no duplicate section or tool names. |
+| `section` | `(name, (input, api) => string \| undefined \| Promise<...>)` | A named piece of the system prompt. See [Sections](#sections-and-the-recorded-system-prompt). |
+| `hook` | `(kind, fn)` | `kind`: `beforeModelRequest`, `beforeTool`, `afterTool` (`HARNESS_HOOK_KINDS`). An extension may list several hooks of one kind; they run in list order. |
+| `wrapTool` | `(toolOrName, (tool) => tool)` | Decorates the winning tool of that name. See [Tool wraps and precedence](#tool-wraps-and-precedence). |
+
+Registration and lookup:
+
+| Case | Result |
+| --- | --- |
+| Two extensions with one name in `registry` | `Harness.open` throws `Harness registry lists extension "<name>" more than once`. Replacing an extension's behavior across versions ships later. |
+| An agent names an unregistered extension | `Harness.open` throws `Agent "<agent>" uses extension "<name>", which is not in this harness registry`. |
+| `createConversation({extensions})` names an unregistered or repeated extension | Throws `Extension "<name>" is not in this harness registry` / `createConversation: an extension is listed more than once`. |
+| A conversation's snapshot names an extension the running process lacks | The turn's `request` fails the turn with `Extension "<name>" is not in this harness registry`. |
+
+Extensions are code: they come from the registry at run time. The conversation stores
+only their names (and the tool names they resolved to at create time).
+
+## Hooks
+
+Every hook gets an `api`:
+
+| Member | Description |
+| --- | --- |
+| `taskId` | The task running the hook: the turn for `beforeModelRequest` and sections, the tool call's task for `beforeTool` / `afterTool`. |
+| `turnTaskId` | The turn task. |
+| `conversationId` | The conversation. |
+| `signal` | Aborts with the turn or when the run loses its lease. |
+| `memo` | [Memo](#memos) scoped to the turn task (from tool hooks too). |
+
+| Hook | Runs | Returns | Effect |
+| --- | --- | --- | --- |
+| `beforeModelRequest(request, api)` | In `request`, after sections are built, before each model call | `{system, messages}` or `undefined` | Replaces the request. `messages` are AI SDK `ModelMessage`s. The span records `rewrittenBy` (extensions whose hook returned a request) and `messages.hash`. A rewritten system prompt is recorded in the transcript; rewritten messages are not (only their hash), so keep message rewrites deterministic. |
+| `beforeTool(call, api)` | In the tool call's task, after the arguments pass `parameters`, before `execute` | `undefined`, `{block: reason}`, or `{args}` | `{block}` stops the call: `execute` never runs; the tool result is an error whose text is `reason`, verbatim. `{args}` replaces the arguments; the next hook sees them. The final arguments are validated again. |
+| `afterTool(call, result, api)` | After `execute` returns (not after it throws) | A replacement result, or `undefined` | Replaces the result the model sees (JSON; `undefined` keeps it, return `null` for null). |
+
+`call` is `{toolName, toolCallId, args}`.
+
+Order: extensions in the conversation's order; within an extension, its `hooks` in list
+order. Each hook sees the previous hook's output. The first `{block}` stops the rest.
+
+When a hook fails:
+
+| Case | Result |
+| --- | --- |
+| `beforeModelRequest` throws | The turn fails: `Extension "<name>" beforeModelRequest hook failed: <message>`. No model call; the conversation goes back to `idle`. |
+| `beforeModelRequest` returns something without a string `system` and a `messages` array | The turn fails: `Extension "<name>" beforeModelRequest hook must return {system, messages} or undefined`. |
+| `beforeTool` / `afterTool` throws | The tool call fails, like a throwing tool: the model gets the error result `Extension "<name>" beforeTool hook failed: <message>` (or `afterTool`). The turn continues. |
+| `beforeTool` returns anything else | Tool error result `Tool "<name>" failed: Extension "<x>" beforeTool hook must return undefined, {block}, or {args}`. |
+| Rewritten arguments fail `parameters` | Tool error result `Invalid arguments for tool "<name>" after beforeTool hooks: <zod issues>`. |
+| The turn is aborted while a hook runs | The abort wins; nothing is reported to the model. |
+
+A failing hook is never retried (turn and tool tasks run with `retry: {maxAttempts: 1}`).
+A `request` that is replayed after a crash runs its sections and `beforeModelRequest`
+hooks again; a replayed `replay: "safe"` tool call runs its tool hooks again. Store
+decisions that must not change with `api.memo`.
+
+## Sections and the recorded system prompt
+
+Before every model request the turn builds the system prompt:
+
+1. The conversation's `instructions`.
+2. Each section of each extension, extensions in the conversation's order, sections in
+   list order. A section returning `undefined`, `null`, or blank text is skipped.
+3. Pieces are joined with a blank line (`"\n\n"`).
+4. `beforeModelRequest` hooks may then replace it.
+
+Section `input`: `{agentName, conversationId, step, messages}` (`step` is 1 for the
+turn's first request; `messages` are the AI SDK messages about to be sent). The second
+argument is the hook `api`. A throwing section fails the turn:
+`Extension "<name>" section "<section>" failed: <message>`.
+
+What the model saw is recorded:
+
+| When the effective system prompt | Then |
+| --- | --- |
+| Equals the last recorded prompt in this conversation (or, before any, the conversation's `instructions`) | Nothing new is written. |
+| Differs | The request's commit appends a `system` message with one `system-prompt` part `{type: "system-prompt", text, hash, sections: [{extension, name}]}`, just before the assistant message. Written on the failed-model path too. |
+
+The `LLM` span's `input.system` is `{hash, messageSeq?, sections}`: `hash` is the sha256
+of the text sent; `messageSeq` points to the `system` message holding it (unset when the
+text is the conversation's `instructions`). Recorded prompts are never sent back to the
+model as messages.
+
+## Tool wraps and precedence
+
+The tools a conversation can call are resolved on every request and every tool call:
+
+1. The agent's `tools`.
+2. Each extension's `tools`, in the conversation's extension order. A tool with a name
+   already present replaces it: later wins.
+3. Every wrap, in extension order, applied to the tool that won its name, whichever
+   extension (or the agent) provided it. A wrap naming a tool nobody provides is ignored.
+   With several wraps on one tool, the first extension's wrap is innermost.
+
+A wrap gets the winning tool and returns the tool to use (typically
+`defineTool({...tool, execute: ...})`). It must return a `defineTool` tool with the same
+name; otherwise resolution throws `Extension "<x>" wrap of tool "<name>" must return a
+defineTool tool named "<name>"`. A throwing wrap reports `Extension "<x>" wrap of tool
+"<name>" failed: <message>`. Where it throws decides what fails: `createConversation`
+throws, `request` fails the turn, a tool call reports the error to the model. Keep wraps
+pure: they run on every resolution.
+
+The conversation snapshot's `tools` lists the resolved names at create time. A tool an
+extension adds later is not callable in existing conversations.
+
+## Memos
+
+`rt.memo(key, value?)` stores a decision durably.
+
+```typescript
+const route = await rt.memo("route", await chooseRoute(task.input)); // first run decides
+```
+
+| Call | Returns |
+| --- | --- |
+| `rt.memo(key)` | The stored value, or `undefined`. |
+| `rt.memo(key, value)` | Stores `value` when `key` is unset, then returns the stored value. A later write (another run, another process, a concurrent call) gets the first value back. `value` `undefined` is a read. The expression computing `value` still runs on every call; read first (`(await rt.memo(key)) ?? (await rt.memo(key, await decide()))`) to call an expensive or side-effecting decision once. |
+
+| Rule | Detail |
+| --- | --- |
+| Scope | Per task: unique `(taskId, key)`. `rt.memo` uses the running task. Hook `api.memo` uses the turn task, also from tool hooks (which run in the tool call's task), so a decision survives a re-run of the request or of the tool call. One turn shares one scope across all its model requests and tool calls: key tool decisions by `toolCallId`, and per-request decisions in sections or `beforeModelRequest` by `step` (a fixed key keeps the first request's value for the whole turn). |
+| Values | Stored as a JSON copy (nested `undefined` is dropped). A BigInt, or a top-level value JSON cannot represent (a function, a symbol), throws `memo "<key>": value is not JSON-serializable`. |
+| Keys | Non-empty strings; blank keys throw `memo requires a non-empty key`. |
+| Fencing | Each write runs in its own transaction that first renews the running task's lease, fenced on its phase and lease token. A run that lost its lease gets `HarnessCommitConflictError` and writes nothing. |
+| After commit | A write after the phase committed (or started waiting) throws; reads still work. |
+| Concurrency | The unique index decides the race; every writer returns the winner's value. |
+
+Writes are durable as soon as the call returns, not with the phase's commit, so a crash
+after the write and before the commit keeps the decision for the replay.
+
 ## ExecutionEnv
 
 Interface only in this slice (implementations ship with coding agents). Pass one to
@@ -850,13 +1029,27 @@ empty objects are kept (`minimize: false`), so `{}` tool arguments survive.
 | `conversationId` | ObjectId | Required. |
 | `seq` | Number | Required. Strictly increasing per conversation from 1; allocated by `$inc` on the conversation inside the commit transaction. |
 | `role` | `system` \| `user` \| `assistant` \| `tool` (`HARNESS_MESSAGE_ROLES`) | |
-| `parts` | array | `{type: "text", text}`, `{type: "tool-call", toolCallId, toolName, input}`, `{type: "tool-result", toolCallId, toolName, output, isError}`. |
+| `parts` | array | `{type: "text", text}`, `{type: "tool-call", toolCallId, toolName, input}`, `{type: "tool-result", toolCallId, toolName, output, isError}`, `{type: "system-prompt", text, hash, sections}` (recorded system prompts; never sent to the model). |
 | `status` | `ok` \| `error` | Tool messages only. |
 | `toolCallId`, `toolName` | String | Tool messages only. |
 | `turnTaskId` | ObjectId | Turn that wrote the message. |
 | `aborted` | Boolean | Partial message cut off mid-stream (event stream slice). Skipped when building the next prompt. |
 
 Index: `{conversationId, seq}` unique.
+
+## HarnessMemo model
+
+Collection `harnessmemos`. Every field has a schema `description`; `strict: "throw"`;
+empty objects are kept.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `taskId` | ObjectId | Required. The task the memo is scoped to (the turn task for hook memos). |
+| `key` | String | Required. |
+| `value` | Mixed | First value written (JSON). |
+| `created`, `updated` | | Plugin. |
+
+Index: `{taskId, key}` unique. Rows are not deleted with their task.
 
 ## Audit spans
 
@@ -870,7 +1063,7 @@ Index: `{conversationId, seq}` unique.
 | `rt.createTask` | The child's `CHAIN` span (`name@version`), parented to the parent's span. |
 | `rt.waitForTasks` starts waiting | One `CHAIN` span named after the phase, `output: {waiting: {...}}`. |
 | `harness.abort` | One `abort` span per aborted task; closes that task's span (and the trace for a root task). |
-| Agent `request` commit | One `LLM` span parented to the turn's span, with the assistant message. See [The agent turn task](#the-agent-turn-task). |
+| Agent `request` commit | One `LLM` span parented to the turn's span, with the assistant message (and a `system` message when the system prompt changed). See [The agent turn task](#the-agent-turn-task). |
 | Tool call | The tool task's own span has kind `TOOL` and the tool's name; it closes with the tool's outcome. |
 | `rt.runAgent` | The subagent turn's own span has kind `AGENT` and the agent's name, parented to the caller's span; the turn's `LLM`, phase, and `TOOL` spans nest under it. |
 | Terminal commit | The task's span gets `endedAt`, `status`, `output`; failures also set `error`. For a root task the `ObsTrace` closes too (`errorSummary` on failure). |
@@ -895,6 +1088,7 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 | `<key> is not in this harness registry` | `createTask` with an unregistered definition. |
 | `<key> is not in this harness registry; register it before retrying` | `resolveInterrupted` `retry` on a task of an unregistered version. |
 | `<key>: initial phase "<x>" is not one of ...` | `initial()` returned an unknown phase. Nothing is written. |
+| `HarnessExtensionError` | A section, hook, or wrap threw. `message`: `Extension "<name>" <what> failed: <cause>`; `extension`: the extension name. Fails the turn or the tool call; see [Hooks](#hooks). |
 | `HarnessSubagentError` | `rt.runAgent`: the subagent's turn failed or was aborted, or its output did not match the schema. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
 | `<key>: rt.runAgent agent "<name>" is not in this harness registry` / `rt.runAgent requires non-empty input` / `rt.runAgent output for "<name>" cannot be expressed as JSON Schema` | Misuse; fails the caller (no retry). |
 | `defineTask(...)` validation errors | Empty name, non-positive or fractional version, no phases, a phase without `run`, an invalid `replay`. |
@@ -982,3 +1176,12 @@ Low-risk choices made in the first slice:
 | `submit` refuses task-owned conversations | A conversation-owned turn there would escape the caller's ownership tree (abort, wait). |
 | `withStrippedJsonFencesModel` lives in `service/jsonFenceModel.ts` | The harness subpath reuses it without loading `AIService`. |
 | `rt.runAgent` is not on the tool api | A wait re-runs the tool's `execute` from the top, which would repeat side effects. |
+| Hooks are registered with `hook(kind, fn)` in a `hooks` array, not a `{beforeTool: fn}` object | One extension can hold several hooks of one kind in a stated order. |
+| A `{block}` reason is the tool error text verbatim | The extension author controls exactly what the model reads. |
+| Tool hooks run inside the tool call's task | Their side effects and errors land on that call's `TOOL` span and outcome, and they share its replay policy. |
+| Hook memos are scoped to the turn task | A tool call's task is gone after it settles; the turn outlives the request and tool re-runs, so their decisions are found again. |
+| A memo write is its own small transaction that renews the lease | Durable before the phase commits (a crash keeps it); the lease write gives a real conflict with a concurrent commit, takeover, or abort, so a stale run cannot write. |
+| The effective system prompt is recorded as a `system` message only when it changes | The transcript holds exactly what the model saw without one copy per request; seqs and transcripts of conversations without extensions are unchanged. |
+| LLM span `input.system` is `{hash, messageSeq, sections}`, not the text | Same bounded-span rule as `messages`; the text is one transcript lookup away. |
+| Tools are resolved per request and per call, not cached | Wraps and overrides stay consistent with the registry the process runs; wraps must be pure. |
+| Tool resolution failures in a tool call are reported to the model | Same treatment as any tool error; the turn keeps going. |

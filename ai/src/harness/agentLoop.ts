@@ -19,13 +19,17 @@ import type {ModelPrice} from "../observability/types";
 import {withStrippedJsonFencesModel} from "../service/jsonFenceModel";
 import {normalizeLlmJsonTextForStructuredOutput} from "../service/parseAiJson";
 import type {
+  AnyHarnessToolDefinition,
   HarnessAgentDefinition,
   HarnessChildOutcome,
   HarnessConversationDocument,
+  HarnessExtensionDefinition,
+  HarnessHookApi,
   HarnessMessageDocument,
   HarnessMessagePart,
   HarnessModelResolver,
   HarnessReplayPolicy,
+  HarnessSystemPromptPart,
   HarnessTaskDefinition,
   HarnessTaskRuntime,
   HarnessTaskView,
@@ -36,6 +40,16 @@ import type {
 import {HARNESS_MESSAGE_ROLES} from "../types/harness";
 import type {HarnessCommitWrites, HarnessModels} from "./commit";
 import {defineTask} from "./defineTask";
+import {
+  buildSystemPrompt,
+  HarnessExtensionError,
+  hashText,
+  resolveExtensions,
+  resolveTools,
+  runAfterTool,
+  runBeforeModelRequest,
+  runBeforeTool,
+} from "./extensions";
 import {internalRuntime} from "./internalRuntime";
 import {callModelWithFallback, HarnessModelCallError} from "./modelCall";
 
@@ -47,6 +61,7 @@ export const AGENT_TOOL_TASK_NAME = "terreno.agent.tool";
 /** Everything the built-in agent tasks need from their harness. */
 export interface AgentLoopContext {
   agents: Map<string, HarnessAgentDefinition>;
+  extensions: Map<string, HarnessExtensionDefinition>;
   models: HarnessModels;
   /** Read at call time so an `ObservabilityApp` registered later still prices calls. */
   priceMap: () => Record<string, ModelPrice> | undefined;
@@ -98,6 +113,14 @@ export interface AgentTasks {
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+/** A tool's own `execute` threw; reported to the model as `Tool "<name>" failed: ...`. */
+class ToolExecuteError extends Error {
+  constructor(toolName: string, cause: unknown) {
+    super(`Tool "${toolName}" failed: ${errorMessage(cause)}`);
+    this.name = "ToolExecuteError";
+  }
+}
+
 /** Tool results must be JSON; `undefined` becomes `null`. */
 const toJsonValue = (value: unknown): unknown => {
   if (value === undefined) {
@@ -120,13 +143,17 @@ const textOf = (parts: ReadonlyArray<HarnessMessagePart>): string =>
     .map((part) => part.text)
     .join("");
 
+const isSystemPromptRecord = (message: Pick<HarnessMessageDocument, "parts">): boolean =>
+  message.parts.some((part) => part.type === "system-prompt");
+
 /** Convert the stored transcript to AI SDK messages. Aborted (partial) messages are skipped. */
 const toModelMessages = (
   history: ReadonlyArray<Pick<HarnessMessageDocument, "aborted" | "parts" | "role">>
 ): ModelMessage[] => {
   const messages: ModelMessage[] = [];
   for (const message of history) {
-    if (message.aborted) {
+    // Aborted partials and recorded system prompts are never replayed to the model.
+    if (message.aborted || isSystemPromptRecord(message)) {
       continue;
     }
     if (message.role === HARNESS_MESSAGE_ROLES.user) {
@@ -173,10 +200,10 @@ const toModelMessages = (
 
 /** AI SDK tools without `execute`: the model's calls come back to the turn, which runs them. */
 const buildToolSet = (
-  agent: HarnessAgentDefinition,
+  available: Map<string, AnyHarnessToolDefinition>,
   allowed: ReadonlyArray<string>
 ): ToolSet | undefined => {
-  const tools = agent.tools.filter((tool) => allowed.includes(tool.name));
+  const tools = [...available.values()].filter((tool) => allowed.includes(tool.name));
   if (tools.length === 0) {
     return undefined;
   }
@@ -227,6 +254,66 @@ const allocateSeqs = async ({
     throw new Error(`Conversation ${conversationId} no longer exists`);
   }
   return updated.seq - count + 1;
+};
+
+/** How an `LLM` span names the system prompt it sent. */
+interface SystemPromptSpan {
+  hash: string;
+  /** The `system` message holding the text; unset when it is the snapshot's instructions. */
+  messageSeq?: number;
+  sections: HarnessSystemPromptPart["sections"];
+}
+
+/**
+ * Decide how a request's effective system prompt is recorded. When it differs from the
+ * last recorded prompt (or, before any, from the conversation's instructions), `write`
+ * appends a `system` message with a `system-prompt` part inside the request's commit, so
+ * the transcript holds exactly what the model saw. `span` names it by hash and seq.
+ */
+const promptRecord = ({
+  conversation,
+  history,
+  models,
+  sections,
+  system,
+}: {
+  conversation: HarnessConversationDocument;
+  history: ReadonlyArray<HarnessMessageDocument>;
+  models: HarnessModels;
+  sections: HarnessSystemPromptPart["sections"];
+  system: string;
+}): {span: SystemPromptSpan; write: HarnessCommitWrites} => {
+  const hash = hashText(system);
+  const last = [...history].reverse().find(isSystemPromptRecord);
+  const lastPart = last?.parts.find(
+    (part): part is HarnessSystemPromptPart => part.type === "system-prompt"
+  );
+  const baseline = lastPart ? lastPart.hash : hashText(conversation.agent.instructions);
+  const span: SystemPromptSpan = {hash, messageSeq: lastPart ? last?.seq : undefined, sections};
+  if (hash === baseline) {
+    return {span, write: async () => {}};
+  }
+  const conversationId = String(conversation._id);
+  return {
+    span,
+    write: async ({session, task}) => {
+      const seq = await allocateSeqs({conversationId, count: 1, models, session});
+      const part: HarnessSystemPromptPart = {hash, sections, text: system, type: "system-prompt"};
+      await models.message.create(
+        [
+          {
+            conversationId,
+            parts: [part],
+            role: HARNESS_MESSAGE_ROLES.system,
+            seq,
+            turnTaskId: task._id,
+          },
+        ],
+        {session}
+      );
+      span.messageSeq = seq;
+    },
+  };
 };
 
 /** What the turn keeps from one model response. */
@@ -318,49 +405,115 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
     );
   };
 
+  /** Extensions a conversation uses, from its snapshot. */
+  const conversationExtensions = (
+    conversation: HarnessConversationDocument
+  ): HarnessExtensionDefinition[] =>
+    resolveExtensions(context.extensions, conversation.agent.extensions ?? []);
+
+  /** Hook api for a tool call: memos are scoped to the turn task that owns the call. */
+  const toolHookApi = async ({
+    conversationId,
+    extensions,
+    rt,
+  }: {
+    conversationId: string;
+    extensions: ReadonlyArray<HarnessExtensionDefinition>;
+    rt: HarnessTaskRuntime<unknown, AgentToolResult>;
+  }): Promise<HarnessHookApi> => {
+    let turnTaskId = rt.taskId;
+    if (extensions.length > 0) {
+      const self = await models.task.findExactlyOne({_id: rt.taskId});
+      turnTaskId = String(self.ownership.id ?? rt.taskId);
+    }
+    return {
+      conversationId,
+      memo: internalRuntime(rt as HarnessTaskRuntime<unknown, unknown>).memoFor(turnTaskId),
+      signal: rt.signal,
+      taskId: rt.taskId,
+      turnTaskId,
+    };
+  };
+
   const runTool = async (
     task: HarnessTaskView<AgentToolInput, unknown>,
     rt: HarnessTaskRuntime<unknown, AgentToolResult>
   ): Promise<void> => {
-    const {agentName, conversationId, enabled, input, toolName} = task.input;
-    const tool = enabled
-      ? context.agents.get(agentName)?.tools.find(({name}) => name === toolName)
-      : undefined;
-    if (!tool) {
-      await rt.commit({terminal: {error: `Unknown tool "${toolName}"`, status: "failed"}});
+    const {agentName, conversationId, enabled, input, toolCallId, toolName} = task.input;
+    const fail = (error: string): Promise<void> => rt.commit({terminal: {error, status: "failed"}});
+    const agent = context.agents.get(agentName);
+    let extensions: HarnessExtensionDefinition[] = [];
+    let tool: AnyHarnessToolDefinition | undefined;
+    try {
+      if (enabled && agent) {
+        extensions = conversationExtensions(await loadConversation(models, conversationId));
+        tool = resolveTools(agent, extensions).get(toolName);
+      }
+    } catch (error: unknown) {
+      await fail(errorMessage(error));
       return;
     }
-    const args = tool.parameters.safeParse(input);
-    if (!args.success) {
-      await rt.commit({
-        terminal: {
-          error: `Invalid arguments for tool "${toolName}": ${args.error.message}`,
-          status: "failed",
-        },
-      });
+    if (!tool) {
+      await fail(`Unknown tool "${toolName}"`);
+      return;
+    }
+    const parsed = tool.parameters.safeParse(input);
+    if (!parsed.success) {
+      await fail(`Invalid arguments for tool "${toolName}": ${parsed.error.message}`);
       return;
     }
     const streamed: string[] = [];
     let value: unknown;
     try {
-      const returned = await tool.execute(args.data, {
-        conversationId,
-        env: rt.env,
-        output: (text: string) => {
-          streamed.push(String(text));
-        },
-        signal: rt.signal,
-        taskId: rt.taskId,
+      const api = await toolHookApi({conversationId, extensions, rt});
+      const before = await runBeforeTool({
+        api,
+        call: {args: parsed.data, toolCallId, toolName},
+        extensions,
       });
-      value = toJsonValue(returned);
+      if (before.blocked !== undefined) {
+        await fail(before.blocked);
+        return;
+      }
+      const args = tool.parameters.safeParse(before.args);
+      if (!args.success) {
+        await fail(
+          `Invalid arguments for tool "${toolName}" after beforeTool hooks: ${args.error.message}`
+        );
+        return;
+      }
+      let returned: unknown;
+      try {
+        returned = await tool.execute(args.data, {
+          conversationId,
+          env: rt.env,
+          output: (text: string) => {
+            streamed.push(String(text));
+          },
+          signal: rt.signal,
+          taskId: rt.taskId,
+        });
+      } catch (error: unknown) {
+        throw new ToolExecuteError(toolName, error);
+      }
+      value = toJsonValue(
+        await runAfterTool({
+          api,
+          call: {args: args.data, toolCallId, toolName},
+          extensions,
+          result: toJsonValue(returned),
+        })
+      );
     } catch (error: unknown) {
       // An abort is the harness's business; any other throw is reported to the model.
       if (rt.signal.aborted) {
         throw error;
       }
-      await rt.commit({
-        terminal: {error: `Tool "${toolName}" failed: ${errorMessage(error)}`, status: "failed"},
-      });
+      await fail(
+        error instanceof ToolExecuteError || error instanceof HarnessExtensionError
+          ? error.message
+          : `Tool "${toolName}" failed: ${errorMessage(error)}`
+      );
       return;
     }
     const result: AgentToolResult = {value};
@@ -396,19 +549,58 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
     if (!context.resolveModel) {
       throw new Error("Harness.open needs a models resolver to run agents");
     }
+    const extensions = conversationExtensions(conversation);
     const history = await models.message.find({conversationId}).sort({seq: 1});
-    const messages = toModelMessages(history);
-    const tools = buildToolSet(agent, conversation.agent.tools);
-    const {instructions} = conversation.agent;
+    const tools = buildToolSet(resolveTools(agent, extensions), conversation.agent.tools);
+    const transcript = toModelMessages(history);
+    const internals = internalRuntime(rt as HarnessTaskRuntime<unknown, unknown>);
+    const api: HarnessHookApi = {
+      conversationId,
+      memo: rt.memo,
+      signal: rt.signal,
+      taskId: rt.taskId,
+      turnTaskId: rt.taskId,
+    };
+    const built = await buildSystemPrompt({
+      api,
+      extensions,
+      input: {
+        agentName: agent.name,
+        conversationId,
+        messages: [...transcript],
+        step: task.state.step + 1,
+      },
+      instructions: conversation.agent.instructions,
+    });
+    const {request: modelRequest, rewrittenBy} = await runBeforeModelRequest({
+      api,
+      extensions,
+      request: {messages: [...transcript], system: built.text},
+    });
+    const {messages, system} = modelRequest;
+    const prompt = promptRecord({
+      conversation,
+      history,
+      models,
+      sections: built.sections,
+      system,
+    });
     const spanInput = {
       // The transcript is stored permanently; the span names the slice that was sent so
       // its size stays bounded however long the conversation grows.
-      messages: {count: messages.length, fromSeq: history[0]?.seq, toSeq: history.at(-1)?.seq},
+      messages: {
+        count: messages.length,
+        fromSeq: history[0]?.seq,
+        // A hook replaced the messages: name exactly what was sent by hash.
+        ...(rewrittenBy.length > 0 ? {hash: hashText(JSON.stringify(messages))} : {}),
+        toSeq: history.at(-1)?.seq,
+      },
       models: [conversation.agent.model, ...(conversation.agent.fallbackModels ?? [])],
-      system: instructions,
+      ...(rewrittenBy.length > 0 ? {rewrittenBy} : {}),
+      system: prompt.span,
       tools: tools ? Object.keys(tools) : [],
     };
-    const commit = internalRuntime(rt as HarnessTaskRuntime<unknown, unknown>).commitWithWrites;
+    const commit = internals.commitWithWrites;
     const startedAt = DateTime.now();
     const resolveModel = context.resolveModel;
     const {outputSchema} = conversation.agent;
@@ -427,7 +619,7 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
               // Same fence and preamble cleanup AIService applies before `Output` parsing.
               model: output ? withStrippedJsonFencesModel(model) : model,
               output,
-              system: instructions,
+              system,
               tools,
             });
             return {
@@ -468,6 +660,7 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
       // Record every failed attempt on an error LLM span with the failed outcome.
       const last = error.attempts.at(-1);
       await commit({terminal: {error: error.message, status: "failed"}}, async (context) => {
+        await prompt.write(context);
         const endedAt = DateTime.now();
         await models.span.create(
           [
@@ -505,7 +698,9 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
       ...toolCalls.map((toolCall): HarnessToolCallPart => ({...toolCall, type: "tool-call"})),
     ];
 
-    const writes: HarnessCommitWrites = async ({session, task: turn, traceStartedAt}) => {
+    const writes: HarnessCommitWrites = async (writeContext) => {
+      const {session, task: turn, traceStartedAt} = writeContext;
+      await prompt.write(writeContext);
       const seq = await allocateSeqs({conversationId, count: 1, models, session});
       await models.message.create(
         [
@@ -589,16 +784,25 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
     const conversation = await loadConversation(models, conversationId);
     const agent = requireAgent(context, conversation.agent.name);
 
+    // A wrap that throws here is reported by the tool call itself, which resolves again.
+    let available: Map<string, AnyHarnessToolDefinition> | undefined;
+    try {
+      available = resolveTools(agent, conversationExtensions(conversation));
+    } catch {
+      available = undefined;
+    }
     const ids: string[] = [];
     for (const [index, call] of toolCalls.entries()) {
-      const declared = agent.tools.find(({name}) => name === call.toolName);
+      const declared = available?.get(call.toolName);
       ids.push(
         await rt.createTask(
           tool,
           {
             agentName: agent.name,
             conversationId,
-            enabled: Boolean(declared) && conversation.agent.tools.includes(call.toolName),
+            enabled:
+              (available === undefined || Boolean(declared)) &&
+              conversation.agent.tools.includes(call.toolName),
             input: call.input,
             replay: declared?.replay ?? "never",
             toolCallId: call.toolCallId,

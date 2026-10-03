@@ -40,9 +40,10 @@ phase runs twice?" A phase declares the answer with `replay` (`"safe"` or the de
 
 Shipped today: tasks, phases, checkpoints, the transactional audit span, the
 `InProcessRunner` with owner and task leases, crash resume, `resolveInterrupted`, phase
-retries, child tasks with `rt.waitForTasks`, `harness.abort` over the ownership tree, and
-agents, tools, and conversations (see [The agent loop](#the-agent-loop)). The other rows
-are the planned shape for later Phase 1 slices.
+retries, child tasks with `rt.waitForTasks`, `harness.abort` over the ownership tree,
+agents, tools, and conversations (see [The agent loop](#the-agent-loop)), subagents, and
+extensions, hooks, and memos (see [Extensions, hooks, and memos](#extensions-hooks-and-memos)).
+The other rows are the planned shape for later Phase 1 slices.
 
 ## Why the audit span shares the checkpoint transaction
 
@@ -302,3 +303,64 @@ after another; for parallel fan-out, start one child task per subagent and wait 
 of them.
 
 API: [Subagents (rt.runAgent)](../reference/ai-harness.md#subagents-rtrunagent).
+
+## Extensions, hooks, and memos
+
+Apps need to shape an agent without forking it: add a policy paragraph to the prompt,
+refuse a dangerous tool call, redact a result, log every chart lookup. An **extension**
+bundles those changes under a name, and agents and conversations list the extensions
+they use. Extensions are code in the registry; a conversation stores only their names.
+
+```
+request phase                         tool call task (child of the turn)
+  instructions + sections ─┐            args ──> beforeTool ──┬─ {block} ──> error result
+  beforeModelRequest ──────┤                                  └─ {args} ──> execute (wrapped)
+  model call               │                                                 │
+  commit: [system prompt   │                                            afterTool
+          if changed] +    │                                                 │
+          assistant + LLM  │            commit: tool result + TOOL span <────┘
+```
+
+### Hooks fail the step they run in
+
+A hook is part of the step that runs it, so it fails like that step's own code. A
+throwing `beforeModelRequest` hook or section fails the turn, as a model that never
+answers would. A throwing tool hook fails the tool call, and the model gets the error
+like any other tool failure and decides what to do. Nothing is retried: a hook that
+failed once usually fails again, and a retry would call the model or the tool twice.
+
+### Blocking is a tool result, not an exception
+
+`beforeTool` returning `{block: reason}` does not stop the turn. The tool never runs and
+the model receives `reason` as an error result. The model can then explain, ask for
+something else, or stop. This keeps the transcript honest (every tool call has a result)
+and lets policy code refuse without knowing how the turn continues.
+
+### Sections are rebuilt, and recorded, every request
+
+Sections are functions, so the prompt can change between requests: fresh vitals, a
+policy that depends on the time of day. That makes "what did the model see?" a real
+question for audit and resume. The turn answers it in the transcript: whenever the
+effective system prompt differs from the last one recorded, the request's commit appends
+a `system` message holding the exact text, and the `LLM` span points to it by hash and
+seq. A prompt that does not change is recorded once, so long turns do not copy it into
+every span.
+
+### Later extensions win, and wraps decorate the winner
+
+Tool names are resolved in a fixed order: the agent's tools, then each extension's, with
+a later tool of the same name replacing an earlier one. Wraps apply after that, to the
+tool that won. An audit wrap therefore keeps working when another extension swaps in a
+different implementation of the tool it watches.
+
+### Memos make a decision once
+
+Phases and tool calls may run more than once (replay, retry, a second process after a
+crash). A decision that must not change, such as "this call was approved" or "route to
+the cardiology queue", goes in `rt.memo(key, value)`. The first write wins, atomically,
+across concurrent calls and processes; every later call gets the stored value back. A
+memo write commits on its own, fenced by the run's lease, so a crash right after the
+decision still keeps it. Hook memos are scoped to the turn task: the turn outlives its
+request re-runs and its tool calls, so their decisions are found again.
+
+API: [Extensions](../reference/ai-harness.md#extensions), [Hooks](../reference/ai-harness.md#hooks), [Memos](../reference/ai-harness.md#memos).

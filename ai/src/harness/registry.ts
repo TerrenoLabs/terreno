@@ -1,4 +1,8 @@
-import type {HarnessAgentDefinition, HarnessTaskDefinition} from "../types/harness";
+import type {
+  HarnessAgentDefinition,
+  HarnessExtensionDefinition,
+  HarnessTaskDefinition,
+} from "../types/harness";
 import {HARNESS_TERMINAL_STATUSES} from "../types/harness";
 import type {HarnessModels} from "./commit";
 import {taskDefinitionKey} from "./defineTask";
@@ -6,13 +10,34 @@ import {taskDefinitionKey} from "./defineTask";
 /** Any task definition, whatever its input, state, and output types. */
 export type AnyHarnessTaskDefinition = HarnessTaskDefinition<never, unknown, unknown>;
 
-/** Separate agents (by unique name) from task definitions. */
+/** Anything `Harness.open({registry})` accepts. */
+export type HarnessRegistryEntry =
+  | AnyHarnessTaskDefinition
+  | HarnessAgentDefinition
+  | HarnessExtensionDefinition;
+
+/**
+ * Separate agents and extensions (each by unique name) from task definitions, and check
+ * that every extension an agent uses is registered.
+ */
 export const splitRegistry = (
-  registry: ReadonlyArray<AnyHarnessTaskDefinition | HarnessAgentDefinition>
-): {agents: Map<string, HarnessAgentDefinition>; tasks: AnyHarnessTaskDefinition[]} => {
+  registry: ReadonlyArray<HarnessRegistryEntry>
+): {
+  agents: Map<string, HarnessAgentDefinition>;
+  extensions: Map<string, HarnessExtensionDefinition>;
+  tasks: AnyHarnessTaskDefinition[];
+} => {
   const agents = new Map<string, HarnessAgentDefinition>();
+  const extensions = new Map<string, HarnessExtensionDefinition>();
   const tasks: AnyHarnessTaskDefinition[] = [];
   for (const entry of registry) {
+    if (entry.kind === "extension") {
+      if (extensions.has(entry.name)) {
+        throw new Error(`Harness registry lists extension "${entry.name}" more than once`);
+      }
+      extensions.set(entry.name, entry);
+      continue;
+    }
     if (entry.kind !== "agent") {
       tasks.push(entry);
       continue;
@@ -22,7 +47,15 @@ export const splitRegistry = (
     }
     agents.set(entry.name, entry);
   }
-  return {agents, tasks};
+  for (const agent of agents.values()) {
+    const missing = agent.extensions.find((name) => !extensions.has(name));
+    if (missing !== undefined) {
+      throw new Error(
+        `Agent "${agent.name}" uses extension "${missing}", which is not in this harness registry`
+      );
+    }
+  }
+  return {agents, extensions, tasks};
 };
 
 /**

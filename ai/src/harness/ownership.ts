@@ -5,6 +5,7 @@ import type mongoose from "mongoose";
 import type {
   HarnessAgentDefinition,
   HarnessChildOutcome,
+  HarnessExtensionDefinition,
   HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTaskView,
@@ -46,6 +47,8 @@ export interface HarnessEngine {
   definitions: Map<string, HarnessTaskDefinition>;
   /** Handed to phases as `rt.env` and to tools as `api.env`. */
   env?: ExecutionEnv;
+  /** Registered extensions, by name. */
+  extensions: Map<string, HarnessExtensionDefinition>;
   models: HarnessModels;
   testHooks?: HarnessTestHooks;
   /** Tell the runner new work may be runnable. */

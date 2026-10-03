@@ -1,4 +1,6 @@
-import type {HarnessCommit, HarnessTaskRuntime} from "../types/harness";
+import type mongoose from "mongoose";
+
+import type {HarnessCommit, HarnessMemo, HarnessTaskRuntime} from "../types/harness";
 import type {HarnessCommitWrites} from "./commit";
 
 /** Key of the engine-only runtime surface; never part of the public `rt`. */
@@ -11,6 +13,8 @@ export interface HarnessInternalRuntime {
     next: HarnessCommit<unknown, unknown>,
     writes: HarnessCommitWrites
   ) => Promise<void>;
+  /** A memo scoped to another task (the turn, for tool hooks), fenced on this run's lease. */
+  memoFor: (scopeTaskId: mongoose.Types.ObjectId | string) => HarnessMemo;
 }
 
 type RuntimeWithInternals = HarnessTaskRuntime<unknown, unknown> & {

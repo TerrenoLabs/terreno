@@ -3,6 +3,7 @@ import type mongoose from "mongoose";
 import type {
   HarnessAgentDefinition,
   HarnessConversationDocument,
+  HarnessExtensionDefinition,
   HarnessMessageDocument,
   HarnessSubmitOptions,
   HarnessTaskDefinition,
@@ -15,6 +16,7 @@ import {
 } from "../types/harness";
 import type {AgentTurnInput} from "./agentLoop";
 import {createTaskRecords, type HarnessModels} from "./commit";
+import {resolveExtensions, resolveTools} from "./extensions";
 
 /** A turn is already running; `whenBusy` queue / steer ship with the submit endpoint. */
 export class HarnessConversationBusyError extends Error {
@@ -54,11 +56,20 @@ export interface ConversationContext {
 const turnRequestId = (conversationId: string, requestId: string): string =>
   `harness-conversation:${conversationId}:${requestId}`;
 
-/** Snapshot an agent's serializable config onto a new conversation. */
-export const conversationAgentSnapshot = (
-  agent: HarnessAgentDefinition
-): HarnessConversationDocument["agent"] => ({
-  extensions: [],
+/**
+ * Snapshot an agent's serializable config onto a new conversation: its extension names
+ * (the agent's, unless `extensionNames` replaces them) and every tool name they resolve to.
+ */
+export const conversationAgentSnapshot = ({
+  agent,
+  extensionNames = agent.extensions,
+  extensions,
+}: {
+  agent: HarnessAgentDefinition;
+  extensionNames?: ReadonlyArray<string>;
+  extensions: Map<string, HarnessExtensionDefinition>;
+}): HarnessConversationDocument["agent"] => ({
+  extensions: [...extensionNames],
   fallbackModels: (agent.fallbackModels ?? []).map(({modelId, provider}) => ({
     modelId,
     provider,
@@ -67,7 +78,7 @@ export const conversationAgentSnapshot = (
   maxSteps: agent.maxSteps,
   model: {modelId: agent.model.modelId, provider: agent.model.provider},
   name: agent.name,
-  tools: agent.tools.map(({name}) => name),
+  tools: [...resolveTools(agent, resolveExtensions(extensions, extensionNames)).keys()],
 });
 
 /**

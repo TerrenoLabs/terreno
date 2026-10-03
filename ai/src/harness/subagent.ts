@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import type {
   HarnessAgentDefinition,
   HarnessChildOutcome,
+  HarnessExtensionDefinition,
   HarnessLeaseSettings,
   HarnessTaskDefinition,
   HarnessTaskDocument,
@@ -73,6 +74,7 @@ export const startSubagentTurn = async ({
   agent,
   callIndex,
   content,
+  extensions,
   instructions,
   lease,
   models,
@@ -83,6 +85,8 @@ export const startSubagentTurn = async ({
   agent: HarnessAgentDefinition;
   callIndex: number;
   content: string;
+  /** Registered extensions, for the conversation's tool snapshot. */
+  extensions: Map<string, HarnessExtensionDefinition>;
   instructions?: string;
   lease: HarnessLeaseSettings;
   models: HarnessModels;
@@ -114,7 +118,7 @@ export const startSubagentTurn = async ({
             _id: newConversationId,
             activeTurnTaskId: task._id,
             agent: {
-              ...conversationAgentSnapshot(agent),
+              ...conversationAgentSnapshot({agent, extensions}),
               instructions: instructions ?? agent.instructions,
               outputSchema,
             },

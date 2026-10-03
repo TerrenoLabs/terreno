@@ -8,6 +8,7 @@ import type {
   HarnessConversationModel,
   HarnessCreateTaskOptions,
   HarnessLeaseSettings,
+  HarnessMemoModel,
   HarnessMessageModel,
   HarnessOwnerModel,
   HarnessOwnership,
@@ -30,6 +31,7 @@ import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 
 export interface HarnessModels {
   conversation: HarnessConversationModel;
+  memo: HarnessMemoModel;
   message: HarnessMessageModel;
   owner: HarnessOwnerModel;
   span: ObsSpanModel;
@@ -80,7 +82,9 @@ const taskSpanIdentity = (
 });
 
 /** Run `work` in one Mongo transaction; every write inside must pass `session`. */
-const inTransaction = async <T>(work: (session: ClientSession) => Promise<T>): Promise<T> => {
+export const inTransaction = async <T>(
+  work: (session: ClientSession) => Promise<T>
+): Promise<T> => {
   const session = await mongoose.connection.startSession();
   try {
     let result: T | undefined;

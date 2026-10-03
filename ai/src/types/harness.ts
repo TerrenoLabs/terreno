@@ -1,5 +1,5 @@
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin, z} from "@terreno/api";
-import type {LanguageModel} from "ai";
+import type {LanguageModel, ModelMessage} from "ai";
 import type {Duration} from "luxon";
 import type mongoose from "mongoose";
 
@@ -244,6 +244,13 @@ export interface HarnessTaskRuntime<State, Out> {
     agent: HarnessAgentDefinition,
     options: HarnessRunAgentOptions<Result>
   ) => Promise<Result>;
+  /**
+   * Durable decision storage scoped to this task. `rt.memo(key)` reads the stored value
+   * (`undefined` when unset); `rt.memo(key, value)` stores `value` unless the key is
+   * already set, and returns whichever value is stored: the first write wins, across
+   * concurrent calls, replays, and restarts.
+   */
+  memo: HarnessMemo;
   /** Aborted when the task is aborted or this run loses its lease; stop work promptly. */
   signal: AbortSignal;
   taskId: string;
@@ -256,6 +263,15 @@ export interface HarnessTaskRuntime<State, Out> {
     ids: ReadonlyArray<mongoose.Types.ObjectId | string>,
     options?: HarnessWaitForTasksOptions
   ) => Promise<HarnessChildOutcome[]>;
+}
+
+/**
+ * Read or first-write a durable memo. Values must be JSON-serializable; `undefined` as the
+ * value means "read".
+ */
+export interface HarnessMemo {
+  <T = unknown>(key: string): Promise<T | undefined>;
+  <T>(key: string, value: T): Promise<T>;
 }
 
 /** Options for `rt.runAgent`. */
@@ -470,16 +486,146 @@ export interface HarnessAgentDefinitionInput {
   modelRetry?: HarnessRetryPolicy;
   /** Unique within a harness registry. */
   name: string;
+  /**
+   * Extensions every conversation with this agent uses, in order, by name or definition.
+   * Each must be listed in the harness registry.
+   */
+  extensions?: ReadonlyArray<HarnessExtensionDefinition | string>;
   /** When set, the final answer is parsed as JSON and validated; the turn result carries it. */
   output?: z.ZodType;
   tools?: ReadonlyArray<AnyHarnessToolDefinition>;
 }
 
-export interface HarnessAgentDefinition extends HarnessAgentDefinitionInput {
+export interface HarnessAgentDefinition extends Omit<HarnessAgentDefinitionInput, "extensions"> {
+  /** Extension names, in order. */
+  extensions: ReadonlyArray<string>;
   kind: "agent";
   maxSteps: number;
   tools: ReadonlyArray<AnyHarnessToolDefinition>;
 }
+
+// ---------------------------------------------------------------------------------------
+// Extensions, hooks, wraps
+// ---------------------------------------------------------------------------------------
+
+/** What every hook and section receives besides its own arguments. */
+export interface HarnessHookApi {
+  conversationId: string;
+  /**
+   * Durable memo scoped to the turn task (also from tool hooks, which run in the tool
+   * call's task), so a decision survives a re-run of the request or the tool call.
+   */
+  memo: HarnessMemo;
+  /** Aborted when the turn is aborted or this run loses its lease. */
+  signal: AbortSignal;
+  /** The task running the hook: the turn for sections and `beforeModelRequest`, the tool call for tool hooks. */
+  taskId: string;
+  /** The turn task. Memo keys are scoped to it. */
+  turnTaskId: string;
+}
+
+/** The request a `beforeModelRequest` hook may rewrite. */
+export interface HarnessModelRequest {
+  /** AI SDK messages built from the transcript. */
+  messages: ModelMessage[];
+  /** Effective system prompt: agent instructions plus extension sections. */
+  system: string;
+}
+
+/** A tool call as tool hooks see it. */
+export interface HarnessToolCall {
+  /** Arguments, already validated against the tool's `parameters`. */
+  args: unknown;
+  toolCallId: string;
+  toolName: string;
+}
+
+/** `beforeTool` outcome: keep going, refuse the call, or replace its arguments. */
+export type HarnessBeforeToolResult = {args: unknown} | {block: string} | undefined;
+
+type MaybePromise<T> = Promise<T> | T;
+
+export interface HarnessHookHandlers {
+  /** Return a replacement result, or `undefined` to keep it. Runs only after `execute` returns. */
+  afterTool: (call: HarnessToolCall, result: unknown, api: HarnessHookApi) => MaybePromise<unknown>;
+  /** Return a replacement request, or `undefined` to keep it. */
+  beforeModelRequest: (
+    request: HarnessModelRequest,
+    api: HarnessHookApi
+  ) => MaybePromise<HarnessModelRequest | undefined>;
+  /** `{block}` refuses the call (the reason is the model's error result); `{args}` rewrites. */
+  beforeTool: (call: HarnessToolCall, api: HarnessHookApi) => MaybePromise<HarnessBeforeToolResult>;
+}
+
+export const HARNESS_HOOK_KINDS = {
+  afterTool: "afterTool",
+  beforeModelRequest: "beforeModelRequest",
+  beforeTool: "beforeTool",
+} as const;
+
+export type HarnessHookKind = keyof HarnessHookHandlers;
+
+/** One hook, made by `hook(kind, fn)`. */
+export type HarnessHook = {
+  [K in HarnessHookKind]: {hook: K; kind: "hook"; run: HarnessHookHandlers[K]};
+}[HarnessHookKind];
+
+/** What a section builder receives about the request it contributes to. */
+export interface HarnessSectionInput {
+  agentName: string;
+  conversationId: string;
+  /** Messages about to be sent (before `beforeModelRequest` hooks). */
+  messages: ReadonlyArray<ModelMessage>;
+  /** 1 for the turn's first model request, 2 for the next, ... */
+  step: number;
+}
+
+/** A named piece of the system prompt, rebuilt before every model request. */
+export interface HarnessSection {
+  build: (input: HarnessSectionInput, api: HarnessHookApi) => MaybePromise<string | undefined>;
+  kind: "section";
+  name: string;
+}
+
+/** Replaces the winning tool of `toolName` with a decorated tool, made by `wrapTool`. */
+export interface HarnessToolWrap {
+  kind: "wrap";
+  toolName: string;
+  wrap: (tool: AnyHarnessToolDefinition) => AnyHarnessToolDefinition;
+}
+
+export interface HarnessExtensionDefinitionInput {
+  hooks?: ReadonlyArray<HarnessHook>;
+  /** Unique within a harness registry; agents and conversations reference it by name. */
+  name: string;
+  sections?: ReadonlyArray<HarnessSection>;
+  /** Added to the agent's tools; a later tool with the same name replaces an earlier one. */
+  tools?: ReadonlyArray<AnyHarnessToolDefinition>;
+  wraps?: ReadonlyArray<HarnessToolWrap>;
+}
+
+export interface HarnessExtensionDefinition {
+  hooks: ReadonlyArray<HarnessHook>;
+  kind: "extension";
+  name: string;
+  sections: ReadonlyArray<HarnessSection>;
+  tools: ReadonlyArray<AnyHarnessToolDefinition>;
+  wraps: ReadonlyArray<HarnessToolWrap>;
+}
+
+/** Durable memo row; unique per `(taskId, key)`. */
+export interface HarnessMemoDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  created: Date;
+  key: string;
+  taskId: mongoose.Types.ObjectId;
+  updated: Date;
+  value?: unknown;
+}
+
+export interface HarnessMemoModel
+  extends mongoose.Model<HarnessMemoDocument>,
+    FindExactlyOnePlugin<HarnessMemoDocument>,
+    FindOneOrNonePlugin<HarnessMemoDocument> {}
 
 export const HARNESS_CONVERSATION_STATUSES = {
   busy: "busy",
@@ -510,6 +656,19 @@ export interface HarnessToolCallPart {
   type: "tool-call";
 }
 
+/**
+ * The effective system prompt of a model request, recorded on a `system` message when it
+ * differs from the last one recorded. Never sent to the model as a message.
+ */
+export interface HarnessSystemPromptPart {
+  /** sha256 of `text`. */
+  hash: string;
+  /** Extension sections that contributed, in prompt order. */
+  sections: Array<{extension: string; name: string}>;
+  text: string;
+  type: "system-prompt";
+}
+
 export interface HarnessToolResultPart {
   isError: boolean;
   output: unknown;
@@ -518,7 +677,11 @@ export interface HarnessToolResultPart {
   type: "tool-result";
 }
 
-export type HarnessMessagePart = HarnessTextPart | HarnessToolCallPart | HarnessToolResultPart;
+export type HarnessMessagePart =
+  | HarnessSystemPromptPart
+  | HarnessTextPart
+  | HarnessToolCallPart
+  | HarnessToolResultPart;
 
 /** Agent config snapshotted onto a conversation when it is created. */
 export interface HarnessConversationAgent {

@@ -96,7 +96,7 @@ src/
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
 - **Prompts:** `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
 - **Web search:** `WebSearchProvider`, `WebSearchResult` types
-- **Harness (subpath `@terreno/ai/harness`):** `Harness`, `defineTask`, `defineAgent`, `defineTool`, `HarnessConversationHandle`, `HarnessConversationBusyError`, `HarnessModelCallError`, `isRetryableModelError`, `AGENT_TURN_TASK_NAME`, `AGENT_TOOL_TASK_NAME`, `HARNESS_AGENT_DEFAULT_MAX_STEPS`, `HARNESS_CONVERSATION_STATUSES`, `HARNESS_INTERRUPT_ACTIONS`, `HARNESS_MESSAGE_ROLES`, `HARNESS_MODEL_RETRY_DEFAULTS`, `InProcessRunner`, `HarnessCommitConflictError`, `HARNESS_RESOLVE_ACTIONS`, `HARNESS_RETRY_DEFAULTS`, `HARNESS_TASK_STATUSES`, `HARNESS_WAIT_KINDS`, `HARNESS_WAIT_POLICIES`, `IN_PROCESS_RUNNER_ROLES` — see [AI harness reference](ai-harness.md)
+- **Harness (subpath `@terreno/ai/harness`):** `Harness`, `defineTask`, `defineAgent`, `defineTool`, `HarnessConversationHandle`, `HarnessConversationBusyError`, `HarnessModelCallError`, `HarnessSubagentError`, `isRetryableModelError`, `AGENT_TURN_TASK_NAME`, `AGENT_TOOL_TASK_NAME`, `HARNESS_AGENT_DEFAULT_MAX_STEPS`, `HARNESS_CONVERSATION_STATUSES`, `HARNESS_INTERRUPT_ACTIONS`, `HARNESS_MESSAGE_ROLES`, `HARNESS_MODEL_RETRY_DEFAULTS`, `InProcessRunner`, `HarnessCommitConflictError`, `HARNESS_RESOLVE_ACTIONS`, `HARNESS_RETRY_DEFAULTS`, `HARNESS_TASK_STATUSES`, `HARNESS_WAIT_KINDS`, `HARNESS_WAIT_POLICIES`, `IN_PROCESS_RUNNER_ROLES` — see [AI harness reference](ai-harness.md)
 
 ## AIService
 
@@ -510,7 +510,8 @@ Phases can start child tasks (`rt.createTask`), wait on them (`rt.waitForTasks`)
 `harness.abort` stops a whole ownership tree bottom-up, running compensation handlers.
 `defineAgent` / `defineTool` run durable agent conversations: each turn is a task whose
 model requests retry 429/5xx and fall back to other models, and whose tool calls run as
-child tasks with per-tool replay rules.
+child tasks with per-tool replay rules. `rt.runAgent` runs an agent as a subagent from a
+phase (a task-owned conversation) and returns its text or schema-checked output.
 API: [AI harness reference](ai-harness.md).
 Why: [Durable agent harness](../explanation/durable-agent-harness.md).
 How-to: [Ship a new task version](../how-to/ship-a-new-task-version.md).

@@ -230,6 +230,20 @@ export interface HarnessTaskRuntime<State, Out> {
    * `ExecutionEnv` interface only; implementations land with coding agents.
    */
   env?: ExecutionEnv;
+  /**
+   * Run `agent` as a subagent: a conversation owned by this task whose turn is a child
+   * task, nested under this task's span as an `AGENT` span. Returns the final assistant
+   * text, or, when `output` (or the agent's own `output`) is set, the parsed object.
+   * Until the turn settles the task commits `waiting` and the phase stops; it re-runs
+   * when the turn ends, and this call then finds the same conversation and returns.
+   * Call it sequentially; for parallel fan-out use `createTask` + `waitForTasks`.
+   * Throws `HarnessSubagentError` when the turn fails, is aborted, or its output does not
+   * match the schema.
+   */
+  runAgent: <Result = string>(
+    agent: HarnessAgentDefinition,
+    options: HarnessRunAgentOptions<Result>
+  ) => Promise<Result>;
   /** Aborted when the task is aborted or this run loses its lease; stop work promptly. */
   signal: AbortSignal;
   taskId: string;
@@ -242,6 +256,19 @@ export interface HarnessTaskRuntime<State, Out> {
     ids: ReadonlyArray<mongoose.Types.ObjectId | string>,
     options?: HarnessWaitForTasksOptions
   ) => Promise<HarnessChildOutcome[]>;
+}
+
+/** Options for `rt.runAgent`. */
+export interface HarnessRunAgentOptions<Result> {
+  /** The subagent's user message. A non-string value is sent as JSON. */
+  input: unknown;
+  /** Replaces the agent's instructions for this subagent conversation only. */
+  instructions?: string;
+  /**
+   * Structured output schema; defaults to the agent's own `output`. Requested through the
+   * AI SDK's `Output.object`, then validated with this schema before it is returned.
+   */
+  output?: z.ZodType<Result>;
 }
 
 /** Runtime handed to a task's `abort` handler. */
@@ -501,6 +528,11 @@ export interface HarnessConversationAgent {
   maxSteps: number;
   model: HarnessModelRef;
   name: string;
+  /**
+   * JSON Schema (serialized) the final answer must match, requested from the model as
+   * structured output. Set by `rt.runAgent` with an `output` schema.
+   */
+  outputSchema?: string;
   tools: string[];
 }
 
@@ -515,6 +547,8 @@ export interface HarnessConversationDocument extends mongoose.Document<mongoose.
   agent: HarnessConversationAgent;
   created: Date;
   deleted: boolean;
+  /** Which `rt.runAgent` call of the owning task created this subagent conversation. */
+  ownerKey?: string;
   ownership: HarnessOwnership;
   queued: HarnessQueuedSubmission[];
   /** Highest message `seq` handed out so far. */

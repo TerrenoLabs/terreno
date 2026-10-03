@@ -28,6 +28,7 @@ import {defineAgent, defineTask, defineTool, Harness, InProcessRunner} from "@te
 - [Conversations](#conversations)
 - [The agent turn task](#the-agent-turn-task)
 - [Model-call resilience](#model-call-resilience)
+- [Subagents (rt.runAgent)](#subagents-rtrunagent)
 - [ExecutionEnv](#executionenv)
 - [Task statuses](#task-statuses)
 - [HarnessTask model](#harnesstask-model)
@@ -179,6 +180,7 @@ A custom runner implements `HarnessRunner` (`start(context)`, `stop()`, `wake()`
 | `rt.signal` | `AbortSignal`. Aborts when the task is aborted (at once in this process, within one heartbeat elsewhere), or when this run loses its lease. Pass it to cancellable calls. |
 | `rt.createTask(definition, input, {background?, key?})` | Create a child task. Returns its id. See [Child tasks and waitForTasks](#child-tasks-and-waitfortasks). |
 | `rt.waitForTasks(ids, {policy?})` | Return child outcomes once they settle; until then the task waits. See [Child tasks and waitForTasks](#child-tasks-and-waitfortasks). |
+| `rt.runAgent(agent, {input, output?, instructions?})` | Run a registered agent as a subagent and return its answer; until it finishes the task waits. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
 
 Rules:
 
@@ -186,7 +188,7 @@ Rules:
 - `phase` must exist in `phases`. An unknown phase fails the task.
 - A phase that returns without committing fails the task (no retry).
 - A phase that throws before committing is retried under the task's `retry` policy; see [Retries](#retries).
-- After `rt.commit` or a `waitForTasks` that started waiting, `rt.createTask` and `rt.waitForTasks` throw.
+- After `rt.commit` or a `waitForTasks` that started waiting, `rt.createTask`, `rt.waitForTasks`, and `rt.runAgent` throw.
 
 ## Leases
 
@@ -559,7 +561,7 @@ A failing tool is never retried: the error goes to the model, which decides what
 | `maxSteps` | positive integer | No | Model requests one turn may make. Default `10` (`HARNESS_AGENT_DEFAULT_MAX_STEPS`). |
 | `fallbackModels` | `Array<{provider, modelId}>` | No | Tried in order after the primary model's retryable failures run out. |
 | `modelRetry` | `{maxAttempts?, backoffMs?, maxBackoffMs?}` | No | Retries per model. Defaults `HARNESS_MODEL_RETRY_DEFAULTS`: 3 attempts, 500 ms base, 8 s cap. |
-| `output` | zod schema | No | The final answer is parsed as JSON (code fences and preamble tolerated) and validated. The turn result carries `output`; a mismatch fails the turn. |
+| `output` | zod schema | No | The final answer is parsed as JSON (code fences and preamble tolerated) and validated. The turn result carries `output`; a mismatch fails the turn. Also the default `output` of `rt.runAgent`. |
 
 ## Conversations
 
@@ -589,6 +591,7 @@ conversation stable when the agent definition changes; tool code, `modelRetry`, 
 | Another turn is running | Throws `HarnessConversationBusyError` (`activeTurnTaskId` set). Queueing and steering (`whenBusy`) ship with the submit endpoint. |
 | Lost a race to another submit | Re-reads the conversation: still busy → `HarnessConversationBusyError` naming the winning turn; idle again (the winner already finished) → claims it and starts its own turn. Up to 3 claims. |
 | Blank `content` / `requestId` | Throws `submit requires non-empty content` / `submit requires a requestId`. |
+| Subagent (task-owned) conversation | Throws: only `rt.runAgent` runs its turns. |
 
 When a turn ends (completed, failed, or aborted) the conversation goes back to `idle`:
 in the terminal commit itself when the turn ends normally or the model call fails, right
@@ -659,6 +662,104 @@ The AI SDK's own retries are off (`maxRetries: 0`). When nothing answers, the ph
 
 `isRetryableModelError(error)` is exported for apps that classify errors the same way.
 
+## Subagents (rt.runAgent)
+
+`rt.runAgent(agent, options)` runs a registered agent from a task phase and returns its
+final answer. The subagent is a conversation owned by the calling task; its turn
+(`terreno.agent.turn@1`) is a child task of the caller.
+
+```typescript
+const SummarySchema = z.object({risk: z.number(), summary: z.string()});
+
+summarize: {
+  replay: "safe",
+  run: async (task, rt) => {
+    const summary = await rt.runAgent(summarizer, {input: task.state.chart, output: SummarySchema});
+    await rt.commit({phase: "review", state: {...task.state, summary}});
+  },
+},
+```
+
+| Option | Type | Required | Description |
+| --- | --- | --- | --- |
+| `input` | `unknown` | Yes | The subagent's user message. A string is sent as-is (blank is rejected); anything else as `JSON.stringify(input)`. |
+| `output` | zod schema | No | Structured output. Defaults to the agent's own `output`. |
+| `instructions` | `string` | No | Replaces the agent's instructions for this subagent conversation only. |
+
+Returns the final assistant text, or, with a schema, the object the schema parsed. The
+generic `rt.runAgent<T>(...)` types the result when the schema comes from the agent.
+
+What one call does:
+
+1. In one transaction, fenced on the caller's lease: creates the conversation
+   (`ownership: {kind: "task", id: <caller>}`, `status: "busy"`, agent snapshot with
+   `instructions` and `outputSchema`), its user message (`seq` 1), and the turn task
+   (`ownership: {kind: "task", id: <caller>}`) with an `AGENT` span named after the agent.
+2. Waits with `rt.waitForTasks([turn])`: the caller commits `waiting` and the phase stops.
+3. When the turn settles the caller wakes and the phase re-runs from its checkpoint. The
+   same call finds the same turn and conversation (step 1 writes nothing) and returns.
+
+Idempotency key: the call's position in the phase (`agent:0`, `agent:1`, ...) within the
+caller's phase visit (`step`) and attempt, the same scheme as `rt.createTask` keys. It is
+stored on the conversation as `ownerKey` (`<step>:<attempt>:agent:<n>`, unique per owner).
+A wake or crash replay reuses the conversation; a retry (next attempt) starts a new one.
+
+| Situation | Behavior |
+| --- | --- |
+| Caller dies after creating the turn | Recovery re-runs the caller's phase (`replay: "safe"`); the call finds the same conversation and turn. No duplicate conversation, message, or model call. |
+| Turn dies mid-flight | The turn's own recovery applies: completed model steps and tool results are committed and are not repeated. |
+| Caller aborted | The turn is aborted with it (ownership tree, bottom-up) and its conversation goes back to `idle`. |
+| Two calls in one phase | Each gets its own conversation and turn (`agent:0`, `agent:1`). The phase runs to the first call, waits, re-runs, returns the first result at once, and waits on the second. |
+| Turn fails or is aborted | Throws `HarnessSubagentError` (`Subagent "<name>" failed: <turn error>`). The caller's `retry` policy applies; a retry starts a new subagent conversation. |
+| Turn ends at `maxSteps` | Throws `HarnessSubagentError` (`Subagent "<name>" finished (max-steps) without a final answer`), with or without a schema: the last text precedes a tool round and is not an answer. |
+| `harness.conversation(id).submit` on a subagent conversation | Throws `Conversation <id> belongs to task <taskId>; only rt.runAgent runs its turns`. |
+
+Structured output:
+
+- The schema is converted with the AI SDK's `asSchema(schema).jsonSchema` and stored on
+  the conversation as `agent.outputSchema` (a JSON string: `$schema` / `$ref` keys are not
+  valid Mongo field names).
+- Each `request` sends `Output.object({schema: jsonSchema(outputSchema)})`, so the
+  provider gets a JSON response format. Model text runs through the same fence and
+  preamble cleanup as `AIService` (`withStrippedJsonFencesModel`, `service/jsonFenceModel.ts`).
+- An answer that is not JSON fails the turn: `Agent "<name>" output does not match its
+  schema (No object generated: could not parse the response.): <cause>`. The answer and
+  its `LLM` span are still committed.
+- The turn result carries the parsed JSON as `output`. The caller then validates it with
+  the zod schema (refinements and transforms included); a mismatch throws
+  `Subagent "<name>" output does not match its schema: <zod issues>`.
+- An answer the SDK has no output for (a `length` or `content-filter` finish with no
+  text) completes the turn without `output`; the caller throws
+  `Subagent "<name>" answered without structured output`.
+
+Limits:
+
+- Call `runAgent` from task phases only. Tools (`HarnessToolApi`) have no `runAgent`: a
+  wait would re-run the tool's `execute` from the top, repeating its side effects.
+- Call sequentially. Concurrent calls (`Promise.all`) are not supported: the first wait
+  ends the phase. For parallel fan-out, create child tasks that each call `runAgent`, then
+  `rt.waitForTasks` them.
+- A schema the AI SDK cannot express as JSON Schema fails the caller at once (no retry).
+
+`HarnessSubagentError` fields: `agentName`, `conversationId`, `turnTaskId`, `status`
+(`failed` or `aborted`).
+
+Spans (one trace, the caller's):
+
+```
+CHAIN test.parent@1                   (caller's span)
+├── AGENT test.summarizer             (the turn task's span; input {conversationId, instructions, messageSeq: 1})
+│   ├── LLM   mock/mock-model
+│   ├── CHAIN request
+│   ├── TOOL  lookup
+│   │   └── CHAIN execute
+│   ├── CHAIN tools
+│   ├── LLM   mock/mock-model
+│   └── CHAIN request
+├── CHAIN summarize                   (waiting)
+└── CHAIN summarize                   (terminal)
+```
+
 ## ExecutionEnv
 
 Interface only in this slice (implementations ship with coding agents). Pass one to
@@ -697,7 +798,7 @@ empty objects are kept (`minimize: false`), so an initial state `{}` is stored a
 | `attempt` | Number | Failed attempts of the current phase. Default 0. |
 | `step` | Number | Phase commits so far; names the current phase visit for idempotent child creation. Default 0. |
 | `retry` | `{maxAttempts, backoffMs, maxBackoffMs}` | Copied from the definition. |
-| `ownership` | `{kind: root \| task \| conversation, id}` | Default `root`. `rt.createTask` children are `{kind: "task", id: <parent>}`; agent turns are `{kind: "conversation", id}`. |
+| `ownership` | `{kind: root \| task \| conversation, id}` | Default `root`. `rt.createTask` children are `{kind: "task", id: <parent>}`; agent turns are `{kind: "conversation", id}`, except subagent turns, which are `{kind: "task", id: <caller>}`. |
 | `rootTaskId` | ObjectId | Top of the ownership tree; equals `_id` for root tasks. |
 | `traceId`, `rootSpanId` | ObjectId | Audit trace and its root `CHAIN` span. |
 | `requestId` | String | Idempotency key; unique sparse index. |
@@ -728,7 +829,8 @@ Collection `harnessconversations`. Every field has a schema `description`; `stri
 | Field | Type | Description |
 | --- | --- | --- |
 | `ownership` | `{kind: root \| task, id}` | Default `root`. Subagent conversations are task-owned. |
-| `agent` | `{name, model {provider, modelId}, instructions, tools[], extensions[], fallbackModels[], maxSteps}` | Snapshot taken at create. |
+| `agent` | `{name, model {provider, modelId}, instructions, tools[], extensions[], fallbackModels[], maxSteps, outputSchema?}` | Snapshot taken at create. `outputSchema` is the serialized JSON Schema `rt.runAgent` requests as structured output. |
+| `ownerKey` | String | Subagent conversations only: which `rt.runAgent` call created it (`<step>:<attempt>:agent:<n>`). |
 | `status` | `idle` \| `busy` (`HARNESS_CONVERSATION_STATUSES`) | `busy` while a turn runs. |
 | `activeTurnTaskId` | ObjectId | The running turn. |
 | `queued` | `[{content, requestId, submittedAt}]` | Reserved for `whenBusy: "queue"`. Empty today. |
@@ -736,7 +838,7 @@ Collection `harnessconversations`. Every field has a schema `description`; `stri
 | `seq` | Number | Highest message `seq` handed out. Default 0. |
 | `created`, `updated`, `deleted` | | Plugins. |
 
-Indexes: `{userId, created}`, `{ownership.id, ownership.kind}`.
+Indexes: `{userId, created}`, `{ownership.id, ownership.kind}`, `{ownership.id, ownerKey}` unique (partial: `ownerKey` set).
 
 ## HarnessMessage model
 
@@ -770,6 +872,7 @@ Index: `{conversationId, seq}` unique.
 | `harness.abort` | One `abort` span per aborted task; closes that task's span (and the trace for a root task). |
 | Agent `request` commit | One `LLM` span parented to the turn's span, with the assistant message. See [The agent turn task](#the-agent-turn-task). |
 | Tool call | The tool task's own span has kind `TOOL` and the tool's name; it closes with the tool's outcome. |
+| `rt.runAgent` | The subagent turn's own span has kind `AGENT` and the agent's name, parented to the caller's span; the turn's `LLM`, phase, and `TOOL` spans nest under it. |
 | Terminal commit | The task's span gets `endedAt`, `status`, `output`; failures also set `error`. For a root task the `ObsTrace` closes too (`errorSummary` on failure). |
 
 If the commit transaction aborts, the task stays at its previous checkpoint in `running`
@@ -792,6 +895,8 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 | `<key> is not in this harness registry` | `createTask` with an unregistered definition. |
 | `<key> is not in this harness registry; register it before retrying` | `resolveInterrupted` `retry` on a task of an unregistered version. |
 | `<key>: initial phase "<x>" is not one of ...` | `initial()` returned an unknown phase. Nothing is written. |
+| `HarnessSubagentError` | `rt.runAgent`: the subagent's turn failed or was aborted, or its output did not match the schema. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
+| `<key>: rt.runAgent agent "<name>" is not in this harness registry` / `rt.runAgent requires non-empty input` / `rt.runAgent output for "<name>" cannot be expressed as JSON Schema` | Misuse; fails the caller (no retry). |
 | `defineTask(...)` validation errors | Empty name, non-positive or fractional version, no phases, a phase without `run`, an invalid `replay`. |
 
 ## Testing
@@ -866,3 +971,14 @@ Low-risk choices made in the first slice:
 | LLM span `input` names a seq range, not the full prompt | The transcript is already permanent; copying it into every span grows without bound and could hit the 16 MB document limit, making the commit fail and the safe `request` phase replay forever. |
 | A model call that fails for good commits a failed terminal with an error LLM span | Every attempt (and which model failed how) stays in the audit, not only in the error string. |
 | Tool calls outside the conversation's snapshot are refused | A tool added to the agent later must not become callable in an existing conversation. |
+| A subagent's conversation, user message, and turn are created in the child-task transaction | Finding the turn by its child key also finds the conversation; a crash cannot leave a conversation without its turn. `ownerKey` + a unique index guard the same invariant on the conversation. |
+| Subagent call keys use their own counter (`agent:<n>`) | Adding an `rt.createTask` call before a `runAgent` call does not change which conversation the call finds. |
+| Structured output: the SDK parses, the caller's zod schema validates | The turn only holds JSON Schema (the zod schema cannot be stored); `jsonSchema()` does not validate, so the authoritative check runs where the zod schema is in hand. |
+| `NoObjectGeneratedError` is a turn outcome, not a model failure | The model answered; retrying or falling back would bill another call for the same prompt. |
+| Subagent turns release their conversation by `input.conversationId` | Their owner is the calling task, not the conversation. |
+| The `AGENT` span input names the message (`messageSeq: 1`), not its content | Same bounded-span rule as `LLM` spans; the content is in the transcript. |
+| A text subagent cut off by `maxSteps` throws | Its last text precedes a tool round; returning it as the answer would hide the cut-off. |
+| `NoOutputGeneratedError` (no parsable final answer) leaves `output` unset | The caller reports it; treating it as a model failure would drop the committed answer. |
+| `submit` refuses task-owned conversations | A conversation-owned turn there would escape the caller's ownership tree (abort, wait). |
+| `withStrippedJsonFencesModel` lives in `service/jsonFenceModel.ts` | The harness subpath reuses it without loading `AIService`. |
+| `rt.runAgent` is not on the tool api | A wait re-runs the tool's `execute` from the top, which would repeat side effects. |

@@ -16,6 +16,7 @@ import type {
   HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTaskModel,
+  HarnessTaskSpanKind,
   HarnessTestHooks,
   HarnessWaiting,
   HarnessWaitKind,
@@ -73,7 +74,7 @@ export type HarnessCommitWrites = (context: {
 const taskSpanIdentity = (
   definition: HarnessTaskDefinition,
   input: unknown
-): {kind: "AGENT" | "CHAIN" | "TOOL"; name: string} => ({
+): {kind: HarnessTaskSpanKind; name: string} => ({
   kind: definition.spanKind ?? "CHAIN",
   name: definition.spanName ? definition.spanName(input) : definition.key,
 });
@@ -255,6 +256,8 @@ export const createChildTaskRecords = async ({
   models,
   options,
   parent,
+  span,
+  writes,
 }: {
   definition: HarnessTaskDefinition;
   input: unknown;
@@ -263,6 +266,10 @@ export const createChildTaskRecords = async ({
   models: HarnessModels;
   options: HarnessChildTaskOptions;
   parent: HarnessTaskDocument;
+  /** Replaces the definition's span identity (and the span's input) for this child. */
+  span?: {input?: unknown; kind: HarnessTaskSpanKind; name: string};
+  /** Rows created with the child, in its transaction (a subagent's conversation). */
+  writes?: HarnessCommitWrites;
 }): Promise<HarnessTaskDocument> => {
   const initial = definition.initial(input);
   if (!definition.phases[initial.phase]) {
@@ -285,7 +292,8 @@ export const createChildTaskRecords = async ({
   const taskId = new mongoose.Types.ObjectId();
   const spanId = new mongoose.Types.ObjectId();
   const startedAt = DateTime.now();
-  const spanIdentity = taskSpanIdentity(definition, input);
+  const spanIdentity = span ?? taskSpanIdentity(definition, input);
+  const spanInput = span && "input" in span ? span.input : input;
 
   try {
     return await inTransaction(async (session) => {
@@ -306,7 +314,7 @@ export const createChildTaskRecords = async ({
         [
           {
             _id: spanId,
-            input,
+            input: spanInput,
             kind: spanIdentity.kind,
             name: spanIdentity.name,
             parentSpanId: parent.rootSpanId,
@@ -340,6 +348,7 @@ export const createChildTaskRecords = async ({
         ],
         {session}
       );
+      await writes?.({session, task, traceStartedAt: DateTime.fromJSDate(trace.startedAt)});
       return task;
     });
   } catch (error: unknown) {

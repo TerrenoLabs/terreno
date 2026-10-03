@@ -120,6 +120,11 @@ export class HarnessConversationHandle {
         return existing;
       }
       const conversation = await models.conversation.findExactlyOne({_id: conversationId});
+      if (conversation.ownership?.kind === "task") {
+        throw new Error(
+          `Conversation ${this.id} belongs to task ${conversation.ownership.id}; only rt.runAgent runs its turns`
+        );
+      }
       if (!(await releaseFinishedTurn({conversation, models}))) {
         throw new HarnessConversationBusyError(this.id, String(conversation.activeTurnTaskId));
       }

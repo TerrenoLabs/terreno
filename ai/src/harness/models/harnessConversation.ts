@@ -37,11 +37,21 @@ const harnessConversationSchema = new mongoose.Schema<
       maxSteps: {description: "Model requests one turn may make", type: Number},
       model: modelRefSchema,
       name: {description: "Registered agent definition name", required: true, type: String},
+      outputSchema: {
+        description:
+          "Serialized JSON Schema the final answer must match (subagent structured output)",
+        type: String,
+      },
       tools: {
         default: [],
         description: "Tool names the model may call in this conversation",
         type: [String],
       },
+    },
+    ownerKey: {
+      description:
+        "Deterministic key of the rt.runAgent call (phase visit, attempt, call index) that created this subagent conversation",
+      type: String,
     },
     ownership: {
       id: {
@@ -99,6 +109,11 @@ harnessConversationSchema.plugin(findOneOrNone);
 harnessConversationSchema.plugin(findExactlyOne);
 harnessConversationSchema.index({created: -1, userId: 1});
 harnessConversationSchema.index({"ownership.id": 1, "ownership.kind": 1});
+// One subagent conversation per rt.runAgent call, however often the phase re-runs.
+harnessConversationSchema.index(
+  {ownerKey: 1, "ownership.id": 1},
+  {partialFilterExpression: {ownerKey: {$type: "string"}}, unique: true}
+);
 
 export const registerHarnessConversation = (): HarnessConversationModel => {
   if (mongoose.models.HarnessConversation) {

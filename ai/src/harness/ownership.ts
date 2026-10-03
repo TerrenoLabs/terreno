@@ -3,6 +3,7 @@ import {Duration} from "luxon";
 import type mongoose from "mongoose";
 
 import type {
+  HarnessAgentDefinition,
   HarnessChildOutcome,
   HarnessTaskDefinition,
   HarnessTaskDocument,
@@ -17,6 +18,7 @@ import {
   HARNESS_WAIT_KINDS,
   HARNESS_WAIT_POLICIES,
 } from "../types/harness";
+import {AGENT_TURN_TASK_NAME} from "./agentLoop";
 import {
   claimAbortHandler,
   commitAbort,
@@ -37,6 +39,8 @@ const NON_TERMINAL_STATUSES = Object.values(HARNESS_TASK_STATUSES).filter(
 
 /** Everything the engine's task, ownership, and wait logic shares within one harness. */
 export interface HarnessEngine {
+  /** Registered agents, by name; `rt.runAgent` only runs these. */
+  agents: Map<string, HarnessAgentDefinition>;
   /** Abort controllers of tasks running in this process, by task id. */
   controllers: Map<string, AbortController>;
   definitions: Map<string, HarnessTaskDefinition>;
@@ -281,7 +285,11 @@ export const abortTaskTree = async ({
   signalAbort(engine, fencedTop, reason);
   for (const task of await fenceOwnedForAbort({engine, reason, top: fencedTop, userId})) {
     try {
-      await abortOne({engine, reason, requestedOn, task, userId});
+      // Owners are aborted too, so only a subagent turn's conversation needs settling.
+      await releaseConversation({
+        engine,
+        task: await abortOne({engine, reason, requestedOn, task, userId}),
+      });
     } catch (error: unknown) {
       // It finished on its own between the scan and the abort commit.
       if (!(error instanceof HarnessCommitConflictError)) {
@@ -423,16 +431,35 @@ const releaseConversation = async ({
   engine: HarnessEngine;
   task: HarnessTaskDocument;
 }): Promise<void> => {
+  const conversationId = turnConversationId(task);
+  if (!conversationId) {
+    return;
+  }
   try {
     await engine.models.conversation.updateOne(
-      {_id: task.ownership.id, activeTurnTaskId: task._id, status: "busy"},
+      {_id: conversationId, activeTurnTaskId: task._id, status: "busy"},
       {$set: {status: "idle"}, $unset: {activeTurnTaskId: 1}}
     );
   } catch (error: unknown) {
     logger.error(
-      `Harness could not release conversation ${task.ownership.id} after turn ${task._id}: ${errorMessage(error)}`
+      `Harness could not release conversation ${conversationId} after turn ${task._id}: ${errorMessage(error)}`
     );
   }
+};
+
+/**
+ * The conversation a turn task runs on: its owner for a root conversation's turn, its
+ * input for a subagent turn (owned by the task that called `rt.runAgent`).
+ */
+const turnConversationId = (task: HarnessTaskDocument): string | undefined => {
+  if (task.ownership?.kind === "conversation" && task.ownership.id) {
+    return String(task.ownership.id);
+  }
+  if (task.name !== AGENT_TURN_TASK_NAME) {
+    return undefined;
+  }
+  const conversationId = (task.input as {conversationId?: unknown} | undefined)?.conversationId;
+  return typeof conversationId === "string" ? conversationId : undefined;
 };
 
 /**
@@ -450,6 +477,8 @@ export const settleTaskOwner = async ({
     await releaseConversation({engine, task});
     return;
   }
+  // A subagent turn frees its conversation, then wakes the task waiting on it.
+  await releaseConversation({engine, task});
   if (task.ownership?.kind !== "task" || !task.ownership.id) {
     return;
   }

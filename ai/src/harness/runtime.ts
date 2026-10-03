@@ -4,10 +4,12 @@ import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
 import type {
+  HarnessAgentDefinition,
   HarnessChildOutcome,
   HarnessChildTaskOptions,
   HarnessCommit,
   HarnessLeaseSettings,
+  HarnessRunAgentOptions,
   HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTaskRuntime,
@@ -19,6 +21,7 @@ import {
   HARNESS_WAIT_KINDS,
   HARNESS_WAIT_POLICIES,
 } from "../types/harness";
+import {AGENT_TURN_TASK_NAME} from "./agentLoop";
 import {
   commitInterruption,
   commitPhase,
@@ -46,6 +49,15 @@ import {
   toTaskView,
 } from "./ownership";
 import {nextRetryAt, resolveRetryPolicy} from "./retryBackoff";
+import {
+  serializeOutputSchema,
+  startSubagentTurn,
+  subagentContent,
+  subagentResult,
+} from "./subagent";
+
+/** Registry key of the built-in agent turn every subagent runs. */
+const AGENT_TURN_KEY = taskDefinitionKey({name: AGENT_TURN_TASK_NAME, version: 1});
 
 /** Most expired tasks one recovery pass handles; the next pass picks up the rest. */
 const RECOVERY_BATCH_SIZE = 100;
@@ -274,6 +286,7 @@ const runPhase = async ({
   let commitStarted = false;
   let commitFailure: unknown;
   let childIndex = 0;
+  let agentIndex = 0;
   const heartbeat = startTaskHeartbeat({
     lease,
     models,
@@ -392,6 +405,62 @@ const runPhase = async ({
     throw new HarnessSuspendSignal(taskId);
   };
 
+  const runAgent = async <Result>(
+    agent: HarnessAgentDefinition,
+    options: HarnessRunAgentOptions<Result>
+  ): Promise<Result> => {
+    assertOpen("rt.runAgent");
+    if (!options || typeof options !== "object") {
+      throw new HarnessDefinitionError(`${definition.key}: rt.runAgent requires {input}`);
+    }
+    // Taken before any await, so the call's key depends only on its order in the phase.
+    const callIndex = agentIndex;
+    agentIndex += 1;
+    if (!agent?.name || engine.agents.get(agent.name) !== agent) {
+      throw new HarnessDefinitionError(
+        `${definition.key}: rt.runAgent agent "${agent?.name}" is not in this harness registry`
+      );
+    }
+    const content = subagentContent(options.input);
+    if (content === undefined) {
+      throw new HarnessDefinitionError(`${definition.key}: rt.runAgent requires non-empty input`);
+    }
+    const turn = engine.definitions.get(AGENT_TURN_KEY);
+    if (!turn) {
+      throw new Error(`${AGENT_TURN_KEY} is not registered`);
+    }
+    const schema = (options.output ?? agent.output) as HarnessRunAgentOptions<Result>["output"];
+    let outputSchema: string | undefined;
+    if (schema) {
+      try {
+        outputSchema = await serializeOutputSchema(schema);
+      } catch (error: unknown) {
+        throw new HarnessDefinitionError(
+          `${definition.key}: rt.runAgent output for "${agent.name}" cannot be expressed as JSON Schema: ${errorMessage(error)}`
+        );
+      }
+    }
+    const {conversationId, turnTask} = await startSubagentTurn({
+      agent,
+      callIndex,
+      content,
+      instructions: options.instructions,
+      lease,
+      models,
+      outputSchema,
+      parent: task,
+      turn,
+    });
+    engine.wake();
+    const [outcome] = await waitForTasks([turnTask._id]);
+    return subagentResult({
+      agent,
+      conversationId,
+      outcome: outcome as HarnessChildOutcome,
+      schema,
+    });
+  };
+
   const failOrRetry = async ({
     error,
     isRetryable,
@@ -450,6 +519,7 @@ const runPhase = async ({
     commit,
     createTask: createTask as HarnessTaskRuntime<unknown, unknown>["createTask"],
     env: engine.env,
+    runAgent: runAgent as HarnessTaskRuntime<unknown, unknown>["runAgent"],
     signal: controller.signal,
     taskId,
     waitForTasks,

@@ -43,7 +43,7 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: reference agents/tools/model resilience; explanation agent loop
   - Acceptance: AC3 (tool rows) + AC4 (model rows) — mock model returns 503 twice then succeeds; fallback used after exhaustion; span tree CHAIN→LLM→TOOL
 
-- [ ] **Task 1.5**: Subagents
+- [x] **Task 1.5**: Subagents
   - Delivers: `rt.runAgent(agent, {input, output})` creates a task-owned child conversation, idempotent on resume (finds existing by `ownerTaskId`), returns parsed structured output; AGENT span nests the child's spans
   - Files: `runtime.ts`, `agentLoop.ts`, tests
   - Blocked by: 1.4

@@ -71,6 +71,7 @@ export type {
   HarnessResolveAction,
   HarnessResolveInterruptedOptions,
   HarnessRetryPolicy,
+  HarnessRunAgentOptions,
   HarnessRunner,
   HarnessRunnerContext,
   HarnessSubmitOptions,
@@ -131,6 +132,7 @@ export {
   type InProcessRunnerOptions,
   type InProcessRunnerRole,
 } from "./runners/inProcessRunner";
+export {HarnessSubagentError} from "./subagent";
 
 export interface HarnessOpenOptions {
   /** Handed to phases as `rt.env` and to tools as `api.env` (interface only in Phase 1). */
@@ -225,6 +227,7 @@ export class Harness {
     this.runner = runner;
     this.testHooks = testHooks;
     this.engine = {
+      agents,
       controllers: new Map(),
       definitions,
       env,

@@ -255,3 +255,50 @@ transcript is therefore always exactly what the committed phases produced.
 
 API: [Agents and conversations](../reference/ai-harness.md#agents-and-conversations).
 
+
+## Subagents
+
+A workflow often needs one focused model job inside a larger, deterministic flow:
+summarize this chart, classify that note. `rt.runAgent` runs that job as a **subagent**
+and returns its answer to the phase, as text or as a schema-checked object.
+
+A subagent is built from parts that already exist, not new machinery:
+
+```
+caller phase ──tx──> subagent conversation (owned by the caller)
+                     + user message
+                     + turn task (child of the caller; AGENT span)
+             ──> waitForTasks([turn]) ── caller waits, holds no lease
+
+turn: request / tools ... ──tx──> completed ── wakes the caller
+
+caller phase re-runs ──> same call finds the same turn ──> returns its answer
+```
+
+- **The conversation is owned by the task.** It is a normal transcript, so the
+  subagent's prompt, answer, and tool results are kept and auditable like any chat.
+- **The turn is a child task.** Waiting, waking, crash recovery, and abort all come from
+  the ownership tree. Aborting the caller aborts the subagent's turn first.
+- **The call is found again, not repeated.** The phase re-runs from its checkpoint after
+  the wait. Each `runAgent` call has a key from its position in the phase, so the re-run
+  finds the conversation and turn it created and gets the stored result. The
+  conversation, its first message, and the turn are created in one transaction, so a
+  crash can never leave one without the others.
+
+### Why the caller checks the structured output
+
+The schema is a zod object in the caller's code, and code cannot be stored. The turn
+gets a JSON Schema copy: enough to ask the provider for JSON and to reject an answer that
+is not JSON at all. Rules JSON Schema cannot carry (refinements, transforms) are checked
+when the caller gets the result, with the real schema. An invalid answer fails the call,
+and the caller's retry policy decides whether to ask again.
+
+### Why only phases call subagents
+
+A phase that waits re-runs from its checkpoint, and phases are written for that. A tool's
+`execute` is not: re-running it from the top would repeat whatever it did before the
+call. Tools therefore cannot call `runAgent`. A phase can run several subagents, one
+after another; for parallel fan-out, start one child task per subagent and wait on all
+of them.
+
+API: [Subagents (rt.runAgent)](../reference/ai-harness.md#subagents-rtrunagent).

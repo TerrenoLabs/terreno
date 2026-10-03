@@ -2,7 +2,11 @@ import {
   tool as aiTool,
   generateText,
   type JSONValue,
+  jsonSchema,
   type ModelMessage,
+  NoObjectGeneratedError,
+  NoOutputGeneratedError,
+  Output,
   type TextPart,
   type ToolCallPart,
   type ToolContent,
@@ -12,6 +16,7 @@ import {
 import {DateTime} from "luxon";
 import type mongoose from "mongoose";
 import type {ModelPrice} from "../observability/types";
+import {withStrippedJsonFencesModel} from "../service/jsonFenceModel";
 import {normalizeLlmJsonTextForStructuredOutput} from "../service/parseAiJson";
 import type {
   HarnessAgentDefinition,
@@ -224,6 +229,38 @@ const allocateSeqs = async ({
   return updated.seq - count + 1;
 };
 
+/** What the turn keeps from one model response. */
+interface ModelResponse {
+  finishReason: string;
+  /** Why the answer failed the conversation's `outputSchema`, when it did. */
+  invalidOutput?: string;
+  /** Parsed structured output, when the conversation requests one. */
+  output?: unknown;
+  text: string;
+  toolCalls: ReadonlyArray<{input: unknown; toolCallId: string; toolName: string}>;
+  usage: {inputTokens?: number; outputTokens?: number};
+}
+
+/**
+ * The SDK parses structured output only for a final answer (`stop`, or text without tool
+ * calls); otherwise reading it throws. Missing output is the caller's to report.
+ */
+const structuredOutputOf = (generated: {output: unknown}): unknown => {
+  try {
+    return generated.output;
+  } catch (error: unknown) {
+    if (NoOutputGeneratedError.isInstance(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+};
+
+const describeInvalidOutput = (agentName: string, error: NoObjectGeneratedError): string => {
+  const cause = error.cause ? `: ${errorMessage(error.cause)}` : "";
+  return `Agent "${agentName}" output does not match its schema (${error.message})${cause}`;
+};
+
 /** Parse the final answer against the agent's `output` schema. */
 const parseStructuredOutput = (
   agent: HarnessAgentDefinition,
@@ -271,7 +308,11 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
    */
   const releaseConversationIn: HarnessCommitWrites = async ({session, task}) => {
     await models.conversation.updateOne(
-      {_id: task.ownership.id, activeTurnTaskId: task._id, status: "busy"},
+      {
+        _id: (task.input as AgentTurnInput).conversationId,
+        activeTurnTaskId: task._id,
+        status: "busy",
+      },
       {$set: {status: "idle"}, $unset: {activeTurnTaskId: 1}},
       {session}
     );
@@ -370,18 +411,47 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
     const commit = internalRuntime(rt as HarnessTaskRuntime<unknown, unknown>).commitWithWrites;
     const startedAt = DateTime.now();
     const resolveModel = context.resolveModel;
+    const {outputSchema} = conversation.agent;
+    const output = outputSchema
+      ? Output.object({schema: jsonSchema(JSON.parse(outputSchema))})
+      : undefined;
     const requestModel = () =>
       callModelWithFallback({
-        call: (model) =>
-          generateText({
-            abortSignal: rt.signal,
-            // Retries and fallbacks are the harness's; the SDK must not retry on its own.
-            maxRetries: 0,
-            messages,
-            model,
-            system: instructions,
-            tools,
-          }),
+        call: async (model): Promise<ModelResponse> => {
+          try {
+            const generated = await generateText({
+              abortSignal: rt.signal,
+              // Retries and fallbacks are the harness's; the SDK must not retry on its own.
+              maxRetries: 0,
+              messages,
+              // Same fence and preamble cleanup AIService applies before `Output` parsing.
+              model: output ? withStrippedJsonFencesModel(model) : model,
+              output,
+              system: instructions,
+              tools,
+            });
+            return {
+              finishReason: generated.finishReason,
+              output: output ? structuredOutputOf(generated) : undefined,
+              text: generated.text,
+              toolCalls: generated.toolCalls,
+              usage: generated.usage,
+            };
+          } catch (error: unknown) {
+            // The model answered, but not with the requested structure: that is the
+            // turn's outcome, not a model failure to retry or fall back from.
+            if (!NoObjectGeneratedError.isInstance(error)) {
+              throw error;
+            }
+            return {
+              finishReason: error.finishReason ?? "stop",
+              invalidOutput: describeInvalidOutput(conversation.agent.name, error),
+              text: error.text ?? "",
+              toolCalls: [],
+              usage: error.usage ?? {inputTokens: undefined, outputTokens: undefined},
+            };
+          }
+        },
         models: [conversation.agent.model, ...(conversation.agent.fallbackModels ?? [])],
         random: context.random,
         resolveModel,
@@ -495,7 +565,9 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
       await writes(writeContext);
       await releaseConversationIn(writeContext);
     };
-    const structured = parseStructuredOutput(agent, text);
+    const structured = outputSchema
+      ? {error: result.invalidOutput, output: result.output}
+      : parseStructuredOutput(agent, text);
     if (structured.error) {
       await commit({terminal: {error: structured.error, status: "failed"}}, finalWrites);
       return;

@@ -1,0 +1,13 @@
+{
+  "kind": "files",
+  "input": {
+    "prompt": "Upload the receipt.",
+    "accept": ["image", "pdf", "image"]
+  },
+  "errors": [
+    {
+      "path": "accept[2]",
+      "code": "DUPLICATE_ID"
+    }
+  ]
+}

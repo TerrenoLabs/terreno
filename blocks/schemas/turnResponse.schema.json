@@ -1,0 +1,204 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "The response body of POST /gpt/histories/{id}/turn, sent once the turn finishes.",
+  "title": "TurnResponse",
+  "type": "object",
+  "properties": {
+    "data": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "description": "Set when the turn failed after it started. text holds what the agent said before the error.",
+          "type": "string"
+        },
+        "historyId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The conversation's id."
+        },
+        "pendingAsk": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "choice",
+                "confirm",
+                "markdown",
+                "form",
+                "files"
+              ]
+            },
+            "simple": {
+              "type": "object",
+              "properties": {
+                "buttons": {
+                  "maxItems": 3,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 20
+                      },
+                      "response": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "action": {
+                                "type": "string",
+                                "const": "accept"
+                              },
+                              "content": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              }
+                            },
+                            "required": [
+                              "action",
+                              "content"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "action": {
+                                "type": "string",
+                                "const": "decline"
+                              }
+                            },
+                            "required": [
+                              "action"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "action": {
+                                "type": "string",
+                                "const": "cancel"
+                              },
+                              "reason": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "action"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ],
+                        "title": "AskResponse"
+                      },
+                      "style": {
+                        "type": "string",
+                        "enum": [
+                          "default",
+                          "primary",
+                          "destructive",
+                          "cancel"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "response",
+                      "style"
+                    ],
+                    "additionalProperties": false,
+                    "title": "SimpleCardButton"
+                  }
+                },
+                "handoff": {
+                  "type": "boolean"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "choice",
+                    "confirm",
+                    "markdown",
+                    "form",
+                    "files"
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 140
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "toolCallId": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "buttons",
+                "handoff",
+                "kind",
+                "text",
+                "toolCallId"
+              ],
+              "additionalProperties": false,
+              "title": "SimpleCard"
+            },
+            "toolCallId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "simple",
+            "toolCallId"
+          ],
+          "additionalProperties": false,
+          "description": "The ask the turn paused on. Answer it with its toolCallId and the id of one of simple.buttons.",
+          "title": "PendingAskSummary"
+        },
+        "text": {
+          "type": "string",
+          "description": "The agent's reply, or an empty string when it only asked."
+        },
+        "title": {
+          "description": "The conversation's title, once it has one.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "historyId",
+        "text"
+      ],
+      "additionalProperties": false,
+      "title": "TurnResult"
+    },
+    "requestId": {
+      "description": "The request's id. Apps built with TerrenoApp add it to every JSON response; quote it when reporting a problem.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "data"
+  ],
+  "additionalProperties": false
+}

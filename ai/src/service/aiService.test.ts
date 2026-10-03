@@ -627,6 +627,262 @@ describe("AIService", () => {
       expect(messages.length).toBe(2);
       expect(messages[0]).toEqual({content: "You are helpful", role: "system"});
     });
+
+    describe("asks", () => {
+      const planAsk = {
+        options: [
+          {id: "starter", label: "Starter"},
+          {id: "team", label: "Team"},
+        ],
+        prompt: "Which plan should I set up?",
+        select: "one",
+      };
+      const regionAsk = {
+        options: [
+          {id: "us", label: "US"},
+          {id: "eu", label: "EU"},
+        ],
+        prompt: "Where should your data live?",
+        select: "one",
+      };
+      const buildMessages = (prompts: Parameters<AIService["buildMessages"]>[0]) =>
+        new AIService({model: createMockModel() as unknown as LanguageModel}).buildMessages(
+          prompts
+        );
+
+      it("includes a completed ask as a tool call and its result, and still skips host tool rows", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: {},
+            text: "Tool call: lookupPlans",
+            toolCallId: "call_lookup",
+            toolName: "lookupPlans",
+            type: "tool-call",
+          },
+          {
+            result: {plans: 2},
+            text: "Tool result: lookupPlans",
+            toolCallId: "call_lookup",
+            toolName: "lookupPlans",
+            type: "tool-result",
+          },
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            result: {action: "accept", content: {selected: ["team"]}},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+          {text: "Setting up the Team plan.", type: "assistant"},
+          {text: "Thanks", type: "user"},
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Set up my workspace", role: "user"},
+          {
+            content: [
+              {input: planAsk, toolCallId: "call_plan", toolName: "ask_choice", type: "tool-call"},
+            ],
+            role: "assistant",
+          },
+          {
+            content: [
+              {
+                output: {type: "json", value: {action: "accept", content: {selected: ["team"]}}},
+                toolCallId: "call_plan",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+            ],
+            role: "tool",
+          },
+          {content: "Setting up the Team plan.", role: "assistant"},
+          {content: "Thanks", role: "user"},
+        ]);
+      });
+
+      it("puts consecutive ask calls from one step in one assistant message, in call order", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            args: regionAsk,
+            ask: {kind: "choice", status: "cancelled"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_region",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            result: {action: "cancel", reason: "one_ask_at_a_time"},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_region",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+          {
+            result: {action: "decline"},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+          {text: "No plan for now.", type: "assistant"},
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Set up my workspace", role: "user"},
+          {
+            content: [
+              {input: planAsk, toolCallId: "call_plan", toolName: "ask_choice", type: "tool-call"},
+              {
+                input: regionAsk,
+                toolCallId: "call_region",
+                toolName: "ask_choice",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+          {
+            content: [
+              {
+                output: {type: "json", value: {action: "decline"}},
+                toolCallId: "call_plan",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+              {
+                output: {type: "json", value: {action: "cancel", reason: "one_ask_at_a_time"}},
+                toolCallId: "call_region",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+            ],
+            role: "tool",
+          },
+          {content: "No plan for now.", role: "assistant"},
+        ]);
+      });
+
+      it("skips an ask that is still waiting for an answer", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "pending"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+        ]);
+
+        expect(messages).toEqual([{content: "Set up my workspace", role: "user"}]);
+      });
+
+      it("skips approval asks, which are display-only", () => {
+        const messages = buildMessages([
+          {text: "Delete my completed todos", type: "user"},
+          {
+            args: {prompt: "Allow deleteCompletedTodos?"},
+            ask: {kind: "confirm", origin: "approval", status: "answered"},
+            text: "Tool call: deleteCompletedTodos",
+            toolCallId: "approval_delete",
+            toolName: "deleteCompletedTodos",
+            type: "tool-call",
+          },
+          {
+            result: {action: "accept", content: {confirmed: true}},
+            text: "Tool result: deleteCompletedTodos",
+            toolCallId: "approval_delete",
+            toolName: "deleteCompletedTodos",
+            type: "tool-result",
+          },
+          {text: "Deleted 2 todos.", type: "assistant"},
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Delete my completed todos", role: "user"},
+          {content: "Deleted 2 todos.", role: "assistant"},
+        ]);
+      });
+
+      it("skips ask rows without a tool call id or tool name, and sends null for a missing result", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            type: "tool-call",
+          },
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_nameless",
+            type: "tool-call",
+          },
+          {
+            result: {action: "decline"},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_nameless",
+            type: "tool-result",
+          },
+          {
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_bare",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            text: "Tool result: ask_choice",
+            toolCallId: "call_bare",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Set up my workspace", role: "user"},
+          {
+            content: [
+              {input: {}, toolCallId: "call_bare", toolName: "ask_choice", type: "tool-call"},
+            ],
+            role: "assistant",
+          },
+          {
+            content: [
+              {
+                output: {type: "json", value: null},
+                toolCallId: "call_bare",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+            ],
+            role: "tool",
+          },
+        ]);
+      });
+    });
   });
 
   describe("generateChatStream", () => {
@@ -697,6 +953,78 @@ describe("AIService", () => {
       const content = (messages[0] as {content: Array<{type: string; filename?: string}>}).content;
       expect(content[1].type).toBe("file");
       expect(content[1].filename).toBe("doc.pdf");
+    });
+  });
+
+  describe("generateBlocks", () => {
+    const validDocument = '{"v":1,"blocks":[{"type":"heading","text":"Hello"}]}';
+    const overLimitDocument =
+      '{"v":1,"datasets":{"signups":{"source":"ref","id":"ds1","limit":5000}},"blocks":[{"type":"heading","text":"Hello"}]}';
+
+    it("returns a validated document at deterministic temperature and logs ui_blocks", async () => {
+      const model = createMockModel(validDocument);
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const result = await service.generateBlocks({prompt: "Say hello"});
+
+      expect(result.blocks[0]).toMatchObject({text: "Hello", type: "heading"});
+      expect(model.doGenerate).toHaveBeenCalledTimes(1);
+      const call = model.doGenerate.mock.calls[0]?.[0] as {temperature?: number} | undefined;
+      expect(call?.temperature).toBe(0);
+      expect(JSON.stringify(call)).toContain("Your entire reply is one document");
+      const logs = await AIRequest.find({requestType: "ui_blocks"});
+      expect(logs).toHaveLength(1);
+      expect(logs[0].error).toBeUndefined();
+    });
+
+    it("repairs once and puts the error code in the second prompt", async () => {
+      const model = createMockModel(overLimitDocument);
+      let calls = 0;
+      model.doGenerate = mock(async () => {
+        calls += 1;
+        const text = calls === 1 ? overLimitDocument : validDocument;
+        return {
+          content: [{text, type: "text" as const}],
+          finishReason: "stop" as const,
+          usage: {inputTokens: 5, outputTokens: 10},
+        };
+      });
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const result = await service.generateBlocks({prompt: "Chart signups"});
+
+      expect(result.blocks[0]).toMatchObject({text: "Hello", type: "heading"});
+      expect(model.doGenerate).toHaveBeenCalledTimes(2);
+      const second = JSON.stringify(model.doGenerate.mock.calls[1]?.[0]);
+      expect(second).toContain("TOO_MANY_POINTS");
+    });
+
+    it("throws 502 when the model fails before a document exists", async () => {
+      const model = createMockModel(validDocument);
+      model.doGenerate = mock(async () => {
+        throw new Error("model unavailable");
+      });
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await expect(service.generateBlocks({prompt: "Say hello"})).rejects.toMatchObject({
+        status: 502,
+        title: "Block generation failed",
+      });
+      expect(model.doGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws 422 and logs error codes when the repair still fails", async () => {
+      const model = createMockModel(overLimitDocument);
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await expect(service.generateBlocks({prompt: "Still too big"})).rejects.toMatchObject({
+        status: 422,
+      });
+
+      expect(model.doGenerate).toHaveBeenCalledTimes(2);
+      const logs = await AIRequest.find({requestType: "ui_blocks"});
+      expect(logs).toHaveLength(1);
+      expect(logs[0].metadata?.errorCodes).toEqual(["TOO_MANY_POINTS"]);
     });
   });
 

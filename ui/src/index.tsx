@@ -14,6 +14,10 @@ export * from "./AnnouncementScreen";
 export type * from "./AreaChart";
 export type * from "./AttachmentPreview";
 export * from "./Avatar";
+export type * from "./asks/AskCard";
+export * from "./asks/askFileRefs";
+export type * from "./asks/askTypes";
+export * from "./asks/SimpleAskCard";
 export * from "./Badge";
 export {Banner, hideBanner} from "./Banner";
 export type * from "./BarChart";
@@ -58,6 +62,7 @@ export type * from "./GPTMemoryModal";
 export * from "./Heading";
 export * from "./HeightActionSheet";
 export * from "./HeightField";
+export * from "./HtmlFrame";
 export * from "./Icon";
 export * from "./IconButton";
 export * from "./IconRegistry";
@@ -72,8 +77,10 @@ export {
   AIRequestExplorer,
   AiSuggestionBox,
   AreaChart,
+  AskCard,
   AttachmentPreview,
   BarChart,
+  BlocksView,
   ChartCard,
   ConflictSheet,
   ConsentFormScreen,

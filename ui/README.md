@@ -189,6 +189,8 @@ Do not rely on internal CSS class names or DOM structure for tests.
 
 Full API reference: [docs/reference/ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/ui.md)
 
+Agent asks in `GPTChat` (`AskCard`, `SimpleAskCard`): [Add agent asks to a chat](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/agent-ui-asks.md)
+
 Live example: [Terreno UI demo](https://terreno-demo.netlify.app)
 
 ## License and Contributing

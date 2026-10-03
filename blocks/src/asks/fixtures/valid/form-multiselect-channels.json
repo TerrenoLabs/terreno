@@ -1,0 +1,64 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Where should I post the update?",
+    "fields": [
+      {
+        "id": "channels",
+        "type": "multiselect",
+        "label": "Channels",
+        "required": true,
+        "default": [
+          "email",
+          "slack"
+        ],
+        "options": [
+          {
+            "id": "email",
+            "label": "Email"
+          },
+          {
+            "id": "slack",
+            "label": "Slack"
+          },
+          {
+            "id": "sms",
+            "label": "SMS"
+          }
+        ]
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "submit-defaults",
+        "label": "Submit defaults",
+        "response": {
+          "action": "accept",
+          "content": {
+            "values": {
+              "channels": [
+                "email",
+                "slack"
+              ]
+            }
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "Where should I post the update?",
+    "toolCallId": "call_fixture"
+  }
+}

@@ -4,11 +4,14 @@ import {AddressFieldConfiguration} from "@story-config/AddressField.config";
 import {AIRequestExplorerConfiguration} from "@story-config/AIRequestExplorer.config";
 import {AiSuggestionBoxConfiguration} from "@story-config/AiSuggestionBox.config";
 import {AreaChartConfiguration} from "@story-config/AreaChart.config";
+import {AskCardConfiguration} from "@story-config/AskCard.config";
 import {AttachmentPreviewConfiguration} from "@story-config/AttachmentPreview.config";
 import {AvatarConfiguration} from "@story-config/Avatar.config";
 import {BadgeConfiguration} from "@story-config/Badge.config";
 import {BannerConfiguration} from "@story-config/Banner.config";
 import {BarChartConfiguration} from "@story-config/BarChart.config";
+import {BlocksPlaygroundConfiguration} from "@story-config/BlocksPlayground.config";
+import {BlocksViewConfiguration} from "@story-config/BlocksView.config";
 import {BodyConfiguration} from "@story-config/Body.config";
 import {BooleanFieldConfiguration} from "@story-config/BooleanField.config";
 import {BoxConfiguration} from "@story-config/Box.config";
@@ -39,6 +42,7 @@ import {GPTChatConfiguration} from "@story-config/GPTChat.config";
 import {GPTMemoryModalConfiguration} from "@story-config/GPTMemoryModal.config";
 import {HeadingConfiguration} from "@story-config/Heading.config";
 import {HeightFieldConfiguration} from "@story-config/HeightField.config";
+import {HtmlFrameConfiguration} from "@story-config/HtmlFrame.config";
 import {IconConfiguration} from "@story-config/Icon.config";
 import {IconButtonConfiguration} from "@story-config/IconButton.config";
 import {ImageConfiguration} from "@story-config/Image.config";
@@ -80,6 +84,7 @@ import {SignatureConfiguration} from "@story-config/Signature.config";
 import {SignatureCaptureFieldConfiguration} from "@story-config/SignatureCaptureField.config";
 import {SignatureFieldConfiguration} from "@story-config/SignatureField.config";
 import {SignUpScreenConfiguration} from "@story-config/SignUpScreen.config";
+import {SimpleAskCardConfiguration} from "@story-config/SimpleAskCard.config";
 import {SimpleContentConfiguration} from "@story-config/SimpleContent.config";
 import {SliderConfiguration} from "@story-config/Slider.config";
 import {SocialLoginButtonConfiguration} from "@story-config/SocialLoginButton.config";
@@ -282,12 +287,15 @@ const Config: DemoConfigurationBase[] = [
   AIRequestExplorerConfiguration,
   AiSuggestionBoxConfiguration,
   AreaChartConfiguration,
+  AskCardConfiguration,
   AvatarConfiguration,
   AddressFieldConfiguration,
   AttachmentPreviewConfiguration,
   BadgeConfiguration,
   BannerConfiguration,
   BarChartConfiguration,
+  BlocksPlaygroundConfiguration,
+  BlocksViewConfiguration,
   BodyConfiguration,
   BooleanFieldConfiguration,
   BoxConfiguration,
@@ -318,6 +326,7 @@ const Config: DemoConfigurationBase[] = [
   GPTChatConfiguration,
   GPTMemoryModalConfiguration,
   HeadingConfiguration,
+  HtmlFrameConfiguration,
   HeightFieldConfiguration,
   IconConfiguration,
   IconButtonConfiguration,
@@ -358,6 +367,7 @@ const Config: DemoConfigurationBase[] = [
   SidebarNavigationExpoRouterConfiguration,
   SideDrawerConfiguration,
   SignUpScreenConfiguration,
+  SimpleAskCardConfiguration,
   SimpleContentConfiguration,
   SignatureConfiguration,
   SignatureCaptureFieldConfiguration,

@@ -1,10 +1,12 @@
 import {afterAll, afterEach, describe, it, mock} from "bun:test";
-import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
+import type {ChoiceAskInput} from "@terreno/blocks";
+import {act, fireEvent, render, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import {setImageAsync, setStringAsync} from "expo-clipboard";
 import React from "react";
-import {Platform, Pressable, ScrollView} from "react-native";
+import {AccessibilityInfo, ActivityIndicator, Platform, Pressable, ScrollView} from "react-native";
 
+import type {AskSubmission, ChatAsk} from "./asks/askTypes";
 import type {SelectedFile} from "./FilePickerButton";
 import type {GPTChatHistory, GPTChatMessage, GPTChatProps, MessageContentPart} from "./GPTChat";
 import {GPTChat} from "./GPTChat";
@@ -48,6 +50,49 @@ const press = async (element: Parameters<typeof fireEvent.press>[0]): Promise<vo
     fireEvent.press(element);
   });
 };
+
+// Block buttons await a haptic call before onClick.
+const pressControl = async (element: Parameters<typeof fireEvent.press>[0]): Promise<void> => {
+  await act(async () => {
+    fireEvent.press(element);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+};
+
+const BLOCKS_REPLY = `v: 1
+blocks:
+  - type: heading
+    text: Quarter heading
+  - type: actions
+    id: row
+    elements:
+      - type: button
+        id: reply_btn
+        text: Ask again
+        action:
+          kind: reply
+          text: Show the weekly numbers
+      - type: button
+        id: open_btn
+        text: Open
+        action:
+          kind: open
+          route: /reports
+      - type: button
+        id: run_btn
+        text: Export
+        action:
+          kind: callback
+          name: export_csv
+`;
+
+const BLOCKS_STREAMING = `v: 1
+blocks:
+  - type: heading
+    text: Done heading
+  - type: heading
+    text: "Still typ
+`;
 
 const histories: GPTChatHistory[] = [
   {id: "h1", prompts: [], title: "First chat"},
@@ -926,5 +971,716 @@ describe("GPTChat web keyboard submit", () => {
     const {removed, result} = renderOnWeb();
     result.unmount();
     assert.include(removed, "keydown");
+  });
+});
+
+describe("GPTChat asks", () => {
+  const PLAN_INPUT: ChoiceAskInput = {
+    default: ["team"],
+    options: [
+      {description: "$0, one seat", id: "starter", label: "Starter"},
+      {description: "$20 per seat", id: "team", label: "Team"},
+      {id: "enterprise", label: "Enterprise"},
+    ],
+    prompt: "Which plan should I set up?",
+    select: "one",
+    title: "Choose a plan",
+  };
+
+  const planAsk = (state: Partial<ChatAsk> = {}): ChatAsk => ({
+    input: PLAN_INPUT,
+    kind: "choice",
+    status: "pending",
+    toolCallId: "call_plan",
+    ...state,
+  });
+
+  const askMessage = (ask: ChatAsk): GPTChatMessage => ({
+    ask,
+    content: "Tool call: ask_choice",
+    role: "tool-call",
+    toolCall: {args: {...ask.input}, toolCallId: ask.toolCallId, toolName: "ask_choice"},
+  });
+
+  const askResultMessage = (result: unknown): GPTChatMessage => ({
+    content: "Tool result: ask_choice",
+    role: "tool-result",
+    toolResult: {result, toolCallId: "call_plan", toolName: "ask_choice"},
+  });
+
+  const userMessage: GPTChatMessage = {content: "Set up my workspace", role: "user"};
+
+  const originalOS = Platform.OS;
+  const setAccessibilityFocus = AccessibilityInfo.setAccessibilityFocus as ReturnType<typeof mock>;
+
+  afterEach(() => {
+    Platform.OS = originalOS;
+  });
+
+  it("renders a pending ask as a card in place of its tool call and sends the answer", async () => {
+    const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+    const {getByTestId, queryByText} = renderChat({
+      currentMessages: [userMessage, askMessage(planAsk())],
+      onAskSubmit,
+    });
+
+    assert.isOk(getByTestId("gpt-ask-call_plan"));
+    assert.isNull(queryByText("Tool: ask_choice"));
+    await act(async () => {
+      fireEvent.press(getByTestId("gpt-ask-call_plan-button-option:team"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+      response: {action: "accept", content: {selected: ["team"]}},
+      toolCallId: "call_plan",
+    });
+  });
+
+  it("keeps a pending ask restored from history interactive", async () => {
+    const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+    const restored: GPTChatHistory = {
+      id: "h3",
+      prompts: [userMessage, askMessage(planAsk({simple: undefined}))],
+      title: "Plan setup",
+    };
+    const {getByTestId} = renderChat({
+      currentHistoryId: "h3",
+      currentMessages: restored.prompts,
+      histories: [...histories, restored],
+      onAskSubmit,
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("gpt-ask-call_plan-button-skip"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+      response: {action: "decline"},
+      toolCallId: "call_plan",
+    });
+  });
+
+  it("sends the checked options and the Other text of a restored select many ask", async () => {
+    const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+    const toppingsAsk = planAsk({
+      input: {
+        allowOther: true,
+        default: ["cheese"],
+        maxSelected: 3,
+        options: [
+          {id: "cheese", label: "Extra cheese"},
+          {id: "mushrooms", label: "Mushrooms"},
+          {id: "olives", label: "Olives"},
+        ],
+        otherLabel: "Another topping",
+        prompt: "Which toppings should I add?",
+        select: "many",
+      },
+      simple: undefined,
+      toolCallId: "call_toppings",
+    });
+    const restored: GPTChatHistory = {
+      id: "h4",
+      prompts: [userMessage, askMessage(toppingsAsk)],
+      title: "Building a pizza",
+    };
+    const {getByLabelText, getByTestId} = renderChat({
+      currentHistoryId: "h4",
+      currentMessages: restored.prompts,
+      histories: [...histories, restored],
+      onAskSubmit,
+    });
+
+    await press(getByLabelText("Olives"));
+    await act(async () => {
+      fireEvent.changeText(getByTestId("gpt-ask-call_toppings-other"), "Basil");
+    });
+    await press(getByTestId("gpt-ask-call_toppings-submit"));
+
+    assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+      response: {action: "accept", content: {other: "Basil", selected: ["cheese", "olives"]}},
+      toolCallId: "call_toppings",
+    });
+  });
+
+  describe("files asks", () => {
+    const notesAsk = (state: Partial<ChatAsk> = {}): ChatAsk =>
+      ({
+        input: {accept: ["text"], maxFiles: 1, prompt: "Upload your notes."},
+        kind: "files",
+        status: "pending",
+        toolCallId: "call_notes",
+        ...state,
+      }) as ChatAsk;
+
+    const filesMessage = (ask: ChatAsk): GPTChatMessage => ({
+      ask,
+      content: "Tool call: ask_files",
+      role: "tool-call",
+      toolCall: {args: {...ask.input}, toolCallId: ask.toolCallId, toolName: "ask_files"},
+    });
+
+    it("sends the refs resolveAskFiles returns for the picked files", async () => {
+      const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+      const resolveAskFiles = mock(async (files: SelectedFile[]) =>
+        files.map((file) => ({
+          fileId: "upload-1",
+          filename: file.name,
+          mimeType: file.mimeType,
+          size: 12,
+        }))
+      );
+      const {getByTestId, getByText} = renderChat({
+        currentMessages: [userMessage, filesMessage(notesAsk())],
+        onAskSubmit,
+        resolveAskFiles,
+      });
+
+      await press(getByTestId("gpt-ask-call_notes-picker"));
+      await waitFor(() => assert.isOk(getByText("notes.txt")));
+      await press(getByTestId("gpt-ask-call_notes-submit"));
+
+      assert.deepEqual(resolveAskFiles.mock.calls[0]?.[0], [pickedDocument]);
+      assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+        response: {
+          action: "accept",
+          content: {
+            files: [{fileId: "upload-1", filename: "notes.txt", mimeType: "text/plain", size: 12}],
+          },
+        },
+        toolCallId: "call_notes",
+      });
+    });
+
+    it("summarizes an answered files ask from the stored metadata", () => {
+      const {getByText} = renderChat({
+        currentMessages: [
+          userMessage,
+          filesMessage(notesAsk({status: "answered"})),
+          {
+            content: "Tool result: ask_files",
+            role: "tool-result",
+            toolResult: {
+              result: {
+                action: "accept",
+                content: {files: [{filename: "notes.txt", mimeType: "text/plain", size: 12}]},
+              },
+              toolCallId: "call_notes",
+              toolName: "ask_files",
+            },
+          },
+        ],
+      });
+
+      assert.isOk(getByText("You sent 1 file: notes.txt"));
+    });
+  });
+
+  describe("confirm asks", () => {
+    const archiveAsk = (state: Partial<ChatAsk> = {}): ChatAsk =>
+      ({
+        input: {
+          confirmLabel: "Archive 12 chats",
+          denyLabel: "Keep them",
+          destructive: true,
+          prompt: "Archive the 12 chats older than 90 days?",
+        },
+        kind: "confirm",
+        status: "pending",
+        toolCallId: "call_archive",
+        ...state,
+      }) as ChatAsk;
+
+    const confirmMessage = (ask: ChatAsk): GPTChatMessage => ({
+      ask,
+      content: "Tool call: ask_confirm",
+      role: "tool-call",
+      toolCall: {args: {...ask.input}, toolCallId: ask.toolCallId, toolName: "ask_confirm"},
+    });
+
+    it("sends {confirmed: false} from the deny button of a restored confirm ask", async () => {
+      const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+      const restored: GPTChatHistory = {
+        id: "h5",
+        prompts: [userMessage, confirmMessage(archiveAsk())],
+        title: "Cleaning up",
+      };
+      const {getByTestId} = renderChat({
+        currentHistoryId: "h5",
+        currentMessages: restored.prompts,
+        histories: [...histories, restored],
+        onAskSubmit,
+      });
+
+      assert.isOk(
+        within(getByTestId("gpt-ask-call_archive-button-approve")).getByText("Archive 12 chats")
+      );
+      await press(getByTestId("gpt-ask-call_archive-button-deny"));
+
+      assert.deepEqual(onAskSubmit.mock.calls[0]?.[0], {
+        response: {action: "accept", content: {confirmed: false}},
+        toolCallId: "call_archive",
+      });
+    });
+
+    it("summarizes an answered confirm ask from its hidden result message", () => {
+      const {getByText, queryByTestId, queryByText} = renderChat({
+        currentMessages: [
+          userMessage,
+          confirmMessage(archiveAsk({status: "answered"})),
+          {
+            content: "Tool result: ask_confirm",
+            role: "tool-result",
+            toolResult: {
+              result: {action: "accept", content: {confirmed: true}},
+              toolCallId: "call_archive",
+              toolName: "ask_confirm",
+            },
+          },
+          {content: "Archived 12 chats.", role: "assistant"},
+        ],
+      });
+
+      assert.isOk(getByText("You confirmed: Archive 12 chats"));
+      assert.isNull(queryByText("Result: ask_confirm"));
+      assert.isNull(queryByTestId("gpt-ask-call_archive-button-approve"));
+    });
+  });
+
+  it("summarizes an answered ask from its hidden result message", () => {
+    const {getByText, queryByTestId, queryByText} = renderChat({
+      currentMessages: [
+        userMessage,
+        askMessage(planAsk({status: "answered"})),
+        askResultMessage({action: "accept", content: {selected: ["starter"]}}),
+        {content: "Starter it is.", role: "assistant"},
+      ],
+    });
+
+    assert.isOk(getByText("You chose: Starter"));
+    assert.isNull(queryByText("Result: ask_choice"));
+    assert.isNull(queryByTestId("gpt-ask-call_plan-button-option:team"));
+    assert.isOk(getByText("Starter it is."));
+  });
+
+  it("still shows tool results that do not belong to an ask", () => {
+    const {getByText} = renderChat({
+      currentMessages: [
+        askMessage(planAsk({status: "answered"})),
+        askResultMessage({action: "decline"}),
+        {
+          content: "Tool result: lookup",
+          role: "tool-result",
+          toolResult: {result: {ok: true}, toolCallId: "call_lookup", toolName: "lookup"},
+        },
+      ],
+    });
+
+    assert.isOk(getByText("You skipped this question."));
+    assert.isOk(getByText("Result: lookup"));
+  });
+
+  it("shows the errors for the matching ask inline", () => {
+    const {getByText} = renderChat({
+      askErrors: {
+        call_other: [
+          {code: "SELECTION_COUNT", fix: "", message: "Not this ask's error.", path: "content"},
+        ],
+        call_plan: [
+          {
+            code: "OPTION_NOT_OFFERED",
+            fix: "Use the id of one of the ask's options.",
+            message: '"gold" is not one of the offered options.',
+            path: "content.selected[0]",
+          },
+        ],
+      },
+      currentMessages: [askMessage(planAsk())],
+      onAskSubmit: async () => {},
+    });
+
+    assert.isOk(getByText('"gold" is not one of the offered options.'));
+  });
+
+  describe("when the host switches to another conversation", () => {
+    const regionAsk = (toolCallId: string): ChatAsk => ({
+      input: {
+        options: [
+          {description: "Oregon", id: "west", label: "West"},
+          {id: "central", label: "Central"},
+          {id: "east", label: "East"},
+          {id: "europe", label: "Europe"},
+          {id: "asia", label: "Asia"},
+        ],
+        prompt: "Where should the data live?",
+        select: "one",
+      },
+      kind: "choice",
+      status: "pending",
+      toolCallId,
+    });
+
+    const chatWith = ({
+      historyId,
+      onAskSubmit,
+      toolCallId,
+    }: {
+      historyId: string;
+      onAskSubmit: GPTChatProps["onAskSubmit"];
+      toolCallId: string;
+    }): React.ReactElement => (
+      <GPTChat
+        currentHistoryId={historyId}
+        currentMessages={[userMessage, askMessage(regionAsk(toolCallId))]}
+        histories={histories}
+        onAskSubmit={onAskSubmit}
+        onCreateHistory={() => {}}
+        onDeleteHistory={() => {}}
+        onSelectHistory={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    const isDisabled = (element: {props: {accessibilityState?: {disabled?: boolean}}}): boolean =>
+      element.props.accessibilityState?.disabled === true;
+
+    it("does not carry the option chosen in one chat into the other chat's ask", async () => {
+      const onAskSubmit = mock(async (_submission: AskSubmission) => {});
+      const {getByLabelText, getByTestId, rerender} = renderWithTheme(
+        chatWith({historyId: "h1", onAskSubmit, toolCallId: "call_first"})
+      );
+      await press(getByLabelText("West — Oregon"));
+      assert.isFalse(isDisabled(getByTestId("gpt-ask-call_first-submit")));
+
+      rerender(chatWith({historyId: "h2", onAskSubmit, toolCallId: "call_second"}));
+
+      assert.isTrue(isDisabled(getByTestId("gpt-ask-call_second-submit")));
+    });
+
+    it("does not show one chat's answer still loading on the other chat's ask", async () => {
+      const onAskSubmit = mock((_submission: AskSubmission) => new Promise<void>(() => {}));
+      const {getByLabelText, getByTestId, rerender} = renderWithTheme(
+        chatWith({historyId: "h1", onAskSubmit, toolCallId: "call_first"})
+      );
+      await press(getByLabelText("West — Oregon"));
+      await act(async () => {
+        fireEvent.press(getByTestId("gpt-ask-call_first-submit"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.lengthOf(onAskSubmit.mock.calls, 1);
+
+      rerender(chatWith({historyId: "h2", onAskSubmit, toolCallId: "call_second"}));
+
+      const spinners = getByTestId("gpt-ask-call_second-submit").findAll(
+        (node) => node.type === "ActivityIndicator"
+      );
+      assert.lengthOf(spinners, 0);
+      assert.isFalse(isDisabled(getByTestId("gpt-ask-call_second-button-skip")));
+    });
+  });
+
+  it("moves screen reader focus to a pending ask's question, an accessible header, when it appears", () => {
+    setAccessibilityFocus.mockClear();
+    const scrollable = {scrollTo: (): void => {}, scrollToEnd: (): void => {}};
+    const {rerender} = render(
+      <GPTChat
+        currentMessages={[userMessage]}
+        histories={histories}
+        onCreateHistory={() => {}}
+        onDeleteHistory={() => {}}
+        onSelectHistory={() => {}}
+        onSubmit={() => {}}
+      />,
+      {
+        createNodeMock: (element) =>
+          element.props.accessibilityRole === "header" &&
+          element.props.children === PLAN_INPUT.prompt
+            ? 42
+            : scrollable,
+        wrapper: ThemeProvider,
+      }
+    );
+    assert.lengthOf(setAccessibilityFocus.mock.calls, 0);
+
+    rerender(
+      <GPTChat
+        currentMessages={[userMessage, askMessage(planAsk())]}
+        histories={histories}
+        onCreateHistory={() => {}}
+        onDeleteHistory={() => {}}
+        onSelectHistory={() => {}}
+        onSubmit={() => {}}
+      />
+    );
+
+    assert.deepEqual(setAccessibilityFocus.mock.calls, [[42]]);
+  });
+
+  it("focuses a pending ask's group on web without scrolling the page", () => {
+    Platform.OS = "web";
+    const focus = mock((_options: {preventScroll: boolean}) => {});
+    const node = {
+      addEventListener: (): void => {},
+      focus,
+      removeEventListener: (): void => {},
+      scrollTo: (): void => {},
+      scrollToEnd: (): void => {},
+    };
+    const {getByLabelText} = render(
+      <GPTChat
+        currentMessages={[userMessage, askMessage(planAsk())]}
+        histories={histories}
+        onCreateHistory={() => {}}
+        onDeleteHistory={() => {}}
+        onSelectHistory={() => {}}
+        onSubmit={() => {}}
+      />,
+      {createNodeMock: () => node, wrapper: ThemeProvider}
+    );
+
+    assert.isOk(getByLabelText("Choose a plan"));
+    assert.deepEqual(focus.mock.calls, [[{preventScroll: true}]]);
+  });
+
+  it("leaves assistant markdown in place when uiBlocks is off", async () => {
+    const {queryByTestId, toJSON} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+    });
+    assert.isNull(queryByTestId("gpt-blocks-m1"));
+    await waitFor(() => {
+      assert.include(JSON.stringify(toJSON()), "Quarter heading");
+    });
+  });
+
+  it("sends a reply and reports open from a block document", async () => {
+    const onSubmit = mock(() => {});
+    const onBlockAction = mock(() => {});
+    const {getByText} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      onBlockAction,
+      onSubmit,
+      uiBlocks: true,
+    });
+    assert.isOk(getByText("Quarter heading"));
+    await pressControl(getByText("Ask again"));
+    await pressControl(getByText("Open"));
+    assert.deepEqual(onSubmit.mock.calls[0], ["Show the weekly numbers"]);
+    assert.deepEqual(onBlockAction.mock.calls[0], [
+      {
+        action: {kind: "open", route: "/reports"},
+        blockId: "row",
+        elementId: "open_btn",
+        messageId: "m1",
+      },
+    ]);
+  });
+
+  it("shows a callback as loading, then replaces that block", async () => {
+    let finish: (result: {
+      blocks: {blocks: {status: "info"; text: string; type: "badge"}[]; v: 1};
+      replace: "block";
+    }) => void = () => {};
+    const onBlockCallback = mock(
+      () =>
+        new Promise<{
+          blocks: {blocks: {status: "info"; text: string; type: "badge"}[]; v: 1};
+          replace: "block";
+        }>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const {getByTestId, getByText, queryByText} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      uiBlocks: true,
+    });
+    await pressControl(getByText("Export"));
+    await waitFor(() => {
+      assert.equal(getByTestId("blocks-1-run_btn").props.accessibilityState.disabled, true);
+    });
+    assert.deepEqual(onBlockCallback.mock.calls[0], [
+      {
+        action: {kind: "callback", name: "export_csv"},
+        blockId: "row",
+        elementId: "run_btn",
+        messageId: "m1",
+      },
+    ]);
+    await act(async () => {
+      finish({
+        blocks: {blocks: [{status: "info", text: "Exporting", type: "badge"}], v: 1},
+        replace: "block",
+      });
+    });
+    await waitFor(() => {
+      assert.isOk(getByText("Exporting"));
+    });
+    assert.isNull(queryByText("Export"));
+  });
+
+  it("appends an assistant message when a callback returns text", async () => {
+    const onBlockCallback = mock(async () => ({text: "Export started"}));
+    const {getByText} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      uiBlocks: true,
+    });
+    await pressControl(getByText("Export"));
+    await waitFor(() => {
+      assert.isOk(getByText("Export started"));
+    });
+  });
+
+  it("shows callback text when the source message has no id", async () => {
+    const onBlockCallback = mock(async () => ({text: "Export started"}));
+    const {getByText} = renderChat({
+      currentMessages: [{content: BLOCKS_REPLY, role: "assistant"}],
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      uiBlocks: true,
+    });
+    await pressControl(getByText("Export"));
+    await waitFor(() => {
+      assert.isOk(getByText("Export started"));
+    });
+  });
+
+  it("keeps callback text after the message that started it", async () => {
+    const onBlockCallback = mock(async () => ({text: "Export started"}));
+    const {getByText, toJSON} = renderChat({
+      currentMessages: [
+        {content: BLOCKS_REPLY, id: "m1", role: "assistant"},
+        {content: "Next question", id: "m2", role: "user"},
+      ],
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      uiBlocks: true,
+    });
+    await pressControl(getByText("Export"));
+    await waitFor(() => {
+      const tree = JSON.stringify(toJSON());
+      const statusAt = tree.indexOf("Export started");
+      const nextAt = tree.indexOf("Next question");
+      assert.isAtLeast(statusAt, 0);
+      assert.isBelow(statusAt, nextAt);
+    });
+  });
+
+  it("drops a callback result after the history changes", async () => {
+    let finish: (result: {text: string}) => void = () => {};
+    const onBlockCallback = mock(
+      () =>
+        new Promise<{text: string}>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const props = {
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      histories,
+      hostActions: ["export_csv"],
+      onBlockCallback,
+      onCreateHistory: () => {},
+      onDeleteHistory: () => {},
+      onSelectHistory: () => {},
+      onSubmit: () => {},
+      uiBlocks: true,
+    };
+    const {getByText, queryByText, rerender} = renderWithTheme(
+      <GPTChat {...props} currentHistoryId="h1" />
+    );
+    await pressControl(getByText("Export"));
+    rerender(<GPTChat {...props} currentHistoryId="h2" />);
+    await act(async () => {
+      finish({text: "Export started"});
+    });
+    assert.isNull(queryByText("Export started"));
+  });
+
+  it("does not flash a nested layout error when an ask follows the live reply", async () => {
+    const nested = `v: 1
+blocks:
+  - type: heading
+    text: Plans
+  - type: text
+    markdown: Compare the options.
+  - type: columns
+    children:
+      - type: card
+        title: Team
+        children:
+          - type: text
+            markdown: Twenty dollars
+      - type: text
+        markdown: Starter is free.
+  - type: text
+    markdown: Still writing
+`;
+    const depthError =
+      "blocks[2].children[0]: A columns or card block is nested inside another columns or card block.";
+    const ask: GPTChatMessage = {
+      ask: {
+        input: {options: [{id: "team", label: "Team"}], prompt: "Which plan?", select: "one"},
+        kind: "choice",
+        status: "pending",
+        toolCallId: "call_plan",
+      },
+      content: "Tool call: ask_choice",
+      role: "tool-call",
+      toolCall: {
+        args: {prompt: "Which plan?"},
+        toolCallId: "call_plan",
+        toolName: "ask_choice",
+      },
+    };
+    const streaming = renderChat({
+      currentMessages: [{content: nested, id: "m1", role: "assistant"}, ask],
+      isStreaming: true,
+      uiBlocks: true,
+    });
+    assert.isNull(streaming.queryByText(depthError));
+    assert.isOk(streaming.getByTestId("gpt-blocks-pending"));
+
+    const finished = renderChat({
+      currentMessages: [{content: nested, id: "m1", role: "assistant"}, ask],
+      uiBlocks: true,
+    });
+    assert.isOk(finished.getByText(depthError));
+  });
+
+  it("renders finished blocks and a spinner while a document is streaming", async () => {
+    const {getByTestId, getByText, queryByTestId, queryByText, UNSAFE_getAllByType} = renderChat({
+      currentMessages: [{content: BLOCKS_STREAMING, id: "m1", role: "assistant"}],
+      isStreaming: true,
+      uiBlocks: true,
+    });
+    assert.isOk(getByText("Done heading"));
+    assert.isNull(queryByText("Still typ"));
+    assert.isOk(getByTestId("gpt-blocks-pending"));
+    assert.isNull(queryByTestId("gpt-streaming-indicator"));
+    await waitFor(() => {
+      assert.isAtLeast(UNSAFE_getAllByType(ActivityIndicator).length, 1);
+    });
+  });
+
+  it("keeps a finished reply intact while the next turn is still sending", () => {
+    const finished = `v: 1
+blocks:
+  - type: html
+    html: "<p>Invoice</p>"
+`;
+    const {getByText, queryByText} = renderChat({
+      currentMessages: [
+        {content: finished, id: "m1", role: "assistant"},
+        {content: "Send another", id: "m2", role: "user"},
+      ],
+      isStreaming: true,
+      uiBlocks: true,
+    });
+    assert.isOk(getByText("HTML preview is turned off."));
+    assert.isNull(queryByText("The preview appears when this reply finishes."));
   });
 });

@@ -1,0 +1,24 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which languages do you speak?",
+    "select": "many",
+    "options": [
+      {"id": "en", "label": "English"},
+      {"id": "es", "label": "Spanish"}
+    ],
+    "minSelected": 1,
+    "maxSelected": 3,
+    "allowOther": true,
+    "otherLabel": "Another language"
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Which languages do you speak?",
+    "handoff": true,
+    "buttons": [
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

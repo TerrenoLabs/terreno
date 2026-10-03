@@ -631,6 +631,17 @@ const injectedRtkApi = api
         providesTags: ["featureflags"],
         query: (queryArg) => ({url: `/feature-flags/flags/${queryArg}`}),
       }),
+      getGptDatasetsById: build.query<GetGptDatasetsByIdRes, GetGptDatasetsByIdArgs>({
+        providesTags: ["gpt"],
+        query: (queryArg) => ({
+          params: {
+            grain: queryArg.grain,
+            limit: queryArg.limit,
+            page: queryArg.page,
+          },
+          url: `/gpt/datasets/${queryArg.id}`,
+        }),
+      }),
       getGptHistories: build.query<GetGptHistoriesRes, GetGptHistoriesArgs>({
         providesTags: ["gpthistories"],
         query: (queryArg) => ({
@@ -793,6 +804,20 @@ const injectedRtkApi = api
       getUsersById: build.query<GetUsersByIdRes, GetUsersByIdArgs>({
         providesTags: ["users"],
         query: (queryArg) => ({url: `/users/${queryArg}`}),
+      }),
+      gpthistoriesPendingAsks: build.query<GpthistoriesPendingAsksRes, GpthistoriesPendingAsksArgs>(
+        {
+          providesTags: ["gpthistories"],
+          query: () => ({url: `/gpt/histories/pendingAsks`}),
+        }
+      ),
+      gpthistoriesTurn: build.mutation<GpthistoriesTurnRes, GpthistoriesTurnArgs>({
+        invalidatesTags: ["gpthistories"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/gpt/histories/${queryArg.id}/turn`,
+        }),
       }),
       listMcpServiceTokens: build.query<ListMcpServiceTokensRes, ListMcpServiceTokensArgs>({
         providesTags: ["mcp"],
@@ -1162,6 +1187,17 @@ const injectedRtkApi = api
           url: `/announcements/`,
         }),
       }),
+      postAnnouncementsImportRelease: build.mutation<
+        PostAnnouncementsImportReleaseRes,
+        PostAnnouncementsImportReleaseArgs
+      >({
+        invalidatesTags: ["announcements"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/announcements/import-release`,
+        }),
+      }),
       postCommsMessagesByIdRetry: build.mutation<
         PostCommsMessagesByIdRetryRes,
         PostCommsMessagesByIdRetryArgs
@@ -1197,6 +1233,14 @@ const injectedRtkApi = api
           body: queryArg,
           method: "POST",
           url: `/feature-flags/flags/`,
+        }),
+      }),
+      postGptActions: build.mutation<PostGptActionsRes, PostGptActionsArgs>({
+        invalidatesTags: ["gpt"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/gpt/actions`,
         }),
       }),
       postGptHistories: build.mutation<PostGptHistoriesRes, PostGptHistoriesArgs>({
@@ -1384,13 +1428,157 @@ const injectedRtkApi = api
   });
 
 export {injectedRtkApi as openapi};
+export type GpthistoriesTurnRes = /** status 200 Successful response */ {
+  data: {
+    /** Set when the turn failed after it started. text holds what the agent said before the error. */
+    error?: string;
+    /** The conversation's id. */
+    historyId: string;
+    /** The ask the turn paused on. Answer it with its toolCallId and the id of one of simple.buttons. */
+    pendingAsk?: {
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      simple: {
+        buttons: {
+          id: string;
+          label: string;
+          response:
+            | {
+                action: "accept";
+                content: {
+                  [key: string]: any | null;
+                };
+              }
+            | {
+                action: "decline";
+              }
+            | {
+                action: "cancel";
+                reason?: string;
+              };
+          style: "default" | "primary" | "destructive" | "cancel";
+        }[];
+        handoff: boolean;
+        kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        text: string;
+        title?: string;
+        toolCallId: string;
+      };
+      toolCallId: string;
+    };
+    /** The agent's reply, or an empty string when it only asked. */
+    text: string;
+    /** The conversation's title, once it has one. */
+    title?: string;
+  };
+};
+export type GpthistoriesTurnArgs = {
+  id: string;
+  body: {
+    /** A full answer to the pending ask, as a client that renders the ask sends it. */
+    askResponse?:
+      | {
+          action: "accept";
+          content: {
+            [key: string]: any | null;
+          };
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        }
+      | {
+          action: "decline";
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        }
+      | {
+          action: "cancel";
+          reason?: string;
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        };
+    /** The id of the simple card button the user pressed. Send it with toolCallId. */
+    buttonId?: string;
+    /** A new message from the user. It cancels the pending ask, if there is one. */
+    prompt?: string;
+    /** Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full". */
+    surface?: "full" | "compact";
+    /** The pending ask's toolCallId. */
+    toolCallId?: string;
+  };
+};
+export type GpthistoriesPendingAsksRes = /** status 200 Successful response */ {
+  data: {
+    /** When the agent asked, as an ISO 8601 UTC timestamp. */
+    created: string;
+    /** The conversation the ask belongs to. */
+    historyId: string;
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    simple: {
+      buttons: {
+        id: string;
+        label: string;
+        response:
+          | {
+              action: "accept";
+              content: {
+                [key: string]: any | null;
+              };
+            }
+          | {
+              action: "decline";
+            }
+          | {
+              action: "cancel";
+              reason?: string;
+            };
+        style: "default" | "primary" | "destructive" | "cancel";
+      }[];
+      handoff: boolean;
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      text: string;
+      title?: string;
+      toolCallId: string;
+    };
+    /** The conversation's title, once it has one. */
+    title?: string;
+    toolCallId: string;
+  }[];
+};
+export type GpthistoriesPendingAsksArgs = undefined;
 export type PostGptHistoriesRes = /** status 201 Successful create */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1439,6 +1627,15 @@ export type PostGptHistoriesArgs = {
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1482,12 +1679,40 @@ export type PostGptHistoriesArgs = {
 };
 export type GetGptHistoriesRes = /** status 200 Successful list */ {
   data?: {
+    /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+    pendingAsk?: {
+      /** AI SDK approval request an approval ask answers; the same as toolCallId */
+      approvalId?: string;
+      /** When the model asked */
+      created: string;
+      /** The validated ask input the model sent */
+      input: any;
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** Simple card (short text and up to three answer buttons) made when the ask was made */
+      simple: any;
+      /** Tool call id of the ask; an answer must name it */
+      toolCallId: string;
+      /** Host tool an approval ask asks to run */
+      toolName?: string;
+    };
     /** Project this conversation belongs to */
     projectId?: string;
     /** Ordered list of messages in this conversation */
     prompts?: {
       /** Arguments passed to a tool call */
       args?: any;
+      /** Set on tool-call rows where the model asked the user a question */
+      ask?: {
+        /** Ask kind; the model asked with the tool ask_<kind> */
+        kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+        origin?: "approval";
+        /** pending while the user can answer; answered or cancelled once the ask is resolved */
+        status: "pending" | "answered" | "cancelled";
+      };
       /** Multipart content attached to this prompt */
       content?: {
         /** Original filename of the attached file */
@@ -1553,12 +1778,40 @@ export type GetGptHistoriesArgs = {
   limit?: number;
 };
 export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1602,12 +1855,40 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
 };
 export type GetGptHistoriesByIdArgs = string;
 export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
@@ -1658,6 +1939,15 @@ export type PatchGptHistoriesByIdArgs = {
     prompts?: {
       /** Arguments passed to a tool call */
       args?: any;
+      /** Set on tool-call rows where the model asked the user a question */
+      ask?: {
+        /** Ask kind; the model asked with the tool ask_<kind> */
+        kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+        origin?: "approval";
+        /** pending while the user can answer; answered or cancelled once the ask is resolved */
+        status: "pending" | "answered" | "cancelled";
+      };
       /** Multipart content attached to this prompt */
       content?: {
         /** Original filename of the attached file */
@@ -1702,10 +1992,46 @@ export type PatchGptHistoriesByIdArgs = {
 };
 export type DeleteGptHistoriesByIdRes = unknown;
 export type DeleteGptHistoriesByIdArgs = string;
+export type GetGptDatasetsByIdRes = /** status 200 Success */ {
+  columns?: object[];
+  more?: boolean;
+  page?: number;
+  rowCount?: number;
+  rows?: any[];
+};
+export type GetGptDatasetsByIdArgs = {
+  id: string;
+  grain?: "hour" | "day" | "week" | "month";
+  limit?: number;
+  page?: number;
+};
+export type PostGptActionsRes = /** status 200 Success */ {
+  blocks?: object;
+  replace?: string;
+  text?: string;
+};
+export type PostGptActionsArgs = {
+  blockId?: string;
+  elementId?: string;
+  historyId?: string;
+  messageId?: string;
+  name?: string;
+  payload?: object;
+};
 export type PostGptPromptRes = /** status 200 Success */ {
   data?: string;
 };
 export type PostGptPromptArgs = {
+  /** The user's answer to the conversation's pending ask. Send it with historyId instead of prompt. */
+  askResponse?: {
+    action?: "accept" | "decline" | "cancel";
+    /** The answer, when action is accept */
+    content?: object;
+    /** Why the ask was cancelled, when action is cancel */
+    reason?: string;
+    /** The pending ask's toolCallId */
+    toolCallId?: string;
+  };
   attachments?: {
     filename?: string;
     mimeType?: string;
@@ -1716,6 +2042,8 @@ export type PostGptPromptArgs = {
   model?: string;
   projectId?: string;
   prompt?: string;
+  /** Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full". */
+  surface?: "full" | "compact";
   systemPrompt?: string;
 };
 export type PatchGptHistoriesByIdRatingRes = /** status 200 Success */ {
@@ -4059,6 +4387,18 @@ export type PostAdminAnnouncementsRes = /** status 201 Successful create */ {
   publishAt?: string;
   /** When the announcement was first published */
   publishedAt?: string;
+  release?: {
+    /** Client build number associated with the imported product release */
+    buildNumber?: number;
+    /** Release channel associated with the imported announcement */
+    channel?: string;
+    /** Product identifier associated with the imported announcement */
+    product?: string;
+    /** User-facing product version associated with the imported announcement */
+    version?: string;
+  };
+  /** Stable announcement identifier within an imported product release */
+  releaseSlug?: string;
   /** Lifecycle status: draft, published, or archived */
   status: "draft" | "published" | "archived";
   /** Announcement title shown in modal and changelog feed */
@@ -4104,6 +4444,18 @@ export type PostAdminAnnouncementsArgs = {
   publishAt?: string;
   /** When the announcement was first published */
   publishedAt?: string;
+  release?: {
+    /** Client build number associated with the imported product release */
+    buildNumber?: number;
+    /** Release channel associated with the imported announcement */
+    channel?: string;
+    /** Product identifier associated with the imported announcement */
+    product?: string;
+    /** User-facing product version associated with the imported announcement */
+    version?: string;
+  };
+  /** Stable announcement identifier within an imported product release */
+  releaseSlug?: string;
   /** Lifecycle status: draft, published, or archived */
   status?: "draft" | "published" | "archived";
   /** Announcement title shown in modal and changelog feed */
@@ -4150,6 +4502,18 @@ export type GetAdminAnnouncementsRes = /** status 200 Successful list */ {
     publishAt?: string;
     /** When the announcement was first published */
     publishedAt?: string;
+    release?: {
+      /** Client build number associated with the imported product release */
+      buildNumber?: number;
+      /** Release channel associated with the imported announcement */
+      channel?: string;
+      /** Product identifier associated with the imported announcement */
+      product?: string;
+      /** User-facing product version associated with the imported announcement */
+      version?: string;
+    };
+    /** Stable announcement identifier within an imported product release */
+    releaseSlug?: string;
     /** Lifecycle status: draft, published, or archived */
     status: "draft" | "published" | "archived";
     /** Announcement title shown in modal and changelog feed */
@@ -4276,6 +4640,18 @@ export type GetAdminAnnouncementsByIdRes = /** status 200 Successful read */ {
   publishAt?: string;
   /** When the announcement was first published */
   publishedAt?: string;
+  release?: {
+    /** Client build number associated with the imported product release */
+    buildNumber?: number;
+    /** Release channel associated with the imported announcement */
+    channel?: string;
+    /** Product identifier associated with the imported announcement */
+    product?: string;
+    /** User-facing product version associated with the imported announcement */
+    version?: string;
+  };
+  /** Stable announcement identifier within an imported product release */
+  releaseSlug?: string;
   /** Lifecycle status: draft, published, or archived */
   status: "draft" | "published" | "archived";
   /** Announcement title shown in modal and changelog feed */
@@ -4322,6 +4698,18 @@ export type PatchAdminAnnouncementsByIdRes = /** status 200 Successful update */
   publishAt?: string;
   /** When the announcement was first published */
   publishedAt?: string;
+  release?: {
+    /** Client build number associated with the imported product release */
+    buildNumber?: number;
+    /** Release channel associated with the imported announcement */
+    channel?: string;
+    /** Product identifier associated with the imported announcement */
+    product?: string;
+    /** User-facing product version associated with the imported announcement */
+    version?: string;
+  };
+  /** Stable announcement identifier within an imported product release */
+  releaseSlug?: string;
   /** Lifecycle status: draft, published, or archived */
   status: "draft" | "published" | "archived";
   /** Announcement title shown in modal and changelog feed */
@@ -4369,6 +4757,18 @@ export type PatchAdminAnnouncementsByIdArgs = {
     publishAt?: string;
     /** When the announcement was first published */
     publishedAt?: string;
+    release?: {
+      /** Client build number associated with the imported product release */
+      buildNumber?: number;
+      /** Release channel associated with the imported announcement */
+      channel?: string;
+      /** Product identifier associated with the imported announcement */
+      product?: string;
+      /** User-facing product version associated with the imported announcement */
+      version?: string;
+    };
+    /** Stable announcement identifier within an imported product release */
+    releaseSlug?: string;
     /** Lifecycle status: draft, published, or archived */
     status?: "draft" | "published" | "archived";
     /** Announcement title shown in modal and changelog feed */
@@ -5554,6 +5954,47 @@ export type GetAnnouncementsOverviewArgs = {
   page?: number;
   limit?: number;
 };
+export type PostAnnouncementsImportReleaseRes = /** status 200 Successful response */ {
+  data?: object;
+};
+export type PostAnnouncementsImportReleaseArgs = {
+  announcements: {
+    acknowledgementPolicy?: "required" | "dismiss-only";
+    audience?: any | null;
+    audienceType?: "staff" | "patient" | "all";
+    displayMode?: "modal" | "banner" | "feed";
+    expiresAt?: string;
+    minBuildNumber?: number;
+    platforms?: ("ios" | "android" | "web")[];
+    priority?: number;
+    publishAt?: string;
+    body: string;
+    primaryAction?: {
+      label: string;
+      url: string;
+    };
+    slug: string;
+    title: string;
+  }[];
+  defaults?: {
+    acknowledgementPolicy?: "required" | "dismiss-only";
+    audience?: any | null;
+    audienceType?: "staff" | "patient" | "all";
+    displayMode?: "modal" | "banner" | "feed";
+    expiresAt?: string;
+    minBuildNumber?: number;
+    platforms?: ("ios" | "android" | "web")[];
+    priority?: number;
+    publishAt?: string;
+  };
+  publish?: boolean;
+  release: {
+    buildNumber?: number;
+    channel?: string;
+    product: string;
+    version: string;
+  };
+};
 export type PostAnnouncementsRes = /** status 201 Successful create */ {
   /** Whether users must acknowledge (required) or may dismiss with an impression only (dismiss-only). Omitted values resolve from the plugin defaultAcknowledgementPolicy at read time. */
   acknowledgementPolicy?: "required" | "dismiss-only";
@@ -5585,6 +6026,18 @@ export type PostAnnouncementsRes = /** status 201 Successful create */ {
   publishAt?: string;
   /** When the announcement was first published */
   publishedAt?: string;
+  release?: {
+    /** Client build number associated with the imported product release */
+    buildNumber?: number;
+    /** Release channel associated with the imported announcement */
+    channel?: string;
+    /** Product identifier associated with the imported announcement */
+    product?: string;
+    /** User-facing product version associated with the imported announcement */
+    version?: string;
+  };
+  /** Stable announcement identifier within an imported product release */
+  releaseSlug?: string;
   /** Lifecycle status: draft, published, or archived */
   status: "draft" | "published" | "archived";
   /** Announcement title shown in modal and changelog feed */
@@ -5630,6 +6083,18 @@ export type PostAnnouncementsArgs = {
   publishAt?: string;
   /** When the announcement was first published */
   publishedAt?: string;
+  release?: {
+    /** Client build number associated with the imported product release */
+    buildNumber?: number;
+    /** Release channel associated with the imported announcement */
+    channel?: string;
+    /** Product identifier associated with the imported announcement */
+    product?: string;
+    /** User-facing product version associated with the imported announcement */
+    version?: string;
+  };
+  /** Stable announcement identifier within an imported product release */
+  releaseSlug?: string;
   /** Lifecycle status: draft, published, or archived */
   status?: "draft" | "published" | "archived";
   /** Announcement title shown in modal and changelog feed */
@@ -5676,6 +6141,18 @@ export type GetAnnouncementsRes = /** status 200 Successful list */ {
     publishAt?: string;
     /** When the announcement was first published */
     publishedAt?: string;
+    release?: {
+      /** Client build number associated with the imported product release */
+      buildNumber?: number;
+      /** Release channel associated with the imported announcement */
+      channel?: string;
+      /** Product identifier associated with the imported announcement */
+      product?: string;
+      /** User-facing product version associated with the imported announcement */
+      version?: string;
+    };
+    /** Stable announcement identifier within an imported product release */
+    releaseSlug?: string;
     /** Lifecycle status: draft, published, or archived */
     status: "draft" | "published" | "archived";
     /** Announcement title shown in modal and changelog feed */
@@ -5756,6 +6233,18 @@ export type GetAnnouncementsByIdRes = /** status 200 Successful read */ {
   publishAt?: string;
   /** When the announcement was first published */
   publishedAt?: string;
+  release?: {
+    /** Client build number associated with the imported product release */
+    buildNumber?: number;
+    /** Release channel associated with the imported announcement */
+    channel?: string;
+    /** Product identifier associated with the imported announcement */
+    product?: string;
+    /** User-facing product version associated with the imported announcement */
+    version?: string;
+  };
+  /** Stable announcement identifier within an imported product release */
+  releaseSlug?: string;
   /** Lifecycle status: draft, published, or archived */
   status: "draft" | "published" | "archived";
   /** Announcement title shown in modal and changelog feed */
@@ -5802,6 +6291,18 @@ export type PatchAnnouncementsByIdRes = /** status 200 Successful update */ {
   publishAt?: string;
   /** When the announcement was first published */
   publishedAt?: string;
+  release?: {
+    /** Client build number associated with the imported product release */
+    buildNumber?: number;
+    /** Release channel associated with the imported announcement */
+    channel?: string;
+    /** Product identifier associated with the imported announcement */
+    product?: string;
+    /** User-facing product version associated with the imported announcement */
+    version?: string;
+  };
+  /** Stable announcement identifier within an imported product release */
+  releaseSlug?: string;
   /** Lifecycle status: draft, published, or archived */
   status: "draft" | "published" | "archived";
   /** Announcement title shown in modal and changelog feed */
@@ -5849,6 +6350,18 @@ export type PatchAnnouncementsByIdArgs = {
     publishAt?: string;
     /** When the announcement was first published */
     publishedAt?: string;
+    release?: {
+      /** Client build number associated with the imported product release */
+      buildNumber?: number;
+      /** Release channel associated with the imported announcement */
+      channel?: string;
+      /** Product identifier associated with the imported announcement */
+      product?: string;
+      /** User-facing product version associated with the imported announcement */
+      version?: string;
+    };
+    /** Stable announcement identifier within an imported product release */
+    releaseSlug?: string;
     /** Lifecycle status: draft, published, or archived */
     status?: "draft" | "published" | "archived";
     /** Announcement title shown in modal and changelog feed */
@@ -5987,11 +6500,15 @@ export type ApiError = {
   title?: string;
 };
 export const {
+  useGpthistoriesTurnMutation,
+  useGpthistoriesPendingAsksQuery,
   usePostGptHistoriesMutation,
   useGetGptHistoriesQuery,
   useGetGptHistoriesByIdQuery,
   usePatchGptHistoriesByIdMutation,
   useDeleteGptHistoriesByIdMutation,
+  useGetGptDatasetsByIdQuery,
+  usePostGptActionsMutation,
   usePostGptPromptMutation,
   usePatchGptHistoriesByIdRatingMutation,
   usePostGptRemixMutation,
@@ -6111,6 +6628,7 @@ export const {
   useDeleteNotificationPreferencesByIdMutation,
   useGetAnnouncementsConfigQuery,
   useGetAnnouncementsOverviewQuery,
+  usePostAnnouncementsImportReleaseMutation,
   usePostAnnouncementsMutation,
   useGetAnnouncementsQuery,
   useGetAnnouncementsByIdQuery,

@@ -1,4 +1,5 @@
 import type {Tool} from "@modelcontextprotocol/server";
+import {type BlockError, parseBlocks, validateBlocks} from "@terreno/blocks";
 import {bootstrapTools, handleBootstrapToolCall} from "./bootstrap.js";
 import {askUpdateHelp, getUpdateNote, searchUpdateNotes} from "./help/updateNotes.js";
 import {getComponentDocsMarkdown, searchDocs} from "./search/docIndex.js";
@@ -341,6 +342,21 @@ export const tools: Tool[] = [
       type: "object",
     },
     name: "terreno_validate_model_schema",
+  },
+  {
+    description:
+      "Validate a whole-reply UI block document. Returns the same report as terreno-blocks validate.",
+    inputSchema: {
+      properties: {
+        document: {
+          description: "Whole-reply YAML or JSON block document",
+          type: "string",
+        },
+      },
+      required: ["document"],
+      type: "object",
+    },
+    name: "terreno_validate_ui_blocks",
   },
   {
     description:
@@ -884,6 +900,28 @@ ${fieldComponents.join("\n")}
 `;
 };
 
+const formatBlockIssue = (error: BlockError): string =>
+  `${error.path}  ${error.code}  ${error.message} — ${error.fix}`;
+
+/** Same stdout as `terreno-blocks validate` for one document. */
+export const validateUiBlocks = (args: {document?: string}): string => {
+  if (typeof args.document !== "string") {
+    return "document is required\n";
+  }
+  const parsed = parseBlocks(args.document);
+  if (!parsed.ok) {
+    return `${parsed.errors.map(formatBlockIssue).join("\n")}\n`;
+  }
+  const validated = validateBlocks(parsed.value);
+  if (!validated.ok) {
+    return `${validated.errors.map(formatBlockIssue).join("\n")}\n`;
+  }
+  if (validated.warnings.length === 0) {
+    return "";
+  }
+  return `${validated.warnings.map(formatBlockIssue).join("\n")}\n`;
+};
+
 export const validateModelSchema = (args: {schema: string}): string => {
   const {schema} = args;
   const issues: string[] = [];
@@ -1307,6 +1345,9 @@ export const handleToolCall = async (
     }
     case "terreno_validate_model_schema":
       result = validateModelSchema(args as Parameters<typeof validateModelSchema>[0]);
+      break;
+    case "terreno_validate_ui_blocks":
+      result = validateUiBlocks(args as Parameters<typeof validateUiBlocks>[0]);
       break;
     case "terreno_install_admin":
       result = generateInstallAdmin(args as Parameters<typeof generateInstallAdmin>[0]);

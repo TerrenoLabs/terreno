@@ -24,8 +24,12 @@ import type express from "express";
 import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
-
+import {exampleUiBlocksOptions} from "../ai/hostActions";
+import {createTodoStatsTool} from "../ai/tools";
+import type {UserDocument} from "../types/models/userTypes";
+import {createDemoAgentService} from "./demoAgent";
 import {fileUploadsEnabledForRequest} from "./fileUploads";
+import {createTodoTools, todoToolApprovals} from "./todoTools";
 
 /** A provider that creates language models and image models from model IDs. */
 interface AIProvider {
@@ -595,7 +599,15 @@ const createImageTool = (apiKey?: string): Tool => {
 };
 
 const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
-  const tools: Record<string, Tool> = {...getMCPTools(req.user as User | undefined)};
+  const user = req.user as UserDocument | undefined;
+  const tools: Record<string, Tool> = {
+    ...getMCPTools(req.user as User | undefined),
+    ...createTodoTools({userId: user?._id}),
+    ...createTodoStatsTool({
+      historyId: typeof req.body?.historyId === "string" ? req.body.historyId : undefined,
+      userId: user?._id,
+    }),
+  };
 
   const apiKey = req.headers["x-ai-api-key"] as string | undefined;
   if (apiKey) {
@@ -732,12 +744,20 @@ export const addAiRoutes = (
     void verifyAllowedVertexModels(vertexProvider);
   }
 
-  addGptHistoryRoutes(router, options);
-  addGptRoutes(router, {
-    aiService,
+  if (!aiService) {
+    logger.info(
+      "No AI model configured (GEMINI_API_KEY or GOOGLE_VERTEX_PROJECT); chat uses the scripted " +
+        "Terreno demo agent unless a request sends x-ai-api-key."
+    );
+  }
+
+  const chat: GptRouteOptions = {
+    aiService: aiService ?? createDemoAgentService(),
+    asks: {approvals: todoToolApprovals},
     createModelFn: createModelFromKey,
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,
+    ...(fileStorageService ? {fileStorageService} : {}),
     demoMode: !aiService,
     fileUploadsEnabled: fileUploadsEnabledForRequest,
     langfuseSystemPromptName: "chat-assistant",
@@ -746,7 +766,10 @@ export const addAiRoutes = (
     openApiOptions: options,
     toolChoice: "auto",
     tools: getDemoTools() as unknown as GptRouteOptions["tools"],
-  });
+    uiBlocks: exampleUiBlocksOptions,
+  };
+  addGptHistoryRoutes(router, {...options, chat});
+  addGptRoutes(router, chat);
   if (fileStorageService) {
     addFileRoutes(router, {
       fileStorageService,

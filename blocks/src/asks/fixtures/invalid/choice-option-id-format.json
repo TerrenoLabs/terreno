@@ -1,0 +1,35 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Pick one.",
+    "select": "one",
+    "options": [
+      {
+        "id": "Team",
+        "label": "Team"
+      },
+      {
+        "id": "-dash",
+        "label": "Dash"
+      },
+      {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "label": "Long"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "options[0].id",
+      "code": "INVALID_FORMAT"
+    },
+    {
+      "path": "options[1].id",
+      "code": "INVALID_FORMAT"
+    },
+    {
+      "path": "options[2].id",
+      "code": "INVALID_FORMAT"
+    }
+  ]
+}

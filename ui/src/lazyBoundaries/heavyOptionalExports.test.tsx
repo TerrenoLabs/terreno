@@ -3,6 +3,7 @@ import {describe, expect, it} from "bun:test";
 import {Categories} from "../emojiCategories";
 import {
   AIRequestExplorer,
+  AskCard,
   DraggableList,
   EmojiSelector,
   heavyOptionalModuleFactories,
@@ -12,6 +13,7 @@ import {
 describe("heavyOptionalExports", () => {
   it("exposes lazy placeholders for heavy optional widgets", () => {
     expect(AIRequestExplorer).toBeTruthy();
+    expect(AskCard).toBeTruthy();
     expect(DraggableList).toBeTruthy();
     expect(EmojiSelector).toBeTruthy();
     expect(MarkdownEditor).toBeTruthy();

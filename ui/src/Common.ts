@@ -1,9 +1,11 @@
+import type {Block, BlockAction, BlocksDocument, InlineDataset} from "@terreno/blocks";
 import type {CountryCode} from "libphonenumber-js";
 import type React from "react";
 import type {FC, ReactElement, ReactNode} from "react";
 import type {
   ImageStyle,
   ListRenderItemInfo,
+  Text as NativeText,
   ScrollView,
   StyleProp,
   TextInput,
@@ -1022,10 +1024,22 @@ export interface NumberRangeFieldProps extends BaseFieldProps, HelperTextProps, 
   max: number;
 }
 
+/**
+ * What the typed parts of a {@link DateTimeFieldProps | DateTimeField} hold: nothing, an unfinished
+ * or invalid entry, or a complete value.
+ */
+export type DateTimeEntryStatus = "empty" | "invalid" | "valid";
+
 export interface DateTimeFieldProps extends BaseFieldProps, HelperTextProps, ErrorTextProps {
   type: "date" | "datetime" | "time";
   value?: string; // ISO string always
   onChange: (date: string) => void;
+  /**
+   * Called after each typed change and picker selection with what the field now holds.
+   * `onChange` only fires for complete values, so use this to refuse an unfinished entry
+   * (such as "0 / 5 / 026") or to notice the user cleared the field.
+   */
+  onEntryStatusChange?: (status: DateTimeEntryStatus) => void;
   onTimezoneChange?: (timezone: string) => void;
   dateFormat?: string;
   pickerType?: "default" | "compact" | "inline" | "spinner";
@@ -1105,6 +1119,15 @@ export interface HeadingProps extends WithTestID {
   overflow?: "normal" | "breakWord"; // default "breakWord"
   size?: "sm" | "md" | "lg" | "xl" | "2xl"; // default "sm"
   truncate?: boolean; // default false
+}
+
+export interface HtmlFrameProps {
+  /** Frame height. `sm` is 240px, `md` is 400px, and `lg` is 640px. */
+  height?: "lg" | "md" | "sm";
+  /** Sanitized HTML. The frame prepends a Content-Security-Policy meta tag. */
+  html: string;
+  /** Accessible name for the frame. Defaults to Agent-generated preview. */
+  title?: string;
 }
 
 export interface MetaProps {
@@ -1984,6 +2007,36 @@ export type BannerProps =
   | (BannerPropsBase & {buttonOnClick?: undefined})
   | (BannerPropsBase & {buttonOnClick: () => void | Promise<void>} & BannerButtonProps);
 
+export interface BlocksViewProps extends WithTestID {
+  /** When true, an `html` block renders in a sandboxed frame. Otherwise it stays a placeholder. */
+  allowHtml?: boolean;
+  /** A whole-reply YAML or JSON string, or a document that already parsed. */
+  document: string | BlocksDocument;
+  /** Names the host will run. A callback outside this list is disabled. Omit to leave callbacks enabled. */
+  hostActions?: readonly string[];
+  /** Hostnames allowed on https image sources. Empty rejects every https image. */
+  imageHosts?: readonly string[];
+  /** Called for reply, open, select, and callback. Select also updates the target chart locally. */
+  onAction?: (event: {action: BlockAction; blockId: string; elementId: string}) => void;
+  /** Block ids replaced in place. The key is the original block id. */
+  overrides?: Record<string, Block>;
+  /** Element ids whose buttons show a loading state. */
+  pendingElementIds?: readonly string[];
+  /** Loads a `ref` dataset. Inline datasets do not call this. */
+  resolveDataset?: (ref: {
+    grain?: "day" | "hour" | "month" | "week";
+    id: string;
+    limit?: number;
+  }) => Promise<InlineDataset | undefined>;
+  /**
+   * Turns a `file:` image id into a URL. Until it resolves, the image is omitted and the alt
+   * text stays. Data and https sources do not call this.
+   */
+  resolveImage?: (fileId: string) => Promise<string | undefined>;
+  /** While a reply is still streaming, `html` stays a placeholder. */
+  streaming?: boolean;
+}
+
 export interface BodyProps {
   scroll?: boolean;
   loading?: boolean;
@@ -2077,6 +2130,13 @@ export interface ButtonProps extends WithTestID {
    * If true, a confirmation modal will be shown before the onClick action.
    */
   withConfirmation?: boolean;
+  /**
+   * If true, the button is never wider than its container, and a label that does not fit wraps
+   * onto centered lines while the button grows taller. A small button grows from its 28px height.
+   * If false, the label stays on one line.
+   * @default false
+   */
+  wrapText?: boolean;
   /**
    * The function to call when the button is clicked.
    */
@@ -3030,6 +3090,8 @@ export interface TableContextProviderProps extends TableContextType {
 }
 
 export interface TextProps extends WithTestID {
+  /** `"header"` marks the text as a heading, so screen readers announce it and can jump to it. */
+  accessibilityRole?: "header";
   align?: "left" | "right" | "center" | "justify"; // default "left"
   children?: React.ReactNode;
   bold?: boolean; // default false
@@ -3039,6 +3101,11 @@ export interface TextProps extends WithTestID {
   truncate?: boolean; // default false
   underline?: boolean;
   numberOfLines?: number;
+  /**
+   * The native text, for example to move screen reader focus to it with
+   * `AccessibilityInfo.setAccessibilityFocus`.
+   */
+  ref?: React.Ref<NativeText>;
   skipLinking?: boolean;
 }
 

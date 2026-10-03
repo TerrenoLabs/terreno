@@ -1,0 +1,10 @@
+v: 1
+blocks:
+  - type: columns
+    children:
+      - type: card
+        children:
+          - type: text
+            markdown: Nested
+      - type: text
+        markdown: Beside

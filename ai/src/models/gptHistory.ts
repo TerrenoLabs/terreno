@@ -1,7 +1,86 @@
 import {createdUpdatedPlugin, findExactlyOne, findOneOrNone, isDeletedPlugin} from "@terreno/api";
+import {ASK_KINDS} from "@terreno/blocks";
 import mongoose from "mongoose";
 
-import type {GptHistoryDocument, GptHistoryModel} from "../types";
+import type {AskOrigin, GptHistoryAskStatus, GptHistoryDocument, GptHistoryModel} from "../types";
+
+const ASK_STATUSES: GptHistoryAskStatus[] = ["pending", "answered", "cancelled"];
+const ASK_ORIGINS: AskOrigin[] = ["approval"];
+
+const askOriginField = {
+  description:
+    "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+  enum: ASK_ORIGINS,
+  type: String,
+};
+
+const promptAskSchema = new mongoose.Schema(
+  {
+    kind: {
+      description: "Ask kind; the model asked with the tool ask_<kind>",
+      enum: ASK_KINDS,
+      required: true,
+      type: String,
+    },
+    origin: askOriginField,
+    status: {
+      description:
+        "pending while the user can answer; answered or cancelled once the ask is resolved",
+      enum: ASK_STATUSES,
+      required: true,
+      type: String,
+    },
+  },
+  {_id: false, strict: "throw"}
+);
+
+const pendingAskSchema = new mongoose.Schema(
+  {
+    approvalId: {
+      description: "AI SDK approval request an approval ask answers; the same as toolCallId",
+      type: String,
+    },
+    created: {description: "When the model asked", required: true, type: Date},
+    input: {
+      description: "The validated ask input the model sent",
+      required: true,
+      type: mongoose.Schema.Types.Mixed,
+    },
+    kind: {
+      description: "Ask kind; the model asked with the tool ask_<kind>",
+      enum: ASK_KINDS,
+      required: true,
+      type: String,
+    },
+    origin: askOriginField,
+    promptIndex: {
+      description:
+        "Number of leading prompts that form the paused turn's history, replayed before responseMessages on resume",
+      required: true,
+      type: Number,
+    },
+    responseMessages: {
+      description:
+        "AI SDK response messages of the paused turn, replayed verbatim with the answer on resume",
+      required: true,
+      type: mongoose.Schema.Types.Mixed,
+    },
+    simple: {
+      description:
+        "Simple card (short text and up to three answer buttons) made when the ask was made",
+      required: true,
+      type: mongoose.Schema.Types.Mixed,
+    },
+    toolCallId: {
+      description: "Tool call id of the ask; an answer must name it",
+      required: true,
+      type: String,
+    },
+    toolName: {description: "Host tool an approval ask asks to run", type: String},
+  },
+  // `minimize` would drop empty objects the AI SDK requires on replay, such as a tool call's `input: {}`.
+  {_id: false, minimize: false, strict: "throw"}
+);
 
 const contentPartSchema = new mongoose.Schema(
   {
@@ -26,6 +105,10 @@ const contentPartSchema = new mongoose.Schema(
 const gptHistoryPromptSchema = new mongoose.Schema(
   {
     args: {description: "Arguments passed to a tool call", type: mongoose.Schema.Types.Mixed},
+    ask: {
+      description: "Set on tool-call rows where the model asked the user a question",
+      type: promptAskSchema,
+    },
     content: {description: "Multipart content attached to this prompt", type: [contentPartSchema]},
     model: {description: "AI model identifier used for this prompt", type: String},
     rating: {
@@ -70,6 +153,11 @@ const gptHistoryPromptSchema = new mongoose.Schema(
 
 const gptHistorySchema = new mongoose.Schema<GptHistoryDocument, GptHistoryModel>(
   {
+    pendingAsk: {
+      description:
+        "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+      type: pendingAskSchema,
+    },
     projectId: {
       description: "Project this conversation belongs to",
       index: true,

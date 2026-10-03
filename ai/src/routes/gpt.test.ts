@@ -3101,6 +3101,31 @@ blocks:
     expect(events.some((event) => "toolCall" in event)).toBe(true);
   });
 
+  it("keeps a JSON block document that contains an action", async () => {
+    const document =
+      '{"v":1,"blocks":[{"type":"actions","id":"row","elements":[{"type":"button","id":"go","text":"Go","action":{"kind":"reply","text":"hi"}}]}]}';
+    const model = createScriptedModel({steps: [textStep(document)]});
+    const agent = await authAsUser(buildApp({model, uiBlocks: true}), "notAdmin");
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    const streamed = events.find((event) => Object.keys(event)[0] === "text") as {text?: string};
+    expect(streamed?.text).toContain('"action"');
+    expect(events.find((event) => "blocks" in event)).toMatchObject({blocks: {ok: true}});
+  });
+
+  it("drops a trailing action blob and keeps the reply in front of it", async () => {
+    const model = createScriptedModel({
+      steps: [textStep('The answer is ready.\n{"action":"think","reason":"done"}')],
+    });
+    const agent = await authAsUser(buildApp({model}), "notAdmin");
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    const streamed = events.find((event) => Object.keys(event)[0] === "text") as {text?: string};
+    expect(streamed?.text).toBe("The answer is ready.");
+  });
+
   it("drops tool-step prose and a tool-step document when a later step writes the reply", async () => {
     const early = `v: 1
 blocks:

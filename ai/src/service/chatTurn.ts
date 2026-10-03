@@ -241,9 +241,22 @@ const approvalFieldsOf = (ask: {
 }): {origin?: AskOrigin; toolName?: string} =>
   ask.origin === "approval" ? {origin: ask.origin, toolName: ask.toolName} : {};
 
-// Strip model reasoning that leaks as JSON action blobs
-const cleanStepText = (text: string): string =>
-  text.replace(/\{[\s\S]*?"action"[\s\S]*?\}\s*$/g, "").trim();
+const trailingActionBlob = /\{[\s\S]*?"action"[\s\S]*?\}\s*$/;
+
+// Drop a trailing JSON action blob the model leaked after its reply. A reply that is
+// itself the object, including a JSON block document, stays intact.
+const cleanStepText = (text: string): string => {
+  const trimmed = text.trim();
+  const match = trailingActionBlob.exec(trimmed);
+  if (!match || match.index === undefined) {
+    return trimmed;
+  }
+  const before = trimmed.slice(0, match.index).trim();
+  if (!before || parseBlocks(match[0]).ok) {
+    return trimmed;
+  }
+  return before;
+};
 
 /**
  * Resolve the AIService for a request. Priority:

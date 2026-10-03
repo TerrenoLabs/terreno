@@ -14,6 +14,7 @@ export const SCAN_ROOTS = [
   "ai/src",
   "api/src",
   "api-health/src",
+  "blocks/src",
   "comms/src",
   "demo",
   "example-backend/src",

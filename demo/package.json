@@ -9,6 +9,7 @@
     "@react-native-community/slider": "catalog:",
     "@react-native-picker/picker": "catalog:",
     "@shopify/react-native-skia": "catalog:",
+    "@terreno/blocks": "workspace:*",
     "@terreno/ui": "workspace:*",
     "crypto-browserify": "^3.12.1",
     "expo": "catalog:",

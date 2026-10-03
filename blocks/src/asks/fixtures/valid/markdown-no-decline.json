@@ -1,0 +1,28 @@
+{
+  "kind": "markdown",
+  "input": {
+    "prompt": "Review the release notes before I publish them.",
+    "initial": "## 2.3.0\n\n- Markdown asks\n",
+    "allowDecline": false
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "approve",
+        "label": "Approve draft",
+        "response": {
+          "action": "accept",
+          "content": {
+            "changed": false,
+            "markdown": "## 2.3.0\n\n- Markdown asks\n"
+          }
+        },
+        "style": "primary"
+      }
+    ],
+    "handoff": true,
+    "kind": "markdown",
+    "text": "Review the release notes before I publish them.",
+    "toolCallId": "call_fixture"
+  }
+}

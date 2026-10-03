@@ -1,0 +1,32 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "How should we celebrate the launch?",
+    "select": "one",
+    "options": [
+      {"id": "party", "label": "Go team 🎉🎉🎉🎉🎉🎉🎉 now"},
+      {"id": "dinner", "label": "Quiet dinner"}
+    ]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "How should we celebrate the launch?",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "option:party",
+        "label": "Go team 🎉🎉🎉🎉🎉…",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["party"]}}
+      },
+      {
+        "id": "option:dinner",
+        "label": "Quiet dinner",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["dinner"]}}
+      },
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

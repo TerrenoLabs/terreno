@@ -21,6 +21,7 @@ const FRONTEND_PREVIEW_PATHS = [
   "rtk/.*",
   "admin-frontend/.*",
   "ai/.*",
+  "blocks/.*",
   "syncdb/.*",
   "bun\\.lock",
 ];

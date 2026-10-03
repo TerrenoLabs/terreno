@@ -276,6 +276,14 @@
         "!src/tests/**!"
       ]
     },
+    "blocks": {
+      "entry": ["src/{index,cli}.ts!"],
+      "project": [
+        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "!src/tests/**!",
+        "!scripts/**!"
+      ]
+    },
     "comms": {
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

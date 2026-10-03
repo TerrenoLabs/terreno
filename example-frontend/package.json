@@ -7,6 +7,7 @@
     "@reduxjs/toolkit": "catalog:",
     "@sentry/react": "catalog:",
     "@shopify/flash-list": "catalog:",
+    "@terreno/blocks": "workspace:*",
     "@terreno/rtk": "workspace:*",
     "@terreno/syncdb": "workspace:*",
     "@terreno/ui": "workspace:*",

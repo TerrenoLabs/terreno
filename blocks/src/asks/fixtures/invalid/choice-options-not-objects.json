@@ -1,0 +1,12 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Pick a color.",
+    "select": "one",
+    "options": ["red", null]
+  },
+  "errors": [
+    {"path": "options[0]", "code": "INVALID_TYPE"},
+    {"path": "options[1]", "code": "INVALID_TYPE"}
+  ]
+}

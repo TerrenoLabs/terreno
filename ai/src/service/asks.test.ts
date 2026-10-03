@@ -1,0 +1,946 @@
+import {describe, expect, it} from "bun:test";
+import {ASK_LIMITS, type AskKind, type AskResponse, askPromptSection} from "@terreno/blocks";
+import {asSchema, jsonSchema, type ModelMessage, type Tool, tool} from "ai";
+
+import {
+  approvalAskInput,
+  askKindFromToolName,
+  askToolName,
+  assertNoReservedToolNames,
+  buildAsksSystemPrompt,
+  completePausedTurn,
+  createAskTools,
+  deniedApprovalReasons,
+  parseAsk,
+  resolveAskKinds,
+  toStoredMessages,
+  withoutReservedToolNames,
+} from "./asks";
+import {TERRENO_ASKS_SYSTEM_PROMPT} from "./prompts";
+
+const PLAN_ASK_INPUT = {
+  options: [
+    {id: "starter", label: "Starter"},
+    {id: "team", label: "Team"},
+  ],
+  prompt: "Which plan should I set up?",
+  select: "one",
+};
+
+const TEAM_ANSWER = {action: "accept" as const, content: {selected: ["team"]}};
+
+const hostTool = (): Tool =>
+  tool({
+    description: "Look up the plans",
+    execute: async () => ({plans: 2}),
+    inputSchema: jsonSchema<Record<string, never>>({properties: {}, type: "object"}),
+  });
+
+const askCall = (toolCallId: string, input: unknown = PLAN_ASK_INPUT) => ({
+  input,
+  toolCallId,
+  toolName: "ask_choice",
+  type: "tool-call" as const,
+});
+
+const lookupCall = {
+  input: {},
+  toolCallId: "call_lookup",
+  toolName: "lookupPlans",
+  type: "tool-call" as const,
+};
+
+const lookupResult = {
+  output: {type: "json" as const, value: {plans: 2}},
+  toolCallId: "call_lookup",
+  toolName: "lookupPlans",
+  type: "tool-result" as const,
+};
+
+const answerResult = (toolCallId: string, value: unknown) => ({
+  output: {type: "json", value},
+  toolCallId,
+  toolName: "ask_choice",
+  type: "tool-result",
+});
+
+describe("asks", () => {
+  describe("resolveAskKinds", () => {
+    it.each([
+      {asks: undefined, expected: [], label: "undefined"},
+      {asks: false, expected: [], label: "false"},
+      {asks: true, expected: ["choice", "confirm", "markdown", "form", "files"], label: "true"},
+      {asks: {}, expected: ["choice", "confirm", "markdown", "form", "files"], label: "{}"},
+      {
+        asks: {kinds: ["confirm"] as AskKind[]},
+        expected: ["confirm"],
+        label: '{kinds: ["confirm"]}',
+      },
+      {asks: {kinds: []}, expected: [], label: "{kinds: []}"},
+      {
+        asks: {kinds: ["choice", "choice"] as AskKind[]},
+        expected: ["choice"],
+        label: '{kinds: ["choice", "choice"]}',
+      },
+    ])("resolves $label", ({asks, expected}) => {
+      expect(resolveAskKinds(asks)).toEqual(expected);
+    });
+
+    it("throws on an unknown kind and names the known kinds", () => {
+      expect(() => resolveAskKinds({kinds: ["choice", "video"] as unknown as AskKind[]})).toThrow(
+        expect.objectContaining({
+          detail: "Unknown ask kinds: video. Known kinds: choice, confirm, markdown, form, files.",
+          message: "The asks option lists unknown ask kinds",
+          status: 500,
+        })
+      );
+    });
+  });
+
+  describe("tool names", () => {
+    it("names a kind's tool ask_<kind>", () => {
+      expect(askToolName("choice")).toBe("ask_choice");
+    });
+
+    it.each([
+      {expected: "choice", kinds: undefined, toolName: "ask_choice"},
+      {expected: "confirm", kinds: undefined, toolName: "ask_confirm"},
+      {expected: undefined, kinds: ["choice"] as AskKind[], toolName: "ask_confirm"},
+      {expected: "markdown", kinds: undefined, toolName: "ask_markdown"},
+      {expected: "form", kinds: undefined, toolName: "ask_form"},
+      {expected: "files", kinds: undefined, toolName: "ask_files"},
+      {expected: undefined, kinds: undefined, toolName: "ask_video"},
+      {expected: undefined, kinds: undefined, toolName: "lookupPlans"},
+      {expected: undefined, kinds: [] as AskKind[], toolName: "ask_choice"},
+    ])("maps $toolName with kinds $kinds to $expected", ({expected, kinds, toolName}) => {
+      expect(askKindFromToolName(toolName, kinds)).toBe(expected as AskKind | undefined);
+    });
+  });
+
+  describe("createAskTools", () => {
+    it("creates one tool without execute per kind, with the kind's schemas", async () => {
+      const tools = createAskTools({kinds: ["choice"]});
+
+      expect(Object.keys(tools)).toEqual(["ask_choice"]);
+      const askChoice = tools.ask_choice;
+      expect(askChoice.execute).toBeUndefined();
+      expect(askChoice.description).toBe(
+        "Ask the user to pick one or more options from a list you provide, optionally with an " +
+          "Other field for an answer of their own. The chat shows the options as a control and " +
+          "returns the user's answer as this tool's result. Use it instead of asking in plain text " +
+          "when the user must choose from options you can list."
+      );
+      const inputSchema = asSchema(askChoice.inputSchema);
+      expect(await inputSchema.validate?.(PLAN_ASK_INPUT)).toEqual({
+        success: true,
+        value: PLAN_ASK_INPUT,
+      });
+      expect(await inputSchema.validate?.({...PLAN_ASK_INPUT, url: "https://example.com"})).toEqual(
+        {error: expect.any(Error), success: false}
+      );
+      const outputSchema = asSchema(askChoice.outputSchema);
+      expect(await outputSchema.validate?.(TEAM_ANSWER)).toEqual({
+        success: true,
+        value: TEAM_ANSWER,
+      });
+    });
+
+    it("creates no tools when no kinds are enabled", () => {
+      expect(createAskTools({kinds: []})).toEqual({});
+    });
+
+    it("accepts select many with Other on the full surface only", async () => {
+      const manyInput = {
+        ...PLAN_ASK_INPUT,
+        allowOther: true,
+        default: ["team", "starter"],
+        maxSelected: 2,
+        select: "many",
+      };
+      expect(
+        await asSchema(createAskTools({kinds: ["choice"]}).ask_choice.inputSchema).validate?.(
+          manyInput
+        )
+      ).toEqual({success: true, value: manyInput});
+      expect(
+        await asSchema(
+          createAskTools({kinds: ["choice"], surface: "compact"}).ask_choice.inputSchema
+        ).validate?.(manyInput)
+      ).toEqual({error: expect.any(Error), success: false});
+    });
+
+    it("describes only select one on the compact surface", () => {
+      expect(createAskTools({kinds: ["choice"], surface: "compact"}).ask_choice.description).toBe(
+        "Ask the user to pick one option from a list you provide. The chat shows the options as a " +
+          "control and returns the user's answer as this tool's result. Use it instead of asking in " +
+          "plain text when the user must choose between options you can list."
+      );
+    });
+
+    it("takes the compact input schema on the compact surface", async () => {
+      const inputSchema = asSchema(
+        createAskTools({kinds: ["choice"], surface: "compact"}).ask_choice.inputSchema
+      );
+      const fourOptions = {
+        ...PLAN_ASK_INPUT,
+        options: ["a", "b", "c", "d"].map((id) => ({id, label: id.toUpperCase()})),
+      };
+
+      expect(await inputSchema.validate?.(PLAN_ASK_INPUT)).toEqual({
+        success: true,
+        value: PLAN_ASK_INPUT,
+      });
+      expect(await inputSchema.validate?.(fourOptions)).toEqual({
+        error: expect.any(Error),
+        success: false,
+      });
+      expect(
+        await asSchema(createAskTools({kinds: ["choice"]}).ask_choice.inputSchema).validate?.(
+          fourOptions
+        )
+      ).toEqual({success: true, value: fourOptions});
+    });
+  });
+
+  describe("createAskTools confirm", () => {
+    const confirmInput = {
+      confirmLabel: "Delete 14 todos",
+      denyLabel: "Keep them",
+      destructive: true,
+      prompt: "Delete your 14 completed todos?",
+    };
+
+    it("creates ask_confirm on both surfaces, after ask_choice", () => {
+      expect(Object.keys(createAskTools({kinds: ["choice", "confirm"]}))).toEqual([
+        "ask_choice",
+        "ask_confirm",
+      ]);
+      expect(
+        Object.keys(createAskTools({kinds: ["choice", "confirm"], surface: "compact"}))
+      ).toEqual(["ask_choice", "ask_confirm"]);
+      expect(createAskTools({kinds: ["confirm"]}).ask_confirm.execute).toBeUndefined();
+    });
+
+    it("describes approving one action on the full and compact surfaces", () => {
+      expect(createAskTools({kinds: ["confirm"]}).ask_confirm.description).toBe(
+        "Ask the user to approve or deny one action you describe. The chat shows an approve " +
+          "button and a deny button and returns {confirmed: true} or {confirmed: false} as this " +
+          "tool's result. Call it before a tool that deletes data, sends something on the user's " +
+          "behalf, spends money, or cannot be undone."
+      );
+      expect(createAskTools({kinds: ["confirm"], surface: "compact"}).ask_confirm.description).toBe(
+        "Ask the user to approve or deny one action you describe, with two short buttons. The " +
+          "user's answer comes back as {confirmed: true} or {confirmed: false}. Call it before a " +
+          "tool that deletes data, sends something, spends money, or cannot be undone."
+      );
+    });
+
+    it.each(["full", "compact"] as const)(
+      "validates confirm input and answers on the %s surface",
+      async (surface) => {
+        const askConfirm = createAskTools({kinds: ["confirm"], surface}).ask_confirm;
+        const inputSchema = asSchema(askConfirm.inputSchema);
+
+        expect(await inputSchema.validate?.(confirmInput)).toEqual({
+          success: true,
+          value: confirmInput,
+        });
+        for (const invalid of [
+          {...confirmInput, confirmLabel: "Delete all fourteen todos"},
+          {...confirmInput, denyLabel: "Delete 14 todos"},
+          {...confirmInput, submitLabel: "Go"},
+          {confirmLabel: "Go"},
+        ]) {
+          expect(await inputSchema.validate?.(invalid)).toEqual({
+            error: expect.any(Error),
+            success: false,
+          });
+        }
+        const outputSchema = asSchema(askConfirm.outputSchema);
+        const approved = {action: "accept", content: {confirmed: true}};
+        expect(await outputSchema.validate?.(approved)).toEqual({success: true, value: approved});
+        expect(
+          await outputSchema.validate?.({action: "accept", content: {confirmed: "yes"}})
+        ).toEqual({error: expect.any(Error), success: false});
+      }
+    );
+
+    it("types a valid confirm input", () => {
+      expect(parseAsk({input: confirmInput, kind: "confirm"})).toEqual({
+        input: confirmInput,
+        kind: "confirm",
+      });
+    });
+  });
+
+  describe("createAskTools markdown", () => {
+    const markdownInput = {
+      initial: "# We're live\n\nToday we launched.",
+      maxLength: 2000,
+      prompt: "Here is a draft announcement. Edit anything, then send it back.",
+    };
+
+    it("creates ask_markdown after ask_confirm on the full surface only", () => {
+      expect(Object.keys(createAskTools({kinds: ["choice", "confirm", "markdown"]}))).toEqual([
+        "ask_choice",
+        "ask_confirm",
+        "ask_markdown",
+      ]);
+      expect(
+        Object.keys(createAskTools({kinds: ["choice", "confirm", "markdown"], surface: "compact"}))
+      ).toEqual(["ask_choice", "ask_confirm"]);
+      expect(createAskTools({kinds: ["markdown"], surface: "compact"})).toEqual({});
+      expect(createAskTools({kinds: ["markdown"]}).ask_markdown.execute).toBeUndefined();
+    });
+
+    it("describes editing a draft and the {markdown, changed} result", () => {
+      expect(createAskTools({kinds: ["markdown"]}).ask_markdown.description).toBe(
+        "Ask the user to edit a markdown draft you write, or to write one, and send it back. The " +
+          "chat shows a markdown editor with a preview and returns {markdown, changed} as this " +
+          "tool's result; changed is false when the user approved your draft as is. Use it when " +
+          "the user should review or rewrite text before you use it, such as an announcement, an " +
+          "email, or release notes."
+      );
+    });
+
+    it("validates markdown input and answers", async () => {
+      const askMarkdown = createAskTools({kinds: ["markdown"]}).ask_markdown;
+      const inputSchema = asSchema(askMarkdown.inputSchema);
+
+      expect(await inputSchema.validate?.(markdownInput)).toEqual({
+        success: true,
+        value: markdownInput,
+      });
+      for (const invalid of [
+        {...markdownInput, initial: "x".repeat(20_001)},
+        {...markdownInput, maxLength: 20_001},
+        {...markdownInput, minLength: 3000},
+        {...markdownInput, language: "md"},
+      ]) {
+        expect(await inputSchema.validate?.(invalid)).toEqual({
+          error: expect.any(Error),
+          success: false,
+        });
+      }
+      const outputSchema = asSchema(askMarkdown.outputSchema);
+      const edited = {action: "accept", content: {changed: true, markdown: "# Live"}};
+      expect(await outputSchema.validate?.(edited)).toEqual({success: true, value: edited});
+      expect(
+        await outputSchema.validate?.({action: "accept", content: {markdown: "# Live"}})
+      ).toEqual({error: expect.any(Error), success: false});
+    });
+
+    it("types a valid markdown input", () => {
+      expect(parseAsk({input: markdownInput, kind: "markdown"})).toEqual({
+        input: markdownInput,
+        kind: "markdown",
+      });
+    });
+  });
+
+  describe("createAskTools form", () => {
+    const formInput = {
+      fields: [
+        {id: "company", label: "Company name", maxLength: 120, required: true, type: "text"},
+        {id: "seats", integer: true, label: "Seats", max: 500, min: 1, type: "number"},
+        {id: "start", label: "Start date", type: "date"},
+      ],
+      prompt: "A few details for the invoice.",
+    };
+
+    it("creates ask_form after ask_markdown on the full surface only", () => {
+      expect(
+        Object.keys(createAskTools({kinds: ["choice", "confirm", "markdown", "form"]}))
+      ).toEqual(["ask_choice", "ask_confirm", "ask_markdown", "ask_form"]);
+      expect(
+        Object.keys(
+          createAskTools({kinds: ["choice", "confirm", "markdown", "form"], surface: "compact"})
+        )
+      ).toEqual(["ask_choice", "ask_confirm"]);
+      expect(createAskTools({kinds: ["form"], surface: "compact"})).toEqual({});
+      expect(createAskTools({kinds: ["form"]}).ask_form.execute).toBeUndefined();
+    });
+
+    it("describes the fields and the {values} result", () => {
+      expect(createAskTools({kinds: ["form"]}).ask_form.description).toBe(
+        "Ask the user to fill in a few typed fields and submit them at once, such as the details " +
+          "for an invoice or a booking. The chat shows one input per field and returns {values}, " +
+          "keyed by field id, as this tool's result. Use it when you need several values together; " +
+          "for one pick from a list, use a choice instead."
+      );
+    });
+
+    it("validates form input and answers", async () => {
+      const askForm = createAskTools({kinds: ["form"]}).ask_form;
+      const inputSchema = asSchema(askForm.inputSchema);
+
+      expect(await inputSchema.validate?.(formInput)).toEqual({success: true, value: formInput});
+      for (const invalid of [
+        {...formInput, fields: []},
+        {...formInput, fields: [{id: "secret", label: "Password", type: "password"}]},
+        {...formInput, fields: [{default: 0, id: "seats", label: "Seats", min: 1, type: "number"}]},
+        {...formInput, fields: [{default: "2026-02-30", id: "d", label: "Due", type: "date"}]},
+      ]) {
+        expect(await inputSchema.validate?.(invalid)).toEqual({
+          error: expect.any(Error),
+          success: false,
+        });
+      }
+      const outputSchema = asSchema(askForm.outputSchema);
+      const answer = {action: "accept", content: {values: {company: "Acme", seats: 12}}};
+      expect(await outputSchema.validate?.(answer)).toEqual({success: true, value: answer});
+      expect(await outputSchema.validate?.({action: "accept", content: {company: "Acme"}})).toEqual(
+        {error: expect.any(Error), success: false}
+      );
+    });
+  });
+
+  describe("parseAsk", () => {
+    it("types a valid ask input", () => {
+      expect(parseAsk({input: PLAN_ASK_INPUT, kind: "choice"})).toEqual({
+        input: PLAN_ASK_INPUT,
+        kind: "choice",
+      });
+    });
+
+    it("throws on an input the kind's schema rejects", () => {
+      expect(() => parseAsk({input: {...PLAN_ASK_INPUT, select: "all"}, kind: "choice"})).toThrow();
+    });
+  });
+
+  describe("reserved tool names", () => {
+    it("accepts host tools without the ask_ prefix, and no tools at all", () => {
+      expect(() => assertNoReservedToolNames({lookupPlans: hostTool()})).not.toThrow();
+      expect(() => assertNoReservedToolNames(undefined)).not.toThrow();
+    });
+
+    it("throws and lists every host tool that uses the ask_ prefix", () => {
+      expect(() =>
+        assertNoReservedToolNames({
+          ask_budget: hostTool(),
+          ask_region: hostTool(),
+          lookupPlans: hostTool(),
+        })
+      ).toThrow(
+        expect.objectContaining({
+          detail: 'Tool names starting with "ask_" are reserved for asks: ask_budget, ask_region.',
+          message: "Host tool names use the prefix reserved for asks",
+          status: 500,
+        })
+      );
+    });
+
+    it("drops per-request tools that use the ask_ prefix and keeps the rest", () => {
+      const lookupPlans = hostTool();
+
+      expect(withoutReservedToolNames({ask_choice: hostTool(), lookupPlans})).toEqual({
+        lookupPlans,
+      });
+    });
+
+    it("returns the same tools when none use the ask_ prefix", () => {
+      const tools = {lookupPlans: hostTool()};
+
+      expect(withoutReservedToolNames(tools)).toBe(tools);
+    });
+  });
+
+  describe("buildAsksSystemPrompt", () => {
+    it("appends the compact section on the compact surface", () => {
+      expect(buildAsksSystemPrompt({kinds: ["choice"], surface: "compact"})).toBe(
+        `${TERRENO_ASKS_SYSTEM_PROMPT}\n\n${askPromptSection({kinds: ["choice"], surface: "compact"})}`
+      );
+    });
+
+    it("appends the section for the enabled kinds to the asks prompt", () => {
+      expect(buildAsksSystemPrompt({kinds: ["choice"]})).toBe(
+        [
+          TERRENO_ASKS_SYSTEM_PROMPT,
+          "Ask tools you can call: ask_choice.",
+          [
+            "Rules for every ask:",
+            "- prompt: required. Plain text with no markdown and no links, 1-500 characters.",
+            "- title: optional, at most 80 characters.",
+            "- Each ask kind below lists its other fields, including whether the user can skip it.",
+          ].join("\n"),
+          [
+            "ask_choice: the user picks one or more options from a list you provide.",
+            '- select: "one" for exactly one option, or "many" to let the user pick several.',
+            "- options: 2-50 items, each {id, label, description?}.",
+            '- id: 1-64 lowercase letters, digits, "_", or "-", starting with a letter or digit. Unique within the ask.',
+            "- label: at most 120 characters. description: optional, at most 280 characters.",
+            '- default: optional list of option ids to preselect, each listed once. With "one", at most one id; with "many", at most maxSelected ids.',
+            '- minSelected, maxSelected: optional whole numbers, "many" only. The user picks from minSelected (default 1, at least 0) to maxSelected (default: every choice) choices.',
+            '- allowOther: optional, "many" only. true adds a text field where the user types an answer of their own, up to 500 characters. It counts as one choice. otherLabel: optional label for that field, at most 120 characters. For one option or Other, use "many" with maxSelected 1.',
+            "- submitLabel: optional label for the submit button, at most 24 characters.",
+            "- allowDecline: optional, default true (the user sees Skip). Set it to false only when you cannot continue without an answer.",
+            '- Prefer select "one" with at most 3 options with labels of 20 characters or fewer; small screens show those as buttons.',
+            '- An accepted answer looks like {"action": "accept", "content": {"selected": ["<id>"]}}.',
+            '- With Other, it looks like {"action": "accept", "content": {"selected": ["<id>"], "other": "<text the user typed>"}}.',
+          ].join("\n"),
+        ].join("\n\n")
+      );
+    });
+
+    it("tells the model when to ask without naming a kind that is not enabled", () => {
+      expect(TERRENO_ASKS_SYSTEM_PROMPT).toContain(
+        "- When you need an answer that one of the ask tools listed below can collect, call that tool instead of asking in plain text.\n"
+      );
+      for (const surface of ["full", "compact"] as const) {
+        const prompt = buildAsksSystemPrompt({kinds: ["choice"], surface});
+        expect(prompt).not.toContain("approve");
+        expect(prompt).not.toContain("confirm");
+        expect(buildAsksSystemPrompt({kinds: ["choice", "confirm"], surface})).toContain(
+          "ask_confirm: the user approves or denies one action you describe in prompt."
+        );
+      }
+    });
+
+    it("describes ask_form only on the full surface", () => {
+      const formRules = "ask_form: the user fills in a few fields and submits them at once.";
+      expect(buildAsksSystemPrompt({kinds: ["choice", "form"]})).toContain(formRules);
+      expect(buildAsksSystemPrompt({kinds: ["choice"]})).not.toContain("ask_form");
+      expect(buildAsksSystemPrompt({kinds: ["choice", "form"], surface: "compact"})).not.toContain(
+        "ask_form"
+      );
+    });
+
+    it("describes ask_markdown only on the full surface", () => {
+      const markdownRules = "ask_markdown: the user edits a markdown draft you write";
+      expect(buildAsksSystemPrompt({kinds: ["choice", "markdown"]})).toContain(markdownRules);
+      expect(buildAsksSystemPrompt({kinds: ["choice"]})).not.toContain("ask_markdown");
+      expect(
+        buildAsksSystemPrompt({kinds: ["choice", "markdown"], surface: "compact"})
+      ).not.toContain("ask_markdown");
+    });
+  });
+
+  describe("toStoredMessages", () => {
+    it("drops undefined fields and keeps empty objects", () => {
+      const messages: ModelMessage[] = [
+        {
+          content: [{...lookupCall, providerExecuted: undefined, providerOptions: undefined}],
+          providerOptions: undefined,
+          role: "assistant",
+        },
+      ];
+
+      expect(toStoredMessages(messages)).toStrictEqual([
+        {
+          content: [
+            {input: {}, toolCallId: "call_lookup", toolName: "lookupPlans", type: "tool-call"},
+          ],
+          role: "assistant",
+        },
+      ]);
+    });
+
+    it("leaves out the fileData a tool result carries, as the stored rows do", () => {
+      const messages: ModelMessage[] = [
+        {
+          content: [
+            {
+              output: {
+                type: "json",
+                value: {fileData: "data:application/pdf;base64,AAAA", filename: "plan.pdf"},
+              },
+              toolCallId: "call_export",
+              toolName: "exportPlan",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        },
+      ];
+
+      expect(toStoredMessages(messages)).toStrictEqual([
+        {
+          content: [
+            {
+              output: {type: "json", value: {filename: "plan.pdf"}},
+              toolCallId: "call_export",
+              toolName: "exportPlan",
+              type: "tool-result",
+            },
+          ],
+          role: "tool",
+        },
+      ]);
+    });
+  });
+
+  describe("completePausedTurn", () => {
+    it("adds a tool message with the answer when the ask was the step's only call", () => {
+      expect(
+        completePausedTurn({
+          answer: TEAM_ANSWER,
+          responseMessages: [{content: [askCall("call_plan")], role: "assistant"}],
+          toolCallId: "call_plan",
+        })
+      ).toEqual([
+        {content: [askCall("call_plan")], role: "assistant"},
+        {content: [answerResult("call_plan", TEAM_ANSWER)], role: "tool"},
+      ]);
+    });
+
+    it("merges the answer into the step's tool message, in call order", () => {
+      expect(
+        completePausedTurn({
+          answer: TEAM_ANSWER,
+          responseMessages: [
+            {content: [askCall("call_plan"), lookupCall], role: "assistant"},
+            {content: [lookupResult], role: "tool"},
+          ],
+          toolCallId: "call_plan",
+        })
+      ).toEqual([
+        {content: [askCall("call_plan"), lookupCall], role: "assistant"},
+        {content: [answerResult("call_plan", TEAM_ANSWER), lookupResult], role: "tool"},
+      ]);
+    });
+
+    it("answers a second ask in the step with cancel one_ask_at_a_time", () => {
+      expect(
+        completePausedTurn({
+          answer: {action: "decline"},
+          responseMessages: [
+            {content: [askCall("call_plan"), askCall("call_region")], role: "assistant"},
+          ],
+          toolCallId: "call_plan",
+        })
+      ).toEqual([
+        {content: [askCall("call_plan"), askCall("call_region")], role: "assistant"},
+        {
+          content: [
+            answerResult("call_plan", {action: "decline"}),
+            answerResult("call_region", {action: "cancel", reason: "one_ask_at_a_time"}),
+          ],
+          role: "tool",
+        },
+      ]);
+    });
+
+    it("gives another tool call that did not run an error result, and skips provider-run calls", () => {
+      const pickFileCall = {
+        input: {},
+        toolCallId: "call_file",
+        toolName: "pickFile",
+        type: "tool-call" as const,
+      };
+      const searchCall = {
+        input: {query: "plans"},
+        providerExecuted: true,
+        toolCallId: "call_search",
+        toolName: "web_search",
+        type: "tool-call" as const,
+      };
+
+      expect(
+        completePausedTurn({
+          answer: TEAM_ANSWER,
+          responseMessages: [
+            {content: [pickFileCall, searchCall, askCall("call_plan")], role: "assistant"},
+          ],
+          toolCallId: "call_plan",
+        })
+      ).toEqual([
+        {content: [pickFileCall, searchCall, askCall("call_plan")], role: "assistant"},
+        {
+          content: [
+            {
+              output: {
+                type: "error-text",
+                value: "This tool call did not run, so it has no result.",
+              },
+              toolCallId: "call_file",
+              toolName: "pickFile",
+              type: "tool-result",
+            },
+            answerResult("call_plan", TEAM_ANSWER),
+          ],
+          role: "tool",
+        },
+      ]);
+    });
+
+    it("keeps parts other than tool results after the results", () => {
+      const approval = {
+        approvalId: "approval_1",
+        approved: true,
+        type: "tool-approval-response" as const,
+      };
+
+      expect(
+        completePausedTurn({
+          answer: TEAM_ANSWER,
+          responseMessages: [
+            {content: [lookupCall, askCall("call_plan")], role: "assistant"},
+            {content: [approval, lookupResult], role: "tool"},
+          ],
+          toolCallId: "call_plan",
+        })
+      ).toEqual([
+        {content: [lookupCall, askCall("call_plan")], role: "assistant"},
+        {content: [lookupResult, answerResult("call_plan", TEAM_ANSWER), approval], role: "tool"},
+      ]);
+    });
+
+    it("answers only the last step when an earlier ask in the turn was already answered", () => {
+      const earlier: ModelMessage[] = [
+        {content: [askCall("call_plan")], role: "assistant"},
+        {content: [answerResult("call_plan", TEAM_ANSWER)], role: "tool"} as ModelMessage,
+      ];
+
+      expect(
+        completePausedTurn({
+          answer: {action: "decline"},
+          responseMessages: [
+            ...earlier,
+            {content: "Got it.", role: "assistant"},
+            {content: [askCall("call_region")], role: "assistant"},
+          ],
+          toolCallId: "call_region",
+        })
+      ).toEqual([
+        ...earlier,
+        {content: "Got it.", role: "assistant"},
+        {content: [askCall("call_region")], role: "assistant"},
+        {content: [answerResult("call_region", {action: "decline"})], role: "tool"},
+      ]);
+    });
+
+    it("returns the messages unchanged when the last step has no call without a result", () => {
+      const responseMessages: ModelMessage[] = [
+        {content: "Be brief.", role: "system"},
+        {content: [lookupCall], role: "assistant"},
+        {content: [lookupResult], role: "tool"},
+        {content: "There are 2 plans.", role: "assistant"},
+      ];
+
+      expect(
+        completePausedTurn({answer: TEAM_ANSWER, responseMessages, toolCallId: "call_plan"})
+      ).toBe(responseMessages);
+    });
+  });
+
+  describe("completePausedTurn approvals", () => {
+    const deleteCall = {
+      input: {},
+      toolCallId: "call_delete",
+      toolName: "deleteTodos",
+      type: "tool-call" as const,
+    };
+    const approvalRequest = (approvalId: string, toolCallId: string) => ({
+      approvalId,
+      toolCallId,
+      type: "tool-approval-request" as const,
+    });
+    const approvalResponse = (approvalId: string, approved: boolean, reason?: string) => ({
+      approvalId,
+      approved,
+      type: "tool-approval-response" as const,
+      ...(reason ? {reason} : {}),
+    });
+
+    it("answers the pending approval and adds no result for its call", () => {
+      const assistant: ModelMessage = {
+        content: [deleteCall, approvalRequest("approval_delete", "call_delete")],
+        role: "assistant",
+      };
+
+      expect(
+        completePausedTurn({
+          answer: {action: "accept", content: {confirmed: true}},
+          approvalId: "approval_delete",
+          responseMessages: [assistant],
+          toolCallId: "approval_delete",
+        })
+      ).toEqual([assistant, {content: [approvalResponse("approval_delete", true)], role: "tool"}]);
+    });
+
+    it("denies every other approval with one_ask_at_a_time and answers the pending ask", () => {
+      const assistant: ModelMessage = {
+        content: [
+          askCall("call_plan"),
+          deleteCall,
+          approvalRequest("approval_delete", "call_delete"),
+        ],
+        role: "assistant",
+      };
+
+      expect(
+        completePausedTurn({
+          answer: TEAM_ANSWER,
+          responseMessages: [assistant],
+          toolCallId: "call_plan",
+        })
+      ).toEqual([
+        assistant,
+        {
+          content: [
+            answerResult("call_plan", TEAM_ANSWER),
+            approvalResponse("approval_delete", false, "one_ask_at_a_time"),
+          ],
+          role: "tool",
+        },
+      ]);
+    });
+
+    it("adds the approval response to the step's tool message after its results", () => {
+      const assistant: ModelMessage = {
+        content: [lookupCall, deleteCall, approvalRequest("approval_delete", "call_delete")],
+        role: "assistant",
+      };
+
+      expect(
+        completePausedTurn({
+          answer: {action: "accept", content: {confirmed: false}},
+          approvalId: "approval_delete",
+          responseMessages: [assistant, {content: [lookupResult], role: "tool"}],
+          toolCallId: "approval_delete",
+        })
+      ).toEqual([
+        assistant,
+        {
+          content: [lookupResult, approvalResponse("approval_delete", false, "user_denied")],
+          role: "tool",
+        },
+      ]);
+    });
+
+    it("leaves an approval that already has a response alone", () => {
+      const responseMessages: ModelMessage[] = [
+        {
+          content: [deleteCall, approvalRequest("approval_delete", "call_delete")],
+          role: "assistant",
+        },
+        {content: [approvalResponse("approval_delete", true)], role: "tool"},
+      ];
+
+      expect(
+        completePausedTurn({
+          answer: {action: "decline"},
+          approvalId: "approval_delete",
+          responseMessages,
+          toolCallId: "approval_delete",
+        })
+      ).toBe(responseMessages);
+    });
+  });
+
+  describe("completePausedTurn approval responses", () => {
+    it.each([
+      [{action: "accept", content: {confirmed: true}}, {approved: true}],
+      [
+        {action: "accept", content: {confirmed: false}},
+        {approved: false, reason: "user_denied"},
+      ],
+      [{action: "decline"}, {approved: false, reason: "user_declined"}],
+      [{action: "cancel"}, {approved: false, reason: "user_cancelled"}],
+      [
+        {action: "cancel", reason: "closed"},
+        {approved: false, reason: "closed"},
+      ],
+    ] as const)("answers %j with %j", (answer, expected) => {
+      const assistant: ModelMessage = {
+        content: [
+          {input: {}, toolCallId: "call_delete", toolName: "deleteTodos", type: "tool-call"},
+          {approvalId: "approval_delete", toolCallId: "call_delete", type: "tool-approval-request"},
+        ],
+        role: "assistant",
+      };
+
+      expect(
+        completePausedTurn({
+          answer: answer as AskResponse,
+          approvalId: "approval_delete",
+          responseMessages: [assistant],
+          toolCallId: "approval_delete",
+        })
+      ).toEqual([
+        assistant,
+        {
+          content: [{approvalId: "approval_delete", type: "tool-approval-response", ...expected}],
+          role: "tool",
+        },
+      ]);
+    });
+  });
+
+  describe("approvalAskInput", () => {
+    it("defaults to Allow <toolName>? with the description, cut to the prompt limit", () => {
+      const input = approvalAskInput({
+        asks: true,
+        description: "x".repeat(600),
+        input: {},
+        surface: "full",
+        toolName: "deleteTodos",
+      });
+
+      expect(input).toMatchObject({confirmLabel: "Allow", denyLabel: "Deny"});
+      expect(input.prompt.startsWith("Allow deleteTodos? xxx")).toBe(true);
+      expect(input.prompt).toHaveLength(ASK_LIMITS.promptMaxLength);
+      expect(input.prompt.endsWith("…")).toBe(true);
+    });
+
+    it("asks without a description when the tool has none", () => {
+      expect(
+        approvalAskInput({asks: {}, input: {}, surface: "compact", toolName: "deleteTodos"})
+      ).toEqual({confirmLabel: "Allow", denyLabel: "Deny", prompt: "Allow deleteTodos?"});
+    });
+
+    it("uses the host's input for the tool and passes it the call's input", () => {
+      const calls: unknown[] = [];
+      const input = approvalAskInput({
+        asks: {
+          approvals: {
+            deleteTodos: (callInput) => {
+              calls.push(callInput);
+              return {destructive: true, prompt: "Delete 3 todos?"};
+            },
+          },
+        },
+        input: {count: 3},
+        surface: "full",
+        toolName: "deleteTodos",
+      });
+
+      expect(input).toEqual({destructive: true, prompt: "Delete 3 todos?"});
+      expect(calls).toEqual([{count: 3}]);
+    });
+  });
+
+  describe("deniedApprovalReasons", () => {
+    it("maps each denied approval in the last tool message to its call and reason", () => {
+      const messages: ModelMessage[] = [
+        {
+          content: [
+            {input: {}, toolCallId: "call_a", toolName: "a", type: "tool-call"},
+            {approvalId: "approval_a", toolCallId: "call_a", type: "tool-approval-request"},
+            {input: {}, toolCallId: "call_b", toolName: "b", type: "tool-call"},
+            {approvalId: "approval_b", toolCallId: "call_b", type: "tool-approval-request"},
+          ],
+          role: "assistant",
+        },
+        {
+          content: [
+            {approvalId: "approval_a", approved: true, type: "tool-approval-response"},
+            {
+              approvalId: "approval_b",
+              approved: false,
+              reason: "one_ask_at_a_time",
+              type: "tool-approval-response",
+            },
+          ],
+          role: "tool",
+        },
+      ];
+
+      expect(deniedApprovalReasons(messages)).toEqual(new Map([["call_b", "one_ask_at_a_time"]]));
+    });
+
+    it("is empty when the last message is not a tool message", () => {
+      expect(deniedApprovalReasons([{content: "Hi", role: "user"}])).toEqual(new Map());
+    });
+  });
+});

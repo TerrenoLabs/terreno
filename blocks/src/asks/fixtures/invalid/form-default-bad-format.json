@@ -1,0 +1,40 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "email",
+        "type": "email",
+        "label": "Email",
+        "default": "not-an-email"
+      },
+      {
+        "id": "site",
+        "type": "url",
+        "label": "Site",
+        "default": "javascript:alert(1)"
+      },
+      {
+        "id": "phone",
+        "type": "phone",
+        "label": "Phone",
+        "default": "call me"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].default",
+      "code": "FIELD_TYPE_MISMATCH"
+    },
+    {
+      "path": "fields[1].default",
+      "code": "FIELD_TYPE_MISMATCH"
+    },
+    {
+      "path": "fields[2].default",
+      "code": "FIELD_TYPE_MISMATCH"
+    }
+  ]
+}

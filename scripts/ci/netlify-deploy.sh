@@ -54,7 +54,7 @@ fi
 
 case "$target" in
   demo)
-    bun run --filter '@terreno/ui' compile
+    bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile
     bun run --filter '@terreno/ui' types
     (cd demo && bun run export)
     bash demo/scripts/fix-netlify-assets.sh demo/dist
@@ -75,7 +75,7 @@ case "$target" in
     publish_dir="example-frontend/dist"
     ;;
   docs)
-    bun run --filter '@terreno/ui' compile
+    bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile
     bun run --filter '@terreno/ui' types
     (cd website && bun run generate:components && bun run generate:api)
     (

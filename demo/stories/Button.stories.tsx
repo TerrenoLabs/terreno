@@ -357,3 +357,23 @@ export const MultilineButtons: React.FC = () => (
     </Box>
   </Box>
 );
+
+export const WrapTextButtons: React.FC = () => (
+  <Box gap={4}>
+    {(["default", "sm"] as const).map((size) => (
+      <Box gap={2} key={size}>
+        <Heading>{size === "sm" ? "Small (sm)" : "Default size"}</Heading>
+        <Box direction="row" gap={6}>
+          <Box gap={1} testID={`wrap-text-${size}-off`} width={150}>
+            <Text>One line (default)</Text>
+            <Button onClick={handleDemoClick} size={size} text="Save all changes now" />
+          </Box>
+          <Box gap={1} testID={`wrap-text-${size}-on`} width={150}>
+            <Text>wrapText</Text>
+            <Button onClick={handleDemoClick} size={size} text="Save all changes now" wrapText />
+          </Box>
+        </Box>
+      </Box>
+    ))}
+  </Box>
+);

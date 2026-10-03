@@ -1,0 +1,40 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Archive the 3 chats you have not opened in 90 days?",
+    "confirmLabel": "Archive",
+    "denyLabel": "Keep",
+    "destructive": false,
+    "allowDecline": true
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "confirm",
+    "text": "Archive the 3 chats you have not opened in 90 days?",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "approve",
+        "label": "Archive",
+        "style": "primary",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": true
+          }
+        }
+      },
+      {
+        "id": "deny",
+        "label": "Keep",
+        "style": "cancel",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": false
+          }
+        }
+      }
+    ]
+  }
+}

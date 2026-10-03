@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "The request body of POST /gpt/histories/{id}/turn. Send exactly one of prompt, askResponse, or toolCallId with buttonId, plus an optional surface. JSON Schema cannot express that rule; the server enforces it.",
+  "title": "TurnRequest",
+  "type": "object",
+  "properties": {
+    "askResponse": {
+      "description": "A full answer to the pending ask, as a client that renders the ask sends it.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "accept"
+            },
+            "content": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            },
+            "toolCallId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The pending ask's toolCallId."
+            }
+          },
+          "required": [
+            "action",
+            "content",
+            "toolCallId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "decline"
+            },
+            "toolCallId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The pending ask's toolCallId."
+            }
+          },
+          "required": [
+            "action",
+            "toolCallId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "cancel"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "toolCallId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The pending ask's toolCallId."
+            }
+          },
+          "required": [
+            "action",
+            "toolCallId"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "title": "AskAnswer"
+    },
+    "buttonId": {
+      "description": "The id of the simple card button the user pressed. Send it with toolCallId.",
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt": {
+      "description": "A new message from the user. It cancels the pending ask, if there is one.",
+      "type": "string",
+      "minLength": 1
+    },
+    "surface": {
+      "type": "string",
+      "enum": [
+        "full",
+        "compact"
+      ],
+      "description": "Where the user answers. \"compact\" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to \"full\"."
+    },
+    "toolCallId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The pending ask's toolCallId."
+    }
+  },
+  "additionalProperties": false
+}

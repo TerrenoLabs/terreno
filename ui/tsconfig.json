@@ -22,6 +22,9 @@
   "exclude": [
     "src/**/*.test.tsx",
     "src/**/*.test.ts",
+    "src/**/*.isolated.tsx",
+    "src/**/*.isolated.ts",
+    "src/isolated/**",
     "src/benchmarks/**",
     "src/bunSetup.ts",
     "src/test-utils.tsx"

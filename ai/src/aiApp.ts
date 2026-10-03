@@ -11,15 +11,21 @@ import {addProjectRoutes} from "./routes/projects";
 import type {AIService} from "./service/aiService";
 import type {FileStorageService} from "./service/fileStorage";
 import type {MCPService} from "./service/mcpService";
+import type {AsksOptions} from "./types";
 
 export interface AiAppOptions {
   /** Pre-configured AIService instance. Optional when using per-request keys or demo mode. */
   aiService?: AIService;
+  /**
+   * Let the model ask the user typed questions in chat. Passed through to `addGptRoutes`, and adds
+   * the headless `pendingAsks` and `turn` actions to `/gpt/histories`.
+   */
+  asks?: boolean | AsksOptions;
   /** Factory function to create a LanguageModel from a per-request API key (sent via x-ai-api-key header). */
   createModelFn?: (apiKey: string, modelId?: string) => LanguageModel;
   /** Factory function to create a LanguageModel on the server side without a per-request key (e.g. Vertex AI with ADC). Returns undefined if no provider is configured. */
   createServerModelFn?: (modelId?: string) => LanguageModel | undefined;
-  /** When true and no AI service is available, routes return canned demo responses instead of failing. */
+  /** Not read: the routes send a canned demo reply whenever no AI service resolves. */
   demoMode?: boolean;
   /** File storage service for handling file uploads to GCS. */
   fileStorageService?: FileStorageService;
@@ -63,7 +69,7 @@ export interface AiAppOptions {
  *
  * @example
  * ```typescript
- * // Demo mode with per-request key support (no server-side API key needed)
+ * // Per-request keys only (no server-side API key needed); requests without a key get the canned demo reply
  * new AiApp({
  *   createModelFn: (key) => google("gemini-3.8-flash", {apiKey: key}),
  *   demoMode: true,
@@ -81,6 +87,7 @@ export class AiApp implements TerrenoPlugin {
     const router = app;
     const {
       aiService,
+      asks,
       createModelFn,
       createServerModelFn,
       demoMode,
@@ -95,14 +102,15 @@ export class AiApp implements TerrenoPlugin {
       tools,
     } = this.options;
 
-    addGptHistoryRoutes(router, {openApiOptions});
-    addGptRoutes(router, {
+    const hasFileRoutes = Boolean(fileStorageService && gcsBucket);
+    const chat = {
       aiService,
+      asks,
       createModelFn,
       createServerModelFn,
       demoMode,
       // Attachments are only uploaded when the file routes are mounted too
-      fileStorageService: fileStorageService && gcsBucket ? fileStorageService : undefined,
+      fileStorageService: hasFileRoutes ? fileStorageService : undefined,
       fileUploadsEnabled,
       maxSteps,
       mcpService,
@@ -110,7 +118,9 @@ export class AiApp implements TerrenoPlugin {
       titleModelId,
       toolChoice,
       tools,
-    });
+    };
+    addGptHistoryRoutes(router, {chat, openApiOptions});
+    addGptRoutes(router, chat);
     addAiRequestsExplorerRoutes(router, {openApiOptions});
     addProjectRoutes(router, {openApiOptions});
 
@@ -119,6 +129,9 @@ export class AiApp implements TerrenoPlugin {
         fileStorageService,
         fileUploadsEnabled,
         gcsBucket,
+        ...(typeof asks === "object" && asks.maxFileSizeBytes !== undefined
+          ? {maxFileSize: asks.maxFileSizeBytes}
+          : {}),
         openApiOptions,
       });
     }

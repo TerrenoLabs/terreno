@@ -22,6 +22,7 @@ const sidebars: SidebarsConfig = {
         "reference/ui",
         "reference/syncdb",
         "reference/ai",
+        "reference/agent-ui-asks",
         "reference/admin-backend",
         "reference/admin-spa",
         "reference/admin-frontend",

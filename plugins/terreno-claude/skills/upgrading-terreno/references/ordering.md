@@ -6,8 +6,10 @@ Why the `upgrading-terreno` skill bumps packages in a fixed order. Packages belo
 
 | Class | Packages (`publish-on-tag.yml` job) |
 | --- | --- |
-| Backend | `api`, `test`, `admin-backend`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp` |
+| Backend | `api`, `test`, `admin-backend`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp` |
 | Frontend | `ui`, `rtk`, `syncdb`, `admin-frontend`, `admin-spa` |
+
+`blocks` holds contracts that both `ai` and `ui` depend on, so it moves with the backend step.
 
 `demo` and the example apps are not published.
 

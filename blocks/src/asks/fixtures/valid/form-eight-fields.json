@@ -1,0 +1,71 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Set up the new hire's account.",
+    "title": "New hire",
+    "fields": [
+      {
+        "id": "full_name",
+        "type": "text",
+        "label": "Full name",
+        "required": true
+      },
+      {
+        "id": "work_email",
+        "type": "email",
+        "label": "Work email",
+        "required": true
+      },
+      {
+        "id": "phone",
+        "type": "phone",
+        "label": "Phone"
+      },
+      {
+        "id": "profile",
+        "type": "url",
+        "label": "Profile link"
+      },
+      {
+        "id": "start_day",
+        "type": "date",
+        "label": "Start date",
+        "required": true
+      },
+      {
+        "id": "first_meeting",
+        "type": "datetime",
+        "label": "First meeting"
+      },
+      {
+        "id": "desk",
+        "type": "number",
+        "label": "Desk number",
+        "integer": true,
+        "min": 1
+      },
+      {
+        "id": "remote",
+        "type": "boolean",
+        "label": "Works remotely"
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "Set up the new hire's account.",
+    "title": "New hire",
+    "toolCallId": "call_fixture"
+  }
+}

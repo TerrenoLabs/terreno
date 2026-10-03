@@ -1,6 +1,10 @@
 import {describe, expect, it, spyOn} from "bun:test";
+import {render} from "@testing-library/react-native";
+import {createRef} from "react";
+import type {Text as NativeText} from "react-native";
 
 import {Text} from "./Text";
+import {ThemeProvider} from "./Theme";
 import {renderWithTheme} from "./test-utils";
 
 describe("Text", () => {
@@ -162,6 +166,24 @@ describe("Text", () => {
   it("renders with testID", () => {
     const {getByTestId} = renderWithTheme(<Text testID="test-text">Test</Text>);
     expect(getByTestId("test-text")).toBeTruthy();
+  });
+
+  it("marks a header for screen readers and exposes its native text to a ref", () => {
+    const ref = createRef<NativeText>();
+    const nativeText = {focus: (): void => {}};
+    const {getByRole} = render(
+      <Text accessibilityRole="header" ref={ref}>
+        Which plan?
+      </Text>,
+      {
+        createNodeMock: (element) =>
+          element.props.accessibilityRole === "header" ? nativeText : null,
+        wrapper: ThemeProvider,
+      }
+    );
+
+    expect(getByRole("header", {name: "Which plan?"})).toBeTruthy();
+    expect(ref.current).toBe(nativeText as unknown as NativeText);
   });
 
   // Combined style tests

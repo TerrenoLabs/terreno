@@ -21,6 +21,10 @@ const harnessTaskSchema = new mongoose.Schema<HarnessTaskDocument, HarnessTaskMo
     },
     input: {description: "Immutable task input", type: mongoose.Schema.Types.Mixed},
     lease: {
+      acquiredAt: {
+        description: "When the current phase started under this lease",
+        type: Date,
+      },
       expiresAt: {description: "When the current execution lease lapses", type: Date},
       owner: {description: "Runner instance that holds the execution lease", type: String},
       token: {description: "Fencing token every commit must match", type: String},
@@ -125,6 +129,13 @@ harnessTaskSchema.index(
   ])
 );
 harnessTaskSchema.index({rootTaskId: 1});
+// Expired-lease recovery scan.
+harnessTaskSchema.index(
+  Object.fromEntries([
+    ["status", 1],
+    ["lease.expiresAt", 1],
+  ])
+);
 
 export const registerHarnessTask = (): HarnessTaskModel => {
   if (mongoose.models.HarnessTask) {

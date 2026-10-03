@@ -12,9 +12,9 @@ opaque handler. Neither can stop halfway and pick up where it left off.
 
 A harness task is a small state machine. A phase does some work, then calls
 `rt.commit()` with the next phase or a terminal outcome. Work that was already committed
-never runs again. Crash resume (planned, with owner leases) restarts the **current phase**
-from its last checkpoint. Today a task cut off mid-phase stays `running` at that
-checkpoint until resume ships.
+never runs again. After a crash, a fresh process restarts the **current phase** from its
+last checkpoint, or parks it for a human when re-running is not safe (see
+[Leases and crash resume](#leases-and-crash-resume)).
 
 The harness does not journal and replay individual steps (Temporal/Inngest style). The
 phase is the only replay boundary, so the unit to reason about is "what happens if this
@@ -38,8 +38,8 @@ phase runs twice?" A phase declares the answer with `replay` (`"safe"` or the de
 | **Event** | Append-only `HarnessEvent` rows with a per-stream `seq`. The SSE source. |
 | **Runner** | Decides who executes runnable tasks and when. |
 
-Shipped today: tasks, phases, checkpoints, the transactional audit span, and the
-`InProcessRunner`. The other rows are the planned shape for later Phase 1 slices.
+Shipped today: tasks, phases, checkpoints, the transactional audit span, the
+`InProcessRunner` with owner and task leases, crash resume, and `resolveInterrupted`. The other rows are the planned shape for later Phase 1 slices.
 
 ## Why the audit span shares the checkpoint transaction
 
@@ -66,12 +66,49 @@ phase "summarize" ── rt.commit ──tx──> task.status=completed + CHAIN
                                        + root span / trace closed
 ```
 
-## Fencing
+## Leases and crash resume
 
-A commit only applies if the task is still `running` at the phase it started from. If
-something else moved the checkpoint first, the commit aborts with
-`HarnessCommitConflictError` and the phase result is discarded. Owner and task leases
-build on this fence: the lease token joins the same filter.
+A process can die at any moment, and a frozen process can wake up later and keep going.
+Two leases make both cases safe.
+
+| Lease | Question it answers | Granularity |
+| --- | --- | --- |
+| **Owner lease** (`HarnessOwner`) | Which process drains tasks right now? | One per database |
+| **Task lease** (`HarnessTask.lease`) | Which run of this phase may commit? | One per running phase, with a random fencing `token` |
+
+Both expire unless their holder renews them on a heartbeat. A second process starts on
+**standby** and becomes owner once the owner lease expires (or at once, when the owner
+stops cleanly).
+
+The owner lease is about efficiency: one drainer, no claim storms. The **task token** is
+about correctness. Every commit is fenced on the token, so a runner that lost its lease
+(it froze past expiry and someone else took over) is rejected with
+`HarnessCommitConflictError` and writes nothing, even if two processes briefly both think
+they own execution.
+
+```
+process A: claim (token t1) ── phase runs ── A freezes ......... A wakes: commit(t1) ✗ rejected
+process B:   standby ........ A's leases expire ── takeover ── recover: phase replay
+                                                              claim (token t2) ── commit(t2) ✓
+```
+
+### Replay is a per-phase promise
+
+When a new owner finds a `running` task whose lease expired, it cannot know how far the
+phase got. The phase's `replay` says what is safe:
+
+- `replay: "safe"`: the phase can run again from its checkpoint (reads, idempotent writes).
+  The task goes back to `pending` and runs again.
+- default `replay: "never"`: the phase might have done something that must not happen
+  twice (an EHR write, a payment). The task becomes `interrupted` and stops.
+
+The harness never guesses. An operator looks at the external system and calls
+`resolveInterrupted` with `retry` (run the phase again), `abort` (give up), or `complete`
+(it already happened; record the result), plus a reason. That decision is audited like
+any other step.
+
+Every interruption also writes an error `CHAIN` span in the same transaction as the status
+change, so the trace shows exactly which phase was cut off and what happened next.
 
 ## Runners
 
@@ -80,8 +117,7 @@ tasks. Switching runners needs no data migration.
 
 | Runner | Status | Ownership |
 | --- | --- | --- |
-| `InProcessRunner` | Shipped (no lease yet) | Polls `pending` tasks in this process, one at a time, and runs phases until the task stops. |
-| `InProcessRunner` with `HarnessOwner` lease | Planned | One process holds the owner lease. A second process waits on standby. |
+| `InProcessRunner` | Shipped | One process holds the `HarnessOwner` lease and drains `pending` tasks one at a time; others wait on standby and take over on lease expiry. |
 | `JobsRunner` | Planned (Phase 2) | Each runnable phase becomes a `@terreno/jobs` job. The task lease is the authority. |
 
 ## Version pinning

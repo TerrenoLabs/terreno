@@ -3,26 +3,36 @@ import mongoose from "mongoose";
 
 import type {
   HarnessCreateTaskOptions,
+  HarnessResolveInterruptedOptions,
   HarnessRunner,
   HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTestHooks,
 } from "../types/harness";
-import {HARNESS_TERMINAL_STATUSES} from "../types/harness";
+import {
+  HARNESS_RESOLVE_ACTIONS,
+  HARNESS_TASK_STATUSES,
+  HARNESS_TERMINAL_STATUSES,
+} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
-import {createTaskRecords, type HarnessModels} from "./commit";
+import {commitResolution, createTaskRecords, type HarnessModels} from "./commit";
 import {taskDefinitionKey} from "./defineTask";
+import {acquireOwnerLease, releaseOwnerLease} from "./leases";
+import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
 import {InProcessRunner} from "./runners/inProcessRunner";
-import {claimNextTask, runClaimedTask} from "./runtime";
+import {claimNextTask, recoverExpiredTasks, runClaimedTask} from "./runtime";
 
 export type {
   HarnessCommit,
   HarnessCreateTaskOptions,
+  HarnessLeaseSettings,
   HarnessOutcome,
   HarnessPhaseCommit,
   HarnessPhaseDefinition,
   HarnessReplayPolicy,
+  HarnessResolveAction,
+  HarnessResolveInterruptedOptions,
   HarnessRetryPolicy,
   HarnessRunner,
   HarnessRunnerContext,
@@ -35,10 +45,15 @@ export type {
   HarnessTerminalCommit,
   HarnessTestHooks,
 } from "../types/harness";
-export {HARNESS_TASK_STATUSES} from "../types/harness";
+export {HARNESS_RESOLVE_ACTIONS, HARNESS_TASK_STATUSES} from "../types/harness";
 export {HarnessCommitConflictError} from "./commit";
 export {defineTask} from "./defineTask";
-export {InProcessRunner, type InProcessRunnerOptions} from "./runners/inProcessRunner";
+export {
+  IN_PROCESS_RUNNER_ROLES,
+  InProcessRunner,
+  type InProcessRunnerOptions,
+  type InProcessRunnerRole,
+} from "./runners/inProcessRunner";
 
 /** Any task definition, whatever its input, state, and output types. */
 export type AnyHarnessTaskDefinition = HarnessTaskDefinition<never, unknown, unknown>;
@@ -133,31 +148,33 @@ export class Harness {
     await assertReplicaSet();
     const definitions = buildRegistry(options.registry);
     const task = registerHarnessTask();
+    const owner = registerHarnessOwner();
     // Transactions cannot create collections or indexes on every server version.
-    await Promise.all([task.init(), span.init(), trace.init()]);
+    await Promise.all([task.init(), owner.init(), span.init(), trace.init()]);
     return new Harness({
       definitions,
-      models: {span, task, trace},
+      models: {owner, span, task, trace},
       runner: options.runner ?? new InProcessRunner(),
       testHooks: options.testHooks,
     });
   }
 
-  /** Begin executing runnable tasks. */
+  /**
+   * Begin executing runnable tasks. The runner recovers tasks whose lease expired once it
+   * owns execution (immediately, or on takeover when another owner holds the lease).
+   */
   async start(): Promise<void> {
     if (this.isStarted) {
       throw new Error("Harness is already started");
     }
     this.isStarted = true;
+    const {definitions, models, testHooks} = this;
     await this.runner.start({
-      claimNext: () => claimNextTask({definitions: this.definitions, models: this.models}),
-      runTask: (task) =>
-        runClaimedTask({
-          definitions: this.definitions,
-          models: this.models,
-          task,
-          testHooks: this.testHooks,
-        }),
+      acquireOwnerLease: (lease) => acquireOwnerLease({lease, models, testHooks}),
+      claimNext: (lease) => claimNextTask({definitions, lease, models}),
+      recoverExpired: () => recoverExpiredTasks({definitions, models, testHooks}),
+      releaseOwnerLease: (lease) => releaseOwnerLease({lease, models}),
+      runTask: (task, lease) => runClaimedTask({definitions, lease, models, task, testHooks}),
     });
   }
 
@@ -191,6 +208,40 @@ export class Harness {
     });
     this.runner.wake();
     return task;
+  }
+
+  /**
+   * Decide what happens to an `interrupted` task: `retry` re-queues the same phase,
+   * `abort` ends it `aborted`, `complete` ends it `completed` with `result`. The decision
+   * and its reason are audited in a `resolveInterrupted` span. Throws when the task is
+   * not `interrupted` or `reason` is empty.
+   */
+  async resolveInterrupted(
+    taskId: mongoose.Types.ObjectId | string,
+    options: HarnessResolveInterruptedOptions
+  ): Promise<HarnessTaskDocument> {
+    if (!Object.values(HARNESS_RESOLVE_ACTIONS).includes(options.action)) {
+      throw new Error(
+        `resolveInterrupted action must be one of ${Object.values(HARNESS_RESOLVE_ACTIONS).join(", ")}`
+      );
+    }
+    if (typeof options.reason !== "string" || !options.reason.trim()) {
+      throw new Error("resolveInterrupted requires a reason");
+    }
+    const task = await this.models.task.findExactlyOne({_id: taskId});
+    if (task.status !== HARNESS_TASK_STATUSES.interrupted) {
+      throw new Error(`Task ${taskId} is ${task.status}, not interrupted`);
+    }
+    const resolved = await commitResolution({
+      models: this.models,
+      options,
+      task,
+      testHooks: this.testHooks,
+    });
+    if (options.action === HARNESS_RESOLVE_ACTIONS.retry) {
+      this.runner.wake();
+    }
+    return resolved;
   }
 
   /** Poll until the task is terminal; throws after `timeout` (default 30 seconds). */

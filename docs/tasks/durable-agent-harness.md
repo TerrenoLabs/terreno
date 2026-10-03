@@ -19,7 +19,7 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: create `docs/explanation/durable-agent-harness.md` (concepts table), `docs/reference/ai-harness.md` (`defineTask`, `Harness.open`, `rt.commit`), link from `docs/reference/ai.md`
   - Acceptance: AC1 — bun test asserts one CHAIN span per phase; forced throw inside the transaction leaves neither task update nor span
 
-- [ ] **Task 1.2**: Owner lease, crash resume, replay semantics
+- [x] **Task 1.2**: Owner lease, crash resume, replay semantics
   - Delivers: `HarnessOwner` lease + heartbeat; standby second process; task leases with fencing token; resume on `start()`; per-phase `replay`; `interrupted` status; `harness.resolveInterrupted(taskId, action)`
   - Files: `runners/inProcessRunner.ts`, `models/harnessOwner.ts`, `runtime.ts`, `commit.ts`, tests
   - Blocked by: 1.1

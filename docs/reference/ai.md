@@ -96,7 +96,7 @@ src/
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
 - **Prompts:** `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
 - **Web search:** `WebSearchProvider`, `WebSearchResult` types
-- **Harness (subpath `@terreno/ai/harness`):** `Harness`, `defineTask`, `InProcessRunner`, `HarnessCommitConflictError` — see [AI harness reference](ai-harness.md)
+- **Harness (subpath `@terreno/ai/harness`):** `Harness`, `defineTask`, `InProcessRunner`, `HarnessCommitConflictError`, `HARNESS_RESOLVE_ACTIONS`, `IN_PROCESS_RUNNER_ROLES` — see [AI harness reference](ai-harness.md)
 
 ## AIService
 
@@ -503,7 +503,9 @@ Authenticated `POST /ai/observability/traces/:id/feedback` records thumbs, outco
 
 `@terreno/ai/harness` runs multi-phase tasks that survive restarts. Each phase commits a
 checkpoint and its `ObsSpan` audit record in one Mongo transaction, so it needs a replica
-set and `createLocalObservabilityPlugin()`. API: [AI harness reference](ai-harness.md).
+set and `createLocalObservabilityPlugin()`. Owner and task leases resume crashed work on a
+fresh process; phases that are not replay-safe park as `interrupted` until an operator calls
+`resolveInterrupted`. API: [AI harness reference](ai-harness.md).
 Why: [Durable agent harness](../explanation/durable-agent-harness.md).
 
 ## Langfuse integration

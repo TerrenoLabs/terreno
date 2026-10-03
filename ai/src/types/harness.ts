@@ -1,4 +1,5 @@
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin} from "@terreno/api";
+import type {Duration} from "luxon";
 import type mongoose from "mongoose";
 
 /** Every lifecycle status a harness task can hold. */
@@ -40,6 +41,7 @@ export interface HarnessRetryPolicy {
 }
 
 export interface HarnessLease {
+  acquiredAt?: Date;
   expiresAt?: Date;
   owner?: string;
   token?: string;
@@ -89,6 +91,20 @@ export interface HarnessTaskStatics
     FindOneOrNonePlugin<HarnessTaskDocument> {}
 
 export interface HarnessTaskModel extends mongoose.Model<HarnessTaskDocument>, HarnessTaskStatics {}
+
+/** Singleton lease that decides which `InProcessRunner` drains tasks. */
+export interface HarnessOwnerDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  created: Date;
+  expiresAt: Date;
+  key: string;
+  owner: string;
+  updated: Date;
+}
+
+export interface HarnessOwnerModel
+  extends mongoose.Model<HarnessOwnerDocument>,
+    FindExactlyOnePlugin<HarnessOwnerDocument>,
+    FindOneOrNonePlugin<HarnessOwnerDocument> {}
 
 /** Read-only view of a task handed to each phase. */
 export interface HarnessTaskView<In, State> {
@@ -149,6 +165,26 @@ export interface HarnessCreateTaskOptions {
   userId?: mongoose.Types.ObjectId | string;
 }
 
+/** How an interrupted task is resolved by an operator. */
+export const HARNESS_RESOLVE_ACTIONS = {
+  abort: "abort",
+  complete: "complete",
+  retry: "retry",
+} as const;
+
+export type HarnessResolveAction =
+  (typeof HARNESS_RESOLVE_ACTIONS)[keyof typeof HARNESS_RESOLVE_ACTIONS];
+
+export interface HarnessResolveInterruptedOptions {
+  action: HarnessResolveAction;
+  /** Why the operator chose this action; required and recorded in the audit span. */
+  reason: string;
+  /** Result stored on the task for `complete`. */
+  result?: unknown;
+  /** Operator who resolved the task; recorded as `decidedBy`. */
+  userId?: mongoose.Types.ObjectId | string;
+}
+
 export interface HarnessTestHooks {
   /** Runs inside the commit transaction after every write, before it commits. */
   beforeCommitEnd?: (context: {
@@ -156,12 +192,39 @@ export interface HarnessTestHooks {
     session: mongoose.ClientSession;
     taskId: string;
   }) => Promise<void> | void;
+  /**
+   * While it returns true every lease renewal (owner and task) is skipped and owner
+   * acquisition fails, as if the process had frozen. Simulates a crash in tests.
+   */
+  isHeartbeatSuspended?: () => boolean;
 }
 
-/** What the harness hands a runner: claim one runnable task, then run it to a stop. */
+/** Lease settings a runner applies to the owner lease and every task lease it takes. */
+export interface HarnessLeaseSettings {
+  /** How long a lease lives without a renewal. */
+  duration: Duration;
+  /** How often the holder renews; must be shorter than `duration`. */
+  heartbeat: Duration;
+  /** Runner instance id written into every lease it holds. */
+  owner: string;
+}
+
+/**
+ * What the harness hands a runner: hold the owner lease, recover tasks whose lease
+ * expired, claim one runnable task, then run it to a stop.
+ */
 export interface HarnessRunnerContext {
-  claimNext: () => Promise<HarnessTaskDocument | null>;
-  runTask: (task: HarnessTaskDocument) => Promise<void>;
+  /** Take or renew the singleton `HarnessOwner` lease; false when another owner holds it. */
+  acquireOwnerLease: (lease: HarnessLeaseSettings) => Promise<boolean>;
+  claimNext: (lease: HarnessLeaseSettings) => Promise<HarnessTaskDocument | null>;
+  /**
+   * Resume or park every `running` task whose lease expired. Returns how many were made
+   * runnable again.
+   */
+  recoverExpired: () => Promise<number>;
+  /** Give up the owner lease so a standby can take over without waiting for expiry. */
+  releaseOwnerLease: (lease: HarnessLeaseSettings) => Promise<void>;
+  runTask: (task: HarnessTaskDocument, lease: HarnessLeaseSettings) => Promise<void>;
 }
 
 /** Decides who executes runnable tasks and when. */

@@ -107,11 +107,12 @@ export interface SetAdminUserPasswordRequest {
 }
 
 // The generated GptHistory endpoints are overridden below to return `GptHistory`, which adds what
-// the generated types cannot express: the `id` virtual, `prompts` the server always sends, and the
-// ask's input and card as objects. Their cache tags come from `generateTags` at the end, under the
-// generated `gpthistories` tag, so generated mutations such as the headless `turn` action refresh
-// them too.
+// the generated types cannot express: the `id` virtual, `prompts` the server always sends, the
+// ask's input and card as objects, and the streaming reply's `status` and `streamId`. Their cache
+// tags come from `generateTags` at the end, under the generated `gpthistories` tag, so generated
+// mutations such as the headless `turn` action refresh them too.
 type GeneratedPendingAsk = NonNullable<GetGptHistoriesByIdRes["pendingAsk"]>;
+type GeneratedPrompt = NonNullable<GetGptHistoriesByIdRes["prompts"]>[number];
 
 /** The ask a conversation is waiting on. Only the chat turn writes it, so clients never send it. */
 interface GptHistoryPendingAsk extends Omit<GeneratedPendingAsk, "input" | "simple"> {
@@ -119,10 +120,16 @@ interface GptHistoryPendingAsk extends Omit<GeneratedPendingAsk, "input" | "simp
   simple: Record<string, unknown>;
 }
 
+interface GptHistoryPrompt extends GeneratedPrompt {
+  /** "streaming" while /gpt/prompt is still writing this reply; resume via /gpt/histories/:id/stream. */
+  status?: "streaming" | "complete" | "error";
+  streamId?: string;
+}
+
 export interface GptHistory extends Omit<GetGptHistoriesByIdRes, "pendingAsk" | "prompts"> {
   id: string;
   pendingAsk?: GptHistoryPendingAsk;
-  prompts: NonNullable<GetGptHistoriesByIdRes["prompts"]>;
+  prompts: GptHistoryPrompt[];
 }
 
 interface GptHistoriesListResponse extends Omit<GetGptHistoriesRes, "data"> {

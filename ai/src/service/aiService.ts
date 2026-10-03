@@ -698,6 +698,13 @@ export class AIService {
       if (prompt.type === "tool-call" || prompt.type === "tool-result") {
         continue;
       }
+      // A reply still streaming (or one that failed before any output) is not a real turn yet
+      if (
+        prompt.status === "streaming" ||
+        (prompt.status === "error" && !prompt.text && !prompt.content?.length)
+      ) {
+        continue;
+      }
 
       const role = prompt.type as "user" | "assistant" | "system";
 

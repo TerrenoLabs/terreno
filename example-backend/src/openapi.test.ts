@@ -105,6 +105,7 @@ describe("OpenAPI spec generation", () => {
       "gpthistories_pendingAsks"
     );
     expect(res.body.paths["/gpt/histories/{id}/turn"].post.operationId).toBe("gpthistories_turn");
+    expect(res.body.paths["/gpt/histories/{id}/stream"].get).toBeDefined();
   });
 
   it("includes settings routes", async () => {

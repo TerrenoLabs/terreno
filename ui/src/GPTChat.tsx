@@ -6,6 +6,7 @@ import {
   type BlocksDocument,
   parseBlocksPartial,
 } from "@terreno/blocks";
+import {DateTime} from "luxon";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {
   AccessibilityInfo,
@@ -26,6 +27,8 @@ import {Box} from "./Box";
 import {Button} from "./Button";
 import {BlocksView} from "./blocks/BlocksView";
 import type {BlocksViewProps} from "./Common";
+import {DropdownMenuItem} from "./DropdownMenuItem";
+import {DropdownPanel} from "./DropdownPanel";
 import type {SelectedFile} from "./FilePickerButton";
 import {FilePickerButton} from "./FilePickerButton";
 import {Heading} from "./Heading";
@@ -301,18 +304,103 @@ const handleDownloadFile = (url: string, filename: string): void => {
   document.body.removeChild(link);
 };
 
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/gif": "gif",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+const getImageFilename = (part: ImageContentPart): string => {
+  const extension = IMAGE_EXTENSIONS[part.mimeType ?? ""] ?? "png";
+  return `image-${DateTime.now().toMillis()}.${extension}`;
+};
+
+// Browsers reliably accept only PNG on the clipboard, so other formats are redrawn as PNG.
+const convertBlobToPng = async (blob: Blob): Promise<Blob> => {
+  if (blob.type === "image/png") {
+    return blob;
+  }
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((png) => (png ? resolve(png) : reject(new Error("PNG conversion failed"))));
+  });
+};
+
+/** Copies the image itself (not a text placeholder) to the clipboard. */
+const copyImageToClipboard = async (part: ImageContentPart): Promise<void> => {
+  if (Platform.OS === "web") {
+    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
+      console.warn("Copying images is not supported in this browser");
+      return;
+    }
+    const response = await fetch(part.url);
+    const png = await convertBlobToPng(await response.blob());
+    await navigator.clipboard.write([new ClipboardItem({"image/png": png})]);
+    return;
+  }
+  const Clipboard = await import("expo-clipboard");
+  const base64 = part.url.startsWith("data:") ? part.url.split(",")[1] : undefined;
+  if (base64) {
+    await Clipboard.setImageAsync(base64);
+  } else {
+    await Clipboard.setStringAsync(part.url);
+  }
+};
+
+const ImageActions = ({part}: {part: ImageContentPart}): React.ReactElement => {
+  const handleCopy = useCallback(async (): Promise<void> => {
+    try {
+      await copyImageToClipboard(part);
+    } catch (error) {
+      console.warn("Failed to copy image", error);
+    }
+  }, [part]);
+
+  const handleDownload = useCallback((): void => {
+    handleDownloadFile(part.url, getImageFilename(part));
+  }, [part]);
+
+  return (
+    <Box direction="row" gap={1} testID="gpt-image-actions">
+      <IconButton
+        accessibilityLabel="Copy image"
+        iconName="copy"
+        onClick={handleCopy}
+        testID="gpt-copy-image"
+        variant="ghost"
+      />
+      {Platform.OS === "web" ? (
+        <IconButton
+          accessibilityLabel="Download image"
+          iconName="download"
+          onClick={handleDownload}
+          testID="gpt-download-image"
+          variant="ghost"
+        />
+      ) : null}
+    </Box>
+  );
+};
+
 const MessageContentParts = ({parts}: {parts: MessageContentPart[]}): React.ReactElement => {
   return (
     <Box gap={2}>
       {parts.map((part, index) => {
         if (part.type === "image") {
           return (
-            <RNImage
-              key={`content-${index}`}
-              resizeMode="contain"
-              source={{uri: part.url}}
-              style={{borderRadius: 8, height: 400, maxWidth: 800, minWidth: 400, width: "100%"}}
-            />
+            <Box gap={1} key={`content-${index}`}>
+              <RNImage
+                resizeMode="contain"
+                source={{uri: part.url}}
+                style={{borderRadius: 8, height: 400, maxWidth: 800, minWidth: 400, width: "100%"}}
+              />
+              <ImageActions part={part} />
+            </Box>
           );
         }
         if (part.type === "file") {
@@ -537,25 +625,44 @@ const HistoryItemTitle = ({
     );
   }
   return (
-    <Text color={history.id === currentHistoryId ? "inverted" : "primary"} size="sm" truncate>
-      {history.title ?? "New Chat"}
-    </Text>
+    <Box flex="grow" minWidth={0}>
+      <Text color={history.id === currentHistoryId ? "inverted" : "primary"} size="sm" truncate>
+        {history.title ?? "New Chat"}
+      </Text>
+    </Box>
   );
 };
 
-const HistoryItemActionButton = ({
+const HistoryItemActions = ({
   editingHistoryId,
   handleFinishRename,
   handleStartRename,
   history,
+  isSelected,
+  onDeleteHistory,
   onUpdateTitle,
 }: {
   editingHistoryId: string | null;
   handleFinishRename: () => void;
   handleStartRename: (id: string, title: string) => void;
   history: GPTChatHistory;
+  isSelected: boolean;
+  onDeleteHistory: (id: string) => void;
   onUpdateTitle?: (id: string, title: string) => void;
-}): React.ReactElement | null => {
+}): React.ReactElement => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const title = history.title ?? "New Chat";
+
+  const handleRename = useCallback((): void => {
+    setIsMenuOpen(false);
+    handleStartRename(history.id, history.title ?? "");
+  }, [handleStartRename, history.id, history.title]);
+
+  const handleDelete = useCallback((): void => {
+    setIsMenuOpen(false);
+    onDeleteHistory(history.id);
+  }, [history.id, onDeleteHistory]);
+
   if (editingHistoryId === history.id) {
     return (
       <IconButton
@@ -566,16 +673,45 @@ const HistoryItemActionButton = ({
       />
     );
   }
-  if (!onUpdateTitle) {
-    return null;
-  }
+
   return (
-    <IconButton
-      accessibilityLabel={`Rename chat: ${history.title ?? "New Chat"}`}
-      iconName="pencil"
-      onClick={() => handleStartRename(history.id, history.title ?? "")}
-      testID={`gpt-rename-history-${history.id}`}
-    />
+    <DropdownPanel
+      align="auto"
+      isOpen={isMenuOpen}
+      onOpenChange={setIsMenuOpen}
+      renderTrigger={({toggle}) => (
+        <IconButton
+          accessibilityLabel={`Chat actions: ${title}`}
+          iconName="ellipsis-vertical"
+          onClick={toggle}
+          testID={`gpt-history-menu-${history.id}`}
+          variant={isSelected ? "primary" : "ghost"}
+        />
+      )}
+      showActionButtons={false}
+      testID={`gpt-history-menu-panel-${history.id}`}
+      width={180}
+    >
+      <Box gap={1}>
+        {onUpdateTitle ? (
+          <DropdownMenuItem
+            accessibilityLabel={`Rename chat: ${title}`}
+            iconName="pen-to-square"
+            label="Rename"
+            onClick={handleRename}
+            testID={`gpt-rename-history-${history.id}`}
+          />
+        ) : null}
+        <DropdownMenuItem
+          accessibilityLabel={`Delete chat: ${title}`}
+          color="error"
+          iconName="trash-can"
+          label="Delete"
+          onClick={handleDelete}
+          testID={`gpt-delete-history-${history.id}`}
+        />
+      </Box>
+    </DropdownPanel>
   );
 };
 
@@ -784,7 +920,7 @@ const AssistantActions = ({
   message,
   onRateFeedback,
 }: {
-  handleCopyMessage: (text: string) => void;
+  handleCopyMessage: (message: GPTChatMessage) => void;
   index: number;
   message: GPTChatMessage;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
@@ -798,7 +934,7 @@ const AssistantActions = ({
       <IconButton
         accessibilityLabel="Copy message"
         iconName="copy"
-        onClick={() => handleCopyMessage(message.content)}
+        onClick={() => handleCopyMessage(message)}
         testID={`gpt-copy-msg-${index}`}
       />
     </Box>
@@ -968,7 +1104,7 @@ const MessageList = ({
   askErrors?: Record<string, AskValidationError[]>;
   blockOverrides: Record<string, Record<string, Block>>;
   currentMessages: GPTChatMessage[];
-  handleCopyMessage: (text: string) => void;
+  handleCopyMessage: (message: GPTChatMessage) => void;
   hostActions?: readonly string[];
   imageHosts?: readonly string[];
   isStreaming: boolean;
@@ -1244,6 +1380,11 @@ const ApiKeyModal = ({
 // Main Component
 // ============================================================
 
+/** Pixels of content below the viewport before "Scroll to bottom" appears. */
+const SCROLL_TO_BOTTOM_THRESHOLD = 100;
+/** Height the composer grows to before its text scrolls. */
+const COMPOSER_MAX_HEIGHT = 200;
+
 export const GPTChat = ({
   askErrors,
   attachments = [],
@@ -1417,9 +1558,21 @@ export const GPTChat = ({
     return () => el.removeEventListener("keydown", handler);
   }, [inputElement]);
 
-  const handleCopyMessage = useCallback(async (text: string) => {
+  // Image-only replies have no meaningful text, so copy the image instead of a placeholder.
+  const handleCopyMessage = useCallback(async (message: GPTChatMessage) => {
+    const firstImage = message.contentParts?.find(
+      (part): part is ImageContentPart => part.type === "image"
+    );
+    if (firstImage && !message.content.trim()) {
+      try {
+        await copyImageToClipboard(firstImage);
+      } catch (error) {
+        console.warn("Failed to copy image", error);
+      }
+      return;
+    }
     const Clipboard = await import("expo-clipboard");
-    await Clipboard.setStringAsync(text);
+    await Clipboard.setStringAsync(message.content);
   }, []);
 
   const scrollToBottom = useCallback(() => {
@@ -1437,12 +1590,17 @@ export const GPTChat = ({
   const handleScroll = useCallback((offsetY: number) => {
     scrollOffsetRef.current = offsetY;
     const distanceFromBottom = contentHeightRef.current - offsetY - viewportHeightRef.current;
-    setIsScrolledUp(distanceFromBottom > 100);
+    setIsScrolledUp(distanceFromBottom > SCROLL_TO_BOTTOM_THRESHOLD);
   }, []);
 
+  // Growing content (a streaming reply) must not count as the user scrolling up, but content
+  // that shrinks to fit the viewport (switching to a short or empty chat) clears the flag.
   const handleContentLayout = useCallback(
-    (_event: {nativeEvent: {layout: {height: number; width: number; x: number; y: number}}}) => {
-      contentHeightRef.current = _event.nativeEvent.layout.height;
+    (event: {nativeEvent: {layout: {height: number; width: number; x: number; y: number}}}) => {
+      contentHeightRef.current = event.nativeEvent.layout.height;
+      if (contentHeightRef.current <= viewportHeightRef.current + SCROLL_TO_BOTTOM_THRESHOLD) {
+        setIsScrolledUp(false);
+      }
     },
     []
   );
@@ -1569,20 +1727,15 @@ export const GPTChat = ({
               history={history}
               setEditingTitle={setEditingTitle}
             />
-            <Box direction="row" gap={1}>
-              <HistoryItemActionButton
+            <Box marginLeft={1}>
+              <HistoryItemActions
                 editingHistoryId={editingHistoryId}
                 handleFinishRename={handleFinishRename}
                 handleStartRename={handleStartRename}
                 history={history}
+                isSelected={history.id === currentHistoryId}
+                onDeleteHistory={onDeleteHistory}
                 onUpdateTitle={onUpdateTitle}
-              />
-              <IconButton
-                accessibilityLabel={`Delete chat: ${history.title ?? "New Chat"}`}
-                iconName="trash"
-                onClick={() => onDeleteHistory(history.id)}
-                testID={`gpt-delete-history-${history.id}`}
-                variant="destructive"
               />
             </Box>
           </Box>
@@ -1639,7 +1792,10 @@ export const GPTChat = ({
           </Box>
         </Box>
 
-        <ScrollToBottomButton isScrolledUp={isScrolledUp} scrollToBottom={scrollToBottom} />
+        <ScrollToBottomButton
+          isScrolledUp={isScrolledUp && !isEmptyChat}
+          scrollToBottom={scrollToBottom}
+        />
         <AttachmentSection attachments={attachments} onRemoveAttachment={onRemoveAttachment} />
 
         {/* Input */}
@@ -1667,7 +1823,9 @@ export const GPTChat = ({
             <TextArea
               blurOnSubmit={false}
               disabled={isStreaming}
+              grow
               inputRef={handleInputRef}
+              maxHeight={COMPOSER_MAX_HEIGHT}
               onChange={setInputValue}
               placeholder="Type a message..."
               testID="gpt-input"

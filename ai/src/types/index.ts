@@ -84,6 +84,8 @@ export interface ImageContentPart {
   type: "image";
   url: string;
   mimeType?: string;
+  /** Durable storage key when the attachment was uploaded through FileStorageService. */
+  gcsKey?: string;
 }
 
 export interface FileContentPart {
@@ -91,6 +93,8 @@ export interface FileContentPart {
   url: string;
   filename?: string;
   mimeType: string;
+  /** Durable storage key when the attachment was uploaded through FileStorageService. */
+  gcsKey?: string;
 }
 
 export type MessageContentPart = TextContentPart | ImageContentPart | FileContentPart;
@@ -112,9 +116,16 @@ export interface GptHistoryPromptAsk {
   status: GptHistoryAskStatus;
 }
 
+/** Lifecycle of an assistant reply that is persisted while it streams. */
+export type GptHistoryPromptStatus = "streaming" | "complete" | "error";
+
 export interface GptHistoryPrompt {
   model?: string;
   rating?: "up" | "down";
+  /** Set on assistant replies produced by /gpt/prompt. "streaming" while partial text is persisted. */
+  status?: GptHistoryPromptStatus;
+  /** Identifies one /gpt/prompt reply so resume clients can follow it. */
+  streamId?: string;
   text: string;
   type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
   content?: MessageContentPart[];
@@ -375,16 +386,17 @@ export interface GptRouteOptions {
   /** Not read: the routes send a canned demo reply whenever no AI service resolves. */
   demoMode?: boolean;
   /**
-   * Where `/files/upload` stores files. With it, an answer to a `files` ask may name uploads by
-   * `fileId`; without it, only `data:` URLs are accepted and a `fileId` fails with `FILE_NOT_OWNED`.
+   * Where uploads are stored. `download` loads a `files` ask by `fileId`. `upload` and
+   * `getSignedUrl` store `data:` attachments and sign them on later turns. A service with only
+   * `download` still answers `files` asks; attachments are then saved as sent.
    */
-  fileStorageService?: AskFileDownloader;
+  fileStorageService?: import("../service/fileStorage").FileStorageService | AskFileDownloader;
   mcpService?: import("../service/mcpService").MCPService;
   openApiOptions?: Record<string, unknown>;
   tools?: Record<string, import("ai").Tool>;
   toolChoice?: "auto" | "none" | "required";
   maxSteps?: number;
-  /** Cheap model ID used for generating conversation titles (e.g. "gemini-2.0-flash-lite"). Falls back to the main model if not set. */
+  /** Cheap model ID used for generating conversation titles (e.g. "gemini-3.5-flash-lite"). Falls back to the main model if not set. */
   titleModelId?: string;
   /**
    * Assistant replies are whole-reply block documents. Off by default; when off, the system
@@ -396,6 +408,17 @@ export interface GptRouteOptions {
   /** Langfuse prompt name to load and use as the system prompt. Compiled with no variables.
    * Falls back gracefully if Langfuse is not configured or the prompt is not found. */
   langfuseSystemPromptName?: string;
+  /**
+   * When `false` or the function returns `false`, prompts that include attachments are rejected.
+   * Omit or pass `true` to leave uploads enabled.
+   */
+  fileUploadsEnabled?: import("../service/fileUploadsGate").FileUploadsEnabled;
+  /** How often partial assistant output is persisted while streaming. Defaults to 1000ms. */
+  streamPersistIntervalMs?: number;
+  /** How often the resume endpoint polls for new partial output. Defaults to 500ms. */
+  streamResumePollIntervalMs?: number;
+  /** A streaming reply with no persisted update for this long is treated as interrupted. Defaults to 60000ms. */
+  streamStaleAfterMs?: number;
 }
 
 export interface GptHistoryRouteOptions {
@@ -417,6 +440,11 @@ export interface FileRouteOptions {
   gcsBucket: string;
   maxFileSize?: number;
   openApiOptions?: Record<string, unknown>;
+  /**
+   * When `false` or the function returns `false`, `POST /files/upload` is rejected.
+   * Reads and deletes stay available. Omit or pass `true` to leave uploads enabled.
+   */
+  fileUploadsEnabled?: import("../service/fileUploadsGate").FileUploadsEnabled;
 }
 
 export interface McpRouteOptions {

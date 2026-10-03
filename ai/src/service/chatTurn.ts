@@ -1,3 +1,5 @@
+import {randomUUID} from "node:crypto";
+
 import {APIError, logger} from "@terreno/api";
 import {
   ASK_CANCEL_REASONS,
@@ -57,6 +59,7 @@ import {
   toStoredMessages,
   withoutReservedToolNames,
 } from "./asks";
+import {assertFileUploadsEnabled} from "./fileUploadsGate";
 import {fillMissingActionIds} from "./fillActionIds";
 import {
   COMPACT_SURFACE_SYSTEM_PROMPT,
@@ -102,6 +105,12 @@ interface ChatTurnBlocksEvent {
   blocks: {errors: BlockError[]; ok: boolean; warnings: BlockError[]};
 }
 
+interface ChatTurnStartedEvent {
+  historyId: string;
+  started: true;
+  streamId: string;
+}
+
 interface ChatTurnTextEvent {
   text: string;
 }
@@ -128,9 +137,16 @@ type ChatTurnEvent =
   | ChatTurnErrorEvent
   | ChatTurnFileEvent
   | ChatTurnImageEvent
+  | ChatTurnStartedEvent
   | ChatTurnTextEvent
   | ChatTurnToolCallEvent
   | ChatTurnToolResultEvent;
+
+const DEFAULT_STREAM_PERSIST_INTERVAL_MS = 1000;
+// Bump `updated` even without new text so long tool calls do not look stale to resumers.
+const STREAM_HEARTBEAT_MS = 10_000;
+const DURABLE_URL_PATTERN = /^(https?:|data:)/i;
+const DATA_URL_PATTERN = /^data:([^;,]*)((?:;[^;,]*)*?)(;base64)?,(.*)$/s;
 
 /** Receives a turn's events. `open` runs once, before the first event. */
 export interface ChatTurnSink {
@@ -214,6 +230,11 @@ interface TurnRecord {
   rows: GptHistoryPrompt[];
   /** The last error the model stream reported, which it streams instead of throwing. */
   streamError?: string;
+  /**
+   * Text a reload should show right now: committed reply text plus the current step, unless that
+   * step is calling a tool.
+   */
+  streamingText: string;
 }
 
 type StreamPart = {type: string; [key: string]: unknown};
@@ -760,37 +781,141 @@ const claimPendingAsk = async ({
   return saved?.pendingAsk?.toolCallId === toolCallId;
 };
 
-const buildContentParts = (prompt: string, attachments: unknown): MessageContentPart[] => {
-  const contentParts: MessageContentPart[] = [{text: prompt, type: "text"}];
-  if (!attachments || !Array.isArray(attachments)) {
-    return contentParts;
+/**
+ * Reject attachment URLs that only exist on the client (blob:, file:, content:, ph:, ...).
+ * They cannot be read by the model provider or reloaded from history later.
+ */
+const validateAttachments = (attachments: unknown): ChatAttachment[] => {
+  if (attachments === undefined || attachments === null) {
+    return [];
   }
-  const chatAttachments = attachments as ChatAttachment[];
-  logger.debug("Processing attachments", {
-    count: chatAttachments.length,
-    types: chatAttachments.map((a) => ({
-      mimeType: a.mimeType,
-      type: a.type,
-      urlLength: a.url?.length ?? 0,
-    })),
-  });
-  for (const attachment of chatAttachments) {
-    if (attachment.type === "image") {
-      contentParts.push({
-        mimeType: attachment.mimeType,
-        type: "image",
-        url: attachment.url as string,
-      });
-    } else if (attachment.type === "file") {
-      contentParts.push({
-        filename: attachment.filename,
-        mimeType: attachment.mimeType as string,
-        type: "file",
-        url: attachment.url as string,
+  if (!Array.isArray(attachments)) {
+    throw new APIError({status: 400, title: "attachments must be an array"});
+  }
+  for (const attachment of attachments as ChatAttachment[]) {
+    if (attachment?.type !== "image" && attachment?.type !== "file") {
+      continue;
+    }
+    if (typeof attachment.url !== "string" || !DURABLE_URL_PATTERN.test(attachment.url)) {
+      const scheme =
+        typeof attachment.url === "string" ? (attachment.url.split(":")[0] ?? "") : "missing";
+      throw new APIError({
+        detail:
+          `Attachment "${attachment.filename ?? attachment.type}" uses a "${scheme}" URL. ` +
+          "Upload the file first (POST /files/upload) or send it as a data: URL.",
+        status: 400,
+        title: "Attachment URL must be an http(s) or data: URL",
       });
     }
   }
-  return contentParts;
+  return attachments as ChatAttachment[];
+};
+
+const decodeDataUrl = (url: string): {buffer: Buffer; mimeType?: string} | undefined => {
+  const match = DATA_URL_PATTERN.exec(url);
+  if (!match) {
+    return undefined;
+  }
+  const [, mimeType, , base64Flag, payload] = match;
+  const buffer = base64Flag
+    ? Buffer.from(payload, "base64")
+    : Buffer.from(decodeURIComponent(payload), "utf8");
+  return {buffer, mimeType: mimeType || undefined};
+};
+
+/** Build model and history content parts, uploading data: attachments when storage is configured. */
+const buildAttachmentParts = async ({
+  attachments,
+  fileStorageService,
+  userId,
+}: {
+  attachments: ChatAttachment[];
+  fileStorageService?: GptRouteOptions["fileStorageService"];
+  userId?: mongoose.Types.ObjectId;
+}): Promise<{modelParts: MessageContentPart[]; storedParts: MessageContentPart[]}> => {
+  const modelParts: MessageContentPart[] = [];
+  const storedParts: MessageContentPart[] = [];
+  for (const attachment of attachments) {
+    if (attachment.type !== "image" && attachment.type !== "file") {
+      continue;
+    }
+    const url = attachment.url as string;
+    const modelPart: MessageContentPart =
+      attachment.type === "image"
+        ? {mimeType: attachment.mimeType, type: "image", url}
+        : {
+            filename: attachment.filename,
+            mimeType: attachment.mimeType as string,
+            type: "file",
+            url,
+          };
+    modelParts.push(modelPart);
+
+    const decoded = url.startsWith("data:") ? decodeDataUrl(url) : undefined;
+    if (!fileStorageService || !("upload" in fileStorageService) || !userId || !decoded) {
+      storedParts.push(modelPart);
+      continue;
+    }
+    const mimeType = attachment.mimeType ?? decoded.mimeType ?? "application/octet-stream";
+    const extension = mimeType.split("/")[1]?.split("+")[0] ?? "bin";
+    try {
+      const uploaded = await fileStorageService.upload({
+        buffer: decoded.buffer,
+        filename: attachment.filename ?? `attachment-${DateTime.now().toMillis()}.${extension}`,
+        mimeType,
+        userId,
+      });
+      storedParts.push({...modelPart, gcsKey: uploaded.gcsKey, url: uploaded.url});
+    } catch (error) {
+      throw new APIError({
+        cause: error,
+        detail: error instanceof Error ? error.message : String(error),
+        status: 502,
+        title: "Attachment upload failed",
+      });
+    }
+  }
+  return {modelParts, storedParts};
+};
+
+const toPlainPrompt = (prompt: GptHistoryPrompt): GptHistoryPrompt => {
+  const maybeSubdoc = prompt as GptHistoryPrompt & {toObject?: () => GptHistoryPrompt};
+  return typeof maybeSubdoc.toObject === "function" ? maybeSubdoc.toObject() : prompt;
+};
+
+/** Swap stored attachment references for short-lived signed URLs the model provider can fetch. */
+const resolveStoredAttachmentUrls = async (
+  prompts: GptHistoryPrompt[],
+  fileStorageService?: GptRouteOptions["fileStorageService"]
+): Promise<GptHistoryPrompt[]> => {
+  if (!fileStorageService || !("getSignedUrl" in fileStorageService)) {
+    return prompts;
+  }
+  return Promise.all(
+    prompts.map(async (prompt) => {
+      if (!prompt.content?.some((part) => part.type !== "text" && part.gcsKey)) {
+        return prompt;
+      }
+      const plain = toPlainPrompt(prompt);
+      const content = await Promise.all(
+        (plain.content ?? []).map(async (part) => {
+          if (part.type === "text" || !part.gcsKey) {
+            return part;
+          }
+          try {
+            return {...part, url: await fileStorageService.getSignedUrl(part.gcsKey)};
+          } catch (error) {
+            logger.warn("Could not sign stored attachment URL", {
+              error: error instanceof Error ? error.message : String(error),
+              gcsKey: part.gcsKey,
+            });
+            return part;
+          }
+        })
+      );
+      return {...plain, content};
+    })
+  );
 };
 
 /**
@@ -833,12 +958,14 @@ const startTurn = async ({
   askAnswer,
   body,
   options,
+  req,
   userId,
 }: {
   aiService: AIService;
   askAnswer: AskAnswer | undefined;
   body: Record<string, unknown>;
   options: GptRouteOptions;
+  req: express.Request;
   userId: mongoose.Types.ObjectId | undefined;
 }): Promise<TurnStart> => {
   const {attachments, historyId, projectId, prompt} = body;
@@ -911,6 +1038,10 @@ const startTurn = async ({
     };
   }
 
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    await assertFileUploadsEnabled(req, options.fileUploadsEnabled);
+  }
+  const validAttachments = validateAttachments(attachments);
   const {history, resolvedAsk} = await cancelPendingAsk(loaded);
 
   // If history doesn't have a projectId yet but one was provided, associate it
@@ -919,19 +1050,38 @@ const startTurn = async ({
   }
 
   const promptText = prompt as string;
-  const contentParts = buildContentParts(promptText, attachments);
-  const hasAttachments = contentParts.length > 1;
+  logger.debug("Processing attachments", {
+    count: validAttachments.length,
+    types: validAttachments.map((attachment) => ({
+      mimeType: attachment.mimeType,
+      type: attachment.type,
+      urlLength: attachment.url?.length ?? 0,
+    })),
+  });
+  const earlierPrompts = await resolveStoredAttachmentUrls(
+    history.prompts,
+    options.fileStorageService
+  );
+  const {modelParts, storedParts} = await buildAttachmentParts({
+    attachments: validAttachments,
+    fileStorageService: options.fileStorageService,
+    userId,
+  });
+  const hasAttachments = storedParts.length > 0;
   const userRow: GptHistoryPrompt = {
     text: promptText,
     type: "user",
-    ...(hasAttachments ? {content: contentParts} : {}),
+    ...(hasAttachments ? {content: [{text: promptText, type: "text"}, ...storedParts]} : {}),
   };
+  const modelUserRow: GptHistoryPrompt = hasAttachments
+    ? {...userRow, content: [{text: promptText, type: "text"}, ...modelParts]}
+    : userRow;
 
   logger.debug("Building messages", {
-    attachmentCount: contentParts.length - 1,
+    attachmentCount: storedParts.length,
     historyLength: history.prompts.length + 1,
   });
-  const messages = aiService.buildMessages([...history.prompts, userRow]);
+  const messages = aiService.buildMessages([...earlierPrompts, modelUserRow]);
   logger.debug("Messages built", {messageCount: messages.length});
   return {
     history,
@@ -1153,6 +1303,7 @@ const consumeStream = async ({
   approvals,
   askKinds,
   deniedReasons,
+  onStreamStart,
   record,
   result,
   sink,
@@ -1160,6 +1311,8 @@ const consumeStream = async ({
   approvals?: ApprovalContext;
   askKinds: AskKind[];
   deniedReasons: Map<string, string | undefined>;
+  /** Saves the reply row once the model yields a part, after concurrent turns have loaded history. */
+  onStreamStart?: () => Promise<void>;
   record: TurnRecord;
   result: ReturnType<typeof streamText>;
   sink: ChatTurnSink;
@@ -1177,12 +1330,24 @@ const consumeStream = async ({
     sink.emit({image: {mimeType: file.mediaType, url}});
   };
   let partCount = 0;
+  let hasStreamStarted = false;
+  const startStream = async (): Promise<void> => {
+    if (hasStreamStarted || !onStreamStart) {
+      return;
+    }
+    hasStreamStarted = true;
+    await onStreamStart();
+  };
   // Buffer text per step so we can discard reasoning text when a tool call follows.
   // A block document in that step is kept only when the turn would otherwise have no text:
   // models often write the reply beside the tool call and then stop.
   let stepTextBuffer = "";
   let stepHasToolCall = false;
   let toolStepDocument = "";
+
+  const publishStreamingText = (): void => {
+    record.streamingText = record.fullResponse + (stepHasToolCall ? "" : stepTextBuffer);
+  };
 
   const commitStepText = (): void => {
     const cleaned = cleanStepText(stepTextBuffer);
@@ -1200,6 +1365,11 @@ const consumeStream = async ({
   };
 
   for await (const part of result.fullStream as AsyncIterable<StreamPart>) {
+    // The AI SDK emits `start` before it calls the model. Saving there would run before
+    // a concurrent turn has loaded this history. The reply row waits for a model part.
+    if (part.type !== "start") {
+      await startStream();
+    }
     partCount++;
     if (partCount <= 5 || part.type === "error" || part.type === "file") {
       logger.debug("Stream part", {
@@ -1216,12 +1386,14 @@ const consumeStream = async ({
     if (part.type === "start-step") {
       stepTextBuffer = "";
       stepHasToolCall = false;
+      publishStreamingText();
       continue;
     }
     if (part.type === "finish-step") {
       commitStepText();
       stepTextBuffer = "";
       stepHasToolCall = false;
+      publishStreamingText();
       continue;
     }
 
@@ -1246,9 +1418,11 @@ const consumeStream = async ({
       const textChunk = (part.text ?? "") as string;
       if (textChunk) {
         stepTextBuffer += textChunk;
+        publishStreamingText();
       }
     } else if (part.type === "tool-call") {
       stepHasToolCall = true;
+      publishStreamingText();
       const toolName = part.toolName as string;
       const toolCallId = part.toolCallId as string;
       const order = callOrder.size;
@@ -1343,10 +1517,13 @@ const consumeStream = async ({
     }
   }
 
+  await startStream();
   // Flush any remaining buffered text from the last step
   commitStepText();
+  publishStreamingText();
   if (record.fullResponse.trim() === "" && toolStepDocument) {
     record.fullResponse = toolStepDocument;
+    record.streamingText = toolStepDocument;
     sink.emit({text: toolStepDocument});
   }
 
@@ -1472,7 +1649,7 @@ export const runChatTurn = async ({
     return;
   }
 
-  const turn = await startTurn({aiService, askAnswer, body, options, userId});
+  const turn = await startTurn({aiService, askAnswer, body, options, req, userId});
   const {answer, isNewHistory, logPrompt, messages, replayedMessages, resolvedAsk, titlePrompt} =
     turn;
   let {history} = turn;
@@ -1520,8 +1697,6 @@ export const runChatTurn = async ({
     answeredRowCount = resolved.prompts.length;
   }
 
-  sink.open();
-
   const startTime = DateTime.now().toMillis();
   const record: TurnRecord = {
     askCalls: [],
@@ -1529,6 +1704,7 @@ export const runChatTurn = async ({
     generatedImages: [],
     hasOutput: false,
     rows: [...turn.rows],
+    streamingText: "",
   };
   const outputSink: ChatTurnSink = {
     emit: (event) => {
@@ -1540,14 +1716,85 @@ export const runChatTurn = async ({
     open: sink.open,
   };
   let isSaved = false;
+  let historyIsNew = isNewHistory;
   const saveRows = async (rows: GptHistoryPrompt[]): Promise<number> => {
-    const saved = await appendTurnRows({history, isNewHistory, projectId, rows});
+    const saved = await appendTurnRows({
+      history,
+      isNewHistory: historyIsNew,
+      projectId,
+      rows,
+    });
     history = saved.history;
+    historyIsNew = false;
     isSaved = true;
     return saved.firstRowIndex;
   };
   // An ask whose call row is saved pending but that is not yet the conversation's pending ask.
   let unclaimedAsk: AskCall | undefined;
+  const streamId = randomUUID();
+  let pausedPromptIndex = turn.promptIndex;
+  let persistTimer: ReturnType<typeof setInterval> | undefined;
+  let persistQueue: Promise<void> = Promise.resolve();
+  const stopPersisting = async (): Promise<void> => {
+    if (persistTimer !== undefined) {
+      clearInterval(persistTimer);
+      persistTimer = undefined;
+    }
+    await persistQueue;
+  };
+  const removeStreamingPlaceholder = async (): Promise<void> => {
+    await GptHistory.updateOne({_id: history._id}, {$pull: {prompts: {streamId}}});
+  };
+
+  // Open before the model runs so a failure that yields no part is still an SSE error.
+  // The reply row is saved on the first part, after concurrent turns have loaded this history.
+  sink.open();
+  let lastPersistedText = "";
+  let lastPersistedAt = DateTime.now();
+  const persistIntervalMs = options.streamPersistIntervalMs ?? DEFAULT_STREAM_PERSIST_INTERVAL_MS;
+  const beginStreaming = async (): Promise<void> => {
+    const earlyRows = await saveRows([
+      ...record.rows,
+      {
+        model: aiService.modelId,
+        status: "streaming",
+        streamId,
+        text: "",
+        type: "assistant",
+      },
+    ]);
+    if (pausedPromptIndex === undefined) {
+      pausedPromptIndex = earlyRows + 1;
+    }
+    record.rows = [];
+    sink.emit({historyId: history._id.toString(), started: true, streamId});
+    persistTimer = setInterval(() => {
+      const text = record.streamingText;
+      const isHeartbeatDue = DateTime.now().diff(lastPersistedAt).toMillis() >= STREAM_HEARTBEAT_MS;
+      if (text === lastPersistedText && !isHeartbeatDue) {
+        return;
+      }
+      lastPersistedText = text;
+      lastPersistedAt = DateTime.now();
+      persistQueue = persistQueue
+        .then(async () => {
+          await GptHistory.updateOne(
+            {_id: history._id, "prompts.streamId": streamId},
+            {
+              $set: {
+                "prompts.$.text": text,
+                updated: DateTime.now().toJSDate(),
+              },
+            }
+          );
+        })
+        .catch((persistErr: unknown) => {
+          logger.warn("Failed to persist partial GPT response", {
+            error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+          });
+        });
+    }, persistIntervalMs);
+  };
 
   /**
    * Ends a failed turn with `{error}` then `{done}`. An answer's turn that failed before the
@@ -1560,6 +1807,19 @@ export const runChatTurn = async ({
     errorMessage: string;
     isErrorSent: boolean;
   }): Promise<void> => {
+    await stopPersisting();
+    // The streaming placeholder is not part of the answer. Remove it before putting the ask
+    // back, which only applies while the row count is still what the answer stored.
+    if (!record.hasOutput && record.streamingText === "" && record.rows.length === 0) {
+      try {
+        await removeStreamingPlaceholder();
+      } catch (saveErr) {
+        logger.error("Failed to remove a streaming placeholder", {
+          error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+          historyId: history._id.toString(),
+        });
+      }
+    }
     const isAskRestored =
       answer && !record.hasOutput
         ? await restorePendingAsk({answer, history, rowCount: answeredRowCount})
@@ -1589,8 +1849,28 @@ export const runChatTurn = async ({
     }
 
     // Keep what the user saw before the failure. Asks are dropped: the turn cannot pause on them.
-    if (!isSaved && !isAskRestored) {
-      try {
+    try {
+      if (isSaved) {
+        const partial = record.streamingText;
+        if (partial) {
+          await GptHistory.updateOne(
+            {_id: history._id, "prompts.streamId": streamId},
+            {
+              $set: {
+                "prompts.$.status": "error",
+                "prompts.$.text": partial,
+                updated: DateTime.now().toJSDate(),
+              },
+            }
+          );
+        } else {
+          await removeStreamingPlaceholder();
+        }
+        if (record.rows.length > 0) {
+          await saveRows(record.rows);
+          record.rows = [];
+        }
+      } else if (!isAskRestored) {
         await saveRows([
           ...record.rows,
           ...assistantRows({
@@ -1599,12 +1879,12 @@ export const runChatTurn = async ({
             modelId: aiService.modelId,
           }),
         ]);
-      } catch (saveErr) {
-        logger.error("Failed to save a failed turn's rows", {
-          error: saveErr instanceof Error ? saveErr.message : String(saveErr),
-          historyId: history._id.toString(),
-        });
       }
+    } catch (saveErr) {
+      logger.error("Failed to save a failed turn's rows", {
+        error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+        historyId: history._id.toString(),
+      });
     }
     sink.emit({
       done: true,
@@ -1652,6 +1932,7 @@ export const runChatTurn = async ({
           : undefined,
       askKinds: offeredAskKinds,
       deniedReasons: deniedApprovalReasons(messages),
+      onStreamStart: beginStreaming,
       record,
       result,
       sink: outputSink,
@@ -1707,9 +1988,14 @@ export const runChatTurn = async ({
     const [asked, ...otherAsks] = askCalls;
     const droppedAsks = otherAsks.filter((call) => call.origin !== "approval");
     const ask = asked ? {...asked, simple: toSimpleCard(asked)} : undefined;
-    const firstRowIndex = await saveRows([
+    await stopPersisting();
+    const finalRows = [
       ...record.rows,
-      ...assistantRows({fullResponse: storedResponse, generatedImages, modelId: aiService.modelId}),
+      ...assistantRows({
+        fullResponse: storedResponse,
+        generatedImages,
+        modelId: aiService.modelId,
+      }).map((row) => ({...row, status: "complete" as const, streamId})),
       ...(ask
         ? [
             askCallRow(ask, "pending"),
@@ -1717,14 +2003,38 @@ export const runChatTurn = async ({
             ...droppedAsks.map(droppedAskResultRow),
           ]
         : []),
-    ]);
+    ];
+    // A text reply replaces the placeholder in place, so a concurrent turn cannot land between
+    // the user message and this reply. Tool and ask rows are appended after the placeholder goes.
+    const [onlyRow] = finalRows;
+    const replacesPlaceholder =
+      finalRows.length === 1 && onlyRow?.type === "assistant" && onlyRow.streamId === streamId;
+    if (replacesPlaceholder) {
+      await GptHistory.updateOne(
+        {_id: history._id, "prompts.streamId": streamId},
+        {
+          $set: {
+            "prompts.$.model": onlyRow.model,
+            "prompts.$.status": "complete",
+            "prompts.$.text": onlyRow.text,
+            ...(onlyRow.content ? {"prompts.$.content": onlyRow.content} : {}),
+            updated: DateTime.now().toJSDate(),
+          },
+        }
+      );
+    } else {
+      await removeStreamingPlaceholder();
+      if (finalRows.length > 0) {
+        await saveRows(finalRows);
+      }
+    }
     unclaimedAsk = ask;
     const isPaused = ask
       ? await claimPendingAsk({
           ask,
           history,
           // A prompt turn's history ends with its own user message, the first row it appended.
-          promptIndex: turn.promptIndex ?? firstRowIndex + 1,
+          promptIndex: pausedPromptIndex ?? 1,
           responseMessages: toStoredMessages([
             ...replayedMessages,
             ...(await result.response).messages,

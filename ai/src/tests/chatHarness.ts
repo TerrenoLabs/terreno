@@ -407,7 +407,9 @@ export const streamPrompt = async (
     .send(body)
     .buffer(true)
     .parse(collectSse as never);
-  return {events: parseSse(res.body as string), status: res.status};
+  // `{started}` is the resume envelope. These tests assert the ask and block events after it.
+  const events = parseSse(res.body as string).filter((event) => event.started !== true);
+  return {events, status: res.status};
 };
 
 export const loadHistory = async (historyId: string): Promise<GptHistoryDocument> => {
@@ -422,10 +424,12 @@ const plain = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
 
 /** The stored rows. Mongoose gives every row an empty `content` array; no row here has attachments. */
 export const rowsOf = (history: GptHistoryDocument): Record<string, unknown>[] =>
-  (plain(history.prompts) as Record<string, unknown>[]).map(({content, ...row}) => {
-    expect(content).toEqual([]);
-    return row;
-  });
+  (plain(history.prompts) as Record<string, unknown>[]).map(
+    ({content, status: _status, streamId: _streamId, ...row}) => {
+      expect(content).toEqual([]);
+      return row;
+    }
+  );
 
 /** The stored pending ask without its `created` timestamp, which the test cannot know. */
 export const pendingAskOf = (history: GptHistoryDocument): unknown => {

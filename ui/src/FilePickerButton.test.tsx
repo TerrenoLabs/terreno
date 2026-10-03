@@ -1,6 +1,6 @@
 import {afterAll, beforeEach, describe, expect, it, mock} from "bun:test";
 import {fireEvent, waitFor, within} from "@testing-library/react-native";
-import {Pressable} from "react-native";
+import {Platform, Pressable} from "react-native";
 
 // Override the IconButton mock so the onClick fires when pressed.
 mock.module("./IconButton", () => ({
@@ -83,17 +83,20 @@ describe("FilePickerButton", () => {
     expect(getByTestId("file-picker-button").props.accessibilityState).toEqual({disabled: true});
   });
 
-  it("opens the attach modal with both options", () => {
+  it("opens an anchored dropdown with both options instead of a modal", () => {
     const {getByText} = openModal();
-    expect(getByText("Attach")).toBeTruthy();
     expect(getByText("Photo Library")).toBeTruthy();
     expect(getByText("Document")).toBeTruthy();
   });
 
-  it("dismisses the modal via the close control", () => {
-    const {getByLabelText} = renderWithTheme(<FilePickerButton onFilesSelected={() => {}} />);
+  it("closes the dropdown from the backdrop", () => {
+    const {getByLabelText, getByTestId, queryByText} = renderWithTheme(
+      <FilePickerButton onFilesSelected={() => {}} />
+    );
     fireEvent.press(getByLabelText("Attach file"));
-    fireEvent.press(getByLabelText("Close modal"));
+    expect(queryByText("Document")).toBeTruthy();
+    fireEvent.press(getByTestId("file-picker-button-menu.backdrop"));
+    expect(queryByText("Document")).toBeNull();
   });
 
   it("maps picked images and applies default mime type and name", async () => {
@@ -216,5 +219,56 @@ describe("FilePickerButton", () => {
     expect(files[0]).toEqual([
       {mimeType: "image/png", name: "pic.png", size: 2048, uri: "file:///pic.png"},
     ]);
+  });
+
+  it("opens a browser file input for documents on web and returns data URLs", async () => {
+    const listeners: Record<string, () => void | Promise<void>> = {};
+    const file = {name: "notes.txt", type: "text/plain"};
+    const input = {
+      accept: "",
+      addEventListener: (event: string, handler: () => void): void => {
+        listeners[event] = handler;
+      },
+      click: mock(() => {}),
+      files: [file],
+      multiple: false,
+      remove: mock(() => {}),
+      style: {display: ""},
+      type: "",
+    };
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const originalDocument = globals.document;
+    const originalFileReader = globals.FileReader;
+    const originalOS = Platform.OS;
+
+    const {files, getByText} = openModal();
+    globals.document = {
+      body: {appendChild: mock(() => {})},
+      createElement: (): typeof input => input,
+    };
+    globals.FileReader = class {
+      onerror: (() => void) | null = null;
+      onload: (() => void) | null = null;
+      result = "data:text/plain;base64,aGk=";
+      readAsDataURL(): void {
+        this.onload?.();
+      }
+    };
+    Platform.OS = "web";
+    try {
+      fireEvent.press(getByText("Document"));
+      expect(input.click).toHaveBeenCalledTimes(1);
+      expect(input.accept).toBe("application/pdf,text/plain,text/csv,application/json");
+      await listeners.change?.();
+      await waitFor(() => expect(files).toHaveLength(1));
+      expect(files[0]).toEqual([
+        {mimeType: "text/plain", name: "notes.txt", uri: "data:text/plain;base64,aGk="},
+      ]);
+      expect(getDocumentAsync).not.toHaveBeenCalled();
+    } finally {
+      Platform.OS = originalOS;
+      globals.document = originalDocument;
+      globals.FileReader = originalFileReader;
+    }
   });
 });

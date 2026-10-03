@@ -1,10 +1,12 @@
 import {DateTime} from "luxon";
 import React, {useCallback, useState} from "react";
+import {Platform} from "react-native";
 
 import {Box} from "./Box";
 import {Button} from "./Button";
+import {DropdownMenuItem} from "./DropdownMenuItem";
+import {DropdownPanel} from "./DropdownPanel";
 import {IconButton} from "./IconButton";
-import {Modal} from "./Modal";
 
 export interface SelectedFile {
   mimeType: string;
@@ -35,6 +37,61 @@ export interface FilePickerButtonProps {
   text?: string;
 }
 
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = (): void => reject(reader.error ?? new Error("Failed to read file"));
+    reader.onload = (): void => resolve(String(reader.result));
+    reader.readAsDataURL(file);
+  });
+
+/**
+ * Opens the browser file dialog. Must run synchronously inside the press handler: browsers
+ * only open a file input from a trusted user gesture, which an awaited import would lose.
+ * Files resolve as `data:` URLs so they outlive the page, unlike `blob:` object URLs.
+ */
+const pickFilesOnWeb = ({
+  accept,
+  multiple,
+}: {
+  accept: string;
+  multiple: boolean;
+}): Promise<SelectedFile[]> =>
+  new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    input.multiple = multiple;
+    input.style.display = "none";
+    const cleanup = (): void => {
+      input.remove();
+    };
+    input.addEventListener("change", async () => {
+      const files = Array.from(input.files ?? []);
+      cleanup();
+      try {
+        const selected = await Promise.all(
+          files.map(async (file) => ({
+            mimeType: file.type || "application/octet-stream",
+            name: file.name,
+            ...(file.size === undefined ? {} : {size: file.size}),
+            uri: await readFileAsDataUrl(file),
+          }))
+        );
+        resolve(selected);
+      } catch (error) {
+        console.warn("Failed to read selected files", error);
+        resolve([]);
+      }
+    });
+    input.addEventListener("cancel", () => {
+      cleanup();
+      resolve([]);
+    });
+    document.body.appendChild(input);
+    input.click();
+  });
+
 export const FilePickerButton = ({
   disabled = false,
   documentTypes = DEFAULT_DOCUMENT_TYPES,
@@ -44,11 +101,26 @@ export const FilePickerButton = ({
   testID,
   text,
 }: FilePickerButtonProps): React.ReactElement => {
-  const [showModal, setShowModal] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const includeDocuments = documentTypes.length > 0;
+  const triggerTestID = testID ?? "file-picker-button";
+
+  const handleWebPick = useCallback(
+    async (accept: string): Promise<void> => {
+      const files = await pickFilesOnWeb({accept, multiple});
+      if (files.length > 0) {
+        onFilesSelected(files);
+      }
+    },
+    [multiple, onFilesSelected]
+  );
 
   const handlePickImage = useCallback(async () => {
-    setShowModal(false);
+    setIsMenuOpen(false);
+    if (Platform.OS === "web") {
+      await handleWebPick("image/*");
+      return;
+    }
     const ImagePicker = await import("expo-image-picker");
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsMultipleSelection: multiple,
@@ -65,10 +137,14 @@ export const FilePickerButton = ({
       }));
       onFilesSelected(files);
     }
-  }, [multiple, onFilesSelected]);
+  }, [handleWebPick, multiple, onFilesSelected]);
 
   const handlePickDocument = useCallback(async () => {
-    setShowModal(false);
+    setIsMenuOpen(false);
+    if (Platform.OS === "web") {
+      await handleWebPick(documentTypes.join(","));
+      return;
+    }
     const DocumentPicker = await import("expo-document-picker");
     const result = await DocumentPicker.getDocumentAsync({multiple, type: documentTypes});
 
@@ -81,7 +157,7 @@ export const FilePickerButton = ({
       }));
       onFilesSelected(files);
     }
-  }, [documentTypes, multiple, onFilesSelected]);
+  }, [documentTypes, handleWebPick, multiple, onFilesSelected]);
 
   const handleOpen = useCallback((): void => {
     if (!includeImages) {
@@ -92,42 +168,76 @@ export const FilePickerButton = ({
       void handlePickImage();
       return;
     }
-    setShowModal(true);
+    setIsMenuOpen(true);
   }, [handlePickDocument, handlePickImage, includeDocuments, includeImages]);
 
-  const buttonTestID = testID ?? "file-picker-button";
+  const trigger =
+    text === undefined ? (
+      <IconButton
+        accessibilityLabel="Attach file"
+        disabled={disabled}
+        iconName="paperclip"
+        onClick={handleOpen}
+        testID={triggerTestID}
+      />
+    ) : (
+      <Button
+        disabled={disabled}
+        iconName="paperclip"
+        onClick={handleOpen}
+        testID={triggerTestID}
+        text={text}
+        variant="outline"
+      />
+    );
+
+  if (!includeImages || !includeDocuments) {
+    return trigger;
+  }
 
   return (
-    <>
-      {text === undefined ? (
-        <IconButton
-          accessibilityLabel="Attach file"
-          disabled={disabled}
-          iconName="paperclip"
-          onClick={handleOpen}
-          testID={buttonTestID}
-        />
-      ) : (
-        <Button
-          disabled={disabled}
-          iconName="paperclip"
-          onClick={handleOpen}
-          testID={buttonTestID}
-          text={text}
-          variant="outline"
-        />
-      )}
-      <Modal onDismiss={() => setShowModal(false)} size="sm" title="Attach" visible={showModal}>
-        <Box gap={2} padding={3}>
+    <DropdownPanel
+      align="auto"
+      isOpen={isMenuOpen}
+      onOpenChange={setIsMenuOpen}
+      renderTrigger={({toggle}) =>
+        text === undefined ? (
+          <IconButton
+            accessibilityLabel="Attach file"
+            disabled={disabled}
+            iconName="paperclip"
+            onClick={toggle}
+            testID={triggerTestID}
+          />
+        ) : (
           <Button
-            iconName="image"
-            onClick={handlePickImage}
-            text="Photo Library"
+            disabled={disabled}
+            iconName="paperclip"
+            onClick={toggle}
+            testID={triggerTestID}
+            text={text}
             variant="outline"
           />
-          <Button iconName="file" onClick={handlePickDocument} text="Document" variant="outline" />
-        </Box>
-      </Modal>
-    </>
+        )
+      }
+      showActionButtons={false}
+      testID={`${triggerTestID}-menu`}
+      width={200}
+    >
+      <Box gap={1}>
+        <DropdownMenuItem
+          iconName="image"
+          label="Photo Library"
+          onClick={handlePickImage}
+          testID={`${triggerTestID}-photo`}
+        />
+        <DropdownMenuItem
+          iconName="file"
+          label="Document"
+          onClick={handlePickDocument}
+          testID={`${triggerTestID}-document`}
+        />
+      </Box>
+    </DropdownPanel>
   );
 };

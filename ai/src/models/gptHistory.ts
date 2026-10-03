@@ -85,6 +85,10 @@ const pendingAskSchema = new mongoose.Schema(
 const contentPartSchema = new mongoose.Schema(
   {
     filename: {description: "Original filename of the attached file", type: String},
+    gcsKey: {
+      description: "Durable storage key for an attachment uploaded through FileStorageService",
+      type: String,
+    },
     mimeType: {description: "MIME type of the content part", type: String},
     text: {description: "Text content of this part", type: String},
     type: {
@@ -113,12 +117,22 @@ const gptHistoryPromptSchema = new mongoose.Schema(
       type: String,
     },
     result: {description: "Result returned from a tool call", type: mongoose.Schema.Types.Mixed},
+    status: {
+      description:
+        "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+      enum: ["streaming", "complete", "error"],
+      type: String,
+    },
+    streamId: {
+      description: "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+      type: String,
+    },
     text: {
       default: "",
       description: "Text content of the prompt or response",
-      // Image-only responses carry their payload in content, not text
-      required: function (this: {content?: unknown[]}): boolean {
-        return !this.content?.length;
+      // Image-only responses carry their payload in content, and streaming replies start empty
+      required: function (this: {content?: unknown[]; status?: string}): boolean {
+        return !this.content?.length && !this.status;
       },
       type: String,
     },

@@ -20,6 +20,31 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.9.0] - 2026-10-03
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.9.0.md`](mcp-server/src/docs/upgrades/57.9.0.md).
+
+### Added
+
+- `@terreno/ui` can compose operations dashboards with scorecards, comparison sparklines, multi-series line and area charts, donut center labels, previous-period bar overlays, chart-card headers, and spanning dashboard items.
+- File uploads can be turned off with the `file-uploads` feature flag. `POST /files/upload`, document storage uploads, and chat attachments return 403 when the flag is off. The example app hides the upload controls. A missing flag leaves uploads enabled.
+- `/gpt/prompt` rejects client-only attachment URLs (`blob:`, `file:`, `content:`, `ph:`) with `400` before streaming. With `fileStorageService` configured, `data:` attachments are uploaded and history stores the storage `url` plus `gcsKey`; later turns send the model signed URLs.
+- `/gpt/prompt` saves the turn before streaming, sends a first `{historyId, started: true, streamId}` event, and persists partial reply text about every second with `status: "streaming"`. The finished reply is saved with `status: "complete"`; a failed one keeps its partial text with `status: "error"`.
+- New `GET /gpt/histories/:id/stream` re-attaches to an in-flight reply after a reload or remount (`offset` skips text the client already shows). The example app reopens the last chat after a reload and resumes its live reply.
+- `store-assets` agent skill for Expo apps. It keeps a simulator/emulator dev client in sync with the native fingerprint (downloading a matching EAS build or starting one), captures App Store and Google Play screenshots on store-sized devices with Maestro flows that log in through the `@terreno/ui` LoginScreen, and renders the Play feature graphic and 512×512 icon from a repo's `storeAssets.config.json`. Install with `npx skills add TerrenoLabs/terreno --skill store-assets` or from the `terreno` Claude plugin.
+
+### Changed
+
+- `GPTChat` history rows move rename and delete into a three-dot overflow menu. Rename uses an outlined pencil in the dark secondary color; titles truncate before the menu trigger at any sidebar width.
+- `GPTChat` shows "Scroll to bottom" only when content sits below the viewport, never in an empty chat.
+- The `GPTChat` composer grows with long text up to 200px, then scrolls. `TextField` / `TextArea` accept `maxHeight` to cap `grow`.
+- Generated images in `GPTChat` offer copy-image and (web) download. Copying an image-only reply copies the image instead of text.
+- `FilePickerButton` opens an anchored dropdown instead of a modal. On web, **Document** now opens the file picker, and both options return `data:` URLs instead of `blob:` URLs.
+
+### Fixed
+
+- Web toasts now render above open modals and remain correctly centered in statically exported apps instead of inheriting a zero-width server-rendered viewport.
+
 ## [57.8.0] - 2026-10-02
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.8.0.md`](mcp-server/src/docs/upgrades/57.8.0.md).

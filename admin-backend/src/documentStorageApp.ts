@@ -12,6 +12,8 @@ import type express from "express";
 import {DateTime} from "luxon";
 import multer from "multer";
 
+import {assertFileUploadsEnabled, type FileUploadsEnabled} from "./fileUploadsGate";
+
 export interface DocumentStorageOptions {
   bucketName: string;
   folderPrefix?: string;
@@ -19,6 +21,11 @@ export interface DocumentStorageOptions {
   allowedMimeTypes?: string[];
   maxFileSize?: number;
   signedUrlExpiration?: number;
+  /**
+   * When `false` or the function returns `false`, `POST` uploads are rejected.
+   * Listing, download, and delete stay available. Omit or pass `true` to leave uploads enabled.
+   */
+  fileUploadsEnabled?: FileUploadsEnabled;
 }
 
 export interface DocumentFile {
@@ -194,6 +201,7 @@ export class DocumentStorageApp implements TerrenoPlugin {
       ...adminGuard,
       upload.single("file") as unknown as express.RequestHandler,
       asyncHandler(async (req: express.Request, res: express.Response) => {
+        await assertFileUploadsEnabled(req, this.options.fileUploadsEnabled);
         const file = (req as unknown as {file?: Express.Multer.File}).file;
         if (!file) {
           throw new APIError({status: 400, title: "No file provided"});

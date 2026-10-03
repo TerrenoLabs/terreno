@@ -783,9 +783,7 @@ describe("/gpt/prompt asks", () => {
     it("cancels an ask whose call row was saved when the turn fails before claiming it", async () => {
       const model = createScriptedModel({steps: [toolCallStep(PLAN_ASK_CALL)]});
       const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
-      const claim = spyOn(GptHistory, "findOneAndUpdate").mockImplementationOnce(() => {
-        throw new Error("Primary stepped down");
-      });
+      const claim = failNextAskClaim();
 
       const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
 

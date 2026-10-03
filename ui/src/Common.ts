@@ -996,6 +996,11 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
 
   grow?: boolean;
+  /**
+   * Caps the height (in pixels) a `grow` field expands to. Past the cap the field
+   * stops growing and its content scrolls.
+   */
+  maxHeight?: number;
   multiline?: boolean;
   rows?: number;
 

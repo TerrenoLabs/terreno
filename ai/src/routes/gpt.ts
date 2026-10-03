@@ -9,6 +9,7 @@ import {
 } from "@terreno/api";
 import {ASK_SURFACES, askSurfaceSchema} from "@terreno/blocks";
 import type express from "express";
+import {DateTime} from "luxon";
 import type mongoose from "mongoose";
 
 import {GptHistory} from "../models/gptHistory";
@@ -40,6 +41,17 @@ const SURFACE_BODY: OpenApiSchemaProperty = {
 interface SseSink extends ChatTurnSink {
   isOpen: () => boolean;
 }
+
+const DEFAULT_STREAM_RESUME_POLL_INTERVAL_MS = 500;
+const DEFAULT_STREAM_STALE_AFTER_MS = 60_000;
+
+const sseEvent = (payload: Record<string, unknown>): string =>
+  `data: ${JSON.stringify(payload)}\n\n`;
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 /** Writes turn events as server-sent events. Headers go out when the turn opens the sink. */
 const createSseSink = (res: express.Response): SseSink => {
@@ -73,6 +85,9 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
   if (askKinds.length > 0) {
     assertNoReservedToolNames(routeTools);
   }
+  const resumePollIntervalMs =
+    options.streamResumePollIntervalMs ?? DEFAULT_STREAM_RESUME_POLL_INTERVAL_MS;
+  const staleAfterMs = options.streamStaleAfterMs ?? DEFAULT_STREAM_STALE_AFTER_MS;
 
   router.post(
     "/gpt/prompt",
@@ -135,6 +150,128 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         });
       }
     }
+  );
+
+  // Re-attach to a reply that /gpt/prompt is still streaming (e.g. after a reload or remount).
+  // Polls the persisted partial output, so it works across server instances.
+  router.get(
+    "/gpt/histories/:id/stream",
+    [
+      authenticateMiddleware(),
+      createOpenApiBuilder(options.openApiOptions ?? {})
+        .withTags(["gpt"])
+        .withSummary("Resume an in-flight GPT reply as SSE")
+        .withPathParameter("id", {type: "string"})
+        .withQueryParameter(
+          "streamId",
+          {type: "string"},
+          {description: "Reply to follow. Defaults to the latest streaming reply."}
+        )
+        .withQueryParameter(
+          "offset",
+          {type: "number"},
+          {description: "Characters of the reply the client already shows. Defaults to 0."}
+        )
+        .withResponse(200, {data: {type: "string"}})
+        .build(),
+    ],
+    asyncHandler(async (req: express.Request, res: express.Response) => {
+      const {id} = req.params;
+      const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id;
+      const requestedStreamId =
+        typeof req.query.streamId === "string" ? req.query.streamId : undefined;
+      const parsedOffset = Number(req.query.offset ?? 0);
+      const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
+
+      const history = await GptHistory.findById(id);
+      if (!history) {
+        throw new APIError({status: 404, title: "History not found"});
+      }
+      if (history.userId.toString() !== userId?.toString()) {
+        throw new APIError({status: 403, title: "Not authorized to access this history"});
+      }
+
+      const reply = requestedStreamId
+        ? history.prompts.find((p) => p.streamId === requestedStreamId)
+        : history.prompts.findLast((p) => p.status === "streaming");
+      const streamId = reply?.streamId;
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.write(sseEvent({historyId: id, resumed: true, ...(streamId ? {streamId} : {})}));
+
+      let isClosed = false;
+      req.on("close", () => {
+        isClosed = true;
+      });
+
+      let isInitialPoll = true;
+      let sentText: string | undefined;
+      let sentLength = offset;
+      try {
+        while (!isClosed) {
+          const current = streamId ? await GptHistory.findById(id) : history;
+          if (!current) {
+            res.write(sseEvent({error: "History not found"}));
+            break;
+          }
+          const currentReply = streamId
+            ? current.prompts.find((p) => p.streamId === streamId)
+            : undefined;
+          const text = currentReply?.text ?? "";
+
+          if (isInitialPoll && offset > 0) {
+            // The client can have loaded a stale placeholder before reconnecting.
+            res.write(sseEvent({replace: true, text}));
+          } else if (sentText !== undefined && !text.startsWith(sentText)) {
+            // Text from a step that turned into a tool call was discarded; resend the reply
+            res.write(sseEvent({replace: true, text}));
+          } else if (text.length > sentLength) {
+            res.write(sseEvent({text: text.slice(sentLength)}));
+          }
+          isInitialPoll = false;
+          sentText = text;
+          sentLength = text.length;
+
+          if (currentReply?.status === "streaming") {
+            const sinceUpdateMs = DateTime.now()
+              .diff(DateTime.fromJSDate(current.updated))
+              .toMillis();
+            if (sinceUpdateMs > staleAfterMs) {
+              await GptHistory.updateOne(
+                {_id: current._id, prompts: {$elemMatch: {status: "streaming", streamId}}},
+                {$set: {"prompts.$.status": "error"}}
+              );
+              res.write(sseEvent({error: "The reply was interrupted before it finished"}));
+              res.write(sseEvent({done: true, historyId: id}));
+              break;
+            }
+            await sleep(resumePollIntervalMs);
+            continue;
+          }
+
+          for (const part of currentReply?.content ?? []) {
+            if (part.type === "image") {
+              res.write(sseEvent({image: {mimeType: part.mimeType, url: part.url}}));
+            }
+          }
+          if (currentReply?.status === "error") {
+            res.write(sseEvent({error: "The reply was interrupted before it finished"}));
+          }
+          res.write(
+            sseEvent({done: true, historyId: id, ...(current.title ? {title: current.title} : {})})
+          );
+          break;
+        }
+      } catch (error) {
+        logger.error("Error resuming GPT stream", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        res.write(sseEvent({error: error instanceof Error ? error.message : "Unknown error"}));
+      }
+      res.end();
+    })
   );
 
   router.patch(

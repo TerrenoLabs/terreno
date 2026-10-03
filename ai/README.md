@@ -20,7 +20,7 @@ import {AiApp, AIService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 import {User} from "./models/user";
 
-const aiService = new AIService({model: google("gemini-2.5-flash")});
+const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 new TerrenoApp({userModel: User})
   .register(new AiApp({aiService}))

@@ -1,10 +1,29 @@
-import type {HarnessTaskDefinition} from "../types/harness";
+import type {HarnessAgentDefinition, HarnessTaskDefinition} from "../types/harness";
 import {HARNESS_TERMINAL_STATUSES} from "../types/harness";
 import type {HarnessModels} from "./commit";
 import {taskDefinitionKey} from "./defineTask";
 
 /** Any task definition, whatever its input, state, and output types. */
 export type AnyHarnessTaskDefinition = HarnessTaskDefinition<never, unknown, unknown>;
+
+/** Separate agents (by unique name) from task definitions. */
+export const splitRegistry = (
+  registry: ReadonlyArray<AnyHarnessTaskDefinition | HarnessAgentDefinition>
+): {agents: Map<string, HarnessAgentDefinition>; tasks: AnyHarnessTaskDefinition[]} => {
+  const agents = new Map<string, HarnessAgentDefinition>();
+  const tasks: AnyHarnessTaskDefinition[] = [];
+  for (const entry of registry) {
+    if (entry.kind !== "agent") {
+      tasks.push(entry);
+      continue;
+    }
+    if (agents.has(entry.name)) {
+      throw new Error(`Harness registry lists agent "${entry.name}" more than once`);
+    }
+    agents.set(entry.name, entry);
+  }
+  return {agents, tasks};
+};
 
 /**
  * Index definitions by exact `name@version`. Several versions of one name may sit side by

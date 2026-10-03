@@ -34,7 +34,23 @@ export const defineTask = <In, State, Out>(
     }
   }
   if (definition.retry !== undefined) {
-    assertValidRetryPolicy(definition.name, definition.retry);
+    assertValidRetryPolicy(`defineTask(${definition.name})`, definition.retry);
+  }
+  if (
+    definition.onInterrupt !== undefined &&
+    definition.onInterrupt !== "park" &&
+    definition.onInterrupt !== "fail"
+  ) {
+    throw new Error(`defineTask(${definition.name}): onInterrupt must be "park" or "fail"`);
+  }
+  if (
+    definition.spanKind !== undefined &&
+    !["AGENT", "CHAIN", "TOOL"].includes(definition.spanKind)
+  ) {
+    throw new Error(`defineTask(${definition.name}): spanKind must be AGENT, CHAIN, or TOOL`);
+  }
+  if (definition.spanName !== undefined && typeof definition.spanName !== "function") {
+    throw new Error(`defineTask(${definition.name}): spanName must be a function`);
   }
   if (definition.abort !== undefined && typeof definition.abort !== "function") {
     throw new Error(`defineTask(${definition.name}): abort must be a function`);

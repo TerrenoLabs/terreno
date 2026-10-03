@@ -35,7 +35,7 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: reference retry/abort/ownership; explanation ownership tree
   - Acceptance: AC4 (phase retries) + AC5 — ordering assertion on abort handlers; `failFast` aborts siblings
 
-- [ ] **Task 1.4**: Agents, conversations, tools, model-call resilience
+- [x] **Task 1.4**: Agents, conversations, tools, model-call resilience
   - Delivers: `defineAgent`, `defineTool` (zod params, `replay`), `HarnessConversation` + `HarnessMessage`; built-in `terreno.agent.turn` task (`request` ⇄ `tools` phases, `maxSteps`); tools run as child tasks; interrupted `never` tools reported to the model; model calls retry 429/5xx then `fallbackModels`; interrupted model requests re-requested; LLM/TOOL spans with usage/cost; `ExecutionEnv` interface (types only) on `rt.env`
   - Files: `defineAgent.ts`, `defineTool.ts`, `agentLoop.ts`, `modelCall.ts`, `executionEnv.ts`, `models/harnessConversation.ts`, `models/harnessMessage.ts`, tests
   - Blocked by: 1.3

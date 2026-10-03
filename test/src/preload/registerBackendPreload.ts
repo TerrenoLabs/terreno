@@ -22,6 +22,8 @@ import {
   startTestTransaction,
 } from "../transaction/testTransaction";
 
+const MONGO_STOP_TIMEOUT_MS = 30_000;
+
 export interface BackendPreloadOptions {
   disableDb?: boolean;
   mongo?: MongoServerOptions;
@@ -110,10 +112,11 @@ export const registerBackendPreload = (options: BackendPreloadOptions = {}): voi
     }, beforeAllTimeoutMs());
 
     if (connectMongoInBeforeAll) {
+      // Stopping an in-memory replica set under load can exceed Bun's 5s hook default
       afterAll(async () => {
         await options.onAfterAll?.();
         await stopMongoServer();
-      });
+      }, MONGO_STOP_TIMEOUT_MS);
     } else {
       afterAll(async () => {
         await options.onAfterAll?.();

@@ -1,9 +1,13 @@
 import {DateTime, Duration, type DurationLike} from "luxon";
 import mongoose from "mongoose";
 
+import {getObservabilityApp} from "../observability/observabilityAppRegistry";
+import type {ModelPrice} from "../observability/types";
 import type {
   HarnessAbortOptions,
+  HarnessAgentDefinition,
   HarnessCreateTaskOptions,
+  HarnessModelResolver,
   HarnessResolveInterruptedOptions,
   HarnessRunner,
   HarnessTaskDefinition,
@@ -16,9 +20,18 @@ import {
   HARNESS_TERMINAL_STATUSES,
 } from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
+import {type AgentTasks, createAgentTasks} from "./agentLoop";
 import {commitResolution, createTaskRecords, type HarnessModels} from "./commit";
+import {
+  type ConversationContext,
+  conversationAgentSnapshot,
+  HarnessConversationHandle,
+} from "./conversation";
 import {taskDefinitionKey} from "./defineTask";
+import type {ExecutionEnv} from "./executionEnv";
 import {acquireOwnerLease, releaseOwnerLease} from "./leases";
+import {registerHarnessConversation} from "./models/harnessConversation";
+import {registerHarnessMessage} from "./models/harnessMessage";
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
 import {abortTaskTree, type HarnessEngine, settleTaskOwner} from "./ownership";
@@ -26,18 +39,31 @@ import {
   type AnyHarnessTaskDefinition,
   assertInFlightVersionsRegistered,
   buildTaskRegistry,
+  splitRegistry,
 } from "./registry";
 import {InProcessRunner} from "./runners/inProcessRunner";
 import {claimNextTask, recoverExpiredTasks, runClaimedTask} from "./runtime";
 
 export type {
+  AnyHarnessToolDefinition,
   HarnessAbortOptions,
   HarnessAbortRuntime,
+  HarnessAgentDefinition,
+  HarnessAgentDefinitionInput,
   HarnessChildOutcome,
   HarnessChildTaskOptions,
   HarnessCommit,
+  HarnessConversationAgent,
+  HarnessConversationDocument,
+  HarnessConversationStatus,
   HarnessCreateTaskOptions,
+  HarnessInterruptAction,
   HarnessLeaseSettings,
+  HarnessMessageDocument,
+  HarnessMessagePart,
+  HarnessMessageRole,
+  HarnessModelRef,
+  HarnessModelResolver,
   HarnessOutcome,
   HarnessPhaseCommit,
   HarnessPhaseDefinition,
@@ -47,28 +73,57 @@ export type {
   HarnessRetryPolicy,
   HarnessRunner,
   HarnessRunnerContext,
+  HarnessSubmitOptions,
   HarnessTaskDefinition,
   HarnessTaskDefinitionInput,
   HarnessTaskDocument,
   HarnessTaskRuntime,
+  HarnessTaskSpanKind,
   HarnessTaskStatus,
   HarnessTaskView,
   HarnessTerminalCommit,
   HarnessTestHooks,
+  HarnessTextPart,
+  HarnessToolApi,
+  HarnessToolCallPart,
+  HarnessToolDefinition,
+  HarnessToolDefinitionInput,
+  HarnessToolResultPart,
+  HarnessTurnResult,
   HarnessWaitForTasksOptions,
   HarnessWaiting,
   HarnessWaitKind,
   HarnessWaitPolicy,
 } from "../types/harness";
 export {
+  HARNESS_AGENT_DEFAULT_MAX_STEPS,
+  HARNESS_CONVERSATION_STATUSES,
+  HARNESS_INTERRUPT_ACTIONS,
+  HARNESS_MESSAGE_ROLES,
+  HARNESS_MODEL_RETRY_DEFAULTS,
   HARNESS_RESOLVE_ACTIONS,
   HARNESS_RETRY_DEFAULTS,
   HARNESS_TASK_STATUSES,
   HARNESS_WAIT_KINDS,
   HARNESS_WAIT_POLICIES,
 } from "../types/harness";
+export {AGENT_TOOL_TASK_NAME, AGENT_TURN_TASK_NAME} from "./agentLoop";
 export {HarnessCommitConflictError} from "./commit";
+export {HarnessConversationBusyError, HarnessConversationHandle} from "./conversation";
+export {defineAgent} from "./defineAgent";
 export {defineTask} from "./defineTask";
+export {defineTool} from "./defineTool";
+export type {
+  ExecutionEnv,
+  ExecutionEnvCallOptions,
+  ExecutionEnvExecOptions,
+  ExecutionEnvExecResult,
+} from "./executionEnv";
+export {
+  HarnessModelCallError,
+  isRetryableModelError,
+  type ModelCallAttempt,
+} from "./modelCall";
 export type {AnyHarnessTaskDefinition} from "./registry";
 export {
   IN_PROCESS_RUNNER_ROLES,
@@ -78,8 +133,23 @@ export {
 } from "./runners/inProcessRunner";
 
 export interface HarnessOpenOptions {
-  /** Every task definition (and version) this process may create or resume. */
-  registry: ReadonlyArray<AnyHarnessTaskDefinition>;
+  /** Handed to phases as `rt.env` and to tools as `api.env` (interface only in Phase 1). */
+  env?: ExecutionEnv;
+  /**
+   * Turns an agent's `{provider, modelId}` into a Vercel AI SDK `LanguageModel`. Required
+   * when the registry lists an agent.
+   */
+  models?: HarnessModelResolver;
+  /**
+   * Per-model token prices for LLM span `usage.costUsd`. Defaults to the registered
+   * `ObservabilityApp`'s `priceMap`.
+   */
+  priceMap?: Record<string, ModelPrice>;
+  /**
+   * Every task definition (and version) this process may create or resume, and every
+   * agent (`defineAgent`) its conversations may use.
+   */
+  registry: ReadonlyArray<AnyHarnessTaskDefinition | HarnessAgentDefinition>;
   /** Defaults to a new `InProcessRunner`. */
   runner?: HarnessRunner;
   /** Test-only seams; never set in production code. */
@@ -122,6 +192,8 @@ const resolveObservabilityModels = (): {span: ObsSpanModel; trace: ObsTraceModel
  * who executes runnable tasks.
  */
 export class Harness {
+  private readonly agents: Map<string, HarnessAgentDefinition>;
+  private readonly agentTasks: AgentTasks;
   private readonly definitions: Map<string, HarnessTaskDefinition>;
   private readonly engine: HarnessEngine;
   private isStarted = false;
@@ -130,16 +202,24 @@ export class Harness {
   private readonly testHooks: HarnessTestHooks | undefined;
 
   private constructor({
+    agents,
+    agentTasks,
     definitions,
+    env,
     models,
     runner,
     testHooks,
   }: {
+    agents: Map<string, HarnessAgentDefinition>;
+    agentTasks: AgentTasks;
     definitions: Map<string, HarnessTaskDefinition>;
+    env?: ExecutionEnv;
     models: HarnessModels;
     runner: HarnessRunner;
     testHooks?: HarnessTestHooks;
   }) {
+    this.agents = agents;
+    this.agentTasks = agentTasks;
     this.definitions = definitions;
     this.models = models;
     this.runner = runner;
@@ -147,6 +227,7 @@ export class Harness {
     this.engine = {
       controllers: new Map(),
       definitions,
+      env,
       models,
       testHooks,
       wake: () => runner.wake(),
@@ -160,14 +241,39 @@ export class Harness {
   static async open(options: HarnessOpenOptions): Promise<Harness> {
     const {span, trace} = resolveObservabilityModels();
     await assertReplicaSet();
-    const definitions = buildTaskRegistry(options.registry);
-    const task = registerHarnessTask();
-    const owner = registerHarnessOwner();
+    const {agents, tasks} = splitRegistry(options.registry);
+    if (agents.size > 0 && !options.models) {
+      throw new Error("Harness.open: the registry lists agents; pass `models` to resolve them");
+    }
+    const models: HarnessModels = {
+      conversation: registerHarnessConversation(),
+      message: registerHarnessMessage(),
+      owner: registerHarnessOwner(),
+      span,
+      task: registerHarnessTask(),
+      trace,
+    };
+    const agentTasks = createAgentTasks({
+      agents,
+      models,
+      priceMap: () => options.priceMap ?? getObservabilityApp()?.priceMap,
+      random: options.testHooks?.random,
+      resolveModel: options.models,
+    });
+    // The built-in agent tasks are always registered, so in-flight turns resume anywhere.
+    const definitions = buildTaskRegistry([
+      ...tasks,
+      agentTasks.turn as unknown as AnyHarnessTaskDefinition,
+      agentTasks.tool as unknown as AnyHarnessTaskDefinition,
+    ]);
     // Transactions cannot create collections or indexes on every server version.
-    await Promise.all([task.init(), owner.init(), span.init(), trace.init()]);
+    await Promise.all(Object.values(models).map((model) => model.init()));
     return new Harness({
+      agents,
+      agentTasks,
       definitions,
-      models: {owner, span, task, trace},
+      env: options.env,
+      models,
       runner: options.runner ?? new InProcessRunner(),
       testHooks: options.testHooks,
     });
@@ -320,6 +426,44 @@ export class Harness {
       await settleTaskOwner({engine: this.engine, task: resolved});
     }
     return resolved;
+  }
+
+  /**
+   * Start a conversation with a registered agent. Its config (model, instructions, tool
+   * names, fallbacks, `maxSteps`) is snapshotted onto the conversation.
+   */
+  async createConversation({
+    agent,
+    userId,
+  }: {
+    agent: HarnessAgentDefinition;
+    userId?: mongoose.Types.ObjectId | string;
+  }): Promise<HarnessConversationHandle> {
+    if (this.agents.get(agent?.name) !== agent) {
+      throw new Error(`Agent "${agent?.name}" is not in this harness registry`);
+    }
+    const document = await this.models.conversation.create({
+      agent: conversationAgentSnapshot(agent),
+      ownership: {kind: "root"},
+      userId,
+    });
+    return new HarnessConversationHandle(this.conversationContext(), document);
+  }
+
+  /** Load a conversation. Throws when it does not exist. */
+  async conversation(
+    conversationId: mongoose.Types.ObjectId | string
+  ): Promise<HarnessConversationHandle> {
+    const document = await this.models.conversation.findExactlyOne({_id: conversationId});
+    return new HarnessConversationHandle(this.conversationContext(), document);
+  }
+
+  private conversationContext(): ConversationContext {
+    return {
+      models: this.models,
+      turn: this.agentTasks.turn as unknown as HarnessTaskDefinition,
+      wake: () => this.runner.wake(),
+    };
   }
 
   /** Poll until the task is terminal; throws after `timeout` (default 30 seconds). */

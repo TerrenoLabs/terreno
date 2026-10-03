@@ -40,8 +40,9 @@ phase runs twice?" A phase declares the answer with `replay` (`"safe"` or the de
 
 Shipped today: tasks, phases, checkpoints, the transactional audit span, the
 `InProcessRunner` with owner and task leases, crash resume, `resolveInterrupted`, phase
-retries, child tasks with `rt.waitForTasks`, and `harness.abort` over the ownership tree.
-The other rows are the planned shape for later Phase 1 slices.
+retries, child tasks with `rt.waitForTasks`, `harness.abort` over the ownership tree, and
+agents, tools, and conversations (see [The agent loop](#the-agent-loop)). The other rows
+are the planned shape for later Phase 1 slices.
 
 ## Why the audit span shares the checkpoint transaction
 
@@ -199,3 +200,58 @@ alone. Keep old versions registered until their in-flight tasks finish. `Harness
 refuses to start while any non-terminal task uses a version the registry lacks, so a
 deploy that drops a version too early fails loudly instead of stranding work. See
 [Ship a new task version](../how-to/ship-a-new-task-version.md).
+
+## The agent loop
+
+An agent turn is not special machinery. It is an ordinary registered task,
+`terreno.agent.turn@1`, owned by its conversation, so everything above (leases, replay,
+retries, the ownership tree, abort, version pinning) applies to it unchanged.
+
+```
+submit ──tx──> user message + conversation busy + turn task (pending)
+
+turn: request ──tx──> assistant message + LLM span ──┐ tool calls?
+        ▲                                            ▼
+        └──tx── tool messages <── waitForTasks <── tools: one child task per call
+                                                     (each call = TOOL span)
+      request with no tool calls ──tx──> completed; conversation idle
+```
+
+### Two phases, both safe to replay
+
+- **`request`** calls the model. A model call has no side effect, so if the process dies
+  mid-call the phase simply runs again. Nothing from the cut-off call was written: the
+  assistant message is only stored in the same transaction as the checkpoint.
+- **`tools`** starts one child task per tool call and waits for all of them. Children
+  are found again by key on a re-run, so a replay never doubles a call.
+
+The side effects live in the tools, and each tool says whether it may run twice.
+
+### Interrupted tools are reported, not hidden
+
+A tool with the default `replay: "never"` might have done its work before the crash (a
+note written, a message sent). The harness cannot know. Parking the call for an operator
+would freeze the whole conversation, so instead the call ends with the result
+"Interrupted, not retried" and the loop goes on. The model sees that result and can check
+or ask the user. A tool marked `replay: "safe"` (a read, an idempotent write) just runs
+again.
+
+### Retries belong to the model call
+
+Providers fail in two ways. Overload and outages (429, 5xx, dropped connections) usually
+pass, so the `request` phase retries them with backoff and jitter, then tries each
+fallback model. Anything else (a 400 for a bad prompt, a 401 for a bad key) will fail the
+same way every time, so the turn fails at once instead of burning retries and fallbacks.
+Every attempt is listed on the `LLM` span, so the audit shows which model answered and
+what failed before it.
+
+### Why the transcript shares the checkpoint transaction
+
+The same rule as phase spans: a message written outside the commit could survive a crash
+whose checkpoint did not, and the next request would replay a half-finished step. Each
+commit writes the messages, the `LLM` span, and the checkpoint together, and each message
+takes its `seq` from a counter on the conversation inside that transaction. The
+transcript is therefore always exactly what the committed phases produced.
+
+API: [Agents and conversations](../reference/ai-harness.md#agents-and-conversations).
+

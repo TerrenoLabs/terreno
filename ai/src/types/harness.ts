@@ -1,6 +1,9 @@
-import type {FindExactlyOnePlugin, FindOneOrNonePlugin} from "@terreno/api";
+import type {FindExactlyOnePlugin, FindOneOrNonePlugin, z} from "@terreno/api";
+import type {LanguageModel} from "ai";
 import type {Duration} from "luxon";
 import type mongoose from "mongoose";
+
+import type {ExecutionEnv} from "../harness/executionEnv";
 
 /** Every lifecycle status a harness task can hold. */
 export const HARNESS_TASK_STATUSES = {
@@ -26,6 +29,18 @@ export type HarnessTerminalStatus = "aborted" | "completed" | "failed";
 
 /** Whether a phase (or tool) may re-run after it was interrupted mid-flight. */
 export type HarnessReplayPolicy = "never" | "safe";
+
+/** What an interrupted `replay: "never"` phase does; see `onInterrupt` on `defineTask`. */
+export const HARNESS_INTERRUPT_ACTIONS = {
+  fail: "fail",
+  park: "park",
+} as const;
+
+export type HarnessInterruptAction =
+  (typeof HARNESS_INTERRUPT_ACTIONS)[keyof typeof HARNESS_INTERRUPT_ACTIONS];
+
+/** Span kinds a task's own audit span may take. */
+export type HarnessTaskSpanKind = "AGENT" | "CHAIN" | "TOOL";
 
 export type HarnessOwnershipKind = "conversation" | "root" | "task";
 
@@ -210,6 +225,11 @@ export interface HarnessTaskRuntime<State, Out> {
     input: ChildIn,
     options?: HarnessChildTaskOptions
   ) => Promise<string>;
+  /**
+   * Execution environment from `Harness.open({env})`, when one was given. Phase 1 ships the
+   * `ExecutionEnv` interface only; implementations land with coding agents.
+   */
+  env?: ExecutionEnv;
   /** Aborted when the task is aborted or this run loses its lease; stop work promptly. */
   signal: AbortSignal;
   taskId: string;
@@ -247,8 +267,18 @@ export interface HarnessTaskDefinitionInput<In, State, Out> {
   abort?(task: HarnessTaskView<In, State>, rt: HarnessAbortRuntime): Promise<void>;
   initial(input: In): {phase: string; state?: State};
   name: string;
+  /**
+   * What an interrupted `replay: "never"` phase does. `park` (default) sets `interrupted`
+   * and waits for `resolveInterrupted`; `fail` ends the task `failed` with an
+   * "Interrupted, not retried" error so a waiting owner can carry on (agent tool calls).
+   */
+  onInterrupt?: HarnessInterruptAction;
   phases: Record<string, HarnessPhaseDefinition<In, State, Out>>;
   retry?: HarnessRetryPolicy;
+  /** Kind of the task's own audit span. Default `CHAIN`. */
+  spanKind?: HarnessTaskSpanKind;
+  /** Name of the task's own audit span. Default `name@version`. */
+  spanName?: (input: In) => string;
   version: number;
 }
 
@@ -342,4 +372,197 @@ export interface HarnessRunner {
   stop: () => Promise<void>;
   /** Hint that new work may be runnable now. */
   wake: () => void;
+}
+
+// ---------------------------------------------------------------------------------------
+// Agents, tools, conversations
+// ---------------------------------------------------------------------------------------
+
+/** Names a model; `Harness.open({models})` turns it into a `LanguageModel`. */
+export interface HarnessModelRef {
+  modelId: string;
+  provider: string;
+}
+
+/** Resolves a model reference to a Vercel AI SDK `LanguageModel`. */
+export type HarnessModelResolver = (ref: HarnessModelRef) => LanguageModel;
+
+/** Defaults for an agent's model-call retries (per model, before fallbacks). */
+export const HARNESS_MODEL_RETRY_DEFAULTS = {
+  backoffMs: 500,
+  maxAttempts: 3,
+  maxBackoffMs: 8000,
+} as const;
+
+/** Model requests one turn may make when an agent leaves `maxSteps` out. */
+export const HARNESS_AGENT_DEFAULT_MAX_STEPS = 10;
+
+/** What a tool's `execute` receives besides its arguments. */
+export interface HarnessToolApi {
+  conversationId: string;
+  /** Execution environment from `Harness.open({env})`, when one was given. */
+  env?: ExecutionEnv;
+  /** Append progress text; recorded on the tool's span (`output.streamedOutput`). */
+  output: (text: string) => void;
+  /** Aborted when the turn is aborted or this run loses its lease. */
+  signal: AbortSignal;
+  /** The tool call's own task id. */
+  taskId: string;
+}
+
+export interface HarnessToolDefinitionInput<Args, Result> {
+  description: string;
+  execute: (args: Args, api: HarnessToolApi) => Promise<Result>;
+  /** Letters, digits, `_` and `-`, at most 64 characters (provider limit). */
+  name: string;
+  /** Zod schema for the arguments. Sent to the model and checked before `execute`. */
+  parameters: z.ZodType<Args>;
+  /** Default `never`: an interrupted call is reported to the model, not re-run. */
+  replay?: HarnessReplayPolicy;
+}
+
+export interface HarnessToolDefinition<Args = unknown, Result = unknown>
+  extends HarnessToolDefinitionInput<Args, Result> {
+  kind: "tool";
+  replay: HarnessReplayPolicy;
+}
+
+/** Any tool, whatever its argument and result types. */
+// biome-ignore lint/suspicious/noExplicitAny: tools are stored in heterogeneous lists; `execute` arguments are contravariant.
+export type AnyHarnessToolDefinition = HarnessToolDefinition<any, unknown>;
+
+export interface HarnessAgentDefinitionInput {
+  /** Tried in order once the primary model's retryable failures exhaust `modelRetry`. */
+  fallbackModels?: HarnessModelRef[];
+  /** System prompt for every request. */
+  instructions: string;
+  /** Model requests one turn may make. Default `HARNESS_AGENT_DEFAULT_MAX_STEPS`. */
+  maxSteps?: number;
+  model: HarnessModelRef;
+  /** Retries per model for 429 / 5xx / network errors. See `HARNESS_MODEL_RETRY_DEFAULTS`. */
+  modelRetry?: HarnessRetryPolicy;
+  /** Unique within a harness registry. */
+  name: string;
+  /** When set, the final answer is parsed as JSON and validated; the turn result carries it. */
+  output?: z.ZodType;
+  tools?: ReadonlyArray<AnyHarnessToolDefinition>;
+}
+
+export interface HarnessAgentDefinition extends HarnessAgentDefinitionInput {
+  kind: "agent";
+  maxSteps: number;
+  tools: ReadonlyArray<AnyHarnessToolDefinition>;
+}
+
+export const HARNESS_CONVERSATION_STATUSES = {
+  busy: "busy",
+  idle: "idle",
+} as const;
+
+export type HarnessConversationStatus =
+  (typeof HARNESS_CONVERSATION_STATUSES)[keyof typeof HARNESS_CONVERSATION_STATUSES];
+
+export const HARNESS_MESSAGE_ROLES = {
+  assistant: "assistant",
+  system: "system",
+  tool: "tool",
+  user: "user",
+} as const;
+
+export type HarnessMessageRole = (typeof HARNESS_MESSAGE_ROLES)[keyof typeof HARNESS_MESSAGE_ROLES];
+
+export interface HarnessTextPart {
+  text: string;
+  type: "text";
+}
+
+export interface HarnessToolCallPart {
+  input: unknown;
+  toolCallId: string;
+  toolName: string;
+  type: "tool-call";
+}
+
+export interface HarnessToolResultPart {
+  isError: boolean;
+  output: unknown;
+  toolCallId: string;
+  toolName: string;
+  type: "tool-result";
+}
+
+export type HarnessMessagePart = HarnessTextPart | HarnessToolCallPart | HarnessToolResultPart;
+
+/** Agent config snapshotted onto a conversation when it is created. */
+export interface HarnessConversationAgent {
+  extensions: string[];
+  fallbackModels: HarnessModelRef[];
+  instructions: string;
+  maxSteps: number;
+  model: HarnessModelRef;
+  name: string;
+  tools: string[];
+}
+
+export interface HarnessQueuedSubmission {
+  content?: unknown;
+  requestId?: string;
+  submittedAt?: Date;
+}
+
+export interface HarnessConversationDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  activeTurnTaskId?: mongoose.Types.ObjectId;
+  agent: HarnessConversationAgent;
+  created: Date;
+  deleted: boolean;
+  ownership: HarnessOwnership;
+  queued: HarnessQueuedSubmission[];
+  /** Highest message `seq` handed out so far. */
+  seq: number;
+  status: HarnessConversationStatus;
+  updated: Date;
+  userId?: mongoose.Types.ObjectId;
+}
+
+export interface HarnessConversationModel
+  extends mongoose.Model<HarnessConversationDocument>,
+    FindExactlyOnePlugin<HarnessConversationDocument>,
+    FindOneOrNonePlugin<HarnessConversationDocument> {}
+
+export interface HarnessMessageDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  aborted: boolean;
+  conversationId: mongoose.Types.ObjectId;
+  created: Date;
+  deleted: boolean;
+  parts: HarnessMessagePart[];
+  role: HarnessMessageRole;
+  seq: number;
+  status?: "error" | "ok";
+  toolCallId?: string;
+  toolName?: string;
+  turnTaskId?: mongoose.Types.ObjectId;
+  updated: Date;
+}
+
+export interface HarnessMessageModel
+  extends mongoose.Model<HarnessMessageDocument>,
+    FindExactlyOnePlugin<HarnessMessageDocument>,
+    FindOneOrNonePlugin<HarnessMessageDocument> {}
+
+/** Result of a completed `terreno.agent.turn` task. */
+export interface HarnessTurnResult {
+  /** `stop` when the model answered without tool calls; `max-steps` when the cap ended it. */
+  finishReason: "max-steps" | "stop";
+  /** Parsed structured output, when the agent declares `output`. */
+  output?: unknown;
+  /** Model requests made in the turn. */
+  steps: number;
+  /** Text of the last assistant message. */
+  text: string;
+}
+
+export interface HarnessSubmitOptions {
+  content: string;
+  /** Idempotency key: a repeated submit returns the turn task it started. */
+  requestId: string;
 }

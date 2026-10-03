@@ -1,10 +1,11 @@
 # @terreno/ai/harness
 
-Durable, multi-phase tasks with transactional checkpoints and audit spans. Concepts:
+Durable, multi-phase tasks with transactional checkpoints and audit spans, plus durable
+agent conversations built on them. Concepts:
 [Durable agent harness](../explanation/durable-agent-harness.md).
 
 ```typescript
-import {defineTask, Harness, InProcessRunner} from "@terreno/ai/harness";
+import {defineAgent, defineTask, defineTool, Harness, InProcessRunner} from "@terreno/ai/harness";
 ```
 
 ## Table of Contents
@@ -21,9 +22,18 @@ import {defineTask, Harness, InProcessRunner} from "@terreno/ai/harness";
 - [Child tasks and waitForTasks](#child-tasks-and-waitfortasks)
 - [abort](#abort)
 - [Versioning](#versioning)
+- [Agents and conversations](#agents-and-conversations)
+- [defineTool](#definetool)
+- [defineAgent](#defineagent)
+- [Conversations](#conversations)
+- [The agent turn task](#the-agent-turn-task)
+- [Model-call resilience](#model-call-resilience)
+- [ExecutionEnv](#executionenv)
 - [Task statuses](#task-statuses)
 - [HarnessTask model](#harnesstask-model)
 - [HarnessOwner model](#harnessowner-model)
+- [HarnessConversation model](#harnessconversation-model)
+- [HarnessMessage model](#harnessmessage-model)
 - [Audit spans](#audit-spans)
 - [Errors](#errors)
 - [Testing](#testing)
@@ -84,6 +94,9 @@ const task = await harness.createTask(intakeSummary, {patientId}, {requestId: `i
 | `phases[x].replay` | `"safe" \| "never"` | No | Default `"never"`. What happens when the phase is cut off mid-run: see [Replay and interruption](#replay-and-interruption). |
 | `retry` | `{maxAttempts?, backoffMs?, maxBackoffMs?}` | No | Copied onto each task. See [Retries](#retries). `maxAttempts` must be a positive integer, `backoffMs` non-negative, `maxBackoffMs >= backoffMs`. |
 | `abort` | `(task, rt) => Promise<void>` | No | Compensation handler, run by `harness.abort` and `resolveInterrupted({action: "abort"})`. `rt` is `{taskId, reason, userId?}`. See [abort](#abort). |
+| `onInterrupt` | `"park" \| "fail"` (`HARNESS_INTERRUPT_ACTIONS`) | No | Default `"park"`. What an interrupted `replay: "never"` phase does: `park` sets `interrupted`; `fail` ends the task `failed` with `Interrupted, not retried: ...` and wakes its owner. The built-in tool task uses `fail`. |
+| `spanKind` | `"AGENT" \| "CHAIN" \| "TOOL"` | No | Kind of the task's own span. Default `CHAIN`. |
+| `spanName` | `(input) => string` | No | Name of the task's own span. Default `name@version`. |
 
 Returns the definition plus `kind: "task"` and `key: "name@version"`.
 
@@ -93,18 +106,40 @@ The `task` view passed to `run`: `{id, name, version, input, state, phase, attem
 
 | Method | Description |
 | --- | --- |
-| `Harness.open({registry, runner?, testHooks?})` | Checks requirements, rejects a duplicate `name@version`, ensures collections and indexes exist. `runner` defaults to `new InProcessRunner()`. |
+| `Harness.open({registry, runner?, models?, env?, priceMap?, testHooks?})` | Checks requirements, rejects a duplicate `name@version` or agent name, ensures collections and indexes exist. `runner` defaults to `new InProcessRunner()`. See [open options](#open-options). |
 | `start()` | Throws, claiming nothing, when any non-terminal task uses a `name@version` missing from the registry (see [Versioning](#versioning)). Then starts the runner. Throws when already started. The runner recovers expired tasks once it owns execution. |
 | `stop()` | Stops claiming work, waits (without a time limit) for the phase in flight while still renewing the owner lease, then releases it. No-op when not started. |
 | `createTask(definition, input, {requestId?, userId?})` | Inserts a `pending` task, its `ObsTrace`, and its root span in one transaction. Wakes the runner. The definition must be in the registry. |
 | `resolveInterrupted(id, {action, reason, result?, userId?})` | Resolve an `interrupted` task. See [resolveInterrupted](#resolveinterrupted). |
 | `abort(id, {reason, userId?})` | Abort a task and every non-terminal task it owns, bottom-up. See [abort](#abort). |
+| `createConversation({agent, userId?})` | Start a conversation with a registered agent. See [Conversations](#conversations). |
+| `conversation(id)` | Load a conversation handle. Throws when it does not exist. |
 | `waitForTask(id, {timeout?, pollInterval?})` | Polls Mongo until the task is `completed`, `failed`, or `aborted`. An `interrupted` task is not terminal, so the wait times out unless someone resolves it. Defaults: 30 s timeout, 50 ms poll. Throws on timeout with the current status. |
 
 `requestId` is an idempotency key backed by a unique sparse index. A repeated or concurrent
 create with the same id returns the first task and leaves no extra trace. Reusing a
 `requestId` for a different task name, or with a different `userId` (including none versus
 some), throws. A soft-deleted task still owns its `requestId`.
+
+### open options
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `registry` | `Array<task definition \| agent>` | Every `defineTask` definition (and version) and every `defineAgent` agent this process uses. The built-in `terreno.agent.turn@1` and `terreno.agent.tool@1` are always added. |
+| `models` | `({provider, modelId}) => LanguageModel` | Resolves an agent's model refs to Vercel AI SDK models. Required when `registry` lists an agent. |
+| `env` | `ExecutionEnv` | Handed to phases as `rt.env` and to tools as `api.env`. Optional. |
+| `priceMap` | `Record<modelId, {inputPerMTok, outputPerMTok}>` | Prices LLM spans (`usage.costUsd`). Defaults to the registered `ObservabilityApp`'s `priceMap`, read at call time. |
+| `runner` | `HarnessRunner` | Default `new InProcessRunner()`. |
+| `testHooks` | `HarnessTestHooks` | Test-only. See [Testing](#testing). |
+
+```typescript
+import {anthropic} from "@ai-sdk/anthropic";
+
+const harness = await Harness.open({
+  models: ({modelId}) => anthropic(modelId),
+  registry: [intakeSummary, summarizer],
+});
+```
 
 ### InProcessRunner
 
@@ -140,6 +175,7 @@ A custom runner implements `HarnessRunner` (`start(context)`, `stop()`, `wake()`
 | `rt.commit({terminal: {status: "completed", result?}})` | Finish the task with a result. |
 | `rt.commit({terminal: {status: "failed", error}})` | Finish the task as failed. |
 | `rt.taskId` | The task id as a string. |
+| `rt.env` | The `ExecutionEnv` from `Harness.open({env})`, or `undefined`. |
 | `rt.signal` | `AbortSignal`. Aborts when the task is aborted (at once in this process, within one heartbeat elsewhere), or when this run loses its lease. Pass it to cancellable calls. |
 | `rt.createTask(definition, input, {background?, key?})` | Create a child task. Returns its id. See [Child tasks and waitForTasks](#child-tasks-and-waitfortasks). |
 | `rt.waitForTasks(ids, {policy?})` | Return child outcomes once they settle; until then the task waits. See [Child tasks and waitForTasks](#child-tasks-and-waitfortasks). |
@@ -195,8 +231,8 @@ lost the database.
 | --- | --- | --- |
 | Phase | Back to `pending` at the same checkpoint; a runner re-runs the phase from its checkpoint | Status `interrupted`; waits for `resolveInterrupted` (`retry` / `abort` / `complete`) |
 | Phase that no longer exists in the definition | — | Treated as `never`: `interrupted` |
-| Tool call | Planned (agents slice) | Planned (agents slice) |
-| Model request | Planned: always re-requested | — |
+| Tool call | The tool task returns to `pending` and the tool runs again | The tool task ends `failed` with `Interrupted, not retried: lease of <owner> expired mid-phase (replay: never)`; that text is the tool's error result, and the turn continues |
+| Model request | Always re-requested (`request` is `replay: "safe"`); the cut-off call wrote nothing | — |
 
 Each interruption writes, in the same transaction as the status change, one `CHAIN` span
 named after the phase with `status: "error"`:
@@ -444,6 +480,196 @@ per `start()`; a row of an unregistered version created by another process after
 skipped by claiming and recovery. Listing the same `name@version` twice in `registry`
 throws from `Harness.open`. Rollout steps: [Ship a new task version](../how-to/ship-a-new-task-version.md).
 
+## Agents and conversations
+
+```typescript
+import {z} from "@terreno/api";
+import {defineAgent, defineTool, Harness} from "@terreno/ai/harness";
+
+const lookupChart = defineTool({
+  name: "lookupChart",
+  description: "Fetch a patient's chart",
+  parameters: z.object({patientId: z.string()}),
+  replay: "safe", // a read: re-running after a crash is harmless
+  execute: async ({patientId}, api) => ehr.getChart(patientId, {signal: api.signal}),
+});
+
+const summarizer = defineAgent({
+  name: "clinic.summarizer",
+  model: {provider: "anthropic", modelId: "claude-sonnet-5-5"},
+  fallbackModels: [{provider: "anthropic", modelId: "claude-haiku-4-5-20251001"}],
+  instructions: "Summarize the chart for a clinician. Cite sources.",
+  tools: [lookupChart],
+});
+
+const harness = await Harness.open({models: ({modelId}) => anthropic(modelId), registry: [summarizer]});
+await harness.start();
+
+const conversation = await harness.createConversation({agent: summarizer, userId});
+const turn = await conversation.submit({content: "Summarize patient p7", requestId: "req-1"});
+const done = await harness.waitForTask(turn._id);
+// done.outcome.result: {finishReason: "stop", steps: 2, text: "..."}
+```
+
+## defineTool
+
+`defineTool(definition)` validates and freezes a tool.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | Yes | 1-64 letters, digits, `_`, `-` (provider limit). Unique within an agent. |
+| `description` | `string` | Yes | Sent to the model. Non-blank. |
+| `parameters` | zod schema | Yes | Sent to the model as the tool's input schema, and checked before `execute`. |
+| `replay` | `"safe" \| "never"` | No | Default `"never"`. What happens when the call is cut off mid-run: see [Replay and interruption](#replay-and-interruption). |
+| `execute` | `(args, api) => Promise<Result>` | Yes | Runs the call. The return value must be JSON-serializable; `undefined` becomes `null`. |
+
+`api`:
+
+| Member | Description |
+| --- | --- |
+| `taskId` | The tool call's own task id. |
+| `conversationId` | The conversation the call belongs to. |
+| `signal` | Aborts when the turn is aborted or the run loses its lease. Pass it to cancellable calls. |
+| `output(text)` | Append progress text. Recorded on the TOOL span as `output.streamedOutput`. Live streaming to clients ships with the event stream. |
+| `env` | The `ExecutionEnv` from `Harness.open({env})`, or `undefined`. |
+
+How a call ends:
+
+| Case | Tool message `status` | Result the model sees |
+| --- | --- | --- |
+| `execute` returns | `ok` | The value (JSON) |
+| `execute` throws, or returns a value that is not JSON-serializable | `error` | `Tool "<name>" failed: <message>` |
+| Arguments fail `parameters` | `error` | `Invalid arguments for tool "<name>": <zod issues>` |
+| The model names a tool the agent lacks, or one not in the conversation's snapshot | `error` | `Unknown tool "<name>"` |
+| Interrupted, `replay: "never"` | `error` | `Interrupted, not retried: ...` |
+| Interrupted, `replay: "safe"` | — | Re-run; then one of the rows above |
+
+A failing tool is never retried: the error goes to the model, which decides what to do.
+
+## defineAgent
+
+`defineAgent(definition)` validates and freezes an agent. List it in `Harness.open({registry})`.
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | `string` | Yes | Unique within a registry. Conversations find the agent by name. |
+| `model` | `{provider, modelId}` | Yes | Resolved by `Harness.open({models})`. |
+| `instructions` | `string` | Yes | System prompt for every request. |
+| `tools` | `defineTool` results | No | Default `[]`. No duplicate names. |
+| `maxSteps` | positive integer | No | Model requests one turn may make. Default `10` (`HARNESS_AGENT_DEFAULT_MAX_STEPS`). |
+| `fallbackModels` | `Array<{provider, modelId}>` | No | Tried in order after the primary model's retryable failures run out. |
+| `modelRetry` | `{maxAttempts?, backoffMs?, maxBackoffMs?}` | No | Retries per model. Defaults `HARNESS_MODEL_RETRY_DEFAULTS`: 3 attempts, 500 ms base, 8 s cap. |
+| `output` | zod schema | No | The final answer is parsed as JSON (code fences and preamble tolerated) and validated. The turn result carries `output`; a mismatch fails the turn. |
+
+## Conversations
+
+A conversation stores a snapshot of the agent's config (model, instructions, tool names,
+fallbacks, `maxSteps`) and an ordered transcript. The snapshot keeps a running
+conversation stable when the agent definition changes; tool code, `modelRetry`, and
+`output` come from the registered agent at run time.
+
+| Member | Description |
+| --- | --- |
+| `harness.createConversation({agent, userId?})` | Creates an `idle` conversation. `agent` must be the registered definition. Returns a `HarnessConversationHandle`. |
+| `harness.conversation(id)` | Loads a handle. |
+| `handle.id`, `handle.document` | Id and the conversation as loaded. |
+| `handle.messages()` | Every `HarnessMessage`, in `seq` order. |
+| `handle.submit({content, requestId})` | Starts a turn. See below. |
+
+`submit`, in one transaction:
+
+1. Claims the conversation (`idle` → `busy`, `activeTurnTaskId` set).
+2. Appends the user message with the next `seq`.
+3. Creates the turn task (`terreno.agent.turn@1`), owned by the conversation, run as the
+   conversation's `userId`, and wakes the runner.
+
+| Case | Result |
+| --- | --- |
+| Repeated `requestId` | Returns the turn it started; appends nothing. Keys are per conversation. |
+| Another turn is running | Throws `HarnessConversationBusyError` (`activeTurnTaskId` set). Queueing and steering (`whenBusy`) ship with the submit endpoint. |
+| Lost a race to another submit | Re-reads the conversation: still busy → `HarnessConversationBusyError` naming the winning turn; idle again (the winner already finished) → claims it and starts its own turn. Up to 3 claims. |
+| Blank `content` / `requestId` | Throws `submit requires non-empty content` / `submit requires a requestId`. |
+
+When a turn ends (completed, failed, or aborted) the conversation goes back to `idle`:
+in the terminal commit itself when the turn ends normally or the model call fails, right
+after the commit otherwise (a thrown phase, an abort, an interruption). If the process
+dies before that write, the next `submit` sees the turn is terminal and frees the
+conversation itself. Two concurrent submits with one `requestId` both get the same turn.
+
+## The agent turn task
+
+`terreno.agent.turn@1` is an ordinary registered task (`AGENT_TURN_TASK_NAME`). Input
+`{conversationId}`; `retry: {maxAttempts: 1}` (model retries happen inside `request`).
+
+| Phase | `replay` | Work | Commit (one transaction) |
+| --- | --- | --- | --- |
+| `request` | `safe` | Load the transcript; call the model with retries and fallbacks | Assistant message (text and tool-call parts) + `LLM` span + next checkpoint: `tools` when there are tool calls, otherwise `completed` |
+| `tools` | `safe` | One `terreno.agent.tool@1` child per tool call (`rt.createTask`), then `rt.waitForTasks` (`all`) | One tool message per call, in call order + `request`, or `completed` with `finishReason: "max-steps"` once `maxSteps` requests were made |
+
+Result (`HarnessTurnResult`): `{finishReason: "stop" | "max-steps", steps, text, output?}`.
+At `maxSteps` the last tool calls still get results, so the transcript never ends on an
+unanswered call.
+
+`terreno.agent.tool@1` (`AGENT_TOOL_TASK_NAME`) has phases `execute` (`never`) and
+`executeSafe` (`safe`); the tool's `replay` picks one. `onInterrupt: "fail"`,
+`retry: {maxAttempts: 1}`, `spanKind: "TOOL"`, span named after the tool.
+
+Spans of one turn (one trace):
+
+```
+CHAIN terreno.agent.turn@1                  (turn root span; closes with the turn)
+├── LLM   mock/primary-model                (one per request; usage + costUsd)
+├── CHAIN request
+├── CHAIN tools                             (waiting on children)
+├── TOOL  lookupChart                       (the tool task's span: input = args, output = {value, streamedOutput?})
+│   └── CHAIN execute
+├── CHAIN tools                             (results committed)
+├── LLM   mock/primary-model
+└── CHAIN request                           (terminal)
+```
+
+| `LLM` span field | Value |
+| --- | --- |
+| `name` | `<provider>/<modelId>` of the model that answered |
+| `input` | `{messages: {count, fromSeq, toSeq}, system, tools, models}`: the transcript slice sent (the messages themselves are in `HarnessMessage`), so span size stays bounded |
+| `output` | `{text, toolCalls, finishReason, attempts}`; `attempts` lists every try (`{provider, modelId, attempt, error?, statusCode?, retryable?}`) |
+| `usage` | `{inputTokens, outputTokens, model, costUsd?}`; `costUsd` only when `priceMap` prices the model |
+| `status` / `error` | `error` and the failure message when no model answered; `output` is then `{attempts}` and the turn fails in the same commit |
+
+Requests are non-streaming (`generateText`) in this slice. Token streaming ships with the
+event stream.
+
+## Model-call resilience
+
+Each `request` phase tries the primary model, then each fallback, with the same budget.
+
+| Failure | Action |
+| --- | --- |
+| HTTP 429, any 5xx | Retry with exponential backoff and equal jitter (same formula as [Retries](#retries), using `modelRetry`), up to `maxAttempts`; then the next model |
+| No HTTP response (`APICallError` without a status and `isRetryable`), `fetch failed`, `ECONNRESET` / `ETIMEDOUT` / `ECONNREFUSED` / `EAI_AGAIN` / `ENOTFOUND` / `EPIPE` | Same as 429 |
+| Any other 4xx (400, 401, 404, 408, ...) or a non-HTTP error | Fail at once; no fallback |
+| `rt.signal` aborts | Stop at once, including mid-backoff |
+
+The AI SDK's own retries are off (`maxRetries: 0`). When nothing answers, the phase throws
+`HarnessModelCallError` (`attempts` attached) and the turn fails:
+
+- `Model <provider>/<modelId> failed with a non-retryable error: <message>`
+- `Model <provider>/<modelId> could not be resolved: <message>` (the `models` resolver threw)
+- `Model call failed after <n> attempts across <models>: <last message>`
+
+`isRetryableModelError(error)` is exported for apps that classify errors the same way.
+
+## ExecutionEnv
+
+Interface only in this slice (implementations ship with coding agents). Pass one to
+`Harness.open({env})`.
+
+| Method | Description |
+| --- | --- |
+| `read(path, {signal?})` | Read a UTF-8 file relative to the environment root. |
+| `write(path, content, {signal?})` | Create or replace a UTF-8 file. |
+| `exec(command, {args?, cwd?, env?, stdin?, timeoutMs?, signal?})` | Run a command; resolves `{exitCode, stdout, stderr}`. |
+
 ## Task statuses
 
 | Status | Meaning |
@@ -458,7 +684,8 @@ throws from `Harness.open`. Rollout steps: [Ship a new task version](../how-to/s
 
 ## HarnessTask model
 
-Collection `harnesstasks`. Every field has a schema `description`; `strict: "throw"`.
+Collection `harnesstasks`. Every field has a schema `description`; `strict: "throw"`;
+empty objects are kept (`minimize: false`), so an initial state `{}` is stored as `{}`.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -470,7 +697,7 @@ Collection `harnesstasks`. Every field has a schema `description`; `strict: "thr
 | `attempt` | Number | Failed attempts of the current phase. Default 0. |
 | `step` | Number | Phase commits so far; names the current phase visit for idempotent child creation. Default 0. |
 | `retry` | `{maxAttempts, backoffMs, maxBackoffMs}` | Copied from the definition. |
-| `ownership` | `{kind: root \| task \| conversation, id}` | Default `root`. `rt.createTask` children are `{kind: "task", id: <parent>}`. |
+| `ownership` | `{kind: root \| task \| conversation, id}` | Default `root`. `rt.createTask` children are `{kind: "task", id: <parent>}`; agent turns are `{kind: "conversation", id}`. |
 | `rootTaskId` | ObjectId | Top of the ownership tree; equals `_id` for root tasks. |
 | `traceId`, `rootSpanId` | ObjectId | Audit trace and its root `CHAIN` span. |
 | `requestId` | String | Idempotency key; unique sparse index. |
@@ -494,6 +721,41 @@ Collection `harnessowners`. One row per singleton lease; `InProcessRunner` uses 
 | `expiresAt` | Date | When the lease lapses unless renewed. |
 | `created`, `updated` | Date | Timestamps. |
 
+## HarnessConversation model
+
+Collection `harnessconversations`. Every field has a schema `description`; `strict: "throw"`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `ownership` | `{kind: root \| task, id}` | Default `root`. Subagent conversations are task-owned. |
+| `agent` | `{name, model {provider, modelId}, instructions, tools[], extensions[], fallbackModels[], maxSteps}` | Snapshot taken at create. |
+| `status` | `idle` \| `busy` (`HARNESS_CONVERSATION_STATUSES`) | `busy` while a turn runs. |
+| `activeTurnTaskId` | ObjectId | The running turn. |
+| `queued` | `[{content, requestId, submittedAt}]` | Reserved for `whenBusy: "queue"`. Empty today. |
+| `userId` | ObjectId | Turns run as this user. |
+| `seq` | Number | Highest message `seq` handed out. Default 0. |
+| `created`, `updated`, `deleted` | | Plugins. |
+
+Indexes: `{userId, created}`, `{ownership.id, ownership.kind}`.
+
+## HarnessMessage model
+
+Collection `harnessmessages`. Every field has a schema `description`; `strict: "throw"`;
+empty objects are kept (`minimize: false`), so `{}` tool arguments survive.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `conversationId` | ObjectId | Required. |
+| `seq` | Number | Required. Strictly increasing per conversation from 1; allocated by `$inc` on the conversation inside the commit transaction. |
+| `role` | `system` \| `user` \| `assistant` \| `tool` (`HARNESS_MESSAGE_ROLES`) | |
+| `parts` | array | `{type: "text", text}`, `{type: "tool-call", toolCallId, toolName, input}`, `{type: "tool-result", toolCallId, toolName, output, isError}`. |
+| `status` | `ok` \| `error` | Tool messages only. |
+| `toolCallId`, `toolName` | String | Tool messages only. |
+| `turnTaskId` | ObjectId | Turn that wrote the message. |
+| `aborted` | Boolean | Partial message cut off mid-stream (event stream slice). Skipped when building the next prompt. |
+
+Index: `{conversationId, seq}` unique.
+
 ## Audit spans
 
 | When | Write (same transaction) |
@@ -506,6 +768,8 @@ Collection `harnessowners`. One row per singleton lease; `InProcessRunner` uses 
 | `rt.createTask` | The child's `CHAIN` span (`name@version`), parented to the parent's span. |
 | `rt.waitForTasks` starts waiting | One `CHAIN` span named after the phase, `output: {waiting: {...}}`. |
 | `harness.abort` | One `abort` span per aborted task; closes that task's span (and the trace for a root task). |
+| Agent `request` commit | One `LLM` span parented to the turn's span, with the assistant message. See [The agent turn task](#the-agent-turn-task). |
+| Tool call | The tool task's own span has kind `TOOL` and the tool's name; it closes with the tool's outcome. |
 | Terminal commit | The task's span gets `endedAt`, `status`, `output`; failures also set `error`. For a root task the `ObsTrace` closes too (`errorSummary` on failure). |
 
 If the commit transaction aborts, the task stays at its previous checkpoint in `running`
@@ -542,7 +806,14 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 - `testHooks.beforeCommitEnd({taskId, phase, session})` runs inside the commit transaction
   after every write. Read with `session` to see the uncommitted writes, then throw to prove
   the commit is atomic. Test-only; never set in production.
-- `testHooks.random()` replaces `Math.random` for retry jitter. Test-only.
+- `testHooks.random()` replaces `Math.random` for retry jitter, including model-call
+  backoff. Test-only.
+- Agents: pass a mock `LanguageModel` through `models` (an object with `doGenerate`,
+  `doStream`, `specificationVersion`, `provider`, `modelId`, `supportedUrls`). Throw an
+  `APICallError` with `statusCode` from `doGenerate` to exercise retries and fallbacks;
+  set `modelRetry: {backoffMs: 0}` for speed.
+- Assert on plain copies (`JSON.parse(JSON.stringify(doc.field))`), never on mongoose
+  subdocuments directly: Bun's matchers can loop forever walking them.
 - `testHooks.isHeartbeatSuspended()`: while it returns true, owner acquisition fails and
   every lease renewal is skipped, as if the process froze. To simulate a crash, start a
   harness with short leases (for example `leaseDuration: {milliseconds: 300}`,
@@ -581,3 +852,17 @@ Low-risk choices made in the first slice:
 | A failing abort handler does not stop the abort | A half-aborted tree is worse than a missed compensation; the span records it. |
 | `resolveInterrupted({action: "abort"})` goes through the abort path | One place runs handlers and aborts owned tasks. |
 | `requestId` relies on the unique index inside the create transaction | One code path for repeats and races; the losing transaction rolls back its trace and span. |
+| Agent tasks are built per harness and always registered | Their phases close over the harness's agents and model resolver; any process can resume a turn. |
+| Messages and LLM spans ride the phase commit through an engine-only `commitWithWrites` | The public `rt.commit` stays one argument; transcript and audit cannot diverge from the checkpoint. |
+| The tool's `replay` selects the tool task's phase (`execute` / `executeSafe`) | Reuses per-phase replay recovery with no per-task override. |
+| `onInterrupt: "fail"` instead of parking interrupted tools | A parked tool would block its turn forever; failing it makes the interruption the tool result. |
+| The tool task's own span is the `TOOL` span | One span per call that opens at creation and closes with the outcome on every path (success, error, interruption, abort). |
+| Turn and tool tasks use `retry: {maxAttempts: 1}` | Model retries live in `request`; tool errors go to the model. Re-running a whole phase on top would multiply calls. |
+| Conversation snapshot holds model, instructions, tool names, fallbacks, `maxSteps` | A redeploy that edits the agent does not change a conversation mid-flight; code (tools, `modelRetry`, `output`) still comes from the registry. |
+| `HarnessTask` and `HarnessMessage` keep empty objects (`minimize: false`) | Mongo otherwise drops `{}` tool arguments and states, and zod rejects the missing value. |
+| A busy conversation throws on `submit` | Queue and steer ship with the submit endpoint; failing loudly beats silently dropping input. |
+| A submit that loses the claim re-reads and retries (3 claims) | With a fast model the winner can finish before the loser looks; reporting "busy" for an idle conversation would be wrong. |
+| Tool `api.output` is buffered onto the TOOL span | Durable now; the event stream will forward it live. |
+| LLM span `input` names a seq range, not the full prompt | The transcript is already permanent; copying it into every span grows without bound and could hit the 16 MB document limit, making the commit fail and the safe `request` phase replay forever. |
+| A model call that fails for good commits a failed terminal with an error LLM span | Every attempt (and which model failed how) stays in the audit, not only in the error string. |
+| Tool calls outside the conversation's snapshot are refused | A tool added to the agent later must not become callable in an existing conversation. |

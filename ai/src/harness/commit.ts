@@ -5,9 +5,12 @@ import mongoose, {type ClientSession} from "mongoose";
 import type {
   HarnessChildTaskOptions,
   HarnessCommit,
+  HarnessConversationModel,
   HarnessCreateTaskOptions,
   HarnessLeaseSettings,
+  HarnessMessageModel,
   HarnessOwnerModel,
+  HarnessOwnership,
   HarnessReplayPolicy,
   HarnessResolveInterruptedOptions,
   HarnessTaskDefinition,
@@ -25,6 +28,8 @@ import {
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 
 export interface HarnessModels {
+  conversation: HarnessConversationModel;
+  message: HarnessMessageModel;
   owner: HarnessOwnerModel;
   span: ObsSpanModel;
   task: HarnessTaskModel;
@@ -52,6 +57,26 @@ export const isDuplicateKeyError = (error: unknown): boolean => {
     (error as {code?: unknown}).code === DUPLICATE_KEY_CODE
   );
 };
+
+/**
+ * Extra rows (messages, LLM spans, ...) written inside a commit's transaction, after the
+ * task update. Every write must pass `session`. `task` is the task as updated (or
+ * created); `traceStartedAt` anchors `startOffsetMs` for spans.
+ */
+export type HarnessCommitWrites = (context: {
+  session: ClientSession;
+  task: HarnessTaskDocument;
+  traceStartedAt: DateTime;
+}) => Promise<void>;
+
+/** How the task's own audit span is named and typed. */
+const taskSpanIdentity = (
+  definition: HarnessTaskDefinition,
+  input: unknown
+): {kind: "AGENT" | "CHAIN" | "TOOL"; name: string} => ({
+  kind: definition.spanKind ?? "CHAIN",
+  name: definition.spanName ? definition.spanName(input) : definition.key,
+});
 
 /** Run `work` in one Mongo transaction; every write inside must pass `session`. */
 const inTransaction = async <T>(work: (session: ClientSession) => Promise<T>): Promise<T> => {
@@ -124,11 +149,16 @@ export const createTaskRecords = async ({
   input,
   models,
   options,
+  ownership = {kind: "root"},
+  writes,
 }: {
   definition: HarnessTaskDefinition;
   input: unknown;
   models: HarnessModels;
   options: HarnessCreateTaskOptions;
+  /** Root tasks default to `{kind: "root"}`; conversation turns are owned by the conversation. */
+  ownership?: HarnessOwnership;
+  writes?: HarnessCommitWrites;
 }): Promise<HarnessTaskDocument> => {
   const initial = definition.initial(input);
   if (!definition.phases[initial.phase]) {
@@ -140,8 +170,10 @@ export const createTaskRecords = async ({
   const taskId = new mongoose.Types.ObjectId();
   const traceId = new mongoose.Types.ObjectId();
   const rootSpanId = new mongoose.Types.ObjectId();
-  const startedAt = DateTime.now().toJSDate();
+  const traceStartedAt = DateTime.now();
+  const startedAt = traceStartedAt.toJSDate();
   const userId = toObjectId(options.userId);
+  const spanIdentity = taskSpanIdentity(definition, input);
 
   try {
     return await inTransaction(async (session) => {
@@ -154,8 +186,8 @@ export const createTaskRecords = async ({
           {
             _id: rootSpanId,
             input,
-            kind: "CHAIN",
-            name: definition.key,
+            kind: spanIdentity.kind,
+            name: spanIdentity.name,
             startedAt,
             startOffsetMs: 0,
             status: "ok",
@@ -170,7 +202,7 @@ export const createTaskRecords = async ({
             _id: taskId,
             input,
             name: definition.name,
-            ownership: {kind: "root"},
+            ownership,
             phase: initial.phase,
             requestId: options.requestId,
             retry: definition.retry,
@@ -185,6 +217,7 @@ export const createTaskRecords = async ({
         ],
         {session}
       );
+      await writes?.({session, task, traceStartedAt});
       return task;
     });
   } catch (error: unknown) {
@@ -252,6 +285,7 @@ export const createChildTaskRecords = async ({
   const taskId = new mongoose.Types.ObjectId();
   const spanId = new mongoose.Types.ObjectId();
   const startedAt = DateTime.now();
+  const spanIdentity = taskSpanIdentity(definition, input);
 
   try {
     return await inTransaction(async (session) => {
@@ -273,8 +307,8 @@ export const createChildTaskRecords = async ({
           {
             _id: spanId,
             input,
-            kind: "CHAIN",
-            name: definition.key,
+            kind: spanIdentity.kind,
+            name: spanIdentity.name,
             parentSpanId: parent.rootSpanId,
             startedAt: startedAt.toJSDate(),
             startOffsetMs: startedAt.diff(DateTime.fromJSDate(trace.startedAt)).toMillis(),
@@ -352,6 +386,7 @@ const commitTransition = async ({
   task,
   testHooks,
   update,
+  writes,
 }: {
   close?: TransitionClose;
   filter: Record<string, unknown>;
@@ -360,6 +395,7 @@ const commitTransition = async ({
   task: HarnessTaskDocument;
   testHooks?: HarnessTestHooks;
   update: Record<string, unknown>;
+  writes?: HarnessCommitWrites;
 }): Promise<HarnessTaskDocument> => {
   const taskId = String(task._id);
   const trace = await models.trace.findExactlyOne({_id: task.traceId});
@@ -431,6 +467,7 @@ const commitTransition = async ({
       );
     }
 
+    await writes?.({session, task: updated, traceStartedAt});
     await testHooks?.beforeCommitEnd?.({phase: task.phase, session, taskId});
     return updated;
   });
@@ -458,6 +495,7 @@ export const commitPhase = async ({
   phaseStartedAt,
   task,
   testHooks,
+  writes,
 }: {
   /** Set when the phase failed for good; recorded as the task's `attempt`. */
   failedAttempts?: number;
@@ -467,6 +505,8 @@ export const commitPhase = async ({
   phaseStartedAt: DateTime;
   task: HarnessTaskDocument;
   testHooks?: HarnessTestHooks;
+  /** Extra rows committed in the same transaction (agent messages, LLM spans). */
+  writes?: HarnessCommitWrites;
 }): Promise<HarnessTaskDocument> => {
   const isTerminal = "terminal" in next;
   const error = isTerminal && next.terminal.status === "failed" ? next.terminal.error : undefined;
@@ -514,6 +554,7 @@ export const commitPhase = async ({
     task,
     testHooks,
     update,
+    writes,
   });
 };
 
@@ -744,32 +785,58 @@ export const expiredLeaseFilter = (now: DateTime): Record<string, unknown> => ({
   status: HARNESS_TASK_STATUSES.running,
 });
 
+/** What recovery does with a task whose lease expired mid-phase. */
+export type HarnessInterruptionAction = "fail" | "park" | "replay";
+
+const interruptionOutcomes = (
+  leaseOwner: string
+): Record<
+  HarnessInterruptionAction,
+  {error: string; replay: HarnessReplayPolicy; status: HarnessTaskDocument["status"]}
+> => ({
+  fail: {
+    error: `Interrupted, not retried: lease of ${leaseOwner} expired mid-phase (replay: never)`,
+    replay: "never",
+    status: HARNESS_TASK_STATUSES.failed,
+  },
+  park: {
+    error: `Interrupted: lease of ${leaseOwner} expired mid-phase; awaiting resolveInterrupted (replay: never)`,
+    replay: "never",
+    status: HARNESS_TASK_STATUSES.interrupted,
+  },
+  replay: {
+    error: `Interrupted: lease of ${leaseOwner} expired mid-phase; re-running (replay: safe)`,
+    replay: "safe",
+    status: HARNESS_TASK_STATUSES.pending,
+  },
+});
+
 /**
- * Record that a task's lease expired mid-phase. `replay: "safe"` returns it to `pending`
- * at the same checkpoint so a runner re-runs the phase; `never` parks it `interrupted`
- * for `resolveInterrupted`. Either way an error `CHAIN` span records the interruption in
- * the same transaction. Fenced on the expired lease, so a renewed lease is left alone.
+ * Record that a task's lease expired mid-phase. `replay` returns it to `pending` at the
+ * same checkpoint so a runner re-runs the phase; `park` sets `interrupted` for
+ * `resolveInterrupted`; `fail` (a `replay: "never"` phase of an `onInterrupt: "fail"`
+ * task) ends it `failed` with an "Interrupted, not retried" outcome and closes its span.
+ * Each writes an error `CHAIN` span in the same transaction. Fenced on the expired lease,
+ * so a renewed lease is left alone.
  */
 export const commitInterruption = async ({
+  action,
   models,
-  replay,
   task,
   testHooks,
 }: {
+  action: HarnessInterruptionAction;
   models: HarnessModels;
-  replay: HarnessReplayPolicy;
   task: HarnessTaskDocument;
   testHooks?: HarnessTestHooks;
 }): Promise<HarnessTaskDocument> => {
   const now = DateTime.now();
-  const isReplay = replay === "safe";
   const leaseOwner = task.lease?.owner ?? "unknown";
-  const error = isReplay
-    ? `Interrupted: lease of ${leaseOwner} expired mid-phase; re-running (replay: safe)`
-    : `Interrupted: lease of ${leaseOwner} expired mid-phase; awaiting resolveInterrupted (replay: never)`;
-  const status = isReplay ? HARNESS_TASK_STATUSES.pending : HARNESS_TASK_STATUSES.interrupted;
+  const {error, replay, status} = interruptionOutcomes(leaseOwner)[action];
+  const isFailure = action === "fail";
 
   return commitTransition({
+    close: isFailure ? {error, output: {error}, status: "error"} : undefined,
     filter: {
       ...expiredLeaseFilter(now),
       phase: task.phase,
@@ -787,7 +854,9 @@ export const commitInterruption = async ({
     },
     task,
     testHooks,
-    update: {$set: {status}, $unset: {lease: 1}},
+    update: isFailure
+      ? {$set: {outcome: {error, status}, status}, $unset: {lease: 1, runAt: 1}}
+      : {$set: {status}, $unset: {lease: 1}},
   });
 };
 

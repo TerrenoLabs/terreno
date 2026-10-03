@@ -132,7 +132,13 @@ const harnessTaskSchema = new mongoose.Schema<HarnessTaskDocument, HarnessTaskMo
       timeoutAt: {description: "When the wait times out", type: Date},
     },
   },
-  {strict: "throw", toJSON: {virtuals: true}, toObject: {virtuals: true}}
+  {
+    // Keep empty objects: `{}` tool arguments and states are meaningful values.
+    minimize: false,
+    strict: "throw",
+    toJSON: {virtuals: true},
+    toObject: {virtuals: true},
+  }
 );
 
 harnessTaskSchema.plugin(createdUpdatedPlugin);

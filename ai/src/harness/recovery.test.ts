@@ -329,8 +329,8 @@ describe("Harness leases and crash recovery", () => {
       const parked = await findTask(created._id);
       expect(parked.status).toBe("interrupted");
       expect(parked.phase).toBe("fetch");
-      // The untouched checkpoint: initial state `{}` (Mongo drops empty objects).
-      expect(parked.state).toBeUndefined();
+      // The untouched checkpoint: initial state `{}` (the task schema keeps empty objects).
+      expect(parked.state).toEqual({});
       expect(parked.lease?.token).toBeUndefined();
       expect(runs).toBe(1);
 
@@ -400,7 +400,7 @@ describe("Harness leases and crash recovery", () => {
       const afterZombie = await findTask(created._id);
       expect(afterZombie.status).toBe("running");
       expect(afterZombie.phase).toBe("fetch");
-      expect(afterZombie.state).toBeUndefined();
+      expect(afterZombie.state).toEqual({});
       expect(afterZombie.lease?.token).toBe(beforeZombie.lease?.token);
       expect(await SpanModel.countDocuments({})).toBe(spansBeforeZombie);
 

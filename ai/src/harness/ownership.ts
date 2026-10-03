@@ -26,6 +26,7 @@ import {
   wakeWaitingTask,
 } from "./commit";
 import {taskDefinitionKey} from "./defineTask";
+import type {ExecutionEnv} from "./executionEnv";
 
 /** Most waiting tasks one sweep re-checks; the next sweep picks up the rest. */
 const WAIT_SWEEP_BATCH_SIZE = 100;
@@ -39,6 +40,8 @@ export interface HarnessEngine {
   /** Abort controllers of tasks running in this process, by task id. */
   controllers: Map<string, AbortController>;
   definitions: Map<string, HarnessTaskDefinition>;
+  /** Handed to phases as `rt.env` and to tools as `api.env`. */
+  env?: ExecutionEnv;
   models: HarnessModels;
   testHooks?: HarnessTestHooks;
   /** Tell the runner new work may be runnable. */
@@ -408,7 +411,34 @@ export const checkTaskWait = async ({
   return isWoken;
 };
 
-/** After `task` settles, re-check the task that owns it (if any) in case it was waiting. */
+/**
+ * Mark a conversation `idle` once its active turn task is terminal. Fenced on the turn,
+ * so a later turn is never released by an earlier one. `submit` also releases a
+ * conversation whose active turn is terminal, should this write be lost to a crash.
+ */
+const releaseConversation = async ({
+  engine,
+  task,
+}: {
+  engine: HarnessEngine;
+  task: HarnessTaskDocument;
+}): Promise<void> => {
+  try {
+    await engine.models.conversation.updateOne(
+      {_id: task.ownership.id, activeTurnTaskId: task._id, status: "busy"},
+      {$set: {status: "idle"}, $unset: {activeTurnTaskId: 1}}
+    );
+  } catch (error: unknown) {
+    logger.error(
+      `Harness could not release conversation ${task.ownership.id} after turn ${task._id}: ${errorMessage(error)}`
+    );
+  }
+};
+
+/**
+ * Wake whatever owns a task that just settled: a waiting parent task re-checks its wait;
+ * a conversation whose turn ended goes back to `idle`.
+ */
 export const settleTaskOwner = async ({
   engine,
   task,
@@ -416,6 +446,10 @@ export const settleTaskOwner = async ({
   engine: HarnessEngine;
   task: HarnessTaskDocument;
 }): Promise<void> => {
+  if (task.ownership?.kind === "conversation" && task.ownership.id) {
+    await releaseConversation({engine, task});
+    return;
+  }
   if (task.ownership?.kind !== "task" || !task.ownership.id) {
     return;
   }

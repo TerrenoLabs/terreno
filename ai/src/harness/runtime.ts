@@ -27,10 +27,13 @@ import {
   createChildTaskRecords,
   expiredLeaseFilter,
   HarnessCommitConflictError,
+  type HarnessCommitWrites,
+  type HarnessInterruptionAction,
   type HarnessModels,
   newTaskLease,
 } from "./commit";
 import {taskDefinitionKey} from "./defineTask";
+import {HARNESS_INTERNAL_RUNTIME} from "./internalRuntime";
 import {startTaskHeartbeat} from "./leases";
 import {
   checkTaskWait,
@@ -130,7 +133,8 @@ export const claimNextTask = async ({
 /**
  * Find `running` tasks whose lease expired (their runner died or froze mid-phase) and
  * resolve each by its current phase's `replay`: `safe` goes back to `pending` at the same
- * checkpoint, anything else is parked `interrupted`. Tasks of unregistered versions are
+ * checkpoint; anything else is parked `interrupted`, or failed (owner woken) when the
+ * definition sets `onInterrupt: "fail"`. Tasks of unregistered versions are
  * left for a runner that registers them. Then wake tasks whose child wait settled
  * without a wake (a crash between a child's outcome and its owner check). Returns how
  * many tasks became runnable.
@@ -148,14 +152,17 @@ export const recoverExpiredTasks = async (engine: HarnessEngine): Promise<number
   let runnable = 0;
   for (const task of expired) {
     const definition = definitions.get(taskDefinitionKey(task));
-    const replay = definition?.phases[task.phase]?.replay === "safe" ? "safe" : "never";
+    const action = interruptionAction(definition, task.phase);
     try {
-      await commitInterruption({models, replay, task, testHooks});
+      const recovered = await commitInterruption({action, models, task, testHooks});
       logger.warn(
-        `Harness task ${task._id} (${taskDefinitionKey(task)}) was interrupted in phase "${task.phase}"; ${replay === "safe" ? "re-running it" : "parked as interrupted"}`
+        `Harness task ${task._id} (${taskDefinitionKey(task)}) was interrupted in phase "${task.phase}"; ${INTERRUPTION_LOG[action]}`
       );
-      if (replay === "safe") {
+      if (action === "replay") {
         runnable += 1;
+      }
+      if (action === "fail") {
+        await settleTaskOwner({engine, task: recovered});
       }
     } catch (error: unknown) {
       // Another runner recovered it first, or its lease was renewed after the scan.
@@ -166,6 +173,23 @@ export const recoverExpiredTasks = async (engine: HarnessEngine): Promise<number
     }
   }
   return runnable + (await sweepWaitingTasks(engine));
+};
+
+const INTERRUPTION_LOG: Record<HarnessInterruptionAction, string> = {
+  fail: "failed it (not retried)",
+  park: "parked as interrupted",
+  replay: "re-running it",
+};
+
+/** What recovery does with an expired task in `phase`, by its definition's policies. */
+const interruptionAction = (
+  definition: HarnessTaskDefinition | undefined,
+  phase: string
+): HarnessInterruptionAction => {
+  if (definition?.phases[phase]?.replay === "safe") {
+    return "replay";
+  }
+  return definition?.onInterrupt === "fail" ? "fail" : "park";
 };
 
 /**
@@ -281,15 +305,22 @@ const runPhase = async ({
     }
   };
 
-  const commit = async (next: HarnessCommit<unknown, unknown>): Promise<void> => {
+  const commitWithWrites = async (
+    next: HarnessCommit<unknown, unknown>,
+    writes?: HarnessCommitWrites
+  ): Promise<void> => {
     if (commitStarted) {
       throw new Error(
         `${definition.key}: rt.commit called more than once in phase "${task.phase}"`
       );
     }
     assertValidNext(definition, next);
-    await settlePhase(() => commitPhase({lease, models, next, phaseStartedAt, task, testHooks}));
+    await settlePhase(() =>
+      commitPhase({lease, models, next, phaseStartedAt, task, testHooks, writes})
+    );
   };
+
+  const commit = (next: HarnessCommit<unknown, unknown>): Promise<void> => commitWithWrites(next);
 
   const createTask = async (
     childDefinition: HarnessTaskDefinition<never, unknown, unknown>,
@@ -414,9 +445,11 @@ const runPhase = async ({
     });
   }
 
-  const rt: HarnessTaskRuntime<unknown, unknown> = {
+  const rt: HarnessTaskRuntime<unknown, unknown> & {[HARNESS_INTERNAL_RUNTIME]: unknown} = {
+    [HARNESS_INTERNAL_RUNTIME]: {commitWithWrites},
     commit,
     createTask: createTask as HarnessTaskRuntime<unknown, unknown>["createTask"],
+    env: engine.env,
     signal: controller.signal,
     taskId,
     waitForTasks,

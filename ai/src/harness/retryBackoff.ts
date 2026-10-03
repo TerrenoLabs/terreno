@@ -18,17 +18,24 @@ export const resolveRetryPolicy = (policy: HarnessRetryPolicy | undefined): Reso
   };
 };
 
-/** Throw when a definition's retry policy cannot be applied. */
-export const assertValidRetryPolicy = (name: string, policy: HarnessRetryPolicy): void => {
+/**
+ * Throw when a retry policy cannot be applied. `scope` prefixes the message (for example
+ * `defineTask(name)`); `field` names the option (`retry`, `modelRetry`).
+ */
+export const assertValidRetryPolicy = (
+  scope: string,
+  policy: HarnessRetryPolicy,
+  field = "retry"
+): void => {
   const {backoffMs, maxAttempts, maxBackoffMs} = resolveRetryPolicy(policy);
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
-    throw new Error(`defineTask(${name}): retry.maxAttempts must be a positive integer`);
+    throw new Error(`${scope}: ${field}.maxAttempts must be a positive integer`);
   }
   if (!Number.isFinite(backoffMs) || backoffMs < 0) {
-    throw new Error(`defineTask(${name}): retry.backoffMs must be a non-negative number`);
+    throw new Error(`${scope}: ${field}.backoffMs must be a non-negative number`);
   }
   if (!Number.isFinite(maxBackoffMs) || maxBackoffMs < backoffMs) {
-    throw new Error(`defineTask(${name}): retry.maxBackoffMs must be at least retry.backoffMs`);
+    throw new Error(`${scope}: ${field}.maxBackoffMs must be at least ${field}.backoffMs`);
   }
 };
 
@@ -38,7 +45,7 @@ export const assertValidRetryPolicy = (name: string, policy: HarnessRetryPolicy)
  * the result lies in `[delay / 2, delay]`. Spreading retries keeps a shared outage from
  * waking every failed task at the same instant.
  */
-const retryDelayMs = ({
+export const retryDelayMs = ({
   failedAttempts,
   policy,
   random = Math.random,

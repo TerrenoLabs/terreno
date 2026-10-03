@@ -1,6 +1,7 @@
 import {afterAll, afterEach, describe, it, mock} from "bun:test";
 import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
+import {setImageAsync, setStringAsync} from "expo-clipboard";
 import React from "react";
 import {Platform, Pressable, ScrollView} from "react-native";
 
@@ -11,8 +12,8 @@ import {Text} from "./Text";
 import {ThemeProvider} from "./Theme";
 import {renderWithTheme} from "./test-utils";
 
-const setStringAsync = mock(async (_text: string) => {});
-mock.module("expo-clipboard", () => ({setStringAsync}));
+const mockedSetImageAsync = setImageAsync as unknown as ReturnType<typeof mock>;
+const mockedSetStringAsync = setStringAsync as unknown as ReturnType<typeof mock>;
 
 const pickedDocument = {mimeType: "text/plain", name: "notes.txt", uri: "file:///notes.txt"};
 mock.module("expo-document-picker", () => ({
@@ -91,6 +92,7 @@ describe("GPTChat", () => {
 
     await press(getByLabelText("Select chat: First chat"));
     await press(getByTestId("gpt-new-chat-button"));
+    await press(getByTestId("gpt-history-menu-h2"));
     await press(getByTestId("gpt-delete-history-h2"));
 
     assert.deepEqual(onSelectHistory.mock.calls, [["h1"]]);
@@ -102,6 +104,7 @@ describe("GPTChat", () => {
     const onUpdateTitle = mock((_id: string, _title: string) => {});
     const {getByTestId} = renderChat({onUpdateTitle});
 
+    await press(getByTestId("gpt-history-menu-h1"));
     await press(getByTestId("gpt-rename-history-h1"));
     fireEvent.changeText(getByTestId("gpt-rename-input-h1"), "Renamed");
     await press(getByTestId("gpt-rename-save-h1"));
@@ -113,6 +116,7 @@ describe("GPTChat", () => {
     const onUpdateTitle = mock((_id: string, _title: string) => {});
     const {getByTestId} = renderChat({onUpdateTitle});
 
+    await press(getByTestId("gpt-history-menu-h2"));
     await press(getByTestId("gpt-rename-history-h2"));
     fireEvent.changeText(getByTestId("gpt-rename-input-h2"), "   ");
     fireEvent(getByTestId("gpt-rename-input-h2"), "blur");
@@ -120,10 +124,31 @@ describe("GPTChat", () => {
     assert.equal(onUpdateTitle.mock.calls.length, 0);
   });
 
-  it("hides the rename button when renaming is not supported", () => {
-    const {queryByTestId} = renderChat();
+  it("hides the rename action when renaming is not supported", async () => {
+    const {getByTestId, queryByTestId} = renderChat();
+
+    await press(getByTestId("gpt-history-menu-h1"));
 
     assert.isNull(queryByTestId("gpt-rename-history-h1"));
+    assert.isOk(getByTestId("gpt-delete-history-h1"));
+  });
+
+  it("keeps rename and delete inside a per-row overflow menu", async () => {
+    const {getByTestId, queryByTestId} = renderChat({onUpdateTitle: () => {}});
+
+    assert.isOk(getByTestId("gpt-history-menu-h1"));
+    assert.isNull(queryByTestId("gpt-rename-history-h1"));
+    assert.isNull(queryByTestId("gpt-delete-history-h1"));
+
+    await press(getByTestId("gpt-history-menu-h1"));
+
+    assert.isOk(getByTestId("gpt-rename-history-h1"));
+    assert.isOk(getByTestId("gpt-delete-history-h1"));
+
+    await press(getByTestId("gpt-rename-history-h1"));
+
+    assert.isNull(queryByTestId("gpt-delete-history-h1"));
+    assert.isOk(getByTestId("gpt-rename-input-h1"));
   });
 
   it("renders a model selector only when models and a change handler are given", () => {
@@ -562,7 +587,7 @@ describe("GPTChat", () => {
   });
 
   it("copies an assistant message to the clipboard", async () => {
-    setStringAsync.mockClear();
+    mockedSetStringAsync.mockClear();
     const {getByTestId} = renderChat({
       currentMessages: [{content: "Copy me", role: "assistant"}],
     });
@@ -571,7 +596,63 @@ describe("GPTChat", () => {
       fireEvent.press(getByTestId("gpt-copy-msg-0"));
     });
 
-    assert.deepEqual(setStringAsync.mock.calls, [["Copy me"]]);
+    assert.deepEqual(mockedSetStringAsync.mock.calls, [["Copy me"]]);
+  });
+
+  it("copies the image, not placeholder text, for an image-only reply", async () => {
+    mockedSetStringAsync.mockClear();
+    mockedSetImageAsync.mockClear();
+    const {getByTestId} = renderChat({
+      currentMessages: [
+        {
+          content: "",
+          contentParts: [{mimeType: "image/png", type: "image", url: "data:image/png;base64,AAAA"}],
+          role: "assistant",
+        },
+      ],
+    });
+
+    await press(getByTestId("gpt-copy-msg-0"));
+
+    assert.deepEqual(mockedSetImageAsync.mock.calls, [["AAAA"]]);
+    assert.equal(mockedSetStringAsync.mock.calls.length, 0);
+  });
+
+  it("offers a copy-image action on generated images", async () => {
+    mockedSetImageAsync.mockClear();
+    const {getByTestId} = renderChat({
+      currentMessages: [
+        {
+          content: "Here you go",
+          contentParts: [{mimeType: "image/png", type: "image", url: "data:image/png;base64,BBBB"}],
+          role: "assistant",
+        },
+      ],
+    });
+
+    await press(getByTestId("gpt-copy-image"));
+
+    assert.deepEqual(mockedSetImageAsync.mock.calls, [["BBBB"]]);
+  });
+
+  it("grows the composer up to a maximum height and resets after sending", async () => {
+    const {getByTestId} = renderChat();
+    const input = getByTestId("gpt-input");
+    fireEvent.changeText(input, "Long pasted notes");
+
+    fireEvent(input, "contentSizeChange", {nativeEvent: {contentSize: {height: 120, width: 100}}});
+    const grownStyle = [getByTestId("gpt-input").props.style].flat(Infinity);
+    assert.isTrue(grownStyle.some((style) => style?.height === 120));
+
+    fireEvent(getByTestId("gpt-input"), "contentSizeChange", {
+      nativeEvent: {contentSize: {height: 900, width: 100}},
+    });
+    const cappedStyle = [getByTestId("gpt-input").props.style].flat(Infinity);
+    assert.isTrue(cappedStyle.some((style) => style?.height === 200));
+
+    await press(getByTestId("gpt-submit"));
+    const resetStyle = [getByTestId("gpt-input").props.style].flat(Infinity);
+    assert.isTrue(resetStyle.some((style) => style?.height === 40));
   });
 
   it("disables input and the attachment picker while streaming", () => {
@@ -615,6 +696,51 @@ describe("GPTChat", () => {
     assert.isOk(getByText("Scroll to bottom"));
 
     await press(getByText("Scroll to bottom"));
+
+    assert.isNull(queryByText("Scroll to bottom"));
+  });
+
+  it("never shows scroll to bottom in an empty chat", async () => {
+    const {getByTestId, queryByText, UNSAFE_getByType} = renderChat({currentMessages: []});
+
+    fireEvent(getByTestId("gpt-viewport"), "layout", {
+      nativeEvent: {layout: {height: 200, width: 100, x: 0, y: 0}},
+    });
+    fireEvent(getByTestId("gpt-messages"), "layout", {
+      nativeEvent: {layout: {height: 600, width: 100, x: 0, y: 0}},
+    });
+    await act(async () => {
+      fireEvent.scroll(UNSAFE_getByType(ScrollView), {
+        nativeEvent: {contentOffset: {x: 0, y: 0}},
+      });
+    });
+
+    assert.isNull(queryByText("Scroll to bottom"));
+  });
+
+  it("hides scroll to bottom once the content fits the viewport", async () => {
+    const {getByTestId, getByText, queryByText, UNSAFE_getByType} = renderChat({
+      currentMessages: [{content: "Hello!", role: "assistant"}],
+    });
+
+    fireEvent(getByTestId("gpt-viewport"), "layout", {
+      nativeEvent: {layout: {height: 200, width: 100, x: 0, y: 0}},
+    });
+    fireEvent(getByTestId("gpt-messages"), "layout", {
+      nativeEvent: {layout: {height: 600, width: 100, x: 0, y: 0}},
+    });
+    await act(async () => {
+      fireEvent.scroll(UNSAFE_getByType(ScrollView), {
+        nativeEvent: {contentOffset: {x: 0, y: 0}},
+      });
+    });
+    assert.isOk(getByText("Scroll to bottom"));
+
+    await act(async () => {
+      fireEvent(getByTestId("gpt-messages"), "layout", {
+        nativeEvent: {layout: {height: 150, width: 100, x: 0, y: 0}},
+      });
+    });
 
     assert.isNull(queryByText("Scroll to bottom"));
   });
@@ -668,6 +794,7 @@ describe("GPTChat", () => {
     const onUpdateTitle = mock((_id: string, _title: string) => {});
     const {getByTestId} = renderChat({onUpdateTitle});
 
+    await press(getByTestId("gpt-history-menu-h1"));
     await press(getByTestId("gpt-rename-history-h1"));
     fireEvent.changeText(getByTestId("gpt-rename-input-h1"), "Renamed");
     const input = getByTestId("gpt-rename-input-h1");

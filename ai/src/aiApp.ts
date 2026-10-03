@@ -25,6 +25,11 @@ export interface AiAppOptions {
   fileStorageService?: FileStorageService;
   /** GCS bucket name for file uploads. Required alongside fileStorageService. */
   gcsBucket?: string;
+  /**
+   * When `false` or the function returns `false`, file uploads and chat attachments are rejected.
+   * Omit or pass `true` to leave uploads enabled whenever storage is configured.
+   */
+  fileUploadsEnabled?: import("./service/fileUploadsGate").FileUploadsEnabled;
   /** Maximum number of tool-calling steps per chat request. Defaults to 5 when tools are present. */
   maxSteps?: number;
   /** MCP service for connecting to external tool servers. */
@@ -33,7 +38,7 @@ export interface AiAppOptions {
   openApiOptions?: Record<string, unknown>;
   /** Tool choice strategy for chat requests. Defaults to "auto" when tools are present. */
   toolChoice?: "auto" | "none" | "required";
-  /** Cheap model ID used for generating conversation titles (e.g. "gemini-2.0-flash-lite"). Falls back to the main model if not set. */
+  /** Cheap model ID used for generating conversation titles (e.g. "gemini-3.5-flash-lite"). Falls back to the main model if not set. */
   titleModelId?: string;
   /** Tool definitions available to the AI model during chat. */
   tools?: Record<string, Tool>;
@@ -52,7 +57,7 @@ export interface AiAppOptions {
  * import {AiApp, AIService} from "@terreno/ai";
  * import {google} from "@ai-sdk/google";
  *
- * const aiService = new AIService({model: google("gemini-2.5-flash")});
+ * const aiService = new AIService({model: google("gemini-3.8-flash")});
  * new AiApp({aiService, tools: myTools}).register(app);
  * ```
  *
@@ -60,7 +65,7 @@ export interface AiAppOptions {
  * ```typescript
  * // Demo mode with per-request key support (no server-side API key needed)
  * new AiApp({
- *   createModelFn: (key) => google("gemini-2.5-flash", {apiKey: key}),
+ *   createModelFn: (key) => google("gemini-3.8-flash", {apiKey: key}),
  *   demoMode: true,
  * }).register(app);
  * ```
@@ -80,6 +85,7 @@ export class AiApp implements TerrenoPlugin {
       createServerModelFn,
       demoMode,
       fileStorageService,
+      fileUploadsEnabled,
       gcsBucket,
       maxSteps,
       mcpService,
@@ -95,6 +101,9 @@ export class AiApp implements TerrenoPlugin {
       createModelFn,
       createServerModelFn,
       demoMode,
+      // Attachments are only uploaded when the file routes are mounted too
+      fileStorageService: fileStorageService && gcsBucket ? fileStorageService : undefined,
+      fileUploadsEnabled,
       maxSteps,
       mcpService,
       openApiOptions,
@@ -108,6 +117,7 @@ export class AiApp implements TerrenoPlugin {
     if (fileStorageService && gcsBucket) {
       addFileRoutes(router, {
         fileStorageService,
+        fileUploadsEnabled,
         gcsBucket,
         openApiOptions,
       });

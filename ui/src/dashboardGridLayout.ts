@@ -47,14 +47,41 @@ export const getDashboardCellBoxStyle = ({
   gapPx: number;
   rowWidth: number;
 }): DashboardCellStyle => {
+  return getDashboardSpanCellBoxStyle({columnCount, gapPx, rowWidth, span: 1});
+};
+
+export const getDashboardSpanCellBoxStyle = ({
+  columnCount,
+  gapPx,
+  rowWidth,
+  span,
+}: {
+  columnCount: number;
+  gapPx: number;
+  rowWidth: number;
+  span: number;
+}): DashboardCellStyle => {
+  const safeColumnCount = Math.max(columnCount, 1);
+  const safeSpan = Math.min(Math.max(Math.floor(span), 1), safeColumnCount);
   if (rowWidth > 0) {
-    const width = getDashboardCellWidth({columnCount, gapPx, rowWidth});
+    const baseWidth = getDashboardCellWidth({
+      columnCount: safeColumnCount,
+      gapPx,
+      rowWidth,
+    });
+    const width = baseWidth * safeSpan + gapPx * (safeSpan - 1);
     return {flexGrow: 0, flexShrink: 0, maxWidth: width, width};
   }
-  if (columnCount <= 1 || Platform.OS !== "web") {
+  if (safeSpan === safeColumnCount || Platform.OS !== "web") {
     return {flexGrow: 0, flexShrink: 0, maxWidth: "100%", width: "100%"};
   }
 
-  const width = `calc((100% - ${gapPx * (columnCount - 1)}px) / ${columnCount})`;
+  const gapTotal = gapPx * (safeColumnCount - 1);
+  if (safeSpan === 1) {
+    const width = `calc((100% - ${gapTotal}px) / ${safeColumnCount})`;
+    return {flexGrow: 0, flexShrink: 0, maxWidth: width, width};
+  }
+  const internalGaps = gapPx * (safeSpan - 1);
+  const width = `calc(((100% - ${gapTotal}px) / ${safeColumnCount}) * ${safeSpan} + ${internalGaps}px)`;
   return {flexGrow: 0, flexShrink: 0, maxWidth: width, width};
 };

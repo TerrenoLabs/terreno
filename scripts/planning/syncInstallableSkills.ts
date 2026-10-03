@@ -123,6 +123,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "expo-cicd-workflows",
       "expo-deployment",
       "expo-dev-client",
+      "store-assets",
       "track-upstream-expo",
       "upgrading-expo",
       "use-dom",

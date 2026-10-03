@@ -2,7 +2,7 @@
 import {spawn} from "node:child_process";
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import {join, resolve} from "node:path";
-import {chromium} from "@playwright/test";
+import {chromium, type Locator, type Page} from "@playwright/test";
 import {DateTime} from "luxon";
 
 import {
@@ -117,6 +117,36 @@ const startDemoIfNeeded = async (baseUrl: string): Promise<StartedDemo | undefin
   }
 };
 
+const waitForFixtureChartsReady = async (locator: Locator): Promise<void> => {
+  await locator.scrollIntoViewIfNeeded();
+  await Promise.race([
+    locator.locator("svg").first().waitFor({state: "visible", timeout: 30_000}),
+    locator.getByText("No signups yet").waitFor({state: "visible", timeout: 30_000}),
+  ]);
+  const svgLocator = locator.locator("svg");
+  const svgCount = await svgLocator.count();
+  for (let index = 0; index < svgCount; index += 1) {
+    await svgLocator.nth(index).waitFor({state: "visible", timeout: 30_000});
+  }
+  await Bun.sleep(300);
+};
+
+const hideFixedAndStickyElements = async (page: Page): Promise<void> => {
+  await page.evaluate(() => {
+    const nodes = document.querySelectorAll("body *");
+    for (const node of nodes) {
+      if (!(node instanceof HTMLElement)) {
+        continue;
+      }
+      const style = window.getComputedStyle(node);
+      if (style.position !== "fixed" && style.position !== "sticky") {
+        continue;
+      }
+      node.style.setProperty("display", "none", "important");
+    }
+  });
+};
+
 const selectedFixtures = (only?: ChartVisualFixtureId) => {
   if (!only) {
     return [...CHART_VISUAL_FIXTURES];
@@ -152,29 +182,17 @@ export const compareChartRenderedSnapshots = async ({
     });
     await page.goto(`${baseUrl}${GALLERY_PATH}`, {timeout: 120_000, waitUntil: "networkidle"});
     await page.getByTestId(CHART_VISUAL_GALLERY_TEST_ID).waitFor({timeout: 60_000});
-    await page.evaluate(async () => {
+    await page.evaluate(async (): Promise<void> => {
       await document.fonts.ready;
-      const nodes = document.querySelectorAll("body *");
-      for (const node of nodes) {
-        if (!(node instanceof HTMLElement)) {
-          continue;
-        }
-        const style = window.getComputedStyle(node);
-        if (style.position !== "fixed" && style.position !== "sticky") {
-          continue;
-        }
-        node.style.setProperty("display", "none", "important");
-      }
     });
+    await hideFixedAndStickyElements(page);
     await Bun.sleep(250);
 
     for (const fixture of selectedFixtures(only)) {
       const locator = page.getByTestId(chartVisualFixtureTestId(fixture.id));
-      await locator.scrollIntoViewIfNeeded();
-      await Promise.race([
-        locator.locator("svg").first().waitFor({state: "visible", timeout: 30_000}),
-        locator.getByText("No signups yet").waitFor({state: "visible", timeout: 30_000}),
-      ]);
+      await waitForFixtureChartsReady(locator);
+      // Expo dev overlays can mount after lazy chart modules resolve, so suppress fixed UI again.
+      await hideFixedAndStickyElements(page);
       const actual = await locator.screenshot({animations: "disabled", type: "png"});
       const snapshotPath = join(SNAPSHOT_DIR, `${fixture.id}.png`);
       const actualPath = join(OUTPUT_DIR, "actual", `${fixture.id}.png`);

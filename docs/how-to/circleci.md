@@ -242,9 +242,10 @@ restrict `terreno-release` and `terreno-npm` to tag/manual release pipelines.
 Until contexts exist, e2e jobs may use **project env vars for `E2E_*` secrets only**
 (or the in-job `ci-e2e-*-secret` fallbacks). **Do not** put `GITHUB_TOKEN` (or any
 GitHub PAT) in project env vars — those are injected into every job, including
-`bun` scripts from the PR. Create `terreno-github-api`, restrict it to this
-project, leave fork-PR secret passing off, and attach that context **only** to
-`dco` and `architectural-pr-review`. DCO skips if `GITHUB_TOKEN` is unset.
+`bun` scripts from the PR. `terreno-github-api` must hold the PAT as
+`GITHUB_TOKEN`; restrict it to this project and leave fork-PR secret passing off.
+The `always` workflow attaches it **only** to `dco` and `architectural-pr-review`
+(the latter also gets `terreno-agentic`). DCO skips if `GITHUB_TOKEN` is unset.
 `architectural-pr-review` also skips if `GITHUB_TOKEN` or `CURSOR_API_KEY` is
 unset, and it skips fork PRs. The job checks out `origin/master` before running
 the review script so a PR cannot rewrite the reviewer.

@@ -270,6 +270,7 @@ status. `AuditEvent` itself is never audited.
 | `access` | `"admin"` | `"authenticated"` also admits signed-in non-admins, confined to `{folderPrefix}users/<userId>/`. Admins always see the whole `folderPrefix` |
 | `uploadRateLimit` | off | `{max, windowMs, store?, keyBy?}` on `POST basePath/` only. Keys by IP by default. See [Rate limiting](../how-to/rate-limiting.md#limit-one-route) |
 | `allowedMimeTypes`, `maxFileSize` | images, PDF, text, Office; 10 MB | Upload filter |
+| `fileUploadsEnabled` | `true` | `false` or `(req) => boolean` rejects uploads; list, download, delete stay on |
 
 ```typescript
 new DocumentStorageApp({

@@ -196,6 +196,23 @@ describe("DocumentStorageApp", () => {
       expect(saved.body?.toString()).toBe("hello");
     });
 
+    it("rejects uploads when file uploads are disabled", async () => {
+      app = buildApp({
+        bucketName: "test-bucket",
+        fileUploadsEnabled: async () => false,
+        folderPrefix: "tenant/",
+      });
+      const agent = await authAsUser(app, "admin");
+      const res = await agent
+        .post("/documents/")
+        .attach("file", Buffer.from("hello"), {
+          contentType: "application/pdf",
+          filename: "notes.pdf",
+        })
+        .expect(403);
+      expect(res.body.title).toBe("File uploads are disabled");
+    });
+
     it("rejects disallowed mime types via multer fileFilter", async () => {
       await adminAgent
         .post("/documents/")

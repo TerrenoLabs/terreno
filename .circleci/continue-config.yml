@@ -1358,12 +1358,10 @@ jobs:
 
   # Trusted-base architectural review: checkout master (not the PR head) then
   # fetch the PR via GitHub API. Matches GHA pull_request_target. Skip forks.
-  # Attach terreno-github-api + terreno-agentic once those contexts exist.
   architectural-pr-review:
     executor: node22
     resource_class: medium
     steps:
-      - skip_if_not_pull_request
       - skip_if_fork_pull_request
       - run:
           name: Skip when review secrets are missing
@@ -1380,6 +1378,14 @@ jobs:
             set -euo pipefail
             git fetch origin master
             git checkout --force origin/master
+      # GitHub App pipelines leave CIRCLE_PULL_REQUEST unset; resolve the PR by
+      # branch and rebuild the URL the review script expects.
+      - resolve_preview_pr_number
+      - run:
+          name: Export pull request URL
+          command: |
+            set -euo pipefail
+            echo "export CIRCLE_PULL_REQUEST=https://github.com/TerrenoLabs/terreno/pull/${PR_NUMBER}" >> "$BASH_ENV"
       - install_bun_and_deps
       - run:
           name: Install Cursor Agent CLI
@@ -2114,19 +2120,14 @@ jobs:
               "$ZOOM_WEBHOOK_URL"
 
 workflows:
-  # Attach terreno-e2e / terreno-github-api / terreno-agentic in the CircleCI
-  # project once Phase 0 contexts exist. Do not put GITHUB_TOKEN or
-  # CURSOR_API_KEY in project env vars (injected into every job). Missing named
-  # contexts fail the pipeline, so they are not hard-required in this file until
-  # created; then attach:
-  #   - dco:
-  #       context: [terreno-github-api]
-  #   - architectural-pr-review:
-  #       context: [terreno-github-api, terreno-agentic]
+  # Never put GITHUB_TOKEN or CURSOR_API_KEY in project env vars (injected into
+  # every job); scope them to these two jobs through contexts.
   always:
     jobs:
-      - dco
-      - architectural-pr-review
+      - dco:
+          context: [terreno-github-api]
+      - architectural-pr-review:
+          context: [terreno-github-api, terreno-agentic]
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>

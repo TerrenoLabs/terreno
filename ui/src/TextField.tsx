@@ -1,5 +1,5 @@
 import {getCalendars} from "expo-localization";
-import {type FC, useCallback, useMemo, useRef, useState} from "react";
+import {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   type DimensionValue,
   type KeyboardTypeOptions,
@@ -89,6 +89,7 @@ export const TextField: FC<TextFieldProps> = ({
   multiline,
   rows = 1,
   grow,
+  maxHeight,
   returnKeyType,
   onBlur,
   onFocus,
@@ -112,6 +113,13 @@ export const TextField: FC<TextFieldProps> = ({
   const [height, setHeight] = useState(rows * 40);
   const [isValueRevealed, setIsValueRevealed] = useState(false);
   const textInputRef = useRef<TextInput | null>(null);
+
+  // Clear stale measured height so the next typed character starts at the default row height.
+  useEffect(() => {
+    if (grow && !value) {
+      setHeight(rows * 40);
+    }
+  }, [grow, rows, value]);
 
   const isPasswordField = type === "password";
   const hasVisibilityToggle = isPasswordField && showVisibilityToggle;
@@ -164,7 +172,9 @@ export const TextField: FC<TextFieldProps> = ({
 
   const calculatedHeight: DimensionValue = useMemo(() => {
     if (grow) {
-      return Math.max(40, height);
+      // React Native Web never reports a smaller content size, so an emptied field resets.
+      const grownHeight = value ? Math.max(40, height) : rows * 40;
+      return maxHeight ? Math.min(grownHeight, maxHeight) : grownHeight;
     } else if (multiline) {
       return height || "100%";
     } else {
@@ -172,7 +182,7 @@ export const TextField: FC<TextFieldProps> = ({
       // single-line inputs need extra vertical room beyond 16px text.
       return Platform.OS === "ios" ? 24 : 22;
     }
-  }, [grow, height, multiline]);
+  }, [grow, height, maxHeight, multiline, rows, value]);
 
   const defaultTextInputStyles = useMemo(() => {
     const style: StyleProp<TextStyleWithOutline> = {

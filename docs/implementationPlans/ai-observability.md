@@ -527,7 +527,7 @@ Registration is the flag — no OpenFeature gate.
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | 3 | optional OTLP |
 
 Validate dataset/experiment primary equality and reject a `langfuse` review queue at boot with a clear
-`logger.error` + throw, the way a missing SendGrid key fails.
+`logger.error` and `APIError` throw, the way a missing SendGrid key fails.
 
 ## Activity log
 

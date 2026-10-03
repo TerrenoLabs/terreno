@@ -18385,6 +18385,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                         "description": "Original filename of the attached file",
                                         "type": "string",
                                       },
+                                      "gcsKey": {
+                                        "description": "Durable storage key for an attachment uploaded through FileStorageService",
+                                        "type": "string",
+                                      },
                                       "mimeType": {
                                         "description": "MIME type of the content part",
                                         "type": "string",
@@ -18428,6 +18432,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 },
                                 "result": {
                                   "description": "Result returned from a tool call",
+                                },
+                                "status": {
+                                  "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                                  "enum": [
+                                    "streaming",
+                                    "complete",
+                                    "error",
+                                  ],
+                                  "type": "string",
+                                },
+                                "streamId": {
+                                  "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                                  "type": "string",
                                 },
                                 "text": {
                                   "description": "Text content of the prompt or response",
@@ -18594,6 +18611,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "description": "Original filename of the attached file",
                                 "type": "string",
                               },
+                              "gcsKey": {
+                                "description": "Durable storage key for an attachment uploaded through FileStorageService",
+                                "type": "string",
+                              },
                               "mimeType": {
                                 "description": "MIME type of the content part",
                                 "type": "string",
@@ -18637,6 +18658,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                         "result": {
                           "description": "Result returned from a tool call",
+                        },
+                        "status": {
+                          "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                          "enum": [
+                            "streaming",
+                            "complete",
+                            "error",
+                          ],
+                          "type": "string",
+                        },
+                        "streamId": {
+                          "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                          "type": "string",
                         },
                         "text": {
                           "description": "Text content of the prompt or response",
@@ -18732,6 +18766,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                   "description": "Original filename of the attached file",
                                   "type": "string",
                                 },
+                                "gcsKey": {
+                                  "description": "Durable storage key for an attachment uploaded through FileStorageService",
+                                  "type": "string",
+                                },
                                 "mimeType": {
                                   "description": "MIME type of the content part",
                                   "type": "string",
@@ -18775,6 +18813,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                           "result": {
                             "description": "Result returned from a tool call",
+                          },
+                          "status": {
+                            "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                            "enum": [
+                              "streaming",
+                              "complete",
+                              "error",
+                            ],
+                            "type": "string",
+                          },
+                          "streamId": {
+                            "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                            "type": "string",
                           },
                           "text": {
                             "description": "Text content of the prompt or response",
@@ -19000,6 +19051,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                   "description": "Original filename of the attached file",
                                   "type": "string",
                                 },
+                                "gcsKey": {
+                                  "description": "Durable storage key for an attachment uploaded through FileStorageService",
+                                  "type": "string",
+                                },
                                 "mimeType": {
                                   "description": "MIME type of the content part",
                                   "type": "string",
@@ -19043,6 +19098,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                           "result": {
                             "description": "Result returned from a tool call",
+                          },
+                          "status": {
+                            "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                            "enum": [
+                              "streaming",
+                              "complete",
+                              "error",
+                            ],
+                            "type": "string",
+                          },
+                          "streamId": {
+                            "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                            "type": "string",
                           },
                           "text": {
                             "description": "Text content of the prompt or response",
@@ -19202,6 +19270,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "description": "Original filename of the attached file",
                                 "type": "string",
                               },
+                              "gcsKey": {
+                                "description": "Durable storage key for an attachment uploaded through FileStorageService",
+                                "type": "string",
+                              },
                               "mimeType": {
                                 "description": "MIME type of the content part",
                                 "type": "string",
@@ -19245,6 +19317,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                         "result": {
                           "description": "Result returned from a tool call",
+                        },
+                        "status": {
+                          "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                          "enum": [
+                            "streaming",
+                            "complete",
+                            "error",
+                          ],
+                          "type": "string",
+                        },
+                        "streamId": {
+                          "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                          "type": "string",
                         },
                         "text": {
                           "description": "Text content of the prompt or response",
@@ -19340,6 +19425,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                   "description": "Original filename of the attached file",
                                   "type": "string",
                                 },
+                                "gcsKey": {
+                                  "description": "Durable storage key for an attachment uploaded through FileStorageService",
+                                  "type": "string",
+                                },
                                 "mimeType": {
                                   "description": "MIME type of the content part",
                                   "type": "string",
@@ -19383,6 +19472,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                           "result": {
                             "description": "Result returned from a tool call",
+                          },
+                          "status": {
+                            "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                            "enum": [
+                              "streaming",
+                              "complete",
+                              "error",
+                            ],
+                            "type": "string",
+                          },
+                          "streamId": {
+                            "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                            "type": "string",
                           },
                           "text": {
                             "description": "Text content of the prompt or response",
@@ -19583,6 +19685,102 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
           },
         },
         "summary": "Rate a prompt in a GPT history",
+        "tags": [
+          "gpt",
+        ],
+      },
+    },
+    "/gpt/histories/{id}/stream": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "description": "Reply to follow. Defaults to the latest streaming reply.",
+            "in": "query",
+            "name": "streamId",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "description": "Characters of the reply the client already shows. Defaults to 0.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Resume an in-flight GPT reply as SSE",
         "tags": [
           "gpt",
         ],

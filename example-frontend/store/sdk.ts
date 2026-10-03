@@ -105,13 +105,18 @@ interface GptHistoryPrompt {
   args?: Record<string, unknown>;
   content?: Array<{
     filename?: string;
+    gcsKey?: string;
     mimeType?: string;
     text?: string;
     type: string;
     url?: string;
   }>;
   model?: string;
+  rating?: "up" | "down";
   result?: unknown;
+  /** "streaming" while /gpt/prompt is still writing this reply; resume via /gpt/histories/:id/stream. */
+  status?: "streaming" | "complete" | "error";
+  streamId?: string;
   text: string;
   toolCallId?: string;
   toolName?: string;

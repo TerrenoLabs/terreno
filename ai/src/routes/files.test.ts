@@ -69,6 +69,27 @@ describe("File Routes", () => {
       expect(res.status).toBe(400);
     });
 
+    it("rejects uploads when file uploads are disabled", async () => {
+      const gated = new TerrenoApp({
+        configureApp: (router, options) => {
+          addFileRoutes(router, {
+            fileStorageService: fileStorageService as FileStorageService,
+            fileUploadsEnabled: async () => false,
+            openApiOptions: options,
+          });
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+      const agent = await authAsUser(gated, "notAdmin");
+      const res = await agent
+        .post("/files/upload")
+        .attach("file", Buffer.from("hello"), {contentType: "text/plain", filename: "hi.txt"});
+      expect(res.status).toBe(403);
+      expect(res.body.title).toBe("File uploads are disabled");
+      expect(fileStorageService.upload as ReturnType<typeof mock>).not.toHaveBeenCalled();
+    });
+
     it("rejects unsupported mime types", async () => {
       const agent = await authAsUser(app, "notAdmin");
       const res = await agent.post("/files/upload").attach("file", Buffer.from("<html></html>"), {

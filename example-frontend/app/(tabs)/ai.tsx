@@ -1,4 +1,4 @@
-import {baseUrl, selectBetterAuthUserId, useMCPTools} from "@terreno/rtk";
+import {baseUrl, selectBetterAuthUserId, useFeatureFlags, useMCPTools} from "@terreno/rtk";
 import {
   Box,
   GPTChat,
@@ -13,10 +13,11 @@ import {
 } from "@terreno/ui";
 import {DateTime} from "luxon";
 import type React from "react";
-import {useCallback, useMemo, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {type ImageSourcePropType, Image as RNImage} from "react-native";
 import {useDispatch, useSelector} from "react-redux";
 import {getSessionToken} from "@/lib/betterAuth";
+import {fileUploadsEnabledFromFlags} from "@/lib/fileUploads";
 import {selectGptMascotIndex} from "@/lib/gptMascot";
 import {
   type GptHistory,
@@ -40,7 +41,7 @@ const mapHistoryToChat = (history: GptHistory): GPTChatHistory => ({
       }
       return {filename: c.filename, mimeType: c.mimeType ?? "", type: "file", url: c.url ?? ""};
     }),
-    rating: (p as unknown as {rating?: "up" | "down"}).rating,
+    rating: p.rating,
     role: p.type,
     ...(p.toolCallId && p.type === "tool-call"
       ? {toolCall: {args: p.args ?? {}, toolCallId: p.toolCallId, toolName: p.toolName ?? ""}}
@@ -71,20 +72,80 @@ const readFileAsBase64DataUrl = async (uri: string, _mimeType: string): Promise<
   });
 };
 
+/** One `data:` event from POST /gpt/prompt or GET /gpt/histories/:id/stream. */
+interface GptStreamEvent {
+  done?: boolean;
+  error?: string;
+  file?: {filename?: string; mimeType?: string; url: string};
+  historyId?: string;
+  image?: {mimeType?: string; url: string};
+  /** Resume only: the persisted reply was rewritten; `text` is the whole reply. */
+  replace?: boolean;
+  resumed?: boolean;
+  started?: boolean;
+  streamId?: string;
+  text?: string;
+  title?: string;
+  toolCall?: GPTChatMessage["toolCall"];
+  toolResult?: GPTChatMessage["toolResult"];
+}
+
+/** Read an SSE response body and hand each parsed `data:` event to `onEvent`. */
+const readSseEvents = async (
+  response: Response,
+  onEvent: (event: GptStreamEvent) => void
+): Promise<void> => {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("No response body");
+  }
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, {stream: true});
+    const lines = buffer.split("\n");
+    // Keep the last potentially incomplete line in the buffer
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data: ")) {
+        continue;
+      }
+      let event: GptStreamEvent;
+      try {
+        event = JSON.parse(trimmed.slice(6));
+      } catch {
+        // Skip malformed JSON lines
+        continue;
+      }
+      onEvent(event);
+    }
+  }
+};
+
+/** The in-flight reply of a stored history, if /gpt/prompt is still streaming it. */
+const findStreamingReply = (history?: GptHistory): {text: string} | undefined => {
+  const last = history?.prompts[history.prompts.length - 1];
+  return last?.type === "assistant" && last.status === "streaming" ? {text: last.text} : undefined;
+};
+
 /**
  * Fallback model list used before the backend responds (or if the request fails). The live list is
  * fetched from GET /ai/models, which reflects the backend's allow-list and Vertex enabled models.
  */
 const FALLBACK_MODELS = [
-  {label: "Gemini 2.5 Pro", value: "gemini-2.5-pro"},
-  {label: "Gemini 2.5 Flash", value: "gemini-2.5-flash"},
-  {label: "Gemini 2.5 Flash Lite", value: "gemini-2.5-flash-lite"},
-  {label: "Gemini 2.0 Flash", value: "gemini-2.0-flash"},
-  {label: "Gemini 2.0 Flash Lite", value: "gemini-2.0-flash-lite"},
+  {label: "Gemini 3.8 Flash", value: "gemini-3.8-flash"},
+  {label: "Gemini 3.5 Flash Lite", value: "gemini-3.5-flash-lite"},
+  {label: "Gemini 3.1 Pro", value: "gemini-3.1-pro-preview"},
+  {label: "Gemini 3 Pro Image", value: "gemini-3-pro-image"},
 ];
 
 /** Default selection — a balanced model that matches the example backend's default. */
-const DEFAULT_MODEL_VALUE = "gemini-2.5-flash";
+const DEFAULT_MODEL_VALUE = "gemini-3.8-flash";
 
 /** RTK Query cache key for the default gpt histories list (must match useGetGptHistoriesQuery). */
 const gptHistoriesListQueryArgs = {};
@@ -98,6 +159,12 @@ const GPT_MASCOT_IMAGES: ImageSourcePropType[] = [
 
 const AiScreen: React.FC = () => {
   const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>(undefined);
+  // Remember the open chat so a reload can reopen it and re-attach to an in-flight reply
+  const [storedHistoryId, setStoredHistoryId, isStoredHistoryIdLoading] = useStoredState<
+    string | undefined
+  >("gptCurrentHistoryId", undefined);
+  const hasRestoredHistoryRef = useRef(false);
+  const resumeAbortRef = useRef<AbortController | null>(null);
   const [currentMessages, setCurrentMessages] = useState<GPTChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [geminiApiKey, setGeminiApiKey] = useStoredState<string>("geminiApiKey", "");
@@ -125,6 +192,16 @@ const AiScreen: React.FC = () => {
 
   const dispatch = useDispatch();
   const userId = useSelector(selectBetterAuthUserId);
+  const {flags, isLoading: isFlagsLoading} = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  const fileUploadsEnabled = fileUploadsEnabledFromFlags({flags, isLoading: isFlagsLoading});
+
+  // Drop staged files when an admin turns the file-uploads flag off.
+  useEffect(() => {
+    if (!fileUploadsEnabled) {
+      setAttachments([]);
+    }
+  }, [fileUploadsEnabled]);
+
   const {data: modelsData} = useGetAiModelsQuery(undefined, {skip: !userId});
 
   // Prefer the live model list from the backend; fall back to the static list until it loads.
@@ -145,27 +222,233 @@ const AiScreen: React.FC = () => {
 
   const histories: GPTChatHistory[] = (historiesData?.data ?? []).map(mapHistoryToChat);
 
+  const upsertSidebarHistory = useCallback(
+    (historyId: string, title?: string) => {
+      dispatch(
+        terrenoApi.util.updateQueryData(
+          "getGptHistories" as never,
+          gptHistoriesListQueryArgs as never,
+          (draft: {data?: GptHistory[]}) => {
+            const entry = draft.data?.find((h: GptHistory) => h.id === historyId);
+            if (entry) {
+              if (title) {
+                entry.title = title;
+              }
+              return;
+            }
+            if (!draft.data) {
+              draft.data = [];
+            }
+            // New conversation — add it to the sidebar immediately
+            draft.data.unshift({
+              _id: historyId,
+              created: DateTime.now().toISO() ?? "",
+              id: historyId,
+              prompts: [],
+              title: title ?? "New Chat",
+              updated: DateTime.now().toISO() ?? "",
+              userId: "",
+            });
+          }
+        )
+      );
+    },
+    [dispatch]
+  );
+
+  /** Build a handler that applies stream events to the open chat, starting from `initialText`. */
+  const createStreamEventHandler = useCallback(
+    (initialText: string) => {
+      let assistantText = initialText;
+      const setAssistantText = (text: string): void => {
+        assistantText = text;
+        setCurrentMessages((prev) => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          // Update existing assistant message or create one
+          if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+            updated[lastIdx] = {...updated[lastIdx], content: text};
+          } else {
+            updated.push({content: text, role: "assistant"});
+          }
+          return updated;
+        });
+      };
+
+      return (data: GptStreamEvent): void => {
+        if (data.started && data.historyId) {
+          // The backend saved the turn before streaming; a reload can now resume it
+          setCurrentHistoryId(data.historyId);
+          upsertSidebarHistory(data.historyId);
+        } else if (data.replace && typeof data.text === "string") {
+          setAssistantText(data.text);
+        } else if (data.text) {
+          setAssistantText(assistantText + data.text);
+        } else if (data.toolCall) {
+          const toolCall = data.toolCall;
+          setCurrentMessages((prev) => [
+            ...prev,
+            {content: `Tool call: ${toolCall.toolName}`, role: "tool-call", toolCall},
+          ]);
+          // Add a new empty assistant message for continued text after tool results
+          assistantText = "";
+          setCurrentMessages((prev) => [...prev, {content: "", role: "assistant"}]);
+        } else if (data.toolResult) {
+          const toolResult = data.toolResult;
+          // Insert tool result before the last empty assistant message
+          setCurrentMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (
+              lastIdx >= 0 &&
+              updated[lastIdx].role === "assistant" &&
+              !updated[lastIdx].content
+            ) {
+              updated.splice(lastIdx, 0, {
+                content: `Tool result: ${toolResult.toolName}`,
+                role: "tool-result",
+                toolResult,
+              });
+            }
+            return updated;
+          });
+        } else if (data.image || data.file) {
+          const part: MessageContentPart = data.image
+            ? {mimeType: data.image.mimeType, type: "image", url: data.image.url}
+            : {
+                filename: data.file?.filename,
+                mimeType: data.file?.mimeType ?? "",
+                type: data.file?.mimeType?.startsWith("image/") ? "image" : "file",
+                url: data.file?.url ?? "",
+              };
+          setCurrentMessages((prev) => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+              const existing = updated[lastIdx].contentParts ?? [];
+              updated[lastIdx] = {...updated[lastIdx], contentParts: [...existing, part]};
+            } else {
+              updated.push({content: "", contentParts: [part], role: "assistant"});
+            }
+            return updated;
+          });
+        } else if (data.done) {
+          // Clean up trailing empty assistant messages
+          setCurrentMessages((prev) =>
+            prev.filter(
+              (m) =>
+                m.content || (m.contentParts && m.contentParts.length > 0) || m.role !== "assistant"
+            )
+          );
+          if (data.historyId) {
+            setCurrentHistoryId(data.historyId);
+            // Update sidebar locally (backend already persisted it)
+            upsertSidebarHistory(data.historyId, data.title);
+          }
+        } else if (data.error) {
+          console.error("SSE error:", data.error);
+          setCurrentMessages((prev) => [
+            ...prev.filter((m) => m.content || m.role !== "assistant"),
+            {content: `Error: ${data.error}`, role: "assistant"},
+          ]);
+        }
+      };
+    },
+    [upsertSidebarHistory]
+  );
+
+  const stopResume = useCallback(() => {
+    resumeAbortRef.current?.abort();
+    resumeAbortRef.current = null;
+  }, []);
+
+  /** Re-attach to a reply another page load started, continuing after `partialText`. */
+  const resumeStream = useCallback(
+    async (historyId: string, partialText: string) => {
+      stopResume();
+      const controller = new AbortController();
+      resumeAbortRef.current = controller;
+      setIsStreaming(true);
+      try {
+        const token = await getSessionToken();
+        const response = await fetch(
+          `${baseUrl}/gpt/histories/${historyId}/stream?offset=${partialText.length}`,
+          {headers: {Authorization: `Bearer ${token}`}, signal: controller.signal}
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        await readSseEvents(response, createStreamEventHandler(partialText));
+        // Pick up the final stored reply for later visits to this chat
+        dispatch(terrenoApi.util.invalidateTags([{id: "LIST", type: "gptHistories"}]));
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.error("Error resuming reply:", err);
+        }
+      } finally {
+        if (resumeAbortRef.current === controller) {
+          resumeAbortRef.current = null;
+          setIsStreaming(false);
+        }
+      }
+    },
+    [createStreamEventHandler, dispatch, stopResume]
+  );
+
   const handleSelectHistory = useCallback(
     (id: string) => {
       const history = histories.find((h) => h.id === id);
-      if (history) {
-        setCurrentHistoryId(id);
-        setCurrentMessages(history.prompts);
+      if (!history) {
+        return;
+      }
+      stopResume();
+      setIsStreaming(false);
+      setCurrentHistoryId(id);
+      setCurrentMessages(history.prompts);
+      const streamingReply = findStreamingReply(historiesData?.data?.find((h) => h.id === id));
+      if (streamingReply) {
+        void resumeStream(id, streamingReply.text);
       }
     },
-    [histories]
+    [histories, historiesData, resumeStream, stopResume]
   );
 
   const handleCreateHistory = useCallback(() => {
+    stopResume();
+    setIsStreaming(false);
     setCurrentHistoryId(undefined);
     setCurrentMessages([]);
-  }, []);
+  }, [stopResume]);
+
+  // Reopen the chat that was open before a reload, once the stored id and histories are loaded
+  useEffect(() => {
+    if (!userId || hasRestoredHistoryRef.current || isStoredHistoryIdLoading || isLoading) {
+      return;
+    }
+    hasRestoredHistoryRef.current = true;
+    if (storedHistoryId) {
+      handleSelectHistory(storedHistoryId);
+    }
+  }, [handleSelectHistory, isLoading, isStoredHistoryIdLoading, storedHistoryId, userId]);
+
+  // Persist the open chat id after the restore above has run
+  useEffect(() => {
+    if (!userId || !hasRestoredHistoryRef.current) {
+      return;
+    }
+    void setStoredHistoryId(currentHistoryId);
+  }, [currentHistoryId, setStoredHistoryId, userId]);
+
+  // Stop following a resumed reply when leaving the screen
+  useEffect(() => stopResume, [stopResume]);
 
   const handleDeleteHistory = useCallback(
     async (id: string) => {
       try {
         await deleteHistory({id}).unwrap();
         if (currentHistoryId === id) {
+          stopResume();
+          setIsStreaming(false);
           setCurrentHistoryId(undefined);
           setCurrentMessages([]);
         }
@@ -173,7 +456,7 @@ const AiScreen: React.FC = () => {
         console.error("Error deleting history:", err);
       }
     },
-    [deleteHistory, currentHistoryId]
+    [deleteHistory, currentHistoryId, stopResume]
   );
 
   const handleUpdateTitle = useCallback(
@@ -230,7 +513,7 @@ const AiScreen: React.FC = () => {
 
   const handleSubmit = useCallback(
     async (prompt: string) => {
-      const currentAttachments = [...attachments];
+      const currentAttachments = fileUploadsEnabled ? [...attachments] : [];
       setAttachments([]);
 
       // Build content parts for display in the chat from attached files
@@ -286,161 +569,7 @@ const AiScreen: React.FC = () => {
           throw new Error(`HTTP ${response.status}`);
         }
 
-        const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error("No response body");
-        }
-
-        const decoder = new TextDecoder();
-        let assistantText = "";
-        let buffer = "";
-
-        while (true) {
-          const {done, value} = await reader.read();
-          if (done) {
-            break;
-          }
-
-          buffer += decoder.decode(value, {stream: true});
-          const lines = buffer.split("\n");
-          // Keep the last potentially incomplete line in the buffer
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith("data: ")) {
-              continue;
-            }
-
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-
-              if (data.text) {
-                assistantText += data.text;
-                const updatedText = assistantText;
-                setCurrentMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIdx = updated.length - 1;
-                  // Update existing assistant message or create one
-                  if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-                    updated[lastIdx] = {...updated[lastIdx], content: updatedText};
-                  } else {
-                    updated.push({content: updatedText, role: "assistant"});
-                  }
-                  return updated;
-                });
-              } else if (data.toolCall) {
-                setCurrentMessages((prev) => [
-                  ...prev,
-                  {
-                    content: `Tool call: ${data.toolCall.toolName}`,
-                    role: "tool-call",
-                    toolCall: data.toolCall,
-                  },
-                ]);
-                // Add a new empty assistant message for continued text after tool results
-                assistantText = "";
-                setCurrentMessages((prev) => [...prev, {content: "", role: "assistant"}]);
-              } else if (data.toolResult) {
-                // Insert tool result before the last empty assistant message
-                setCurrentMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIdx = updated.length - 1;
-                  if (
-                    lastIdx >= 0 &&
-                    updated[lastIdx].role === "assistant" &&
-                    !updated[lastIdx].content
-                  ) {
-                    updated.splice(lastIdx, 0, {
-                      content: `Tool result: ${data.toolResult.toolName}`,
-                      role: "tool-result",
-                      toolResult: data.toolResult,
-                    });
-                  }
-                  return updated;
-                });
-              } else if (data.image || data.file) {
-                const part = data.image
-                  ? {mimeType: data.image.mimeType, type: "image" as const, url: data.image.url}
-                  : {
-                      filename: data.file.filename,
-                      mimeType: data.file.mimeType,
-                      type: (typeof data.file.mimeType === "string" &&
-                      data.file.mimeType.startsWith("image/")
-                        ? "image"
-                        : "file") as "image" | "file",
-                      url: data.file.url,
-                    };
-                setCurrentMessages((prev) => {
-                  const updated = [...prev];
-                  const lastIdx = updated.length - 1;
-                  if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
-                    const existing = updated[lastIdx].contentParts ?? [];
-                    updated[lastIdx] = {
-                      ...updated[lastIdx],
-                      contentParts: [...existing, part],
-                    };
-                  } else {
-                    updated.push({content: "", contentParts: [part], role: "assistant"});
-                  }
-                  return updated;
-                });
-              } else if (data.done) {
-                // Clean up trailing empty assistant messages
-                setCurrentMessages((prev) =>
-                  prev.filter(
-                    (m) =>
-                      m.content ||
-                      (m.contentParts && m.contentParts.length > 0) ||
-                      m.role !== "assistant"
-                  )
-                );
-                if (data.historyId) {
-                  setCurrentHistoryId(data.historyId);
-                }
-                // Update sidebar locally (backend already persisted it)
-                if (data.historyId) {
-                  dispatch(
-                    terrenoApi.util.updateQueryData(
-                      "getGptHistories" as never,
-                      gptHistoriesListQueryArgs as never,
-                      (draft: {data?: GptHistory[]}) => {
-                        const entry = draft.data?.find((h: GptHistory) => h.id === data.historyId);
-                        if (entry) {
-                          if (data.title) {
-                            entry.title = data.title;
-                          }
-                        } else {
-                          if (!draft.data) {
-                            draft.data = [];
-                          }
-                          // New conversation — add it to the sidebar immediately
-                          draft.data.unshift({
-                            _id: data.historyId,
-                            created: DateTime.now().toISO() ?? "",
-                            id: data.historyId,
-                            prompts: [],
-                            title: data.title ?? "New Chat",
-                            updated: DateTime.now().toISO() ?? "",
-                            userId: "",
-                          });
-                        }
-                      }
-                    )
-                  );
-                }
-              } else if (data.error) {
-                console.error("SSE error:", data.error);
-                setCurrentMessages((prev) => [
-                  ...prev.filter((m) => m.content || m.role !== "assistant"),
-                  {content: `Error: ${data.error}`, role: "assistant"},
-                ]);
-              }
-            } catch {
-              // Skip malformed JSON lines
-            }
-          }
-        }
+        await readSseEvents(response, createStreamEventHandler(""));
       } catch (err) {
         console.error("Error sending prompt:", err);
         setCurrentMessages((prev) => [
@@ -451,7 +580,14 @@ const AiScreen: React.FC = () => {
         setIsStreaming(false);
       }
     },
-    [attachments, currentHistoryId, geminiApiKey, selectedModel]
+    [
+      attachments,
+      createStreamEventHandler,
+      currentHistoryId,
+      fileUploadsEnabled,
+      geminiApiKey,
+      selectedModel,
+    ]
   );
 
   if (isLoading) {
@@ -464,7 +600,7 @@ const AiScreen: React.FC = () => {
 
   return (
     <GPTChat
-      attachments={attachments}
+      attachments={fileUploadsEnabled ? attachments : []}
       availableModels={availableModels}
       currentHistoryId={currentHistoryId}
       currentMessages={currentMessages}
@@ -473,7 +609,7 @@ const AiScreen: React.FC = () => {
       isStreaming={isStreaming}
       mascot={mascot}
       mcpTools={mcpTools}
-      onAttachFiles={handleAttachFiles}
+      onAttachFiles={fileUploadsEnabled ? handleAttachFiles : undefined}
       onCreateHistory={handleCreateHistory}
       onDeleteHistory={handleDeleteHistory}
       onGeminiApiKeyChange={setGeminiApiKey}

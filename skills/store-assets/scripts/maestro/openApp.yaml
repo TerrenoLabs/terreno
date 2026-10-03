@@ -1,0 +1,26 @@
+appId: ${APP_ID}
+---
+# Waits for the app and signs in if needed. scripts/screenshots.ts has already launched the
+# dev client into the screenshot Metro server with the dev menu overlays disabled, and supplies
+# APP_ID, EMAIL, PASSWORD, and HOME_SCREEN_ID.
+# The first production bundle can take a minute to build.
+- extendedWaitUntil:
+    visible:
+      id: "login-screen|${HOME_SCREEN_ID}"
+    timeout: 180000
+# The app can re-render while it boots; let it settle before branching on login.
+- waitForAnimationToEnd:
+    timeout: 5000
+- extendedWaitUntil:
+    visible:
+      id: "login-screen-email-input|${HOME_SCREEN_ID}"
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: "login-screen-email-input"
+    file: login.yaml
+- extendedWaitUntil:
+    visible:
+      id: ${HOME_SCREEN_ID}
+    timeout: 30000

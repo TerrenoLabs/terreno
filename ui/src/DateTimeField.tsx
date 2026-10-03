@@ -11,7 +11,7 @@ import {FieldError} from "./fieldElements/FieldError";
 import {FieldHelperText} from "./fieldElements/FieldHelperText";
 import {FieldTitle} from "./fieldElements/FieldTitle";
 import {IconButton} from "./IconButton";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {SelectField} from "./SelectField";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
@@ -454,7 +454,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
 
   const [parentWidth, setParentWidth] = useState<number | null>(null);
   const parentIsLessThanBreakpointOrIsMobile =
-    (parentWidth !== null && parentWidth < breakpoint) || isMobileDevice();
+    (parentWidth !== null && parentWidth < breakpoint) || isNarrowViewport();
 
   // We need to store the pending value in a ref because the state changes don't trigger
   // immediately, so onBlur may use stale values.
@@ -904,7 +904,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
     onRef: (el: TextInput | null, i: number) => (inputRefs.current[i] = el),
   };
 
-  const isMobile = isMobileDevice();
+  const isMobile = isNarrowViewport();
   const isMobileTimeOnly = isMobile && type === "time";
   const isMobileDatetime = isMobile && type === "datetime";
   const showDateSection = type === "date" || type === "datetime";

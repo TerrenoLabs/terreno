@@ -70,7 +70,7 @@ scan stages come from
 | Docs | `update-docs`, `update-agent-docs`, architecture skills |
 | GitHub | issues, review, UI verification, release, dependency updates |
 | Code scans | `terreno-scan-1-aim` … `terreno-scan-5-track`, `terreno-scan-campaign`, `terreno-scan-loop` |
-| Expo and native | `track-upstream-expo`, `upgrading-expo`, deployment / EAS skills |
+| Expo and native | `track-upstream-expo`, `upgrading-expo`, `store-assets`, deployment / EAS skills |
 | Plugin agents | `pre-commit`, `ui-verifier` |
 
 `skills.sh.json` at the repo root groups those names on [skills.sh](https://skills.sh).

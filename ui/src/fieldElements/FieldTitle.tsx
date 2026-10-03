@@ -4,7 +4,7 @@
 import type {FC} from "react";
 import {Text} from "react-native";
 
-import {isMobileDevice} from "../MediaQuery";
+import {isNarrowViewport} from "../MediaQuery";
 import {useTheme} from "../Theme";
 import {toTestProps} from "../testing/resolveTestId";
 import {isNative} from "../Utilities";
@@ -16,7 +16,7 @@ interface FieldTitleProps {
 
 export const FieldTitle: FC<FieldTitleProps> = ({text, testID}) => {
   const {theme} = useTheme();
-  const isMobileOrNative = isMobileDevice() || isNative();
+  const isMobileOrNative = isNarrowViewport() || isNative();
 
   return (
     <Text

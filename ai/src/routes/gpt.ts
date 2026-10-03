@@ -17,6 +17,8 @@ import {GptHistory} from "../models/gptHistory";
 import {Project} from "../models/project";
 import type {SpanRecord} from "../observability/types";
 import {AIService} from "../service/aiService";
+import type {FileStorageService} from "../service/fileStorage";
+import {assertFileUploadsEnabled} from "../service/fileUploadsGate";
 import {TITLE_GENERATION_PROMPT} from "../service/prompts";
 import type {
   GptHistoryDocument,
@@ -24,6 +26,174 @@ import type {
   GptRouteOptions,
   MessageContentPart,
 } from "../types";
+
+const DEFAULT_STREAM_PERSIST_INTERVAL_MS = 1000;
+const DEFAULT_STREAM_RESUME_POLL_INTERVAL_MS = 500;
+const DEFAULT_STREAM_STALE_AFTER_MS = 60_000;
+// Bump `updated` even without new text so long tool calls do not look stale to resumers
+const STREAM_HEARTBEAT_MS = 10_000;
+
+const DURABLE_URL_PATTERN = /^(https?:|data:)/i;
+const DATA_URL_PATTERN = /^data:([^;,]*)((?:;[^;,]*)*?)(;base64)?,(.*)$/s;
+
+interface PromptAttachment {
+  filename?: string;
+  mimeType?: string;
+  type?: string;
+  url?: string;
+}
+
+interface AttachmentContentParts {
+  /** Parts sent to the model for this request (original URLs, including data URLs). */
+  modelParts: MessageContentPart[];
+  /** Parts persisted to history (durable storage references when storage is configured). */
+  storedParts: MessageContentPart[];
+}
+
+const sseEvent = (payload: Record<string, unknown>): string =>
+  `data: ${JSON.stringify(payload)}\n\n`;
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+/**
+ * Reject attachment URLs that only exist on the client (blob:, file:, content:, ph:, ...).
+ * They cannot be read by the model provider or reloaded from history later.
+ */
+const validateAttachments = (attachments: unknown): PromptAttachment[] => {
+  if (attachments === undefined || attachments === null) {
+    return [];
+  }
+  if (!Array.isArray(attachments)) {
+    throw new APIError({status: 400, title: "attachments must be an array"});
+  }
+  for (const attachment of attachments as PromptAttachment[]) {
+    if (attachment?.type !== "image" && attachment?.type !== "file") {
+      continue;
+    }
+    if (typeof attachment.url !== "string" || !DURABLE_URL_PATTERN.test(attachment.url)) {
+      const scheme =
+        typeof attachment.url === "string" ? (attachment.url.split(":")[0] ?? "") : "missing";
+      throw new APIError({
+        detail:
+          `Attachment "${attachment.filename ?? attachment.type}" uses a "${scheme}" URL. ` +
+          "Upload the file first (POST /files/upload) or send it as a data: URL.",
+        status: 400,
+        title: "Attachment URL must be an http(s) or data: URL",
+      });
+    }
+  }
+  return attachments as PromptAttachment[];
+};
+
+const decodeDataUrl = (url: string): {buffer: Buffer; mimeType?: string} | undefined => {
+  const match = DATA_URL_PATTERN.exec(url);
+  if (!match) {
+    return undefined;
+  }
+  const [, mimeType, , base64Flag, payload] = match;
+  const buffer = base64Flag
+    ? Buffer.from(payload, "base64")
+    : Buffer.from(decodeURIComponent(payload), "utf8");
+  return {buffer, mimeType: mimeType || undefined};
+};
+
+/** Build model and history content parts, uploading data: attachments when storage is configured. */
+const buildAttachmentParts = async ({
+  attachments,
+  fileStorageService,
+  userId,
+}: {
+  attachments: PromptAttachment[];
+  fileStorageService?: FileStorageService;
+  userId?: mongoose.Types.ObjectId;
+}): Promise<AttachmentContentParts> => {
+  const modelParts: MessageContentPart[] = [];
+  const storedParts: MessageContentPart[] = [];
+  for (const attachment of attachments) {
+    if (attachment.type !== "image" && attachment.type !== "file") {
+      continue;
+    }
+    const url = attachment.url as string;
+    const modelPart: MessageContentPart =
+      attachment.type === "image"
+        ? {mimeType: attachment.mimeType, type: "image", url}
+        : {
+            filename: attachment.filename,
+            mimeType: attachment.mimeType as string,
+            type: "file",
+            url,
+          };
+    modelParts.push(modelPart);
+
+    const decoded = url.startsWith("data:") ? decodeDataUrl(url) : undefined;
+    if (!fileStorageService || !userId || !decoded) {
+      storedParts.push(modelPart);
+      continue;
+    }
+    const mimeType = attachment.mimeType ?? decoded.mimeType ?? "application/octet-stream";
+    const extension = mimeType.split("/")[1]?.split("+")[0] ?? "bin";
+    try {
+      const uploaded = await fileStorageService.upload({
+        buffer: decoded.buffer,
+        filename: attachment.filename ?? `attachment-${DateTime.now().toMillis()}.${extension}`,
+        mimeType,
+        userId,
+      });
+      storedParts.push({...modelPart, gcsKey: uploaded.gcsKey, url: uploaded.url});
+    } catch (error) {
+      throw new APIError({
+        cause: error,
+        detail: error instanceof Error ? error.message : String(error),
+        status: 502,
+        title: "Attachment upload failed",
+      });
+    }
+  }
+  return {modelParts, storedParts};
+};
+
+const toPlainPrompt = (prompt: GptHistoryPrompt): GptHistoryPrompt => {
+  const maybeSubdoc = prompt as GptHistoryPrompt & {toObject?: () => GptHistoryPrompt};
+  return typeof maybeSubdoc.toObject === "function" ? maybeSubdoc.toObject() : prompt;
+};
+
+/** Swap stored attachment references for short-lived signed URLs the model provider can fetch. */
+const resolveStoredAttachmentUrls = async (
+  prompts: GptHistoryPrompt[],
+  fileStorageService?: FileStorageService
+): Promise<GptHistoryPrompt[]> => {
+  if (!fileStorageService) {
+    return prompts;
+  }
+  return Promise.all(
+    prompts.map(async (prompt) => {
+      if (!prompt.content?.some((part) => part.type !== "text" && part.gcsKey)) {
+        return prompt;
+      }
+      const plain = toPlainPrompt(prompt);
+      const content = await Promise.all(
+        (plain.content ?? []).map(async (part) => {
+          if (part.type === "text" || !part.gcsKey) {
+            return part;
+          }
+          try {
+            return {...part, url: await fileStorageService.getSignedUrl(part.gcsKey)};
+          } catch (error) {
+            logger.warn("Could not sign stored attachment URL", {
+              error: error instanceof Error ? error.message : String(error),
+              gcsKey: part.gcsKey,
+            });
+            return part;
+          }
+        })
+      );
+      return {...plain, content};
+    })
+  );
+};
 
 interface GeneratedImageFile {
   base64: string;
@@ -173,7 +343,18 @@ const generateTitle = async (
 };
 
 export const addGptRoutes = (router: express.Router, options: GptRouteOptions): void => {
-  const {mcpService, tools: routeTools, createRequestTools, toolChoice, maxSteps} = options;
+  const {
+    mcpService,
+    tools: routeTools,
+    createRequestTools,
+    toolChoice,
+    maxSteps,
+    fileStorageService,
+  } = options;
+  const persistIntervalMs = options.streamPersistIntervalMs ?? DEFAULT_STREAM_PERSIST_INTERVAL_MS;
+  const resumePollIntervalMs =
+    options.streamResumePollIntervalMs ?? DEFAULT_STREAM_RESUME_POLL_INTERVAL_MS;
+  const staleAfterMs = options.streamStaleAfterMs ?? DEFAULT_STREAM_STALE_AFTER_MS;
 
   router.post(
     "/gpt/prompt",
@@ -237,6 +418,10 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         if (!prompt || typeof prompt !== "string") {
           throw new APIError({status: 400, title: "prompt is required"});
         }
+        if (Array.isArray(attachments) && attachments.length > 0) {
+          await assertFileUploadsEnabled(req, options.fileUploadsEnabled);
+        }
+        const validAttachments = validateAttachments(attachments);
 
         // Resolve AI service (per-request key takes priority, then configured service)
         const hasPerRequestKey = !!req.headers["x-ai-api-key"];
@@ -329,33 +514,20 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         effectiveSystemPrompt = observability.systemPrompt;
 
         // Build content parts from attachments
-        const contentParts: MessageContentPart[] = [{text: prompt, type: "text"}];
-        if (attachments && Array.isArray(attachments)) {
-          logger.debug("Processing attachments", {
-            count: attachments.length,
-            types: attachments.map((a: {mimeType?: string; type?: string; url?: string}) => ({
-              mimeType: a.mimeType,
-              type: a.type,
-              urlLength: a.url?.length ?? 0,
-            })),
-          });
-          for (const attachment of attachments) {
-            if (attachment.type === "image") {
-              contentParts.push({
-                mimeType: attachment.mimeType,
-                type: "image",
-                url: attachment.url,
-              });
-            } else if (attachment.type === "file") {
-              contentParts.push({
-                filename: attachment.filename,
-                mimeType: attachment.mimeType,
-                type: "file",
-                url: attachment.url,
-              });
-            }
-          }
-        }
+        logger.debug("Processing attachments", {
+          count: validAttachments.length,
+          types: validAttachments.map((a) => ({
+            mimeType: a.mimeType,
+            type: a.type,
+            urlLength: a.url?.length ?? 0,
+          })),
+        });
+        const {modelParts, storedParts} = await buildAttachmentParts({
+          attachments: validAttachments,
+          fileStorageService,
+          userId,
+        });
+        const contentParts: MessageContentPart[] = [{text: prompt, type: "text"}, ...storedParts];
 
         // Add user prompt to history
         const hasAttachments = contentParts.length > 1;
@@ -371,10 +543,18 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
           attachmentCount: contentParts.length - 1,
           historyLength: history.prompts.length,
         });
-        const messages = aiService.buildMessages(history.prompts);
+        // Earlier turns reference stored attachments; this turn sends the original URLs
+        const earlierPrompts = await resolveStoredAttachmentUrls(
+          history.prompts.slice(0, -1),
+          fileStorageService
+        );
+        const modelUserPrompt: GptHistoryPrompt = hasAttachments
+          ? {...userPrompt, content: [{text: prompt, type: "text"}, ...modelParts]}
+          : userPrompt;
+        const messages = aiService.buildMessages([...earlierPrompts, modelUserPrompt]);
         logger.debug("Messages built", {messageCount: messages.length});
 
-        // Some models (e.g. gemini-2.5-flash-image) don't support tool calling
+        // Some models (e.g. gemini-3-pro-image) don't support tool calling
         const modelId = aiService.modelId;
         const supportsTools = !modelId?.includes("image");
 
@@ -393,13 +573,74 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
           }
         }
 
+        // Persist the user turn and a streaming placeholder so a reload can resume the reply
+        const streamId = randomUUID();
+        history.prompts.push({
+          model: aiService.modelId,
+          status: "streaming",
+          streamId,
+          text: "",
+          type: "assistant",
+        });
+        await history.save();
+        const savedHistory = history;
+        const placeholderIndex = history.prompts.length - 1;
+
         // Stream response via SSE
         res.setHeader("Content-Type", "text/event-stream");
         res.setHeader("Cache-Control", "no-cache");
         res.setHeader("Connection", "keep-alive");
         sseStarted = true;
+        res.write(sseEvent({historyId: history._id.toString(), started: true, streamId}));
 
         let fullResponse = "";
+        // Buffer text per step so we can discard reasoning text when a tool call follows
+        let stepTextBuffer = "";
+        let stepHasToolCall = false;
+        const currentPartialText = (): string =>
+          fullResponse + (stepHasToolCall ? "" : stepTextBuffer);
+
+        let lastPersistedText = "";
+        let lastPersistedAt = DateTime.now();
+        let persistQueue: Promise<void> = Promise.resolve();
+        const persistTimer = setInterval(() => {
+          const text = currentPartialText();
+          const isHeartbeatDue =
+            DateTime.now().diff(lastPersistedAt).toMillis() >= STREAM_HEARTBEAT_MS;
+          if (text === lastPersistedText && !isHeartbeatDue) {
+            return;
+          }
+          lastPersistedText = text;
+          lastPersistedAt = DateTime.now();
+          persistQueue = persistQueue
+            .then(async () => {
+              await GptHistory.updateOne(
+                {_id: savedHistory._id, [`prompts.${placeholderIndex}.streamId`]: streamId},
+                {
+                  $set: {
+                    [`prompts.${placeholderIndex}.text`]: text,
+                    updated: DateTime.now().toJSDate(),
+                  },
+                }
+              );
+            })
+            .catch((persistErr) => {
+              logger.warn("Failed to persist partial GPT response", {
+                error: persistErr instanceof Error ? persistErr.message : String(persistErr),
+              });
+            });
+        }, persistIntervalMs);
+        const stopPersisting = async (): Promise<void> => {
+          clearInterval(persistTimer);
+          await persistQueue;
+        };
+        const removePlaceholder = (): void => {
+          const index = savedHistory.prompts.findIndex((p) => p.streamId === streamId);
+          if (index >= 0) {
+            savedHistory.prompts.splice(index, 1);
+          }
+        };
+
         const generatedImages: Array<{mimeType: string; url: string}> = [];
         // Stream file parts and result.files report the same images; emit each data URL once.
         const sendGeneratedImage = (file: GeneratedImageFile): void => {
@@ -442,9 +683,6 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
           });
 
           let partCount = 0;
-          // Buffer text per step so we can discard reasoning text when a tool call follows
-          let stepTextBuffer = "";
-          let stepHasToolCall = false;
 
           for await (const part of result.fullStream as AsyncIterable<{
             type: string;
@@ -624,7 +862,9 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
             });
           }
 
-          // Save assistant response to history
+          // Replace the streaming placeholder with the final reply, after any tool turns
+          await stopPersisting();
+          removePlaceholder();
           if (fullResponse || generatedImages.length > 0) {
             const contentParts: MessageContentPart[] = generatedImages.map((img) => ({
               mimeType: img.mimeType,
@@ -633,12 +873,15 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
             }));
             const assistantPrompt: GptHistoryPrompt = {
               model: aiService.modelId,
+              status: "complete",
+              streamId,
               text: fullResponse,
               type: "assistant",
               ...(contentParts.length > 0 ? {content: contentParts} : {}),
             };
             history.prompts.push(assistantPrompt);
           }
+          history.markModified("prompts");
           await history.save();
 
           try {
@@ -691,6 +934,27 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
             error: error instanceof Error ? error.message : String(error),
           });
 
+          // Keep any partial reply so the conversation shows what streamed before the failure
+          try {
+            await stopPersisting();
+            const partialText = currentPartialText();
+            const placeholder = savedHistory.prompts.find((p) => p.streamId === streamId);
+            if (placeholder?.status === "streaming") {
+              if (partialText) {
+                placeholder.text = partialText;
+                placeholder.status = "error";
+              } else {
+                removePlaceholder();
+              }
+              savedHistory.markModified("prompts");
+              await savedHistory.save();
+            }
+          } catch (saveErr) {
+            logger.warn("Failed to save interrupted GPT response", {
+              error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+            });
+          }
+
           try {
             await aiService.recordGenerate({
               childSpans: toolSpans.length > 0 ? toolSpans : undefined,
@@ -735,6 +999,128 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         }
       }
     }
+  );
+
+  // Re-attach to a reply that /gpt/prompt is still streaming (e.g. after a reload or remount).
+  // Polls the persisted partial output, so it works across server instances.
+  router.get(
+    "/gpt/histories/:id/stream",
+    [
+      authenticateMiddleware(),
+      createOpenApiBuilder(options.openApiOptions ?? {})
+        .withTags(["gpt"])
+        .withSummary("Resume an in-flight GPT reply as SSE")
+        .withPathParameter("id", {type: "string"})
+        .withQueryParameter(
+          "streamId",
+          {type: "string"},
+          {description: "Reply to follow. Defaults to the latest streaming reply."}
+        )
+        .withQueryParameter(
+          "offset",
+          {type: "number"},
+          {description: "Characters of the reply the client already shows. Defaults to 0."}
+        )
+        .withResponse(200, {data: {type: "string"}})
+        .build(),
+    ],
+    asyncHandler(async (req: express.Request, res: express.Response) => {
+      const {id} = req.params;
+      const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id;
+      const requestedStreamId =
+        typeof req.query.streamId === "string" ? req.query.streamId : undefined;
+      const parsedOffset = Number(req.query.offset ?? 0);
+      const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
+
+      const history = await GptHistory.findById(id);
+      if (!history) {
+        throw new APIError({status: 404, title: "History not found"});
+      }
+      if (history.userId.toString() !== userId?.toString()) {
+        throw new APIError({status: 403, title: "Not authorized to access this history"});
+      }
+
+      const reply = requestedStreamId
+        ? history.prompts.find((p) => p.streamId === requestedStreamId)
+        : history.prompts.findLast((p) => p.status === "streaming");
+      const streamId = reply?.streamId;
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.write(sseEvent({historyId: id, resumed: true, ...(streamId ? {streamId} : {})}));
+
+      let isClosed = false;
+      req.on("close", () => {
+        isClosed = true;
+      });
+
+      let isInitialPoll = true;
+      let sentText: string | undefined;
+      let sentLength = offset;
+      try {
+        while (!isClosed) {
+          const current = streamId ? await GptHistory.findById(id) : history;
+          if (!current) {
+            res.write(sseEvent({error: "History not found"}));
+            break;
+          }
+          const currentReply = streamId
+            ? current.prompts.find((p) => p.streamId === streamId)
+            : undefined;
+          const text = currentReply?.text ?? "";
+
+          if (isInitialPoll && offset > 0) {
+            // The client can have loaded a stale placeholder before reconnecting.
+            res.write(sseEvent({replace: true, text}));
+          } else if (sentText !== undefined && !text.startsWith(sentText)) {
+            // Text from a step that turned into a tool call was discarded; resend the reply
+            res.write(sseEvent({replace: true, text}));
+          } else if (text.length > sentLength) {
+            res.write(sseEvent({text: text.slice(sentLength)}));
+          }
+          isInitialPoll = false;
+          sentText = text;
+          sentLength = text.length;
+
+          if (currentReply?.status === "streaming") {
+            const sinceUpdateMs = DateTime.now()
+              .diff(DateTime.fromJSDate(current.updated))
+              .toMillis();
+            if (sinceUpdateMs > staleAfterMs) {
+              await GptHistory.updateOne(
+                {_id: current._id, prompts: {$elemMatch: {status: "streaming", streamId}}},
+                {$set: {"prompts.$.status": "error"}}
+              );
+              res.write(sseEvent({error: "The reply was interrupted before it finished"}));
+              res.write(sseEvent({done: true, historyId: id}));
+              break;
+            }
+            await sleep(resumePollIntervalMs);
+            continue;
+          }
+
+          for (const part of currentReply?.content ?? []) {
+            if (part.type === "image") {
+              res.write(sseEvent({image: {mimeType: part.mimeType, url: part.url}}));
+            }
+          }
+          if (currentReply?.status === "error") {
+            res.write(sseEvent({error: "The reply was interrupted before it finished"}));
+          }
+          res.write(
+            sseEvent({done: true, historyId: id, ...(current.title ? {title: current.title} : {})})
+          );
+          break;
+        }
+      } catch (error) {
+        logger.error("Error resuming GPT stream", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        res.write(sseEvent({error: error instanceof Error ? error.message : "Unknown error"}));
+      }
+      res.end();
+    })
   );
 
   router.patch(

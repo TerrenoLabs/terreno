@@ -547,6 +547,27 @@ describe("AIService", () => {
       expect(messages[1]).toEqual({content: "[Generated image]", role: "assistant"});
     });
 
+    it("skips streaming placeholders and empty failed replies", () => {
+      const model = createMockModel();
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const messages = service.buildMessages([
+        {text: "First", type: "user"},
+        {status: "error", text: "", type: "assistant"},
+        {text: "Second", type: "user"},
+        {status: "error", text: "Partial answer", type: "assistant"},
+        {text: "Third", type: "user"},
+        {status: "streaming", text: "Half", type: "assistant"},
+      ]);
+
+      expect(messages).toEqual([
+        {content: "First", role: "user"},
+        {content: "Second", role: "user"},
+        {content: "Partial answer", role: "assistant"},
+        {content: "Third", role: "user"},
+      ]);
+    });
+
     it("should convert multi-modal user prompts with image content", () => {
       const model = createMockModel();
       const service = new AIService({model: model as unknown as LanguageModel});

@@ -5,6 +5,7 @@ import multer from "multer";
 
 import {FileAttachment} from "../models/fileAttachment";
 import type {FileStorageService} from "../service/fileStorage";
+import {assertFileUploadsEnabled} from "../service/fileUploadsGate";
 import type {FileRouteOptions} from "../types";
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -56,6 +57,7 @@ export const addFileRoutes = (
         .build(),
     ],
     asyncHandler(async (req: express.Request, res: express.Response) => {
+      await assertFileUploadsEnabled(req, options.fileUploadsEnabled);
       const file = (req as express.Request & {file?: Express.Multer.File}).file;
       const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)
         ?._id as mongoose.Types.ObjectId;

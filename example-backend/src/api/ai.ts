@@ -25,6 +25,8 @@ import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
 
+import {fileUploadsEnabledForRequest} from "./fileUploads";
+
 /** A provider that creates language models and image models from model IDs. */
 interface AIProvider {
   (modelId: string): LanguageModel;
@@ -737,6 +739,7 @@ export const addAiRoutes = (
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,
     demoMode: !aiService,
+    fileUploadsEnabled: fileUploadsEnabledForRequest,
     langfuseSystemPromptName: "chat-assistant",
     maxSteps: 5,
     mcpService,
@@ -747,6 +750,7 @@ export const addAiRoutes = (
   if (fileStorageService) {
     addFileRoutes(router, {
       fileStorageService,
+      fileUploadsEnabled: fileUploadsEnabledForRequest,
       gcsBucket: process.env.GCS_BUCKET ?? "",
       openApiOptions: options,
     });

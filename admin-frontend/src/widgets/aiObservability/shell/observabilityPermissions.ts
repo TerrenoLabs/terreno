@@ -41,9 +41,3 @@ export const resolvePromptActionPermissions = ({
     canUpdate: permissions.aiPrompt?.update === true,
   };
 };
-
-export const promptActionPermissionsFromStatus = (
-  status?: ObservabilityStatusPayload
-): PromptActionPermissions => {
-  return resolvePromptActionPermissions({status});
-};

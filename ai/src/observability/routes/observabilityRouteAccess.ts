@@ -23,7 +23,7 @@ const isLegacyAdmin = (user: unknown): boolean => {
   return Permissions.IsAdmin("read", user as Parameters<typeof Permissions.IsAdmin>[1]);
 };
 
-export const assertObservabilityRouteAccess = async (
+const assertObservabilityRouteAccess = async (
   req: Request,
   accessControl?: AnyTerrenoAccess,
   permission?: ObservabilityRoutePermission

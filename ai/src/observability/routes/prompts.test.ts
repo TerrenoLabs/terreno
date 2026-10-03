@@ -15,7 +15,6 @@ import {registerObsPrompt} from "../local/models/obsPrompt";
 import {registerObsPromptLabel} from "../local/models/obsPromptLabel";
 import {registerObsPromptVersion} from "../local/models/obsPromptVersion";
 import {registerObsTrace} from "../local/models/obsTrace";
-import {PROMPT_RELATIONSHIP_LIMIT} from "../local/promptStore";
 import {ObservabilityApp, resetObservabilityApp} from "../observabilityApp";
 
 const createMockModel = (responseText = "Playground output") => {
@@ -216,7 +215,7 @@ describe("observability prompt routes", () => {
     });
 
     const ObsTrace = registerObsTrace();
-    for (let index = 0; index < PROMPT_RELATIONSHIP_LIMIT + 3; index += 1) {
+    for (let index = 0; index < 23; index += 1) {
       await ObsTrace.create({
         name: `hub-trace-${index}`,
         prompts: [{name: "hub-http", version: index % 2 === 0 ? 2 : 1}],
@@ -253,9 +252,9 @@ describe("observability prompt routes", () => {
 
     const detail = await agent.get("/ai/observability/prompts/hub-http");
     expect(detail.status).toBe(200);
-    expect(detail.body.data.relationships.traces.total).toBe(PROMPT_RELATIONSHIP_LIMIT + 3);
-    expect(detail.body.data.relationships.traces.limit).toBe(PROMPT_RELATIONSHIP_LIMIT);
-    expect(detail.body.data.relationships.traces.items).toHaveLength(PROMPT_RELATIONSHIP_LIMIT);
+    expect(detail.body.data.relationships.traces.total).toBe(23);
+    expect(detail.body.data.relationships.traces.limit).toBe(20);
+    expect(detail.body.data.relationships.traces.items).toHaveLength(20);
     expect(
       detail.body.data.relationships.traces.items.every((row: {promptName: string}) => {
         return row.promptName === "hub-http";
@@ -275,6 +274,24 @@ describe("observability prompt routes", () => {
         return row.name === "foreign-trace";
       })
     ).toBe(false);
+
+    const v2Only = await agent.get("/ai/observability/prompts/hub-http?promptVersion=2");
+    expect(v2Only.status).toBe(200);
+    expect(
+      v2Only.body.data.relationships.traces.items.every((row: {promptVersion: number}) => {
+        return row.promptVersion === 2;
+      })
+    ).toBe(true);
+    expect(
+      v2Only.body.data.relationships.traces.items.some((row: {promptVersion: number}) => {
+        return row.promptVersion === 1;
+      })
+    ).toBe(false);
+
+    const badVersion = await agent.get("/ai/observability/prompts/hub-http?promptVersion=0");
+    expect(badVersion.status).toBe(400);
+    const fractional = await agent.get("/ai/observability/prompts/hub-http?promptVersion=1.5");
+    expect(fractional.status).toBe(400);
   });
 
   it("lists folder matches with usage7d and — when production is unset", async () => {

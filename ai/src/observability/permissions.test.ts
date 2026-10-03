@@ -3,7 +3,7 @@ import {createAccess, Permissions, terrenoStatements} from "@terreno/api";
 import mongoose from "mongoose";
 
 import {UserModel} from "../tests/helpers";
-import {allObservabilityPermissionsGranted, resolveObservabilityPermissions} from "./permissions";
+import {resolveObservabilityPermissions} from "./permissions";
 
 describe("resolveObservabilityPermissions", () => {
   beforeEach(async () => {
@@ -16,9 +16,11 @@ describe("resolveObservabilityPermissions", () => {
       email: "no-ac@example.com",
       name: "No AC",
     });
-    expect(await resolveObservabilityPermissions({user})).toEqual(
-      allObservabilityPermissionsGranted()
-    );
+    const permissions = await resolveObservabilityPermissions({user});
+    expect(permissions.aiPrompt?.list).toBe(true);
+    expect(permissions.aiPrompt?.create).toBe(true);
+    expect(permissions.aiExperiment?.promote).toBe(true);
+    expect(permissions.aiReview?.score).toBe(true);
   });
 
   it("grants every action for legacy admin users", async () => {
@@ -35,9 +37,11 @@ describe("resolveObservabilityPermissions", () => {
       }),
       statements: terrenoStatements,
     });
-    expect(await resolveObservabilityPermissions({accessControl, user})).toEqual(
-      allObservabilityPermissionsGranted()
-    );
+    const permissions = await resolveObservabilityPermissions({accessControl, user});
+    expect(permissions.aiPrompt?.playground).toBe(true);
+    expect(permissions.aiDataset?.delete).toBe(true);
+    expect(permissions.aiEvaluator?.update).toBe(true);
+    expect(permissions.aiTrace?.read).toBe(true);
   });
 
   it("reflects effective RBAC grants for non-admin users", async () => {

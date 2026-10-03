@@ -11,8 +11,14 @@ const LABEL_KEY = "moveAiObservabilityPromptLabel";
 const PLAYGROUND_KEY = "runAiObservabilityPlayground";
 const STATUS_KEY = "aiObservabilityStatus";
 
+export interface PromptDetailQueryArg {
+  name: string;
+  promptVersion?: number;
+}
+
 export interface CreatePromptBody {
   config?: Record<string, unknown>;
+  description?: string;
   folder: string;
   name: string;
   system?: string;
@@ -76,12 +82,13 @@ const createPromptsApi = (api: AdminApi) => {
         }),
       }),
       [DETAIL_KEY]: build.query({
-        providesTags: (_result: unknown, _error: unknown, name: string) => [
-          {id: name, type: "aiObservabilityPrompts"},
+        providesTags: (_result: unknown, _error: unknown, arg: PromptDetailQueryArg) => [
+          {id: arg.name, type: "aiObservabilityPrompts"},
         ],
-        query: (name: string) => ({
+        query: (arg: PromptDetailQueryArg) => ({
           method: "GET",
-          url: `/ai/observability/prompts/${encodeURIComponent(name)}`,
+          params: arg.promptVersion !== undefined ? {promptVersion: arg.promptVersion} : undefined,
+          url: `/ai/observability/prompts/${encodeURIComponent(arg.name)}`,
         }),
       }),
       [CREATE_KEY]: build.mutation({
@@ -144,12 +151,13 @@ export const useAiObservabilityPromptsApi = (api: AdminApi) => {
       {error?: unknown; isError: boolean; isLoading: boolean},
     ],
     useDetailQuery: hooks.useAiObservabilityPromptQuery as (
-      name: string,
+      arg: PromptDetailQueryArg,
       options?: QueryOptions
     ) => {
       data?: PromptDetail | {data: PromptDetail};
       error?: unknown;
       isError: boolean;
+      isFetching: boolean;
       isLoading: boolean;
       refetch: () => void;
     },

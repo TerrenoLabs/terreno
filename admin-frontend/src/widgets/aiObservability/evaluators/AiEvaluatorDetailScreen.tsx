@@ -30,9 +30,12 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
     data: promptDetailRaw,
     isError: isPromptError,
     isLoading: isPromptLoading,
-  } = usePromptDetailQuery(evaluator?.judgePromptName ?? "", {
-    skip: !evaluator?.judgePromptName,
-  });
+  } = usePromptDetailQuery(
+    {name: evaluator?.judgePromptName ?? ""},
+    {
+      skip: !evaluator?.judgePromptName,
+    }
+  );
   const promptDetail = useMemo(() => unwrapPromptDetail(promptDetailRaw), [promptDetailRaw]);
   const judgePromptStatus = isPromptLoading
     ? ("loading" as const)

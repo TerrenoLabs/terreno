@@ -11,7 +11,7 @@ import {registerObsPromptLabel} from "./models/obsPromptLabel";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
 import {registerObsTrace} from "./models/obsTrace";
 
-export const PROMPT_RELATIONSHIP_LIMIT = 20;
+const PROMPT_RELATIONSHIP_LIMIT = 20;
 
 export interface PromptRelatedExperimentSummary {
   created: string;
@@ -228,7 +228,10 @@ export class LocalPromptStore implements PromptRegistry {
     };
   }
 
-  async getDetail(name: string): Promise<{
+  async getDetail(
+    name: string,
+    options?: {promptVersion?: number}
+  ): Promise<{
     description?: string;
     folder: string;
     labels: Array<{label: string; version: number}>;
@@ -259,7 +262,7 @@ export class LocalPromptStore implements PromptRegistry {
         return {label: row.label, version: versionById.get(String(row.versionId)) ?? 0};
       }),
       name: prompt.name,
-      relationships: await this.loadRelationships(prompt.name),
+      relationships: await this.loadRelationships(prompt.name, options?.promptVersion),
       tags: prompt.tags,
       versions: versions.map((row) => {
         return {
@@ -575,8 +578,14 @@ export class LocalPromptStore implements PromptRegistry {
     };
   }
 
-  private async loadRelationships(promptName: string): Promise<PromptRelationships> {
-    const traceFilter = {"prompts.name": promptName};
+  private async loadRelationships(
+    promptName: string,
+    promptVersion?: number
+  ): Promise<PromptRelationships> {
+    const traceFilter: Record<string, unknown> =
+      promptVersion === undefined
+        ? {"prompts.name": promptName}
+        : {prompts: {$elemMatch: {name: promptName, version: promptVersion}}};
     const ObsTrace = registerObsTrace();
     const totalTraces = await ObsTrace.countDocuments(traceFilter);
     const traceRows = await ObsTrace.find(traceFilter)

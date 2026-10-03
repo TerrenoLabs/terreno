@@ -462,10 +462,14 @@ errored, or missing `permissions`; list screens gate **Create prompt** on
 `permissions.aiPrompt.create`) without coupling to host Redux.
 
 `ai-prompts` lists prompts with a folder rail, search, type badge, latest vs production columns
-(tooltips), 7-day usage, and **Create prompt** when `aiPrompt:create` is allowed. `ai-prompt-editor?name=`
-is a prompt hub with **Overview**, **Versions**, **Traces**, and **Experiments** tabs. Overview
-shows optional description, folder, tags, and latest vs production badges. Traces and Experiments
-render bounded relationship rows from prompt detail (no full-list fetches). The **Versions** tab
+(tooltips), 7-day usage, and **Create prompt** when `aiPrompt:create` is allowed. The create modal
+includes an optional **Description** (saved on the prompt record and shown on the hub Overview tab).
+`ai-prompt-editor?name=` is a prompt hub with **Overview**, **Versions**, **Traces**, and
+**Experiments** tabs. Overview shows optional description, folder, tags, and latest vs production
+badges. Traces and Experiments render bounded relationship rows from
+`GET /ai/observability/prompts/:name?promptVersion=` (the hub pins the selected version, defaulting
+to latest after the first load, so related traces and experiments are filtered server-side while the
+full immutable version list stays on the detail payload). The **Versions** tab
 hosts the versioned editor: full-width version history rows show `vN`, every label attached to
 that version, and its creation time on one line. The selected row is highlighted. Editor /
 Playground tabs appear on Versions when allowed; **Save as vN+1**, **Set vN as production…**, and

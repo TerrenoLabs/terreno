@@ -388,7 +388,7 @@ need `admin:access` plus the resource action for that route unless `user.admin` 
 Examples: `GET /prompts` → `aiPrompt:list`; `POST /prompts/:name/labels` → `aiPrompt:promote`;
 `POST /review/:id` with `action: "submit"` → `aiReview:score`; `POST /traces/review` →
 `aiReview:assign`; `POST /experiments/:id/promote` → `aiExperiment:promote`;
-`GET /status` → `aiTrace:list`; `POST /traces/:id/scores` → `aiReview:score`. The seeded
+`GET /status` → `admin:access` (admin shell only, no resource action); `POST /traces/:id/scores` → `aiReview:score`. The seeded
 `auditor` role receives observability `list` / `read` only; compose it with `admin:access` in a
 consumer role when operators should enter the admin shell.
 
@@ -462,7 +462,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 | --- | --- | --- |
 | GET | `/ai/observability/prompts` | List. Query `folder`, `search`, `include=usage7d` (7-day calls/cost). `production` is `"—"` until a production label exists |
 | POST | `/ai/observability/prompts` | Create prompt in a folder as immutable v1 (`latest` label) |
-| GET | `/ai/observability/prompts/:name` | Prompt + versions + labels + bounded `relationships` (`traces` and `experiments` for this prompt name, each with `total`, `limit`, and summary `items`; trace rows include matching `promptVersion`) |
+| GET | `/ai/observability/prompts/:name` | Prompt + versions + labels + bounded `relationships` (`traces` and `experiments` for this prompt name, each with `total`, `limit`, and summary `items`; trace rows include matching `promptVersion`). Optional query `promptVersion` (positive integer) filters hub traces with `$elemMatch` on name and version so a v2 filter excludes v1-only traces. Omit it for the unfiltered prompt-name match. Non-integers and values below 1 return **400** |
 | POST | `/ai/observability/prompts/:name/versions` | Create `vN+1`; never mutates an existing version |
 | POST | `/ai/observability/prompts/:name/labels` | Move `production` or `staging`; `outgoingVersion` is the previous pointer |
 | POST | `/ai/observability/prompts/:name/playground` | Compile `{{var}}` + one `AIService` call; returns compiled messages, output, latency, tokens, cost; creates no version. Uses `ObservabilityApp.aiService`, or `requestAiServiceFactory({apiKey, modelId})` when the server service is absent (`apiKey` comes from `x-ai-api-key`) |

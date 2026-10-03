@@ -1,4 +1,6 @@
 import {describe, expect, it, mock} from "bun:test";
+import {fireEvent} from "@testing-library/react-native";
+import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../../../ui/src/test-utils";
 import {AiPromptsListView} from "./AiPromptsListView";
@@ -15,6 +17,7 @@ const prompts: PromptListItem[] = [
 ];
 
 const idleHandlers = {
+  createDescription: "",
   createFolder: "examples",
   createName: "",
   createOpen: false,
@@ -22,6 +25,7 @@ const idleHandlers = {
   createTemplate: "",
   folder: "All folders",
   onCreate: mock(() => {}),
+  onCreateDescriptionChange: mock(() => {}),
   onCreateFolderChange: mock(() => {}),
   onCreateNameChange: mock(() => {}),
   onCreateSystemChange: mock(() => {}),
@@ -45,5 +49,21 @@ describe("AiPromptsListView", () => {
     const view = renderWithTheme(<AiPromptsListView {...idleHandlers} canCreate={true} />);
     expect(view.getByTestId("ai-prompts-create")).toBeTruthy();
     expect(view.getByText("Create prompt")).toBeTruthy();
+  });
+
+  it("wires description in the create modal", () => {
+    const onCreateDescriptionChange = mock(() => {});
+    const view = renderWithTheme(
+      <AiPromptsListView
+        {...idleHandlers}
+        canCreate={true}
+        createDescription="Operator summary"
+        createOpen={true}
+        onCreateDescriptionChange={onCreateDescriptionChange}
+      />
+    );
+    expect(view.getByDisplayValue("Operator summary")).toBeTruthy();
+    fireEvent.changeText(view.getByDisplayValue("Operator summary"), "Updated summary");
+    assert.isAtLeast(onCreateDescriptionChange.mock.calls.length, 1);
   });
 });

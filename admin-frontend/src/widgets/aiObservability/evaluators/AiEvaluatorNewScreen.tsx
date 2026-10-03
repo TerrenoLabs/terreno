@@ -51,9 +51,12 @@ export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pro
     data: promptDetailRaw,
     isError: isJudgePromptError,
     isLoading: isJudgePromptLoading,
-  } = usePromptDetailQuery(judgePromptName, {
-    skip: type !== "llm-judge" || !judgePromptName.trim(),
-  });
+  } = usePromptDetailQuery(
+    {name: judgePromptName},
+    {
+      skip: type !== "llm-judge" || !judgePromptName.trim(),
+    }
+  );
   const promptDetail = useMemo(() => unwrapPromptDetail(promptDetailRaw), [promptDetailRaw]);
   const judgeOutputSchema = useMemo(() => {
     if (!promptDetail) {

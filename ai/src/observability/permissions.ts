@@ -18,7 +18,7 @@ const OBSERVABILITY_RESOURCE_ACTIONS: Record<string, readonly string[]> = {
   aiTrace: terrenoStatements.aiTrace,
 };
 
-export const allObservabilityPermissionsGranted = (): ObservabilityPermissions => {
+const allObservabilityPermissionsGranted = (): ObservabilityPermissions => {
   const permissions: ObservabilityPermissions = {};
   for (const [resource, actions] of Object.entries(OBSERVABILITY_RESOURCE_ACTIONS)) {
     permissions[resource] = {};

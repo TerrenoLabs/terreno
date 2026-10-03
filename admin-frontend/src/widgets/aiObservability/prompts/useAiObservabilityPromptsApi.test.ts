@@ -59,8 +59,15 @@ describe("useAiObservabilityPromptsApi", () => {
       params: {include: "usage"},
       url: "/ai/observability/prompts",
     });
-    expect(endpoints.aiObservabilityPrompt.query("summarize" as never)).toEqual({
+    expect(endpoints.aiObservabilityPrompt.query({name: "summarize"} as never)).toEqual({
       method: "GET",
+      url: "/ai/observability/prompts/summarize",
+    });
+    expect(
+      endpoints.aiObservabilityPrompt.query({name: "summarize", promptVersion: 2} as never)
+    ).toEqual({
+      method: "GET",
+      params: {promptVersion: 2},
       url: "/ai/observability/prompts/summarize",
     });
     expect(endpoints.createAiObservabilityPrompt.query({name: "summarize"} as never)).toEqual({

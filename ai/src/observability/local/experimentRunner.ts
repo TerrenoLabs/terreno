@@ -62,7 +62,7 @@ export interface ExperimentItemView {
 }
 
 export const EXPERIMENT_LIST_DEFAULT_LIMIT = 50;
-export const EXPERIMENT_LIST_MAX_LIMIT = 100;
+const EXPERIMENT_LIST_MAX_LIMIT = 100;
 
 export interface ExperimentListResult {
   data: ExperimentView[];

@@ -12264,6 +12264,32 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
     },
     "/ai/observability/experiments": {
       "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "promptName",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
         "responses": {
           "200": {
             "content": {
@@ -12699,6 +12725,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "application/json": {
               "schema": {
                 "properties": {
+                  "description": {
+                    "required": false,
+                    "type": "string",
+                  },
                   "folder": {
                     "required": true,
                     "type": "string",
@@ -12793,6 +12823,14 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "required": true,
             "schema": {
               "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "promptVersion",
+            "required": false,
+            "schema": {
+              "type": "number",
             },
           },
         ],
@@ -13412,6 +13450,24 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
     },
     "/ai/observability/traces": {
       "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "prompt",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "promptVersion",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
         "responses": {
           "200": {
             "content": {

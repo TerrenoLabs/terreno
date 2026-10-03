@@ -59,6 +59,7 @@ import {
   type TraceDetail,
   type TraceListItem,
 } from "../widgets/aiObservability/traces/traceTypes";
+import {operatorObservabilityStatus} from "./observabilityStatusFixtures.isolated";
 
 interface ExpoRouterPushMock {
   (...args: unknown[]): void;
@@ -2921,17 +2922,9 @@ describe("AiPromptEditorScreen", () => {
   });
   let promptName = "summarize";
 
-  const statusData = {
-    localOn: true,
-    playgroundAi: {source: "request-key" as const},
-    plugins: [],
-    primaries: {
-      datasets: "local",
-      experiments: "local",
-      prompts: "local",
-      reviewQueue: "local",
-    },
-  };
+  const statusData = operatorObservabilityStatus({
+    playgroundAi: {source: "request-key"},
+  });
 
   const emptyPromptRelationships = {
     experiments: {items: [], limit: 20, total: 0},
@@ -3044,6 +3037,7 @@ describe("AiPromptEditorScreen", () => {
   describe("AiPromptEditorScreenWidget", () => {
     it("shows loading then hub overview and versions playground tabs", () => {
       detailState.isLoading = true;
+      detailState.data = undefined;
       const loading = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
       expect(loading.getByTestId("ai-prompt-editor-loading")).toBeTruthy();
       loading.unmount();
@@ -3595,16 +3589,7 @@ describe("AiPromptsListScreen", () => {
   const injectedHooks = {
     useAiObservabilityPromptsQuery: () => ({...listState, refetch: mock(() => undefined)}),
     useAiObservabilityStatusQuery: () => ({
-      data: {
-        localOn: true,
-        plugins: [],
-        primaries: {
-          datasets: "local",
-          experiments: "local",
-          prompts: "local",
-          reviewQueue: "local",
-        },
-      },
+      data: operatorObservabilityStatus(),
       isError: false,
       isLoading: false,
     }),
@@ -3737,6 +3722,7 @@ describe("AiPromptsListView", () => {
 
   const idleHandlers = {
     onCreate: () => undefined,
+    onCreateDescriptionChange: () => undefined,
     onCreateFolderChange: () => undefined,
     onCreateNameChange: () => undefined,
     onCreateSystemChange: () => undefined,
@@ -3752,6 +3738,7 @@ describe("AiPromptsListView", () => {
     it("renders the loading state", () => {
       const {getByTestId} = renderWithTheme(
         <AiPromptsListView
+          createDescription=""
           createFolder="examples"
           createName=""
           createOpen={false}
@@ -3770,6 +3757,7 @@ describe("AiPromptsListView", () => {
     it("renders the empty state", () => {
       const {getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
+          createDescription=""
           createFolder="examples"
           createName=""
           createOpen={false}
@@ -3788,6 +3776,7 @@ describe("AiPromptsListView", () => {
     it("renders a loaded table with folder counts and latest vs production columns", () => {
       const {getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
+          createDescription=""
           createFolder="examples"
           createName=""
           createOpen={false}
@@ -3810,6 +3799,7 @@ describe("AiPromptsListView", () => {
     it("renders an Open control for each prompt", () => {
       const {getByTestId} = renderWithTheme(
         <AiPromptsListView
+          createDescription=""
           createFolder="examples"
           createName=""
           createOpen={false}
@@ -3831,6 +3821,7 @@ describe("AiPromptsListView", () => {
       const onRetry = mock(() => undefined);
       const {getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
+          createDescription="Short summary"
           createError="Name required"
           createFolder="examples"
           createName="new-prompt"
@@ -3840,6 +3831,7 @@ describe("AiPromptsListView", () => {
           folder=""
           loadError="Failed to load prompts"
           onCreate={onCreate}
+          onCreateDescriptionChange={() => undefined}
           onCreateFolderChange={() => undefined}
           onCreateNameChange={() => undefined}
           onCreateSystemChange={() => undefined}

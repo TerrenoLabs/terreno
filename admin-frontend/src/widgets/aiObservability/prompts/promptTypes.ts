@@ -81,7 +81,7 @@ const emptyRelationships = (): PromptRelationships => ({
   traces: {items: [], limit: 20, total: 0},
 });
 
-export const normalizePromptDetail = (detail: PromptDetail): PromptDetail => {
+const normalizePromptDetail = (detail: PromptDetail): PromptDetail => {
   return {
     ...detail,
     relationships: detail.relationships ?? emptyRelationships(),

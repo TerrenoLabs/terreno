@@ -25,6 +25,7 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
   const [createOpen, setCreateOpen] = useState(false);
   const [createFolder, setCreateFolder] = useState("examples");
   const [createName, setCreateName] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
   const [createSystem, setCreateSystem] = useState("");
   const [createTemplate, setCreateTemplate] = useState("");
   const [createError, setCreateError] = useState("");
@@ -49,9 +50,11 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
   const handleCreate = useCallback(async (): Promise<void> => {
     setCreateError("");
     try {
+      const trimmedDescription = createDescription.trim();
       const created = await createPrompt({
         folder: createFolder.trim(),
         name: createName.trim(),
+        ...(trimmedDescription ? {description: trimmedDescription} : {}),
         system: createSystem,
         template: createTemplate,
         type: "chat",
@@ -62,7 +65,15 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
     } catch {
       setCreateError("Could not create prompt. Check the name is unique and try again.");
     }
-  }, [createFolder, createName, createPrompt, createSystem, createTemplate, prefix]);
+  }, [
+    createDescription,
+    createFolder,
+    createName,
+    createPrompt,
+    createSystem,
+    createTemplate,
+    prefix,
+  ]);
 
   const loadError = isError
     ? error && typeof error === "object" && "data" in error
@@ -79,6 +90,7 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
       ) : (
         <AiPromptsListView
           canCreate={canCreatePrompt}
+          createDescription={createDescription}
           createError={createError}
           createFolder={createFolder}
           createName={createName}
@@ -89,6 +101,7 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
           isCreating={createState.isLoading}
           loadError={loadError}
           onCreate={handleCreate}
+          onCreateDescriptionChange={setCreateDescription}
           onCreateFolderChange={setCreateFolder}
           onCreateNameChange={setCreateName}
           onCreateSystemChange={setCreateSystem}

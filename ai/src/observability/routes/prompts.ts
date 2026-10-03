@@ -36,6 +36,17 @@ const asUserId = (user: unknown): mongoose.Types.ObjectId | undefined => {
   return (user as {_id?: mongoose.Types.ObjectId})._id;
 };
 
+const parsePromptVersionQuery = (value: unknown): number | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new APIError({status: 400, title: "promptVersion must be a positive integer"});
+  }
+  return parsed;
+};
+
 const versionFieldsFromBody = (body: Record<string, unknown>): PromptVersionFields => {
   return {
     config: body.config as Record<string, unknown> | undefined,
@@ -150,11 +161,13 @@ export const addObservabilityPromptRoutes = (
         .withTags(["observability"])
         .withSummary("Get an observability prompt")
         .withPathParameter("name", {type: "string"})
+        .withQueryParameter("promptVersion", {type: "number"}, {required: false})
         .withResponse(200, {data: {type: "object"}})
         .build()
     ),
     asyncHandler(async (req, res) => {
-      const data = await options.store.getDetail(req.params.name);
+      const promptVersion = parsePromptVersionQuery(req.query.promptVersion);
+      const data = await options.store.getDetail(req.params.name, {promptVersion});
       return res.json({data});
     })
   );

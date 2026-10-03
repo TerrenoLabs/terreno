@@ -13,7 +13,7 @@ import {getBaseServer, setupDb, UserModel} from "@terreno/api/testing";
 import {authAsUser as loginWithCredentials} from "@terreno/test";
 import mongoose from "mongoose";
 
-import {observabilityAdminScreens} from "./adminScreens";
+import {observabilityAdminScreens} from "../observability/adminScreens";
 
 const OBSERVABILITY_SCREEN_NAMES = [
   "ai-prompts",

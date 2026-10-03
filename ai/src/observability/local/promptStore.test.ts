@@ -10,7 +10,7 @@ import {registerObsPrompt} from "./models/obsPrompt";
 import {registerObsPromptLabel} from "./models/obsPromptLabel";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
 import {registerObsTrace} from "./models/obsTrace";
-import {LocalPromptStore, PROMPT_RELATIONSHIP_LIMIT} from "./promptStore";
+import {LocalPromptStore} from "./promptStore";
 
 describe("LocalPromptStore", () => {
   let store: LocalPromptStore;
@@ -123,7 +123,42 @@ describe("LocalPromptStore", () => {
     ).toBe(2);
   });
 
-  it("caps relationship traces at PROMPT_RELATIONSHIP_LIMIT while reporting total", async () => {
+  it("filters hub traces by prompt version and keeps unfiltered detail", async () => {
+    await store.create({
+      folder: "examples",
+      name: "version-filter",
+      system: "v1",
+      type: "text",
+    });
+    await store.createVersion("version-filter", {system: "v2", type: "text"});
+    const ObsTrace = registerObsTrace();
+    await ObsTrace.create({
+      name: "only-v1",
+      prompts: [{name: "version-filter", version: 1}],
+      startedAt: DateTime.utc().minus({minutes: 2}).toJSDate(),
+      status: "ok",
+    });
+    await ObsTrace.create({
+      name: "only-v2",
+      prompts: [{name: "version-filter", version: 2}],
+      startedAt: DateTime.utc().minus({minutes: 1}).toJSDate(),
+      status: "ok",
+    });
+
+    const v2 = await store.getDetail("version-filter", {promptVersion: 2});
+    expect(v2.relationships.traces.total).toBe(1);
+    expect(v2.relationships.traces.items.map((row) => row.name)).toEqual(["only-v2"]);
+    expect(v2.relationships.traces.items[0]?.promptVersion).toBe(2);
+
+    const all = await store.getDetail("version-filter");
+    expect(all.relationships.traces.total).toBe(2);
+    expect(all.relationships.traces.items.map((row) => row.name).sort()).toEqual([
+      "only-v1",
+      "only-v2",
+    ]);
+  });
+
+  it("caps relationship traces at the published limit while reporting total", async () => {
     await store.create({
       folder: "examples",
       name: "bounded-traces",
@@ -131,7 +166,7 @@ describe("LocalPromptStore", () => {
       type: "text",
     });
     const ObsTrace = registerObsTrace();
-    const seedCount = PROMPT_RELATIONSHIP_LIMIT + 5;
+    const seedCount = 25;
     for (let index = 0; index < seedCount; index += 1) {
       await ObsTrace.create({
         name: `trace-${index}`,
@@ -143,8 +178,8 @@ describe("LocalPromptStore", () => {
 
     const detail = await store.getDetail("bounded-traces");
     expect(detail.relationships.traces.total).toBe(seedCount);
-    expect(detail.relationships.traces.limit).toBe(PROMPT_RELATIONSHIP_LIMIT);
-    expect(detail.relationships.traces.items).toHaveLength(PROMPT_RELATIONSHIP_LIMIT);
+    expect(detail.relationships.traces.limit).toBe(20);
+    expect(detail.relationships.traces.items).toHaveLength(20);
   });
 
   it("leaves v1 unchanged after creating v2 and resolves production by label", async () => {

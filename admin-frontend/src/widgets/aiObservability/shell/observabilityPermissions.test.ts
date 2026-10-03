@@ -1,10 +1,7 @@
 import {describe, expect, it} from "bun:test";
 
 import type {ObservabilityStatusPayload} from "./aiObservabilityNav";
-import {
-  promptActionPermissionsFromStatus,
-  resolvePromptActionPermissions,
-} from "./observabilityPermissions";
+import {resolvePromptActionPermissions} from "./observabilityPermissions";
 
 const statusWithPermissions = (
   permissions: NonNullable<ObservabilityStatusPayload["permissions"]>
@@ -143,30 +140,18 @@ describe("resolvePromptActionPermissions", () => {
       canUpdate: true,
     });
   });
-});
-
-describe("promptActionPermissionsFromStatus", () => {
-  it("requires an explicit permissions map (no fail-open defaults)", () => {
+  it("requires an explicit permissions map when status is present without loading flags", () => {
     expect(
-      promptActionPermissionsFromStatus(
-        statusWithPermissions({
-          aiPrompt: {
-            create: true,
-            list: true,
-            playground: true,
-            promote: true,
-            read: true,
-            update: true,
-          },
-        })
-      )
+      resolvePromptActionPermissions({
+        status: statusWithPermissions(operatorPromptPermissions),
+      })
     ).toEqual({
       canCreate: true,
       canPlayground: true,
       canPromote: true,
       canUpdate: true,
     });
-    expect(promptActionPermissionsFromStatus(undefined)).toEqual({
+    expect(resolvePromptActionPermissions({status: undefined})).toEqual({
       canCreate: false,
       canPlayground: false,
       canPromote: false,

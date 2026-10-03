@@ -9,7 +9,7 @@ import {
   terrenoStatements,
   type UserModel as UserModelType,
 } from "@terreno/api";
-import {getBaseServer} from "@terreno/api/testing";
+import {getBaseServer} from "@terreno/test";
 import type express from "express";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";

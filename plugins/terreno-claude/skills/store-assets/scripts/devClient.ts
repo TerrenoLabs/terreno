@@ -127,7 +127,8 @@ const getFingerprint = async ({target}: {target: Target}): Promise<string> => {
       "fingerprint:generate",
       "-p",
       target.platform,
-      "-e",
+      // Long form on purpose: `-e` is also --build-profile here, but reads like --environment.
+      "--build-profile",
       target.profile,
       "--json",
       "--non-interactive",

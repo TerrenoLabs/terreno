@@ -154,21 +154,25 @@ export const reversePorts = async ({
   }
 };
 
-const hideAndroidDevMenu = async ({
+const writeAndroidDevMenuPrefs = async ({
   serial,
   androidPackage,
+  devMenu,
   tag,
 }: {
   serial: string;
   androidPackage: string;
+  devMenu: DevMenuMode;
   tag: string;
 }): Promise<void> => {
+  const prefs =
+    devMenu === "hideAll"
+      ? {isOnboardingFinished: true, showFab: false, showsAtLaunch: false}
+      : {isOnboardingFinished: true};
   const xml = [
     "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>",
     "<map>",
-    '<boolean name="isOnboardingFinished" value="true" />',
-    '<boolean name="showFab" value="false" />',
-    '<boolean name="showsAtLaunch" value="false" />',
+    ...Object.entries(prefs).map(([name, value]) => `<boolean name="${name}" value="${value}" />`),
     "</map>",
   ].join("");
   // Dev client builds are debuggable, so run-as can write the app's private prefs. Base64
@@ -250,14 +254,18 @@ export const launchDevClientIntoMetro = async ({
     return;
   }
 
-  if (devMenu === "hideAll") {
-    await runOrFail({
-      cmd: ["adb", "-s", deviceId, "shell", "am", "force-stop", expo.androidPackage],
-      isQuiet: true,
-      tag,
-    });
-    await hideAndroidDevMenu({androidPackage: expo.androidPackage, serial: deviceId, tag});
-  }
+  // The app caches its prefs in memory, so stop it before rewriting them.
+  await runOrFail({
+    cmd: ["adb", "-s", deviceId, "shell", "am", "force-stop", expo.androidPackage],
+    isQuiet: true,
+    tag,
+  });
+  await writeAndroidDevMenuPrefs({
+    androidPackage: expo.androidPackage,
+    devMenu,
+    serial: deviceId,
+    tag,
+  });
   const url = `exp+${expo.slug}://expo-development-client/?url=${encodeURIComponent(metroUrl)}`;
   await runOrFail({
     cmd: [

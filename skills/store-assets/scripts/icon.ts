@@ -42,7 +42,11 @@ const main = async (): Promise<void> => {
   // A logo SVG can supply the mark: its first N <path>s, re-wrapped in the mark's viewBox.
   // Root fill="none" matters because stroke-only paths would otherwise fill black.
   if (brand.iconPathCount) {
-    const paths = (svg.match(/<path[^>]*\/>/g) ?? []).slice(0, brand.iconPathCount);
+    // Matches both self-closing <path .../> and <path ...></path> elements.
+    const paths = (svg.match(/<path\b[^>]*?(?:\/>|>[\s\S]*?<\/path>)/g) ?? []).slice(
+      0,
+      brand.iconPathCount
+    );
     if (paths.length !== brand.iconPathCount) {
       fail(`Expected ${brand.iconPathCount} <path> elements in ${brand.iconSvg}`);
     }

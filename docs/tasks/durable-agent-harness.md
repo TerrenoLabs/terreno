@@ -5,6 +5,27 @@ IP: [durable-agent-harness.md](../implementationPlans/durable-agent-harness.md)
 **Base branch:** `cursor/ai-observability-ip-64ca` (rebase as it lands)  
 **First PR scope:** Phases 1–2. Phases 3–5 ship in follow-up PRs.
 
+## Resume here (paused 2026-10-03)
+
+The Pick ⇄ Roast loop is paused after Phase 1. Tasks 1.1–1.12 are Roast-verified, one commit each.
+
+1. **Sync the base.** `git fetch origin && git merge origin/cursor/ai-observability-ip-64ca`.
+   At pause it was 5+ commits ahead, including a master merge and "Preserve AI observability
+   across chat turn refactor", which touches `ai/`. Re-run `cd ai && bun run test:ci` after the merge.
+2. **Resume the loop** with `/terreno:pick-roast-loop` (or `terreno-pick-roast-loop`) at
+   **Task 2.0**, then 2.1, then 2.2. Each task is Pick, then an independent Roast, then one commit.
+3. **Brew when Phase 2 is done.** Run the full independent branch review that was deferred at
+   pause, take the PR out of draft, then Taste.
+
+Known environment notes from Phase 1:
+
+- `/tmp` in the cloud VM is a 1 GB tmpfs, and in-memory replica sets use about 200 MB each. Run Mongo
+  test suites sequentially and delete leftover `/tmp/mongo-mem-*` directories after killed runs.
+- `example-backend` seed-heavy tests can hit Bun's 5 s default timeout under load. This also
+  happens on the base branch.
+- In the root `bun run lint`, `check:explicit-any:lint` requires a `// noExplicitAny: <reason>` line
+  above every `biome-ignore … noExplicitAny`.
+
 Every task: bun tests in `ai/` against the in-memory replica set from `@terreno/test`; real
 models are replaced by the mock model pattern in `.claude/rules/ai/00-ai.md`. Docs pages are
 created in 1.1 and extended by every later task — never deferred.

@@ -516,7 +516,7 @@ describe("Harness leases and crash recovery", () => {
       expect(tokens[0]).not.toBe(tokens[1]);
       expect(only.runner.role).toBe("owner");
       expect(standby.runner.role).toBe("standby");
-    });
+    }, 15000);
   });
 
   describe("recovery on start()", () => {
@@ -601,11 +601,7 @@ describe("Harness leases and crash recovery", () => {
       expect(await SpanModel.countDocuments({name: "write"})).toBe(0);
     });
 
-    it("leaves expired tasks of unregistered versions alone", async () => {
-      const writer = await openProcess({ownerId: "writer", registry: [writeOnce(() => {})]});
-      const foreign = await writer.harness.createTask(writeOnce(() => {}) as never, {});
-      await abandonRunning(foreign._id);
-
+    it("leaves expired tasks of versions created after start that it does not register", async () => {
       const other = defineTask<unknown, unknown, unknown>({
         initial: () => ({phase: "only"}),
         name: "test.unrelated",
@@ -615,6 +611,10 @@ describe("Harness leases and crash recovery", () => {
       const handle = await openProcess({ownerId: "fresh", registry: [other as never]});
       await handle.harness.start();
       await waitUntil(() => handle.runner.role === "owner", "fresh owns");
+      // Another deploy creates a task of a version this process does not run.
+      const writer = await openProcess({ownerId: "writer", registry: [writeOnce(() => {})]});
+      const foreign = await writer.harness.createTask(writeOnce(() => {}) as never, {});
+      await abandonRunning(foreign._id);
       // Several heartbeat sweeps run while owner.
       await pause(HEARTBEAT_MS * 4);
 

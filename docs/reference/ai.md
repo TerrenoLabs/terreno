@@ -510,6 +510,7 @@ Phases can start child tasks (`rt.createTask`), wait on them (`rt.waitForTasks`)
 `harness.abort` stops a whole ownership tree bottom-up, running compensation handlers.
 API: [AI harness reference](ai-harness.md).
 Why: [Durable agent harness](../explanation/durable-agent-harness.md).
+How-to: [Ship a new task version](../how-to/ship-a-new-task-version.md).
 
 ## Langfuse integration
 

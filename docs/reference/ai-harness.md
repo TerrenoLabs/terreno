@@ -20,6 +20,7 @@ import {defineTask, Harness, InProcessRunner} from "@terreno/ai/harness";
 - [Retries](#retries)
 - [Child tasks and waitForTasks](#child-tasks-and-waitfortasks)
 - [abort](#abort)
+- [Versioning](#versioning)
 - [Task statuses](#task-statuses)
 - [HarnessTask model](#harnesstask-model)
 - [HarnessOwner model](#harnessowner-model)
@@ -93,7 +94,7 @@ The `task` view passed to `run`: `{id, name, version, input, state, phase, attem
 | Method | Description |
 | --- | --- |
 | `Harness.open({registry, runner?, testHooks?})` | Checks requirements, rejects a duplicate `name@version`, ensures collections and indexes exist. `runner` defaults to `new InProcessRunner()`. |
-| `start()` | Starts the runner. Throws when already started. The runner recovers expired tasks once it owns execution. |
+| `start()` | Throws, claiming nothing, when any non-terminal task uses a `name@version` missing from the registry (see [Versioning](#versioning)). Then starts the runner. Throws when already started. The runner recovers expired tasks once it owns execution. |
 | `stop()` | Stops claiming work, waits (without a time limit) for the phase in flight while still renewing the owner lease, then releases it. No-op when not started. |
 | `createTask(definition, input, {requestId?, userId?})` | Inserts a `pending` task, its `ObsTrace`, and its root span in one transaction. Wakes the runner. The definition must be in the registry. |
 | `resolveInterrupted(id, {action, reason, result?, userId?})` | Resolve an `interrupted` task. See [resolveInterrupted](#resolveinterrupted). |
@@ -414,6 +415,35 @@ Rules:
 | `HarnessCommitConflictError` | Another resolution won a race. Nothing is written. |
 | `findExactlyOne` not-found error | No task with that id. |
 
+## Versioning
+
+Every task row stores the `name` and `version` of the definition that created it. Several
+versions of one name may be registered side by side; the registry key is the exact
+`name@version`.
+
+| Lookup | Resolves by |
+| --- | --- |
+| `harness.createTask(definition, ...)` | `definition.key`; the row records `definition.version`. |
+| Claiming, phase runs, retries | The row's `name@version`. A runner only claims rows whose key it registers. |
+| Expired-lease recovery | The row's `name@version`. Rows of keys this process does not register are left alone. |
+| `harness.abort` / `resolveInterrupted` `abort` | The row's `name@version` abort handler. A key this process does not register is recorded as `abortHandler: {status: "unregistered"}`. |
+| `rt.createTask(child, ...)` | `child.key`; the child row records `child.version`. |
+| `resolveInterrupted` `retry` | The row's `name@version`. Throws `<key> is not in this harness registry; register it before retrying` when this process does not register it, so the task is never re-queued where nothing would claim it. |
+
+`Harness.start()` first counts non-terminal tasks (`pending`, `running`, `waiting`,
+`interrupted`, including tasks with `abortRequested`) by `name@version`. When any key is
+missing from the registry it throws one error listing each key with its count, sorted by
+key, and claims nothing:
+
+```text
+Harness.start: in-flight tasks use task versions this registry does not register: test.intake@1 (3 tasks), test.intake@3 (2 tasks). Register those definitions (keep old versions until their tasks finish) or resolve the tasks first.
+```
+
+Terminal tasks (`completed`, `failed`, `aborted`) never block start. The check runs once
+per `start()`; a row of an unregistered version created by another process afterwards is
+skipped by claiming and recovery. Listing the same `name@version` twice in `registry`
+throws from `Harness.open`. Rollout steps: [Ship a new task version](../how-to/ship-a-new-task-version.md).
+
 ## Task statuses
 
 | Status | Meaning |
@@ -493,8 +523,10 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 | `defineTask(...): retry.* ...` / `abort must be a function` | Invalid `retry` policy or `abort` handler. |
 | `InProcessRunner heartbeatInterval must be positive and shorter than leaseDuration` | Invalid lease options. |
 | `Harness registry lists <key> more than once` | Duplicate `name@version` in `registry`. |
+| `Harness.start: in-flight tasks use task versions this registry does not register: ...` | A non-terminal task uses an unregistered `name@version`. Nothing was claimed. |
 | `requestId "<id>" already belongs to ...` | `requestId` reused for another task name or another user. |
 | `<key> is not in this harness registry` | `createTask` with an unregistered definition. |
+| `<key> is not in this harness registry; register it before retrying` | `resolveInterrupted` `retry` on a task of an unregistered version. |
 | `<key>: initial phase "<x>" is not one of ...` | `initial()` returned an unknown phase. Nothing is written. |
 | `defineTask(...)` validation errors | Empty name, non-positive or fractional version, no phases, a phase without `run`, an invalid `replay`. |
 
@@ -528,6 +560,7 @@ Low-risk choices made in the first slice:
 | Phase commits fence on `{_id, status: "running", phase, lease.token}` | The token tells two runs of the same phase apart, including a phase that commits back to itself. |
 | Each phase commit writes a new lease token for the next phase | The lease is per phase without an extra write at phase start. |
 | A safe-replay recovery goes back to `pending` instead of running in place | One claim path (and one place that issues tokens) for fresh, retried, and replayed work. |
+| The start-time version check is one `$group` aggregate over non-terminal rows | One round trip; the error names every missing key with a count instead of failing on the first. |
 | Recovery also runs on every owner heartbeat, not only at takeover | A dead owner's task lease can outlive its owner lease by up to one heartbeat; a takeover-only scan would miss it. |
 | Interruption spans start at `lease.acquiredAt` | Records when the cut-off phase began. |
 | `resolveInterrupted({action: "abort"})` closes the trace as `error` | `ObsTrace.status` is `ok` or `error`; an abort is not a success. |

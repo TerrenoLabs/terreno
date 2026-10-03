@@ -83,7 +83,7 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: reference SSE contract (event types, ids, reconnect)
   - Acceptance: AC9 — two `HarnessApp` instances on one replica set; client disconnects mid-stream, reconnects to the other with `Last-Event-ID`, receives each missed event exactly once
 
-- [ ] **Task 1.10**: Version pinning
+- [x] **Task 1.10**: Version pinning
   - Delivers: runs resume only on exact `name@version`; `Harness.start()` throws listing unregistered in-flight versions
   - Files: `harness.ts`, `registry.ts`, tests
   - Blocked by: 1.2

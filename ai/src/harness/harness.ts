@@ -22,6 +22,11 @@ import {acquireOwnerLease, releaseOwnerLease} from "./leases";
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
 import {abortTaskTree, type HarnessEngine, settleTaskOwner} from "./ownership";
+import {
+  type AnyHarnessTaskDefinition,
+  assertInFlightVersionsRegistered,
+  buildTaskRegistry,
+} from "./registry";
 import {InProcessRunner} from "./runners/inProcessRunner";
 import {claimNextTask, recoverExpiredTasks, runClaimedTask} from "./runtime";
 
@@ -64,15 +69,13 @@ export {
 } from "../types/harness";
 export {HarnessCommitConflictError} from "./commit";
 export {defineTask} from "./defineTask";
+export type {AnyHarnessTaskDefinition} from "./registry";
 export {
   IN_PROCESS_RUNNER_ROLES,
   InProcessRunner,
   type InProcessRunnerOptions,
   type InProcessRunnerRole,
 } from "./runners/inProcessRunner";
-
-/** Any task definition, whatever its input, state, and output types. */
-export type AnyHarnessTaskDefinition = HarnessTaskDefinition<never, unknown, unknown>;
 
 export interface HarnessOpenOptions {
   /** Every task definition (and version) this process may create or resume. */
@@ -112,19 +115,6 @@ const resolveObservabilityModels = (): {span: ObsSpanModel; trace: ObsTraceModel
     );
   }
   return {span, trace};
-};
-
-const buildRegistry = (
-  registry: ReadonlyArray<AnyHarnessTaskDefinition>
-): Map<string, HarnessTaskDefinition> => {
-  const definitions = new Map<string, HarnessTaskDefinition>();
-  for (const definition of registry) {
-    if (definitions.has(definition.key)) {
-      throw new Error(`Harness registry lists ${definition.key} more than once`);
-    }
-    definitions.set(definition.key, definition as unknown as HarnessTaskDefinition);
-  }
-  return definitions;
 };
 
 /**
@@ -170,7 +160,7 @@ export class Harness {
   static async open(options: HarnessOpenOptions): Promise<Harness> {
     const {span, trace} = resolveObservabilityModels();
     await assertReplicaSet();
-    const definitions = buildRegistry(options.registry);
+    const definitions = buildTaskRegistry(options.registry);
     const task = registerHarnessTask();
     const owner = registerHarnessOwner();
     // Transactions cannot create collections or indexes on every server version.
@@ -184,15 +174,24 @@ export class Harness {
   }
 
   /**
-   * Begin executing runnable tasks. The runner recovers tasks whose lease expired once it
-   * owns execution (immediately, or on takeover when another owner holds the lease).
+   * Begin executing runnable tasks. First throws, claiming nothing, when any non-terminal
+   * task is pinned to a `name@version` missing from the registry. The runner recovers
+   * tasks whose lease expired once it owns execution (immediately, or on takeover when
+   * another owner holds the lease).
    */
   async start(): Promise<void> {
     if (this.isStarted) {
       throw new Error("Harness is already started");
     }
+    // Claimed before the first await so overlapping start() calls cannot both start the runner.
     this.isStarted = true;
     const {definitions, engine, models, testHooks} = this;
+    try {
+      await assertInFlightVersionsRegistered({definitions, models});
+    } catch (error: unknown) {
+      this.isStarted = false;
+      throw error;
+    }
     await this.runner.start({
       acquireOwnerLease: (lease) => acquireOwnerLease({lease, models, testHooks}),
       claimNext: (lease) => claimNextTask({definitions, lease, models}),
@@ -285,6 +284,14 @@ export class Harness {
     }
     if (options.action === HARNESS_RESOLVE_ACTIONS.retry && task.abortRequested?.at) {
       throw new Error(`Task ${taskId} is being aborted; resolve it with abort, not retry`);
+    }
+    if (
+      options.action === HARNESS_RESOLVE_ACTIONS.retry &&
+      !this.definitions.has(taskDefinitionKey(task))
+    ) {
+      throw new Error(
+        `${taskDefinitionKey(task)} is not in this harness registry; register it before retrying`
+      );
     }
     const decidedBy = options.userId === undefined ? undefined : String(options.userId);
     if (options.action === HARNESS_RESOLVE_ACTIONS.abort) {

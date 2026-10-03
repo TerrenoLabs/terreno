@@ -195,4 +195,7 @@ tasks. Switching runners needs no data migration.
 
 Each task records `name` and `version`. A runner only claims tasks whose exact
 `name@version` is in its registry. A process that registers only `v2` leaves `v1` rows
-alone. Keep old versions registered until their in-flight tasks finish.
+alone. Keep old versions registered until their in-flight tasks finish. `Harness.start()`
+refuses to start while any non-terminal task uses a version the registry lacks, so a
+deploy that drops a version too early fails loudly instead of stranding work. See
+[Ship a new task version](../how-to/ship-a-new-task-version.md).

@@ -583,29 +583,6 @@ describe("Harness", () => {
       expect(await TaskModel.countDocuments({})).toBe(0);
       expect(await TraceModel.countDocuments({})).toBe(0);
     });
-
-    it("runs a version-pinned task only on its registered version", async () => {
-      const v2 = defineTask<IntakeInput, IntakeState, unknown>({
-        initial: () => ({phase: "only"}),
-        name: "test.intake",
-        phases: {
-          only: {
-            run: async (_task, rt) => rt.commit({terminal: {result: "v2", status: "completed"}}),
-          },
-        },
-        version: 2,
-      });
-      const harness = await openHarness({registry: [v2]});
-      // A v1 row this harness cannot run stays pending.
-      const v1Harness = await openHarness();
-      const stranded = await v1Harness.createTask(intakeTask, {patientId: "p8"});
-      await harness.start();
-
-      const done = await harness.waitForTask((await harness.createTask(v2, {patientId: "p8"}))._id);
-      expect(done.outcome?.result).toBe("v2");
-      const strandedNow = await TaskModel.findExactlyOne({_id: stranded._id});
-      expect(strandedNow.status).toBe("pending");
-    });
   });
 
   describe("open / start / stop", () => {
@@ -671,10 +648,11 @@ describe("Harness", () => {
     });
 
     it("never claims tasks when the registry is empty", async () => {
-      const writer = await openHarness();
-      const created = await writer.createTask(intakeTask, {patientId: "p11"});
       const idle = await openHarness({registry: []});
       await idle.start();
+      // Created after start, so the start-time version check does not reject it.
+      const writer = await openHarness();
+      const created = await writer.createTask(intakeTask, {patientId: "p11"});
       await new Promise((resolve) => setTimeout(resolve, 60));
       await idle.stop();
 

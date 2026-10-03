@@ -266,7 +266,7 @@ status. `AuditEvent` itself is never audited.
 | Option | Default | Notes |
 | --- | --- | --- |
 | `bucketName` | `GCS_BUCKET` | 503 `Storage not configured` when neither is set |
-| `folderPrefix` | `""` | Root inside the bucket |
+| `folderPrefix` | `""` | Root inside the bucket. A non-empty value without a trailing `/` gets one, so `pr-5` and `pr-5/` both scope to `pr-5/` |
 | `access` | `"admin"` | `"authenticated"` also admits signed-in non-admins, confined to `{folderPrefix}users/<userId>/`. Admins always see the whole `folderPrefix` |
 | `uploadRateLimit` | off | `{max, windowMs, store?, keyBy?}` on `POST basePath/` only. Keys by IP by default. See [Rate limiting](../how-to/rate-limiting.md#limit-one-route) |
 | `allowedMimeTypes`, `maxFileSize` | images, PDF, text, Office; 10 MB | Upload filter |

@@ -433,6 +433,7 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
             accessibilityLabel="Storage settings"
             iconName="gear"
             onClick={onSettingsPress}
+            testID="document-settings-button"
             variant="muted"
           />
         )}

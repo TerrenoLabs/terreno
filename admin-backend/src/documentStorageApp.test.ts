@@ -533,6 +533,25 @@ describe("DocumentStorageApp", () => {
       expect(saved).toEqual([`save:${userPrefix}x.txt`, `delete:${userPrefix}x.txt`]);
     });
 
+    it("inserts a slash when folderPrefix has none", async () => {
+      app = buildApp({access: "authenticated", bucketName: "b", folderPrefix: "pr-5"});
+      const userAgent = await authAsUser(app, "notAdmin");
+      const user = await UserModel.findOne({email: "notAdmin@example.com"});
+      const userId = String(user?._id);
+      bucketBehavior.getFiles = mock(async (opts: {prefix: string}) => {
+        expect(opts.prefix).toBe(`pr-5/users/${userId}/`);
+        return [[], null, {prefixes: []}];
+      });
+      await userAgent.get("/documents/").expect(200);
+
+      const adminAgent = await authAsUser(app, "admin");
+      bucketBehavior.getFiles = mock(async (opts: {prefix: string}) => {
+        expect(opts.prefix).toBe("pr-5/");
+        return [[], null, {prefixes: []}];
+      });
+      await adminAgent.get("/documents/").expect(200);
+    });
+
     it("keeps whole-bucket access for admins", async () => {
       app = buildApp({access: "authenticated", bucketName: "b", folderPrefix: "tenant/"});
       const agent = await authAsUser(app, "admin");

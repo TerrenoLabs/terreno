@@ -25,7 +25,8 @@ export interface DocumentStorageOptions {
   signedUrlExpiration?: number;
   /**
    * Who may use the routes. `admin` (default) gives admins the whole bucket. `authenticated`
-   * also lets signed-in non-admins in, confined to their own `users/<userId>/` folder.
+   * also lets signed-in non-admins in, confined to their own `users/<userId>/` folder
+   * under `folderPrefix`. A prefix without a trailing slash gets one.
    */
   access?: "admin" | "authenticated";
   /** Per-key limit on uploads (`POST basePath/`). Keys by client IP unless `keyBy` is set. */
@@ -94,6 +95,16 @@ const userIdOf = (req: express.Request): string | undefined => {
   return user?.id ?? (user?._id != null ? String(user._id) : undefined);
 };
 
+// GCS prefixes are directories. A value without a trailing slash would glue the next
+// segment on (`pr-5users/` instead of `pr-5/users/`).
+const withTrailingSlash = (folderPrefix: string | undefined): string => {
+  const base = folderPrefix ?? "";
+  if (base.length === 0 || base.endsWith("/")) {
+    return base;
+  }
+  return `${base}/`;
+};
+
 export class DocumentStorageApp implements TerrenoPlugin {
   private options: DocumentStorageOptions;
   private storage: Storage;
@@ -124,7 +135,7 @@ export class DocumentStorageApp implements TerrenoPlugin {
 
   // Admins see the whole configured prefix; other users only their own folder.
   private prefixFor(req: express.Request): string {
-    const base = this.options.folderPrefix ?? "";
+    const base = withTrailingSlash(this.options.folderPrefix);
     if (isAdmin(req)) {
       return base;
     }

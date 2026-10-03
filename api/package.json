@@ -7,7 +7,7 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^8.5.0",
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
     "@modelcontextprotocol/node": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@sentry/bun": "catalog:",
@@ -40,7 +40,7 @@
     "serve-static": "^2.2.1",
     "socket.io": "catalog:",
     "swagger-parser": "^10.0.3",
-    "swagger-ui-dist": "^5.11.8",
+    "swagger-ui-dist": "^5.33.0",
     "winston": "catalog:",
     "yaml": "^2.4.0"
   },

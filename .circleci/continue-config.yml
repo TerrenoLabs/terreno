@@ -685,7 +685,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api
+          packages: api admin-backend
       - run:
           name: Lint / compile / test ai
           working_directory: ~/project/ai

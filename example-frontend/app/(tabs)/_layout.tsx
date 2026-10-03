@@ -38,24 +38,11 @@ const TabLayout: React.FC = () => {
         }}
       />
       <Tabs.Screen
-        name="files"
+        name="documents"
         options={{
+          tabBarButtonTestID: "tab-documents",
           tabBarIcon: ({color}) => <TabBarIcon color={color} name="folder-open" />,
-          title: "Files",
-        }}
-      />
-      <Tabs.Screen
-        name="consents"
-        options={{
-          tabBarIcon: ({color}) => <TabBarIcon color={color} name="file-text" />,
-          title: "Consents",
-        }}
-      />
-      <Tabs.Screen
-        name="pdf"
-        options={{
-          tabBarIcon: ({color}) => <TabBarIcon color={color} name="file-pdf-o" />,
-          title: "PDF",
+          title: "Documents",
         }}
       />
       <Tabs.Screen

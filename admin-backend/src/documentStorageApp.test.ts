@@ -471,6 +471,84 @@ describe("DocumentStorageApp", () => {
     });
   });
 
+  describe("access: authenticated", () => {
+    const recordingFileFactory = (saved: string[]) => (path: string) =>
+      ({
+        createReadStream: mock(() => new PassThrough()),
+        delete: mock(async () => {
+          saved.push(`delete:${path}`);
+          return [{}];
+        }),
+        getMetadata: mock(async () => [{}]),
+        metadata: {},
+        name: path,
+        save: mock(async () => {
+          saved.push(`save:${path}`);
+        }),
+      }) as unknown as MockedFile;
+
+    it("confines non-admins to their own users/<id>/ folder", async () => {
+      app = buildApp({access: "authenticated", bucketName: "b", folderPrefix: "tenant/"});
+      const agent = await authAsUser(app, "notAdmin");
+      const user = await UserModel.findOne({email: "notAdmin@example.com"});
+      const userId = String(user?._id);
+      const userPrefix = `tenant/users/${userId}/`;
+
+      bucketBehavior.getFiles = mock(async (opts: {prefix: string}) => {
+        expect(opts.prefix).toBe(`${userPrefix}sub/`);
+        return [
+          [{metadata: {size: 1}, name: `${userPrefix}sub/a.txt`}],
+          null,
+          {prefixes: [`${userPrefix}sub/inner/`]},
+        ];
+      });
+      const list = await agent.get("/documents/").query({prefix: "sub/"}).expect(200);
+      expect(list.body.files[0].fullPath).toBe("sub/a.txt");
+      expect(list.body.folders).toEqual(["sub/inner/"]);
+
+      const saved: string[] = [];
+      bucketBehavior.fileFactory = recordingFileFactory(saved);
+      await agent
+        .post("/documents/")
+        .attach("file", Buffer.from("x"), {contentType: "text/plain", filename: "x.txt"})
+        .expect(200);
+      await agent.delete("/documents/x.txt").expect(200);
+      expect(saved).toEqual([`save:${userPrefix}x.txt`, `delete:${userPrefix}x.txt`]);
+    });
+
+    it("keeps whole-bucket access for admins", async () => {
+      app = buildApp({access: "authenticated", bucketName: "b", folderPrefix: "tenant/"});
+      const agent = await authAsUser(app, "admin");
+      bucketBehavior.getFiles = mock(async (opts: {prefix: string}) => {
+        expect(opts.prefix).toBe("tenant/");
+        return [[], null, {prefixes: []}];
+      });
+      await agent.get("/documents/").expect(200);
+    });
+
+    it("still requires authentication", async () => {
+      app = buildApp({access: "authenticated", bucketName: "b"});
+      await supertest(app).get("/documents/").expect(401);
+    });
+  });
+
+  describe("uploadRateLimit", () => {
+    it("allows one upload per IP per window, then returns 429", async () => {
+      app = buildApp({bucketName: "b", uploadRateLimit: {max: 1, windowMs: 60_000}});
+      const agent = await authAsUser(app, "admin");
+      const upload = () =>
+        agent
+          .post("/documents/")
+          .attach("file", Buffer.from("x"), {contentType: "text/plain", filename: "x.txt"});
+
+      await upload().expect(200);
+      const limited = await upload().expect(429);
+      expect(limited.headers["retry-after"]).toBeDefined();
+      // Listing is not rate limited.
+      await agent.get("/documents/").expect(200);
+    });
+  });
+
   describe("configuration edge cases", () => {
     it("throws a 503 when no bucketName is configured", async () => {
       const originalBucket = process.env.GCS_BUCKET;

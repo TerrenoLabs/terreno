@@ -135,6 +135,7 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
 | `GCS_BUCKET` | example-backend, admin | ❌ | — | No | server |
+| `GCS_FOLDER_PREFIX` | example-backend `DocumentStorageApp` (`folderPrefix`) | ❌ | — | No | server |
 | `GCS_PROJECT_ID` | GCS clients | ❌ | — | No | server |
 | `GCS_SERVICE_ACCOUNT_KEY` | GCS clients | ❌ | — | Yes | server |
 

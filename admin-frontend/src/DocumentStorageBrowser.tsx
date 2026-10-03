@@ -33,6 +33,14 @@ const formatFileSize = (bytes: number): string => {
   return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
 };
 
+const uploadErrorMessage = (err: unknown): string => {
+  const {status, data} = (err ?? {}) as {status?: number; data?: {title?: string}};
+  if (status === 429) {
+    return "Upload limit reached. Try again in a minute.";
+  }
+  return data?.title ? `Upload failed: ${data.title}` : "Upload failed. Please try again.";
+};
+
 const formatDate = (isoDate: string): string => {
   const dt = DateTime.fromISO(isoDate);
   return dt.isValid ? dt.toLocaleString(DateTime.DATETIME_SHORT) : isoDate;
@@ -42,6 +50,7 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
   api,
   basePath,
   backHref,
+  backButton = true,
   title = "Documents",
   allowDelete = true,
   allowUpload = true,
@@ -54,6 +63,7 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -183,10 +193,12 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
       const formData = new FormData();
       formData.append("file", file);
 
+      setUploadError(null);
       try {
         await uploadFile({formData, prefix: currentPrefix || undefined}).unwrap();
       } catch (err) {
         console.error("Failed to upload file:", err);
+        setUploadError(uploadErrorMessage(err));
       }
 
       if (fileInputRef.current) {
@@ -476,6 +488,7 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
 
   return (
     <AdminScreenPage
+      backButton={backButton}
       backHref={backHref}
       color="transparent"
       maxWidth="100%"
@@ -483,6 +496,11 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
       title={title}
     >
       {headerRow}
+      {uploadError && (
+        <Box paddingX={4} paddingY={2} testID="document-upload-error">
+          <Text color="error">{uploadError}</Text>
+        </Box>
+      )}
       {renderContent()}
 
       <Modal

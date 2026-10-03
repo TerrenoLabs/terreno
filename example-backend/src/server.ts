@@ -409,10 +409,25 @@ export const start = async (skipListen = false): Promise<express.Application> =>
           },
         })
       )
+      // Cloud Run sits behind one Google Front End hop. Trusting it makes req.ip the real
+      // client address so the per-IP upload limit below cannot be bypassed or shared.
+      .register({
+        register: (app: express.Application): void => {
+          if (isDeployed) {
+            app.set("trust proxy", 1);
+          }
+        },
+      })
       .register(
         new DocumentStorageApp({
+          // Public demo: any signed-in user gets a private `users/<id>/` folder.
+          access: "authenticated",
           basePath: "/documents",
           bucketName: process.env.GCS_BUCKET ?? "",
+          // PR previews share the bucket; a per-PR prefix keeps their files apart.
+          folderPrefix: process.env.GCS_FOLDER_PREFIX,
+          // One upload per IP per minute. Mongo store so the limit holds across instances.
+          uploadRateLimit: {max: 1, store: "mongo", windowMs: 60_000},
         })
       )
       .register(new AuditApp())

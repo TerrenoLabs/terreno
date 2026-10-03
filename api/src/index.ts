@@ -132,6 +132,10 @@ export * from "./orgs/orgsApp";
 export * from "./permissions";
 export * from "./plugins";
 export * from "./populate";
+export {
+  createRouteRateLimitMiddleware,
+  type RouteRateLimitOptions,
+} from "./rateLimit/routeRateLimit";
 export type {
   RateLimitLimits,
   RateLimitOptions,

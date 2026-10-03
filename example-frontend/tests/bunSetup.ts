@@ -57,6 +57,7 @@ const uiMocks = {
   NotificationInbox: createUiElement("NotificationInbox"),
   NotificationPreferences: createUiElement("NotificationPreferences"),
   Page: createUiElement("Page"),
+  resolveAskFilesAsDataUrls: async (): Promise<[]> => [],
   Scorecard: createUiElement("Scorecard"),
   SideDrawer: ({
     children,
@@ -64,6 +65,12 @@ const uiMocks = {
     ...props
   }: MockUiProps & {renderContent?: () => React.ReactNode}): React.ReactElement =>
     React.createElement("SideDrawer", props, children, renderContent?.()),
+  selectedFileMimeType: (file: {mimeType?: string; name: string}): string => {
+    if (file.name.endsWith(".csv")) {
+      return "text/csv";
+    }
+    return file.mimeType ?? "application/octet-stream";
+  },
   TerrenoProvider: createUiElement("TerrenoProvider"),
   Text: createUiElement("Text"),
   useStoredState: () => ["", async (): Promise<void> => undefined, false],

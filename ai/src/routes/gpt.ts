@@ -339,9 +339,15 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
     asyncHandler(async (req: express.Request, res: express.Response) => {
       const {text} = req.body;
       const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id;
+      const hasPromptReference =
+        typeof req.body.promptName === "string" || typeof req.body.promptLabel === "string";
+      const isAdmin = (req.user as {admin?: boolean} | undefined)?.admin === true;
 
       if (!text || typeof text !== "string") {
         throw new APIError({status: 400, title: "text is required"});
+      }
+      if (hasPromptReference && !isAdmin) {
+        throw new APIError({status: 403, title: "Prompt registry selection requires admin access"});
       }
 
       const aiService = resolveAiService(req, options);

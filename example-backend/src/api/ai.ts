@@ -18,7 +18,15 @@ import {
   verifyVertexModelsEnabled,
 } from "@terreno/ai";
 import type {ModelRouterOptions, User} from "@terreno/api";
-import {APIError, logger, modelRouter, Permissions} from "@terreno/api";
+import {
+  APIError,
+  asyncHandler,
+  authenticateMiddleware,
+  createOpenApiBuilder,
+  logger,
+  modelRouter,
+  Permissions,
+} from "@terreno/api";
 import type {ImageModel, LanguageModel, Tool} from "ai";
 import {generateImage, tool, zodSchema} from "ai";
 import type express from "express";
@@ -266,7 +274,7 @@ export const aiModelsRouter = modelRouter("/ai", GptHistory, {
   permissions: disabledCrud,
 });
 
-const getAiService = (): AIService | undefined => {
+export const getAiService = (): AIService | undefined => {
   if (aiServiceInstance) {
     return aiServiceInstance;
   }
@@ -299,7 +307,7 @@ const getAiService = (): AIService | undefined => {
 };
 
 /** Create a LanguageModel on the server side (Vertex AI / Gemini Enterprise Agent Platform or Gemini API key). Returns undefined if no provider is configured (falls through to demo mode). Throws if the requested model is not in the configured allow-list. */
-const createServerModel = (modelId?: string) => {
+export const createServerModel = (modelId?: string) => {
   const vertexProvider = getVertexProvider();
   if (vertexProvider) {
     return vertexProvider.languageModel(modelId ?? resolveDefaultVertexModel(vertexProvider));
@@ -316,7 +324,7 @@ const createServerModel = (modelId?: string) => {
 };
 
 /** Create a LanguageModel from a per-request API key (always uses Gemini API). */
-const createModelFromKey = (apiKey: string, modelId?: string) => {
+export const createModelFromKey = (apiKey: string, modelId?: string) => {
   const google = getGoogleModule();
   if (!google) {
     throw new APIError({status: 500, title: "Missing @ai-sdk/google dependency."});

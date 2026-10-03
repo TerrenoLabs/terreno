@@ -134,6 +134,7 @@ describe("AiApp", () => {
       "/gpt/histories/pendingAsks",
       "/gpt/histories/{id}",
       "/gpt/histories/{id}/rating",
+      "/gpt/histories/{id}/stream",
       "/gpt/histories/{id}/turn",
     ]);
     expect(turn.body.data).toEqual({historyId, text: ""});
@@ -171,7 +172,12 @@ describe("AiApp", () => {
     };
 
     expect(await historyRoutes()).toEqual({
-      paths: ["/gpt/histories/", "/gpt/histories/{id}", "/gpt/histories/{id}/rating"],
+      paths: [
+        "/gpt/histories/",
+        "/gpt/histories/{id}",
+        "/gpt/histories/{id}/rating",
+        "/gpt/histories/{id}/stream",
+      ],
       pendingAsksStatus: 404,
       turnModelCalls: 0,
     });
@@ -181,6 +187,7 @@ describe("AiApp", () => {
         "/gpt/histories/pendingAsks",
         "/gpt/histories/{id}",
         "/gpt/histories/{id}/rating",
+        "/gpt/histories/{id}/stream",
         "/gpt/histories/{id}/turn",
       ],
       pendingAsksStatus: 200,

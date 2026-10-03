@@ -20,7 +20,9 @@
  *
  * `@terreno/blocks` runs this coverage pass with `--max-concurrency=1`.
  * On a 2-vCPU CircleCI worker, Bun's default 20-way run exits 0 before the
- * All files row while the last file is still printing.
+ * All files row while the last file is still printing. After one retry, a
+ * missing table is accepted when `coverage/lcov.info` lists every non-test
+ * source file under `src/`.
  *
  * Usage:
  *   bun run ../scripts/check-coverage.ts [--threshold=95]
@@ -553,12 +555,66 @@ const findIsolatedFiles = (cwd: string): string[] => {
   return files.sort();
 };
 
-const readLcov = (coverageDir: string): Map<string, FileCoverage> => {
+const readLcov = (coverageDir: string, cwd: string = process.cwd()): Map<string, FileCoverage> => {
   const lcovPath = join(coverageDir, "lcov.info");
   if (!existsSync(lcovPath)) {
     return new Map();
   }
-  return parseLcov(readFileSync(lcovPath, "utf8"));
+  return parseLcov(readFileSync(lcovPath, "utf8"), cwd);
+};
+
+const isCoveredSourceFile = (name: string): boolean => {
+  if (!name.endsWith(".ts") && !name.endsWith(".tsx")) {
+    return false;
+  }
+  if (name.includes(".test.") || name.includes(".isolated.")) {
+    return false;
+  }
+  return true;
+};
+
+/** Non-test source files the coverage gate expects to see in an LCOV report. */
+export const listCoveredSourceFiles = (cwd: string): string[] => {
+  const srcDir = join(cwd, "src");
+  if (!existsSync(srcDir)) {
+    return [];
+  }
+  const files: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, {withFileTypes: true})) {
+      if (entry.isDirectory()) {
+        if (entry.name === "tests") {
+          continue;
+        }
+        walk(join(dir, entry.name));
+        continue;
+      }
+      if (!entry.isFile() || !isCoveredSourceFile(entry.name)) {
+        continue;
+      }
+      files.push(relative(cwd, join(dir, entry.name)).replaceAll("\\", "/"));
+    }
+  };
+  walk(srcDir);
+  return files.sort();
+};
+
+/**
+ * Summarize `coverage/lcov.info` when it names every non-test source file.
+ * A truncated text table can still leave a complete LCOV report. An incomplete
+ * report returns null so the gate does not invent a percentage.
+ */
+export const summaryFromCompleteLcov = (cwd: string): CoverageSummary | null => {
+  const coverage = readLcov(resolve(cwd, "coverage"), cwd);
+  if (coverage.size === 0) {
+    return null;
+  }
+  const covered = new Set(coverage.keys());
+  const missing = listCoveredSourceFiles(cwd).filter((file) => !covered.has(file));
+  if (missing.length > 0) {
+    return null;
+  }
+  return summarizeLcov(coverage);
 };
 
 const main = async (): Promise<void> => {
@@ -585,10 +641,16 @@ const main = async (): Promise<void> => {
       run = await runCoverage();
     }
     failIfTestsFailed(run.exitCode, run.output, "bun test");
-    const summary = parseAllFilesRow(run.output);
+    const table = parseAllFilesRow(run.output);
+    const summary = table ?? summaryFromCompleteLcov(cwd);
     if (!summary) {
       console.error('\nCould not find an "All files" row in the coverage output.');
       process.exit(1);
+    }
+    if (!table) {
+      console.error(
+        "\nCoverage text table was missing. Using the LCOV report, which includes every source file."
+      );
     }
     reportSummary(summary, threshold);
     return;

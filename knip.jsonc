@@ -312,7 +312,8 @@
         "e2e/**/*.ts",
         "jspdf-native-stub.js",
         "fingerprint.config.js",
-        "playwright.circleci.config.ts"
+        "playwright.circleci.config.ts",
+        "tests/testPreload.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

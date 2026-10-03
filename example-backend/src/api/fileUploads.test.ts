@@ -1,7 +1,12 @@
 import {beforeEach, describe, expect, it} from "bun:test";
 import {FeatureFlag} from "@terreno/feature-flags";
+import type {Request} from "express";
 
-import {areFileUploadsEnabledForUser, FILE_UPLOADS_FLAG_KEY} from "./fileUploads";
+import {
+  areFileUploadsEnabledForUser,
+  FILE_UPLOADS_FLAG_KEY,
+  fileUploadsEnabledForRequest,
+} from "./fileUploads";
 
 describe("areFileUploadsEnabledForUser", () => {
   beforeEach(async () => {
@@ -36,5 +41,10 @@ describe("areFileUploadsEnabledForUser", () => {
       type: "boolean",
     });
     expect(await areFileUploadsEnabledForUser({_id: "user-1"})).toBe(true);
+  });
+
+  it("reads the user from the request", async () => {
+    const req = {user: {_id: "user-1"}} as unknown as Request;
+    expect(await fileUploadsEnabledForRequest(req)).toBe(true);
   });
 });

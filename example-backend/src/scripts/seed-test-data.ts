@@ -38,11 +38,13 @@ import mongoose from "mongoose";
 import "../api/projects";
 import "../api/todos";
 import {Configuration} from "../models/configuration";
+import {FakeClinicalNote} from "../models/fakeClinicalNote";
+import {FakePatientChart} from "../models/fakePatientChart";
 import {organizationSettingsSchema} from "../models/organizationSettings";
 import {Project} from "../models/project";
 import {Todo} from "../models/todo";
 import {User} from "../models/user";
-import {DEFAULT_USER_ROLE, SUPERADMIN_ROLE} from "../rbacRoles";
+import {CLINICIAN_ROLE, DEFAULT_USER_ROLE, SUPERADMIN_ROLE} from "../rbacRoles";
 import type {UserDocument} from "../types/models/userTypes";
 import {getAuthProvider} from "../utils/betterAuthConfig";
 import {seedBetterAuthUserInProcess} from "../utils/betterAuthUserSeed";
@@ -50,6 +52,7 @@ import {connectToMongoDB} from "../utils/database";
 import {CHAT_SAFETY_DATASET_NAME, seedChatSafetyDataset} from "./chatSafetyDataset";
 import {seedAnnouncements} from "./seed-announcements";
 import {seedFeatureFlags} from "./seed-feature-flags";
+import {seedFakeEhr} from "./seedFakeEhr";
 
 const ensureNotificationSyncRegistered = (): void => {
   if (findSyncEntryByModelName("Notification")) {
@@ -158,6 +161,12 @@ const TEST_USERS: SeedUser[] = [
     email: "superadmin@example.com",
     name: "Super Admin",
     password: "testpassword123",
+  },
+  {
+    email: "clinician@example.com",
+    name: "Casey Clinician",
+    password: "testpassword123",
+    roles: [DEFAULT_USER_ROLE, CLINICIAN_ROLE],
   },
   {
     email: "operator@example.com",
@@ -911,6 +920,15 @@ export const seedSteps: SeedStep[] = [
   {
     name: "aiObservability",
     run: seedObservability,
+  },
+  {
+    description: "Synthetic patient charts for the clinic.intakeSummary harness tracer",
+    name: "fakeEhr",
+    reset: async (context) => {
+      await context.deleteMany(FakePatientChart);
+      await context.deleteMany(FakeClinicalNote);
+    },
+    run: seedFakeEhr,
   },
 ];
 

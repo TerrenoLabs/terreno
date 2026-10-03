@@ -381,6 +381,8 @@ commands:
             export PORT=4000
             export MONGO_URI="mongodb://127.0.0.1/terreno-e2e?replicaSet=rs0"
             export TOKEN_ISSUER=terreno-e2e
+            # harness-intake asserts the deterministic demo summarizer, never a real provider.
+            export CLINIC_DEMO_MODEL=true
             bun run src/index.ts
       - run:
           name: Wait for backend health
@@ -451,7 +453,7 @@ commands:
               auth) specs="login signup consents forgot-password reset-password verify-email" ;;
               app) specs="todos profile realtime ai-chat pdf notifications" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth" ;;
-              admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals" ;;
+              admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
               *) specs="$shard" ;;
             esac

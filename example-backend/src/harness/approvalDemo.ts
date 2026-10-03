@@ -27,7 +27,8 @@ const DEMO_SUMMARY = [
 /**
  * Smallest durable workflow that needs a human: one `replay: "safe"` phase asks for an
  * approval, then completes with the decision. Admins approve it in the admin
- * "AI Harness → Approvals" inbox. The clinical tracer (`clinic.intakeSummary`) replaces this.
+ * "AI Harness → Approvals" inbox. The full worked example is `clinic.intakeSummary`
+ * (`clinicalIntake.ts`); this one stays as the inbox's approve/reject fixture.
  */
 export const approvalDemo = defineTask<
   ApprovalDemoInput,

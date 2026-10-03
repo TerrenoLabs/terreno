@@ -4,6 +4,7 @@ import {ConsentForm, Membership, Notification, Organization, runSeeds} from "@te
 import {CommsMessage} from "@terreno/comms";
 import {assert} from "chai";
 import {DateTime} from "luxon";
+import {FakePatientChart} from "../models/fakePatientChart";
 import {Project} from "../models/project";
 import {Todo} from "../models/todo";
 import {User} from "../models/user";
@@ -35,6 +36,15 @@ describe("seedDefaultData", () => {
     assert.isTrue(superadmin.admin);
     assert.include(superadmin.roles, "superadmin");
     assert.include(operator.roles, "operator");
+    const clinician = await User.findByEmail("clinician@example.com");
+    assert.includeMembers(clinician?.roles ?? [], ["clinician", "todoUser"]);
+    assert.isFalse(clinician?.admin);
+    const charts = await FakePatientChart.find({}).sort({patientId: 1});
+    assert.deepEqual(
+      charts.map((chart) => chart.patientId),
+      ["p-1001", "p-1002", "p-1003"]
+    );
+    assert.include(charts[0]?.problems ?? [], "Hypertension");
     const alpha = await Organization.findExactlyOne({name: "Alpha Workspace"});
     const beta = await Organization.findExactlyOne({name: "Beta Workspace"});
     assert.isTrue(await Membership.isOrgAdmin(alphaAdmin._id, alpha._id));

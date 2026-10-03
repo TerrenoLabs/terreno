@@ -81,7 +81,7 @@ MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
 | `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` |
 | `e2e` `app` | `todos` `profile` `realtime` `ai-chat` `pdf` |
 | `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` |
-| `e2e` `admin-table` | `admin-table-search-filter` `admin-table-bulk-actions` `admin-custom-screens` `admin-comms-back` `harness-approvals` |
+| `e2e` `admin-table` | `admin-table-search-filter` `admin-table-bulk-actions` `admin-custom-screens` `admin-comms-back` `harness-approvals` `harness-intake` |
 | `e2e` `syncdb` | `syncdb-load-delta` `syncdb-offline` `syncdb-conflicts` `syncdb-storage` `syncdb-chaos` |
 
 Full local suite: `bun run frontend:e2e`. Nightly load (`e2e-load` / `syncdb-loadlab`) is

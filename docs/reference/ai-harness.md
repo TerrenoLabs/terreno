@@ -2,7 +2,8 @@
 
 Durable, multi-phase tasks with transactional checkpoints and audit spans, plus durable
 agent conversations built on them. Concepts:
-[Durable agent harness](../explanation/durable-agent-harness.md).
+[Durable agent harness](../explanation/durable-agent-harness.md). Worked example:
+[Build a durable workflow](../how-to/build-a-durable-workflow.md) (`clinic.intakeSummary`).
 
 ```typescript
 import {
@@ -787,6 +788,10 @@ The example backend mounts `HarnessApp` only when Mongo is a replica set (`Harne
 requires one). Its unit tests run on a standalone memory server, so the example-backend
 OpenAPI snapshot excludes the `/harness/*` routes; the generated example-frontend SDK
 (`bun run sdk` against a replica-set backend) includes them.
+It registers `clinic.intakeSummary@1` with its `clinic.summarizer` agent (the worked example
+in [Build a durable workflow](../how-to/build-a-durable-workflow.md)) and
+`demo.approvalDemo@1`, and starts runs with the `startClinicalIntake` and
+`startHarnessApprovalDemo` admin scripts.
 
 ## Event stream (SSE)
 

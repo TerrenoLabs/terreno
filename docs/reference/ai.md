@@ -525,7 +525,8 @@ resumable from any instance with `Last-Event-ID`; turns stream coalesced text de
 `POST /harness/conversations/:id/submit` queues or steers a message while a turn runs.
 API: [AI harness reference](ai-harness.md).
 Why: [Durable agent harness](../explanation/durable-agent-harness.md).
-How-to: [Ship a new task version](../how-to/ship-a-new-task-version.md).
+How-to: [Build a durable workflow](../how-to/build-a-durable-workflow.md),
+[Ship a new task version](../how-to/ship-a-new-task-version.md).
 
 ## Langfuse integration
 

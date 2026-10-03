@@ -99,13 +99,14 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: `docs/reference/admin-frontend.md` inbox section
   - Acceptance: AC8 — component tests + Playwright run on web: approve one item, reject one; screenshots in `/opt/cursor/artifacts/`
 
-- [ ] **Task 1.12**: Clinical tracer in example-backend + how-to
+- [x] **Task 1.12**: Clinical tracer in example-backend + how-to
   - Delivers: `clinic.intakeSummary` (fetch → `runAgent` summary → approval → EHR write with `replay: "never"`) against a fake EHR model; `HarnessApp` registered in `server.ts`; admin action to start a run; e2e script kills the backend during `summarize`, restarts, approves in the inbox, asserts `filed` and the span tree in Traces
   - Files: `example-backend/src/harness/*`, `example-backend/src/server.ts`, `example-frontend/e2e/harness-intake.spec.ts`
   - Blocked by: 1.5, 1.9, 1.10, 1.11
   - Skills: `verify-ui-changes`, `backend-test-env`
   - Docs: create `docs/how-to/build-a-durable-workflow.md` using this workflow as the one example
   - Acceptance: AC2 (e2e) — Playwright spec passes; screenshots of the inbox and the trace waterfall attached
+  - Shipped as two proofs: the kill/restart runs in `example-backend/src/harness/clinicalIntake.crash.test.ts` (spawns the real API process, SIGKILLs it mid-`summarize`, restarts); `harness-intake.spec.ts` approves in the inbox and asserts `filed` and the span tree
 
 ## Phase 2 — Multi-instance
 

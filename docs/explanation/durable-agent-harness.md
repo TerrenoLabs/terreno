@@ -3,6 +3,8 @@
 `@terreno/ai/harness` runs long-lived work so that a crash, deploy, or restart never loses
 it. Work is split into **phases**. Each finished phase commits a **checkpoint**, and the
 same Mongo transaction writes its audit span. API: [AI harness reference](../reference/ai-harness.md).
+Worked example (fetch → agent → sign-off → once-only write, with a crash drill):
+[Build a durable workflow](../how-to/build-a-durable-workflow.md).
 Design lock: [implementation plan](../implementationPlans/durable-agent-harness.md).
 
 ## Why phases, not one long handler
@@ -38,12 +40,15 @@ phase runs twice?" A phase declares the answer with `replay` (`"safe"` or the de
 | **Event** | Append-only `HarnessEvent` rows with a per-stream `seq`. The SSE source. |
 | **Runner** | Decides who executes runnable tasks and when. |
 
-Shipped today: tasks, phases, checkpoints, the transactional audit span, the
+Shipped (Phase 1): tasks, phases, checkpoints, the transactional audit span, the
 `InProcessRunner` with owner and task leases, crash resume, `resolveInterrupted`, phase
 retries, child tasks with `rt.waitForTasks`, `harness.abort` over the ownership tree,
-agents, tools, and conversations (see [The agent loop](#the-agent-loop)), subagents, and
-extensions, hooks, and memos (see [Extensions, hooks, and memos](#extensions-hooks-and-memos)).
-The other rows are the planned shape for later Phase 1 slices.
+agents, tools, and conversations (see [The agent loop](#the-agent-loop)), subagents,
+extensions, hooks, and memos (see [Extensions, hooks, and memos](#extensions-hooks-and-memos)),
+events, waits, and approvals with the admin inbox, the SSE event stream, and version
+pinning. The example backend's `clinic.intakeSummary` runs all of it end to end, including
+a crash drill: [Build a durable workflow](../how-to/build-a-durable-workflow.md). Other
+runners (jobs-backed, concurrent) come in Phase 2.
 
 ## Why the audit span shares the checkpoint transaction
 

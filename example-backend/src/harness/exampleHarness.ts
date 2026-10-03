@@ -1,13 +1,29 @@
 import {createLocalObservabilityPlugin} from "@terreno/ai";
-import {Harness} from "@terreno/ai/harness";
+import {Harness, InProcessRunner, type InProcessRunnerOptions} from "@terreno/ai/harness";
 import {logger} from "@terreno/api";
 
 import {approvalDemo} from "./approvalDemo";
-
-/** Every task definition the example backend runs or decides approvals for. */
-const exampleHarnessRegistry = [approvalDemo];
+import {type ClinicalIntake, createClinicalIntake} from "./clinicalIntake";
+import {clinicSummarizerModels, resolveExampleModel} from "./clinicModels";
 
 let exampleHarness: Harness | undefined;
+let exampleClinicalIntake: ClinicalIntake | undefined;
+
+/**
+ * `HARNESS_LEASE_SECONDS` (default 30): owner and task lease length, with heartbeats every
+ * third of it. A crashed process's work is taken over once its leases expire, so a short
+ * lease (the crash test uses 3) makes recovery fast; keep the default in production.
+ */
+export const exampleRunnerOptions = (): InProcessRunnerOptions => {
+  const seconds = Number(process.env.HARNESS_LEASE_SECONDS ?? "");
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return {};
+  }
+  return {
+    heartbeatInterval: {milliseconds: Math.floor((seconds * 1000) / 3)},
+    leaseDuration: {seconds},
+  };
+};
 
 const isMissingReplicaSet = (error: unknown): boolean =>
   error instanceof Error && error.message.includes("requires a MongoDB replica set");
@@ -23,8 +39,13 @@ export const openExampleHarness = async (): Promise<Harness | undefined> => {
     return exampleHarness;
   }
   createLocalObservabilityPlugin();
+  const clinicalIntake = createClinicalIntake(clinicSummarizerModels());
   try {
-    exampleHarness = await Harness.open({registry: exampleHarnessRegistry});
+    exampleHarness = await Harness.open({
+      models: resolveExampleModel,
+      registry: [approvalDemo, clinicalIntake.intakeSummary, clinicalIntake.summarizer],
+      runner: new InProcessRunner(exampleRunnerOptions()),
+    });
   } catch (error: unknown) {
     if (!isMissingReplicaSet(error)) {
       throw error;
@@ -32,16 +53,24 @@ export const openExampleHarness = async (): Promise<Harness | undefined> => {
     logger.warn("Harness disabled: MongoDB is not a replica set");
     return undefined;
   }
+  exampleClinicalIntake = clinicalIntake;
+  logger.info(
+    `[harness] clinic.summarizer uses ${clinicalIntake.summarizer.model.provider}/${clinicalIntake.summarizer.model.modelId}`
+  );
   return exampleHarness;
 };
 
 /** The harness opened by `openExampleHarness`, or `undefined` when it is not open. */
 export const getExampleHarness = (): Harness | undefined => exampleHarness;
 
+/** The clinical tracer definitions registered in the open harness. */
+export const getExampleClinicalIntake = (): ClinicalIntake | undefined => exampleClinicalIntake;
+
 /** Stop the runner (waiting for the phase in flight) and forget the harness. */
 const stopExampleHarness = async (): Promise<void> => {
   const harness = exampleHarness;
   exampleHarness = undefined;
+  exampleClinicalIntake = undefined;
   await harness?.stop();
 };
 

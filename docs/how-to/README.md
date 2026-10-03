@@ -36,6 +36,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Install agent skills](install-agent-skills.md) — `npx skills`, the Cursor plugin, the Codex plugin, or the Claude Code plugin
 - [Develop an AI feature](ai-feature-development.md) — Dataset → prompt → evaluators → experiment → production label → live traces (SOP)
 - [Observe LLM calls](observe-llm-calls.md) — Register ObservabilityApp, primaries, price map, sampleRate
+- [Build a durable workflow](build-a-durable-workflow.md) — Phased harness task with an agent, a human sign-off, and a once-only side effect (`clinic.intakeSummary`)
 - [Ship a new task version](ship-a-new-task-version.md) — Change a durable harness task without stranding in-flight runs
 - [GitHub issue lifecycle](github-issue-lifecycle.md) — Create pick-ready issues, Pick ⇄ Roast, or unattended `status:ready-for-dev` pickup
 - [Call external APIs](call-external-apis.md) — Authenticated HTTP client, retries, and error normalization for third-party integrations

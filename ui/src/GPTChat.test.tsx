@@ -1600,6 +1600,57 @@ describe("GPTChat asks", () => {
     assert.isNull(queryByText("Export started"));
   });
 
+  it("does not flash a nested layout error when an ask follows the live reply", async () => {
+    const nested = `v: 1
+blocks:
+  - type: heading
+    text: Plans
+  - type: text
+    markdown: Compare the options.
+  - type: columns
+    children:
+      - type: card
+        title: Team
+        children:
+          - type: text
+            markdown: Twenty dollars
+      - type: text
+        markdown: Starter is free.
+  - type: text
+    markdown: Still writing
+`;
+    const depthError =
+      "blocks[2].children[0]: A columns or card block is nested inside another columns or card block.";
+    const ask: GPTChatMessage = {
+      ask: {
+        input: {options: [{id: "team", label: "Team"}], prompt: "Which plan?", select: "one"},
+        kind: "choice",
+        status: "pending",
+        toolCallId: "call_plan",
+      },
+      content: "Tool call: ask_choice",
+      role: "tool-call",
+      toolCall: {
+        args: {prompt: "Which plan?"},
+        toolCallId: "call_plan",
+        toolName: "ask_choice",
+      },
+    };
+    const streaming = renderChat({
+      currentMessages: [{content: nested, id: "m1", role: "assistant"}, ask],
+      isStreaming: true,
+      uiBlocks: true,
+    });
+    assert.isNull(streaming.queryByText(depthError));
+    assert.isOk(streaming.getByTestId("gpt-blocks-pending"));
+
+    const finished = renderChat({
+      currentMessages: [{content: nested, id: "m1", role: "assistant"}, ask],
+      uiBlocks: true,
+    });
+    assert.isOk(finished.getByText(depthError));
+  });
+
   it("renders finished blocks and a spinner while a document is streaming", async () => {
     const {getByTestId, getByText, queryByTestId, queryByText, UNSAFE_getAllByType} = renderChat({
       currentMessages: [{content: BLOCKS_STREAMING, id: "m1", role: "assistant"}],

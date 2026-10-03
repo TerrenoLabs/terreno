@@ -3011,15 +3011,11 @@ describe("/gpt/prompt uiBlocks", () => {
 
     const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
 
-    expect(events.map((event) => Object.keys(event)[0])).toEqual([
-      "text",
-      "replace",
-      "blocks",
-      "done",
-    ]);
-    expect(events.find((event) => "replace" in event)).toMatchObject({
+    expect(events.map((event) => Object.keys(event)[0])).toEqual(["text", "blocks", "done"]);
+    expect(events.find((event) => "text" in event)).toMatchObject({
       text: VALID_BLOCKS.trim(),
     });
+    expect(JSON.stringify(events)).not.toContain("export_csv");
     expect(events.find((event) => "blocks" in event)).toMatchObject({blocks: {ok: true}});
     const repairCall = model.doGenerate.mock.calls.find((call) =>
       JSON.stringify(call[0]).includes("UNKNOWN_HOST_ACTION")
@@ -3033,7 +3029,51 @@ describe("/gpt/prompt uiBlocks", () => {
     );
   });
 
-  it("fills a missing actions id and replaces the streamed joke document", async () => {
+  it("sends a repaired document before the ask, with no nested-layout draft", async () => {
+    const nested = `v: 1
+blocks:
+  - type: heading
+    text: Plans
+  - type: text
+    markdown: Compare the options.
+  - type: columns
+    children:
+      - type: card
+        title: Team
+        children:
+          - type: text
+            markdown: Twenty dollars
+      - type: text
+        markdown: Starter is free.
+`;
+    const model = createScriptedModel({
+      steps: [[...textStep(nested).slice(0, -1), ...toolCallStep(PLAN_ASK_CALL)]],
+    });
+    model.doGenerate.mockImplementation(async (options: {prompt?: unknown}) => {
+      const raw = JSON.stringify(options);
+      const text = raw.includes("DEPTH_EXCEEDED") ? VALID_BLOCKS : "Workspace setup";
+      return {
+        content: [{text, type: "text" as const}],
+        finishReason: "stop" as const,
+        usage: {inputTokens: 1, outputTokens: 1, totalTokens: 2},
+      };
+    });
+    const agent = await authAsUser(
+      buildApp({asks: true, model, uiBlocks: {repair: true}}),
+      "notAdmin"
+    );
+
+    const {events} = await streamPrompt(agent, {prompt: "help me pick a plan"});
+
+    expect(events.map((event) => Object.keys(event)[0])).toEqual(["text", "ask", "blocks", "done"]);
+    const streamed = events.find((event) => "text" in event) as {text?: string};
+    expect(streamed.text).toBe(VALID_BLOCKS.trim());
+    expect(JSON.stringify(events)).not.toContain("Twenty dollars");
+    expect(JSON.stringify(events)).not.toContain("nested inside");
+    expect(events.find((event) => "blocks" in event)).toMatchObject({blocks: {ok: true}});
+  });
+
+  it("fills a missing actions id before the client receives the joke document", async () => {
     const joke = `v: 1
 blocks:
   - type: text
@@ -3052,19 +3092,14 @@ blocks:
 
     const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
 
-    expect(events.map((event) => Object.keys(event)[0])).toEqual([
-      "text",
-      "replace",
-      "blocks",
-      "done",
-    ]);
-    const replaced = events.find((event) => "replace" in event) as {text?: string};
-    expect(replaced.text).toContain("MongoDB!");
-    expect(replaced.text).toContain('"id":"actions"');
+    expect(events.map((event) => Object.keys(event)[0])).toEqual(["text", "blocks", "done"]);
+    const streamed = events.find((event) => "text" in event) as {text?: string};
+    expect(streamed.text).toContain("MongoDB!");
+    expect(streamed.text).toContain('"id":"actions"');
     expect(events.find((event) => "blocks" in event)).toMatchObject({blocks: {ok: true}});
     expect(model.doGenerate).toHaveBeenCalledTimes(1);
     const history = await loadHistory(await onlyHistoryId());
-    expect(rowsOf(history).find((row) => row.type === "assistant")?.text).toBe(replaced.text);
+    expect(rowsOf(history).find((row) => row.type === "assistant")?.text).toBe(streamed.text);
   });
 
   it("keeps a joke document written beside the tool call when the next step is empty", async () => {
@@ -3093,8 +3128,8 @@ blocks:
 
     const streamed = events.find((event) => Object.keys(event)[0] === "text") as {text?: string};
     expect(streamed.text).toContain("MongoDB!");
-    const replaced = events.find((event) => "replace" in event) as {text?: string};
-    expect(replaced.text).toContain('"id":"actions"');
+    expect(streamed.text).toContain('"id":"actions"');
+    expect(events.some((event) => "replace" in event)).toBe(false);
     expect(events.find((event) => "blocks" in event)).toMatchObject({blocks: {ok: true}});
     expect(events.some((event) => "toolCall" in event)).toBe(true);
   });
@@ -3166,7 +3201,7 @@ blocks:
     expect(systemPromptOf(modelCall(model, 0))).toContain("Do not emit type html");
   });
 
-  it("stores sanitized html and sends it with {replace: text} before {blocks}", async () => {
+  it("stores sanitized html and sends that document once, before {blocks}", async () => {
     const model = createScriptedModel({
       steps: [
         textStep('v: 1\nblocks:\n  - type: html\n    html: "<p>Hi</p><script>alert(1)</script>"\n'),
@@ -3176,17 +3211,13 @@ blocks:
 
     const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
 
-    expect(events.map((event) => Object.keys(event)[0])).toEqual([
-      "text",
-      "replace",
-      "blocks",
-      "done",
-    ]);
-    const replaced = events.find((event) => "replace" in event) as {text?: string};
-    expect(replaced.text).toBe('{"v":1,"blocks":[{"html":"<p>Hi</p>","type":"html"}]}');
+    expect(events.map((event) => Object.keys(event)[0])).toEqual(["text", "blocks", "done"]);
+    const streamed = events.find((event) => "text" in event) as {text?: string};
+    expect(streamed.text).toBe('{"v":1,"blocks":[{"html":"<p>Hi</p>","type":"html"}]}');
+    expect(JSON.stringify(events)).not.toContain("script");
     expect(systemPromptOf(modelCall(model, 0))).toContain("card, html");
     const history = await loadHistory(await onlyHistoryId());
-    expect(rowsOf(history).find((row) => row.type === "assistant")?.text).toBe(replaced.text);
+    expect(rowsOf(history).find((row) => row.type === "assistant")?.text).toBe(streamed.text);
   });
 
   it("returns only the sanitized document from a headless turn", async () => {

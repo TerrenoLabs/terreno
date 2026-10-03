@@ -495,6 +495,38 @@ blocks:
     expect(queryByText("Original")).toBeNull();
   });
 
+  it("hides a nested layout error while the reply is still streaming", () => {
+    const document = `v: 1
+blocks:
+  - type: heading
+    text: Plans
+  - type: text
+    markdown: Compare the options.
+  - type: columns
+    children:
+      - type: card
+        title: Team
+        children:
+          - type: text
+            markdown: Twenty dollars
+      - type: text
+        markdown: Starter is free.
+`;
+    const streaming = renderWithTheme(<BlocksView document={document} streaming />);
+    expect(
+      streaming.queryByText(
+        "blocks[2].children[0]: A columns or card block is nested inside another columns or card block."
+      )
+    ).toBeNull();
+
+    const finished = renderWithTheme(<BlocksView document={document} />);
+    expect(
+      finished.getByText(
+        "blocks[2].children[0]: A columns or card block is nested inside another columns or card block."
+      )
+    ).toBeTruthy();
+  });
+
   it("keeps html as a placeholder until the host allows it and the reply finishes", () => {
     const block: Record<string, string> = {};
     block.type = "html";

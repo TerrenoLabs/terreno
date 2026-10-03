@@ -228,6 +228,8 @@ interface TurnRecord {
   /** True once the client was sent any of the model's output. Errors do not count. */
   hasOutput: boolean;
   rows: GptHistoryPrompt[];
+  /** True once assistant text was sent. A later rewrite then uses `{replace}` instead of `{text}`. */
+  textDelivered: boolean;
   /** The last error the model stream reported, which it streams instead of throwing. */
   streamError?: string;
   /**
@@ -1303,6 +1305,7 @@ const consumeStream = async ({
   approvals,
   askKinds,
   deniedReasons,
+  holdAssistantText = false,
   onStreamStart,
   record,
   result,
@@ -1311,6 +1314,11 @@ const consumeStream = async ({
   approvals?: ApprovalContext;
   askKinds: AskKind[];
   deniedReasons: Map<string, string | undefined>;
+  /**
+   * Record assistant text without sending it. The caller sends one document after id-fill,
+   * repair, and sanitizing, so the client never paints a draft that those steps will change.
+   */
+  holdAssistantText?: boolean;
   /** Saves the reply row once the model yields a part, after concurrent turns have loaded history. */
   onStreamStart?: () => Promise<void>;
   record: TurnRecord;
@@ -1355,7 +1363,10 @@ const consumeStream = async ({
       if (cleaned) {
         toolStepDocument = "";
         record.fullResponse += cleaned;
-        sink.emit({text: cleaned});
+        if (!holdAssistantText) {
+          record.textDelivered = true;
+          sink.emit({text: cleaned});
+        }
       }
       return;
     }
@@ -1524,7 +1535,10 @@ const consumeStream = async ({
   if (record.fullResponse.trim() === "" && toolStepDocument) {
     record.fullResponse = toolStepDocument;
     record.streamingText = toolStepDocument;
-    sink.emit({text: toolStepDocument});
+    if (!holdAssistantText) {
+      record.textDelivered = true;
+      sink.emit({text: toolStepDocument});
+    }
   }
 
   logger.debug("Stream completed", {fullResponseLength: record.fullResponse.length, partCount});
@@ -1705,6 +1719,7 @@ export const runChatTurn = async ({
     hasOutput: false,
     rows: [...turn.rows],
     streamingText: "",
+    textDelivered: false,
   };
   const outputSink: ChatTurnSink = {
     emit: (event) => {
@@ -1932,6 +1947,7 @@ export const runChatTurn = async ({
           : undefined,
       askKinds: offeredAskKinds,
       deniedReasons: deniedApprovalReasons(messages),
+      holdAssistantText: uiBlocks !== undefined,
       onStreamStart: beginStreaming,
       record,
       result,
@@ -1982,6 +1998,20 @@ export const runChatTurn = async ({
       blocksCheck && !blocksCheck.ok
         ? storedBlockText(fullResponse, blocksCheck.errors)
         : fullResponse;
+
+    // Send the document the client should paint before `{ask}`. With uiBlocks the stream held
+    // the draft, so this is the first `{text}` and it already includes id-fill, repair, and
+    // sanitizing. A draft that was already sent is replaced instead.
+    if (fullResponse.trim() !== "") {
+      if (record.textDelivered) {
+        if (fullResponse !== streamedResponse) {
+          outputSink.emit({replace: "text", text: fullResponse});
+        }
+      } else if (uiBlocks) {
+        outputSink.emit({text: fullResponse});
+        record.textDelivered = true;
+      }
+    }
 
     // The first ask in the step pauses the turn. Any other ask the model made in that step is
     // cancelled now; any other approval is denied when the turn resumes, so its tool never runs.
@@ -2112,9 +2142,6 @@ export const runChatTurn = async ({
       fullResponseLength: fullResponse.length,
       historyId: history._id.toString(),
     });
-    if (fullResponse !== streamedResponse) {
-      sink.emit({replace: "text", text: fullResponse});
-    }
     if (blocksCheck) {
       sink.emit({blocks: blocksCheck});
     }

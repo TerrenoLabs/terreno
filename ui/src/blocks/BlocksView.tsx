@@ -3,6 +3,7 @@ import type React from "react";
 
 import {Box} from "../Box";
 import type {BlocksViewProps} from "../Common";
+import {Spinner} from "../Spinner";
 import {BlocksError} from "./BlocksError";
 import {type BlockRenderContext, renderBlock} from "./blockRenderers";
 import {useBlockSelections} from "./useBlockSelections";
@@ -25,6 +26,13 @@ const renderBlocks = (
 ): React.ReactElement => (
   <Box gap={3} testID={testID}>
     {blocks.map((block, index) => renderBlock(block, `blocks-${index}`, context))}
+  </Box>
+);
+
+/** A draft that is still streaming should not flash a validation banner the server may still correct. */
+const StreamingBlocks = ({testID}: {testID?: string}): React.ReactElement => (
+  <Box testID={testID}>
+    <Spinner size="sm" />
   </Box>
 );
 
@@ -101,9 +109,15 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
     if (isNonDocument) {
       return renderBlocks(wrapAsTextDocument(document).blocks, context, testID);
     }
+    if (streaming) {
+      return <StreamingBlocks testID={testID} />;
+    }
     return <BlocksError errors={parsed.errors} raw={document} testID={testID} />;
   }
   if (validated === undefined || !validated.ok) {
+    if (streaming) {
+      return <StreamingBlocks testID={testID} />;
+    }
     const errors = validated === undefined ? [] : validated.errors;
     return <BlocksError errors={errors} raw={rawOf(document)} testID={testID} />;
   }

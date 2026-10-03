@@ -1128,9 +1128,23 @@ const MessageList = ({
     }
   }
 
-  const lastIndex = currentMessages.length - 1;
-  const streamingIndex =
-    uiBlocks && isStreaming && currentMessages[lastIndex]?.role === "assistant" ? lastIndex : -1;
+  // The live reply stays partial after an ask is appended, so a draft document does not
+  // validate as a finished message while the turn is still streaming.
+  const liveAssistantIndex = ((): number => {
+    if (!uiBlocks || !isStreaming) {
+      return -1;
+    }
+    for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
+      const role = currentMessages[index]?.role;
+      if (role === "assistant") {
+        return index;
+      }
+      if (role === "user") {
+        return -1;
+      }
+    }
+    return -1;
+  })();
   const rows = currentMessages.flatMap((message, sourceIndex) => {
     const messageKey = message.id ?? `msg-${sourceIndex}`;
     const extras = appendedByMessage[messageKey] ?? [];
@@ -1199,7 +1213,7 @@ const MessageList = ({
                 content={message.content}
                 hostActions={hostActions}
                 imageHosts={imageHosts}
-                isPartial={streamingIndex >= 0 && sourceIndex === streamingIndex}
+                isPartial={liveAssistantIndex >= 0 && sourceIndex === liveAssistantIndex}
                 messageId={messageId}
                 onBlockEvent={onBlockEvent}
                 overrides={blockOverrides[messageId]}

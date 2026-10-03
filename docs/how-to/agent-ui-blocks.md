@@ -34,7 +34,7 @@ addGptRoutes(router, {
 
 `hostActions` is the callback allowlist. A callback outside it fails with `UNKNOWN_HOST_ACTION`. `repair: true` runs one repair call and stores that document. A document that is still invalid is stored with a `Block validation errors:` note so the next turn sees the codes.
 
-An actions block that omits `id` gets one before storage. A block document written in the same step as a tool call is kept when no later step has text, so the first reply still shows. When the stored document differs from the text already streamed, the chat receives `{replace: "text"}`.
+An actions block that omits `id` gets one before storage. A block document written in the same step as a tool call is kept when no later step has text, so the first reply still shows. The chat receives that document after ids are filled, repair runs, and html is sanitized, so an invalid draft is not shown. `{replace: "text"}` is sent only when text was already streamed and then changed.
 
 Outside a chat turn, `AIService.generateBlocks({prompt})` returns one validated document. Temperature is 0. A failed check is repaired once. Pass `repair: false` to skip that retry. A second validation failure throws 422 and logs `metadata.errorCodes`. A model or network error throws 502 and is not repaired.
 

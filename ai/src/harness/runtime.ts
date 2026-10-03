@@ -1,5 +1,5 @@
 import {logger} from "@terreno/api";
-import {DateTime} from "luxon";
+import {DateTime, type DurationLike} from "luxon";
 
 import mongoose from "mongoose";
 
@@ -13,6 +13,7 @@ import type {
   HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTaskRuntime,
+  HarnessWaitForOptions,
   HarnessWaitForTasksOptions,
 } from "../types/harness";
 import {
@@ -36,6 +37,7 @@ import {
   newTaskLease,
 } from "./commit";
 import {taskDefinitionKey} from "./defineTask";
+import {HarnessDefinitionError} from "./definitionError";
 import {HARNESS_INTERNAL_RUNTIME} from "./internalRuntime";
 import {startTaskHeartbeat} from "./leases";
 import {createMemo} from "./memo";
@@ -56,20 +58,13 @@ import {
   subagentContent,
   subagentResult,
 } from "./subagent";
+import {parseWaitDuration, resolveWaitCall, type WaitRequest, waitCallKey} from "./waits";
 
 /** Registry key of the built-in agent turn every subagent runs. */
 const AGENT_TURN_KEY = taskDefinitionKey({name: AGENT_TURN_TASK_NAME, version: 1});
 
 /** Most expired tasks one recovery pass handles; the next pass picks up the rest. */
 const RECOVERY_BATCH_SIZE = 100;
-
-/** A misuse of the task API; retrying the phase cannot fix it, so the task fails at once. */
-class HarnessDefinitionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "HarnessDefinitionError";
-  }
-}
 
 /** Unwinds a phase that committed `waiting`; the runner stops the task without failing it. */
 class HarnessSuspendSignal extends Error {
@@ -106,8 +101,8 @@ const registeredFilter = (
 };
 
 /**
- * Atomically move the oldest runnable, registered task from `pending` to `running` and
- * give it a fresh lease (owner, fencing token, expiry) for the phase about to start.
+ * Atomically move the oldest runnable, registered task (`pending` and due, or `waiting` on
+ * an event or sleep whose `timeoutAt` passed) to `running` and give it a fresh lease (owner, fencing token, expiry) for the phase about to start.
  */
 export const claimNextTask = async ({
   definitions,
@@ -122,23 +117,33 @@ export const claimNextTask = async ({
     return null;
   }
   const registered = registeredFilter(definitions);
+  const now = DateTime.now().toJSDate();
   return models.task.findOneAndUpdate(
     {
       $and: [
         {$or: registered},
         {
           $or: [
-            {runAt: {$exists: false}},
-            {runAt: null},
-            {runAt: {$lte: DateTime.now().toJSDate()}},
+            {
+              $or: [{runAt: {$exists: false}}, {runAt: null}, {runAt: {$lte: now}}],
+              status: HARNESS_TASK_STATUSES.pending,
+            },
+            // An event wait or sleep whose timeout passed resumes like a due retry.
+            {
+              status: HARNESS_TASK_STATUSES.waiting,
+              "waiting.kind": {$in: [HARNESS_WAIT_KINDS.event, HARNESS_WAIT_KINDS.sleep]},
+              "waiting.timeoutAt": {$lte: now},
+            },
           ],
         },
       ],
       // A task being aborted never starts another run.
       "abortRequested.at": {$exists: false},
-      status: HARNESS_TASK_STATUSES.pending,
     },
-    {$set: {lease: newTaskLease(lease), status: HARNESS_TASK_STATUSES.running}},
+    {
+      $set: {lease: newTaskLease(lease), status: HARNESS_TASK_STATUSES.running},
+      $unset: {waiting: 1},
+    },
     {returnDocument: "after", sort: {created: 1}}
   );
 };
@@ -288,6 +293,7 @@ const runPhase = async ({
   let commitFailure: unknown;
   let childIndex = 0;
   let agentIndex = 0;
+  let waitIndex = 0;
   const heartbeat = startTaskHeartbeat({
     lease,
     models,
@@ -392,18 +398,85 @@ const runPhase = async ({
     if (isSettled) {
       return childOutcomes(ids.map(String), children);
     }
-    await settlePhase(() =>
-      commitWaiting({
+    await settlePhase(async () => {
+      const parked = await commitWaiting({
         models,
         phaseStartedAt,
         task,
         testHooks,
         waiting: {kind: HARNESS_WAIT_KINDS.tasks, policy, taskIds: childIds},
-      })
-    );
+      });
+      return parked.task;
+    });
     // A child may have settled between the check above and the waiting commit.
     await checkTaskWait({engine, taskId: task._id});
     throw new HarnessSuspendSignal(taskId);
+  };
+
+  /** Shared by `rt.waitFor` and `rt.sleep`: resolve the call now, or park the task on it. */
+  const waitCall = async (method: string, request: WaitRequest): Promise<unknown> => {
+    assertOpen(method);
+    // Taken before any await, so the call's key depends only on its order in the phase.
+    const callKey = waitCallKey({index: waitIndex, task});
+    waitIndex += 1;
+    let result: Awaited<ReturnType<typeof resolveWaitCall>>;
+    try {
+      result = await resolveWaitCall({
+        callKey,
+        label: definition.key,
+        lease,
+        models,
+        request,
+        task,
+        testHooks,
+      });
+    } catch (error: unknown) {
+      // A lost lease ends the run like a failed commit: nothing more may be written.
+      if (error instanceof HarnessCommitConflictError) {
+        commitStarted = true;
+        commitFailure = error;
+      }
+      throw error;
+    }
+    if (result.isResolved) {
+      return result.payload;
+    }
+    const {entry} = result;
+    let isWoken = false;
+    await settlePhase(async () => {
+      const parked = await commitWaiting({
+        models,
+        phaseStartedAt,
+        task,
+        testHooks,
+        waitCall: {entry, key: callKey},
+        waiting: {key: entry.key, kind: entry.kind, timeoutAt: entry.timeoutAt},
+      });
+      isWoken = parked.isWoken;
+      return parked.task;
+    });
+    // An event buffered before the wait committed sent the task straight back to pending.
+    if (isWoken) {
+      engine.wake();
+    }
+    throw new HarnessSuspendSignal(taskId);
+  };
+
+  const waitFor = async (event: string, options: HarnessWaitForOptions = {}): Promise<unknown> => {
+    if (typeof event !== "string" || !event.trim()) {
+      assertOpen("rt.waitFor");
+      throw new HarnessDefinitionError(`${definition.key}: rt.waitFor requires an event name`);
+    }
+    const timeout =
+      options?.timeout === undefined
+        ? undefined
+        : parseWaitDuration(options.timeout, `${definition.key}: rt.waitFor timeout`);
+    return waitCall("rt.waitFor", {duration: timeout, event, kind: HARNESS_WAIT_KINDS.event});
+  };
+
+  const sleep = async (duration: DurationLike): Promise<void> => {
+    const length = parseWaitDuration(duration, `${definition.key}: rt.sleep duration`);
+    await waitCall("rt.sleep", {duration: length, kind: HARNESS_WAIT_KINDS.sleep});
   };
 
   const runAgent = async <Result>(
@@ -533,7 +606,9 @@ const runPhase = async ({
     memo: memoFor(task._id),
     runAgent: runAgent as HarnessTaskRuntime<unknown, unknown>["runAgent"],
     signal: controller.signal,
+    sleep,
     taskId,
+    waitFor: waitFor as HarnessTaskRuntime<unknown, unknown>["waitFor"],
     waitForTasks,
   };
   let thrown: {error: unknown} | undefined;

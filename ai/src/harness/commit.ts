@@ -7,6 +7,7 @@ import type {
   HarnessCommit,
   HarnessConversationModel,
   HarnessCreateTaskOptions,
+  HarnessInboxEventModel,
   HarnessLeaseSettings,
   HarnessMemoModel,
   HarnessMessageModel,
@@ -19,6 +20,7 @@ import type {
   HarnessTaskModel,
   HarnessTaskSpanKind,
   HarnessTestHooks,
+  HarnessWaitCall,
   HarnessWaiting,
   HarnessWaitKind,
 } from "../types/harness";
@@ -26,11 +28,13 @@ import {
   HARNESS_RESOLVE_ACTIONS,
   HARNESS_TASK_STATUSES,
   HARNESS_TERMINAL_STATUSES,
+  HARNESS_WAIT_KINDS,
 } from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 
 export interface HarnessModels {
   conversation: HarnessConversationModel;
+  inbox: HarnessInboxEventModel;
   memo: HarnessMemoModel;
   message: HarnessMessageModel;
   owner: HarnessOwnerModel;
@@ -532,7 +536,7 @@ export const commitPhase = async ({
           status: next.terminal.status,
           ...(failedAttempts === undefined ? {} : {attempt: failedAttempts}),
         },
-        $unset: {lease: 1, runAt: 1},
+        $unset: {lease: 1, runAt: 1, waits: 1},
       }
     : {
         $inc: {step: 1},
@@ -542,7 +546,8 @@ export const commitPhase = async ({
           phase: next.phase,
           state: next.state === undefined ? task.state : next.state,
         },
-        $unset: {runAt: 1},
+        // Wait records belong to one phase visit; the next visit starts with none.
+        $unset: {runAt: 1, waits: 1},
       };
 
   return commitTransition({
@@ -620,24 +625,30 @@ export const commitRetry = async ({
 };
 
 /**
- * Park a running task as `waiting` on `waiting` (child tasks today; events and sleeps
- * share the shape). Gives up the lease so no runner holds the task while it waits; the
- * phase re-runs from its checkpoint once the wait is satisfied.
+ * Park a running task as `waiting` on `waiting` (child tasks, an event, or a sleep). Gives
+ * up the lease so no runner holds the task while it waits; the phase re-runs from its
+ * checkpoint once the wait is satisfied. `waitCall` records the `rt.waitFor` / `rt.sleep`
+ * call that started the wait. An event wait checks the inbox inside the transaction and,
+ * when a matching event is already buffered, returns the task straight to `pending`:
+ * `sendEvent` writes the task in its own transaction, so the two can never miss each other.
  */
 export const commitWaiting = async ({
   models,
   phaseStartedAt,
   task,
   testHooks,
+  waitCall,
   waiting,
 }: {
   models: HarnessModels;
   phaseStartedAt: DateTime;
   task: HarnessTaskDocument;
   testHooks?: HarnessTestHooks;
+  waitCall?: {entry: HarnessWaitCall; key: string};
   waiting: HarnessWaiting;
-}): Promise<HarnessTaskDocument> => {
-  return commitTransition({
+}): Promise<{isWoken: boolean; task: HarnessTaskDocument}> => {
+  let isWoken = false;
+  const committed = await commitTransition({
     filter: runFence(task),
     models,
     span: {
@@ -655,7 +666,74 @@ export const commitWaiting = async ({
     },
     task,
     testHooks,
-    update: {$set: {status: HARNESS_TASK_STATUSES.waiting, waiting}, $unset: {lease: 1}},
+    update: {
+      $set: {
+        status: HARNESS_TASK_STATUSES.waiting,
+        waiting,
+        ...(waitCall ? {[`waits.${waitCall.key}`]: waitCall.entry} : {}),
+      },
+      $unset: {lease: 1},
+    },
+    writes: async ({session}) => {
+      isWoken = false;
+      if (waiting.kind !== HARNESS_WAIT_KINDS.event || !waiting.key) {
+        return;
+      }
+      const buffered = await models.inbox.countDocuments(
+        {consumedKey: {$exists: false}, name: waiting.key, taskId: task._id},
+        {session}
+      );
+      if (buffered === 0) {
+        return;
+      }
+      await models.task.updateOne(
+        {_id: task._id},
+        {$set: {status: HARNESS_TASK_STATUSES.pending}, $unset: {waiting: 1}},
+        {session}
+      );
+      isWoken = true;
+    },
+  });
+  return {isWoken, task: committed};
+};
+
+/**
+ * Record how one `rt.waitFor` / `rt.sleep` call resolved, plus its resume span, in one
+ * transaction fenced on the run's lease. `writes` claims the delivered event in the same
+ * transaction. The phase keeps running under its lease.
+ */
+export const commitWaitResolution = async ({
+  callKey,
+  entry,
+  lease,
+  models,
+  span,
+  task,
+  testHooks,
+  writes,
+}: {
+  callKey: string;
+  entry: HarnessWaitCall;
+  lease: HarnessLeaseSettings;
+  models: HarnessModels;
+  span: {input: unknown; name: string; output: unknown};
+  task: HarnessTaskDocument;
+  testHooks?: HarnessTestHooks;
+  writes?: HarnessCommitWrites;
+}): Promise<void> => {
+  await commitTransition({
+    filter: runFence(task),
+    models,
+    span: {...span, startedAt: DateTime.fromJSDate(entry.startedAt), status: "ok"},
+    task,
+    testHooks,
+    update: {
+      $set: {
+        "lease.expiresAt": DateTime.now().plus(lease.duration).toJSDate(),
+        [`waits.${callKey}`]: entry,
+      },
+    },
+    writes,
   });
 };
 
@@ -787,7 +865,7 @@ export const commitAbort = async ({
         outcome: {error, status: HARNESS_TASK_STATUSES.aborted},
         status: HARNESS_TASK_STATUSES.aborted,
       },
-      $unset: {lease: 1, runAt: 1, waiting: 1},
+      $unset: {lease: 1, runAt: 1, waiting: 1, waits: 1},
     },
   });
 };
@@ -868,7 +946,7 @@ export const commitInterruption = async ({
     task,
     testHooks,
     update: isFailure
-      ? {$set: {outcome: {error, status}, status}, $unset: {lease: 1, runAt: 1}}
+      ? {$set: {outcome: {error, status}, status}, $unset: {lease: 1, runAt: 1, waits: 1}}
       : {$set: {status}, $unset: {lease: 1}},
   });
 };

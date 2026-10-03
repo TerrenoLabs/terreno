@@ -32,6 +32,11 @@ const harnessTaskSchema = new mongoose.Schema<HarnessTaskDocument, HarnessTaskMo
       description: "When true, the task outlives its owning conversation turn",
       type: Boolean,
     },
+    eventSeq: {
+      default: 0,
+      description: "Events received by harness.sendEvent; numbers the task's inbox",
+      type: Number,
+    },
     input: {description: "Immutable task input", type: mongoose.Schema.Types.Mixed},
     lease: {
       acquiredAt: {
@@ -131,6 +136,11 @@ const harnessTaskSchema = new mongoose.Schema<HarnessTaskDocument, HarnessTaskMo
       },
       timeoutAt: {description: "When the wait times out", type: Date},
     },
+    waits: {
+      description:
+        "rt.waitFor / rt.sleep calls of the current phase visit by `<step>:<call index>`, so a re-run returns the same result",
+      type: mongoose.Schema.Types.Mixed,
+    },
   },
   {
     // Keep empty objects: `{}` tool arguments and states are meaningful values.
@@ -151,6 +161,13 @@ harnessTaskSchema.index(
   Object.fromEntries([
     ["status", 1],
     ["runAt", 1],
+  ])
+);
+// Claim scan for event and sleep waits whose timeout passed.
+harnessTaskSchema.index(
+  Object.fromEntries([
+    ["status", 1],
+    ["waiting.timeoutAt", 1],
   ])
 );
 harnessTaskSchema.index({rootTaskId: 1});

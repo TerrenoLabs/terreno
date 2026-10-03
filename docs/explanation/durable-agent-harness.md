@@ -156,8 +156,32 @@ That re-run is why `rt.createTask` is idempotent within one attempt of a phase v
 second run gets the children the first run created, not duplicates. A retry is a fresh
 attempt, so it starts fresh children. It also means work before the
 wait runs twice, so keep it to reads and child creation, and do side effects in a later
-phase. Events and sleeps (a later slice) use the same "commit `waiting`, re-run on wake"
-shape.
+phase. Events and sleeps use the same "commit `waiting`, re-run on wake" shape.
+
+### Waiting for the outside world: events and sleeps
+
+`rt.waitFor(event, {timeout})` pauses a task until something outside it happens: a
+webhook, an operator decision, a lab result. `rt.sleep(duration)` pauses it for a fixed
+time. Neither holds a lease while it waits.
+
+`harness.sendEvent(taskId, event, payload)` writes the event to the task's **inbox**
+before it does anything else. So the sender never has to know where the task is:
+
+- If the task is already waiting on that event, the same transaction sends it back to
+  `pending`.
+- If it has not reached the wait yet, the event stays buffered until it does.
+- If no runner is up, the event is still stored, and the task resumes once one starts.
+
+A timeout or a sleep is a `timeoutAt` on the wait. The runner claims a waiting task whose
+`timeoutAt` has passed the same way it claims a retry whose `runAt` has passed. There is
+no timer to lose in a crash.
+
+When the phase re-runs, each wait call must return the same thing it returned before. The
+harness records how each call resolved on the task, keyed by the phase visit and the
+call's position, together with the event it received. A later run of that phase visit (a
+retry, a crash replay, the wake for the next wait) reads the record and does not take
+another event. A timeout is recorded too, so an event that arrives after the timeout can
+never turn an earlier `undefined` into a payload.
 
 `policy: "failFast"` resolves at the first failed or aborted child and aborts the
 siblings still in flight. Use it when one failure makes the rest pointless (for example,

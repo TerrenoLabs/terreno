@@ -8,9 +8,11 @@ import type {
   HarnessAgentDefinition,
   HarnessCreateTaskOptions,
   HarnessExtensionDefinition,
+  HarnessInboxEventDocument,
   HarnessModelResolver,
   HarnessResolveInterruptedOptions,
   HarnessRunner,
+  HarnessSendEventOptions,
   HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTestHooks,
@@ -33,6 +35,7 @@ import {taskDefinitionKey} from "./defineTask";
 import type {ExecutionEnv} from "./executionEnv";
 import {acquireOwnerLease, releaseOwnerLease} from "./leases";
 import {registerHarnessConversation} from "./models/harnessConversation";
+import {registerHarnessInboxEvent} from "./models/harnessInboxEvent";
 import {registerHarnessMemo} from "./models/harnessMemo";
 import {registerHarnessMessage} from "./models/harnessMessage";
 import {registerHarnessOwner} from "./models/harnessOwner";
@@ -47,6 +50,7 @@ import {
 } from "./registry";
 import {InProcessRunner} from "./runners/inProcessRunner";
 import {claimNextTask, recoverExpiredTasks, runClaimedTask} from "./runtime";
+import {sendEventRecords} from "./waits";
 
 export type {
   AnyHarnessToolDefinition,
@@ -68,6 +72,7 @@ export type {
   HarnessHookApi,
   HarnessHookHandlers,
   HarnessHookKind,
+  HarnessInboxEventDocument,
   HarnessInterruptAction,
   HarnessLeaseSettings,
   HarnessMemo,
@@ -90,6 +95,7 @@ export type {
   HarnessRunnerContext,
   HarnessSection,
   HarnessSectionInput,
+  HarnessSendEventOptions,
   HarnessSubmitOptions,
   HarnessSystemPromptPart,
   HarnessTaskDefinition,
@@ -110,10 +116,13 @@ export type {
   HarnessToolResultPart,
   HarnessToolWrap,
   HarnessTurnResult,
+  HarnessWaitCall,
+  HarnessWaitForOptions,
   HarnessWaitForTasksOptions,
   HarnessWaiting,
   HarnessWaitKind,
   HarnessWaitPolicy,
+  HarnessWaitResolution,
 } from "../types/harness";
 export {
   HARNESS_AGENT_DEFAULT_MAX_STEPS,
@@ -127,6 +136,7 @@ export {
   HARNESS_TASK_STATUSES,
   HARNESS_WAIT_KINDS,
   HARNESS_WAIT_POLICIES,
+  HARNESS_WAIT_RESOLUTIONS,
 } from "../types/harness";
 export {AGENT_TOOL_TASK_NAME, AGENT_TURN_TASK_NAME} from "./agentLoop";
 export {HarnessCommitConflictError} from "./commit";
@@ -283,6 +293,7 @@ export class Harness {
     }
     const models: HarnessModels = {
       conversation: registerHarnessConversation(),
+      inbox: registerHarnessInboxEvent(),
       memo: registerHarnessMemo(),
       message: registerHarnessMessage(),
       owner: registerHarnessOwner(),
@@ -402,6 +413,36 @@ export class Harness {
       top: task,
       userId: options.userId === undefined ? undefined : String(options.userId),
     });
+  }
+
+  /**
+   * Send `event` with `payload` to a task. The event is stored durably first, so it is
+   * never lost: a task already waiting on `event` (`rt.waitFor`) goes back to `pending`
+   * and its `waitFor` returns `payload`; otherwise the event stays buffered until a
+   * `rt.waitFor(event)` takes it. Works while no runner is up. Delivery is FIFO per event
+   * name. With `requestId` (unique per task), a repeated send returns the event sent
+   * first. Throws when the task is terminal or `event` is blank.
+   */
+  async sendEvent(
+    taskId: mongoose.Types.ObjectId | string,
+    event: string,
+    payload?: unknown,
+    options: HarnessSendEventOptions = {}
+  ): Promise<HarnessInboxEventDocument> {
+    if (typeof event !== "string" || !event.trim()) {
+      throw new Error("sendEvent requires an event name");
+    }
+    const sent = await sendEventRecords({
+      event,
+      models: this.models,
+      payload,
+      requestId: options.requestId,
+      taskId,
+    });
+    if (sent.isWoken) {
+      this.runner.wake();
+    }
+    return sent.event;
   }
 
   /**

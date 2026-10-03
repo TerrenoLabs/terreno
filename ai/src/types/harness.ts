@@ -1,6 +1,6 @@
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin, z} from "@terreno/api";
 import type {LanguageModel, ModelMessage} from "ai";
-import type {Duration} from "luxon";
+import type {Duration, DurationLike} from "luxon";
 import type mongoose from "mongoose";
 
 import type {ExecutionEnv} from "../harness/executionEnv";
@@ -90,6 +90,37 @@ export const HARNESS_WAIT_POLICIES = {
 
 export type HarnessWaitPolicy = (typeof HARNESS_WAIT_POLICIES)[keyof typeof HARNESS_WAIT_POLICIES];
 
+/** How one `rt.waitFor` / `rt.sleep` call resolved. */
+export const HARNESS_WAIT_RESOLUTIONS = {
+  /** A sleep reached its `timeoutAt`. */
+  elapsed: "elapsed",
+  /** An event was delivered. */
+  event: "event",
+  /** An event wait reached its `timeoutAt` first. */
+  timeout: "timeout",
+} as const;
+
+export type HarnessWaitResolution =
+  (typeof HARNESS_WAIT_RESOLUTIONS)[keyof typeof HARNESS_WAIT_RESOLUTIONS];
+
+/**
+ * Durable record of one `rt.waitFor` / `rt.sleep` call, stored on the task under
+ * `waits["<step>:<call index>"]` so a re-run of the same phase visit returns what the
+ * call returned the first time.
+ */
+export interface HarnessWaitCall {
+  /** Event id delivered to the call (`resolution: "event"`). */
+  eventId?: mongoose.Types.ObjectId;
+  /** Event name for an event wait. */
+  key?: string;
+  kind: "event" | "sleep";
+  resolution?: HarnessWaitResolution;
+  resolvedAt?: Date;
+  /** When the call first ran; the resume span starts here. */
+  startedAt: Date;
+  timeoutAt?: Date;
+}
+
 export interface HarnessWaiting {
   key?: string;
   kind?: HarnessWaitKind;
@@ -132,6 +163,8 @@ export interface HarnessTaskDocument extends mongoose.Document<mongoose.Types.Ob
   runAt?: Date;
   state?: unknown;
   status: HarnessTaskStatus;
+  /** Events received by `harness.sendEvent`; orders the task's inbox. */
+  eventSeq: number;
   /** Phase commits so far; identifies the current phase visit. */
   step: number;
   traceId: mongoose.Types.ObjectId;
@@ -139,6 +172,8 @@ export interface HarnessTaskDocument extends mongoose.Document<mongoose.Types.Ob
   userId?: mongoose.Types.ObjectId;
   version: number;
   waiting?: HarnessWaiting;
+  /** `rt.waitFor` / `rt.sleep` calls of the current phase visit, by `<step>:<call index>`. */
+  waits?: Record<string, HarnessWaitCall>;
 }
 
 export interface HarnessTaskStatics
@@ -210,6 +245,36 @@ export interface HarnessChildOutcome {
   status: HarnessTerminalStatus;
 }
 
+export interface HarnessWaitForOptions {
+  /** Resolve with `undefined` when no event arrives within this long. Default: wait forever. */
+  timeout?: DurationLike;
+}
+
+export interface HarnessSendEventOptions {
+  /** Idempotency key, unique per task: a repeated send returns the event sent first. */
+  requestId?: string;
+}
+
+/** An event sent to a task by `harness.sendEvent`, buffered until a `rt.waitFor` takes it. */
+export interface HarnessInboxEventDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  /** `<step>:<call index>` of the `rt.waitFor` call that received it. */
+  consumedKey?: string;
+  consumedAt?: Date;
+  created: Date;
+  name: string;
+  payload?: unknown;
+  requestId?: string;
+  /** Position in the task's inbox (1, 2, ...); delivery is FIFO per event name. */
+  seq: number;
+  taskId: mongoose.Types.ObjectId;
+  updated: Date;
+}
+
+export interface HarnessInboxEventModel
+  extends mongoose.Model<HarnessInboxEventDocument>,
+    FindExactlyOnePlugin<HarnessInboxEventDocument>,
+    FindOneOrNonePlugin<HarnessInboxEventDocument> {}
+
 export interface HarnessWaitForTasksOptions {
   /** Default `all`. */
   policy?: HarnessWaitPolicy;
@@ -253,7 +318,21 @@ export interface HarnessTaskRuntime<State, Out> {
   memo: HarnessMemo;
   /** Aborted when the task is aborted or this run loses its lease; stop work promptly. */
   signal: AbortSignal;
+  /**
+   * Return once `duration` has passed. Until then the task commits `waiting` (kind
+   * `sleep`), gives up its lease, and the phase stops; it re-runs at `timeoutAt`, and this
+   * call then returns.
+   */
+  sleep: (duration: DurationLike) => Promise<void>;
   taskId: string;
+  /**
+   * Return the payload of the oldest undelivered `event` sent to this task with
+   * `harness.sendEvent`, or `undefined` once `timeout` passes first. Until then the task
+   * commits `waiting` (kind `event`), gives up its lease, and the phase stops; it re-runs
+   * when the event arrives or the timeout passes. A re-run of the same phase visit gets
+   * the same result from the same call.
+   */
+  waitFor: <T = unknown>(event: string, options?: HarnessWaitForOptions) => Promise<T | undefined>;
   /**
    * Return child outcomes once they settle under `policy`. Until then the task commits
    * `waiting`, gives up its lease, and the phase stops; it re-runs from its checkpoint
@@ -471,6 +550,7 @@ export interface HarnessToolDefinition<Args = unknown, Result = unknown>
 }
 
 /** Any tool, whatever its argument and result types. */
+// noExplicitAny: tools are stored in heterogeneous lists; `execute` arguments are contravariant.
 // biome-ignore lint/suspicious/noExplicitAny: tools are stored in heterogeneous lists; `execute` arguments are contravariant.
 export type AnyHarnessToolDefinition = HarnessToolDefinition<any, unknown>;
 

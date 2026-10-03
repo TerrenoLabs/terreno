@@ -30,6 +30,7 @@ import {
 - [resolveInterrupted](#resolveinterrupted)
 - [Retries](#retries)
 - [Child tasks and waitForTasks](#child-tasks-and-waitfortasks)
+- [Events, waits, and sleep](#events-waits-and-sleep)
 - [abort](#abort)
 - [Versioning](#versioning)
 - [Agents and conversations](#agents-and-conversations)
@@ -51,6 +52,7 @@ import {
 - [HarnessConversation model](#harnessconversation-model)
 - [HarnessMessage model](#harnessmessage-model)
 - [HarnessMemo model](#harnessmemo-model)
+- [HarnessInboxEvent model](#harnessinboxevent-model)
 - [Audit spans](#audit-spans)
 - [Errors](#errors)
 - [Testing](#testing)
@@ -129,6 +131,7 @@ The `task` view passed to `run`: `{id, name, version, input, state, phase, attem
 | `createTask(definition, input, {requestId?, userId?})` | Inserts a `pending` task, its `ObsTrace`, and its root span in one transaction. Wakes the runner. The definition must be in the registry. |
 | `resolveInterrupted(id, {action, reason, result?, userId?})` | Resolve an `interrupted` task. See [resolveInterrupted](#resolveinterrupted). |
 | `abort(id, {reason, userId?})` | Abort a task and every non-terminal task it owns, bottom-up. See [abort](#abort). |
+| `sendEvent(id, event, payload?, {requestId?})` | Store an event in the task's inbox and wake the task when it waits on it. Works without a running runner. See [Events, waits, and sleep](#events-waits-and-sleep). |
 | `createConversation({agent, userId?})` | Start a conversation with a registered agent. See [Conversations](#conversations). |
 | `conversation(id)` | Load a conversation handle. Throws when it does not exist. |
 | `waitForTask(id, {timeout?, pollInterval?})` | Polls Mongo until the task is `completed`, `failed`, or `aborted`. An `interrupted` task is not terminal, so the wait times out unless someone resolves it. Defaults: 30 s timeout, 50 ms poll. Throws on timeout with the current status. |
@@ -198,6 +201,8 @@ A custom runner implements `HarnessRunner` (`start(context)`, `stop()`, `wake()`
 | `rt.waitForTasks(ids, {policy?})` | Return child outcomes once they settle; until then the task waits. See [Child tasks and waitForTasks](#child-tasks-and-waitfortasks). |
 | `rt.runAgent(agent, {input, output?, instructions?})` | Run a registered agent as a subagent and return its answer; until it finishes the task waits. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
 | `rt.memo(key)` / `rt.memo(key, value)` | Read, or first-write, a durable value scoped to this task. See [Memos](#memos). |
+| `rt.waitFor(event, {timeout?})` | Return the payload of the next `event` sent to this task, or `undefined` once `timeout` passes; until then the task waits. See [Events, waits, and sleep](#events-waits-and-sleep). |
+| `rt.sleep(duration)` | Return once `duration` has passed; until then the task waits. See [Events, waits, and sleep](#events-waits-and-sleep). |
 
 Rules:
 
@@ -205,7 +210,7 @@ Rules:
 - `phase` must exist in `phases`. An unknown phase fails the task.
 - A phase that returns without committing fails the task (no retry).
 - A phase that throws before committing is retried under the task's `retry` policy; see [Retries](#retries).
-- After `rt.commit` or a `waitForTasks` that started waiting, `rt.createTask`, `rt.waitForTasks`, `rt.runAgent`, and memo writes throw. Memo reads still work.
+- After `rt.commit` or a wait that started waiting, `rt.createTask`, `rt.waitForTasks`, `rt.runAgent`, `rt.waitFor`, `rt.sleep`, and memo writes throw. Memo reads still work.
 
 ## Leases
 
@@ -400,6 +405,118 @@ When not yet settled:
 
 Keep work before a wait idempotent: it runs once per wake. `ids` must all be tasks this
 task created; otherwise the task fails.
+
+## Events, waits, and sleep
+
+```typescript
+const followUp = defineTask<{patientId: string}, unknown, unknown>({
+  name: "clinic.followUp",
+  version: 1,
+  initial: () => ({phase: "await"}),
+  phases: {
+    await: {
+      run: async (task, rt) => {
+        const labs = await rt.waitFor<{a1c: number}>("labs.ready", {timeout: {days: 2}});
+        if (!labs) {
+          await rt.sleep({hours: 1}); // back off before paging someone
+          await rt.commit({phase: "escalate"});
+          return;
+        }
+        await rt.commit({phase: "review", state: {labs}});
+      },
+    },
+    // ...
+  },
+});
+
+// Anywhere with a Harness (an API route, a webhook), runner up or not:
+await harness.sendEvent(taskId, "labs.ready", {a1c: 6.1}, {requestId: `labs-${orderId}`});
+```
+
+### rt.waitFor(event, {timeout?})
+
+| Argument | Description |
+| --- | --- |
+| `event` | Non-empty event name. A blank name fails the task (no retry). |
+| `timeout` | Luxon `DurationLike`, non-negative. Omitted: wait forever. Invalid: fails the task. |
+
+Returns the payload of the oldest undelivered event named `event`, or `undefined` once
+`timeoutAt` (first call time + `timeout`) passes with none. An event already buffered when the
+call runs wins over a passed timeout. One that lands while the timeout is being recorded
+stays buffered for the next `rt.waitFor` of that name.
+
+A run that lost its lease (taken over or aborted) cannot resolve a wait: the call throws
+`HarnessCommitConflictError`, takes no event, and the run can write nothing more.
+
+### rt.sleep(duration)
+
+`duration` is a non-negative Luxon `DurationLike`. Returns `undefined` once
+`timeoutAt` (first call time + `duration`) passes. `{seconds: 0}` returns at once.
+
+### How a wait runs
+
+1. The call takes a key `<step>:<n>`: the phase visit (`step`) and its position among
+   this phase's `waitFor` / `sleep` calls (`n`, from 0).
+2. When `task.waits[key]` says the call already resolved, it returns the recorded result
+   (the same event's payload, or `undefined`). No new event is taken.
+3. Otherwise an event wait takes the oldest undelivered matching event. Failing that, a
+   passed `timeoutAt` resolves it. Either way the resolution is recorded in `waits[key]`,
+   the event is marked consumed, and a resume span is written, in one transaction fenced
+   on the lease. The phase continues.
+4. Otherwise the task commits `status: "waiting"`, `waiting: {kind: "event", key: event,
+   timeoutAt}` (or `{kind: "sleep", timeoutAt}`), `waits[key]`, and clears its lease, with
+   a `CHAIN` span named after the phase (`output: {waiting: {...}}`). The phase stops.
+5. It wakes when a matching event arrives (`sendEvent` sets it `pending`) or when
+   `timeoutAt` passes (the runner claims it). The phase runs again from its checkpoint.
+
+Several waits in one phase run in order: each wake re-runs the phase, earlier calls
+return their records, and the next call waits. Keep the calls in the same order on every
+run; a call whose kind or event name differs from its record fails the task.
+
+Records live until the next phase commit (`waits` is cleared then). A retry of the same
+phase visit returns the same results.
+
+### harness.sendEvent(taskId, event, payload?, {requestId?})
+
+1. Throws when `event` is blank, the task does not exist, or it is `completed`,
+   `failed`, or `aborted` (`Task <id> is already <status>; it cannot receive event "<event>"`).
+2. With `requestId`, an earlier event of this task with that key is returned as is (a
+   no-op). The key is unique per task; reusing it for another event name throws.
+3. In one transaction: increments `eventSeq`, inserts a `HarnessInboxEvent` with
+   `seq = eventSeq`, and, when the task is `waiting` on this event name, sets it
+   `pending`. Wakes the local runner.
+
+Returns the `HarnessInboxEvent`.
+
+| Rule | Behavior |
+| --- | --- |
+| Ordering | FIFO per event name, by `seq`. Different names are independent. |
+| Buffering | An event no wait has taken yet stays undelivered until a `rt.waitFor` of its name takes it, in any later phase. |
+| Retention | Rows stay after delivery (`consumedKey`, `consumedAt` set) and after the task ends. Events left undelivered when the task ends are never delivered. No TTL. |
+| No runner | The event and the wake are stored in Mongo; the task runs when a runner starts. |
+| Abort | `harness.abort` works on a waiting task: it is aborted with its `waiting` and `waits` cleared. Later sends throw. |
+
+### Latency
+
+| Wake | Worst case |
+| --- | --- |
+| Event, sent in the owner process | Immediate when the runner is idle; otherwise after the task in flight stops. |
+| Event, sent from another process | One `pollInterval` of the owner (default 250 ms) after the owner is idle. |
+| Timeout or sleep | One `pollInterval` after `timeoutAt`, once the owner is idle. |
+| No owner up | When an owner starts or takes over (up to `leaseDuration`, default 30 s, after the old owner died). |
+
+The runner adds no timers or polling for waits: timeouts use the same claim query as
+retries (`{status: "waiting", waiting.timeoutAt <= now}` next to `{status: "pending",
+runAt <= now}`).
+
+### Spans
+
+| When | Span (same transaction) |
+| --- | --- |
+| The task starts waiting | `CHAIN` named after the phase, `output: {waiting: {kind, key?, timeoutAt?}}`. |
+| An event is delivered | `CHAIN` `wait:<event>`, `input: {event, kind, startedAt, timeoutAt?}`, `output: {event, eventId, seq, payload, timedOut: false}`. `payload` is a summary (`{type, keys?, keyCount?, length?}`), never the values. `durationMs` is the time since the call first ran. |
+| An event wait times out | `CHAIN` `wait:<event>`, `output: {event, timedOut: true}`. |
+| A sleep ends | `CHAIN` `sleep`, `output: {elapsed: true}`. |
 
 ## abort
 
@@ -956,7 +1073,7 @@ Interface only in this slice (implementations ship with coding agents). Pass one
 | --- | --- |
 | `pending` | Created, waiting for a runner. |
 | `running` | Claimed under a task lease. A phase is executing, or the runner died and recovery will act once the lease expires. |
-| `waiting` | Blocked on child tasks (`rt.waitForTasks`). Holds no lease and is never claimed. Woken back to `pending` when the wait is satisfied. Events and sleeps ship later. |
+| `waiting` | Blocked on child tasks (`rt.waitForTasks`), an event (`rt.waitFor`), or a sleep (`rt.sleep`). Holds no lease. Woken back to `pending` when the wait is satisfied; an event or sleep wait whose `timeoutAt` passed is claimed directly. |
 | `interrupted` | A `replay: "never"` phase was cut off. Waits for `resolveInterrupted`. Never claimed. |
 | `completed` | Terminal. `outcome.result` holds the result. |
 | `failed` | Terminal. `outcome.error` holds the cause. |
@@ -984,11 +1101,13 @@ empty objects are kept (`minimize: false`), so an initial state `{}` is stored a
 | `userId` | ObjectId | Optional initiating user. Also set on the `ObsTrace`. |
 | `lease` | `{owner, token, acquiredAt, expiresAt}` | Current task lease. Cleared on terminal commit and interruption. |
 | `runAt` | Date | Earliest claim time; set by a retry, cleared by the next commit. |
-| `waiting` | `{kind, taskIds, policy, key, timeoutAt}` | Set while `waiting`. `kind: "tasks"` today; `event` / `sleep` (with `key`, `timeoutAt`) ship later. |
+| `waiting` | `{kind, taskIds, policy, key, timeoutAt}` | Set while `waiting`. `kind: "tasks"` (`taskIds`, `policy`), `"event"` (`key` = event name, optional `timeoutAt`), or `"sleep"` (`timeoutAt`). |
+| `waits` | Mixed | `rt.waitFor` / `rt.sleep` records of the current phase visit by `<step>:<n>`: `{kind, key?, startedAt, timeoutAt?, resolution?, eventId?, resolvedAt?}`. `resolution` is `event`, `timeout`, or `elapsed`. Cleared on each phase commit and on abort. |
+| `eventSeq` | Number | Events received by `sendEvent`. Default 0. |
 | `abortRequested` | `{at, reason, userId, handlerClaimExpiresAt}` | Set when an abort starts. Blocks claims. `handlerClaimExpiresAt` is the current aborter's claim on running the handler. |
 | `background` | Boolean | Stored from `rt.createTask`. Default false. |
 
-Indexes: `{requestId}` unique sparse, `{status, runAt}`, `{rootTaskId}`, `{status, lease.expiresAt}`, `{ownership.id, ownership.kind}`.
+Indexes: `{requestId}` unique sparse, `{status, runAt}`, `{status, waiting.timeoutAt}`, `{rootTaskId}`, `{status, lease.expiresAt}`, `{ownership.id, ownership.kind}`.
 
 ## HarnessOwner model
 
@@ -1051,6 +1170,26 @@ empty objects are kept.
 
 Index: `{taskId, key}` unique. Rows are not deleted with their task.
 
+## HarnessInboxEvent model
+
+Collection `harnessinboxevents`. Every field has a schema `description`; `strict: "throw"`;
+empty objects are kept.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `taskId` | ObjectId | Required. The task the event was sent to. |
+| `name` | String | Required. Event name. |
+| `payload` | Mixed | What `rt.waitFor` returns. |
+| `seq` | Number | Required. Position in the task's inbox (1, 2, ...). |
+| `requestId` | String | Sender idempotency key. |
+| `consumedKey` | String | `<step>:<n>` of the wait call that took it; unset while undelivered. |
+| `consumedAt` | Date | When it was taken. |
+| `created`, `updated` | | Plugin. |
+
+Indexes: `{taskId, name, consumedKey, seq}`; `{requestId, taskId}` unique where
+`requestId` exists; `{consumedKey, taskId}` unique where `consumedKey` exists (one event
+per wait call).
+
 ## Audit spans
 
 | When | Write (same transaction) |
@@ -1061,7 +1200,8 @@ Index: `{taskId, key}` unique. Rows are not deleted with their task.
 | `resolveInterrupted` | One `CHAIN` span named `resolveInterrupted`; closes root span and trace for `abort` / `complete`. |
 | Failed attempt with retries left | One error `CHAIN` span named after the phase, `output: {retry: {attempt, maxAttempts, runAt}}`. |
 | `rt.createTask` | The child's `CHAIN` span (`name@version`), parented to the parent's span. |
-| `rt.waitForTasks` starts waiting | One `CHAIN` span named after the phase, `output: {waiting: {...}}`. |
+| `rt.waitForTasks` / `rt.waitFor` / `rt.sleep` starts waiting | One `CHAIN` span named after the phase, `output: {waiting: {...}}`. |
+| `rt.waitFor` / `rt.sleep` resolves | One `CHAIN` span `wait:<event>` or `sleep`. See [Events, waits, and sleep](#spans). |
 | `harness.abort` | One `abort` span per aborted task; closes that task's span (and the trace for a root task). |
 | Agent `request` commit | One `LLM` span parented to the turn's span, with the assistant message (and a `system` message when the system prompt changed). See [The agent turn task](#the-agent-turn-task). |
 | Tool call | The tool task's own span has kind `TOOL` and the tool's name; it closes with the tool's outcome. |
@@ -1079,6 +1219,10 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 | `abort requires a reason` / `Task <id> is already <status>` | `harness.abort` with a blank reason, or on a terminal task. |
 | `rt.waitForTasks only waits on tasks this task created with rt.createTask` | Fails the task (no retry). |
 | `rt.waitForTasks policy must be one of all, failFast` | Unknown policy. Fails the task. |
+| `<key>: rt.waitFor requires an event name` / `rt.waitFor timeout ...` / `rt.sleep duration must be a valid, non-negative duration` | Misuse; fails the task (no retry). |
+| `<key>: wait call <step>:<n> was rt.waitFor("a") on an earlier run and is ...` | Wait calls changed order between runs of a phase. Fails the task. |
+| `Task <id> is already <status>; it cannot receive event "<event>"` | `sendEvent` to a terminal task. |
+| `sendEvent requires an event name` / `requestId "<id>" already sent event "<name>" to task ...` | `sendEvent` misuse. |
 | `Child key "<key>" already belongs to task ...` | Two `rt.createTask` calls in one phase visit used the same `key` for different definitions. |
 | `defineTask(...): retry.* ...` / `abort must be a function` | Invalid `retry` policy or `abort` handler. |
 | `InProcessRunner heartbeatInterval must be positive and shorter than leaseDuration` | Invalid lease options. |
@@ -1139,7 +1283,13 @@ Low-risk choices made in the first slice:
 | A retry goes back to `pending` with `runAt` instead of sleeping in the runner | The runner never holds a lease while waiting, and the backoff survives a restart. |
 | Equal jitter (`[delay/2, delay]`) rather than full jitter | Keeps a guaranteed minimum backoff so a retry storm cannot start at zero delay. |
 | API-misuse errors are not retried | Retrying cannot fix them; failing fast surfaces the bug. |
-| `waitForTasks` suspends by committing `waiting` and re-running the phase on wake | No in-memory continuation to lose; the same machinery serves events and sleeps later. |
+| `waitForTasks` suspends by committing `waiting` and re-running the phase on wake | No in-memory continuation to lose; the same machinery serves events and sleeps. |
+| Wait results are recorded on the task (`waits`), keyed `<step>:<n>` without the attempt | A retry or replay of the same phase visit must return the same payload; keying by attempt would make a retry wait for a second event. |
+| The inbox is its own collection (`HarnessInboxEvent`), not `HarnessEvent` | `HarnessEvent` is the SSE stream log (coalesced, TTL); inbox rows are durable inputs. |
+| `sendEvent` always writes the task row (`$inc eventSeq`) | A concurrent waiting commit and send then write-conflict and one retries, so a wake cannot be lost to snapshot isolation. The waiting commit also counts buffered events in its transaction and sends itself back to `pending` when one is there. |
+| Timeouts and sleeps are claimed by the runner's claim query | Same path as `runAt`: no in-process timers, survives restarts, latency of one poll. |
+| Resume spans summarize the payload | Payloads may carry PHI; the inbox row holds the value. |
+| Undelivered events are kept, not expired | Retention is the app's call; a TTL would silently drop inputs a later wait expects. |
 | Child idempotency keys are scoped to a phase visit (`step`) and attempt | A wake or crash replay reuses the children; a retry or a later visit (a loop) gets fresh ones, so a retried fan-out does not re-read the same failed child. |
 | Abort handlers run under a one-minute claim per task | Concurrent aborts must not run one compensation twice; an expiring claim still lets a later abort finish after a crash. |
 | The handler `rt` has no `signal` | The run's signal is already aborted by then; handing it over would cancel the compensation's own calls. |

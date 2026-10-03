@@ -59,7 +59,7 @@ created in 1.1 and extended by every later task — never deferred.
   - Docs: reference extensions/hooks/memos
   - Acceptance: AC6 — blocked tool result reaches the model; memo value survives a new harness instance
 
-- [ ] **Task 1.7**: Events, waits, sleep
+- [x] **Task 1.7**: Events, waits, sleep
   - Delivers: `rt.waitFor(event, {timeout})`, `rt.sleep(duration)`, `harness.sendEvent(taskId, event, payload)`; `waiting` status; runner wakes on event or `timeoutAt`; timeout resolves `undefined`
   - Files: `runtime.ts`, `runners/inProcessRunner.ts`, tests
   - Blocked by: 1.3
@@ -109,10 +109,18 @@ created in 1.1 and extended by every later task — never deferred.
 
 ## Phase 2 — Multi-instance
 
+- [ ] **Task 2.0**: `InProcessRunner` concurrency
+  - Delivers: `new InProcessRunner({concurrency})` (default 8) runs up to N claimed tasks at once, each with its own lease and heartbeat; a slow phase no longer delays other tasks' wakes; `stop()` waits for all in-flight phases
+  - Files: `ai/src/harness/runners/inProcessRunner.ts`, tests
+  - Blocked by: 1.12
+  - Skills: `terreno-backend-api`
+  - Docs: reference "Runners" (concurrency option, ordering guarantees)
+  - Acceptance: bun test — a phase blocked on a gate does not prevent a second task from completing; never more than N concurrent; no task runs twice concurrently
+
 - [ ] **Task 2.1**: `JobsRunner`
   - Delivers: `@terreno/ai/harness/jobsRunner` with optional peer `@terreno/jobs`; job `terreno.harness.phase` keyed `taskId:phase:attempt`; harness task lease + heartbeat is the authority; importing the root `@terreno/ai` never loads jobs
   - Files: `ai/src/harness/runners/jobsRunner.ts`, `ai/package.json`, tests
-  - Blocked by: 1.12
+  - Blocked by: 2.0
   - Skills: `terreno-backend-api`
   - Docs: reference "Runners"; how-to "Run on multiple instances"
   - Acceptance: AC11 — two workers race one phase; exactly one commit; stale owner rejected; knip clean without jobs installed

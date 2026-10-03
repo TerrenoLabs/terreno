@@ -20,6 +20,14 @@ Height works the same way: `height` is the whole chart, and the tick row, toolti
 row come out of that budget. A chart therefore fits a fixed-height slot, and reserving the tooltip
 row even when no tooltip is showing keeps hovering from reflowing the page.
 
+Cartesian facades use `xTickPolicy="auto"` by default: up to seven categorical labels
+stay horizontal, while denser sets rotate 45 degrees and reserve a taller axis row.
+That taller row comes out of `height`; the plot shrinks so the chart still fits the
+requested slot. `SparklineChart` scales to the data range so a small period-over-period
+change stays visible.
+Callers may force `"truncate"` or `"rotate"`. `title` and `periodLabel` are convenience
+props backed by the same `ChartCard` used for explicit chart/table composition.
+
 `DashboardGrid` is layout only, so it stays on the eager root export. Chart implementations sit behind the same lazy root boundary as `GPTChat`. Cell width subtracts flex `gap` so `md`/`lg` column counts actually fit.
 
 Chart paint is proven with **rendered PNG goldens**, not React test-renderer JSON.
@@ -27,3 +35,7 @@ Chart paint is proven with **rendered PNG goldens**, not React test-renderer JSO
 (`/demo/chart-visual-gallery`), screenshots each fixture from easy to hard, and
 pixel-diffs against `demo/rendered-snapshots/`. Agents use the `review-chart-visuals`
 skill to read golden / actual / diff images when a compare fails.
+
+The example app admin home (`/admin`) mounts `AdminCharts` so scorecards, a multi-series line,
+bars, an area, and a donut with a center label render together. See
+[Compose charts in a dashboard grid](../how-to/charts-and-dashboards.md).

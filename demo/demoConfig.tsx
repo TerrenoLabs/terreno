@@ -17,11 +17,13 @@ import {BooleanFieldConfiguration} from "@story-config/BooleanField.config";
 import {BoxConfiguration} from "@story-config/Box.config";
 import {ButtonConfiguration} from "@story-config/Button.config";
 import {CardConfiguration} from "@story-config/Card.config";
+import {ChartCardConfiguration} from "@story-config/ChartCard.config";
 import {CheckBoxConfiguration} from "@story-config/CheckBox.config";
 import {ConflictSheetConfiguration} from "@story-config/ConflictSheet.config";
 import {ConsentFormScreenConfiguration} from "@story-config/ConsentFormScreen.config";
 import {CustomSelectFieldConfiguration} from "@story-config/CustomSelectField.config";
 import {DashboardGridConfiguration} from "@story-config/DashboardGrid.config";
+import {DashboardGridItemConfiguration} from "@story-config/DashboardGridItem.config";
 import {DataTableConfiguration} from "@story-config/DataTable.config";
 import {DateTimeFieldConfiguration} from "@story-config/DateTimeField.config";
 import {DecimalRangeActionSheetConfiguration} from "@story-config/DecimalRangeActionSheet.config";
@@ -68,6 +70,7 @@ import {PhoneNumberConfiguration} from "@story-config/PhoneNumberField.config";
 import {PopoverConfiguration} from "@story-config/Popover.config";
 import {RadioConfiguration} from "@story-config/Radio.config";
 import {RadioFieldConfiguration} from "@story-config/RadioField.config";
+import {ScorecardConfiguration} from "@story-config/Scorecard.config";
 import {SectionDividerConfiguration} from "@story-config/SectionDivider.config";
 import {SegmentedControlConfiguration} from "@story-config/SegmentedControl.config";
 import {SelectBadgeConfiguration} from "@story-config/SelectBadge.config";
@@ -85,6 +88,7 @@ import {SimpleAskCardConfiguration} from "@story-config/SimpleAskCard.config";
 import {SimpleContentConfiguration} from "@story-config/SimpleContent.config";
 import {SliderConfiguration} from "@story-config/Slider.config";
 import {SocialLoginButtonConfiguration} from "@story-config/SocialLoginButton.config";
+import {SparklineChartConfiguration} from "@story-config/SparklineChart.config";
 import {SpinnerConfiguration} from "@story-config/Spinner.config";
 import {SplitPageConfiguration} from "@story-config/SplitPage.config";
 import {SwiperConfiguration} from "@story-config/Swiper.config";
@@ -297,12 +301,14 @@ const Config: DemoConfigurationBase[] = [
   BoxConfiguration,
   ButtonConfiguration,
   CardConfiguration,
+  ChartCardConfiguration,
   // ChatBubbleConfiguration,
   CheckBoxConfiguration,
   ConflictSheetConfiguration,
   ConsentFormScreenConfiguration,
   CustomSelectFieldConfiguration,
   DashboardGridConfiguration,
+  DashboardGridItemConfiguration,
   DataTableConfiguration,
   DateTimeFieldConfiguration,
   DecimalRangeActionSheetConfiguration,
@@ -352,6 +358,7 @@ const Config: DemoConfigurationBase[] = [
   PhoneNumberConfiguration,
   RadioConfiguration,
   RadioFieldConfiguration,
+  ScorecardConfiguration,
   SectionDividerConfiguration,
   SegmentedControlConfiguration,
   SelectBadgeConfiguration,
@@ -367,6 +374,7 @@ const Config: DemoConfigurationBase[] = [
   SignatureFieldConfiguration,
   SliderConfiguration,
   SocialLoginButtonConfiguration,
+  SparklineChartConfiguration,
   SpinnerConfiguration,
   SplitPageConfiguration,
   SwiperConfiguration,

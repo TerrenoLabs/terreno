@@ -26,6 +26,7 @@ export * from "./BooleanField";
 export * from "./Box";
 export * from "./Button";
 export * from "./Card";
+export type * from "./ChartCard";
 export * from "./CheckBox";
 export * from "./Common";
 export type * from "./ConflictSheet";
@@ -80,6 +81,7 @@ export {
   AttachmentPreview,
   BarChart,
   BlocksView,
+  ChartCard,
   ConflictSheet,
   ConsentFormScreen,
   ConsentNavigator,
@@ -91,6 +93,8 @@ export {
   LineChart,
   MarkdownEditor,
   MarkdownEditorField,
+  Scorecard,
+  SparklineChart,
   UpgradeRequiredScreen,
 } from "./lazyBoundaries/heavyOptionalExports";
 export * from "./login/LoginScreen";
@@ -119,6 +123,7 @@ export * from "./PortalHost";
 export * from "./pdfHtmlTemplate";
 export * from "./Radio";
 export * from "./RadioField";
+export type * from "./Scorecard";
 export * from "./ScrollView";
 export * from "./SectionDivider";
 export * from "./SegmentedControl";
@@ -131,6 +136,7 @@ export * from "./SignatureCaptureField";
 export * from "./SignatureField";
 export * from "./Slider";
 export * from "./SocialLoginButton";
+export type * from "./SparklineChart";
 export * from "./Spinner";
 export * from "./SplitPage";
 export * from "./SyncStatusBanner";

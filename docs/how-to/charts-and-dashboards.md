@@ -37,3 +37,8 @@ Charts have no width prop: each one fills the container you put it in and redraw
 Prove paint with `bun run ui:charts:compare` against `demo/rendered-snapshots/`, not with JSON snapshots. See [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md).
 
 A chat reply can draw the same charts. `BlocksView` turns a `chart` block into one series of `{label, value}` points from an inline dataset or from `points`. It does not pass a per-point `color`. A `ref` dataset is loaded with `resolveDataset` and the chart stays in `loading` until those rows arrive.
+
+The example app admin home (`example-frontend/components/AdminCharts.tsx`, mounted
+below the admin dashboard at `/admin`) shows the same pieces together: scorecards with comparison
+sparklines, a multi-series line, a donut with a center label, a bar chart, and an
+area chart inside a spanning `DashboardGrid`.

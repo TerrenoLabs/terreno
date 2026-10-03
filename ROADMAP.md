@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-10-03T11:00:18.599Z.
+> dates are promised. Last updated: 2026-10-03T20:09:55.611Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -36,6 +36,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### ai
 
+- [Agent UI Asks — agents ask the user for a typed answer inside the chat](https://github.com/TerrenoLabs/terreno/issues/1501) (Feature, In progress) — IP: [agent-ui-asks](docs/implementationPlans/agent-ui-asks.md) · Tasks: [agent-ui-asks](docs/tasks/agent-ui-asks.md)
 - [Agent UI Blocks — a strict YAML DSL for agent-rendered Terreno components](https://github.com/TerrenoLabs/terreno/issues/1389) (Feature, Planned) — IP: [agent-ui-blocks](docs/implementationPlans/agent-ui-blocks.md) · Tasks: [agent-ui-blocks](docs/tasks/agent-ui-blocks.md)
 
 ### mcp

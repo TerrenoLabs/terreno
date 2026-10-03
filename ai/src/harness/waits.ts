@@ -23,6 +23,7 @@ import {
   isDuplicateKeyError,
 } from "./commit";
 import {HarnessDefinitionError} from "./definitionError";
+import {harnessError} from "./errors";
 import {inTransaction} from "./transaction";
 
 /** Most object keys a resume span lists for a delivered payload. */
@@ -246,9 +247,10 @@ const assertSameEvent = (
   event: string
 ): HarnessInboxEventDocument => {
   if (existing.name !== event) {
-    throw new Error(
-      `requestId "${existing.requestId}" already sent event "${existing.name}" to task ${existing.taskId}, not "${event}"`
-    );
+    throw harnessError({
+      detail: `requestId "${existing.requestId}" already sent event "${existing.name}" to task ${existing.taskId}, not "${event}"`,
+      kind: "requestIdConflict",
+    });
   }
   return existing;
 };
@@ -279,7 +281,10 @@ export const appendInboxEvent = async ({
     {returnDocument: "after", session}
   );
   if (!counted) {
-    throw new Error(`Task ${taskId} is already terminal; it cannot receive event "${event}"`);
+    throw harnessError({
+      detail: `Task ${taskId} is already terminal; it cannot receive event "${event}"`,
+      kind: "taskTerminal",
+    });
   }
   const [created] = await models.inbox.create(
     [{name: event, payload, requestId, seq: counted.eventSeq, taskId}],
@@ -328,7 +333,10 @@ export const sendEventRecords = async ({
     }
   }
   const terminalError = (status: string): Error =>
-    new Error(`Task ${task._id} is already ${status}; it cannot receive event "${event}"`);
+    harnessError({
+      detail: `Task ${task._id} is already ${status}; it cannot receive event "${event}"`,
+      kind: "taskTerminal",
+    });
   if (HARNESS_TERMINAL_STATUSES.has(task.status)) {
     throw terminalError(task.status);
   }

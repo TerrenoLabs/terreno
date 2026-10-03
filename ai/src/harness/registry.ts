@@ -6,6 +6,7 @@ import type {
 import {HARNESS_TERMINAL_STATUSES} from "../types/harness";
 import type {HarnessModels} from "./commit";
 import {taskDefinitionKey} from "./defineTask";
+import {harnessError} from "./errors";
 
 /** Any task definition, whatever its input, state, and output types. */
 export type AnyHarnessTaskDefinition = HarnessTaskDefinition<never, unknown, unknown>;
@@ -33,7 +34,10 @@ export const splitRegistry = (
   for (const entry of registry) {
     if (entry.kind === "extension") {
       if (extensions.has(entry.name)) {
-        throw new Error(`Harness registry lists extension "${entry.name}" more than once`);
+        throw harnessError({
+          detail: `Harness registry lists extension "${entry.name}" more than once`,
+          kind: "configInvalid",
+        });
       }
       extensions.set(entry.name, entry);
       continue;
@@ -43,16 +47,20 @@ export const splitRegistry = (
       continue;
     }
     if (agents.has(entry.name)) {
-      throw new Error(`Harness registry lists agent "${entry.name}" more than once`);
+      throw harnessError({
+        detail: `Harness registry lists agent "${entry.name}" more than once`,
+        kind: "configInvalid",
+      });
     }
     agents.set(entry.name, entry);
   }
   for (const agent of agents.values()) {
     const missing = agent.extensions.find((name) => !extensions.has(name));
     if (missing !== undefined) {
-      throw new Error(
-        `Agent "${agent.name}" uses extension "${missing}", which is not in this harness registry`
-      );
+      throw harnessError({
+        detail: `Agent "${agent.name}" uses extension "${missing}", which is not in this harness registry`,
+        kind: "configInvalid",
+      });
     }
   }
   return {agents, extensions, tasks};
@@ -68,7 +76,10 @@ export const buildTaskRegistry = (
   const definitions = new Map<string, HarnessTaskDefinition>();
   for (const definition of registry) {
     if (definitions.has(definition.key)) {
-      throw new Error(`Harness registry lists ${definition.key} more than once`);
+      throw harnessError({
+        detail: `Harness registry lists ${definition.key} more than once`,
+        kind: "configInvalid",
+      });
     }
     definitions.set(definition.key, definition as unknown as HarnessTaskDefinition);
   }
@@ -106,7 +117,8 @@ export const assertInFlightVersionsRegistered = async ({
   const listed = missing
     .map(({count, key}) => `${key} (${count} task${count === 1 ? "" : "s"})`)
     .join(", ");
-  throw new Error(
-    `Harness.start: in-flight tasks use task versions this registry does not register: ${listed}. Register those definitions (keep old versions until their tasks finish) or resolve the tasks first.`
-  );
+  throw harnessError({
+    detail: `Harness.start: in-flight tasks use task versions this registry does not register: ${listed}. Register those definitions (keep old versions until their tasks finish) or resolve the tasks first.`,
+    kind: "configInvalid",
+  });
 };

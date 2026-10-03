@@ -45,6 +45,7 @@ import {HARNESS_MESSAGE_ROLES, HARNESS_WHEN_BUSY} from "../types/harness";
 import {AGENT_TOOL_TASK_NAME, AGENT_TURN_TASK_NAME} from "./agentTaskNames";
 import type {HarnessCommitWrites, HarnessModels} from "./commit";
 import {defineTask} from "./defineTask";
+import {errorMessage, harnessError} from "./errors";
 import {HarnessDeltaWriter, insertMessages, type ResolvedStreamingOptions} from "./events";
 import {
   buildSystemPrompt,
@@ -113,9 +114,6 @@ export interface AgentTasks {
   turn: HarnessTaskDefinition<AgentTurnInput, AgentTurnState, HarnessTurnResult>;
 }
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
-
 /** A tool's own `execute` threw; reported to the model as `Tool "<name>" failed: ...`. */
 class ToolExecuteError extends Error {
   constructor(toolName: string, cause: unknown) {
@@ -135,7 +133,10 @@ const toJsonValue = (value: unknown): unknown => {
 const requireAgent = (context: AgentLoopContext, name: string): HarnessAgentDefinition => {
   const agent = context.agents.get(name);
   if (!agent) {
-    throw new Error(`Agent "${name}" is not in this harness registry`);
+    throw harnessError({
+      detail: `Agent "${name}" is not in this harness registry`,
+      kind: "notRegistered",
+    });
   }
   return agent;
 };
@@ -254,7 +255,10 @@ const allocateSeqs = async ({
     {returnDocument: "after", session}
   );
   if (!updated) {
-    throw new Error(`Conversation ${conversationId} no longer exists`);
+    throw harnessError({
+      detail: `Conversation ${conversationId} no longer exists`,
+      kind: "notFound",
+    });
   }
   return updated.seq - count + 1;
 };
@@ -672,7 +676,10 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
     const conversation = await loadConversation(models, conversationId);
     const agent = requireAgent(context, conversation.agent.name);
     if (!context.resolveModel) {
-      throw new Error("Harness.open needs a models resolver to run agents");
+      throw harnessError({
+        detail: "Harness.open needs a models resolver to run agents",
+        kind: "configInvalid",
+      });
     }
     const extensions = conversationExtensions(conversation);
     const history = await models.message.find({conversationId}).sort({seq: 1});

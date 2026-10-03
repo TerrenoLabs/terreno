@@ -1,6 +1,11 @@
 import {createLocalObservabilityPlugin} from "@terreno/ai";
-import {Harness, InProcessRunner, type InProcessRunnerOptions} from "@terreno/ai/harness";
-import {logger} from "@terreno/api";
+import {
+  HARNESS_ERRORS,
+  Harness,
+  InProcessRunner,
+  type InProcessRunnerOptions,
+} from "@terreno/ai/harness";
+import {isAPIError, logger} from "@terreno/api";
 
 import {approvalDemo} from "./approvalDemo";
 import {type ClinicalIntake, createClinicalIntake} from "./clinicalIntake";
@@ -26,7 +31,7 @@ export const exampleRunnerOptions = (): InProcessRunnerOptions => {
 };
 
 const isMissingReplicaSet = (error: unknown): boolean =>
-  error instanceof Error && error.message.includes("requires a MongoDB replica set");
+  isAPIError(error) && error.code === HARNESS_ERRORS.replicaSetRequired.code;
 
 /**
  * Open the process-wide example harness once. Returns `undefined` (and logs) when Mongo is
@@ -67,7 +72,7 @@ export const getExampleHarness = (): Harness | undefined => exampleHarness;
 export const getExampleClinicalIntake = (): ClinicalIntake | undefined => exampleClinicalIntake;
 
 /** Stop the runner (waiting for the phase in flight) and forget the harness. */
-const stopExampleHarness = async (): Promise<void> => {
+export const stopExampleHarness = async (): Promise<void> => {
   const harness = exampleHarness;
   exampleHarness = undefined;
   exampleClinicalIntake = undefined;

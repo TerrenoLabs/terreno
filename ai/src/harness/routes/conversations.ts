@@ -1,6 +1,5 @@
 import {
   type ActionContext,
-  ConflictError,
   type ModelRouterOptions,
   modelRouter,
   type PermissionMethod,
@@ -12,7 +11,6 @@ import type express from "express";
 
 import type {HarnessConversationDocument, HarnessSubmitResult} from "../../types/harness";
 import {HARNESS_WHEN_BUSY} from "../../types/harness";
-import {HarnessConversationOwnedError} from "../conversation";
 import type {Harness} from "../harness";
 import {registerHarnessConversation} from "../models/harnessConversation";
 import {isOwnerOrAdmin} from "./events";
@@ -66,19 +64,9 @@ export const addHarnessConversationRoutes = (
   >): Promise<HarnessSubmitResult> => {
     // Validated by the action's zod body schema.
     const {content, requestId, whenBusy} = body as z.infer<typeof submitBody>;
-    try {
-      const conversation = await harness.conversation(doc._id);
-      return await conversation.send({content, requestId, whenBusy});
-    } catch (error: unknown) {
-      if (error instanceof HarnessConversationOwnedError) {
-        throw new ConflictError({
-          code: "harness-conversation-owned",
-          detail: error.message,
-          title: "Conversation is run by its owning task",
-        });
-      }
-      throw error;
-    }
+    // HarnessConversationOwnedError is already a 409 APIError.
+    const conversation = await harness.conversation(doc._id);
+    return conversation.send({content, requestId, whenBusy});
   };
 
   router.use(

@@ -5,6 +5,7 @@ import type mongoose from "mongoose";
 import type {HarnessLeaseSettings, HarnessTestHooks} from "../types/harness";
 import {HARNESS_TASK_STATUSES} from "../types/harness";
 import {type HarnessModels, isDuplicateKeyError} from "./commit";
+import {errorMessage} from "./errors";
 
 /** `HarnessOwner.key` of the lease every `InProcessRunner` competes for. */
 const DEFAULT_OWNER_LEASE_KEY = "default";
@@ -106,7 +107,7 @@ export const startTaskHeartbeat = ({
         return;
       }
     } catch (error: unknown) {
-      logger.warn(`Harness task ${taskId} lease renewal failed: ${String(error)}`);
+      logger.warn(`Harness task ${taskId} lease renewal failed: ${errorMessage(error)}`);
     }
     schedule();
   };

@@ -1,4 +1,11 @@
-import {checkPermissions, logger, Permissions, type RESTMethod, type User} from "@terreno/api";
+import {
+  APIError,
+  checkPermissions,
+  logger,
+  Permissions,
+  type RESTMethod,
+  type User,
+} from "@terreno/api";
 import {DateTime, type Duration, type DurationLike} from "luxon";
 import mongoose, {type ClientSession} from "mongoose";
 
@@ -22,6 +29,7 @@ import {
 import type {HarnessModels} from "./commit";
 import {taskDefinitionKey} from "./defineTask";
 import {HarnessDefinitionError} from "./definitionError";
+import {errorMessage, HARNESS_ERRORS, harnessError} from "./errors";
 import {appendTaskEvents} from "./events";
 import {defineExtension, hook} from "./extensions";
 import {registerHarnessTask} from "./models/harnessTask";
@@ -45,15 +53,11 @@ export const HARNESS_DEFAULT_APPROVERS: ReadonlyArray<HarnessApprover> = Object.
 ]);
 
 /** The approval can no longer be decided: already decided, expired, or its task ended. */
-export class HarnessApprovalConflictError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "HarnessApprovalConflictError";
+export class HarnessApprovalConflictError extends APIError {
+  constructor(detail: string) {
+    super({...HARNESS_ERRORS.approvalNotPending, detail});
   }
 }
-
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
 
 const toObjectId = (
   id: mongoose.Types.ObjectId | string | undefined
@@ -165,7 +169,10 @@ const approvalResult = (approval: HarnessApprovalDocument): HarnessApprovalResul
   }
   if (approval.status === HARNESS_APPROVAL_STATUSES.pending) {
     // Only a decision may wake an approval wait; a hand-sent event must not approve.
-    throw new Error(`Approval ${approvalId} received its event without a recorded decision`);
+    throw harnessError({
+      detail: `Approval ${approvalId} received its event without a recorded decision`,
+      kind: "internal",
+    });
   }
   const result: HarnessApprovalResult = {
     approvalId,
@@ -576,17 +583,19 @@ export interface ApprovalGateOptions {
  */
 export const approvalGate = (options: ApprovalGateOptions): HarnessExtensionDefinition => {
   if (!Array.isArray(options?.tools) || options.tools.length === 0) {
-    throw new Error("approvalGate: tools must list at least one tool");
+    throw new HarnessDefinitionError("approvalGate: tools must list at least one tool");
   }
   const toolNames = options.tools.map((tool) => (typeof tool === "string" ? tool : tool?.name));
   if (toolNames.some((name) => typeof name !== "string" || !name.trim())) {
-    throw new Error("approvalGate: every tool must be a defineTool tool or a tool name");
+    throw new HarnessDefinitionError(
+      "approvalGate: every tool must be a defineTool tool or a tool name"
+    );
   }
   const gated = new Set(toolNames);
   const name = options.name ?? `approvalGate:${toolNames.join(",")}`;
   const approvers = options.approvers ?? HARNESS_DEFAULT_APPROVERS;
   if (options.title !== undefined && !["function", "string"].includes(typeof options.title)) {
-    throw new Error(`approvalGate(${name}): title must be a string or a function`);
+    throw new HarnessDefinitionError(`approvalGate(${name}): title must be a string or a function`);
   }
   if (options.timeout !== undefined) {
     parseWaitDuration(options.timeout, `approvalGate(${name}): timeout`);

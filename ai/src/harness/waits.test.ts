@@ -5,9 +5,11 @@ import mongoose from "mongoose";
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import type {HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {commitWaiting, type HarnessModels} from "./commit";
+import {errorMessage} from "./errors";
 import {type AnyHarnessTaskDefinition, defineTask, Harness, InProcessRunner} from "./harness";
 import {registerHarnessEvent, registerHarnessEventStream} from "./models/harnessEvent";
 import {registerHarnessInboxEvent} from "./models/harnessInboxEvent";
@@ -192,7 +194,10 @@ describe("Harness events, waits, and sleep", () => {
 
     // The timed-out call completed the task, so a late event has nowhere to go.
     await expect(harness.sendEvent(created._id, "approved", {})).rejects.toThrow(
-      /is already completed; it cannot receive event "approved"/
+      harnessErrorMatching(
+        "taskTerminal",
+        /is already completed; it cannot receive event "approved"/
+      )
     );
   }, 20_000);
 
@@ -246,7 +251,7 @@ describe("Harness events, waits, and sleep", () => {
     expect((await findTask(created._id)).eventSeq).toBe(1);
     await expect(
       harness.sendEvent(created._id, "rejected", 3, {requestId: "req-1"})
-    ).rejects.toThrow(/already sent event "approved"/);
+    ).rejects.toThrow(harnessErrorMatching("requestIdConflict", /already sent event "approved"/));
 
     // The same key on another task is a different event.
     const other = await harness.createTask(definition, {});
@@ -313,7 +318,7 @@ describe("Harness events, waits, and sleep", () => {
     await pause(150);
     expect((await findTask(created._id)).status).toBe("aborted");
     await expect(harness.sendEvent(created._id, "approved", {})).rejects.toThrow(
-      /is already aborted/
+      harnessErrorMatching("taskTerminal", /is already aborted/)
     );
   }, 20_000);
 
@@ -388,10 +393,13 @@ describe("Harness events, waits, and sleep", () => {
     await harness.waitForTask(created._id, {timeout: {seconds: 10}});
 
     await expect(harness.sendEvent(created._id, "approved", {})).rejects.toThrow(
-      `Task ${created._id} is already completed; it cannot receive event "approved"`
+      harnessErrorMatching(
+        "taskTerminal",
+        `Task ${created._id} is already completed; it cannot receive event "approved"`
+      )
     );
     await expect(harness.sendEvent(created._id, " ", {})).rejects.toThrow(
-      "sendEvent requires an event name"
+      harnessErrorMatching("invalidRequest", "sendEvent requires an event name")
     );
     await expect(harness.sendEvent(new mongoose.Types.ObjectId(), "approved")).rejects.toThrow(
       /no documents/
@@ -617,8 +625,8 @@ describe("Harness events, waits, and sleep", () => {
                 caught.push((error as Error).name);
               }
               // Carrying on after the conflict must not be able to checkpoint.
-              await rt.commit({terminal: {status: "completed"}}).catch((error: Error) => {
-                caught.push(error.message);
+              await rt.commit({terminal: {status: "completed"}}).catch((error: unknown) => {
+                caught.push(errorMessage(error));
               });
             },
           },

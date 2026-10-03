@@ -2,6 +2,7 @@ import {DateTime} from "luxon";
 
 import type {HarnessRetryPolicy} from "../types/harness";
 import {HARNESS_RETRY_DEFAULTS} from "../types/harness";
+import {HarnessDefinitionError} from "./definitionError";
 
 export interface ResolvedRetryPolicy {
   backoffMs: number;
@@ -29,13 +30,15 @@ export const assertValidRetryPolicy = (
 ): void => {
   const {backoffMs, maxAttempts, maxBackoffMs} = resolveRetryPolicy(policy);
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
-    throw new Error(`${scope}: ${field}.maxAttempts must be a positive integer`);
+    throw new HarnessDefinitionError(`${scope}: ${field}.maxAttempts must be a positive integer`);
   }
   if (!Number.isFinite(backoffMs) || backoffMs < 0) {
-    throw new Error(`${scope}: ${field}.backoffMs must be a non-negative number`);
+    throw new HarnessDefinitionError(`${scope}: ${field}.backoffMs must be a non-negative number`);
   }
   if (!Number.isFinite(maxBackoffMs) || maxBackoffMs < backoffMs) {
-    throw new Error(`${scope}: ${field}.maxBackoffMs must be at least ${field}.backoffMs`);
+    throw new HarnessDefinitionError(
+      `${scope}: ${field}.maxBackoffMs must be at least ${field}.backoffMs`
+    );
   }
 };
 

@@ -1,5 +1,6 @@
 import {afterAll, beforeAll} from "bun:test";
 import {LocalTraceStore} from "@terreno/ai";
+import {APIError} from "@terreno/api";
 import {startMongoServer, stopMongoServer} from "@terreno/test";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
@@ -63,7 +64,12 @@ export const pollUntil = async <T>(
     }
     await Bun.sleep(intervalMs);
   }
-  throw new Error(`Timed out after ${timeoutMs} ms waiting for ${what}`);
+  throw new APIError({
+    code: "test-wait-timed-out",
+    detail: `Timed out after ${timeoutMs} ms waiting for ${what}`,
+    status: 504,
+    title: "Timed out waiting",
+  });
 };
 
 const flatten = (nodes: SpanNodeLike[], depth: number, parent?: string): SpanLine[] =>

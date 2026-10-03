@@ -16,6 +16,7 @@ import {createLocalObservabilityPlugin} from "../observability/local/localPlugin
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
 import {generateToStream} from "../tests/generateStream";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import type {
   AnyHarnessToolDefinition,
   HarnessAgentDefinition,
@@ -23,6 +24,7 @@ import type {
 } from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import type {HarnessModels} from "./commit";
+import {errorMessage} from "./errors";
 import {
   AGENT_TOOL_TASK_NAME,
   AGENT_TURN_TASK_NAME,
@@ -222,48 +224,83 @@ describe("Extensions, hooks, wraps, and memos", () => {
 
   describe("definitions", () => {
     it("validates extensions, sections, hooks, and wraps", () => {
-      expect(() => defineExtension({name: " "})).toThrow("defineExtension: name is required");
-      expect(() => section("", () => "x")).toThrow("section: name is required");
-      expect(() => section("s", "x" as never)).toThrow("section(s): build must be a function");
+      expect(() => defineExtension({name: " "})).toThrow(
+        harnessErrorMatching("definitionInvalid", "defineExtension: name is required")
+      );
+      expect(() => section("", () => "x")).toThrow(
+        harnessErrorMatching("definitionInvalid", "section: name is required")
+      );
+      expect(() => section("s", "x" as never)).toThrow(
+        harnessErrorMatching("definitionInvalid", "section(s): build must be a function")
+      );
       expect(() => hook("onEverything" as never, () => undefined)).toThrow(
-        'hook: kind must be one of afterTool, beforeModelRequest, beforeTool, not "onEverything"'
+        harnessErrorMatching(
+          "definitionInvalid",
+          'hook: kind must be one of afterTool, beforeModelRequest, beforeTool, not "onEverything"'
+        )
       );
       expect(() => hook("beforeTool", 3 as never)).toThrow(
-        "hook(beforeTool): handler must be a function"
+        harnessErrorMatching("definitionInvalid", "hook(beforeTool): handler must be a function")
       );
       expect(() => wrapTool("", (tool) => tool)).toThrow(
-        "wrapTool: a tool or tool name is required"
+        harnessErrorMatching("definitionInvalid", "wrapTool: a tool or tool name is required")
       );
       expect(() => wrapTool("lookup", null as never)).toThrow(
-        "wrapTool(lookup): wrap must be a function"
+        harnessErrorMatching("definitionInvalid", "wrapTool(lookup): wrap must be a function")
       );
       expect(wrapTool(lookupTool, (tool) => tool).toolName).toBe("lookup");
       expect(() =>
         defineExtension({name: "x", sections: [section("a", () => ""), section("a", () => "")]})
-      ).toThrow('defineExtension(x): section "a" is listed more than once');
+      ).toThrow(
+        harnessErrorMatching(
+          "definitionInvalid",
+          'defineExtension(x): section "a" is listed more than once'
+        )
+      );
       expect(() => defineExtension({name: "x", sections: [{} as never]})).toThrow(
-        "defineExtension(x): every section must come from section()"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "defineExtension(x): every section must come from section()"
+        )
       );
       expect(() => defineExtension({name: "x", tools: [lookupTool, lookupTool]})).toThrow(
-        'defineExtension(x): tool "lookup" is listed more than once'
+        harnessErrorMatching(
+          "definitionInvalid",
+          'defineExtension(x): tool "lookup" is listed more than once'
+        )
       );
       expect(() => defineExtension({name: "x", tools: [{} as never]})).toThrow(
-        "defineExtension(x): every tool must come from defineTool"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "defineExtension(x): every tool must come from defineTool"
+        )
       );
       expect(() => defineExtension({hooks: [{} as never], name: "x"})).toThrow(
-        "defineExtension(x): every hook must come from hook()"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "defineExtension(x): every hook must come from hook()"
+        )
       );
       expect(() => defineExtension({name: "x", wraps: [{} as never]})).toThrow(
-        "defineExtension(x): every wrap must come from wrapTool()"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "defineExtension(x): every wrap must come from wrapTool()"
+        )
       );
       const extension = defineExtension({name: "clinic"});
       expect(Object.isFrozen(extension)).toBe(true);
       expect(agentWith({extensions: [extension, "audit"]}).extensions).toEqual(["clinic", "audit"]);
       expect(() => agentWith({extensions: ["clinic", extension]})).toThrow(
-        "defineAgent(test.clinician): an extension is listed more than once"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "defineAgent(test.clinician): an extension is listed more than once"
+        )
       );
       expect(() => agentWith({extensions: [{} as never]})).toThrow(
-        "defineAgent(test.clinician): every extension must be a defineExtension result or its name"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "defineAgent(test.clinician): every extension must be a defineExtension result or its name"
+        )
       );
     });
 
@@ -271,14 +308,22 @@ describe("Extensions, hooks, wraps, and memos", () => {
       const clinic = defineExtension({name: "clinic"});
       await expect(
         Harness.open({registry: [clinic, defineExtension({name: "clinic"})]})
-      ).rejects.toThrow('Harness registry lists extension "clinic" more than once');
+      ).rejects.toThrow(
+        harnessErrorMatching(
+          "configInvalid",
+          'Harness registry lists extension "clinic" more than once'
+        )
+      );
       await expect(
         Harness.open({
           models: () => ({}) as LanguageModel,
           registry: [agentWith({extensions: ["clinic"]})],
         })
       ).rejects.toThrow(
-        'Agent "test.clinician" uses extension "clinic", which is not in this harness registry'
+        harnessErrorMatching(
+          "configInvalid",
+          'Agent "test.clinician" uses extension "clinic", which is not in this harness registry'
+        )
       );
     });
   });
@@ -795,7 +840,10 @@ describe("Extensions, hooks, wraps, and memos", () => {
       });
       // Snapshotting the conversation resolves its tools, so a bad wrap fails there.
       await expect(harness.createConversation({agent})).rejects.toThrow(
-        'Extension "bad" wrap of tool "lookup" must return a defineTool tool named "lookup"'
+        harnessErrorMatching(
+          "definitionInvalid",
+          'Extension "bad" wrap of tool "lookup" must return a defineTool tool named "lookup"'
+        )
       );
       await expect(harness.createConversation({agent, extensions: ["throwing"]})).rejects.toThrow(
         'Extension "throwing" wrap of tool "lookup" failed: no audit sink'
@@ -855,14 +903,22 @@ describe("Extensions, hooks, wraps, and memos", () => {
       const agent = agentWith({tools: []});
       const harness = await openHarness({model: scripted.model, registry: [agent, clinic]});
       await expect(harness.createConversation({agent, extensions: ["ghost"]})).rejects.toThrow(
-        'Extension "ghost" is not in this harness registry'
+        harnessErrorMatching("notRegistered", 'Extension "ghost" is not in this harness registry')
       );
       await expect(harness.createConversation({agent, extensions: [3 as never]})).rejects.toThrow(
-        "createConversation: every extension must be a defineExtension result or its name"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "createConversation: every extension must be a defineExtension result or its name"
+        )
       );
       await expect(
         harness.createConversation({agent, extensions: [clinic, "clinic"]})
-      ).rejects.toThrow("createConversation: an extension is listed more than once");
+      ).rejects.toThrow(
+        harnessErrorMatching(
+          "invalidRequest",
+          "createConversation: an extension is listed more than once"
+        )
+      );
       const conversation = await harness.createConversation({agent, extensions: [clinic]});
       expect(plain(conversation.document.agent.extensions)).toEqual(["clinic"]);
       const turn = await conversation.submit({content: "hi", requestId: "r1"});
@@ -944,7 +1000,7 @@ describe("Extensions, hooks, wraps, and memos", () => {
         try {
           await work();
         } catch (error: unknown) {
-          errors.push(error instanceof Error ? error.message : String(error));
+          errors.push(errorMessage(error));
         }
       };
       const task = defineTask<Record<string, never>, unknown, unknown>({
@@ -1073,8 +1129,10 @@ describe("Extensions, hooks, wraps, and memos", () => {
         const {release, rows} = await hangTasks(1);
         try {
           const [row] = rows as [HarnessTaskDocument];
-          await expect(memoFor(row, row._id, "stale-token")("choice", "a")).rejects.toBeInstanceOf(
-            HarnessCommitConflictError
+          const stale = memoFor(row, row._id, "stale-token")("choice", "a");
+          await expect(stale).rejects.toBeInstanceOf(HarnessCommitConflictError);
+          await expect(stale).rejects.toThrow(
+            harnessErrorMatching("commitConflict", `Harness commit for task ${row._id}`)
           );
           expect(await MemoModel.countDocuments({})).toBe(0);
           expect(await memoFor(row, row._id)("choice", "b")).toBe("b");

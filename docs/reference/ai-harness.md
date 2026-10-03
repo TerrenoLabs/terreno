@@ -70,11 +70,14 @@ import {
 
 ## Requirements
 
-| Requirement | Why | Failure |
+| Requirement | Why | Failure (`code`: `detail`) |
 | --- | --- | --- |
-| MongoDB replica set (or `mongos`) on the default mongoose connection | Checkpoint and span commit in one transaction | `Harness.open` throws `Harness.open requires a MongoDB replica set` |
-| Local observability models (`createLocalObservabilityPlugin()`) | `ObsTrace` / `ObsSpan` are the audit log | `Harness.open` throws `Harness.open requires the local observability plugin` |
-| A connected default connection | Models live on `mongoose.connection` | `Harness.open` throws `requires a connected mongoose default connection` |
+| MongoDB replica set (or `mongos`) on the default mongoose connection | Checkpoint and span commit in one transaction | `Harness.open` throws `harness-replica-set-required`: `Harness.open requires a MongoDB replica set: ...` |
+| Local observability models (`createLocalObservabilityPlugin()`) | `ObsTrace` / `ObsSpan` are the audit log | `Harness.open` throws `harness-config-invalid`: `Harness.open requires the local observability plugin: ...` |
+| A connected default connection | Models live on `mongoose.connection` | `Harness.open` throws `harness-config-invalid`: `Harness.open requires a connected mongoose default connection` |
+
+Every harness error is an `APIError` (see [Errors](#errors)). Quoted error text on this
+page is the error's `detail`; its `message` is the stable `title` of its `code`.
 
 ## Minimal example
 
@@ -756,7 +759,8 @@ appear in `/openapi.json` (tag `harness`). The two SSE routes are plain Express 
 | --- | --- |
 | 400 | Missing or blank `reason`, unknown `action`, unknown keys. |
 | 403 | abort: neither owner nor admin. resolveInterrupted: not an admin. |
-| 409 | abort: the task already ended (`code: "harness-task-terminal"`). resolveInterrupted: the task is not `interrupted` (`"harness-task-not-interrupted"`), or `retry` on a task being aborted (`"harness-task-aborting"`). |
+| 404 | resolveInterrupted `retry`: the task's `name@version` is no longer registered (`"harness-not-registered"`). |
+| 409 | abort: the task already ended (`code: "harness-task-terminal"`). resolveInterrupted: the task is not `interrupted` (`"harness-task-not-interrupted"`), or `retry` on a task being aborted (`"harness-task-aborting"`). Either route: lost a commit race on a task that has not ended (`"harness-commit-conflict"`); retry the request. |
 
 ### Approval routes
 
@@ -936,20 +940,20 @@ Rules:
   either process, and one more phase can start in the narrow window before the abort
   rotates the lease token. None of those writes commit. Phases with side effects should
   check `rt.signal` before acting.
-- Throws `abort requires a reason` for a blank reason and `Task <id> is already <status>`
-  for a terminal task.
+- Throws `harness-invalid-request` (`abort requires a reason`) for a blank reason and
+  `harness-task-terminal` (`Task <id> is already <status>`) for a terminal task.
 - If the process dies mid-abort, the remaining tasks keep `abortRequested` and are never
   claimed. Call `abort` again to finish (after a handler claim lapses, within one minute).
   `resolveInterrupted` rejects `retry` for such a task; use `abort`.
 
-| Error | When |
-| --- | --- |
-| `resolveInterrupted action must be one of abort, complete, retry` | Unknown `action`. |
-| `resolveInterrupted requires a reason` | Missing or blank `reason`. |
-| `Task <id> is <status>, not interrupted` | The task is in any other status. |
-| `Task <id> is being aborted; resolve it with abort, not retry` | `retry` on a task with `abortRequested`. |
-| `HarnessCommitConflictError` | Another resolution won a race. Nothing is written. |
-| `findExactlyOne` not-found error | No task with that id. |
+| `code` | `detail` | When |
+| --- | --- | --- |
+| `harness-invalid-request` | `resolveInterrupted action must be one of abort, complete, retry` | Unknown `action`. |
+| `harness-invalid-request` | `resolveInterrupted requires a reason` | Missing or blank `reason`. |
+| `harness-task-not-interrupted` | `Task <id> is <status>, not interrupted` | The task is in any other status. |
+| `harness-task-aborting` | `Task <id> is being aborted; resolve it with abort, not retry` | `retry` on a task with `abortRequested`. |
+| `harness-commit-conflict` | `Harness commit for task <id> phase "<phase>" lost its checkpoint fence` | `HarnessCommitConflictError`: another resolution won a race. Nothing is written. |
+| (none) | `findExactlyOne` not-found error | No task with that id. |
 
 ## Versioning
 
@@ -1091,7 +1095,7 @@ conversation stable when the agent definition changes; tool code, `modelRetry`, 
 | Repeated `requestId` | Returns the turn it started; appends nothing. Keys are per conversation. |
 | Another turn is running, or submissions are queued | Throws `HarnessConversationBusyError` (`activeTurnTaskId` set). Use `send` to queue or steer. |
 | Lost a race to another submit | Re-reads the conversation: still busy → `HarnessConversationBusyError` naming the winning turn; idle again (the winner already finished) → claims it and starts its own turn. Up to 3 claims. |
-| Blank `content` / `requestId` | Throws `submit requires non-empty content` / `submit requires a requestId`. |
+| Blank `content` / `requestId` | Throws `harness-invalid-request`: `submit requires non-empty content` / `submit requires a requestId`. |
 | Subagent (task-owned) conversation | Throws `HarnessConversationOwnedError`: only `rt.runAgent` runs its turns. |
 
 When a turn ends (completed, failed, or aborted) the conversation goes back to `idle` in
@@ -1337,9 +1341,9 @@ Registration and lookup:
 
 | Case | Result |
 | --- | --- |
-| Two extensions with one name in `registry` | `Harness.open` throws `Harness registry lists extension "<name>" more than once`. Replacing an extension's behavior across versions ships later. |
-| An agent names an unregistered extension | `Harness.open` throws `Agent "<agent>" uses extension "<name>", which is not in this harness registry`. |
-| `createConversation({extensions})` names an unregistered or repeated extension | Throws `Extension "<name>" is not in this harness registry` / `createConversation: an extension is listed more than once`. |
+| Two extensions with one name in `registry` | `Harness.open` throws `harness-config-invalid`: `Harness registry lists extension "<name>" more than once`. Replacing an extension's behavior across versions ships later. |
+| An agent names an unregistered extension | `Harness.open` throws `harness-config-invalid`: `Agent "<agent>" uses extension "<name>", which is not in this harness registry`. |
+| `createConversation({extensions})` names an unregistered or repeated extension | Throws `harness-not-registered`: `Extension "<name>" is not in this harness registry` / `harness-invalid-request`: `createConversation: an extension is listed more than once`. An entry that is not an extension definition or name throws `harness-definition-invalid` (500). |
 | A conversation's snapshot names an extension the running process lacks | The turn's `request` fails the turn with `Extension "<name>" is not in this harness registry`. |
 
 Extensions are code: they come from the registry at run time. The conversation stores
@@ -1425,8 +1429,8 @@ The tools a conversation can call are resolved on every request and every tool c
 
 A wrap gets the winning tool and returns the tool to use (typically
 `defineTool({...tool, execute: ...})`). It must return a `defineTool` tool with the same
-name; otherwise resolution throws `Extension "<x>" wrap of tool "<name>" must return a
-defineTool tool named "<name>"`. A throwing wrap reports `Extension "<x>" wrap of tool
+name; otherwise resolution throws `harness-definition-invalid`: `Extension "<x>" wrap of tool
+"<name>" must return a defineTool tool named "<name>"`. A throwing wrap reports `Extension "<x>" wrap of tool
 "<name>" failed: <message>`. Where it throws decides what fails: `createConversation`
 throws, `request` fails the turn, a tool call reports the error to the model. Keep wraps
 pure: they run on every resolution.
@@ -1450,8 +1454,8 @@ const route = await rt.memo("route", await chooseRoute(task.input)); // first ru
 | Rule | Detail |
 | --- | --- |
 | Scope | Per task: unique `(taskId, key)`. `rt.memo` uses the running task. Hook `api.memo` uses the turn task, also from tool hooks (which run in the tool call's task), so a decision survives a re-run of the request or of the tool call. One turn shares one scope across all its model requests and tool calls: key tool decisions by `toolCallId`, and per-request decisions in sections or `beforeModelRequest` by `step` (a fixed key keeps the first request's value for the whole turn). |
-| Values | Stored as a JSON copy (nested `undefined` is dropped). A BigInt, or a top-level value JSON cannot represent (a function, a symbol), throws `memo "<key>": value is not JSON-serializable`. |
-| Keys | Non-empty strings; blank keys throw `memo requires a non-empty key`. |
+| Values | Stored as a JSON copy (nested `undefined` is dropped). A BigInt, or a top-level value JSON cannot represent (a function, a symbol), throws `harness-invalid-request`: `memo "<key>": value is not JSON-serializable`. |
+| Keys | Non-empty strings; blank keys throw `harness-invalid-request`: `memo requires a non-empty key`. |
 | Fencing | Each write runs in its own transaction that first renews the running task's lease, fenced on its phase and lease token. A run that lost its lease gets `HarnessCommitConflictError` and writes nothing. |
 | After commit | A write after the phase committed (or started waiting) throws; reads still work. |
 | Concurrency | The unique index decides the race; every writer returns the winner's value. |
@@ -1669,41 +1673,83 @@ and no span is written. Once its lease expires, recovery treats it as interrupte
 
 ## Errors
 
-| Error | When |
-| --- | --- |
-| `HarnessCommitConflictError` | The task was no longer `running` at the phase this commit started from, or its lease token changed (another runner took it over, or an abort fenced it). Also thrown by `rt.createTask` / `rt.waitForTasks` from a run that lost its lease, by a losing concurrent `resolveInterrupted`, and by `harness.abort` when the task finished on its own first. Nothing is written. |
-| `abort requires a reason` / `Task <id> is already <status>` | `harness.abort` with a blank reason, or on a terminal task. |
-| `rt.waitForTasks only waits on tasks this task created with rt.createTask` | Fails the task (no retry). |
-| `rt.waitForTasks policy must be one of all, failFast` | Unknown policy. Fails the task. |
-| `<key>: rt.waitFor requires an event name` / `rt.waitFor timeout ...` / `rt.sleep duration must be a valid, non-negative duration` | Misuse; fails the task (no retry). |
-| `<key>: wait call <step>:<n> was rt.waitFor("a") on an earlier run and is ...` | Wait calls changed order between runs of a phase. Fails the task. |
-| `Task <id> is already <status>; it cannot receive event "<event>"` | `sendEvent` to a terminal task. |
-| `sendEvent requires an event name` / `requestId "<id>" already sent event "<name>" to task ...` / `sendEvent: event names starting with "terreno." are reserved for the harness ...` | `sendEvent` misuse. |
-| `Child key "<key>" already belongs to task ...` | Two `rt.createTask` calls in one phase visit used the same `key` for different definitions. |
-| `defineTask(...): retry.* ...` / `abort must be a function` | Invalid `retry` policy or `abort` handler. |
-| `InProcessRunner heartbeatInterval must be positive and shorter than leaseDuration` | Invalid lease options. |
-| `Harness registry lists <key> more than once` | Duplicate `name@version` in `registry`. |
-| `Harness.start: in-flight tasks use task versions this registry does not register: ...` | A non-terminal task uses an unregistered `name@version`. Nothing was claimed. |
-| `requestId "<id>" already belongs to ...` | `requestId` reused for another task name or another user. |
-| `<key> is not in this harness registry` | `createTask` with an unregistered definition. |
-| `<key> is not in this harness registry; register it before retrying` | `resolveInterrupted` `retry` on a task of an unregistered version. |
-| `<key>: initial phase "<x>" is not one of ...` | `initial()` returned an unknown phase. Nothing is written. |
-| `HarnessExtensionError` | A section, hook, or wrap threw. `message`: `Extension "<name>" <what> failed: <cause>`; `extension`: the extension name. Fails the turn or the tool call; see [Hooks](#hooks). |
-| `HarnessSubagentError` | `rt.runAgent`: the subagent's turn failed or was aborted, or its output did not match the schema. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
-| `<key>: rt.runAgent agent "<name>" is not in this harness registry` / `rt.runAgent requires non-empty input` / `rt.runAgent output for "<name>" cannot be expressed as JSON Schema` | Misuse; fails the caller (no retry). |
-| `<key>: rt.approval requires a key` / `rt.approval("<key>") requires a title` / `... does not take approvers; declare them in defineTask(...)` / `... summary must be a string` / `... notify must be a function` / `... timeout must be positive` | Misuse; fails the task (no retry). |
-| `Approval <id> received its event without a recorded decision` | The approval's event was sent by hand. Fails the phase. |
-| `HarnessApprovalConflictError` | `decideApproval` (409 over HTTP): `Approval <id> is already <status>`, `has expired`, `is no longer pending`, or `belongs to a task that is already <status>`. |
-| `decideApproval requires approved: true or false` / `decideApproval: a rejection requires a reason` | `decideApproval` misuse. |
-| `<label>: approvals must be an object keyed by approval key` / `approval keys must be non-empty` / `approvals.<key>.approvers must be an array of permission functions` | Invalid `approvals` on `defineTask` or `defineExtension`. |
-| `approvalGate: tools must list at least one tool` / `every tool must be a defineTool tool or a tool name` / `title must be a string or a function` | Invalid `approvalGate` options. |
-| `HarnessApp basePath must start with "/" and not end with "/"` / `HarnessApp requires an opened Harness` / `HarnessApp heartbeatInterval must be positive` | Invalid `HarnessApp` options. |
-| `HarnessConversationBusyError` | `submit` while a turn runs or submissions are queued. `activeTurnTaskId` names the turn. |
-| `HarnessConversationOwnedError` | `submit` / `send` on a subagent conversation (409 over HTTP). |
-| `send whenBusy must be one of queue, steer` | `send` with another `whenBusy`. |
-| `<key>: rt.output takes a string` | `rt.output` with a non-string; fails the task (no retry). |
-| `Harness streaming.deltaFlushChars must be a positive integer` / `Harness streaming.deltaFlushInterval and deltaTtl must be positive` | Invalid `Harness.open({streaming})`. |
-| `defineTask(...)` validation errors | Empty name, non-positive or fractional version, no phases, a phase without `run`, an invalid `replay`. |
+Every error the harness throws for a caller to act on is an `APIError` from
+`@terreno/api`: `message` is the stable `title` of its `code`, the per-occurrence sentence
+is in `detail`, and a wrapped error is in `cause`. Over HTTP the error middleware sends
+`status`, `code`, `title`, and `detail`. Detect them with `isAPIError(error)` and branch on
+`error.code`; never parse `message`. `HARNESS_ERRORS` (exported from `@terreno/ai/harness`)
+lists every kind:
+
+| `code` | `status` | `title` | Kinds of failure |
+| --- | --- | --- | --- |
+| `harness-definition-invalid` | 500 | Invalid harness definition | `defineTask` / `defineTool` / `defineAgent` / `defineExtension` / `approvalGate` validation, and `rt.*` misuse inside a phase. Thrown as `HarnessDefinitionError`, which fails the task at once (no retry). |
+| `harness-config-invalid` | 500 | Invalid harness configuration | `Harness.open`, `HarnessApp`, `InProcessRunner`, `streaming`, and registry problems. |
+| `harness-replica-set-required` | 500 | MongoDB replica set required | `Harness.open` on a deployment without transactions. |
+| `harness-invalid-request` | 400 | Invalid harness request | A caller passed a bad argument (`abort`, `sendEvent`, `decideApproval`, `resolveInterrupted`, `submit` / `send`, `createConversation`, memos). |
+| `harness-not-registered` | 404 | Not registered in this harness | A task definition, agent, or extension the registry lacks. |
+| `harness-not-found` | 404 | Harness record not found | A conversation or child task disappeared. |
+| `harness-already-started` | 409 | Already started | `Harness.start` / `InProcessRunner.start` called twice. |
+| `harness-commit-conflict` | 409 | Harness commit lost its checkpoint fence | `HarnessCommitConflictError`. |
+| `harness-approval-not-pending` | 409 | Approval can no longer be decided | `HarnessApprovalConflictError`. |
+| `harness-conversation-busy` | 409 | Conversation is busy | `HarnessConversationBusyError`. |
+| `harness-conversation-owned` | 409 | Conversation is run by its owning task | `HarnessConversationOwnedError`. |
+| `harness-request-id-conflict` | 409 | requestId is already in use | A task, event, or child `key` reused for something else. |
+| `harness-task-terminal` | 409 | Task already ended | `abort` or `sendEvent` on a completed, failed, or aborted task. |
+| `harness-task-not-interrupted` | 409 | Task is not interrupted | `resolveInterrupted` on a task in another status. |
+| `harness-task-aborting` | 409 | Task is being aborted | `resolveInterrupted` `retry` on a task with `abortRequested`. |
+| `harness-internal` | 500 | Harness invariant violated | An internal invariant broke (a hand-sent approval event, a closed event tail). |
+| `harness-wait-timed-out` | 504 | Timed out waiting for task | `waitForTask` gave up. |
+
+What a task or turn records as its `error` (and what the model sees for a failed tool
+call) is the harness error's `detail` alone; another `APIError` records `title: detail`;
+any other error its `message`.
+
+The classes keep their names and `instanceof` checks. `HarnessDefinitionError`,
+`HarnessCommitConflictError`, `HarnessApprovalConflictError`,
+`HarnessConversationBusyError`, and `HarnessConversationOwnedError` extend `APIError`.
+`HarnessExtensionError`, `HarnessModelCallError`, and `HarnessSubagentError` are turn
+outcomes, not caller errors: they stay plain `Error`s whose `message` is the recorded text.
+
+| `code` | `detail` | When |
+| --- | --- | --- |
+| `harness-commit-conflict` | `Harness commit for task <id> phase "<phase>" lost its checkpoint fence` | The task was no longer `running` at the phase this commit started from, or its lease token changed (another runner took it over, or an abort fenced it). Also thrown by `rt.createTask` / `rt.waitForTasks` from a run that lost its lease, by a losing concurrent `resolveInterrupted`, and by `harness.abort` when the task finished on its own first. Nothing is written. |
+| `harness-invalid-request` / `harness-task-terminal` | `abort requires a reason` / `Task <id> is already <status>` | `harness.abort` with a blank reason, or on a terminal task. |
+| `harness-definition-invalid` | `rt.waitForTasks only waits on tasks this task created with rt.createTask` | Fails the task (no retry). |
+| `harness-definition-invalid` | `rt.waitForTasks policy must be one of all, failFast` | Unknown policy. Fails the task. |
+| `harness-definition-invalid` | `<key>: rt.waitFor requires an event name` / `rt.waitFor timeout ...` / `rt.sleep duration must be a valid, non-negative duration` | Misuse; fails the task (no retry). |
+| `harness-definition-invalid` | `<key>: wait call <step>:<n> was rt.waitFor("a") on an earlier run and is ...` | Wait calls changed order between runs of a phase. Fails the task. |
+| `harness-task-terminal` | `Task <id> is already <status>; it cannot receive event "<event>"` | `sendEvent` to a terminal task. |
+| `harness-invalid-request` / `harness-request-id-conflict` | `sendEvent requires an event name` / `sendEvent: event names starting with "terreno." are reserved for the harness ...` / `requestId "<id>" already sent event "<name>" to task ...` | `sendEvent` misuse. |
+| `harness-request-id-conflict` | `Child key "<key>" already belongs to task ...` | Two `rt.createTask` calls in one phase visit used the same `key` for different definitions. |
+| `harness-definition-invalid` | `defineTask(...): retry.* ...` / `abort must be a function` | Invalid `retry` policy or `abort` handler. |
+| `harness-config-invalid` | `InProcessRunner heartbeatInterval must be positive and shorter than leaseDuration` | Invalid lease options. |
+| `harness-config-invalid` | `Harness registry lists <key> more than once` | Duplicate `name@version` in `registry`. |
+| `harness-config-invalid` | `Harness.start: in-flight tasks use task versions this registry does not register: ...` | A non-terminal task uses an unregistered `name@version`. Nothing was claimed. |
+| `harness-request-id-conflict` | `requestId "<id>" already belongs to ...` | `requestId` reused for another task name or another user. |
+| `harness-not-registered` | `<key> is not in this harness registry` | `createTask` with an unregistered definition. (`rt.createTask` throws the same text as `harness-definition-invalid`, which fails the task.) |
+| `harness-not-registered` | `<key> is not in this harness registry; register it before retrying` | `resolveInterrupted` `retry` on a task of an unregistered version. |
+| `harness-definition-invalid` | `<key>: initial phase "<x>" is not one of ...` | `initial()` returned an unknown phase. Nothing is written. A child created with `rt.createTask` fails its parent's phase without retrying, since the error is deterministic. |
+| (plain `Error`) | `HarnessExtensionError` | A section, hook, or wrap threw. `message`: `Extension "<name>" <what> failed: <cause>`; `extension`: the extension name. Fails the turn or the tool call; see [Hooks](#hooks). |
+| `harness-definition-invalid` | `Extension "<name>" beforeModelRequest hook must return {system, messages} or undefined` / `... beforeTool hook must return undefined, {block}, or {args}` / `... wrap of tool "<tool>" must return a defineTool tool named "<tool>"` | A hook or wrap returned the wrong shape. |
+| (plain `Error`) | `HarnessSubagentError` | `rt.runAgent`: the subagent's turn failed or was aborted, or its output did not match the schema. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
+| `harness-definition-invalid` | `<key>: rt.runAgent agent "<name>" is not in this harness registry` / `rt.runAgent requires non-empty input` / `rt.runAgent output for "<name>" cannot be expressed as JSON Schema` | Misuse; fails the caller (no retry). |
+| `harness-definition-invalid` | `<key>: rt.approval requires a key` / `rt.approval("<key>") requires a title` / `... does not take approvers; declare them in defineTask(...)` / `... summary must be a string` / `... notify must be a function` / `... timeout must be positive` | Misuse; fails the task (no retry). |
+| `harness-internal` | `Approval <id> received its event without a recorded decision` | The approval's event was sent by hand. Fails the phase. |
+| `harness-approval-not-pending` | `Approval <id> is already <status>` / `... has expired` / `... is no longer pending` / `... belongs to a task that is already <status>` | `HarnessApprovalConflictError` from `decideApproval` (409 over HTTP). |
+| `harness-invalid-request` | `decideApproval requires approved: true or false` / `decideApproval: a rejection requires a reason` | `decideApproval` misuse. |
+| `harness-definition-invalid` | `<label>: approvals must be an object keyed by approval key` / `approval keys must be non-empty` / `approvals.<key>.approvers must be an array of permission functions` | Invalid `approvals` on `defineTask` or `defineExtension`. |
+| `harness-definition-invalid` | `approvalGate: tools must list at least one tool` / `every tool must be a defineTool tool or a tool name` / `title must be a string or a function` | Invalid `approvalGate` options. |
+| `harness-config-invalid` | `HarnessApp basePath must start with "/" and not end with "/": "<path>"` / `HarnessApp requires an opened Harness` / `HarnessApp heartbeatInterval must be positive` | Invalid `HarnessApp` options. |
+| `harness-conversation-busy` | `Conversation <id> is busy with turn task <taskId>; ...` | `HarnessConversationBusyError`: `submit` while a turn runs or submissions are queued. `activeTurnTaskId` names the turn. |
+| `harness-conversation-owned` | `Conversation <id> belongs to task <taskId>; only rt.runAgent runs its turns` | `HarnessConversationOwnedError`: `submit` / `send` on a subagent conversation (409 over HTTP). |
+| `harness-invalid-request` | `submit requires non-empty content` / `submit requires a requestId` / `send whenBusy must be one of queue, steer` | `submit` / `send` misuse. |
+| `harness-not-registered` / `harness-invalid-request` | `Agent "<name>" is not in this harness registry` / `Extension "<name>" is not in this harness registry` / `createConversation: an extension is listed more than once` | `createConversation` misuse. |
+| `harness-definition-invalid` | `<key>: rt.output takes a string` | `rt.output` with a non-string; fails the task (no retry). |
+| `harness-invalid-request` | `memo requires a non-empty key` / `memo "<key>": value is not JSON-serializable` | Memo misuse; the phase fails and retries. |
+| `harness-config-invalid` | `Harness streaming.deltaFlushChars must be a positive integer` / `Harness streaming.deltaFlushInterval and deltaTtl must be positive` | Invalid `Harness.open({streaming})`. |
+| `harness-config-invalid` | `` Harness.open: the registry lists agents; pass `models` to resolve them `` / `Harness.open needs a models resolver to run agents` | Agents without a model resolver. |
+| `harness-wait-timed-out` | `Timed out waiting for task <id> (<key>) in status <status>` | `waitForTask` passed its `timeout`. |
+| `harness-definition-invalid` | `defineTask(...)` validation errors | Empty name, non-positive or fractional version, no phases, a phase without `run`, an invalid `replay`. |
 
 ## Testing
 

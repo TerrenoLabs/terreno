@@ -30,6 +30,7 @@ import {
 } from "./commit";
 import {startNextQueuedTurn} from "./conversation";
 import {taskDefinitionKey} from "./defineTask";
+import {errorMessage, harnessError} from "./errors";
 import type {ExecutionEnv} from "./executionEnv";
 
 /** Most waiting tasks one sweep re-checks; the next sweep picks up the rest. */
@@ -55,10 +56,6 @@ export interface HarnessEngine {
   /** Tell the runner new work may be runnable. */
   wake: () => void;
 }
-
-export const errorMessage = (error: unknown): string => {
-  return error instanceof Error ? error.message : String(error);
-};
 
 export const toTaskView = (task: HarnessTaskDocument): HarnessTaskView<unknown, unknown> => {
   return {
@@ -324,7 +321,10 @@ export const childOutcomes = (
   return ids.map((id) => {
     const child = byId.get(id);
     if (!child) {
-      throw new Error(`Child task ${id} disappeared while its owner waited on it`);
+      throw harnessError({
+        detail: `Child task ${id} disappeared while its owner waited on it`,
+        kind: "notFound",
+      });
     }
     const outcome: HarnessChildOutcome = {
       id,

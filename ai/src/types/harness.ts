@@ -570,10 +570,11 @@ export interface HarnessToolDefinition<Args = unknown, Result = unknown>
   replay: HarnessReplayPolicy;
 }
 
-/** Any tool, whatever its argument and result types. */
-// noExplicitAny: tools are stored in heterogeneous lists; `execute` arguments are contravariant.
-// biome-ignore lint/suspicious/noExplicitAny: tools are stored in heterogeneous lists; `execute` arguments are contravariant.
-export type AnyHarnessToolDefinition = HarnessToolDefinition<any, unknown>;
+/**
+ * Any tool, whatever its argument and result types. `execute` arguments are contravariant, so
+ * `never` accepts every tool in heterogeneous lists without an explicit `any`.
+ */
+export type AnyHarnessToolDefinition = HarnessToolDefinition<never, unknown>;
 
 export interface HarnessAgentDefinitionInput {
   /** Tried in order once the primary model's retryable failures exhaust `modelRetry`. */

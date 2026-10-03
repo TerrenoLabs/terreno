@@ -12,6 +12,7 @@ import {Duration, type DurationLike} from "luxon";
 import mongoose from "mongoose";
 
 import type {HarnessEventDocument} from "../../types/harness";
+import {harnessError} from "../errors";
 import type {HarnessEventHub} from "../eventHub";
 import {eventBody, taskStreamOf} from "../events";
 import {registerHarnessConversation} from "../models/harnessConversation";
@@ -205,7 +206,10 @@ export const addHarnessEventRoutes = (
 ): void => {
   const heartbeat = Duration.fromDurationLike(heartbeatInterval ?? {seconds: 15});
   if (heartbeat.toMillis() <= 0) {
-    throw new Error("HarnessApp heartbeatInterval must be positive");
+    throw harnessError({
+      detail: "HarnessApp heartbeatInterval must be positive",
+      kind: "configInvalid",
+    });
   }
 
   const loadOr404 = async <T extends {userId?: mongoose.Types.ObjectId}>(

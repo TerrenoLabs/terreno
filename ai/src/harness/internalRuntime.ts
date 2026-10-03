@@ -7,6 +7,7 @@ import type {
   HarnessTaskRuntime,
 } from "../types/harness";
 import type {HarnessCommitWrites} from "./commit";
+import {harnessError} from "./errors";
 
 /** Key of the engine-only runtime surface; never part of the public `rt`. */
 export const HARNESS_INTERNAL_RUNTIME = Symbol("terreno.harness.internalRuntime");
@@ -34,7 +35,10 @@ export const internalRuntime = (
 ): HarnessInternalRuntime => {
   const internals = (rt as RuntimeWithInternals)[HARNESS_INTERNAL_RUNTIME];
   if (!internals) {
-    throw new Error("This runtime was not built by the harness engine");
+    throw harnessError({
+      detail: "This runtime was not built by the harness engine",
+      kind: "internal",
+    });
   }
   return internals;
 };

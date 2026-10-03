@@ -1,6 +1,6 @@
 import {describe, expect, it} from "bun:test";
 import {z} from "@terreno/api";
-
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import {defineAgent} from "./defineAgent";
 import {defineTask} from "./defineTask";
 import {defineTool} from "./defineTool";
@@ -30,7 +30,9 @@ describe("defineTool", () => {
     [{execute: "nope"}, "execute must be a function"],
     [{replay: "sometimes"}, 'replay must be "safe" or "never"'],
   ])("rejects %p", (override, message) => {
-    expect(() => defineTool({...echo, ...(override as object)} as never)).toThrow(message);
+    expect(() => defineTool({...echo, ...(override as object)} as never)).toThrow(
+      harnessErrorMatching("definitionInvalid", message)
+    );
   });
 });
 
@@ -56,7 +58,7 @@ describe("defineAgent", () => {
   ])("rejects %p", (override, message) => {
     expect(() =>
       defineAgent({instructions: "Help.", model, name: "test.helper", ...(override as object)})
-    ).toThrow(message);
+    ).toThrow(harnessErrorMatching("definitionInvalid", message));
   });
 });
 
@@ -73,7 +75,9 @@ describe("defineTask agent-related options", () => {
     [{spanKind: "LLM"}, "spanKind must be AGENT, CHAIN, or TOOL"],
     [{spanName: "fixed"}, "spanName must be a function"],
   ])("rejects %p", (override, message) => {
-    expect(() => defineTask({...base, ...(override as object)} as never)).toThrow(message);
+    expect(() => defineTask({...base, ...(override as object)} as never)).toThrow(
+      harnessErrorMatching("definitionInvalid", message)
+    );
   });
 
   it("accepts the valid values", () => {

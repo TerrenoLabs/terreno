@@ -1,4 +1,5 @@
 import type {AddressInfo} from "node:net";
+import {APIError} from "@terreno/api";
 import type express from "express";
 
 /** One model request a gated streaming mock received; the test feeds its stream. */
@@ -23,7 +24,12 @@ export const gatedStreamingModel = (modelId = "gated-model") => {
   let taken = 0;
   const model = {
     doGenerate: async () => {
-      throw new Error("gatedStreamingModel only streams");
+      throw new APIError({
+        code: "test-model-generate-unsupported",
+        detail: "gatedStreamingModel only streams",
+        status: 500,
+        title: "Unsupported model call",
+      });
     },
     doStream: async (options: {abortSignal?: AbortSignal; prompt: GatedRequest["prompt"]}) => {
       let controller: ReadableStreamDefaultController<unknown> | undefined;
@@ -136,7 +142,12 @@ export const openSse = async (
     signal: controller.signal,
   });
   if (!response.ok || !response.body) {
-    throw new Error(`SSE ${response.status}: ${await response.text()}`);
+    throw new APIError({
+      code: "test-sse-failed",
+      detail: `SSE ${response.status}: ${await response.text()}`,
+      status: 502,
+      title: "SSE request failed",
+    });
   }
   const frames: SseFrame[] = [];
   const comments: string[] = [];

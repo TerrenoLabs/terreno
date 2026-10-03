@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {DateTime, Settings} from "luxon";
-
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import {defineTask} from "./defineTask";
 import {nextRetryAt, resolveRetryPolicy} from "./retryBackoff";
 
@@ -68,11 +68,20 @@ describe("retryBackoff", () => {
         retry,
         version: 1,
       });
-    expect(() => build({maxAttempts: 0})).toThrow("retry.maxAttempts must be a positive integer");
-    expect(() => build({maxAttempts: 1.5})).toThrow("retry.maxAttempts must be a positive integer");
-    expect(() => build({backoffMs: -1})).toThrow("retry.backoffMs must be a non-negative number");
+    expect(() => build({maxAttempts: 0})).toThrow(
+      harnessErrorMatching("definitionInvalid", "retry.maxAttempts must be a positive integer")
+    );
+    expect(() => build({maxAttempts: 1.5})).toThrow(
+      harnessErrorMatching("definitionInvalid", "retry.maxAttempts must be a positive integer")
+    );
+    expect(() => build({backoffMs: -1})).toThrow(
+      harnessErrorMatching("definitionInvalid", "retry.backoffMs must be a non-negative number")
+    );
     expect(() => build({backoffMs: 500, maxBackoffMs: 100})).toThrow(
-      "retry.maxBackoffMs must be at least retry.backoffMs"
+      harnessErrorMatching(
+        "definitionInvalid",
+        "retry.maxBackoffMs must be at least retry.backoffMs"
+      )
     );
     expect(() => build({backoffMs: 0, maxAttempts: 1})).not.toThrow();
   });
@@ -86,6 +95,6 @@ describe("retryBackoff", () => {
         phases: {only: {run: async (_task, rt) => rt.commit({terminal: {status: "completed"}})}},
         version: 1,
       })
-    ).toThrow("abort must be a function");
+    ).toThrow(harnessErrorMatching("definitionInvalid", "abort must be a function"));
   });
 });

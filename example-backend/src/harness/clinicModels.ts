@@ -1,4 +1,5 @@
 import type {HarnessModelRef, HarnessModelResolver} from "@terreno/ai/harness";
+import {APIError} from "@terreno/api";
 import type {LanguageModel} from "ai";
 
 import {createServerModel} from "../api/ai";
@@ -46,9 +47,17 @@ export const resolveExampleModel: HarnessModelResolver = (ref): LanguageModel =>
     if (model) {
       return model;
     }
-    throw new Error(
-      `${ref.provider}/${ref.modelId} needs GEMINI_API_KEY or GOOGLE_VERTEX_PROJECT on the server`
-    );
+    throw new APIError({
+      code: "clinic-model-credentials-missing",
+      detail: `${ref.provider}/${ref.modelId} needs GEMINI_API_KEY or GOOGLE_VERTEX_PROJECT on the server`,
+      status: 500,
+      title: "Model credentials are missing",
+    });
   }
-  throw new Error(`The example backend has no model provider named "${ref.provider}"`);
+  throw new APIError({
+    code: "clinic-model-provider-unknown",
+    detail: `The example backend has no model provider named "${ref.provider}"`,
+    status: 500,
+    title: "Unknown model provider",
+  });
 };

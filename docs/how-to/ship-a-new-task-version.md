@@ -65,7 +65,8 @@ version.
 
 ## If you remove a version too early
 
-`Harness.start()` throws and claims nothing:
+`Harness.start()` throws an `APIError` with code `harness-config-invalid` and claims
+nothing. Its `detail` reads:
 
 ```text
 Harness.start: in-flight tasks use task versions this registry does not register: clinic.intake@1 (4 tasks). Register those definitions (keep old versions until their tasks finish) or resolve the tasks first.

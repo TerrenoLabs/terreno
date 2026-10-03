@@ -1,3 +1,4 @@
+import {APIError} from "@terreno/api";
 import {DateTime} from "luxon";
 import type mongoose from "mongoose";
 
@@ -23,34 +24,35 @@ import {
 } from "../types/harness";
 import type {AgentTurnInput} from "./agentLoop";
 import {createTaskRecords, type HarnessModels} from "./commit";
+import {HARNESS_ERRORS, harnessError} from "./errors";
 import {appendEvents, insertMessages} from "./events";
 import {resolveExtensions, resolveTools} from "./extensions";
 import {inTransaction} from "./transaction";
 
 /** A turn is already running and the submission did not say what to do (`submit`). */
-export class HarnessConversationBusyError extends Error {
+export class HarnessConversationBusyError extends APIError {
   readonly activeTurnTaskId?: string;
   readonly conversationId: string;
 
   constructor(conversationId: string, activeTurnTaskId?: string) {
-    super(
-      `Conversation ${conversationId} is busy with turn task ${activeTurnTaskId ?? "(unknown)"}; wait for it to finish, or send with whenBusy "queue" or "steer"`
-    );
-    this.name = "HarnessConversationBusyError";
+    super({
+      ...HARNESS_ERRORS.conversationBusy,
+      detail: `Conversation ${conversationId} is busy with turn task ${activeTurnTaskId ?? "(unknown)"}; wait for it to finish, or send with whenBusy "queue" or "steer"`,
+    });
     this.activeTurnTaskId = activeTurnTaskId;
     this.conversationId = conversationId;
   }
 }
 
 /** A subagent conversation: only the `rt.runAgent` call that owns it runs its turns. */
-export class HarnessConversationOwnedError extends Error {
+export class HarnessConversationOwnedError extends APIError {
   readonly conversationId: string;
 
   constructor(conversationId: string, ownerTaskId: string) {
-    super(
-      `Conversation ${conversationId} belongs to task ${ownerTaskId}; only rt.runAgent runs its turns`
-    );
-    this.name = "HarnessConversationOwnedError";
+    super({
+      ...HARNESS_ERRORS.conversationOwned,
+      detail: `Conversation ${conversationId} belongs to task ${ownerTaskId}; only rt.runAgent runs its turns`,
+    });
     this.conversationId = conversationId;
   }
 }
@@ -105,10 +107,10 @@ export const conversationAgentSnapshot = ({
 
 const assertSubmission = ({content, requestId}: HarnessSubmitOptions): void => {
   if (typeof content !== "string" || !content.trim()) {
-    throw new Error("submit requires non-empty content");
+    throw harnessError({detail: "submit requires non-empty content", kind: "invalidRequest"});
   }
   if (typeof requestId !== "string" || !requestId.trim()) {
-    throw new Error("submit requires a requestId");
+    throw harnessError({detail: "submit requires a requestId", kind: "invalidRequest"});
   }
 };
 
@@ -317,9 +319,10 @@ export class HarnessConversationHandle {
     assertSubmission(options);
     const {content, requestId, whenBusy} = options;
     if (!Object.values(HARNESS_WHEN_BUSY).includes(whenBusy)) {
-      throw new Error(
-        `send whenBusy must be one of ${Object.values(HARNESS_WHEN_BUSY).join(", ")}`
-      );
+      throw harnessError({
+        detail: `send whenBusy must be one of ${Object.values(HARNESS_WHEN_BUSY).join(", ")}`,
+        kind: "invalidRequest",
+      });
     }
     const {models, wake} = this.context;
     for (let attempt = 1; attempt <= SUBMIT_CLAIM_ATTEMPTS; attempt++) {
@@ -362,7 +365,10 @@ export class HarnessConversationHandle {
     }
     const settled = await this.findSubmission(requestId);
     if (!settled) {
-      throw new Error(`Conversation ${this.id}: could not record submission ${requestId}`);
+      throw harnessError({
+        detail: `Conversation ${this.id}: could not record submission ${requestId}`,
+        kind: "internal",
+      });
     }
     return settled;
   }

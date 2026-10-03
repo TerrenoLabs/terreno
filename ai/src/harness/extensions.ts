@@ -21,10 +21,9 @@ import type {
 } from "../types/harness";
 import {HARNESS_HOOK_KINDS} from "../types/harness";
 import {assertValidApprovalPolicies} from "./approvalPolicy";
+import {HarnessDefinitionError} from "./definitionError";
+import {errorMessage, harnessError} from "./errors";
 import {isHarnessSuspendSignal} from "./suspend";
-
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
 
 /** A hook that parked its task (an approval wait) must stop the phase, not fail it. */
 const rethrowSuspend = (error: unknown): void => {
@@ -51,10 +50,10 @@ export class HarnessExtensionError extends Error {
 /** A named piece of the system prompt, rebuilt before every model request. */
 export const section = (name: string, build: HarnessSection["build"]): HarnessSection => {
   if (!name?.trim()) {
-    throw new Error("section: name is required");
+    throw new HarnessDefinitionError("section: name is required");
   }
   if (typeof build !== "function") {
-    throw new Error(`section(${name}): build must be a function`);
+    throw new HarnessDefinitionError(`section(${name}): build must be a function`);
   }
   return Object.freeze({build, kind: "section" as const, name});
 };
@@ -65,12 +64,12 @@ export const hook = <K extends HarnessHookKind>(
   run: HarnessHookHandlers[K]
 ): HarnessHook => {
   if (!Object.values(HARNESS_HOOK_KINDS).includes(kind)) {
-    throw new Error(
+    throw new HarnessDefinitionError(
       `hook: kind must be one of ${Object.values(HARNESS_HOOK_KINDS).join(", ")}, not "${kind}"`
     );
   }
   if (typeof run !== "function") {
-    throw new Error(`hook(${kind}): handler must be a function`);
+    throw new HarnessDefinitionError(`hook(${kind}): handler must be a function`);
   }
   return Object.freeze({hook: kind, kind: "hook" as const, run}) as HarnessHook;
 };
@@ -85,10 +84,10 @@ export const wrapTool = (
 ): HarnessToolWrap => {
   const toolName = typeof toolOrName === "string" ? toolOrName : toolOrName?.name;
   if (!toolName?.trim()) {
-    throw new Error("wrapTool: a tool or tool name is required");
+    throw new HarnessDefinitionError("wrapTool: a tool or tool name is required");
   }
   if (typeof wrap !== "function") {
-    throw new Error(`wrapTool(${toolName}): wrap must be a function`);
+    throw new HarnessDefinitionError(`wrapTool(${toolName}): wrap must be a function`);
   }
   return Object.freeze({kind: "wrap" as const, toolName, wrap});
 };
@@ -102,16 +101,20 @@ export const defineExtension = (
 ): HarnessExtensionDefinition => {
   const {name} = definition;
   if (!name?.trim()) {
-    throw new Error("defineExtension: name is required");
+    throw new HarnessDefinitionError("defineExtension: name is required");
   }
   const sections = definition.sections ?? [];
   const sectionNames = new Set<string>();
   for (const entry of sections) {
     if (entry?.kind !== "section") {
-      throw new Error(`defineExtension(${name}): every section must come from section()`);
+      throw new HarnessDefinitionError(
+        `defineExtension(${name}): every section must come from section()`
+      );
     }
     if (sectionNames.has(entry.name)) {
-      throw new Error(`defineExtension(${name}): section "${entry.name}" is listed more than once`);
+      throw new HarnessDefinitionError(
+        `defineExtension(${name}): section "${entry.name}" is listed more than once`
+      );
     }
     sectionNames.add(entry.name);
   }
@@ -119,20 +122,26 @@ export const defineExtension = (
   const toolNames = new Set<string>();
   for (const tool of tools) {
     if (tool?.kind !== "tool") {
-      throw new Error(`defineExtension(${name}): every tool must come from defineTool`);
+      throw new HarnessDefinitionError(
+        `defineExtension(${name}): every tool must come from defineTool`
+      );
     }
     if (toolNames.has(tool.name)) {
-      throw new Error(`defineExtension(${name}): tool "${tool.name}" is listed more than once`);
+      throw new HarnessDefinitionError(
+        `defineExtension(${name}): tool "${tool.name}" is listed more than once`
+      );
     }
     toolNames.add(tool.name);
   }
   const hooks = definition.hooks ?? [];
   if (hooks.some((entry) => entry?.kind !== "hook")) {
-    throw new Error(`defineExtension(${name}): every hook must come from hook()`);
+    throw new HarnessDefinitionError(`defineExtension(${name}): every hook must come from hook()`);
   }
   const wraps = definition.wraps ?? [];
   if (wraps.some((entry) => entry?.kind !== "wrap")) {
-    throw new Error(`defineExtension(${name}): every wrap must come from wrapTool()`);
+    throw new HarnessDefinitionError(
+      `defineExtension(${name}): every wrap must come from wrapTool()`
+    );
   }
   const approvals: Readonly<Record<string, HarnessApprovalPolicy>> = Object.freeze({
     ...(definition.approvals ?? {}),
@@ -157,7 +166,10 @@ export const resolveExtensions = (
   names.map((name) => {
     const extension = extensions.get(name);
     if (!extension) {
-      throw new Error(`Extension "${name}" is not in this harness registry`);
+      throw harnessError({
+        detail: `Extension "${name}" is not in this harness registry`,
+        kind: "notRegistered",
+      });
     }
     return extension;
   });
@@ -193,7 +205,7 @@ export const resolveTools = (
         throw new HarnessExtensionError(extension.name, `wrap of tool "${toolName}"`, error);
       }
       if (wrapped?.kind !== "tool" || wrapped.name !== toolName) {
-        throw new Error(
+        throw new HarnessDefinitionError(
           `Extension "${extension.name}" wrap of tool "${toolName}" must return a defineTool tool named "${toolName}"`
         );
       }
@@ -287,7 +299,7 @@ export const runBeforeModelRequest = async ({
       continue;
     }
     if (typeof next?.system !== "string" || !Array.isArray(next.messages)) {
-      throw new Error(
+      throw new HarnessDefinitionError(
         `Extension "${extension}" beforeModelRequest hook must return {system, messages} or undefined`
       );
     }
@@ -335,7 +347,7 @@ export const runBeforeTool = async ({
       args = decision.args;
       continue;
     }
-    throw new Error(
+    throw new HarnessDefinitionError(
       `Extension "${extension}" beforeTool hook must return undefined, {block}, or {args}`
     );
   }

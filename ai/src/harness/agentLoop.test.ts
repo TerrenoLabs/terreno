@@ -15,6 +15,7 @@ import {createLocalObservabilityPlugin} from "../observability/local/localPlugin
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
 import {generateToStream} from "../tests/generateStream";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import type {HarnessAgentDefinition, HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import type {ExecutionEnv} from "./executionEnv";
@@ -947,15 +948,20 @@ describe("Agent turns", () => {
       const conversation = await harness.createConversation({agent});
 
       await expect(conversation.submit({content: " ", requestId: "r1"})).rejects.toThrow(
-        "submit requires non-empty content"
+        harnessErrorMatching("invalidRequest", "submit requires non-empty content")
       );
       await expect(conversation.submit({content: "Hi", requestId: ""})).rejects.toThrow(
-        "submit requires a requestId"
+        harnessErrorMatching("invalidRequest", "submit requires a requestId")
       );
       await expect(harness.createConversation({agent: stranger})).rejects.toThrow(
-        'Agent "test.stranger" is not in this harness registry'
+        harnessErrorMatching(
+          "notRegistered",
+          'Agent "test.stranger" is not in this harness registry'
+        )
       );
-      await expect(harness.conversation(new mongoose.Types.ObjectId())).rejects.toThrow();
+      await expect(harness.conversation(new mongoose.Types.ObjectId())).rejects.toMatchObject({
+        status: 404,
+      });
       expect(await conversation.messages()).toEqual([]);
     });
   });
@@ -963,7 +969,10 @@ describe("Agent turns", () => {
   describe("Harness.open", () => {
     it("requires a models resolver when the registry lists agents", async () => {
       await expect(Harness.open({registry: [agentWith()]})).rejects.toThrow(
-        "Harness.open: the registry lists agents; pass `models` to resolve them"
+        harnessErrorMatching(
+          "configInvalid",
+          "Harness.open: the registry lists agents; pass `models` to resolve them"
+        )
       );
     });
 
@@ -975,7 +984,12 @@ describe("Agent turns", () => {
           },
           registry: [agentWith(), agentWith()],
         })
-      ).rejects.toThrow('Harness registry lists agent "test.clinician" more than once');
+      ).rejects.toThrow(
+        harnessErrorMatching(
+          "configInvalid",
+          'Harness registry lists agent "test.clinician" more than once'
+        )
+      );
     });
 
     it("hands the execution env to task phases as rt.env", async () => {

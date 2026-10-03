@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import type {HarnessChildOutcome, HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import type {HarnessModels} from "./commit";
@@ -849,10 +850,10 @@ describe("Harness ownership tree", () => {
       const done = await harness.waitForTask((await harness.createTask(quick, {}))._id);
 
       await expect(harness.abort(done._id, {reason: " "})).rejects.toThrow(
-        "abort requires a reason"
+        harnessErrorMatching("invalidRequest", "abort requires a reason")
       );
       await expect(harness.abort(done._id, {reason: "late"})).rejects.toThrow(
-        `Task ${done._id} is already completed`
+        harnessErrorMatching("taskTerminal", `Task ${done._id} is already completed`)
       );
       expect(await SpanModel.countDocuments({name: "abort"})).toBe(0);
     });
@@ -926,7 +927,9 @@ describe("Harness ownership tree", () => {
 
       await expect(
         harness.resolveInterrupted(created._id, {action: "retry", reason: "try again"})
-      ).rejects.toThrow("is being aborted; resolve it with abort, not retry");
+      ).rejects.toThrow(
+        harnessErrorMatching("taskAborting", "is being aborted; resolve it with abort, not retry")
+      );
       const resolved = await harness.resolveInterrupted(created._id, {
         action: "abort",
         reason: "finish the abort",

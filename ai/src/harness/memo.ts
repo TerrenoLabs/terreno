@@ -4,6 +4,7 @@ import type mongoose from "mongoose";
 import type {HarnessLeaseSettings, HarnessMemo} from "../types/harness";
 import {HARNESS_TASK_STATUSES} from "../types/harness";
 import {HarnessCommitConflictError, type HarnessModels, isDuplicateKeyError} from "./commit";
+import {errorMessage, harnessError} from "./errors";
 import {inTransaction} from "./transaction";
 
 /** The run allowed to write: its task, phase, and lease token. */
@@ -19,12 +20,17 @@ const toMemoValue = (key: string, value: unknown): unknown => {
   try {
     serialized = JSON.stringify(value);
   } catch (error: unknown) {
-    throw new Error(
-      `memo "${key}": value is not JSON-serializable (${error instanceof Error ? error.message : String(error)})`
-    );
+    throw harnessError({
+      cause: error,
+      detail: `memo "${key}": value is not JSON-serializable (${errorMessage(error)})`,
+      kind: "invalidRequest",
+    });
   }
   if (serialized === undefined) {
-    throw new Error(`memo "${key}": value is not JSON-serializable`);
+    throw harnessError({
+      detail: `memo "${key}": value is not JSON-serializable`,
+      kind: "invalidRequest",
+    });
   }
   return JSON.parse(serialized);
 };
@@ -90,7 +96,7 @@ export const createMemo = ({
 
   const memo = async (key: string, ...rest: unknown[]): Promise<unknown> => {
     if (typeof key !== "string" || !key.trim()) {
-      throw new Error("memo requires a non-empty key");
+      throw harnessError({detail: "memo requires a non-empty key", kind: "invalidRequest"});
     }
     if (rest.length === 0 || rest[0] === undefined) {
       return read(key);

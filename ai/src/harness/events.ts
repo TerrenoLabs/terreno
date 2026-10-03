@@ -13,6 +13,7 @@ import type {
 import {HARNESS_EVENT_TYPES, HARNESS_TERMINAL_STATUSES} from "../types/harness";
 import {AGENT_TOOL_TASK_NAME, AGENT_TURN_TASK_NAME} from "./agentTaskNames";
 import type {HarnessModels} from "./commit";
+import {errorMessage, harnessError} from "./errors";
 import {inTransaction} from "./transaction";
 
 /** One event to append; `seq` and `created` are assigned on write. */
@@ -42,10 +43,16 @@ export const resolveStreamingOptions = (
     deltaTtl: Duration.fromDurationLike(options.deltaTtl ?? {hours: 1}),
   };
   if (!Number.isInteger(resolved.deltaFlushChars) || resolved.deltaFlushChars < 1) {
-    throw new Error("Harness streaming.deltaFlushChars must be a positive integer");
+    throw harnessError({
+      detail: "Harness streaming.deltaFlushChars must be a positive integer",
+      kind: "configInvalid",
+    });
   }
   if (resolved.deltaFlushInterval.toMillis() <= 0 || resolved.deltaTtl.toMillis() <= 0) {
-    throw new Error("Harness streaming.deltaFlushInterval and deltaTtl must be positive");
+    throw harnessError({
+      detail: "Harness streaming.deltaFlushInterval and deltaTtl must be positive",
+      kind: "configInvalid",
+    });
   }
   return resolved;
 };
@@ -358,7 +365,7 @@ export class HarnessDeltaWriter {
         });
       } catch (error: unknown) {
         logger.warn(
-          `Harness could not write a delta for turn ${source.turnTaskId}: ${error instanceof Error ? error.message : String(error)}`
+          `Harness could not write a delta for turn ${source.turnTaskId}: ${errorMessage(error)}`
         );
       }
     });

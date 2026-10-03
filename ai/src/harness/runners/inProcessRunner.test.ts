@@ -1,5 +1,5 @@
 import {describe, expect, it} from "bun:test";
-
+import {harnessErrorMatching} from "../../tests/harnessErrors";
 import type {
   HarnessLeaseSettings,
   HarnessRunnerContext,
@@ -160,7 +160,9 @@ describe("InProcessRunner", () => {
     const context = fakeContext({claimNext: async () => null, runTask: async () => {}});
     const runner = new InProcessRunner({pollInterval: {milliseconds: 5}});
     await runner.start(context);
-    await expect(runner.start(context)).rejects.toThrow("InProcessRunner is already started");
+    await expect(runner.start(context)).rejects.toThrow(
+      harnessErrorMatching("alreadyStarted", "InProcessRunner is already started")
+    );
     await runner.stop();
   });
 
@@ -379,10 +381,13 @@ describe("InProcessRunner", () => {
       expect(
         () => new InProcessRunner({heartbeatInterval: {seconds: 30}, leaseDuration: {seconds: 30}})
       ).toThrow(
-        "InProcessRunner heartbeatInterval must be positive and shorter than leaseDuration"
+        harnessErrorMatching(
+          "configInvalid",
+          "InProcessRunner heartbeatInterval must be positive and shorter than leaseDuration"
+        )
       );
       expect(() => new InProcessRunner({heartbeatInterval: {seconds: 0}})).toThrow(
-        "heartbeatInterval must be positive"
+        harnessErrorMatching("configInvalid", "heartbeatInterval must be positive")
       );
     });
 

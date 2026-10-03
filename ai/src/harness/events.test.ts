@@ -10,6 +10,7 @@ import supertest from "supertest";
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import {
   gatedStreamingModel,
   listen,
@@ -349,7 +350,9 @@ describe("Harness event stream", () => {
         app
           .register(new HarnessApp({harness: {} as Harness, heartbeatInterval: {seconds: 0}}))
           .build()
-      ).toThrow("HarnessApp heartbeatInterval must be positive");
+      ).toThrow(
+        harnessErrorMatching("configInvalid", "HarnessApp heartbeatInterval must be positive")
+      );
     });
 
     it("sends heartbeat comments while the stream is idle", async () => {
@@ -713,9 +716,11 @@ describe("Harness event stream", () => {
 
     it("rejects invalid streaming options", () => {
       expect(() => resolveStreamingOptions({deltaFlushChars: 0})).toThrow(
-        "deltaFlushChars must be a positive integer"
+        harnessErrorMatching("configInvalid", "deltaFlushChars must be a positive integer")
       );
-      expect(() => resolveStreamingOptions({deltaTtl: {seconds: 0}})).toThrow("must be positive");
+      expect(() => resolveStreamingOptions({deltaTtl: {seconds: 0}})).toThrow(
+        harnessErrorMatching("configInvalid", "must be positive")
+      );
     });
   });
 });

@@ -1,4 +1,5 @@
 import {randomUUID} from "node:crypto";
+import {APIError} from "@terreno/api";
 import {DateTime, Duration} from "luxon";
 import mongoose, {type ClientSession} from "mongoose";
 
@@ -35,6 +36,8 @@ import {
 } from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {AGENT_TURN_TASK_NAME} from "./agentTaskNames";
+import {HarnessDefinitionError} from "./definitionError";
+import {HARNESS_ERRORS, harnessError} from "./errors";
 import {appendTaskTransitionEvents} from "./events";
 import {inTransaction} from "./transaction";
 
@@ -56,10 +59,12 @@ export interface HarnessModels {
  * The task changed underneath this commit (checkpoint moved, status changed, or another
  * runner holds the lease); nothing was written and the result is discarded.
  */
-export class HarnessCommitConflictError extends Error {
+export class HarnessCommitConflictError extends APIError {
   constructor(taskId: string, phase: string) {
-    super(`Harness commit for task ${taskId} phase "${phase}" lost its checkpoint fence`);
-    this.name = "HarnessCommitConflictError";
+    super({
+      ...HARNESS_ERRORS.commitConflict,
+      detail: `Harness commit for task ${taskId} phase "${phase}" lost its checkpoint fence`,
+    });
   }
 }
 
@@ -131,12 +136,16 @@ const findByRequestId = async ({
   const existing = await models.task.findExactlyOne({deleted: {$in: [false, true]}, requestId});
   // Never hand one user's task (input, state) to another caller reusing the key.
   if (String(existing.userId ?? "") !== String(userId ?? "")) {
-    throw new Error(`requestId "${requestId}" already belongs to a task for a different user`);
+    throw harnessError({
+      detail: `requestId "${requestId}" already belongs to a task for a different user`,
+      kind: "requestIdConflict",
+    });
   }
   if (existing.name !== definition.name) {
-    throw new Error(
-      `requestId "${requestId}" already belongs to task ${existing._id} (${existing.name}), not ${definition.name}`
-    );
+    throw harnessError({
+      detail: `requestId "${requestId}" already belongs to task ${existing._id} (${existing.name}), not ${definition.name}`,
+      kind: "requestIdConflict",
+    });
   }
   return existing;
 };
@@ -164,7 +173,7 @@ export const createTaskRecords = async ({
 }): Promise<HarnessTaskDocument> => {
   const initial = definition.initial(input);
   if (!definition.phases[initial.phase]) {
-    throw new Error(
+    throw new HarnessDefinitionError(
       `${definition.key}: initial phase "${initial.phase}" is not one of ${Object.keys(definition.phases).join(", ")}`
     );
   }
@@ -275,7 +284,7 @@ export const createChildTaskRecords = async ({
 }): Promise<HarnessTaskDocument> => {
   const initial = definition.initial(input);
   if (!definition.phases[initial.phase]) {
-    throw new Error(
+    throw new HarnessDefinitionError(
       `${definition.key}: initial phase "${initial.phase}" is not one of ${Object.keys(definition.phases).join(", ")}`
     );
   }
@@ -283,9 +292,10 @@ export const createChildTaskRecords = async ({
   const existing = await models.task.findOneOrNone({deleted: {$in: [false, true]}, requestId});
   if (existing) {
     if (existing.name !== definition.name) {
-      throw new Error(
-        `Child key "${key}" already belongs to task ${existing._id} (${existing.name}), not ${definition.name}`
-      );
+      throw harnessError({
+        detail: `Child key "${key}" already belongs to task ${existing._id} (${existing.name}), not ${definition.name}`,
+        kind: "requestIdConflict",
+      });
     }
     return existing;
   }

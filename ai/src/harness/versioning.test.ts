@@ -4,6 +4,7 @@ import {DateTime} from "luxon";
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {type AnyHarnessTaskDefinition, defineTask, Harness, InProcessRunner} from "./harness";
 import {registerHarnessTask} from "./models/harnessTask";
@@ -110,7 +111,7 @@ describe("Harness version pinning", () => {
 
   it("throws when the same name@version is registered twice, even beside other versions", async () => {
     await expect(openHarness([intakeV1, intakeV2, intakeAt(2)])).rejects.toThrow(
-      "Harness registry lists test.intake@2 more than once"
+      harnessErrorMatching("configInvalid", "Harness registry lists test.intake@2 more than once")
     );
   });
 
@@ -161,7 +162,10 @@ describe("Harness version pinning", () => {
     // A task this registry does run, to prove the check happens before any claim.
     const runnable = await harness.createTask(intakeV2, {patientId: "g"} as never);
     await expect(harness.start()).rejects.toThrow(
-      "Harness.start: in-flight tasks use task versions this registry does not register: test.intake@1 (3 tasks), test.intake@3 (2 tasks)."
+      harnessErrorMatching(
+        "configInvalid",
+        "Harness.start: in-flight tasks use task versions this registry does not register: test.intake@1 (3 tasks), test.intake@3 (2 tasks)."
+      )
     );
 
     // Nothing was claimed: the pending task kept no lease and never ran.
@@ -252,14 +256,16 @@ describe("Harness version pinning", () => {
     const stranded = await old.createTask(intakeV1, {patientId: "a"} as never);
     const harness = await openHarness([intakeV2]);
 
-    await expect(harness.start()).rejects.toThrow("test.intake@1 (1 task)");
+    await expect(harness.start()).rejects.toThrow(
+      harnessErrorMatching("configInvalid", "test.intake@1 (1 task)")
+    );
     await TaskModel.updateOne({_id: stranded._id}, {$set: {status: "aborted"}});
 
     const results = await Promise.allSettled([harness.start(), harness.start()]);
     expect(results.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected"]);
     const rejected = results.find((result) => result.status === "rejected");
-    expect(String((rejected as PromiseRejectedResult).reason)).toContain(
-      "Harness is already started"
+    expect((rejected as PromiseRejectedResult).reason).toEqual(
+      harnessErrorMatching("alreadyStarted", "Harness is already started")
     );
   });
 
@@ -271,7 +277,12 @@ describe("Harness version pinning", () => {
     const harness = await openHarness([intakeV2]);
     await expect(
       harness.resolveInterrupted(created._id, {action: "retry", reason: "try again"})
-    ).rejects.toThrow("test.intake@1 is not in this harness registry; register it before retrying");
+    ).rejects.toThrow(
+      harnessErrorMatching(
+        "notRegistered",
+        "test.intake@1 is not in this harness registry; register it before retrying"
+      )
+    );
     expect((await TaskModel.findExactlyOne({_id: created._id})).status).toBe("interrupted");
   });
 });

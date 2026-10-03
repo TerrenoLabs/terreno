@@ -43,6 +43,7 @@ import {
 } from "./conversation";
 import {extensionName} from "./defineAgent";
 import {taskDefinitionKey} from "./defineTask";
+import {harnessError} from "./errors";
 import {resolveStreamingOptions} from "./events";
 import type {ExecutionEnv} from "./executionEnv";
 import {acquireOwnerLease, releaseOwnerLease} from "./leases";
@@ -195,6 +196,8 @@ export {
 export {defineAgent} from "./defineAgent";
 export {defineTask} from "./defineTask";
 export {defineTool} from "./defineTool";
+export {HarnessDefinitionError} from "./definitionError";
+export {HARNESS_ERRORS, type HarnessErrorKind, type HarnessErrorKindName} from "./errors";
 export type {
   ExecutionEnv,
   ExecutionEnvCallOptions,
@@ -261,15 +264,20 @@ const QUEUE_SWEEP_INTERVAL = Duration.fromObject({seconds: 1});
 const assertReplicaSet = async (): Promise<void> => {
   const db = mongoose.connection.db;
   if (!db) {
-    throw new Error("Harness.open requires a connected mongoose default connection");
+    throw harnessError({
+      detail: "Harness.open requires a connected mongoose default connection",
+      kind: "configInvalid",
+    });
   }
   const hello = await db.command({hello: 1});
   // Replica set members report setName; mongos ("isdbgrid") also supports transactions.
   const isReplicaSet = typeof hello.setName === "string" && hello.setName.length > 0;
   if (!isReplicaSet && hello.msg !== "isdbgrid") {
-    throw new Error(
-      "Harness.open requires a MongoDB replica set: checkpoints and audit spans commit in one transaction"
-    );
+    throw harnessError({
+      detail:
+        "Harness.open requires a MongoDB replica set: checkpoints and audit spans commit in one transaction",
+      kind: "replicaSetRequired",
+    });
   }
 };
 
@@ -277,9 +285,11 @@ const resolveObservabilityModels = (): {span: ObsSpanModel; trace: ObsTraceModel
   const span = mongoose.models.ObsSpan as ObsSpanModel | undefined;
   const trace = mongoose.models.ObsTrace as ObsTraceModel | undefined;
   if (!span || !trace) {
-    throw new Error(
-      "Harness.open requires the local observability plugin: call createLocalObservabilityPlugin() (or register ObservabilityApp with it) before opening the harness"
-    );
+    throw harnessError({
+      detail:
+        "Harness.open requires the local observability plugin: call createLocalObservabilityPlugin() (or register ObservabilityApp with it) before opening the harness",
+      kind: "configInvalid",
+    });
   }
   return {span, trace};
 };
@@ -347,7 +357,10 @@ export class Harness {
     await assertReplicaSet();
     const {agents, extensions, tasks} = splitRegistry(options.registry);
     if (agents.size > 0 && !options.models) {
-      throw new Error("Harness.open: the registry lists agents; pass `models` to resolve them");
+      throw harnessError({
+        detail: "Harness.open: the registry lists agents; pass `models` to resolve them",
+        kind: "configInvalid",
+      });
     }
     const models: HarnessModels = {
       approval: registerHarnessApproval(),
@@ -399,7 +412,7 @@ export class Harness {
    */
   async start(): Promise<void> {
     if (this.isStarted) {
-      throw new Error("Harness is already started");
+      throw harnessError({detail: "Harness is already started", kind: "alreadyStarted"});
     }
     // Claimed before the first await so overlapping start() calls cannot both start the runner.
     this.isStarted = true;
@@ -457,7 +470,10 @@ export class Harness {
   ): Promise<HarnessTaskDocument> {
     const registered = this.definitions.get(definition.key);
     if (!registered) {
-      throw new Error(`${definition.key} is not in this harness registry`);
+      throw harnessError({
+        detail: `${definition.key} is not in this harness registry`,
+        kind: "notRegistered",
+      });
     }
     const task = await createTaskRecords({
       definition: registered,
@@ -481,11 +497,14 @@ export class Harness {
     options: HarnessAbortOptions
   ): Promise<HarnessTaskDocument> {
     if (typeof options?.reason !== "string" || !options.reason.trim()) {
-      throw new Error("abort requires a reason");
+      throw harnessError({detail: "abort requires a reason", kind: "invalidRequest"});
     }
     const task = await this.models.task.findExactlyOne({_id: taskId});
     if (HARNESS_TERMINAL_STATUSES.has(task.status)) {
-      throw new Error(`Task ${taskId} is already ${task.status}`);
+      throw harnessError({
+        detail: `Task ${taskId} is already ${task.status}`,
+        kind: "taskTerminal",
+      });
     }
     return abortTaskTree({
       engine: this.engine,
@@ -510,12 +529,13 @@ export class Harness {
     options: HarnessSendEventOptions = {}
   ): Promise<HarnessInboxEventDocument> {
     if (typeof event !== "string" || !event.trim()) {
-      throw new Error("sendEvent requires an event name");
+      throw harnessError({detail: "sendEvent requires an event name", kind: "invalidRequest"});
     }
     if (event.startsWith(HARNESS_RESERVED_EVENT_PREFIX)) {
-      throw new Error(
-        `sendEvent: event names starting with "${HARNESS_RESERVED_EVENT_PREFIX}" are reserved for the harness (approval decisions use decideApproval)`
-      );
+      throw harnessError({
+        detail: `sendEvent: event names starting with "${HARNESS_RESERVED_EVENT_PREFIX}" are reserved for the harness (approval decisions use decideApproval)`,
+        kind: "invalidRequest",
+      });
     }
     const sent = await sendEventRecords({
       event,
@@ -542,10 +562,16 @@ export class Harness {
     options: HarnessDecideApprovalOptions
   ): Promise<HarnessApprovalDocument> {
     if (typeof options?.approved !== "boolean") {
-      throw new Error("decideApproval requires approved: true or false");
+      throw harnessError({
+        detail: "decideApproval requires approved: true or false",
+        kind: "invalidRequest",
+      });
     }
     if (!options.approved && !options.reason?.trim()) {
-      throw new Error("decideApproval: a rejection requires a reason");
+      throw harnessError({
+        detail: "decideApproval: a rejection requires a reason",
+        kind: "invalidRequest",
+      });
     }
     const {approval, isWoken} = await decideApprovalRecords({
       approvalId,
@@ -596,27 +622,35 @@ export class Harness {
     options: HarnessResolveInterruptedOptions
   ): Promise<HarnessTaskDocument> {
     if (!Object.values(HARNESS_RESOLVE_ACTIONS).includes(options.action)) {
-      throw new Error(
-        `resolveInterrupted action must be one of ${Object.values(HARNESS_RESOLVE_ACTIONS).join(", ")}`
-      );
+      throw harnessError({
+        detail: `resolveInterrupted action must be one of ${Object.values(HARNESS_RESOLVE_ACTIONS).join(", ")}`,
+        kind: "invalidRequest",
+      });
     }
     if (typeof options.reason !== "string" || !options.reason.trim()) {
-      throw new Error("resolveInterrupted requires a reason");
+      throw harnessError({detail: "resolveInterrupted requires a reason", kind: "invalidRequest"});
     }
     const task = await this.models.task.findExactlyOne({_id: taskId});
     if (task.status !== HARNESS_TASK_STATUSES.interrupted) {
-      throw new Error(`Task ${taskId} is ${task.status}, not interrupted`);
+      throw harnessError({
+        detail: `Task ${taskId} is ${task.status}, not interrupted`,
+        kind: "taskNotInterrupted",
+      });
     }
     if (options.action === HARNESS_RESOLVE_ACTIONS.retry && task.abortRequested?.at) {
-      throw new Error(`Task ${taskId} is being aborted; resolve it with abort, not retry`);
+      throw harnessError({
+        detail: `Task ${taskId} is being aborted; resolve it with abort, not retry`,
+        kind: "taskAborting",
+      });
     }
     if (
       options.action === HARNESS_RESOLVE_ACTIONS.retry &&
       !this.definitions.has(taskDefinitionKey(task))
     ) {
-      throw new Error(
-        `${taskDefinitionKey(task)} is not in this harness registry; register it before retrying`
-      );
+      throw harnessError({
+        detail: `${taskDefinitionKey(task)} is not in this harness registry; register it before retrying`,
+        kind: "notRegistered",
+      });
     }
     const decidedBy = options.userId === undefined ? undefined : String(options.userId);
     if (options.action === HARNESS_RESOLVE_ACTIONS.abort) {
@@ -663,15 +697,24 @@ export class Harness {
     userId?: mongoose.Types.ObjectId | string;
   }): Promise<HarnessConversationHandle> {
     if (this.agents.get(agent?.name) !== agent) {
-      throw new Error(`Agent "${agent?.name}" is not in this harness registry`);
+      throw harnessError({
+        detail: `Agent "${agent?.name}" is not in this harness registry`,
+        kind: "notRegistered",
+      });
     }
     const extensionNames = extensions?.map((entry) => extensionName("createConversation", entry));
     if (extensionNames && new Set(extensionNames).size !== extensionNames.length) {
-      throw new Error("createConversation: an extension is listed more than once");
+      throw harnessError({
+        detail: "createConversation: an extension is listed more than once",
+        kind: "invalidRequest",
+      });
     }
     for (const name of extensionNames ?? []) {
       if (!this.extensions.has(name)) {
-        throw new Error(`Extension "${name}" is not in this harness registry`);
+        throw harnessError({
+          detail: `Extension "${name}" is not in this harness registry`,
+          kind: "notRegistered",
+        });
       }
     }
     const document = await this.models.conversation.create({
@@ -713,9 +756,10 @@ export class Harness {
         return task;
       }
       if (DateTime.now() >= deadline) {
-        throw new Error(
-          `Timed out waiting for task ${taskId} (${taskDefinitionKey(task)}) in status ${task.status}`
-        );
+        throw harnessError({
+          detail: `Timed out waiting for task ${taskId} (${taskDefinitionKey(task)}) in status ${task.status}`,
+          kind: "waitTimedOut",
+        });
       }
       await new Promise((resolve) => setTimeout(resolve, pollMs));
     }

@@ -1,6 +1,5 @@
 import {
   type ActionContext,
-  ConflictError,
   type ModelRouterOptions,
   modelRouter,
   type PermissionMethod,
@@ -15,6 +14,8 @@ import {
   HARNESS_TASK_STATUSES,
   HARNESS_TERMINAL_STATUSES,
 } from "../../types/harness";
+import {HarnessCommitConflictError} from "../commit";
+import {harnessError} from "../errors";
 import type {Harness} from "../harness";
 import {registerHarnessTask} from "../models/harnessTask";
 import {isOwnerOrAdmin} from "./events";
@@ -45,8 +46,7 @@ const ownerOrAdmin: PermissionMethod<HarnessTaskDocument> = (_method, user, task
 const adminOnly: PermissionMethod<HarnessTaskDocument> = (_method, user, task) =>
   task ? Boolean(user?.admin) : true;
 
-const conflict = (code: string, title: string, detail: string): ConflictError =>
-  new ConflictError({code, detail, title});
+const isCommitConflict = (error: unknown): boolean => error instanceof HarnessCommitConflictError;
 
 /**
  * Mount `{basePath}/tasks`: read (owner or admin), plus the `abort` (owner or admin) and
@@ -67,12 +67,17 @@ export const addHarnessTaskRoutes = (
     try {
       return await harness.abort(doc._id, {reason, userId: user?.id});
     } catch (error: unknown) {
-      // The harness refuses a task that already ended (perhaps after the router loaded it).
+      // The harness throws coded APIErrors itself; only a lost race (the task finished on
+      // its own between the check and the abort) needs restating as "already ended".
       const current = await model.findOneOrNone({_id: doc._id});
-      if (!current || !HARNESS_TERMINAL_STATUSES.has(current.status)) {
+      if (!isCommitConflict(error) || !current || !HARNESS_TERMINAL_STATUSES.has(current.status)) {
         throw error;
       }
-      throw conflict("harness-task-terminal", "Task already ended", `Task is ${current.status}`);
+      throw harnessError({
+        cause: error,
+        detail: `Task ${String(doc._id)} is already ${current.status}`,
+        kind: "taskTerminal",
+      });
     }
   };
 
@@ -85,23 +90,21 @@ export const addHarnessTaskRoutes = (
     try {
       return await harness.resolveInterrupted(doc._id, {action, reason, result, userId: user?.id});
     } catch (error: unknown) {
-      // The harness refuses a task that is not interrupted (perhaps resolved meanwhile).
+      // The harness throws coded APIErrors itself; only a lost race (another resolution won)
+      // needs restating as "not interrupted".
       const current = await model.findOneOrNone({_id: doc._id});
-      if (current && current.status !== HARNESS_TASK_STATUSES.interrupted) {
-        throw conflict(
-          "harness-task-not-interrupted",
-          "Task is not interrupted",
-          `Task is ${current.status}`
-        );
+      if (
+        !isCommitConflict(error) ||
+        !current ||
+        current.status === HARNESS_TASK_STATUSES.interrupted
+      ) {
+        throw error;
       }
-      if (current?.abortRequested?.at && action === HARNESS_RESOLVE_ACTIONS.retry) {
-        throw conflict(
-          "harness-task-aborting",
-          "Task is being aborted",
-          "Resolve a task that is being aborted with abort, not retry"
-        );
-      }
-      throw error;
+      throw harnessError({
+        cause: error,
+        detail: `Task ${String(doc._id)} is ${current.status}, not interrupted`,
+        kind: "taskNotInterrupted",
+      });
     }
   };
 

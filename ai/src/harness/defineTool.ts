@@ -1,4 +1,5 @@
 import type {HarnessToolDefinition, HarnessToolDefinitionInput} from "../types/harness";
+import {HarnessDefinitionError} from "./definitionError";
 
 /** Provider-safe tool names (the strictest common limit across providers). */
 const TOOL_NAME_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -12,25 +13,29 @@ export const defineTool = <Args, Result>(
   definition: HarnessToolDefinitionInput<Args, Result>
 ): HarnessToolDefinition<Args, Result> => {
   if (!TOOL_NAME_PATTERN.test(definition.name ?? "")) {
-    throw new Error(
+    throw new HarnessDefinitionError(
       `defineTool(${definition.name}): name must be 1-64 letters, digits, "_" or "-"`
     );
   }
   if (!definition.description?.trim()) {
-    throw new Error(`defineTool(${definition.name}): description is required`);
+    throw new HarnessDefinitionError(`defineTool(${definition.name}): description is required`);
   }
   if (typeof definition.parameters?.safeParse !== "function") {
-    throw new Error(`defineTool(${definition.name}): parameters must be a zod schema`);
+    throw new HarnessDefinitionError(
+      `defineTool(${definition.name}): parameters must be a zod schema`
+    );
   }
   if (typeof definition.execute !== "function") {
-    throw new Error(`defineTool(${definition.name}): execute must be a function`);
+    throw new HarnessDefinitionError(`defineTool(${definition.name}): execute must be a function`);
   }
   if (
     definition.replay !== undefined &&
     definition.replay !== "safe" &&
     definition.replay !== "never"
   ) {
-    throw new Error(`defineTool(${definition.name}): replay must be "safe" or "never"`);
+    throw new HarnessDefinitionError(
+      `defineTool(${definition.name}): replay must be "safe" or "never"`
+    );
   }
   return Object.freeze({
     ...definition,

@@ -42,6 +42,7 @@ import {
 } from "./commit";
 import {taskDefinitionKey} from "./defineTask";
 import {HarnessDefinitionError} from "./definitionError";
+import {errorMessage, harnessError} from "./errors";
 import {appendTaskEvents} from "./events";
 import {HARNESS_INTERNAL_RUNTIME} from "./internalRuntime";
 import {startTaskHeartbeat} from "./leases";
@@ -49,7 +50,6 @@ import {createMemo} from "./memo";
 import {
   checkTaskWait,
   childOutcomes,
-  errorMessage,
   type HarnessEngine,
   settleChildren,
   settleTaskOwner,
@@ -227,7 +227,10 @@ export const runClaimedTask = async ({
 }): Promise<void> => {
   const definition = engine.definitions.get(taskDefinitionKey(task));
   if (!definition) {
-    throw new Error(`No registered task definition for ${taskDefinitionKey(task)}`);
+    throw harnessError({
+      detail: `No registered task definition for ${taskDefinitionKey(task)}`,
+      kind: "notRegistered",
+    });
   }
 
   const taskId = String(task._id);
@@ -329,7 +332,7 @@ const runPhase = async ({
     writes?: HarnessCommitWrites
   ): Promise<void> => {
     if (commitStarted) {
-      throw new Error(
+      throw new HarnessDefinitionError(
         `${definition.key}: rt.commit called more than once in phase "${task.phase}"`
       );
     }
@@ -528,7 +531,7 @@ const runPhase = async ({
     }
     const turn = engine.definitions.get(AGENT_TURN_KEY);
     if (!turn) {
-      throw new Error(`${AGENT_TURN_KEY} is not registered`);
+      throw harnessError({detail: `${AGENT_TURN_KEY} is not registered`, kind: "notRegistered"});
     }
     const schema = (options.output ?? agent.output) as HarnessRunAgentOptions<Result>["output"];
     let outputSchema: string | undefined;

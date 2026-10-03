@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import type {HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {defineTask, Harness, HarnessCommitConflictError, InProcessRunner} from "./harness";
@@ -518,7 +519,7 @@ describe("Harness", () => {
       await harness.createTask(intakeTask, {patientId: "p7"}, {requestId: "shared-key"});
 
       await expect(harness.createTask(other, {}, {requestId: "shared-key"})).rejects.toThrow(
-        'requestId "shared-key" already belongs to task'
+        harnessErrorMatching("requestIdConflict", 'requestId "shared-key" already belongs to task')
       );
     });
 
@@ -537,10 +538,15 @@ describe("Harness", () => {
           {patientId: "p12"},
           {requestId: "user-key", userId: new mongoose.Types.ObjectId()}
         )
-      ).rejects.toThrow('requestId "user-key" already belongs to a task for a different user');
+      ).rejects.toThrow(
+        harnessErrorMatching(
+          "requestIdConflict",
+          'requestId "user-key" already belongs to a task for a different user'
+        )
+      );
       await expect(
         harness.createTask(intakeTask, {patientId: "p12"}, {requestId: "user-key"})
-      ).rejects.toThrow("different user");
+      ).rejects.toThrow(harnessErrorMatching("requestIdConflict", "different user"));
       const same = await harness.createTask(
         intakeTask,
         {patientId: "p12"},
@@ -565,7 +571,7 @@ describe("Harness", () => {
       });
       const harness = await openHarness();
       await expect(harness.createTask(unregistered, {})).rejects.toThrow(
-        "test.unregistered@1 is not in this harness registry"
+        harnessErrorMatching("notRegistered", "test.unregistered@1 is not in this harness registry")
       );
     });
 
@@ -578,7 +584,10 @@ describe("Harness", () => {
       });
       const harness = await openHarness({registry: [badInitial]});
       await expect(harness.createTask(badInitial, {})).rejects.toThrow(
-        'test.badInitial@1: initial phase "missing" is not one of only'
+        harnessErrorMatching(
+          "definitionInvalid",
+          'test.badInitial@1: initial phase "missing" is not one of only'
+        )
       );
       expect(await TaskModel.countDocuments({})).toBe(0);
       expect(await TraceModel.countDocuments({})).toBe(0);
@@ -590,7 +599,10 @@ describe("Harness", () => {
       mongoose.deleteModel("ObsSpan");
       try {
         await expect(Harness.open({registry: [intakeTask]})).rejects.toThrow(
-          "Harness.open requires the local observability plugin"
+          harnessErrorMatching(
+            "configInvalid",
+            "Harness.open requires the local observability plugin"
+          )
         );
       } finally {
         SpanModel = registerObsSpan();
@@ -608,7 +620,7 @@ describe("Harness", () => {
         ok: 1,
       });
       await expect(Harness.open({registry: [intakeTask]})).rejects.toThrow(
-        "Harness.open requires a MongoDB replica set"
+        harnessErrorMatching("replicaSetRequired", "Harness.open requires a MongoDB replica set")
       );
       commandSpy.mockRestore();
     });
@@ -626,7 +638,7 @@ describe("Harness", () => {
 
     it("throws when a name@version is registered twice", async () => {
       await expect(Harness.open({registry: [intakeTask, intakeTask]})).rejects.toThrow(
-        "Harness registry lists test.intake@1 more than once"
+        harnessErrorMatching("configInvalid", "Harness registry lists test.intake@1 more than once")
       );
     });
 
@@ -634,7 +646,9 @@ describe("Harness", () => {
       const harness = await openHarness();
       await harness.stop();
       await harness.start();
-      await expect(harness.start()).rejects.toThrow("Harness is already started");
+      await expect(harness.start()).rejects.toThrow(
+        harnessErrorMatching("alreadyStarted", "Harness is already started")
+      );
     });
 
     it("defaults to an InProcessRunner", async () => {
@@ -669,7 +683,10 @@ describe("Harness", () => {
           timeout: {milliseconds: 30},
         })
       ).rejects.toThrow(
-        `Timed out waiting for task ${created._id} (test.intake@1) in status pending`
+        harnessErrorMatching(
+          "waitTimedOut",
+          `Timed out waiting for task ${created._id} (test.intake@1) in status pending`
+        )
       );
     });
   });

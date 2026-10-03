@@ -1,7 +1,5 @@
 import {
   type ActionContext,
-  APIError,
-  ConflictError,
   type ModelRouterOptions,
   modelRouter,
   type PermissionMethod,
@@ -12,7 +10,7 @@ import type express from "express";
 
 import type {HarnessApprovalDocument} from "../../types/harness";
 import {HARNESS_APPROVAL_STATUSES} from "../../types/harness";
-import {HarnessApprovalConflictError} from "../approvals";
+import {harnessError} from "../errors";
 import type {Harness} from "../harness";
 import {registerHarnessApproval} from "../models/harnessApproval";
 
@@ -52,23 +50,13 @@ export const addHarnessApprovalRoutes = (
       unknown,
       unknown
     >): Promise<HarnessApprovalDocument> => {
-      try {
-        return await harness.decideApproval(doc._id, {
-          approved,
-          // Validated by the action's zod body schema.
-          reason: (body as {reason?: string} | undefined)?.reason,
-          userId: user?.id,
-        });
-      } catch (error: unknown) {
-        if (error instanceof HarnessApprovalConflictError) {
-          throw new ConflictError({
-            code: "harness-approval-not-pending",
-            detail: error.message,
-            title: "Approval can no longer be decided",
-          });
-        }
-        throw error;
-      }
+      // HarnessApprovalConflictError is already a 409 APIError.
+      return harness.decideApproval(doc._id, {
+        approved,
+        // Validated by the action's zod body schema.
+        reason: (body as {reason?: string} | undefined)?.reason,
+        userId: user?.id,
+      });
     };
 
   router.use(
@@ -126,9 +114,9 @@ export const addHarnessApprovalRoutes = (
 
 export const assertValidBasePath = (basePath: string): string => {
   if (!basePath.startsWith("/") || basePath.endsWith("/")) {
-    throw new APIError({
-      status: 500,
-      title: `HarnessApp basePath must start with "/" and not end with "/": "${basePath}"`,
+    throw harnessError({
+      detail: `HarnessApp basePath must start with "/" and not end with "/": "${basePath}"`,
+      kind: "configInvalid",
     });
   }
   return basePath;

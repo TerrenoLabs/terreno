@@ -14,6 +14,7 @@ import {createLocalObservabilityPlugin} from "../observability/local/localPlugin
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
 import {generateToStream, withGenerateStreaming} from "../tests/generateStream";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import type {HarnessAgentDefinition, HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {
@@ -296,7 +297,10 @@ describe("rt.runAgent (subagents)", () => {
     // Only rt.runAgent runs turns on a task-owned conversation.
     const handle = await harness.conversation(conversation._id);
     await expect(handle.submit({content: "Follow up", requestId: "r1"})).rejects.toThrow(
-      `belongs to task ${created._id}; only rt.runAgent runs its turns`
+      harnessErrorMatching(
+        "conversationOwned",
+        `belongs to task ${created._id}; only rt.runAgent runs its turns`
+      )
     );
   });
 

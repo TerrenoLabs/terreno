@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import type {HarnessTaskDocument} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {
@@ -809,16 +810,28 @@ describe("Harness leases and crash recovery", () => {
 
       await expect(
         handle.harness.resolveInterrupted(running._id, {action: "retry", reason: "nope"})
-      ).rejects.toThrow(`Task ${running._id} is completed, not interrupted`);
+      ).rejects.toThrow(
+        harnessErrorMatching(
+          "taskNotInterrupted",
+          `Task ${running._id} is completed, not interrupted`
+        )
+      );
       await expect(
         handle.harness.resolveInterrupted(created._id, {action: "retry", reason: "  "})
-      ).rejects.toThrow("resolveInterrupted requires a reason");
+      ).rejects.toThrow(
+        harnessErrorMatching("invalidRequest", "resolveInterrupted requires a reason")
+      );
       await expect(
         handle.harness.resolveInterrupted(created._id, {
           action: "replay" as never,
           reason: "typo",
         })
-      ).rejects.toThrow("resolveInterrupted action must be one of abort, complete, retry");
+      ).rejects.toThrow(
+        harnessErrorMatching(
+          "invalidRequest",
+          "resolveInterrupted action must be one of abort, complete, retry"
+        )
+      );
       expect((await findTask(created._id)).status).toBe("interrupted");
       expect(await SpanModel.countDocuments({name: "resolveInterrupted"})).toBe(0);
     });

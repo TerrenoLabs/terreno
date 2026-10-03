@@ -135,6 +135,22 @@ A retry re-runs the whole phase, so a phase that throws after a side effect repe
 Throw before the side effect, or make it idempotent. Programming errors (committing to an
 unknown phase, forgetting to commit) fail at once: retrying cannot fix them.
 
+### Errors are APIErrors with stable codes
+
+Harness errors reach three audiences: the code that called the harness, an HTTP client of
+`HarnessApp`, and an operator reading a failed task or a Sentry issue. All three are served
+by one shape, Terreno's `APIError`. The `code` (`harness-task-terminal`,
+`harness-definition-invalid`, ...) and `title` never change, so callers branch on `code` and
+Sentry groups occurrences together. What changed this time (which task, which key) lives in
+`detail`. The same error thrown from `harness.abort` therefore becomes a 409 over HTTP with
+no route code translating it.
+
+The retry rule above rides on the class, not the code. A `HarnessDefinitionError` fails the
+task at once. Any other error, including an `APIError` with the same code from a non-phase
+call, is an ordinary failed attempt. A failed task records the error's `detail`. Each
+harness detail is a full sentence, so the task's `error` reads as a complete message on
+its own.
+
 ## The ownership tree
 
 Tasks form a tree. A phase calls `rt.createTask` to start a child. The child records

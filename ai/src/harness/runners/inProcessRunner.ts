@@ -4,6 +4,7 @@ import {logger} from "@terreno/api";
 import {Duration, type DurationLike} from "luxon";
 
 import type {HarnessLeaseSettings, HarnessRunner, HarnessRunnerContext} from "../../types/harness";
+import {errorMessage, harnessError} from "../errors";
 
 export interface InProcessRunnerOptions {
   /** How often the runner renews its owner lease and its running task's lease. */
@@ -49,9 +50,10 @@ export class InProcessRunner implements HarnessRunner {
     const duration = Duration.fromDurationLike(options.leaseDuration ?? {seconds: 30});
     const heartbeat = Duration.fromDurationLike(options.heartbeatInterval ?? {seconds: 10});
     if (heartbeat.toMillis() <= 0 || heartbeat.toMillis() >= duration.toMillis()) {
-      throw new Error(
-        "InProcessRunner heartbeatInterval must be positive and shorter than leaseDuration"
-      );
+      throw harnessError({
+        detail: "InProcessRunner heartbeatInterval must be positive and shorter than leaseDuration",
+        kind: "configInvalid",
+      });
     }
     this.lease = {
       duration,
@@ -75,7 +77,7 @@ export class InProcessRunner implements HarnessRunner {
 
   async start(context: HarnessRunnerContext): Promise<void> {
     if (this.loop !== undefined) {
-      throw new Error("InProcessRunner is already started");
+      throw harnessError({detail: "InProcessRunner is already started", kind: "alreadyStarted"});
     }
     this.context = context;
     this.isStopping = false;
@@ -103,7 +105,7 @@ export class InProcessRunner implements HarnessRunner {
       try {
         await context.releaseOwnerLease(this.lease);
       } catch (error: unknown) {
-        logger.warn(`InProcessRunner could not release the owner lease: ${String(error)}`);
+        logger.warn(`InProcessRunner could not release the owner lease: ${errorMessage(error)}`);
       }
     }
     this.currentRole = IN_PROCESS_RUNNER_ROLES.stopped;
@@ -148,7 +150,7 @@ export class InProcessRunner implements HarnessRunner {
       await context.recoverExpired();
       return true;
     } catch (error: unknown) {
-      logger.error(`InProcessRunner could not take ownership: ${String(error)}`);
+      logger.error(`InProcessRunner could not take ownership: ${errorMessage(error)}`);
       return this.currentRole === IN_PROCESS_RUNNER_ROLES.owner;
     }
   }
@@ -163,7 +165,7 @@ export class InProcessRunner implements HarnessRunner {
       await context.runTask(task, this.lease);
       return false;
     } catch (error: unknown) {
-      logger.error(`InProcessRunner iteration failed: ${String(error)}`);
+      logger.error(`InProcessRunner iteration failed: ${errorMessage(error)}`);
       return true;
     }
   }
@@ -194,7 +196,7 @@ export class InProcessRunner implements HarnessRunner {
         this.wake();
       }
     } catch (error: unknown) {
-      logger.warn(`InProcessRunner heartbeat failed: ${String(error)}`);
+      logger.warn(`InProcessRunner heartbeat failed: ${errorMessage(error)}`);
     }
   }
 

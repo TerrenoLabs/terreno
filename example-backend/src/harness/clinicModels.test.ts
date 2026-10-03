@@ -37,10 +37,21 @@ describe("clinic summarizer models", () => {
     expect(modelLabel(resolveExampleModel(CLINIC_SERVER_MODEL))).toContain("gemini-2.5-flash");
     Reflect.deleteProperty(process.env, "GEMINI_API_KEY");
     expect(() => resolveExampleModel(CLINIC_SERVER_MODEL)).toThrow(
-      "google/gemini-2.5-flash needs GEMINI_API_KEY or GOOGLE_VERTEX_PROJECT on the server"
+      expect.objectContaining({
+        code: "clinic-model-credentials-missing",
+        detail:
+          "google/gemini-2.5-flash needs GEMINI_API_KEY or GOOGLE_VERTEX_PROJECT on the server",
+        message: "Model credentials are missing",
+        status: 500,
+      })
     );
     expect(() => resolveExampleModel({modelId: "x", provider: "openai"})).toThrow(
-      'The example backend has no model provider named "openai"'
+      expect.objectContaining({
+        code: "clinic-model-provider-unknown",
+        detail: 'The example backend has no model provider named "openai"',
+        message: "Unknown model provider",
+        status: 500,
+      })
     );
   });
 });

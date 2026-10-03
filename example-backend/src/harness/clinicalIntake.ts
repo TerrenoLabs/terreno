@@ -6,7 +6,7 @@ import {
   type HarnessModelRef,
   type HarnessTaskDefinition,
 } from "@terreno/ai/harness";
-import {Permissions, z} from "@terreno/api";
+import {APIError, Permissions, z} from "@terreno/api";
 import type {DurationLike} from "luxon";
 
 import {access} from "../access";
@@ -91,7 +91,12 @@ const signoffSummary = (chart: ChartView, summary: NoteContent): string =>
 
 const requireState = <T>(value: T | undefined, what: string): T => {
   if (value === undefined) {
-    throw new Error(`clinic.intakeSummary: ${what} is missing from the task state`);
+    throw new APIError({
+      code: "clinic-intake-state-missing",
+      detail: `clinic.intakeSummary: ${what} is missing from the task state`,
+      status: 500,
+      title: "Intake task state is incomplete",
+    });
   }
   return value;
 };

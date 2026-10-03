@@ -2,6 +2,7 @@ import {APIError, logger} from "@terreno/api";
 import mongoose from "mongoose";
 
 import type {HarnessEventDocument} from "../types/harness";
+import {errorMessage, harnessError} from "./errors";
 import {registerHarnessEvent} from "./models/harnessEvent";
 
 /** How long one wait on the tail may block; also how soon a stop takes effect. */
@@ -112,7 +113,7 @@ export class HarnessEventHub {
       while (this.changes === changes) {
         // An invalidated (collection dropped) or externally closed tail is a failure.
         if (changes.closed) {
-          throw new Error("The HarnessEvent change stream closed");
+          throw harnessError({detail: "The HarnessEvent change stream closed", kind: "internal"});
         }
         const change = (await changes.tryNext()) as {fullDocument?: HubEvent} | null;
         const event = change?.fullDocument;
@@ -137,7 +138,7 @@ export class HarnessEventHub {
 
   /** The tail failed: drop every subscriber (each closes its stream); the next one restarts it. */
   private fail(error: unknown): void {
-    logger.warn(`Harness event tail failed; closing its SSE streams: ${String(error)}`);
+    logger.warn(`Harness event tail failed; closing its SSE streams: ${errorMessage(error)}`);
     const subscribers = [...this.subscribers];
     this.subscribers.clear();
     this.changes = undefined;

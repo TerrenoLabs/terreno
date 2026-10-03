@@ -3,6 +3,7 @@ import type express from "express";
 import type {DurationLike} from "luxon";
 
 import {harnessAdminScreens} from "./adminScreens";
+import {harnessError} from "./errors";
 import {HarnessEventHub} from "./eventHub";
 import type {Harness} from "./harness";
 import {addHarnessApprovalRoutes, assertValidBasePath} from "./routes/approvals";
@@ -49,7 +50,7 @@ export class HarnessApp implements TerrenoPlugin {
 
   constructor({basePath = "/harness", harness, heartbeatInterval}: HarnessAppOptions) {
     if (!harness) {
-      throw new Error("HarnessApp requires an opened Harness");
+      throw harnessError({detail: "HarnessApp requires an opened Harness", kind: "configInvalid"});
     }
     this.basePath = assertValidBasePath(basePath);
     this.harness = harness;

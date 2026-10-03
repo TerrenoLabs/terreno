@@ -20,6 +20,7 @@ import {createLocalObservabilityPlugin} from "../observability/local/localPlugin
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
 import {withGenerateStreaming} from "../tests/generateStream";
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
 import type {
   HarnessApprovalDocument,
@@ -665,7 +666,10 @@ describe("Harness approvals", () => {
       await expect(
         harness.sendEvent(created._id, approval.event, {approved: true})
       ).rejects.toThrow(
-        'sendEvent: event names starting with "terreno." are reserved for the harness'
+        harnessErrorMatching(
+          "invalidRequest",
+          'sendEvent: event names starting with "terreno." are reserved for the harness'
+        )
       );
       // Below the public API (a raw inbox write), the decision row still decides.
       await sendEventRecords({
@@ -706,16 +710,20 @@ describe("Harness approvals", () => {
       expect(await harness.mayApprove({approval, user: {id: notAdminId} as User})).toBe(true);
       expect(seenInputs).toEqual([{patientId: "p8"}]);
       await expect(harness.decideApproval(approval._id, {approved: false})).rejects.toThrow(
-        "decideApproval: a rejection requires a reason"
+        harnessErrorMatching("invalidRequest", "decideApproval: a rejection requires a reason")
       );
       await expect(
         harness.decideApproval(approval._id, {approved: "yes" as unknown as boolean})
-      ).rejects.toThrow("decideApproval requires approved: true or false");
+      ).rejects.toThrow(
+        harnessErrorMatching("invalidRequest", "decideApproval requires approved: true or false")
+      );
 
       const decided = await harness.decideApproval(approval._id, {approved: true});
       expect(decided.decidedBy).toBeUndefined();
-      await expect(harness.decideApproval(approval._id, {approved: true})).rejects.toBeInstanceOf(
-        HarnessApprovalConflictError
+      const conflict = harness.decideApproval(approval._id, {approved: true});
+      await expect(conflict).rejects.toBeInstanceOf(HarnessApprovalConflictError);
+      await expect(conflict).rejects.toThrow(
+        harnessErrorMatching("approvalNotPending", `Approval ${approval._id} is already approved`)
       );
       const done = await harness.waitForTask(created._id, {timeout: {seconds: 10}});
       const result = plain(done.outcome?.result) as HarnessApprovalResult;
@@ -792,16 +800,27 @@ describe("Harness approvals", () => {
       expect(await ApprovalModel.countDocuments({})).toBe(0);
 
       expect(() => asksApproval({approvals: [] as never, name: "test.bad1"})).toThrow(
-        "approvals must be an object keyed by approval key"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "approvals must be an object keyed by approval key"
+        )
       );
       expect(() => asksApproval({approvals: {" ": {approvers: []}}, name: "test.bad2"})).toThrow(
-        "approval keys must be non-empty"
+        harnessErrorMatching("definitionInvalid", "approval keys must be non-empty")
       );
       expect(() =>
         asksApproval({approvals: {k: {approvers: ["x" as never]}}, name: "test.bad3"})
-      ).toThrow("approvals.k.approvers must be an array of permission functions");
+      ).toThrow(
+        harnessErrorMatching(
+          "definitionInvalid",
+          "approvals.k.approvers must be an array of permission functions"
+        )
+      );
       expect(() => defineExtension({approvals: {k: {} as never}, name: "badExtension"})).toThrow(
-        "defineExtension(badExtension): approvals.k.approvers must be an array"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "defineExtension(badExtension): approvals.k.approvers must be an array"
+        )
       );
     });
 
@@ -824,22 +843,34 @@ describe("Harness approvals", () => {
     it("validates HarnessApp and approvalGate options", async () => {
       const harness = await openHarness([], {start: false});
       expect(() => new HarnessApp({basePath: "harness", harness})).toThrow(
-        'HarnessApp basePath must start with "/" and not end with "/": "harness"'
+        harnessErrorMatching(
+          "configInvalid",
+          'HarnessApp basePath must start with "/" and not end with "/": "harness"'
+        )
       );
       expect(() => new HarnessApp({harness: undefined as unknown as Harness})).toThrow(
-        "HarnessApp requires an opened Harness"
+        harnessErrorMatching("configInvalid", "HarnessApp requires an opened Harness")
       );
       expect(() => approvalGate({tools: []})).toThrow(
-        "approvalGate: tools must list at least one tool"
+        harnessErrorMatching("definitionInvalid", "approvalGate: tools must list at least one tool")
       );
       expect(() => approvalGate({tools: [" "]})).toThrow(
-        "approvalGate: every tool must be a defineTool tool or a tool name"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "approvalGate: every tool must be a defineTool tool or a tool name"
+        )
       );
       expect(() => approvalGate({title: 3 as never, tools: ["x"]})).toThrow(
-        "approvalGate(approvalGate:x): title must be a string or a function"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "approvalGate(approvalGate:x): title must be a string or a function"
+        )
       );
       expect(() => approvalGate({timeout: {seconds: -1}, tools: ["x"]})).toThrow(
-        "approvalGate(approvalGate:x): timeout must be a valid, non-negative duration"
+        harnessErrorMatching(
+          "definitionInvalid",
+          "approvalGate(approvalGate:x): timeout must be a valid, non-negative duration"
+        )
       );
     });
   });

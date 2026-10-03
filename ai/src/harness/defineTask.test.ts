@@ -1,5 +1,5 @@
 import {describe, expect, it} from "bun:test";
-
+import {harnessErrorMatching} from "../tests/harnessErrors";
 import type {HarnessTaskDefinitionInput} from "../types/harness";
 import {defineTask, taskDefinitionKey} from "./defineTask";
 
@@ -52,6 +52,8 @@ describe("defineTask", () => {
       'defineTask(test.define): phase "odd" replay must be "safe" or "never"',
     ],
   ])("rejects an invalid definition %#", (override, message) => {
-    expect(() => defineTask({...validInput(), ...override})).toThrow(message);
+    expect(() => defineTask({...validInput(), ...override})).toThrow(
+      harnessErrorMatching("definitionInvalid", message)
+    );
   });
 });

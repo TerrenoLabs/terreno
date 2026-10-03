@@ -25,8 +25,18 @@ interface MockPreference {
 }
 
 const createHostComponent = (name: string): React.FC<Record<string, unknown>> => {
-  const HostComponent: React.FC<Record<string, unknown>> = ({children, ...props}) =>
-    React.createElement(name, props, children as ReactNode);
+  const HostComponent: React.FC<Record<string, unknown>> = ({children, text, title, ...props}) => {
+    const ReactNativeText = require("react-native").Text as React.ComponentType<{
+      children?: ReactNode;
+    }>;
+    return React.createElement(
+      name,
+      props,
+      typeof title === "string" ? React.createElement(ReactNativeText, null, title) : null,
+      typeof text === "string" ? React.createElement(ReactNativeText, null, text) : null,
+      children as ReactNode
+    );
+  };
   HostComponent.displayName = name;
   return HostComponent;
 };
@@ -76,14 +86,21 @@ mock.module("@terreno/syncdb/react", () => ({
 }));
 
 mock.module("@terreno/ui", () => ({
+  AreaChart: createHostComponent("AreaChart"),
+  BarChart: createHostComponent("BarChart"),
   Box: createHostComponent("Box"),
   Button: createHostComponent("Button"),
   Card: createHostComponent("Card"),
+  DashboardGrid: createHostComponent("DashboardGrid"),
+  DashboardGridItem: createHostComponent("DashboardGridItem"),
+  DonutChart: createHostComponent("DonutChart"),
   Heading: createHostComponent("Heading"),
+  LineChart: createHostComponent("LineChart"),
   NotificationBell: createHostComponent("NotificationBell"),
   NotificationInbox: createHostComponent("NotificationInbox"),
   NotificationPreferences: createHostComponent("NotificationPreferences"),
   Page: createHostComponent("Page"),
+  Scorecard: createHostComponent("Scorecard"),
   SideDrawer: ({children, renderContent, ...props}: Record<string, unknown>) =>
     React.createElement(
       "SideDrawer",
@@ -91,6 +108,7 @@ mock.module("@terreno/ui", () => ({
       children as ReactNode,
       (renderContent as () => ReactNode)()
     ),
+  TerrenoProvider: createHostComponent("TerrenoProvider"),
   Text: createHostComponent("Text"),
   // Sibling suites import useStoredState from @terreno/ui under Bun's process-global mock.module.
   useStoredState: () => ["", async (): Promise<void> => undefined, false],

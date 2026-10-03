@@ -16,6 +16,7 @@ import {detectImportFormat} from "./datasetImport";
 import {type DatasetImportResult, type DatasetRecord, formatProvenanceBar} from "./datasetTypes";
 
 export interface AiDatasetsListViewProps {
+  canCreate?: boolean;
   createError?: string;
   createName: string;
   createOpen: boolean;
@@ -66,6 +67,7 @@ const formatUpdated = (iso: string): string => {
 };
 
 export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
+  canCreate = true,
   createError,
   createName,
   createOpen,
@@ -147,7 +149,9 @@ export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
         <Text color="secondaryDark" size="sm">
           Human-annotated items are proofread. Auto-captured items may need review.
         </Text>
-        <Button onClick={onOpenCreate} testID="ai-datasets-create" text="New dataset" />
+        {canCreate ? (
+          <Button onClick={onOpenCreate} testID="ai-datasets-create" text="New dataset" />
+        ) : undefined}
       </Box>
       {loadError ? (
         <Box gap={2} testID="ai-datasets-load-error">

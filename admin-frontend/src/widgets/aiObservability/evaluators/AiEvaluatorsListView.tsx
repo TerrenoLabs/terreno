@@ -16,6 +16,7 @@ import {
 } from "./evaluatorTypes";
 
 export interface AiEvaluatorsListViewProps {
+  canCreate?: boolean;
   evaluators: EvaluatorRecord[];
   isLoading: boolean;
   loadError?: string;
@@ -57,6 +58,7 @@ const TypeBadgeCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
 };
 
 export const AiEvaluatorsListView: React.FC<AiEvaluatorsListViewProps> = ({
+  canCreate = true,
   evaluators,
   isLoading,
   loadError,
@@ -104,7 +106,9 @@ export const AiEvaluatorsListView: React.FC<AiEvaluatorsListViewProps> = ({
         <Text color="secondaryDark" size="sm">
           Schema is checked on save. Live sampling bills judge calls at the configured rate.
         </Text>
-        <Button onClick={onCreate} testID="ai-evaluators-create" text="Create evaluator" />
+        {canCreate ? (
+          <Button onClick={onCreate} testID="ai-evaluators-create" text="Create evaluator" />
+        ) : undefined}
       </Box>
       {loadError ? (
         <Box gap={2} testID="ai-evaluators-load-error">

@@ -41,3 +41,22 @@ export const resolvePromptActionPermissions = ({
     canUpdate: permissions.aiPrompt?.update === true,
   };
 };
+
+export const observabilityActionAllowed = ({
+  action,
+  resource,
+  status,
+  statusError = false,
+  statusLoading = false,
+}: {
+  action: string;
+  resource: string;
+  status?: ObservabilityStatusPayload;
+  statusError?: boolean;
+  statusLoading?: boolean;
+}): boolean => {
+  if (statusLoading || statusError || !status?.permissions) {
+    return false;
+  }
+  return status.permissions[resource]?.[action] === true;
+};

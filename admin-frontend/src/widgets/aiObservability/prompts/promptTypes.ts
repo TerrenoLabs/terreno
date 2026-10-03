@@ -216,6 +216,13 @@ export const productionVersionFromDetail = (detail: PromptDetail): number | unde
   return detail.labels.find((entry) => entry.label === "production")?.version;
 };
 
+export const judgeOutputSchemaFromDetail = (
+  detail: PromptDetail
+): Record<string, unknown> | undefined => {
+  const versionNumber = productionVersionFromDetail(detail) ?? latestVersionFromDetail(detail);
+  return detail.versions.find((entry) => entry.version === versionNumber)?.outputSchema;
+};
+
 export const templateVariableKeys = (template: string): string[] => {
   const keys: string[] = [];
   const seen = new Set<string>();

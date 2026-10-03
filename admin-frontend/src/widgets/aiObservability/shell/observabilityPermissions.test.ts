@@ -1,7 +1,10 @@
 import {describe, expect, it} from "bun:test";
 
 import type {ObservabilityStatusPayload} from "./aiObservabilityNav";
-import {resolvePromptActionPermissions} from "./observabilityPermissions";
+import {
+  observabilityActionAllowed,
+  resolvePromptActionPermissions,
+} from "./observabilityPermissions";
 
 const statusWithPermissions = (
   permissions: NonNullable<ObservabilityStatusPayload["permissions"]>
@@ -27,6 +30,33 @@ const operatorPromptPermissions = {
     update: true,
   },
 };
+
+describe("observabilityActionAllowed", () => {
+  it("fails closed until the named action is granted", () => {
+    expect(
+      observabilityActionAllowed({
+        action: "create",
+        resource: "aiEvaluator",
+        status: statusWithPermissions(operatorPromptPermissions),
+        statusLoading: true,
+      })
+    ).toBe(false);
+    expect(
+      observabilityActionAllowed({
+        action: "create",
+        resource: "aiDataset",
+        status: statusWithPermissions({aiDataset: {list: true, read: true}}),
+      })
+    ).toBe(false);
+    expect(
+      observabilityActionAllowed({
+        action: "update",
+        resource: "aiDataset",
+        status: statusWithPermissions({aiDataset: {update: true}}),
+      })
+    ).toBe(true);
+  });
+});
 
 describe("resolvePromptActionPermissions", () => {
   it("denies write controls while status is loading", () => {

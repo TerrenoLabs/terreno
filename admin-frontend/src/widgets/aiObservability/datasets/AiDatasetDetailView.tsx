@@ -25,6 +25,8 @@ import {
 } from "./datasetTypes";
 
 export interface AiDatasetDetailViewProps {
+  canAddItem?: boolean;
+  canRunExperiment?: boolean;
   dataset: DatasetRecord;
   isItemsLoading?: boolean;
   items: DatasetItemRecord[];
@@ -84,6 +86,8 @@ const formatTimestamp = (value: string): string => {
 };
 
 export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
+  canAddItem = true,
+  canRunExperiment = true,
   dataset,
   isItemsLoading,
   items,
@@ -165,20 +169,24 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
           </Text>
         </Box>
         <Box direction="row" gap={2}>
-          <Button
-            onClick={() => {
-              setAddError("");
-              setAddOpen(true);
-            }}
-            testID="ai-dataset-add-item"
-            text="Add item"
-            variant="secondary"
-          />
-          <Button
-            onClick={onOpenExperiment}
-            testID="ai-dataset-run-experiment"
-            text="Run experiment"
-          />
+          {canAddItem ? (
+            <Button
+              onClick={() => {
+                setAddError("");
+                setAddOpen(true);
+              }}
+              testID="ai-dataset-add-item"
+              text="Add item"
+              variant="secondary"
+            />
+          ) : undefined}
+          {canRunExperiment ? (
+            <Button
+              onClick={onOpenExperiment}
+              testID="ai-dataset-run-experiment"
+              text="Run experiment"
+            />
+          ) : undefined}
         </Box>
       </Box>
       <SegmentedControl

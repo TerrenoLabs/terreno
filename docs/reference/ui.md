@@ -250,6 +250,14 @@ Buttons automatically size to their content unless `fullWidth` is specified:
 
 Internally, Button sets `alignSelf: 'flex-start'` when `fullWidth={false}` to prevent stretching in column layouts.
 
+### TextField grow and maxHeight
+
+`grow` makes a multiline field expand with its content. Pair it with `maxHeight` (pixels) to cap the expansion; past the cap the content scrolls.
+
+```tsx
+<TextArea grow maxHeight={200} onChange={setNotes} value={notes} />
+```
+
 ### TextField password visibility
 
 `type="password"` masks the value and renders a show/hide eye control at the end of the field.
@@ -356,7 +364,15 @@ Streaming chat surface for `@terreno/ai`. Histories, messages, submit, and optio
 
 Pass `mascot` when the app owns a character. Terreno ships none. The node renders only while `currentMessages` is empty, centered in the chat panel above the suggested prompts. The empty hero uses the message viewport height as a minimum so short content stays centered, while taller mascots still scroll. Streaming feedback shares that centered hero instead of creating a second pane. Omit the prop for the default empty chat.
 
-The composer row (attachment picker, tools, input, Send) is vertically centered, so controls stay aligned with the input as it grows. The attachment cell is omitted when `onAttachFiles` is not provided.
+The composer row (attachment picker, tools, input, Send) is vertically centered, so controls stay aligned with the input as it grows. The composer input grows with its text up to 200px, then scrolls. The attachment cell is omitted when `onAttachFiles` is not provided.
+
+Each history row keeps rename and delete in a three-dot overflow menu (`gpt-history-menu-{id}`), anchored with `DropdownPanel`. Rename uses an outlined pencil in the dark secondary text color. Titles truncate before the menu trigger, so the trigger stays aligned at any sidebar width.
+
+"Scroll to bottom" appears only when content sits more than 100px below the viewport. It never shows in an empty chat.
+
+Image content parts render copy-image and (web) download actions. The message copy button on an image-only reply copies the image, not text. On web the image is written to the clipboard as PNG; on native it uses `expo-clipboard` `setImageAsync` for `data:` URLs.
+
+The attach control (`FilePickerButton`) opens an anchored dropdown with **Photo Library** and **Document**. On web both open a browser file input from the press itself and return `data:` URLs, so attachments survive a reload; on native they use `expo-image-picker` and `expo-document-picker`.
 
 ```tsx
 <GPTChat

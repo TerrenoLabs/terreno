@@ -896,6 +896,7 @@ mock.module("expo-haptics", () => ({
 mock.module("expo-clipboard", () => ({
   getStringAsync: mock(() => Promise.resolve("")),
   hasStringAsync: mock(() => Promise.resolve(false)),
+  setImageAsync: mock(() => Promise.resolve(undefined)),
   setStringAsync: mock(() => Promise.resolve(undefined)),
 }));
 

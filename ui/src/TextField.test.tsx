@@ -790,6 +790,22 @@ describe("TextField", () => {
       ).not.toThrow();
     });
 
+    it("clears the measured grow height after the controlled value is emptied", async () => {
+      const {getByDisplayValue, rerender} = renderWithTheme(
+        <TextField grow multiline onChange={mockOnChange} value="long note" />
+      );
+      fireEvent(getByDisplayValue("long note"), "contentSizeChange", {
+        nativeEvent: {contentSize: {height: 120}},
+      });
+
+      rerender(<TextField grow multiline onChange={mockOnChange} value="" />);
+      await act(async () => {});
+      rerender(<TextField grow multiline onChange={mockOnChange} value="n" />);
+
+      const styles = [getByDisplayValue("n").props.style].flat(Infinity);
+      assert.isTrue(styles.some((style) => style?.height === 40));
+    });
+
     it("invokes the onFocus callback when the input is focused", () => {
       const {getByDisplayValue} = renderWithTheme(
         <TextField onChange={mockOnChange} onFocus={mockOnFocus} value="" />

@@ -104,7 +104,7 @@ import {AIService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
 const aiService = new AIService({
-  model: google("gemini-2.5-flash"),
+  model: google("gemini-3.8-flash"),
   defaultTemperature: 1.0,
 });
 ```
@@ -211,7 +211,9 @@ Conversation history with multi-modal prompts.
 | `userId` | ObjectId | Owner (required) |
 | `title` | string? | Auto-generated on first `/gpt/prompt` response when empty |
 | `projectId` | ObjectId? | Optional project association |
-| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields. `text` is required unless `content` has parts; an image-only assistant response saves `text: ""` |
+| `prompts` | array | Messages: `text`, `type` (`user` \| `assistant` \| `system` \| `tool-call` \| `tool-result`), optional `content` parts, `model`, `rating`, tool fields, `status`, `streamId`. `text` is required unless `content` has parts or `status` is set; an image-only assistant response saves `text: ""` |
+
+Assistant replies from `/gpt/prompt` carry `streamId` and `status`: `streaming` while partial text is persisted, then `complete` or `error`. `buildMessages` skips `streaming` replies and `error` replies with no output. Attachment `content` parts carry an optional `gcsKey` when the file was uploaded to durable storage.
 
 **Virtual:** `ownerId` aliases `userId` for `Permissions.IsOwner`.
 
@@ -252,9 +254,35 @@ GPT project with persistent context and memories.
 | `/gpt/prompt` | POST | `IsAuthenticated` | SSE streaming chat; body: `prompt`, optional `historyId`, `systemPrompt`, `attachments`, `model`, `projectId` |
 | `/gpt/remix` | POST | `IsAuthenticated` | Non-streaming text remix; body: `{text}` |
 | `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null}` |
+| `/gpt/histories/:id/stream` | GET | `IsAuthenticated` (owner) | SSE resume of an in-flight reply; query: optional `streamId`, `offset` |
 | `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools |
 
 Generated images (image-output models such as `gemini-3-pro-image`) arrive as SSE `image` events: `{image: {mimeType, url}}` with a base64 data URL. Each image is sent once, even when the model reports it both as a stream file part and in the final `result.files`. The saved assistant prompt stores one `image` content part per image. On later turns, `buildMessages` sends an image-only assistant prompt to the model as the text `[Generated image]`, because providers reject empty assistant turns.
+
+#### Attachments
+
+Each `attachments` item is `{type: "image" | "file", url, mimeType, filename?}`. The `url` must be `http(s):` or `data:`. Client-only URLs (`blob:`, `file:`, `content:`, `ph:`) return `400` before streaming starts, because neither the model provider nor a later page load can read them. Upload the file with `POST /files/upload` first, or send it as a `data:` URL.
+
+When `fileStorageService` is set, `data:` attachments are uploaded with `FileStorageService.upload`. The saved user prompt then stores the storage `url` plus `gcsKey`, not the base64 payload. The model still receives the original data for that turn. On later turns, parts with a `gcsKey` are sent to the model as 1-hour signed URLs. A failed upload returns `502 Attachment upload failed`. Without storage, attachments are saved as sent.
+
+`fileUploadsEnabled` turns uploads off without removing storage. Pass `false`, or a function that returns `false`, and any prompt that includes attachments returns `403 File uploads are disabled` before streaming. Omit it, or pass `true`, to leave uploads enabled. The example app wires this to the `file-uploads` feature flag.
+
+#### Stream events and resume
+
+`/gpt/prompt` saves the user turn and a `status: "streaming"` assistant placeholder before streaming. While the reply streams, partial text is persisted about every second (`streamPersistIntervalMs`), plus a heartbeat every 10 seconds. The final reply replaces the placeholder with `status: "complete"`. On failure, partial text is kept with `status: "error"`; an empty placeholder is removed.
+
+| Event | Sent by | Meaning |
+|-------|---------|---------|
+| `{historyId, started: true, streamId}` | prompt | First event; the turn is saved and resumable |
+| `{historyId, resumed: true, streamId?}` | resume | First event; `streamId` is absent when nothing is streaming |
+| `{text}` | both | Text delta |
+| `{replace: true, text}` | resume | Authoritative whole reply: sent first when the client provides `offset`, and whenever persisted text was rewritten (for example, a step became a tool call) |
+| `{image: {mimeType, url}}` | both | Generated image |
+| `{file}`, `{toolCall}`, `{toolResult}` | prompt | File and tool events |
+| `{error}` | both | Error; resume sends it when the reply ended as `error` or went stale |
+| `{done: true, historyId, title?}` | both | Reply finished |
+
+`GET /gpt/histories/:id/stream` re-attaches after a reload or remount. Pass `offset` as the number of characters the client already shows, usually the stored placeholder `text`. The endpoint polls the stored history (`streamResumePollIntervalMs`, default 500 ms), so it works across server instances. A `streaming` reply with no update for `streamStaleAfterMs` (default 60 s) is marked `error`.
 
 AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerModelFn(modelId)` → configured `aiService` → demo SSE response when `demoMode` and none available.
 
@@ -283,7 +311,7 @@ Requires `fileStorageService` and `gcsBucket` (registered by `AiApp` when both a
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/files/upload` | POST | `IsAuthenticated` | Multipart upload (`file` field); allowed MIME: images, PDF, plain text, CSV, JSON |
+| `/files/upload` | POST | `IsAuthenticated` | Multipart upload (`file` field); allowed MIME: images, PDF, plain text, CSV, JSON. Returns `403` when `fileUploadsEnabled` is off |
 | `/files/*gcsKey` | GET | None | Returns signed read URL (1 hour) |
 | `/files/*gcsKey` | DELETE | `IsAuthenticated` (owner) | Soft-delete attachment and remove from GCS |
 
@@ -311,7 +339,7 @@ Requires `mcpService` (registered by `AiApp` when set).
 import {AiApp, AIService, FileStorageService, MCPService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
-const aiService = new AIService({model: google("gemini-2.5-flash")});
+const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 new AiApp({
   aiService,
@@ -320,7 +348,7 @@ new AiApp({
   mcpService: new MCPService([{name: "tools", transport: {type: "sse", url: "..."}}]),
   tools: myToolDefinitions,
   demoMode: false,
-  createModelFn: (apiKey, modelId) => google(modelId ?? "gemini-2.5-flash", {apiKey}),
+  createModelFn: (apiKey, modelId) => google(modelId ?? "gemini-3.8-flash", {apiKey}),
   openApiOptions: options,
 }).register(app);
 ```
@@ -331,7 +359,8 @@ new AiApp({
 | `createModelFn` | Build model from per-request `x-ai-api-key` |
 | `createServerModelFn` | Server-side model factory (e.g. Vertex ADC) without per-request key |
 | `demoMode` | Return canned responses when no AI service resolves |
-| `fileStorageService` + `gcsBucket` | Enable file upload routes |
+| `fileStorageService` + `gcsBucket` | Enable file upload routes and durable `/gpt/prompt` attachments |
+| `fileUploadsEnabled` | `false` or a function returning `false` rejects uploads and chat attachments with `403`. Omit to leave uploads enabled |
 | `mcpService` | Enable MCP routes and tool discovery in chat |
 | `tools` | Static Vercel AI SDK tool definitions for chat |
 | `toolChoice` | `"auto"` \| `"none"` \| `"required"` (default `"auto"` when tools present) |
@@ -447,10 +476,10 @@ import {
 } from "@terreno/ai";
 
 const vertex = await createVertexProvider({project: "my-gcp-project"});
-const model = vertex.languageModel("gemini-2.5-flash");
+const model = vertex.languageModel("gemini-3.8-flash");
 ```
 
-Env fallbacks: `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` (default `us-central1`).
+Env fallbacks: `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` (default `global`).
 
 ## Web search types
 
@@ -463,7 +492,7 @@ import {TerrenoApp} from "@terreno/api";
 import {AiApp, AIService, LangfuseApp} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
-const aiService = new AIService({model: google("gemini-2.5-flash")});
+const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 new TerrenoApp({userModel: User})
   .register(new AiApp({aiService, openApiOptions: {}}))
@@ -483,7 +512,7 @@ Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. i
 | Variable | Used by | Description |
 |----------|---------|-------------|
 | `GOOGLE_VERTEX_PROJECT` | `createVertexProvider` | GCP project for Vertex models |
-| `GOOGLE_VERTEX_LOCATION` | `createVertexProvider` | Vertex region (default `us-central1`) |
+| `GOOGLE_VERTEX_LOCATION` | `createVertexProvider` | Vertex region (default `global`) |
 | `LANGFUSE_PUBLIC_KEY` | `LangfuseApp` | Langfuse public key |
 | `LANGFUSE_SECRET_KEY` | `LangfuseApp` | Langfuse secret key |
 | `LANGFUSE_BASE_URL` | Langfuse client | Langfuse host URL |

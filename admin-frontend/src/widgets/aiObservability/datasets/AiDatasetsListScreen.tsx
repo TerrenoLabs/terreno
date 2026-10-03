@@ -23,6 +23,13 @@ export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) 
     statusError: statusQuery.isError,
     statusLoading: statusQuery.isLoading,
   });
+  const canImport = observabilityActionAllowed({
+    action: "update",
+    resource: "aiDataset",
+    status: unwrapObservabilityStatus(statusQuery.data),
+    statusError: statusQuery.isError,
+    statusLoading: statusQuery.isLoading,
+  });
   const [createDataset, createState] = useCreateMutation();
   const [importItems, importState] = useImportMutation();
   const datasets = useMemo(() => unwrapDatasetList(data), [data]);
@@ -122,6 +129,7 @@ export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) 
     <AiObservabilityChrome {...props} screenName="ai-datasets">
       <AiDatasetsListView
         canCreate={canCreate}
+        canImport={canImport}
         createError={createError}
         createName={createName}
         createOpen={createOpen}

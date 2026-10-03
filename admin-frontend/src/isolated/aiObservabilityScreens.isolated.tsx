@@ -465,6 +465,17 @@ describe("AiDatasetsListScreen", () => {
       expect(loaded.getByTestId("ai-datasets-table")).toBeTruthy();
     });
 
+    it("hides import when the caller cannot update datasets", () => {
+      listState.isLoading = false;
+      listState.data = datasets;
+      statusData.permissions = {aiDataset: {list: true, read: true}};
+      const view = renderWithTheme(<AiDatasetsScreenWidget api={createApi()} {...widgetProps} />);
+      expect(view.queryByTestId("ai-datasets-import-ds-1")).toBeNull();
+      statusData.permissions = {
+        aiDataset: {create: true, list: true, read: true, update: true},
+      };
+    });
+
     it("validates create name and navigates on success", async () => {
       listState.data = datasets;
       routerPush.mockClear();

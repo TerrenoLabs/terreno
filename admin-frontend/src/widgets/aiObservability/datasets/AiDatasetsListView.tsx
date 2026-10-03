@@ -17,6 +17,7 @@ import {type DatasetImportResult, type DatasetRecord, formatProvenanceBar} from 
 
 export interface AiDatasetsListViewProps {
   canCreate?: boolean;
+  canImport?: boolean;
   createError?: string;
   createName: string;
   createOpen: boolean;
@@ -68,6 +69,7 @@ const formatUpdated = (iso: string): string => {
 
 export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
   canCreate = true,
+  canImport = true,
   createError,
   createName,
   createOpen,
@@ -99,19 +101,20 @@ export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
 }) => {
   const customColumnComponentMap = useMemo(
     () => ({
-      datasetImport: ({cellData}: {cellData: DataTableCellData}) => (
-        <Box justifyContent="center">
-          <Button
-            onClick={() => {
-              onOpenImport(String(cellData.value ?? ""));
-            }}
-            size="sm"
-            testID={`ai-datasets-import-${String(cellData.value ?? "")}`}
-            text="Import"
-            variant="ghost"
-          />
-        </Box>
-      ),
+      datasetImport: ({cellData}: {cellData: DataTableCellData}) =>
+        canImport ? (
+          <Box justifyContent="center">
+            <Button
+              onClick={() => {
+                onOpenImport(String(cellData.value ?? ""));
+              }}
+              size="sm"
+              testID={`ai-datasets-import-${String(cellData.value ?? "")}`}
+              text="Import"
+              variant="ghost"
+            />
+          </Box>
+        ) : null,
       datasetOpen: ({cellData}: {cellData: DataTableCellData}) => (
         <Box justifyContent="center">
           <Button
@@ -126,7 +129,7 @@ export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
         </Box>
       ),
     }),
-    [onOpenDetail, onOpenImport]
+    [canImport, onOpenDetail, onOpenImport]
   );
 
   const rows: DataTableCellData[][] = useMemo(() => {

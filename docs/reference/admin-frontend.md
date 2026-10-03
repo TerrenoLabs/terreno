@@ -461,8 +461,9 @@ read the payload through `resolvePromptActionPermissions` and `observabilityActi
 closed while status is loading, errored, or missing `permissions`). List screens gate **Create
 prompt** on `aiPrompt:create`, **Create evaluator** on `aiEvaluator:create`, and **New dataset** on
 `aiDataset:create`. Dataset detail hides **Add item** without `aiDataset:update` and **Run
-experiment** without `aiExperiment:create`. Judge schema checks use the production prompt version,
-or the latest version when production is unset. Widgets do not couple to host Redux.
+experiment** without `aiExperiment:create`; dataset lists hide **Import** without
+`aiDataset:update`. Judge schema checks use the production prompt version, or the latest version
+when production is unset. Widgets do not couple to host Redux.
 
 `ai-prompts` lists prompts with a folder rail, search, type badge, latest vs production columns
 (tooltips), 7-day usage, and **Create prompt** when `aiPrompt:create` is allowed. The create modal

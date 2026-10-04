@@ -194,6 +194,35 @@ describe("Button", () => {
     expect(getByTestId("outline-active").props.style.borderWidth).toBeUndefined();
   });
 
+  for (const size of ["default", "sm"] as const) {
+    it(`renders ${size} outline button with the same outer box as solid buttons`, () => {
+      const {getByTestId} = renderWithTheme(
+        <>
+          <Button onClick={() => {}} size={size} testID="solid" text="Solid" />
+          <Button
+            onClick={() => {}}
+            size={size}
+            testID="outline"
+            text="Outline"
+            variant="outline"
+          />
+        </>
+      );
+      const outerBox = (style: Record<string, number | undefined>): Record<string, number> => {
+        const border = style.borderWidth ?? 0;
+        return {
+          height: style.height ?? 0,
+          horizontal: (style.paddingHorizontal ?? 0) + border,
+          vertical: style.height === undefined ? (style.paddingVertical ?? 0) + border : 0,
+        };
+      };
+
+      expect(outerBox(getByTestId("outline").props.style)).toEqual(
+        outerBox(getByTestId("solid").props.style)
+      );
+    });
+  }
+
   it("keeps disabled styling when state is active", () => {
     const {getByTestId} = renderWithTheme(
       <Button

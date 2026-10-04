@@ -139,6 +139,8 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 | `GCS_PROJECT_ID` | GCS clients | ❌ | — | No | server |
 | `GCS_SERVICE_ACCOUNT_KEY` | GCS clients | ❌ | — | Yes | server |
 
+Example-backend Cloud Run deploys set `GCS_BUCKET` (default `flourish-terreno-example-documents`). Preview deploys also set `GCS_FOLDER_PREFIX=pr-<number>/`.
+
 ## Feature flags
 
 | Variable | Read by | Required | Default | Secret | Scope |

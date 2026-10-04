@@ -45,11 +45,12 @@ const DocumentsScreen: React.FC = () => {
 
   return (
     <Box flex="grow" testID="documents-screen">
-      <Box paddingX={4} paddingY={2} style={{paddingTop: insets.top + 8}}>
+      <Box paddingX={4} style={{paddingTop: insets.top + 4}}>
         <SegmentedControl
           items={SECTIONS.map((s) => s.label)}
           onChange={handleSectionChange}
           selectedIndex={selectedIndex}
+          size="sm"
           testID="documents-section-control"
         />
       </Box>

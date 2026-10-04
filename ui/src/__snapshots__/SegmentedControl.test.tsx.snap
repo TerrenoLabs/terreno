@@ -148,6 +148,7 @@ exports[`SegmentedControl renders correctly with default props 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
+          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -324,6 +325,7 @@ exports[`SegmentedControl highlights selected item 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
+          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -500,6 +502,7 @@ exports[`SegmentedControl renders with medium size (default) 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
+          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -508,6 +511,210 @@ exports[`SegmentedControl renders with medium size (default) 1`] = `
           "flexShrink": 1,
           "height": 36,
           "maxHeight": 36,
+          "overflow": "hidden",
+        },
+        "testID": undefined,
+      },
+      "type": "View",
+    },
+  ],
+  "props": {
+    "style": {
+      "alignItems": "center",
+      "display": "flex",
+      "flexDirection": "row",
+      "gap": 8,
+    },
+    "testID": undefined,
+  },
+  "type": "View",
+}
+`;
+
+exports[`SegmentedControl renders a compact control that hugs its labels 1`] = `
+{
+  "$$typeof": Symbol(react.test.json),
+  "children": [
+    {
+      "$$typeof": Symbol(react.test.json),
+      "children": [
+        {
+          "$$typeof": Symbol(react.test.json),
+          "children": [
+            {
+              "$$typeof": Symbol(react.test.json),
+              "children": [
+                {
+                  "$$typeof": Symbol(react.test.json),
+                  "children": [
+                    {
+                      "$$typeof": Symbol(react.test.json),
+                      "children": [
+                        "Tab 1",
+                      ],
+                      "props": {
+                        "numberOfLines": 0,
+                        "selectable": undefined,
+                        "style": {
+                          "color": "#1C1C1C",
+                          "fontFamily": "text-regular",
+                          "fontSize": 10,
+                          "textAlign": "left",
+                        },
+                        "testID": undefined,
+                      },
+                      "type": "Text",
+                    },
+                  ],
+                  "props": {},
+                  "type": "View",
+                },
+              ],
+              "props": {
+                "aria-role": "button",
+                "onPress": [Function],
+                "style": {
+                  "alignItems": "center",
+                  "backgroundColor": "#FFFFFF",
+                  "borderRadius": 360,
+                  "display": "flex",
+                  "flexBasis": "auto",
+                  "flexDirection": "row",
+                  "flexGrow": 0,
+                  "gap": 8,
+                  "height": "100%",
+                  "justifyContent": "center",
+                  "overflow": "hidden",
+                  "paddingHorizontal": 12,
+                },
+              },
+              "type": "Pressable",
+            },
+            {
+              "$$typeof": Symbol(react.test.json),
+              "children": [
+                {
+                  "$$typeof": Symbol(react.test.json),
+                  "children": [
+                    {
+                      "$$typeof": Symbol(react.test.json),
+                      "children": [
+                        "Tab 2",
+                      ],
+                      "props": {
+                        "numberOfLines": 0,
+                        "selectable": undefined,
+                        "style": {
+                          "color": "#1C1C1C",
+                          "fontFamily": "text-regular",
+                          "fontSize": 10,
+                          "textAlign": "left",
+                        },
+                        "testID": undefined,
+                      },
+                      "type": "Text",
+                    },
+                  ],
+                  "props": {},
+                  "type": "View",
+                },
+              ],
+              "props": {
+                "aria-role": "button",
+                "onPress": [Function],
+                "style": {
+                  "alignItems": "center",
+                  "backgroundColor": undefined,
+                  "borderRadius": 360,
+                  "display": "flex",
+                  "flexBasis": "auto",
+                  "flexDirection": "row",
+                  "flexGrow": 0,
+                  "gap": 8,
+                  "height": "100%",
+                  "justifyContent": "center",
+                  "overflow": "hidden",
+                  "paddingHorizontal": 12,
+                },
+              },
+              "type": "Pressable",
+            },
+            {
+              "$$typeof": Symbol(react.test.json),
+              "children": [
+                {
+                  "$$typeof": Symbol(react.test.json),
+                  "children": [
+                    {
+                      "$$typeof": Symbol(react.test.json),
+                      "children": [
+                        "Tab 3",
+                      ],
+                      "props": {
+                        "numberOfLines": 0,
+                        "selectable": undefined,
+                        "style": {
+                          "color": "#1C1C1C",
+                          "fontFamily": "text-regular",
+                          "fontSize": 10,
+                          "textAlign": "left",
+                        },
+                        "testID": undefined,
+                      },
+                      "type": "Text",
+                    },
+                  ],
+                  "props": {},
+                  "type": "View",
+                },
+              ],
+              "props": {
+                "aria-role": "button",
+                "onPress": [Function],
+                "style": {
+                  "alignItems": "center",
+                  "backgroundColor": undefined,
+                  "borderRadius": 360,
+                  "display": "flex",
+                  "flexBasis": "auto",
+                  "flexDirection": "row",
+                  "flexGrow": 0,
+                  "gap": 8,
+                  "height": "100%",
+                  "justifyContent": "center",
+                  "overflow": "hidden",
+                  "paddingHorizontal": 12,
+                },
+              },
+              "type": "Pressable",
+            },
+          ],
+          "props": {
+            "style": {
+              "display": "flex",
+              "flexDirection": "row",
+              "flexGrow": 0,
+              "gap": 4,
+              "height": 24,
+              "paddingHorizontal": 2,
+            },
+            "testID": undefined,
+          },
+          "type": "View",
+        },
+      ],
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "alignSelf": "flex-start",
+          "backgroundColor": "#CDCDCD",
+          "borderRadius": 360,
+          "display": "flex",
+          "flexDirection": "row",
+          "flexGrow": 0,
+          "flexShrink": 1,
+          "height": 28,
+          "maxHeight": 28,
           "overflow": "hidden",
         },
         "testID": undefined,
@@ -676,6 +883,7 @@ exports[`SegmentedControl renders with large size 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
+          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -1011,6 +1219,7 @@ exports[`SegmentedControl renders with badges 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
+          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -1197,6 +1406,7 @@ exports[`SegmentedControl renders with maxItems and scroll buttons 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
+          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -1393,6 +1603,7 @@ exports[`SegmentedControl handles scroll navigation 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
+          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",

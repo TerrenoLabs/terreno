@@ -283,6 +283,8 @@ new DocumentStorageApp({
 
 Pair it with `DocumentStorageBrowser` from `@terreno/admin-frontend`. Pass `backButton={false}` when the browser is embedded outside admin. Upload failures (including 429) show inline.
 
+Example-backend deploys set `GCS_BUCKET` to the example documents bucket. PR previews also set `GCS_FOLDER_PREFIX` to `pr-<number>/`. A missing bucket is the only path that returns 503 `Storage not configured`.
+
 ## Best Practices
 
 - Add `description` to all model fields — flows through to admin UI

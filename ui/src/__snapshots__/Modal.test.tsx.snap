@@ -428,7 +428,7 @@ exports[`Modal renders with both buttons 1`] = `
                               ],
                               "props": {
                                 "style": {
-                                  "color": "#FFFFFF",
+                                  "color": "#092E3A",
                                   "fontSize": 16,
                                   "fontWeight": "700",
                                 },
@@ -682,7 +682,7 @@ exports[`Modal renders with disabled primary button 1`] = `
                               ],
                               "props": {
                                 "style": {
-                                  "color": "#FFFFFF",
+                                  "color": "#092E3A",
                                   "fontSize": 16,
                                   "fontWeight": "700",
                                 },

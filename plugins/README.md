@@ -14,12 +14,14 @@ copy as `terreno` (see [Hosts](#hosts)):
 | 4 | **Brew** (`terreno-4-brew`) | Final checks, commit/push, PR/evidence, confirm product CI on every discovered host, wait for review bots, then exit |
 | 5 | **Taste** (`terreno-5-taste`) | Wait for review bots and product CI, one current-head reaction; record last-run failed tests and re-verify them locally before push; fetch latest `master` (merge only when needed), then run root `prepush` when present (otherwise affected-package checks) in a no-context subagent, then push and watch; invoked directly, repeats bounded reactions until terminal |
 
-**PRD** (`terreno-prd`, `/terreno:prd` in Claude Code) runs ahead of Grow. It turns the
-current conversation into a product-only PRD — problem, solution, user stories, success
-metrics, out of scope — and publishes it. Every success metric is concrete and measurable,
-or `TBD` with who decides, so Grow inherits criteria it can verify. It is a fork of Matt
-Pocock's `to-spec`, keeps only the product half, adds the measurable-metric rule from
-awesome-copilot's `prd` skill, and is explicit-invoke only. It is not a stage.
+**PRD** (`terreno-prd`, `/terreno:prd` in Claude Code) runs ahead of Grow. It interviews the
+app owner with Grow's grilling procedure, then writes and publishes a full product PRD —
+problem, why now, solution, user stories, success metrics and guardrails, constraints,
+rollout, out of scope — sized for one owner and one or two developers. Every metric is
+concrete and measurable, or `TBD` with who decides, so Grow inherits criteria it can
+verify. It forks the product half of Matt Pocock's `to-spec`, adds the interview and
+measurable-metric rule from awesome-copilot's `prd` skill, and is explicit-invoke only. It
+is not a stage.
 
 Stages and outer loops are model-invocable; descriptions keep Pick/Brew/Taste from firing
 on casual chat. Grow, Brew, and Taste never own the full orchestration. Pick and Roast own

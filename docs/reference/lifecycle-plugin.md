@@ -20,10 +20,12 @@ Pre-Grow skill (not a stage):
 
 | Skill | Input | Primary output | Next |
 | --- | --- | --- | --- |
-| `terreno-prd` | current conversation + repository | published product-only PRD (problem, solution, user stories, success metrics, out of scope); every metric measurable or `TBD` with its decider | Grow, with the PRD as its spec; metrics become acceptance criteria, `TBD`s become grilling questions |
+| `terreno-prd` | app owner + conversation, prototype, repository | interview, then a published full product PRD (problem, why now, solution, user stories, success metrics and guardrails, constraints, rollout, out of scope); every metric measurable or `TBD` with its decider | Grow, with the PRD as its spec; metrics become acceptance criteria, `TBD`s become grilling questions, settled product decisions are not re-asked |
 
-It is explicit-invoke only (`/terreno-prd`, `$terreno-prd`, `/terreno:prd`), does not
-interview, and carries no implementation or testing decisions; those stay in Grow.
+It is explicit-invoke only (`/terreno-prd`, `$terreno-prd`, `/terreno:prd`). It
+interviews with Grow's grilling procedure over a product tree, is sized for one app owner
+and one or two developers, and carries no implementation or testing decisions; those stay
+in Grow.
 
 Outer loops (not stages):
 

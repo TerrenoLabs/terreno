@@ -73,6 +73,12 @@ export const HARNESS_ERRORS = {
     status: 409,
     title: "requestId is already in use",
   },
+  /** A `JobsRunner` phase job ran on an instance whose harness is not started. */
+  runnerStopped: {
+    code: "harness-runner-stopped",
+    status: 503,
+    title: "Harness runner is not running",
+  },
   /** `retry` on a task whose abort is still running. */
   taskAborting: {code: "harness-task-aborting", status: 409, title: "Task is being aborted"},
   /** `resolveInterrupted` on a task that is not interrupted. */

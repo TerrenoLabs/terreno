@@ -94,7 +94,7 @@ Note the hook's output classification also feeds the client's retry decision —
 
 - **Your own backend's routes** — use the generated `@terreno/rtk` SDK (frontend) or call the function directly (backend).
 - **SDK-managed transport** (Twilio, googleapis) — don't fight the SDK's HTTP layer; adopt only `normalizeApiError`/`withApiErrorHandling` for consistent failure handling.
-- **Webhook notifiers** — `sendToSlack`/`sendToGoogleChat`/`sendToZoom` already exist; see [Webhooks & Notifications](../reference/api.md#webhooks--notifications). Slack @-mentions require a stored Slack member ID (`mentionUserIds` or `formatSlackUserMention`); names and emails in the text do not notify anyone.
+- **Webhook notifiers** — `sendToSlack`/`sendToGoogleChat`/`sendToZoom` post to a fixed webhook. Slack channel creation, invites, and bot posts use `createSlackPrivateChannel`, `inviteSlackUsersToChannel`, and `postSlackMessage` with `SLACK_BOT_TOKEN`. See [Webhooks & Notifications](../reference/api.md#webhooks--notifications).
 
 ## Related
 

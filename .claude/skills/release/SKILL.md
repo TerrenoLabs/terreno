@@ -124,7 +124,7 @@ Before creating the tag:
 
 Never commit the release directly to master, and never tag before this pull request is merged. Master accepts changes through a squash merge.
 
-1. From latest master, create and push `release/X.Y.Z` with the assembled changelog, deleted fragments, upgrade note, and any skill updates.
+1. From latest master, create and push `release/X.Y.Z` with the assembled changelog, deleted fragments, upgrade note, and any skill updates. A Cursor cloud agent whose forge requires a `cursor/` prefix uses `cursor/release-X.Y.Z` instead.
 2. Open the pull request against master:
 
    ```bash

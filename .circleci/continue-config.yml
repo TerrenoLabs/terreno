@@ -452,7 +452,7 @@ commands:
             shard="<< parameters.spec >>"
             case "$shard" in
               auth) specs="login signup consents forgot-password reset-password verify-email" ;;
-              app) specs="todos profile realtime ai-chat pdf notifications" ;;
+              app) specs="todos todo-windows profile realtime ai-chat pdf notifications" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;

@@ -8,8 +8,13 @@
 import {useCallback, useMemo} from "react";
 
 import {retriesToMaxAttempts} from "../maxAttempts";
-import type {UseEntityResult, UseQueryOptions} from "./hooks";
-import {useEntity, useMutate, useQuery} from "./hooks";
+import type {
+  UseEntityResult,
+  UseQueryOptions,
+  UseWindowQueryOptions,
+  UseWindowQueryResult,
+} from "./hooks";
+import {useEntity, useMutate, useQuery, useWindowQuery} from "./hooks";
 
 export interface CollectionHooksConfig {
   collection: string;
@@ -25,6 +30,11 @@ export type MutationTrigger<TArgs> = (args: TArgs) => {mutationId: string; id: s
 export interface CollectionHooks<TData, TCreate, TUpdate> {
   /** List query (RTK: useGet{Path}Query). */
   useListQuery: (options?: UseQueryOptions<TData>) => {data: TData[]};
+  /**
+   * Server-filtered list for `queryCollections` (RTK: useGet{Path}Query with
+   * filter/sort/limit/page args). Overlapping windows share entity rows.
+   */
+  useWindowQuery: (options?: UseWindowQueryOptions) => UseWindowQueryResult<TData>;
   /** Single-entity read (RTK: useGet{Path}ByIdQuery). */
   useReadQuery: (id: string) => UseEntityResult<TData>;
   /** Create (RTK: usePost{Path}Mutation). Optional `id` pins the client-minted entity id. */
@@ -48,6 +58,9 @@ export const createCollectionHooks = <
     const data = useQuery<TData>(config.collection, options);
     return {data};
   };
+
+  const useCollectionWindowQuery = (options?: UseWindowQueryOptions): UseWindowQueryResult<TData> =>
+    useWindowQuery<TData>(config.collection, options);
 
   const useReadQuery = (id: string): UseEntityResult<TData> =>
     useEntity<TData>(config.collection, id);
@@ -99,5 +112,6 @@ export const createCollectionHooks = <
     useListQuery,
     useReadQuery,
     useUpdateMutation,
+    useWindowQuery: useCollectionWindowQuery,
   };
 };

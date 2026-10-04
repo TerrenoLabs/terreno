@@ -224,6 +224,30 @@ export const todoRouter = modelRouter("/todos", Todo, {
 Do not add `endpoints: (router) => { router.get(...) }` when an action fits.
 Action config supports `allowAnonymous: true` as a per-action override; it does not change authentication for CRUD or sibling actions.
 
+## modelRouter list queries
+
+`GET /{path}` accepts filters on fields listed in `queryFields` (qs syntax, so operators work:
+`?status[$in][0]=open&created[$gte]=2026-01-01`), plus the reserved `limit`, `page`, and `sort`.
+`limit` is clamped to `maxLimit` (default 500); the response echoes the applied `limit` with
+`{data, limit, more, page, total}`.
+
+A filter on a field missing from `queryFields` is rejected before query validation runs, so
+it can never be stripped and silently ignored:
+
+```json
+{
+  "status": 400,
+  "code": "query-param-not-allowed",
+  "title": "Query parameter not allowed",
+  "detail": "title is not allowed as a query param. Add \"title\" to queryFields on the Todo modelRouter to filter on it. Allowed: completed, created, ownerId.",
+  "source": {"parameter": "title"},
+  "meta": {"queryParam": "title", "model": "Todo", "allowedQueryFields": ["completed", "created", "ownerId"]}
+}
+```
+
+`@terreno/syncdb` raises this as `QueryFieldNotAllowedError` (see
+[Query windows](syncdb.md#query-windows)).
+
 ## modelRouter array operations
 
 When a model has at least one array field, `modelRouter` provides subroutes for adding,

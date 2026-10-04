@@ -25,7 +25,7 @@ const E2E_SHARDS: Record<string, string[]> = {
     "admin-custom-screens",
     "admin-comms-back",
   ],
-  app: ["todos", "profile", "realtime", "ai-chat", "pdf", "notifications"],
+  app: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
   auth: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],
   syncdb: [
     "syncdb-load-delta",

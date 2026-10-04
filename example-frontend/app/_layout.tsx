@@ -314,6 +314,7 @@ const RootLayoutNav = (): React.ReactElement => {
       <Stack.Screen name="syncdb-debug" options={{presentation: "modal"}} />
       <Stack.Screen name="settings" />
       <Stack.Screen name="notifications" />
+      <Stack.Screen name="todo-windows" />
     </Stack>
   );
 

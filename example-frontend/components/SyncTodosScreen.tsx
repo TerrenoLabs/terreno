@@ -12,6 +12,7 @@ import {
   Text,
   TextField,
 } from "@terreno/ui";
+import {useRouter} from "expo-router";
 import {DateTime} from "luxon";
 import type React from "react";
 import {memo, useCallback, useMemo, useState} from "react";
@@ -392,6 +393,11 @@ const SyncTodosScreen: React.FC = () => {
     return `${noun} · ${incompleteIds.length} remaining · ${completedIds.length} completed`;
   }, [completedIds.length, incompleteIds.length, totalCount]);
 
+  const router = useRouter();
+  const handleOpenWindows = useCallback((): void => {
+    router.push("/todo-windows");
+  }, [router]);
+
   const listHeader = useMemo(
     (): React.ReactElement => (
       <Box>
@@ -403,7 +409,16 @@ const SyncTodosScreen: React.FC = () => {
               Local-first via @terreno/syncdb
             </Text>
           </Box>
-          <NotificationCenterBell />
+          <Box alignItems="center" direction="row" gap={2}>
+            <Button
+              iconName="filter"
+              onClick={handleOpenWindows}
+              testID="todos-open-windows"
+              text="Query windows"
+              variant="muted"
+            />
+            <NotificationCenterBell />
+          </Box>
         </Box>
         <Box alignItems="center" direction="row" gap={1} marginBottom={6} wrap>
           <Text color="secondaryLight" size="sm" testID="todos-count">
@@ -416,7 +431,7 @@ const SyncTodosScreen: React.FC = () => {
         <NewTodoForm disabled={!isSyncDbReady} onCreate={handleCreate} />
       </Box>
     ),
-    [countSummary, handleCreate, isSyncDbReady, totalCount]
+    [countSummary, handleCreate, handleOpenWindows, isSyncDbReady, totalCount]
   );
 
   const listEmpty = useMemo(

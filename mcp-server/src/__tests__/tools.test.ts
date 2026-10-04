@@ -1,6 +1,12 @@
 import {describe, expect, test} from "bun:test";
+import {spawnSync} from "node:child_process";
+import {fileURLToPath} from "node:url";
 import {assert} from "chai";
 import {handleToolCall, tools} from "../tools.js";
+
+const blocksCli = fileURLToPath(
+  new URL("../../../node_modules/.bin/terreno-blocks", import.meta.url)
+);
 
 describe("tools", () => {
   test("should export all required tools", async () => {
@@ -11,6 +17,7 @@ describe("tools", () => {
     expect(toolNames).toContain("terreno_generate_screen");
     expect(toolNames).toContain("terreno_generate_form_fields");
     expect(toolNames).toContain("terreno_validate_model_schema");
+    expect(toolNames).toContain("terreno_validate_ui_blocks");
     expect(toolNames).toContain("terreno_install_admin");
     expect(toolNames).toContain("terreno_bootstrap_ai_rules");
     expect(toolNames).toContain("terreno_search_docs");
@@ -682,6 +689,43 @@ describe("tools", () => {
         toVersion: "0.20.0",
       });
       expect(out.content[0].text).toContain("Invalid version range");
+    });
+  });
+
+  describe("terreno_validate_ui_blocks", () => {
+    const cliReport = (document: string): string => {
+      const result = spawnSync(blocksCli, ["validate", "-"], {
+        encoding: "utf8",
+        input: document,
+      });
+      return result.stdout;
+    };
+
+    test("lists a document argument", () => {
+      const tool = tools.find((entry) => entry.name === "terreno_validate_ui_blocks");
+      expect(tool?.inputSchema).toEqual({
+        properties: {
+          document: {
+            description: "Whole-reply YAML or JSON block document",
+            type: "string",
+          },
+        },
+        required: ["document"],
+        type: "object",
+      });
+    });
+
+    test("matches the CLI report for a valid document", async () => {
+      const document = "v: 1\nblocks:\n  - type: heading\n    text: Hello\n";
+      const out = await handleToolCall("terreno_validate_ui_blocks", {document});
+      expect(out.content[0].text).toBe(cliReport(document));
+    });
+
+    test("matches the CLI report for an invalid document", async () => {
+      const document = "v: 1\nblocks:\n  - type: heading\n    color: red\n";
+      const out = await handleToolCall("terreno_validate_ui_blocks", {document});
+      expect(out.content[0].text).toBe(cliReport(document));
+      expect(out.content[0].text).toContain("UNKNOWN_KEY");
     });
   });
 });

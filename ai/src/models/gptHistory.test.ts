@@ -210,6 +210,162 @@ describe("GptHistory Model", () => {
     });
   });
 
+  describe("asks", () => {
+    const planAsk = {
+      options: [
+        {id: "starter", label: "Starter"},
+        {id: "team", label: "Team"},
+      ],
+      prompt: "Which plan should I set up?",
+      select: "one",
+    };
+    const pendingAsk = {
+      created: new Date("2026-09-27T12:00:00.000Z"),
+      input: planAsk,
+      kind: "choice",
+      promptIndex: 1,
+      responseMessages: [
+        {
+          content: [
+            {input: {}, toolCallId: "call_lookup", toolName: "lookupPlans", type: "tool-call"},
+            {input: planAsk, toolCallId: "call_plan", toolName: "ask_choice", type: "tool-call"},
+          ],
+          role: "assistant",
+        },
+      ],
+      simple: {
+        buttons: [
+          {
+            id: "option:starter",
+            label: "Starter",
+            response: {action: "accept", content: {selected: ["starter"]}},
+            style: "default",
+          },
+          {
+            id: "option:team",
+            label: "Team",
+            response: {action: "accept", content: {selected: ["team"]}},
+            style: "default",
+          },
+          {id: "skip", label: "Skip", response: {action: "decline"}, style: "cancel"},
+        ],
+        handoff: false,
+        kind: "choice",
+        text: "Which plan should I set up?",
+        toolCallId: "call_plan",
+      },
+      toolCallId: "call_plan",
+    };
+    const askRow = {
+      args: planAsk,
+      ask: {kind: "choice", status: "pending"},
+      text: "Tool call: ask_choice",
+      toolCallId: "call_plan",
+      toolName: "ask_choice",
+      type: "tool-call",
+    };
+
+    it("loads a history saved before asks existed", async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const {insertedId} = await GptHistory.collection.insertOne({
+        created: new Date("2026-01-05T09:00:00.000Z"),
+        deleted: false,
+        prompts: [
+          {text: "What time is it?", type: "user"},
+          {
+            args: {},
+            text: "Tool call: get_time",
+            toolCallId: "c1",
+            toolName: "get_time",
+            type: "tool-call",
+          },
+        ],
+        updated: new Date("2026-01-05T09:00:00.000Z"),
+        userId,
+      });
+
+      const history = await GptHistory.findById(insertedId);
+
+      expect(history?.pendingAsk).toBeUndefined();
+      expect(history?.prompts[1].ask).toBeUndefined();
+      expect(history?.prompts[1].toolName).toBe("get_time");
+    });
+
+    it("stores a pending ask and its row, keeping empty objects in responseMessages", async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const history = await GptHistory.create({
+        pendingAsk,
+        prompts: [{text: "Set up my workspace", type: "user"}, askRow],
+        userId,
+      });
+
+      const stored = await GptHistory.collection.findOne({_id: history._id});
+
+      expect(stored?.pendingAsk).toEqual(pendingAsk);
+      expect(stored?.prompts[1].ask).toEqual({kind: "choice", status: "pending"});
+    });
+
+    it("keeps empty objects in responseMessages when a pending ask replaces another", async () => {
+      const userId = new mongoose.Types.ObjectId();
+      const history = await GptHistory.create({prompts: [], userId});
+
+      history.pendingAsk = pendingAsk as unknown as NonNullable<typeof history.pendingAsk>;
+      await history.save();
+
+      const stored = await GptHistory.collection.findOne({_id: history._id});
+      expect(stored?.pendingAsk.responseMessages[0].content[0]).toEqual({
+        input: {},
+        toolCallId: "call_lookup",
+        toolName: "lookupPlans",
+        type: "tool-call",
+      });
+    });
+
+    it.each([
+      {
+        expected: 'at path "pendingAsk" because of "StrictModeError"',
+        field: "pendingAsk",
+        history: {pendingAsk: {...pendingAsk, note: "extra"}},
+      },
+      {
+        expected: 'at path "ask" because of "StrictModeError"',
+        field: "prompts.ask",
+        history: {prompts: [{...askRow, ask: {kind: "choice", note: "extra", status: "pending"}}]},
+      },
+    ])("rejects an unknown key in $field", async ({expected, history}) => {
+      await expect(
+        GptHistory.create({...history, userId: new mongoose.Types.ObjectId()})
+      ).rejects.toThrow(expected);
+    });
+
+    it.each([
+      {
+        expected: "`bogus` is not a valid enum value for path `kind`",
+        history: {pendingAsk: {...pendingAsk, kind: "bogus"}},
+        label: "an unknown pending ask kind",
+      },
+      {
+        expected: "`bogus` is not a valid enum value for path `kind`",
+        history: {prompts: [{...askRow, ask: {kind: "bogus", status: "pending"}}]},
+        label: "an unknown row ask kind",
+      },
+      {
+        expected: "`done` is not a valid enum value for path `status`",
+        history: {prompts: [{...askRow, ask: {kind: "choice", status: "done"}}]},
+        label: "an unknown row ask status",
+      },
+      {
+        expected: "Path `toolCallId` is required.",
+        history: {pendingAsk: {...pendingAsk, toolCallId: undefined}},
+        label: "a pending ask without a toolCallId",
+      },
+    ])("rejects $label", async ({expected, history}) => {
+      await expect(
+        GptHistory.create({...history, userId: new mongoose.Types.ObjectId()})
+      ).rejects.toThrow(expected);
+    });
+  });
+
   describe("soft delete", () => {
     it("should filter out deleted records by default", async () => {
       const userId = new mongoose.Types.ObjectId();

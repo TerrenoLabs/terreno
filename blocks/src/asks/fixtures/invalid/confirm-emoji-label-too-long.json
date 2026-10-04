@@ -1,0 +1,13 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Launch the rocket?",
+    "confirmLabel": "Launch 🚀🚀🚀🚀🚀🚀🚀"
+  },
+  "errors": [
+    {
+      "path": "confirmLabel",
+      "code": "TOO_LONG"
+    }
+  ]
+}

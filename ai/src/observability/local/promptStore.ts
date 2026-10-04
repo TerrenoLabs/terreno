@@ -5,10 +5,45 @@ import type mongoose from "mongoose";
 import type {ObsPromptVariable} from "../../types/observability";
 import {compileTemplate} from "../compileTemplate";
 import type {ModelPrice, PromptRegistry, PromptVersionRef} from "../types";
+import {registerObsExperiment} from "./models/obsExperiment";
 import {registerObsPrompt} from "./models/obsPrompt";
 import {registerObsPromptLabel} from "./models/obsPromptLabel";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
 import {registerObsTrace} from "./models/obsTrace";
+
+const PROMPT_RELATIONSHIP_LIMIT = 20;
+
+export interface PromptRelatedExperimentSummary {
+  created: string;
+  id: string;
+  name: string;
+  promptName: string;
+  status: "completed" | "failed" | "pending" | "running";
+  versions: number[];
+}
+
+export interface PromptRelatedTraceSummary {
+  id: string;
+  name: string;
+  promptName: string;
+  promptVersion: number;
+  sensitive: boolean;
+  startedAt: string;
+  status: "error" | "ok";
+}
+
+export interface PromptRelationships {
+  experiments: {
+    items: PromptRelatedExperimentSummary[];
+    limit: number;
+    total: number;
+  };
+  traces: {
+    items: PromptRelatedTraceSummary[];
+    limit: number;
+    total: number;
+  };
+}
 
 export interface PromptVersionFields {
   config?: Record<string, unknown>;
@@ -23,12 +58,14 @@ export interface PromptVersionFields {
 }
 
 export interface CreatePromptInput extends PromptVersionFields {
+  description?: string;
   folder: string;
   name: string;
   tags?: string[];
 }
 
 export interface PromptListItem {
+  description?: string;
   folder: string;
   latestVersion: number;
   name: string;
@@ -111,6 +148,7 @@ export class LocalPromptStore implements PromptRegistry {
     }
     try {
       const prompt = await ObsPrompt.create({
+        ...(input.description !== undefined ? {description: input.description} : {}),
         folder: input.folder,
         name: input.name,
         tags: input.tags ?? [],
@@ -190,10 +228,15 @@ export class LocalPromptStore implements PromptRegistry {
     };
   }
 
-  async getDetail(name: string): Promise<{
+  async getDetail(
+    name: string,
+    options?: {promptVersion?: number}
+  ): Promise<{
+    description?: string;
     folder: string;
     labels: Array<{label: string; version: number}>;
     name: string;
+    relationships: PromptRelationships;
     tags: string[];
     versions: Array<{
       config?: Record<string, unknown>;
@@ -213,11 +256,13 @@ export class LocalPromptStore implements PromptRegistry {
     const labels = await registerObsPromptLabel().find({promptId: prompt._id});
     const versionById = new Map(versions.map((row) => [String(row._id), row.version]));
     return {
+      ...(prompt.description !== undefined ? {description: prompt.description} : {}),
       folder: prompt.folder,
       labels: labels.map((row) => {
         return {label: row.label, version: versionById.get(String(row.versionId)) ?? 0};
       }),
       name: prompt.name,
+      relationships: await this.loadRelationships(prompt.name, options?.promptVersion),
       tags: prompt.tags,
       versions: versions.map((row) => {
         return {
@@ -272,6 +317,7 @@ export class LocalPromptStore implements PromptRegistry {
       }
       const latest = versions[0];
       items.push({
+        ...(prompt.description !== undefined ? {description: prompt.description} : {}),
         folder: prompt.folder,
         latestVersion: latest?.version ?? 0,
         name: prompt.name,
@@ -532,8 +578,71 @@ export class LocalPromptStore implements PromptRegistry {
     };
   }
 
+  private async loadRelationships(
+    promptName: string,
+    promptVersion?: number
+  ): Promise<PromptRelationships> {
+    const traceFilter: Record<string, unknown> =
+      promptVersion === undefined
+        ? {"prompts.name": promptName}
+        : {prompts: {$elemMatch: {name: promptName, version: promptVersion}}};
+    const ObsTrace = registerObsTrace();
+    const totalTraces = await ObsTrace.countDocuments(traceFilter);
+    const traceRows = await ObsTrace.find(traceFilter)
+      .sort({created: -1})
+      .limit(PROMPT_RELATIONSHIP_LIMIT);
+    const traceItems: PromptRelatedTraceSummary[] = [];
+    for (const row of traceRows) {
+      const ref = row.prompts.find((promptRef) => {
+        return promptRef.name === promptName;
+      });
+      if (!ref) {
+        continue;
+      }
+      traceItems.push({
+        id: String(row._id),
+        name: row.name,
+        promptName: ref.name,
+        promptVersion: ref.version,
+        sensitive: row.sensitive,
+        startedAt: DateTime.fromJSDate(row.startedAt).toUTC().toISO() ?? "",
+        status: row.status,
+      });
+    }
+
+    const experimentFilter = {promptName};
+    const ObsExperiment = registerObsExperiment();
+    const totalExperiments = await ObsExperiment.countDocuments(experimentFilter);
+    const experimentRows = await ObsExperiment.find(experimentFilter)
+      .sort({created: -1})
+      .limit(PROMPT_RELATIONSHIP_LIMIT);
+
+    return {
+      experiments: {
+        items: experimentRows.map((row) => {
+          return {
+            created: DateTime.fromJSDate(row.created).toUTC().toISO() ?? "",
+            id: String(row._id),
+            name: row.name,
+            promptName: row.promptName,
+            status: row.status,
+            versions: row.versions,
+          };
+        }),
+        limit: PROMPT_RELATIONSHIP_LIMIT,
+        total: totalExperiments,
+      },
+      traces: {
+        items: traceItems,
+        limit: PROMPT_RELATIONSHIP_LIMIT,
+        total: totalTraces,
+      },
+    };
+  }
+
   private async requirePrompt(name: string): Promise<{
     _id: mongoose.Types.ObjectId;
+    description?: string;
     folder: string;
     name: string;
     tags: string[];

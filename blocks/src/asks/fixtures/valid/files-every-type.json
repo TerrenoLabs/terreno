@@ -1,0 +1,28 @@
+{
+  "kind": "files",
+  "input": {
+    "title": "Supporting documents for the quarterly expense report",
+    "prompt": "Attach every document for the expense report: receipts, the signed PDF, notes, the ledger CSV, and the JSON export.",
+    "accept": ["image", "pdf", "text", "csv", "json"],
+    "minFiles": 2,
+    "maxFiles": 10,
+    "submitLabel": "Send documents"
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "skip",
+        "label": "Skip",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "files",
+    "text": "Attach every document for the expense report: receipts, the signed PDF, notes, the ledger CSV, and the JSON export.",
+    "title": "Supporting documents for the quarterly…",
+    "toolCallId": "call_fixture"
+  }
+}

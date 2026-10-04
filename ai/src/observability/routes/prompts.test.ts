@@ -3,11 +3,14 @@ import {TerrenoApp} from "@terreno/api";
 import type {LanguageModel} from "ai";
 import {assert} from "chai";
 import type express from "express";
+import {DateTime} from "luxon";
+import mongoose from "mongoose";
 
 import {AIRequest} from "../../models/aiRequest";
 import {AIService} from "../../service/aiService";
 import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
+import {registerObsExperiment} from "../local/models/obsExperiment";
 import {registerObsPrompt} from "../local/models/obsPrompt";
 import {registerObsPromptLabel} from "../local/models/obsPromptLabel";
 import {registerObsPromptVersion} from "../local/models/obsPromptVersion";
@@ -166,6 +169,129 @@ describe("observability prompt routes", () => {
       type: "text",
     });
     expect(res.status).toBe(403);
+  });
+
+  it("round-trips description on list/detail and omits it for legacy prompts", async () => {
+    const agent = await authAsUser(app, "admin");
+    await agent.post("/ai/observability/prompts").send({
+      description: "Operator-facing summary of what this prompt does",
+      folder: "examples",
+      name: "described",
+      system: "Hello",
+      type: "text",
+    });
+    await agent.post("/ai/observability/prompts").send({
+      folder: "examples",
+      name: "legacy-prompt",
+      system: "Legacy",
+      type: "text",
+    });
+
+    const listed = await agent.get("/ai/observability/prompts?folder=examples&search=desc");
+    expect(listed.status).toBe(200);
+    expect(listed.body.data[0]?.description).toBe(
+      "Operator-facing summary of what this prompt does"
+    );
+    expect(
+      listed.body.data.find((row: {name: string}) => row.name === "legacy-prompt")?.description
+    ).toBeUndefined();
+
+    const legacyDetail = await agent.get("/ai/observability/prompts/legacy-prompt");
+    expect(legacyDetail.status).toBe(200);
+    expect(legacyDetail.body.data.description).toBeUndefined();
+  });
+
+  it("returns bounded prompt relationships with version evidence and unrelated exclusions", async () => {
+    const agent = await authAsUser(app, "admin");
+    await agent.post("/ai/observability/prompts").send({
+      folder: "examples",
+      name: "hub-http",
+      system: "v1",
+      type: "text",
+    });
+    await agent.post("/ai/observability/prompts/hub-http/versions").send({
+      system: "v2",
+      type: "text",
+    });
+
+    const ObsTrace = registerObsTrace();
+    for (let index = 0; index < 23; index += 1) {
+      await ObsTrace.create({
+        name: `hub-trace-${index}`,
+        prompts: [{name: "hub-http", version: index % 2 === 0 ? 2 : 1}],
+        startedAt: DateTime.utc().minus({minutes: index}).toJSDate(),
+        status: "ok",
+      });
+    }
+    await ObsTrace.create({
+      name: "foreign-trace",
+      prompts: [{name: "other", version: 1}],
+      startedAt: DateTime.utc().toJSDate(),
+      status: "ok",
+    });
+
+    const ObsExperiment = registerObsExperiment();
+    await ObsExperiment.create({
+      datasetId: new mongoose.Types.ObjectId(),
+      evaluatorIds: [],
+      name: "hub-experiment",
+      promptName: "hub-http",
+      status: "completed",
+      thresholds: [],
+      versions: [1, 2],
+    });
+    await ObsExperiment.create({
+      datasetId: new mongoose.Types.ObjectId(),
+      evaluatorIds: [],
+      name: "foreign-experiment",
+      promptName: "other",
+      status: "pending",
+      thresholds: [],
+      versions: [1, 2],
+    });
+
+    const detail = await agent.get("/ai/observability/prompts/hub-http");
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.relationships.traces.total).toBe(23);
+    expect(detail.body.data.relationships.traces.limit).toBe(20);
+    expect(detail.body.data.relationships.traces.items).toHaveLength(20);
+    expect(
+      detail.body.data.relationships.traces.items.every((row: {promptName: string}) => {
+        return row.promptName === "hub-http";
+      })
+    ).toBe(true);
+    expect(
+      detail.body.data.relationships.traces.items.some((row: {promptVersion: number}) => {
+        return row.promptVersion === 2;
+      })
+    ).toBe(true);
+    expect(detail.body.data.relationships.experiments.total).toBe(1);
+    expect(detail.body.data.relationships.experiments.items).toEqual([
+      expect.objectContaining({name: "hub-experiment", promptName: "hub-http"}),
+    ]);
+    expect(
+      detail.body.data.relationships.traces.items.some((row: {name: string}) => {
+        return row.name === "foreign-trace";
+      })
+    ).toBe(false);
+
+    const v2Only = await agent.get("/ai/observability/prompts/hub-http?promptVersion=2");
+    expect(v2Only.status).toBe(200);
+    expect(
+      v2Only.body.data.relationships.traces.items.every((row: {promptVersion: number}) => {
+        return row.promptVersion === 2;
+      })
+    ).toBe(true);
+    expect(
+      v2Only.body.data.relationships.traces.items.some((row: {promptVersion: number}) => {
+        return row.promptVersion === 1;
+      })
+    ).toBe(false);
+
+    const badVersion = await agent.get("/ai/observability/prompts/hub-http?promptVersion=0");
+    expect(badVersion.status).toBe(400);
+    const fractional = await agent.get("/ai/observability/prompts/hub-http?promptVersion=1.5");
+    expect(fractional.status).toBe(400);
   });
 
   it("lists folder matches with usage7d and — when production is unset", async () => {

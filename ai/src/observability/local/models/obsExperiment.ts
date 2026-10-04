@@ -77,6 +77,8 @@ obsExperimentSchema.plugin(findOneOrNone);
 obsExperimentSchema.plugin(findExactlyOne);
 obsExperimentSchema.index({created: -1, datasetId: 1});
 obsExperimentSchema.index({created: -1, status: 1});
+// biome-ignore assist/source/useSortedKeys: promptName must be the leading key for prompt-filtered lists
+obsExperimentSchema.index({promptName: 1, created: -1});
 
 export const registerObsExperiment = (): ObsExperimentModel => {
   if (mongoose.models.ObsExperiment) {

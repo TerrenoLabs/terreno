@@ -61,6 +61,7 @@ import {
   getAiService,
 } from "./api/ai";
 import {commsDevRouter} from "./api/commsDev";
+import {fileUploadsEnabledForRequest} from "./api/fileUploads";
 import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
 import {addDevNotificationRoutes} from "./api/notificationsDev";
 import {projectOrgContextPlugin, projectRouter} from "./api/projects";
@@ -72,6 +73,7 @@ import {bindPortEarly, closeEarlyListenHolder} from "./bindPortEarly";
 import {isDeployed, isWebsocketService, WEBSOCKETS_DEBUG} from "./conf";
 import {consentDefinitions} from "./consentDefinitions";
 import {exampleAdminHome} from "./exampleAdminConfig";
+import {exampleFeatureFlagSegments} from "./featureFlagSegments";
 import {openExampleHarness, startExampleHarness} from "./harness/exampleHarness";
 import {createExampleJobsApp} from "./jobs/createExampleJobsApp";
 import {shouldStartJobsWorkerInApiProcess} from "./jobs/jobsStartWorker";
@@ -416,18 +418,14 @@ export const start = async (skipListen = false): Promise<express.Application> =>
           liveUpdates: {
             socketIoServer: () => io,
           },
-          segments: {
-            "admin-users": (user: unknown) => (user as {admin?: boolean}).admin === true,
-            "has-name": (user: unknown) => Boolean((user as {name?: string}).name),
-            "oauth-users": (user: unknown) =>
-              Boolean((user as {oauthProvider?: string}).oauthProvider),
-          },
+          segments: exampleFeatureFlagSegments,
         })
       )
       .register(
         new DocumentStorageApp({
           basePath: "/documents",
           bucketName: process.env.GCS_BUCKET ?? "",
+          fileUploadsEnabled: fileUploadsEnabledForRequest,
         })
       )
       .register(new AuditApp())
@@ -435,27 +433,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
 
     const exampleJobsApp = createExampleJobsApp({accessControl: access});
     terraApp.register(exampleJobsApp);
-
-    terraApp.register(
-      new ObservabilityApp({
-        aiService: getAiService(),
-        aiServiceFactory: (modelId) => {
-          const model = createServerModel(modelId);
-          if (!model) {
-            return undefined;
-          }
-          return new AIService({model});
-        },
-        plugins: [createLocalObservabilityPlugin()],
-        priceMap: parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON),
-        requestAiServiceFactory: ({apiKey, modelId}) => {
-          if (!apiKey) {
-            return undefined;
-          }
-          return new AIService({model: createModelFromKey(apiKey, modelId)});
-        },
-      })
-    );
 
     // Before AdminApp, so HarnessApp's approvals inbox joins the admin sidebar. Skipped
     // (with a warning) when Mongo is not a replica set, as in the unit tests.
@@ -465,6 +442,27 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     }
 
     terraApp
+      .register(
+        new ObservabilityApp({
+          accessControl: access,
+          aiService: getAiService(),
+          aiServiceFactory: (modelId) => {
+            const model = createServerModel(modelId);
+            if (!model) {
+              return undefined;
+            }
+            return new AIService({model});
+          },
+          plugins: [createLocalObservabilityPlugin()],
+          priceMap: parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON),
+          requestAiServiceFactory: ({apiKey, modelId}) => {
+            if (!apiKey) {
+              return undefined;
+            }
+            return new AIService({model: createModelFromKey(apiKey, modelId)});
+          },
+        })
+      )
       .register(
         new AdminApp({
           accessControl: access,

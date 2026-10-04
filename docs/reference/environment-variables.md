@@ -121,7 +121,7 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 | `GEMINI_API_KEY` | `@terreno/ai` | ❌ | — | Yes | server |
 | `OPENAI_API_KEY` | `@terreno/ai` | ❌ | — | Yes | server |
 | `GOOGLE_VERTEX_PROJECT` | `@terreno/ai` | ❌ | — | No | server |
-| `GOOGLE_VERTEX_LOCATION` | `@terreno/ai` | ❌ | — | No | server |
+| `GOOGLE_VERTEX_LOCATION` | `@terreno/ai` | ❌ | `global` | No | server |
 | `GOOGLE_VERTEX_ALLOWED_MODELS` | `@terreno/ai` | ❌ | all | No | server |
 | `CLAUDE_KEY` | tooling | ❌ | — | Yes | tooling |
 | `LANGFUSE_SECRET_KEY` | `@terreno/ai` | ❌ | — | Yes | server |

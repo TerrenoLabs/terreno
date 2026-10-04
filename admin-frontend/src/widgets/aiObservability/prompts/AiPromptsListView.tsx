@@ -46,6 +46,8 @@ const TypeBadgeCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => (
 );
 
 export interface AiPromptsListViewProps {
+  canCreate?: boolean;
+  createDescription: string;
   createError?: string;
   createFolder: string;
   createName: string;
@@ -57,6 +59,7 @@ export interface AiPromptsListViewProps {
   isLoading?: boolean;
   loadError?: string;
   onCreate: () => void;
+  onCreateDescriptionChange: (value: string) => void;
   onCreateFolderChange: (value: string) => void;
   onCreateNameChange: (value: string) => void;
   onCreateSystemChange: (value: string) => void;
@@ -72,6 +75,8 @@ export interface AiPromptsListViewProps {
 }
 
 export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
+  canCreate = true,
+  createDescription,
   createError,
   createFolder,
   createName,
@@ -83,6 +88,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   isLoading,
   loadError,
   onCreate,
+  onCreateDescriptionChange,
   onCreateFolderChange,
   onCreateNameChange,
   onCreateSystemChange,
@@ -172,7 +178,9 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
                 value={search}
               />
             </Box>
-            <Button onClick={onOpenCreate} testID="ai-prompts-create" text="Create prompt" />
+            {canCreate ? (
+              <Button onClick={onOpenCreate} testID="ai-prompts-create" text="Create prompt" />
+            ) : undefined}
           </Box>
           {loadError ? (
             <Box gap={2} testID="ai-prompts-load-error">
@@ -209,11 +217,30 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
         visible={createOpen}
       >
         <Box gap={3} testID="ai-prompts-create-form">
-          <TextField onChange={onCreateFolderChange} title="Folder" value={createFolder} />
-          <TextField onChange={onCreateNameChange} title="Name" value={createName} />
+          <TextField
+            onChange={onCreateFolderChange}
+            testID="ai-prompts-create-folder"
+            title="Folder"
+            value={createFolder}
+          />
+          <TextField
+            onChange={onCreateNameChange}
+            testID="ai-prompts-create-name"
+            title="Name"
+            value={createName}
+          />
+          <TextField
+            helperText="Optional short summary for operators browsing the library."
+            multiline
+            onChange={onCreateDescriptionChange}
+            testID="ai-prompts-create-description"
+            title="Description"
+            value={createDescription}
+          />
           <TextField
             multiline
             onChange={onCreateSystemChange}
+            testID="ai-prompts-create-system"
             title="System"
             value={createSystem}
           />
@@ -221,6 +248,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
             helperText="Use {{variable}} placeholders. Saving creates immutable v1."
             multiline
             onChange={onCreateTemplateChange}
+            testID="ai-prompts-create-template"
             title="User template"
             value={createTemplate}
           />

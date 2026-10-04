@@ -3,6 +3,8 @@ import {router} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
+import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
+import {resolvePromptActionPermissions} from "../shell/observabilityPermissions";
 import {AiPromptsListView} from "./AiPromptsListView";
 import {
   ALL_FOLDERS,
@@ -14,20 +16,29 @@ import {useAiObservabilityPromptsApi} from "./useAiObservabilityPromptsApi";
 
 export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {api, routeBase} = props;
-  const {useCreateMutation, useListQuery} = useAiObservabilityPromptsApi(api);
+  const {useCreateMutation, useListQuery, useStatusQuery} = useAiObservabilityPromptsApi(api);
   const {data, error, isError, isLoading, refetch} = useListQuery({include: "usage7d"});
+  const statusQuery = useStatusQuery();
   const [createPrompt, createState] = useCreateMutation();
   const [search, setSearch] = useState("");
   const [folder, setFolder] = useState(ALL_FOLDERS);
   const [createOpen, setCreateOpen] = useState(false);
   const [createFolder, setCreateFolder] = useState("examples");
   const [createName, setCreateName] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
   const [createSystem, setCreateSystem] = useState("");
   const [createTemplate, setCreateTemplate] = useState("");
   const [createError, setCreateError] = useState("");
 
   const prompts = useMemo(() => unwrapPromptList(data), [data]);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
+  const canCreatePrompt = useMemo(() => {
+    return resolvePromptActionPermissions({
+      status: unwrapObservabilityStatus(statusQuery.data),
+      statusError: statusQuery.isError,
+      statusLoading: statusQuery.isLoading,
+    }).canCreate;
+  }, [statusQuery.data, statusQuery.isError, statusQuery.isLoading]);
 
   const handleOpen = useCallback(
     (name: string): void => {
@@ -39,9 +50,11 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
   const handleCreate = useCallback(async (): Promise<void> => {
     setCreateError("");
     try {
+      const trimmedDescription = createDescription.trim();
       const created = await createPrompt({
         folder: createFolder.trim(),
         name: createName.trim(),
+        ...(trimmedDescription ? {description: trimmedDescription} : {}),
         system: createSystem,
         template: createTemplate,
         type: "chat",
@@ -52,7 +65,15 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
     } catch {
       setCreateError("Could not create prompt. Check the name is unique and try again.");
     }
-  }, [createFolder, createName, createPrompt, createSystem, createTemplate, prefix]);
+  }, [
+    createDescription,
+    createFolder,
+    createName,
+    createPrompt,
+    createSystem,
+    createTemplate,
+    prefix,
+  ]);
 
   const loadError = isError
     ? error && typeof error === "object" && "data" in error
@@ -68,6 +89,8 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
         </Box>
       ) : (
         <AiPromptsListView
+          canCreate={canCreatePrompt}
+          createDescription={createDescription}
           createError={createError}
           createFolder={createFolder}
           createName={createName}
@@ -78,6 +101,7 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
           isCreating={createState.isLoading}
           loadError={loadError}
           onCreate={handleCreate}
+          onCreateDescriptionChange={setCreateDescription}
           onCreateFolderChange={setCreateFolder}
           onCreateNameChange={setCreateName}
           onCreateSystemChange={setCreateSystem}

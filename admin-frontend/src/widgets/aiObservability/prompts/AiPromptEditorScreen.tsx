@@ -1,14 +1,16 @@
 import {Box, Button, Spinner, Text} from "@terreno/ui";
-import {useLocalSearchParams} from "expo-router";
-import React, {useCallback, useMemo, useState} from "react";
+import {router, useLocalSearchParams} from "expo-router";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {resolveAiRunBlockedMessage, resolveAiRunError} from "../shell/aiRunAccess";
-import {AiPromptEditorView} from "./AiPromptEditorView";
+import {resolvePromptActionPermissions} from "../shell/observabilityPermissions";
+import {AiPromptHubView} from "./AiPromptHubView";
 import {
   latestVersionFromDetail,
   type PlaygroundRunResult,
+  type PromptDetail,
   unwrapPromptDetail,
   unwrapPromptPayload,
 } from "./promptTypes";
@@ -35,16 +37,59 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
     useSetLabelMutation,
     useStatusQuery,
   } = useAiObservabilityPromptsApi(api);
-  const {data, isError, isLoading, refetch} = useDetailQuery(name ?? "", {skip: !name});
+  const [selectedVersion, setSelectedVersion] = useState<number | undefined>(undefined);
+  const [pinnedQueryVersion, setPinnedQueryVersion] = useState<number | undefined>(undefined);
+  const [cachedDetail, setCachedDetail] = useState<
+    {detail: PromptDetail; name: string} | undefined
+  >(undefined);
+
+  const detailQueryArg = useMemo(() => {
+    if (!name) {
+      return {name: ""};
+    }
+    if (pinnedQueryVersion === undefined) {
+      return {name};
+    }
+    return {name, promptVersion: pinnedQueryVersion};
+  }, [name, pinnedQueryVersion]);
+
+  const {data, isError, isFetching, isLoading, refetch} = useDetailQuery(detailQueryArg, {
+    skip: !name,
+  });
   const statusQuery = useStatusQuery();
   const [createVersion, createState] = useCreateVersionMutation();
   const [setLabel, labelState] = useSetLabelMutation();
   const [runPlayground, playgroundState] = usePlaygroundMutation();
-  const [selectedVersion, setSelectedVersion] = useState<number | undefined>(undefined);
 
-  const detail = useMemo(() => unwrapPromptDetail(data), [data]);
-  const version = selectedVersion ?? (detail ? latestVersionFromDetail(detail) : 1);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
+  const detail = useMemo(() => unwrapPromptDetail(data), [data]);
+  // Keep the last loaded hub when a version pin changes the RTK cache key.
+  // A fresh query starts with empty `data` and `isLoading`, which would unmount the hub.
+  useEffect(() => {
+    if (!detail || !name) {
+      return;
+    }
+    setCachedDetail({detail, name});
+  }, [detail, name]);
+  const samePromptCache = cachedDetail?.name === name ? cachedDetail : undefined;
+  const visibleDetail = detail ?? samePromptCache?.detail;
+  const version = selectedVersion ?? (visibleDetail ? latestVersionFromDetail(visibleDetail) : 1);
+
+  // Pin GET detail to latest promptVersion after bootstrap so relationship tabs filter server-side.
+  useEffect(() => {
+    if (pinnedQueryVersion !== undefined || selectedVersion !== undefined) {
+      return;
+    }
+    if (!detail) {
+      return;
+    }
+    setPinnedQueryVersion(latestVersionFromDetail(detail));
+  }, [detail, pinnedQueryVersion, selectedVersion]);
+
+  const handleSelectVersion = useCallback((nextVersion: number): void => {
+    setSelectedVersion(nextVersion);
+    setPinnedQueryVersion(nextVersion);
+  }, []);
   const backHref = `${prefix}/ai-prompts`;
 
   const handleSaveVersion = useCallback(
@@ -60,6 +105,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
       }
       const updated = await createVersion({body, name}).unwrap();
       setSelectedVersion(updated.version);
+      setPinnedQueryVersion(updated.version);
     },
     [createVersion, name]
   );
@@ -77,6 +123,15 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
   const observabilityStatus = useMemo(
     () => unwrapObservabilityStatus(statusQuery.data),
     [statusQuery.data]
+  );
+  const promptPermissions = useMemo(
+    () =>
+      resolvePromptActionPermissions({
+        status: observabilityStatus,
+        statusError: statusQuery.isError,
+        statusLoading: statusQuery.isLoading,
+      }),
+    [observabilityStatus, statusQuery.isError, statusQuery.isLoading]
   );
   const playgroundAiSource = observabilityStatus?.playgroundAi?.source;
   const isPlaygroundAccessLoading = apiKeyLoading || statusQuery.isLoading;
@@ -111,6 +166,12 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
       })
     : undefined;
 
+  const isInitialLoad = isLoading && !visibleDetail;
+  const isRelationshipsLoading = Boolean(visibleDetail && (isFetching || (isLoading && !detail)));
+  const relationshipsError =
+    isError && visibleDetail ? "Could not refresh related traces and experiments." : undefined;
+  const isFatalLoadError = isError && !visibleDetail;
+
   if (!name) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-prompt-editor">
@@ -121,7 +182,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
     );
   }
 
-  if (isLoading) {
+  if (isInitialLoad) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-prompt-editor">
         <Box alignItems="center" padding={4} testID="ai-prompt-editor-loading">
@@ -131,7 +192,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
     );
   }
 
-  if (isError || !detail) {
+  if (isFatalLoadError || !visibleDetail) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-prompt-editor">
         <Box gap={2} padding={4}>
@@ -144,20 +205,29 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
 
   return (
     <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-prompt-editor">
-      <AiPromptEditorView
-        detail={detail}
+      <AiPromptHubView
+        detail={visibleDetail}
         isApiKeyLoading={isPlaygroundAccessLoading}
+        isRelationshipsLoading={isRelationshipsLoading}
         isRunningPlayground={playgroundState.isLoading}
         isSaving={createState.isLoading}
         isSettingProduction={labelState.isLoading}
+        onOpenExperiment={(experimentId) => {
+          router.push(`${prefix}/ai-experiment-results?id=${encodeURIComponent(experimentId)}`);
+        }}
+        onOpenTrace={(traceId) => {
+          router.push(`${prefix}/ai-trace-detail?id=${encodeURIComponent(traceId)}`);
+        }}
         onRunPlayground={handleRunPlayground}
         onSaveVersion={handleSaveVersion}
-        onSelectVersion={setSelectedVersion}
+        onSelectVersion={handleSelectVersion}
         onSetProduction={handleSetProduction}
+        permissions={promptPermissions}
         playgroundBlockedMessage={playgroundBlockedMessage}
         playgroundError={playgroundError}
         playgroundResult={playgroundResult}
         productionError={labelState.isError ? "Could not set production." : undefined}
+        relationshipsError={relationshipsError}
         saveError={createState.isError ? "Could not save a new version." : undefined}
         selectedVersion={version}
       />

@@ -10,16 +10,19 @@
     "@langfuse/otel": "^5.0.1",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/sdk-node": "0.217.0",
+    "@terreno/blocks": "workspace:*",
     "ai": "catalog:",
     "ajv": "catalog:",
     "csv-parse": "catalog:",
     "google-auth-library": "^10.5.0",
     "luxon": "catalog:",
-    "multer": "catalog:"
+    "multer": "catalog:",
+    "sanitize-html": "catalog:"
   },
   "description": "Provider-agnostic AI service with streaming chat, request logging, and admin tools — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/admin-backend": "workspace:*",
     "@terreno/api": "workspace:*",
     "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
@@ -106,5 +109,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.7.0"
+  "version": "57.9.0"
 }

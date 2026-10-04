@@ -92,7 +92,12 @@ describe("HarnessEventHub", () => {
     unsubscribes.push(await hub.subscribe(second.subscriber));
 
     // The cursor goes away underneath the tail (a failover), and a second close rejects.
-    const tail = (hub as unknown as {changes: {close: () => Promise<void>}}).changes;
+    // Wait until the server has assigned a cursor id: closing before that skips killCursors
+    // and leaves the cursor open.
+    const tail = (
+      hub as unknown as {changes: {close: () => Promise<void>; cursor?: {id?: unknown}}}
+    ).changes;
+    await waitUntil(() => tail.cursor?.id != null, "the tail's server cursor");
     const closeCursor = tail.close.bind(tail);
     let closeAttempts = 0;
     tail.close = () => {

@@ -59,6 +59,7 @@ import {
   type TraceDetail,
   type TraceListItem,
 } from "../widgets/aiObservability/traces/traceTypes";
+import {operatorObservabilityStatus} from "./observabilityStatusFixtures.isolated";
 
 interface ExpoRouterPushMock {
   (...args: unknown[]): void;
@@ -94,6 +95,10 @@ describe("AiDatasetDetailScreen", () => {
 
   const statusData = {
     localOn: true,
+    permissions: {
+      aiDataset: {create: true, list: true, read: true, update: true},
+      aiExperiment: {create: true, list: true, read: true},
+    },
     plugins: [],
     primaries: {
       datasets: "local",
@@ -368,6 +373,9 @@ describe("AiDatasetsListScreen", () => {
   });
   const statusData = {
     localOn: true,
+    permissions: {
+      aiDataset: {create: true, list: true, read: true, update: true},
+    },
     plugins: [],
     primaries: {
       datasets: "local",
@@ -455,6 +463,17 @@ describe("AiDatasetsListScreen", () => {
       listState.data = datasets;
       const loaded = renderWithTheme(<AiDatasetsScreenWidget api={createApi()} {...widgetProps} />);
       expect(loaded.getByTestId("ai-datasets-table")).toBeTruthy();
+    });
+
+    it("hides import when the caller cannot update datasets", () => {
+      listState.isLoading = false;
+      listState.data = datasets;
+      statusData.permissions = {aiDataset: {list: true, read: true}};
+      const view = renderWithTheme(<AiDatasetsScreenWidget api={createApi()} {...widgetProps} />);
+      expect(view.queryByTestId("ai-datasets-import-ds-1")).toBeNull();
+      statusData.permissions = {
+        aiDataset: {create: true, list: true, read: true, update: true},
+      };
     });
 
     it("validates create name and navigates on success", async () => {
@@ -1259,6 +1278,9 @@ describe("AiEvaluatorNewScreen", () => {
   });
   const statusData = {
     localOn: true,
+    permissions: {
+      aiExperiment: {create: true, list: true, read: true},
+    },
     plugins: [],
     primaries: {
       datasets: "local",
@@ -1634,6 +1656,9 @@ describe("AiEvaluatorsListScreen", () => {
   });
   const statusData = {
     localOn: true,
+    permissions: {
+      aiEvaluator: {create: true, list: true, read: true},
+    },
     plugins: [],
     primaries: {
       datasets: "local",
@@ -1715,6 +1740,21 @@ describe("AiEvaluatorsListScreen", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       assert.include(String(routerPush.mock.calls[1]?.[0]), "ai-evaluator-detail");
+    });
+
+    it("hides create when the caller cannot create evaluators", () => {
+      listState.isLoading = false;
+      statusData.permissions = {aiEvaluator: {list: true, read: true}};
+      const view = renderWithTheme(
+        <AiEvaluatorsScreenWidget
+          api={createApi()}
+          config={emptyConfig}
+          routeBase="/admin"
+          screenName="ai-evaluators"
+        />
+      );
+      expect(view.queryByTestId("ai-evaluators-create")).toBeNull();
+      statusData.permissions = {aiEvaluator: {create: true, list: true, read: true}};
     });
   });
 });
@@ -2544,6 +2584,9 @@ describe("AiExperimentsListScreen", () => {
   });
   const statusData = {
     localOn: true,
+    permissions: {
+      aiExperiment: {create: true, list: true, read: true},
+    },
     plugins: [],
     primaries: {
       datasets: "local",
@@ -2636,6 +2679,21 @@ describe("AiExperimentsListScreen", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       assert.include(String(routerPush.mock.calls[1]?.[0]), "ai-experiment-results");
+    });
+
+    it("hides create when the caller cannot create experiments", () => {
+      listState.isLoading = false;
+      statusData.permissions = {aiExperiment: {list: true, read: true}};
+      const view = renderWithTheme(
+        <AiExperimentsScreenWidget
+          api={createApi()}
+          config={emptyConfig}
+          routeBase="/admin"
+          screenName="ai-experiments"
+        />
+      );
+      expect(view.queryByTestId("ai-experiments-create")).toBeNull();
+      statusData.permissions = {aiExperiment: {create: true, list: true, read: true}};
     });
   });
 });
@@ -2921,16 +2979,13 @@ describe("AiPromptEditorScreen", () => {
   });
   let promptName = "summarize";
 
-  const statusData = {
-    localOn: true,
-    playgroundAi: {source: "request-key" as const},
-    plugins: [],
-    primaries: {
-      datasets: "local",
-      experiments: "local",
-      prompts: "local",
-      reviewQueue: "local",
-    },
+  const statusData = operatorObservabilityStatus({
+    playgroundAi: {source: "request-key"},
+  });
+
+  const emptyPromptRelationships = {
+    experiments: {items: [], limit: 20, total: 0},
+    traces: {items: [], limit: 20, total: 0},
   };
 
   const detail: PromptDetail = {
@@ -2940,6 +2995,7 @@ describe("AiPromptEditorScreen", () => {
       {label: "production", version: 1},
     ],
     name: "summarize",
+    relationships: emptyPromptRelationships,
     tags: [],
     versions: [
       {
@@ -3036,8 +3092,9 @@ describe("AiPromptEditorScreen", () => {
   };
 
   describe("AiPromptEditorScreenWidget", () => {
-    it("shows loading then editor and playground tabs", () => {
+    it("shows loading then hub overview and versions playground tabs", () => {
       detailState.isLoading = true;
+      detailState.data = undefined;
       const loading = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
       expect(loading.getByTestId("ai-prompt-editor-loading")).toBeTruthy();
       loading.unmount();
@@ -3045,6 +3102,8 @@ describe("AiPromptEditorScreen", () => {
       detailState.isLoading = false;
       detailState.data = detail;
       const loaded = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+      expect(loaded.getByTestId("ai-prompt-overview")).toBeTruthy();
+      fireEvent.press(loaded.getByText("Versions"));
       expect(loaded.getByTestId("ai-prompt-save-next")).toBeTruthy();
       fireEvent.press(loaded.getByText("Playground"));
       expect(loaded.getByTestId("ai-prompt-playground")).toBeTruthy();
@@ -3060,6 +3119,7 @@ describe("AiPromptEditorScreen", () => {
           playgroundApiKeyHint="Save a Gemini API key on Profile."
         />
       );
+      fireEvent.press(view.getByText("Versions"));
       fireEvent.press(view.getByText("Playground"));
       expect(view.getByTestId("ai-prompt-playground-blocked")).toHaveTextContent(
         "Save a Gemini API key on Profile."
@@ -3074,6 +3134,7 @@ describe("AiPromptEditorScreen", () => {
       const loading = renderWithTheme(
         <AiPromptEditorScreenWidget {...widgetProps} apiKeyLoading={true} />
       );
+      fireEvent.press(loading.getByText("Versions"));
       fireEvent.press(loading.getByText("Playground"));
       expect(loading.getByTestId("ai-prompt-run-once")).toHaveTextContent("Loading API key…");
       loading.unmount();
@@ -3081,6 +3142,7 @@ describe("AiPromptEditorScreen", () => {
       const ready = renderWithTheme(
         <AiPromptEditorScreenWidget {...widgetProps} apiKey="saved-key" />
       );
+      fireEvent.press(ready.getByText("Versions"));
       fireEvent.press(ready.getByText("Playground"));
       expect(ready.queryByTestId("ai-prompt-playground-blocked")).toBeNull();
     });
@@ -3092,6 +3154,7 @@ describe("AiPromptEditorScreen", () => {
       const view = renderWithTheme(
         <AiPromptEditorScreenWidget {...widgetProps} apiKey="saved-key" />
       );
+      fireEvent.press(view.getByText("Versions"));
       fireEvent.press(view.getByText("Playground"));
       fireEvent.changeText(view.getByTestId("ai-prompt-var-text"), "hello");
       await act(async () => {
@@ -3136,6 +3199,7 @@ describe("AiPromptEditorScreen", () => {
       detailState.data = detail;
       detailState.isError = false;
       const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+      fireEvent.press(view.getByText("Versions"));
       await act(async () => {
         fireEvent.press(view.getByTestId("ai-prompt-set-production"));
         await Promise.resolve();
@@ -3164,6 +3228,7 @@ describe("AiPromptEditorScreen", () => {
       const view = renderWithTheme(
         <AiPromptEditorScreenWidget {...widgetProps} apiKey="saved-key" />
       );
+      fireEvent.press(view.getByText("Versions"));
       expect(view.getByText("Could not save a new version.")).toBeTruthy();
       expect(view.getByText("Could not set production.")).toBeTruthy();
       fireEvent.press(view.getByText("Playground"));
@@ -3190,6 +3255,7 @@ describe("AiPromptEditorScreen", () => {
           playgroundApiKeyHint="Save a Gemini API key on Profile."
         />
       );
+      fireEvent.press(view.getByText("Versions"));
       fireEvent.press(view.getByText("Playground"));
       expect(view.getByTestId("ai-prompt-playground-blocked")).toHaveTextContent(
         "Save a Gemini API key on Profile."
@@ -3216,6 +3282,11 @@ describe("AiPromptEditorView", () => {
     onSetProduction: async () => undefined,
   };
 
+  const emptyPromptRelationships = {
+    experiments: {items: [], limit: 20, total: 0},
+    traces: {items: [], limit: 20, total: 0},
+  };
+
   const detail: PromptDetail = {
     folder: "examples",
     labels: [
@@ -3224,6 +3295,7 @@ describe("AiPromptEditorView", () => {
       {label: "staging", version: 1},
     ],
     name: "summarize",
+    relationships: emptyPromptRelationships,
     tags: [],
     versions: [
       {
@@ -3574,16 +3646,7 @@ describe("AiPromptsListScreen", () => {
   const injectedHooks = {
     useAiObservabilityPromptsQuery: () => ({...listState, refetch: mock(() => undefined)}),
     useAiObservabilityStatusQuery: () => ({
-      data: {
-        localOn: true,
-        plugins: [],
-        primaries: {
-          datasets: "local",
-          experiments: "local",
-          prompts: "local",
-          reviewQueue: "local",
-        },
-      },
+      data: operatorObservabilityStatus(),
       isError: false,
       isLoading: false,
     }),
@@ -3716,6 +3779,7 @@ describe("AiPromptsListView", () => {
 
   const idleHandlers = {
     onCreate: () => undefined,
+    onCreateDescriptionChange: () => undefined,
     onCreateFolderChange: () => undefined,
     onCreateNameChange: () => undefined,
     onCreateSystemChange: () => undefined,
@@ -3731,6 +3795,7 @@ describe("AiPromptsListView", () => {
     it("renders the loading state", () => {
       const {getByTestId} = renderWithTheme(
         <AiPromptsListView
+          createDescription=""
           createFolder="examples"
           createName=""
           createOpen={false}
@@ -3749,6 +3814,7 @@ describe("AiPromptsListView", () => {
     it("renders the empty state", () => {
       const {getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
+          createDescription=""
           createFolder="examples"
           createName=""
           createOpen={false}
@@ -3767,6 +3833,7 @@ describe("AiPromptsListView", () => {
     it("renders a loaded table with folder counts and latest vs production columns", () => {
       const {getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
+          createDescription=""
           createFolder="examples"
           createName=""
           createOpen={false}
@@ -3789,6 +3856,7 @@ describe("AiPromptsListView", () => {
     it("renders an Open control for each prompt", () => {
       const {getByTestId} = renderWithTheme(
         <AiPromptsListView
+          createDescription=""
           createFolder="examples"
           createName=""
           createOpen={false}
@@ -3810,6 +3878,7 @@ describe("AiPromptsListView", () => {
       const onRetry = mock(() => undefined);
       const {getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
+          createDescription="Short summary"
           createError="Name required"
           createFolder="examples"
           createName="new-prompt"
@@ -3819,6 +3888,7 @@ describe("AiPromptsListView", () => {
           folder=""
           loadError="Failed to load prompts"
           onCreate={onCreate}
+          onCreateDescriptionChange={() => undefined}
           onCreateFolderChange={() => undefined}
           onCreateNameChange={() => undefined}
           onCreateSystemChange={() => undefined}

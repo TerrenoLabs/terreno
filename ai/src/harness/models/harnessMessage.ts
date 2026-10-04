@@ -11,7 +11,8 @@ const harnessMessageSchema = new mongoose.Schema<HarnessMessageDocument, Harness
   {
     aborted: {
       default: false,
-      description: "True when the message was cut off before it finished (partial stream)",
+      description:
+        "True when the next prompt must skip this message: a partial stream, or an assistant message aborted before its tool calls had results",
       type: Boolean,
     },
     conversationId: {

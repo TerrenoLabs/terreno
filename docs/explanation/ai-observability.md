@@ -26,10 +26,11 @@ That split is the two planes:
 Telemetry sinks still fan out even when a control primary is local-only.
 
 Admin chrome lives in `admin-frontend`. One sidebar group **AI Observability** holds Prompts,
-Traces, and Review (Review is omitted when the local plugin is off). Existing **AI Requests**
-stays under **Screens**. Every observability screen shows breadcrumbs
-`Admin / AI Observability / <Section> / <leaf>` and a status chip from `GET /ai/observability/status`.
-Prompts are edited as immutable versions in admin (`Save as vN+1`); apps never inline the string.
+Traces, Evaluators, Datasets, Experiments, and Review (Review is omitted when the local plugin is
+off). Existing **AI Requests** stays under **Screens**. Every observability screen shows
+breadcrumbs `Admin / AI Observability / <Section> / <leaf>` and a status chip from
+`GET /ai/observability/status`. Prompt detail is a hub (Overview, Versions, Traces, Experiments);
+versions are immutable in admin (`Save as vN+1`); apps never inline the string.
 
 ## Why this shape for product work
 
@@ -37,7 +38,27 @@ Flourish AI features follow an 8-step loop: gold dataset → labels → prompt v
 
 That loop is the product requirement, not an optional dashboard. Operator steps: [Develop an AI feature](../how-to/ai-feature-development.md). Registration and env: [Observe LLM calls](../how-to/observe-llm-calls.md). Models and routes: [AI reference](../reference/ai.md). Design lock: [implementation plan](../implementationPlans/ai-observability.md).
 
+## RBAC (domain-neutral)
+
+Observability HTTP routes use Terreno RBAC resources (`aiPrompt`, `aiTrace`, `aiReview`,
+`aiDataset`, `aiExperiment`, `aiEvaluator`) instead of domain-specific approval vocabulary.
+Pass the same `accessControl` instance on `ObservabilityApp` and `AdminApp` so
+`GET /ai/observability/status` permissions match `/admin/config` screen filtering. Admin widgets
+hide write controls from status flags (fail closed while status is loading or errored). Seeded
+`admin` receives every observability action; `auditor` receives `list` and
+`read` on each observability resource through the read-only sentinel (but not `admin:access` —
+pair auditor with a shell grant in a composed consumer role); `superadmin` receives `*`. Existing
+customized `admin` and `auditor` roles gain only missing observability actions on re-seed. Legacy
+`user.admin` remains a full-access fallback when RBAC is enabled. See
+[API reference](../reference/api.md#ai-observability-rbac). The example backend registers
+`accessControl: access` on `ObservabilityApp` and seeds optional `aiObservabilityViewer` and
+`aiObservabilityOperator` roles (not auto-assigned) in `example-backend/src/rbacRoles.ts`.
+
 `AIRequest` remains the cheap per-call log. Observability traces are the nested, scored, user/session/cost record used in the SOP.
+
+## Prompt hub relationships (phase 4)
+
+Prompts may carry an optional domain-neutral `description` (folder semantics stay consumer-defined). `GET /ai/observability/prompts/:name` composes bounded recent **traces** and **experiments** for that prompt name so the admin hub does not scan full trace or experiment lists on the client. Trace evidence is version-aware: list filters accept `prompt` plus optional `promptVersion`, and relationship trace rows include the matching `promptVersion` from `ObsTrace.prompts[]`. The same optional positive integer `promptVersion` on prompt detail filters hub traces with `$elemMatch` on `prompts` (name and version). Omit it to keep the unfiltered prompt-name match. Invalid or non-positive versions return **400**. Experiment relationships filter server-side by `promptName` on `GET /ai/observability/experiments?promptName=…` (omit or pass an empty value for no filter). The experiment list endpoint returns summary rows without per-item hydration; use experiment detail for full item results. Reading relationships uses the same `aiPrompt:read` grant as prompt detail.
 
 ## Phase 1 reference loop
 

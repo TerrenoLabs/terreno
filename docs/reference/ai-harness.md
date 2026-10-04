@@ -853,7 +853,7 @@ data: {"seq":7,"type":"message.created","created":"2026-10-03T12:00:00.000Z","ta
 | Close | The connection is tracked from the first middleware, so a client that leaves during auth, the lookups, or the replay releases its subscription and heartbeat timer. A tail error closes every stream of the app; clients reconnect with `Last-Event-ID`. |
 | Auth | `authenticateMiddleware` (401 without a user), then owner (`userId`) or admin (403). Unknown or malformed id: 404. Errors are JSON, sent before the stream starts. |
 | 503 | The server could not read a cluster time to start the tail (not a replica set). |
-| Cost | One change stream per `HarnessApp` instance (`harnessApp.eventHub`), opened with the first viewer and closed with the last, fanned out in memory by stream and task path. Viewers do not hold pooled Mongo connections; each reconnect runs its replay queries. |
+| Cost | One change stream per `HarnessApp` instance (`harnessApp.eventHub`), opened with the first viewer and closed with the last, fanned out in memory by stream and task path. The tail finishes its opening read before closing, so the server has a cursor id and the close runs `killCursors`. Viewers do not hold pooled Mongo connections; each reconnect runs its replay queries. |
 
 ### Deltas
 
@@ -1152,7 +1152,10 @@ Rules:
 
 Result (`HarnessTurnResult`): `{finishReason: "stop" | "max-steps", steps, text, output?}`.
 At `maxSteps` the last tool calls still get results, so the transcript never ends on an
-unanswered call.
+unanswered call. Aborting the turn after those tool calls are stored and before their
+results are stored marks that assistant message `aborted`. The next request skips it, so
+the model transcript never ends on an unanswered call. An aborted tool still writes no
+tool message.
 
 `terreno.agent.tool@1` (`AGENT_TOOL_TASK_NAME`) has phases `execute` (`never`) and
 `executeSafe` (`safe`); the tool's `replay` picks one. `onInterrupt: "fail"`,
@@ -1561,7 +1564,7 @@ empty objects are kept (`minimize: false`), so `{}` tool arguments survive.
 | `toolCallId`, `toolName` | String | Tool messages only. |
 | `turnTaskId` | ObjectId | Turn that wrote the message. |
 | `requestId` | String | User messages from `submit` / `send`: the submitter's idempotency key. |
-| `aborted` | Boolean | Marks a partial message; skipped when building the next prompt. The turn never stores partial text (it streams as `delta` events and commits only complete messages), so it is `false` today. |
+| `aborted` | Boolean | Skipped when building the next prompt. Set when an assistant message is aborted after its tool calls were stored and before their results were stored. The turn does not store partial text (it streams as `delta` events and commits only complete messages). |
 
 Indexes: `{conversationId, seq}` unique; `{conversationId, requestId}` unique (partial: `requestId` set).
 

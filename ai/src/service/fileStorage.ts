@@ -13,6 +13,8 @@ export interface UploadFileParams {
 export interface UploadFileResult {
   filename: string;
   gcsKey: string;
+  /** The `FileAttachment` id, sent as `fileId` in an answer to a `files` ask. */
+  id: string;
   mimeType: string;
   size: number;
   url: string;
@@ -44,7 +46,7 @@ export class FileStorageService {
 
     const url = `https://storage.googleapis.com/${this.bucketName}/${gcsKey}`;
 
-    await FileAttachment.create({
+    const attachment = await FileAttachment.create({
       filename,
       gcsKey,
       mimeType,
@@ -53,7 +55,13 @@ export class FileStorageService {
       userId,
     });
 
-    return {filename, gcsKey, mimeType, size: buffer.length, url};
+    return {filename, gcsKey, id: attachment._id.toString(), mimeType, size: buffer.length, url};
+  }
+
+  /** The bytes of an upload, so a `files` ask answer can reach the model. */
+  async download(gcsKey: string): Promise<Buffer> {
+    const [contents] = await this.bucket.file(gcsKey).download();
+    return contents;
   }
 
   async getSignedUrl(gcsKey: string): Promise<string> {

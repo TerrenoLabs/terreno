@@ -33,6 +33,12 @@ import type express from "express";
 import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
+import {exampleUiBlocksOptions} from "../ai/hostActions";
+import {createTodoStatsTool} from "../ai/tools";
+import type {UserDocument} from "../types/models/userTypes";
+import {createDemoAgentService} from "./demoAgent";
+import {fileUploadsEnabledForRequest} from "./fileUploads";
+import {createTodoTools, todoToolApprovals} from "./todoTools";
 
 /** A provider that creates language models and image models from model IDs. */
 interface AIProvider {
@@ -67,15 +73,20 @@ const getGoogleModule = (): GoogleModule | undefined => {
   }
 };
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
-const VERTEX_IMAGE_MODEL = "imagen-4.0-fast-generate-001";
+const DEFAULT_MODEL = "gemini-3.8-flash";
+const VERTEX_IMAGE_MODEL = "gemini-3-pro-image";
 
 /**
- * Curated fallback chat models, used only when the live Google model listing cannot be retrieved
- * (no provider/API key configured, or the request failed). Kept to current, generally-available
- * models so the picker never offers a retired model.
+ * Curated fallback chat models (Gemini 3 family), used only when the live Google model listing cannot be retrieved
+ * (no provider/API key configured, or the request failed). Kept to current Gemini 3
+ * models so the picker never offers retired models.
  */
-const DEFAULT_CHAT_MODEL_IDS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+const DEFAULT_CHAT_MODEL_IDS = [
+  "gemini-3.8-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-pro-preview",
+  "gemini-3-pro-image",
+];
 
 interface SelectableModel {
   label: string;
@@ -296,7 +307,7 @@ export const getAiService = (): AIService | undefined => {
 };
 
 /** Create a LanguageModel on the server side (Vertex AI / Gemini Enterprise Agent Platform or Gemini API key). Returns undefined if no provider is configured (falls through to demo mode). Throws if the requested model is not in the configured allow-list. */
-export const createServerModel = (modelId?: string): LanguageModel | undefined => {
+export const createServerModel = (modelId?: string) => {
   const vertexProvider = getVertexProvider();
   if (vertexProvider) {
     return vertexProvider.languageModel(modelId ?? resolveDefaultVertexModel(vertexProvider));
@@ -597,7 +608,15 @@ const createImageTool = (apiKey?: string): Tool => {
 };
 
 const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
-  const tools: Record<string, Tool> = {...getMCPTools(req.user as User | undefined)};
+  const user = req.user as UserDocument | undefined;
+  const tools: Record<string, Tool> = {
+    ...getMCPTools(req.user as User | undefined),
+    ...createTodoTools({userId: user?._id}),
+    ...createTodoStatsTool({
+      historyId: typeof req.body?.historyId === "string" ? req.body.historyId : undefined,
+      userId: user?._id,
+    }),
+  };
 
   const apiKey = req.headers["x-ai-api-key"] as string | undefined;
   if (apiKey) {
@@ -753,8 +772,6 @@ export const addAiRoutes = (
       })
       .build(),
     asyncHandler(async (req, res) => {
-      // Prefer the server-wide service; fall back to the caller's own key so the example app
-      // still traces real runs when the backend has no provider credentials.
       const requestApiKey = req.header("x-ai-api-key");
       const effectiveAiService =
         aiService ??
@@ -782,23 +799,36 @@ export const addAiRoutes = (
     }),
   ]);
 
-  addGptHistoryRoutes(router, options);
-  addGptRoutes(router, {
-    aiService,
+  if (!aiService) {
+    logger.info(
+      "No AI model configured (GEMINI_API_KEY or GOOGLE_VERTEX_PROJECT); chat uses the scripted " +
+        "Terreno demo agent unless a request sends x-ai-api-key."
+    );
+  }
+
+  const chat: GptRouteOptions = {
+    aiService: aiService ?? createDemoAgentService(),
+    asks: {approvals: todoToolApprovals},
     createModelFn: createModelFromKey,
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,
+    ...(fileStorageService ? {fileStorageService} : {}),
     demoMode: !aiService,
+    fileUploadsEnabled: fileUploadsEnabledForRequest,
     langfuseSystemPromptName: "chat-assistant",
     maxSteps: 5,
     mcpService,
     openApiOptions: options,
     toolChoice: "auto",
     tools: getDemoTools() as unknown as GptRouteOptions["tools"],
-  });
+    uiBlocks: exampleUiBlocksOptions,
+  };
+  addGptHistoryRoutes(router, {...options, chat});
+  addGptRoutes(router, chat);
   if (fileStorageService) {
     addFileRoutes(router, {
       fileStorageService,
+      fileUploadsEnabled: fileUploadsEnabledForRequest,
       gcsBucket: process.env.GCS_BUCKET ?? "",
       openApiOptions: options,
     });

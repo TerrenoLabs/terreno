@@ -1,7 +1,10 @@
 import {router} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
+import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPromptsApi";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
+import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
+import {observabilityActionAllowed} from "../shell/observabilityPermissions";
 import {AiDatasetsListView} from "./AiDatasetsListView";
 import {buildCsvImportPayload, detectImportFormat, parseImportText} from "./datasetImport";
 import {type DatasetImportResult, unwrapDatasetList} from "./datasetTypes";
@@ -10,7 +13,23 @@ import {useAiObservabilityDatasetsApi} from "./useAiObservabilityDatasetsApi";
 export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {api, routeBase} = props;
   const {useCreateMutation, useImportMutation, useListQuery} = useAiObservabilityDatasetsApi(api);
+  const {useStatusQuery} = useAiObservabilityPromptsApi(api);
   const {data, isError, isLoading, refetch} = useListQuery();
+  const statusQuery = useStatusQuery();
+  const canCreate = observabilityActionAllowed({
+    action: "create",
+    resource: "aiDataset",
+    status: unwrapObservabilityStatus(statusQuery.data),
+    statusError: statusQuery.isError,
+    statusLoading: statusQuery.isLoading,
+  });
+  const canImport = observabilityActionAllowed({
+    action: "update",
+    resource: "aiDataset",
+    status: unwrapObservabilityStatus(statusQuery.data),
+    statusError: statusQuery.isError,
+    statusLoading: statusQuery.isLoading,
+  });
   const [createDataset, createState] = useCreateMutation();
   const [importItems, importState] = useImportMutation();
   const datasets = useMemo(() => unwrapDatasetList(data), [data]);
@@ -109,6 +128,8 @@ export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) 
   return (
     <AiObservabilityChrome {...props} screenName="ai-datasets">
       <AiDatasetsListView
+        canCreate={canCreate}
+        canImport={canImport}
         createError={createError}
         createName={createName}
         createOpen={createOpen}

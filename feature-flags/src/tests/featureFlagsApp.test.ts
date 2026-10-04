@@ -230,7 +230,7 @@ describe("FeatureFlagsApp", () => {
       await unauth.get("/feature-flags/flagConfiguration").expect(401);
     });
 
-    it("returns OpenFeature-shaped entries for enabled flags and omits disabled and archived", async () => {
+    it("returns OpenFeature-shaped entries and resolves disabled boolean flags to off", async () => {
       await FeatureFlag.create({
         enabled: true,
         key: "bool-active",
@@ -281,7 +281,11 @@ describe("FeatureFlagsApp", () => {
       expect(data.profile?.disabled).toBe(false);
       expect(["compact", "detailed"].includes(data.profile?.defaultVariant ?? "")).toBe(true);
       expect(data.profile?.variants.compact).toBe("compact");
-      expect(data["disabled-one"]).toBeUndefined();
+      expect(data["disabled-one"]).toEqual({
+        defaultVariant: "off",
+        disabled: false,
+        variants: {off: false, on: true},
+      });
       expect(data["archived-one"]).toBeUndefined();
     });
 

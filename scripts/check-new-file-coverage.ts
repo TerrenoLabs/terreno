@@ -55,6 +55,7 @@ export const PACKAGE_CI_LCOV_SKIP: {packageName: string; pipelineParameter: stri
   {packageName: "ai", pipelineParameter: "run-ai"},
   {packageName: "api", pipelineParameter: "run-api"},
   {packageName: "api-health", pipelineParameter: "run-api-health"},
+  {packageName: "blocks", pipelineParameter: "run-blocks"},
   {packageName: "comms", pipelineParameter: "run-comms"},
   {packageName: "create-terreno-app", pipelineParameter: "run-create-terreno-app"},
   {packageName: "feature-flags", pipelineParameter: "run-feature-flags"},

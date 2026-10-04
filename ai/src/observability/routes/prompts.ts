@@ -1,9 +1,7 @@
-import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
+import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
 import {DateTime} from "luxon";
 import type mongoose from "mongoose";
-
-import {requireAdmin} from "../../langfuseRoutesMiddleware";
 import {AIRequest} from "../../models/aiRequest";
 import type {
   LocalPromptStore,
@@ -15,11 +13,15 @@ import type {
   ObservabilityGenerateClient,
   ObservabilityRequestAiServiceFactory,
 } from "../types";
+import {
+  type ObservabilityRouteAccessOptions,
+  observabilityRouteMiddleware,
+} from "./observabilityRouteAccess";
 import {resolveRequestAiService} from "./requestAiService";
 
 const BASE_PATH = "/ai/observability";
 
-export interface ObservabilityPromptRouteOptions {
+export interface ObservabilityPromptRouteOptions extends ObservabilityRouteAccessOptions {
   aiService?: ObservabilityGenerateClient;
   openApi?: unknown;
   priceMap?: Record<string, ModelPrice>;
@@ -32,6 +34,17 @@ const asUserId = (user: unknown): mongoose.Types.ObjectId | undefined => {
     return undefined;
   }
   return (user as {_id?: mongoose.Types.ObjectId})._id;
+};
+
+const parsePromptVersionQuery = (value: unknown): number | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new APIError({status: 400, title: "promptVersion must be a positive integer"});
+  }
+  return parsed;
 };
 
 const versionFieldsFromBody = (body: Record<string, unknown>): PromptVersionFields => {
@@ -87,9 +100,9 @@ export const addObservabilityPromptRoutes = (
 
   router.get(
     `${BASE_PATH}/prompts`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "list", resource: "aiPrompt"},
       builder()
         .withTags(["observability"])
         .withSummary("List observability prompts")
@@ -97,8 +110,8 @@ export const addObservabilityPromptRoutes = (
         .withQueryParameter("search", {type: "string"}, {required: false})
         .withQueryParameter("include", {type: "string"}, {required: false})
         .withResponse(200, {data: {type: "array"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const include = typeof req.query.include === "string" ? req.query.include : undefined;
       const data = await options.store.list({
@@ -112,23 +125,25 @@ export const addObservabilityPromptRoutes = (
 
   router.post(
     `${BASE_PATH}/prompts`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "create", resource: "aiPrompt"},
       builder()
         .withTags(["observability"])
         .withSummary("Create an observability prompt")
         .withRequestBody({
+          description: {required: false, type: "string"},
           folder: {required: true, type: "string"},
           name: {required: true, type: "string"},
         })
         .withResponse(201, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
       const created = await options.store.create({
         ...versionFieldsFromBody(body),
+        description: typeof body.description === "string" ? body.description : undefined,
         folder: String(body.folder ?? ""),
         name: String(body.name ?? ""),
         tags: body.tags as string[] | undefined,
@@ -139,34 +154,36 @@ export const addObservabilityPromptRoutes = (
 
   router.get(
     `${BASE_PATH}/prompts/:name`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "read", resource: "aiPrompt"},
       builder()
         .withTags(["observability"])
         .withSummary("Get an observability prompt")
         .withPathParameter("name", {type: "string"})
+        .withQueryParameter("promptVersion", {type: "number"}, {required: false})
         .withResponse(200, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
-      const data = await options.store.getDetail(req.params.name);
+      const promptVersion = parsePromptVersionQuery(req.query.promptVersion);
+      const data = await options.store.getDetail(req.params.name, {promptVersion});
       return res.json({data});
     })
   );
 
   router.post(
     `${BASE_PATH}/prompts/:name/versions`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "update", resource: "aiPrompt"},
       builder()
         .withTags(["observability"])
         .withSummary("Create the next immutable prompt version")
         .withPathParameter("name", {type: "string"})
         .withResponse(201, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const created = await options.store.createVersion(
         req.params.name,
@@ -178,9 +195,9 @@ export const addObservabilityPromptRoutes = (
 
   router.post(
     `${BASE_PATH}/prompts/:name/labels`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "promote", resource: "aiPrompt"},
       builder()
         .withTags(["observability"])
         .withSummary("Move a prompt label")
@@ -190,8 +207,8 @@ export const addObservabilityPromptRoutes = (
           version: {required: true, type: "number"},
         })
         .withResponse(200, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const body = req.body as {label?: string; version?: number};
       if (!body.label || body.version === undefined) {
@@ -207,16 +224,16 @@ export const addObservabilityPromptRoutes = (
 
   router.post(
     `${BASE_PATH}/prompts/:name/playground`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "playground", resource: "aiPrompt"},
       builder()
         .withTags(["observability"])
         .withSummary("Compile and run a prompt version once")
         .withPathParameter("name", {type: "string"})
         .withResponse(200, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const body = req.body as {
         modelId?: string;

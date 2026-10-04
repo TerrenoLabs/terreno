@@ -639,6 +639,26 @@ docs are the proof; comms admin stats consume these primitives later.
 
 ---
 
+## dashboard-chart-parity
+
+**Title:** `Ops dashboard chart parity`
+
+**Labels:** `area:ui`, `type:feature`
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`dashboard-chart-parity`, Status=`Planned`
+
+Follow-up to charts-and-dashboards: scorecards with comparison sparklines, `ChartCard`
+period badges, additive multi-series facades, donut hole labels, spanning `DashboardGrid`
+items, and DataTable period headers / totals / range status so apps can compose a
+“How’s it going?”-class ops dashboard. Terreno theme defaults; no Looker preset. Grammar
+not required.
+
+- **Implementation plan:** [dashboard-chart-parity.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/dashboard-chart-parity.md)
+- **Tasks:** [dashboard-chart-parity.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/dashboard-chart-parity.md)
+- **RTK flag:** None
+- **Depends on:** charts-and-dashboards
+
+---
+
 ## dark-mode-theme
 
 **Title:** `First-class dark mode`
@@ -1140,7 +1160,7 @@ Delete the **legacy RTK cache-patching realtime path** in Terreno 58. Collection
 **Title:** `AI observability (Langfuse-light, pluggable)`
 
 **Labels:** `area:ai`, `type:feature`  
-**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Shaping`
+**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Planned`
 
 Ship **Langfuse-like** prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
 
@@ -1268,6 +1288,20 @@ Turn the Expo demo into the workshop for `@terreno/ui`: a person can find a comp
 
 - **Implementation plan:** [demo-workshop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/demo-workshop.md)
 - **Tasks:** [demo-workshop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/demo-workshop.md)
+
+---
+
+## agent-ui-asks
+
+**Title:** `Agent UI Asks — agents ask the user for a typed answer inside the chat`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`agent-ui-asks`, Status=`In progress`
+
+Let an agent **ask the user something and get a typed answer back in the same turn**. The agent calls an ask tool: pick one, pick many, upload images or files, edit a markdown draft, confirm an action, or fill a short form. `GPTChat` renders the matching `@terreno/ui` control inline. The user answers. The answer returns to the agent as a validated tool result and the turn continues from where it paused.
+
+- **Implementation plan:** [agent-ui-asks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-asks.md)
+- **Tasks:** [agent-ui-asks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/agent-ui-asks.md)
 
 ---
 

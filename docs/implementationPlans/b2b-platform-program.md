@@ -36,7 +36,7 @@ org switcher, dark mode).
 | C | Communications (pluggable) | `comms-abstraction`, one item **per adapter**: `comms-adapter-expo-push` (first push adapter, per D4), `comms-adapter-twilio-sms`, `comms-adapter-twilio-verify`, `comms-adapter-sendgrid` (first mail adapter, per D2); operations: `comms-admin-dashboard`; consumers: `password-reset-and-email-verification`, `notification-center` |
 | B | Billing | `inbound-webhooks`, `billing-stripe` (web-first, per D1), `mobile-iap-revenuecat` (Future) |
 | D | Zero-to-deployed DX | `create-terreno-app`, `mongo-migrations` (deploy items already exist in the OSS launch program) |
-| E | B2B UI surfaces | `data-grid-server-filters`, `charts-and-dashboards`, `dark-mode-theme`, `command-palette`, `wizard-stepper`, `wysiwyg-editor` (markdown stays for now, per D3), `global-search` |
+| E | B2B UI surfaces | `data-grid-server-filters`, `charts-and-dashboards`, `dashboard-chart-parity`, `dark-mode-theme`, `command-palette`, `wizard-stepper`, `wysiwyg-editor` (markdown stays for now, per D3), `global-search` |
 | F | Enterprise & scale | `framework-audit-log` (Next), `rate-limiting` (Next), `job-queues` (Next), `enterprise-sso`, `mfa-step-up-auth` |
 | — | Native baseline | `native-module-baseline` — all new native modules land in one major release |
 

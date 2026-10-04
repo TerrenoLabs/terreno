@@ -1,7 +1,11 @@
 import {router} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
-import {unwrapPromptDetail, unwrapPromptList} from "../prompts/promptTypes";
+import {
+  judgeOutputSchemaFromDetail,
+  unwrapPromptDetail,
+  unwrapPromptList,
+} from "../prompts/promptTypes";
 import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPromptsApi";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {
@@ -51,18 +55,18 @@ export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pro
     data: promptDetailRaw,
     isError: isJudgePromptError,
     isLoading: isJudgePromptLoading,
-  } = usePromptDetailQuery(judgePromptName, {
-    skip: type !== "llm-judge" || !judgePromptName.trim(),
-  });
+  } = usePromptDetailQuery(
+    {name: judgePromptName},
+    {
+      skip: type !== "llm-judge" || !judgePromptName.trim(),
+    }
+  );
   const promptDetail = useMemo(() => unwrapPromptDetail(promptDetailRaw), [promptDetailRaw]);
   const judgeOutputSchema = useMemo(() => {
     if (!promptDetail) {
       return undefined;
     }
-    const production = promptDetail.labels.find((label) => label.label === "production");
-    const versionNumber = production?.version ?? promptDetail.versions[0]?.version;
-    const version = promptDetail.versions.find((entry) => entry.version === versionNumber);
-    return version?.outputSchema;
+    return judgeOutputSchemaFromDetail(promptDetail);
   }, [promptDetail]);
 
   const schemaMismatchKey = useMemo(() => {

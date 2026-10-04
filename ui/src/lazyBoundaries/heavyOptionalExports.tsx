@@ -2,7 +2,10 @@ import type {AIRequestExplorer as AIRequestExplorerComponent} from "../AIRequest
 import type {AiSuggestionBox as AiSuggestionBoxComponent} from "../AiSuggestionBox";
 import type {AreaChart as AreaChartComponent} from "../AreaChart";
 import type {AttachmentPreview as AttachmentPreviewComponent} from "../AttachmentPreview";
+import type {AskCard as AskCardComponent} from "../asks/AskCard";
 import type {BarChart as BarChartComponent} from "../BarChart";
+import type {BlocksView as BlocksViewComponent} from "../blocks/BlocksView";
+import type {ChartCard as ChartCardComponent} from "../ChartCard";
 import type {ConflictSheet as ConflictSheetComponent} from "../ConflictSheet";
 import type {ConsentFormScreen as ConsentFormScreenComponent} from "../ConsentFormScreen";
 import type {ConsentNavigator as ConsentNavigatorComponent} from "../ConsentNavigator";
@@ -15,6 +18,8 @@ import type {GPTMemoryModal as GPTMemoryModalComponent} from "../GPTMemoryModal"
 import type {LineChart as LineChartComponent} from "../LineChart";
 import type {MarkdownEditor as MarkdownEditorComponent} from "../MarkdownEditor";
 import type {MarkdownEditorField as MarkdownEditorFieldComponent} from "../MarkdownEditorField";
+import type {Scorecard as ScorecardComponent} from "../Scorecard";
+import type {SparklineChart as SparklineChartComponent} from "../SparklineChart";
 import type {UpgradeRequiredScreen as UpgradeRequiredScreenComponent} from "../UpgradeRequiredScreen";
 import {createLazyComponentExport, createLazyNamedExport} from "./createLazyComponentExport";
 
@@ -22,8 +27,11 @@ export const heavyOptionalModuleFactories = {
   AIRequestExplorer: () => import("../AIRequestExplorer"),
   AiSuggestionBox: () => import("../AiSuggestionBox"),
   AreaChart: () => import("../AreaChart"),
+  AskCard: () => import("../asks/AskCard"),
   AttachmentPreview: () => import("../AttachmentPreview"),
   BarChart: () => import("../BarChart"),
+  BlocksView: () => import("../blocks/BlocksView"),
+  ChartCard: () => import("../ChartCard"),
   ConflictSheet: () => import("../ConflictSheet"),
   ConsentFormScreen: () => import("../ConsentFormScreen"),
   ConsentNavigator: () => import("../ConsentNavigator"),
@@ -35,6 +43,8 @@ export const heavyOptionalModuleFactories = {
   LineChart: () => import("../LineChart"),
   MarkdownEditor: () => import("../MarkdownEditor"),
   MarkdownEditorField: () => import("../MarkdownEditorField"),
+  Scorecard: () => import("../Scorecard"),
+  SparklineChart: () => import("../SparklineChart"),
   UpgradeRequiredScreen: () => import("../UpgradeRequiredScreen"),
 } as const;
 
@@ -64,6 +74,11 @@ export const AiSuggestionBox = createLazyNamedExport(
   "AiSuggestionBox"
 ) as unknown as typeof AiSuggestionBoxComponent;
 
+export const AskCard = createLazyNamedExport(
+  heavyOptionalModuleFactories.AskCard,
+  "AskCard"
+) as unknown as typeof AskCardComponent;
+
 export const AttachmentPreview = createLazyNamedExport(
   heavyOptionalModuleFactories.AttachmentPreview,
   "AttachmentPreview"
@@ -73,6 +88,16 @@ export const BarChart = createLazyNamedExport(
   heavyOptionalModuleFactories.BarChart,
   "BarChart"
 ) as unknown as typeof BarChartComponent;
+
+export const BlocksView = createLazyNamedExport(
+  heavyOptionalModuleFactories.BlocksView,
+  "BlocksView"
+) as unknown as typeof BlocksViewComponent;
+
+export const ChartCard = createLazyNamedExport(
+  heavyOptionalModuleFactories.ChartCard,
+  "ChartCard"
+) as unknown as typeof ChartCardComponent;
 
 export const ConflictSheet = createLazyNamedExport(
   heavyOptionalModuleFactories.ConflictSheet,
@@ -127,6 +152,16 @@ export const MarkdownEditorField = createLazyNamedExport(
   heavyOptionalModuleFactories.MarkdownEditorField,
   "MarkdownEditorField"
 ) as unknown as typeof MarkdownEditorFieldComponent;
+
+export const Scorecard = createLazyNamedExport(
+  heavyOptionalModuleFactories.Scorecard,
+  "Scorecard"
+) as unknown as typeof ScorecardComponent;
+
+export const SparklineChart = createLazyNamedExport(
+  heavyOptionalModuleFactories.SparklineChart,
+  "SparklineChart"
+) as unknown as typeof SparklineChartComponent;
 
 export const UpgradeRequiredScreen = createLazyNamedExport(
   heavyOptionalModuleFactories.UpgradeRequiredScreen,

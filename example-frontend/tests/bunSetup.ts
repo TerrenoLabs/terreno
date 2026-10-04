@@ -14,15 +14,27 @@ interface MockUiProps {
   onClick?: () => void;
   testID?: string;
   text?: string;
+  title?: string;
 }
 
 const createUiElement = (name: string): React.FC<MockUiProps> => {
-  return ({children, ...props}): React.ReactElement => {
-    return React.createElement(name, props, children);
+  return ({children, text, title, ...props}): React.ReactElement => {
+    const ReactNativeText = require("react-native").Text as React.ComponentType<{
+      children?: React.ReactNode;
+    }>;
+    return React.createElement(
+      name,
+      props,
+      title ? React.createElement(ReactNativeText, null, title) : null,
+      text ? React.createElement(ReactNativeText, null, text) : null,
+      children
+    );
   };
 };
 
 const uiMocks = {
+  AreaChart: createUiElement("AreaChart"),
+  BarChart: createUiElement("BarChart"),
   Box: createUiElement("Box"),
   Button: ({disabled, onClick, testID, text}: MockUiProps): React.ReactElement =>
     React.createElement(
@@ -36,7 +48,30 @@ const uiMocks = {
       text
     ),
   Card: createUiElement("Card"),
+  DashboardGrid: createUiElement("DashboardGrid"),
+  DashboardGridItem: createUiElement("DashboardGridItem"),
+  DonutChart: createUiElement("DonutChart"),
   Heading: createUiElement("Heading"),
+  LineChart: createUiElement("LineChart"),
+  NotificationBell: createUiElement("NotificationBell"),
+  NotificationInbox: createUiElement("NotificationInbox"),
+  NotificationPreferences: createUiElement("NotificationPreferences"),
+  Page: createUiElement("Page"),
+  resolveAskFilesAsDataUrls: async (): Promise<[]> => [],
+  Scorecard: createUiElement("Scorecard"),
+  SideDrawer: ({
+    children,
+    renderContent,
+    ...props
+  }: MockUiProps & {renderContent?: () => React.ReactNode}): React.ReactElement =>
+    React.createElement("SideDrawer", props, children, renderContent?.()),
+  selectedFileMimeType: (file: {mimeType?: string; name: string}): string => {
+    if (file.name.endsWith(".csv")) {
+      return "text/csv";
+    }
+    return file.mimeType ?? "application/octet-stream";
+  },
+  TerrenoProvider: createUiElement("TerrenoProvider"),
   Text: createUiElement("Text"),
   useStoredState: () => ["", async (): Promise<void> => undefined, false],
 };

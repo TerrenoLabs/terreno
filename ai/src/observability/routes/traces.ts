@@ -1,15 +1,16 @@
-import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
+import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
-
-import {requireAdmin} from "../../langfuseRoutesMiddleware";
 import type {LocalTraceStore} from "../local/traceStore";
 import {getObservabilityApp} from "../observabilityAppRegistry";
 import type {ScoreRecord, ScoreSink} from "../types";
+import {
+  type ObservabilityRouteAccessOptions,
+  observabilityRouteMiddleware,
+} from "./observabilityRouteAccess";
 
 const BASE_PATH = "/ai/observability";
 
-export interface ObservabilityTraceRouteOptions {
-  openApi?: unknown;
+export interface ObservabilityTraceRouteOptions extends ObservabilityRouteAccessOptions {
   store: LocalTraceStore;
 }
 
@@ -24,6 +25,20 @@ const parseBoolean = (value: unknown): boolean | undefined => {
     return false;
   }
   throw new APIError({status: 400, title: "boolean query must be true or false"});
+};
+
+const parsePromptVersion = (value: unknown, prompt?: string): number | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new APIError({status: 400, title: "promptVersion must be a positive integer"});
+  }
+  if (!prompt) {
+    throw new APIError({status: 400, title: "prompt is required when promptVersion is set"});
+  }
+  return parsed;
 };
 
 const parsePositiveInt = (value: unknown, fallback: number): number => {
@@ -48,23 +63,27 @@ export const addObservabilityTraceRoutes = (
 
   router.get(
     `${BASE_PATH}/traces`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "list", resource: "aiTrace"},
       builder()
         .withTags(["observability"])
         .withSummary("List observability traces")
+        .withQueryParameter("prompt", {type: "string"}, {required: false})
+        .withQueryParameter("promptVersion", {type: "number"}, {required: false})
         .withResponse(200, {data: {type: "array"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
+      const prompt = typeof req.query.prompt === "string" ? req.query.prompt : undefined;
       const listed = await options.store.list({
         flaggedForDataset: parseBoolean(req.query.flaggedForDataset),
         from: typeof req.query.from === "string" ? req.query.from : undefined,
         hasScore: parseBoolean(req.query.hasScore),
         limit: parsePositiveInt(req.query.limit, 20),
         page: parsePositiveInt(req.query.page, 1),
-        prompt: typeof req.query.prompt === "string" ? req.query.prompt : undefined,
+        prompt,
+        promptVersion: parsePromptVersion(req.query.promptVersion, prompt),
         sensitive: parseBoolean(req.query.sensitive),
         sessionId: typeof req.query.sessionId === "string" ? req.query.sessionId : undefined,
         status:
@@ -85,16 +104,16 @@ export const addObservabilityTraceRoutes = (
 
   router.get(
     `${BASE_PATH}/traces/:id`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "read", resource: "aiTrace"},
       builder()
         .withTags(["observability"])
         .withSummary("Get an observability trace")
         .withPathParameter("id", {type: "string"})
         .withResponse(200, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const data = await options.store.getDetail(req.params.id);
       return res.json({data});
@@ -103,16 +122,16 @@ export const addObservabilityTraceRoutes = (
 
   router.post(
     `${BASE_PATH}/traces/:id/scores`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "score", resource: "aiReview"},
       builder()
         .withTags(["observability"])
         .withSummary("Add a score to a trace")
         .withPathParameter("id", {type: "string"})
         .withResponse(201, {data: {type: "object"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       await options.store.getDetail(req.params.id);
       const body = req.body as Partial<ScoreRecord>;

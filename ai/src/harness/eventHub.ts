@@ -69,7 +69,7 @@ export class HarnessEventHub {
   private unsubscribe(subscriber: HubSubscriber): void {
     this.subscribers.delete(subscriber);
     if (this.subscribers.size === 0) {
-      // The pump sees this after its current read and closes the tail.
+      // The pump finishes its current read (so the server cursor has an id) and closes the tail.
       this.changes = undefined;
     }
   }
@@ -105,17 +105,27 @@ export class HarnessEventHub {
 
   /**
    * Read the tail until it is stopped or replaced (`this.changes` no longer points at it),
-   * then close it. Closing only between reads means the opening aggregate has always
-   * answered first; closing while it is in flight would orphan its server cursor.
+   * then close it. The first read always finishes: `close()` before the server has assigned
+   * a cursor id skips `killCursors`, and the opening aggregate can still leave that cursor
+   * open on the server.
    */
   private async pump(changes: EventChangeStream): Promise<void> {
+    let initialized = false;
     try {
-      while (this.changes === changes) {
-        // An invalidated (collection dropped) or externally closed tail is a failure.
+      while (this.changes === changes || !initialized) {
+        // An invalidated (collection dropped) or externally closed tail is a failure
+        // only while this pump still owns it.
         if (changes.closed) {
+          if (this.changes !== changes) {
+            break;
+          }
           throw harnessError({detail: "The HarnessEvent change stream closed", kind: "internal"});
         }
         const change = (await changes.tryNext()) as {fullDocument?: HubEvent} | null;
+        initialized = true;
+        if (this.changes !== changes) {
+          break;
+        }
         const event = change?.fullDocument;
         if (!event) {
           continue;

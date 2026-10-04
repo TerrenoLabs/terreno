@@ -1,0 +1,14 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Send the invoice now?",
+    "confirmLabel": "Send ",
+    "denyLabel": " Send"
+  },
+  "errors": [
+    {
+      "path": "denyLabel",
+      "code": "DUPLICATE_LABEL"
+    }
+  ]
+}

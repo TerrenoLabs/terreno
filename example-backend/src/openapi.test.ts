@@ -102,6 +102,31 @@ describe("OpenAPI spec generation", () => {
     expect(res.body.paths["/gpt/histories/"]).toBeDefined();
     expect(res.body.paths["/gpt/histories/"].get).toBeDefined();
     expect(res.body.paths["/gpt/histories/{id}"]).toBeDefined();
+    expect(res.body.paths["/gpt/histories/pendingAsks"].get.operationId).toBe(
+      "gpthistories_pendingAsks"
+    );
+    expect(res.body.paths["/gpt/histories/{id}/turn"].post.operationId).toBe("gpthistories_turn");
+    expect(res.body.paths["/gpt/histories/{id}/stream"].get).toBeDefined();
+  });
+
+  it("boots local observability and documents the seeded summarize route", async () => {
+    const observability = getObservabilityApp();
+    expect(observability?.plugins.map((plugin) => plugin.id)).toEqual(["local"]);
+    expect(observability?.control).toEqual({
+      datasets: "local",
+      experiments: "local",
+      prompts: "local",
+      reviewQueue: "local",
+    });
+
+    const server = supertest(app);
+    const res = await server.get("/openapi.json").expect(200);
+    expect(res.body.paths["/ai/example-summarize"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/status"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/prompts"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces/test-multi-stage"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/review"]?.get).toBeDefined();
   });
 
   it("boots local observability and documents the seeded summarize route", async () => {

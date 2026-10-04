@@ -13,7 +13,12 @@
     ".devin/skills/expo-cicd-workflows/scripts/**",
     ".github/skills/expo-cicd-workflows/scripts/**",
     "skills/expo-cicd-workflows/scripts/**",
-    ".rulesync/skills/expo-cicd-workflows/scripts/**"
+    ".rulesync/skills/expo-cicd-workflows/scripts/**",
+    // Store-assets scripts are copied into consumer repos and run with `bun`, not imported
+    // here. Canonical source is `plugins/terreno-planning/skills`; the rest are sync output.
+    "plugins/terreno-planning/skills/store-assets/scripts/**",
+    "plugins/terreno-claude/skills/store-assets/scripts/**",
+    "skills/store-assets/scripts/**"
   ],
   // Maestro is installed by CI and developer toolchains rather than package.json.
   "ignoreBinaries": ["maestro"],
@@ -274,6 +279,14 @@
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!"
+      ]
+    },
+    "blocks": {
+      "entry": ["src/{index,cli}.ts!"],
+      "project": [
+        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "!src/tests/**!",
+        "!scripts/**!"
       ]
     },
     "comms": {

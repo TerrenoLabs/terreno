@@ -2,7 +2,10 @@ import {Box, Spinner, Text} from "@terreno/ui";
 import {router, useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
+import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPromptsApi";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
+import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
+import {observabilityActionAllowed} from "../shell/observabilityPermissions";
 import {AiDatasetDetailView} from "./AiDatasetDetailView";
 import {unwrapDatasetItems, unwrapDatasetRecord} from "./datasetTypes";
 import {useAiObservabilityDatasetsApi} from "./useAiObservabilityDatasetsApi";
@@ -13,6 +16,23 @@ export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
   const {useCreateItemMutation, useDetailQuery, useItemsQuery} = useAiObservabilityDatasetsApi(api);
+  const {useStatusQuery} = useAiObservabilityPromptsApi(api);
+  const statusQuery = useStatusQuery();
+  const status = unwrapObservabilityStatus(statusQuery.data);
+  const canAddItem = observabilityActionAllowed({
+    action: "update",
+    resource: "aiDataset",
+    status,
+    statusError: statusQuery.isError,
+    statusLoading: statusQuery.isLoading,
+  });
+  const canRunExperiment = observabilityActionAllowed({
+    action: "create",
+    resource: "aiExperiment",
+    status,
+    statusError: statusQuery.isError,
+    statusLoading: statusQuery.isLoading,
+  });
   const {data, isError, isLoading} = useDetailQuery(id ?? "", {skip: !id});
   const {
     data: itemsRaw,
@@ -110,6 +130,8 @@ export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
     <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-dataset-detail">
       <AiDatasetDetailView
         {...(isItemsError ? {itemsLoadError: "Failed to load dataset items."} : {})}
+        canAddItem={canAddItem}
+        canRunExperiment={canRunExperiment}
         dataset={dataset}
         isItemsLoading={isItemsLoading}
         items={items}

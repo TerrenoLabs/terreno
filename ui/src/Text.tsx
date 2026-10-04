@@ -25,6 +25,7 @@ const fontSizeAndWeighMobile = {
 const fontSizes = Platform.OS === "web" ? fontSizeAndWeightWeb : fontSizeAndWeighMobile;
 
 const TextComponent = ({
+  accessibilityRole,
   align = "left",
   bold,
   children,
@@ -34,6 +35,7 @@ const TextComponent = ({
   truncate = false,
   underline,
   numberOfLines,
+  ref,
   skipLinking,
   testID,
 }: TextProps): React.ReactElement => {
@@ -93,7 +95,14 @@ const TextComponent = ({
     lines = 1;
   }
   const inner = (
-    <NativeText numberOfLines={lines} selectable={undefined} style={style} testID={testID}>
+    <NativeText
+      numberOfLines={lines}
+      selectable={undefined}
+      style={style}
+      testID={testID}
+      {...(accessibilityRole ? {accessibilityRole} : {})}
+      {...(ref ? {ref} : {})}
+    >
       {children}
     </NativeText>
   );

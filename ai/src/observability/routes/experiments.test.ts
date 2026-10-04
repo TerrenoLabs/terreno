@@ -178,6 +178,68 @@ describe("observability experiment routes", () => {
     expect(promoted.body.data.version).toBe(2);
   });
 
+  it("lists experiments filtered by promptName", async () => {
+    const admin = await authAsUser(app, "admin");
+    const fixtures = await seedExperimentFixtures(admin);
+    await admin.post("/ai/observability/prompts").send({
+      folder: "examples",
+      name: "other-exp-prompt",
+      system: "other",
+      type: "text",
+    });
+    await admin.post("/ai/observability/prompts/other-exp-prompt/versions").send({
+      system: "other v2",
+      type: "text",
+    });
+    const otherDataset = await admin.post("/ai/observability/datasets").send({name: "other-ds"});
+    await admin.post(`/ai/observability/datasets/${otherDataset.body.data.id}/items`).send({
+      input: {question: "1+1"},
+      proofread: true,
+    });
+    const otherEvaluator = await admin.post("/ai/observability/evaluators").send({
+      assertion: {constraint: "exists", path: "answer"},
+      dimensions: [{dataType: "boolean", key: "correct", required: true}],
+      name: "other-correctness",
+      target: "full trace",
+      type: "json-assert",
+    });
+    await admin.post("/ai/observability/experiments").send({
+      datasetId: otherDataset.body.data.id,
+      evaluatorIds: [otherEvaluator.body.data.id],
+      name: "other-run",
+      promptName: "other-exp-prompt",
+      versions: [1, 2],
+    });
+    await admin.post(`/ai/observability/datasets/${fixtures.datasetId}/items`).send({
+      input: {question: "3+3"},
+      proofread: true,
+    });
+    const hubRun = await admin.post("/ai/observability/experiments").send({
+      datasetId: fixtures.datasetId,
+      evaluatorIds: [fixtures.evaluatorId],
+      name: "hub-run",
+      promptName: fixtures.promptName,
+      versions: [1, 2],
+    });
+    expect(hubRun.status).toBe(201);
+
+    const listed = await admin.get(
+      `/ai/observability/experiments?promptName=${fixtures.promptName}`
+    );
+    expect(listed.status).toBe(200);
+    expect(
+      listed.body.data.every((row: {promptName: string}) => row.promptName === fixtures.promptName)
+    ).toBe(true);
+    expect(listed.body.data.some((row: {name: string}) => row.name === "hub-run")).toBe(true);
+    expect(listed.body.data.some((row: {name: string}) => row.name === "other-run")).toBe(false);
+    expect(listed.body.data.every((row: {items: unknown[]}) => row.items.length === 0)).toBe(true);
+    expect(listed.body.total).toBe(1);
+
+    const emptyPromptName = await admin.get("/ai/observability/experiments?promptName=");
+    expect(emptyPromptName.status).toBe(200);
+    expect(emptyPromptName.body.total).toBeGreaterThanOrEqual(2);
+  });
+
   it("lists experiments and returns estimates", async () => {
     const admin = await authAsUser(app, "admin");
     const fixtures = await seedExperimentFixtures(admin);

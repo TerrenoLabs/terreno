@@ -15,6 +15,7 @@ import {
 } from "./experimentTypes";
 
 export interface AiExperimentsListViewProps {
+  canCreate?: boolean;
   experiments: ExperimentRecord[];
   isLoading: boolean;
   loadError?: string;
@@ -57,6 +58,7 @@ const StatusCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => (
 );
 
 export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
+  canCreate = true,
   experiments,
   isLoading,
   loadError,
@@ -111,7 +113,9 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
           Experiments run via BackgroundTask locally. Langfuse deep-links when the remote plugin is
           primary.
         </Text>
-        <Button onClick={onCreate} testID="ai-experiments-create" text="New experiment" />
+        {canCreate ? (
+          <Button onClick={onCreate} testID="ai-experiments-create" text="New experiment" />
+        ) : undefined}
       </Box>
       {loadError ? (
         <Box gap={2}>

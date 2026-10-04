@@ -253,7 +253,7 @@ radiusSm, radiusMd, radiusLg, radiusXl, radius2xl, radius3xl
 ## Utilities
 
 ```typescript
-import { useStoredState, MediaQuery, isMobileDevice } from "@terreno/ui";
+import { useStoredState, MediaQuery, isNarrowViewport } from "@terreno/ui";
 
 // Persist state to storage
 const [value, setValue] = useStoredState("key", defaultValue);
@@ -263,9 +263,10 @@ const [value, setValue] = useStoredState("key", defaultValue);
   <DesktopLayout />
 </MediaQuery>
 
-// Device detection
-if (isMobileDevice()) {
-  // Mobile-specific code
+// Current window is below the desktop breakpoint.
+// isMobileDevice() is deprecated in favor of isNarrowViewport().
+if (isNarrowViewport()) {
+  // Narrow-viewport code
 }
 ```
 

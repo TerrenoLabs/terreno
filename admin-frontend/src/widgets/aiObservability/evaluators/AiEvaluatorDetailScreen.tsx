@@ -5,7 +5,7 @@ import React, {useMemo} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {unwrapExperimentList} from "../experiments/experimentTypes";
 import {useAiObservabilityExperimentsApi} from "../experiments/useAiObservabilityExperimentsApi";
-import {unwrapPromptDetail} from "../prompts/promptTypes";
+import {judgeOutputSchemaFromDetail, unwrapPromptDetail} from "../prompts/promptTypes";
 import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPromptsApi";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {AiEvaluatorDetailView} from "./AiEvaluatorPanels";
@@ -30,9 +30,12 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
     data: promptDetailRaw,
     isError: isPromptError,
     isLoading: isPromptLoading,
-  } = usePromptDetailQuery(evaluator?.judgePromptName ?? "", {
-    skip: !evaluator?.judgePromptName,
-  });
+  } = usePromptDetailQuery(
+    {name: evaluator?.judgePromptName ?? ""},
+    {
+      skip: !evaluator?.judgePromptName,
+    }
+  );
   const promptDetail = useMemo(() => unwrapPromptDetail(promptDetailRaw), [promptDetailRaw]);
   const judgePromptStatus = isPromptLoading
     ? ("loading" as const)
@@ -43,10 +46,7 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
     if (!promptDetail) {
       return undefined;
     }
-    const production = promptDetail.labels.find((label) => label.label === "production");
-    const versionNumber = production?.version ?? promptDetail.versions[0]?.version;
-    const version = promptDetail.versions.find((entry) => entry.version === versionNumber);
-    return version?.outputSchema;
+    return judgeOutputSchemaFromDetail(promptDetail);
   }, [promptDetail]);
 
   const usageRows = useMemo((): EvaluatorUsageRow[] => {

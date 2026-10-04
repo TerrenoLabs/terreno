@@ -2,6 +2,7 @@ import type {ChartPlot} from "./types/chartTypes";
 
 export const CHART_Y_AXIS_MAX_WIDTH = 40;
 export const CHART_X_AXIS_HEIGHT = 18;
+export const CHART_ROTATED_X_AXIS_HEIGHT = 72;
 export const CHART_FOOTER_ROW_HEIGHT = 18;
 
 const Y_AXIS_WIDTH_RATIO = 0.3;
@@ -39,12 +40,18 @@ export const getChartAxisWidth = (chartWidth: number): number => {
 export const getPlotHeight = ({
   hasLegend,
   height,
+  xAxisHeight = CHART_X_AXIS_HEIGHT,
 }: {
   hasLegend: boolean;
   height: number;
+  xAxisHeight?: number;
 }): number => {
-  const footer = CHART_X_AXIS_HEIGHT + CHART_FOOTER_ROW_HEIGHT * (hasLegend ? 2 : 1);
-  return Math.max(height - footer, MIN_PLOT_HEIGHT);
+  const footer = xAxisHeight + CHART_FOOTER_ROW_HEIGHT * (hasLegend ? 2 : 1);
+  const remaining = height - footer;
+  if (remaining >= MIN_PLOT_HEIGHT) {
+    return remaining;
+  }
+  return Math.max(remaining, 1);
 };
 
 export const getDonutSize = ({
@@ -85,13 +92,39 @@ export const getChartPlot = ({
  */
 export const getXTickStyle = ({
   bandwidth,
+  isRotated = false,
   xCenter,
 }: {
   bandwidth: number;
+  isRotated?: boolean;
   xCenter: number;
 }): ChartTickStyle => {
-  const width = Math.max(bandwidth, 1);
-  return {left: xCenter - width / 2, position: "absolute", top: 0, width};
+  const width = isRotated
+    ? Math.max(bandwidth * 1.5, CHART_ROTATED_X_AXIS_HEIGHT)
+    : Math.max(bandwidth, 1);
+  return {
+    left: isRotated ? xCenter - bandwidth / 4 : xCenter - width / 2,
+    position: "absolute",
+    top: 0,
+    ...(isRotated ? {transform: [{rotate: "45deg"}], transformOrigin: "left top"} : {}),
+    width,
+  };
+};
+
+export const shouldRotateChartXTicks = ({
+  labelCount,
+  policy = "auto",
+}: {
+  labelCount: number;
+  policy?: "auto" | "rotate" | "truncate";
+}): boolean => {
+  if (policy === "rotate") {
+    return true;
+  }
+  if (policy === "truncate") {
+    return false;
+  }
+  return labelCount > 7;
 };
 
 export const getYTickStyle = ({axisWidth, y}: {axisWidth: number; y: number}): ChartTickStyle => {

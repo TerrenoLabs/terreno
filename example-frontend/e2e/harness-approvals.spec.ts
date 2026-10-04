@@ -18,7 +18,9 @@ interface ApprovalRow {
 /** Saves a screenshot to `HARNESS_E2E_ARTIFACTS_DIR` when set, else the test output dir. */
 const capture = async (page: Page, testInfo: TestInfo, name: string): Promise<void> => {
   const dir = process.env.HARNESS_E2E_ARTIFACTS_DIR;
-  const file = dir ? path.join(dir, `harness-approvals-${name}.png`) : testInfo.outputPath(name);
+  const file = dir
+    ? path.join(dir, `harness-approvals-${name}.png`)
+    : testInfo.outputPath(`${name}.png`);
   await page.screenshot({fullPage: true, path: file});
 };
 

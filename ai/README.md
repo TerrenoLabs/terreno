@@ -20,7 +20,7 @@ import {AiApp, AIService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 import {User} from "./models/user";
 
-const aiService = new AIService({model: google("gemini-2.5-flash")});
+const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 new TerrenoApp({userModel: User})
   .register(new AiApp({aiService}))
@@ -35,6 +35,7 @@ This mounts GPT chat (`POST /gpt/prompt`), history CRUD (`/gpt/histories`), proj
 - `AiApp` — TerrenoPlugin that registers all AI routes in one call
 - Mongoose models: `AIRequest`, `GptHistory`, `Project`, `FileAttachment`
 - Route registrars: `addGptRoutes`, `addGptHistoryRoutes`, `addProjectRoutes`, `addFileRoutes`, `addMcpRoutes`, `addAiRequestsExplorerRoutes`
+- Agent UI Asks (opt-in `asks` option on `AiApp` / `addGptRoutes`) — the agent pauses a turn to ask a typed question (`choice`, `confirm`, `markdown`, `form`, `files`), server-enforced approval for tools with `needsApproval`, and headless `pendingAsks` / `turn` endpoints for watches and other small clients. See [Agent UI Asks](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/agent-ui-asks.md)
 - `LangfuseApp` — optional Langfuse tracing and admin UI routes
 - `FileStorageService` — GCS uploads with signed URLs
 - `MCPService` — SSE MCP client for tool calling

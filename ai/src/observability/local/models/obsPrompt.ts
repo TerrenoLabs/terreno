@@ -5,6 +5,10 @@ import type {ObsPromptDocument, ObsPromptModel} from "../../../types/observabili
 
 const obsPromptSchema = new mongoose.Schema<ObsPromptDocument, ObsPromptModel>(
   {
+    description: {
+      description: "Optional operator-facing summary of what this prompt is for",
+      type: String,
+    },
     folder: {
       description: "Folder path used to group prompts in the admin list",
       required: true,

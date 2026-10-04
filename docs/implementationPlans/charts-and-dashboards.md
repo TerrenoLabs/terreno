@@ -194,8 +194,9 @@ None.
 
 ## Not Included / Future Work
 
-- Composition grammar (Phase 6) — recorded Grow decisions; implement on a follow-up Pick.
-- Multi-series cartesian beyond `dataKey` / `stackId` once the grammar ships.
+- Ops-dashboard parity (scorecards, comparison sparklines, additive multi-series, donut centers, spanning grid, table chrome) — [`dashboard-chart-parity.md`](dashboard-chart-parity.md).
+- Composition grammar (Phase 6) — recorded Grow decisions; implement on a follow-up Pick. Not required for the How’s it going dashboard.
+- Multi-series cartesian via additive `series` lands in `dashboard-chart-parity`; grammar `dataKey` / `stackId` remains later.
 - Wiring `CommsDashboardScreen` charts to the stats endpoint.
 - Example-frontend dashboard.
 - Zoom/pan.

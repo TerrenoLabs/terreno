@@ -838,6 +838,48 @@ await Membership.create({
 });
 ``````
 
+### AI observability RBAC
+
+`terrenoStatements` includes domain-neutral resources for `@terreno/ai` `ObservabilityApp`
+routes. Pass `accessControl` from `createAccess` on `ObservabilityApp` to enforce them; omit
+`accessControl` to keep legacy `user.admin` / `Permissions.IsAdmin` behavior.
+
+| Resource | Actions |
+| --- | --- |
+| `aiPrompt` | `list`, `read`, `create`, `update`, `promote`, `playground` |
+| `aiTrace` | `list`, `read` |
+| `aiReview` | `list`, `read`, `score`, `assign` |
+| `aiDataset` | `create`, `list`, `read`, `update`, `delete` |
+| `aiEvaluator` | `create`, `list`, `read`, `update`, `delete` |
+| `aiExperiment` | `list`, `read`, `create`, `promote` |
+
+Human-readable labels for the admin role editor live in `terrenoStatementDescriptions`
+(optional on `createAccess({ statementDescriptions })`).
+
+| Role | Observability grants |
+| --- | --- |
+| `superadmin` | `*` (every action on every resource) |
+| `admin` (seeded) | Full grants on all six resources |
+| `auditor` | Read-only sentinel expands to `list` and `read` on each observability resource (no `admin:access`) |
+| `aiObservabilityViewer` (example-backend only) | `admin:access` plus `list` and `read` on each observability resource |
+| `aiObservabilityOperator` (example-backend only) | `admin:access` plus full grants on each observability resource |
+
+The seeded `auditor` role does **not** include `admin:access`. Observability `list` / `read`
+grants alone do not open the admin shell — compose a consumer role (for example
+`auditor` + `admin: ["access"]`, or a custom role) when operators should browse observability
+screens.
+
+Re-seeding default roles does not overwrite customized unsealed roles, except seeded
+`admin` and `auditor`: on each `seedDefaults`, Terreno **merges** missing observability
+actions into stored permissions (`admin` — full grants; `auditor` — `list` and `read` per
+resource) without removing consumer-defined grants on other resources.
+
+When `accessControl` is configured, each observability HTTP route checks `admin:access` and
+the mapped resource action. Callers with `user.admin === true` still receive full access
+(legacy compatibility). RBAC-only operators need `admin:access` plus the exact action for
+mutations. Route mapping (for example prompt label moves → `aiPrompt:promote`, review
+submit → `aiReview:score`) is documented in [AI reference — Observability](ai.md#observability).
+
 ## Request Validation
 
 @terreno/api provides runtime validation of incoming requests against OpenAPI schemas using [AJV](https://ajv.js.org/). Validation is opt-in and can be enabled globally or per-route.

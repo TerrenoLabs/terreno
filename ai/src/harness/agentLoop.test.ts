@@ -913,6 +913,7 @@ describe("Agent turns", () => {
       });
       const primary = scriptedModel("primary-model", [
         {toolCalls: [{id: "h1", input: {}, name: "hanging"}]},
+        {text: "Cancelled"},
       ]);
       const agent = agentWith({tools: [hanging]});
       const harness = await openHarness({
@@ -930,11 +931,24 @@ describe("Agent turns", () => {
       const freed = await harness.conversation(conversation.id);
       expect(freed.document.status).toBe("idle");
       expect(freed.document.activeTurnTaskId).toBeUndefined();
-      // An aborted tool writes no result.
-      expect((await messagesOf(conversation.id)).map(({role}) => role)).toEqual([
-        "user",
-        "assistant",
-      ]);
+      // An aborted tool writes no result. The assistant message that asked for it is
+      // marked aborted so the next request does not replay an unanswered tool call.
+      const stored = await messagesOf(conversation.id);
+      expect(stored.map(({role}) => role)).toEqual(["user", "assistant"]);
+      const assistant = await MessageModel.findExactlyOne({
+        conversationId: conversation.id,
+        role: "assistant",
+      });
+      expect(assistant.aborted).toBe(true);
+
+      const again = await conversation.submit({content: "Again", requestId: "r2"});
+      expect((await harness.waitForTask(again._id, {timeout: {seconds: 10}})).status).toBe(
+        "completed"
+      );
+      const replay = JSON.stringify(primary.calls[1]?.prompt);
+      expect(replay).toContain("Again");
+      expect(replay).not.toContain("h1");
+      expect(replay).not.toContain("tool-call");
     });
 
     it("validates submit input and conversation lookups", async () => {

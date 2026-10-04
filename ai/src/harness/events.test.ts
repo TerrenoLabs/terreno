@@ -67,7 +67,7 @@ const waitUntil = async (predicate: () => Promise<boolean>, label: string): Prom
     }
     await pause(10);
   }
-  throw new Error(`waitUntil timed out: ${label}`);
+  throw new Error(`waitUntil timed out: ${label} (${await describeChangeStreams()})`);
 };
 
 const cleanups: Array<() => Promise<void> | void> = [];
@@ -109,15 +109,42 @@ const serve = async (
 };
 
 /** Open change-stream cursors on the server, idle ones included. */
-const openChangeStreams = async (): Promise<number> => {
-  const ops = await mongoose.connection.client
+const openChangeStreamOps = async (): Promise<Array<Record<string, unknown>>> => {
+  const dbName = mongoose.connection.db?.databaseName;
+  return mongoose.connection.client
     .db("admin")
     .aggregate([
       {$currentOp: {allUsers: true, idleCursors: true}},
-      {$match: {"cursor.originatingCommand.pipeline.0.$changeStream": {$exists: true}}},
+      {
+        $match: {
+          "cursor.originatingCommand.$db": dbName,
+          "cursor.originatingCommand.pipeline.0.$changeStream": {$exists: true},
+        },
+      },
     ])
-    .toArray();
-  return ops.length;
+    .toArray() as Promise<Array<Record<string, unknown>>>;
+};
+
+const openChangeStreams = async (): Promise<number> => (await openChangeStreamOps()).length;
+
+const describeChangeStreams = async (): Promise<string> => {
+  const ops = await openChangeStreamOps();
+  if (ops.length === 0) {
+    return "none";
+  }
+  return ops
+    .map((op) => {
+      const cursor = op.cursor as
+        | {
+            createdDate?: string;
+            nBatchesReturned?: number;
+            originatingCommand?: {aggregate?: string};
+          }
+        | undefined;
+      const name = String(cursor?.originatingCommand?.aggregate ?? op.ns);
+      return `${name} type=${String(op.type)} batches=${String(cursor?.nBatchesReturned)} created=${String(cursor?.createdDate)}`;
+    })
+    .join("; ");
 };
 
 const tokenFor = async (app: express.Application, email: string, password: string) => {
@@ -420,8 +447,6 @@ describe("Harness event stream", () => {
       const client = await sse(`${url}/harness/conversations/${conversation.id}/events`, token);
       await waitUntil(async () => client.comments.includes("heartbeat"), "heartbeat");
     });
-    // After the cursor-counting tests: closing the cursor mid-read leaves a server cursor
-    // that only times out.
     it("ends every stream when the shared tail fails, and serves again on reconnect", async () => {
       const harness = await openHarness({registry: [agent], start: false});
       const {app, plugin, url} = await serve(harness);
@@ -431,8 +456,14 @@ describe("Harness event stream", () => {
         headers: {authorization: token},
       });
       await waitUntil(async () => plugin.eventHub.openStreams === 1, "tail open");
-      // The tail's cursor goes away underneath it, as on a failover or an invalidate.
-      const tail = (plugin.eventHub as unknown as {changes: {close: () => Promise<void>}}).changes;
+      // Close only after the server cursor id exists. Closing during the opening aggregate
+      // skips killCursors and leaves the cursor open; closing after the id exists ends the tail.
+      const tail = (
+        plugin.eventHub as unknown as {
+          changes: {close: () => Promise<void>; cursor?: {id?: unknown}};
+        }
+      ).changes;
+      await waitUntil(async () => tail.cursor?.id != null, "tail cursor");
       await tail.close();
       expect(await response.text()).not.toContain("event:");
       expect(plugin.eventHub.openStreams).toBe(0);

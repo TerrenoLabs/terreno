@@ -1,0 +1,40 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "due",
+        "type": "date",
+        "label": "Due",
+        "default": "2026-02-30"
+      },
+      {
+        "id": "at",
+        "type": "time",
+        "label": "At",
+        "default": "9:30am"
+      },
+      {
+        "id": "starts",
+        "type": "datetime",
+        "label": "Starts",
+        "default": "2026-10-01T09:30:00"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].default",
+      "code": "INVALID_DATE"
+    },
+    {
+      "path": "fields[1].default",
+      "code": "INVALID_DATE"
+    },
+    {
+      "path": "fields[2].default",
+      "code": "INVALID_DATE"
+    }
+  ]
+}

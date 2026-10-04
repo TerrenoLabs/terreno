@@ -218,7 +218,9 @@ it must run after they have stopped and undone their own work. The harness:
    running phase loses its lease token, so nothing it does afterwards can commit. Its
    `rt.signal` aborts so it can stop early.
 2. Walks the tree **deepest first**. For each task it runs the `abort` handler, then
-   commits `aborted` with an audit span.
+   commits `aborted` with an audit span. A turn's handler marks an assistant message
+   `aborted` when that message still has a tool call with no stored result, so the next
+   model request skips it.
 
 Concurrent aborts of one task (an operator and a `failFast` sibling abort, say) run its
 handler once. A failing handler does not stop the abort. A half-aborted tree would be worse than a

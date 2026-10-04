@@ -1,6 +1,6 @@
+import type {AnyTerrenoAccess} from "@terreno/api";
 import {type AdminContribution, logger, type TerrenoPlugin} from "@terreno/api";
 import type express from "express";
-
 import {observabilityAdminScreens} from "./adminScreens";
 import {LocalDatasetStore} from "./local/datasetStore";
 import {LocalEvaluatorStore} from "./local/evaluatorStore";
@@ -39,6 +39,7 @@ import {validateObservabilityConfig} from "./types";
 export {getObservabilityApp, resetObservabilityApp};
 
 export class ObservabilityApp implements TerrenoPlugin {
+  readonly accessControl?: AnyTerrenoAccess;
   readonly aiService?: ObservabilityGenerateClient;
   readonly aiServiceFactory?: ObservabilityAiServiceFactory;
   readonly control: ObservabilityControlConfig;
@@ -48,6 +49,7 @@ export class ObservabilityApp implements TerrenoPlugin {
   readonly sampleRate: number;
 
   constructor(options: ObservabilityAppOptions) {
+    this.accessControl = options.accessControl;
     this.aiService = options.aiService;
     this.aiServiceFactory = options.aiServiceFactory;
     this.control = validateObservabilityConfig(options);
@@ -122,13 +124,14 @@ export class ObservabilityApp implements TerrenoPlugin {
   }
 
   register(app: express.Application, openApi?: unknown): void {
-    addObservabilityStatusRoutes(app, {openApi});
+    const routeAccess = {accessControl: this.accessControl, openApi};
+    addObservabilityStatusRoutes(app, routeAccess);
     if (this.control.prompts === "local") {
       const store = this.promptRegistry;
       if (store instanceof LocalPromptStore) {
         addObservabilityPromptRoutes(app, {
+          ...routeAccess,
           aiService: this.aiService,
-          openApi,
           priceMap: this.priceMap,
           requestAiServiceFactory: this.requestAiServiceFactory,
           store,
@@ -143,38 +146,38 @@ export class ObservabilityApp implements TerrenoPlugin {
     if (localPlugin) {
       const evaluatorStore = new LocalEvaluatorStore(promptStore ?? new LocalPromptStore());
       addObservabilityEvaluatorRoutes(app, {
-        openApi,
+        ...routeAccess,
         store: evaluatorStore,
       });
       addObservabilityReviewRoutes(app, {
-        openApi,
+        ...routeAccess,
         store: new LocalReviewStore(),
       });
       if (localPlugin.datasetStore instanceof LocalDatasetStore) {
         addObservabilityDatasetRoutes(app, {
-          openApi,
+          ...routeAccess,
           store: localPlugin.datasetStore,
         });
       }
       const experimentRunner = this.configureLocalExperimentRunner(localPlugin);
       if (experimentRunner) {
         addObservabilityExperimentRoutes(app, {
-          openApi,
+          ...routeAccess,
           runner: experimentRunner,
         });
       }
     }
     if (localPlugin?.traceSink instanceof LocalTraceSink) {
       addObservabilityTraceRoutes(app, {
-        openApi,
+        ...routeAccess,
         store: localPlugin.traceSink.store,
       });
       addObservabilityTestMultiStageRoutes(app, {
+        ...routeAccess,
         aiService: this.aiService,
         exportTrace: (trace) => {
           return this.exportTrace(trace);
         },
-        openApi,
         requestAiServiceFactory: this.requestAiServiceFactory,
       });
     }

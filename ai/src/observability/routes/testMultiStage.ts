@@ -1,22 +1,23 @@
-import {asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
+import {asyncHandler, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
 import type mongoose from "mongoose";
-
-import {requireAdmin} from "../../langfuseRoutesMiddleware";
 import {runTestMultiStageWorkflow} from "../testMultiStageWorkflow";
 import type {
   ObservabilityGenerateClient,
   ObservabilityRequestAiServiceFactory,
   TraceRecord,
 } from "../types";
+import {
+  type ObservabilityRouteAccessOptions,
+  observabilityRouteMiddleware,
+} from "./observabilityRouteAccess";
 import {resolveRequestAiService} from "./requestAiService";
 
 const BASE_PATH = "/ai/observability";
 
-export interface ObservabilityTestMultiStageRouteOptions {
+export interface ObservabilityTestMultiStageRouteOptions extends ObservabilityRouteAccessOptions {
   aiService?: ObservabilityGenerateClient;
   exportTrace: (trace: TraceRecord) => Promise<string | undefined>;
-  openApi?: unknown;
   requestAiServiceFactory?: ObservabilityRequestAiServiceFactory;
 }
 
@@ -31,9 +32,9 @@ export const addObservabilityTestMultiStageRoutes = (
 
   router.post(
     `${BASE_PATH}/traces/test-multi-stage`,
-    [
-      authenticateMiddleware(),
-      requireAdmin,
+    observabilityRouteMiddleware(
+      options.accessControl,
+      {action: "read", resource: "aiTrace"},
       builder()
         .withTags(["observability"])
         .withSummary("Run a multi-stage observability workflow and export one nested trace")
@@ -68,8 +69,8 @@ export const addObservabilityTestMultiStageRoutes = (
           },
         })
         .withResponse(503, {title: {type: "string"}})
-        .build(),
-    ],
+        .build()
+    ),
     asyncHandler(async (req, res) => {
       const aiService = resolveRequestAiService({
         aiService: options.aiService,

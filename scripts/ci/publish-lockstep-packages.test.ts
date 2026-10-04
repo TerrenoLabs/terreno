@@ -29,12 +29,28 @@ describe("lockstep publish package lists", () => {
   it("includes create-terreno-app in CircleCI tag publish and master version bump", () => {
     assert.match(
       circleConfig,
-      /packages=\(\s*\n\s*api test ui rtk admin-backend admin-frontend admin-spa ai\s*\n\s*api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb\s*\n\s*\)/
+      /packages=\(\s*\n\s*api test blocks ui rtk admin-backend admin-frontend admin-spa ai\s*\n\s*api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb\s*\n\s*\)/
     );
     assert.match(
       circleConfig,
-      /for package in api test ui rtk admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do/
+      /for package in api test blocks ui rtk admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do/
     );
+  });
+
+  it("publishes blocks before ui and ai because both depend on it at install time", () => {
+    assert.include([...PUBLISHED_PACKAGES], "blocks");
+    assert.match(publishWorkflow, /publish-blocks:[\s\S]*?working-directory: blocks/);
+    assert.match(publishWorkflow, /publish-ui:\n {4}needs: \[check-changes, publish-blocks\]/);
+    assert.match(
+      publishWorkflow,
+      /publish-ai:\n {4}needs: \[check-changes, publish-api, publish-test, publish-blocks\]/
+    );
+    assert.match(
+      publishWorkflow,
+      /update_version blocks "\$\{\{ needs\.publish-blocks\.result \}\}"/
+    );
+    assert.match(publishWorkflow, /add_status "@terreno\/blocks"/);
+    assert.match(publishWorkflow, /notify:[\s\S]*?needs: \[[^\]]*publish-blocks/);
   });
 
   it("includes create-terreno-app in GitHub tag publish fallback workflow", () => {

@@ -10,6 +10,7 @@ import {
   ConfirmationButton,
   FullWidthButtons,
   MultilineButtons,
+  WrapTextButtons,
 } from "@stories/Button.stories";
 import {Button} from "@terreno/ui";
 
@@ -115,6 +116,10 @@ export const ButtonConfiguration: DemoConfiguration = {
         type: "boolean",
         defaultValue: false,
       },
+      wrapText: {
+        type: "boolean",
+        defaultValue: false,
+      },
       size: {
         type: "select",
         defaultValue: "default",
@@ -141,5 +146,6 @@ export const ButtonConfiguration: DemoConfiguration = {
     FullWidth: {render: () => <FullWidthButtons />},
     PressAnimations: {render: () => <ButtonPressAnimations />},
     Multiline: {render: () => <MultilineButtons />, showInDemo: false},
+    WrapText: {render: () => <WrapTextButtons />},
   },
 };

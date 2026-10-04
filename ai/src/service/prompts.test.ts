@@ -1,12 +1,15 @@
 import {describe, expect, it} from "bun:test";
 
 import {
+  askFileHeading,
   CONTENT_SUMMARY_PROMPT,
   DEFAULT_GPT_MEMORY,
   JSON_VALUE_SYSTEM_PROMPT,
   REMIX_PROMPT,
   TITLE_GENERATION_PROMPT,
   TRANSLATION_PROMPT,
+  truncatedAskFileNote,
+  unloadedAskUploadsNote,
 } from "./prompts";
 
 describe("AI prompt constants", () => {
@@ -18,5 +21,23 @@ describe("AI prompt constants", () => {
     expect(TRANSLATION_PROMPT).toContain("{targetLanguage}");
     expect(TITLE_GENERATION_PROMPT).toContain("3-6 words");
     expect(JSON_VALUE_SYSTEM_PROMPT).toContain("JSON value");
+  });
+
+  it("words the lines around a files answer's files as the model reads them", () => {
+    expect(
+      askFileHeading({
+        count: 2,
+        filename: "day.csv",
+        mimeType: "text/csv",
+        position: 1,
+        size: 28,
+      })
+    ).toBe("File 1 of 2: day.csv (text/csv, 28 bytes)");
+    expect(truncatedAskFileNote({keptBytes: 102400, totalBytes: 150000})).toBe(
+      "[The file is cut to its first 102400 of 150000 bytes.]"
+    );
+    expect(unloadedAskUploadsNote([{fileId: "f1", filename: "a.png"}])).toBe(
+      'Uploads not loaded here: [{"fileId":"f1","filename":"a.png"}]'
+    );
   });
 });

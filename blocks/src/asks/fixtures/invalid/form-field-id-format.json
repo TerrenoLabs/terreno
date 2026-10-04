@@ -1,0 +1,19 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "Full Name",
+        "type": "text",
+        "label": "Full name"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].id",
+      "code": "INVALID_FORMAT"
+    }
+  ]
+}

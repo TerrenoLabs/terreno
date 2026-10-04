@@ -125,6 +125,40 @@ describe("observability trace routes", () => {
     expect(filtered.status).toBe(200);
     expect(filtered.body.data.map((row: {id: string}) => row.id)).toContain(exported.id);
 
+    const v2Trace = await store.exportTrace({
+      id: "trace-v2",
+      name: "summarize-v2",
+      prompts: [{name: "summarize", version: 2}],
+      sensitive: false,
+      spans: [],
+      startedAt,
+      status: "ok",
+    });
+    const v2Only = await admin.get("/ai/observability/traces?prompt=summarize&promptVersion=2");
+    expect(v2Only.status).toBe(200);
+    expect(v2Only.body.data.map((row: {id: string}) => row.id)).toEqual([v2Trace.id]);
+    const v1Only = await admin.get("/ai/observability/traces?prompt=summarize&promptVersion=1");
+    expect(v1Only.body.data.map((row: {id: string}) => row.id)).toEqual([exported.id]);
+
+    const missingPrompt = await admin.get("/ai/observability/traces?promptVersion=1");
+    expect(missingPrompt.status).toBe(400);
+    expect(missingPrompt.body.title).toBe("prompt is required when promptVersion is set");
+
+    const zeroVersion = await admin.get(
+      "/ai/observability/traces?prompt=summarize&promptVersion=0"
+    );
+    expect(zeroVersion.status).toBe(400);
+
+    const fractional = await admin.get(
+      "/ai/observability/traces?prompt=summarize&promptVersion=1.5"
+    );
+    expect(fractional.status).toBe(400);
+
+    const nonInteger = await admin.get(
+      "/ai/observability/traces?prompt=summarize&promptVersion=abc"
+    );
+    expect(nonInteger.status).toBe(400);
+
     const missingFields = await admin.post(`/ai/observability/traces/${exported.id}/scores`).send({
       name: "quality",
     });

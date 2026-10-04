@@ -150,6 +150,47 @@ const textOf = (parts: ReadonlyArray<HarnessMessagePart>): string =>
 const isSystemPromptRecord = (message: Pick<HarnessMessageDocument, "parts">): boolean =>
   message.parts.some((part) => part.type === "system-prompt");
 
+/**
+ * Mark assistant messages from this turn aborted when they still contain a tool call
+ * with no stored result. The next request skips those messages, so a provider never
+ * sees a tool call without its tool result.
+ */
+const markUnansweredToolCallsAborted = async ({
+  conversationId,
+  models,
+  turnTaskId,
+}: {
+  conversationId: string;
+  models: HarnessModels;
+  turnTaskId: string;
+}): Promise<void> => {
+  const messages = await models.message.find({conversationId, turnTaskId}).sort({seq: 1});
+  const answered = new Set<string>();
+  for (const message of messages) {
+    if (message.role !== HARNESS_MESSAGE_ROLES.tool) {
+      continue;
+    }
+    if (message.toolCallId) {
+      answered.add(message.toolCallId);
+    }
+    for (const part of message.parts) {
+      if (part.type === "tool-result") {
+        answered.add(part.toolCallId);
+      }
+    }
+  }
+  const orphanIds = messages
+    .filter((message) => message.role === HARNESS_MESSAGE_ROLES.assistant && !message.aborted)
+    .filter((message) =>
+      message.parts.some((part) => part.type === "tool-call" && !answered.has(part.toolCallId))
+    )
+    .map((message) => message._id);
+  if (orphanIds.length === 0) {
+    return;
+  }
+  await models.message.updateMany({_id: {$in: orphanIds}}, {$set: {aborted: true}});
+};
+
 /** Convert the stored transcript to AI SDK messages. Aborted (partial) messages are skipped. */
 const toModelMessages = (
   history: ReadonlyArray<Pick<HarnessMessageDocument, "aborted" | "parts" | "role">>
@@ -1017,6 +1058,13 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
   };
 
   const turn = defineTask<AgentTurnInput, AgentTurnState, HarnessTurnResult>({
+    abort: async (task) => {
+      await markUnansweredToolCallsAborted({
+        conversationId: task.input.conversationId,
+        models,
+        turnTaskId: task.id,
+      });
+    },
     initial: () => ({phase: "request", state: {step: 0, text: ""}}),
     name: AGENT_TURN_TASK_NAME,
     phases: {

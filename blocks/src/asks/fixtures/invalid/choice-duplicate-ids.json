@@ -1,0 +1,17 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which plan?",
+    "select": "one",
+    "options": [
+      {"id": "team", "label": "Team"},
+      {"id": "solo", "label": "Solo"},
+      {"id": "team", "label": "Team (annual)"},
+      {"id": "solo", "label": "Solo (annual)"}
+    ]
+  },
+  "errors": [
+    {"path": "options[2].id", "code": "DUPLICATE_ID"},
+    {"path": "options[3].id", "code": "DUPLICATE_ID"}
+  ]
+}

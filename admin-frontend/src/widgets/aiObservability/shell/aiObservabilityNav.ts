@@ -1,7 +1,12 @@
 import type {AdminBreadcrumbSegment} from "../../../AdminBreadcrumbs";
 
+export type ObservabilityActionFlags = Record<string, boolean>;
+
+export type ObservabilityPermissionsPayload = Record<string, ObservabilityActionFlags>;
+
 export interface ObservabilityStatusPayload {
   localOn: boolean;
+  permissions?: ObservabilityPermissionsPayload;
   playgroundAi?: {
     source: "request-key" | "server" | "unavailable";
   };
@@ -31,7 +36,7 @@ export const AI_OBSERVABILITY_SCREENS: Record<string, AiObservabilityScreenMeta>
   "ai-experiment-new": {leaf: "New", section: "Experiments", title: "New experiment"},
   "ai-experiment-results": {leaf: "Results", section: "Experiments", title: "Experiment results"},
   "ai-experiments": {leaf: "List", section: "Experiments", title: "Experiments"},
-  "ai-prompt-editor": {leaf: "Editor", section: "Prompts", title: "Prompt editor"},
+  "ai-prompt-editor": {leaf: "Detail", section: "Prompts", title: "Prompt detail"},
   "ai-prompts": {leaf: "Library", section: "Prompts", title: "Prompts"},
   "ai-review": {leaf: "Queue", section: "Review", title: "Review queue"},
   "ai-review-item": {leaf: "Item", section: "Review", title: "Review item"},

@@ -1,0 +1,47 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "What should I call the project?",
+    "fields": [
+      {
+        "id": "name",
+        "type": "text",
+        "label": "Project name",
+        "required": true,
+        "default": "Launch plan",
+        "minLength": 3,
+        "maxLength": 60,
+        "helperText": "Shown on the dashboard."
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "submit-defaults",
+        "label": "Submit defaults",
+        "response": {
+          "action": "accept",
+          "content": {
+            "values": {
+              "name": "Launch plan"
+            }
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "What should I call the project?",
+    "toolCallId": "call_fixture"
+  }
+}

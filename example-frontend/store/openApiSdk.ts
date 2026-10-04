@@ -600,7 +600,14 @@ const injectedRtkApi = api
         GetAiObservabilityExperimentsArgs
       >({
         providesTags: ["observability"],
-        query: () => ({url: `/ai/observability/experiments`}),
+        query: (queryArg) => ({
+          params: {
+            limit: queryArg.limit,
+            page: queryArg.page,
+            promptName: queryArg.promptName,
+          },
+          url: `/ai/observability/experiments`,
+        }),
       }),
       getAiObservabilityExperimentsById: build.query<
         GetAiObservabilityExperimentsByIdRes,
@@ -630,7 +637,12 @@ const injectedRtkApi = api
         GetAiObservabilityPromptsByNameArgs
       >({
         providesTags: ["observability"],
-        query: (queryArg) => ({url: `/ai/observability/prompts/${queryArg}`}),
+        query: (queryArg) => ({
+          params: {
+            promptVersion: queryArg.promptVersion,
+          },
+          url: `/ai/observability/prompts/${queryArg.name}`,
+        }),
       }),
       getAiObservabilityReview: build.query<
         GetAiObservabilityReviewRes,
@@ -658,7 +670,13 @@ const injectedRtkApi = api
         GetAiObservabilityTracesArgs
       >({
         providesTags: ["observability"],
-        query: () => ({url: `/ai/observability/traces`}),
+        query: (queryArg) => ({
+          params: {
+            prompt: queryArg.prompt,
+            promptVersion: queryArg.promptVersion,
+          },
+          url: `/ai/observability/traces`,
+        }),
       }),
       getAiObservabilityTracesById: build.query<
         GetAiObservabilityTracesByIdRes,
@@ -786,6 +804,17 @@ const injectedRtkApi = api
         providesTags: ["featureflags"],
         query: (queryArg) => ({url: `/feature-flags/flags/${queryArg}`}),
       }),
+      getGptDatasetsById: build.query<GetGptDatasetsByIdRes, GetGptDatasetsByIdArgs>({
+        providesTags: ["gpt"],
+        query: (queryArg) => ({
+          params: {
+            grain: queryArg.grain,
+            limit: queryArg.limit,
+            page: queryArg.page,
+          },
+          url: `/gpt/datasets/${queryArg.id}`,
+        }),
+      }),
       getGptHistories: build.query<GetGptHistoriesRes, GetGptHistoriesArgs>({
         providesTags: ["gpthistories"],
         query: (queryArg) => ({
@@ -803,6 +832,19 @@ const injectedRtkApi = api
       getGptHistoriesById: build.query<GetGptHistoriesByIdRes, GetGptHistoriesByIdArgs>({
         providesTags: ["gpthistories"],
         query: (queryArg) => ({url: `/gpt/histories/${queryArg}`}),
+      }),
+      getGptHistoriesByIdStream: build.query<
+        GetGptHistoriesByIdStreamRes,
+        GetGptHistoriesByIdStreamArgs
+      >({
+        providesTags: ["gpt"],
+        query: (queryArg) => ({
+          params: {
+            offset: queryArg.offset,
+            streamId: queryArg.streamId,
+          },
+          url: `/gpt/histories/${queryArg.id}/stream`,
+        }),
       }),
       getGptTools: build.query<GetGptToolsRes, GetGptToolsArgs>({
         providesTags: ["gpt"],
@@ -993,6 +1035,20 @@ const injectedRtkApi = api
       getUsersById: build.query<GetUsersByIdRes, GetUsersByIdArgs>({
         providesTags: ["users"],
         query: (queryArg) => ({url: `/users/${queryArg}`}),
+      }),
+      gpthistoriesPendingAsks: build.query<GpthistoriesPendingAsksRes, GpthistoriesPendingAsksArgs>(
+        {
+          providesTags: ["gpthistories"],
+          query: () => ({url: `/gpt/histories/pendingAsks`}),
+        }
+      ),
+      gpthistoriesTurn: build.mutation<GpthistoriesTurnRes, GpthistoriesTurnArgs>({
+        invalidatesTags: ["gpthistories"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/gpt/histories/${queryArg.id}/turn`,
+        }),
       }),
       harnessAbort: build.mutation<HarnessAbortRes, HarnessAbortArgs>({
         invalidatesTags: ["harness"],
@@ -1657,6 +1713,14 @@ const injectedRtkApi = api
           url: `/feature-flags/flags/`,
         }),
       }),
+      postGptActions: build.mutation<PostGptActionsRes, PostGptActionsArgs>({
+        invalidatesTags: ["gpt"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/gpt/actions`,
+        }),
+      }),
       postGptHistories: build.mutation<PostGptHistoriesRes, PostGptHistoriesArgs>({
         invalidatesTags: ["gpthistories"],
         query: (queryArg) => ({
@@ -1850,17 +1914,163 @@ export type PostAiExampleSummarizeRes = /** status 200 Success */ {
 export type PostAiExampleSummarizeArgs = {
   text?: string;
 };
+export type GpthistoriesTurnRes = /** status 200 Successful response */ {
+  data: {
+    /** Set when the turn failed after it started. text holds what the agent said before the error. */
+    error?: string;
+    /** The conversation's id. */
+    historyId: string;
+    /** The ask the turn paused on. Answer it with its toolCallId and the id of one of simple.buttons. */
+    pendingAsk?: {
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      simple: {
+        buttons: {
+          id: string;
+          label: string;
+          response:
+            | {
+                action: "accept";
+                content: {
+                  [key: string]: any | null;
+                };
+              }
+            | {
+                action: "decline";
+              }
+            | {
+                action: "cancel";
+                reason?: string;
+              };
+          style: "default" | "primary" | "destructive" | "cancel";
+        }[];
+        handoff: boolean;
+        kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        text: string;
+        title?: string;
+        toolCallId: string;
+      };
+      toolCallId: string;
+    };
+    /** The agent's reply, or an empty string when it only asked. */
+    text: string;
+    /** The conversation's title, once it has one. */
+    title?: string;
+  };
+};
+export type GpthistoriesTurnArgs = {
+  id: string;
+  body: {
+    /** A full answer to the pending ask, as a client that renders the ask sends it. */
+    askResponse?:
+      | {
+          action: "accept";
+          content: {
+            [key: string]: any | null;
+          };
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        }
+      | {
+          action: "decline";
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        }
+      | {
+          action: "cancel";
+          reason?: string;
+          /** The pending ask's toolCallId. */
+          toolCallId: string;
+        };
+    /** The id of the simple card button the user pressed. Send it with toolCallId. */
+    buttonId?: string;
+    /** A new message from the user. It cancels the pending ask, if there is one. */
+    prompt?: string;
+    /** Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full". */
+    surface?: "full" | "compact";
+    /** The pending ask's toolCallId. */
+    toolCallId?: string;
+  };
+};
+export type GpthistoriesPendingAsksRes = /** status 200 Successful response */ {
+  data: {
+    /** When the agent asked, as an ISO 8601 UTC timestamp. */
+    created: string;
+    /** The conversation the ask belongs to. */
+    historyId: string;
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    simple: {
+      buttons: {
+        id: string;
+        label: string;
+        response:
+          | {
+              action: "accept";
+              content: {
+                [key: string]: any | null;
+              };
+            }
+          | {
+              action: "decline";
+            }
+          | {
+              action: "cancel";
+              reason?: string;
+            };
+        style: "default" | "primary" | "destructive" | "cancel";
+      }[];
+      handoff: boolean;
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      text: string;
+      title?: string;
+      toolCallId: string;
+    };
+    /** The conversation's title, once it has one. */
+    title?: string;
+    toolCallId: string;
+  }[];
+};
+export type GpthistoriesPendingAsksArgs = undefined;
 export type PostGptHistoriesRes = /** status 201 Successful create */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
       filename?: string;
+      /** Durable storage key for an attachment uploaded through FileStorageService */
+      gcsKey?: string;
       /** MIME type of the content part */
       mimeType?: string;
       /** Text content of this part */
@@ -1876,6 +2086,10 @@ export type PostGptHistoriesRes = /** status 201 Successful create */ {
     rating?: "up" | "down";
     /** Result returned from a tool call */
     result?: any;
+    /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+    status?: "streaming" | "complete" | "error";
+    /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+    streamId?: string;
     /** Text content of the prompt or response */
     text: string;
     /** Identifier linking a tool result to its originating call */
@@ -1905,10 +2119,21 @@ export type PostGptHistoriesArgs = {
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
       filename?: string;
+      /** Durable storage key for an attachment uploaded through FileStorageService */
+      gcsKey?: string;
       /** MIME type of the content part */
       mimeType?: string;
       /** Text content of this part */
@@ -1924,6 +2149,10 @@ export type PostGptHistoriesArgs = {
     rating?: "up" | "down";
     /** Result returned from a tool call */
     result?: any;
+    /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+    status?: "streaming" | "complete" | "error";
+    /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+    streamId?: string;
     /** Text content of the prompt or response */
     text: string;
     /** Identifier linking a tool result to its originating call */
@@ -1948,16 +2177,46 @@ export type PostGptHistoriesArgs = {
 };
 export type GetGptHistoriesRes = /** status 200 Successful list */ {
   data?: {
+    /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+    pendingAsk?: {
+      /** AI SDK approval request an approval ask answers; the same as toolCallId */
+      approvalId?: string;
+      /** When the model asked */
+      created: string;
+      /** The validated ask input the model sent */
+      input: any;
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** Simple card (short text and up to three answer buttons) made when the ask was made */
+      simple: any;
+      /** Tool call id of the ask; an answer must name it */
+      toolCallId: string;
+      /** Host tool an approval ask asks to run */
+      toolName?: string;
+    };
     /** Project this conversation belongs to */
     projectId?: string;
     /** Ordered list of messages in this conversation */
     prompts?: {
       /** Arguments passed to a tool call */
       args?: any;
+      /** Set on tool-call rows where the model asked the user a question */
+      ask?: {
+        /** Ask kind; the model asked with the tool ask_<kind> */
+        kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+        origin?: "approval";
+        /** pending while the user can answer; answered or cancelled once the ask is resolved */
+        status: "pending" | "answered" | "cancelled";
+      };
       /** Multipart content attached to this prompt */
       content?: {
         /** Original filename of the attached file */
         filename?: string;
+        /** Durable storage key for an attachment uploaded through FileStorageService */
+        gcsKey?: string;
         /** MIME type of the content part */
         mimeType?: string;
         /** Text content of this part */
@@ -1973,6 +2232,10 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
       rating?: "up" | "down";
       /** Result returned from a tool call */
       result?: any;
+      /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+      status?: "streaming" | "complete" | "error";
+      /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+      streamId?: string;
       /** Text content of the prompt or response */
       text: string;
       /** Identifier linking a tool result to its originating call */
@@ -2019,16 +2282,46 @@ export type GetGptHistoriesArgs = {
   limit?: number;
 };
 export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
       filename?: string;
+      /** Durable storage key for an attachment uploaded through FileStorageService */
+      gcsKey?: string;
       /** MIME type of the content part */
       mimeType?: string;
       /** Text content of this part */
@@ -2044,6 +2337,10 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
     rating?: "up" | "down";
     /** Result returned from a tool call */
     result?: any;
+    /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+    status?: "streaming" | "complete" | "error";
+    /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+    streamId?: string;
     /** Text content of the prompt or response */
     text: string;
     /** Identifier linking a tool result to its originating call */
@@ -2068,16 +2365,46 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
 };
 export type GetGptHistoriesByIdArgs = string;
 export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
+  /** The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled */
+  pendingAsk?: {
+    /** AI SDK approval request an approval ask answers; the same as toolCallId */
+    approvalId?: string;
+    /** When the model asked */
+    created: string;
+    /** The validated ask input the model sent */
+    input: any;
+    /** Ask kind; the model asked with the tool ask_<kind> */
+    kind: "choice" | "confirm" | "markdown" | "form" | "files";
+    /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+    origin?: "approval";
+    /** Simple card (short text and up to three answer buttons) made when the ask was made */
+    simple: any;
+    /** Tool call id of the ask; an answer must name it */
+    toolCallId: string;
+    /** Host tool an approval ask asks to run */
+    toolName?: string;
+  };
   /** Project this conversation belongs to */
   projectId?: string;
   /** Ordered list of messages in this conversation */
   prompts?: {
     /** Arguments passed to a tool call */
     args?: any;
+    /** Set on tool-call rows where the model asked the user a question */
+    ask?: {
+      /** Ask kind; the model asked with the tool ask_<kind> */
+      kind: "choice" | "confirm" | "markdown" | "form" | "files";
+      /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+      origin?: "approval";
+      /** pending while the user can answer; answered or cancelled once the ask is resolved */
+      status: "pending" | "answered" | "cancelled";
+    };
     /** Multipart content attached to this prompt */
     content?: {
       /** Original filename of the attached file */
       filename?: string;
+      /** Durable storage key for an attachment uploaded through FileStorageService */
+      gcsKey?: string;
       /** MIME type of the content part */
       mimeType?: string;
       /** Text content of this part */
@@ -2093,6 +2420,10 @@ export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
     rating?: "up" | "down";
     /** Result returned from a tool call */
     result?: any;
+    /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+    status?: "streaming" | "complete" | "error";
+    /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+    streamId?: string;
     /** Text content of the prompt or response */
     text: string;
     /** Identifier linking a tool result to its originating call */
@@ -2124,10 +2455,21 @@ export type PatchGptHistoriesByIdArgs = {
     prompts?: {
       /** Arguments passed to a tool call */
       args?: any;
+      /** Set on tool-call rows where the model asked the user a question */
+      ask?: {
+        /** Ask kind; the model asked with the tool ask_<kind> */
+        kind: "choice" | "confirm" | "markdown" | "form" | "files";
+        /** approval when the server asked before running a host tool that needs approval; unset when the model asked */
+        origin?: "approval";
+        /** pending while the user can answer; answered or cancelled once the ask is resolved */
+        status: "pending" | "answered" | "cancelled";
+      };
       /** Multipart content attached to this prompt */
       content?: {
         /** Original filename of the attached file */
         filename?: string;
+        /** Durable storage key for an attachment uploaded through FileStorageService */
+        gcsKey?: string;
         /** MIME type of the content part */
         mimeType?: string;
         /** Text content of this part */
@@ -2143,6 +2485,10 @@ export type PatchGptHistoriesByIdArgs = {
       rating?: "up" | "down";
       /** Result returned from a tool call */
       result?: any;
+      /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+      status?: "streaming" | "complete" | "error";
+      /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+      streamId?: string;
       /** Text content of the prompt or response */
       text: string;
       /** Identifier linking a tool result to its originating call */
@@ -2168,10 +2514,46 @@ export type PatchGptHistoriesByIdArgs = {
 };
 export type DeleteGptHistoriesByIdRes = unknown;
 export type DeleteGptHistoriesByIdArgs = string;
+export type GetGptDatasetsByIdRes = /** status 200 Success */ {
+  columns?: object[];
+  more?: boolean;
+  page?: number;
+  rowCount?: number;
+  rows?: any[];
+};
+export type GetGptDatasetsByIdArgs = {
+  id: string;
+  grain?: "hour" | "day" | "week" | "month";
+  limit?: number;
+  page?: number;
+};
+export type PostGptActionsRes = /** status 200 Success */ {
+  blocks?: object;
+  replace?: string;
+  text?: string;
+};
+export type PostGptActionsArgs = {
+  blockId?: string;
+  elementId?: string;
+  historyId?: string;
+  messageId?: string;
+  name?: string;
+  payload?: object;
+};
 export type PostGptPromptRes = /** status 200 Success */ {
   data?: string;
 };
 export type PostGptPromptArgs = {
+  /** The user's answer to the conversation's pending ask. Send it with historyId instead of prompt. */
+  askResponse?: {
+    action?: "accept" | "decline" | "cancel";
+    /** The answer, when action is accept */
+    content?: object;
+    /** Why the ask was cancelled, when action is cancel */
+    reason?: string;
+    /** The pending ask's toolCallId */
+    toolCallId?: string;
+  };
   attachments?: {
     filename?: string;
     mimeType?: string;
@@ -2182,11 +2564,19 @@ export type PostGptPromptArgs = {
   model?: string;
   projectId?: string;
   prompt?: string;
-  promptLabel?: string;
-  promptName?: string;
-  sensitive?: boolean;
-  sessionId?: string;
+  /** Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full". */
+  surface?: "full" | "compact";
   systemPrompt?: string;
+};
+export type GetGptHistoriesByIdStreamRes = /** status 200 Success */ {
+  data?: string;
+};
+export type GetGptHistoriesByIdStreamArgs = {
+  id: string;
+  /** Reply to follow. Defaults to the latest streaming reply. */
+  streamId?: string;
+  /** Characters of the reply the client already shows. Defaults to 0. */
+  offset?: number;
 };
 export type PatchGptHistoriesByIdRatingRes = /** status 200 Success */ {
   data?: object;
@@ -2202,10 +2592,6 @@ export type PostGptRemixRes = /** status 200 Success */ {
   data?: string;
 };
 export type PostGptRemixArgs = {
-  promptLabel?: string;
-  promptName?: string;
-  sensitive?: boolean;
-  sessionId?: string;
   text?: string;
 };
 export type GetGptToolsRes = /** status 200 Success */ {
@@ -3310,157 +3696,6 @@ export type PostJobsByIdCancelRes = /** status 200 Success */ {
   data?: object;
 };
 export type PostJobsByIdCancelArgs = string;
-export type GetAiObservabilityStatusRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityStatusArgs = undefined;
-export type GetAiObservabilityPromptsRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityPromptsArgs = {
-  folder?: string;
-  search?: string;
-  include?: string;
-};
-export type PostAiObservabilityPromptsRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityPromptsArgs = {
-  folder: string;
-  name: string;
-};
-export type GetAiObservabilityPromptsByNameRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityPromptsByNameArgs = string;
-export type PostAiObservabilityPromptsByNameVersionsRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityPromptsByNameVersionsArgs = string;
-export type PostAiObservabilityPromptsByNameLabelsRes = /** status 200 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityPromptsByNameLabelsArgs = {
-  name: string;
-  body: {
-    label: string;
-    version: number;
-  };
-};
-export type PostAiObservabilityPromptsByNamePlaygroundRes = /** status 200 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityPromptsByNamePlaygroundArgs = string;
-export type GetAiObservabilityEvaluatorsTemplatesRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityEvaluatorsTemplatesArgs = undefined;
-export type PostAiObservabilityEvaluatorsTemplatesByNameRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityEvaluatorsTemplatesByNameArgs = string;
-export type GetAiObservabilityEvaluatorsRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityEvaluatorsArgs = undefined;
-export type PostAiObservabilityEvaluatorsRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityEvaluatorsArgs = undefined;
-export type GetAiObservabilityEvaluatorsByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityEvaluatorsByIdArgs = string;
-export type PatchAiObservabilityEvaluatorsByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type PatchAiObservabilityEvaluatorsByIdArgs = string;
-export type DeleteAiObservabilityEvaluatorsByIdRes = /** status 204 Success */ {};
-export type DeleteAiObservabilityEvaluatorsByIdArgs = string;
-export type PostAiObservabilityTracesReviewRes = /** status 201 Success */ {
-  data?: any;
-};
-export type PostAiObservabilityTracesReviewArgs = undefined;
-export type GetAiObservabilityReviewRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityReviewArgs = undefined;
-export type GetAiObservabilityReviewByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityReviewByIdArgs = string;
-export type PostAiObservabilityReviewByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityReviewByIdArgs = string;
-export type GetAiObservabilityDatasetsRes = /** status 200 Success */ {};
-export type GetAiObservabilityDatasetsArgs = undefined;
-export type PostAiObservabilityDatasetsRes = /** status 201 Success */ {};
-export type PostAiObservabilityDatasetsArgs = undefined;
-export type GetAiObservabilityDatasetsByIdRes = /** status 200 Success */ {};
-export type GetAiObservabilityDatasetsByIdArgs = string;
-export type PatchAiObservabilityDatasetsByIdRes = /** status 200 Success */ {};
-export type PatchAiObservabilityDatasetsByIdArgs = string;
-export type DeleteAiObservabilityDatasetsByIdRes = /** status 204 Success */ {};
-export type DeleteAiObservabilityDatasetsByIdArgs = string;
-export type GetAiObservabilityDatasetsByIdItemsRes = /** status 200 Success */ {};
-export type GetAiObservabilityDatasetsByIdItemsArgs = string;
-export type PostAiObservabilityDatasetsByIdItemsRes = /** status 201 Success */ {};
-export type PostAiObservabilityDatasetsByIdItemsArgs = string;
-export type PatchAiObservabilityDatasetsByIdItemsAndItemIdRes = /** status 200 Success */ {};
-export type PatchAiObservabilityDatasetsByIdItemsAndItemIdArgs = {
-  id: string;
-  itemId: string;
-};
-export type DeleteAiObservabilityDatasetsByIdItemsAndItemIdRes = /** status 204 Success */ {};
-export type DeleteAiObservabilityDatasetsByIdItemsAndItemIdArgs = {
-  id: string;
-  itemId: string;
-};
-export type PostAiObservabilityDatasetsByIdImportRes = /** status 200 Success */ {};
-export type PostAiObservabilityDatasetsByIdImportArgs = string;
-export type PostAiObservabilityTracesAddToDatasetRes = /** status 201 Success */ {};
-export type PostAiObservabilityTracesAddToDatasetArgs = undefined;
-export type PostAiObservabilityExperimentsEstimateRes = /** status 200 Success */ {};
-export type PostAiObservabilityExperimentsEstimateArgs = undefined;
-export type GetAiObservabilityExperimentsRes = /** status 200 Success */ {};
-export type GetAiObservabilityExperimentsArgs = undefined;
-export type PostAiObservabilityExperimentsRes = /** status 201 Success */ {};
-export type PostAiObservabilityExperimentsArgs = undefined;
-export type GetAiObservabilityExperimentsByIdRes = /** status 200 Success */ {};
-export type GetAiObservabilityExperimentsByIdArgs = string;
-export type PostAiObservabilityExperimentsByIdPromoteRes = /** status 200 Success */ {};
-export type PostAiObservabilityExperimentsByIdPromoteArgs = string;
-export type GetAiObservabilityTracesRes = /** status 200 Success */ {
-  data?: any;
-};
-export type GetAiObservabilityTracesArgs = undefined;
-export type GetAiObservabilityTracesByIdRes = /** status 200 Success */ {
-  data?: object;
-};
-export type GetAiObservabilityTracesByIdArgs = string;
-export type PostAiObservabilityTracesByIdScoresRes = /** status 201 Success */ {
-  data?: object;
-};
-export type PostAiObservabilityTracesByIdScoresArgs = string;
-export type PostAiObservabilityTracesTestMultiStageRes = /** status 200 Success */ {
-  data?: {
-    output?: {
-      keywords?: string[];
-      metrics?: object;
-      phrase?: string;
-      sentence?: string;
-    };
-    stages?: {
-      name?: string;
-      status?: string;
-    }[];
-    traceId?: string;
-  };
-};
-export type PostAiObservabilityTracesTestMultiStageArgs = {
-  input?: string;
-};
 export type HarnessSubmitRes = /** status 200 Successful response */ {
   data?: object;
 };
@@ -3854,6 +4089,168 @@ export type GetHarnessApprovalsByIdRes = /** status 200 Successful read */ {
   created: string;
 };
 export type GetHarnessApprovalsByIdArgs = string;
+export type GetAiObservabilityStatusRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityStatusArgs = undefined;
+export type GetAiObservabilityPromptsRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityPromptsArgs = {
+  folder?: string;
+  search?: string;
+  include?: string;
+};
+export type PostAiObservabilityPromptsRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityPromptsArgs = {
+  description?: string;
+  folder: string;
+  name: string;
+};
+export type GetAiObservabilityPromptsByNameRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityPromptsByNameArgs = {
+  name: string;
+  promptVersion?: number;
+};
+export type PostAiObservabilityPromptsByNameVersionsRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityPromptsByNameVersionsArgs = string;
+export type PostAiObservabilityPromptsByNameLabelsRes = /** status 200 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityPromptsByNameLabelsArgs = {
+  name: string;
+  body: {
+    label: string;
+    version: number;
+  };
+};
+export type PostAiObservabilityPromptsByNamePlaygroundRes = /** status 200 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityPromptsByNamePlaygroundArgs = string;
+export type GetAiObservabilityEvaluatorsTemplatesRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityEvaluatorsTemplatesArgs = undefined;
+export type PostAiObservabilityEvaluatorsTemplatesByNameRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityEvaluatorsTemplatesByNameArgs = string;
+export type GetAiObservabilityEvaluatorsRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityEvaluatorsArgs = undefined;
+export type PostAiObservabilityEvaluatorsRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityEvaluatorsArgs = undefined;
+export type GetAiObservabilityEvaluatorsByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityEvaluatorsByIdArgs = string;
+export type PatchAiObservabilityEvaluatorsByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type PatchAiObservabilityEvaluatorsByIdArgs = string;
+export type DeleteAiObservabilityEvaluatorsByIdRes = /** status 204 Success */ {};
+export type DeleteAiObservabilityEvaluatorsByIdArgs = string;
+export type PostAiObservabilityTracesReviewRes = /** status 201 Success */ {
+  data?: any;
+};
+export type PostAiObservabilityTracesReviewArgs = undefined;
+export type GetAiObservabilityReviewRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityReviewArgs = undefined;
+export type GetAiObservabilityReviewByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityReviewByIdArgs = string;
+export type PostAiObservabilityReviewByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityReviewByIdArgs = string;
+export type GetAiObservabilityDatasetsRes = /** status 200 Success */ {};
+export type GetAiObservabilityDatasetsArgs = undefined;
+export type PostAiObservabilityDatasetsRes = /** status 201 Success */ {};
+export type PostAiObservabilityDatasetsArgs = undefined;
+export type GetAiObservabilityDatasetsByIdRes = /** status 200 Success */ {};
+export type GetAiObservabilityDatasetsByIdArgs = string;
+export type PatchAiObservabilityDatasetsByIdRes = /** status 200 Success */ {};
+export type PatchAiObservabilityDatasetsByIdArgs = string;
+export type DeleteAiObservabilityDatasetsByIdRes = /** status 204 Success */ {};
+export type DeleteAiObservabilityDatasetsByIdArgs = string;
+export type GetAiObservabilityDatasetsByIdItemsRes = /** status 200 Success */ {};
+export type GetAiObservabilityDatasetsByIdItemsArgs = string;
+export type PostAiObservabilityDatasetsByIdItemsRes = /** status 201 Success */ {};
+export type PostAiObservabilityDatasetsByIdItemsArgs = string;
+export type PatchAiObservabilityDatasetsByIdItemsAndItemIdRes = /** status 200 Success */ {};
+export type PatchAiObservabilityDatasetsByIdItemsAndItemIdArgs = {
+  id: string;
+  itemId: string;
+};
+export type DeleteAiObservabilityDatasetsByIdItemsAndItemIdRes = /** status 204 Success */ {};
+export type DeleteAiObservabilityDatasetsByIdItemsAndItemIdArgs = {
+  id: string;
+  itemId: string;
+};
+export type PostAiObservabilityDatasetsByIdImportRes = /** status 200 Success */ {};
+export type PostAiObservabilityDatasetsByIdImportArgs = string;
+export type PostAiObservabilityTracesAddToDatasetRes = /** status 201 Success */ {};
+export type PostAiObservabilityTracesAddToDatasetArgs = undefined;
+export type PostAiObservabilityExperimentsEstimateRes = /** status 200 Success */ {};
+export type PostAiObservabilityExperimentsEstimateArgs = undefined;
+export type GetAiObservabilityExperimentsRes = /** status 200 Success */ {};
+export type GetAiObservabilityExperimentsArgs = {
+  promptName?: string;
+  page?: number;
+  limit?: number;
+};
+export type PostAiObservabilityExperimentsRes = /** status 201 Success */ {};
+export type PostAiObservabilityExperimentsArgs = undefined;
+export type GetAiObservabilityExperimentsByIdRes = /** status 200 Success */ {};
+export type GetAiObservabilityExperimentsByIdArgs = string;
+export type PostAiObservabilityExperimentsByIdPromoteRes = /** status 200 Success */ {};
+export type PostAiObservabilityExperimentsByIdPromoteArgs = string;
+export type GetAiObservabilityTracesRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityTracesArgs = {
+  prompt?: string;
+  promptVersion?: number;
+};
+export type GetAiObservabilityTracesByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityTracesByIdArgs = string;
+export type PostAiObservabilityTracesByIdScoresRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityTracesByIdScoresArgs = string;
+export type PostAiObservabilityTracesTestMultiStageRes = /** status 200 Success */ {
+  data?: {
+    output?: {
+      keywords?: string[];
+      metrics?: object;
+      phrase?: string;
+      sentence?: string;
+    };
+    stages?: {
+      name?: string;
+      status?: string;
+    }[];
+    traceId?: string;
+  };
+};
+export type PostAiObservabilityTracesTestMultiStageArgs = {
+  input?: string;
+};
 export type GetAdminConfigRes = /** status 200 Success */ {
   capabilities?: {
     actions?: boolean;
@@ -7191,12 +7588,17 @@ export type ApiError = {
 };
 export const {
   usePostAiExampleSummarizeMutation,
+  useGpthistoriesTurnMutation,
+  useGpthistoriesPendingAsksQuery,
   usePostGptHistoriesMutation,
   useGetGptHistoriesQuery,
   useGetGptHistoriesByIdQuery,
   usePatchGptHistoriesByIdMutation,
   useDeleteGptHistoriesByIdMutation,
+  useGetGptDatasetsByIdQuery,
+  usePostGptActionsMutation,
   usePostGptPromptMutation,
+  useGetGptHistoriesByIdStreamQuery,
   usePatchGptHistoriesByIdRatingMutation,
   usePostGptRemixMutation,
   useGetGptToolsQuery,
@@ -7250,6 +7652,16 @@ export const {
   usePostJobsByIdRetryMutation,
   usePostJobsByIdRequeueMutation,
   usePostJobsByIdCancelMutation,
+  useHarnessSubmitMutation,
+  useGetHarnessConversationsQuery,
+  useGetHarnessConversationsByIdQuery,
+  useHarnessAbortMutation,
+  useHarnessResolveInterruptedMutation,
+  useGetHarnessTasksByIdQuery,
+  useHarnessApproveMutation,
+  useHarnessRejectMutation,
+  useGetHarnessApprovalsQuery,
+  useGetHarnessApprovalsByIdQuery,
   useGetAiObservabilityStatusQuery,
   useGetAiObservabilityPromptsQuery,
   usePostAiObservabilityPromptsMutation,
@@ -7288,16 +7700,6 @@ export const {
   useGetAiObservabilityTracesByIdQuery,
   usePostAiObservabilityTracesByIdScoresMutation,
   usePostAiObservabilityTracesTestMultiStageMutation,
-  useHarnessSubmitMutation,
-  useGetHarnessConversationsQuery,
-  useGetHarnessConversationsByIdQuery,
-  useHarnessAbortMutation,
-  useHarnessResolveInterruptedMutation,
-  useGetHarnessTasksByIdQuery,
-  useHarnessApproveMutation,
-  useHarnessRejectMutation,
-  useGetHarnessApprovalsQuery,
-  useGetHarnessApprovalsByIdQuery,
   useGetAdminConfigQuery,
   usePostAdminBackgroundTasksMutation,
   usePostAdminMcpServiceTokensBulkPatchMutation,

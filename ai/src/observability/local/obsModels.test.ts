@@ -2,6 +2,7 @@ import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import mongoose from "mongoose";
 import {ObservabilityApp, resetObservabilityApp} from "../observabilityApp";
 import {createLocalObservabilityPlugin} from "./localPlugin";
+import {registerObsExperiment} from "./models/obsExperiment";
 import {registerObsPrompt} from "./models/obsPrompt";
 import {registerObsPromptLabel} from "./models/obsPromptLabel";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
@@ -108,5 +109,11 @@ describe("local observability models", () => {
     expect(serialized).toContain('{"status":1,"created":-1}');
     expect(serialized).toContain('{"prompts.name":1,"prompts.version":1}');
     expect(serialized).toContain('{"flaggedForDataset":1,"created":-1}');
+  });
+
+  it("declares ObsExperiment promptName list index", () => {
+    const ObsExperiment = registerObsExperiment();
+    const serialized = ObsExperiment.schema.indexes().map(([fields]) => JSON.stringify(fields));
+    expect(serialized).toContain('{"promptName":1,"created":-1}');
   });
 });

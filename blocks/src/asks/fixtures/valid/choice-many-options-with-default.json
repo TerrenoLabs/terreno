@@ -1,0 +1,30 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which region should host the database?",
+    "select": "one",
+    "options": [
+      {"id": "us-east", "label": "US East"},
+      {"id": "us-west", "label": "US West"},
+      {"id": "eu-west", "label": "EU West"},
+      {"id": "ap-south", "label": "Asia Pacific South"},
+      {"id": "sa-east", "label": "South America East"}
+    ],
+    "default": ["eu-west"]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Which region should host the database?",
+    "handoff": true,
+    "buttons": [
+      {
+        "id": "use-default",
+        "label": "Use \"EU West\"",
+        "style": "primary",
+        "response": {"action": "accept", "content": {"selected": ["eu-west"]}}
+      },
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

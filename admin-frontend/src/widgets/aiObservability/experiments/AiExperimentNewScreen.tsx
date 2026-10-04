@@ -52,7 +52,7 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
   const [estimateError, setEstimateError] = useState("");
   const [estimate, setEstimate] = useState<ExperimentEstimate | undefined>(undefined);
 
-  const {data: promptDetailRaw} = usePromptDetailQuery(promptName, {skip: !promptName});
+  const {data: promptDetailRaw} = usePromptDetailQuery({name: promptName}, {skip: !promptName});
   const promptDetail = useMemo(() => unwrapPromptDetail(promptDetailRaw), [promptDetailRaw]);
 
   // Default prompt to the first library entry when the wizard opens.

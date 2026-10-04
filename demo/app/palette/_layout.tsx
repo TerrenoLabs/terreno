@@ -1,4 +1,4 @@
-import {isMobileDevice} from "@terreno/ui";
+import {isNarrowViewport} from "@terreno/ui";
 import {router, Stack} from "expo-router";
 import {StatusBar} from "expo-status-bar";
 import {Pressable, StyleSheet, Text} from "react-native";
@@ -10,7 +10,7 @@ const Layout = () => {
       <Stack
         screenOptions={{
           headerBackTitle: "Back",
-          headerBackVisible: isMobileDevice(),
+          headerBackVisible: isNarrowViewport(),
           headerRight: () => (
             <Pressable
               onPress={async () => {
@@ -35,6 +35,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: "100%",
     justifyContent: "center",
-    marginRight: isMobileDevice() ? 0 : 16,
+    marginRight: isNarrowViewport() ? 0 : 16,
   },
 });

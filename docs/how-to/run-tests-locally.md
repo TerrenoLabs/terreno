@@ -48,6 +48,7 @@ bun test --only-failures <path>
 | --- | --- |
 | `api-ci` | `bun run api:test` |
 | `ai-ci` | `cd ai && bun run test:ci` |
+| `blocks-ci` | `bun run blocks:test` |
 | `ui-ci` | `bun run ui:test` |
 | `rtk-ci` | `bun run rtk:test` |
 | `syncdb-ci` | `bun run syncdb:test` |

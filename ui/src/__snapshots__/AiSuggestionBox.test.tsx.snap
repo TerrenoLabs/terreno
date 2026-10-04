@@ -577,7 +577,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for ready s
                               ],
                               "props": {
                                 "style": {
-                                  "color": "#2B6072",
+                                  "color": "#092E3A",
                                   "fontSize": 14,
                                   "fontWeight": "700",
                                 },
@@ -615,10 +615,10 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for ready s
                     "style": {
                       "alignItems": "center",
                       "alignSelf": "flex-start",
-                      "backgroundColor": "transparent",
-                      "borderColor": undefined,
+                      "backgroundColor": "#FFFFFF",
+                      "borderColor": "#092E3A",
                       "borderRadius": 360,
-                      "borderWidth": undefined,
+                      "borderWidth": 2,
                       "flexDirection": "column",
                       "height": 28,
                       "justifyContent": "center",
@@ -903,7 +903,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for hidden 
                                   ],
                                   "props": {
                                     "style": {
-                                      "color": "#2B6072",
+                                      "color": "#092E3A",
                                       "fontSize": 14,
                                       "fontWeight": "700",
                                     },
@@ -941,10 +941,10 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for hidden 
                         "style": {
                           "alignItems": "center",
                           "alignSelf": "flex-start",
-                          "backgroundColor": "transparent",
-                          "borderColor": undefined,
+                          "backgroundColor": "#FFFFFF",
+                          "borderColor": "#092E3A",
                           "borderRadius": 360,
-                          "borderWidth": undefined,
+                          "borderWidth": 2,
                           "flexDirection": "column",
                           "height": 28,
                           "justifyContent": "center",
@@ -1201,7 +1201,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for added s
                             "numberOfLines": 0,
                             "selectable": undefined,
                             "style": {
-                              "color": "#092E3A",
+                              "color": "#1C1C1C",
                               "fontFamily": "text-regular",
                               "fontSize": 10,
                               "textAlign": "left",
@@ -1242,7 +1242,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for added s
                                   ],
                                   "props": {
                                     "style": {
-                                      "color": "#2B6072",
+                                      "color": "#092E3A",
                                       "fontSize": 14,
                                       "fontWeight": "700",
                                     },
@@ -1280,10 +1280,10 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for added s
                         "style": {
                           "alignItems": "center",
                           "alignSelf": "flex-start",
-                          "backgroundColor": "transparent",
-                          "borderColor": undefined,
+                          "backgroundColor": "#FFFFFF",
+                          "borderColor": "#092E3A",
                           "borderRadius": 360,
-                          "borderWidth": undefined,
+                          "borderWidth": 2,
                           "flexDirection": "column",
                           "height": 28,
                           "justifyContent": "center",

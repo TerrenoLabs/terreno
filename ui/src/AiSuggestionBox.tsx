@@ -151,7 +151,7 @@ export const AiSuggestionBox: FC<AiSuggestionBoxProps> = ({
         <View style={{alignItems: "center", flexDirection: "row", gap: 4, width: "100%"}}>
           <SparklesIcon fill={theme.text.secondaryDark} />
           <View style={{flex: 1}}>
-            <Text color="secondaryDark" size="sm">
+            <Text color={isAdded ? "primary" : "secondaryDark"} size="sm">
               {headingText}
             </Text>
           </View>

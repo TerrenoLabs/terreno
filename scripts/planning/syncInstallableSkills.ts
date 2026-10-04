@@ -29,8 +29,9 @@ const INSTALLABLE_PLUGIN_DIRECTORIES = ["plugins/terreno-planning", "plugins/ter
 export const SKILL_GROUPS: SkillGroup[] = [
   {
     description:
-      "Bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
+      "PRD seed, then bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
     skills: [
+      "terreno-prd",
       "terreno-1-grow",
       "terreno-2-pick",
       "terreno-3-roast",

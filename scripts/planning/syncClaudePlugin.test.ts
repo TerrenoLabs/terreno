@@ -16,6 +16,7 @@ describe("Claude plugin sync", (): void => {
     assert.equal(shortenStageName("terreno-1-grow"), "1-grow");
     assert.equal(shortenStageName("terreno-5-taste"), "5-taste");
     assert.equal(shortenStageName("terreno-pick-roast-loop"), "pick-roast-loop");
+    assert.equal(shortenStageName("terreno-prd"), "prd");
   });
 
   it("rewrites stage frontmatter without touching the plugin directory name", (): void => {
@@ -38,6 +39,7 @@ describe("Claude plugin sync", (): void => {
     assert.include(paths, "skills/3-roast/SKILL.md");
     assert.include(paths, "skills/5-taste/SKILL.md");
     assert.include(paths, "skills/pick-roast-loop/SKILL.md");
+    assert.include(paths, "skills/prd/SKILL.md");
     assert.include(paths, "skills/planning-loop/SKILL.md");
     assert.include(paths, "skills/taste-sweep/SKILL.md");
     assert.include(paths, "skills/terreno-backend-api/SKILL.md");

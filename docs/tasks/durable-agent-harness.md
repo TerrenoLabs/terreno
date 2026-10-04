@@ -131,21 +131,23 @@ created in 1.1 and extended by every later task — never deferred.
 
 ## Phase 2 — Multi-instance
 
-- [ ] **Task 2.0**: `InProcessRunner` concurrency
+- [x] **Task 2.0**: `InProcessRunner` concurrency
   - Delivers: `new InProcessRunner({concurrency})` (default 8) runs up to N claimed tasks at once, each with its own lease and heartbeat; a slow phase no longer delays other tasks' wakes; `stop()` waits for all in-flight phases
   - Files: `ai/src/harness/runners/inProcessRunner.ts`, tests
   - Blocked by: 1.12
   - Skills: `terreno-backend-api`
   - Docs: reference "Runners" (concurrency option, ordering guarantees)
   - Acceptance: bun test — a phase blocked on a gate does not prevent a second task from completing; never more than N concurrent; no task runs twice concurrently
+  - Shipped: fake-context cases in `ai/src/harness/runners/inProcessRunner.test.ts` (default 8, gate, peak, stop waits for all, invalid concurrency) and real-Mongo cases in `ai/src/harness/concurrency.test.ts` (blocked task does not hold up a second; 7 two-phase tasks at concurrency 3 peak at exactly 3 with no task running twice). Roast: PASS (2026-10-04; 76 targeted tests, three mutation checks red)
 
-- [ ] **Task 2.1**: `JobsRunner`
+- [x] **Task 2.1**: `JobsRunner`
   - Delivers: `@terreno/ai/harness/jobsRunner` with optional peer `@terreno/jobs`; job `terreno.harness.phase` keyed `taskId:phase:attempt`; harness task lease + heartbeat is the authority; importing the root `@terreno/ai` never loads jobs
   - Files: `ai/src/harness/runners/jobsRunner.ts`, `ai/package.json`, tests
   - Blocked by: 2.0
   - Skills: `terreno-backend-api`
   - Docs: reference "Runners"; how-to "Run on multiple instances"
   - Acceptance: AC11 — two workers race one phase; exactly one commit; stale owner rejected; knip clean without jobs installed
+  - Shipped: `ai/src/harness/runners/jobsRunner.test.ts` (two-worker race, stale-lease commit rejected, re-dispatch of a dead job, root imports never reach `@terreno/jobs`). Drift: the job key is `taskId:phase:attempt:claims` — `claims` (new `HarnessTask` counter) gives a phase revisited by an event wake or crash replay its own job, since jobs idempotency keys are permanent. Built before Task 2.0; it does not depend on `InProcessRunner` concurrency. Roast: PASS (2026-10-04; 17 targeted tests, ai suite 1185/0, knip clean, two mutation checks red)
 
 - [ ] **Task 2.2**: Runs admin screen
   - Delivers: task list/tree with status filters, abort, resolve-interrupted (retry/abort/complete + reason), link to trace

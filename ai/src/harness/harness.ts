@@ -69,7 +69,13 @@ import {
   splitRegistry,
 } from "./registry";
 import {InProcessRunner} from "./runners/inProcessRunner";
-import {claimNextTask, recoverExpiredTasks, runClaimedTask} from "./runtime";
+import {
+  claimNextTask,
+  claimTaskById,
+  listRunnableTasks,
+  recoverExpiredTasks,
+  runClaimedTask,
+} from "./runtime";
 import {sendEventRecords} from "./waits";
 
 export type {
@@ -121,8 +127,10 @@ export type {
   HarnessResolveInterruptedOptions,
   HarnessRetryPolicy,
   HarnessRunAgentOptions,
+  HarnessRunnableTask,
   HarnessRunner,
   HarnessRunnerContext,
+  HarnessRunTaskOptions,
   HarnessSection,
   HarnessSectionInput,
   HarnessSendEventOptions,
@@ -426,9 +434,12 @@ export class Harness {
     await this.runner.start({
       acquireOwnerLease: (lease) => acquireOwnerLease({lease, models, testHooks}),
       claimNext: (lease) => this.claimNextOrSweep(lease),
+      claimTask: (taskId, lease) => claimTaskById({definitions, lease, models, taskId}),
+      listRunnable: (limit) => listRunnableTasks({definitions, limit, models}),
       recoverExpired: () => recoverExpiredTasks(engine),
       releaseOwnerLease: (lease) => releaseOwnerLease({lease, models}),
-      runTask: (task, lease) => runClaimedTask({engine, lease, task}),
+      runTask: (task, lease, options) =>
+        runClaimedTask({engine, lease, maxPhases: options?.maxPhases, task}),
     });
   }
 
@@ -450,7 +461,7 @@ export class Harness {
     return claimNextTask({definitions, lease, models});
   }
 
-  /** Stop claiming work and wait for the phase in flight to settle. */
+  /** Stop claiming work and wait for every phase in flight to settle. */
   async stop(): Promise<void> {
     if (!this.isStarted) {
       return;

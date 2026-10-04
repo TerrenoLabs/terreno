@@ -24,6 +24,7 @@
     "@biomejs/biome": "catalog:",
     "@terreno/admin-backend": "workspace:*",
     "@terreno/api": "workspace:*",
+    "@terreno/jobs": "workspace:*",
     "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/express": "catalog:",
@@ -49,6 +50,12 @@
       "import": "./dist/harness/harness.js",
       "require": "./dist/harness/harness.js",
       "types": "./dist/harness/harness.d.ts"
+    },
+    "./harness/jobsRunner": {
+      "default": "./dist/harness/runners/jobsRunner.js",
+      "import": "./dist/harness/runners/jobsRunner.js",
+      "require": "./dist/harness/runners/jobsRunner.js",
+      "types": "./dist/harness/runners/jobsRunner.d.ts"
     },
     "./langfuseApp": {
       "default": "./dist/langfuseApp.js",
@@ -82,10 +89,14 @@
   "peerDependencies": {
     "@ai-sdk/google-vertex": "^4.0.142",
     "@terreno/api": "workspace:*",
+    "@terreno/jobs": "workspace:*",
     "mongoose": "^8.0.0 || ^9.0.0"
   },
   "peerDependenciesMeta": {
     "@ai-sdk/google-vertex": {
+      "optional": true
+    },
+    "@terreno/jobs": {
       "optional": true
     }
   },

@@ -3,32 +3,26 @@ import {darkThemeConfig} from "@terreno/ui";
 import type {RoleMap} from "./paletteTypes";
 
 /**
- * The preview and its WCAG audit use the same Figma-backed dark theme exported by @terreno/ui.
- */
-
-export const DARK_THEME_CONFIG = darkThemeConfig;
-
-/**
- * Dark-mode role → primitive map used by the WCAG audit, DERIVED from `DARK_THEME_CONFIG` so the
- * contrast checks always evaluate the same primitives the preview renders.
+ * Dark-mode role → primitive map used by the WCAG audit, derived from the Figma-backed
+ * `darkThemeConfig` so contrast checks evaluate the same primitives the preview renders.
  */
 export const DARK_ROLE_MAP: RoleMap = {
-  border: {default: DARK_THEME_CONFIG.border?.default as string},
+  border: {default: darkThemeConfig.border?.default as string},
   surface: {
-    base: DARK_THEME_CONFIG.surface?.base as string,
-    error: DARK_THEME_CONFIG.surface?.error as string,
-    primary: DARK_THEME_CONFIG.surface?.primary as string,
-    secondaryDark: DARK_THEME_CONFIG.surface?.secondaryDark as string,
-    success: DARK_THEME_CONFIG.surface?.success as string,
-    warning: DARK_THEME_CONFIG.surface?.warning as string,
+    base: darkThemeConfig.surface?.base as string,
+    error: darkThemeConfig.surface?.error as string,
+    primary: darkThemeConfig.surface?.primary as string,
+    secondaryDark: darkThemeConfig.surface?.secondaryDark as string,
+    success: darkThemeConfig.surface?.success as string,
+    warning: darkThemeConfig.surface?.warning as string,
   },
   text: {
-    accent: DARK_THEME_CONFIG.text?.accent as string,
-    error: DARK_THEME_CONFIG.text?.error as string,
-    inverted: DARK_THEME_CONFIG.text?.inverted as string,
-    link: DARK_THEME_CONFIG.text?.link as string,
-    primary: DARK_THEME_CONFIG.text?.primary as string,
-    secondaryLight: DARK_THEME_CONFIG.text?.secondaryLight as string,
+    accent: darkThemeConfig.text?.accent as string,
+    error: darkThemeConfig.text?.error as string,
+    inverted: darkThemeConfig.text?.inverted as string,
+    link: darkThemeConfig.text?.link as string,
+    primary: darkThemeConfig.text?.primary as string,
+    secondaryLight: darkThemeConfig.text?.secondaryLight as string,
   },
 };
 

@@ -1,14 +1,15 @@
 import {describe, expect, it} from "bun:test";
+import {darkThemeConfig} from "@terreno/ui";
 
 import {buildFontConfigCode} from "./codeExport";
 import {generatePrimitivesFromAnchors} from "./colorUtils";
-import {DARK_ROLE_MAP, DARK_THEME_CONFIG} from "./darkTheme";
+import {DARK_ROLE_MAP} from "./darkTheme";
 import {DEFAULT_FONTS} from "./fonts";
 import {CONTRAST_CHECKS, DEFAULT_ANCHORS, LIGHT_ROLE_MAP, runContrastChecks} from "./paletteTypes";
 
 /**
  * Tests for the mode-aware WCAG audit and font export. In particular, guards that the dark role map
- * used by the audit stays derived from `DARK_THEME_CONFIG` (the source used by the preview
+ * used by the audit stays derived from `darkThemeConfig` (the source used by the preview
  * provider), so the two cannot drift.
  */
 
@@ -41,10 +42,10 @@ describe("runContrastChecks", () => {
 describe("dark role map / preview config consistency", () => {
   it("resolves error and success surfaces to the same primitive the preview renders", () => {
     // Regression guard for the reviewer finding that the dark audit and preview diverged.
-    expect(DARK_ROLE_MAP.surface.error).toBe(DARK_THEME_CONFIG.surface?.error as string);
-    expect(DARK_ROLE_MAP.surface.success).toBe(DARK_THEME_CONFIG.surface?.success as string);
-    expect(DARK_ROLE_MAP.surface.base).toBe(DARK_THEME_CONFIG.surface?.base as string);
-    expect(DARK_ROLE_MAP.text.primary).toBe(DARK_THEME_CONFIG.text?.primary as string);
+    expect(DARK_ROLE_MAP.surface.error).toBe(darkThemeConfig.surface?.error as string);
+    expect(DARK_ROLE_MAP.surface.success).toBe(darkThemeConfig.surface?.success as string);
+    expect(DARK_ROLE_MAP.surface.base).toBe(darkThemeConfig.surface?.base as string);
+    expect(DARK_ROLE_MAP.text.primary).toBe(darkThemeConfig.text?.primary as string);
   });
 
   it("uses the Figma inverted text token in dark mode", () => {

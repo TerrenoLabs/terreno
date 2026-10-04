@@ -1035,7 +1035,9 @@ const county = formattedCountyCode("6075"); // "6075" (Santa Cruz County, CA)
 
 ## Media Query Helpers
 
-Responsive design utilities for breakpoints and device detection.
+Responsive design utilities for breakpoints and device detection. The policy
+(support levels, which widths to test, how layouts should adapt) is
+[Responsive design](../explanation/responsive-design.md).
 
 ``````typescript
 import {
@@ -1043,6 +1045,7 @@ import {
   mediaQueryLargerThan,
   mediaQuerySmallerThan,
   isNarrowViewport,
+  isSupportedDesktopWidth,
 } from "@terreno/ui";
 
 // Read the current breakpoint
@@ -1063,6 +1066,11 @@ if (mediaQuerySmallerThan("lg")) {
 // Current window is below the desktop breakpoint
 if (isNarrowViewport()) {
   console.info("Narrow viewport");
+}
+
+// Same floor for a width you already measured
+if (isSupportedDesktopWidth({width: 1280})) {
+  console.info("Desktop layout");
 }
 ``````
 
@@ -1089,6 +1097,8 @@ Web (desktop staff):
 On web, `sm` (320) and `md` (375) still classify widths below 1024 so layouts can remain accessible.
 
 `isNarrowViewport()` is true below the supported desktop floor: native width < 1024 (`xl`), web width < 1024 (`lg`). `isMobileDevice()` is the same check and is deprecated in favor of `isNarrowViewport`.
+
+`isSupportedDesktopWidth({width})` is the same floor for a width you already have (for example from `useWindowDimensions`). It does not read `Dimensions` itself. Web `lg` and native `xl` both start at 1024pt, so a 768pt window is narrow on both surfaces.
 
 Responsive `Box` direction props update automatically when the window resizes or a device rotates:
 

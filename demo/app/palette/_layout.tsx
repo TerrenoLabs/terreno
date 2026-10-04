@@ -1,22 +1,31 @@
-import {isNarrowViewport} from "@terreno/ui";
+import {isSupportedDesktopWidth} from "@terreno/ui";
 import {router, Stack} from "expo-router";
 import {StatusBar} from "expo-status-bar";
-import {Pressable, StyleSheet, Text} from "react-native";
+import type {ReactElement} from "react";
+import {Pressable, Text, useWindowDimensions} from "react-native";
 
-const Layout = () => {
+const Layout = (): ReactElement => {
+  const {width} = useWindowDimensions();
+  const isDesktopLayout = isSupportedDesktopWidth({width});
+
   return (
     <>
       <StatusBar style="auto" />
       <Stack
         screenOptions={{
           headerBackTitle: "Back",
-          headerBackVisible: isNarrowViewport(),
+          headerBackVisible: !isDesktopLayout,
           headerRight: () => (
             <Pressable
               onPress={async () => {
                 router.navigate("demo");
               }}
-              style={styles.header}
+              style={{
+                alignItems: "center",
+                height: "100%",
+                justifyContent: "center",
+                marginRight: isDesktopLayout ? 16 : 0,
+              }}
             >
               <Text style={{fontWeight: "bold"}}>Demo Mode</Text>
             </Pressable>
@@ -29,12 +38,3 @@ const Layout = () => {
 };
 
 export default Layout;
-
-const styles = StyleSheet.create({
-  header: {
-    alignItems: "center",
-    height: "100%",
-    justifyContent: "center",
-    marginRight: isNarrowViewport() ? 0 : 16,
-  },
-});

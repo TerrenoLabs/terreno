@@ -11,6 +11,7 @@ import {
   getBreakpointForWidth,
   isBreakpointAtLeast,
   isSupportedDesktopViewport,
+  isSupportedDesktopWidth,
   type ResponsiveBreakpointStore,
   useResponsiveBreakpoint,
 } from "./ResponsiveBreakpoint";
@@ -61,6 +62,12 @@ describe("ResponsiveBreakpoint", () => {
     assert.isTrue(isSupportedDesktopViewport({breakpoint: "xl", surface: "native"}));
     assert.isFalse(isSupportedDesktopViewport({breakpoint: "md", surface: "web"}));
     assert.isTrue(isSupportedDesktopViewport({breakpoint: "lg", surface: "web"}));
+    assert.isFalse(isSupportedDesktopWidth({surface: "web", width: 768}));
+    assert.isFalse(isSupportedDesktopWidth({surface: "native", width: 768}));
+    assert.isFalse(isSupportedDesktopWidth({surface: "web", width: 1023}));
+    assert.isTrue(isSupportedDesktopWidth({surface: "web", width: 1024}));
+    assert.isFalse(isSupportedDesktopWidth({surface: "native", width: 1023}));
+    assert.isTrue(isSupportedDesktopWidth({surface: "native", width: 1024}));
   });
 
   it("compares breakpoints without reading Dimensions", () => {

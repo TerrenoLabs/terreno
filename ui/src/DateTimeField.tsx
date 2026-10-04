@@ -461,20 +461,22 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
     providedTimezone ?? DateTime.local().zoneName ?? "UTC"
   );
 
-  const breakpoint = 395; // Breakpoint for switching to action sheet
+  // Parent width, in pt, below which inline controls do not fit. This is the field's own
+  // minimum, not a viewport breakpoint.
+  const inlineControlsMinWidth = 395;
   let minimumWidth = 230; // Minimum width for the field container
   if (type === "date") {
     minimumWidth = 200;
   }
 
-  let maximumWidth = breakpoint; // Maximum width for the field container
+  let maximumWidth = inlineControlsMinWidth; // Maximum width for the field container
   if (["date", "time"].includes(type)) {
     maximumWidth = minimumWidth + 10;
   }
 
   const [parentWidth, setParentWidth] = useState<number | null>(null);
   const parentIsLessThanBreakpointOrIsMobile =
-    (parentWidth !== null && parentWidth < breakpoint) || isNarrowViewport();
+    (parentWidth !== null && parentWidth < inlineControlsMinWidth) || isNarrowViewport();
 
   // We need to store the pending value in a ref because the state changes don't trigger
   // immediately, so onBlur may use stale values.

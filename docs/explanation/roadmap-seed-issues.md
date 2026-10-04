@@ -1305,6 +1305,20 @@ Let an agent **ask the user something and get a typed answer back in the same tu
 
 ---
 
+## durable-agent-harness
+
+**Title:** `Durable agent harness (@terreno/ai/harness)`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`durable-agent-harness`, Status=`Planned`
+
+One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work durably: deterministic multi-phase workflows, LLM agent loops, tools, subagents, human approvals, retries, and crash recovery — all audited. It must be strong enough to build an OpenClaw/Hermes-class personal agent, a coding agent, and a regulated clinical automation on the same primitives.
+
+- **Implementation plan:** [durable-agent-harness.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/durable-agent-harness.md)
+- **Tasks:** [durable-agent-harness.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/durable-agent-harness.md)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

@@ -1,75 +1,12 @@
-import type {TerrenoThemeConfig} from "@terreno/ui";
+import {darkThemeConfig} from "@terreno/ui";
 
 import type {RoleMap} from "./paletteTypes";
 
 /**
- * Dark-mode support for the palette preview. Terreno ships a single light theme, so a dark theme is
- * produced by REMAPPING semantic roles to darker primitives (not by inverting the neutral ramp).
- * `text.inverted` is intentionally kept light because many components use it as "text on a colored
- * surface" — see `DARK_MODE_AUDIT` for the components that do and do not adapt cleanly.
- *
- * `DARK_THEME_CONFIG` is the single source of truth for dark semantics: it is applied to the live
- * preview via `setTheme`, and `DARK_ROLE_MAP` (used by the dark WCAG audit) is derived from it so
- * the two can never drift.
+ * The preview and its WCAG audit use the same Figma-backed dark theme exported by @terreno/ui.
  */
 
-type DeepPartial<T> = {
-  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
-};
-
-/**
- * Role → primitive remapping applied (via `setTheme`) to the nested preview provider for dark mode.
- * Covers the surface/text/border/status roles that most components read.
- */
-export const DARK_THEME_CONFIG: DeepPartial<TerrenoThemeConfig> = {
-  border: {
-    activeAccent: "accent300",
-    activeNeutral: "neutral300",
-    dark: "neutral500",
-    default: "neutral700",
-    error: "error100",
-    focus: "primary300",
-    hover: "neutral600",
-    success: "success100",
-    warning: "warning100",
-  },
-  status: {
-    active: "success100",
-    away: "neutral400",
-    doNotDisturb: "error100",
-  },
-  surface: {
-    base: "neutral900",
-    disabled: "neutral600",
-    error: "error200",
-    errorLight: "error000",
-    neutral: "neutral600",
-    neutralDark: "neutral700",
-    neutralLight: "neutral800",
-    primary: "primary400",
-    secondaryDark: "secondary400",
-    secondaryExtraDark: "secondary200",
-    secondaryLight: "secondary700",
-    success: "success200",
-    successLight: "success000",
-    warning: "warning100",
-    warningLight: "warning000",
-  },
-  text: {
-    accent: "accent200",
-    error: "error100",
-    extraLight: "neutral400",
-    // Kept light on purpose — this role sits on colored/dark surfaces across the library.
-    inverted: "neutral000",
-    link: "primary200",
-    linkLight: "primary300",
-    primary: "neutral000",
-    secondaryDark: "secondary100",
-    secondaryLight: "neutral300",
-    success: "success100",
-    warning: "warning100",
-  },
-};
+export const DARK_THEME_CONFIG = darkThemeConfig;
 
 /**
  * Dark-mode role → primitive map used by the WCAG audit, DERIVED from `DARK_THEME_CONFIG` so the
@@ -118,13 +55,13 @@ export const DARK_MODE_AUDIT: DarkModeAuditItem[] = [
   {
     area: "text.inverted role",
     detail:
-      "Mapped to the lightest neutral and used as 'text on colored surfaces' (Button, Badge, Banner, Toast, Tooltip, Avatar). Kept light here so it stays legible — inverting the neutral ramp instead would break all of these.",
+      "Uses the Figma dark-mode value (#353535). Components place it on the lighter primary and status surfaces, so those pairings must remain in the WCAG scan.",
     status: "partial",
   },
   {
     area: "Button / Badge / Banner text",
     detail:
-      "Labels use text.inverted on saturated fills. Fine as long as the colored surface stays dark enough for white text (watch the WCAG flags for primary/warning).",
+      "Labels use text.inverted on Figma's dark-mode fills. Keep these semantic pairings in the WCAG scan when tokens change.",
     status: "partial",
   },
   {
@@ -148,8 +85,8 @@ export const DARK_MODE_AUDIT: DarkModeAuditItem[] = [
   {
     area: "IconButton muted/navigation/destructive",
     detail:
-      "These variants use theme.text.inverted (white) as the button background, so the pill stays white on a dark page.",
-    status: "breaks",
+      "These variants use theme.text.inverted as a background. The Figma dark token is #353535, so the pills now follow the dark canvas but still require per-variant contrast checks.",
+    status: "partial",
   },
   {
     area: "Banner inner action button text",

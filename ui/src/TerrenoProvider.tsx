@@ -1,16 +1,18 @@
 import type React from "react";
 import type {FC} from "react";
 
-import type {IconRegistryMap} from "./Common";
+import type {IconRegistryMap, ThemePrimitives} from "./Common";
 import {IconRegistryProvider} from "./IconRegistry";
 import {OpenAPIProvider} from "./OpenAPIContext";
 import {Host} from "./PortalHost";
-import {ThemeProvider} from "./Theme";
+import {type DeepPartial, type ThemeColorScheme, ThemeProvider} from "./Theme";
 import {Toast} from "./Toast";
 import {ToastProvider} from "./ToastNotifications";
 
-export const TerrenoProvider: FC<{
+export interface TerrenoProviderProps {
   children: React.ReactNode;
+  colorScheme?: ThemeColorScheme;
+  initialPrimitives?: DeepPartial<ThemePrimitives>;
   openAPISpecUrl?: string;
   /**
    * Custom icons to register, keyed by icon name. Registered names take
@@ -18,9 +20,17 @@ export const TerrenoProvider: FC<{
    * is accepted (Icon, Button, IconButton, fields, etc.).
    */
   icons?: IconRegistryMap;
-}> = ({children, openAPISpecUrl, icons}) => {
+}
+
+export const TerrenoProvider: FC<TerrenoProviderProps> = ({
+  children,
+  colorScheme,
+  initialPrimitives,
+  openAPISpecUrl,
+  icons,
+}) => {
   return (
-    <ThemeProvider>
+    <ThemeProvider colorScheme={colorScheme} initialPrimitives={initialPrimitives}>
       <IconRegistryProvider icons={icons}>
         <ToastProvider
           animationDuration={250}

@@ -61,6 +61,31 @@ const customStyle: StyleProp<ViewStyle> = {
 - Ensures type compatibility when passing styles to @terreno/ui components
 - Simplifies imports (one package instead of two)
 
+## Theme modes
+
+`TerrenoProvider` defaults to the Flourish Health light mode exported from
+Figma. Select the matching Figma dark mode explicitly or follow the operating
+system:
+
+``````tsx
+import {TerrenoProvider} from "@terreno/ui";
+
+<TerrenoProvider colorScheme="system">
+  <App />
+</TerrenoProvider>
+``````
+
+`colorScheme` accepts `"light"`, `"dark"`, or `"system"` and defaults to
+`"light"` for deterministic server rendering. `useTheme()` returns the resolved
+`colorScheme` (`"light"` or `"dark"`) with `theme`, `setTheme`,
+`setPrimitives`, and `resetTheme`.
+
+The public `lightThemeConfig`, `darkThemeConfig`, and
+`defaultThemePrimitives` exports are the canonical token maps. They include the
+Figma AI surface/border roles and the dark status ramps. Custom overrides set
+through `useTheme()` are layered over the active mode; `resetTheme()` removes
+those overrides without changing the provider's selected mode.
+
 ### DashboardGrid and DashboardGridItem
 
 Eager layout-only wrapping grid. Default columns `{sm: 1, md: 2, lg: 3}`. Children stay caller-supplied `Card`s. Cell width is `(rowWidth - gap × (columns - 1)) / columns` so flex `gap` does not wrap extra columns.
@@ -1224,7 +1249,7 @@ const buttonStyles = toggle(isPressed, pressedStyles, defaultStyles);
 
 @terreno/ui components do not require environment variables. All configuration is done at runtime via:
 
-- **TerrenoProvider props** — Theme customization, custom icon registry (`icons`), OpenAPI spec URL
+- **TerrenoProvider props** — `colorScheme`, `initialPrimitives`, custom icons, and OpenAPI spec URL
 - **Theme hooks** — `useTheme()`, `setTheme()`, `setPrimitives()`
 - **Component props** — Direct prop overrides for individual components
 
@@ -1234,11 +1259,8 @@ const buttonStyles = toggle(isPressed, pressedStyles, defaultStyles);
 import {TerrenoProvider} from "@terreno/ui";
 
 <TerrenoProvider
-  baseUrl="https://api.example.com"
-  theme={{
-    surface: {primary: "secondary500"},
-  }}
-  onError={(error) => console.error(error)}
+  colorScheme="system"
+  openAPISpecUrl="https://api.example.com/openapi.json"
 >
   {children}
 </TerrenoProvider>

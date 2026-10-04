@@ -122,6 +122,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@biomejs/biome": "catalog:",
     "@playwright/test": "catalog:",
     "@rtk-query/codegen-openapi": "catalog:",
@@ -177,6 +178,7 @@
   "private": true,
   "license": "MIT",
   "scripts": {
+    "accessibility:scan": "bun scripts/accessibility/scan.ts",
     "admin-backend:compile": "bun run --filter '@terreno/admin-backend' compile",
     "admin-backend:lint": "bun run --filter '@terreno/admin-backend' lint",
     "admin-backend:test": "bun run --filter '@terreno/admin-backend' test",

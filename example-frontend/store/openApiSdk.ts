@@ -16,7 +16,6 @@ export const addTagTypes = [
   "admin",
   "featureflags",
   "jobs",
-  "harness",
   "harnessconversations",
   "harnesstasks",
   "harnessapprovals",
@@ -1050,47 +1049,55 @@ const injectedRtkApi = api
           url: `/gpt/histories/${queryArg.id}/turn`,
         }),
       }),
-      harnessAbort: build.mutation<HarnessAbortRes, HarnessAbortArgs>({
-        invalidatesTags: ["harness"],
-        query: (queryArg) => ({
-          body: queryArg.body,
-          method: "POST",
-          url: `/harness/tasks/${queryArg.id}/abort`,
-        }),
-      }),
-      harnessApprove: build.mutation<HarnessApproveRes, HarnessApproveArgs>({
-        invalidatesTags: ["harness"],
+      harnessapprovalsApprove: build.mutation<
+        HarnessapprovalsApproveRes,
+        HarnessapprovalsApproveArgs
+      >({
+        invalidatesTags: ["harnessapprovals"],
         query: (queryArg) => ({
           body: queryArg.body,
           method: "POST",
           url: `/harness/approvals/${queryArg.id}/approve`,
         }),
       }),
-      harnessReject: build.mutation<HarnessRejectRes, HarnessRejectArgs>({
-        invalidatesTags: ["harness"],
-        query: (queryArg) => ({
-          body: queryArg.body,
-          method: "POST",
-          url: `/harness/approvals/${queryArg.id}/reject`,
-        }),
-      }),
-      harnessResolveInterrupted: build.mutation<
-        HarnessResolveInterruptedRes,
-        HarnessResolveInterruptedArgs
+      harnessapprovalsReject: build.mutation<HarnessapprovalsRejectRes, HarnessapprovalsRejectArgs>(
+        {
+          invalidatesTags: ["harnessapprovals"],
+          query: (queryArg) => ({
+            body: queryArg.body,
+            method: "POST",
+            url: `/harness/approvals/${queryArg.id}/reject`,
+          }),
+        }
+      ),
+      harnessconversationsSubmit: build.mutation<
+        HarnessconversationsSubmitRes,
+        HarnessconversationsSubmitArgs
       >({
-        invalidatesTags: ["harness"],
-        query: (queryArg) => ({
-          body: queryArg.body,
-          method: "POST",
-          url: `/harness/tasks/${queryArg.id}/resolveInterrupted`,
-        }),
-      }),
-      harnessSubmit: build.mutation<HarnessSubmitRes, HarnessSubmitArgs>({
-        invalidatesTags: ["harness"],
+        invalidatesTags: ["harnessconversations"],
         query: (queryArg) => ({
           body: queryArg.body,
           method: "POST",
           url: `/harness/conversations/${queryArg.id}/submit`,
+        }),
+      }),
+      harnesstasksAbort: build.mutation<HarnesstasksAbortRes, HarnesstasksAbortArgs>({
+        invalidatesTags: ["harnesstasks"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/harness/tasks/${queryArg.id}/abort`,
+        }),
+      }),
+      harnesstasksResolveInterrupted: build.mutation<
+        HarnesstasksResolveInterruptedRes,
+        HarnesstasksResolveInterruptedArgs
+      >({
+        invalidatesTags: ["harnesstasks"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/harness/tasks/${queryArg.id}/resolveInterrupted`,
         }),
       }),
       listMcpServiceTokens: build.query<ListMcpServiceTokensRes, ListMcpServiceTokensArgs>({
@@ -3696,10 +3703,10 @@ export type PostJobsByIdCancelRes = /** status 200 Success */ {
   data?: object;
 };
 export type PostJobsByIdCancelArgs = string;
-export type HarnessSubmitRes = /** status 200 Successful response */ {
+export type HarnessconversationsSubmitRes = /** status 200 Successful response */ {
   data?: object;
 };
-export type HarnessSubmitArgs = {
+export type HarnessconversationsSubmitArgs = {
   id: string;
   body: {
     content: string;
@@ -3848,19 +3855,19 @@ export type GetHarnessConversationsByIdRes = /** status 200 Successful read */ {
   deleted?: boolean;
 };
 export type GetHarnessConversationsByIdArgs = string;
-export type HarnessAbortRes = /** status 200 Successful response */ {
+export type HarnesstasksAbortRes = /** status 200 Successful response */ {
   data?: object;
 };
-export type HarnessAbortArgs = {
+export type HarnesstasksAbortArgs = {
   id: string;
   body: {
     reason: string;
   };
 };
-export type HarnessResolveInterruptedRes = /** status 200 Successful response */ {
+export type HarnesstasksResolveInterruptedRes = /** status 200 Successful response */ {
   data?: object;
 };
-export type HarnessResolveInterruptedArgs = {
+export type HarnesstasksResolveInterruptedArgs = {
   id: string;
   body: {
     action: "abort" | "complete" | "retry";
@@ -3889,16 +3896,6 @@ export type GetHarnessTasksByIdRes = /** status 200 Successful read */ {
   eventSeq?: number;
   /** Immutable task input */
   input?: any;
-  lease?: {
-    /** When the current phase started under this lease */
-    acquiredAt?: string;
-    /** When the current execution lease lapses */
-    expiresAt?: string;
-    /** Runner instance that holds the execution lease */
-    owner?: string;
-    /** Fencing token every commit must match */
-    token?: string;
-  };
   /** Registered task definition name */
   name: string;
   outcome?: {
@@ -3968,19 +3965,19 @@ export type GetHarnessTasksByIdRes = /** status 200 Successful read */ {
   deleted?: boolean;
 };
 export type GetHarnessTasksByIdArgs = string;
-export type HarnessApproveRes = /** status 200 Successful response */ {
+export type HarnessapprovalsApproveRes = /** status 200 Successful response */ {
   data?: object;
 };
-export type HarnessApproveArgs = {
+export type HarnessapprovalsApproveArgs = {
   id: string;
   body: {
     reason?: string;
   };
 };
-export type HarnessRejectRes = /** status 200 Successful response */ {
+export type HarnessapprovalsRejectRes = /** status 200 Successful response */ {
   data?: object;
 };
-export type HarnessRejectArgs = {
+export type HarnessapprovalsRejectArgs = {
   id: string;
   body: {
     reason: string;
@@ -7652,14 +7649,14 @@ export const {
   usePostJobsByIdRetryMutation,
   usePostJobsByIdRequeueMutation,
   usePostJobsByIdCancelMutation,
-  useHarnessSubmitMutation,
+  useHarnessconversationsSubmitMutation,
   useGetHarnessConversationsQuery,
   useGetHarnessConversationsByIdQuery,
-  useHarnessAbortMutation,
-  useHarnessResolveInterruptedMutation,
+  useHarnesstasksAbortMutation,
+  useHarnesstasksResolveInterruptedMutation,
   useGetHarnessTasksByIdQuery,
-  useHarnessApproveMutation,
-  useHarnessRejectMutation,
+  useHarnessapprovalsApproveMutation,
+  useHarnessapprovalsRejectMutation,
   useGetHarnessApprovalsQuery,
   useGetHarnessApprovalsByIdQuery,
   useGetAiObservabilityStatusQuery,

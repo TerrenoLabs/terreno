@@ -69,7 +69,7 @@ export const SegmentedControl: FC<SegmentedControlProps> = ({
       <View
         style={{
           alignItems: "center",
-          alignSelf: hugsContent ? "flex-start" : undefined,
+          ...(hugsContent ? {alignSelf: "flex-start" as const} : {}),
           backgroundColor: theme.primitives.neutral300,
           borderRadius: theme.primitives.radius3xl,
           display: "flex",
@@ -113,7 +113,13 @@ export const SegmentedControl: FC<SegmentedControlProps> = ({
                   paddingHorizontal: hugsContent ? 12 : 2,
                 }}
               >
-                {hugsContent ? <Text size="sm">{item}</Text> : <Heading size="sm">{item}</Heading>}
+                {hugsContent ? (
+                  <Text size="sm" skipLinking>
+                    {item}
+                  </Text>
+                ) : (
+                  <Heading size="sm">{item}</Heading>
+                )}
                 {visibleBadges[index] && (
                   <Badge
                     status={visibleBadges[index].status ?? "info"}

@@ -148,7 +148,6 @@ exports[`SegmentedControl renders correctly with default props 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
-          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -325,7 +324,6 @@ exports[`SegmentedControl highlights selected item 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
-          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -502,7 +500,6 @@ exports[`SegmentedControl renders with medium size (default) 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
-          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -547,27 +544,20 @@ exports[`SegmentedControl renders a compact control that hugs its labels 1`] = `
                 {
                   "$$typeof": Symbol(react.test.json),
                   "children": [
-                    {
-                      "$$typeof": Symbol(react.test.json),
-                      "children": [
-                        "Tab 1",
-                      ],
-                      "props": {
-                        "numberOfLines": 0,
-                        "selectable": undefined,
-                        "style": {
-                          "color": "#1C1C1C",
-                          "fontFamily": "text-regular",
-                          "fontSize": 10,
-                          "textAlign": "left",
-                        },
-                        "testID": undefined,
-                      },
-                      "type": "Text",
-                    },
+                    "Tab 1",
                   ],
-                  "props": {},
-                  "type": "View",
+                  "props": {
+                    "numberOfLines": 0,
+                    "selectable": undefined,
+                    "style": {
+                      "color": "#1C1C1C",
+                      "fontFamily": "text-regular",
+                      "fontSize": 10,
+                      "textAlign": "left",
+                    },
+                    "testID": undefined,
+                  },
+                  "type": "Text",
                 },
               ],
               "props": {
@@ -596,27 +586,20 @@ exports[`SegmentedControl renders a compact control that hugs its labels 1`] = `
                 {
                   "$$typeof": Symbol(react.test.json),
                   "children": [
-                    {
-                      "$$typeof": Symbol(react.test.json),
-                      "children": [
-                        "Tab 2",
-                      ],
-                      "props": {
-                        "numberOfLines": 0,
-                        "selectable": undefined,
-                        "style": {
-                          "color": "#1C1C1C",
-                          "fontFamily": "text-regular",
-                          "fontSize": 10,
-                          "textAlign": "left",
-                        },
-                        "testID": undefined,
-                      },
-                      "type": "Text",
-                    },
+                    "Tab 2",
                   ],
-                  "props": {},
-                  "type": "View",
+                  "props": {
+                    "numberOfLines": 0,
+                    "selectable": undefined,
+                    "style": {
+                      "color": "#1C1C1C",
+                      "fontFamily": "text-regular",
+                      "fontSize": 10,
+                      "textAlign": "left",
+                    },
+                    "testID": undefined,
+                  },
+                  "type": "Text",
                 },
               ],
               "props": {
@@ -645,27 +628,20 @@ exports[`SegmentedControl renders a compact control that hugs its labels 1`] = `
                 {
                   "$$typeof": Symbol(react.test.json),
                   "children": [
-                    {
-                      "$$typeof": Symbol(react.test.json),
-                      "children": [
-                        "Tab 3",
-                      ],
-                      "props": {
-                        "numberOfLines": 0,
-                        "selectable": undefined,
-                        "style": {
-                          "color": "#1C1C1C",
-                          "fontFamily": "text-regular",
-                          "fontSize": 10,
-                          "textAlign": "left",
-                        },
-                        "testID": undefined,
-                      },
-                      "type": "Text",
-                    },
+                    "Tab 3",
                   ],
-                  "props": {},
-                  "type": "View",
+                  "props": {
+                    "numberOfLines": 0,
+                    "selectable": undefined,
+                    "style": {
+                      "color": "#1C1C1C",
+                      "fontFamily": "text-regular",
+                      "fontSize": 10,
+                      "textAlign": "left",
+                    },
+                    "testID": undefined,
+                  },
+                  "type": "Text",
                 },
               ],
               "props": {
@@ -883,7 +859,6 @@ exports[`SegmentedControl renders with large size 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
-          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -1219,7 +1194,6 @@ exports[`SegmentedControl renders with badges 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
-          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -1406,7 +1380,6 @@ exports[`SegmentedControl renders with maxItems and scroll buttons 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
-          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",
@@ -1603,7 +1576,6 @@ exports[`SegmentedControl handles scroll navigation 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
-          "alignSelf": undefined,
           "backgroundColor": "#CDCDCD",
           "borderRadius": 360,
           "display": "flex",

@@ -2055,7 +2055,7 @@ jobs:
           command: |
             set -euo pipefail
             packages=(
-              api test ui rtk admin-backend admin-frontend admin-spa ai
+              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             filters=()

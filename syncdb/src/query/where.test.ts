@@ -63,6 +63,71 @@ describe("encodeQueryParams", () => {
   });
 });
 
+describe("compileWhere operator coverage", () => {
+  it("handles $eq, $exists, and failing comparisons", () => {
+    expect(matches({a: {$eq: 1}}, {a: 1})).toBe(true);
+    expect(matches({a: {$eq: 1}}, {a: 2})).toBe(false);
+    expect(matches({a: {$exists: true}}, {})).toBe(false);
+    expect(matches({a: {$exists: "true"}}, {a: 0})).toBe(true);
+    expect(matches({a: {$in: "x"}}, {a: "x"})).toBe(true);
+    expect(matches({a: {$nin: "x"}}, {a: "y"})).toBe(true);
+    expect(matches({a: {$gt: 5}}, {a: 5})).toBe(false);
+    expect(matches({a: {$gte: 6}}, {a: 5})).toBe(false);
+    expect(matches({a: {$lt: 5}}, {a: 6})).toBe(false);
+    expect(matches({a: {$lte: 4}}, {a: 5})).toBe(false);
+    expect(matches({a: {$gt: 1}}, {})).toBe(false);
+    expect(matches({a: {$gt: 1}}, {a: null})).toBe(false);
+  });
+
+  it("compares numeric strings, mixed types, and equal strings", () => {
+    expect(matches({a: "5"}, {a: 5})).toBe(true);
+    expect(matches({a: {$gt: "4"}}, {a: 5})).toBe(true);
+    expect(matches({a: {$gt: "x"}}, {a: 5})).toBe(false);
+    expect(matches({a: {$gte: "b"}}, {a: "b"})).toBe(true);
+    expect(matches({a: {$lt: "b"}}, {a: "a"})).toBe(true);
+    expect(matches({"a.b": 1}, {a: "flat"})).toBe(false);
+  });
+
+  it("normalizes Luxon-like values with toISO", () => {
+    const luxonLike = {toISO: (): string => "2026-01-01T00:00:00.000Z"};
+    expect(matches({created: {$gte: luxonLike}}, {created: "2026-02-01T00:00:00.000Z"})).toBe(true);
+  });
+
+  it("is inexact for malformed or ambiguous filters", () => {
+    expect(compileWhere({$and: {a: 1} as never}).match).toBeUndefined();
+    expect(compileWhere({$or: [{a: {$regex: "x"}}]}).match).toBeUndefined();
+    expect(compileWhere({nested: {a: 1}}).match).toBeUndefined();
+    expect(compileWhere({a: undefined}).match?.({})).toBe(true);
+    expect(compileWhere(undefined).match?.({})).toBe(true);
+  });
+});
+
+describe("encodeQueryParams values", () => {
+  it("encodes dates, nulls, and skips undefined", () => {
+    expect(
+      decodeURIComponent(
+        encodeQueryParams({a: undefined, b: null, c: new Date("2026-01-01T00:00:00.000Z")})
+      )
+    ).toBe("b=null&c=2026-01-01T00:00:00.000Z");
+  });
+});
+
+describe("compileSort value ranks", () => {
+  it("orders missing < numbers < strings < booleans < objects", () => {
+    const rows = [{v: {x: 1}}, {v: true}, {v: "s"}, {v: 2}, {}, {v: 1}, {v: false}];
+    const sorted = [...rows].sort(compileSort({v: 1}));
+    expect(sorted).toEqual([{}, {v: 1}, {v: 2}, {v: "s"}, {v: false}, {v: true}, {v: {x: 1}}]);
+  });
+
+  it("treats equal objects and two missing values as ties", () => {
+    const compare = compileSort<Record<string, unknown>>({v: -1});
+    expect(compare({v: {a: 1}}, {v: {a: 1}})).toBe(0);
+    expect(compare({v: {a: 1}}, {v: {b: 1}})).not.toBe(0);
+    expect(compare({}, {v: undefined})).toBe(0);
+    expect(compileSort("a.b")({a: "flat"}, {a: {b: 1}})).toBeLessThan(0);
+  });
+});
+
 describe("encodeQueryParams empty arrays", () => {
   it("throws instead of silently dropping an empty array", () => {
     expect(() => encodeQueryParams({$or: [{a: {$in: []}}]})).toThrow(/empty array/);

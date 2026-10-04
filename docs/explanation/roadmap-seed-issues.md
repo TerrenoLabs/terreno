@@ -1160,7 +1160,7 @@ Delete the **legacy RTK cache-patching realtime path** in Terreno 58. Collection
 **Title:** `AI observability (Langfuse-light, pluggable)`
 
 **Labels:** `area:ai`, `type:feature`  
-**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Shaping`
+**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Planned`
 
 Ship **Langfuse-like** prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
 

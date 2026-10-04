@@ -97,6 +97,8 @@ const AppearanceSetting = () => {
 };
 ``````
 
+Dark `surface.warningLight` uses `warning200`. The lighter warning orange, `warning100`, is 2.52:1 against warning text and misses WCAG AA. Highlighted `DataTable` cells switch to `text.inverted` when `text.primary` is below 4.5:1 on that fill.
+
 `themeColorSchemeOptions` labels those values Light, Dark, and Follow system.
 `useTheme()` also returns the resolved `colorScheme` (`"light"` or `"dark"`)
 with `theme`, `setTheme`, `setPrimitives`, and `resetTheme`. An explicit

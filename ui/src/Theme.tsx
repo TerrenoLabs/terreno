@@ -209,7 +209,9 @@ export const darkThemeConfig: TerrenoThemeConfig = {
     success: "success050",
     successLight: "success200",
     warning: "warning050",
-    warningLight: "warning100",
+    // warning200 is the darkest warning fill. warning100 (#F36719) is 2.52:1
+    // against warning text (#FFE3C6), below the 4.5:1 AA bar.
+    warningLight: "warning200",
   },
   text: {
     accent: "accent400",

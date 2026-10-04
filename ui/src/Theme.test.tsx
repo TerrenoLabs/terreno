@@ -225,7 +225,7 @@ describe("Theme", () => {
         success: "success050",
         successLight: "success200",
         warning: "warning050",
-        warningLight: "warning100",
+        warningLight: "warning200",
       });
       assert.deepEqual(darkThemeConfig.border, {
         activeAccent: "accent200",

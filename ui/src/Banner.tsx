@@ -74,7 +74,7 @@ export const BannerButton = ({
               <Icon iconName={buttonIconName as IconName} type="solid" />
             </View>
           )}
-          <NativeText style={{fontSize: 12}}>{buttonText}</NativeText>
+          <NativeText style={{color: theme.text.primary, fontSize: 12}}>{buttonText}</NativeText>
         </View>
         {Boolean(loading) && (
           <Box marginLeft={2}>

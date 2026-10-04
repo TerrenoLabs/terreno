@@ -30,6 +30,7 @@ import type {
   DataTableProps,
   SurfaceColor,
 } from "./Common";
+import {readableTextColor} from "./colorContrast";
 import {DataTableHeaderInfoMarkdown} from "./DataTableHeaderInfoMarkdown";
 import {
   DataTableAdditionalFiltersWeb,
@@ -64,9 +65,19 @@ const TextCell: FC<{
   cellData: DataTableCellData;
   column: DataTableColumn;
 }> = ({cellData}) => {
+  const {theme} = useTheme();
+  const highlightColor = cellData.highlight ? theme.surface[cellData.highlight] : undefined;
+  const textColor =
+    highlightColor &&
+    readableTextColor(theme.text.primary, theme.text.inverted, highlightColor) === "inverted"
+      ? "inverted"
+      : undefined;
+
   return (
     <Box flex="grow" justifyContent="center">
-      <Text size={cellData.textSize || "md"}>{String(cellData.value ?? "")}</Text>
+      <Text color={textColor} size={cellData.textSize || "md"}>
+        {String(cellData.value ?? "")}
+      </Text>
     </Box>
   );
 };

@@ -85,7 +85,7 @@ export const DARK_MODE_AUDIT: DarkModeAuditItem[] = [
   {
     area: "Banner inner action button text",
     detail:
-      "Renders a raw React Native Text with no theme color on a surface.base pill, so the label can disappear when surface.base is dark.",
-    status: "breaks",
+      "The action pill uses surface.base with text.primary, so the label follows the active theme.",
+    status: "adapts",
   },
 ];

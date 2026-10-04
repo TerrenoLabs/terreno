@@ -1028,7 +1028,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui rtk admin-frontend
+          packages: blocks ui rtk admin-frontend syncdb
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend

@@ -586,6 +586,22 @@ describe("DocumentStorageApp", () => {
   });
 
   describe("configuration edge cases", () => {
+    it("returns an empty list when the bucket does not exist", async () => {
+      app = buildApp({bucketName: "missing-bucket"});
+      const agent = await authAsUser(app, "admin");
+      bucketBehavior.getFiles = mock(async () => {
+        const error = new Error("The specified bucket does not exist.") as Error & {
+          code?: number;
+          errors?: {reason?: string}[];
+        };
+        error.code = 404;
+        error.errors = [{reason: "notFound"}];
+        throw error;
+      });
+      const res = await agent.get("/documents/").expect(200);
+      expect(res.body).toEqual({files: [], folders: [], prefix: ""});
+    });
+
     it("throws a 503 when no bucketName is configured", async () => {
       const originalBucket = process.env.GCS_BUCKET;
       process.env.GCS_BUCKET = "";

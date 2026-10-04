@@ -97,6 +97,18 @@ const userIdOf = (req: express.Request): string | undefined => {
 
 // GCS prefixes are directories. A value without a trailing slash would glue the next
 // segment on (`pr-5users/` instead of `pr-5/users/`).
+// GCS answers a missing bucket with 404 notFound. That is an empty demo, not a broken list.
+const isMissingBucket = (error: unknown): boolean => {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const gcsError = error as {code?: number; errors?: {reason?: string}[]};
+  if (gcsError.code !== 404) {
+    return false;
+  }
+  return gcsError.errors?.some((item) => item.reason === "notFound") === true;
+};
+
 const withTrailingSlash = (folderPrefix: string | undefined): string => {
   const base = folderPrefix ?? "";
   if (base.length === 0 || base.endsWith("/")) {
@@ -206,10 +218,23 @@ export class DocumentStorageApp implements TerrenoPlugin {
         const rootPrefix = this.prefixFor(req);
         const fullPrefix = `${rootPrefix}${queryPrefix}`;
 
-        const [files, , apiResponse] = await this.bucket.getFiles({
-          delimiter: "/",
-          prefix: fullPrefix,
-        });
+        let files: Awaited<ReturnType<ReturnType<Storage["bucket"]>["getFiles"]>>[0];
+        let apiResponse: {prefixes?: string[]} | undefined;
+        try {
+          const listed = await this.bucket.getFiles({
+            delimiter: "/",
+            prefix: fullPrefix,
+          });
+          files = listed[0];
+          apiResponse = listed[2] as {prefixes?: string[]} | undefined;
+        } catch (error) {
+          if (!isMissingBucket(error)) {
+            throw error;
+          }
+          logger.warn("Document storage bucket does not exist; returning an empty list");
+          files = [];
+          apiResponse = {prefixes: []};
+        }
 
         const documentFiles: DocumentFile[] = files
           .filter((file) => file.name !== fullPrefix)
@@ -222,8 +247,7 @@ export class DocumentStorageApp implements TerrenoPlugin {
             updated: file.metadata.updated as string,
           }));
 
-        const prefixes =
-          ((apiResponse as {prefixes?: string[]})?.prefixes as string[] | undefined) ?? [];
+        const prefixes = apiResponse?.prefixes ?? [];
         const folders = prefixes.map((p) => {
           const relative = p.slice(rootPrefix.length);
           return relative;

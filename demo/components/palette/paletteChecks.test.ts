@@ -8,8 +8,8 @@ import {CONTRAST_CHECKS, DEFAULT_ANCHORS, LIGHT_ROLE_MAP, runContrastChecks} fro
 
 /**
  * Tests for the mode-aware WCAG audit and font export. In particular, guards that the dark role map
- * used by the audit stays derived from `DARK_THEME_CONFIG` (the source applied to the preview), so
- * the two cannot drift.
+ * used by the audit stays derived from `DARK_THEME_CONFIG` (the source used by the preview
+ * provider), so the two cannot drift.
  */
 
 const primitives = generatePrimitivesFromAnchors(DEFAULT_ANCHORS) as Record<string, string>;
@@ -47,8 +47,8 @@ describe("dark role map / preview config consistency", () => {
     expect(DARK_ROLE_MAP.text.primary).toBe(DARK_THEME_CONFIG.text?.primary as string);
   });
 
-  it("keeps text.inverted light in dark mode", () => {
-    expect(DARK_ROLE_MAP.text.inverted).toBe("neutral000");
+  it("uses the Figma inverted text token in dark mode", () => {
+    expect(DARK_ROLE_MAP.text.inverted).toBe("neutral800");
   });
 
   it("differs from the light role map on the base surface", () => {

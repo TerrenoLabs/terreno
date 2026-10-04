@@ -105,7 +105,7 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
   withConfirmation = false,
   wrapText = false,
 }) => {
-  const {theme} = useTheme();
+  const {colorScheme, theme} = useTheme();
   const CustomIcon = useCustomIcon(iconName);
 
   const {backgroundColor, borderColor, borderWidth, color} = useMemo(() => {
@@ -115,7 +115,10 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
     let bgColor = theme.surface.primary;
     let bColor: string | undefined;
     let bWidth: number | undefined;
-    let textColor = theme.text.inverted;
+    let textColor =
+      variant === "primary" && colorScheme === "light"
+        ? theme.text.secondaryDark
+        : theme.text.inverted;
 
     if (disabled) {
       bgColor = theme.surface.disabled;
@@ -155,7 +158,7 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
       borderWidth: bWidth,
       color: textColor,
     };
-  }, [disabled, state, variant, theme]);
+  }, [colorScheme, disabled, state, variant, theme]);
 
   if (!theme) {
     return null;

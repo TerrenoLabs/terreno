@@ -49,6 +49,7 @@ export const ThemeComponentStories = () => {
             {label: "Pink", value: "pink"},
             {label: "Dark", value: "dark"},
           ]}
+          title="Theme"
           value={themeName}
         />
       </Box>

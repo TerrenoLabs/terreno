@@ -1,5 +1,5 @@
 import {useEmbedMode} from "@contexts/EmbedModeContext";
-import {Box, useTheme} from "@terreno/ui";
+import {Box, ThemeProvider} from "@terreno/ui";
 import {router, useGlobalSearchParams, useNavigation, usePathname} from "expo-router";
 import type React from "react";
 import {useCallback, useEffect} from "react";
@@ -13,28 +13,14 @@ import {
 } from "../previewState";
 import {DemoPreviewBar} from "./DemoPreviewBar";
 import {HeaderModeLink} from "./HeaderModeLink";
-import {DARK_THEME_CONFIG} from "./palette/darkTheme";
 
 export const DemoPreviewFrame: React.FC<{children: React.ReactNode}> = ({children}) => {
   const params = useGlobalSearchParams();
   const {isEmbedMode} = useEmbedMode();
   const state = previewStateFromQuery(params);
   const shareQuery = previewQueryFromState(state);
-  const {resetTheme, setTheme} = useTheme();
   const navigation = useNavigation();
   const isDevRoute = usePathname().startsWith("/dev");
-
-  // Keep the live theme aligned with the shareable preview query, and restore the app theme on leave.
-  useEffect(() => {
-    if (state.theme === "dark") {
-      setTheme(DARK_THEME_CONFIG);
-    } else {
-      resetTheme();
-    }
-    return () => {
-      resetTheme();
-    };
-  }, [resetTheme, setTheme, state.theme]);
 
   const handleChange = useCallback((next: DemoPreviewState): void => {
     router.setParams(previewParamsFromState(next));
@@ -75,18 +61,20 @@ export const DemoPreviewFrame: React.FC<{children: React.ReactNode}> = ({childre
 
   return (
     <DemoPreviewContext.Provider value={state}>
-      <Box flex="grow" height="100%" testID="demo-preview-root" width="100%">
-        <Box
-          color={state.background === "transparent" ? undefined : background}
-          flex="grow"
-          height="100%"
-          maxWidth={frameWidth}
-          testID="demo-preview-frame"
-          width={frameWidth}
-        >
-          {children}
+      <ThemeProvider colorScheme={state.theme}>
+        <Box flex="grow" height="100%" testID="demo-preview-root" width="100%">
+          <Box
+            color={state.background === "transparent" ? undefined : background}
+            flex="grow"
+            height="100%"
+            maxWidth={frameWidth}
+            testID="demo-preview-frame"
+            width={frameWidth}
+          >
+            {children}
+          </Box>
         </Box>
-      </Box>
+      </ThemeProvider>
     </DemoPreviewContext.Provider>
   );
 };

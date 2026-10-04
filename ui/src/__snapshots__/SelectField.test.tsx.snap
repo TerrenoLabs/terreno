@@ -1757,7 +1757,7 @@ exports[`SelectField renders disabled state 1`] = `
                 "borderColor": "#9A9A9A",
               },
               {
-                "backgroundColor": "#D9D9D9",
+                "backgroundColor": "#CDCDCD",
               },
             ],
             "testID": undefined,

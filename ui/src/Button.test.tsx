@@ -136,6 +136,20 @@ describe("Button", () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
+  it("uses accessible Figma text colors for primary buttons in both modes", () => {
+    const light = renderWithTheme(
+      <Button onClick={() => {}} text="Light primary" variant="primary" />
+    );
+    const dark = render(
+      <ThemeModule.ThemeProvider colorScheme="dark">
+        <Button onClick={() => {}} text="Dark primary" variant="primary" />
+      </ThemeModule.ThemeProvider>
+    );
+
+    assert.equal(light.getByText("Light primary").props.style.color, "#092E3A");
+    assert.equal(dark.getByText("Dark primary").props.style.color, "#353535");
+  });
+
   it("renders secondary variant", () => {
     const {toJSON} = renderWithTheme(
       <Button onClick={() => {}} text="Secondary" variant="secondary" />

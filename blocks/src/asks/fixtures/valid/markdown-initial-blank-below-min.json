@@ -1,0 +1,24 @@
+{
+  "kind": "markdown",
+  "input": {
+    "prompt": "Add a note for the delivery driver.",
+    "initial": "   ",
+    "minLength": 1
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "markdown",
+    "text": "Add a note for the delivery driver.",
+    "toolCallId": "call_fixture"
+  }
+}

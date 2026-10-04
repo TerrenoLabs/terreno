@@ -1,0 +1,24 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Pick two reviewers for this pull request.",
+    "select": "many",
+    "options": [
+      {"id": "ana", "label": "Ana"},
+      {"id": "ben", "label": "Ben"},
+      {"id": "chen", "label": "Chen"}
+    ],
+    "default": ["ana"],
+    "minSelected": 2,
+    "maxSelected": 2
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Pick two reviewers for this pull request.",
+    "handoff": true,
+    "buttons": [
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

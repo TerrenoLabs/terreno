@@ -117,7 +117,7 @@ When you add a framework capability, exercise it in `example-backend` and/or
 Package-specific commands are listed in [AGENTS.md](AGENTS.md). You can also use Bun's filter syntax:
 
 ```bash
-bun run --filter '@terreno/ui' compile
+bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile
 bun run --filter '@terreno/api' test
 ```
 

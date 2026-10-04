@@ -19,6 +19,7 @@ describe("@terreno/ai public exports", () => {
     "addProjectRoutes",
     "assertVertexModelsEnabled",
     "compilePrompt",
+    "createAskTools",
     "createPrompt",
     "createTelemetryConfig",
     "createVertexProvider",
@@ -40,6 +41,10 @@ describe("@terreno/ai public exports", () => {
     "normalizeVertexModelId",
     "parseAiJson",
     "preparePromptForAI",
+    "getObservabilityApp",
+    "resetObservabilityApp",
+    "resolveObservabilityControl",
+    "validateObservabilityConfig",
     "setCached",
     "shutdownLangfuseClient",
     "shutdownTracing",
@@ -56,17 +61,23 @@ describe("@terreno/ai public exports", () => {
     "LangfuseApp",
     "LangfuseCache",
     "MCPService",
+    "MemoryScoreSink",
+    "MemoryTraceSink",
+    "ObservabilityApp",
     "Project",
   ] as const;
 
   const expectedConstants = [
+    "COMPACT_SURFACE_SYSTEM_PROMPT",
     "CONTENT_SUMMARY_PROMPT",
     "DEFAULT_GPT_MEMORY",
+    "DEFAULT_OBSERVABILITY_CONTROL",
     "DEFAULT_VERTEX_LOCATION",
     "GEMINI_API_BASE_URL",
     "JSON_VALUE_SYSTEM_PROMPT",
     "Output",
     "REMIX_PROMPT",
+    "TERRENO_ASKS_SYSTEM_PROMPT",
     "TITLE_GENERATION_PROMPT",
     "TRANSLATION_PROMPT",
     "TemperaturePresets",
@@ -98,6 +109,8 @@ describe("@terreno/ai public exports", () => {
       "remix",
       "summarization",
       "translation",
+      "ui_action",
+      "ui_blocks",
     ]);
   });
 });

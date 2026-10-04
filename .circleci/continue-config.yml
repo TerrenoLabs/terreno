@@ -15,6 +15,9 @@ parameters:
   run-ai:
     type: boolean
     default: false
+  run-blocks:
+    type: boolean
+    default: false
   run-rtk:
     type: boolean
     default: false
@@ -246,10 +249,10 @@ commands:
             done
 
   demo_lint_and_typecheck:
-    description: Compile ui, then lint, typecheck, and smoke-test demo, then check story coverage
+    description: Compile blocks and ui, then lint, typecheck, and smoke-test demo, then check story coverage
     steps:
       - compile_packages:
-          packages: ui
+          packages: blocks ui
       - run:
           name: Lint and typecheck demo
           command: |
@@ -381,6 +384,8 @@ commands:
             export PORT=4000
             export MONGO_URI="mongodb://127.0.0.1/terreno-e2e?replicaSet=rs0"
             export TOKEN_ISSUER=terreno-e2e
+            # harness-intake asserts the deterministic demo summarizer, never a real provider.
+            export CLINIC_DEMO_MODEL=true
             bun run src/index.ts
       - run:
           name: Wait for backend health
@@ -451,7 +456,7 @@ commands:
               auth) specs="login signup consents forgot-password reset-password verify-email" ;;
               app) specs="todos profile realtime ai-chat pdf notifications" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth" ;;
-              admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back" ;;
+              admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
               *) specs="$shard" ;;
             esac
@@ -685,7 +690,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api
+          packages: api admin-backend blocks
       - run:
           name: Lint / compile / test ai
           working_directory: ~/project/ai
@@ -700,13 +705,32 @@ jobs:
       - check_new_file_lcov:
           package: ai
 
+  blocks-ci:
+    executor: node22
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - run:
+          name: Lint / compile / test blocks
+          working_directory: ~/project/blocks
+          environment:
+            CI: "true"
+          command: |
+            set -euo pipefail
+            bun run lint
+            bun run compile
+            bun run test:coverage
+            bash ../scripts/upload-codecov.sh blocks
+      - check_new_file_lcov:
+          package: blocks
+
   rtk-ci:
     executor: node22
     steps:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: ui
+          packages: blocks ui
       - run:
           name: Lint / compile / test rtk
           working_directory: ~/project/rtk
@@ -726,6 +750,8 @@ jobs:
     steps:
       - checkout
       - install_bun_and_deps
+      - compile_packages:
+          packages: blocks
       - run:
           name: Lint / compile / types / test ui
           working_directory: ~/project/ui
@@ -770,7 +796,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: ui
+          packages: blocks ui
       - run:
           name: Lint / compile / test admin-frontend
           working_directory: ~/project/admin-frontend
@@ -824,7 +850,7 @@ jobs:
           name: Fetch coverage base
           command: git fetch origin master
       - compile_packages:
-          packages: api ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
+          packages: api blocks ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
       - run:
           name: Check new source file coverage
           command: |
@@ -841,6 +867,7 @@ jobs:
             add_skip "<< pipeline.parameters.run-ai >>" ai
             add_skip "<< pipeline.parameters.run-api >>" api
             add_skip "<< pipeline.parameters.run-api-health >>" api-health
+            add_skip "<< pipeline.parameters.run-blocks >>" blocks
             add_skip "<< pipeline.parameters.run-comms >>" comms
             add_skip "<< pipeline.parameters.run-create-terreno-app >>" create-terreno-app
             add_skip "<< pipeline.parameters.run-feature-flags >>" feature-flags
@@ -1001,7 +1028,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: ui rtk admin-frontend
+          packages: blocks ui rtk admin-frontend
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1086,7 +1113,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api ai api-health comms jobs admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
+          packages: api blocks ai api-health comms jobs admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
       - run:
           name: List admin scripts
           working_directory: ~/project/example-backend
@@ -1156,7 +1183,7 @@ jobs:
       - run:
           name: Compile admin-spa dependencies
           command: |
-            bun run --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
+            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
       - run:
           name: Lint / compile / types / unit / build / smoke
           working_directory: ~/project/admin-spa
@@ -1358,12 +1385,10 @@ jobs:
 
   # Trusted-base architectural review: checkout master (not the PR head) then
   # fetch the PR via GitHub API. Matches GHA pull_request_target. Skip forks.
-  # Attach terreno-github-api + terreno-agentic once those contexts exist.
   architectural-pr-review:
     executor: node22
     resource_class: medium
     steps:
-      - skip_if_not_pull_request
       - skip_if_fork_pull_request
       - run:
           name: Skip when review secrets are missing
@@ -1380,6 +1405,14 @@ jobs:
             set -euo pipefail
             git fetch origin master
             git checkout --force origin/master
+      # GitHub App pipelines leave CIRCLE_PULL_REQUEST unset; resolve the PR by
+      # branch and rebuild the URL the review script expects.
+      - resolve_preview_pr_number
+      - run:
+          name: Export pull request URL
+          command: |
+            set -euo pipefail
+            echo "export CIRCLE_PULL_REQUEST=https://github.com/TerrenoLabs/terreno/pull/${PR_NUMBER}" >> "$BASH_ENV"
       - install_bun_and_deps
       - run:
           name: Install Cursor Agent CLI
@@ -2022,7 +2055,7 @@ jobs:
           command: |
             set -euo pipefail
             packages=(
-              api test ui rtk admin-backend admin-frontend admin-spa ai
+              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             filters=()
@@ -2044,7 +2077,7 @@ jobs:
               npm_tag=latest
             fi
             packages=(
-              api test ui rtk admin-backend admin-frontend admin-spa ai
+              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             export TERRENO_PUBLISH_PREBUILT=1
@@ -2067,7 +2100,7 @@ jobs:
             # Publish rewrites catalog:/workspace:* specifiers in the working tree;
             # --force drops those edits so only the version bump is committed.
             git checkout --force -B release-master origin/master
-            for package in api test ui rtk admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
+            for package in api test blocks ui rtk admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
               [ -d "$package" ] || continue
               node -e "
                 const fs=require('fs');
@@ -2114,19 +2147,14 @@ jobs:
               "$ZOOM_WEBHOOK_URL"
 
 workflows:
-  # Attach terreno-e2e / terreno-github-api / terreno-agentic in the CircleCI
-  # project once Phase 0 contexts exist. Do not put GITHUB_TOKEN or
-  # CURSOR_API_KEY in project env vars (injected into every job). Missing named
-  # contexts fail the pipeline, so they are not hard-required in this file until
-  # created; then attach:
-  #   - dco:
-  #       context: [terreno-github-api]
-  #   - architectural-pr-review:
-  #       context: [terreno-github-api, terreno-agentic]
+  # Never put GITHUB_TOKEN or CURSOR_API_KEY in project env vars (injected into
+  # every job); scope them to these two jobs through contexts.
   always:
     jobs:
-      - dco
-      - architectural-pr-review
+      - dco:
+          context: [terreno-github-api]
+      - architectural-pr-review:
+          context: [terreno-github-api, terreno-agentic]
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>
@@ -2153,6 +2181,11 @@ workflows:
     when: << pipeline.parameters.run-ai >>
     jobs:
       - ai-ci
+
+  blocks:
+    when: << pipeline.parameters.run-blocks >>
+    jobs:
+      - blocks-ci
 
   rtk:
     when: << pipeline.parameters.run-rtk >>
@@ -2236,7 +2269,7 @@ workflows:
     jobs:
       - packages-ci:
           package: admin-frontend
-          compile-deps: ui
+          compile-deps: blocks ui
 
   api-health:
     when: << pipeline.parameters.run-api-health >>

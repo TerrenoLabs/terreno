@@ -1,0 +1,13 @@
+{
+  "kind": "markdown",
+  "input": {
+    "prompt": "Write a tagline.",
+    "minLength": 20001
+  },
+  "errors": [
+    {
+      "path": "minLength",
+      "code": "RANGE_INVALID"
+    }
+  ]
+}

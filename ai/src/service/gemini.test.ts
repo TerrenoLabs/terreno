@@ -12,11 +12,11 @@ const jsonResponse = (body: unknown, ok = true, status = 200): Response =>
 describe("gemini model listing helpers", () => {
   describe("normalizeGeminiModelId", () => {
     it("strips the models/ prefix", () => {
-      expect(normalizeGeminiModelId("models/gemini-2.5-flash")).toBe("gemini-2.5-flash");
+      expect(normalizeGeminiModelId("models/gemini-3.8-flash")).toBe("gemini-3.8-flash");
     });
 
     it("leaves a bare id unchanged", () => {
-      expect(normalizeGeminiModelId("gemini-2.5-pro")).toBe("gemini-2.5-pro");
+      expect(normalizeGeminiModelId("gemini-3.1-pro-preview")).toBe("gemini-3.1-pro-preview");
     });
   });
 
@@ -30,29 +30,32 @@ describe("gemini model listing helpers", () => {
       const fetchImpl = mock(async () =>
         jsonResponse({
           models: [
-            {name: "models/gemini-2.5-pro", supportedGenerationMethods: ["generateContent"]},
-            {name: "models/gemini-2.5-flash", supportedGenerationMethods: ["generateContent"]},
+            {
+              name: "models/gemini-3.1-pro-preview",
+              supportedGenerationMethods: ["generateContent"],
+            },
+            {name: "models/gemini-3.8-flash", supportedGenerationMethods: ["generateContent"]},
             {name: "models/text-embedding-004", supportedGenerationMethods: ["embedContent"]},
           ],
         })
       ) as unknown as typeof fetch;
 
       const result = await listGeminiApiModels({apiKey: "key", fetchImpl});
-      expect(result).toEqual(["gemini-2.5-pro", "gemini-2.5-flash"]);
+      expect(result).toEqual(["gemini-3.1-pro-preview", "gemini-3.8-flash"]);
     });
 
     it("returns every model when chatOnly is false", async () => {
       const fetchImpl = mock(async () =>
         jsonResponse({
           models: [
-            {name: "models/gemini-2.5-flash", supportedGenerationMethods: ["generateContent"]},
+            {name: "models/gemini-3.8-flash", supportedGenerationMethods: ["generateContent"]},
             {name: "models/text-embedding-004", supportedGenerationMethods: ["embedContent"]},
           ],
         })
       ) as unknown as typeof fetch;
 
       const result = await listGeminiApiModels({apiKey: "key", chatOnly: false, fetchImpl});
-      expect(result).toEqual(["gemini-2.5-flash", "text-embedding-004"]);
+      expect(result).toEqual(["gemini-3.8-flash", "text-embedding-004"]);
     });
 
     it("follows pagination via nextPageToken", async () => {
@@ -62,20 +65,23 @@ describe("gemini model listing helpers", () => {
         if (call === 1) {
           return jsonResponse({
             models: [
-              {name: "models/gemini-2.5-pro", supportedGenerationMethods: ["generateContent"]},
+              {
+                name: "models/gemini-3.1-pro-preview",
+                supportedGenerationMethods: ["generateContent"],
+              },
             ],
             nextPageToken: "page2",
           });
         }
         return jsonResponse({
           models: [
-            {name: "models/gemini-2.5-flash", supportedGenerationMethods: ["generateContent"]},
+            {name: "models/gemini-3.8-flash", supportedGenerationMethods: ["generateContent"]},
           ],
         });
       }) as unknown as typeof fetch;
 
       const result = await listGeminiApiModels({apiKey: "key", fetchImpl});
-      expect(result).toEqual(["gemini-2.5-pro", "gemini-2.5-flash"]);
+      expect(result).toEqual(["gemini-3.1-pro-preview", "gemini-3.8-flash"]);
       expect(call).toBe(2);
     });
 

@@ -850,8 +850,9 @@ mock.module("react-native-actions-sheet", () => ({
 
 // Mock MediaQuery
 mock.module("./MediaQuery", () => ({
-  isMobileDevice: mock(() => false),
+  isNarrowViewport: mock(() => false),
   mediaQueryLargerThan: mock(() => false),
+  mediaQuerySmallerThan: mock(() => false),
 }));
 
 // Mock expo-image-manipulator
@@ -895,6 +896,7 @@ mock.module("expo-haptics", () => ({
 mock.module("expo-clipboard", () => ({
   getStringAsync: mock(() => Promise.resolve("")),
   hasStringAsync: mock(() => Promise.resolve(false)),
+  setImageAsync: mock(() => Promise.resolve(undefined)),
   setStringAsync: mock(() => Promise.resolve(undefined)),
 }));
 

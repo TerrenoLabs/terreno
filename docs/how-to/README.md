@@ -34,18 +34,24 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Debug with MCP](debug-with-mcp.md) — Diagnose backend, browser, Metro, app, and client-state failures
 - [Connect an MCP client with a service token](connect-mcp-service-token.md) — Mint a personal `mcp_` key for Perplexity and other remote clients
 - [Install agent skills](install-agent-skills.md) — `npx skills`, the Cursor plugin, the Codex plugin, or the Claude Code plugin
+- [Develop an AI feature](ai-feature-development.md) — Dataset → prompt → evaluators → experiment → production label → live traces (SOP)
+- [Observe LLM calls](observe-llm-calls.md) — Register ObservabilityApp, primaries, price map, sampleRate
+- [Build a durable workflow](build-a-durable-workflow.md) — Phased harness task with an agent, a human sign-off, and a once-only side effect (`clinic.intakeSummary`)
+- [Ship a new task version](ship-a-new-task-version.md) — Change a durable harness task without stranding in-flight runs
 - [GitHub issue lifecycle](github-issue-lifecycle.md) — Create pick-ready issues, Pick ⇄ Roast, or unattended `status:ready-for-dev` pickup
 - [Call external APIs](call-external-apis.md) — Authenticated HTTP client, retries, and error normalization for third-party integrations
 - [Upgrade banner](upgrade-banner.md) — Soft warning and hard-block app update UX
 - [Upgrade Terreno](upgrade-terreno.md) — Lockstep `@terreno/*` bumps, note range, order, rollback
 - [Track upstream Expo](track-upstream-expo.md) — Morning probe for SDK betas; `release-X.Y.Z` loop log + native fingerprint deps
-- [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid`
+- [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid` (ops-dashboard scorecards and spans: [dashboard-chart-parity](../implementationPlans/dashboard-chart-parity.md))
 - [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md) — PNG goldens for the chart visual gallery, not JSON snapshots
 - [Migrate from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md) — Move data sync to the local-first layer
 - [Generate a REST CLI from OpenAPI](generate-a-rest-cli.md) — Scaffold `terreno generate rest-cli` for an app API
 - [In-app notifications](in-app-notifications.md) — Register `NotificationsApp`, syncdb inbox, and UI bell
 - [Add organizations](add-organizations.md) — Opt into Membership-backed tenancy, RBAC, admin, and seeded examples
 - [Add a GPT chat mascot](add-gpt-chat-mascot.md) — Optional consumer-owned character on empty `GPTChat`
+- [Add agent asks to a chat](agent-ui-asks.md) — Turn on `asks`, show and answer them in `GPTChat`, try the keyless demo agent, and answer asks from an Apple Watch or another small client
+- [Validate a block document locally](agent-ui-blocks.md) — `terreno-blocks validate` for a whole-reply YAML document
 
 ## Admin
 

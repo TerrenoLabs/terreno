@@ -4,6 +4,14 @@ export interface ChartPoint {
   value: number;
 }
 
+export interface ChartSeries {
+  color?: string;
+  data: ChartPoint[];
+  id: string;
+  label: string;
+  stroke?: "solid" | "dotted";
+}
+
 export interface ChartPlot {
   height: number;
   left: number;

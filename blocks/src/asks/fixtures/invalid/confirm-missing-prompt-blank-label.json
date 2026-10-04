@@ -1,0 +1,16 @@
+{
+  "kind": "confirm",
+  "input": {
+    "denyLabel": "   "
+  },
+  "errors": [
+    {
+      "path": "denyLabel",
+      "code": "TOO_SHORT"
+    },
+    {
+      "path": "prompt",
+      "code": "MISSING_REQUIRED"
+    }
+  ]
+}

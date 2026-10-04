@@ -1,0 +1,12 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which toppings?",
+    "select": "all",
+    "options": [
+      {"id": "cheese", "label": "Cheese"},
+      {"id": "olives", "label": "Olives"}
+    ]
+  },
+  "errors": [{"path": "select", "code": "INVALID_ENUM"}]
+}

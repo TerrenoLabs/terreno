@@ -55,6 +55,7 @@ export const PACKAGE_CI_LCOV_SKIP: {packageName: string; pipelineParameter: stri
   {packageName: "ai", pipelineParameter: "run-ai"},
   {packageName: "api", pipelineParameter: "run-api"},
   {packageName: "api-health", pipelineParameter: "run-api-health"},
+  {packageName: "blocks", pipelineParameter: "run-blocks"},
   {packageName: "comms", pipelineParameter: "run-comms"},
   {packageName: "create-terreno-app", pipelineParameter: "run-create-terreno-app"},
   {packageName: "feature-flags", pipelineParameter: "run-feature-flags"},
@@ -322,6 +323,23 @@ export const expandCoverageFileArgs = (args: readonly string[], cwd: string): st
   return expanded;
 };
 
+const BUN_TEST_VALUE_FLAGS = new Set([
+  "--bail",
+  "--config",
+  "--coverage-dir",
+  "--cwd",
+  "--max-concurrency",
+  "--preload",
+  "--reporter",
+  "--rerun-each",
+  "--seed",
+  "--test-name-pattern",
+  "--timeout",
+  "-c",
+  "-r",
+  "-t",
+]);
+
 export const bunTestFileArgs = (testScript: string | undefined): string[] => {
   if (!testScript) {
     return [];
@@ -331,7 +349,20 @@ export const bunTestFileArgs = (testScript: string | undefined): string[] => {
   if (!match?.[1]) {
     return [];
   }
-  return match[1].split(/\s+/).filter((token) => token.length > 0 && !token.startsWith("-"));
+  const tokens = match[1].split(/\s+/).filter((token) => token.length > 0);
+  const files: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.startsWith("-")) {
+      const flag = token.split("=")[0];
+      if (!token.includes("=") && BUN_TEST_VALUE_FLAGS.has(flag)) {
+        index += 1;
+      }
+      continue;
+    }
+    files.push(token);
+  }
+  return files;
 };
 
 export const coverageRunArgs = ({

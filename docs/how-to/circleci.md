@@ -80,7 +80,8 @@ for `.circleci/**`); the kitchen-sink does not start a second copy. If the same
 pipeline already set `run-api`, `run-ui`, `run-e2e`, `run-example-backend`, or
 `run-admin-spa`, that kitchen-sink workflow is skipped so jobs are not doubled.
 `comms/**` also sets `run-example-backend` and `run-example-backend-script`,
-matching the GitHub Actions twins.
+matching the GitHub Actions twins. `blocks/**` sets `run-blocks` plus every
+parameter `ai/**` sets, because `@terreno/ai` depends on `@terreno/blocks`.
 
 The example-backend Docker job runs only when its image recipe changes
 (`Dockerfile`, `.dockerignore`, package manifests, or `bun.lock`). API/source
@@ -165,7 +166,7 @@ non-PR branch builds.
 | Path (examples) | Parameter | PR job | `master` job |
 | --- | --- | --- | --- |
 | `demo/**`, `ui/**` | `run-deploy-demo` | `deploy-demo-preview` | `deploy-demo` |
-| `example-frontend/**`, `admin-frontend/**`, `rtk/**`, `ui/**`, `ai/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
+| `example-frontend/**`, `admin-frontend/**`, `rtk/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
 | `docs/**`, `website/**` | `run-deploy-docs` | `deploy-docs-preview` | `deploy-docs` |
 | `example-backend/**`, `api/**`, `comms/**`, `jobs/**`, `admin-spa/**`, `feature-flags/**`, `announcements/**`, plus every frontend path above | `run-cd-backend` | `gcp-cd-preview` | `gcp-cd-prod` |
 | `terraform/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
@@ -242,9 +243,10 @@ restrict `terreno-release` and `terreno-npm` to tag/manual release pipelines.
 Until contexts exist, e2e jobs may use **project env vars for `E2E_*` secrets only**
 (or the in-job `ci-e2e-*-secret` fallbacks). **Do not** put `GITHUB_TOKEN` (or any
 GitHub PAT) in project env vars — those are injected into every job, including
-`bun` scripts from the PR. Create `terreno-github-api`, restrict it to this
-project, leave fork-PR secret passing off, and attach that context **only** to
-`dco` and `architectural-pr-review`. DCO skips if `GITHUB_TOKEN` is unset.
+`bun` scripts from the PR. `terreno-github-api` must hold the PAT as
+`GITHUB_TOKEN`; restrict it to this project and leave fork-PR secret passing off.
+The `always` workflow attaches it **only** to `dco` and `architectural-pr-review`
+(the latter also gets `terreno-agentic`). DCO skips if `GITHUB_TOKEN` is unset.
 `architectural-pr-review` also skips if `GITHUB_TOKEN` or `CURSOR_API_KEY` is
 unset, and it skips fork PRs. The job checks out `origin/master` before running
 the review script so a PR cannot rewrite the reviewer.
@@ -268,7 +270,7 @@ ambient OIDC token for GCP impersonation.
 Branch protection must require the CircleCI job names below. Remove disabled
 GitHub check names or pull requests will wait for checks that can no longer run.
 
-Dedicated package jobs (`api-ci`, `ai-ci`, `rtk-ci`, `ui-ci`, `syncdb-ci`,
+Dedicated package jobs (`api-ci`, `ai-ci`, `blocks-ci`, `rtk-ci`, `ui-ci`, `syncdb-ci`,
 `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run `bun run test:coverage`
 (`scripts/check-coverage.ts`, 95% functions and lines). Isolated `syncdb` tests
 are included by that script. Published packages without a dedicated workflow
@@ -287,6 +289,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Admin backend lint, compile, coverage | `packages-ci` (`admin-backend`) |
 | Admin frontend lint, compile, coverage | `packages-ci` (`admin-frontend`) |
 | Run all tests (AI CI) | `ai-ci` |
+| Lint, compile, and test blocks | `blocks-ci` |
 | RTK Lint and Build | `rtk-ci` |
 | Syncdb Lint, Build, and Tests | `syncdb-ci` |
 | UI Lint, Build, Types, and Tests + demo typecheck | `ui-ci` |

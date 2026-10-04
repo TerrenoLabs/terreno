@@ -20,6 +20,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build blocks dependency
+        working-directory: blocks
+        run: bun run compile
+
       - name: Compile UI and generate types
         run: |
           bun run compile

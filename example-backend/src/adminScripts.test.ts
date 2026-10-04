@@ -67,11 +67,41 @@ describe("resetDatabase admin script", () => {
       2
     );
     assert.equal(await ConsentForm.countDocuments(), 3);
-    assert.equal(await FeatureFlag.countDocuments(), 5);
+    assert.equal(await FeatureFlag.countDocuments(), 6);
     const superadmin = await User.findByEmail("superadmin@example.com");
     assert.exists(superadmin);
     assert.isTrue(superadmin?.admin);
     assert.include(superadmin?.roles ?? [], "superadmin");
+  });
+});
+
+describe("seedChatSafetyDataset admin script", () => {
+  it("is registered for the admin script runner", () => {
+    const script = adminScripts.find(({name}) => name === "seedChatSafetyDataset");
+    assert.exists(script);
+    assert.match(script?.description ?? "", /chat-safety/i);
+  });
+
+  it("leaves the seeded dataset unchanged on dry and wet runs", async () => {
+    await seedDefaultData();
+    const script = adminScripts.find(({name}) => name === "seedChatSafetyDataset");
+    if (!script) {
+      assert.fail("seedChatSafetyDataset is not registered");
+    }
+    const dry = await script.runner(false);
+    const wet = await script.runner(true);
+    assert.isTrue(dry.success);
+    assert.isTrue(wet.success);
+    assert.isTrue(
+      dry.results.some((line) => {
+        return line.includes("left unchanged");
+      })
+    );
+    assert.isTrue(
+      wet.results.some((line) => {
+        return line.includes("left unchanged");
+      })
+    );
   });
 });
 

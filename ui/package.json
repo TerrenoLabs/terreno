@@ -26,6 +26,7 @@
     "@react-native-picker/picker": "catalog:",
     "@react-navigation/native": "catalog:",
     "@shopify/react-native-skia": "catalog:",
+    "@terreno/blocks": "workspace:*",
     "d3-scale": "^4.0.2",
     "d3-shape": "^3.2.0",
     "emoji-datasource": "^16.0.0",
@@ -162,7 +163,7 @@
     "test:coverage": "TZ=America/New_York bun run ../scripts/check-coverage.ts",
     "types": "bun typedoc"
   },
-  "version": "57.7.0",
+  "version": "57.10.1",
   "bugs": {
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },

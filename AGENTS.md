@@ -30,6 +30,7 @@ deploy.
 - **admin-backend/** - Admin panel backend plugin for @terreno/api (`@terreno/admin-backend`)
 - **admin-frontend/** - Admin panel frontend screens for @terreno/api backends (`@terreno/admin-frontend`)
 - **admin-spa/** - Standalone admin SPA (Expo Router web app) + Express plugin to serve it from a backend (`@terreno/admin-spa`)
+- **blocks/** - Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards, and JSON Schemas for native clients (`@terreno/blocks`)
 - **mcp-server/** - MCP server for AI assistant integration (`@terreno/mcp`, bins `terreno-mcp` + `terreno-mcp-local`)
 - **demo/** - Demo app for showcasing and testing UI components
 - **example-frontend/** - Example Expo app demonstrating full stack usage

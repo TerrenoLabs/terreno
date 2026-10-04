@@ -220,7 +220,7 @@ jobs:
         run: echo "Published @terreno/test@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
   publish-ui:
-    needs: check-changes
+    needs: [check-changes, publish-blocks]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -358,6 +358,9 @@ jobs:
         env:
           VERSION: ${{ needs.check-changes.outputs.version }}
           UI_VERSION: ${{ steps.ui_version.outputs.ui_version }}
+
+      - name: Compile workspace dependencies
+        run: node ../.github/scripts/compile-workspace-deps.js
 
       - name: Compile
         run: bun run compile
@@ -819,8 +822,88 @@ jobs:
       - name: Summary
         run: echo "Published @terreno/admin-spa@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
+  publish-blocks:
+    needs: [check-changes]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: blocks
+    steps:
+      - uses: actions/checkout@v6.0.3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Validate required secrets
+        run: |
+          missing=()
+          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then missing+=("NPM_TOKEN"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Update version
+        run: |
+          VERSION="${{ needs.check-changes.outputs.version }}"
+          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); pkg.version = '$VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
+
+      - name: Replace catalog and workspace references
+        run: |
+          node -e "
+          const fs = require('fs');
+          const rootPkg = JSON.parse(fs.readFileSync('../package.json', 'utf8'));
+          const catalog = rootPkg.catalog || {};
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const version = process.env.VERSION;
+          for (const depType of ['dependencies', 'devDependencies', 'peerDependencies']) {
+            if (!pkg[depType]) continue;
+            for (const [key, value] of Object.entries(pkg[depType])) {
+              if (value === 'catalog:') {
+                if (!catalog[key]) throw new Error(\`Catalog entry not found for \${key}\`);
+                pkg[depType][key] = catalog[key];
+              } else if (value === 'workspace:*' && key.startsWith('@terreno/')) {
+                pkg[depType][key] = version;
+              }
+            }
+          }
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+        env:
+          VERSION: ${{ needs.check-changes.outputs.version }}
+
+      - name: Install dependencies after replacement
+        run: bun install
+
+      - name: Compile
+        run: bun run compile
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Publish to npm
+        run: npm publish --tag "${{ needs.check-changes.outputs.npmTag }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        run: echo "Published @terreno/blocks@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+
   publish-ai:
-    needs: [check-changes, publish-api, publish-test]
+    needs: [check-changes, publish-api, publish-test, publish-blocks]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1658,12 +1741,12 @@ jobs:
         run: echo "Published @terreno/cli@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
   update-version-on-master:
-    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
     # Run if any package was published and this is not a prerelease tag
     if: |
       always() &&
       needs.check-changes.outputs.isPrerelease != 'true' &&
-      (needs.publish-api.result == 'success' || needs.publish-test.result == 'success' || needs.publish-ui.result == 'success' || needs.publish-rtk.result == 'success' || needs.publish-admin-backend.result == 'success' || needs.publish-admin-frontend.result == 'success' || needs.publish-admin-spa.result == 'success' || needs.publish-ai.result == 'success' || needs.publish-api-health.result == 'success' || needs.publish-comms.result == 'success' || needs.publish-feature-flags.result == 'success' || needs.publish-jobs.result == 'success' || needs.publish-announcements.result == 'success' || needs.publish-create-terreno-app.result == 'success' || needs.publish-mcp.result == 'success' || needs.publish-syncdb.result == 'success' || needs.publish-cli.result == 'success')
+      (needs.publish-api.result == 'success' || needs.publish-test.result == 'success' || needs.publish-ui.result == 'success' || needs.publish-rtk.result == 'success' || needs.publish-admin-backend.result == 'success' || needs.publish-admin-frontend.result == 'success' || needs.publish-admin-spa.result == 'success' || needs.publish-blocks.result == 'success' || needs.publish-ai.result == 'success' || needs.publish-api-health.result == 'success' || needs.publish-comms.result == 'success' || needs.publish-feature-flags.result == 'success' || needs.publish-jobs.result == 'success' || needs.publish-announcements.result == 'success' || needs.publish-create-terreno-app.result == 'success' || needs.publish-mcp.result == 'success' || needs.publish-syncdb.result == 'success' || needs.publish-cli.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1714,6 +1797,7 @@ jobs:
           update_version admin-backend "${{ needs.publish-admin-backend.result }}"
           update_version admin-frontend "${{ needs.publish-admin-frontend.result }}"
           update_version admin-spa "${{ needs.publish-admin-spa.result }}"
+          update_version blocks "${{ needs.publish-blocks.result }}"
           update_version ai "${{ needs.publish-ai.result }}"
           update_version api-health "${{ needs.publish-api-health.result }}"
           update_version comms "${{ needs.publish-comms.result }}"
@@ -1809,6 +1893,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build blocks dependency
+        working-directory: blocks
+        run: bun run compile
+
       - name: Generate docs inputs
         run: |
           bun run compile
@@ -1836,7 +1924,7 @@ jobs:
           fi
 
   notify:
-    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1878,6 +1966,7 @@ jobs:
           add_status "@terreno/admin-backend" "${{ needs.publish-admin-backend.result }}"
           add_status "@terreno/admin-frontend" "${{ needs.publish-admin-frontend.result }}"
           add_status "@terreno/admin-spa" "${{ needs.publish-admin-spa.result }}"
+          add_status "@terreno/blocks" "${{ needs.publish-blocks.result }}"
           add_status "@terreno/ai" "${{ needs.publish-ai.result }}"
           add_status "@terreno/api-health" "${{ needs.publish-api-health.result }}"
           add_status "@terreno/comms" "${{ needs.publish-comms.result }}"
@@ -1911,3 +2000,75 @@ jobs:
             -H "Authorization: ${{ secrets.ZOOM_WEBHOOK_TOKEN }}" \
             -H "Content-Type: text/plain" \
             --data-raw "$MESSAGE"
+
+  slack-notify-start:
+    name: Slack - release started
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          missing=()
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then missing+=("SLACK_WEBHOOK_URL"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Post start message
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TAG_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MESSAGE=$(printf '🚀 Publishing release %s started\nCommit: %s\n<%s|View run>' \
+            "$TAG_NAME" "${COMMIT_SHA:0:7}" "$RUN_URL")
+          jq -n --arg text "$MESSAGE" '{text: $text}' \
+            | curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              --data-binary @-
+
+  slack-notify-result:
+    name: Slack - release result
+    needs: [breaking-change-documentation, check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-ai, publish-api-health, publish-feature-flags, publish-mcp, update-version-on-master, trigger-demo-deploy, cut-docs-version, notify]
+    # Run regardless of upstream results so failures are reported too
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          missing=()
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then missing+=("SLACK_WEBHOOK_URL"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Post result message
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          TAG_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+        run: |
+          FAILED=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | "• \(.key) (\(.value.result))"')
+          PUBLISHED=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select((.key | startswith("publish-")) and .value.result == "success") | .key | sub("^publish-"; "@terreno/")' | paste -sd ',' - | sed 's/,/, /g')
+
+          if [ -n "$FAILED" ]; then
+            MESSAGE=$(printf '❌ Release %s failed\nFailed jobs:\n%s\nPublished: %s\nCommit: %s\n<%s|View run>' \
+              "$TAG_NAME" "$FAILED" "${PUBLISHED:-none}" "${COMMIT_SHA:0:7}" "$RUN_URL")
+          else
+            MESSAGE=$(printf '✅ Release %s published successfully\nPublished: %s\nCommit: %s\n<%s|View release> · <%s|View run>' \
+              "$TAG_NAME" "${PUBLISHED:-none (no changes)}" "${COMMIT_SHA:0:7}" "$RELEASE_URL" "$RUN_URL")
+          fi
+
+          jq -n --arg text "$MESSAGE" '{text: $text}' \
+            | curl -sS --fail -X POST "$SLACK_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              --data-binary @-

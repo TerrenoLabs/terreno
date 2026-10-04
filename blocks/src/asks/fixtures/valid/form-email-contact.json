@@ -1,0 +1,44 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Where should I send the receipt?",
+    "fields": [
+      {
+        "id": "email",
+        "type": "email",
+        "label": "Email",
+        "required": true,
+        "default": "billing@acme.test"
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "submit-defaults",
+        "label": "Submit defaults",
+        "response": {
+          "action": "accept",
+          "content": {
+            "values": {
+              "email": "billing@acme.test"
+            }
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "Where should I send the receipt?",
+    "toolCallId": "call_fixture"
+  }
+}

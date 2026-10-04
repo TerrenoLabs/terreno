@@ -10871,6 +10871,95 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/ai/example-summarize": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "text": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "output": {
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Run the seeded observability summarization prompt",
+        "tags": [
+          "ai",
+          "observability",
+        ],
+      },
+    },
     "/ai/models": {
       "get": {
         "operationId": "ai_models",
@@ -10938,6 +11027,2935 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         "summary": "List selectable AI chat models",
         "tags": [
           "ai",
+        ],
+      },
+    },
+    "/ai/observability/datasets": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List datasets",
+        "tags": [
+          "observability",
+        ],
+      },
+      "post": {
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Create a dataset",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/datasets/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Delete a dataset",
+        "tags": [
+          "observability",
+        ],
+      },
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get a dataset",
+        "tags": [
+          "observability",
+        ],
+      },
+      "patch": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Update a dataset",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/datasets/{id}/import": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Import dataset items from JSON or CSV",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/datasets/{id}/items": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List dataset items",
+        "tags": [
+          "observability",
+        ],
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Create a dataset item",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/datasets/{id}/items/{itemId}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "itemId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Delete a dataset item",
+        "tags": [
+          "observability",
+        ],
+      },
+      "patch": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "itemId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Update a dataset item",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/evaluators": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List evaluators",
+        "tags": [
+          "observability",
+        ],
+      },
+      "post": {
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Create an evaluator",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/evaluators/templates": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List seeded evaluator templates",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/evaluators/templates/{name}": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Install a seeded evaluator template",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/evaluators/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "204": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Delete an evaluator",
+        "tags": [
+          "observability",
+        ],
+      },
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get an evaluator",
+        "tags": [
+          "observability",
+        ],
+      },
+      "patch": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Update an evaluator",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/experiments": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "promptName",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List experiments",
+        "tags": [
+          "observability",
+        ],
+      },
+      "post": {
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Create an experiment",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/experiments/estimate": {
+      "post": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Estimate experiment cost and runtime",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/experiments/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get experiment detail",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/experiments/{id}/promote": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Promote a passing experiment version to production",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/prompts": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "folder",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List observability prompts",
+        "tags": [
+          "observability",
+        ],
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "description": {
+                    "required": false,
+                    "type": "string",
+                  },
+                  "folder": {
+                    "required": true,
+                    "type": "string",
+                  },
+                  "name": {
+                    "required": true,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "folder",
+                  "name",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Create an observability prompt",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/prompts/{name}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "promptVersion",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get an observability prompt",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/prompts/{name}/labels": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "label": {
+                    "required": true,
+                    "type": "string",
+                  },
+                  "version": {
+                    "required": true,
+                    "type": "number",
+                  },
+                },
+                "required": [
+                  "label",
+                  "version",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Move a prompt label",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/prompts/{name}/playground": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Compile and run a prompt version once",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/prompts/{name}/versions": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Create the next immutable prompt version",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/review": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List the review queue",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/review/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get a review item",
+        "tags": [
+          "observability",
+        ],
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Submit, skip, or assign a review item",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/status": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Observability plugin status for admin chrome",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/traces": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "prompt",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "promptVersion",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List observability traces",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/traces/add-to-dataset": {
+      "post": {
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Copy one or many traces into a dataset",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/traces/review": {
+      "post": {
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Enqueue traces for human review",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/traces/test-multi-stage": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "input": {
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "output": {
+                          "properties": {
+                            "keywords": {
+                              "items": {
+                                "type": "string",
+                              },
+                              "type": "array",
+                            },
+                            "metrics": {
+                              "type": "object",
+                            },
+                            "phrase": {
+                              "type": "string",
+                            },
+                            "sentence": {
+                              "type": "string",
+                            },
+                          },
+                          "type": "object",
+                        },
+                        "stages": {
+                          "items": {
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                              },
+                              "status": {
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
+                        "traceId": {
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+        },
+        "summary": "Run a multi-stage observability workflow and export one nested trace",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/traces/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get an observability trace",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/traces/{id}/scores": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Add a score to a trace",
+        "tags": [
+          "observability",
         ],
       },
     },
@@ -15237,6 +18255,236 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/gpt/actions": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "blockId": {
+                    "type": "string",
+                  },
+                  "elementId": {
+                    "type": "string",
+                  },
+                  "historyId": {
+                    "type": "string",
+                  },
+                  "messageId": {
+                    "type": "string",
+                  },
+                  "name": {
+                    "type": "string",
+                  },
+                  "payload": {
+                    "type": "object",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "blocks": {
+                      "type": "object",
+                    },
+                    "replace": {
+                      "type": "string",
+                    },
+                    "text": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Run a host callback from a block button",
+        "tags": [
+          "gpt",
+        ],
+      },
+    },
+    "/gpt/datasets/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "grain",
+            "required": false,
+            "schema": {
+              "enum": [
+                "hour",
+                "day",
+                "week",
+                "month",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "columns": {
+                      "items": {
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "more": {
+                      "type": "boolean",
+                    },
+                    "page": {
+                      "type": "number",
+                    },
+                    "rowCount": {
+                      "type": "number",
+                    },
+                    "rows": {
+                      "items": {
+                        "type": "array",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Read a stored chart dataset",
+        "tags": [
+          "gpt",
+        ],
+      },
+    },
     "/gpt/histories/": {
       "get": {
         "parameters": [
@@ -15347,6 +18595,61 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "ownerId": {
                             "type": "any",
                           },
+                          "pendingAsk": {
+                            "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                            "properties": {
+                              "approvalId": {
+                                "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                                "type": "string",
+                              },
+                              "created": {
+                                "description": "When the model asked",
+                                "format": "date-time",
+                                "type": "string",
+                              },
+                              "input": {
+                                "description": "The validated ask input the model sent",
+                              },
+                              "kind": {
+                                "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                "enum": [
+                                  "choice",
+                                  "confirm",
+                                  "markdown",
+                                  "form",
+                                  "files",
+                                ],
+                                "type": "string",
+                              },
+                              "origin": {
+                                "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                "enum": [
+                                  "approval",
+                                ],
+                                "type": "string",
+                              },
+                              "simple": {
+                                "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                              },
+                              "toolCallId": {
+                                "description": "Tool call id of the ask; an answer must name it",
+                                "type": "string",
+                              },
+                              "toolName": {
+                                "description": "Host tool an approval ask asks to run",
+                                "type": "string",
+                              },
+                            },
+                            "readOnly": true,
+                            "required": [
+                              "created",
+                              "input",
+                              "kind",
+                              "simple",
+                              "toolCallId",
+                            ],
+                            "type": "object",
+                          },
                           "projectId": {
                             "description": "Project this conversation belongs to",
                             "format": "objectid",
@@ -15359,12 +18662,53 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 "args": {
                                   "description": "Arguments passed to a tool call",
                                 },
+                                "ask": {
+                                  "description": "Set on tool-call rows where the model asked the user a question",
+                                  "properties": {
+                                    "kind": {
+                                      "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                      "enum": [
+                                        "choice",
+                                        "confirm",
+                                        "markdown",
+                                        "form",
+                                        "files",
+                                      ],
+                                      "type": "string",
+                                    },
+                                    "origin": {
+                                      "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                      "enum": [
+                                        "approval",
+                                      ],
+                                      "type": "string",
+                                    },
+                                    "status": {
+                                      "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                                      "enum": [
+                                        "pending",
+                                        "answered",
+                                        "cancelled",
+                                      ],
+                                      "type": "string",
+                                    },
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "status",
+                                  ],
+                                  "type": "object",
+                                },
                                 "content": {
                                   "description": "Multipart content attached to this prompt",
                                   "items": {
                                     "properties": {
                                       "filename": {
                                         "description": "Original filename of the attached file",
+                                        "type": "string",
+                                      },
+                                      "gcsKey": {
+                                        "description": "Durable storage key for an attachment uploaded through FileStorageService",
                                         "type": "string",
                                       },
                                       "mimeType": {
@@ -15410,6 +18754,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 },
                                 "result": {
                                   "description": "Result returned from a tool call",
+                                },
+                                "status": {
+                                  "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                                  "enum": [
+                                    "streaming",
+                                    "complete",
+                                    "error",
+                                  ],
+                                  "type": "string",
+                                },
+                                "streamId": {
+                                  "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                                  "type": "string",
                                 },
                                 "text": {
                                   "description": "Text content of the prompt or response",
@@ -15556,6 +18913,61 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                   "ownerId": {
                     "type": "any",
                   },
+                  "pendingAsk": {
+                    "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                    "properties": {
+                      "approvalId": {
+                        "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                        "type": "string",
+                      },
+                      "created": {
+                        "description": "When the model asked",
+                        "format": "date-time",
+                        "type": "string",
+                      },
+                      "input": {
+                        "description": "The validated ask input the model sent",
+                      },
+                      "kind": {
+                        "description": "Ask kind; the model asked with the tool ask_<kind>",
+                        "enum": [
+                          "choice",
+                          "confirm",
+                          "markdown",
+                          "form",
+                          "files",
+                        ],
+                        "type": "string",
+                      },
+                      "origin": {
+                        "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                        "enum": [
+                          "approval",
+                        ],
+                        "type": "string",
+                      },
+                      "simple": {
+                        "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                      },
+                      "toolCallId": {
+                        "description": "Tool call id of the ask; an answer must name it",
+                        "type": "string",
+                      },
+                      "toolName": {
+                        "description": "Host tool an approval ask asks to run",
+                        "type": "string",
+                      },
+                    },
+                    "readOnly": true,
+                    "required": [
+                      "created",
+                      "input",
+                      "kind",
+                      "simple",
+                      "toolCallId",
+                    ],
+                    "type": "object",
+                  },
                   "projectId": {
                     "description": "Project this conversation belongs to",
                     "format": "objectid",
@@ -15568,12 +18980,53 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "args": {
                           "description": "Arguments passed to a tool call",
                         },
+                        "ask": {
+                          "description": "Set on tool-call rows where the model asked the user a question",
+                          "properties": {
+                            "kind": {
+                              "description": "Ask kind; the model asked with the tool ask_<kind>",
+                              "enum": [
+                                "choice",
+                                "confirm",
+                                "markdown",
+                                "form",
+                                "files",
+                              ],
+                              "type": "string",
+                            },
+                            "origin": {
+                              "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                              "enum": [
+                                "approval",
+                              ],
+                              "type": "string",
+                            },
+                            "status": {
+                              "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                              "enum": [
+                                "pending",
+                                "answered",
+                                "cancelled",
+                              ],
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "kind",
+                            "status",
+                          ],
+                          "type": "object",
+                        },
                         "content": {
                           "description": "Multipart content attached to this prompt",
                           "items": {
                             "properties": {
                               "filename": {
                                 "description": "Original filename of the attached file",
+                                "type": "string",
+                              },
+                              "gcsKey": {
+                                "description": "Durable storage key for an attachment uploaded through FileStorageService",
                                 "type": "string",
                               },
                               "mimeType": {
@@ -15619,6 +19072,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                         "result": {
                           "description": "Result returned from a tool call",
+                        },
+                        "status": {
+                          "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                          "enum": [
+                            "streaming",
+                            "complete",
+                            "error",
+                          ],
+                          "type": "string",
+                        },
+                        "streamId": {
+                          "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                          "type": "string",
                         },
                         "text": {
                           "description": "Text content of the prompt or response",
@@ -15694,6 +19160,61 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "ownerId": {
                       "type": "any",
                     },
+                    "pendingAsk": {
+                      "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                      "properties": {
+                        "approvalId": {
+                          "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                          "type": "string",
+                        },
+                        "created": {
+                          "description": "When the model asked",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "input": {
+                          "description": "The validated ask input the model sent",
+                        },
+                        "kind": {
+                          "description": "Ask kind; the model asked with the tool ask_<kind>",
+                          "enum": [
+                            "choice",
+                            "confirm",
+                            "markdown",
+                            "form",
+                            "files",
+                          ],
+                          "type": "string",
+                        },
+                        "origin": {
+                          "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                          "enum": [
+                            "approval",
+                          ],
+                          "type": "string",
+                        },
+                        "simple": {
+                          "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                        },
+                        "toolCallId": {
+                          "description": "Tool call id of the ask; an answer must name it",
+                          "type": "string",
+                        },
+                        "toolName": {
+                          "description": "Host tool an approval ask asks to run",
+                          "type": "string",
+                        },
+                      },
+                      "readOnly": true,
+                      "required": [
+                        "created",
+                        "input",
+                        "kind",
+                        "simple",
+                        "toolCallId",
+                      ],
+                      "type": "object",
+                    },
                     "projectId": {
                       "description": "Project this conversation belongs to",
                       "format": "objectid",
@@ -15706,12 +19227,53 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "args": {
                             "description": "Arguments passed to a tool call",
                           },
+                          "ask": {
+                            "description": "Set on tool-call rows where the model asked the user a question",
+                            "properties": {
+                              "kind": {
+                                "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                "enum": [
+                                  "choice",
+                                  "confirm",
+                                  "markdown",
+                                  "form",
+                                  "files",
+                                ],
+                                "type": "string",
+                              },
+                              "origin": {
+                                "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                "enum": [
+                                  "approval",
+                                ],
+                                "type": "string",
+                              },
+                              "status": {
+                                "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                                "enum": [
+                                  "pending",
+                                  "answered",
+                                  "cancelled",
+                                ],
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "kind",
+                              "status",
+                            ],
+                            "type": "object",
+                          },
                           "content": {
                             "description": "Multipart content attached to this prompt",
                             "items": {
                               "properties": {
                                 "filename": {
                                   "description": "Original filename of the attached file",
+                                  "type": "string",
+                                },
+                                "gcsKey": {
+                                  "description": "Durable storage key for an attachment uploaded through FileStorageService",
                                   "type": "string",
                                 },
                                 "mimeType": {
@@ -15757,6 +19319,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                           "result": {
                             "description": "Result returned from a tool call",
+                          },
+                          "status": {
+                            "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                            "enum": [
+                              "streaming",
+                              "complete",
+                              "error",
+                            ],
+                            "type": "string",
+                          },
+                          "streamId": {
+                            "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                            "type": "string",
                           },
                           "text": {
                             "description": "Text content of the prompt or response",
@@ -15866,6 +19441,256 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/gpt/histories/pendingAsks": {
+      "get": {
+        "description": "The asks the caller's conversations are waiting on, newest first, each with its simple card. Answer one with POST /gpt/histories/{id}/turn.",
+        "operationId": "gpthistories_pendingAsks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "created": {
+                            "description": "When the agent asked, as an ISO 8601 UTC timestamp.",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "historyId": {
+                            "description": "The conversation the ask belongs to.",
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                          "kind": {
+                            "enum": [
+                              "choice",
+                              "confirm",
+                              "markdown",
+                              "form",
+                              "files",
+                            ],
+                            "type": "string",
+                          },
+                          "simple": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "buttons": {
+                                "items": {
+                                  "additionalProperties": false,
+                                  "properties": {
+                                    "id": {
+                                      "minLength": 1,
+                                      "type": "string",
+                                    },
+                                    "label": {
+                                      "maxLength": 20,
+                                      "minLength": 1,
+                                      "type": "string",
+                                    },
+                                    "response": {
+                                      "oneOf": [
+                                        {
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "action": {
+                                              "enum": [
+                                                "accept",
+                                              ],
+                                              "type": "string",
+                                            },
+                                            "content": {
+                                              "additionalProperties": {
+                                                "nullable": true,
+                                              },
+                                              "type": "object",
+                                            },
+                                          },
+                                          "required": [
+                                            "action",
+                                            "content",
+                                          ],
+                                          "type": "object",
+                                        },
+                                        {
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "action": {
+                                              "enum": [
+                                                "decline",
+                                              ],
+                                              "type": "string",
+                                            },
+                                          },
+                                          "required": [
+                                            "action",
+                                          ],
+                                          "type": "object",
+                                        },
+                                        {
+                                          "additionalProperties": false,
+                                          "properties": {
+                                            "action": {
+                                              "enum": [
+                                                "cancel",
+                                              ],
+                                              "type": "string",
+                                            },
+                                            "reason": {
+                                              "maxLength": 200,
+                                              "minLength": 1,
+                                              "type": "string",
+                                            },
+                                          },
+                                          "required": [
+                                            "action",
+                                          ],
+                                          "type": "object",
+                                        },
+                                      ],
+                                    },
+                                    "style": {
+                                      "enum": [
+                                        "default",
+                                        "primary",
+                                        "destructive",
+                                        "cancel",
+                                      ],
+                                      "type": "string",
+                                    },
+                                  },
+                                  "required": [
+                                    "id",
+                                    "label",
+                                    "response",
+                                    "style",
+                                  ],
+                                  "type": "object",
+                                },
+                                "maxItems": 3,
+                                "type": "array",
+                              },
+                              "handoff": {
+                                "type": "boolean",
+                              },
+                              "kind": {
+                                "enum": [
+                                  "choice",
+                                  "confirm",
+                                  "markdown",
+                                  "form",
+                                  "files",
+                                ],
+                                "type": "string",
+                              },
+                              "text": {
+                                "maxLength": 140,
+                                "minLength": 1,
+                                "type": "string",
+                              },
+                              "title": {
+                                "maxLength": 40,
+                                "minLength": 1,
+                                "type": "string",
+                              },
+                              "toolCallId": {
+                                "minLength": 1,
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "buttons",
+                              "handoff",
+                              "kind",
+                              "text",
+                              "toolCallId",
+                            ],
+                            "type": "object",
+                          },
+                          "title": {
+                            "description": "The conversation's title, once it has one.",
+                            "type": "string",
+                          },
+                          "toolCallId": {
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "created",
+                          "historyId",
+                          "kind",
+                          "simple",
+                          "toolCallId",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful response",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List the caller's pending asks",
+        "tags": [
+          "gpthistories",
+        ],
+      },
+    },
     "/gpt/histories/{id}": {
       "delete": {
         "parameters": [
@@ -15962,6 +19787,61 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "ownerId": {
                       "type": "any",
                     },
+                    "pendingAsk": {
+                      "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                      "properties": {
+                        "approvalId": {
+                          "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                          "type": "string",
+                        },
+                        "created": {
+                          "description": "When the model asked",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "input": {
+                          "description": "The validated ask input the model sent",
+                        },
+                        "kind": {
+                          "description": "Ask kind; the model asked with the tool ask_<kind>",
+                          "enum": [
+                            "choice",
+                            "confirm",
+                            "markdown",
+                            "form",
+                            "files",
+                          ],
+                          "type": "string",
+                        },
+                        "origin": {
+                          "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                          "enum": [
+                            "approval",
+                          ],
+                          "type": "string",
+                        },
+                        "simple": {
+                          "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                        },
+                        "toolCallId": {
+                          "description": "Tool call id of the ask; an answer must name it",
+                          "type": "string",
+                        },
+                        "toolName": {
+                          "description": "Host tool an approval ask asks to run",
+                          "type": "string",
+                        },
+                      },
+                      "readOnly": true,
+                      "required": [
+                        "created",
+                        "input",
+                        "kind",
+                        "simple",
+                        "toolCallId",
+                      ],
+                      "type": "object",
+                    },
                     "projectId": {
                       "description": "Project this conversation belongs to",
                       "format": "objectid",
@@ -15974,12 +19854,53 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "args": {
                             "description": "Arguments passed to a tool call",
                           },
+                          "ask": {
+                            "description": "Set on tool-call rows where the model asked the user a question",
+                            "properties": {
+                              "kind": {
+                                "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                "enum": [
+                                  "choice",
+                                  "confirm",
+                                  "markdown",
+                                  "form",
+                                  "files",
+                                ],
+                                "type": "string",
+                              },
+                              "origin": {
+                                "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                "enum": [
+                                  "approval",
+                                ],
+                                "type": "string",
+                              },
+                              "status": {
+                                "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                                "enum": [
+                                  "pending",
+                                  "answered",
+                                  "cancelled",
+                                ],
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "kind",
+                              "status",
+                            ],
+                            "type": "object",
+                          },
                           "content": {
                             "description": "Multipart content attached to this prompt",
                             "items": {
                               "properties": {
                                 "filename": {
                                   "description": "Original filename of the attached file",
+                                  "type": "string",
+                                },
+                                "gcsKey": {
+                                  "description": "Durable storage key for an attachment uploaded through FileStorageService",
                                   "type": "string",
                                 },
                                 "mimeType": {
@@ -16025,6 +19946,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                           "result": {
                             "description": "Result returned from a tool call",
+                          },
+                          "status": {
+                            "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                            "enum": [
+                              "streaming",
+                              "complete",
+                              "error",
+                            ],
+                            "type": "string",
+                          },
+                          "streamId": {
+                            "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                            "type": "string",
                           },
                           "text": {
                             "description": "Text content of the prompt or response",
@@ -16164,6 +20098,61 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                   "ownerId": {
                     "type": "any",
                   },
+                  "pendingAsk": {
+                    "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                    "properties": {
+                      "approvalId": {
+                        "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                        "type": "string",
+                      },
+                      "created": {
+                        "description": "When the model asked",
+                        "format": "date-time",
+                        "type": "string",
+                      },
+                      "input": {
+                        "description": "The validated ask input the model sent",
+                      },
+                      "kind": {
+                        "description": "Ask kind; the model asked with the tool ask_<kind>",
+                        "enum": [
+                          "choice",
+                          "confirm",
+                          "markdown",
+                          "form",
+                          "files",
+                        ],
+                        "type": "string",
+                      },
+                      "origin": {
+                        "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                        "enum": [
+                          "approval",
+                        ],
+                        "type": "string",
+                      },
+                      "simple": {
+                        "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                      },
+                      "toolCallId": {
+                        "description": "Tool call id of the ask; an answer must name it",
+                        "type": "string",
+                      },
+                      "toolName": {
+                        "description": "Host tool an approval ask asks to run",
+                        "type": "string",
+                      },
+                    },
+                    "readOnly": true,
+                    "required": [
+                      "created",
+                      "input",
+                      "kind",
+                      "simple",
+                      "toolCallId",
+                    ],
+                    "type": "object",
+                  },
                   "projectId": {
                     "description": "Project this conversation belongs to",
                     "format": "objectid",
@@ -16176,12 +20165,53 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "args": {
                           "description": "Arguments passed to a tool call",
                         },
+                        "ask": {
+                          "description": "Set on tool-call rows where the model asked the user a question",
+                          "properties": {
+                            "kind": {
+                              "description": "Ask kind; the model asked with the tool ask_<kind>",
+                              "enum": [
+                                "choice",
+                                "confirm",
+                                "markdown",
+                                "form",
+                                "files",
+                              ],
+                              "type": "string",
+                            },
+                            "origin": {
+                              "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                              "enum": [
+                                "approval",
+                              ],
+                              "type": "string",
+                            },
+                            "status": {
+                              "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                              "enum": [
+                                "pending",
+                                "answered",
+                                "cancelled",
+                              ],
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "kind",
+                            "status",
+                          ],
+                          "type": "object",
+                        },
                         "content": {
                           "description": "Multipart content attached to this prompt",
                           "items": {
                             "properties": {
                               "filename": {
                                 "description": "Original filename of the attached file",
+                                "type": "string",
+                              },
+                              "gcsKey": {
+                                "description": "Durable storage key for an attachment uploaded through FileStorageService",
                                 "type": "string",
                               },
                               "mimeType": {
@@ -16227,6 +20257,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                         "result": {
                           "description": "Result returned from a tool call",
+                        },
+                        "status": {
+                          "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                          "enum": [
+                            "streaming",
+                            "complete",
+                            "error",
+                          ],
+                          "type": "string",
+                        },
+                        "streamId": {
+                          "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                          "type": "string",
                         },
                         "text": {
                           "description": "Text content of the prompt or response",
@@ -16302,6 +20345,61 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "ownerId": {
                       "type": "any",
                     },
+                    "pendingAsk": {
+                      "description": "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
+                      "properties": {
+                        "approvalId": {
+                          "description": "AI SDK approval request an approval ask answers; the same as toolCallId",
+                          "type": "string",
+                        },
+                        "created": {
+                          "description": "When the model asked",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "input": {
+                          "description": "The validated ask input the model sent",
+                        },
+                        "kind": {
+                          "description": "Ask kind; the model asked with the tool ask_<kind>",
+                          "enum": [
+                            "choice",
+                            "confirm",
+                            "markdown",
+                            "form",
+                            "files",
+                          ],
+                          "type": "string",
+                        },
+                        "origin": {
+                          "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                          "enum": [
+                            "approval",
+                          ],
+                          "type": "string",
+                        },
+                        "simple": {
+                          "description": "Simple card (short text and up to three answer buttons) made when the ask was made",
+                        },
+                        "toolCallId": {
+                          "description": "Tool call id of the ask; an answer must name it",
+                          "type": "string",
+                        },
+                        "toolName": {
+                          "description": "Host tool an approval ask asks to run",
+                          "type": "string",
+                        },
+                      },
+                      "readOnly": true,
+                      "required": [
+                        "created",
+                        "input",
+                        "kind",
+                        "simple",
+                        "toolCallId",
+                      ],
+                      "type": "object",
+                    },
                     "projectId": {
                       "description": "Project this conversation belongs to",
                       "format": "objectid",
@@ -16314,12 +20412,53 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "args": {
                             "description": "Arguments passed to a tool call",
                           },
+                          "ask": {
+                            "description": "Set on tool-call rows where the model asked the user a question",
+                            "properties": {
+                              "kind": {
+                                "description": "Ask kind; the model asked with the tool ask_<kind>",
+                                "enum": [
+                                  "choice",
+                                  "confirm",
+                                  "markdown",
+                                  "form",
+                                  "files",
+                                ],
+                                "type": "string",
+                              },
+                              "origin": {
+                                "description": "approval when the server asked before running a host tool that needs approval; unset when the model asked",
+                                "enum": [
+                                  "approval",
+                                ],
+                                "type": "string",
+                              },
+                              "status": {
+                                "description": "pending while the user can answer; answered or cancelled once the ask is resolved",
+                                "enum": [
+                                  "pending",
+                                  "answered",
+                                  "cancelled",
+                                ],
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "kind",
+                              "status",
+                            ],
+                            "type": "object",
+                          },
                           "content": {
                             "description": "Multipart content attached to this prompt",
                             "items": {
                               "properties": {
                                 "filename": {
                                   "description": "Original filename of the attached file",
+                                  "type": "string",
+                                },
+                                "gcsKey": {
+                                  "description": "Durable storage key for an attachment uploaded through FileStorageService",
                                   "type": "string",
                                 },
                                 "mimeType": {
@@ -16365,6 +20504,19 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                           "result": {
                             "description": "Result returned from a tool call",
+                          },
+                          "status": {
+                            "description": "Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error",
+                            "enum": [
+                              "streaming",
+                              "complete",
+                              "error",
+                            ],
+                            "type": "string",
+                          },
+                          "streamId": {
+                            "description": "Identifier of the /gpt/prompt reply, used to resume an in-flight stream",
+                            "type": "string",
                           },
                           "text": {
                             "description": "Text content of the prompt or response",
@@ -16570,6 +20722,487 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/gpt/histories/{id}/stream": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "description": "Reply to follow. Defaults to the latest streaming reply.",
+            "in": "query",
+            "name": "streamId",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "description": "Characters of the reply the client already shows. Defaults to 0.",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Resume an in-flight GPT reply as SSE",
+        "tags": [
+          "gpt",
+        ],
+      },
+    },
+    "/gpt/histories/{id}/turn": {
+      "post": {
+        "description": "Runs one chat turn to completion and returns the reply as JSON, for clients that do not read server-sent events. The turn finishes and is saved even if the client disconnects.",
+        "operationId": "gpthistories_turn",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "description": "Send exactly one of prompt, askResponse, or toolCallId with buttonId, plus an optional surface.",
+                "properties": {
+                  "askResponse": {
+                    "description": "A full answer to the pending ask, as a client that renders the ask sends it.",
+                    "oneOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "enum": [
+                              "accept",
+                            ],
+                            "type": "string",
+                          },
+                          "content": {
+                            "additionalProperties": {
+                              "nullable": true,
+                            },
+                            "type": "object",
+                          },
+                          "toolCallId": {
+                            "description": "The pending ask's toolCallId.",
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "action",
+                          "content",
+                          "toolCallId",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "enum": [
+                              "decline",
+                            ],
+                            "type": "string",
+                          },
+                          "toolCallId": {
+                            "description": "The pending ask's toolCallId.",
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "action",
+                          "toolCallId",
+                        ],
+                        "type": "object",
+                      },
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "action": {
+                            "enum": [
+                              "cancel",
+                            ],
+                            "type": "string",
+                          },
+                          "reason": {
+                            "maxLength": 200,
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                          "toolCallId": {
+                            "description": "The pending ask's toolCallId.",
+                            "minLength": 1,
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "action",
+                          "toolCallId",
+                        ],
+                        "type": "object",
+                      },
+                    ],
+                  },
+                  "buttonId": {
+                    "description": "The id of the simple card button the user pressed. Send it with toolCallId.",
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "prompt": {
+                    "description": "A new message from the user. It cancels the pending ask, if there is one.",
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "surface": {
+                    "description": "Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full".",
+                    "enum": [
+                      "full",
+                      "compact",
+                    ],
+                    "type": "string",
+                  },
+                  "toolCallId": {
+                    "description": "The pending ask's toolCallId.",
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "error": {
+                          "description": "Set when the turn failed after it started. text holds what the agent said before the error.",
+                          "type": "string",
+                        },
+                        "historyId": {
+                          "description": "The conversation's id.",
+                          "minLength": 1,
+                          "type": "string",
+                        },
+                        "pendingAsk": {
+                          "additionalProperties": false,
+                          "description": "The ask the turn paused on. Answer it with its toolCallId and the id of one of simple.buttons.",
+                          "properties": {
+                            "kind": {
+                              "enum": [
+                                "choice",
+                                "confirm",
+                                "markdown",
+                                "form",
+                                "files",
+                              ],
+                              "type": "string",
+                            },
+                            "simple": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "buttons": {
+                                  "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                      "id": {
+                                        "minLength": 1,
+                                        "type": "string",
+                                      },
+                                      "label": {
+                                        "maxLength": 20,
+                                        "minLength": 1,
+                                        "type": "string",
+                                      },
+                                      "response": {
+                                        "oneOf": [
+                                          {
+                                            "additionalProperties": false,
+                                            "properties": {
+                                              "action": {
+                                                "enum": [
+                                                  "accept",
+                                                ],
+                                                "type": "string",
+                                              },
+                                              "content": {
+                                                "additionalProperties": {
+                                                  "nullable": true,
+                                                },
+                                                "type": "object",
+                                              },
+                                            },
+                                            "required": [
+                                              "action",
+                                              "content",
+                                            ],
+                                            "type": "object",
+                                          },
+                                          {
+                                            "additionalProperties": false,
+                                            "properties": {
+                                              "action": {
+                                                "enum": [
+                                                  "decline",
+                                                ],
+                                                "type": "string",
+                                              },
+                                            },
+                                            "required": [
+                                              "action",
+                                            ],
+                                            "type": "object",
+                                          },
+                                          {
+                                            "additionalProperties": false,
+                                            "properties": {
+                                              "action": {
+                                                "enum": [
+                                                  "cancel",
+                                                ],
+                                                "type": "string",
+                                              },
+                                              "reason": {
+                                                "maxLength": 200,
+                                                "minLength": 1,
+                                                "type": "string",
+                                              },
+                                            },
+                                            "required": [
+                                              "action",
+                                            ],
+                                            "type": "object",
+                                          },
+                                        ],
+                                      },
+                                      "style": {
+                                        "enum": [
+                                          "default",
+                                          "primary",
+                                          "destructive",
+                                          "cancel",
+                                        ],
+                                        "type": "string",
+                                      },
+                                    },
+                                    "required": [
+                                      "id",
+                                      "label",
+                                      "response",
+                                      "style",
+                                    ],
+                                    "type": "object",
+                                  },
+                                  "maxItems": 3,
+                                  "type": "array",
+                                },
+                                "handoff": {
+                                  "type": "boolean",
+                                },
+                                "kind": {
+                                  "enum": [
+                                    "choice",
+                                    "confirm",
+                                    "markdown",
+                                    "form",
+                                    "files",
+                                  ],
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "maxLength": 140,
+                                  "minLength": 1,
+                                  "type": "string",
+                                },
+                                "title": {
+                                  "maxLength": 40,
+                                  "minLength": 1,
+                                  "type": "string",
+                                },
+                                "toolCallId": {
+                                  "minLength": 1,
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "buttons",
+                                "handoff",
+                                "kind",
+                                "text",
+                                "toolCallId",
+                              ],
+                              "type": "object",
+                            },
+                            "toolCallId": {
+                              "minLength": 1,
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "kind",
+                            "simple",
+                            "toolCallId",
+                          ],
+                          "type": "object",
+                        },
+                        "text": {
+                          "description": "The agent's reply, or an empty string when it only asked.",
+                          "type": "string",
+                        },
+                        "title": {
+                          "description": "The conversation's title, once it has one.",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "historyId",
+                        "text",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful response",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Run a chat turn and return the reply as JSON",
+        "tags": [
+          "gpthistories",
+        ],
+      },
+    },
     "/gpt/prompt": {
       "post": {
         "requestBody": {
@@ -16577,6 +21210,32 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "application/json": {
               "schema": {
                 "properties": {
+                  "askResponse": {
+                    "description": "The user's answer to the conversation's pending ask. Send it with historyId instead of prompt.",
+                    "properties": {
+                      "action": {
+                        "enum": [
+                          "accept",
+                          "decline",
+                          "cancel",
+                        ],
+                        "type": "string",
+                      },
+                      "content": {
+                        "description": "The answer, when action is accept",
+                        "type": "object",
+                      },
+                      "reason": {
+                        "description": "Why the ask was cancelled, when action is cancel",
+                        "type": "string",
+                      },
+                      "toolCallId": {
+                        "description": "The pending ask's toolCallId",
+                        "type": "string",
+                      },
+                    },
+                    "type": "object",
+                  },
                   "attachments": {
                     "items": {
                       "properties": {
@@ -16607,6 +21266,14 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "type": "string",
                   },
                   "prompt": {
+                    "type": "string",
+                  },
+                  "surface": {
+                    "description": "Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full".",
+                    "enum": [
+                      "full",
+                      "compact",
+                    ],
                     "type": "string",
                   },
                   "systemPrompt": {

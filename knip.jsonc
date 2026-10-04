@@ -13,7 +13,12 @@
     ".devin/skills/expo-cicd-workflows/scripts/**",
     ".github/skills/expo-cicd-workflows/scripts/**",
     "skills/expo-cicd-workflows/scripts/**",
-    ".rulesync/skills/expo-cicd-workflows/scripts/**"
+    ".rulesync/skills/expo-cicd-workflows/scripts/**",
+    // Store-assets scripts are copied into consumer repos and run with `bun`, not imported
+    // here. Canonical source is `plugins/terreno-planning/skills`; the rest are sync output.
+    "plugins/terreno-planning/skills/store-assets/scripts/**",
+    "plugins/terreno-claude/skills/store-assets/scripts/**",
+    "skills/store-assets/scripts/**"
   ],
   // Maestro is installed by CI and developer toolchains rather than package.json.
   "ignoreBinaries": ["maestro"],
@@ -47,6 +52,9 @@
     // Preserve the vendored express-openapi CommonJS API unchanged; Knip cannot trace
     // properties assigned through module.exports (including serveSwaggerUI used in index.js).
     "api/src/vendor/wesleytodd-openapi/**": ["exports", "types"],
+    // The evaluator algorithms are direct unit-test seams; production calls both through
+    // runEvaluator, while tests exercise their detailed coercion and failure contracts.
+    "ai/src/observability/evaluate.ts": ["exports"],
     // Published public types may have no in-monorepo consumer; removing them would be a
     // breaking package API change.
     "admin-spa/components/AppConfigGate.tsx": ["types"],
@@ -119,6 +127,8 @@
       // The Vertex provider is loaded dynamically only when an app opts in and supplies
       // the package through @terreno/ai's optional peer contract.
       "ignoreDependencies": ["@ai-sdk/google-vertex"],
+      // Public types used by their own implementation remain valid package API.
+      "ignoreExportsUsedInFile": {"interface": true, "type": true},
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -271,6 +281,14 @@
         "!src/tests/**!"
       ]
     },
+    "blocks": {
+      "entry": ["src/{index,cli}.ts!"],
+      "project": [
+        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "!src/tests/**!",
+        "!scripts/**!"
+      ]
+    },
     "comms": {
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -299,7 +317,8 @@
         "e2e/**/*.ts",
         "jspdf-native-stub.js",
         "fingerprint.config.js",
-        "playwright.circleci.config.ts"
+        "playwright.circleci.config.ts",
+        "tests/bunSetup.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

@@ -20,6 +20,88 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.10.1] - 2026-10-04
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.10.1.md`](mcp-server/src/docs/upgrades/57.10.1.md).
+
+### Breaking
+
+- Security: `GET /files/*gcsKey` (`addFileRoutes`, `AiApp` with `gcsBucket`) now requires authentication and returns a signed URL only for the caller's own upload. Before, anyone could get a signed URL for any stored key, and keys are guessable (`uploads/<userId>/<ms>-<name>`). Another user's file, including for an admin, returns 404 like a missing file, so keys cannot be probed. Send the user's session token with the request; an unauthenticated request now returns 401.
+
+### Added
+
+- Agent UI Asks: the chat agent can pause a turn and ask the user a typed question, then continue with the exact answer. Turn it on with `asks: true` (or `{kinds, approvals, maxFileSizeBytes}`) on `AiApp` or `addGptRoutes`. Asks are off by default: with `asks` unset, tools, the system prompt, SSE events, and endpoints are unchanged. See `docs/how-to/agent-ui-asks.md`, `docs/reference/agent-ui-asks.md`, and `docs/explanation/agent-ui-asks.md`.
+- New package `@terreno/blocks`: the shared Zod contracts for asks (input and answer schemas, `validateAskInput`, `validateAskResponse`, stable error codes, `ASK_LIMITS`), simple cards (`toSimpleCard`, `resolveButtonAnswer`), the compact surface, the headless endpoint bodies, and JSON Schema documents plus fixtures (`@terreno/blocks/schemas/*`, `@terreno/blocks/fixtures/*`) for native clients such as a Swift watch app.
+- Five ask kinds, each a client-side `ask_<kind>` tool: `choice` (select one, or select many with an optional Other text answer), `confirm`, `markdown` (edit a draft), `form` (a few typed fields, one submit), and `files` (upload images or documents the model reads in the same turn, as data URLs or `fileId`s from `POST /files/upload`).
+- Server-enforced approval: with asks on, a host tool marked `needsApproval: true` runs only after the user approves a server-made `confirm` ask. `asks.approvals` sets that ask's text per tool name. With asks off, such a tool never runs.
+- `/gpt/prompt` accepts `askResponse` and `surface: "full" | "compact"`, and streams `{ask}` and `{askResolved}` events plus `pendingAsk` on `{done}`. `GptHistory` stores the pending ask. With `chat` options that turn asks on, `addGptHistoryRoutes` (and `AiApp`) adds `GET /gpt/histories/pendingAsks` and `POST /gpt/histories/:id/turn`, which run a turn to completion and return JSON for clients that do not read server-sent events.
+- `@terreno/ui`: `GPTChat` shows asks as an `AskCard` in the transcript (`GPTChatMessage.ask`, `onAskSubmit`, `askErrors`, `resolveAskFiles`). New `AskCard` and `SimpleAskCard` components. `Button` has a new `wrapText` prop that wraps a long label onto centered lines instead of overflowing its container.
+- The example app's AI screen answers asks end to end, and the example backend runs a scripted keyless demo agent (`terreno-demo-agent`) when no model is configured, so asks can be tried without an API key.
+- Agent UI blocks: a chat reply can be one YAML document of headings, metrics, charts, tables, and actions. Turn it on with `uiBlocks` on `addGptRoutes`. The model is told its whole reply is that document. After the text, the route checks it and sends `{blocks}` before `{done}`. `repair: true` runs one repair call. See `docs/how-to/agent-ui-blocks.md`, `docs/reference/blocks.md`, and `docs/explanation/agent-ui-blocks.md`.
+- `@terreno/blocks` adds `parseBlocks`, `validateBlocks`, `blocksJsonSchema`, and `terreno-blocks validate`. Charts and tables read inline rows or a `ref` dataset. `AIService.generateBlocks` returns one validated document at temperature 0.
+- `@terreno/ai` stores chart rows on `AIDataset` via `registerAiDataset`. `GET /gpt/datasets/:id` is owner-only and can bucket, downsample, or paginate them. `POST /gpt/actions` runs a named host callback after an owner check and a payload check.
+- `@terreno/ui` `BlocksView` paints a document. `GPTChat` `uiBlocks` renders assistant messages through that view, including a spinner while the reply is still streaming.
+- The example backend registers `exportDataset` and a `todoStats` tool that stores open and completed todo counts. The example AI tab loads `ref` charts and posts callbacks.
+- `html` blocks are opt-in (`uiBlocks.html` on the server, `allowHtml` on `GPTChat` or `BlocksView`). The server strips scripts, event handlers, forms, frames, and links, then stores the cleaned document. The client draws it in a sandboxed frame only after the reply finishes.
+- `callout`, `image`, and `details` render as a banner, an image, and an accordion. An `https` image loads only when its host is in `uiBlocks.imageHosts`.
+- A reply that omits an actions block `id` gets one before it is stored. A block document written in the same step as a tool call is kept when the turn would otherwise have no text. The chat receives the document after that fill, repair, and HTML sanitizing, so an invalid draft is not shown. `{replace: "text"}` is sent only when text was already streamed and then changed. A validation banner names the field path once the reply has finished.
+- Example-backend registers `accessControl: access` on `ObservabilityApp` and seeds optional `aiObservabilityViewer` and `aiObservabilityOperator` RBAC roles that demonstrate read-only and full observability access without auto-assigning them to users.
+- `@terreno/ai` ships local prompt versions, nested traces, evaluators, datasets, experiments, and a review queue through `ObservabilityApp`, with the admin screens in `@terreno/admin-frontend`. Prompts, datasets, and experiments have one writer. Traces and scores fan out to every registered sink (local Mongo, Langfuse, or OTLP). Six RBAC resources cover read-only, reviewer, and operator access. See `docs/how-to/observe-llm-calls.md`.
+- `@terreno/ai/harness` runs phased tasks on Mongo that survive a process crash. Each checkpoint and its trace span commit in one transaction. Tasks can wait for a person, retry, abort from the bottom up, and stay pinned to the definition version they started with. `defineTask`, `defineAgent`, and `defineTool` describe the work; approvals have their own permissions and an admin inbox. See `docs/how-to/build-a-durable-workflow.md`.
+
+### Fixed
+
+- `GET` and `DELETE /files/*gcsKey` find uploads by their full key. Express 5 passes the wildcard as path segments, so a key with slashes, such as the `uploads/<userId>/<ms>-<name>` key every upload gets, returned 404.
+
+## [57.9.0] - 2026-10-03
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.9.0.md`](mcp-server/src/docs/upgrades/57.9.0.md).
+
+### Added
+
+- `@terreno/ui` can compose operations dashboards with scorecards, comparison sparklines, multi-series line and area charts, donut center labels, previous-period bar overlays, chart-card headers, and spanning dashboard items.
+- File uploads can be turned off with the `file-uploads` feature flag. `POST /files/upload`, document storage uploads, and chat attachments return 403 when the flag is off. The example app hides the upload controls. A missing flag leaves uploads enabled.
+- `/gpt/prompt` rejects client-only attachment URLs (`blob:`, `file:`, `content:`, `ph:`) with `400` before streaming. With `fileStorageService` configured, `data:` attachments are uploaded and history stores the storage `url` plus `gcsKey`; later turns send the model signed URLs.
+- `/gpt/prompt` saves the turn before streaming, sends a first `{historyId, started: true, streamId}` event, and persists partial reply text about every second with `status: "streaming"`. The finished reply is saved with `status: "complete"`; a failed one keeps its partial text with `status: "error"`.
+- New `GET /gpt/histories/:id/stream` re-attaches to an in-flight reply after a reload or remount (`offset` skips text the client already shows). The example app reopens the last chat after a reload and resumes its live reply.
+- `store-assets` agent skill for Expo apps. It keeps a simulator/emulator dev client in sync with the native fingerprint (downloading a matching EAS build or starting one), captures App Store and Google Play screenshots on store-sized devices with Maestro flows that log in through the `@terreno/ui` LoginScreen, and renders the Play feature graphic and 512×512 icon from a repo's `storeAssets.config.json`. Install with `npx skills add TerrenoLabs/terreno --skill store-assets` or from the `terreno` Claude plugin.
+
+### Changed
+
+- `GPTChat` history rows move rename and delete into a three-dot overflow menu. Rename uses an outlined pencil in the dark secondary color; titles truncate before the menu trigger at any sidebar width.
+- `GPTChat` shows "Scroll to bottom" only when content sits below the viewport, never in an empty chat.
+- The `GPTChat` composer grows with long text up to 200px, then scrolls. `TextField` / `TextArea` accept `maxHeight` to cap `grow`.
+- Generated images in `GPTChat` offer copy-image and (web) download. Copying an image-only reply copies the image instead of text.
+- `FilePickerButton` opens an anchored dropdown instead of a modal. On web, **Document** now opens the file picker, and both options return `data:` URLs instead of `blob:` URLs.
+
+### Fixed
+
+- Web toasts now render above open modals and remain correctly centered in statically exported apps instead of inheriting a zero-width server-rendered viewport.
+
+## [57.8.0] - 2026-10-02
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.8.0.md`](mcp-server/src/docs/upgrades/57.8.0.md).
+
+### Added
+
+- `@terreno/announcements` imports a versioned release pack (`pack.yaml` plus one Markdown file per announcement) through idempotent `POST /announcements/import-release`. Imports default to drafts; pass `publish: true` to publish on import. Re-importing the same product, release version, channel, and slug updates the existing row, and a matching soft-deleted row is restored. Admin auth or `ANNOUNCEMENTS_UPLOAD_TOKEN` can call the route. Request bodies for the import and for impression and click events are strict Zod schemas.
+- `SplitPage` accepts opt-in web layout props. `desktopChildrenMinWidth` keeps one or two desktop children at least that many pixels wide and scrolls horizontally when the row is tighter. `narrowViewportChildLabels`, `narrowViewportSelectionActive`, `narrowViewportSelectionKey`, and `narrowViewportListButtonLabel` replace the dotted narrow swiper with a labeled pager. `narrowBelowWidth` uses the narrow layout at or below that pixel width; omit it to keep `isNarrowViewport()`. Native `SplitPage` ignores these props. `IconButton` accepts `backgroundOpacity` to tint only the button background.
+
+### Changed
+
+- CircleCI `publish-release` compiles every lockstep package once and publishes them in parallel instead of recompiling and retesting each package in turn. Tagged commits already passed CI on master. Releases drop from 25+ minutes to about 4.
+- `deploy-demo` runs alongside `publish-release` instead of after it.
+- `scripts/ci/netlify-deploy.sh` passes `--no-build`, so Netlify deploys no longer rerun the root `netlify.toml` docs build (about 3.5 minutes per demo and frontend deploy).
+
+### Deprecated
+
+- `isMobileDevice` is deprecated. Call `isNarrowViewport` instead. The old function stays exported and returns the same result until it is removed.
+
+### Fixed
+
+- `DropdownPanel` now anchors to its trigger rather than to the row around it. The measured wrapper stretched to fill its container, so the panel opened at the start of that row — visible whenever the trigger is not at the start edge, such as a right-aligned button or a right-to-left layout, where the panel appeared on the opposite side of the screen.
+- `/gpt/prompt` sends each generated image once. Image-output models no longer duplicate the SSE `image` event and saved content part, and image-only responses save empty text instead of the `(image)` placeholder. `GptHistory` prompt `text` is now required only when the prompt has no `content` parts.
+
 ## [57.7.0] - 2026-09-28
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.7.0.md`](mcp-server/src/docs/upgrades/57.7.0.md).

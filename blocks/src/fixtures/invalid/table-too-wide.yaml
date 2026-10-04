@@ -1,0 +1,9 @@
+v: 1
+datasets:
+  signups:
+    source: ref
+    id: ds_1
+blocks:
+  - type: table
+    data: signups
+    columns: [a, b, c, d, e, f, g, h, i, j, k, l, m]

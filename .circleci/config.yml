@@ -92,6 +92,9 @@ workflows:
             feature-flags/.* run-feature-flags true
             test/.* run-test-package true
             ai/.* run-ai true
+            blocks/.* run-blocks true
+            blocks/.* run-ai true
+            blocks/.* run-ui true
             rtk/.* run-rtk true
             ui/.* run-ui true
             demo/.* run-ui true
@@ -120,6 +123,7 @@ workflows:
             scripts/check-coverage\.ts run-syncdb true
             scripts/check-coverage\.ts run-ui true
             scripts/check-coverage\.ts run-ai true
+            scripts/check-coverage\.ts run-blocks true
             scripts/check-coverage\.ts run-comms true
             scripts/check-coverage\.ts run-admin-spa true
             scripts/check-coverage\.ts run-admin-backend true
@@ -145,6 +149,8 @@ workflows:
             api/.* run-example-backend-script true
             ai/.* run-example-backend true
             ai/.* run-example-backend-script true
+            blocks/.* run-example-backend true
+            blocks/.* run-example-backend-script true
             admin-backend/.* run-admin-backend true
             admin-backend/.* run-example-backend true
             admin-backend/.* run-example-backend-script true
@@ -166,6 +172,7 @@ workflows:
             ui/.* run-admin-spa true
             ui/.* run-e2e true
             bun\.lock run-ai true
+            bun\.lock run-blocks true
             bun\.lock run-comms true
             bun\.lock run-jobs true
             bun\.lock run-example-backend true
@@ -173,6 +180,7 @@ workflows:
             bun\.lock run-example-backend-docker true
             bun\.lock run-e2e true
             bun\.lock run-admin-spa-integration true
+            package\.json run-blocks true
             package\.json run-comms true
             package\.json run-jobs true
             package\.json run-example-backend-docker true
@@ -184,6 +192,7 @@ workflows:
             jobs/src/.* run-new-file-coverage true
             api/src/.* run-new-file-coverage true
             ai/src/.* run-new-file-coverage true
+            blocks/src/.* run-new-file-coverage true
             ui/src/.* run-new-file-coverage true
             rtk/src/.* run-new-file-coverage true
             syncdb/src/.* run-new-file-coverage true
@@ -264,6 +273,7 @@ workflows:
             api/src/.* run-e2e true
             api/src/.* run-admin-spa-integration true
             ai/src/.* run-e2e true
+            blocks/src/.* run-e2e true
             admin-backend/src/.* run-e2e true
             admin-backend/src/.* run-admin-spa-integration true
             admin-frontend/src/.* run-e2e true
@@ -282,12 +292,14 @@ workflows:
             syncdb/.* run-syncdb true
             demo/.* run-deploy-demo true
             ui/.* run-deploy-demo true
+            blocks/.* run-deploy-demo true
             example-frontend/.* run-deploy-frontend true
             ui/.* run-deploy-frontend true
             rtk/.* run-deploy-frontend true
             admin-frontend/.* run-deploy-frontend true
             bun\.lock run-deploy-frontend true
             ai/.* run-deploy-frontend true
+            blocks/.* run-deploy-frontend true
             syncdb/.* run-deploy-frontend true
             docs/.* run-deploy-docs true
             website/.* run-deploy-docs true
@@ -303,6 +315,7 @@ workflows:
             api-health/.* run-cd-backend true
             admin-backend/.* run-cd-backend true
             ai/.* run-cd-backend true
+            blocks/.* run-cd-backend true
             comms/.* run-cd-backend true
             jobs/.* run-cd-backend true
             announcements/.* run-cd-backend true

@@ -3,10 +3,17 @@ import {assert} from "chai";
 
 import {
   ADMIN_PAGE_PERMISSION,
+  AI_EXPERIMENT_ACTIONS,
+  AI_PROMPT_ACTIONS,
+  AI_REVIEW_ACTIONS,
+  AI_TRACE_ACTIONS,
   expandRolePermissions,
+  mergeMissingResourcePermissions,
   mergeStatements,
+  OBSERVABILITY_RBAC_RESOURCES,
   READ_ACTIONS,
   READ_ONLY_ROLE_PERMISSIONS,
+  terrenoStatementDescriptions,
   terrenoStatements,
 } from "./statements";
 
@@ -82,5 +89,58 @@ describe("rbac statements", () => {
     const expanded = expandRolePermissions(permissions, terrenoStatements, READ_ACTIONS);
 
     expect(expanded).toEqual(permissions);
+  });
+
+  it("exports observability RBAC vocabulary (Q62/Q63)", () => {
+    expect(terrenoStatements.aiPrompt).toEqual([...AI_PROMPT_ACTIONS]);
+    expect(terrenoStatements.aiTrace).toEqual([...AI_TRACE_ACTIONS]);
+    expect(terrenoStatements.aiReview).toEqual([...AI_REVIEW_ACTIONS]);
+    expect(terrenoStatements.aiExperiment).toEqual([...AI_EXPERIMENT_ACTIONS]);
+    expect(terrenoStatements.aiDataset).toEqual(["create", "list", "read", "update", "delete"]);
+    expect(terrenoStatements.aiEvaluator).toEqual(["create", "list", "read", "update", "delete"]);
+    expect(OBSERVABILITY_RBAC_RESOURCES).toEqual([
+      "aiPrompt",
+      "aiTrace",
+      "aiReview",
+      "aiDataset",
+      "aiExperiment",
+      "aiEvaluator",
+    ]);
+  });
+
+  it("expands read-only sentinel to observability list and read actions", () => {
+    const expanded = expandRolePermissions(
+      READ_ONLY_ROLE_PERMISSIONS,
+      terrenoStatements,
+      READ_ACTIONS
+    );
+
+    expect(expanded.aiPrompt).toEqual(["list", "read"]);
+    expect(expanded.aiTrace).toEqual(["list", "read"]);
+    expect(expanded.aiReview).toEqual(["list", "read"]);
+    expect(expanded.aiDataset).toEqual(["list", "read"]);
+    expect(expanded.aiEvaluator).toEqual(["list", "read"]);
+    expect(expanded.aiExperiment).toEqual(["list", "read"]);
+  });
+
+  it("includes human-readable descriptions for observability resources", () => {
+    expect(terrenoStatementDescriptions.aiPrompt?.promote).toContain("production");
+    expect(terrenoStatementDescriptions.aiReview?.score).toContain("review");
+    expect(Object.keys(terrenoStatementDescriptions.aiTrace ?? {})).toEqual(["list", "read"]);
+  });
+
+  it("mergeMissingResourcePermissions adds actions without removing custom grants", () => {
+    const defaults = {
+      aiPrompt: [...terrenoStatements.aiPrompt],
+      user: [...terrenoStatements.user],
+    };
+    const merged = mergeMissingResourcePermissions(
+      {aiPrompt: ["read"], user: ["read", "impersonate"]},
+      defaults,
+      ["aiPrompt"]
+    );
+
+    expect(merged.aiPrompt?.toSorted()).toEqual([...terrenoStatements.aiPrompt].toSorted());
+    expect(merged.user).toEqual(["read", "impersonate"]);
   });
 });

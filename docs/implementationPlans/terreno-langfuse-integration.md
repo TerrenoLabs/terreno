@@ -3,7 +3,7 @@
 **Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1093  
 **Status:** Complete
 
-> **See also:** Native in-app observability (prompts, traces, evals, experiments, review queue) is specified in [ai-observability.md](./ai-observability.md). This IP remains the **Langfuse Cloud/self-host vendor plugin**. Both plugins may be registered; traces/scores fan out (see that IP).
+> **See also:** Native in-app observability (prompts, traces, evals, experiments, review queue) is specified in [ai-observability.md](./ai-observability.md). Operator loop: [Develop an AI feature](../how-to/ai-feature-development.md). This IP remains the **Langfuse Cloud/self-host vendor plugin**. Both plugins may be registered; traces/scores fan out (see the observability IP).
 
 A TerrenoApp plugin that integrates [Langfuse](https://langfuse.com) into Terreno backends and frontends. Provides prompt management with MongoDB caching, OpenTelemetry tracing, Vercel AI SDK helpers, React hooks, and an admin UI — all wired up via `.install()`.
 

@@ -34,6 +34,7 @@ describe("File Routes", () => {
         async (params: UploadFileParams): Promise<UploadFileResult> => ({
           filename: params.filename,
           gcsKey: `uploads/${params.userId.toString()}/${params.filename}`,
+          id: "6710c2a4f1c0de0000000001",
           mimeType: params.mimeType,
           size: params.buffer.length,
           url: `https://example.com/${params.filename}`,
@@ -69,6 +70,27 @@ describe("File Routes", () => {
       expect(res.status).toBe(400);
     });
 
+    it("rejects uploads when file uploads are disabled", async () => {
+      const gated = new TerrenoApp({
+        configureApp: (router, options) => {
+          addFileRoutes(router, {
+            fileStorageService: fileStorageService as FileStorageService,
+            fileUploadsEnabled: async () => false,
+            openApiOptions: options,
+          });
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+      const agent = await authAsUser(gated, "notAdmin");
+      const res = await agent
+        .post("/files/upload")
+        .attach("file", Buffer.from("hello"), {contentType: "text/plain", filename: "hi.txt"});
+      expect(res.status).toBe(403);
+      expect(res.body.title).toBe("File uploads are disabled");
+      expect(fileStorageService.upload as ReturnType<typeof mock>).not.toHaveBeenCalled();
+    });
+
     it("rejects unsupported mime types", async () => {
       const agent = await authAsUser(app, "notAdmin");
       const res = await agent.post("/files/upload").attach("file", Buffer.from("<html></html>"), {
@@ -80,24 +102,61 @@ describe("File Routes", () => {
   });
 
   describe("GET /files/*gcsKey", () => {
-    it("returns 404 when the file is missing", async () => {
-      const res = await supertest(app).get("/files/missing/key.txt");
-      expect(res.status).toBe(404);
-    });
-
-    it("returns the signed URL when the file exists", async () => {
-      const attachment = await FileAttachment.create({
+    const createUserFile = (): Promise<unknown> =>
+      FileAttachment.create({
         filename: "hi.txt",
-        gcsKey: "hi-single.txt",
+        gcsKey: `uploads/${userId.toString()}/1727550000000-hi.txt`,
         mimeType: "text/plain",
         size: 5,
         url: "https://example.com/hi.txt",
         userId,
       });
-      const res = await supertest(app).get(`/files/${attachment.gcsKey}`);
+    const userFilePath = (): string => `/files/uploads/${userId.toString()}/1727550000000-hi.txt`;
+
+    it("returns 404 when the file is missing", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent.get("/files/missing/key.txt");
+      expect(res.status).toBe(404);
+    });
+
+    it("returns the signed URL when the requester owns the file", async () => {
+      await createUserFile();
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent.get(userFilePath());
       expect(res.status).toBe(200);
       expect(res.body.data.url).toBe("https://example.com/signed");
       expect(fileStorageService.getSignedUrl as ReturnType<typeof mock>).toHaveBeenCalledTimes(1);
+    });
+
+    it("requires authentication and signs no URL without it", async () => {
+      await createUserFile();
+      const res = await supertest(app).get(userFilePath());
+      expect(res.status).toBe(401);
+      expect(fileStorageService.getSignedUrl as ReturnType<typeof mock>).not.toHaveBeenCalled();
+    });
+
+    it("returns 404, as for a missing file, when another user owns the file", async () => {
+      await FileAttachment.create({
+        filename: "theirs.txt",
+        gcsKey: `uploads/${adminId.toString()}/1727550000000-theirs.txt`,
+        mimeType: "text/plain",
+        size: 6,
+        url: "https://example.com/theirs.txt",
+        userId: adminId,
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent.get(`/files/uploads/${adminId.toString()}/1727550000000-theirs.txt`);
+      expect(res.status).toBe(404);
+      expect(res.body.title).toBe("File not found");
+      expect(fileStorageService.getSignedUrl as ReturnType<typeof mock>).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 to an admin who does not own the file, as DELETE refuses them", async () => {
+      await createUserFile();
+      const agent = await authAsUser(app, "admin");
+      const res = await agent.get(userFilePath());
+      expect(res.status).toBe(404);
+      expect(fileStorageService.getSignedUrl as ReturnType<typeof mock>).not.toHaveBeenCalled();
     });
   });
 
@@ -127,6 +186,22 @@ describe("File Routes", () => {
       expect(res.status).toBe(200);
       expect(res.body.data.success).toBe(true);
       expect(fileStorageService.delete as ReturnType<typeof mock>).toHaveBeenCalledTimes(1);
+    });
+
+    it("deletes a file by the nested key an upload gets", async () => {
+      const gcsKey = `uploads/${userId.toString()}/1727550000000-mine.txt`;
+      await FileAttachment.create({
+        filename: "mine.txt",
+        gcsKey,
+        mimeType: "text/plain",
+        size: 4,
+        url: "https://example.com/mine.txt",
+        userId,
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent.delete(`/files/${gcsKey}`);
+      expect(res.status).toBe(200);
+      expect(fileStorageService.delete as ReturnType<typeof mock>).toHaveBeenCalledWith(gcsKey);
     });
 
     it("returns 403 when the requester does not own the file", async () => {

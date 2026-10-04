@@ -13,17 +13,32 @@ import {
   MCPService,
   normalizeVertexModelId,
   preparePromptForAI,
+  TemperaturePresets,
   type TerrenoVertexProvider,
   verifyVertexModelsEnabled,
 } from "@terreno/ai";
 import type {ModelRouterOptions, User} from "@terreno/api";
-import {APIError, logger, modelRouter, Permissions} from "@terreno/api";
+import {
+  APIError,
+  asyncHandler,
+  authenticateMiddleware,
+  createOpenApiBuilder,
+  logger,
+  modelRouter,
+  Permissions,
+} from "@terreno/api";
 import type {ImageModel, LanguageModel, Tool} from "ai";
 import {generateImage, tool, zodSchema} from "ai";
 import type express from "express";
 import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
+import {exampleUiBlocksOptions} from "../ai/hostActions";
+import {createTodoStatsTool} from "../ai/tools";
+import type {UserDocument} from "../types/models/userTypes";
+import {createDemoAgentService} from "./demoAgent";
+import {fileUploadsEnabledForRequest} from "./fileUploads";
+import {createTodoTools, todoToolApprovals} from "./todoTools";
 
 /** A provider that creates language models and image models from model IDs. */
 interface AIProvider {
@@ -58,15 +73,20 @@ const getGoogleModule = (): GoogleModule | undefined => {
   }
 };
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
-const VERTEX_IMAGE_MODEL = "imagen-4.0-fast-generate-001";
+const DEFAULT_MODEL = "gemini-3.8-flash";
+const VERTEX_IMAGE_MODEL = "gemini-3-pro-image";
 
 /**
- * Curated fallback chat models, used only when the live Google model listing cannot be retrieved
- * (no provider/API key configured, or the request failed). Kept to current, generally-available
- * models so the picker never offers a retired model.
+ * Curated fallback chat models (Gemini 3 family), used only when the live Google model listing cannot be retrieved
+ * (no provider/API key configured, or the request failed). Kept to current Gemini 3
+ * models so the picker never offers retired models.
  */
-const DEFAULT_CHAT_MODEL_IDS = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+const DEFAULT_CHAT_MODEL_IDS = [
+  "gemini-3.8-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-pro-preview",
+  "gemini-3-pro-image",
+];
 
 interface SelectableModel {
   label: string;
@@ -254,7 +274,7 @@ export const aiModelsRouter = modelRouter("/ai", GptHistory, {
   permissions: disabledCrud,
 });
 
-const getAiService = (): AIService | undefined => {
+export const getAiService = (): AIService | undefined => {
   if (aiServiceInstance) {
     return aiServiceInstance;
   }
@@ -287,7 +307,7 @@ const getAiService = (): AIService | undefined => {
 };
 
 /** Create a LanguageModel on the server side (Vertex AI / Gemini Enterprise Agent Platform or Gemini API key). Returns undefined if no provider is configured (falls through to demo mode). Throws if the requested model is not in the configured allow-list. */
-const createServerModel = (modelId?: string) => {
+export const createServerModel = (modelId?: string) => {
   const vertexProvider = getVertexProvider();
   if (vertexProvider) {
     return vertexProvider.languageModel(modelId ?? resolveDefaultVertexModel(vertexProvider));
@@ -304,7 +324,7 @@ const createServerModel = (modelId?: string) => {
 };
 
 /** Create a LanguageModel from a per-request API key (always uses Gemini API). */
-const createModelFromKey = (apiKey: string, modelId?: string) => {
+export const createModelFromKey = (apiKey: string, modelId?: string) => {
   const google = getGoogleModule();
   if (!google) {
     throw new APIError({status: 500, title: "Missing @ai-sdk/google dependency."});
@@ -588,7 +608,15 @@ const createImageTool = (apiKey?: string): Tool => {
 };
 
 const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
-  const tools: Record<string, Tool> = {...getMCPTools(req.user as User | undefined)};
+  const user = req.user as UserDocument | undefined;
+  const tools: Record<string, Tool> = {
+    ...getMCPTools(req.user as User | undefined),
+    ...createTodoTools({userId: user?._id}),
+    ...createTodoStatsTool({
+      historyId: typeof req.body?.historyId === "string" ? req.body.historyId : undefined,
+      userId: user?._id,
+    }),
+  };
 
   const apiKey = req.headers["x-ai-api-key"] as string | undefined;
   if (apiKey) {
@@ -633,6 +661,7 @@ const pdfTool = tool({
 
 const JOKE_FALLBACK_SYSTEM_PROMPT =
   "You are a witty comedian. Tell a short, clever joke in 1-3 sentences. Be funny and concise.";
+const EXAMPLE_SUMMARIZE_PROMPT_NAME = "example-summarize";
 
 const jokeGeneratorTool = tool({
   description:
@@ -725,23 +754,81 @@ export const addAiRoutes = (
     void verifyAllowedVertexModels(vertexProvider);
   }
 
-  addGptHistoryRoutes(router, options);
-  addGptRoutes(router, {
-    aiService,
+  router.post("/ai/example-summarize", [
+    authenticateMiddleware(),
+    createOpenApiBuilder(options ?? {})
+      .withTags(["ai", "observability"])
+      .withSummary("Run the seeded observability summarization prompt")
+      .withRequestBody({
+        text: {type: "string"},
+      })
+      .withResponse(200, {
+        data: {
+          properties: {
+            output: {type: "string"},
+          },
+          type: "object",
+        },
+      })
+      .build(),
+    asyncHandler(async (req, res) => {
+      const requestApiKey = req.header("x-ai-api-key");
+      const effectiveAiService =
+        aiService ??
+        (requestApiKey ? new AIService({model: createModelFromKey(requestApiKey)}) : undefined);
+      if (!effectiveAiService) {
+        throw new APIError({
+          status: 503,
+          title:
+            "Configure GOOGLE_VERTEX_PROJECT or GEMINI_API_KEY, or save a Gemini API key in Profile",
+        });
+      }
+      const text = (req.body as {text?: string}).text?.trim();
+      if (!text) {
+        throw new APIError({status: 400, title: "text is required"});
+      }
+      const output = await effectiveAiService.generateText({
+        prompt: text,
+        promptLabel: "production",
+        promptName: EXAMPLE_SUMMARIZE_PROMPT_NAME,
+        sessionId: req.header("x-ai-session-id"),
+        temperature: TemperaturePresets.LOW,
+        userId: req.user?._id,
+      });
+      return res.json({data: {output}});
+    }),
+  ]);
+
+  if (!aiService) {
+    logger.info(
+      "No AI model configured (GEMINI_API_KEY or GOOGLE_VERTEX_PROJECT); chat uses the scripted " +
+        "Terreno demo agent unless a request sends x-ai-api-key."
+    );
+  }
+
+  const chat: GptRouteOptions = {
+    aiService: aiService ?? createDemoAgentService(),
+    asks: {approvals: todoToolApprovals},
     createModelFn: createModelFromKey,
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,
+    ...(fileStorageService ? {fileStorageService} : {}),
     demoMode: !aiService,
+    fileUploadsEnabled: fileUploadsEnabledForRequest,
     langfuseSystemPromptName: "chat-assistant",
     maxSteps: 5,
     mcpService,
     openApiOptions: options,
     toolChoice: "auto",
     tools: getDemoTools() as unknown as GptRouteOptions["tools"],
-  });
+    uiBlocks: exampleUiBlocksOptions,
+  };
+  addGptHistoryRoutes(router, {...options, chat});
+  addGptRoutes(router, chat);
   if (fileStorageService) {
     addFileRoutes(router, {
       fileStorageService,
+      fileUploadsEnabled: fileUploadsEnabledForRequest,
       gcsBucket: process.env.GCS_BUCKET ?? "",
       openApiOptions: options,
     });

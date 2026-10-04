@@ -15,8 +15,8 @@ import type {ImageModel, LanguageModel} from "ai";
  *   actually enabled/available for the project using the Google publisher-models listing API.
  */
 
-/** Default Vertex / Gemini Enterprise Agent Platform region. */
-export const DEFAULT_VERTEX_LOCATION = "us-central1";
+/** Default Vertex / Gemini Enterprise Agent Platform region. Only global is supported for Gemini 3. */
+export const DEFAULT_VERTEX_LOCATION = "global";
 
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const MAX_MODEL_LIST_PAGES = 10;
@@ -38,7 +38,7 @@ export interface CreateVertexProviderOptions {
    * Vertex models are permitted. When provided, only listed models may be resolved.
    */
   allowedModels?: string[];
-  /** Vertex location/region. Falls back to GOOGLE_VERTEX_LOCATION, then `us-central1`. */
+  /** Vertex location/region. Forced to global endpoint for Gemini 3 support. */
   location?: string;
   /** GCP project id. Falls back to the GOOGLE_VERTEX_PROJECT env var. */
   project?: string;
@@ -76,7 +76,7 @@ export interface ListEnabledVertexModelsOptions {
   fetchImpl?: typeof fetch;
   /** Injectable access-token getter (defaults to Application Default Credentials). */
   getAccessToken?: () => Promise<string | undefined>;
-  /** Vertex location/region. Falls back to GOOGLE_VERTEX_LOCATION, then `us-central1`. */
+  /** Vertex location/region. Forced to global endpoint for Gemini 3 support. */
   location?: string;
   /** GCP project id. */
   project: string;
@@ -99,8 +99,8 @@ export interface VerifyVertexModelsOptions extends ListEnabledVertexModelsOption
 }
 
 /**
- * Normalize a publisher model resource name (e.g. "publishers/google/models/gemini-2.5-flash" or
- * "gemini-2.5-flash@001") down to its bare model id (e.g. "gemini-2.5-flash").
+ * Normalize a publisher model resource name (e.g. "publishers/google/models/gemini-3.8-flash" or
+ * "gemini-3.8-flash@001") down to its bare model id (e.g. "gemini-3.8-flash").
  */
 export const normalizeVertexModelId = (modelName: string): string => {
   const lastSegment = modelName.trim().split("/").pop() ?? modelName.trim();
@@ -152,8 +152,7 @@ const getDefaultAccessToken = async (): Promise<string | undefined> => {
   }
 };
 
-const resolveLocation = (location?: string): string =>
-  location ?? process.env.GOOGLE_VERTEX_LOCATION ?? DEFAULT_VERTEX_LOCATION;
+const resolveLocation = (_location?: string): string => "global";
 
 const aiPlatformHost = (location: string): string =>
   location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;

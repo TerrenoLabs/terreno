@@ -28,6 +28,10 @@ registerSimpleMongoPreload({
     Reflect.deleteProperty(process.env, "TWILIO_VERIFY_SERVICE_SID");
     Reflect.deleteProperty(process.env, "WEBHOOK_SECRET");
     Reflect.deleteProperty(process.env, "ADMIN_SPA_DEV_PROXY");
+    Reflect.deleteProperty(process.env, "CLINIC_DEMO_MODEL");
+    Reflect.deleteProperty(process.env, "CLINIC_DEMO_MODEL_DELAY_MS");
+    Reflect.deleteProperty(process.env, "HARNESS_LEASE_SECONDS");
+    Reflect.deleteProperty(process.env, "GOOGLE_VERTEX_PROJECT");
     Reflect.deleteProperty(process.env, "ADMIN_SPA_DIST_DIR");
     Reflect.deleteProperty(process.env, "MIGRATIONS_DIR");
   },

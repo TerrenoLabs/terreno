@@ -47,6 +47,11 @@ export interface DocumentFile {
   isFolder: boolean;
 }
 
+interface ListedStorageFile {
+  metadata: {contentType?: unknown; size?: unknown; updated?: unknown};
+  name: string;
+}
+
 export interface DocumentListResponse {
   files: DocumentFile[];
   folders: string[];
@@ -218,22 +223,22 @@ export class DocumentStorageApp implements TerrenoPlugin {
         const rootPrefix = this.prefixFor(req);
         const fullPrefix = `${rootPrefix}${queryPrefix}`;
 
-        let files: Awaited<ReturnType<ReturnType<Storage["bucket"]>["getFiles"]>>[0];
-        let apiResponse: {prefixes?: string[]} | undefined;
+        let files: ListedStorageFile[];
+        let prefixes: string[] = [];
         try {
           const listed = await this.bucket.getFiles({
             delimiter: "/",
             prefix: fullPrefix,
           });
           files = listed[0];
-          apiResponse = listed[2] as {prefixes?: string[]} | undefined;
+          prefixes = (listed[2] as {prefixes?: string[]} | undefined)?.prefixes ?? [];
         } catch (error) {
           if (!isMissingBucket(error)) {
             throw error;
           }
           logger.warn("Document storage bucket does not exist; returning an empty list");
-          files = [];
-          apiResponse = {prefixes: []};
+          const empty: DocumentListResponse = {files: [], folders: [], prefix: queryPrefix};
+          return res.json(empty);
         }
 
         const documentFiles: DocumentFile[] = files
@@ -247,7 +252,6 @@ export class DocumentStorageApp implements TerrenoPlugin {
             updated: file.metadata.updated as string,
           }));
 
-        const prefixes = apiResponse?.prefixes ?? [];
         const folders = prefixes.map((p) => {
           const relative = p.slice(rootPrefix.length);
           return relative;

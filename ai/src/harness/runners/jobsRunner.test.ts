@@ -642,6 +642,18 @@ describe("JobsRunner", () => {
     await runner.stop();
   });
 
+  it("rejects a dispatchBatchSize that is not a positive integer", () => {
+    // A Mongo limit of 0 means "no limit", so 0 must not slip through.
+    for (const dispatchBatchSize of [0, -1, 2.5]) {
+      expect(() => new JobsRunner({dispatchBatchSize, jobs: new JobsApp()})).toThrow(
+        harnessErrorMatching(
+          "configInvalid",
+          "JobsRunner dispatchBatchSize must be a positive integer"
+        )
+      );
+    }
+  });
+
   it("refuses to start before a JobsApp is registered", async () => {
     const runner = new JobsRunner({jobs: new JobsApp()});
 

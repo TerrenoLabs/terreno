@@ -90,7 +90,14 @@ export class JobsRunner implements HarnessRunner {
     this.pollIntervalMs = Duration.fromDurationLike(
       options.pollInterval ?? {milliseconds: 500}
     ).toMillis();
-    this.dispatchBatchSize = options.dispatchBatchSize ?? 100;
+    const dispatchBatchSize = options.dispatchBatchSize ?? 100;
+    if (!Number.isInteger(dispatchBatchSize) || dispatchBatchSize < 1) {
+      throw harnessError({
+        detail: "JobsRunner dispatchBatchSize must be a positive integer",
+        kind: "configInvalid",
+      });
+    }
+    this.dispatchBatchSize = dispatchBatchSize;
     options.jobs.define(HARNESS_PHASE_JOB_NAME, {
       handler: (payload) => this.runPhaseJob(payload),
     });

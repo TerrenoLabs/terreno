@@ -247,7 +247,7 @@ await jobs.startWorker();
 | `leaseDuration` | `{seconds: 30}` | Lifetime of each task lease without a renewal. |
 | `heartbeatInterval` | `{seconds: 10}` | How often a running phase renews its task lease, and how often this instance sweeps expired leases. Must be positive and shorter than `leaseDuration`, or the constructor throws. |
 | `ownerId` | `hostname:pid:uuid` | Id written into every task lease this runner holds. |
-| `dispatchBatchSize` | `100` | Most runnable tasks one scan enqueues. |
+| `dispatchBatchSize` | `100` | Most runnable tasks one scan enqueues. Must be a positive integer, or the constructor throws. |
 
 Every instance runs a dispatcher and a jobs worker. There is no owner lease.
 
@@ -351,7 +351,8 @@ Assumptions:
 
 Recovery runs when a runner becomes owner (on `start()` or on takeover) and on every owner
 heartbeat. `JobsRunner` has no owner lease: every instance sweeps once per
-`heartbeatInterval`, and concurrent sweeps are fenced, so each expired task is recovered once. It scans up to 100 `running` tasks whose lease expired (or that have no lease),
+`heartbeatInterval`, and concurrent sweeps are fenced, so each expired task is recovered
+once. It scans up to 100 `running` tasks whose lease expired (or that have no lease),
 oldest first, for registered `name@version`s only. A stopping owner skips the sweep. A task
 whose interruption commit keeps failing for a non-conflict reason is logged and retried on
 the next sweep.

@@ -49,7 +49,7 @@ events, waits, and approvals with the admin inbox, the SSE event stream, and ver
 pinning. The example backend's `clinic.intakeSummary` runs all of it end to end, including
 a crash drill: [Build a durable workflow](../how-to/build-a-durable-workflow.md).
 
-Shipped (Phase 2, in progress): `InProcessRunner` concurrency (up to 8 tasks at once by
+Phase 2 so far: `InProcessRunner` concurrency (up to 8 tasks at once by
 default) and the `JobsRunner`, which runs each phase as a `@terreno/jobs` job across many
 instances. The Runs admin screen is still to come.
 

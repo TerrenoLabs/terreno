@@ -188,5 +188,5 @@ gh release create "$VERSION" --target master --title "$VERSION" --notes-file /tm
 
 1. Open the `ci/circleci: publish-release` target URL from the tag status. CircleCI holds the job log.
 2. Transient failure (network, registry flake): rerun the failed CircleCI job.
-3. Real failure needing a code fix: fix it via a normal PR. npm versions are immutable, so if **any** package already published for this version, do not reuse the tag — merge the fix and release the next patch version. Only if nothing published may you delete the release and tag (`gh release delete "$VERSION" --cleanup-tag`) and re-create it from the fixed master. Do not dispatch `.github/workflows/publish-on-tag.yml` for a version CircleCI already published.
+3. Real failure needing a code fix: fix it via a normal PR, merge it when CI is green, and release the next patch version. Do not reuse the failed tag. npm versions are immutable once any package has published, and this repo also rejects recreating a tag after `gh release create` — deleting the release does not free the name (`tag_name was used by an immutable release`). Move the changelog section and upgrade note to the new version before tagging. Do not dispatch `.github/workflows/publish-on-tag.yml` for a version CircleCI already published.
 4. Report the final per-package publish status either way.

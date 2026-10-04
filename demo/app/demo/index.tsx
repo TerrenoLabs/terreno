@@ -1,11 +1,14 @@
 import {DemoHomePage} from "@components/DemoHomePage";
-import {Host} from "@terreno/ui";
-import {router} from "expo-router";
+import {Host, useTheme} from "@terreno/ui";
+import {router, useGlobalSearchParams} from "expo-router";
 import {StyleSheet, View} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
 
 const App = () => {
   const insets = useSafeAreaInsets();
+  const {theme} = useTheme();
+  const {theme: themeParam} = useGlobalSearchParams<{theme?: string | string[]}>();
+  const selectedTheme = Array.isArray(themeParam) ? themeParam[0] : themeParam;
 
   // Update when we have new fonts picked, these look baaad.
   // const [loaded] = useFonts({
@@ -25,7 +28,7 @@ const App = () => {
       <View
         style={{
           ...styles.container,
-          backgroundColor: "#fff",
+          backgroundColor: theme.surface.base,
           paddingBottom: insets.bottom,
           paddingLeft: insets.left,
           paddingRight: insets.right,
@@ -33,10 +36,16 @@ const App = () => {
           width: "100%",
         }}
       >
-        <View style={styles.body} testID="demo-home-screen">
+        <View
+          style={[styles.body, {backgroundColor: theme.surface.baseAlternate}]}
+          testID="demo-home-screen"
+        >
           <DemoHomePage
             onPress={(component: string) => {
-              router.push(`demo/${encodeURIComponent(component)}`);
+              router.push({
+                params: {component, ...(selectedTheme ? {theme: selectedTheme} : {})},
+                pathname: "/demo/[component]",
+              });
             }}
           />
         </View>
@@ -47,7 +56,6 @@ const App = () => {
 
 const styles = StyleSheet.create({
   body: {
-    backgroundColor: "#eee",
     display: "flex",
     flex: 1,
     flexDirection: "column",
@@ -56,7 +64,6 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   container: {
-    backgroundColor: "#fff",
     height: "100%",
     maxHeight: "100%",
     overflow: "hidden",

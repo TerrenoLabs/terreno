@@ -1,7 +1,8 @@
 import {DevHomePage} from "@components/DevHomePage";
 import {DemoConfig} from "@config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {router, useRootNavigationState} from "expo-router";
+import {useTheme} from "@terreno/ui";
+import {router, useGlobalSearchParams, useRootNavigationState} from "expo-router";
 import {type ReactElement, useEffect} from "react";
 import {StyleSheet, View} from "react-native";
 
@@ -10,6 +11,9 @@ const ASYNC_STORAGE_KEY = "CURRENT_ROUTE";
 const Dev = (): ReactElement => {
   // TODO create a shared hook for saving navigation state to AsyncStorage
   const navigationState = useRootNavigationState();
+  const {theme: themeParam} = useGlobalSearchParams<{theme?: string | string[]}>();
+  const selectedTheme = Array.isArray(themeParam) ? themeParam[0] : themeParam;
+  const {theme} = useTheme();
   // Save the current navigation state to AsyncStorage
   useEffect(() => {
     const saveCurrentRoute = async () => {
@@ -43,7 +47,10 @@ const Dev = (): ReactElement => {
         if (savedRoute) {
           const {component, story} = JSON.parse(savedRoute);
           if (component && story) {
-            router.navigate(`dev/${component}?story=${story}`);
+            router.navigate({
+              params: {component, story, ...(selectedTheme ? {theme: selectedTheme} : {})},
+              pathname: "/dev/[component]",
+            });
           }
         }
       } catch (error) {
@@ -52,20 +59,23 @@ const Dev = (): ReactElement => {
     };
 
     void restoreRoute();
-  }, []);
+  }, [selectedTheme]);
 
   return (
     <View
       style={{
         ...styles.container,
-        backgroundColor: "#fff",
+        backgroundColor: theme.surface.base,
         width: "100%",
       }}
     >
       <DevHomePage
         demoConfig={DemoConfig}
         onPress={(component: string, story: string) => {
-          router.navigate(`dev/${component}?story=${story}`);
+          router.navigate({
+            params: {component, story, ...(selectedTheme ? {theme: selectedTheme} : {})},
+            pathname: "/dev/[component]",
+          });
         }}
       />
     </View>
@@ -74,7 +84,6 @@ const Dev = (): ReactElement => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#fff",
     height: "100%",
     maxHeight: "100%",
     overflow: "hidden",

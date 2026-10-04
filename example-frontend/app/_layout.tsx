@@ -27,15 +27,16 @@ import {
   ConflictSheet,
   ConsentNavigator,
   Spinner,
-  TerrenoProvider,
   Text,
   UpgradeRequiredScreen,
+  useTheme,
 } from "@terreno/ui";
 import {Provider, useSelector} from "react-redux";
 import {PersistGate} from "redux-persist/integration/react";
 import {SyncConflictsProvider} from "@/components/SyncConflictsController";
 import {SyncHealthToast} from "@/components/SyncHealthToast";
 import {SyncLabRuntime} from "@/components/SyncLabRuntime";
+import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
 import {getSessionToken} from "@/lib/betterAuth";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
@@ -135,9 +136,9 @@ const RootLayout = (): React.ReactElement | null => {
     <GestureHandlerRootView style={{flex: 1}}>
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
-          <TerrenoProvider openAPISpecUrl={`${baseUrl}/openapi.json`}>
+          <AppThemeProvider openAPISpecUrl={`${baseUrl}/openapi.json`}>
             <RootLayoutNav />
-          </TerrenoProvider>
+          </AppThemeProvider>
         </PersistGate>
       </Provider>
     </GestureHandlerRootView>
@@ -145,6 +146,7 @@ const RootLayout = (): React.ReactElement | null => {
 };
 
 const RootLayoutNav = (): React.ReactElement => {
+  const {theme} = useTheme();
   const userId = useSelector(selectBetterAuthUserId) ?? undefined;
   // The initial syncBetterAuthSession() call below is async (it awaits
   // authClient.getSession()), so userId is undefined for one or more render
@@ -303,7 +305,12 @@ const RootLayoutNav = (): React.ReactElement => {
   ) : null;
 
   const stack = (
-    <Stack screenOptions={{headerShown: false}}>
+    <Stack
+      screenOptions={{
+        contentStyle: {backgroundColor: theme.surface.base},
+        headerShown: false,
+      }}
+    >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="admin" />
       <Stack.Screen name="login" />

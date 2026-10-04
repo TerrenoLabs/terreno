@@ -68,7 +68,7 @@ const harnessEventStreamSchema = new mongoose.Schema<
       type: Number,
     },
   },
-  {strict: "throw"}
+  {strict: "throw", toJSON: {virtuals: true}, toObject: {virtuals: true}}
 );
 
 export const registerHarnessEvent = (): HarnessEventModel => {

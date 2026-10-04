@@ -10,6 +10,9 @@ export const DEFAULT_USER_ROLE = "todoUser";
 /** Role used by the seed scripts and admin UI demo for elevated todo access. */
 const MANAGER_ROLE = "manager";
 
+/** Role whose holders may sign off clinic.intakeSummary approvals. */
+export const CLINICIAN_ROLE = "clinician";
+
 /** Role granting the admin shell and RBAC management screens. */
 export const SUPERADMIN_ROLE = "superadmin";
 
@@ -46,6 +49,14 @@ export const appDefaultRoles: RoleDefinition[] = [
     name: DEFAULT_USER_ROLE,
     permissions: {
       todo: ["create", "read", "update", "delete", "list"],
+    },
+  },
+  {
+    description: "Can sign off AI intake summaries before they are filed in the EHR",
+    displayName: "Clinician",
+    name: CLINICIAN_ROLE,
+    permissions: {
+      clinicalIntake: ["signoff"],
     },
   },
   {

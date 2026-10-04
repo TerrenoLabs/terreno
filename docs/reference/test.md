@@ -79,9 +79,13 @@ Defaults: `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET`, `SESSION_SECRE
 |----------|--------|
 | `TERRENO_TEST_USE_MEMORY_MONGO` | When `"true"`, `registerSimpleMongoPreload` starts `mongodb-memory-server` if `TERRENO_TEST_MONGODB_URI` is unset. |
 | `TERRENO_TEST_MONGODB_URI` | External MongoDB URI. Takes priority over in-memory server in `startMongoServer` and `registerSimpleMongoPreload`. |
+| `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` | Per-mongod start timeout for in-memory servers started by `startMongoServer`. Default `60000` (mongodb-memory-server's own default is 10s). Startup is tried twice. |
 | `BUN_TEST_DISABLE_DB` | When `"true"`, `registerBackendPreload` skips all Mongo `beforeAll`/`afterAll` hooks (no DB startup). |
 
 `startMongoServer` also publishes the resolved URI to `TERRENO_TEST_MONGO_URI` and honors `TERRENO_TEST_USE_REPLSET=true` for replica-set memory servers.
+
+If `registerBackendPreload` cannot start Mongo, every later test fails at once with
+`MongoDB test server failed to start` instead of waiting on mongoose command buffering.
 
 ## Exported helpers
 
@@ -92,6 +96,7 @@ Defaults: `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET`, `SESSION_SECRE
 | `setTerrenoTestEnv` | Apply and validate auth test env vars. |
 | `startMongoServer` / `stopMongoServer` | Start or stop shared in-memory Mongo and connect mongoose. |
 | `getMongoServerUri` | Resolved URI after `startMongoServer`. |
+| `resolveMongoLaunchTimeoutMs` | In-memory mongod launch timeout from `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` (integer ≥ 1000), default 60000. |
 | `getBaseServer` | Build an Express app for supertest from route registrars. |
 | `authAsUser` | Login helper returning auth headers for supertest. |
 | `createMongoTestCache` | Fixture-cache controller for fast `@terreno/api` tests. |

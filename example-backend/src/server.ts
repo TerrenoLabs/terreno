@@ -8,6 +8,7 @@ import {
   LangfuseApp,
   ObservabilityApp,
 } from "@terreno/ai";
+import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
   AuditApp,
@@ -73,6 +74,7 @@ import {isDeployed, isWebsocketService, WEBSOCKETS_DEBUG} from "./conf";
 import {consentDefinitions} from "./consentDefinitions";
 import {exampleAdminHome} from "./exampleAdminConfig";
 import {exampleFeatureFlagSegments} from "./featureFlagSegments";
+import {openExampleHarness, startExampleHarness} from "./harness/exampleHarness";
 import {createExampleJobsApp} from "./jobs/createExampleJobsApp";
 import {shouldStartJobsWorkerInApiProcess} from "./jobs/jobsStartWorker";
 import {registerJobsWorkerShutdown} from "./jobs/shutdownJobsWorker";
@@ -447,8 +449,14 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     const exampleJobsApp = createExampleJobsApp({accessControl: access});
     terraApp.register(exampleJobsApp);
 
-    terraApp
+    // Before AdminApp, so HarnessApp's approvals inbox joins the admin sidebar. Skipped
+    // (with a warning) when Mongo is not a replica set, as in the unit tests.
+    const exampleHarness = await openExampleHarness();
+    if (exampleHarness) {
+      terraApp.register(new HarnessApp({harness: exampleHarness}));
+    }
 
+    terraApp
       .register(
         new ObservabilityApp({
           accessControl: access,
@@ -583,6 +591,10 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       logger.info(
         "[jobs] API-process worker disabled (JOBS_START_WORKER=false); use bun run jobs:worker if needed"
       );
+    }
+
+    if (!skipListen) {
+      await startExampleHarness();
     }
 
     // Log total boot time

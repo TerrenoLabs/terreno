@@ -576,3 +576,77 @@ wizard rail buttons stay disabled until 2–3 versions are selected. `includeUnp
 the wizard. `ai-experiment-results?id=` polls while pending/running, shows gate tiles per version,
 failing gate count, outliers, a side-by-side per-item output table (failed rows first from the
 API), and **Promote to production** with a confirm modal; promote is blocked when gates fail (409).
+
+### AI Harness approvals inbox
+
+`HarnessApp` (`@terreno/ai/harness`) contributes custom screen `harness-approvals`
+(`group: "AI Harness"`, label **Approvals**) through `adminContribution()`, so registering
+`HarnessApp` before `AdminApp` is enough on the backend. `HARNESS_ADMIN_WIDGETS["harness-approvals"]`
+(`HarnessApprovalsScreenWidget`) is in the built-in screen registry, so `/admin/harness-approvals`
+renders through `AdminScreenRouter` with no host route file. See
+[AI harness approvals](ai-harness.md#approvals).
+
+The inbox lists the pending approvals the signed-in user may decide
+(`GET /harness/approvals`, oldest first), each with title, task (`name@version` from
+`definitionKey`), age, and expiry. Selecting one shows its `summary` (rendered with `MarkdownView`
+when it looks like markdown) and `payload` (pretty JSON; a string payload that looks like
+markdown renders as markdown), plus a **Reason** field and
+**Approve** / **Reject**.
+
+| Behavior | Detail |
+| --- | --- |
+| Approve | `POST /harness/approvals/:id/approve` with `{reason}` when one was typed, else `{}`. |
+| Reject | Requires a non-blank reason (checked before the request); `POST .../reject` with `{reason}` (trimmed). |
+| Success | Back to the list with a confirmation; the list refetches. |
+| 409 | "Already decided, expired, or its task ended" notice; back to the list and refetch. |
+| Other errors | The API error `title` under the buttons; the detail stays open. |
+| States | Loading spinner, error with **Try again**, empty (**Nothing to approve.**), **Refresh** button. |
+| Page size | The oldest 100 (`?limit=100`). When the response has `more`, a note says so; deciding items brings the rest into view. |
+| In flight | Both buttons and the reason field are disabled until the decision returns, so it is sent once. |
+
+Requests use the host-bound admin request client (`AdminProvider` `getAuthHeaders` / `apiOrigin`),
+never RTK `injectEndpoints`. Test ids: `harness-approvals` (root), `harness-approvals-list`,
+`harness-approvals-empty`, `harness-approvals-error`, `harness-approvals-loading`,
+`harness-approvals-refresh`, `harness-approvals-notice`, `harness-approval-row-<id>-clickable`,
+`harness-approval-detail`, `harness-approval-payload`, `harness-approval-reason`,
+`harness-approval-approve`, `harness-approval-reject`, `harness-approval-error`,
+`harness-approval-back` (standalone only; in admin the page back chevron closes the detail).
+
+#### Mount outside admin chrome
+
+`HarnessApprovalInbox` is exported for app screens (for example a clinician view). Inside an
+`AdminProvider` it needs no props. Elsewhere, pass a request client from `bindAdminRequest`:
+
+```typescript
+import {bindAdminRequest, HarnessApprovalInbox} from "@terreno/admin-frontend";
+import {baseUrl} from "@terreno/rtk";
+import {Page} from "@terreno/ui";
+
+// getAuthHeaders: the host's `() => ({Authorization: "Bearer …"})`, as passed to AdminProvider.
+const request = bindAdminRequest({getAuthHeaders, origin: baseUrl});
+
+export const SignOffScreen: React.FC = () => (
+  <Page title="Sign-offs" scroll>
+    <HarnessApprovalInbox request={request} />
+  </Page>
+);
+```
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `request` | `(args: AdminRequestArgs) => Promise<unknown>` | `AdminProvider` client | Request client, usually `bindAdminRequest({getAuthHeaders, origin})`. |
+| `baseUrl` | `string` | `/harness` | Where `HarnessApp` is mounted (its `basePath`). Relative paths resolve against the client's `origin`. |
+| `selected` | `HarnessApprovalRow \| undefined` | internal | Controlled selection: the approval whose detail is open. |
+| `onSelectedChange` | `(approval \| undefined) => void` | — | With `selected`, lets the host's back control close the detail; the inbox then hides its own **All approvals** button. The admin screen uses this so the page chevron returns to the list. |
+| `showHeading` | `boolean` | `true` | Show the **Approvals** heading; the admin screen passes `false` because `AdminScreenPage` already titles it. |
+| `testID` | `string` | `harness-approvals` | Root test id. |
+
+The built-in admin screen always uses `/harness`. A host that mounts `HarnessApp` at another
+`basePath` registers its own `widgets.screens["harness-approvals"]` that renders
+`<HarnessApprovalInbox baseUrl="/ops/harness" />`.
+
+The example backend registers `HarnessApp` with a demo task, `demo.approvalDemo@1`. Start
+approvals with the admin script `startHarnessApprovalDemo` (args `count`, default 2, and `prefix`)
+from the admin Scripts screen or `bun run script startHarnessApprovalDemo --wet`. It needs Mongo
+running as a replica set; without one the backend logs `Harness disabled` and skips the routes.
+`example-frontend/e2e/harness-approvals.spec.ts` approves one and rejects one.

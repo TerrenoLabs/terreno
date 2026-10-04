@@ -192,6 +192,15 @@ export {
   FEATURE_FLAGS_ADMIN_WIDGETS,
   FeatureFlagsOverridesWidget,
 } from "./widgets/FeatureFlagsOverridesWidget";
+export {
+  HarnessApprovalInbox,
+  type HarnessApprovalInboxProps,
+} from "./widgets/harness/HarnessApprovalInbox";
+export {
+  HARNESS_ADMIN_WIDGETS,
+  HarnessApprovalsScreenWidget,
+} from "./widgets/harness/HarnessApprovalsScreenWidget";
+export type {HarnessApprovalRow} from "./widgets/harness/harnessApprovalTypes";
 export {ModelsGridWidget} from "./widgets/ModelsGridWidget";
 export {RecentActivityWidget} from "./widgets/RecentActivityWidget";
 export {ScriptRunnerWidget} from "./widgets/ScriptRunnerWidget";

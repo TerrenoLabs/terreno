@@ -41,6 +41,10 @@ describe("@terreno/ai public exports", () => {
     "normalizeVertexModelId",
     "parseAiJson",
     "preparePromptForAI",
+    "getObservabilityApp",
+    "resetObservabilityApp",
+    "resolveObservabilityControl",
+    "validateObservabilityConfig",
     "setCached",
     "shutdownLangfuseClient",
     "shutdownTracing",
@@ -57,6 +61,9 @@ describe("@terreno/ai public exports", () => {
     "LangfuseApp",
     "LangfuseCache",
     "MCPService",
+    "MemoryScoreSink",
+    "MemoryTraceSink",
+    "ObservabilityApp",
     "Project",
   ] as const;
 
@@ -64,6 +71,7 @@ describe("@terreno/ai public exports", () => {
     "COMPACT_SURFACE_SYSTEM_PROMPT",
     "CONTENT_SUMMARY_PROMPT",
     "DEFAULT_GPT_MEMORY",
+    "DEFAULT_OBSERVABILITY_CONTROL",
     "DEFAULT_VERTEX_LOCATION",
     "GEMINI_API_BASE_URL",
     "JSON_VALUE_SYSTEM_PROMPT",

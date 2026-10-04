@@ -79,11 +79,95 @@ describe("rbac role model", () => {
     await setupDb();
     const RbacRole = createRbacRoleModel(mongoose.connection);
     await RbacRole.seedDefaults({statements: terrenoStatements});
-    await RbacRole.updateOne({name: "admin"}, {$set: {permissions: {user: ["read"]}}});
+    await RbacRole.updateOne({name: "member"}, {$set: {permissions: {user: ["read"]}}});
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const member = await RbacRole.findExactlyOne({name: "member"});
+    expect(member.permissions.user).toEqual(["read"]);
+  });
+
+  it("seeds admin with full observability grants", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const admin = await RbacRole.findExactlyOne({name: "admin"});
+    expect(admin.permissions.aiPrompt).toEqual([...terrenoStatements.aiPrompt]);
+    expect(admin.permissions.aiTrace).toEqual([...terrenoStatements.aiTrace]);
+    expect(admin.permissions.aiReview).toEqual([...terrenoStatements.aiReview]);
+    expect(admin.permissions.aiDataset).toEqual([...terrenoStatements.aiDataset]);
+    expect(admin.permissions.aiEvaluator).toEqual([...terrenoStatements.aiEvaluator]);
+    expect(admin.permissions.aiExperiment).toEqual([...terrenoStatements.aiExperiment]);
+  });
+
+  it("merges missing observability grants into customized unsealed admin on re-seed", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+    await RbacRole.updateOne(
+      {name: "admin"},
+      {
+        $set: {
+          permissions: {
+            customApp: ["deploy"],
+            user: ["read"],
+          },
+        },
+      }
+    );
     await RbacRole.seedDefaults({statements: terrenoStatements});
 
     const admin = await RbacRole.findExactlyOne({name: "admin"});
     expect(admin.permissions.user).toEqual(["read"]);
+    expect(admin.permissions.customApp).toEqual(["deploy"]);
+    expect(admin.permissions.aiPrompt).toEqual([...terrenoStatements.aiPrompt]);
+    expect(admin.permissions.aiTrace).toEqual([...terrenoStatements.aiTrace]);
+    expect(admin.permissions.aiReview).toEqual([...terrenoStatements.aiReview]);
+    expect(admin.permissions.aiDataset).toEqual([...terrenoStatements.aiDataset]);
+    expect(admin.permissions.aiEvaluator).toEqual([...terrenoStatements.aiEvaluator]);
+    expect(admin.permissions.aiExperiment).toEqual([...terrenoStatements.aiExperiment]);
+  });
+
+  it("seeds auditor with observability list and read grants", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const auditor = await RbacRole.findExactlyOne({name: "auditor"});
+    expect(auditor.permissions.aiPrompt).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiTrace).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiReview).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiDataset).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiEvaluator).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiExperiment).toEqual(["list", "read"]);
+  });
+
+  it("merges missing observability read grants into customized unsealed auditor on re-seed", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+    await RbacRole.updateOne(
+      {name: "auditor"},
+      {
+        $set: {
+          permissions: {
+            customAudit: ["export"],
+            user: ["list", "read"],
+          },
+        },
+      }
+    );
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const auditor = await RbacRole.findExactlyOne({name: "auditor"});
+    expect(auditor.permissions.user).toEqual(["list", "read"]);
+    expect(auditor.permissions.customAudit).toEqual(["export"]);
+    expect(auditor.permissions.aiPrompt).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiTrace).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiReview).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiDataset).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiEvaluator).toEqual(["list", "read"]);
+    expect(auditor.permissions.aiExperiment).toEqual(["list", "read"]);
   });
 
   it("refreshes sealed default roles on re-seed", async () => {

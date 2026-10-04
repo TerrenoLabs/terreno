@@ -1,7 +1,13 @@
 import * as Sentry from "@sentry/bun";
 import {AdminApp, DocumentStorageApp} from "@terreno/admin-backend";
 import {AdminSpaServeApp} from "@terreno/admin-spa";
-import {AIAdminApp, LangfuseApp} from "@terreno/ai";
+import {
+  AIAdminApp,
+  AIService,
+  createLocalObservabilityPlugin,
+  LangfuseApp,
+  ObservabilityApp,
+} from "@terreno/ai";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
   AuditApp,
@@ -46,7 +52,13 @@ import mongoose from "mongoose";
 import twilio from "twilio";
 import {access} from "./access";
 import {adminScripts} from "./adminScripts";
-import {addAiRoutes, aiModelsRouter} from "./api/ai";
+import {
+  addAiRoutes,
+  aiModelsRouter,
+  createModelFromKey,
+  createServerModel,
+  getAiService,
+} from "./api/ai";
 import {commsDevRouter} from "./api/commsDev";
 import {fileUploadsEnabledForRequest} from "./api/fileUploads";
 import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
@@ -76,6 +88,7 @@ import {resolveTwilioVerifyEnvConfig} from "./twilioVerifyEnv";
 import type {UserDocument} from "./types/models/userTypes";
 import {buildBetterAuthConfig, getAuthProvider, getWebOrigins} from "./utils/betterAuthConfig";
 import {connectToMongoDB} from "./utils/database";
+import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
 import {createExampleInboundWebhooks} from "./webhooksExample";
 import {io} from "./websockets";
 
@@ -421,6 +434,27 @@ export const start = async (skipListen = false): Promise<express.Application> =>
 
     terraApp
 
+      .register(
+        new ObservabilityApp({
+          accessControl: access,
+          aiService: getAiService(),
+          aiServiceFactory: (modelId) => {
+            const model = createServerModel(modelId);
+            if (!model) {
+              return undefined;
+            }
+            return new AIService({model});
+          },
+          plugins: [createLocalObservabilityPlugin()],
+          priceMap: parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON),
+          requestAiServiceFactory: ({apiKey, modelId}) => {
+            if (!apiKey) {
+              return undefined;
+            }
+            return new AIService({model: createModelFromKey(apiKey, modelId)});
+          },
+        })
+      )
       .register(
         new AdminApp({
           accessControl: access,

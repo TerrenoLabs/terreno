@@ -9,6 +9,7 @@ import type {
   ScreenWidgetComponent,
 } from "../types";
 import {AI_ADMIN_WIDGETS} from "./AIRequestsScreenWidget";
+import {AI_OBSERVABILITY_WIDGETS} from "./aiObservability/shell/AiObservabilityScreenWidgets";
 import {MarkdownFieldWidget, TextareaFieldWidget} from "./builtInFieldWidgets";
 import {CONSENT_ADMIN_WIDGETS} from "./consentWidgets";
 import {DOCUMENT_STORAGE_ADMIN_WIDGETS} from "./DocumentsScreenWidget";
@@ -31,6 +32,7 @@ export const BUILT_IN_HOME_WIDGETS: Record<string, HomeWidgetComponent> = {
 
 export const BUILT_IN_SCREEN_WIDGETS: Record<string, ScreenWidgetComponent> = {
   ...AI_ADMIN_WIDGETS,
+  ...AI_OBSERVABILITY_WIDGETS,
   ...ANNOUNCEMENTS_ADMIN_WIDGETS,
   ...COMMS_ADMIN_WIDGETS,
   ...DOCUMENT_STORAGE_ADMIN_WIDGETS,

@@ -1,2 +1,8 @@
 [test]
-preload = ["../ui/src/bunSetup.ts"]
+preload = ["./tests/bunSetup.ts"]
+coveragePathIgnorePatterns = [
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "tests/**",
+  "store/openApiSdk.ts",
+]

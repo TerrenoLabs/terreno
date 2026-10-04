@@ -92,4 +92,30 @@ describe("buildAdminSidebarGroups", () => {
       },
     ]);
   });
+
+  it("keeps AI Observability screens in their own sidebar group", () => {
+    const {groups, ungroupedScreens} = buildAdminSidebarGroups({
+      customScreens: [
+        {displayName: "AI Requests", name: "ai-requests"},
+        {displayName: "Prompts", group: "AI Observability", name: "ai-prompts"},
+        {displayName: "Review queue", group: "AI Observability", name: "ai-review"},
+      ],
+      models: [],
+    });
+
+    assert.deepEqual(
+      ungroupedScreens.map((screen) => screen.name),
+      ["ai-requests"]
+    );
+    assert.deepEqual(groups, [
+      {
+        customScreens: [
+          {displayName: "Prompts", group: "AI Observability", name: "ai-prompts"},
+          {displayName: "Review queue", group: "AI Observability", name: "ai-review"},
+        ],
+        group: "AI Observability",
+        models: [],
+      },
+    ]);
+  });
 });

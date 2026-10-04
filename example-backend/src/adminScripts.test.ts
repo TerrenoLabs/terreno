@@ -75,6 +75,36 @@ describe("resetDatabase admin script", () => {
   });
 });
 
+describe("seedChatSafetyDataset admin script", () => {
+  it("is registered for the admin script runner", () => {
+    const script = adminScripts.find(({name}) => name === "seedChatSafetyDataset");
+    assert.exists(script);
+    assert.match(script?.description ?? "", /chat-safety/i);
+  });
+
+  it("leaves the seeded dataset unchanged on dry and wet runs", async () => {
+    await seedDefaultData();
+    const script = adminScripts.find(({name}) => name === "seedChatSafetyDataset");
+    if (!script) {
+      assert.fail("seedChatSafetyDataset is not registered");
+    }
+    const dry = await script.runner(false);
+    const wet = await script.runner(true);
+    assert.isTrue(dry.success);
+    assert.isTrue(wet.success);
+    assert.isTrue(
+      dry.results.some((line) => {
+        return line.includes("left unchanged");
+      })
+    );
+    assert.isTrue(
+      wet.results.some((line) => {
+        return line.includes("left unchanged");
+      })
+    );
+  });
+});
+
 describe("enqueueDlqDemoJob admin script", () => {
   const typedUserModel = User as unknown as TerrenoAuthUserModel;
 

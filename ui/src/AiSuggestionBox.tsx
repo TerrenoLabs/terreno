@@ -61,14 +61,14 @@ export const AiSuggestionBox: FC<AiSuggestionBoxProps> = ({
   const backgroundColor = isAdded
     ? theme.surface.successLight
     : status === "not-started"
-      ? theme.primitives.neutral050
-      : theme.primitives.primary000;
+      ? theme.surface.baseAlternate
+      : theme.surface.ai;
 
   const borderColor = isAdded
-    ? "#9BE7B2"
+    ? theme.border.success
     : status === "not-started"
-      ? theme.surface.secondaryLight
-      : theme.primitives.primary100;
+      ? theme.border.default
+      : theme.border.ai;
 
   const containerStyle = {
     backgroundColor,

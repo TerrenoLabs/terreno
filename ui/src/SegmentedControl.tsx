@@ -65,7 +65,7 @@ export const SegmentedControl: FC<SegmentedControlProps> = ({
       <View
         style={{
           alignItems: "center",
-          backgroundColor: theme.primitives.neutral300,
+          backgroundColor: theme.surface.neutralLight,
           borderRadius: theme.primitives.radius3xl,
           display: "flex",
           flexDirection: "row",

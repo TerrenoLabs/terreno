@@ -55,6 +55,14 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
     };
 
     return {
+      blockquote: {
+        backgroundColor: theme.surface.baseAlternate,
+        borderColor: theme.border.default,
+        borderLeftWidth: 4,
+        marginLeft: 0,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+      },
       body: {width: "100%", ...markdownTextStyle},
       bullet_list: {width: "100%"},
       bullet_list_content: {flex: 1, flexShrink: 1, minWidth: 0},
@@ -149,7 +157,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
       text: color,
       textgroup: {flexShrink: 1, minWidth: 0},
     };
-  }, [textColor, theme.border.default, theme.surface.neutralLight]);
+  }, [textColor, theme.border.default, theme.surface.baseAlternate, theme.surface.neutralLight]);
 
   const handleLinkPress = useCallback((url: string): boolean => {
     void Linking.openURL(url);

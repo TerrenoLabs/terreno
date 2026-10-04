@@ -16,6 +16,15 @@ loops that invoke those stages; they are not stages and must not appear as `stag
 | `terreno-4-brew` | Roast PASS for every in-scope task + branch/evidence | pushed head + PR + product-CI trigger check + review-bot wait + attached evidence | Taste |
 | `terreno-5-taste` | PR + current state | one current-head reaction; before push: fetch latest `master` (merge only when needed), re-verify last-run failed tests locally, run root `prepush` when present (otherwise affected-package checks) in a no-context subagent, then watch CI; invoked directly, repeats bounded reactions until terminal | null or fresh Taste |
 
+Pre-Grow skill (not a stage):
+
+| Skill | Input | Primary output | Next |
+| --- | --- | --- | --- |
+| `terreno-prd` | current conversation + repository | published product-only PRD (problem, solution, user stories, success metrics, out of scope); every metric measurable or `TBD` with its decider | Grow, with the PRD as its spec; metrics become acceptance criteria, `TBD`s become grilling questions |
+
+It is explicit-invoke only (`/terreno-prd`, `$terreno-prd`, `/terreno:prd`), does not
+interview, and carries no implementation or testing decisions; those stay in Grow.
+
 Outer loops (not stages):
 
 | Skill | What it walks | Default |

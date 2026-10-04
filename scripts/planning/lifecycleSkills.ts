@@ -68,6 +68,9 @@ const OUTER_LOOP_DIRECTORIES = [
   "terreno-taste-sweep",
 ] as const;
 
+/** Skills that run before Grow and feed it input; not stages. */
+const PRE_GROW_SKILL_DIRECTORIES = ["terreno-prd"] as const;
+
 const PLUGIN_APP_SKILL_DIRECTORIES = [
   "ai-prompt-governance",
   "backend-test-env",
@@ -736,6 +739,7 @@ export const validateClaudePluginHost = ({
   const expectedClaudeStages = [
     ...STAGE_DEFINITIONS.map(({directory}) => directory.replace(/^terreno-/, "")),
     ...OUTER_LOOP_DIRECTORIES.map((directory) => directory.replace(/^terreno-/, "")),
+    ...PRE_GROW_SKILL_DIRECTORIES.map((directory) => directory.replace(/^terreno-/, "")),
     ...PLUGIN_APP_SKILL_DIRECTORIES,
   ].sort();
   if (JSON.stringify(claudeStages) !== JSON.stringify(expectedClaudeStages)) {
@@ -888,6 +892,11 @@ export const validateLifecyclePlugin = ({
   for (const directory of PLUGIN_APP_SKILL_DIRECTORIES) {
     if (!existsSync(join(skillsDirectory, directory, "SKILL.md"))) {
       errors.push(`plugin Terreno app skill is missing: ${directory}`);
+    }
+  }
+  for (const directory of PRE_GROW_SKILL_DIRECTORIES) {
+    if (!existsSync(join(skillsDirectory, directory, "SKILL.md"))) {
+      errors.push(`plugin pre-Grow skill is missing: ${directory}`);
     }
   }
   for (const directory of REMOVED_SKILL_DIRECTORIES) {

@@ -26,7 +26,7 @@
     },
     "admin-backend": {
       "name": "@terreno/admin-backend",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@google-cloud/storage": "catalog:",
         "@terreno/api": "workspace:*",
@@ -52,7 +52,7 @@
     },
     "admin-frontend": {
       "name": "@terreno/admin-frontend",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@terreno/ui": "workspace:*",
         "expo-router": "catalog:",
@@ -65,6 +65,7 @@
       },
       "devDependencies": {
         "@biomejs/biome": "catalog:",
+        "@react-native-community/slider": "catalog:",
         "@reduxjs/toolkit": "catalog:",
         "@testing-library/react-native": "catalog:",
         "@types/lodash": "catalog:",
@@ -87,7 +88,7 @@
     },
     "admin-spa": {
       "name": "@terreno/admin-spa",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@expo/vector-icons": "catalog:",
         "@react-native-async-storage/async-storage": "catalog:",
@@ -138,7 +139,7 @@
     },
     "ai": {
       "name": "@terreno/ai",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@ai-sdk/mcp": "^1.0.21",
         "@google-cloud/storage": "catalog:",
@@ -148,6 +149,8 @@
         "@opentelemetry/sdk-node": "0.217.0",
         "@terreno/blocks": "workspace:*",
         "ai": "catalog:",
+        "ajv": "catalog:",
+        "csv-parse": "catalog:",
         "google-auth-library": "^10.5.0",
         "luxon": "catalog:",
         "multer": "catalog:",
@@ -155,13 +158,16 @@
       },
       "devDependencies": {
         "@biomejs/biome": "catalog:",
+        "@terreno/admin-backend": "workspace:*",
         "@terreno/api": "workspace:*",
+        "@terreno/jobs": "workspace:*",
         "@terreno/test": "workspace:*",
         "@types/bun": "catalog:",
         "@types/express": "catalog:",
         "@types/luxon": "catalog:",
         "@types/multer": "catalog:",
         "@types/supertest": "catalog:",
+        "chai": "catalog:",
         "express": "catalog:",
         "mongoose": "catalog:",
         "passport-local-mongoose": "catalog:",
@@ -171,15 +177,17 @@
       "peerDependencies": {
         "@ai-sdk/google-vertex": "^4.0.142",
         "@terreno/api": "workspace:*",
+        "@terreno/jobs": "workspace:*",
         "mongoose": "^8.0.0 || ^9.0.0",
       },
       "optionalPeers": [
         "@ai-sdk/google-vertex",
+        "@terreno/jobs",
       ],
     },
     "announcements": {
       "name": "@terreno/announcements",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -202,7 +210,7 @@
     },
     "api": {
       "name": "@terreno/api",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "bin": {
         "terreno-migrate": "./src/migrations/cli.ts",
       },
@@ -281,7 +289,7 @@
     },
     "api-health": {
       "name": "@terreno/api-health",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -332,7 +340,7 @@
     },
     "comms": {
       "name": "@terreno/comms",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "libphonenumber-js": "catalog:",
@@ -363,7 +371,7 @@
     },
     "create-terreno-app": {
       "name": "create-terreno-app",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "bin": {
         "create-terreno-app": "./dist/cli.js",
       },
@@ -561,7 +569,7 @@
     },
     "feature-flags": {
       "name": "@terreno/feature-flags",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@openfeature/server-sdk": "catalog:",
         "@terreno/api": "workspace:*",
@@ -584,7 +592,7 @@
     },
     "jobs": {
       "name": "@terreno/jobs",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "cron": "^4.3.4",
@@ -614,7 +622,7 @@
     },
     "mcp-server": {
       "name": "@terreno/mcp",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "bin": {
         "terreno-mcp": "./dist/index.js",
         "terreno-mcp-local": "./dist/local/index.js",
@@ -643,7 +651,7 @@
     },
     "rtk": {
       "name": "@terreno/rtk",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@ai-sdk/react": "^3.0.118",
         "@better-auth/expo": "^1.6.25",
@@ -690,7 +698,7 @@
     },
     "syncdb": {
       "name": "@terreno/syncdb",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "bin": {
         "terreno-syncdb-codegen": "./src/codegen/cli.ts",
       },
@@ -724,7 +732,7 @@
     },
     "test": {
       "name": "@terreno/test",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "express": "catalog:",
         "luxon": "catalog:",
@@ -750,7 +758,7 @@
     },
     "ui": {
       "name": "@terreno/ui",
-      "version": "57.7.0",
+      "version": "57.9.0",
       "dependencies": {
         "@expo-google-fonts/caveat": "^0.4.2",
         "@expo-google-fonts/dancing-script": "^0.4.2",
@@ -931,10 +939,12 @@
     "@types/react": "~19.2.14",
     "@types/supertest": "^7.2.0",
     "ai": "^6.0.97",
+    "ajv": "8.20.0",
     "axios": "^1.13.2",
     "babel-preset-expo": "~57.0.7",
     "better-auth": "^1.6.25",
     "chai": "^6.2.2",
+    "csv-parse": "^6.1.0",
     "expo": "~57.0.14",
     "expo-clipboard": "~57.0.1",
     "expo-constants": "~57.0.12",
@@ -3083,6 +3093,8 @@
     "csso": ["csso@5.0.5", "", { "dependencies": { "css-tree": "~2.2.0" } }, "sha512-0LrrStPOdJj+SPCCrGhzryycLjwcgUSHBtxNA8aIDxf0GLsRh1cKYhB00Gd1lDOS4yGH69+SNn13+TWbVHETFQ=="],
 
     "csstype": ["csstype@3.2.3", "", {}, "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ=="],
+
+    "csv-parse": ["csv-parse@6.2.1", "", {}, "sha512-LRLMV+UCyfMokp8Wb411duBf1gaBKJfOfBWU9eHMJ+b+cJYZsNu3AFmjJf3+yPGd59Exz1TsMjaSFyxnYB9+IQ=="],
 
     "d3-array": ["d3-array@3.2.4", "", { "dependencies": { "internmap": "1 - 2" } }, "sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg=="],
 

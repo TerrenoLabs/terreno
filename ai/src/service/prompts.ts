@@ -155,3 +155,20 @@ export const TITLE_GENERATION_PROMPT =
 export const JSON_VALUE_SYSTEM_PROMPT =
   "You respond with a single JSON value (object, array, string, number, boolean, or null) only. " +
   "No markdown code fences, no commentary before or after the JSON.";
+
+/** Observability test-multi-stage workflow: first parallel-style LLM pass. */
+export const OBS_TEST_MULTI_STAGE_CALL_1_SYSTEM =
+  "Summarize the user input in one short phrase. Return a JSON object that matches the output " +
+  'schema {"phrase": string}. No markdown fences and no extra keys.';
+
+/** Observability test-multi-stage workflow: second LLM pass over the same input. */
+export const OBS_TEST_MULTI_STAGE_CALL_2_SYSTEM =
+  "Extract exactly two keywords from the user input. Return a JSON object that matches the output " +
+  'schema {"keywords": [string, string]}. No markdown fences and no extra keys.';
+
+/** Observability test-multi-stage workflow: final synthesis LLM pass. */
+export const OBS_TEST_MULTI_STAGE_FINAL_SYSTEM =
+  "Combine the stage-one phrase, stage-two keywords, and text metrics into one concise sentence. " +
+  "Return a JSON object that matches the output schema " +
+  '{"sentence": string, "phrase": string, "keywords": string[], "metrics": object}. ' +
+  "Echo phrase, keywords, and metrics from the prompt. No markdown fences and no extra keys.";

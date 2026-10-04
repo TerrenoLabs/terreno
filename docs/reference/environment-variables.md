@@ -23,6 +23,7 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `TERRENO_TEST_MONGODB_URI` | `@terreno/test` | ❌ | auto | Yes | tooling |
 | `TERRENO_TEST_USE_MEMORY_MONGO` | `@terreno/test` | ❌ | — | No | tooling |
 | `TERRENO_TEST_USE_REPLSET` | `@terreno/test` | ❌ | — | No | tooling |
+| `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` | `@terreno/test` | ❌ | `60000` | No | tooling |
 | `TERRENO_TEST_USE_FIXTURE_CACHE` | `@terreno/test` | ❌ | — | No | tooling |
 | `TERRENO_TEST_CACHE_DIR` | `@terreno/test` | ❌ | — | No | tooling |
 | `BUN_TEST_DISABLE_DB` | test harness | ❌ | — | No | tooling |

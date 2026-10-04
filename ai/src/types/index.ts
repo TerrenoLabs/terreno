@@ -208,7 +208,16 @@ export interface AIServiceOptions {
   model: LanguageModel;
 }
 
-export interface GenerateTextOptions {
+export interface GenerateObservabilityOptions {
+  priceMap?: Record<string, {inputPerMTok: number; outputPerMTok: number}>;
+  promptLabel?: string;
+  promptName?: string;
+  sensitive?: boolean;
+  sessionId?: string;
+  skipTrace?: boolean;
+}
+
+export interface GenerateTextOptions extends GenerateObservabilityOptions {
   maxOutputTokens?: number;
   prompt: string;
   stopWhen?: StopCondition<ToolSet>;
@@ -219,7 +228,7 @@ export interface GenerateTextOptions {
   userId?: mongoose.Types.ObjectId;
 }
 
-export interface GenerateStreamOptions {
+export interface GenerateStreamOptions extends GenerateObservabilityOptions {
   maxOutputTokens?: number;
   prompt: string;
   systemPrompt?: string;
@@ -227,7 +236,7 @@ export interface GenerateStreamOptions {
   userId?: mongoose.Types.ObjectId;
 }
 
-export interface GenerateChatStreamOptions {
+export interface GenerateChatStreamOptions extends GenerateObservabilityOptions {
   messages: Array<{content: string; role: "user" | "assistant" | "system"}>;
   stopWhen?: StopCondition<ToolSet>;
   systemPrompt?: string;
@@ -236,24 +245,24 @@ export interface GenerateChatStreamOptions {
   userId?: mongoose.Types.ObjectId;
 }
 
-export interface RemixOptions {
+export interface RemixOptions extends GenerateObservabilityOptions {
   text: string;
   userId?: mongoose.Types.ObjectId;
 }
 
-export interface SummaryOptions {
+export interface SummaryOptions extends GenerateObservabilityOptions {
   text: string;
   userId?: mongoose.Types.ObjectId;
 }
 
-export interface TranslateOptions {
+export interface TranslateOptions extends GenerateObservabilityOptions {
   sourceLanguage?: string;
   targetLanguage: string;
   text: string;
   userId?: mongoose.Types.ObjectId;
 }
 
-export interface GenerateJsonValueOptions {
+export interface GenerateJsonValueOptions extends GenerateObservabilityOptions {
   maxOutputTokens?: number;
   /** Optional name passed to the provider for structured-output guidance. */
   outputName?: string;
@@ -265,7 +274,7 @@ export interface GenerateJsonValueOptions {
   userId?: mongoose.Types.ObjectId;
 }
 
-export interface GenerateJsonObjectOptions<OBJECT> {
+export interface GenerateJsonObjectOptions<OBJECT> extends GenerateObservabilityOptions {
   maxOutputTokens?: number;
   prompt: string;
   /** Zod schema, `jsonSchema(...)`, or other `FlexibleSchema` accepted by the AI SDK. */
@@ -277,7 +286,28 @@ export interface GenerateJsonObjectOptions<OBJECT> {
   userId?: mongoose.Types.ObjectId;
 }
 
-export interface GenerateJsonArrayOptions<ELEMENT> {
+export interface ObsTestMultiStageCall1Output {
+  phrase: string;
+}
+
+export interface ObsTestMultiStageCall2Output {
+  keywords: string[];
+}
+
+export interface ObsTestMultiStageMetrics {
+  call1: {charCount: number; wordCount: number};
+  call2: {charCount: number; wordCount: number};
+  combinedCharCount: number;
+}
+
+export interface ObsTestMultiStageFinalOutput {
+  keywords: string[];
+  metrics: ObsTestMultiStageMetrics;
+  phrase: string;
+  sentence: string;
+}
+
+export interface GenerateJsonArrayOptions<ELEMENT> extends GenerateObservabilityOptions {
   /** Schema for each array element. */
   element: import("ai").FlexibleSchema<ELEMENT>;
   /** Optional description for the array output (provider guidance). */

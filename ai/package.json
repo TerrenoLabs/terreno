@@ -12,6 +12,8 @@
     "@opentelemetry/sdk-node": "0.217.0",
     "@terreno/blocks": "workspace:*",
     "ai": "catalog:",
+    "ajv": "catalog:",
+    "csv-parse": "catalog:",
     "google-auth-library": "^10.5.0",
     "luxon": "catalog:",
     "multer": "catalog:",
@@ -20,13 +22,16 @@
   "description": "Provider-agnostic AI service with streaming chat, request logging, and admin tools — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/admin-backend": "workspace:*",
     "@terreno/api": "workspace:*",
+    "@terreno/jobs": "workspace:*",
     "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/express": "catalog:",
     "@types/luxon": "catalog:",
     "@types/multer": "catalog:",
     "@types/supertest": "catalog:",
+    "chai": "catalog:",
     "express": "catalog:",
     "mongoose": "catalog:",
     "passport-local-mongoose": "catalog:",
@@ -39,6 +44,18 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./harness": {
+      "default": "./dist/harness/harness.js",
+      "import": "./dist/harness/harness.js",
+      "require": "./dist/harness/harness.js",
+      "types": "./dist/harness/harness.d.ts"
+    },
+    "./harness/jobsRunner": {
+      "default": "./dist/harness/runners/jobsRunner.js",
+      "import": "./dist/harness/runners/jobsRunner.js",
+      "require": "./dist/harness/runners/jobsRunner.js",
+      "types": "./dist/harness/runners/jobsRunner.d.ts"
     },
     "./langfuseApp": {
       "default": "./dist/langfuseApp.js",
@@ -72,10 +89,14 @@
   "peerDependencies": {
     "@ai-sdk/google-vertex": "^4.0.142",
     "@terreno/api": "workspace:*",
+    "@terreno/jobs": "workspace:*",
     "mongoose": "^8.0.0 || ^9.0.0"
   },
   "peerDependenciesMeta": {
     "@ai-sdk/google-vertex": {
+      "optional": true
+    },
+    "@terreno/jobs": {
       "optional": true
     }
   },
@@ -99,5 +120,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.9.0"
+  "version": "57.10.1"
 }

@@ -28,6 +28,7 @@ import {createTelemetryConfig, preparePromptForAI} from "../langfuseVercelAi";
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
 import {Project} from "../models/project";
+import type {SpanRecord} from "../observability/types";
 import type {
   AskOrigin,
   GptHistoryAskStatus,
@@ -331,6 +332,7 @@ const generateTitle = async (
     const conversationSnippet = `User: ${prompt}\nAssistant: ${response.substring(0, 500)}`;
     const title = await titleService.generateText({
       prompt: conversationSnippet,
+      skipTrace: true,
       systemPrompt: TITLE_GENERATION_PROMPT,
       temperature: 0.3,
     });
@@ -1623,6 +1625,35 @@ const answeredAskMetadata = (resolvedAsk: ResolvedAsk | undefined): Record<strin
       }
     : {};
 
+const toolSpansFromRows = ({
+  rows,
+  startTime,
+}: {
+  rows: GptHistoryPrompt[];
+  startTime: number;
+}): SpanRecord[] => {
+  const resultsByCallId = new Map(
+    rows
+      .filter((row) => row.type === "tool-result" && row.toolCallId)
+      .map((row) => [row.toolCallId as string, row.result])
+  );
+  const endedAt = DateTime.now().toMillis();
+  return rows
+    .filter((row) => row.type === "tool-call" && row.toolCallId && row.toolName)
+    .map((row, index) => ({
+      durationMs: 0,
+      endedAt: DateTime.fromMillis(endedAt, {zone: "utc"}).toISO() ?? "",
+      id: `${row.toolCallId}-span`,
+      input: row.args,
+      kind: "TOOL" as const,
+      name: row.toolName as string,
+      output: resultsByCallId.get(row.toolCallId as string),
+      startedAt: DateTime.fromMillis(startTime + index, {zone: "utc"}).toISO() ?? "",
+      startOffsetMs: index,
+      status: "ok" as const,
+    }));
+};
+
 /**
  * Runs one chat turn: a new prompt, or the user's answer to the pending ask (`askResponse`).
  * `surface: "compact"` offers only the asks a small screen can show and asks for short replies.
@@ -1644,6 +1675,16 @@ export const runChatTurn = async ({
   const {toolChoice, maxSteps} = options;
   const {model: requestModel, projectId, systemPrompt} = body;
   const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id;
+  const promptName = typeof body.promptName === "string" ? body.promptName : undefined;
+  const promptLabel = typeof body.promptLabel === "string" ? body.promptLabel : undefined;
+  const isAdmin = (req.user as {admin?: boolean} | undefined)?.admin === true;
+  if ((promptName || promptLabel) && !isAdmin) {
+    throw new APIError({status: 403, title: "Prompt registry selection requires admin access"});
+  }
+  const sessionId =
+    (typeof body.sessionId === "string" ? body.sessionId : undefined) ??
+    req.header("x-ai-session-id") ??
+    undefined;
   const askKinds = resolveAskKinds(options.asks);
   const askAnswer = parseTurnBody({askKinds, body});
   const surface = parseSurface(body.surface);
@@ -1667,13 +1708,21 @@ export const runChatTurn = async ({
   const {answer, isNewHistory, logPrompt, messages, replayedMessages, resolvedAsk, titlePrompt} =
     turn;
   let {history} = turn;
-  const effectiveSystemPrompt = await buildSystemPrompt({
+  let effectiveSystemPrompt = await buildSystemPrompt({
     history,
     options,
     projectId,
     systemPrompt,
     userId,
   });
+  const observability = await aiService.resolveGenerateObservability({
+    promptLabel,
+    promptName,
+    sensitive: body.sensitive === true ? true : undefined,
+    sessionId,
+    systemPrompt: effectiveSystemPrompt,
+  });
+  effectiveSystemPrompt = observability.systemPrompt;
 
   // Some models (e.g. gemini-2.5-flash-image) don't support tool calling
   const modelId = aiService.modelId;
@@ -2107,14 +2156,16 @@ export const runChatTurn = async ({
         : {}),
     };
     try {
-      await AIRequest.logRequest({
-        aiModel: modelId ?? "unknown",
+      await aiService.recordGenerate({
+        childSpans: toolSpansFromRows({rows: record.rows, startTime}),
+        metadata,
+        observability,
         prompt: logPrompt,
         requestType: "general",
         response: storedResponse,
         responseTime: DateTime.now().toMillis() - startTime,
+        startTime,
         userId: userId ?? undefined,
-        ...(Object.keys(metadata).length > 0 ? {metadata} : {}),
       });
     } catch (logErr) {
       logger.warn("Failed to log AIRequest", {
@@ -2154,6 +2205,23 @@ export const runChatTurn = async ({
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error("Error in GPT stream", {error: errorMessage});
+    try {
+      await aiService.recordGenerate({
+        childSpans: toolSpansFromRows({rows: record.rows, startTime}),
+        error: errorMessage,
+        observability,
+        prompt: logPrompt,
+        requestType: "general",
+        response: record.fullResponse || undefined,
+        responseTime: DateTime.now().toMillis() - startTime,
+        startTime,
+        userId: userId ?? undefined,
+      });
+    } catch (logError) {
+      logger.warn("Failed to log AIRequest error", {
+        error: logError instanceof Error ? logError.message : String(logError),
+      });
+    }
     await endFailedTurn({
       errorMessage: error instanceof Error ? error.message : "Unknown error",
       isErrorSent: false,

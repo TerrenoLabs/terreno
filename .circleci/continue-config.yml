@@ -384,6 +384,8 @@ commands:
             export PORT=4000
             export MONGO_URI="mongodb://127.0.0.1/terreno-e2e?replicaSet=rs0"
             export TOKEN_ISSUER=terreno-e2e
+            # harness-intake asserts the deterministic demo summarizer, never a real provider.
+            export CLINIC_DEMO_MODEL=true
             bun run src/index.ts
       - run:
           name: Wait for backend health
@@ -454,7 +456,7 @@ commands:
               auth) specs="login signup consents forgot-password reset-password verify-email" ;;
               app) specs="todos todo-windows profile realtime ai-chat pdf notifications" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth" ;;
-              admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back" ;;
+              admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
               *) specs="$shard" ;;
             esac
@@ -688,7 +690,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api blocks
+          packages: api admin-backend blocks
       - run:
           name: Lint / compile / test ai
           working_directory: ~/project/ai
@@ -848,7 +850,7 @@ jobs:
           name: Fetch coverage base
           command: git fetch origin master
       - compile_packages:
-          packages: api blocks ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
       - run:
           name: Check new source file coverage
           command: |
@@ -1111,7 +1113,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api blocks ai api-health comms jobs admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
       - run:
           name: List admin scripts
           working_directory: ~/project/example-backend
@@ -2053,7 +2055,7 @@ jobs:
           command: |
             set -euo pipefail
             packages=(
-              api test ui rtk admin-backend admin-frontend admin-spa ai
+              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             filters=()

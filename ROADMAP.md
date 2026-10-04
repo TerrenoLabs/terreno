@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-10-03T20:09:55.611Z.
+> dates are promised. Last updated: 2026-10-04T18:56:30.566Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -38,6 +38,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 - [Agent UI Asks — agents ask the user for a typed answer inside the chat](https://github.com/TerrenoLabs/terreno/issues/1501) (Feature, In progress) — IP: [agent-ui-asks](docs/implementationPlans/agent-ui-asks.md) · Tasks: [agent-ui-asks](docs/tasks/agent-ui-asks.md)
 - [Agent UI Blocks — a strict YAML DSL for agent-rendered Terreno components](https://github.com/TerrenoLabs/terreno/issues/1389) (Feature, Planned) — IP: [agent-ui-blocks](docs/implementationPlans/agent-ui-blocks.md) · Tasks: [agent-ui-blocks](docs/tasks/agent-ui-blocks.md)
+- [Durable agent harness (@terreno/ai/harness)](https://github.com/TerrenoLabs/terreno/issues/1503) (Feature, Planned) — IP: [durable-agent-harness](docs/implementationPlans/durable-agent-harness.md) · Tasks: [durable-agent-harness](docs/tasks/durable-agent-harness.md)
 
 ### mcp
 
@@ -84,7 +85,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 ### ai
 
 - [AI agents and provider failover](https://github.com/TerrenoLabs/terreno/issues/1397) (Feature, Shaping) — IP: [ai-agents-and-failover](docs/implementationPlans/ai-agents-and-failover.md) · Tasks: [ai-agents-and-failover](docs/tasks/ai-agents-and-failover.md)
-- [AI observability (Langfuse-light, pluggable)](https://github.com/TerrenoLabs/terreno/issues/1393) (Feature, Shaping) — IP: [ai-observability](docs/implementationPlans/ai-observability.md) · Tasks: [ai-observability](docs/tasks/ai-observability.md)
+- [AI observability (Langfuse-light, pluggable)](https://github.com/TerrenoLabs/terreno/issues/1393) (Feature, Planned) — IP: [ai-observability](docs/implementationPlans/ai-observability.md) · Tasks: [ai-observability](docs/tasks/ai-observability.md)
 - [Support answering agent (@terreno/support)](https://github.com/TerrenoLabs/terreno/issues/1396) (Feature, Shaping) — IP: [support-agent](docs/implementationPlans/support-agent.md) · Tasks: [support-agent](docs/tasks/support-agent.md)
 
 ### mcp

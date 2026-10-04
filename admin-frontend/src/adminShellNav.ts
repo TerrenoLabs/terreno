@@ -76,3 +76,7 @@ export const buildAdminSidebarGroups = ({
 
   return {groups, ungroupedScreens};
 };
+
+export const adminScreenGroupTestId = (group: string): string => {
+  return `admin-shell-nav-group-${group.trim().toLowerCase().replace(/\s+/g, "-")}`;
+};

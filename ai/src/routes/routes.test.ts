@@ -10,6 +10,9 @@ import type supertest from "supertest";
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
 import {Project} from "../models/project";
+import {MemoryTraceSink} from "../observability/local/traceStore";
+import {ObservabilityApp, resetObservabilityApp} from "../observability/observabilityApp";
+import type {ObservabilityPlugin} from "../observability/types";
 import {AIService} from "../service/aiService";
 import type {FileStorageService} from "../service/fileStorage";
 import type {MCPService} from "../service/mcpService";
@@ -200,6 +203,7 @@ describe("AI Routes", () => {
 
   afterEach(async () => {
     streamTextOverride = undefined;
+    resetObservabilityApp();
     await AIRequest.deleteMany({});
     await GptHistory.deleteMany({});
   });
@@ -239,6 +243,15 @@ describe("AI Routes", () => {
       const res = await agent.post("/gpt/remix").send({});
 
       expect(res.status).toBe(400);
+    });
+
+    it("forbids non-admin prompt registry selection", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .post("/gpt/remix")
+        .send({promptLabel: "latest", promptName: "private-prompt", text: "Hello"});
+
+      assert.equal(res.status, 403);
     });
 
     it("returns demo response when no aiService configured", async () => {
@@ -290,6 +303,90 @@ describe("AI Routes", () => {
 
       const histories = await GptHistory.find({});
       expect(histories.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("forbids non-admin prompt registry selection", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Hi", promptLabel: "latest", promptName: "private-prompt"});
+
+      assert.equal(res.status, 403);
+    });
+
+    it("does not let client sensitive false downgrade a sensitive prompt", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {
+          get: async () => ({
+            body: "Sensitive system prompt",
+            label: "production",
+            name: "sensitive-prompt",
+            sensitive: true,
+            version: 1,
+          }),
+        },
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+
+      const agent = await authAsUser(app, "admin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Hi", promptName: "sensitive-prompt", sensitive: false})
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.equal(res.status, 200);
+      assert.equal(sink.traces.length, 1);
+      assert.isTrue(sink.traces[0]?.sensitive);
+    });
+
+    it("emits a memory-sink trace with userId and sessionId", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {get: async () => undefined},
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+
+      const agent = await authAsUser(app, "notAdmin");
+      const user = await UserModel.findOne({email: "notAdmin@example.com"});
+      const res = await agent
+        .post("/gpt/prompt")
+        .set("x-ai-session-id", "sess-gpt-1")
+        .send({prompt: "Hi"})
+        .buffer(true)
+        .parse(sseCollect);
+
+      expect(res.status).toBe(200);
+      expect(sink.traces.length).toBe(1);
+      expect(sink.traces[0].sessionId).toBe("sess-gpt-1");
+      expect(sink.traces[0].userId).toBe(user?._id.toString());
     });
 
     it("sends demo response when no ai service configured", async () => {
@@ -719,6 +816,25 @@ describe("AI Routes", () => {
     });
 
     it("forwards model tool-call and tool-result stream events via SSE", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {get: async () => undefined},
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+
       const toolModel = {
         doGenerate: mock(async () => ({
           content: [{text: "ok", type: "text" as const}],
@@ -743,15 +859,29 @@ describe("AI Routes", () => {
                 type: "tool-call" as const,
               });
               controller.enqueue({
-                output: {
+                providerExecuted: true,
+                result: {
                   fileData: "data:application/pdf;base64,AAAA",
                   filename: "result.pdf",
                   mimeType: "application/pdf",
                   results: ["item1"],
                 },
-                providerExecuted: true,
                 toolCallId: "tc1",
                 toolName: "search",
+                type: "tool-result" as const,
+              });
+              controller.enqueue({
+                input: {id: "second"},
+                providerExecuted: true,
+                toolCallId: "tc2",
+                toolName: "lookup",
+                type: "tool-call" as const,
+              });
+              controller.enqueue({
+                providerExecuted: true,
+                result: {value: "second-result"},
+                toolCallId: "tc2",
+                toolName: "lookup",
                 type: "tool-result" as const,
               });
               controller.enqueue({
@@ -774,6 +904,7 @@ describe("AI Routes", () => {
             aiService: new AIService({model: toolModel as unknown as LanguageModel}),
             openApiOptions: options,
             tools: {
+              lookup: {description: "Lookup item"} as unknown as Tool,
               search: {description: "Web search"} as unknown as Tool,
             },
           });
@@ -791,6 +922,29 @@ describe("AI Routes", () => {
       const body = (res as SseResponse).body;
       expect(body).toContain("toolCall");
       expect(body).toContain("toolResult");
+      assert.equal(sink.traces.length, 1);
+      const trace = sink.traces[0];
+      assert.equal(trace.spans[0]?.kind, "CHAIN");
+      assert.equal(trace.spans.length, 3);
+      const toolSpans = trace.spans.filter((span) => span.kind === "TOOL");
+      assert.sameMembers(
+        toolSpans.map((span) => span.name),
+        ["search", "lookup"]
+      );
+      const toolSpan = toolSpans.find((span) => span.name === "search");
+      assert.isDefined(toolSpan);
+      assert.equal(toolSpan?.name, "search");
+      assert.deepEqual(toolSpan?.input, {q: "hello"});
+      assert.deepEqual(toolSpan?.output, {
+        filename: "result.pdf",
+        mimeType: "application/pdf",
+        results: ["item1"],
+      });
+      assert.equal(toolSpan?.parentSpanId, trace.spans[0]?.id);
+      assert.equal(
+        toolSpans.find((span) => span.name === "lookup")?.parentSpanId,
+        trace.spans[0]?.id
+      );
     });
 
     it("emits a file SSE event when a tool execution returns fileData", async () => {
@@ -1694,6 +1848,72 @@ describe("AI Routes", () => {
   });
 
   describe("GPT Prompt error handling", () => {
+    it("preserves completed tool spans when the stream later fails", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {get: async () => undefined},
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+      streamTextOverride = () =>
+        ({
+          files: Promise.resolve([]),
+          fullStream: (async function* () {
+            yield {type: "start-step"};
+            yield {
+              input: {query: "before failure"},
+              toolCallId: "tc-error",
+              toolName: "search",
+              type: "tool-call",
+            };
+            yield {
+              output: {items: ["one"]},
+              toolCallId: "tc-error",
+              toolName: "search",
+              type: "tool-result",
+            };
+            throw new Error("stream failed after tool");
+          })(),
+        }) as unknown as StreamTextResult;
+      const errApp = new TerrenoApp({
+        configureApp: (router, options) => {
+          addGptRoutes(router, {
+            aiService,
+            openApiOptions: options,
+            tools: {search: {description: "Search"} as unknown as Tool},
+          });
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+      const agent = await authAsUser(errApp, "notAdmin");
+
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Search, then fail"})
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.equal(res.status, 200);
+      assert.equal(sink.traces.length, 1);
+      assert.equal(sink.traces[0]?.status, "error");
+      const toolSpan = sink.traces[0]?.spans.find((span) => span.kind === "TOOL");
+      assert.deepEqual(toolSpan?.input, {query: "before failure"});
+      assert.deepEqual(toolSpan?.output, {items: ["one"]});
+    });
+
     it("sends an outer SSE error when error handling itself fails after streaming starts", async () => {
       streamTextOverride = () =>
         ({

@@ -1160,7 +1160,7 @@ Delete the **legacy RTK cache-patching realtime path** in Terreno 58. Collection
 **Title:** `AI observability (Langfuse-light, pluggable)`
 
 **Labels:** `area:ai`, `type:feature`  
-**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Shaping`
+**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Planned`
 
 Ship **Langfuse-like** prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
 
@@ -1302,6 +1302,20 @@ Let an agent **ask the user something and get a typed answer back in the same tu
 
 - **Implementation plan:** [agent-ui-asks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-asks.md)
 - **Tasks:** [agent-ui-asks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/agent-ui-asks.md)
+
+---
+
+## durable-agent-harness
+
+**Title:** `Durable agent harness (@terreno/ai/harness)`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`durable-agent-harness`, Status=`Planned`
+
+One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work durably: deterministic multi-phase workflows, LLM agent loops, tools, subagents, human approvals, retries, and crash recovery — all audited. It must be strong enough to build an OpenClaw/Hermes-class personal agent, a coding agent, and a regulated clinical automation on the same primitives.
+
+- **Implementation plan:** [durable-agent-harness.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/durable-agent-harness.md)
+- **Tasks:** [durable-agent-harness.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/durable-agent-harness.md)
 
 ---
 

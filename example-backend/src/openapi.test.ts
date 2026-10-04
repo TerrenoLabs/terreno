@@ -1,5 +1,6 @@
 /** Verifies generated `/openapi.json` includes registered example-backend routes. */
 import {describe, expect, it} from "bun:test";
+import {getObservabilityApp} from "@terreno/ai";
 import {assert} from "chai";
 import type express from "express";
 import supertest from "supertest";
@@ -106,6 +107,46 @@ describe("OpenAPI spec generation", () => {
     );
     expect(res.body.paths["/gpt/histories/{id}/turn"].post.operationId).toBe("gpthistories_turn");
     expect(res.body.paths["/gpt/histories/{id}/stream"].get).toBeDefined();
+  });
+
+  it("boots local observability and documents the seeded summarize route", async () => {
+    const observability = getObservabilityApp();
+    expect(observability?.plugins.map((plugin) => plugin.id)).toEqual(["local"]);
+    expect(observability?.control).toEqual({
+      datasets: "local",
+      experiments: "local",
+      prompts: "local",
+      reviewQueue: "local",
+    });
+
+    const server = supertest(app);
+    const res = await server.get("/openapi.json").expect(200);
+    expect(res.body.paths["/ai/example-summarize"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/status"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/prompts"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces/test-multi-stage"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/review"]?.get).toBeDefined();
+  });
+
+  it("boots local observability and documents the seeded summarize route", async () => {
+    const observability = getObservabilityApp();
+    expect(observability?.plugins.map((plugin) => plugin.id)).toEqual(["local"]);
+    expect(observability?.control).toEqual({
+      datasets: "local",
+      experiments: "local",
+      prompts: "local",
+      reviewQueue: "local",
+    });
+
+    const server = supertest(app);
+    const res = await server.get("/openapi.json").expect(200);
+    expect(res.body.paths["/ai/example-summarize"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/status"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/prompts"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces/test-multi-stage"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/review"]?.get).toBeDefined();
   });
 
   it("includes settings routes", async () => {

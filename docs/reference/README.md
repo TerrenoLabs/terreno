@@ -8,6 +8,7 @@ Technical reference for Terreno packages and APIs. Information-oriented, precise
 - [@terreno/ui](ui.md) — Components, theming, layout
 - [@terreno/syncdb](syncdb.md) — Local-first data layer (reads, writes, offline sync)
 - [@terreno/ai](ai.md) — AI service, GPT routes, Langfuse integration
+- [@terreno/ai/harness](ai-harness.md) — Durable multi-phase tasks with transactional checkpoints and audit spans
 - [Agent UI Asks](agent-ui-asks.md) — `@terreno/blocks` ask schemas, simple cards, the compact surface, limits, error codes, SSE events, the headless `pendingAsks` and `turn` endpoints, and JSON Schemas for native clients
 - [UI blocks](blocks.md) — whole-reply YAML for leaf and layout blocks: grammar, limits, and error codes
 - [@terreno/admin-backend](admin-backend.md) — Auto-generated admin CRUD endpoints

@@ -3,6 +3,7 @@
 
 import {generateTags, realtimeDocument, realtimeList} from "@terreno/rtk";
 
+import {getAiSessionId} from "@/lib/aiSession";
 import {
   addTagTypes,
   type GetGptHistoriesArgs,
@@ -51,6 +52,10 @@ export interface ProfileResponse {
   emailVerified?: boolean;
   permissions?: Record<string, readonly string[]>;
   roles?: string[];
+}
+
+export interface SummarizeExampleTextResponse {
+  output: string;
 }
 
 // AI Request Explorer types
@@ -293,6 +298,21 @@ export const terrenoApi = openapi
           url: `/users/${id}/password`,
         }),
       }),
+      summarizeExampleText: builder.mutation<
+        SummarizeExampleTextResponse,
+        {apiKey?: string; text: string}
+      >({
+        query: ({apiKey, text}) => ({
+          body: {text},
+          headers: {
+            "x-ai-session-id": getAiSessionId(),
+            ...(apiKey ? {"x-ai-api-key": apiKey} : {}),
+          },
+          method: "POST",
+          url: "/ai/example-summarize",
+        }),
+        transformResponse: (response: {data: SummarizeExampleTextResponse}) => response.data,
+      }),
     }),
     overrideExisting: true,
   })
@@ -328,5 +348,6 @@ export const {
   usePostNotificationsDevNotifyMutation,
   useGetAiModelsQuery,
   useSetAdminUserPasswordMutation,
+  useSummarizeExampleTextMutation,
 } = terrenoApi;
 export * from "./openApiSdk";

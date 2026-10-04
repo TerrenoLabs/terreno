@@ -41,6 +41,62 @@ export {AIRequest} from "./models/aiRequest";
 export {FileAttachment} from "./models/fileAttachment";
 export {GptHistory} from "./models/gptHistory";
 export {Project} from "./models/project";
+export {AI_OBSERVABILITY_GROUP, observabilityAdminScreens} from "./observability/adminScreens";
+export {LocalDatasetStore} from "./observability/local/datasetStore";
+export {LocalEvaluatorStore} from "./observability/local/evaluatorStore";
+export {LocalExperimentRunner} from "./observability/local/experimentRunner";
+export {
+  createLocalObservabilityBundle,
+  createLocalObservabilityPlugin,
+} from "./observability/local/localPlugin";
+export {LocalPromptStore} from "./observability/local/promptStore";
+export {LocalReviewStore} from "./observability/local/reviewStore";
+export {
+  LocalScoreSink,
+  LocalTraceSink,
+  LocalTraceStore,
+  MemoryScoreSink,
+  MemoryTraceSink,
+} from "./observability/local/traceStore";
+export {
+  getObservabilityApp,
+  ObservabilityApp,
+  resetObservabilityApp,
+} from "./observability/observabilityApp";
+export type {
+  ObservabilityPluginStatus,
+  ObservabilityStatus,
+  PlaygroundAiSource,
+  PlaygroundAiStatus,
+} from "./observability/status";
+export {
+  buildObservabilityStatus,
+  buildPlaygroundAiStatus,
+  isLocalObservabilityPluginOn,
+} from "./observability/status";
+export type {
+  ControlPrimary,
+  ObservabilityAiServiceFactory,
+  ObservabilityAppOptions,
+  ObservabilityCapability,
+  ObservabilityControlConfig,
+  ObservabilityGenerateClient,
+  ObservabilityPlugin,
+  ObservabilityRequestAiServiceFactory,
+  PromptRegistry,
+  ReviewQueue,
+  ScoreRecord,
+  ScoreSink,
+  SpanRecord,
+  TraceExportResult,
+  TraceRecord,
+  TraceSink,
+} from "./observability/types";
+export {
+  DEFAULT_OBSERVABILITY_CONTROL,
+  resolveObservabilityControl,
+  validateObservabilityConfig,
+} from "./observability/types";
 export {addAiRequestsExplorerRoutes} from "./routes/aiRequestsExplorer";
 export {addFileRoutes} from "./routes/files";
 export {addGptRoutes} from "./routes/gpt";

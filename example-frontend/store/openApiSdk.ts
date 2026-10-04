@@ -1,9 +1,10 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: types are generated from backend OpenAPI schemas
 import {emptySplitApi as api} from "./betterAuthApi";
 export const addTagTypes = [
+  "ai",
+  "observability",
   "gpthistories",
   "gpt",
-  "ai",
   "settings",
   "notifications",
   "todos",
@@ -15,6 +16,10 @@ export const addTagTypes = [
   "admin",
   "featureflags",
   "jobs",
+  "harness",
+  "harnessconversations",
+  "harnesstasks",
+  "harnessapprovals",
   "mcpservicetokens",
   "auditevents",
   "consentforms",
@@ -120,6 +125,36 @@ const injectedRtkApi = api
         query: (queryArg) => ({
           method: "DELETE",
           url: `/admin/users/${queryArg}`,
+        }),
+      }),
+      deleteAiObservabilityDatasetsById: build.mutation<
+        DeleteAiObservabilityDatasetsByIdRes,
+        DeleteAiObservabilityDatasetsByIdArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "DELETE",
+          url: `/ai/observability/datasets/${queryArg}`,
+        }),
+      }),
+      deleteAiObservabilityDatasetsByIdItemsAndItemId: build.mutation<
+        DeleteAiObservabilityDatasetsByIdItemsAndItemIdRes,
+        DeleteAiObservabilityDatasetsByIdItemsAndItemIdArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "DELETE",
+          url: `/ai/observability/datasets/${queryArg.id}/items/${queryArg.itemId}`,
+        }),
+      }),
+      deleteAiObservabilityEvaluatorsById: build.mutation<
+        DeleteAiObservabilityEvaluatorsByIdRes,
+        DeleteAiObservabilityEvaluatorsByIdArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "DELETE",
+          url: `/ai/observability/evaluators/${queryArg}`,
         }),
       }),
       deleteAnnouncementsById: build.mutation<
@@ -512,6 +547,144 @@ const injectedRtkApi = api
         providesTags: ["users"],
         query: (queryArg) => ({url: `/admin/users/${queryArg}`}),
       }),
+      getAiObservabilityDatasets: build.query<
+        GetAiObservabilityDatasetsRes,
+        GetAiObservabilityDatasetsArgs
+      >({
+        providesTags: ["observability"],
+        query: () => ({url: `/ai/observability/datasets`}),
+      }),
+      getAiObservabilityDatasetsById: build.query<
+        GetAiObservabilityDatasetsByIdRes,
+        GetAiObservabilityDatasetsByIdArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({
+          url: `/ai/observability/datasets/${queryArg}`,
+        }),
+      }),
+      getAiObservabilityDatasetsByIdItems: build.query<
+        GetAiObservabilityDatasetsByIdItemsRes,
+        GetAiObservabilityDatasetsByIdItemsArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({
+          url: `/ai/observability/datasets/${queryArg}/items`,
+        }),
+      }),
+      getAiObservabilityEvaluators: build.query<
+        GetAiObservabilityEvaluatorsRes,
+        GetAiObservabilityEvaluatorsArgs
+      >({
+        providesTags: ["observability"],
+        query: () => ({url: `/ai/observability/evaluators`}),
+      }),
+      getAiObservabilityEvaluatorsById: build.query<
+        GetAiObservabilityEvaluatorsByIdRes,
+        GetAiObservabilityEvaluatorsByIdArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({
+          url: `/ai/observability/evaluators/${queryArg}`,
+        }),
+      }),
+      getAiObservabilityEvaluatorsTemplates: build.query<
+        GetAiObservabilityEvaluatorsTemplatesRes,
+        GetAiObservabilityEvaluatorsTemplatesArgs
+      >({
+        providesTags: ["observability"],
+        query: () => ({url: `/ai/observability/evaluators/templates`}),
+      }),
+      getAiObservabilityExperiments: build.query<
+        GetAiObservabilityExperimentsRes,
+        GetAiObservabilityExperimentsArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({
+          params: {
+            limit: queryArg.limit,
+            page: queryArg.page,
+            promptName: queryArg.promptName,
+          },
+          url: `/ai/observability/experiments`,
+        }),
+      }),
+      getAiObservabilityExperimentsById: build.query<
+        GetAiObservabilityExperimentsByIdRes,
+        GetAiObservabilityExperimentsByIdArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({
+          url: `/ai/observability/experiments/${queryArg}`,
+        }),
+      }),
+      getAiObservabilityPrompts: build.query<
+        GetAiObservabilityPromptsRes,
+        GetAiObservabilityPromptsArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({
+          params: {
+            folder: queryArg.folder,
+            include: queryArg.include,
+            search: queryArg.search,
+          },
+          url: `/ai/observability/prompts`,
+        }),
+      }),
+      getAiObservabilityPromptsByName: build.query<
+        GetAiObservabilityPromptsByNameRes,
+        GetAiObservabilityPromptsByNameArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({
+          params: {
+            promptVersion: queryArg.promptVersion,
+          },
+          url: `/ai/observability/prompts/${queryArg.name}`,
+        }),
+      }),
+      getAiObservabilityReview: build.query<
+        GetAiObservabilityReviewRes,
+        GetAiObservabilityReviewArgs
+      >({
+        providesTags: ["observability"],
+        query: () => ({url: `/ai/observability/review`}),
+      }),
+      getAiObservabilityReviewById: build.query<
+        GetAiObservabilityReviewByIdRes,
+        GetAiObservabilityReviewByIdArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({url: `/ai/observability/review/${queryArg}`}),
+      }),
+      getAiObservabilityStatus: build.query<
+        GetAiObservabilityStatusRes,
+        GetAiObservabilityStatusArgs
+      >({
+        providesTags: ["observability"],
+        query: () => ({url: `/ai/observability/status`}),
+      }),
+      getAiObservabilityTraces: build.query<
+        GetAiObservabilityTracesRes,
+        GetAiObservabilityTracesArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({
+          params: {
+            prompt: queryArg.prompt,
+            promptVersion: queryArg.promptVersion,
+          },
+          url: `/ai/observability/traces`,
+        }),
+      }),
+      getAiObservabilityTracesById: build.query<
+        GetAiObservabilityTracesByIdRes,
+        GetAiObservabilityTracesByIdArgs
+      >({
+        providesTags: ["observability"],
+        query: (queryArg) => ({url: `/ai/observability/traces/${queryArg}`}),
+      }),
       getAnnouncements: build.query<GetAnnouncementsRes, GetAnnouncementsArgs>({
         providesTags: ["announcements"],
         query: (queryArg) => ({
@@ -660,9 +833,67 @@ const injectedRtkApi = api
         providesTags: ["gpthistories"],
         query: (queryArg) => ({url: `/gpt/histories/${queryArg}`}),
       }),
+      getGptHistoriesByIdStream: build.query<
+        GetGptHistoriesByIdStreamRes,
+        GetGptHistoriesByIdStreamArgs
+      >({
+        providesTags: ["gpt"],
+        query: (queryArg) => ({
+          params: {
+            offset: queryArg.offset,
+            streamId: queryArg.streamId,
+          },
+          url: `/gpt/histories/${queryArg.id}/stream`,
+        }),
+      }),
       getGptTools: build.query<GetGptToolsRes, GetGptToolsArgs>({
         providesTags: ["gpt"],
         query: () => ({url: `/gpt/tools`}),
+      }),
+      getHarnessApprovals: build.query<GetHarnessApprovalsRes, GetHarnessApprovalsArgs>({
+        providesTags: ["harnessapprovals"],
+        query: (queryArg) => ({
+          params: {
+            _id: queryArg._id,
+            limit: queryArg.limit,
+            page: queryArg.page,
+            rootTaskId: queryArg.rootTaskId,
+            sort: queryArg.sort,
+            taskId: queryArg.taskId,
+          },
+          url: `/harness/approvals/`,
+        }),
+      }),
+      getHarnessApprovalsById: build.query<GetHarnessApprovalsByIdRes, GetHarnessApprovalsByIdArgs>(
+        {
+          providesTags: ["harnessapprovals"],
+          query: (queryArg) => ({url: `/harness/approvals/${queryArg}`}),
+        }
+      ),
+      getHarnessConversations: build.query<GetHarnessConversationsRes, GetHarnessConversationsArgs>(
+        {
+          providesTags: ["harnessconversations"],
+          query: (queryArg) => ({
+            params: {
+              _id: queryArg._id,
+              limit: queryArg.limit,
+              page: queryArg.page,
+              sort: queryArg.sort,
+            },
+            url: `/harness/conversations/`,
+          }),
+        }
+      ),
+      getHarnessConversationsById: build.query<
+        GetHarnessConversationsByIdRes,
+        GetHarnessConversationsByIdArgs
+      >({
+        providesTags: ["harnessconversations"],
+        query: (queryArg) => ({url: `/harness/conversations/${queryArg}`}),
+      }),
+      getHarnessTasksById: build.query<GetHarnessTasksByIdRes, GetHarnessTasksByIdArgs>({
+        providesTags: ["harnesstasks"],
+        query: (queryArg) => ({url: `/harness/tasks/${queryArg}`}),
       }),
       getJobs: build.query<GetJobsRes, GetJobsArgs>({
         providesTags: ["admin", "jobs"],
@@ -820,6 +1051,49 @@ const injectedRtkApi = api
           url: `/gpt/histories/${queryArg.id}/turn`,
         }),
       }),
+      harnessAbort: build.mutation<HarnessAbortRes, HarnessAbortArgs>({
+        invalidatesTags: ["harness"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/harness/tasks/${queryArg.id}/abort`,
+        }),
+      }),
+      harnessApprove: build.mutation<HarnessApproveRes, HarnessApproveArgs>({
+        invalidatesTags: ["harness"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/harness/approvals/${queryArg.id}/approve`,
+        }),
+      }),
+      harnessReject: build.mutation<HarnessRejectRes, HarnessRejectArgs>({
+        invalidatesTags: ["harness"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/harness/approvals/${queryArg.id}/reject`,
+        }),
+      }),
+      harnessResolveInterrupted: build.mutation<
+        HarnessResolveInterruptedRes,
+        HarnessResolveInterruptedArgs
+      >({
+        invalidatesTags: ["harness"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/harness/tasks/${queryArg.id}/resolveInterrupted`,
+        }),
+      }),
+      harnessSubmit: build.mutation<HarnessSubmitRes, HarnessSubmitArgs>({
+        invalidatesTags: ["harness"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/harness/conversations/${queryArg.id}/submit`,
+        }),
+      }),
       listMcpServiceTokens: build.query<ListMcpServiceTokensRes, ListMcpServiceTokensArgs>({
         providesTags: ["mcp"],
         query: (queryArg) => ({
@@ -900,6 +1174,36 @@ const injectedRtkApi = api
           body: queryArg.body,
           method: "PATCH",
           url: `/admin/users/${queryArg.id}`,
+        }),
+      }),
+      patchAiObservabilityDatasetsById: build.mutation<
+        PatchAiObservabilityDatasetsByIdRes,
+        PatchAiObservabilityDatasetsByIdArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "PATCH",
+          url: `/ai/observability/datasets/${queryArg}`,
+        }),
+      }),
+      patchAiObservabilityDatasetsByIdItemsAndItemId: build.mutation<
+        PatchAiObservabilityDatasetsByIdItemsAndItemIdRes,
+        PatchAiObservabilityDatasetsByIdItemsAndItemIdArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "PATCH",
+          url: `/ai/observability/datasets/${queryArg.id}/items/${queryArg.itemId}`,
+        }),
+      }),
+      patchAiObservabilityEvaluatorsById: build.mutation<
+        PatchAiObservabilityEvaluatorsByIdRes,
+        PatchAiObservabilityEvaluatorsByIdArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "PATCH",
+          url: `/ai/observability/evaluators/${queryArg}`,
         }),
       }),
       patchAnnouncementsById: build.mutation<PatchAnnouncementsByIdRes, PatchAnnouncementsByIdArgs>(
@@ -1180,6 +1484,180 @@ const injectedRtkApi = api
           url: `/admin/users/bulk-patch`,
         }),
       }),
+      postAiExampleSummarize: build.mutation<PostAiExampleSummarizeRes, PostAiExampleSummarizeArgs>(
+        {
+          invalidatesTags: ["ai", "observability"],
+          query: (queryArg) => ({
+            body: queryArg,
+            method: "POST",
+            url: `/ai/example-summarize`,
+          }),
+        }
+      ),
+      postAiObservabilityDatasets: build.mutation<
+        PostAiObservabilityDatasetsRes,
+        PostAiObservabilityDatasetsArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: () => ({method: "POST", url: `/ai/observability/datasets`}),
+      }),
+      postAiObservabilityDatasetsByIdImport: build.mutation<
+        PostAiObservabilityDatasetsByIdImportRes,
+        PostAiObservabilityDatasetsByIdImportArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/ai/observability/datasets/${queryArg}/import`,
+        }),
+      }),
+      postAiObservabilityDatasetsByIdItems: build.mutation<
+        PostAiObservabilityDatasetsByIdItemsRes,
+        PostAiObservabilityDatasetsByIdItemsArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/ai/observability/datasets/${queryArg}/items`,
+        }),
+      }),
+      postAiObservabilityEvaluators: build.mutation<
+        PostAiObservabilityEvaluatorsRes,
+        PostAiObservabilityEvaluatorsArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: () => ({method: "POST", url: `/ai/observability/evaluators`}),
+      }),
+      postAiObservabilityEvaluatorsTemplatesByName: build.mutation<
+        PostAiObservabilityEvaluatorsTemplatesByNameRes,
+        PostAiObservabilityEvaluatorsTemplatesByNameArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/ai/observability/evaluators/templates/${queryArg}`,
+        }),
+      }),
+      postAiObservabilityExperiments: build.mutation<
+        PostAiObservabilityExperimentsRes,
+        PostAiObservabilityExperimentsArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: () => ({method: "POST", url: `/ai/observability/experiments`}),
+      }),
+      postAiObservabilityExperimentsByIdPromote: build.mutation<
+        PostAiObservabilityExperimentsByIdPromoteRes,
+        PostAiObservabilityExperimentsByIdPromoteArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/ai/observability/experiments/${queryArg}/promote`,
+        }),
+      }),
+      postAiObservabilityExperimentsEstimate: build.mutation<
+        PostAiObservabilityExperimentsEstimateRes,
+        PostAiObservabilityExperimentsEstimateArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: () => ({
+          method: "POST",
+          url: `/ai/observability/experiments/estimate`,
+        }),
+      }),
+      postAiObservabilityPrompts: build.mutation<
+        PostAiObservabilityPromptsRes,
+        PostAiObservabilityPromptsArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/ai/observability/prompts`,
+        }),
+      }),
+      postAiObservabilityPromptsByNameLabels: build.mutation<
+        PostAiObservabilityPromptsByNameLabelsRes,
+        PostAiObservabilityPromptsByNameLabelsArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/ai/observability/prompts/${queryArg.name}/labels`,
+        }),
+      }),
+      postAiObservabilityPromptsByNamePlayground: build.mutation<
+        PostAiObservabilityPromptsByNamePlaygroundRes,
+        PostAiObservabilityPromptsByNamePlaygroundArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/ai/observability/prompts/${queryArg}/playground`,
+        }),
+      }),
+      postAiObservabilityPromptsByNameVersions: build.mutation<
+        PostAiObservabilityPromptsByNameVersionsRes,
+        PostAiObservabilityPromptsByNameVersionsArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/ai/observability/prompts/${queryArg}/versions`,
+        }),
+      }),
+      postAiObservabilityReviewById: build.mutation<
+        PostAiObservabilityReviewByIdRes,
+        PostAiObservabilityReviewByIdArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/ai/observability/review/${queryArg}`,
+        }),
+      }),
+      postAiObservabilityTracesAddToDataset: build.mutation<
+        PostAiObservabilityTracesAddToDatasetRes,
+        PostAiObservabilityTracesAddToDatasetArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: () => ({
+          method: "POST",
+          url: `/ai/observability/traces/add-to-dataset`,
+        }),
+      }),
+      postAiObservabilityTracesByIdScores: build.mutation<
+        PostAiObservabilityTracesByIdScoresRes,
+        PostAiObservabilityTracesByIdScoresArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/ai/observability/traces/${queryArg}/scores`,
+        }),
+      }),
+      postAiObservabilityTracesReview: build.mutation<
+        PostAiObservabilityTracesReviewRes,
+        PostAiObservabilityTracesReviewArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: () => ({
+          method: "POST",
+          url: `/ai/observability/traces/review`,
+        }),
+      }),
+      postAiObservabilityTracesTestMultiStage: build.mutation<
+        PostAiObservabilityTracesTestMultiStageRes,
+        PostAiObservabilityTracesTestMultiStageArgs
+      >({
+        invalidatesTags: ["observability"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/ai/observability/traces/test-multi-stage`,
+        }),
+      }),
       postAnnouncements: build.mutation<PostAnnouncementsRes, PostAnnouncementsArgs>({
         invalidatesTags: ["announcements"],
         query: (queryArg) => ({
@@ -1429,6 +1907,14 @@ const injectedRtkApi = api
   });
 
 export {injectedRtkApi as openapi};
+export type PostAiExampleSummarizeRes = /** status 200 Success */ {
+  data?: {
+    output?: string;
+  };
+};
+export type PostAiExampleSummarizeArgs = {
+  text?: string;
+};
 export type GpthistoriesTurnRes = /** status 200 Successful response */ {
   data: {
     /** Set when the turn failed after it started. text holds what the agent said before the error. */
@@ -1584,6 +2070,8 @@ export type PostGptHistoriesRes = /** status 201 Successful create */ {
     content?: {
       /** Original filename of the attached file */
       filename?: string;
+      /** Durable storage key for an attachment uploaded through FileStorageService */
+      gcsKey?: string;
       /** MIME type of the content part */
       mimeType?: string;
       /** Text content of this part */
@@ -1599,6 +2087,10 @@ export type PostGptHistoriesRes = /** status 201 Successful create */ {
     rating?: "up" | "down";
     /** Result returned from a tool call */
     result?: any;
+    /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+    status?: "streaming" | "complete" | "error";
+    /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+    streamId?: string;
     /** Text content of the prompt or response */
     text: string;
     /** Identifier linking a tool result to its originating call */
@@ -1641,6 +2133,8 @@ export type PostGptHistoriesArgs = {
     content?: {
       /** Original filename of the attached file */
       filename?: string;
+      /** Durable storage key for an attachment uploaded through FileStorageService */
+      gcsKey?: string;
       /** MIME type of the content part */
       mimeType?: string;
       /** Text content of this part */
@@ -1656,6 +2150,10 @@ export type PostGptHistoriesArgs = {
     rating?: "up" | "down";
     /** Result returned from a tool call */
     result?: any;
+    /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+    status?: "streaming" | "complete" | "error";
+    /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+    streamId?: string;
     /** Text content of the prompt or response */
     text: string;
     /** Identifier linking a tool result to its originating call */
@@ -1718,6 +2216,8 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
       content?: {
         /** Original filename of the attached file */
         filename?: string;
+        /** Durable storage key for an attachment uploaded through FileStorageService */
+        gcsKey?: string;
         /** MIME type of the content part */
         mimeType?: string;
         /** Text content of this part */
@@ -1733,6 +2233,10 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
       rating?: "up" | "down";
       /** Result returned from a tool call */
       result?: any;
+      /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+      status?: "streaming" | "complete" | "error";
+      /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+      streamId?: string;
       /** Text content of the prompt or response */
       text: string;
       /** Identifier linking a tool result to its originating call */
@@ -1817,6 +2321,8 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
     content?: {
       /** Original filename of the attached file */
       filename?: string;
+      /** Durable storage key for an attachment uploaded through FileStorageService */
+      gcsKey?: string;
       /** MIME type of the content part */
       mimeType?: string;
       /** Text content of this part */
@@ -1832,6 +2338,10 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
     rating?: "up" | "down";
     /** Result returned from a tool call */
     result?: any;
+    /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+    status?: "streaming" | "complete" | "error";
+    /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+    streamId?: string;
     /** Text content of the prompt or response */
     text: string;
     /** Identifier linking a tool result to its originating call */
@@ -1894,6 +2404,8 @@ export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
     content?: {
       /** Original filename of the attached file */
       filename?: string;
+      /** Durable storage key for an attachment uploaded through FileStorageService */
+      gcsKey?: string;
       /** MIME type of the content part */
       mimeType?: string;
       /** Text content of this part */
@@ -1909,6 +2421,10 @@ export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
     rating?: "up" | "down";
     /** Result returned from a tool call */
     result?: any;
+    /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+    status?: "streaming" | "complete" | "error";
+    /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+    streamId?: string;
     /** Text content of the prompt or response */
     text: string;
     /** Identifier linking a tool result to its originating call */
@@ -1953,6 +2469,8 @@ export type PatchGptHistoriesByIdArgs = {
       content?: {
         /** Original filename of the attached file */
         filename?: string;
+        /** Durable storage key for an attachment uploaded through FileStorageService */
+        gcsKey?: string;
         /** MIME type of the content part */
         mimeType?: string;
         /** Text content of this part */
@@ -1968,6 +2486,10 @@ export type PatchGptHistoriesByIdArgs = {
       rating?: "up" | "down";
       /** Result returned from a tool call */
       result?: any;
+      /** Lifecycle of an assistant reply: streaming while partial text is persisted, then complete or error */
+      status?: "streaming" | "complete" | "error";
+      /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
+      streamId?: string;
       /** Text content of the prompt or response */
       text: string;
       /** Identifier linking a tool result to its originating call */
@@ -2046,6 +2568,16 @@ export type PostGptPromptArgs = {
   /** Where the user answers. "compact" is a watch or another small screen: the agent asks only questions whose buttons show every option, and keeps replies to two short sentences. Defaults to "full". */
   surface?: "full" | "compact";
   systemPrompt?: string;
+};
+export type GetGptHistoriesByIdStreamRes = /** status 200 Success */ {
+  data?: string;
+};
+export type GetGptHistoriesByIdStreamArgs = {
+  id: string;
+  /** Reply to follow. Defaults to the latest streaming reply. */
+  streamId?: string;
+  /** Characters of the reply the client already shows. Defaults to 0. */
+  offset?: number;
 };
 export type PatchGptHistoriesByIdRatingRes = /** status 200 Success */ {
   data?: object;
@@ -3177,6 +3709,561 @@ export type PostJobsByIdCancelRes = /** status 200 Success */ {
   data?: object;
 };
 export type PostJobsByIdCancelArgs = string;
+export type HarnessSubmitRes = /** status 200 Successful response */ {
+  data?: object;
+};
+export type HarnessSubmitArgs = {
+  id: string;
+  body: {
+    content: string;
+    requestId: string;
+    whenBusy?: "queue" | "steer";
+  };
+};
+export type GetHarnessConversationsRes = /** status 200 Successful list */ {
+  data?: {
+    /** Turn task running on this conversation while it is busy */
+    activeTurnTaskId?: string;
+    agent?: {
+      /** Extension names applied to this conversation's requests */
+      extensions?: string[];
+      /** Models tried in order after the primary model's retries run out */
+      fallbackModels?: {
+        /** Provider model id, for example claude-sonnet-5-5 */
+        modelId?: string;
+        /** Provider name the models resolver understands */
+        provider?: string;
+      }[];
+      /** System prompt sent with every model request */
+      instructions?: string;
+      /** Model requests one turn may make */
+      maxSteps?: number;
+      model?: {
+        /** Provider model id, for example claude-sonnet-5-5 */
+        modelId?: string;
+        /** Provider name the models resolver understands */
+        provider?: string;
+      };
+      /** Registered agent definition name */
+      name: string;
+      /** Serialized JSON Schema the final answer must match (subagent structured output) */
+      outputSchema?: string;
+      /** Tool names the model may call in this conversation */
+      tools?: string[];
+    };
+    /** Deterministic key of the rt.runAgent call (phase visit, attempt, call index) that created this subagent conversation */
+    ownerKey?: string;
+    ownership?: {
+      /** Owning task id for a subagent conversation; empty for root conversations */
+      id?: string;
+      /** What owns this conversation: nothing (root) or a task (subagent) */
+      kind?: "root" | "task";
+    };
+    /** Submissions waiting on the active turn, oldest first: queued for a later turn, or steering the active one */
+    queued?: {
+      /** Submitted user content */
+      content?: any;
+      /** Caller idempotency key of the submission */
+      requestId?: string;
+      /** When the submission arrived */
+      submittedAt?: string;
+      /** queue: run as its own turn later; steer: join the active turn's next model request */
+      whenBusy?: "queue" | "steer";
+    }[];
+    /** Highest message sequence number handed out; messages count up from 1 */
+    seq?: number;
+    /** idle, or busy while a turn task runs */
+    status?: "busy" | "idle";
+    /** User the conversation belongs to; turn tasks run as this user */
+    userId?: string;
+    _id: string;
+    /** When this document was last updated */
+    updated: string;
+    /** When this document was created */
+    created: string;
+    /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+    deleted?: boolean;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+export type GetHarnessConversationsArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+export type GetHarnessConversationsByIdRes = /** status 200 Successful read */ {
+  /** Turn task running on this conversation while it is busy */
+  activeTurnTaskId?: string;
+  agent?: {
+    /** Extension names applied to this conversation's requests */
+    extensions?: string[];
+    /** Models tried in order after the primary model's retries run out */
+    fallbackModels?: {
+      /** Provider model id, for example claude-sonnet-5-5 */
+      modelId?: string;
+      /** Provider name the models resolver understands */
+      provider?: string;
+    }[];
+    /** System prompt sent with every model request */
+    instructions?: string;
+    /** Model requests one turn may make */
+    maxSteps?: number;
+    model?: {
+      /** Provider model id, for example claude-sonnet-5-5 */
+      modelId?: string;
+      /** Provider name the models resolver understands */
+      provider?: string;
+    };
+    /** Registered agent definition name */
+    name: string;
+    /** Serialized JSON Schema the final answer must match (subagent structured output) */
+    outputSchema?: string;
+    /** Tool names the model may call in this conversation */
+    tools?: string[];
+  };
+  /** Deterministic key of the rt.runAgent call (phase visit, attempt, call index) that created this subagent conversation */
+  ownerKey?: string;
+  ownership?: {
+    /** Owning task id for a subagent conversation; empty for root conversations */
+    id?: string;
+    /** What owns this conversation: nothing (root) or a task (subagent) */
+    kind?: "root" | "task";
+  };
+  /** Submissions waiting on the active turn, oldest first: queued for a later turn, or steering the active one */
+  queued?: {
+    /** Submitted user content */
+    content?: any;
+    /** Caller idempotency key of the submission */
+    requestId?: string;
+    /** When the submission arrived */
+    submittedAt?: string;
+    /** queue: run as its own turn later; steer: join the active turn's next model request */
+    whenBusy?: "queue" | "steer";
+  }[];
+  /** Highest message sequence number handed out; messages count up from 1 */
+  seq?: number;
+  /** idle, or busy while a turn task runs */
+  status?: "busy" | "idle";
+  /** User the conversation belongs to; turn tasks run as this user */
+  userId?: string;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+};
+export type GetHarnessConversationsByIdArgs = string;
+export type HarnessAbortRes = /** status 200 Successful response */ {
+  data?: object;
+};
+export type HarnessAbortArgs = {
+  id: string;
+  body: {
+    reason: string;
+  };
+};
+export type HarnessResolveInterruptedRes = /** status 200 Successful response */ {
+  data?: object;
+};
+export type HarnessResolveInterruptedArgs = {
+  id: string;
+  body: {
+    action: "abort" | "complete" | "retry";
+    reason: string;
+    result?: any | null;
+  };
+};
+export type GetHarnessTasksByIdRes = /** status 200 Successful read */ {
+  abortRequested?: {
+    /** When an abort of this task was requested */
+    at?: string;
+    /** Until when one aborter holds the right to run the abort handler */
+    handlerClaimExpiresAt?: string;
+    /** Why the abort was requested */
+    reason?: string;
+    /** Who requested the abort */
+    userId?: string;
+  };
+  /** Owning tasks from the root down to the parent (empty for a root task); scopes task event streams to a subtree */
+  ancestorIds?: string[];
+  /** Failed attempts consumed by the current phase */
+  attempt?: number;
+  /** When true, the task outlives its owning conversation turn */
+  background?: boolean;
+  /** Events received by harness.sendEvent; numbers the task's inbox */
+  eventSeq?: number;
+  /** Immutable task input */
+  input?: any;
+  lease?: {
+    /** When the current phase started under this lease */
+    acquiredAt?: string;
+    /** When the current execution lease lapses */
+    expiresAt?: string;
+    /** Runner instance that holds the execution lease */
+    owner?: string;
+    /** Fencing token every commit must match */
+    token?: string;
+  };
+  /** Registered task definition name */
+  name: string;
+  outcome?: {
+    /** Failure cause for a failed task */
+    error?: string;
+    /** Result value for a completed task */
+    result?: any;
+    /** Terminal status recorded with the outcome */
+    status?: "aborted" | "completed" | "failed";
+  };
+  ownership?: {
+    /** Owning conversation or task id; empty for root tasks */
+    id?: string;
+    /** What owns this task: a conversation, another task, or nothing (root) */
+    kind?: "conversation" | "root" | "task";
+  };
+  /** Current checkpointed phase name */
+  phase: string;
+  /** Caller idempotency key; a repeated create returns the existing task */
+  requestId?: string;
+  retry?: {
+    /** Base retry backoff in milliseconds */
+    backoffMs?: number;
+    /** Attempts allowed per phase before the task fails */
+    maxAttempts?: number;
+    /** Upper bound for retry backoff in milliseconds */
+    maxBackoffMs?: number;
+  };
+  /** Root CHAIN span that parents every phase span */
+  rootSpanId: string;
+  /** Top of the ownership tree; equals _id for root tasks */
+  rootTaskId: string;
+  /** Earliest time a runner may execute the task */
+  runAt?: string;
+  /** Checkpointed task state */
+  state?: any;
+  /** Lifecycle status of the task */
+  status: "aborted" | "completed" | "failed" | "interrupted" | "pending" | "running" | "waiting";
+  /** Phase commits so far; names the current phase visit for idempotent child creation */
+  step?: number;
+  /** ObsTrace that audits this task tree */
+  traceId: string;
+  /** User on whose behalf the task runs */
+  userId?: string;
+  /** Pinned task definition version */
+  version: number;
+  waiting?: {
+    /** Event key or sleep reason the task waits on */
+    key?: string;
+    /** What the task waits for */
+    kind?: "event" | "sleep" | "tasks";
+    /** How child-task waits resolve */
+    policy?: "all" | "failFast";
+    /** Child tasks the task waits on */
+    taskIds?: string[];
+    /** When the wait times out */
+    timeoutAt?: string;
+  };
+  /** rt.waitFor / rt.sleep calls of the current phase visit by `<step>:<call index>`, so a re-run returns the same result */
+  waits?: any;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+};
+export type GetHarnessTasksByIdArgs = string;
+export type HarnessApproveRes = /** status 200 Successful response */ {
+  data?: object;
+};
+export type HarnessApproveArgs = {
+  id: string;
+  body: {
+    reason?: string;
+  };
+};
+export type HarnessRejectRes = /** status 200 Successful response */ {
+  data?: object;
+};
+export type HarnessRejectArgs = {
+  id: string;
+  body: {
+    reason: string;
+  };
+};
+export type GetHarnessApprovalsRes = /** status 200 Successful list */ {
+  data?: {
+    /** `<step>:<call index>` of the wait call that requested the approval */
+    callKey: string;
+    /** When the approval was approved or rejected */
+    decidedAt?: string;
+    /** User who approved or rejected the approval */
+    decidedBy?: string;
+    /** `name@version:key` of the requesting task definition and approval key */
+    definitionKey: string;
+    /** Inbox event name the decision sends to the waiting task */
+    event: string;
+    /** When the approval expires undecided; unset means it never expires */
+    expiresAt?: string;
+    /** Extension whose approvals policy names the approvers (hook approvals only) */
+    extension?: string;
+    /** Approval key; selects the approvers policy of the definition or extension */
+    key: string;
+    /** What the approver reviews (JSON) */
+    payload?: any;
+    /** Why the approver approved or rejected */
+    reason?: string;
+    /** Root task of the requesting task's ownership tree */
+    rootTaskId: string;
+    /** pending until approved, rejected, or expired */
+    status: "approved" | "expired" | "pending" | "rejected";
+    /** Short explanation shown under the title */
+    summary?: string;
+    /** Task that requested the approval and waits for the decision */
+    taskId: string;
+    /** What the approver is asked to approve */
+    title: string;
+    /** ObsTrace of the requesting task; the decision span lands in it */
+    traceId: string;
+    _id: string;
+    /** When this document was last updated */
+    updated: string;
+    /** When this document was created */
+    created: string;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+export type GetHarnessApprovalsArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  rootTaskId?:
+    | any
+    | {
+        $in?: any[];
+      };
+  taskId?:
+    | any
+    | {
+        $in?: any[];
+      };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+export type GetHarnessApprovalsByIdRes = /** status 200 Successful read */ {
+  /** `<step>:<call index>` of the wait call that requested the approval */
+  callKey: string;
+  /** When the approval was approved or rejected */
+  decidedAt?: string;
+  /** User who approved or rejected the approval */
+  decidedBy?: string;
+  /** `name@version:key` of the requesting task definition and approval key */
+  definitionKey: string;
+  /** Inbox event name the decision sends to the waiting task */
+  event: string;
+  /** When the approval expires undecided; unset means it never expires */
+  expiresAt?: string;
+  /** Extension whose approvals policy names the approvers (hook approvals only) */
+  extension?: string;
+  /** Approval key; selects the approvers policy of the definition or extension */
+  key: string;
+  /** What the approver reviews (JSON) */
+  payload?: any;
+  /** Why the approver approved or rejected */
+  reason?: string;
+  /** Root task of the requesting task's ownership tree */
+  rootTaskId: string;
+  /** pending until approved, rejected, or expired */
+  status: "approved" | "expired" | "pending" | "rejected";
+  /** Short explanation shown under the title */
+  summary?: string;
+  /** Task that requested the approval and waits for the decision */
+  taskId: string;
+  /** What the approver is asked to approve */
+  title: string;
+  /** ObsTrace of the requesting task; the decision span lands in it */
+  traceId: string;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+};
+export type GetHarnessApprovalsByIdArgs = string;
+export type GetAiObservabilityStatusRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityStatusArgs = undefined;
+export type GetAiObservabilityPromptsRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityPromptsArgs = {
+  folder?: string;
+  search?: string;
+  include?: string;
+};
+export type PostAiObservabilityPromptsRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityPromptsArgs = {
+  description?: string;
+  folder: string;
+  name: string;
+};
+export type GetAiObservabilityPromptsByNameRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityPromptsByNameArgs = {
+  name: string;
+  promptVersion?: number;
+};
+export type PostAiObservabilityPromptsByNameVersionsRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityPromptsByNameVersionsArgs = string;
+export type PostAiObservabilityPromptsByNameLabelsRes = /** status 200 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityPromptsByNameLabelsArgs = {
+  name: string;
+  body: {
+    label: string;
+    version: number;
+  };
+};
+export type PostAiObservabilityPromptsByNamePlaygroundRes = /** status 200 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityPromptsByNamePlaygroundArgs = string;
+export type GetAiObservabilityEvaluatorsTemplatesRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityEvaluatorsTemplatesArgs = undefined;
+export type PostAiObservabilityEvaluatorsTemplatesByNameRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityEvaluatorsTemplatesByNameArgs = string;
+export type GetAiObservabilityEvaluatorsRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityEvaluatorsArgs = undefined;
+export type PostAiObservabilityEvaluatorsRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityEvaluatorsArgs = undefined;
+export type GetAiObservabilityEvaluatorsByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityEvaluatorsByIdArgs = string;
+export type PatchAiObservabilityEvaluatorsByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type PatchAiObservabilityEvaluatorsByIdArgs = string;
+export type DeleteAiObservabilityEvaluatorsByIdRes = /** status 204 Success */ {};
+export type DeleteAiObservabilityEvaluatorsByIdArgs = string;
+export type PostAiObservabilityTracesReviewRes = /** status 201 Success */ {
+  data?: any;
+};
+export type PostAiObservabilityTracesReviewArgs = undefined;
+export type GetAiObservabilityReviewRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityReviewArgs = undefined;
+export type GetAiObservabilityReviewByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityReviewByIdArgs = string;
+export type PostAiObservabilityReviewByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityReviewByIdArgs = string;
+export type GetAiObservabilityDatasetsRes = /** status 200 Success */ {};
+export type GetAiObservabilityDatasetsArgs = undefined;
+export type PostAiObservabilityDatasetsRes = /** status 201 Success */ {};
+export type PostAiObservabilityDatasetsArgs = undefined;
+export type GetAiObservabilityDatasetsByIdRes = /** status 200 Success */ {};
+export type GetAiObservabilityDatasetsByIdArgs = string;
+export type PatchAiObservabilityDatasetsByIdRes = /** status 200 Success */ {};
+export type PatchAiObservabilityDatasetsByIdArgs = string;
+export type DeleteAiObservabilityDatasetsByIdRes = /** status 204 Success */ {};
+export type DeleteAiObservabilityDatasetsByIdArgs = string;
+export type GetAiObservabilityDatasetsByIdItemsRes = /** status 200 Success */ {};
+export type GetAiObservabilityDatasetsByIdItemsArgs = string;
+export type PostAiObservabilityDatasetsByIdItemsRes = /** status 201 Success */ {};
+export type PostAiObservabilityDatasetsByIdItemsArgs = string;
+export type PatchAiObservabilityDatasetsByIdItemsAndItemIdRes = /** status 200 Success */ {};
+export type PatchAiObservabilityDatasetsByIdItemsAndItemIdArgs = {
+  id: string;
+  itemId: string;
+};
+export type DeleteAiObservabilityDatasetsByIdItemsAndItemIdRes = /** status 204 Success */ {};
+export type DeleteAiObservabilityDatasetsByIdItemsAndItemIdArgs = {
+  id: string;
+  itemId: string;
+};
+export type PostAiObservabilityDatasetsByIdImportRes = /** status 200 Success */ {};
+export type PostAiObservabilityDatasetsByIdImportArgs = string;
+export type PostAiObservabilityTracesAddToDatasetRes = /** status 201 Success */ {};
+export type PostAiObservabilityTracesAddToDatasetArgs = undefined;
+export type PostAiObservabilityExperimentsEstimateRes = /** status 200 Success */ {};
+export type PostAiObservabilityExperimentsEstimateArgs = undefined;
+export type GetAiObservabilityExperimentsRes = /** status 200 Success */ {};
+export type GetAiObservabilityExperimentsArgs = {
+  promptName?: string;
+  page?: number;
+  limit?: number;
+};
+export type PostAiObservabilityExperimentsRes = /** status 201 Success */ {};
+export type PostAiObservabilityExperimentsArgs = undefined;
+export type GetAiObservabilityExperimentsByIdRes = /** status 200 Success */ {};
+export type GetAiObservabilityExperimentsByIdArgs = string;
+export type PostAiObservabilityExperimentsByIdPromoteRes = /** status 200 Success */ {};
+export type PostAiObservabilityExperimentsByIdPromoteArgs = string;
+export type GetAiObservabilityTracesRes = /** status 200 Success */ {
+  data?: any;
+};
+export type GetAiObservabilityTracesArgs = {
+  prompt?: string;
+  promptVersion?: number;
+};
+export type GetAiObservabilityTracesByIdRes = /** status 200 Success */ {
+  data?: object;
+};
+export type GetAiObservabilityTracesByIdArgs = string;
+export type PostAiObservabilityTracesByIdScoresRes = /** status 201 Success */ {
+  data?: object;
+};
+export type PostAiObservabilityTracesByIdScoresArgs = string;
+export type PostAiObservabilityTracesTestMultiStageRes = /** status 200 Success */ {
+  data?: {
+    output?: {
+      keywords?: string[];
+      metrics?: object;
+      phrase?: string;
+      sentence?: string;
+    };
+    stages?: {
+      name?: string;
+      status?: string;
+    }[];
+    traceId?: string;
+  };
+};
+export type PostAiObservabilityTracesTestMultiStageArgs = {
+  input?: string;
+};
 export type GetAdminConfigRes = /** status 200 Success */ {
   capabilities?: {
     actions?: boolean;
@@ -6513,6 +7600,7 @@ export type ApiError = {
   title?: string;
 };
 export const {
+  usePostAiExampleSummarizeMutation,
   useGpthistoriesTurnMutation,
   useGpthistoriesPendingAsksQuery,
   usePostGptHistoriesMutation,
@@ -6523,6 +7611,7 @@ export const {
   useGetGptDatasetsByIdQuery,
   usePostGptActionsMutation,
   usePostGptPromptMutation,
+  useGetGptHistoriesByIdStreamQuery,
   usePatchGptHistoriesByIdRatingMutation,
   usePostGptRemixMutation,
   useGetGptToolsQuery,
@@ -6576,6 +7665,54 @@ export const {
   usePostJobsByIdRetryMutation,
   usePostJobsByIdRequeueMutation,
   usePostJobsByIdCancelMutation,
+  useHarnessSubmitMutation,
+  useGetHarnessConversationsQuery,
+  useGetHarnessConversationsByIdQuery,
+  useHarnessAbortMutation,
+  useHarnessResolveInterruptedMutation,
+  useGetHarnessTasksByIdQuery,
+  useHarnessApproveMutation,
+  useHarnessRejectMutation,
+  useGetHarnessApprovalsQuery,
+  useGetHarnessApprovalsByIdQuery,
+  useGetAiObservabilityStatusQuery,
+  useGetAiObservabilityPromptsQuery,
+  usePostAiObservabilityPromptsMutation,
+  useGetAiObservabilityPromptsByNameQuery,
+  usePostAiObservabilityPromptsByNameVersionsMutation,
+  usePostAiObservabilityPromptsByNameLabelsMutation,
+  usePostAiObservabilityPromptsByNamePlaygroundMutation,
+  useGetAiObservabilityEvaluatorsTemplatesQuery,
+  usePostAiObservabilityEvaluatorsTemplatesByNameMutation,
+  useGetAiObservabilityEvaluatorsQuery,
+  usePostAiObservabilityEvaluatorsMutation,
+  useGetAiObservabilityEvaluatorsByIdQuery,
+  usePatchAiObservabilityEvaluatorsByIdMutation,
+  useDeleteAiObservabilityEvaluatorsByIdMutation,
+  usePostAiObservabilityTracesReviewMutation,
+  useGetAiObservabilityReviewQuery,
+  useGetAiObservabilityReviewByIdQuery,
+  usePostAiObservabilityReviewByIdMutation,
+  useGetAiObservabilityDatasetsQuery,
+  usePostAiObservabilityDatasetsMutation,
+  useGetAiObservabilityDatasetsByIdQuery,
+  usePatchAiObservabilityDatasetsByIdMutation,
+  useDeleteAiObservabilityDatasetsByIdMutation,
+  useGetAiObservabilityDatasetsByIdItemsQuery,
+  usePostAiObservabilityDatasetsByIdItemsMutation,
+  usePatchAiObservabilityDatasetsByIdItemsAndItemIdMutation,
+  useDeleteAiObservabilityDatasetsByIdItemsAndItemIdMutation,
+  usePostAiObservabilityDatasetsByIdImportMutation,
+  usePostAiObservabilityTracesAddToDatasetMutation,
+  usePostAiObservabilityExperimentsEstimateMutation,
+  useGetAiObservabilityExperimentsQuery,
+  usePostAiObservabilityExperimentsMutation,
+  useGetAiObservabilityExperimentsByIdQuery,
+  usePostAiObservabilityExperimentsByIdPromoteMutation,
+  useGetAiObservabilityTracesQuery,
+  useGetAiObservabilityTracesByIdQuery,
+  usePostAiObservabilityTracesByIdScoresMutation,
+  usePostAiObservabilityTracesTestMultiStageMutation,
   useGetAdminConfigQuery,
   usePostAdminBackgroundTasksMutation,
   usePostAdminMcpServiceTokensBulkPatchMutation,

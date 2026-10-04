@@ -20,6 +20,39 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.10.1] - 2026-10-04
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.10.1.md`](mcp-server/src/docs/upgrades/57.10.1.md).
+
+### Breaking
+
+- Security: `GET /files/*gcsKey` (`addFileRoutes`, `AiApp` with `gcsBucket`) now requires authentication and returns a signed URL only for the caller's own upload. Before, anyone could get a signed URL for any stored key, and keys are guessable (`uploads/<userId>/<ms>-<name>`). Another user's file, including for an admin, returns 404 like a missing file, so keys cannot be probed. Send the user's session token with the request; an unauthenticated request now returns 401.
+
+### Added
+
+- Agent UI Asks: the chat agent can pause a turn and ask the user a typed question, then continue with the exact answer. Turn it on with `asks: true` (or `{kinds, approvals, maxFileSizeBytes}`) on `AiApp` or `addGptRoutes`. Asks are off by default: with `asks` unset, tools, the system prompt, SSE events, and endpoints are unchanged. See `docs/how-to/agent-ui-asks.md`, `docs/reference/agent-ui-asks.md`, and `docs/explanation/agent-ui-asks.md`.
+- New package `@terreno/blocks`: the shared Zod contracts for asks (input and answer schemas, `validateAskInput`, `validateAskResponse`, stable error codes, `ASK_LIMITS`), simple cards (`toSimpleCard`, `resolveButtonAnswer`), the compact surface, the headless endpoint bodies, and JSON Schema documents plus fixtures (`@terreno/blocks/schemas/*`, `@terreno/blocks/fixtures/*`) for native clients such as a Swift watch app.
+- Five ask kinds, each a client-side `ask_<kind>` tool: `choice` (select one, or select many with an optional Other text answer), `confirm`, `markdown` (edit a draft), `form` (a few typed fields, one submit), and `files` (upload images or documents the model reads in the same turn, as data URLs or `fileId`s from `POST /files/upload`).
+- Server-enforced approval: with asks on, a host tool marked `needsApproval: true` runs only after the user approves a server-made `confirm` ask. `asks.approvals` sets that ask's text per tool name. With asks off, such a tool never runs.
+- `/gpt/prompt` accepts `askResponse` and `surface: "full" | "compact"`, and streams `{ask}` and `{askResolved}` events plus `pendingAsk` on `{done}`. `GptHistory` stores the pending ask. With `chat` options that turn asks on, `addGptHistoryRoutes` (and `AiApp`) adds `GET /gpt/histories/pendingAsks` and `POST /gpt/histories/:id/turn`, which run a turn to completion and return JSON for clients that do not read server-sent events.
+- `@terreno/ui`: `GPTChat` shows asks as an `AskCard` in the transcript (`GPTChatMessage.ask`, `onAskSubmit`, `askErrors`, `resolveAskFiles`). New `AskCard` and `SimpleAskCard` components. `Button` has a new `wrapText` prop that wraps a long label onto centered lines instead of overflowing its container.
+- The example app's AI screen answers asks end to end, and the example backend runs a scripted keyless demo agent (`terreno-demo-agent`) when no model is configured, so asks can be tried without an API key.
+- Agent UI blocks: a chat reply can be one YAML document of headings, metrics, charts, tables, and actions. Turn it on with `uiBlocks` on `addGptRoutes`. The model is told its whole reply is that document. After the text, the route checks it and sends `{blocks}` before `{done}`. `repair: true` runs one repair call. See `docs/how-to/agent-ui-blocks.md`, `docs/reference/blocks.md`, and `docs/explanation/agent-ui-blocks.md`.
+- `@terreno/blocks` adds `parseBlocks`, `validateBlocks`, `blocksJsonSchema`, and `terreno-blocks validate`. Charts and tables read inline rows or a `ref` dataset. `AIService.generateBlocks` returns one validated document at temperature 0.
+- `@terreno/ai` stores chart rows on `AIDataset` via `registerAiDataset`. `GET /gpt/datasets/:id` is owner-only and can bucket, downsample, or paginate them. `POST /gpt/actions` runs a named host callback after an owner check and a payload check.
+- `@terreno/ui` `BlocksView` paints a document. `GPTChat` `uiBlocks` renders assistant messages through that view, including a spinner while the reply is still streaming.
+- The example backend registers `exportDataset` and a `todoStats` tool that stores open and completed todo counts. The example AI tab loads `ref` charts and posts callbacks.
+- `html` blocks are opt-in (`uiBlocks.html` on the server, `allowHtml` on `GPTChat` or `BlocksView`). The server strips scripts, event handlers, forms, frames, and links, then stores the cleaned document. The client draws it in a sandboxed frame only after the reply finishes.
+- `callout`, `image`, and `details` render as a banner, an image, and an accordion. An `https` image loads only when its host is in `uiBlocks.imageHosts`.
+- A reply that omits an actions block `id` gets one before it is stored. A block document written in the same step as a tool call is kept when the turn would otherwise have no text. The chat receives the document after that fill, repair, and HTML sanitizing, so an invalid draft is not shown. `{replace: "text"}` is sent only when text was already streamed and then changed. A validation banner names the field path once the reply has finished.
+- Example-backend registers `accessControl: access` on `ObservabilityApp` and seeds optional `aiObservabilityViewer` and `aiObservabilityOperator` RBAC roles that demonstrate read-only and full observability access without auto-assigning them to users.
+- `@terreno/ai` ships local prompt versions, nested traces, evaluators, datasets, experiments, and a review queue through `ObservabilityApp`, with the admin screens in `@terreno/admin-frontend`. Prompts, datasets, and experiments have one writer. Traces and scores fan out to every registered sink (local Mongo, Langfuse, or OTLP). Six RBAC resources cover read-only, reviewer, and operator access. See `docs/how-to/observe-llm-calls.md`.
+- `@terreno/ai/harness` runs phased tasks on Mongo that survive a process crash. Each checkpoint and its trace span commit in one transaction. Tasks can wait for a person, retry, abort from the bottom up, and stay pinned to the definition version they started with. `defineTask`, `defineAgent`, and `defineTool` describe the work; approvals have their own permissions and an admin inbox. See `docs/how-to/build-a-durable-workflow.md`.
+
+### Fixed
+
+- `GET` and `DELETE /files/*gcsKey` find uploads by their full key. Express 5 passes the wildcard as path segments, so a key with slashes, such as the `uploads/<userId>/<ms>-<name>` key every upload gets, returned 404.
+
 ## [57.9.0] - 2026-10-03
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.9.0.md`](mcp-server/src/docs/upgrades/57.9.0.md).

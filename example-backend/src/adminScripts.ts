@@ -12,6 +12,8 @@ import {getJobsService} from "@terreno/jobs";
 import mongoose from "mongoose";
 
 import {consentDefinitions} from "./consentDefinitions";
+import {startApprovalDemo} from "./harness/startApprovalDemo";
+import {DEFAULT_INTAKE_PATIENT_ID, startClinicalIntake} from "./harness/startClinicalIntake";
 import {Project} from "./models/project";
 import {Todo} from "./models/todo";
 import {User} from "./models/user";
@@ -242,5 +244,48 @@ export const adminScripts: AdminScriptConfig[] = [
         success: true,
       };
     },
+  },
+  {
+    args: [
+      {
+        default: 2,
+        description: "How many demo approvals to request (1-20)",
+        example: "2",
+        name: "count",
+        type: "number",
+      },
+      {
+        default: "Demo approval",
+        description: "Title prefix; each approval is titled '<prefix> <n> of <count>'",
+        example: "Demo approval",
+        name: "prefix",
+        type: "string",
+      },
+    ],
+    description:
+      "Start demo.approvalDemo harness tasks; each waits for an admin decision in AI Harness > Approvals.",
+    name: "startHarnessApprovalDemo",
+    runner: startApprovalDemo,
+  },
+  {
+    args: [
+      {
+        default: DEFAULT_INTAKE_PATIENT_ID,
+        description: "FakePatientChart patientId to summarize (seeded: p-1001, p-1002, p-1003)",
+        example: DEFAULT_INTAKE_PATIENT_ID,
+        name: "patientId",
+        type: "string",
+      },
+      {
+        description: "Idempotency key; defaults to intake-<patientId>. Use a new one to rerun.",
+        example: "intake-p-1001-2",
+        name: "requestId",
+        type: "string",
+      },
+    ],
+    description:
+      "Start a clinic.intakeSummary run: fetch the chart, summarize it, wait for clinician sign-off in AI Harness > Approvals, then file the note.",
+    name: "startClinicalIntake",
+    runner: startClinicalIntake,
   },
 ];

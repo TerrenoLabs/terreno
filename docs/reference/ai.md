@@ -15,6 +15,8 @@ AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI 
 - [Route registrars](#route-registrars)
 - [AiApp plugin](#aiapp-plugin)
 - [LangfuseApp plugin](#langfuseapp-plugin)
+- [Observability](#observability)
+- [Durable agent harness](#durable-agent-harness)
 - [Langfuse integration](#langfuse-integration)
 - [FileStorageService](#filestorageservice)
 - [MCPService](#mcpservice)
@@ -97,6 +99,7 @@ src/
 - **Prompts:** `COMPACT_SURFACE_SYSTEM_PROMPT`, `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TERRENO_ASKS_SYSTEM_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
 - **Asks:** `createAskTools({kinds, surface?})`, `TERRENO_ASKS_SYSTEM_PROMPT`, `COMPACT_SURFACE_SYSTEM_PROMPT`, types `AsksOptions`, `ApprovalAskInput`, `AskOrigin`, `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus`, and `Ask`, `AskKind`, `AskResponse`, `AskValidationError`, `SimpleCard`, `SimpleCardButton` re-exported from `@terreno/blocks` ([Agent UI Asks](agent-ui-asks.md))
 - **Web search:** `WebSearchProvider`, `WebSearchResult` types
+- **Harness (subpath `@terreno/ai/harness`):** `Harness`, `defineTask`, `defineAgent`, `defineTool`, `defineExtension`, `section`, `hook`, `wrapTool`, `HarnessExtensionError`, `HARNESS_HOOK_KINDS`, `HarnessConversationHandle`, `HarnessConversationBusyError`, `HarnessConversationOwnedError`, `HARNESS_EVENT_TYPES`, `HARNESS_SUBMIT_DISPOSITIONS`, `HARNESS_WHEN_BUSY`, `HarnessModelCallError`, `HarnessSubagentError`, `isRetryableModelError`, `AGENT_TURN_TASK_NAME`, `AGENT_TOOL_TASK_NAME`, `HARNESS_AGENT_DEFAULT_MAX_STEPS`, `HARNESS_CONVERSATION_STATUSES`, `HARNESS_INTERRUPT_ACTIONS`, `HARNESS_MESSAGE_ROLES`, `HARNESS_MODEL_RETRY_DEFAULTS`, `InProcessRunner`, `HarnessCommitConflictError`, `HARNESS_RESOLVE_ACTIONS`, `HARNESS_RETRY_DEFAULTS`, `HARNESS_TASK_STATUSES`, `HARNESS_WAIT_KINDS`, `HARNESS_WAIT_POLICIES`, `HARNESS_WAIT_RESOLUTIONS`, `IN_PROCESS_RUNNER_ROLES`, `approvalGate`, `approvalTaskInput`, `HarnessApp`, `HarnessApprovalConflictError`, `HARNESS_APPROVAL_STATUSES`, `HARNESS_DEFAULT_APPROVERS` — see [AI harness reference](ai-harness.md)
 
 ## AIService
 
@@ -472,6 +475,158 @@ Client construction failures log a warning and skip the plugin so the API proces
 
 Calls `shutdownLangfuseClient()` and `shutdownTracing()` on `SIGTERM`.
 
+## Observability
+
+In-app prompt versions, nested traces, evaluators, datasets, experiments, review queue, and in-app feedback. Operator loop: [Develop an AI feature](../how-to/ai-feature-development.md). Register plugins: [Observe LLM calls](../how-to/observe-llm-calls.md). Why two planes: [AI observability](../explanation/ai-observability.md). Locked design: [implementation plan](../implementationPlans/ai-observability.md).
+
+Register `ObservabilityApp` with at least a local plugin. Construction throws if `experiments.primary !== datasets.primary`, if `reviewQueue` is not `local`, or if a control primary has no matching plugin. Defaults for all four primaries are `local`. Construction also registers the app as the process singleton (`getObservabilityApp()`) through the dependency-free observability registry, so routes do not import the plugin class that registers them. Call `resetObservabilityApp()` in tests. `createLocalObservabilityPlugin()` registers the local Mongo models (`ObsPrompt`, `ObsPromptVersion`, `ObsPromptLabel`, `ObsTrace`, `ObsSpan`, `ObsScore`) on the default connection.
+
+The example backend always registers `createLocalObservabilityPlugin()` and passes the
+validated `AI_OBS_PRICE_MAP_JSON` object as `priceMap`. `bun run backend:seed` idempotently
+creates `examples/example-summarize` with production on v1 and an experimental v2, installs
+`correctness-human` and `schema-assert`, and creates a two-item proofread `example-gold`
+dataset bound to the prompt input schema. The same seed creates `examples/chat-safety-screen`
+(production v1 scores the new message alone; v2 reads earlier turns), `examples/chat-safety-judge`,
+the `chat-safety-agreement` llm-judge, and the 12-item proofread synthetic dataset
+`chat-safety-synthetic`. Each row is one new message plus earlier turns from a two-person chat,
+labeled for 988 vs care-team routing, toxicity, a privacy leak, and a dismissive reply.
+Admin → Scripts → `seedChatSafetyDataset`, or `bun run script seedChatSafetyDataset --wet` from
+`example-backend`, loads that set into an already-running database. `SEED_DEFAULTS=true` loads
+it on boot, including PR preview. Invalid price JSON or negative/non-numeric prices
+fail startup with `AI_OBS_PRICE_MAP_JSON` in the error.
+
+`POST /ai/example-summarize` (example backend) runs that seeded prompt with
+`promptLabel: "production"`, `userId`, and `sessionId` from `x-ai-session-id`. It uses the
+server `AIService` when configured, otherwise a request-scoped service built from
+`x-ai-api-key`, and returns **503** when neither exists. The example frontend calls it from
+**Todos → Summarize**.
+
+### Local observability models
+
+| Model | Role |
+| --- | --- |
+| `ObsPrompt` | Named prompt (`name` unique) with `folder` and `tags[]` |
+| `ObsPromptVersion` | Immutable `vN` body, `variables[]`, schemas, `sensitive` (default false), `config` |
+| `ObsPromptLabel` | Movable labels; unique `(promptId, label)` |
+| `ObsTrace` | Root trace: user, session, status, `errorSummary`, `sensitive`, `prompts[]`, usage |
+| `ObsSpan` | Nested span with `kind`, `status`, optional `error`, offsets, usage |
+| `ObsScore` | Scores on a trace/span; many per trace, **no unique index** |
+| `ObsEvaluator` | Evaluator: `type` (`human` \| `llm-judge` \| `json-assert`), `target`, `dimensions[]`, `runModes`, `instructions`, `judgePromptName` (judge), `assertion` (json-assert), `confidenceAlertBelow` (default 0.7) |
+| `ObsReviewItem` | Review queue item: status, evaluator, trace, reason, scores, comment |
+| `ObsDataset` | Named dataset with optional `inputSchemaPromptName` and `expectedOutputSchema` |
+| `ObsDatasetItem` | Item with `input`, `expectedOutput`, `origin`, `proofread`, `tags`, `outcomeClass`, `sourceTraceId`, `metadata` |
+| `ObsExperiment` | Compares 2–3 prompt versions on a dataset with thresholds and aggregates |
+| `ObsExperimentItem` | Per dataset row: outputs per version, evaluator score maps, gate failure flags |
+
+`POST /ai/observability/traces/review` requires a `human` `ObsEvaluator`. Its
+`dimensions[]` render as reviewer score fields and `instructions` render above the review form.
+Automatic evaluator types return **400** instead of entering the human queue. Submitting a review
+requires every dimension marked `required`; omitted optional dimensions do not create empty score
+rows. The local score store remains the fallback when no external score sink is configured.
+
+`AIService` generate methods:
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `promptName` | unset | Resolve `PromptRegistry.get({name, label})` **before** the model call, even when `skipTrace` is true |
+| `promptLabel` | `"production"` | Label used with `promptName` |
+| `skipTrace` | `false` | Skip `TraceSink.export` only; prompt resolve and `AIRequest` still run |
+| `sensitive` | inherited | Explicit value wins; otherwise the resolved prompt version's `sensitive` |
+| `sessionId` / `userId` | unset | Copied onto the exported trace |
+| `priceMap` | app `priceMap` | Per-call override; `costUsd` is omitted when the model is unpriced |
+
+Missing registry, missing prompt, or missing label throws `APIError` 400 and does not call the model. Sink `export` failures are logged and never fail generate.
+
+**GPT tool spans:** `/gpt/prompt` collects streamed `tool-call` / `tool-result` events into `TOOL` child spans (name = tool name, input = args, output = cleaned result with large `fileData` stripped). When any tool span is present, `AIService.recordGenerate` exports one trace with a `CHAIN` root plus `TOOL` children linked by `parentSpanId`. Ordinary `generateText` / JSON helpers without `childSpans` still emit a single `LLM` root span.
+
+`ObservabilityApp.exportTrace(trace)` fans out to every `TraceSink` (best-effort) and returns the first persisted `{id}` from sinks that support it (for example `LocalTraceSink`). `TraceSink.export` may return `TraceExportResult` (`{id?: string}`) or `void`; `MemoryTraceSink` remains in-memory only.
+
+When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only prompt routes at `/ai/observability`. Pass `aiService` on `ObservabilityApp` for playground runs and the multi-stage trace smoke endpoint. Apps that let an admin supply a per-request provider key may instead set `requestAiServiceFactory`; both the playground and the multi-stage smoke endpoint read the key from `x-ai-api-key`, while a configured server `aiService` remains preferred. `GET /ai/observability/status` is always mounted so admin chrome can read plugin ids, capabilities, primaries, `localOn`, and `playgroundAi.source` (`server` \| `request-key` \| `unavailable`). Admin UIs use that field to distinguish “save a provider key” from true backend misconfiguration.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/ai/observability/status` | Admin chrome. `{plugins, primaries, localOn, playgroundAi}` — drives the status chip, hides Review when `localOn` is false, and tells the prompt playground whether AI comes from `ObservabilityApp.aiService` (`server`), per-request `x-ai-api-key` via `requestAiServiceFactory` (`request-key`), or is not configured (`unavailable`) |
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/ai/observability/prompts` | List. Query `folder`, `search`, `include=usage7d` (7-day calls/cost). `production` is `"—"` until a production label exists |
+| POST | `/ai/observability/prompts` | Create prompt in a folder as immutable v1 (`latest` label) |
+| GET | `/ai/observability/prompts/:name` | Prompt + versions + labels |
+| POST | `/ai/observability/prompts/:name/versions` | Create `vN+1`; never mutates an existing version |
+| POST | `/ai/observability/prompts/:name/labels` | Move `production` or `staging`; `outgoingVersion` is the previous pointer |
+| POST | `/ai/observability/prompts/:name/playground` | Compile `{{var}}` + one `AIService` call; returns compiled messages, output, latency, tokens, cost; creates no version. Uses `ObservabilityApp.aiService`, or `requestAiServiceFactory({apiKey, modelId})` when the server service is absent (`apiKey` comes from `x-ai-api-key`) |
+
+`PromptRegistry.get({name, label})` (default label `production`) reads the labelled local version. `createLocalObservabilityPlugin()` wires `LocalPromptStore` as that registry and local `TraceSink` / `ScoreSink`.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/ai/observability/traces` | Admin list. Query `from`, `to`, `prompt`, `status`, `userId`, `sessionId`, `hasScore`, `sensitive`, `flaggedForDataset`, `page`, `limit`. Body is `{data, page, limit, more, total}` so pagination survives RTK `{data}` unwrap. Each row includes `spanCount` and `scoreCount`. `prompts.length` is the `N prompts` count |
+| GET | `/ai/observability/traces/:id` | Span tree (kind, offsets, durations, I/O, cost) plus scores. `errorSummary` is the first span with `status: "error"` |
+| POST | `/ai/observability/traces/:id/scores` | Persist a score and fan out to every `ScoreSink` |
+| POST | `/ai/observability/traces/test-multi-stage` | Admin-only smoke workflow, registered only with the local trace sink. Uses `ObservabilityApp.aiService`, or `requestAiServiceFactory({apiKey})` when the server service is absent (`apiKey` comes from `x-ai-api-key`); answers **503** with the same missing-key title as playground when neither exists. Body `{input?: string}` (defaults to a built-in sample). Runs two `AIService.generateJsonObject` calls with `skipTrace: true` and named JSON output schemas (`obs-test-multi-stage-call-1` / `call-2`), a deterministic local `text-metrics` `TOOL` stage, then a final `generateJsonObject` synthesis against `obs-test-multi-stage-final`; exports exactly one parent trace with ordered child spans `LLM`, `LLM`, `TOOL`, `LLM` under a `CHAIN` root. LLM span input includes `outputSchema`. Returns `{traceId, output, stages[]}` where `output` is the final schema object (`sentence`, `phrase`, `keywords`, `metrics`). Child LLM failures export an error trace then rethrow |
+
+`createLocalObservabilityPlugin()` registers `ObsEvaluator` with the other local models.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/ai/observability/evaluators/templates` | Seeded templates: `llm-judge` (`correctness`, `hallucination`, `helpfulness`, `toxicity`), `json-assert` (`schema-assert`), and human queue variants (`correctness-human`, …) |
+| POST | `/ai/observability/evaluators/templates/:name` | Install a template by name as an immutable-named evaluator |
+| GET/POST | `/ai/observability/evaluators` | List / create. Create accepts `target: "full trace"` only (`generation span` and `dataset item` → 400). Seeded template install can still store other targets. `llm-judge` requires `judgePromptName`; create rejects when the judge prompt `outputSchema` omits a required dimension (400 names the key). `json-assert` supports `assertion` (`path` + `constraint`) or built-in output-schema mode. Human + `liveSampleRate > 0` → 400. Numeric dimension `range` is `min-max` (for example `0-1`); categorical `range` is `label|label` |
+| GET/PATCH/DELETE | `/ai/observability/evaluators/:id` | Read / update / soft-delete |
+| POST | `/ai/observability/traces/review` | Enqueue one or many traces against a human evaluator (`reason: "manual"`) |
+| GET | `/ai/observability/review` | Queue by `status` with counts; oldest-first. Response includes `more: false` so RTK preserves the count envelope. Rows include `traceName`, `promptName`, assignee, reason, and enqueue time |
+| GET | `/ai/observability/review/:id` | Item + evaluator dimensions + `given` / `wrote` panels and `rawInput` / `rawOutput` for the Raw JSON disclosure |
+| POST | `/ai/observability/review/:id` | `submit` (scores via ScoreSinks, status `done`), `skip`, or `assign` |
+
+`createLocalObservabilityPlugin()` wires `LocalDatasetStore` and `LocalExperimentRunner` when datasets/experiments primaries are `local`.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET/POST | `/ai/observability/datasets` | List (includes `humanCount` for proofread items, `autoCount` for unreviewed trace or synthetic items, `needsReviewCount`) / create |
+| GET/PATCH/DELETE | `/ai/observability/datasets/:id` | Detail (with counts) / update / soft-delete. PATCH `null` clears optional dataset fields; omitted fields stay unchanged |
+| GET/POST | `/ai/observability/datasets/:id/items` | List / create items |
+| PATCH/DELETE | `/ai/observability/datasets/:id/items/:itemId` | Update labels (`expectedOutput`, `proofread`, `tags`, `outcomeClass`) / delete (does not touch the source trace). PATCH `null` clears optional item fields |
+| POST | `/ai/observability/datasets/:id/import` | **JSON:** body is an array of bare input objects, or structured rows with `input` / `expectedOutput` / `proofread` / `tags` / `outcomeClass` / `metadata`. **CSV:** `Content-Type: text/csv` with raw CSV body, or JSON `{format: "csv", content: "..."}`. Plain columns map to `input`; plain `input` / `expectedOutput` cells accept JSON values; `input.foo` and `expectedOutput.foo` nest fields; reserved `proofread`, `tags`, `outcomeClass` map metadata. Nested paths reject `__proto__`, `constructor`, and `prototype` segments. Rows validate against the dataset's bound prompt `inputSchema` when `inputSchemaPromptName` is set; 400 reports row number and JSON path |
+| POST | `/ai/observability/traces/add-to-dataset` | `{datasetId, traceId \| traceIds[]}`. Copies span I/O; `origin: "trace"`; `sourceTraceId` set; **sensitive traces always `proofread: false`** |
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| POST | `/ai/observability/experiments/estimate` | `{datasetId, promptName, versions[], evaluatorIds[], modelOverride?}` → generation count, USD, wall-clock estimate |
+| GET/POST | `/ai/observability/experiments` | List / create. Body: dataset, 2–3 version numbers, evaluator ids, optional `thresholds[]` (defaults to `SOP_DEFAULT_THRESHOLDS`), `modelOverride`, `includeUnproofread` (default false). Evaluator ids must be `llm-judge` or `json-assert` (human → 400). Local primary always enqueues `BackgroundTask` (even one item) |
+| GET | `/ai/observability/experiments/:id` | Status, progress, per-version aggregates, gate pass/fail (`gates[].version`), `outlierItemIds`, `lowConfidenceItemIds`, per-item side-by-side (**failed rows first**) |
+| POST | `/ai/observability/experiments/:id/promote` | `{version}` moves the `production` label when **that version's** gates pass; **409** while any gate for the selected version fails |
+
+Authenticated `POST /ai/observability/traces/:id/feedback` records thumbs, outcome class, and flag-for-dataset (phase 2.6).
+
+## Durable agent harness
+
+`@terreno/ai/harness` runs multi-phase tasks that survive restarts. Each phase commits a
+checkpoint and its `ObsSpan` audit record in one Mongo transaction, so it needs a replica
+set and `createLocalObservabilityPlugin()`. Owner and task leases resume crashed work on a
+fresh process; phases that are not replay-safe park as `interrupted` until an operator calls
+`resolveInterrupted`. A thrown phase retries with exponential backoff before it fails.
+Phases can start child tasks (`rt.createTask`), wait on them (`rt.waitForTasks`), and
+`harness.abort` stops a whole ownership tree bottom-up, running compensation handlers.
+`defineAgent` / `defineTool` run durable agent conversations: each turn is a task whose
+model requests retry 429/5xx and fall back to other models, and whose tool calls run as
+child tasks with per-tool replay rules. `rt.runAgent` runs an agent as a subagent from a
+phase (a task-owned conversation) and returns its text or schema-checked output.
+`defineExtension` bundles prompt sections, tools, tool wraps, and hooks
+(`beforeModelRequest`, `beforeTool` with block or rewrite, `afterTool`); `rt.memo` stores
+first-write-wins decisions that survive restarts. `rt.waitFor(event, {timeout})` and
+`rt.sleep(duration)` park a task without a lease; `harness.sendEvent` stores the event
+durably and wakes the task, even when no runner is up. `rt.approval(key, {...})` waits for
+a human decision; `approvalGate` requires one before named tool calls; `HarnessApp` serves
+`GET /harness/approvals` (only what the caller may approve) and `approve` / `reject`
+instance actions, each decision audited in an `approval:<key>` span. Clients watch runs
+over SSE (`GET /harness/conversations/:id/events`, `GET /harness/tasks/:id/events`),
+resumable from any instance with `Last-Event-ID`; turns stream coalesced text deltas, and
+`POST /harness/conversations/:id/submit` queues or steers a message while a turn runs.
+API: [AI harness reference](ai-harness.md).
+Why: [Durable agent harness](../explanation/durable-agent-harness.md).
+How-to: [Build a durable workflow](../how-to/build-a-durable-workflow.md),
+[Ship a new task version](../how-to/ship-a-new-task-version.md).
+
 ## Langfuse integration
 
 Low-level exports (also used by `addGptRoutes` when `langfuseSystemPromptName` is set):
@@ -584,7 +739,7 @@ Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. i
 |----------|---------|-------------|
 | `GOOGLE_VERTEX_PROJECT` | `createVertexProvider` | GCP project for Vertex models |
 | `GOOGLE_VERTEX_LOCATION` | `createVertexProvider` | Vertex region (default `global`) |
-| `LANGFUSE_PUBLIC_KEY` | `LangfuseApp` | Langfuse public key |
+| `AI_OBS_PRICE_MAP_JSON` | `ObservabilityApp` | JSON model map with non-negative `inputPerMTok` / `outputPerMTok`; omitted models have tokens but no USD cost || `LANGFUSE_PUBLIC_KEY` | `LangfuseApp` | Langfuse public key |
 | `LANGFUSE_SECRET_KEY` | `LangfuseApp` | Langfuse secret key |
 | `LANGFUSE_BASE_URL` | Langfuse client | Langfuse host URL |
 
@@ -603,7 +758,7 @@ GCS credentials use standard Google Cloud Application Default Credentials for `F
 
 - Framework: `bun test` with preload `./src/tests/bunSetup.ts`
 - HTTP: supertest against real routes
-- DB: memory Mongo via `@terreno/test` (`TERRENO_TEST_USE_MEMORY_MONGO` or `TERRENO_TEST_MONGODB_URI`)
+- DB: in-memory single-node replica set via `@terreno/test` (transactions work); `TERRENO_TEST_MONGODB_URI` overrides it and must point at a replica set
 - Mock AI model: implement `doGenerate` and `doStream` on a fake `LanguageModel`
 
 ```typescript

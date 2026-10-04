@@ -100,6 +100,8 @@ export default defineConfig({
         BETTER_AUTH_SECRET:
           process.env.BETTER_AUTH_SECRET ?? "terreno-example-e2e-better-auth-secret-32",
         BETTER_AUTH_URL: "http://localhost:4000",
+        // harness-intake asserts the deterministic demo summarizer, never a real provider.
+        CLINIC_DEMO_MODEL: "true",
         MONGO_URI: process.env.MONGO_URI ?? "mongodb://127.0.0.1/terreno-e2e",
         PORT: "4000",
         REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET ?? "e2e-refresh-secret-dev",

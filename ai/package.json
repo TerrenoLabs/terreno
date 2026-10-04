@@ -44,6 +44,12 @@
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./harness": {
+      "default": "./dist/harness/harness.js",
+      "import": "./dist/harness/harness.js",
+      "require": "./dist/harness/harness.js",
+      "types": "./dist/harness/harness.d.ts"
+    },
     "./langfuseApp": {
       "default": "./dist/langfuseApp.js",
       "import": "./dist/langfuseApp.js",

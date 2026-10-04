@@ -16,6 +16,7 @@ Understanding-oriented documentation: concepts, architecture, and context.
 - [GitHub issue lifecycle](../how-to/github-issue-lifecycle.md) — Pick-ready issues and plan comments for Pick/Roast
 - [Install agent skills](../how-to/install-agent-skills.md) — `npx skills add TerrenoLabs/terreno`
 - [AI observability](ai-observability.md) — Two planes (telemetry vs control), plugins vs LangfuseApp, SOP loop
+- [Durable agent harness](durable-agent-harness.md) — Phases, checkpoints, and why the audit span shares the checkpoint transaction
 - [AI-powered workflows](ai-workflows.md) — Autonomous documentation, testing, and maintenance workflows
 - [Agent UI Asks](agent-ui-asks.md) — Why agent questions are client-side tool calls, the pause and resume round trip, why cards carry exact answers, the watch paths, asks vs blocks
 - [Agent UI blocks](agent-ui-blocks.md) — Why chat replies use a closed YAML catalog instead of free-form UI

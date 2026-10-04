@@ -82,6 +82,8 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "admin-table-bulk-actions",
       "admin-custom-screens",
       "admin-comms-back",
+      "harness-approvals",
+      "harness-intake",
     ],
   },
   {

@@ -12,6 +12,7 @@ import {registerSentryBunMock} from "../mocks/sentryBun";
 import {
   initializeModels,
   type MongoServerOptions,
+  resolveMongoLaunchTimeoutMs,
   startMongoServer,
   stopMongoServer,
 } from "../mongo/mongoServer";
@@ -20,6 +21,8 @@ import {
   installTransactionPatches,
   startTestTransaction,
 } from "../transaction/testTransaction";
+
+const MONGO_STOP_TIMEOUT_MS = 30_000;
 
 export interface BackendPreloadOptions {
   disableDb?: boolean;
@@ -48,6 +51,12 @@ const shouldDisableDb = (options: BackendPreloadOptions): boolean => {
 };
 
 let isServerStarted = false;
+// Set when Mongo startup failed, so every later test fails at once instead of waiting on
+// mongoose's command buffering.
+let mongoStartupError: unknown;
+
+/** Startup budget: two launch attempts plus connect and model init. */
+const beforeAllTimeoutMs = (): number => resolveMongoLaunchTimeoutMs() * 2 + 30000;
 
 /**
  * Registers Bun test lifecycle hooks for Terreno backend packages.
@@ -77,9 +86,17 @@ export const registerBackendPreload = (options: BackendPreloadOptions = {}): voi
   if (!shouldDisableDb(options)) {
     beforeAll(async () => {
       if (connectMongoInBeforeAll) {
+        if (mongoStartupError !== undefined) {
+          throw mongoStartupError;
+        }
         if (!isServerStarted) {
           setTerrenoTestEnv(options.testEnv);
-          await startMongoServer(options.mongo);
+          try {
+            await startMongoServer(options.mongo);
+          } catch (error: unknown) {
+            mongoStartupError = error;
+            throw error;
+          }
           if (options.loadModels) {
             await options.loadModels();
           }
@@ -92,13 +109,14 @@ export const registerBackendPreload = (options: BackendPreloadOptions = {}): voi
         }
       }
       await options.onBeforeAll?.();
-    }, 60000);
+    }, beforeAllTimeoutMs());
 
     if (connectMongoInBeforeAll) {
+      // Stopping an in-memory replica set under load can exceed Bun's 5s hook default
       afterAll(async () => {
         await options.onAfterAll?.();
         await stopMongoServer();
-      });
+      }, MONGO_STOP_TIMEOUT_MS);
     } else {
       afterAll(async () => {
         await options.onAfterAll?.();
@@ -107,6 +125,9 @@ export const registerBackendPreload = (options: BackendPreloadOptions = {}): voi
   }
 
   beforeEach(async () => {
+    if (mongoStartupError !== undefined) {
+      throw new Error(`MongoDB test server failed to start: ${String(mongoStartupError)}`);
+    }
     setTerrenoTestEnv(options.testEnv);
     logSilencer?.reapply();
     logSilencer?.clearLogs();

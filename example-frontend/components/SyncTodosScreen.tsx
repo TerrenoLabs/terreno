@@ -19,6 +19,7 @@ import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {NotificationCenterBell} from "@/components/NotificationCenter";
 import {useSyncConflictsController} from "@/components/SyncConflictsController";
 import {SyncDevPanel} from "@/components/SyncDevPanel";
+import {TodoSummaryCard} from "@/components/TodoSummaryCard";
 import {useSyncDbReady} from "@/hooks/useSyncDbReady";
 import {logout, useAppDispatch} from "@/store/index";
 import {
@@ -414,6 +415,7 @@ const SyncTodosScreen: React.FC = () => {
           </Text>
         </Box>
         <NewTodoForm disabled={!isSyncDbReady} onCreate={handleCreate} />
+        <TodoSummaryCard />
       </Box>
     ),
     [countSummary, handleCreate, isSyncDbReady, totalCount]

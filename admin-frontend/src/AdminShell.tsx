@@ -6,7 +6,11 @@ import {useWindowDimensions} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
 import {type AdminBreadcrumbSegment, AdminBreadcrumbs} from "./AdminBreadcrumbs";
 import {isAdminPageForbiddenError} from "./adminPageAccess";
-import {type AdminSidebarGroup, buildAdminSidebarGroups} from "./adminShellNav";
+import {
+  type AdminSidebarGroup,
+  adminScreenGroupTestId,
+  buildAdminSidebarGroups,
+} from "./adminShellNav";
 import {isAuditLogModel} from "./isAuditLogModel";
 import type {AdminApi, AdminConfigResponse, AdminCustomScreen, AdminModelConfig} from "./types";
 import {resolveAdminBases} from "./types";
@@ -185,7 +189,7 @@ const AdminShellSidebarNav: React.FC<AdminShellSidebarNavProps> = ({
               Models
             </Text>
             {visibleSidebarGroups.map(({customScreens, group, models: groupModels}) => (
-              <Box direction="column" gap={1} key={group}>
+              <Box direction="column" gap={1} key={group} testID={adminScreenGroupTestId(group)}>
                 <Text bold color={sectionLabelColor} size="sm">
                   {group}
                 </Text>

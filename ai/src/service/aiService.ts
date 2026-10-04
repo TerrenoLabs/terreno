@@ -1,3 +1,4 @@
+import {randomUUID} from "node:crypto";
 import {APIError, logger} from "@terreno/api";
 import {type BlocksDocument, blocksJsonSchema, validateBlocks} from "@terreno/blocks";
 import type {
@@ -20,6 +21,8 @@ import {DateTime} from "luxon";
 import type mongoose from "mongoose";
 
 import {AIRequest} from "../models/aiRequest";
+import {getObservabilityApp} from "../observability/observabilityAppRegistry";
+import type {ModelPrice, PromptVersionRef, SpanRecord, TraceRecord} from "../observability/types";
 import type {
   AIRequestType,
   AIServiceOptions,
@@ -27,6 +30,7 @@ import type {
   GenerateJsonArrayOptions,
   GenerateJsonObjectOptions,
   GenerateJsonValueOptions,
+  GenerateObservabilityOptions,
   GenerateStreamOptions,
   GenerateTextOptions,
   GptHistoryPrompt,
@@ -136,6 +140,56 @@ const getModelId = (model: LanguageModel): string => {
   return (model as {modelId?: string}).modelId ?? "unknown";
 };
 
+const toIsoUtc = (millis: number): string => {
+  return DateTime.fromMillis(millis, {zone: "utc"}).toISO() ?? "";
+};
+
+const readTokenUsage = (
+  usage:
+    | {
+        completionTokens?: number;
+        inputTokens?: number;
+        outputTokens?: number;
+        promptTokens?: number;
+        totalTokens?: number;
+      }
+    | undefined
+): {inputTokens?: number; outputTokens?: number; totalTokens?: number} => {
+  return {
+    inputTokens: usage?.inputTokens ?? usage?.promptTokens,
+    outputTokens: usage?.outputTokens ?? usage?.completionTokens,
+    totalTokens: usage?.totalTokens,
+  };
+};
+
+const computeCostUsd = (params: {
+  inputTokens?: number;
+  modelId: string;
+  outputTokens?: number;
+  priceMap?: Record<string, ModelPrice>;
+}): number | undefined => {
+  if (!params.priceMap) {
+    return undefined;
+  }
+  const price = params.priceMap[params.modelId];
+  if (!price || params.inputTokens === undefined || params.outputTokens === undefined) {
+    return undefined;
+  }
+  return (
+    (price.inputPerMTok * params.inputTokens + price.outputPerMTok * params.outputTokens) /
+    1_000_000
+  );
+};
+
+interface ResolvedObservability {
+  priceMap?: Record<string, ModelPrice>;
+  promptRef?: PromptVersionRef;
+  sensitive: boolean;
+  sessionId?: string;
+  skipTrace: boolean;
+  systemPrompt?: string;
+}
+
 export class AIService {
   readonly model: LanguageModel;
   readonly defaultTemperature: number;
@@ -190,9 +244,11 @@ export class AIService {
 
   private async logStructuredJsonFailure(params: {
     error: unknown;
+    observability: ResolvedObservability;
     prompt: string;
     requestType: AIRequestType;
     responseTime: number;
+    startTime: number;
     system: string;
     userId?: mongoose.Types.ObjectId;
   }): Promise<void> {
@@ -220,8 +276,7 @@ export class AIService {
       system: params.system,
     });
 
-    await this.logRequest({
-      aiModel: getModelId(this.model),
+    await this.logRequestAndTrace({
       error: errorDescription,
       metadata: {
         errorStack,
@@ -229,10 +284,12 @@ export class AIService {
         rawModelTextCaptured: Boolean(rawText && rawText.length > 0),
         system: params.system,
       },
+      observability: params.observability,
       prompt: params.prompt,
       requestType: params.requestType,
       response: responseForLog,
       responseTime: params.responseTime,
+      startTime: params.startTime,
       userId: params.userId,
     });
   }
@@ -255,8 +312,243 @@ export class AIService {
     }
   }
 
+  private async resolveObservability(
+    options: GenerateObservabilityOptions & {systemPrompt?: string}
+  ): Promise<ResolvedObservability> {
+    let promptRef: PromptVersionRef | undefined;
+    let systemPrompt = options.systemPrompt;
+    let sensitive = options.sensitive ?? false;
+
+    if (options.promptName) {
+      const registry = getObservabilityApp()?.promptRegistry;
+      if (!registry) {
+        throw new APIError({status: 400, title: "Prompt registry is not configured"});
+      }
+      const label = options.promptLabel ?? "production";
+      const version = await registry.get({label, name: options.promptName});
+      if (!version) {
+        throw new APIError({
+          status: 400,
+          title: `Unknown prompt "${options.promptName}" with label "${label}"`,
+        });
+      }
+      promptRef = version;
+      systemPrompt = version.body;
+      if (options.sensitive === undefined) {
+        sensitive = Boolean(version.sensitive);
+      }
+    }
+
+    return {
+      priceMap: options.priceMap,
+      promptRef,
+      sensitive,
+      sessionId: options.sessionId,
+      skipTrace: options.skipTrace === true,
+      systemPrompt,
+    };
+  }
+
+  private observabilityFields(options: GenerateObservabilityOptions): GenerateObservabilityOptions {
+    return {
+      priceMap: options.priceMap,
+      promptLabel: options.promptLabel,
+      promptName: options.promptName,
+      sensitive: options.sensitive,
+      sessionId: options.sessionId,
+      skipTrace: options.skipTrace,
+    };
+  }
+
+  private buildTraceRecord(params: {
+    error?: string;
+    childSpans?: SpanRecord[];
+    inputTokens?: number;
+    metadata?: Record<string, unknown>;
+    observability: ResolvedObservability;
+    outputTokens?: number;
+    prompt: string;
+    requestType: AIRequestType;
+    response?: string;
+    responseTime: number;
+    startTime: number;
+    userId?: mongoose.Types.ObjectId;
+  }): TraceRecord {
+    const modelId = getModelId(this.model);
+    const priceMap = params.observability.priceMap;
+    const app = getObservabilityApp();
+    const effectivePriceMap = priceMap ?? app?.priceMap;
+    const costUsd = computeCostUsd({
+      inputTokens: params.inputTokens,
+      modelId,
+      outputTokens: params.outputTokens,
+      priceMap: effectivePriceMap,
+    });
+    const usage = {
+      inputTokens: params.inputTokens,
+      model: modelId,
+      outputTokens: params.outputTokens,
+      ...(costUsd === undefined ? {} : {costUsd}),
+    };
+    const status = params.error ? "error" : "ok";
+    const startedAt = toIsoUtc(params.startTime);
+    const endedAt = toIsoUtc(params.startTime + params.responseTime);
+    const spanName = params.observability.promptRef?.name ?? params.requestType;
+    const childSpans = params.childSpans ?? [];
+    let spans: SpanRecord[];
+
+    if (childSpans.length > 0) {
+      const rootId = randomUUID();
+      const rootSpan: SpanRecord = {
+        durationMs: params.responseTime,
+        endedAt,
+        id: rootId,
+        input: params.prompt,
+        kind: "CHAIN",
+        name: spanName,
+        output: params.response,
+        startedAt,
+        status,
+        usage,
+        ...(params.error ? {error: params.error} : {}),
+      };
+      spans = [
+        rootSpan,
+        ...childSpans.map((child) => {
+          return {
+            ...child,
+            parentSpanId: child.parentSpanId ?? rootId,
+          };
+        }),
+      ];
+    } else {
+      spans = [
+        {
+          durationMs: params.responseTime,
+          endedAt,
+          id: randomUUID(),
+          input: params.prompt,
+          kind: "LLM",
+          name: spanName,
+          output: params.response,
+          startedAt,
+          status,
+          usage,
+          ...(params.error ? {error: params.error} : {}),
+        },
+      ];
+    }
+
+    const promptRef = params.observability.promptRef;
+    return {
+      endedAt,
+      id: randomUUID(),
+      input: params.prompt,
+      name: spanName,
+      output: params.response,
+      prompts: promptRef
+        ? [{label: promptRef.label, name: promptRef.name, version: promptRef.version}]
+        : [],
+      sensitive: params.observability.sensitive,
+      sessionId: params.observability.sessionId,
+      spans,
+      startedAt,
+      status,
+      usage,
+      userId: params.userId?.toString(),
+      ...(params.error ? {errorSummary: params.error} : {}),
+    };
+  }
+
+  private async logRequestAndTrace(params: {
+    error?: string;
+    childSpans?: SpanRecord[];
+    inputTokens?: number;
+    metadata?: Record<string, unknown>;
+    observability: ResolvedObservability;
+    outputTokens?: number;
+    prompt: string;
+    requestType: AIRequestType;
+    response?: string;
+    responseTime: number;
+    startTime: number;
+    tokensUsed?: number;
+    userId?: mongoose.Types.ObjectId;
+  }): Promise<void> {
+    await this.logRequest({
+      aiModel: getModelId(this.model),
+      error: params.error,
+      metadata: {
+        ...params.metadata,
+        ...(params.inputTokens === undefined ? {} : {inputTokens: params.inputTokens}),
+        ...(params.outputTokens === undefined ? {} : {outputTokens: params.outputTokens}),
+      },
+      prompt: params.prompt,
+      requestType: params.requestType,
+      response: params.response,
+      responseTime: params.responseTime,
+      tokensUsed: params.tokensUsed,
+      userId: params.userId,
+    });
+
+    const app = getObservabilityApp();
+    if (!app || params.observability.skipTrace) {
+      return;
+    }
+
+    const trace = this.buildTraceRecord({
+      childSpans: params.childSpans,
+      error: params.error,
+      inputTokens: params.inputTokens,
+      observability: params.observability,
+      outputTokens: params.outputTokens,
+      prompt: params.prompt,
+      requestType: params.requestType,
+      response: params.response,
+      responseTime: params.responseTime,
+      startTime: params.startTime,
+      userId: params.userId,
+    });
+
+    const results = await Promise.allSettled(
+      app.traceSinks.map((sink) => {
+        return sink.export(trace);
+      })
+    );
+    for (const result of results) {
+      if (result.status === "rejected") {
+        logger.error("Observability TraceSink.export failed", {error: result.reason});
+      }
+    }
+  }
+
+  async resolveGenerateObservability(
+    options: GenerateObservabilityOptions & {systemPrompt?: string}
+  ): Promise<ResolvedObservability> {
+    return this.resolveObservability(options);
+  }
+
+  async recordGenerate(params: {
+    childSpans?: SpanRecord[];
+    error?: string;
+    inputTokens?: number;
+    metadata?: Record<string, unknown>;
+    observability: ResolvedObservability;
+    outputTokens?: number;
+    prompt: string;
+    requestType: AIRequestType;
+    response?: string;
+    responseTime: number;
+    startTime: number;
+    tokensUsed?: number;
+    userId?: mongoose.Types.ObjectId;
+  }): Promise<void> {
+    await this.logRequestAndTrace(params);
+  }
+
   async generateText(options: GenerateTextOptions): Promise<string> {
-    const {prompt, systemPrompt, temperature, maxOutputTokens, userId} = options;
+    const observability = await this.resolveObservability(options);
+    const {prompt, temperature, maxOutputTokens, userId} = options;
     const startTime = DateTime.now().toMillis();
 
     try {
@@ -265,30 +557,35 @@ export class AIService {
         maxOutputTokens,
         model: this.model,
         prompt,
-        system: systemPrompt,
+        system: observability.systemPrompt,
         temperature: temperature ?? this.defaultTemperature,
       });
 
       const responseTime = DateTime.now().toMillis() - startTime;
-      await this.logRequest({
-        aiModel: getModelId(this.model),
+      const tokens = readTokenUsage(result.usage);
+      await this.logRequestAndTrace({
+        inputTokens: tokens.inputTokens,
+        observability,
+        outputTokens: tokens.outputTokens,
         prompt,
         requestType: "general",
         response: result.text,
         responseTime,
-        tokensUsed: result.usage?.totalTokens,
+        startTime,
+        tokensUsed: tokens.totalTokens,
         userId,
       });
 
       return result.text;
     } catch (error) {
       const responseTime = DateTime.now().toMillis() - startTime;
-      await this.logRequest({
-        aiModel: getModelId(this.model),
+      await this.logRequestAndTrace({
         error: error instanceof Error ? error.message : String(error),
+        observability,
         prompt,
         requestType: "general",
         responseTime,
+        startTime,
         userId,
       });
       throw error;
@@ -412,17 +709,13 @@ export class AIService {
 
   /** Any JSON value (object, array, primitive, or null) via the AI SDK `Output.json()` parser. */
   async generateJsonValue(options: GenerateJsonValueOptions): Promise<JSONValue> {
-    const {
-      maxOutputTokens,
-      outputDescription,
-      outputName,
-      prompt,
-      systemPrompt,
-      temperature,
-      userId,
-    } = options;
+    const observability = await this.resolveObservability({
+      ...options,
+      systemPrompt: options.systemPrompt ?? JSON_VALUE_SYSTEM_PROMPT,
+    });
+    const {maxOutputTokens, outputDescription, outputName, prompt, temperature, userId} = options;
     const startTime = DateTime.now().toMillis();
-    const system = systemPrompt ?? JSON_VALUE_SYSTEM_PROMPT;
+    const system = observability.systemPrompt ?? JSON_VALUE_SYSTEM_PROMPT;
 
     try {
       const result = await aiGenerateText({
@@ -436,13 +729,17 @@ export class AIService {
       });
 
       const responseTime = DateTime.now().toMillis() - startTime;
-      await this.logRequest({
-        aiModel: getModelId(this.model),
+      const tokens = readTokenUsage(result.usage);
+      await this.logRequestAndTrace({
+        inputTokens: tokens.inputTokens,
+        observability,
+        outputTokens: tokens.outputTokens,
         prompt,
         requestType: "json_value",
         response: JSON.stringify(result.output),
         responseTime,
-        tokensUsed: result.usage?.totalTokens,
+        startTime,
+        tokensUsed: tokens.totalTokens,
         userId,
       });
 
@@ -451,9 +748,11 @@ export class AIService {
       const responseTime = DateTime.now().toMillis() - startTime;
       await this.logStructuredJsonFailure({
         error,
+        observability,
         prompt,
         requestType: "json_value",
         responseTime,
+        startTime,
         system,
         userId,
       });
@@ -463,18 +762,14 @@ export class AIService {
 
   /** Typed object from a Zod schema, `jsonSchema(...)`, or other `FlexibleSchema` (`Output.object()`). */
   async generateJsonObject<OBJECT>(options: GenerateJsonObjectOptions<OBJECT>): Promise<OBJECT> {
-    const {
-      maxOutputTokens,
-      prompt,
-      schema,
-      schemaDescription,
-      schemaName,
-      systemPrompt,
-      temperature,
-      userId,
-    } = options;
+    const observability = await this.resolveObservability({
+      ...options,
+      systemPrompt: options.systemPrompt ?? JSON_VALUE_SYSTEM_PROMPT,
+    });
+    const {maxOutputTokens, prompt, schema, schemaDescription, schemaName, temperature, userId} =
+      options;
     const startTime = DateTime.now().toMillis();
-    const system = systemPrompt ?? JSON_VALUE_SYSTEM_PROMPT;
+    const system = observability.systemPrompt ?? JSON_VALUE_SYSTEM_PROMPT;
 
     try {
       const result = await aiGenerateText({
@@ -492,13 +787,17 @@ export class AIService {
       });
 
       const responseTime = DateTime.now().toMillis() - startTime;
-      await this.logRequest({
-        aiModel: getModelId(this.model),
+      const tokens = readTokenUsage(result.usage);
+      await this.logRequestAndTrace({
+        inputTokens: tokens.inputTokens,
+        observability,
+        outputTokens: tokens.outputTokens,
         prompt,
         requestType: "json_object",
         response: JSON.stringify(result.output),
         responseTime,
-        tokensUsed: result.usage?.totalTokens,
+        startTime,
+        tokensUsed: tokens.totalTokens,
         userId,
       });
 
@@ -507,9 +806,11 @@ export class AIService {
       const responseTime = DateTime.now().toMillis() - startTime;
       await this.logStructuredJsonFailure({
         error,
+        observability,
         prompt,
         requestType: "json_object",
         responseTime,
+        startTime,
         system,
         userId,
       });
@@ -524,18 +825,14 @@ export class AIService {
   async generateJsonArray<ELEMENT>(
     options: GenerateJsonArrayOptions<ELEMENT>
   ): Promise<Array<ELEMENT>> {
-    const {
-      element,
-      maxOutputTokens,
-      outputDescription,
-      outputName,
-      prompt,
-      systemPrompt,
-      temperature,
-      userId,
-    } = options;
+    const observability = await this.resolveObservability({
+      ...options,
+      systemPrompt: options.systemPrompt ?? JSON_VALUE_SYSTEM_PROMPT,
+    });
+    const {element, maxOutputTokens, outputDescription, outputName, prompt, temperature, userId} =
+      options;
     const startTime = DateTime.now().toMillis();
-    const system = systemPrompt ?? JSON_VALUE_SYSTEM_PROMPT;
+    const system = observability.systemPrompt ?? JSON_VALUE_SYSTEM_PROMPT;
 
     try {
       const result = await aiGenerateText({
@@ -553,13 +850,17 @@ export class AIService {
       });
 
       const responseTime = DateTime.now().toMillis() - startTime;
-      await this.logRequest({
-        aiModel: getModelId(this.model),
+      const tokens = readTokenUsage(result.usage);
+      await this.logRequestAndTrace({
+        inputTokens: tokens.inputTokens,
+        observability,
+        outputTokens: tokens.outputTokens,
         prompt,
         requestType: "json_array",
         response: JSON.stringify(result.output),
         responseTime,
-        tokensUsed: result.usage?.totalTokens,
+        startTime,
+        tokensUsed: tokens.totalTokens,
         userId,
       });
 
@@ -568,9 +869,11 @@ export class AIService {
       const responseTime = DateTime.now().toMillis() - startTime;
       await this.logStructuredJsonFailure({
         error,
+        observability,
         prompt,
         requestType: "json_array",
         responseTime,
+        startTime,
         system,
         userId,
       });
@@ -579,7 +882,8 @@ export class AIService {
   }
 
   async *generateTextStream(options: GenerateStreamOptions): AsyncGenerator<string> {
-    const {prompt, systemPrompt, temperature, maxOutputTokens, userId} = options;
+    const observability = await this.resolveObservability(options);
+    const {prompt, temperature, maxOutputTokens, userId} = options;
     const startTime = DateTime.now().toMillis();
     let fullResponse = "";
 
@@ -589,7 +893,7 @@ export class AIService {
         maxOutputTokens,
         model: this.model,
         prompt,
-        system: systemPrompt,
+        system: observability.systemPrompt,
         temperature: temperature ?? this.defaultTemperature,
       });
 
@@ -600,23 +904,28 @@ export class AIService {
 
       const responseTime = DateTime.now().toMillis() - startTime;
       const usage = await result.usage;
-      await this.logRequest({
-        aiModel: getModelId(this.model),
+      const tokens = readTokenUsage(usage);
+      await this.logRequestAndTrace({
+        inputTokens: tokens.inputTokens,
+        observability,
+        outputTokens: tokens.outputTokens,
         prompt,
         requestType: "general",
         response: fullResponse,
         responseTime,
-        tokensUsed: usage?.totalTokens,
+        startTime,
+        tokensUsed: tokens.totalTokens,
         userId,
       });
     } catch (error) {
       const responseTime = DateTime.now().toMillis() - startTime;
-      await this.logRequest({
-        aiModel: getModelId(this.model),
+      await this.logRequestAndTrace({
         error: error instanceof Error ? error.message : String(error),
+        observability,
         prompt,
         requestType: "general",
         responseTime,
+        startTime,
         userId,
       });
       throw error;
@@ -625,6 +934,7 @@ export class AIService {
 
   async generateRemix(options: RemixOptions): Promise<string> {
     return this.generateText({
+      ...this.observabilityFields(options),
       prompt: options.text,
       systemPrompt: REMIX_PROMPT,
       temperature: TemperaturePresets.BALANCED,
@@ -634,6 +944,7 @@ export class AIService {
 
   async generateSummary(options: SummaryOptions): Promise<string> {
     return this.generateText({
+      ...this.observabilityFields(options),
       prompt: options.text,
       systemPrompt: CONTENT_SUMMARY_PROMPT,
       temperature: TemperaturePresets.LOW,
@@ -649,6 +960,7 @@ export class AIService {
     );
 
     return this.generateText({
+      ...this.observabilityFields(options),
       prompt: text,
       systemPrompt,
       temperature: TemperaturePresets.LOW,
@@ -753,7 +1065,11 @@ export class AIService {
   }
 
   async *generateChatStream(options: GenerateChatStreamOptions): AsyncGenerator<string> {
-    const {messages, systemPrompt, tools, toolChoice, stopWhen, userId} = options;
+    const observability = await this.resolveObservability({
+      ...options,
+      systemPrompt: options.systemPrompt ?? DEFAULT_GPT_MEMORY,
+    });
+    const {messages, tools, toolChoice, stopWhen, userId} = options;
     const startTime = DateTime.now().toMillis();
     let fullResponse = "";
 
@@ -765,7 +1081,7 @@ export class AIService {
         messages: messages.map((m) => ({content: m.content, role: m.role})),
         model: this.model,
         stopWhen: stopWhen ?? stepCountIs(1),
-        system: systemPrompt ?? DEFAULT_GPT_MEMORY,
+        system: observability.systemPrompt ?? DEFAULT_GPT_MEMORY,
         temperature: this.defaultTemperature,
         toolChoice,
         tools,
@@ -778,23 +1094,28 @@ export class AIService {
 
       const responseTime = DateTime.now().toMillis() - startTime;
       const usage = await result.usage;
-      await this.logRequest({
-        aiModel: getModelId(this.model),
+      const tokens = readTokenUsage(usage);
+      await this.logRequestAndTrace({
+        inputTokens: tokens.inputTokens,
+        observability,
+        outputTokens: tokens.outputTokens,
         prompt: promptText,
         requestType: "general",
         response: fullResponse,
         responseTime,
-        tokensUsed: usage?.totalTokens,
+        startTime,
+        tokensUsed: tokens.totalTokens,
         userId,
       });
     } catch (error) {
       const responseTime = DateTime.now().toMillis() - startTime;
-      await this.logRequest({
-        aiModel: getModelId(this.model),
+      await this.logRequestAndTrace({
         error: error instanceof Error ? error.message : String(error),
+        observability,
         prompt: promptText,
         requestType: "general",
         responseTime,
+        startTime,
         userId,
       });
       throw error;

@@ -434,3 +434,145 @@ import {CommsDashboardScreenWidget, CommsMessageDetail} from "@terreno/admin-fro
 The list screen persists filters in the URL (`channel`, `provider`, `status`, `errorClass`, `q`,
 `startDate`, `endDate`, `page`) and calls `/comms/messages`, `/comms/stats`, and
 `/comms/messages/retryMany`.
+
+### AI Observability chrome
+
+`ObservabilityApp` contributes grouped custom screens (`group: "AI Observability"`): `ai-prompts`,
+`ai-traces`, `ai-evaluators`, `ai-datasets`, `ai-experiments`, and `ai-review` when the local
+plugin is on. `AI Requests` (`ai-requests`) stays ungrouped. Widgets also register detail routes:
+`ai-prompt-editor`, `ai-trace-detail`, `ai-review-item`, `ai-evaluator-detail`, `ai-evaluator-new`,
+`ai-dataset-detail`, `ai-experiment-new`, and `ai-experiment-results`.
+
+Every observability screen wraps `AiObservabilityChrome`: breadcrumbs
+`Admin / AI Observability / <Section> / <leaf>` and a status chip from
+`GET /ai/observability/status` (`Local on|off` plus active primaries). Review queue nav and the
+review screen body hide when `localOn` is false.
+
+Each observability list screen is contributed with `adminAccess: {resource, action: "list"}` so
+`/admin/config` omits screens the caller cannot list (`aiPrompt`, `aiTrace`, `aiEvaluator`,
+`aiDataset`, `aiExperiment`, `aiReview`). Detail routes stay registered on the host; route
+handlers still enforce Task 4.1 RBAC.
+
+`GET /ai/observability/status` includes a `permissions` map (per observability resource and
+action). Legacy admin users and apps without `accessControl` receive all actions `true`. RBAC
+callers receive effective flags for the signed-in user. Pass the same `accessControl` to
+`ObservabilityApp` and `AdminApp` so status permissions match sidebar filtering. Admin widgets
+read the payload through `resolvePromptActionPermissions` and `observabilityActionAllowed` (fail
+closed while status is loading, errored, or missing `permissions`). List screens gate **Create
+prompt** on `aiPrompt:create`, **Create evaluator** on `aiEvaluator:create`, and **New dataset** on
+`aiDataset:create`; experiment lists hide **New experiment** without `aiExperiment:create`.
+Dataset detail hides **Add item** without `aiDataset:update` and **Run experiment** without
+`aiExperiment:create`; dataset lists hide **Import** without
+`aiDataset:update`. Judge schema checks use the production prompt version, or the latest version
+when production is unset. Widgets do not couple to host Redux.
+
+`ai-prompts` lists prompts with a folder rail, search, type badge, latest vs production columns
+(tooltips), 7-day usage, and **Create prompt** when `aiPrompt:create` is allowed. The create modal
+includes an optional **Description** (saved on the prompt record and shown on the hub Overview tab).
+`ai-prompt-editor?name=` is a prompt hub with **Overview**, **Versions**, **Traces**, and
+**Experiments** tabs. Overview shows optional description, folder, tags, and latest vs production
+badges. Traces and Experiments render bounded relationship rows from
+`GET /ai/observability/prompts/:name?promptVersion=` (the hub pins the selected version, defaulting
+to latest after the first load, so related traces and experiments are filtered server-side while the
+full immutable version list stays on the detail payload). The **Versions** tab
+hosts the versioned editor: full-width version history rows show `vN`, every label attached to
+that version, and its creation time on one line. The selected row is highlighted. Editor /
+Playground tabs appear on Versions when allowed; **Save as vN+1**, **Set vN as production…**, and
+playground **Run once** hide when `aiPrompt:update`, `aiPrompt:promote`, or `aiPrompt:playground`
+is denied (fields stay read-only). Playground **Run once** does not create a version; hosts may pass `apiKey` to
+`AiPromptEditorScreenWidget`, which forwards it as `x-ai-api-key` without putting the key in the
+request body. Pass `apiKeyLoading` while the host reads a saved key (for example from
+`useStoredState`) so the playground waits instead of showing a missing-key message. Pass
+`playgroundApiKeyHint` when `GET /ai/observability/status` reports
+`playgroundAi.source: "request-key"`; the editor blocks **Run once** and shows that hint until a
+trimmed key is available. When `playgroundAi.source` is `server`, no key is required. When it is
+`unavailable`, the editor explains that the backend must configure `aiService` or
+`requestAiServiceFactory`. A stale playground **503** with the missing-key title is remapped to the
+same hint for `request-key` hosts so operators are not told to fix server configuration. The
+example admin supplies the Gemini key saved from Profile. **Save this run to dataset** stays
+disabled until phase 2.
+
+`ai-traces` lists traces with a filter bar: from/to date fields; dropdowns for prompt, status,
+score presence (**All traces / Has a score / No scores**), and data sensitivity
+(**All traces / Sensitive only / Not sensitive**); plus user and session text fields.
+Checkbox selection opens a bulk bar with **Send to human review**, a sensitive-count
+warning, **Clear**, and **Add to dataset** (opens a dataset picker modal; sensitive traces show a
+warning before bulk add). **Send to human review** opens a modal that explains how human
+evaluators define the score fields and reviewer instructions, then requires a human evaluator
+before creating one review-queue item per trace. When local trace storage is on,
+**Run multi-stage trace test** calls the admin-only smoke endpoint and
+opens the resulting detail: two schema-validated LLM stages, one deterministic tool span, and a
+final schema-validated combining LLM stage under one CHAIN root. LLM span input includes
+`outputSchema`. That run needs AI the same way the playground does: hosts may pass `apiKey`,
+`apiKeyLoading`, and `apiKeyHint` to `AiTracesScreenWidget`, which forwards the key as
+`x-ai-api-key`. When `GET /ai/observability/status` reports `playgroundAi.source: "request-key"`
+and no trimmed key is available, the button is disabled and the hint explains where to save one;
+`unavailable` instead reports that the backend must configure `aiService` or
+`requestAiServiceFactory`. The example admin supplies the Gemini key saved from Profile. Rows show a status dot (primary for successful runs, accent for failed runs),
+`sensitive` badge, error line, numeric prompt count, span count, tokens, cost, latency, score count, and
+**Open**. Pagination uses `page` / `limit` / `more` / `total`.
+`ai-trace-detail?id=` shows the header, left span list (kind badge, indent, duration bar),
+right span detail with **collapsed** sensitive I/O, and scores (value + source). The two columns
+size from the row width rather than their content, so a wide span value (multi-stage LLM spans embed
+`outputSchema` JSON) wraps inside the detail column instead of pushing it below the span list.
+
+`ai-review` shows Pending / In progress / Done / Skipped tabs with counts. Each tab is
+oldest-first and lists the trace action, prompt, assignee, waiting time, and status.
+**Start reviewing — oldest first** opens the first pending item; the empty state names both
+Traces intake and manual **Assign to me** assignment.
+
+`ai-review-item?id=` shows "Item N of M pending", previous/next navigation, read-only
+**What the AI was given** / **What the AI wrote** panels, collapsed long fields with word
+counts, reviewer notes, and a collapsed Raw JSON disclosure. Score controls come from evaluator
+dimensions (numeric slider, boolean Pass / Fail, categorical pills). Actions are
+**Submit & next**, **Skip**, and **Assign to me**; completion toasts report the remaining count
+or **Queue clear**.
+
+`ai-evaluators` lists evaluators with type badge, dimension summary, target, and run-mode chips.
+**Create evaluator** opens `ai-evaluator-new` with the name and optional purpose first, then how
+scoring happens (human / JSON assert / LLM judge). New evaluators score a **full trace** only;
+generation span and dataset item targets are not offered yet. Score fields depend on data type:
+boolean has no extra control, numeric asks for min and max, and categorical is a list you add to.
+LLM judge picks the judge prompt from the existing prompt list. Human setup points operators to
+**Send to human review** and omits live sampling because it never applies; automatic evaluators
+explain experiment/manual availability and production sampling, while LLM judges call out the billed
+model-call impact. The optional purpose is saved as the evaluator description and appears on its
+detail screen. LLM judge schema feedback stays idle until a prompt is selected, then shows
+loading/error states and only checks dimensions after its production schema loads.
+`ai-evaluator-detail?id=` leads with the evaluator name, description, and type/target/run-mode
+badges, then explains the saved scores, how scoring works, where it runs, and a **Used by** list
+derived from recent experiments. A failed experiments request shows **Could not load experiments.**
+instead of an empty 30-day list. Its dimension and usage rows use the shared `ObservabilityTable` instead of
+`DataTable`, which sizes to a height-constrained parent and collapses inside a scrolling page. LLM
+judge details show loading or load-failed feedback while resolving the judge prompt; schema
+mismatches appear only after its production schema loads.
+
+`ai-datasets` lists datasets with item counts, provenance bar, input-schema binding, and updated
+time. **New dataset** creates a dataset; **Import** on each row accepts `.json` or `.csv` via
+`FilePickerButton` (local URI read) or paste, posting `{rows}` for JSON or `{format:'csv',content}`
+for CSV. `ai-dataset-detail?id=` shows counts, schema binding, tabs **All / Human / Auto / Needs
+review**. Human is proofread items. Auto is unreviewed trace or synthetic items, so a proofread
+trace is not listed in both tabs. The screen includes an items table (input, expected, provenance,
+trace link), **Add item**, and **Run experiment**. The items table uses `ObservabilityTable`: rows grow with their content
+and cells wrap to three lines before truncating, so long inputs and expected outputs no longer
+overlap adjacent rows. Input and Expected receive 2.5× the flexible width of metadata columns.
+Selecting a row opens a scrollable modal with the complete input, expected output, provenance,
+annotation ids, tags, timestamps, metadata, and an **Open source trace** action when linked.
+Opening the source trace dismisses the item modal before navigation.
+Item-query loading and failures render dedicated states with Retry; they never appear as an empty
+dataset.
+
+`ObservabilityTable` (`widgets/aiObservability/shell/ObservabilityTable.tsx`) is the shared
+flow-height table for these screens. Columns take a `title`, optional `minWidth`, and optional
+relative `grow`; rows take a `key`, `cells`, and optional click/accessibility properties. A string
+cell renders truncated text and a node cell renders as-is. Its
+bordered shell shrink-wraps the rows inside flex/scroll parents so its bottom border cannot stretch
+into the following section.
+
+`ai-experiments` lists experiments with status, running progress, and cost. **New experiment**
+opens a four-step wizard (dataset with counts, prompt versions tagged latest/production/superseded,
+llm-judge and json-assert evaluators, review & run with estimate). A slower in-flight estimate is ignored after the selection changes, so it cannot replace a newer estimate or its error. Human evaluators are omitted. On the prompt-versions step, **Next** and the later
+wizard rail buttons stay disabled until 2–3 versions are selected. `includeUnproofread` and optional model override are on
+the wizard. `ai-experiment-results?id=` polls while pending/running, shows gate tiles per version,
+failing gate count, outliers, a side-by-side per-item output table (failed rows first from the
+API), and **Promote to production** with a confirm modal; promote is blocked when gates fail (409).

@@ -15,6 +15,7 @@
   "description": "Admin panel frontend screens for @terreno/api backends — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@react-native-community/slider": "catalog:",
     "@reduxjs/toolkit": "catalog:",
     "@testing-library/react-native": "catalog:",
     "@types/lodash": "catalog:",

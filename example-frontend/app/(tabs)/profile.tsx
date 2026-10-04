@@ -354,8 +354,8 @@ const ProfileScreen: React.FC = () => {
           <Box gap={4}>
             <Heading size="lg">Gemini API Key</Heading>
             <Text color="secondaryLight" size="sm">
-              Paste your Gemini API key to enable AI features. The key is stored locally on your
-              device.
+              Paste your Gemini API key to enable AI chat and the admin prompt playground. The key
+              is stored locally on your device.
             </Text>
             <TextField
               onChange={setApiKeyInput}

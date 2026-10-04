@@ -1,9 +1,13 @@
 import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
+import {APIError} from "@terreno/api";
 import {jsonSchema, type LanguageModel} from "ai";
 import {assert} from "chai";
 import mongoose from "mongoose";
 
 import {AIRequest} from "../models/aiRequest";
+import {MemoryTraceSink} from "../observability/local/traceStore";
+import {ObservabilityApp, resetObservabilityApp} from "../observability/observabilityApp";
+import type {ObservabilityPlugin, PromptVersionRef} from "../observability/types";
 import {AIService, TemperaturePresets} from "./aiService";
 
 // Create a mock LanguageModelV2
@@ -44,6 +48,7 @@ describe("AIService", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
+    resetObservabilityApp();
   });
 
   describe("constructor", () => {
@@ -953,6 +958,266 @@ describe("AIService", () => {
       const content = (messages[0] as {content: Array<{type: string; filename?: string}>}).content;
       expect(content[1].type).toBe("file");
       expect(content[1].filename).toBe("doc.pdf");
+    });
+  });
+
+  describe("observability traces and prompt resolve", () => {
+    const PRODUCTION_BODY = "You are the production greeter.";
+    const productionVersion: PromptVersionRef = {
+      body: PRODUCTION_BODY,
+      label: "production",
+      name: "greeter",
+      sensitive: true,
+      version: 2,
+    };
+
+    const registerLocalApp = ({
+      priceMap,
+      promptVersion,
+      traceSink,
+    }: {
+      priceMap?: {inputPerMTok: number; outputPerMTok: number};
+      promptVersion?: PromptVersionRef;
+      traceSink: MemoryTraceSink | {export: (trace: unknown) => Promise<void>};
+    }): void => {
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {
+          get: async ({label, name}) => {
+            if (!promptVersion) {
+              return undefined;
+            }
+            if (name === promptVersion.name && (label ?? "production") === promptVersion.label) {
+              return promptVersion;
+            }
+            return undefined;
+          },
+        },
+        reviewQueue: {},
+        traceSink: traceSink as MemoryTraceSink,
+      };
+      new ObservabilityApp({
+        plugins: [plugin],
+        priceMap: priceMap ? {"mock-model": priceMap} : undefined,
+      });
+    };
+
+    it("exports a trace to every TraceSink", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+      const userId = new mongoose.Types.ObjectId();
+
+      await service.generateText({
+        prompt: "Say hello",
+        sessionId: "sess-1",
+        userId,
+      });
+
+      expect(sink.traces.length).toBe(1);
+      expect(sink.traces[0].userId).toBe(userId.toString());
+      expect(sink.traces[0].sessionId).toBe("sess-1");
+      expect(sink.traces[0].status).toBe("ok");
+      expect(sink.traces[0].spans[0].kind).toBe("LLM");
+      expect("costUsd" in (sink.traces[0].usage ?? {})).toBe(false);
+    });
+
+    it("exports a CHAIN root with TOOL children when childSpans are provided", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+      const observability = await service.resolveGenerateObservability({});
+
+      await service.recordGenerate({
+        childSpans: [
+          {
+            durationMs: 5,
+            endedAt: "2026-01-01T00:00:00.005Z",
+            id: "tool-span",
+            input: {q: "hello"},
+            kind: "TOOL",
+            name: "search",
+            output: {results: ["item1"]},
+            startedAt: "2026-01-01T00:00:00.000Z",
+            status: "ok",
+          },
+        ],
+        observability,
+        prompt: "search",
+        requestType: "general",
+        response: "done",
+        responseTime: 12,
+        startTime: Date.parse("2026-01-01T00:00:00.000Z"),
+      });
+
+      assert.equal(sink.traces.length, 1);
+      assert.equal(sink.traces[0].spans[0]?.kind, "CHAIN");
+      assert.equal(sink.traces[0].spans.length, 2);
+      const toolSpan = sink.traces[0].spans.find((span) => span.kind === "TOOL");
+      assert.isDefined(toolSpan);
+      assert.equal(toolSpan?.parentSpanId, sink.traces[0].spans[0]?.id);
+      assert.deepEqual(toolSpan?.input, {q: "hello"});
+      assert.deepEqual(toolSpan?.output, {results: ["item1"]});
+    });
+
+    it("does not export a trace when skipTrace is true", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({prompt: "Say hello", skipTrace: true});
+
+      expect(sink.traces.length).toBe(0);
+      const logs = await AIRequest.find({prompt: "Say hello"});
+      expect(logs.length).toBe(1);
+    });
+
+    it("logs a throwing sink and still writes AIRequest", async () => {
+      registerLocalApp({
+        traceSink: {
+          export: async () => {
+            throw new Error("sink down");
+          },
+        },
+      });
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const result = await service.generateText({prompt: "Say hello"});
+
+      expect(result).toBe("Hello world");
+      const logs = await AIRequest.find({prompt: "Say hello"});
+      expect(logs.length).toBe(1);
+    });
+
+    it("sets costUsd from the price map", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({
+        priceMap: {inputPerMTok: 1000, outputPerMTok: 2000},
+        traceSink: sink,
+      });
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({prompt: "Say hello"});
+
+      expect(sink.traces[0].usage?.costUsd).toBeCloseTo(0.025);
+    });
+
+    it("omits costUsd when the model is unpriced", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({prompt: "Say hello"});
+
+      expect(sink.traces[0].usage?.costUsd).toBeUndefined();
+    });
+
+    it("resolves promptName before the model call even when skipTrace is true", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({promptVersion: productionVersion, traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({
+        prompt: "User says hi",
+        promptLabel: "production",
+        promptName: "greeter",
+        skipTrace: true,
+      });
+
+      expect(sink.traces.length).toBe(0);
+      expect(model.doGenerate.mock.calls.length).toBe(1);
+      const payload = JSON.stringify(model.doGenerate.mock.calls[0]);
+      expect(payload).toContain(PRODUCTION_BODY);
+    });
+
+    it("returns 400 and does not call the model when the production label is missing", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({promptVersion: productionVersion, traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      try {
+        await service.generateText({
+          prompt: "User says hi",
+          promptLabel: "production",
+          promptName: "missing-prompt",
+        });
+        throw new Error("expected APIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(APIError);
+        expect((error as APIError).status).toBe(400);
+      }
+      expect(model.doGenerate.mock.calls.length).toBe(0);
+      expect(sink.traces.length).toBe(0);
+    });
+
+    it("returns 400 and does not call the model when no prompt registry is registered", async () => {
+      resetObservabilityApp();
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      try {
+        await service.generateText({
+          prompt: "User says hi",
+          promptName: "greeter",
+        });
+        throw new Error("expected APIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(APIError);
+        expect((error as APIError).status).toBe(400);
+      }
+      expect(model.doGenerate.mock.calls.length).toBe(0);
+    });
+
+    it("inherits sensitive from the resolved prompt version", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({promptVersion: productionVersion, traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({
+        prompt: "User says hi",
+        promptName: "greeter",
+      });
+
+      expect(sink.traces[0].sensitive).toBe(true);
+      expect(sink.traces[0].prompts).toEqual([{label: "production", name: "greeter", version: 2}]);
+    });
+
+    it("still writes AIRequest for a chat stream when a sink is registered", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel();
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const chunks: string[] = [];
+      for await (const chunk of service.generateChatStream({
+        messages: [{content: "Hello", role: "user"}],
+      })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks.join("")).toBe("Mock response");
+      const logs = await AIRequest.find({});
+      expect(logs.length).toBe(1);
+      expect(sink.traces.length).toBe(1);
     });
   });
 

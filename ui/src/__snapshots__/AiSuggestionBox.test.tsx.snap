@@ -86,7 +86,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for not-sta
           "props": {
             "style": {
               "backgroundColor": "#F2F2F2",
-              "borderColor": "#B6CDD5",
+              "borderColor": "#CDCDCD",
               "borderRadius": 8,
               "borderWidth": 1,
               "gap": 8,
@@ -1394,7 +1394,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for added s
           "props": {
             "style": {
               "backgroundColor": "#DCF2E2",
-              "borderColor": "#9BE7B2",
+              "borderColor": "#3EA45C",
               "borderRadius": 8,
               "borderWidth": 1,
               "flexDirection": "column",

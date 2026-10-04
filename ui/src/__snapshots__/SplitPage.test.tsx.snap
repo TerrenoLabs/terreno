@@ -119,7 +119,7 @@ exports[`SplitPage renders correctly with renderContent 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -317,7 +317,7 @@ exports[`SplitPage renders correctly with children 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -470,7 +470,7 @@ exports[`SplitPage renders with loading state 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -1030,7 +1030,7 @@ exports[`SplitPage renders with tabs when more than 2 children 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -1192,7 +1192,7 @@ exports[`SplitPage renders with list view header 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -1345,7 +1345,7 @@ exports[`SplitPage renders with custom list view width and max width 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -1500,7 +1500,7 @@ exports[`SplitPage renders with listViewExtraData 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -1653,7 +1653,7 @@ exports[`SplitPage renders with keyboard offset 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -1851,7 +1851,7 @@ exports[`SplitPage filters out null children 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -2004,7 +2004,7 @@ exports[`SplitPage renders with showItemList true to reset selection 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",
@@ -2177,7 +2177,7 @@ exports[`SplitPage renders with bottomNavBarHeight 1`] = `
             "onPointerEnter": [Function: AsyncFunction],
             "onPointerLeave": [Function: AsyncFunction],
             "style": {
-              "backgroundColor": "#CDCDCD",
+              "backgroundColor": "#F2F2F2",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "row",

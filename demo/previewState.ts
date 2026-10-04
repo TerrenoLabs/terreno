@@ -3,7 +3,7 @@ export interface DemoPreviewState {
   locale: string;
   reducedMotion: boolean;
   rtl: boolean;
-  theme: "light" | "dark";
+  theme: "light" | "dark" | "system";
   viewport: "full" | "320" | "375" | "1024" | "1280";
 }
 
@@ -33,7 +33,7 @@ export const previewStateFromQuery = (
 ): DemoPreviewState => {
   const state = defaultPreviewState();
   const theme = one(query.theme);
-  if (theme === "dark" || theme === "light") {
+  if (theme === "dark" || theme === "light" || theme === "system") {
     state.theme = theme;
   }
   const viewport = one(query.viewport);

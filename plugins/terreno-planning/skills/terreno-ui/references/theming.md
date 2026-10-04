@@ -23,7 +23,8 @@ Required at the app root. Provides theme context and toast support.
 ```tsx
 import {useTheme} from "@terreno/ui";
 
-const {colorScheme, theme, setTheme, setPrimitives, resetTheme} = useTheme();
+const {colorScheme, colorSchemeSetting, setColorScheme, theme, setTheme, setPrimitives, resetTheme} =
+  useTheme();
 ```
 
 ## Component color props
@@ -72,9 +73,12 @@ Load fonts in root `_layout.tsx` via `useFonts` (see example-frontend).
 
 Set `TerrenoProvider colorScheme` to `"light"`, `"dark"`, or `"system"`.
 The default is deterministic `"light"`; `"system"` follows React Native's
-current system scheme. `useTheme().colorScheme` is always the resolved
-`"light"` or `"dark"` value. The exported `lightThemeConfig` and
-`darkThemeConfig` match the Flourish Health Figma modes.
+current system scheme. `themeColorSchemeOptions` exposes those three choices
+as Light, Dark, and Follow system. Call `setColorScheme("system")` to change
+the choice after startup. `colorSchemeSetting` keeps the selected choice, while
+`useTheme().colorScheme` is always the resolved `"light"` or `"dark"` value.
+The exported `lightThemeConfig` and `darkThemeConfig` match the Flourish Health
+Figma modes.
 
 ## Do not
 

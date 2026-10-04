@@ -1,13 +1,16 @@
 import {describe, expect, it} from "bun:test";
 import {act, render} from "@testing-library/react-native";
 import {assert} from "chai";
-import {Text, View} from "react-native";
+import {Text, useColorScheme, View} from "react-native";
 
 import {
   darkThemeConfig,
   defaultThemePrimitives,
   lightThemeConfig,
+  resolveThemeColorScheme,
+  type ThemeColorScheme,
   ThemeProvider,
+  themeColorSchemeOptions,
   useTheme,
 } from "./Theme";
 
@@ -15,10 +18,11 @@ type ThemeContextValue = ReturnType<typeof useTheme>;
 type ThemeValue = ThemeContextValue["theme"];
 
 const ThemeConsumer = () => {
-  const {colorScheme, theme} = useTheme();
+  const {colorScheme, colorSchemeSetting, theme} = useTheme();
   return (
     <View>
       <Text testID="color-scheme">{colorScheme}</Text>
+      <Text testID="color-scheme-setting">{colorSchemeSetting}</Text>
       <Text testID="border-ai">{theme.border.ai}</Text>
       <Text testID="surface-base">{theme.surface?.base}</Text>
       <Text testID="surface-ai">{theme.surface.ai}</Text>
@@ -65,6 +69,60 @@ describe("Theme", () => {
       assert.equal(getByTestId("border-ai").children[0], "#0086B3");
       assert.equal(getByTestId("text-primary").children[0], "#FFFFFF");
       assert.equal(getByTestId("color-scheme").children[0], "dark");
+      assert.equal(getByTestId("color-scheme-setting").children[0], "dark");
+    });
+
+    it("follows the system scheme and accepts a later choice", () => {
+      const colorSchemeMock = useColorScheme as unknown as {
+        mockReturnValue: (value: string | null) => void;
+      };
+      let setColorScheme: ((nextColorScheme: ThemeColorScheme) => void) | undefined;
+      const Capture = (): null => {
+        setColorScheme = useTheme().setColorScheme;
+        return null;
+      };
+
+      colorSchemeMock.mockReturnValue("dark");
+      const view = render(
+        <ThemeProvider colorScheme="system">
+          <Capture />
+          <ThemeConsumer />
+        </ThemeProvider>
+      );
+
+      assert.equal(view.getByTestId("color-scheme-setting").children[0], "system");
+      assert.equal(view.getByTestId("color-scheme").children[0], "dark");
+      assert.equal(view.getByTestId("surface-base").children[0], "#353535");
+
+      act(() => {
+        setColorScheme?.("light");
+      });
+      assert.equal(view.getByTestId("color-scheme-setting").children[0], "light");
+      assert.equal(view.getByTestId("surface-base").children[0], "#FFFFFF");
+
+      view.rerender(
+        <ThemeProvider colorScheme="dark">
+          <Capture />
+          <ThemeConsumer />
+        </ThemeProvider>
+      );
+      assert.equal(view.getByTestId("color-scheme-setting").children[0], "dark");
+      assert.equal(view.getByTestId("color-scheme").children[0], "dark");
+      colorSchemeMock.mockReturnValue("light");
+    });
+
+    it("lists light, dark, and follow system", () => {
+      assert.deepEqual(
+        themeColorSchemeOptions.map((option) => option.value),
+        ["light", "dark", "system"]
+      );
+      assert.equal(
+        themeColorSchemeOptions.find((option) => option.value === "system")?.label,
+        "Follow system"
+      );
+      assert.equal(resolveThemeColorScheme("system", null), "light");
+      assert.equal(resolveThemeColorScheme("system", "dark"), "dark");
+      assert.equal(resolveThemeColorScheme("light", "dark"), "light");
     });
 
     it("maps semantic tokens to the supplied Figma modes", () => {
@@ -211,6 +269,7 @@ describe("Theme", () => {
       );
       const rerenderedValue = capturedValues.at(-1);
 
+      assert.strictEqual(rerenderedValue?.setColorScheme, initialValue?.setColorScheme);
       assert.strictEqual(rerenderedValue?.resetTheme, initialValue?.resetTheme);
       assert.strictEqual(rerenderedValue?.setPrimitives, initialValue?.setPrimitives);
       assert.strictEqual(rerenderedValue?.setTheme, initialValue?.setTheme);

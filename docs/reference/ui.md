@@ -76,9 +76,31 @@ import {TerrenoProvider} from "@terreno/ui";
 ``````
 
 `colorScheme` accepts `"light"`, `"dark"`, or `"system"` and defaults to
-`"light"` for deterministic server rendering. `useTheme()` returns the resolved
-`colorScheme` (`"light"` or `"dark"`) with `theme`, `setTheme`,
-`setPrimitives`, and `resetTheme`.
+`"light"` for deterministic server rendering. `"system"` follows the operating
+system. Change the choice after startup with `setColorScheme`:
+
+``````tsx
+import {SelectField, themeColorSchemeOptions, useTheme, type ThemeColorScheme} from "@terreno/ui";
+
+const AppearanceSetting = () => {
+  const {colorSchemeSetting, setColorScheme} = useTheme();
+  return (
+    <SelectField
+      onChange={(value) => {
+        setColorScheme(value as ThemeColorScheme);
+      }}
+      options={themeColorSchemeOptions}
+      title="Appearance"
+      value={colorSchemeSetting}
+    />
+  );
+};
+``````
+
+`themeColorSchemeOptions` labels those values Light, Dark, and Follow system.
+`useTheme()` also returns the resolved `colorScheme` (`"light"` or `"dark"`)
+with `theme`, `setTheme`, `setPrimitives`, and `resetTheme`. An explicit
+`colorScheme` prop replaces the current choice whenever the parent changes it.
 
 The public `lightThemeConfig`, `darkThemeConfig`, and
 `defaultThemePrimitives` exports are the canonical token maps. They include the
@@ -1250,7 +1272,7 @@ const buttonStyles = toggle(isPressed, pressedStyles, defaultStyles);
 @terreno/ui components do not require environment variables. All configuration is done at runtime via:
 
 - **TerrenoProvider props** — `colorScheme`, `initialPrimitives`, custom icons, and OpenAPI spec URL
-- **Theme hooks** — `useTheme()`, `setTheme()`, `setPrimitives()`
+- **Theme hooks** — `useTheme()`, `setColorScheme()`, `setTheme()`, `setPrimitives()`
 - **Component props** — Direct prop overrides for individual components
 
 **Example configuration:**

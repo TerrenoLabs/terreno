@@ -1,4 +1,4 @@
-import React, {createContext, useCallback, useContext, useMemo, useState} from "react";
+import React, {createContext, useCallback, useContext, useEffect, useMemo, useState} from "react";
 import {useColorScheme} from "react-native";
 
 import type {TerrenoTheme, TerrenoThemeConfig, ThemePrimitives} from "./Common";
@@ -227,6 +227,29 @@ export const darkThemeConfig: TerrenoThemeConfig = {
 };
 
 export type ThemeColorScheme = "light" | "dark" | "system";
+export type ResolvedThemeColorScheme = Exclude<ThemeColorScheme, "system">;
+
+export const themeColorSchemeOptions: {label: string; value: ThemeColorScheme}[] = [
+  {label: "Light", value: "light"},
+  {label: "Dark", value: "dark"},
+  {label: "Follow system", value: "system"},
+];
+
+export const resolveThemeColorScheme = (
+  colorScheme: ThemeColorScheme,
+  systemColorScheme: string | null | undefined
+): ResolvedThemeColorScheme => {
+  if (colorScheme === "dark") {
+    return "dark";
+  }
+  if (colorScheme === "light") {
+    return "light";
+  }
+  if (systemColorScheme === "dark") {
+    return "dark";
+  }
+  return "light";
+};
 
 export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
@@ -290,8 +313,10 @@ const computeTheme = (
 const defaultComputedTheme = computeTheme(lightThemeConfig, defaultThemePrimitives);
 
 export const ThemeContext = createContext({
-  colorScheme: "light" as Exclude<ThemeColorScheme, "system">,
+  colorScheme: "light" as ResolvedThemeColorScheme,
+  colorSchemeSetting: "light" as ThemeColorScheme,
   resetTheme: () => {},
+  setColorScheme: (_colorScheme: ThemeColorScheme) => {},
   setPrimitives: (_primitives: DeepPartial<ThemePrimitives>) => {},
   setTheme: (_theme: DeepPartial<TerrenoThemeConfig>) => {},
   theme: defaultComputedTheme,
@@ -305,12 +330,27 @@ export interface ThemeProviderProps {
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   children,
-  colorScheme = "light",
+  colorScheme,
   initialPrimitives,
 }) => {
   const systemColorScheme = useColorScheme();
-  const resolvedColorScheme =
-    colorScheme === "system" ? (systemColorScheme === "dark" ? "dark" : "light") : colorScheme;
+  const [colorSchemeSetting, setColorSchemeSetting] = useState<ThemeColorScheme>(
+    colorScheme ?? "light"
+  );
+
+  // Keep an explicit parent selection in charge when that selection changes.
+  useEffect(() => {
+    if (colorScheme === undefined) {
+      return;
+    }
+    setColorSchemeSetting(colorScheme);
+  }, [colorScheme]);
+
+  const setColorScheme = useCallback((nextColorScheme: ThemeColorScheme): void => {
+    setColorSchemeSetting(nextColorScheme);
+  }, []);
+
+  const resolvedColorScheme = resolveThemeColorScheme(colorSchemeSetting, systemColorScheme);
   const baseTheme = resolvedColorScheme === "dark" ? darkThemeConfig : lightThemeConfig;
   const [providerThemeOverrides, setProviderThemeOverrides] = useState<
     DeepPartial<TerrenoThemeConfig>
@@ -343,12 +383,22 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   const contextValue = useMemo(
     () => ({
       colorScheme: resolvedColorScheme,
+      colorSchemeSetting,
       resetTheme,
+      setColorScheme,
       setPrimitives,
       setTheme,
       theme: computedTheme,
     }),
-    [computedTheme, resetTheme, resolvedColorScheme, setPrimitives, setTheme]
+    [
+      colorSchemeSetting,
+      computedTheme,
+      resetTheme,
+      resolvedColorScheme,
+      setColorScheme,
+      setPrimitives,
+      setTheme,
+    ]
   );
 
   return (

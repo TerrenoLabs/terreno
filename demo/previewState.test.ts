@@ -35,6 +35,13 @@ describe("preview state", () => {
     assert.equal(previewQueryFromState(defaultPreviewState()), "");
   });
 
+  it("keeps follow-system as a shareable theme choice", () => {
+    const state = previewStateFromQuery({theme: "system"});
+    assert.equal(state.theme, "system");
+    assert.equal(previewQueryFromState(state), "theme=system");
+    assert.equal(previewParamsFromState(state).theme, "system");
+  });
+
   it("ignores unknown viewport and theme values", () => {
     const state = previewStateFromQuery({theme: "neon", viewport: "999"});
     assert.equal(state.theme, "light");

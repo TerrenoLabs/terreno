@@ -9,6 +9,7 @@ Example Expo app demonstrating full-stack Terreno usage with @terreno/api backen
 - **Type-safe API**: Generated RTK Query hooks from backend OpenAPI spec
 - **Todo CRUD**: Complete todo list with create, read, update, delete
 - **Profile Management**: User profile viewing and editing
+- **Appearance**: Persisted Light, Dark, or Follow system theme choice under Profile → Appearance
 - **Tab Navigation**: Expo Router with file-based routing
 - **Cross-platform**: Runs on web, iOS, and Android
 - **Admin UI v2**: Profile → Admin uses `@terreno/admin-frontend` with `AdminShellLayout` (sidebar + `AdminHome` dashboard from `/admin/config`), tools/model cards, configuration, scripts, and a static “Admin UI v2 map” screen — backed by the rich `AdminApp` setup in `example-backend`
@@ -114,11 +115,13 @@ app/
     profile.tsx        # User profile screen
 store/
   index.ts             # Redux store configuration
-  appState.ts          # App-level state (dark mode, language)
+  appState.ts          # App-level state (language)
   openApiSdk.ts        # Generated RTK Query hooks (DO NOT EDIT)
   sdk.ts               # SDK exports with custom endpoints
   errors.ts            # Error handling middleware
 components/            # Reusable React components
+contexts/
+  ThemePreferenceContext.tsx # Persisted light/dark/system theme provider
 constants/             # App constants
 hooks/                 # Custom React hooks
 utils/                 # Utility functions
@@ -179,7 +182,7 @@ const handleCreate = async () => {
 
 The store combines:
 - **auth**: JWT authentication (from `@terreno/rtk`)
-- **appState**: Dark mode, language preferences
+- **appState**: Language preferences
 - **openapi**: RTK Query API slice with all endpoints
 
 ### Persistence

@@ -1902,6 +1902,9 @@ jobs:
       - run:
           name: Deploy example frontend preview to Netlify
           no_output_timeout: 25m
+          environment:
+            # Match example-frontend `web` script; Expo export can exceed default heap in CI.
+            NODE_OPTIONS: "--max-old-space-size=8192"
           command: |
             set -euo pipefail
             # Frontend paths also set run-cd-backend, so gcp-cd-preview deploys

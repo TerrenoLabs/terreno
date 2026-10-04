@@ -16,7 +16,11 @@ interface AccessibilityPageReport {
     helpUrl: string;
     id: string;
     impact: string | null;
-    nodes: number;
+    nodes: Array<{
+      failureSummary: string | undefined;
+      html: string;
+      target: string[];
+    }>;
   }>;
 }
 
@@ -52,7 +56,11 @@ const scanPage = async ({
       helpUrl: violation.helpUrl,
       id: violation.id,
       impact: violation.impact,
-      nodes: violation.nodes.length,
+      nodes: violation.nodes.map((node) => ({
+        failureSummary: node.failureSummary,
+        html: node.html,
+        target: node.target.map(String),
+      })),
     })),
   };
 };
@@ -65,7 +73,8 @@ const main = async (): Promise<void> => {
 
   await mkdir(ARTIFACT_DIRECTORY, {recursive: true});
   const browser = await chromium.launch();
-  const page = await browser.newPage({viewport: {height: 900, width: 1440}});
+  const context = await browser.newContext({viewport: {height: 900, width: 1440}});
+  const page = await context.newPage();
   const reports: AccessibilityPageReport[] = [];
 
   try {
@@ -73,6 +82,7 @@ const main = async (): Promise<void> => {
       reports.push(await scanPage({page, url}));
     }
   } finally {
+    await context.close();
     await browser.close();
   }
 

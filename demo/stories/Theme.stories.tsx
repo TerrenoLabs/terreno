@@ -1,7 +1,6 @@
 import {
   Box,
   Button,
-  darkThemeConfig,
   Field,
   Heading,
   IconButton,
@@ -15,7 +14,7 @@ type ThemeName = "default" | "pink" | "dark";
 
 export const ThemeComponentStories = () => {
   const [themeName, setThemeName] = useState<ThemeName>("default");
-  const {resetTheme, setPrimitives, setTheme} = useContext(ThemeContext);
+  const {resetTheme, setColorScheme, setPrimitives} = useContext(ThemeContext);
 
   return (
     <Box
@@ -35,13 +34,16 @@ export const ThemeComponentStories = () => {
             setThemeName(nextTheme);
             resetTheme();
             if (nextTheme === "pink") {
+              setColorScheme("light");
               setPrimitives({
                 primary400: "#e0218a",
                 secondary100: "#ed5c9b",
                 secondary500: "#f18dbc",
               });
             } else if (nextTheme === "dark") {
-              setTheme(darkThemeConfig);
+              setColorScheme("dark");
+            } else {
+              setColorScheme("light");
             }
           }}
           options={[

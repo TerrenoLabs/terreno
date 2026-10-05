@@ -1,4 +1,4 @@
-const NORMAL_TEXT_CONTRAST = 4.5;
+export const WCAG_NORMAL_TEXT_CONTRAST = 4.5;
 
 const srgbChannel = (value: number): number => {
   const srgb = value / 255;
@@ -44,7 +44,7 @@ export const readableTextColor = (
   background: string
 ): "inverted" | "primary" => {
   const primaryRatio = contrastRatio(primary, background);
-  if (primaryRatio >= NORMAL_TEXT_CONTRAST) {
+  if (primaryRatio >= WCAG_NORMAL_TEXT_CONTRAST) {
     return "primary";
   }
   const invertedRatio = contrastRatio(inverted, background);

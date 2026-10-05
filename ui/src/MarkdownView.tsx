@@ -3,6 +3,7 @@ import {Linking, Platform} from "react-native";
 import type Markdown from "react-native-markdown-display";
 import {FitImage, renderRules} from "react-native-markdown-display";
 
+import {contrastRatio, WCAG_NORMAL_TEXT_CONTRAST} from "./colorContrast";
 import {MarkdownEmbed} from "./MarkdownEmbed";
 import {isEmbeddableMediaUrl, toMediaEmbedUrl} from "./markdownEmbeds";
 import {Spinner} from "./Spinner";
@@ -54,9 +55,14 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
       ...color,
     };
 
+    const blockquoteBackground =
+      contrastRatio(textColor, theme.surface.baseAlternate) >= WCAG_NORMAL_TEXT_CONTRAST
+        ? theme.surface.baseAlternate
+        : theme.surface.neutralDark;
+
     return {
       blockquote: {
-        backgroundColor: theme.surface.baseAlternate,
+        backgroundColor: blockquoteBackground,
         borderColor: theme.border.default,
         borderLeftWidth: 4,
         marginLeft: 0,
@@ -157,7 +163,13 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
       text: color,
       textgroup: {flexShrink: 1, minWidth: 0},
     };
-  }, [textColor, theme.border.default, theme.surface.baseAlternate, theme.surface.neutralLight]);
+  }, [
+    textColor,
+    theme.border.default,
+    theme.surface.baseAlternate,
+    theme.surface.neutralDark,
+    theme.surface.neutralLight,
+  ]);
 
   const handleLinkPress = useCallback((url: string): boolean => {
     void Linking.openURL(url);

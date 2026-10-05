@@ -97,7 +97,7 @@ const AppearanceSetting = () => {
 };
 ``````
 
-Dark `surface.warningLight` uses `warning200`. The lighter warning orange, `warning100`, is 2.52:1 against warning text and misses WCAG AA. Highlighted `DataTable` cells switch to `text.inverted` when `text.primary` is below 4.5:1 on that fill.
+Dark `surface.warningLight` uses `warning200`. The lighter warning orange, `warning100`, is 2.52:1 against warning text and misses WCAG AA. Highlighted `DataTable` cells switch to `text.inverted` when `text.primary` is below 4.5:1 on that fill. Primary `Button` labels use `text.secondaryDark` when that pair meets 4.5:1 on `surface.primary`, and `text.inverted` otherwise, so `setTheme(darkThemeConfig)` stays readable without changing `colorScheme`. The demo palette generator emits status `050` steps so custom palettes update those dark error, success, and warning surfaces.
 
 `themeColorSchemeOptions` labels those values Light, Dark, and Follow system.
 `useTheme()` also returns the resolved `colorScheme` (`"light"` or `"dark"`)
@@ -778,7 +778,7 @@ are one or two children. `narrowViewportChildLabels` opts into a labeled full-wi
 the narrow viewport. `narrowBelowWidth` uses that viewport when the window is at or below the
 given pixel width; when omitted, the narrow viewport follows `isNarrowViewport()`. These props
 are web only; the native `SplitPage` ignores them. See `SplitPageProps` for when each prop
-applies and what is ignored.
+applies and what is ignored. An unset `color` is `baseAlternate` on web and native.
 `IconButton`'s `backgroundOpacity` tints only that button's background.
 
 ```typescript

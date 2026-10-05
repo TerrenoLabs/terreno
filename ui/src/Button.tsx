@@ -20,6 +20,7 @@ import {
 
 import {Box} from "./Box";
 import type {ButtonPressAnimation, ButtonProps} from "./Common";
+import {contrastRatio, WCAG_NORMAL_TEXT_CONTRAST} from "./colorContrast";
 import {useCustomIcon} from "./IconRegistry";
 import {isNarrowViewport} from "./MediaQuery";
 import {useTheme} from "./Theme";
@@ -105,7 +106,7 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
   withConfirmation = false,
   wrapText = false,
 }) => {
-  const {colorScheme, theme} = useTheme();
+  const {theme} = useTheme();
   const CustomIcon = useCustomIcon(iconName);
 
   const {backgroundColor, borderColor, borderWidth, color} = useMemo(() => {
@@ -115,10 +116,15 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
     let bgColor = theme.surface.primary;
     let bColor: string | undefined;
     let bWidth: number | undefined;
-    let textColor =
-      variant === "primary" && colorScheme === "light"
-        ? theme.text.secondaryDark
-        : theme.text.inverted;
+    // secondaryDark is the light-mode on-primary label. Dark tokens make that
+    // role too light for the primary fill, so fall back to inverted.
+    let textColor = theme.text.inverted;
+    if (
+      variant === "primary" &&
+      contrastRatio(theme.text.secondaryDark, theme.surface.primary) >= WCAG_NORMAL_TEXT_CONTRAST
+    ) {
+      textColor = theme.text.secondaryDark;
+    }
 
     if (disabled) {
       bgColor = theme.surface.disabled;
@@ -158,7 +164,7 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
       borderWidth: bWidth,
       color: textColor,
     };
-  }, [colorScheme, disabled, state, variant, theme]);
+  }, [disabled, state, variant, theme]);
 
   if (!theme) {
     return null;

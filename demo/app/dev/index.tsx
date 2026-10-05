@@ -3,7 +3,7 @@ import {DemoConfig} from "@config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {useTheme} from "@terreno/ui";
 import {router, useGlobalSearchParams, useRootNavigationState} from "expo-router";
-import {type ReactElement, useEffect} from "react";
+import {type ReactElement, useEffect, useRef} from "react";
 import {StyleSheet, View} from "react-native";
 
 const ASYNC_STORAGE_KEY = "CURRENT_ROUTE";
@@ -13,6 +13,8 @@ const Dev = (): ReactElement => {
   const navigationState = useRootNavigationState();
   const {theme: themeParam} = useGlobalSearchParams<{theme?: string | string[]}>();
   const selectedTheme = Array.isArray(themeParam) ? themeParam[0] : themeParam;
+  const selectedThemeRef = useRef(selectedTheme);
+  selectedThemeRef.current = selectedTheme;
   const {theme} = useTheme();
   // Save the current navigation state to AsyncStorage
   useEffect(() => {
@@ -39,16 +41,18 @@ const Dev = (): ReactElement => {
     void saveCurrentRoute();
   }, [navigationState]);
 
-  // Restore the route from AsyncStorage
+  // Restore the saved story once. A later theme change must not navigate again,
+  // or Expo Router drops the other preview params and remounts the story.
   useEffect(() => {
-    const restoreRoute = async () => {
+    const restoreRoute = async (): Promise<void> => {
       try {
         const savedRoute = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
         if (savedRoute) {
           const {component, story} = JSON.parse(savedRoute);
+          const theme = selectedThemeRef.current;
           if (component && story) {
             router.navigate({
-              params: {component, story, ...(selectedTheme ? {theme: selectedTheme} : {})},
+              params: {component, story, ...(theme ? {theme} : {})},
               pathname: "/dev/[component]",
             });
           }
@@ -59,7 +63,7 @@ const Dev = (): ReactElement => {
     };
 
     void restoreRoute();
-  }, [selectedTheme]);
+  }, []);
 
   return (
     <View

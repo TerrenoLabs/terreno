@@ -1484,7 +1484,7 @@ jobs:
             CI: "true"
             EXPO_NO_TELEMETRY: "1"
             EXPO_PUBLIC_API_URL: http://localhost:4000
-            NODE_OPTIONS: "--max-old-space-size=3072"
+            NODE_OPTIONS: "--max-old-space-size=8192"
           command: bun expo export --platform web
       - run:
           name: Seed example-backend
@@ -1660,7 +1660,7 @@ jobs:
           environment:
             CI: "true"
             EXPO_NO_TELEMETRY: "1"
-            NODE_OPTIONS: "--max-old-space-size=3072"
+            NODE_OPTIONS: "--max-old-space-size=8192"
           command: bun expo export --platform web
       - run:
           name: Archive dist trees

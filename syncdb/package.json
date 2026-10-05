@@ -8,7 +8,7 @@
   "dependencies": {
     "luxon": "catalog:",
     "socket.io-client": "catalog:",
-    "tinybase": "^10.0.0"
+    "tinybase": "^9.5.1"
   },
   "description": "Local-first data layer with TinyBase, durable outbox, and delta sync — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {

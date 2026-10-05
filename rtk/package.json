@@ -4,7 +4,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.116",
-    "@better-auth/expo": "^1.7.5",
+    "@better-auth/expo": "^1.6.25",
     "@modelcontextprotocol/client": "catalog:",
     "@openfeature/core": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",

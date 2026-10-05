@@ -21,7 +21,7 @@ url: http://localhost:8082/login
 - inputText: "testpassword123"
 
 - tapOn:
-    id: "Log In"
+    id: "login-screen-submit-button"
 
 - extendedWaitUntil:
     visible:
@@ -29,7 +29,7 @@ url: http://localhost:8082/login
     timeout: 30000
 
 - tapOn:
-    text: "Got it"
+    id: "announcement-screen.primary"
 
 - extendedWaitUntil:
     visible:

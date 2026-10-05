@@ -21,7 +21,7 @@ url: http://localhost:8082/
 - inputText: "Buy groceries"
 
 - tapOn:
-    id: "Add Todo"
+    id: "todos-create-button"
 
 # SyncDevPanel starts collapsed so the new row sits below the form in the
 # Maestro viewport. Window scrollUntilVisible does not move FlashList's

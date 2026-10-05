@@ -29,6 +29,7 @@ import {type FC, useEffect, useState} from "react";
 import {Linking, Pressable} from "react-native";
 import MarkdownView from "react-native-markdown-display";
 import {controlDefault, storiesForDemo} from "../../catalogContract";
+import {formatPropType} from "../../formatPropType";
 
 export const generateStaticParams = () => DemoConfig.map((c) => ({component: c.name}));
 
@@ -53,7 +54,7 @@ const ComponentProps = ({props}: {props: DemoConfigurationProp[]}) => {
 
   const data = sortedProps.map((p) => [
     {value: p.name},
-    {value: p.type.name},
+    {value: formatPropType(p.type)},
     {value: p.flags?.isOptional ? "" : "Required"},
     {value: p.comment?.summary?.[0]?.text ?? ""},
   ]);

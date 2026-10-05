@@ -86,29 +86,6 @@ exports[`Accordion renders correctly with default props 1`] = `
       },
       "type": "View",
     },
-    {
-      "$$typeof": Symbol(react.test.json),
-      "children": [
-        {
-          "$$typeof": Symbol(react.test.json),
-          "children": [
-            "Test Content",
-          ],
-          "props": {
-            "style": undefined,
-            "testID": "test-content",
-          },
-          "type": "Text",
-        },
-      ],
-      "props": {
-        "style": {
-          "marginTop": 8,
-        },
-        "testID": undefined,
-      },
-      "type": "View",
-    },
   ],
   "props": {
     "style": {

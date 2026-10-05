@@ -1,16 +1,16 @@
-import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {type FC, useEffect, useState} from "react";
 import {Pressable, View} from "react-native";
 
 import type {AccordionProps} from "./Common";
 import {Heading} from "./Heading";
+import {Icon} from "./Icon";
 import {InfoModalIcon} from "./InfoModalIcon";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
 
 export const Accordion: FC<AccordionProps> = ({
   children,
-  isCollapsed = false,
+  isCollapsed = true,
   title,
   subtitle,
   includeInfoModal = false,
@@ -22,7 +22,7 @@ export const Accordion: FC<AccordionProps> = ({
   testID,
 }) => {
   const {theme} = useTheme();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(isCollapsed);
 
   // The external collapse state should override the internal collapse state.
   useEffect(() => {
@@ -68,12 +68,7 @@ export const Accordion: FC<AccordionProps> = ({
             }}
             testID={testID ? `${testID}.toggle` : "accordion-toggle"}
           >
-            <FontAwesome6
-              color={theme.text.link}
-              name={collapsed ? "chevron-down" : "chevron-up"}
-              selectable={undefined}
-              size={16}
-            />
+            <Icon color="link" iconName={collapsed ? "chevron-down" : "chevron-up"} size="sm" />
           </Pressable>
         </View>
       </View>

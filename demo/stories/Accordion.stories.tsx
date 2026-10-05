@@ -1,6 +1,5 @@
-import {Accordion, Box, Heading, isNarrowViewport, Text} from "@terreno/ui";
+import {Accordion, Box, Heading, Text} from "@terreno/ui";
 import React from "react";
-import {View} from "react-native";
 
 export const AccordionDemo = () => {
   return (
@@ -20,7 +19,6 @@ export const AccordionDemo = () => {
 };
 
 export const AccordionDevDemo = () => {
-  const isMobile = isNarrowViewport();
   const InfoChild = () => {
     return (
       <Box>
@@ -29,8 +27,8 @@ export const AccordionDevDemo = () => {
     );
   };
   return (
-    <View style={{backgroundColor: "white", width: isMobile ? "100%" : "50%"}}>
-      <View style={{padding: 15, width: "100%"}}>
+    <Box color="base" maxWidth={480} width="100%">
+      <Box padding={4} width="100%">
         <Accordion
           includeInfoModal
           infoModalChildren={<InfoChild />}
@@ -43,19 +41,24 @@ export const AccordionDevDemo = () => {
             <Text>Some more children content</Text>
           </Box>
         </Accordion>
-      </View>
-    </View>
+      </Box>
+    </Box>
   );
 };
 
 export const AccordionOnToggleDemo = () => {
   const [isCollapsed, setIsCollapsed] = React.useState(true);
   const [title, setTitle] = React.useState("Sm Title");
-  const isMobile = isNarrowViewport();
+  const [containerWidth, setContainerWidth] = React.useState<number | "100%">("100%");
+
+  // Width animation is client-only so static export SSR matches the first paint.
+  React.useEffect(() => {
+    setContainerWidth(isCollapsed ? 150 : 450);
+  }, [isCollapsed]);
 
   return (
-    <View style={{backgroundColor: "white", width: isMobile ? "100%" : isCollapsed ? 150 : 450}}>
-      <View style={{padding: 15, width: "100%"}}>
+    <Box color="base" style={{width: containerWidth}}>
+      <Box padding={4} width="100%">
         <Accordion
           isCollapsed={isCollapsed}
           onToggle={(isCollapse: boolean) => {
@@ -69,7 +72,7 @@ export const AccordionOnToggleDemo = () => {
             <Text>Allows dynamic width adjustment</Text>
           </Box>
         </Accordion>
-      </View>
-    </View>
+      </Box>
+    </Box>
   );
 };

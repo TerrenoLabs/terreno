@@ -122,12 +122,6 @@ const RootLayout = (): React.ReactElement | null => {
     }
   }, [error]);
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
   if (!loaded) {
     return null;
   }
@@ -157,6 +151,12 @@ const ThemedStatusBar: FC = () => {
 
 const RootLayoutNav = (): React.ReactElement => {
   const {theme} = useTheme();
+
+  // AppThemeProvider withholds this tree until the stored theme resolves, so the
+  // splash stays up through that wait instead of uncovering a blank, wrong-scheme frame.
+  useEffect(() => {
+    void SplashScreen.hideAsync();
+  }, []);
   const userId = useSelector(selectBetterAuthUserId) ?? undefined;
   // The initial syncBetterAuthSession() call below is async (it awaits
   // authClient.getSession()), so userId is undefined for one or more render

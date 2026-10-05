@@ -64,6 +64,28 @@ describe("MarkdownView", () => {
     assert.ok(darkSerialized.includes('"color":"#353535"'));
   });
 
+  it("keeps inverted code off a fill below 4.5:1", async () => {
+    const light = renderWithTheme(<MarkdownView inverted>{"Use `inline code` here"}</MarkdownView>);
+    await waitFor(() => {
+      expect(JSON.stringify(light.toJSON())).toContain("inline code");
+    });
+    const lightSerialized = JSON.stringify(light.toJSON());
+    assert.ok(lightSerialized.includes('"backgroundColor":"#353535"'));
+    assert.ok(lightSerialized.includes('"color":"#FFFFFF"'));
+
+    const dark = render(
+      <ThemeProvider colorScheme="dark">
+        <MarkdownView inverted>{"```\ncode block\n```"}</MarkdownView>
+      </ThemeProvider>
+    );
+    await waitFor(() => {
+      expect(JSON.stringify(dark.toJSON())).toContain("code block");
+    });
+    const darkSerialized = JSON.stringify(dark.toJSON());
+    assert.ok(darkSerialized.includes('"backgroundColor":"#F2F2F2"'));
+    assert.ok(darkSerialized.includes('"color":"#353535"'));
+  });
+
   it("renders with inverted colors", async () => {
     const {toJSON} = renderWithTheme(<MarkdownView inverted>Inverted text colors</MarkdownView>);
     await waitFor(() => {

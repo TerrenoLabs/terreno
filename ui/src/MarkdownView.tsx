@@ -59,6 +59,12 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
       contrastRatio(textColor, theme.surface.baseAlternate) >= WCAG_NORMAL_TEXT_CONTRAST
         ? theme.surface.baseAlternate
         : theme.surface.neutralDark;
+    // Inverted text on neutralLight is about 2:1 in dark mode. Prefer that fill, then
+    // neutralDark, so code stays on the lighter chip when primary text already passes.
+    const codeBackground =
+      contrastRatio(textColor, theme.surface.neutralLight) >= WCAG_NORMAL_TEXT_CONTRAST
+        ? theme.surface.neutralLight
+        : theme.surface.neutralDark;
 
     return {
       blockquote: {
@@ -81,7 +87,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
         ...markdownTextStyle,
       },
       code_block: {
-        backgroundColor: theme.surface.neutralLight,
+        backgroundColor: codeBackground,
         borderColor: theme.border.default,
         borderRadius: 4,
         borderWidth: 1,
@@ -91,7 +97,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
         ...color,
       },
       code_inline: {
-        backgroundColor: theme.surface.neutralLight,
+        backgroundColor: codeBackground,
         borderColor: theme.border.default,
         borderRadius: 3,
         borderWidth: 1,
@@ -102,7 +108,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
         ...color,
       },
       fence: {
-        backgroundColor: theme.surface.neutralLight,
+        backgroundColor: codeBackground,
         borderColor: theme.border.default,
         borderRadius: 4,
         borderWidth: 1,

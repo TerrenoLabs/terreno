@@ -97,7 +97,7 @@ const AppearanceSetting = () => {
 };
 ``````
 
-Dark `surface.warningLight` uses `warning200`. The lighter warning orange, `warning100`, is 2.52:1 against warning text and misses WCAG AA. Highlighted `DataTable` cells switch to `text.inverted` when `text.primary` is below 4.5:1 on that fill. Primary `Button` labels use `text.secondaryDark` when that pair meets 4.5:1 on `surface.primary`, and `text.inverted` otherwise, so `setTheme(darkThemeConfig)` stays readable without changing `colorScheme`. The demo palette generator emits status `050` steps so custom palettes update those dark error, success, and warning surfaces.
+Dark `surface.warningLight` uses `warning200`. The lighter warning orange, `warning100`, is 2.52:1 against warning text and misses WCAG AA. Highlighted `DataTable` cells switch to `text.inverted` when `text.primary` is below 4.5:1 on that fill. Inverted `MarkdownView` code uses `surface.neutralDark` when `surface.neutralLight` is below 4.5:1 against that text, and blockquotes do the same with `surface.baseAlternate`. Primary `Button` labels use `text.secondaryDark` when that pair meets 4.5:1 on `surface.primary`, and `text.inverted` otherwise, so `setTheme(darkThemeConfig)` stays readable without changing `colorScheme`. The demo palette generator emits status `050` steps so custom palettes update those dark error, success, and warning surfaces.
 
 `themeColorSchemeOptions` labels those values Light, Dark, and Follow system.
 `useTheme()` also returns the resolved `colorScheme` (`"light"` or `"dark"`)

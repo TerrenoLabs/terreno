@@ -159,6 +159,7 @@
         "@biomejs/biome": "catalog:",
         "@terreno/admin-backend": "workspace:*",
         "@terreno/api": "workspace:*",
+        "@terreno/jobs": "workspace:*",
         "@terreno/test": "workspace:*",
         "@types/bun": "catalog:",
         "@types/express": "catalog:",
@@ -175,10 +176,12 @@
       "peerDependencies": {
         "@ai-sdk/google-vertex": "^4.0.142",
         "@terreno/api": "workspace:*",
+        "@terreno/jobs": "workspace:*",
         "mongoose": "^8.0.0 || ^9.0.0",
       },
       "optionalPeers": [
         "@ai-sdk/google-vertex",
+        "@terreno/jobs",
       ],
     },
     "announcements": {

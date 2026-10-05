@@ -577,21 +577,33 @@ describe("Harness event stream", () => {
         const who = frame.data.taskId === String(created._id) ? "parent" : "child";
         return `${who} ${frame.event} ${payload.status ?? payload.text ?? ""}`.trim();
       };
-      expect(parentStream.frames.map(describe)).toEqual([
+      // Parent and child run concurrently, so only each task's own order is fixed.
+      const lines = parentStream.frames.map(describe);
+      expect(lines.filter((line) => line.startsWith("parent"))).toEqual([
         "parent task.status pending",
         "parent output parent starting",
-        "child task.status pending",
         "parent task.status waiting",
+        // Each phase re-runs after its wait, so its output is sent again.
+        "parent output parent starting",
+        "parent task.status completed",
+      ]);
+      expect(lines.filter((line) => line.startsWith("child"))).toEqual([
+        "child task.status pending",
         "child output child 1 working",
         "child approval.requested pending",
         "child task.status waiting",
         "child approval.decided approved",
-        // Each phase re-runs after its wait, so its output is sent again.
         "child output child 1 working",
         "child task.status completed",
-        "parent output parent starting",
-        "parent task.status completed",
       ]);
+      // The child is created inside the parent's first phase, and the parent resumes only
+      // after the child completes.
+      expect(lines.indexOf("child task.status pending")).toBeLessThan(
+        lines.indexOf("parent task.status waiting")
+      );
+      expect(lines.indexOf("child task.status completed")).toBeLessThan(
+        lines.lastIndexOf("parent output parent starting")
+      );
       // The child's stream is the same log narrowed to the child: no parent events.
       expect(childStream.frames.map(describe)).toEqual(
         parentStream.frames.map(describe).filter((line) => line.startsWith("child"))

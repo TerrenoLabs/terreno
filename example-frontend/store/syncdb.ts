@@ -49,6 +49,9 @@ export const syncDb: SyncDb = createSyncDb({
   // conflict on one to never stall unrelated ones.
   haltQueueOnConflict: true,
   name: SYNC_DB_NAME,
+  // Todos stay fully synced; `fullSync` also enables server-filtered query windows
+  // (`useWindowQuery`) over GET /todos — see app/todo-windows.tsx.
+  queryCollections: [{collection: "todos", fullSync: true}],
 });
 
 let adminOrganizationId: string | undefined;

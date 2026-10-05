@@ -140,7 +140,7 @@ On resume, a task whose status is `running` with an expired lease was interrupte
 | Runner | Ownership | Use |
 |---|---|---|
 | `InProcessRunner` (default) | One process holds the `HarnessOwner` lease (heartbeat). A second process gets `standby` and takes over on lease expiry. Polls runnable tasks; wakes on `runAt` and events. | Local agents, single-instance apps, tests |
-| `JobsRunner` (`@terreno/ai/harness/jobsRunner`, optional peer `@terreno/jobs`) | Each runnable phase → job `terreno.harness.phase`, idempotency key `taskId:phase:attempt`. Handler acquires the task lease (fenced, heartbeat) and runs one phase. The task lease, not the job lock, is the authority. | Multi-instance Cloud Run |
+| `JobsRunner` (`@terreno/ai/harness/jobsRunner`, optional peer `@terreno/jobs`) | Each runnable phase → job `terreno.harness.phase`, idempotency key `taskId:phase:attempt:claims` (`claims` counts claims, so a phase revisited by an event wake or crash replay gets a new job; jobs idempotency keys are permanent). Handler acquires the task lease (fenced, heartbeat) and runs one phase. The task lease, not the job lock, is the authority. | Multi-instance Cloud Run |
 
 ### Ownership tree
 

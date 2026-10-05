@@ -20,6 +20,7 @@ describe("friendlyHookNames", () => {
       read: "useTodo",
       remove: "useDeleteTodo",
       update: "useUpdateTodo",
+      window: "useTodosWindow",
     });
   });
 });
@@ -194,6 +195,7 @@ describe("generateSyncDbSdk", () => {
       expect(source).toContain("useCreateMutation: useCreateTodo");
       expect(source).toContain("useUpdateMutation: useUpdateTodo");
       expect(source).toContain("useDeleteMutation: useDeleteTodo");
+      expect(source).toContain("useWindowQuery: useTodosWindow");
       expect(source).toContain("export interface Todo");
       expect(source).toContain("title?: string;");
       expect(await readFile(out, "utf8")).toBe(source);

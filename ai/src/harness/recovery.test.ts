@@ -838,10 +838,8 @@ describe("Harness leases and crash recovery", () => {
   });
 
   describe("owner lease", () => {
-    it("never lets two live harnesses run tasks at the same time", async () => {
+    it("lets only the owner of two live harnesses run tasks, each task once", async () => {
       const activeByTask = new Map<string, number>();
-      let maxConcurrent = 0;
-      let active = 0;
       const ranBy: string[] = [];
       const counted = defineTask<unknown, unknown, unknown>({
         initial: () => ({phase: "work"}),
@@ -850,12 +848,9 @@ describe("Harness leases and crash recovery", () => {
           work: {
             replay: "safe",
             run: async (task, rt) => {
-              active += 1;
               activeByTask.set(task.id, (activeByTask.get(task.id) ?? 0) + 1);
-              maxConcurrent = Math.max(maxConcurrent, active);
               ranBy.push(String((await TaskModel.findExactlyOne({_id: task.id})).lease?.owner));
               await pause(15);
-              active -= 1;
               await rt.commit({terminal: {status: "completed"}});
             },
           },
@@ -882,7 +877,7 @@ describe("Harness leases and crash recovery", () => {
         created.map((task) => a.harness.waitForTask(task._id, {timeout: {seconds: 5}}))
       );
 
-      expect(maxConcurrent).toBe(1);
+      // Only the owner runs work (concurrently, up to its limit); each task runs once.
       expect([...activeByTask.values()]).toEqual([1, 1, 1, 1, 1, 1]);
       expect(new Set(ranBy).size).toBe(1);
       expect([a.runner.role, b.runner.role].sort()).toEqual(["owner", "standby"]);

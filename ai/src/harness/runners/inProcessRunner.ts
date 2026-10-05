@@ -3,10 +3,17 @@ import {hostname} from "node:os";
 import {logger} from "@terreno/api";
 import {Duration, type DurationLike} from "luxon";
 
-import type {HarnessLeaseSettings, HarnessRunner, HarnessRunnerContext} from "../../types/harness";
+import type {
+  HarnessLeaseSettings,
+  HarnessRunner,
+  HarnessRunnerContext,
+  HarnessTaskDocument,
+} from "../../types/harness";
 import {errorMessage, harnessError} from "../errors";
 
 export interface InProcessRunnerOptions {
+  /** Most claimed tasks this runner executes at once. Default 8. */
+  concurrency?: number;
   /** How often the runner renews its owner lease and its running task's lease. */
   heartbeatInterval?: DurationLike;
   /** How long the owner lease and each task lease live without a heartbeat. */
@@ -28,16 +35,19 @@ export type InProcessRunnerRole =
   (typeof IN_PROCESS_RUNNER_ROLES)[keyof typeof IN_PROCESS_RUNNER_ROLES];
 
 /**
- * Executes runnable tasks inside this process, one at a time, until each is terminal.
+ * Executes runnable tasks inside this process, up to `concurrency` at a time, each until it
+ * stops (terminal, retry, waiting, or aborted).
  * Only the process holding the singleton `HarnessOwner` lease drains; every other
  * process stays on standby and takes over once that lease expires. On becoming owner,
  * and on every heartbeat while owner, it recovers tasks whose lease expired.
  */
 export class InProcessRunner implements HarnessRunner {
+  private readonly concurrency: number;
   private context: HarnessRunnerContext | undefined;
   private heartbeatInFlight: Promise<void> = Promise.resolve();
   private heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
   private hasPendingWake = false;
+  private readonly inFlight = new Set<Promise<void>>();
   private isHeartbeatStopped = false;
   private isStopping = false;
   private readonly lease: HarnessLeaseSettings;
@@ -55,6 +65,14 @@ export class InProcessRunner implements HarnessRunner {
         kind: "configInvalid",
       });
     }
+    const concurrency = options.concurrency ?? 8;
+    if (!Number.isInteger(concurrency) || concurrency < 1) {
+      throw harnessError({
+        detail: "InProcessRunner concurrency must be a positive integer",
+        kind: "configInvalid",
+      });
+    }
+    this.concurrency = concurrency;
     this.lease = {
       duration,
       heartbeat,
@@ -87,14 +105,14 @@ export class InProcessRunner implements HarnessRunner {
     this.scheduleHeartbeat();
   }
 
-  /** Stop claiming new work, wait for the task in flight, then release the owner lease. */
+  /** Stop claiming new work, wait for every task in flight, then release the owner lease. */
   async stop(): Promise<void> {
     if (this.loop === undefined) {
       return;
     }
     this.isStopping = true;
     this.wake();
-    // Keep renewing the owner lease until the task in flight settles, so a standby does
+    // Keep renewing the owner lease until the tasks in flight settle, so a standby does
     // not take over while this process is still working.
     await this.loop;
     this.isHeartbeatStopped = true;
@@ -132,11 +150,13 @@ export class InProcessRunner implements HarnessRunner {
           continue;
         }
       }
-      const isIdle = await this.runNext(this.context);
-      if (isIdle && !this.isStopping) {
+      await this.fillSlots(this.context);
+      if (!this.isStopping) {
+        // Woken early by new work or by a task that frees a slot.
         await this.sleep(this.pollIntervalMs);
       }
     }
+    await Promise.allSettled([...this.inFlight]);
   }
 
   /** Become owner when the lease is free or expired, then recover abandoned tasks. */
@@ -155,18 +175,38 @@ export class InProcessRunner implements HarnessRunner {
     }
   }
 
-  /** Run one claimed task; returns true when nothing was runnable. */
-  private async runNext(context: HarnessRunnerContext): Promise<boolean> {
-    try {
-      const task = await context.claimNext(this.lease);
-      if (!task) {
-        return true;
+  /** Claim and start tasks until every slot is busy or nothing is runnable. */
+  private async fillSlots(context: HarnessRunnerContext): Promise<void> {
+    while (
+      this.inFlight.size < this.concurrency &&
+      !this.isStopping &&
+      this.currentRole === IN_PROCESS_RUNNER_ROLES.owner
+    ) {
+      let task: HarnessTaskDocument | null;
+      try {
+        task = await context.claimNext(this.lease);
+      } catch (error: unknown) {
+        logger.error(`InProcessRunner iteration failed: ${errorMessage(error)}`);
+        return;
       }
+      if (!task) {
+        return;
+      }
+      const run = this.runOne(context, task);
+      this.inFlight.add(run);
+      void run.finally(() => {
+        this.inFlight.delete(run);
+        this.wake();
+      });
+    }
+  }
+
+  /** Run one claimed task to a stop; its own task lease and heartbeat guard its commits. */
+  private async runOne(context: HarnessRunnerContext, task: HarnessTaskDocument): Promise<void> {
+    try {
       await context.runTask(task, this.lease);
-      return false;
     } catch (error: unknown) {
-      logger.error(`InProcessRunner iteration failed: ${errorMessage(error)}`);
-      return true;
+      logger.error(`InProcessRunner task ${task._id} failed to run: ${errorMessage(error)}`);
     }
   }
 

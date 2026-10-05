@@ -2,8 +2,9 @@
   "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
   "groupings": [
     {
-      "description": "Bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
+      "description": "PRD seed, then bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
       "skills": [
+        "terreno-prd",
         "terreno-1-grow",
         "terreno-2-pick",
         "terreno-3-roast",

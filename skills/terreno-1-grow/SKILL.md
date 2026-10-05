@@ -56,7 +56,9 @@ human decision until the answer is executable.
    dependencies.
 7. **Specify proof.** Make every acceptance criterion observable and pair it with a
    verification method (test, build, runtime/API/database probe, UI exercise, artifact,
-   compatibility/regression case).
+   compatibility/regression case). When the input is a PRD from `terreno-prd`, carry
+   each success metric and guardrail into an acceptance criterion, grill each `TBD` as a
+   human decision, and do not re-ask product decisions the PRD already settled.
 8. **Write.** Produce the IP and a dependency-aware tracer-bullet task list. Each task
    names files/seams, acceptance criteria, blockers, verification, docs to create or
    update, and relevant supporting skills when discoverable. Docs updates follow the

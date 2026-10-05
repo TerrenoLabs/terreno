@@ -43,11 +43,12 @@ const waitUntil = async (predicate: () => Promise<boolean>, label: string): Prom
 
 const openHarness = async (
   registry: ReadonlyArray<AnyHarnessTaskDefinition>,
-  testHooks?: HarnessTestHooks
+  testHooks?: HarnessTestHooks,
+  concurrency?: number
 ): Promise<Harness> => {
   const harness = await Harness.open({
     registry,
-    runner: new InProcessRunner({pollInterval: {milliseconds: 20}}),
+    runner: new InProcessRunner({concurrency, pollInterval: {milliseconds: 20}}),
     testHooks,
   });
   openHarnesses.push(harness);
@@ -500,13 +501,12 @@ describe("Harness ownership tree", () => {
         policy: "failFast",
         runs,
       });
-      const harness = await openHarness([
-        parent,
-        failing,
-        asAny(waitingSibling),
-        asAny(pendingSibling),
-        asAny(grandchild),
-      ]);
+      // One task at a time keeps the last sibling unstarted (pending) when the failure lands.
+      const harness = await openHarness(
+        [parent, failing, asAny(waitingSibling), asAny(pendingSibling), asAny(grandchild)],
+        undefined,
+        1
+      );
       await harness.start();
 
       const done = await harness.waitForTask((await harness.createTask(parent, {}))._id);

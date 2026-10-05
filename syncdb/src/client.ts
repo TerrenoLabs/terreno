@@ -11,6 +11,7 @@ import {createOutbox, generateMutationId, type Outbox} from "./mutations/outbox"
 import {resolveConflict as applyConflictResolution} from "./mutations/resolveConflict";
 import {createDefaultPersisterFactory} from "./persisters/defaultPersisterFactory";
 import type {DefaultPersisterFactoryConfig, PersisterFactory} from "./persisters/types";
+import {createQueryWindows, type QueryWindows} from "./query/queryWindows";
 import {SYNC_SCHEMA_VERSION} from "./storage/schema";
 import {createSyncStore, type SyncStore} from "./storage/store";
 import {CURSORS_TABLE, KNOWN_STREAMS_TABLE} from "./storage/types";
@@ -97,6 +98,16 @@ export interface SyncDbConfig {
    * Hydrate rows via REST membership + `/sync/entities` instead.
    */
   windowCollections?: string[];
+  /**
+   * Collections too large to sync whole: no snapshot bootstrap or reconcile paging.
+   * Rows arrive through server query windows (`client.queryWindows`,
+   * `useWindowQuery`) against the collection's `modelRouter` list endpoint, plus
+   * live deltas on the user's normal streams. Every window shares one entity row per
+   * id. Each entry must also appear in `collections`. `path` defaults to `/{collection}`.
+   * `fullSync: true` keeps normal snapshot sync and only enables windows (server
+   * filtering, paging, and totals over a collection that is also synced whole).
+   */
+  queryCollections?: Array<string | {collection: string; path?: string; fullSync?: boolean}>;
   /** Rate limit for seq-jump-triggered reconciles per stream (default 30s). */
   seqJumpReconcileMinIntervalMs?: number;
   /** Millisecond clock, injectable for deterministic rate-limit tests. */
@@ -253,6 +264,11 @@ export interface SyncDb {
     restRows?: Record<string, unknown>;
   }) => Promise<HydrateWindowEntitiesResult>;
   /**
+   * Server-filtered query windows for `queryCollections`: per-query membership over
+   * the shared entity table. Prefer the `useWindowQuery` hook in React.
+   */
+  readonly queryWindows: QueryWindows;
+  /**
    * Purge every known stream locally and re-bootstrap from cursor 0. Use when
    * devices have diverged and a full server snapshot is needed without wiping
    * the outbox or conflicts. Reports what it did (or why it could not run) so a
@@ -336,6 +352,24 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
   });
   const windowCollectionSet = new Set(config.windowCollections ?? []);
   const isWindowCollection = (collection: string): boolean => windowCollectionSet.has(collection);
+  const queryCollectionPaths = new Map<string, string>();
+  const windowOnlyCollections = new Set<string>();
+  for (const entry of config.queryCollections ?? []) {
+    const collection = typeof entry === "string" ? entry : entry.collection;
+    const path = typeof entry === "string" ? undefined : entry.path;
+    if (!config.collections.includes(collection)) {
+      throw new Error(`queryCollections entry "${collection}" must also be listed in collections`);
+    }
+    if (windowCollectionSet.has(collection)) {
+      throw new Error(`"${collection}" cannot be both a windowCollection and a queryCollection`);
+    }
+    queryCollectionPaths.set(collection, path ?? `/${collection}`);
+    if (typeof entry === "string" || !entry.fullSync) {
+      windowOnlyCollections.add(collection);
+    }
+  }
+  /** Query collections that skip snapshot sync (rows come only from windows and deltas). */
+  const isQueryCollection = (collection: string): boolean => windowOnlyCollections.has(collection);
   const skipSnapshotPaging = ({
     collection,
     stream,
@@ -344,7 +378,11 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     collection: string;
     stream: string;
     mode?: "window";
-  }): boolean => isWindowCollection(collection) || mode === "window" || stream.endsWith("|admin");
+  }): boolean =>
+    isWindowCollection(collection) ||
+    isQueryCollection(collection) ||
+    mode === "window" ||
+    stream.endsWith("|admin");
   const subscribeConfiguredCollections = (): void => {
     const windowed = config.collections.filter((collection) => isWindowCollection(collection));
     const full = config.collections.filter((collection) => !isWindowCollection(collection));
@@ -531,6 +569,21 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
       console.warn(`[syncdb] ${message}`, error);
     };
   };
+
+  const queryWindows = createQueryWindows({
+    getChannel: () => httpChannel,
+    getEpoch: () => `${generation}:${currentUserId ?? ""}`,
+    getListPath: (collection: string): string => {
+      const path = queryCollectionPaths.get(collection);
+      if (!path) {
+        throw new Error(`"${collection}" is not configured in queryCollections`);
+      }
+      return path;
+    },
+    now: () => DateTime.fromMillis(now()).toISO() ?? new Date(now()).toISOString(),
+    onError: warn("query window fetch failed"),
+    store,
+  });
 
   const coordinator: ReplayCoordinator = createReplayCoordinator({
     batchSize: config.batchSize,
@@ -965,6 +1018,11 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
         purged += store.purgeUnknownStreamEntities({collection});
       }
       for (const {stream, collection} of streamInfos) {
+        if (isQueryCollection(collection)) {
+          // Query collections have no snapshot to rebuild from; their retained
+          // windows are refetched below instead.
+          continue;
+        }
         purged += store.purgeStream({stream});
         store.addKnownStream({collection, stream});
         await bootstrapStream({channel: httpChannel, collection, store, stream});
@@ -974,6 +1032,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
         }
       }
       repaired = await repairAllMarkedEntities();
+      await queryWindows.refetchRetained();
       return {ok: true, purged, repaired, streams: streamInfos.length};
     } catch (error) {
       if (error instanceof AuthRequiredError) {
@@ -1207,6 +1266,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     });
     clearPendingDurableConflicts();
     lastSeqJumpReconcileAt.clear();
+    queryWindows.reset();
     persistenceMode = "durable";
     await createAndStartPersister(userId);
     store.raw.setValue("schemaVersion", SYNC_SCHEMA_VERSION);
@@ -1261,6 +1321,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
       });
       clearPendingDurableConflicts();
       lastSeqJumpReconcileAt.clear();
+      queryWindows.reset();
       await createAndStartPersister(userId);
     }
     // E2: schema version check. `getSchemaVersion()` reads the persisted
@@ -1400,6 +1461,9 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     coordinator.notifyReconnect();
     void reconcile().catch(warn("reconnect reconcile failed"));
     void replayOutbox().catch(warn("reconnect replay failed"));
+    // Query collections skip snapshot catch-up, so deltas missed while offline are
+    // recovered by refetching the windows on screen.
+    void queryWindows.refetchRetained();
   };
 
   /**
@@ -1611,6 +1675,8 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
       // the reconnect status event) so a client that starts offline-then-online, or with a
       // warm socket, still backfills newly-joined streams and drains legacy cursors.
       void reconcile().catch(warn("startup reconcile failed"));
+      // Drop persisted membership of windows nobody has shown for a while (rows stay).
+      queryWindows.pruneStale();
       startReconcileTimer();
       isStarted = true;
       void replayOutbox().catch(warn("startup replay failed"));
@@ -1629,6 +1695,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
       unsubscribers = [];
       transport.disconnect();
       setConnected(false);
+      queryWindows.reset();
       coordinator.dispose(currentUserId ? {userId: currentUserId} : undefined);
       // Capture the persister into a local BEFORE the awaits below: this is
       // the exact fix for the original bug (a later start() calling
@@ -1960,6 +2027,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
         });
         clearPendingDurableConflicts();
         lastSeqJumpReconcileAt.clear();
+        queryWindows.reset();
         return;
       }
       coordinator.dispose(userId ? {userId} : undefined);
@@ -1982,6 +2050,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     mutate,
     onStatusChange,
     outbox,
+    queryWindows,
     reconcile,
     replayOutbox,
     resolveConflict,

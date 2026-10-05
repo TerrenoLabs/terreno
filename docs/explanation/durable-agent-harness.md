@@ -47,8 +47,11 @@ agents, tools, and conversations (see [The agent loop](#the-agent-loop)), subage
 extensions, hooks, and memos (see [Extensions, hooks, and memos](#extensions-hooks-and-memos)),
 events, waits, and approvals with the admin inbox, the SSE event stream, and version
 pinning. The example backend's `clinic.intakeSummary` runs all of it end to end, including
-a crash drill: [Build a durable workflow](../how-to/build-a-durable-workflow.md). Other
-runners (jobs-backed, concurrent) come in Phase 2.
+a crash drill: [Build a durable workflow](../how-to/build-a-durable-workflow.md).
+
+Phase 2 so far: `InProcessRunner` concurrency (up to 8 tasks at once by
+default) and the `JobsRunner`, which runs each phase as a `@terreno/jobs` job across many
+instances. The Runs admin screen is still to come.
 
 ## Why the audit span shares the checkpoint transaction
 
@@ -237,8 +240,18 @@ tasks. Switching runners needs no data migration.
 
 | Runner | Status | Ownership |
 | --- | --- | --- |
-| `InProcessRunner` | Shipped | One process holds the `HarnessOwner` lease and drains `pending` tasks one at a time; others wait on standby and take over on lease expiry. |
-| `JobsRunner` | Planned (Phase 2) | Each runnable phase becomes a `@terreno/jobs` job. The task lease is the authority. |
+| `InProcessRunner` | Shipped | One process holds the `HarnessOwner` lease and runs up to `concurrency` (default 8) claimed tasks at once, each under its own task lease; others wait on standby and take over on lease expiry. |
+| `JobsRunner` | Shipped | Every instance dispatches runnable tasks as `terreno.harness.phase` jobs; a job claims its task, runs one phase, and hands the task back. The task lease is the authority. |
+
+Why the jobs runner runs **one** phase per job: a phase is the unit that commits, so it is
+the natural unit of work to spread across instances and to bound by a request or job
+timeout. Why the task lease and not the job lock decides who commits: a jobs lock can
+expire while a long phase still runs, and a queue can deliver a job twice. Both are
+harmless here, because the claim is an atomic fenced update and every commit checks the
+lease token. Why the job key carries `claims`: `taskId:phase:attempt` alone repeats when a
+task returns to the same phase without a failure (an event wake or a crash replay), and a
+permanent idempotency key would then swallow the new visit. `claims` changes on every
+claim, so each visit gets one job.
 
 ## Version pinning
 

@@ -201,7 +201,7 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
         flexDirection: "column",
         height: size === "sm" ? 28 : undefined,
         justifyContent: "center",
-        paddingHorizontal: size === "sm" ? 16 : 20,
+        paddingHorizontal: (size === "sm" ? 16 : 20) - (borderWidth ?? 0),
         paddingVertical: size === "sm" ? 0 : 8 - (borderWidth ?? 0),
         width: fullWidth ? "100%" : "auto",
         ...wrapBoxStyle,

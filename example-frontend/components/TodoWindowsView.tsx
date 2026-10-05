@@ -1,23 +1,19 @@
 /**
- * Query windows demo: two server-filtered views over the same todos.
+ * Query windows demo view: two server-filtered windows over the same todos plus a
+ * filter on a field missing from `queryFields`. Window results arrive as props from
+ * `app/todo-windows/index.tsx`, which owns the `useTodosWindow` hooks.
  *
- * Each `useWindowQuery` is its own server list request (`GET /todos?…`) with its own
- * membership, but rows are stored once per id in the local `todos` table. A todo that
- * matches both windows is one row: completing it updates the store once, and the
- * "Open" window drops it while the "Recent" window keeps it. The third card filters on
- * a field missing from the route's `queryFields` to show the loud error path.
+ * Each window is its own server list request with its own membership, but rows are
+ * stored once per id in the local `todos` table. A todo that matches both windows is
+ * one row: completing it updates the store once, and "Open" drops it while "Recent"
+ * keeps it.
  */
 import type {UseWindowQueryResult} from "@terreno/syncdb/react";
-import {Box, Button, Card, Heading, Page, Spinner, Text} from "@terreno/ui";
-import {useRouter} from "expo-router";
+import {Box, Button, Card, Heading, Page, Text} from "@terreno/ui";
 import {DateTime} from "luxon";
 import type React from "react";
-import {useCallback, useMemo, useState} from "react";
-import {useSyncDbReady} from "@/hooks/useSyncDbReady";
-import {type Todo, useTodosWindow} from "@/store/syncDbSdk";
-import {syncDb} from "@/store/syncdb";
-
-const PAGE_SIZE = 5;
+import {useCallback, useMemo} from "react";
+import type {Todo} from "@/store/syncDbSdk";
 
 interface TodoWindowCardProps {
   title: string;
@@ -54,7 +50,11 @@ const TodoWindowCard: React.FC<TodoWindowCardProps> = ({
     <Card flex="grow" gap={3} minWidth={280} padding={4} testID={testID}>
       <Box alignItems="center" direction="row" justifyContent="between">
         <Heading size="md">{title}</Heading>
-        {isFetching ? <Spinner size="sm" /> : null}
+        {isFetching ? (
+          <Text color="secondaryLight" size="sm" testID={`${testID}-fetching`}>
+            Refreshing…
+          </Text>
+        ) : null}
       </Box>
       <Text color="secondaryLight" size="sm">
         {description}
@@ -67,7 +67,7 @@ const TodoWindowCard: React.FC<TodoWindowCardProps> = ({
           {error}
         </Text>
       ) : null}
-      {isLoading ? <Spinner /> : null}
+      {isLoading ? <Text color="secondaryLight">Loading…</Text> : null}
       {!isLoading && data.length === 0 ? (
         <Text color="secondaryLight">No matching todos.</Text>
       ) : null}
@@ -118,88 +118,65 @@ const TodoWindowCard: React.FC<TodoWindowCardProps> = ({
   );
 };
 
+interface MissingQueryFieldCardProps {
+  isEnabled: boolean;
+  onRun: () => void;
+  window: UseWindowQueryResult<Todo>;
+}
+
 /** Filters on `title`, which the todos route does not list in `queryFields`. */
-const MissingQueryFieldCard: React.FC = () => {
-  const [isEnabled, setIsEnabled] = useState(false);
-  const window = useTodosWindow({skip: !isEnabled, where: {title: "Milk"}});
-
-  const handleRun = useCallback((): void => {
-    setIsEnabled(true);
-  }, []);
-
-  return (
-    <Card gap={3} padding={4} testID="todo-windows-missing-field">
-      <Heading size="md">Filter on a field missing from queryFields</Heading>
-      <Text color="secondaryLight" size="sm">
-        {'where: {title: "Milk"} — the todos route allows completed, created, and ownerId.'}
-      </Text>
-      <Box direction="row">
-        <Button
-          disabled={isEnabled}
-          onClick={handleRun}
-          testID="todo-windows-missing-field-run"
-          text="Run query"
-          variant="outline"
-        />
+const MissingQueryFieldCard: React.FC<MissingQueryFieldCardProps> = ({
+  isEnabled,
+  onRun,
+  window,
+}) => (
+  <Card gap={3} padding={4} testID="todo-windows-missing-field">
+    <Heading size="md">Filter on a field missing from queryFields</Heading>
+    <Text color="secondaryLight" size="sm">
+      {'where: {title: "Milk"} — the todos route allows completed, created, and ownerId.'}
+    </Text>
+    <Box direction="row">
+      <Button
+        disabled={isEnabled}
+        onClick={onRun}
+        testID="todo-windows-missing-field-run"
+        text="Run query"
+        variant="outline"
+      />
+    </Box>
+    {window.errorCode ? (
+      <Box gap={1} testID="todo-windows-missing-field-error">
+        <Text bold color="error" size="sm">
+          {window.errorCode}
+        </Text>
+        <Text color="error" size="sm">
+          {window.error}
+        </Text>
       </Box>
-      {window.errorCode ? (
-        <Box gap={1} testID="todo-windows-missing-field-error">
-          <Text bold color="error" size="sm">
-            {window.errorCode}
-          </Text>
-          <Text color="error" size="sm">
-            {window.error}
-          </Text>
-        </Box>
-      ) : null}
-    </Card>
-  );
-};
+    ) : null}
+  </Card>
+);
 
-const TodoWindowsScreen: React.FC = () => {
-  const router = useRouter();
-  const isSyncDbReady = useSyncDbReady();
-  // Rounded to the hour so revisits reuse one window (and its cached membership).
-  const since = useMemo(
-    (): string => DateTime.now().minus({days: 1}).startOf("hour").toUTC().toISO() ?? "",
-    []
-  );
+export interface TodoWindowsViewProps {
+  openTodos: UseWindowQueryResult<Todo>;
+  recentTodos: UseWindowQueryResult<Todo>;
+  missingField: MissingQueryFieldCardProps;
+  onBack: () => void;
+  onToggle: (todo: Todo) => void;
+}
 
-  const openTodos = useTodosWindow({
-    pageSize: PAGE_SIZE,
-    sort: "-created",
-    where: {completed: false},
-  });
-  const recentTodos = useTodosWindow({
-    pageSize: PAGE_SIZE,
-    sort: "-created",
-    where: {created: {$gte: since}},
-  });
-
+export const TodoWindowsView: React.FC<TodoWindowsViewProps> = ({
+  openTodos,
+  recentTodos,
+  missingField,
+  onBack,
+  onToggle,
+}) => {
   const sharedIds = useMemo((): Set<string> => {
     const recent = new Set(recentTodos.ids);
     return new Set(openTodos.ids.filter((id) => recent.has(id)));
   }, [openTodos.ids, recentTodos.ids]);
   const storedRowCount = new Set([...openTodos.ids, ...recentTodos.ids]).size;
-
-  const handleBack = useCallback((): void => {
-    router.back();
-  }, [router]);
-
-  const handleToggle = useCallback(
-    (todo: Todo): void => {
-      if (!isSyncDbReady) {
-        return;
-      }
-      syncDb.mutate({
-        collection: "todos",
-        data: {completed: !todo.completed},
-        id: todo._id,
-        operation: "update",
-      });
-    },
-    [isSyncDbReady]
-  );
 
   return (
     <Page navigation={undefined} scroll>
@@ -214,7 +191,7 @@ const TodoWindowsScreen: React.FC = () => {
         <Box alignItems="center" direction="row" gap={3}>
           <Button
             iconName="arrow-left"
-            onClick={handleBack}
+            onClick={onBack}
             testID="todo-windows-back"
             text="Back"
             variant="ghost"
@@ -233,7 +210,7 @@ const TodoWindowsScreen: React.FC = () => {
         <Box direction="row" gap={4} wrap>
           <TodoWindowCard
             description='where: {completed: false}, sort: "-created", 5 per page'
-            onToggle={handleToggle}
+            onToggle={onToggle}
             sharedIds={sharedIds}
             testID="todo-windows-open"
             title="Open todos"
@@ -241,17 +218,15 @@ const TodoWindowsScreen: React.FC = () => {
           />
           <TodoWindowCard
             description='where: {created: {$gte: 24h ago}}, sort: "-created", 5 per page'
-            onToggle={handleToggle}
+            onToggle={onToggle}
             sharedIds={sharedIds}
             testID="todo-windows-recent"
             title="Created in the last day"
             window={recentTodos}
           />
         </Box>
-        <MissingQueryFieldCard />
+        <MissingQueryFieldCard {...missingField} />
       </Box>
     </Page>
   );
 };
-
-export default TodoWindowsScreen;

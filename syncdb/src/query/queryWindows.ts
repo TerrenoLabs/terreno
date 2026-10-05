@@ -93,7 +93,10 @@ export interface QueryWindows {
    * fetches it (cached membership renders meanwhile). Returns a release function.
    */
   retain: (query: WindowQuery) => () => void;
-  /** Refetch every retained window (reconnect, force resync). */
+  /**
+   * Refetch every retained window and mark the rest stale so they refetch on their
+   * next retain (reconnect, force resync).
+   */
   refetchRetained: () => Promise<void>;
   /** Drop windows that are not retained (membership only; rows stay). */
   pruneUnretained: () => number;
@@ -660,6 +663,9 @@ export const createQueryWindows = ({
   };
 
   const refetchRetained = async (): Promise<void> => {
+    // Callers (reconnect, force resync) mean cached membership may have missed changes:
+    // windows not on screen now must refetch the next time they are retained.
+    fetchedThisSession.clear();
     const queries = [...retained.values()].map((entry) => entry.query);
     await Promise.all(
       queries.map((query) =>

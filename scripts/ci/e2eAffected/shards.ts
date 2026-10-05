@@ -64,7 +64,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/(tabs)/pdf.tsx`,
       `${APP}/(tabs)/files.tsx`,
       `${APP}/notifications.tsx`,
-      `${APP}/todo-windows.tsx`,
+      `${APP}/todo-windows/**`,
     ],
     specs: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
   },

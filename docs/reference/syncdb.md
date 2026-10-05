@@ -434,7 +434,8 @@ Set `liveMatch: false` to show server membership only. Operators only the server
 renders meanwhile, so windows work offline. Concurrent fetches of the same window share one
 request; a refetch and a `fetchNextPage()` on one window run one after the other. Retained
 windows refetch on reconnect and after `forceResync()` — query collections
-skip snapshot catch-up, so this is how deltas missed offline are recovered. Window fetches
+skip snapshot catch-up, so this is how deltas missed offline are recovered. Windows not on
+screen at that moment refetch the next time they are shown. Window fetches
 started before a `stop()` or user switch are discarded.
 
 **Seq.** List rows that carry `_syncSeq` (the `syncPlugin` field) are written with that seq.

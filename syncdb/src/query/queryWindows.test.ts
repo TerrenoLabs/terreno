@@ -352,6 +352,28 @@ describe("query windows", () => {
     await harness.client.stop();
   });
 
+  it("refetches off-screen windows on their next retain after a reconnect", async () => {
+    const harness = await setup();
+    harness.client.queryWindows.retain(THREAD_A)();
+    await flush();
+    expect(harness.listCalls).toHaveLength(1);
+    harness.client.queryWindows.retain(THREAD_A)();
+    await flush();
+    expect(harness.listCalls).toHaveLength(1);
+
+    harness.transport.setConnected(false);
+    harness.transport.setConnected(true);
+    await flush();
+    // Not retained during the reconnect, so nothing refetched yet…
+    expect(harness.listCalls).toHaveLength(1);
+    // …but it is stale now, so the next mount refetches it.
+    const release = harness.client.queryWindows.retain(THREAD_A);
+    await flush();
+    expect(harness.listCalls).toHaveLength(2);
+    release();
+    await harness.client.stop();
+  });
+
   it("discards a fetch that resolves after stop()", async () => {
     const harness = await setup();
     let release = (): void => {};

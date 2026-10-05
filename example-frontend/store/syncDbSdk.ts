@@ -132,6 +132,7 @@ export const {
   useCreateMutation: useCreateTodo,
   useUpdateMutation: useUpdateTodo,
   useDeleteMutation: useDeleteTodo,
+  useWindowQuery: useTodosWindow,
 } = createCollectionHooks<Todo, CreateTodoBody, UpdateTodoBody>({
   collection: "todos",
   retries: false,
@@ -143,6 +144,7 @@ export const {
   useCreateMutation: useCreateNotification,
   useUpdateMutation: useUpdateNotification,
   useDeleteMutation: useDeleteNotification,
+  useWindowQuery: useNotificationsWindow,
 } = createCollectionHooks<Notification, CreateNotificationBody, UpdateNotificationBody>({
   collection: "notifications",
 });
@@ -153,6 +155,7 @@ export const {
   useCreateMutation: useCreateNotificationPreference,
   useUpdateMutation: useUpdateNotificationPreference,
   useDeleteMutation: useDeleteNotificationPreference,
+  useWindowQuery: useNotificationPreferencesWindow,
 } = createCollectionHooks<
   NotificationPreference,
   CreateNotificationPreferenceBody,

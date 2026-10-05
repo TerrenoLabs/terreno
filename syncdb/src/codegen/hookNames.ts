@@ -7,7 +7,7 @@ export const toPascalCase = (value: string): string =>
 
 /**
  * Friendly generated names (IP decision: no collision with RTK codegen).
- * Collection `todos`, entity `Todo` → useTodos / useTodo / useCreateTodo / …
+ * Collection `todos`, entity `Todo` → useTodos / useTodosWindow / useTodo / useCreateTodo / …
  */
 export const friendlyHookNames = ({
   collection,
@@ -21,6 +21,7 @@ export const friendlyHookNames = ({
   create: string;
   update: string;
   remove: string;
+  window: string;
 } => {
   const plural = toPascalCase(collection);
   return {
@@ -29,6 +30,7 @@ export const friendlyHookNames = ({
     read: `use${entityName}`,
     remove: `useDelete${entityName}`,
     update: `useUpdate${entityName}`,
+    window: `use${plural}Window`,
   };
 };
 

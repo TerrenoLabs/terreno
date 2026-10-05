@@ -63,8 +63,9 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/(tabs)/ai.tsx`,
       `${APP}/(tabs)/documents.tsx`,
       `${APP}/notifications.tsx`,
+      `${APP}/todo-windows/**`,
     ],
-    specs: ["todos", "profile", "realtime", "ai-chat", "pdf", "notifications"],
+    specs: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
   },
   {
     blocksPullRequest: true,

@@ -68,6 +68,7 @@ export const emitSdk = ({
     const create = assertTsIdentifier({label: "hook name", value: hooks.create});
     const update = assertTsIdentifier({label: "hook name", value: hooks.update});
     const remove = assertTsIdentifier({label: "hook name", value: hooks.remove});
+    const window = assertTsIdentifier({label: "hook name", value: hooks.window});
     const retries = retriesLiteral(collection.retries);
     hookBlocks.push(`export const {
   useListQuery: ${list},
@@ -75,6 +76,7 @@ export const emitSdk = ({
   useCreateMutation: ${create},
   useUpdateMutation: ${update},
   useDeleteMutation: ${remove},
+  useWindowQuery: ${window},
 } = createCollectionHooks<${entityName}, ${createName}, ${updateName}>({collection: ${emitTsString(collectionName)}${retries}});`);
   }
 

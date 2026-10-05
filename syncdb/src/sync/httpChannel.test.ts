@@ -1,7 +1,13 @@
 import {describe, expect, it} from "bun:test";
 
 import type {AuthProvider} from "../types";
-import {AuthRequiredError, createHttpChannel, type FetchLike} from "./httpChannel";
+import {
+  AuthRequiredError,
+  createHttpChannel,
+  type FetchLike,
+  ListRequestError,
+  QueryFieldNotAllowedError,
+} from "./httpChannel";
 
 const authProvider: Pick<AuthProvider, "getToken"> = {
   getToken: async () => "token-123",
@@ -342,6 +348,64 @@ describe("createHttpChannel", () => {
         fetchImpl: makeFetch(() => json({})).fetchImpl,
       });
       await expect(empty.fetchKeyMaterial()).rejects.toThrow(/missing keyMaterial/);
+    });
+  });
+
+  describe("fetchList", () => {
+    it("qs-encodes params against the list path", async () => {
+      const {fetchImpl, requests} = makeFetch(() => json({data: [], limit: 10, more: false}));
+      const channel = createHttpChannel({authProvider, baseUrl: "https://api.test", fetchImpl});
+      await channel.fetchList?.({params: {completed: false, limit: 10, page: 1}, path: "/todos"});
+      expect(decodeURIComponent(requests[0].input)).toBe(
+        "https://api.test/todos?completed=false&limit=10&page=1"
+      );
+    });
+
+    it("raises QueryFieldNotAllowedError naming the field and allowed queryFields", async () => {
+      const {fetchImpl} = makeFetch(() =>
+        json(
+          {
+            code: "query-param-not-allowed",
+            detail: 'title is not allowed as a query param. Add "title" to queryFields…',
+            meta: {
+              allowedQueryFields: ["completed", "ownerId"],
+              model: "Todo",
+              queryParam: "title",
+            },
+            source: {parameter: "title"},
+            status: 400,
+            title: "Query parameter not allowed",
+          },
+          400
+        )
+      );
+      const channel = createHttpChannel({authProvider, baseUrl: "https://api.test", fetchImpl});
+      const error = await channel
+        .fetchList?.({params: {title: "x"}, path: "/todos"})
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(QueryFieldNotAllowedError);
+      const typed = error as QueryFieldNotAllowedError;
+      expect(typed.field).toBe("title");
+      expect(typed.allowedQueryFields).toEqual(["completed", "ownerId"]);
+      expect(typed.model).toBe("Todo");
+      expect(typed.code).toBe("query-param-not-allowed");
+      expect(typed.message).toContain('Add "title" to queryFields');
+      expect(typed.message).toContain("Allowed: completed, ownerId.");
+    });
+
+    it("raises ListRequestError with the server detail for other failures", async () => {
+      const {fetchImpl} = makeFetch(() =>
+        json({code: "list-error", detail: "boom", status: 500, title: "List error"}, 500)
+      );
+      const channel = createHttpChannel({authProvider, baseUrl: "https://api.test", fetchImpl});
+      const error = await channel
+        .fetchList?.({params: {}, path: "/todos"})
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(ListRequestError);
+      expect(error).not.toBeInstanceOf(QueryFieldNotAllowedError);
+      expect((error as ListRequestError).message).toBe(
+        "List request for /todos failed with status 500: boom"
+      );
     });
   });
 });

@@ -17,7 +17,7 @@ import {
 import {SwiperFlatList} from "react-native-swiper-flatlist";
 
 import {Box} from "./Box";
-import type {SplitPageListItem, SplitPageProps} from "./Common";
+import {getRounding, type SplitPageListItem, type SplitPageProps} from "./Common";
 import {FlatList} from "./FlatList";
 import {IconButton} from "./IconButton";
 import {isNarrowViewport} from "./MediaQuery";
@@ -51,6 +51,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   narrowViewportListButtonLabel,
   narrowViewportSelectionActive,
   narrowViewportSelectionKey,
+  childColumnRounding = "md",
   showItemList,
 }: SplitPageProps<TItem>) => {
   const {theme} = useTheme();
@@ -67,6 +68,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   const isNarrowLayout =
     narrowBelowWidth === undefined ? isNarrowViewport() : windowWidth <= narrowBelowWidth;
   const isDetailActive = selectedId !== undefined || narrowViewportSelectionActive === true;
+  const childColumnBorderRadius = getRounding(childColumnRounding);
 
   const elementArray = Children.toArray(children).filter((c) => c !== null);
 
@@ -210,8 +212,10 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
                   }}
                   key={tabIndex}
                   style={{
+                    borderRadius: childColumnBorderRadius,
                     flex: 1,
                     height: "100%",
+                    overflow: "hidden",
                     paddingLeft: i ? 16 : 0,
                     paddingRight: i ? 0 : 16,
                     width: "60%",
@@ -259,10 +263,12 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
                 contentContainerStyle={{flexGrow: 1}}
                 key={index}
                 style={{
+                  borderRadius: childColumnBorderRadius,
                   flexGrow: 0,
                   flexShrink: 0,
                   height: "100%",
                   maxWidth: childWidth,
+                  overflow: "hidden",
                   width: childWidth,
                 }}
                 testID={`split-page-desktop-child-${index}`}
@@ -285,8 +291,10 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
               }}
               key={index}
               style={{
+                borderRadius: childColumnBorderRadius,
                 flex: 1,
                 height: "100%",
+                overflow: "hidden",
                 width: "60%",
               }}
             >
@@ -386,7 +394,9 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
               <View
                 key={index}
                 style={{
+                  borderRadius: childColumnBorderRadius,
                   height: "100%",
+                  overflow: "hidden",
                   padding: 0,
                   paddingBottom: bottomNavBarHeight,
                   width: pageWidth,
@@ -410,11 +420,9 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
             <IconButton
               accessibilityHint={narrowViewportListButtonLabel}
               accessibilityLabel={narrowViewportListButtonLabel}
-              backgroundOpacity={0.88}
               iconName="arrow-left"
               onClick={() => onItemDeselect()}
               testID="split-page-back-to-list"
-              variant="muted"
             />
           </View>
         ) : null}
@@ -431,25 +439,21 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
           {activeChildIndex > 0 ? (
             <IconButton
               accessibilityLabel={`Show previous column: ${labels[activeChildIndex - 1]}`}
-              backgroundOpacity={0.88}
               iconName="chevron-left"
               onClick={() => {
                 showMobileChild(activeChildIndex - 1);
               }}
               testID="split-page-column-previous"
-              variant="muted"
             />
           ) : null}
           {activeChildIndex < lastIndex ? (
             <IconButton
               accessibilityLabel={`Show next column: ${labels[activeChildIndex + 1]}`}
-              backgroundOpacity={0.88}
               iconName="chevron-right"
               onClick={() => {
                 showMobileChild(activeChildIndex + 1);
               }}
               testID="split-page-column-next"
-              variant="muted"
             />
           ) : null}
         </View>
@@ -482,7 +486,9 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
             <View
               key={i}
               style={{
+                borderRadius: childColumnBorderRadius,
                 height: elementArray.length > 1 ? "90%" : "100%",
+                overflow: "hidden",
                 padding: 4,
                 paddingBottom: bottomNavBarHeight,
                 width: windowWidth - 8,

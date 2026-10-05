@@ -930,12 +930,6 @@ mock.module("expo-localization", () => ({
   timezone: "America/New_York",
 }));
 
-// Mock @expo/vector-icons
-mock.module("@expo/vector-icons", () => ({
-  default: mock(() => null),
-  FontAwesome6: mock(() => null),
-}));
-
 // Mock @expo/vector-icons/FontAwesome6
 mock.module("@expo/vector-icons/FontAwesome6", () => ({
   default: mock(() => null),

@@ -4,6 +4,7 @@ import {forwardRef, type ReactNode, type Ref, useImperativeHandle} from "react";
 import {type ScaledSize, StyleSheet, useWindowDimensions, View} from "react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 
+import {getRounding} from "./Common";
 import {SplitPage} from "./SplitPage";
 import {renderWithTheme} from "./test-utils";
 
@@ -49,6 +50,8 @@ const setWindowWidth = (width: number): (() => void) => {
 };
 
 const styleWidth = (style: unknown): unknown => StyleSheet.flatten(style)?.width;
+
+const styleBorderRadius = (style: unknown): unknown => StyleSheet.flatten(style)?.borderRadius;
 
 const setDesktop = () => {
   mock.module("./MediaQuery", () => ({
@@ -1017,6 +1020,58 @@ describe("SplitPage", () => {
       );
       expect(paginated.length).toBeGreaterThan(0);
       warnSpy.mockRestore();
+    });
+
+    it("applies the default md border radius to desktop child columns but not the list column", () => {
+      setDesktop();
+      const {getByTestId, UNSAFE_root} = renderWithTheme(
+        <SplitPage {...defaultProps} desktopChildrenMinWidth={200}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      expect(styleBorderRadius(getByTestId("split-page-desktop-child-0").props.style)).toBe(
+        getRounding("md")
+      );
+      expect(styleBorderRadius(getByTestId("split-page-desktop-child-1").props.style)).toBe(
+        getRounding("md")
+      );
+      const listColumn = UNSAFE_root.findAll(
+        (node: ReactTestInstance) =>
+          styleWidth(node.props?.style) === 300 && node.props?.style?.maxWidth === 300
+      )[0];
+      expect(listColumn).toBeTruthy();
+      expect(styleBorderRadius(listColumn?.props?.style)).toBeUndefined();
+    });
+
+    it("allows childColumnRounding to override the desktop child column border radius", () => {
+      setDesktop();
+      const {getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps} childColumnRounding="lg" desktopChildrenMinWidth={200}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      expect(styleBorderRadius(getByTestId("split-page-desktop-child-0").props.style)).toBe(
+        getRounding("lg")
+      );
+    });
+
+    it("applies child column border radius on the labeled narrow pager child containers", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps} narrowViewportChildLabels={["Summary", "Notes"]}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      expect(styleBorderRadius(getByTestId("split-page-mobile-child-0").props.style)).toBe(
+        getRounding("md")
+      );
+      expect(styleBorderRadius(getByTestId("split-page-mobile-child-1").props.style)).toBe(
+        getRounding("md")
+      );
     });
   });
 });

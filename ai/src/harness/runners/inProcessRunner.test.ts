@@ -12,6 +12,8 @@ const fakeTask = (id: string): HarnessTaskDocument => ({_id: id}) as unknown as 
 const fakeContext = (overrides: Partial<HarnessRunnerContext>): HarnessRunnerContext => ({
   acquireOwnerLease: async () => true,
   claimNext: async () => null,
+  claimTask: async () => null,
+  listRunnable: async () => [],
   recoverExpired: async () => 0,
   releaseOwnerLease: async () => {},
   runTask: async () => {},
@@ -154,6 +156,132 @@ describe("InProcessRunner", () => {
     release();
     await stopping;
     expect(isStopped).toBe(true);
+  });
+
+  describe("concurrency", () => {
+    const blockingTask = (): {done: Promise<void>; release: () => void} => {
+      let release: () => void = () => {};
+      const done = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return {done, release};
+    };
+
+    it("defaults to 8 tasks at a time", async () => {
+      const gates = Array.from({length: 10}, () => blockingTask());
+      const queue = gates.map((_gate, index) => fakeTask(String(index)));
+      let running = 0;
+      let peak = 0;
+      const context = fakeContext({
+        claimNext: async () => queue.shift() ?? null,
+        runTask: async (task) => {
+          running += 1;
+          peak = Math.max(peak, running);
+          await gates[Number(task._id)].done;
+          running -= 1;
+        },
+      });
+      const runner = new InProcessRunner({pollInterval: {milliseconds: 5}});
+      await runner.start(context);
+      await waitUntil(() => running === 8);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(running).toBe(8);
+      expect(queue.length).toBe(2);
+      for (const gate of gates) {
+        gate.release();
+      }
+      await waitUntil(() => queue.length === 0 && running === 0);
+      await runner.stop();
+      expect(peak).toBe(8);
+    });
+
+    it("lets a second task complete while the first is blocked on a gate", async () => {
+      const slow = blockingTask();
+      const finished: string[] = [];
+      const queue = [fakeTask("slow"), fakeTask("fast")];
+      const context = fakeContext({
+        claimNext: async () => queue.shift() ?? null,
+        runTask: async (task) => {
+          if (String(task._id) === "slow") {
+            await slow.done;
+          }
+          finished.push(String(task._id));
+        },
+      });
+      const runner = new InProcessRunner({concurrency: 2, pollInterval: {minutes: 10}});
+      await runner.start(context);
+
+      await waitUntil(() => finished.length === 1);
+      expect(finished).toEqual(["fast"]);
+      slow.release();
+      await waitUntil(() => finished.length === 2);
+      await runner.stop();
+      expect(finished).toEqual(["fast", "slow"]);
+    });
+
+    it("never runs more than concurrency tasks and claims again as soon as a slot frees", async () => {
+      const queue = ["a", "b", "c", "d", "e"].map(fakeTask);
+      const ran: string[] = [];
+      let running = 0;
+      let peak = 0;
+      const context = fakeContext({
+        claimNext: async () => queue.shift() ?? null,
+        runTask: async (task) => {
+          running += 1;
+          peak = Math.max(peak, running);
+          await new Promise((resolve) => setTimeout(resolve, 15));
+          ran.push(String(task._id));
+          running -= 1;
+        },
+      });
+      // Only a freed slot (not the 10-minute poll) can pick up the rest.
+      const runner = new InProcessRunner({concurrency: 2, pollInterval: {minutes: 10}});
+      await runner.start(context);
+      await waitUntil(() => ran.length === 5);
+      await runner.stop();
+
+      expect(peak).toBe(2);
+      expect([...ran].sort()).toEqual(["a", "b", "c", "d", "e"]);
+    });
+
+    it("waits for every task in flight before stop resolves", async () => {
+      const gates = [blockingTask(), blockingTask()];
+      const queue = [fakeTask("0"), fakeTask("1")];
+      let started = 0;
+      let isStopped = false;
+      const context = fakeContext({
+        claimNext: async () => queue.shift() ?? null,
+        runTask: async (task) => {
+          started += 1;
+          await gates[Number(task._id)].done;
+        },
+      });
+      const runner = new InProcessRunner({concurrency: 2, pollInterval: {milliseconds: 5}});
+      await runner.start(context);
+      await waitUntil(() => started === 2);
+
+      const stopping = runner.stop().then(() => {
+        isStopped = true;
+      });
+      gates[0].release();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(isStopped).toBe(false);
+      gates[1].release();
+      await stopping;
+      expect(isStopped).toBe(true);
+    });
+
+    it("rejects a concurrency that is not a positive integer", () => {
+      for (const concurrency of [0, -1, 1.5]) {
+        expect(() => new InProcessRunner({concurrency})).toThrow(
+          harnessErrorMatching(
+            "configInvalid",
+            "InProcessRunner concurrency must be a positive integer"
+          )
+        );
+      }
+    });
   });
 
   it("rejects a second start while running", async () => {

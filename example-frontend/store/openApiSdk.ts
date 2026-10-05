@@ -1006,6 +1006,7 @@ const injectedRtkApi = api
           params: {
             _id: queryArg._id,
             completed: queryArg.completed,
+            created: queryArg.created,
             limit: queryArg.limit,
             ownerId: queryArg.ownerId,
             page: queryArg.page,
@@ -2769,6 +2770,18 @@ export type GetTodosArgs = {
     | boolean
     | {
         $in?: boolean[];
+      };
+  created?:
+    | string
+    | {
+        /** When this document was created */
+        $gt?: string;
+        /** When this document was created */
+        $gte?: string;
+        /** When this document was created */
+        $lt?: string;
+        /** When this document was created */
+        $lte?: string;
       };
   ownerId?:
     | any

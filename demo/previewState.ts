@@ -74,3 +74,11 @@ export const previewParamsFromState = (state: DemoPreviewState): Record<string, 
     viewport: state.viewport === "full" ? "" : state.viewport,
   };
 };
+
+/** Non-default preview params to carry when opening another demo or dev route. */
+export const activePreviewParams = (
+  query: Record<string, string | string[] | undefined>
+): Record<string, string> => {
+  const params = previewParamsFromState(previewStateFromQuery(query));
+  return Object.fromEntries(Object.entries(params).filter((entry) => entry[1] !== ""));
+};

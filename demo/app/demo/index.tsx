@@ -3,12 +3,13 @@ import {Host, useTheme} from "@terreno/ui";
 import {router, useGlobalSearchParams} from "expo-router";
 import {StyleSheet, View} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
+import {activePreviewParams} from "../../previewState";
 
 const App = () => {
   const insets = useSafeAreaInsets();
   const {theme} = useTheme();
-  const {theme: themeParam} = useGlobalSearchParams<{theme?: string | string[]}>();
-  const selectedTheme = Array.isArray(themeParam) ? themeParam[0] : themeParam;
+  const searchParams = useGlobalSearchParams();
+  const previewParams = activePreviewParams(searchParams);
 
   // Update when we have new fonts picked, these look baaad.
   // const [loaded] = useFonts({
@@ -43,7 +44,7 @@ const App = () => {
           <DemoHomePage
             onPress={(component: string) => {
               router.push({
-                params: {component, ...(selectedTheme ? {theme: selectedTheme} : {})},
+                params: {component, ...previewParams},
                 pathname: "/demo/[component]",
               });
             }}

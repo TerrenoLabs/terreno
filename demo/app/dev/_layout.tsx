@@ -1,7 +1,7 @@
+import {HeaderModeLink} from "@components/HeaderModeLink";
 import {isNarrowViewport} from "@terreno/ui";
-import {router, Stack} from "expo-router";
+import {Stack} from "expo-router";
 import {StatusBar} from "expo-status-bar";
-import {Pressable, StyleSheet, Text} from "react-native";
 
 const Layout = () => {
   return (
@@ -12,16 +12,7 @@ const Layout = () => {
           contentStyle: {flex: 1},
           headerBackTitle: "Back",
           headerBackVisible: isNarrowViewport(),
-          headerRight: () => (
-            <Pressable
-              onPress={async () => {
-                router.navigate("demo");
-              }}
-              style={styles.header}
-            >
-              <Text style={{fontWeight: "bold"}}>Demo Mode</Text>
-            </Pressable>
-          ),
+          headerRight: () => <HeaderModeLink target="demo" />,
         }}
       />
     </>
@@ -29,12 +20,3 @@ const Layout = () => {
 };
 
 export default Layout;
-
-const styles = StyleSheet.create({
-  header: {
-    alignItems: "center",
-    height: "100%",
-    justifyContent: "center",
-    marginRight: isNarrowViewport() ? 0 : 16,
-  },
-});

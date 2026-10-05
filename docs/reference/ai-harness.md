@@ -141,7 +141,7 @@ The `task` view passed to `run`: `{id, name, version, input, state, phase, attem
 | --- | --- |
 | `Harness.open({registry, runner?, models?, env?, priceMap?, streaming?, testHooks?})` | Checks requirements, rejects a duplicate `name@version` or agent name, ensures collections and indexes exist. `runner` defaults to `new InProcessRunner()`. See [open options](#open-options). |
 | `start()` | Throws, claiming nothing, when any non-terminal task uses a `name@version` missing from the registry (see [Versioning](#versioning)). Then starts the runner. Throws when already started. The runner recovers expired tasks once it owns execution. |
-| `stop()` | Stops claiming work, waits (without a time limit) for the phase in flight while still renewing the owner lease, then releases it. No-op when not started. |
+| `stop()` | Stops claiming work, waits (without a time limit) for every phase in flight while still renewing the owner lease, then releases it. No-op when not started. |
 | `createTask(definition, input, {requestId?, userId?})` | Inserts a `pending` task, its `ObsTrace`, and its root span in one transaction. Wakes the runner. The definition must be in the registry. |
 | `resolveInterrupted(id, {action, reason, result?, userId?})` | Resolve an `interrupted` task. See [resolveInterrupted](#resolveinterrupted). |
 | `abort(id, {reason, userId?})` | Abort a task and every non-terminal task it owns, bottom-up. See [abort](#abort). |
@@ -166,7 +166,7 @@ some), throws. A soft-deleted task still owns its `requestId`.
 | `models` | `({provider, modelId}) => LanguageModel` | Resolves an agent's model refs to Vercel AI SDK models. Required when `registry` lists an agent. |
 | `env` | `ExecutionEnv` | Handed to phases as `rt.env` and to tools as `api.env`. Optional. |
 | `priceMap` | `Record<modelId, {inputPerMTok, outputPerMTok}>` | Prices LLM spans (`usage.costUsd`). Defaults to the registered `ObservabilityApp`'s `priceMap`, read at call time. |
-| `runner` | `HarnessRunner` | Default `new InProcessRunner()`. |
+| `runner` | `HarnessRunner` | Default `new InProcessRunner()`. For many instances, `JobsRunner` (see [JobsRunner](#jobsrunner)). |
 | `streaming` | `{deltaFlushChars?, deltaFlushInterval?, deltaTtl?}` | How streamed model text becomes `delta` events. Defaults: 200 characters, `{milliseconds: 250}`, `{hours: 1}`. Non-positive values throw. See [Event stream (SSE)](#event-stream-sse). |
 | `testHooks` | `HarnessTestHooks` | Test-only. See [Testing](#testing). |
 
@@ -183,7 +183,8 @@ const harness = await Harness.open({
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `pollInterval` | `{milliseconds: 250}` | Idle sleep between claim attempts. `createTask` wakes the runner early. |
+| `concurrency` | `8` | Most claimed tasks run at once. Must be a positive integer, or the constructor throws. `1` runs one task at a time. |
+| `pollInterval` | `{milliseconds: 250}` | Idle sleep between claim attempts. `createTask` and a task that frees a slot wake the runner early. |
 | `leaseDuration` | `{seconds: 30}` | Lifetime of the owner lease and of each task lease without a renewal. Luxon `DurationLike`. |
 | `heartbeatInterval` | `{seconds: 10}` | How often both leases are renewed. Must be positive and shorter than `leaseDuration`, or the constructor throws. |
 | `ownerId` | `hostname:pid:uuid` | Id written into every lease this runner holds. |
@@ -197,13 +198,101 @@ Only the owner claims work. It claims the oldest `pending` task whose `name@vers
 registered, whose `runAt` is empty or past (by Luxon's `DateTime.now()`), and that has no
 `abortRequested`. It sets the task `running` with a fresh task lease and runs phases one
 after another until the task stops: terminal, `pending` for a retry, `waiting`, or
-aborted. One task runs at a time. An idle owner re-polls every `pollInterval`, so a retry
-starts within one poll of its `runAt`.
+aborted. An idle owner re-polls every `pollInterval`, so a retry starts within one poll of
+its `runAt`.
+
+Up to `concurrency` tasks run at once, each under its own task lease and heartbeat, so a
+slow phase (a long model call, a phase blocked on I/O) does not delay other tasks. Ordering
+guarantees:
+
+- Tasks are **claimed** oldest first (`created`), one claim at a time, while a slot is free.
+- With `concurrency` above 1, claimed tasks run in parallel, so a later task can finish
+  first. Use `concurrency: 1` for strict one-at-a-time order.
+- Phases of one task always run in order, and a phase never commits twice: the claim is an
+  atomic update, and every commit is fenced on the task lease. (A runner that froze past
+  its lease may still be executing phase code while recovery replays it; only its commit
+  is rejected.)
+- Turns of one conversation stay serial regardless of `concurrency`; turns of different
+  conversations, and sibling child tasks, run in parallel.
+- `stop()` stops claiming and waits for every task in flight.
+
+Before Phase 2 the runner ran one task at a time. Upgrading to the default of 8 means
+parallel model calls (watch provider rate limits and cost) and more stream-counter retries
+(see [Implementation notes](#implementation-notes)). Pass `concurrency: 1` to keep the old
+behavior.
+
+### JobsRunner
+
+Runs phases as `@terreno/jobs` jobs so any number of instances share the work. Import it
+from its own entry point; `@terreno/jobs` is an optional peer dependency, and importing
+`@terreno/ai` or `@terreno/ai/harness` never loads it. How-to:
+[Run the harness on multiple instances](../how-to/run-harness-on-multiple-instances.md).
+
+```typescript
+import {JobsApp} from "@terreno/jobs";
+import {Harness} from "@terreno/ai/harness";
+import {JobsRunner} from "@terreno/ai/harness/jobsRunner";
+
+const jobs = new JobsApp();
+const harness = await Harness.open({registry, runner: new JobsRunner({jobs})});
+app.register(jobs).build(); // the runner enqueues through the registered jobs service
+await harness.start();
+await jobs.startWorker();
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `jobs` | required | The `JobsApp`. The constructor defines `terreno.harness.phase` on it (`HARNESS_PHASE_JOB_NAME`). Register it and build the app before `harness.start()`; otherwise `start()` throws `harness-config-invalid`. |
+| `pollInterval` | `{milliseconds: 500}` | Sleep between dispatch scans. `createTask`, `sendEvent`, and each finished phase wake the dispatcher early. |
+| `leaseDuration` | `{seconds: 30}` | Lifetime of each task lease without a renewal. |
+| `heartbeatInterval` | `{seconds: 10}` | How often a running phase renews its task lease, and how often this instance sweeps expired leases. Must be positive and shorter than `leaseDuration`, or the constructor throws. |
+| `ownerId` | `hostname:pid:uuid` | Id written into every task lease this runner holds. |
+| `dispatchBatchSize` | `100` | Most runnable tasks one scan enqueues. Must be a positive integer, or the constructor throws. |
+
+Every instance runs a dispatcher and a jobs worker. There is no owner lease.
+
+1. **Dispatch.** Each scan lists runnable tasks (the same rule `InProcessRunner` claims by)
+   and enqueues one `terreno.harness.phase` job per task with payload `{taskId}` and
+   idempotency key `taskId:phase:attempt:claims`. `claims` counts how often the task was
+   claimed, so each runnable visit of a phase (first run, retry, event wake, replay) gets
+   its own job, and repeated scans or instances enqueue it once. When the job with that key
+   already ended without claiming the task (for example it died after its retries, or ran
+   on an instance mid-deploy that did not register the task), the dispatcher follows or
+   extends the chain `<key>:<endedJobId>` until a job is in flight, so the task is not
+   stranded.
+2. **Run one phase.** The job handler claims that task under a fresh fenced task lease,
+   runs **one** phase with heartbeats, and hands a task that is still `running` back as
+   `pending` (lease cleared) for the next job. It then wakes the dispatcher. A handler
+   whose task is no longer runnable (another job claimed it, or it is aborting) does
+   nothing and succeeds.
+3. **Recover.** Each instance sweeps expired task leases once per `heartbeatInterval`, with
+   the same replay and interruption rules as `InProcessRunner`. A replayed task becomes
+   runnable with a new `claims` value, so it is dispatched again.
+
+Load: with N instances, the recovery sweep (expired leases, settled child waits, stranded
+queued conversations) runs N times per `heartbeatInterval`, where `InProcessRunner` runs it
+once, and each scan does one job lookup per runnable task (up to `dispatchBatchSize`). The
+sweeps are fenced, so this costs queries, not correctness. Raise `heartbeatInterval` and
+`pollInterval` for large fleets.
+
+The task lease, not the job lock, is the authority. Two jobs for one phase race on the
+atomic claim, and only one runs it. A worker that froze past its lease cannot commit: its
+`rt.commit` throws `HarnessCommitConflictError`. A phase that runs longer than the jobs
+lock TTL is safe for the same reason. A job that runs on an instance whose harness is not
+started (or is stopping) throws `harness-runner-stopped`, so the jobs worker retries it.
+
+`stop()` stops dispatching and waits for every phase this instance is running. Stop the
+jobs worker (`jobs.stopWorker()`) after `harness.stop()`.
+
+### Custom runners
 
 A custom runner implements `HarnessRunner` (`start(context)`, `stop()`, `wake()`). The
 `context` provides `acquireOwnerLease(lease)`, `releaseOwnerLease(lease)`,
-`recoverExpired()`, `claimNext(lease)`, and `runTask(task, lease)`, where `lease` is
-`{owner, duration, heartbeat}` (Luxon `Duration`s).
+`recoverExpired()`, `claimNext(lease)`, `claimTask(taskId, lease)` (claim one task by id
+when it is runnable now, else `null`), `listRunnable(limit)` (oldest runnable tasks as
+`{taskId, phase, attempt, claims}`, unclaimed), and `runTask(task, lease, {maxPhases?})`,
+where `lease` is `{owner, duration, heartbeat}` (Luxon `Duration`s). With `maxPhases`,
+`runTask` hands a task that is still `running` after that many phases back as `pending`.
 
 ## Runtime (rt)
 
@@ -261,7 +350,9 @@ Assumptions:
   recovery treats them as expired.
 
 Recovery runs when a runner becomes owner (on `start()` or on takeover) and on every owner
-heartbeat. It scans up to 100 `running` tasks whose lease expired (or that have no lease),
+heartbeat. `JobsRunner` has no owner lease: every instance sweeps once per
+`heartbeatInterval`, and concurrent sweeps are fenced, so each expired task is recovered
+once. It scans up to 100 `running` tasks whose lease expired (or that have no lease),
 oldest first, for registered `name@version`s only. A stopping owner skips the sweep. A task
 whose interruption commit keeps failing for a non-conflict reason is logged and retried on
 the next sweep.
@@ -1503,6 +1594,7 @@ empty objects are kept (`minimize: false`), so an initial state `{}` is stored a
 | `outcome` | `{status, result, error}` | Set on terminal commit. |
 | `attempt` | Number | Failed attempts of the current phase. Default 0. |
 | `step` | Number | Phase commits so far; names the current phase visit for idempotent child creation. Default 0. |
+| `claims` | Number | Times a runner claimed the task. Numbers each runnable visit; `JobsRunner` puts it in the job idempotency key. Default 0; a missing value reads as 0. |
 | `retry` | `{maxAttempts, backoffMs, maxBackoffMs}` | Copied from the definition. |
 | `ownership` | `{kind: root \| task \| conversation, id}` | Default `root`. `rt.createTask` children are `{kind: "task", id: <parent>}`; agent turns are `{kind: "conversation", id}`, except subagent turns, which are `{kind: "task", id: <caller>}`. |
 | `rootTaskId` | ObjectId | Top of the ownership tree; equals `_id` for root tasks. |
@@ -1686,12 +1778,13 @@ lists every kind:
 | `code` | `status` | `title` | Kinds of failure |
 | --- | --- | --- | --- |
 | `harness-definition-invalid` | 500 | Invalid harness definition | `defineTask` / `defineTool` / `defineAgent` / `defineExtension` / `approvalGate` validation, and `rt.*` misuse inside a phase. Thrown as `HarnessDefinitionError`, which fails the task at once (no retry). |
-| `harness-config-invalid` | 500 | Invalid harness configuration | `Harness.open`, `HarnessApp`, `InProcessRunner`, `streaming`, and registry problems. |
+| `harness-config-invalid` | 500 | Invalid harness configuration | `Harness.open`, `HarnessApp`, `InProcessRunner` (lease timing, `concurrency`), `JobsRunner`, `streaming`, and registry problems. |
 | `harness-replica-set-required` | 500 | MongoDB replica set required | `Harness.open` on a deployment without transactions. |
-| `harness-invalid-request` | 400 | Invalid harness request | A caller passed a bad argument (`abort`, `sendEvent`, `decideApproval`, `resolveInterrupted`, `submit` / `send`, `createConversation`, memos). |
+| `harness-invalid-request` | 400 | Invalid harness request | A caller passed a bad argument (`abort`, `sendEvent`, `decideApproval`, `resolveInterrupted`, `submit` / `send`, `createConversation`, memos, a `terreno.harness.phase` payload without `taskId`). |
 | `harness-not-registered` | 404 | Not registered in this harness | A task definition, agent, or extension the registry lacks. |
 | `harness-not-found` | 404 | Harness record not found | A conversation or child task disappeared. |
-| `harness-already-started` | 409 | Already started | `Harness.start` / `InProcessRunner.start` called twice. |
+| `harness-already-started` | 409 | Already started | `Harness.start` / `InProcessRunner.start` / `JobsRunner.start` called twice. |
+| `harness-runner-stopped` | 503 | Harness runner is not running | A `terreno.harness.phase` job ran on an instance whose harness is not started; the jobs worker retries it. |
 | `harness-commit-conflict` | 409 | Harness commit lost its checkpoint fence | `HarnessCommitConflictError`. |
 | `harness-approval-not-pending` | 409 | Approval can no longer be decided | `HarnessApprovalConflictError`. |
 | `harness-conversation-busy` | 409 | Conversation is busy | `HarnessConversationBusyError`. |
@@ -1809,7 +1902,7 @@ Low-risk choices made in the first slice:
 | The SSE tail starts at a cluster time read before any subscriber's replay query | No gap between replay and tail; overlap is removed by `seq`. |
 | One shared change stream per `HarnessApp`, not one per connection | A change stream holds a pooled connection while it waits; per-connection streams let a few dozen viewers starve commits and lease renewals. |
 | Queue recovery is a sweep by the execution owner, not part of the turn's terminal commit | Starting a turn is its own transaction; the sweep (fenced, idempotent) covers the crash window between the two. |
-| Writers to one stream conflict on its counter document | The price of commit-ordered `seq`s. `withTransaction` retries the loser. `InProcessRunner` runs one task at a time, so only HTTP submits, approvals, and deltas contend; a parallel runner fanning out many children of one tree will see retries. |
+| Writers to one stream conflict on its counter document | The price of commit-ordered `seq`s. `withTransaction` retries the loser. `InProcessRunner` (default `concurrency: 8`) and `JobsRunner` both run sibling tasks of one tree in parallel, so their writes to the shared root stream retry alongside HTTP submits, approvals, and deltas. `InProcessRunner({concurrency: 1})` avoids task-on-task contention. |
 | Interruption spans start at `lease.acquiredAt` | Records when the cut-off phase began. |
 | `resolveInterrupted({action: "abort"})` closes the trace as `error` | `ObsTrace.status` is `ok` or `error`; an abort is not a success. |
 | `requestId` replays are scoped to the same `userId` | Stops one caller from reading another user's task through a shared key. |

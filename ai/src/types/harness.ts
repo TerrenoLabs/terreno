@@ -150,6 +150,8 @@ export interface HarnessTaskDocument extends mongoose.Document<mongoose.Types.Ob
   ancestorIds?: mongoose.Types.ObjectId[];
   attempt: number;
   background: boolean;
+  /** Times a runner claimed the task; numbers each runnable visit for job dispatch. */
+  claims?: number;
   created: Date;
   deleted: boolean;
   input?: unknown;
@@ -491,6 +493,20 @@ export interface HarnessLeaseSettings {
   owner: string;
 }
 
+/** A task a runner may claim now, as listed for dispatch. */
+export interface HarnessRunnableTask {
+  attempt: number;
+  /** Claims so far; changes every time the task becomes runnable again after a claim. */
+  claims: number;
+  phase: string;
+  taskId: string;
+}
+
+export interface HarnessRunTaskOptions {
+  /** Stop after this many phases and hand a still-running task back as `pending`. */
+  maxPhases?: number;
+}
+
 /**
  * What the harness hands a runner: hold the owner lease, recover tasks whose lease
  * expired, claim one runnable task, then run it to a stop.
@@ -499,6 +515,10 @@ export interface HarnessRunnerContext {
   /** Take or renew the singleton `HarnessOwner` lease; false when another owner holds it. */
   acquireOwnerLease: (lease: HarnessLeaseSettings) => Promise<boolean>;
   claimNext: (lease: HarnessLeaseSettings) => Promise<HarnessTaskDocument | null>;
+  /** Claim one task by id when it is runnable now; null when it is not (or another runner won). */
+  claimTask: (taskId: string, lease: HarnessLeaseSettings) => Promise<HarnessTaskDocument | null>;
+  /** Oldest runnable tasks first, at most `limit`, without claiming them. */
+  listRunnable: (limit: number) => Promise<HarnessRunnableTask[]>;
   /**
    * Resume or park every `running` task whose lease expired. Returns how many were made
    * runnable again.
@@ -506,7 +526,11 @@ export interface HarnessRunnerContext {
   recoverExpired: () => Promise<number>;
   /** Give up the owner lease so a standby can take over without waiting for expiry. */
   releaseOwnerLease: (lease: HarnessLeaseSettings) => Promise<void>;
-  runTask: (task: HarnessTaskDocument, lease: HarnessLeaseSettings) => Promise<void>;
+  runTask: (
+    task: HarnessTaskDocument,
+    lease: HarnessLeaseSettings,
+    options?: HarnessRunTaskOptions
+  ) => Promise<void>;
 }
 
 /** Decides who executes runnable tasks and when. */

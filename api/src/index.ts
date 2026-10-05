@@ -118,6 +118,7 @@ export {
 } from "./notifications/notificationsBeforeSend";
 export * from "./notifiers/googleChatNotifier";
 export * from "./notifiers/slackNotifier";
+export * from "./notifiers/slackWebApi";
 export * from "./notifiers/zoomNotifier";
 export * from "./openApiBuilder";
 export * from "./openApiCompat";

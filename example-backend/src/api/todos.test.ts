@@ -85,4 +85,37 @@ describe("todo notifications", () => {
     assert.equal(deleted.status, 204);
     assert.equal(await Notification.countDocuments({ownerId: user._id, title: "Todo deleted"}), 1);
   });
+
+  it("filters the list by created for syncdb query windows and names missing queryFields", async () => {
+    const user = await createUser(`todo-windows-${crypto.randomUUID()}@example.com`);
+    const {token} = await generateTokens(user);
+    for (const title of ["older", "newer"]) {
+      const res = await supertest(app)
+        .post("/todos")
+        .set("Authorization", `Bearer ${token}`)
+        .send({title});
+      assert.equal(res.status, 201);
+    }
+    await Todo.collection.updateOne(
+      {title: "older"},
+      {$set: {created: new Date("2020-01-01T00:00:00Z")}}
+    );
+
+    const recent = await supertest(app)
+      .get("/todos?created[$gte]=2021-01-01T00:00:00.000Z&page=1&limit=10")
+      .set("Authorization", `Bearer ${token}`);
+    assert.equal(recent.status, 200);
+    assert.deepEqual(
+      recent.body.data.map((todo: {title: string}) => todo.title),
+      ["newer"]
+    );
+
+    const rejected = await supertest(app)
+      .get("/todos?title=newer")
+      .set("Authorization", `Bearer ${token}`);
+    assert.equal(rejected.status, 400);
+    assert.equal(rejected.body.code, "query-param-not-allowed");
+    assert.include(rejected.body.detail, 'Add "title" to queryFields on the Todo modelRouter');
+    assert.deepEqual(rejected.body.meta.allowedQueryFields, ["completed", "created", "ownerId"]);
+  });
 });

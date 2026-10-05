@@ -1280,6 +1280,12 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
    * When omitted, that button is not rendered.
    */
   narrowViewportListButtonLabel?: string;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Border radius applied to each detail child column container. The list column is excluded.
+   * Uses the same rounding scale as `Box` (`md` is 4px). Defaults to `md` when omitted.
+   */
+  childColumnRounding?: Rounding;
 }
 
 export type PermissionKind =

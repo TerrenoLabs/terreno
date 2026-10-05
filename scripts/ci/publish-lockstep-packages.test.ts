@@ -43,7 +43,7 @@ describe("lockstep publish package lists", () => {
     assert.match(publishWorkflow, /publish-ui:\n {4}needs: \[check-changes, publish-blocks\]/);
     assert.match(
       publishWorkflow,
-      /publish-ai:\n {4}needs: \[check-changes, publish-api, publish-test, publish-blocks\]/
+      /publish-ai:\n {4}needs: \[check-changes, publish-api, publish-test, publish-blocks, publish-jobs\]/
     );
     assert.match(
       publishWorkflow,
@@ -51,6 +51,10 @@ describe("lockstep publish package lists", () => {
     );
     assert.match(publishWorkflow, /add_status "@terreno\/blocks"/);
     assert.match(publishWorkflow, /notify:[\s\S]*?needs: \[[^\]]*publish-blocks/);
+  });
+
+  it("publishes jobs before ai because ai's optional JobsRunner installs it as a dev dependency", () => {
+    assert.match(publishWorkflow, /publish-ai:\n {4}needs: \[[^\]]*publish-jobs/);
   });
 
   it("includes create-terreno-app in GitHub tag publish fallback workflow", () => {

@@ -10,6 +10,7 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - [createSyncDb configuration](#createsyncdb-configuration)
 - [SyncDb client methods](#syncdb-client-methods)
 - [React hooks](#react-hooks)
+- [Query windows](#query-windows)
 - [Codegen](#codegen)
 - [Conflict API](#conflict-api)
 - [Sync status API](#sync-status-api)
@@ -25,7 +26,8 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - `createSyncDb`, `SyncDb`, `SyncDbConfig`, `MutateArgs`
 - `betterAuthAdapter`, `bridgeBetterAuthReactClient`, `AuthProvider`
 - `listConflicts`, `wipeLocalData`, `generateMutationId`
-- React (`@terreno/syncdb/react`): `SyncDbProvider`, `useEntity`, `useQuery`, `useEntityIds`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSyncDebugLog`, `createCollectionHooks`
+- Queries: `QueryFieldNotAllowedError`, `ListRequestError`, `WhereFilter`, `SortSpec`, `WindowQuery`, `QueryWindowState`, `QueryWindows`, `compileWhere`, `DEFAULT_WINDOW_PAGE_SIZE`
+- React (`@terreno/syncdb/react`): `SyncDbProvider`, `useEntity`, `useQuery`, `useEntityIds`, `useWindowQuery`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSyncDebugLog`, `createCollectionHooks`
 - CLI: `terreno-syncdb-codegen` (generates `SYNC_COLLECTIONS` + friendly hooks from OpenAPI)
 - Testing (`@terreno/syncdb/testing`): `createFakeTransport`
 
@@ -165,6 +167,7 @@ be passed to `betterAuthAdapter` directly.
 | `name` | `string` | — (required) | Persisted database name |
 | `collections` | `string[]` | — (required) | Collection names to sync (local tables + subscriptions) |
 | `windowCollections` | `string[]` | `[]` | Collections that join `{collection}\|admin`, skip snapshots/reconcile, and hydrate only known REST membership ids |
+| `queryCollections` | `Array<string \| {collection, path?, fullSync?}>` | `[]` | Collections too large to sync whole (or `fullSync: true` to keep snapshot sync and add windows). No snapshot/reconcile paging; rows arrive through [query windows](#query-windows) against the `modelRouter` list endpoint (`path`, default `/{collection}`) plus live deltas on the user's normal streams. Each entry must also be in `collections` and not in `windowCollections`. |
 | `organizationIdProvider` | `() => string \| undefined` | — | Read at send time: sets `X-Organization-Id` on HTTP sync calls and `organizationId` on socket mutate payloads |
 | `authProvider` | `AuthProvider` | — (required) | `{getToken, getUserId, onAuthChange, refresh?}` |
 | `baseUrl` | `string` | — | Server origin; required unless both `transport` and `httpChannel` are injected |
@@ -200,6 +203,7 @@ be passed to `betterAuthAdapter` directly.
 | `mutate({collection, operation, id?, data?})` | Optimistic local write + durable outbox enqueue + fire-and-forget replay. Returns `{mutationId, id}`. |
 | `reconcile()` | HTTP snapshot catch-up for every known stream; runs tombstone compaction on success. Also runs automatically on (re)connect, on a rate-limited seq-jump hint, and on the periodic timer; each `sync:subscribed` confirmation additionally pages just the streams it names. |
 | `hydrateWindow({collection, ids, restRows?})` | Admin window upsert: REST rows (optional) land immediately; every requested id is also fetched from `GET /sync/entities` before this resolves so seq/deleted metadata is canonical for immediate update/delete. A `{collection}|admin` delta that lands while the fetch is in flight wins, so hydration never rewinds a row to an older seq. Unknown ids are ignored. |
+| `queryWindows` | Server query windows for `queryCollections`: `fetchWindow({query, nextPage?})`, `getWindow(query)`, `retain(query)` → release, `refetchRetained()`, `pruneUnretained()`, `subscribe(cb)`, `keyFor(query)`. See [Query windows](#query-windows). |
 | `forceResync()` | Purge every known stream locally and re-bootstrap from cursor 0 (outbox/conflicts untouched). Returns `{ok, reason?, streams, purged, repaired}`. After discovery and each stream bootstrap it waits for in-flight `start`/`stop`/auth-change work, then abandons with `reason: "superseded"` when that work switched users or generations. |
 | `replayOutbox()` | Drain queued mutations for the current user now. |
 | `resolveConflict({mutationId, strategy})` | Apply `"useServer"` or `"keepMine"` to a recorded conflict. |
@@ -271,13 +275,26 @@ Subscribe to a single entity. Re-renders when that row changes. `isPending` is t
 
 ```typescript
 const todos = useQuery<Todo>("todos", {
-  filter: (t) => !t.completed,
-  sort: (a, b) => b.created.localeCompare(a.created),
-  includeDeleted: false,
+  where: {completed: false, created: {$gte: since}},
+  sort: "-created",
+  limit: 20,
 });
+
+// Callbacks still work and combine with `where`:
+const mine = useQuery<Todo>("todos", {filter: (t) => t.ownerId === userId, sort: byCreatedDesc});
 ```
 
-Returns decoded entity data arrays. Tombstones excluded unless `includeDeleted: true`. Filter and sort run in JS — memoize callbacks when collections are large.
+Returns decoded entity data arrays from the local store. Tombstones excluded unless `includeDeleted: true`.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `where` | `WhereFilter` | Mongo-style filter: equality, dot paths, `$eq` `$ne` `$gt` `$gte` `$lt` `$lte` `$in` `$nin` `$exists`, `$and` / `$or`. An array field matches when any element equals the value. Compared by value, so inline objects are fine. Throws for operators only the server can run (`$search`, `$regex`). |
+| `filter` | `(data) => boolean` | Arbitrary predicate, applied after `where`. |
+| `sort` | `SortSpec \| comparator` | `"-created name"`, `{created: "descending"}`, or `(a, b) => number`. |
+| `limit` | `number` | Keep the first N rows after filter and sort. |
+| `includeDeleted` | `boolean` | Include tombstones. |
+
+Filter and sort run in JS — memoize `filter`/comparator callbacks when collections are large.
 
 ### `useEntityIds(collection, options?)`
 
@@ -287,6 +304,38 @@ return ids.map((id) => <TodoRow key={id} id={id} />);
 ```
 
 Same options as `useQuery`, but returns only ordered ids with **referential stability** — the array identity changes only when membership or order changes, not on field updates. Pair with per-row `useEntity` for large lists.
+
+### `useWindowQuery(collection, options?)`
+
+```typescript
+const {data, isLoading, isFetching, hasMore, fetchNextPage, refetch, total, error} =
+  useWindowQuery<Message>("messages", {
+    where: {threadId, deleted: false},
+    sort: "-created",
+    pageSize: 30,
+  });
+```
+
+Server-filtered list over a `queryCollections` collection. See [Query windows](#query-windows).
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `where` | `WhereFilter` | — | Sent as qs list params (`status[$in][0]=open`). Fields must be in the route's `queryFields`. |
+| `sort` | `SortSpec` | route default | Server `sort`; also orders the local view. |
+| `pageSize` | `number` | `50` | Server `limit` per page (capped by the route's `maxLimit`). |
+| `skip` | `boolean` | `false` | Do not retain or fetch (e.g. a required param is missing). |
+| `liveMatch` | `boolean` | `true` | Show cached rows that newly match `where` inside the loaded range. |
+
+| Result | Description |
+|--------|-------------|
+| `data` / `ids` | This window's rows in view order. |
+| `isLoading` | No membership yet (first fetch in flight). Cached membership renders with `isLoading: false`. |
+| `isFetching` | Any request for this window is in flight. |
+| `isError` / `error` | Last request failed (cached rows still render). |
+| `errorCode` | Server error code of the last failure; `"query-param-not-allowed"` means a `where` field is missing from `queryFields`. |
+| `hasMore` / `total` | From the list response's `more` / `total`. |
+| `fetchNextPage()` | Append the next server page. |
+| `refetch()` | Reload every loaded page in one request, replacing membership. |
 
 ### `useMutate(collection)`
 
@@ -331,7 +380,7 @@ Returns the `SyncDb` instance from context (escape hatch for imperative calls li
 
 ### `createCollectionHooks`
 
-Factory used by `terreno-syncdb-codegen` and by hand-written custom collections. Returns five operation hooks (`useListQuery`, `useReadQuery`, `useCreateMutation`, `useUpdateMutation`, `useDeleteMutation`). Generated SDKs rename them to friendly names (`useTodos`, `useTodo`, `useCreateTodo`, …). Mutation hooks return `[trigger]`; triggers apply locally and return `{mutationId, id}` synchronously. Optional `retries` maps to `maxAttempts` (`false` → 1, a number → that many, omitted → engine default).
+Factory used by `terreno-syncdb-codegen` and by hand-written custom collections. Returns six operation hooks (`useListQuery`, `useWindowQuery`, `useReadQuery`, `useCreateMutation`, `useUpdateMutation`, `useDeleteMutation`). Generated SDKs rename them to friendly names (`useTodos`, `useTodosWindow`, `useTodo`, `useCreateTodo`, …). `useWindowQuery` works only for collections listed in `queryCollections`. Mutation hooks return `[trigger]`; triggers apply locally and return `{mutationId, id}` synchronously. Optional `retries` maps to `maxAttempts` (`false` → 1, a number → that many, omitted → engine default).
 
 ```typescript
 export const {useListQuery: useNotes, useCreateMutation: useCreateNote} =
@@ -339,6 +388,107 @@ export const {useListQuery: useNotes, useCreateMutation: useCreateNote} =
     collection: "notes",
   });
 ```
+
+## Query windows
+
+Use query windows when a collection is too large to sync whole (messages, events, audit
+rows). They match what an RTK list query did — `where`, `sort`, `limit`, `page`, `more`,
+`total` — but keep the data local-first and deduplicated.
+
+```typescript
+export const syncDb = createSyncDb({
+  collections: ["todos", "messages"],
+  queryCollections: [{collection: "messages", path: "/messages"}],
+  // ...
+});
+```
+
+**Membership, not copies.** A window is one list query against the collection's
+`modelRouter` list endpoint. Its result is an ordered id list stored in the reserved
+`_queryWindows` table. Each row lands once in the collection's entity table, keyed by id.
+Two windows that overlap share those rows:
+
+- A delta, mutation, or refetch for a shared row writes the store once; every window that
+  lists the row re-renders from it.
+- Each window lists only its own members. Window B never shows rows that only window A
+  fetched.
+
+**Live membership.** When `where` is locally evaluable (see `useQuery`'s `where`), a window
+also:
+
+- hides a member whose fields stop matching (an unpinned message leaves the "pinned" window);
+- shows cached rows that newly match (a live delta, or a local create) when they sort inside
+  the loaded range. With more pages unloaded, a row that sorts after the last loaded row
+  waits for `fetchNextPage()`. Without a `sort` and with more pages, only local creates are
+  admitted.
+
+A full fetch also records cached rows that matched `where` locally but that the server did
+not return (deleted, changed, or no longer visible while this device was offline). They stay
+out of the view until a newer delta or a local edit changes them, so stale cached data never
+resurrects a row.
+
+Set `liveMatch: false` to show server membership only. Operators only the server runs
+(`$search`) also fall back to server membership.
+
+**Fetching.** The first `retain` of a window in a session fetches it; persisted membership
+renders meanwhile, so windows work offline. Concurrent fetches of the same window share one
+request; a refetch and a `fetchNextPage()` on one window run one after the other. Retained
+windows refetch on reconnect and after `forceResync()` — query collections
+skip snapshot catch-up, so this is how deltas missed offline are recovered. Windows not on
+screen at that moment refetch the next time they are shown. Window fetches
+started before a `stop()` or user switch are discarded.
+
+**Seq.** List rows that carry `_syncSeq` (the `syncPlugin` field) are written with that seq.
+Rows without it (a `responseHandler` that strips it) are re-read from `GET /sync/entities` so
+a later mutation never sends a stale `baseVersion`. Rows with a pending outbox mutation, or
+with a newer seq from a delta, are never overwritten. A list `responseHandler` must return the
+same shape as the sync serializer; otherwise list rows and delta rows differ.
+
+**Missing `queryFields`.** Every `where` field must be in the route's `queryFields`. The
+server answers 400 `query-param-not-allowed` naming the field, the model, and the allowed
+list. syncdb turns it into `QueryFieldNotAllowedError` (`field`, `allowedQueryFields`,
+`model`), logs it with `console.error`, sets the window's `errorCode` to
+`"query-param-not-allowed"`, and rejects `fetchWindow` / `refetch` / `fetchNextPage` with it.
+Other list failures throw `ListRequestError` (`status`, `code`, `detail`).
+
+```typescript
+import {QueryFieldNotAllowedError} from "@terreno/syncdb";
+
+try {
+  await refetch();
+} catch (error) {
+  if (error instanceof QueryFieldNotAllowedError) {
+    // error.field === "title", error.allowedQueryFields === ["completed", "created", "ownerId"]
+  }
+}
+```
+
+**`maxLimit` and pipelining.** `modelRouter` clamps `limit` to the route's `maxLimit` and
+echoes the applied value. Window requests always send `page` (so the server never logs a
+truncated unpaginated list). When a fetch needs more rows than one request returns — a
+`refetch()` after several `fetchNextPage()` calls, or a `pageSize` above `maxLimit` — syncdb
+learns the cap from the echoed `limit` and splits the range into sequential page requests
+of `maxLimit` rows starting at the aligned page that contains the range, trimming the extra
+rows, so offsets stay exact. Each pipelined fetch logs a
+`console.warn` naming the row count, the cap, and the request count. Fix it by loading fewer
+pages, lowering `pageSize`, or raising `maxLimit` on the route.
+
+**Fully synced collections.** `queryCollections: [{collection: "todos", fullSync: true}]`
+keeps normal snapshot sync and also enables windows, for server-side filtering, paging, and
+totals over a collection that is already local. See `example-frontend/app/todo-windows.tsx`.
+
+**Limits.**
+
+- `refetch()` with several pages loaded reloads `pageSize × pages` rows (see below).
+- Page appends dedupe ids. A delete between page loads can shift offsets and skip one row
+  until the next refetch.
+- `null` in `where` is rejected (qs would send the string `"null"`); use `{$exists: false}`.
+  A top-level `{$in: []}` returns an empty window without a request; an empty array anywhere
+  else throws instead of silently widening the query.
+- Rows stay in the entity table after their windows unmount. `start()` prunes persisted
+  membership of unretained windows not fetched for 7 days (`pruneStale`);
+  `pruneUnretained()` drops all unretained membership. Rows are dropped by leave-purge,
+  tombstone compaction, or a wipe.
 
 ## Codegen
 

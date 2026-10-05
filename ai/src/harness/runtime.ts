@@ -12,6 +12,7 @@ import type {
   HarnessCommit,
   HarnessLeaseSettings,
   HarnessRunAgentOptions,
+  HarnessRunnableTask,
   HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTaskRuntime,
@@ -100,6 +101,42 @@ const registeredFilter = (
 };
 
 /**
+ * Mongo filter for a registered task a runner may claim now: `pending` and due, or
+ * `waiting` on an event or sleep whose `timeoutAt` passed, and not being aborted.
+ */
+const runnableTaskFilter = (
+  definitions: Map<string, HarnessTaskDefinition>,
+  now: DateTime
+): Record<string, unknown> => ({
+  $and: [
+    {$or: registeredFilter(definitions)},
+    {
+      $or: [
+        {
+          $or: [{runAt: {$exists: false}}, {runAt: null}, {runAt: {$lte: now.toJSDate()}}],
+          status: HARNESS_TASK_STATUSES.pending,
+        },
+        // An event wait or sleep whose timeout passed resumes like a due retry.
+        {
+          status: HARNESS_TASK_STATUSES.waiting,
+          "waiting.kind": {$in: [HARNESS_WAIT_KINDS.event, HARNESS_WAIT_KINDS.sleep]},
+          "waiting.timeoutAt": {$lte: now.toJSDate()},
+        },
+      ],
+    },
+  ],
+  // A task being aborted never starts another run.
+  "abortRequested.at": {$exists: false},
+});
+
+/** Move a runnable task to `running` under a fresh lease (owner, fencing token, expiry). */
+const claimUpdate = (lease: HarnessLeaseSettings): Record<string, unknown> => ({
+  $inc: {claims: 1},
+  $set: {lease: newTaskLease(lease), status: HARNESS_TASK_STATUSES.running},
+  $unset: {waiting: 1},
+});
+
+/**
  * Atomically move the oldest runnable, registered task (`pending` and due, or `waiting` on
  * an event or sleep whose `timeoutAt` passed) to `running` and give it a fresh lease (owner, fencing token, expiry) for the phase about to start.
  */
@@ -115,36 +152,78 @@ export const claimNextTask = async ({
   if (definitions.size === 0) {
     return null;
   }
-  const registered = registeredFilter(definitions);
-  const now = DateTime.now().toJSDate();
   return models.task.findOneAndUpdate(
-    {
-      $and: [
-        {$or: registered},
-        {
-          $or: [
-            {
-              $or: [{runAt: {$exists: false}}, {runAt: null}, {runAt: {$lte: now}}],
-              status: HARNESS_TASK_STATUSES.pending,
-            },
-            // An event wait or sleep whose timeout passed resumes like a due retry.
-            {
-              status: HARNESS_TASK_STATUSES.waiting,
-              "waiting.kind": {$in: [HARNESS_WAIT_KINDS.event, HARNESS_WAIT_KINDS.sleep]},
-              "waiting.timeoutAt": {$lte: now},
-            },
-          ],
-        },
-      ],
-      // A task being aborted never starts another run.
-      "abortRequested.at": {$exists: false},
-    },
-    {
-      $set: {lease: newTaskLease(lease), status: HARNESS_TASK_STATUSES.running},
-      $unset: {waiting: 1},
-    },
+    runnableTaskFilter(definitions, DateTime.now()),
+    claimUpdate(lease),
     {returnDocument: "after", sort: {created: 1}}
   );
+};
+
+/**
+ * Claim one task by id under the same rules as `claimNextTask`. Null when the task is not
+ * runnable now: unknown, not due, already claimed by another runner, terminal, or aborting.
+ */
+export const claimTaskById = async ({
+  definitions,
+  lease,
+  models,
+  taskId,
+}: {
+  definitions: Map<string, HarnessTaskDefinition>;
+  lease: HarnessLeaseSettings;
+  models: HarnessModels;
+  taskId: string;
+}): Promise<HarnessTaskDocument | null> => {
+  if (definitions.size === 0 || !mongoose.isValidObjectId(taskId)) {
+    return null;
+  }
+  return models.task.findOneAndUpdate(
+    {...runnableTaskFilter(definitions, DateTime.now()), _id: toObjectId(taskId)},
+    claimUpdate(lease),
+    {returnDocument: "after"}
+  );
+};
+
+/** Oldest runnable, registered tasks first, at most `limit`, without claiming them. */
+export const listRunnableTasks = async ({
+  definitions,
+  limit,
+  models,
+}: {
+  definitions: Map<string, HarnessTaskDefinition>;
+  limit: number;
+  models: HarnessModels;
+}): Promise<HarnessRunnableTask[]> => {
+  if (definitions.size === 0) {
+    return [];
+  }
+  const tasks = await models.task
+    .find(runnableTaskFilter(definitions, DateTime.now()))
+    .select({attempt: 1, claims: 1, phase: 1})
+    .sort({created: 1})
+    .limit(limit);
+  return tasks.map((task) => ({
+    attempt: task.attempt ?? 0,
+    claims: task.claims ?? 0,
+    phase: task.phase,
+    taskId: String(task._id),
+  }));
+};
+
+/**
+ * Give a task that is still `running` under `task`'s lease back to the runners as
+ * `pending` at its current checkpoint. False when the lease moved on (aborted, recovered).
+ */
+const releaseTask = async (models: HarnessModels, task: HarnessTaskDocument): Promise<boolean> => {
+  const result = await models.task.updateOne(
+    {
+      _id: task._id,
+      "lease.token": task.lease?.token ?? null,
+      status: HARNESS_TASK_STATUSES.running,
+    },
+    {$set: {status: HARNESS_TASK_STATUSES.pending}, $unset: {lease: 1}}
+  );
+  return result.modifiedCount > 0;
 };
 
 /**
@@ -219,10 +298,13 @@ const interruptionAction = (
 export const runClaimedTask = async ({
   engine,
   lease,
+  maxPhases,
   task,
 }: {
   engine: HarnessEngine;
   lease: HarnessLeaseSettings;
+  /** Hand the task back as `pending` once this many phases committed and it still runs. */
+  maxPhases?: number;
   task: HarnessTaskDocument;
 }): Promise<void> => {
   const definition = engine.definitions.get(taskDefinitionKey(task));
@@ -238,14 +320,20 @@ export const runClaimedTask = async ({
   engine.controllers.set(taskId, controller);
   try {
     let current = task;
-    let isFirstPhase = true;
+    let phasesRun = 0;
     while (current.status === HARNESS_TASK_STATUSES.running && !controller.signal.aborted) {
+      if (maxPhases !== undefined && phasesRun >= maxPhases) {
+        if (!(await releaseTask(engine.models, current))) {
+          logger.info(`Harness task ${taskId} lost its lease before hand-off; stopping`);
+        }
+        return;
+      }
       // An abort from another process may have fenced the task since the last commit.
-      if (!isFirstPhase && !(await holdsLease(engine.models, current))) {
+      if (phasesRun > 0 && !(await holdsLease(engine.models, current))) {
         logger.info(`Harness task ${taskId} lost its lease between phases; stopping`);
         return;
       }
-      isFirstPhase = false;
+      phasesRun += 1;
       const result = await runPhase({controller, definition, engine, lease, task: current});
       if (!result) {
         return;

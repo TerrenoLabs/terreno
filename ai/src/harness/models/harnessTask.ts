@@ -39,6 +39,11 @@ const harnessTaskSchema = new mongoose.Schema<HarnessTaskDocument, HarnessTaskMo
       description: "When true, the task outlives its owning conversation turn",
       type: Boolean,
     },
+    claims: {
+      default: 0,
+      description: "Times a runner claimed the task; numbers each runnable visit for job dispatch",
+      type: Number,
+    },
     eventSeq: {
       default: 0,
       description: "Events received by harness.sendEvent; numbers the task's inbox",

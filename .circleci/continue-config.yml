@@ -454,7 +454,7 @@ commands:
             shard="<< parameters.spec >>"
             case "$shard" in
               auth) specs="login signup consents forgot-password reset-password verify-email" ;;
-              app) specs="todos profile realtime ai-chat pdf notifications" ;;
+              app) specs="todos todo-windows profile realtime ai-chat pdf notifications" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
@@ -850,7 +850,7 @@ jobs:
           name: Fetch coverage base
           command: git fetch origin master
       - compile_packages:
-          packages: api blocks ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
       - run:
           name: Check new source file coverage
           command: |
@@ -1113,7 +1113,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api blocks ai api-health comms jobs admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
       - run:
           name: List admin scripts
           working_directory: ~/project/example-backend

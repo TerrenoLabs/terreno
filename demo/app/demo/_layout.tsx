@@ -1,8 +1,8 @@
+import {HeaderModeLink} from "@components/HeaderModeLink";
 import {EmbedModeProvider} from "@contexts/EmbedModeContext";
 import {isNarrowViewport} from "@terreno/ui";
-import {router, Stack, useGlobalSearchParams} from "expo-router";
+import {Stack, useGlobalSearchParams} from "expo-router";
 import {StatusBar} from "expo-status-bar";
-import {Pressable, StyleSheet, Text} from "react-native";
 
 const Layout = () => {
   const {embed} = useGlobalSearchParams<{embed?: string}>();
@@ -15,18 +15,7 @@ const Layout = () => {
         screenOptions={{
           headerBackTitle: "Back",
           headerBackVisible: !isEmbedMode && isNarrowViewport(),
-          headerRight: isEmbedMode
-            ? undefined
-            : () => (
-                <Pressable
-                  onPress={async () => {
-                    router.navigate("dev");
-                  }}
-                  style={styles.header}
-                >
-                  <Text style={{fontWeight: "bold"}}>Dev Mode</Text>
-                </Pressable>
-              ),
+          headerRight: isEmbedMode ? undefined : () => <HeaderModeLink target="dev" />,
           headerShown: !isEmbedMode,
         }}
       >
@@ -37,12 +26,3 @@ const Layout = () => {
 };
 
 export default Layout;
-
-const styles = StyleSheet.create({
-  header: {
-    alignItems: "center",
-    height: "100%",
-    justifyContent: "center",
-    marginRight: isNarrowViewport() ? 0 : 16,
-  },
-});

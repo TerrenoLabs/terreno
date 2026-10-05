@@ -3,7 +3,7 @@ import {useFonts} from "expo-font";
 import {Stack, useRouter, useSegments} from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, {type FC, type ReactNode, useCallback, useEffect, useState} from "react";
-import {Platform} from "react-native";
+import {Platform, StatusBar} from "react-native";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 import "react-native-reanimated";
 import {OpenFeatureProvider} from "@openfeature/react-sdk";
@@ -145,6 +145,16 @@ const RootLayout = (): React.ReactElement | null => {
   );
 };
 
+const ThemedStatusBar: FC = () => {
+  const {colorScheme, theme} = useTheme();
+  return (
+    <StatusBar
+      backgroundColor={theme.surface.base}
+      barStyle={colorScheme === "dark" ? "light-content" : "dark-content"}
+    />
+  );
+};
+
 const RootLayoutNav = (): React.ReactElement => {
   const {theme} = useTheme();
   const userId = useSelector(selectBetterAuthUserId) ?? undefined;
@@ -276,6 +286,7 @@ const RootLayoutNav = (): React.ReactElement => {
   if (isAuthLoading || (Boolean(userId) && isProfileLoading)) {
     return (
       <Box alignItems="center" flex="grow" justifyContent="center" testID="app-auth-loading">
+        <ThemedStatusBar />
         <Spinner />
       </Box>
     );
@@ -283,13 +294,16 @@ const RootLayoutNav = (): React.ReactElement => {
 
   if (isRequired) {
     return (
-      <UpgradeRequiredScreen
-        canUpdate={canUpdate}
-        message={
-          requiredMessage ?? "This version is no longer supported. Please update to continue."
-        }
-        onUpdate={onUpdate}
-      />
+      <>
+        <ThemedStatusBar />
+        <UpgradeRequiredScreen
+          canUpdate={canUpdate}
+          message={
+            requiredMessage ?? "This version is no longer supported. Please update to continue."
+          }
+          onUpdate={onUpdate}
+        />
+      </>
     );
   }
 
@@ -413,7 +427,12 @@ const RootLayoutNav = (): React.ReactElement => {
       profileLoaded: !!profile,
       userId,
     });
-    return <ConsentNavigator api={terrenoApi}>{announcementWrapped}</ConsentNavigator>;
+    return (
+      <>
+        <ThemedStatusBar />
+        <ConsentNavigator api={terrenoApi}>{announcementWrapped}</ConsentNavigator>
+      </>
+    );
   }
 
   console.debug("[RootLayout] Skipping ConsentNavigator", {
@@ -421,7 +440,12 @@ const RootLayoutNav = (): React.ReactElement => {
     profileLoaded: !!profile,
     userId: userId ?? "none",
   });
-  return announcementWrapped;
+  return (
+    <>
+      <ThemedStatusBar />
+      {announcementWrapped}
+    </>
+  );
 };
 
 export default RootLayout;

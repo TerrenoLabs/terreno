@@ -37,6 +37,12 @@ export const AppThemeProvider: FC<{
     [colorSchemeSetting, isLoading, setColorScheme]
   );
 
+  // Hold the themed tree until storage resolves. The hook's initial value is "system",
+  // so painting during isLoading flashes the OS theme before a saved Light or Dark choice.
+  if (isLoading) {
+    return <ThemePreferenceContext.Provider value={contextValue} />;
+  }
+
   return (
     <ThemePreferenceContext.Provider value={contextValue}>
       <TerrenoProvider colorScheme={colorSchemeSetting} openAPISpecUrl={openAPISpecUrl}>

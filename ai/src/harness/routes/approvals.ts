@@ -73,7 +73,7 @@ export const addHarnessApprovalRoutes = (
           method: "POST",
           permissions: [Permissions.IsAuthenticated, canApprove as PermissionMethod<unknown>],
           summary: "Approve a harness approval",
-          tag: "harness",
+          tag: "harnessapprovals",
         },
         reject: {
           body: rejectBody,
@@ -82,7 +82,7 @@ export const addHarnessApprovalRoutes = (
           method: "POST",
           permissions: [Permissions.IsAuthenticated, canApprove as PermissionMethod<unknown>],
           summary: "Reject a harness approval",
-          tag: "harness",
+          tag: "harnessapprovals",
         },
       },
       permissions: {

@@ -817,7 +817,9 @@ is not offered to sections, `beforeModelRequest`, or `afterTool` (the tool alrea
 `basePath` defaults to `/harness`; it must start with `/` and not end with `/`.
 `heartbeatInterval` (default `{seconds: 15}`, must be positive) paces SSE heartbeats.
 Conversation, task, and approval routes are `modelRouter`s with instance actions, so they
-appear in `/openapi.json` (tag `harness`). The two SSE routes are plain Express routes
+appear in `/openapi.json`. Each route and its mutations use that collection's tag
+(`harnessconversations`, `harnesstasks`, `harnessapprovals`), so a generated client
+invalidates the list it just changed. The two SSE routes are plain Express routes
 (the listed exception to modelRouter actions) and are not in the OpenAPI spec.
 
 ### Conversation routes
@@ -840,7 +842,7 @@ appear in `/openapi.json` (tag `harness`). The two SSE routes are plain Express 
 
 | Method | Path | Permissions | Behavior |
 | --- | --- | --- | --- |
-| GET | `/harness/tasks/:id` | Owner (`userId`) or admin | One task. Others: 403. |
+| GET | `/harness/tasks/:id` | Owner (`userId`) or admin | One task, without `lease` (the fencing token stays on the server). Others: 403. |
 | POST | `/harness/tasks/:id/abort` | Owner or admin | Body `{reason}` (required, non-blank). Runs `harness.abort` with the caller as `userId`; returns the aborted task. |
 | POST | `/harness/tasks/:id/resolveInterrupted` | Admin | Body `{action: "retry" \| "abort" \| "complete", reason, result?}`. Runs `harness.resolveInterrupted` with the caller as `userId`; returns the task. |
 | GET | `/harness/tasks/:id/events` | Owner or admin | SSE for the task and its descendants. See [Event stream (SSE)](#event-stream-sse). |

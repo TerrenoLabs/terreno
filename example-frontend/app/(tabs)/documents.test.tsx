@@ -46,6 +46,21 @@ const Wrapper: React.FC<{children: ReactNode}> = ({children}) => (
 
 const renderDocuments = (): RenderResult => render(<DocumentsScreen />, {wrapper: Wrapper});
 
+// lg segments render Heading. The UI test mock does not put Heading children on a
+// host Text node, so press the segment by its label string.
+const pressSegment = (view: RenderResult, label: string): void => {
+  const labelNode = view.UNSAFE_root.findAll(
+    (node) => Array.isArray(node.children) && node.children.some((child) => child === label)
+  )[0];
+  assert.exists(labelNode);
+  let current = labelNode;
+  while (current && typeof current.props.onPress !== "function") {
+    current = current.parent;
+  }
+  assert.exists(current);
+  fireEvent.press(current);
+};
+
 describe("DocumentsScreen", () => {
   afterEach((): void => {
     searchParams.mockImplementation(() => ({}));
@@ -58,7 +73,7 @@ describe("DocumentsScreen", () => {
     assert.exists(view.getByTestId("documents-screen"));
     assert.exists(view.getByTestId("document-refresh-button"));
 
-    fireEvent.press(view.getByText("Consents"));
+    pressSegment(view, "Consents");
     assert.deepEqual(setParams.mock.calls[0]?.[0], {section: "consents"});
 
     searchParams.mockImplementation(() => ({section: "consents"}));

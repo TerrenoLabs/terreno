@@ -28,4 +28,23 @@ describe("formatPropType", () => {
       })
     ).toBe("string | number");
   });
+
+  it("returns an empty string when the type is missing", () => {
+    expect(formatPropType(undefined)).toBe("");
+  });
+
+  it("formats literal and array types", () => {
+    expect(formatPropType({type: "literal", value: "sm"})).toBe('"sm"');
+    expect(
+      formatPropType({
+        elementType: {name: "string", type: "intrinsic"},
+        type: "array",
+      })
+    ).toBe("string[]");
+  });
+
+  it("formats object reflections and falls back to the type name", () => {
+    expect(formatPropType({declaration: {}, type: "reflection"})).toBe("object");
+    expect(formatPropType({name: "Custom", type: "tuple"})).toBe("Custom");
+  });
 });

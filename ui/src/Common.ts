@@ -89,7 +89,7 @@ export interface AccordionProps extends InfoModalIconProps {
 
   /**
    * If true, the accordion will be collapsed.
-   * @default true
+   * @default false
    */
   isCollapsed?: boolean;
 

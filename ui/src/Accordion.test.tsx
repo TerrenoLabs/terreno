@@ -29,9 +29,9 @@ describe("Accordion", () => {
     expect(getByText("Test Subtitle")).toBeTruthy();
   });
 
-  it("starts collapsed by default", () => {
-    const {queryByTestId} = renderWithTheme(<Accordion {...defaultProps} />);
-    expect(queryByTestId("test-content")).toBeNull();
+  it("starts expanded by default", () => {
+    const {getByTestId} = renderWithTheme(<Accordion {...defaultProps} />);
+    expect(getByTestId("test-content")).toBeTruthy();
   });
 
   it("collapses when isCollapsed is true", () => {

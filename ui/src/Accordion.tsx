@@ -10,7 +10,7 @@ import {useTheme} from "./Theme";
 
 export const Accordion: FC<AccordionProps> = ({
   children,
-  isCollapsed = true,
+  isCollapsed = false,
   title,
   subtitle,
   includeInfoModal = false,

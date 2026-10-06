@@ -730,8 +730,9 @@ pane (defaults to `md`, 4px); the list column is excluded. The pane clips to tha
 column inside it scrolls: content taller than the pane scrolls in the column, and a child with
 `height: "100%"` fills the visible pane so a scroll view inside that child scrolls on its own.
 On a narrow web viewport the pager page is height-bounded to that same visible pane. Its rounded
-corners still clip, and a `height: "100%"` child scrolls inside the page. Horizontal paging,
-previous/next controls, and `bottomNavBarHeight` padding stay in place.
+corners still clip, and a `height: "100%"` child scrolls inside the page. On the labeled pager,
+previous and next sit in a row under the column, and that row is subtracted from the column
+height. `bottomNavBarHeight` pads that row so the arrows stay above a bottom tab bar.
 `narrowViewportChildLabels`
 opts into a labeled full-width pager on the narrow viewport. `narrowBelowWidth` uses that
 viewport when the window is at or below the given pixel width; when omitted, the narrow

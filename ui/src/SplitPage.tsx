@@ -34,6 +34,10 @@ import {useTheme} from "./Theme";
 // so that same height: "100%" child grows with its content instead of the pane.
 const desktopChildContentContainerStyle = {flex: 1};
 
+// Matches IconButton's default box so the labeled pager can reserve a row under the column.
+const labeledColumnNavButtonHeight = 32;
+const labeledColumnNavGap = 8;
+
 const renderDesktopChildColumn = ({
   borderRadius,
   columnKey,
@@ -451,7 +455,10 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   const renderLabeledMobilePager = (labels: string[]) => {
     const pageWidth = measuredPageWidth > 0 ? measuredPageWidth : windowWidth;
     const lastIndex = elementArray.length - 1;
-    const controlBottom = (bottomNavBarHeight ?? 0) + 8;
+    const navInset = bottomNavBarHeight ?? 0;
+    const navRowHeight = labeledColumnNavGap + labeledColumnNavButtonHeight + navInset;
+    const columnHeight =
+      measuredPageHeight > 0 ? Math.max(measuredPageHeight - navRowHeight, 0) : undefined;
     return (
       <View
         onLayout={onNarrowPagerLayout}
@@ -471,7 +478,13 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
           }}
           ref={swiperRef}
           renderAll
-          style={{height: "100%", width: "100%"}}
+          style={{
+            flexGrow: 1,
+            flexShrink: 1,
+            height: columnHeight,
+            minHeight: 0,
+            width: "100%",
+          }}
         >
           {elementArray.map((element, index) => {
             return (
@@ -479,10 +492,9 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
                 key={index}
                 style={{
                   borderRadius: childColumnBorderRadius,
-                  height: narrowPageHeight(1),
+                  height: columnHeight ?? "100%",
                   overflow: "hidden",
                   padding: 0,
-                  paddingBottom: bottomNavBarHeight,
                   width: pageWidth,
                 }}
                 testID={`split-page-mobile-child-${index}`}
@@ -495,7 +507,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
         {narrowViewportListButtonLabel ? (
           <View
             style={{
-              bottom: controlBottom,
+              bottom: navRowHeight,
               left: 16,
               position: "absolute",
               zIndex: 1,
@@ -512,34 +524,41 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
         ) : null}
         <View
           style={{
-            bottom: controlBottom,
+            alignItems: "center",
             flexDirection: "row",
-            gap: 8,
-            position: "absolute",
-            right: 16,
-            zIndex: 1,
+            flexShrink: 0,
+            height: navRowHeight,
+            justifyContent: "space-between",
+            paddingBottom: navInset,
+            paddingHorizontal: 16,
+            paddingTop: labeledColumnNavGap,
           }}
+          testID="split-page-column-nav"
         >
-          {activeChildIndex > 0 ? (
-            <IconButton
-              accessibilityLabel={`Show previous column: ${labels[activeChildIndex - 1]}`}
-              iconName="chevron-left"
-              onClick={() => {
-                showMobileChild(activeChildIndex - 1);
-              }}
-              testID="split-page-column-previous"
-            />
-          ) : null}
-          {activeChildIndex < lastIndex ? (
-            <IconButton
-              accessibilityLabel={`Show next column: ${labels[activeChildIndex + 1]}`}
-              iconName="chevron-right"
-              onClick={() => {
-                showMobileChild(activeChildIndex + 1);
-              }}
-              testID="split-page-column-next"
-            />
-          ) : null}
+          <View>
+            {activeChildIndex > 0 ? (
+              <IconButton
+                accessibilityLabel={`Show previous column: ${labels[activeChildIndex - 1]}`}
+                iconName="chevron-left"
+                onClick={() => {
+                  showMobileChild(activeChildIndex - 1);
+                }}
+                testID="split-page-column-previous"
+              />
+            ) : null}
+          </View>
+          <View>
+            {activeChildIndex < lastIndex ? (
+              <IconButton
+                accessibilityLabel={`Show next column: ${labels[activeChildIndex + 1]}`}
+                iconName="chevron-right"
+                onClick={() => {
+                  showMobileChild(activeChildIndex + 1);
+                }}
+                testID="split-page-column-next"
+              />
+            ) : null}
+          </View>
         </View>
       </View>
     );

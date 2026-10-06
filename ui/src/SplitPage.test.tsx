@@ -1327,22 +1327,54 @@ describe("SplitPage", () => {
 
       const page = getByTestId("split-page-mobile-child-0");
       const style = flattenedStyle(page.props.style);
-      expect(style.height).toBe(360);
+      const navRowHeight = 8 + 32 + 24;
+      expect(style.height).toBe(360 - navRowHeight);
       expect(style.overflow).toBe("hidden");
       expect(style.borderRadius).toBe(getRounding("md"));
-      expect(style.paddingBottom).toBe(24);
+      expect(style.paddingBottom).toBeUndefined();
       expect(style.width).toBe(320);
+      expect(style.position).toBeUndefined();
       expectBoundedNarrowChild(page);
       const swiper = flattenedStyle(getByTestId("swiper-flatlist").props.style);
-      expect(swiper.height).toBe("100%");
+      expect(swiper.height).toBe(360 - navRowHeight);
       expect(swiper.overflow).toBeUndefined();
+
+      const nav = getByTestId("split-page-column-nav");
+      const navStyle = flattenedStyle(nav.props.style);
+      expect(navStyle.position).toBeUndefined();
+      expect(navStyle.flexDirection).toBe("row");
+      expect(navStyle.justifyContent).toBe("space-between");
+      expect(navStyle.height).toBe(navRowHeight);
+      expect(navStyle.paddingBottom).toBe(24);
+      expect(page.findAll((node) => node.props?.testID === "split-page-column-nav")).toHaveLength(
+        0
+      );
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-previous")).toBeUndefined();
       const next = getIconButtonByTestId(UNSAFE_root, "split-page-column-next");
-      const controls = findAncestor(
-        next,
+      expect(next.props.accessibilityLabel).toBe("Show next column: Notes");
+      expect(next.props.iconName).toBe("chevron-right");
+      expect(nav.findAll((node) => node.props?.testID === "split-page-column-next")).toHaveLength(
+        1
+      );
+
+      await act(async () => {
+        next.props.onClick();
+      });
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-next")).toBeUndefined();
+      const previous = getIconButtonByTestId(UNSAFE_root, "split-page-column-previous");
+      expect(previous.props.accessibilityLabel).toBe("Show previous column: Summary");
+      expect(previous.props.iconName).toBe("chevron-left");
+      expect(
+        getByTestId("split-page-column-nav").findAll(
+          (node) => node.props?.testID === "split-page-column-previous"
+        )
+      ).toHaveLength(1);
+      const back = getIconButtonByTestId(UNSAFE_root, "split-page-back-to-list");
+      const backFrame = findAncestor(
+        back,
         (node) => flattenedStyle(node.props.style).position === "absolute"
       );
-      expect(flattenedStyle(controls?.props.style).bottom).toBe(32);
-      expect(getIconButtonByTestId(UNSAFE_root, "split-page-back-to-list")).toBeTruthy();
+      expect(flattenedStyle(backFrame?.props.style).bottom).toBe(navRowHeight);
     });
 
     it("bounds dotted narrow pages to the measured pane and keeps pagination room", async () => {

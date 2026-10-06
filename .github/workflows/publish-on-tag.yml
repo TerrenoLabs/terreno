@@ -1911,6 +1911,14 @@ jobs:
           bun run docs:version "$VERSION"
           bun run prune-versions
 
+      - name: Build and upload the archived docs site
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: |
+          VERSION="${{ needs.check-changes.outputs.version }}"
+          scripts/ci/docs-archive.sh build "$VERSION" "$RUNNER_TEMP/docs-site.tar.gz"
+          scripts/ci/docs-archive.sh upload "$VERSION" "$RUNNER_TEMP/docs-site.tar.gz"
+
       - name: Commit versioned docs
         run: |
           VERSION="${{ needs.check-changes.outputs.version }}"

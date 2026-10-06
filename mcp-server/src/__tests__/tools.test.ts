@@ -4,9 +4,8 @@ import {fileURLToPath} from "node:url";
 import {assert} from "chai";
 import {handleToolCall, tools} from "../tools.js";
 
-const blocksCli = fileURLToPath(
-  new URL("../../../node_modules/.bin/terreno-blocks", import.meta.url)
-);
+// Run the CLI source with bun so the test does not depend on install-time bin links.
+const blocksCli = fileURLToPath(new URL("../../../blocks/src/cli.ts", import.meta.url));
 
 describe("tools", () => {
   test("should export all required tools", async () => {
@@ -694,7 +693,7 @@ describe("tools", () => {
 
   describe("terreno_validate_ui_blocks", () => {
     const cliReport = (document: string): string => {
-      const result = spawnSync(blocksCli, ["validate", "-"], {
+      const result = spawnSync(process.execPath, [blocksCli, "validate", "-"], {
         encoding: "utf8",
         input: document,
       });

@@ -63,6 +63,7 @@ import {
   serializeOutputSchema,
   startSubagentTurn,
   subagentContent,
+  subagentPrompts,
   subagentResult,
 } from "./subagent";
 import {HarnessSuspendSignal} from "./suspend";
@@ -632,16 +633,22 @@ const runPhase = async ({
         );
       }
     }
+    const {instructions, prompts} = subagentPrompts({
+      instructions: options.instructions,
+      prompts: options.prompts,
+      where: `${definition.key}: rt.runAgent`,
+    });
     const {conversationId, turnTask} = await startSubagentTurn({
       agent,
       callIndex,
       content,
       extensions: engine.extensions,
-      instructions: options.instructions,
+      instructions,
       lease,
       models,
       outputSchema,
       parent: task,
+      prompts,
       turn,
     });
     engine.wake();

@@ -45,11 +45,41 @@
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./admin": {
+      "default": "./dist/aiAdminApp.js",
+      "import": "./dist/aiAdminApp.js",
+      "require": "./dist/aiAdminApp.js",
+      "types": "./dist/aiAdminApp.d.ts"
+    },
     "./harness": {
       "default": "./dist/harness/harness.js",
       "import": "./dist/harness/harness.js",
       "require": "./dist/harness/harness.js",
       "types": "./dist/harness/harness.d.ts"
+    },
+    "./harness/agentLoop": {
+      "default": "./dist/harness/agentLoop.js",
+      "import": "./dist/harness/agentLoop.js",
+      "require": "./dist/harness/agentLoop.js",
+      "types": "./dist/harness/agentLoop.d.ts"
+    },
+    "./harness/commit": {
+      "default": "./dist/harness/commit.js",
+      "import": "./dist/harness/commit.js",
+      "require": "./dist/harness/commit.js",
+      "types": "./dist/harness/commit.d.ts"
+    },
+    "./harness/events": {
+      "default": "./dist/harness/events.js",
+      "import": "./dist/harness/events.js",
+      "require": "./dist/harness/events.js",
+      "types": "./dist/harness/events.d.ts"
+    },
+    "./harness/internalRuntime": {
+      "default": "./dist/harness/internalRuntime.js",
+      "import": "./dist/harness/internalRuntime.js",
+      "require": "./dist/harness/internalRuntime.js",
+      "types": "./dist/harness/internalRuntime.d.ts"
     },
     "./harness/jobsRunner": {
       "default": "./dist/harness/runners/jobsRunner.js",
@@ -68,6 +98,24 @@
       "import": "./dist/langfuseClient.js",
       "require": "./dist/langfuseClient.js",
       "types": "./dist/langfuseClient.d.ts"
+    },
+    "./observability/localPlugin": {
+      "default": "./dist/observability/local/localPlugin.js",
+      "import": "./dist/observability/local/localPlugin.js",
+      "require": "./dist/observability/local/localPlugin.js",
+      "types": "./dist/observability/local/localPlugin.d.ts"
+    },
+    "./observability/observabilityApp": {
+      "default": "./dist/observability/observabilityApp.js",
+      "import": "./dist/observability/observabilityApp.js",
+      "require": "./dist/observability/observabilityApp.js",
+      "types": "./dist/observability/observabilityApp.d.ts"
+    },
+    "./observability/promptStore": {
+      "default": "./dist/observability/local/promptStore.js",
+      "import": "./dist/observability/local/promptStore.js",
+      "require": "./dist/observability/local/promptStore.js",
+      "types": "./dist/observability/local/promptStore.d.ts"
     },
     "./parseAiJson": {
       "default": "./dist/service/parseAiJson.js",
@@ -120,5 +168,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.10.1"
+  "version": "57.11.0"
 }

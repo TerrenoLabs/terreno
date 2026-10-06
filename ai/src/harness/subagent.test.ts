@@ -15,7 +15,12 @@ import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
 import {generateToStream, withGenerateStreaming} from "../tests/generateStream";
 import {harnessErrorMatching} from "../tests/harnessErrors";
-import type {HarnessAgentDefinition, HarnessTestHooks} from "../types/harness";
+import type {
+  HarnessAgentDefinition,
+  HarnessPromptInstructions,
+  HarnessPromptRef,
+  HarnessTestHooks,
+} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {
   AGENT_TURN_TASK_NAME,
@@ -211,12 +216,14 @@ const parentTask = ({
   instructions,
   name = "test.parent",
   output,
+  prompts,
 }: {
   agent: HarnessAgentDefinition;
   inputs?: unknown[];
-  instructions?: string;
+  instructions?: HarnessPromptInstructions | string;
   name?: string;
   output?: z.ZodType;
+  prompts?: HarnessPromptRef[];
 }) =>
   defineTask<Record<string, never>, Record<string, never>, {results: unknown[]}>({
     initial: () => ({phase: "summarize"}),
@@ -227,7 +234,7 @@ const parentTask = ({
         run: async (_task, rt) => {
           const results: unknown[] = [];
           for (const input of inputs) {
-            results.push(await rt.runAgent(agent, {input, instructions, output}));
+            results.push(await rt.runAgent(agent, {input, instructions, output, prompts}));
           }
           await rt.commit({terminal: {result: {results}, status: "completed"}});
         },
@@ -302,6 +309,120 @@ describe("rt.runAgent (subagents)", () => {
         `belongs to task ${created._id}; only rt.runAgent runs its turns`
       )
     );
+  });
+
+  it("records the task's trace scope, tags and prompt versions, and the subagent's prompts", async () => {
+    const agent = summarizerWith();
+    const parent = parentTask({
+      agent,
+      inputs: [{chart: "a"}, {chart: "b"}],
+      instructions: {
+        body: "Registry says be brief.",
+        label: "production",
+        name: "summary",
+        version: 3,
+      },
+      prompts: [{name: "style", version: 1}],
+    });
+    const {calls, model} = scriptedModel([{text: "A."}, {text: "B."}]);
+    const {harness} = await openProcess({model, registry: [agent, parent]});
+
+    const created = await harness.createTask(
+      parent,
+      {},
+      {
+        prompts: [{name: "plan", version: 2}],
+        trace: {scope: "workspace-1", tags: ["nightly", "nightly", "beta"]},
+      }
+    );
+    const done = await harness.waitForTask(created._id, {timeout: {seconds: 10}});
+
+    expect(done.status).toBe("completed");
+    const trace = await TraceModel.findExactlyOne({_id: done.traceId});
+    expect(trace.scope).toBe("workspace-1");
+    expect(plain(trace.tags)).toEqual(["nightly", "beta"]);
+    // Both runAgent calls used the same versions; each is recorded once.
+    expect(plain(trace.prompts)).toEqual([
+      {name: "plan", version: 2},
+      {label: "production", name: "summary", version: 3},
+      {name: "style", version: 1},
+    ]);
+    const conversations = await ConversationModel.find({});
+    expect(conversations.map(({agent: snapshot}) => snapshot.instructions)).toEqual([
+      "Registry says be brief.",
+      "Registry says be brief.",
+    ]);
+    expect(plain(calls[0]?.prompt[0])).toEqual({
+      content: "Registry says be brief.",
+      role: "system",
+    });
+  });
+
+  it("rejects a blank trace scope and a prompt ref without a version", async () => {
+    const agent = summarizerWith();
+    const parent = parentTask({agent});
+    const {model} = scriptedModel([]);
+    const {harness} = await openProcess({model, registry: [agent, parent]});
+
+    await expect(harness.createTask(parent, {}, {trace: {scope: " "}})).rejects.toThrow(
+      harnessErrorMatching("invalidRequest", "trace.scope must be a non-empty string")
+    );
+    await expect(
+      harness.createTask(parent, {}, {prompts: [{name: "plan"} as HarnessPromptRef]})
+    ).rejects.toThrow(
+      harnessErrorMatching("invalidRequest", 'Prompt ref "plan" needs a positive integer version')
+    );
+    await expect(
+      harness.createTask(parent, {}, {prompts: [{label: 3, name: "plan", version: 1} as never]})
+    ).rejects.toThrow(
+      harnessErrorMatching("invalidRequest", 'Prompt ref "plan" label must be a string')
+    );
+    await expect(harness.createTask(parent, {}, {trace: {tags: ["ok", " "]}})).rejects.toThrow(
+      harnessErrorMatching("invalidRequest", "trace.tags must be an array of non-empty strings")
+    );
+    expect(await TaskModel.countDocuments({})).toBe(0);
+  });
+
+  it("records a repeated createTask prompt ref once", async () => {
+    const agent = summarizerWith();
+    const parent = parentTask({agent, inputs: []});
+    const {model} = scriptedModel([]);
+    const {harness} = await openProcess({model, registry: [agent, parent]});
+
+    const plan = {name: "plan", version: 2};
+    const created = await harness.createTask(parent, {}, {prompts: [plan, {...plan}]});
+
+    const trace = await TraceModel.findExactlyOne({_id: created.traceId});
+    expect(plain(trace.prompts)).toEqual([plan]);
+  });
+
+  it("fails the caller at once for an instructions prompt without a body or a bad prompt ref", async () => {
+    const agent = summarizerWith();
+    const noBody = parentTask({
+      agent,
+      instructions: {name: "summary", version: 1} as HarnessPromptInstructions,
+      name: "test.noBody",
+    });
+    const badRef = parentTask({
+      agent,
+      name: "test.badRef",
+      prompts: [{name: "style", version: 0}],
+    });
+    const {calls, model} = scriptedModel([]);
+    const {harness} = await openProcess({model, registry: [agent, noBody, badRef]});
+
+    const first = await harness.createTask(noBody, {});
+    const second = await harness.createTask(badRef, {});
+    const failedNoBody = await harness.waitForTask(first._id, {timeout: {seconds: 10}});
+    const failedBadRef = await harness.waitForTask(second._id, {timeout: {seconds: 10}});
+
+    expect(failedNoBody.status).toBe("failed");
+    expect(failedNoBody.outcome?.error).toContain("instructions prompt needs a string body");
+    expect(failedBadRef.status).toBe("failed");
+    expect(failedBadRef.outcome?.error).toContain(
+      'Prompt ref "style" needs a positive integer version'
+    );
+    expect(calls).toHaveLength(0);
   });
 
   it("nests the subagent's AGENT span under the caller and its LLM and TOOL spans under it", async () => {

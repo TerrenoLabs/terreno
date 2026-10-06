@@ -7,14 +7,23 @@ import type {
   HarnessChildOutcome,
   HarnessExtensionDefinition,
   HarnessLeaseSettings,
+  HarnessPromptInstructions,
+  HarnessPromptRef,
   HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTurnResult,
 } from "../types/harness";
 import {HARNESS_CONVERSATION_STATUSES, HARNESS_MESSAGE_ROLES} from "../types/harness";
 import type {AgentTurnInput} from "./agentLoop";
-import {createChildTaskRecords, type HarnessModels} from "./commit";
+import {
+  addTracePrompts,
+  createChildTaskRecords,
+  type HarnessModels,
+  tracePromptRefs,
+} from "./commit";
 import {conversationAgentSnapshot} from "./conversation";
+import {HarnessDefinitionError} from "./definitionError";
+import {errorMessage} from "./errors";
 import {insertMessages} from "./events";
 
 /** A subagent run by `rt.runAgent` did not produce a usable answer. */
@@ -57,6 +66,35 @@ export const subagentContent = (input: unknown): string | undefined => {
 };
 
 /**
+ * Split `rt.runAgent`'s instructions into the text the agent runs with and the prompt
+ * versions to record on the trace. A registry prompt passed as `instructions` is used by
+ * its `body` and recorded alongside `prompts`.
+ */
+export const subagentPrompts = ({
+  instructions,
+  prompts,
+  where,
+}: {
+  instructions?: HarnessPromptInstructions | string;
+  prompts?: HarnessPromptRef[];
+  where: string;
+}): {instructions?: string; prompts: HarnessPromptRef[]} => {
+  const prompt =
+    instructions !== undefined && typeof instructions !== "string" ? instructions : undefined;
+  if (prompt && typeof prompt.body !== "string") {
+    throw new HarnessDefinitionError(`${where} instructions prompt needs a string body`);
+  }
+  try {
+    return {
+      instructions: prompt ? prompt.body : (instructions as string | undefined),
+      prompts: tracePromptRefs(prompt ? [prompt, ...(prompts ?? [])] : prompts),
+    };
+  } catch (error: unknown) {
+    throw new HarnessDefinitionError(`${where}: ${errorMessage(error)}`);
+  }
+};
+
+/**
  * Serialize `schema` as JSON Schema with the AI SDK's own converter, so the turn requests
  * exactly the structure `Output.object` would. Stored as a string: JSON Schema keys such
  * as `$schema` and `$ref` are not valid Mongo field names.
@@ -81,6 +119,7 @@ export const startSubagentTurn = async ({
   models,
   outputSchema,
   parent,
+  prompts = [],
   turn,
 }: {
   agent: HarnessAgentDefinition;
@@ -93,6 +132,8 @@ export const startSubagentTurn = async ({
   models: HarnessModels;
   outputSchema?: string;
   parent: HarnessTaskDocument;
+  /** Prompt versions recorded on the parent's trace with the turn. */
+  prompts?: HarnessPromptRef[];
   turn: HarnessTaskDefinition;
 }): Promise<{conversationId: string; turnTask: HarnessTaskDocument}> => {
   const key = `agent:${callIndex}`;
@@ -113,6 +154,7 @@ export const startSubagentTurn = async ({
       name: agent.name,
     },
     writes: async ({session, task}) => {
+      await addTracePrompts({models, refs: prompts, session, traceId: parent.traceId});
       await models.conversation.create(
         [
           {

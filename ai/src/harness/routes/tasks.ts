@@ -8,6 +8,9 @@ import {
 } from "@terreno/api";
 import type express from "express";
 
+/** OpenAPI tag shared with the task read query, so mutations refresh that cache. */
+const TASK_OPENAPI_TAG = "harnesstasks";
+
 import type {HarnessTaskDocument} from "../../types/harness";
 import {
   HARNESS_RESOLVE_ACTIONS,
@@ -47,6 +50,91 @@ const adminOnly: PermissionMethod<HarnessTaskDocument> = (_method, user, task) =
   task ? Boolean(user?.admin) : true;
 
 const isCommitConflict = (error: unknown): boolean => error instanceof HarnessCommitConflictError;
+
+const withoutLease = (value: unknown): Record<string, unknown> => {
+  const doc = value as {toObject?: () => Record<string, unknown>};
+  const json =
+    typeof doc.toObject === "function" ? doc.toObject() : {...(value as Record<string, unknown>)};
+  const {lease: _lease, ...rest} = json;
+  return rest;
+};
+
+/** HTTP task reads omit the lease. The fencing token is a runner secret, not a client field. */
+const taskResponseHandler: NonNullable<
+  ModelRouterOptions<HarnessTaskDocument>["responseHandler"]
+> = async (value) => {
+  if (Array.isArray(value)) {
+    return value.map((doc) => withoutLease(doc)) as never;
+  }
+  return withoutLease(value) as never;
+};
+
+const stripLeaseFromOpenApiSpec = (spec: unknown): unknown => {
+  if (!spec || typeof spec !== "object" || !("responses" in spec)) {
+    return spec;
+  }
+  const responses = (spec as {responses?: unknown}).responses;
+  if (!responses || typeof responses !== "object") {
+    return spec;
+  }
+  const nextResponses: Record<string, unknown> = {};
+  for (const [status, response] of Object.entries(responses as Record<string, unknown>)) {
+    const content =
+      response && typeof response === "object"
+        ? (response as {content?: Record<string, unknown>}).content
+        : undefined;
+    const json = content?.["application/json"] as {schema?: Record<string, unknown>} | undefined;
+    const properties = json?.schema?.properties as Record<string, unknown> | undefined;
+    if (!properties || !("lease" in properties)) {
+      nextResponses[status] = response;
+      continue;
+    }
+    const {lease: _lease, ...rest} = properties;
+    const required = json?.schema?.required;
+    nextResponses[status] = {
+      ...(response as Record<string, unknown>),
+      content: {
+        ...content,
+        "application/json": {
+          ...json,
+          schema: {
+            ...json?.schema,
+            properties: rest,
+            ...(Array.isArray(required)
+              ? {required: required.filter((field) => field !== "lease")}
+              : {}),
+          },
+        },
+      },
+    };
+  }
+  return {...(spec as Record<string, unknown>), responses: nextResponses};
+};
+
+/** Task OpenAPI schemas must not publish `lease`, including its fencing token. */
+const openApiWithoutTaskLease = (openApi: unknown): unknown => {
+  // The registrar is a middleware function with a `path` property, not a plain object.
+  if (
+    !openApi ||
+    (typeof openApi !== "object" && typeof openApi !== "function") ||
+    !("path" in openApi)
+  ) {
+    return openApi;
+  }
+  const registrar = openApi as {path: (spec: unknown) => unknown};
+  return new Proxy(registrar, {
+    get(target, prop, receiver) {
+      if (prop === "path") {
+        return (spec: unknown): unknown => target.path(stripLeaseFromOpenApiSpec(spec));
+      }
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value === "function") {
+        return value.bind(target);
+      }
+      return value;
+    },
+  });
+};
 
 /**
  * Mount `{basePath}/tasks`: read (owner or admin), plus the `abort` (owner or admin) and
@@ -111,7 +199,13 @@ export const addHarnessTaskRoutes = (
   router.use(
     `${basePath}/tasks`,
     modelRouter(model, {
-      ...(openApi ? {openApi: openApi as ModelRouterOptions<HarnessTaskDocument>["openApi"]} : {}),
+      ...(openApi
+        ? {
+            openApi: openApiWithoutTaskLease(
+              openApi
+            ) as ModelRouterOptions<HarnessTaskDocument>["openApi"],
+          }
+        : {}),
       instanceActions: {
         abort: {
           body: abortBody,
@@ -121,7 +215,7 @@ export const addHarnessTaskRoutes = (
           method: "POST",
           permissions: [Permissions.IsAuthenticated, ownerOrAdmin as PermissionMethod<unknown>],
           summary: "Abort a harness task",
-          tag: "harness",
+          tag: TASK_OPENAPI_TAG,
         },
         resolveInterrupted: {
           body: resolveBody,
@@ -131,7 +225,7 @@ export const addHarnessTaskRoutes = (
           method: "POST",
           permissions: [Permissions.IsAuthenticated, adminOnly as PermissionMethod<unknown>],
           summary: "Resolve an interrupted harness task",
-          tag: "harness",
+          tag: TASK_OPENAPI_TAG,
         },
       },
       permissions: {
@@ -141,6 +235,7 @@ export const addHarnessTaskRoutes = (
         read: [Permissions.IsAuthenticated, ownerOrAdmin],
         update: [],
       },
+      responseHandler: taskResponseHandler,
     })
   );
 };

@@ -42,6 +42,11 @@ export interface AiAppOptions {
   mcpService?: MCPService;
   /** OpenAPI options passed through to route builders for spec generation. */
   openApiOptions?: Record<string, unknown>;
+  /**
+   * Mount the `/gpt/projects` routes, which register the `Project` model. Defaults to `true`;
+   * pass `false` when the app owns a model named `Project`.
+   */
+  projects?: boolean;
   /** Tool choice strategy for chat requests. Defaults to "auto" when tools are present. */
   toolChoice?: "auto" | "none" | "required";
   /** Cheap model ID used for generating conversation titles (e.g. "gemini-3.5-flash-lite"). Falls back to the main model if not set. */
@@ -97,6 +102,7 @@ export class AiApp implements TerrenoPlugin {
       maxSteps,
       mcpService,
       openApiOptions,
+      projects,
       titleModelId,
       toolChoice,
       tools,
@@ -122,7 +128,9 @@ export class AiApp implements TerrenoPlugin {
     addGptHistoryRoutes(router, {chat, openApiOptions});
     addGptRoutes(router, chat);
     addAiRequestsExplorerRoutes(router, {openApiOptions});
-    addProjectRoutes(router, {openApiOptions});
+    if (projects !== false) {
+      addProjectRoutes(router, {openApiOptions});
+    }
 
     if (fileStorageService && gcsBucket) {
       addFileRoutes(router, {

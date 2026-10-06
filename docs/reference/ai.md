@@ -91,7 +91,7 @@ src/
 - **Plugins:** `AiApp`, `LangfuseApp`
 - **Service:** `AIService`, `TemperaturePresets`, `FileStorageService`, `MCPService`,
   `getMCPTools`
-- **Models:** `AIRequest`, `GptHistory`, `FileAttachment`, `Project`
+- **Models:** `AIRequest`, `GptHistory`, `FileAttachment`, `Project` (lazy; prefer `getProjectModel()`)
 - **Routes:** `addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`, `addFileRoutes`, `addProjectRoutes`, `addMcpRoutes`
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
 - **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
@@ -249,7 +249,8 @@ Metadata for files stored in GCS.
 
 ### Project
 
-GPT project with persistent context and memories.
+GPT project with persistent context and memories. Registered lazily: `getProjectModel()`
+(or any use of the deprecated `Project` export) registers it.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -440,6 +441,7 @@ new AiApp({
 | `maxSteps` | Max tool-calling steps (default 5) |
 | `titleModelId` | Cheaper model for conversation title generation |
 | `openApiOptions` | Passed to route OpenAPI builders |
+| `projects` | Default `true`. `false` skips the `/gpt/projects` routes, so `AiApp` never registers the `Project` model |
 
 ## LangfuseApp plugin
 
@@ -508,7 +510,7 @@ server `AIService` when configured, otherwise a request-scoped service built fro
 | `ObsPrompt` | Named prompt (`name` unique) with `folder` and `tags[]` |
 | `ObsPromptVersion` | Immutable `vN` body, `variables[]`, schemas, `sensitive` (default false), `config` |
 | `ObsPromptLabel` | Movable labels; unique `(promptId, label)` |
-| `ObsTrace` | Root trace: user, session, status, `errorSummary`, `sensitive`, `prompts[]`, usage |
+| `ObsTrace` | Root trace: user, session, status, `errorSummary`, `sensitive`, `prompts[]`, `scope`, `tags[]`, usage |
 | `ObsSpan` | Nested span with `kind`, `status`, optional `error`, offsets, usage |
 | `ObsScore` | Scores on a trace/span; many per trace, **no unique index** |
 | `ObsEvaluator` | Evaluator: `type` (`human` \| `llm-judge` \| `json-assert`), `target`, `dimensions[]`, `runModes`, `instructions`, `judgePromptName` (judge), `assertion` (json-assert), `confidenceAlertBelow` (default 0.7) |
@@ -560,7 +562,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/ai/observability/traces` | Admin list. Query `from`, `to`, `prompt`, `status`, `userId`, `sessionId`, `hasScore`, `sensitive`, `flaggedForDataset`, `page`, `limit`. Body is `{data, page, limit, more, total}` so pagination survives RTK `{data}` unwrap. Each row includes `spanCount` and `scoreCount`. `prompts.length` is the `N prompts` count |
+| GET | `/ai/observability/traces` | Admin list. Query `from`, `to`, `prompt`, `status`, `userId`, `sessionId`, `scope`, `hasScore`, `sensitive`, `flaggedForDataset`, `page`, `limit`. Body is `{data, page, limit, more, total}` so pagination survives RTK `{data}` unwrap. Each row includes `spanCount` and `scoreCount`. `prompts.length` is the `N prompts` count |
 | GET | `/ai/observability/traces/:id` | Span tree (kind, offsets, durations, I/O, cost) plus scores. `errorSummary` is the first span with `status: "error"` |
 | POST | `/ai/observability/traces/:id/scores` | Persist a score and fan out to every `ScoreSink` |
 | POST | `/ai/observability/traces/test-multi-stage` | Admin-only smoke workflow, registered only with the local trace sink. Uses `ObservabilityApp.aiService`, or `requestAiServiceFactory({apiKey})` when the server service is absent (`apiKey` comes from `x-ai-api-key`); answers **503** with the same missing-key title as playground when neither exists. Body `{input?: string}` (defaults to a built-in sample). Runs two `AIService.generateJsonObject` calls with `skipTrace: true` and named JSON output schemas (`obs-test-multi-stage-call-1` / `call-2`), a deterministic local `text-metrics` `TOOL` stage, then a final `generateJsonObject` synthesis against `obs-test-multi-stage-final`; exports exactly one parent trace with ordered child spans `LLM`, `LLM`, `TOOL`, `LLM` under a `CHAIN` root. LLM span input includes `outputSchema`. Returns `{traceId, output, stages[]}` where `output` is the final schema object (`sentence`, `phrase`, `keywords`, `metrics`). Child LLM failures export an error trace then rethrow |
@@ -637,6 +639,33 @@ Low-level exports (also used by `addGptRoutes` when `langfuseSystemPromptName` i
 - **Cache:** `LangfuseCache`, `getCached`, `setCached`, `invalidateCache`
 
 Subpath imports for tree-shaking: `@terreno/ai/langfuseClient`, `@terreno/ai/langfuseApp`.
+
+## Subpath exports
+
+Import these instead of `dist/` paths. Deep `dist/` imports break when a bundler (such as
+Vercel's) inlines them and their bare `@terreno/api` imports no longer resolve. Each
+subpath shares module instances with `@terreno/ai/harness`.
+
+| Subpath | Exports |
+| --- | --- |
+| `@terreno/ai/harness` | Harness public API; see [AI harness reference](ai-harness.md) |
+| `@terreno/ai/harness/jobsRunner` | `JobsRunner` |
+| `@terreno/ai/harness/agentLoop` | `createAgentTasks` and the agent turn internals |
+| `@terreno/ai/harness/commit` | `createTaskRecords`, `HarnessModels`, and other commit helpers, for custom commits that write domain records inside a task's fenced commit |
+| `@terreno/ai/harness/events` | `insertMessages`, `resolveStreamingOptions` |
+| `@terreno/ai/harness/internalRuntime` | `internalRuntime` |
+| `@terreno/ai/admin` | `AIAdminApp` |
+| `@terreno/ai/observability/observabilityApp` | `ObservabilityApp` |
+| `@terreno/ai/observability/localPlugin` | `createLocalObservabilityPlugin`, `createLocalObservabilityBundle` |
+| `@terreno/ai/observability/promptStore` | `LocalPromptStore` |
+
+The internals subpaths follow the harness's own changes; they carry no compatibility
+promise beyond the release they ship in.
+
+The root `@terreno/ai` entry registers the `Project` model on first use
+(`getProjectModel()` or the `Project` export), not on import. `AiApp` uses it for
+`/gpt/projects` by default; an app that owns a model named `Project` passes
+`new AiApp({projects: false})` and does not call `addProjectRoutes`.
 
 ## FileStorageService
 

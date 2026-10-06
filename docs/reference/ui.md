@@ -725,11 +725,12 @@ Master-detail layout. Pass `listViewData` plus `renderListViewItem` for the list
 screens the detail replaces the list until the user goes back.
 
 `desktopChildrenMinWidth` opts into a minimum pixel width for each desktop child when there
-are one or two children. `narrowViewportChildLabels` opts into a labeled full-width pager on
-the narrow viewport. `narrowBelowWidth` uses that viewport when the window is at or below the
-given pixel width; when omitted, the narrow viewport follows `isNarrowViewport()`. These props
-are web only; the native `SplitPage` ignores them. See `SplitPageProps` for when each prop
-applies and what is ignored.
+are one or two children. `childColumnRounding` sets the border radius on each detail child
+column container (defaults to `md`, 4px); the list column is excluded. `narrowViewportChildLabels`
+opts into a labeled full-width pager on the narrow viewport. `narrowBelowWidth` uses that
+viewport when the window is at or below the given pixel width; when omitted, the narrow
+viewport follows `isNarrowViewport()`. These props are web only; the native `SplitPage`
+ignores them. See `SplitPageProps` for when each prop applies and what is ignored.
 `IconButton`'s `backgroundOpacity` tints only that button's background.
 
 ```typescript

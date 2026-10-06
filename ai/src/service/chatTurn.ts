@@ -27,7 +27,7 @@ import type mongoose from "mongoose";
 import {createTelemetryConfig, preparePromptForAI} from "../langfuseVercelAi";
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
-import {Project} from "../models/project";
+import {getProjectModel} from "../models/project";
 import type {SpanRecord} from "../observability/types";
 import type {
   AskOrigin,
@@ -1120,7 +1120,7 @@ const buildSystemPrompt = async ({
   let effectiveSystemPrompt = systemPrompt as string | undefined;
   if (effectiveProjectId) {
     try {
-      const project = await Project.findById(effectiveProjectId);
+      const project = await getProjectModel().findById(effectiveProjectId);
       if (project && project.userId.toString() === userId?.toString()) {
         const parts: string[] = [];
         if (project.systemContext) {

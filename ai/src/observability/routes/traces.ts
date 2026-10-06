@@ -71,6 +71,7 @@ export const addObservabilityTraceRoutes = (
         .withSummary("List observability traces")
         .withQueryParameter("prompt", {type: "string"}, {required: false})
         .withQueryParameter("promptVersion", {type: "number"}, {required: false})
+        .withQueryParameter("scope", {type: "string"}, {required: false})
         .withResponse(200, {data: {type: "array"}})
         .build()
     ),
@@ -84,6 +85,7 @@ export const addObservabilityTraceRoutes = (
         page: parsePositiveInt(req.query.page, 1),
         prompt,
         promptVersion: parsePromptVersion(req.query.promptVersion, prompt),
+        scope: typeof req.query.scope === "string" ? req.query.scope : undefined,
         sensitive: parseBoolean(req.query.sensitive),
         sessionId: typeof req.query.sessionId === "string" ? req.query.sessionId : undefined,
         status:

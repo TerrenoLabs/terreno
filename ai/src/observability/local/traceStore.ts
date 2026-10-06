@@ -15,6 +15,7 @@ export interface TraceListQuery {
   page?: number;
   prompt?: string;
   promptVersion?: number;
+  scope?: string;
   sensitive?: boolean;
   sessionId?: string;
   status?: "error" | "ok";
@@ -49,12 +50,14 @@ export interface TraceDetail {
   name: string;
   output?: unknown;
   prompts: TraceRecord["prompts"];
+  scope?: string;
   scores: ScoreRecord[];
   sensitive: boolean;
   sessionId?: string;
   spans: TraceSpanNode[];
   startedAt: string;
   status: "error" | "ok";
+  tags: string[];
   usage?: TraceRecord["usage"];
   userId?: string;
 }
@@ -66,12 +69,14 @@ export interface TraceListItem {
   id: string;
   name: string;
   prompts: TraceRecord["prompts"];
+  scope?: string;
   scoreCount: number;
   sensitive: boolean;
   sessionId?: string;
   spanCount: number;
   startedAt: string;
   status: "error" | "ok";
+  tags: string[];
   usage?: TraceRecord["usage"];
   userId?: string;
 }
@@ -221,6 +226,9 @@ export class LocalTraceStore {
     if (query.sessionId) {
       filter.sessionId = query.sessionId;
     }
+    if (query.scope) {
+      filter.scope = query.scope;
+    }
     if (query.promptVersion !== undefined && !query.prompt) {
       throw new APIError({status: 400, title: "prompt is required when promptVersion is set"});
     }
@@ -324,10 +332,12 @@ export class LocalTraceStore {
       flaggedForDataset: boolean;
       name: string;
       prompts: TraceRecord["prompts"];
+      scope?: string;
       sensitive: boolean;
       sessionId?: string;
       startedAt: Date;
       status: "error" | "ok";
+      tags?: string[];
       usage?: TraceRecord["usage"];
       userId?: mongoose.Types.ObjectId;
     },
@@ -340,12 +350,14 @@ export class LocalTraceStore {
       id: String(row._id),
       name: row.name,
       prompts: row.prompts,
+      scope: row.scope,
       scoreCount: counts.scoreCount,
       sensitive: row.sensitive,
       sessionId: row.sessionId,
       spanCount: counts.spanCount,
       startedAt: toIso(row.startedAt) ?? "",
       status: row.status,
+      tags: row.tags ?? [],
       usage: usageWithoutUndefinedCost(row.usage),
       userId: row.userId ? String(row.userId) : undefined,
     };

@@ -142,7 +142,7 @@ The `task` view passed to `run`: `{id, name, version, input, state, phase, attem
 | `Harness.open({registry, runner?, models?, env?, priceMap?, streaming?, testHooks?})` | Checks requirements, rejects a duplicate `name@version` or agent name, ensures collections and indexes exist. `runner` defaults to `new InProcessRunner()`. See [open options](#open-options). |
 | `start()` | Throws, claiming nothing, when any non-terminal task uses a `name@version` missing from the registry (see [Versioning](#versioning)). Then starts the runner. Throws when already started. The runner recovers expired tasks once it owns execution. |
 | `stop()` | Stops claiming work, waits (without a time limit) for every phase in flight while still renewing the owner lease, then releases it. No-op when not started. |
-| `createTask(definition, input, {requestId?, userId?})` | Inserts a `pending` task, its `ObsTrace`, and its root span in one transaction. Wakes the runner. The definition must be in the registry. |
+| `createTask(definition, input, {requestId?, userId?, trace?, prompts?})` | Inserts a `pending` task, its `ObsTrace`, and its root span in one transaction. Wakes the runner. The definition must be in the registry. See [Trace scope and prompt versions](#trace-scope-and-prompt-versions). |
 | `resolveInterrupted(id, {action, reason, result?, userId?})` | Resolve an `interrupted` task. See [resolveInterrupted](#resolveinterrupted). |
 | `abort(id, {reason, userId?})` | Abort a task and every non-terminal task it owns, bottom-up. See [abort](#abort). |
 | `decideApproval(approvalId, {approved, reason?, userId?})` | Approve or reject a pending approval without checking approvers. See [Approvals](#approvals). |
@@ -157,6 +157,30 @@ The `task` view passed to `run`: `{id, name, version, input, state, phase, attem
 create with the same id returns the first task and leaves no extra trace. Reusing a
 `requestId` for a different task name, or with a different `userId` (including none versus
 some), throws. A soft-deleted task still owns its `requestId`.
+
+### Trace scope and prompt versions
+
+A task's `ObsTrace` is its run record. `createTask` can label it:
+
+```typescript
+const prompt = await promptRegistry.get({label: "production", name: "intake-summary"});
+await harness.createTask(intakeSummary, {patientId}, {
+  prompts: prompt ? [prompt] : [],
+  trace: {scope: String(workspaceId), tags: ["nightly"]},
+  userId,
+});
+```
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `trace.scope` | `string` | App-defined scope, such as a tenant or workspace id. Stored as `ObsTrace.scope`, indexed with `created` for per-scope metering (sum `LLM` span `usage.costUsd` by scope and month). Blank throws `harness-invalid-request`. |
+| `trace.tags` | `string[]` | App-defined labels, stored once each as `ObsTrace.tags`. A blank tag throws `harness-invalid-request`. |
+| `prompts` | `{name, version, label?}[]` | Prompt versions the task uses, stored once each on `ObsTrace.prompts`. A `PromptVersionRef` from `promptRegistry.get` fits as-is; its `body` is not stored. A ref without a name, with a non-string `label`, or without a positive integer `version` throws `harness-invalid-request`. |
+
+Child tasks and subagents write into the root task's trace, so they share its scope and
+tags. `rt.runAgent` adds its own prompt versions to the same trace (see
+[Subagents](#subagents-rtrunagent)). The admin trace list filters by `scope` and by
+prompt.
 
 ### open options
 
@@ -306,7 +330,7 @@ where `lease` is `{owner, duration, heartbeat}` (Luxon `Duration`s). With `maxPh
 | `rt.signal` | `AbortSignal`. Aborts when the task is aborted (at once in this process, within one heartbeat elsewhere), or when this run loses its lease. Pass it to cancellable calls. |
 | `rt.createTask(definition, input, {background?, key?})` | Create a child task. Returns its id. See [Child tasks and waitForTasks](#child-tasks-and-waitfortasks). |
 | `rt.waitForTasks(ids, {policy?})` | Return child outcomes once they settle; until then the task waits. See [Child tasks and waitForTasks](#child-tasks-and-waitfortasks). |
-| `rt.runAgent(agent, {input, output?, instructions?})` | Run a registered agent as a subagent and return its answer; until it finishes the task waits. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
+| `rt.runAgent(agent, {input, output?, instructions?, prompts?})` | Run a registered agent as a subagent and return its answer; until it finishes the task waits. See [Subagents (rt.runAgent)](#subagents-rtrunagent). |
 | `rt.memo(key)` / `rt.memo(key, value)` | Read, or first-write, a durable value scoped to this task. See [Memos](#memos). |
 | `rt.waitFor(event, {timeout?})` | Return the payload of the next `event` sent to this task, or `undefined` once `timeout` passes; until then the task waits. See [Events, waits, and sleep](#events-waits-and-sleep). |
 | `rt.sleep(duration)` | Return once `duration` has passed; until then the task waits. See [Events, waits, and sleep](#events-waits-and-sleep). |
@@ -1320,7 +1344,8 @@ summarize: {
 | --- | --- | --- | --- |
 | `input` | `unknown` | Yes | The subagent's user message. A string is sent as-is (blank is rejected); anything else as `JSON.stringify(input)`. |
 | `output` | zod schema | No | Structured output. Defaults to the agent's own `output`. |
-| `instructions` | `string` | No | Replaces the agent's instructions for this subagent conversation only. |
+| `instructions` | `string` or `PromptVersionRef` | No | Replaces the agent's instructions for this subagent conversation only. A registry prompt (`promptRegistry.get`) runs with its `body`, and its `{name, version, label}` is added to the trace's `prompts`. |
+| `prompts` | `{name, version, label?}[]` | No | More prompt versions this subagent used, added to the trace's `prompts`. Each version is recorded once per trace. An invalid ref, or an `instructions` prompt without a string `body`, fails the phase with a definition error. |
 
 Returns the final assistant text, or, with a schema, the object the schema parsed. The
 generic `rt.runAgent<T>(...)` types the result when the schema comes from the agent.
@@ -1331,6 +1356,7 @@ What one call does:
    (`ownership: {kind: "task", id: <caller>}`, `status: "busy"`, agent snapshot with
    `instructions` and `outputSchema`), its user message (`seq` 1), and the turn task
    (`ownership: {kind: "task", id: <caller>}`) with an `AGENT` span named after the agent.
+   Prompt versions from `instructions` and `prompts` are added to the trace's `prompts`.
 2. Waits with `rt.waitForTasks([turn])`: the caller commits `waiting` and the phase stops.
 3. When the turn settles the caller wakes and the phase re-runs from its checkpoint. The
    same call finds the same turn and conversation (step 1 writes nothing) and returns.

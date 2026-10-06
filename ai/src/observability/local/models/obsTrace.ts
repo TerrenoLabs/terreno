@@ -22,12 +22,20 @@ const obsTraceSchema = new mongoose.Schema<ObsTraceDocument, ObsTraceModel>(
       default: [],
       description: "Prompt versions used during this trace",
       type: [
-        {
-          label: {description: "Label resolved at call time", type: String},
-          name: {description: "Prompt name", required: true, type: String},
-          version: {description: "Prompt version number", required: true, type: Number},
-        },
+        // No subdocument _id, so `$addToSet` dedupes repeated refs from replayed phases.
+        new mongoose.Schema(
+          {
+            label: {description: "Label resolved at call time", type: String},
+            name: {description: "Prompt name", required: true, type: String},
+            version: {description: "Prompt version number", required: true, type: Number},
+          },
+          {_id: false}
+        ),
       ],
+    },
+    scope: {
+      description: "App-defined scope (tenant, workspace) for metering and filtering traces",
+      type: String,
     },
     sensitive: {
       default: false,
@@ -41,6 +49,11 @@ const obsTraceSchema = new mongoose.Schema<ObsTraceDocument, ObsTraceModel>(
       enum: ["error", "ok"],
       required: true,
       type: String,
+    },
+    tags: {
+      default: [],
+      description: "App-defined labels for grouping traces",
+      type: [String],
     },
     usage: {
       description: "Aggregated token and cost usage for the trace",
@@ -79,6 +92,10 @@ const traceIndexSpecs: Array<Array<[string, -1 | 1]>> = [
   ],
   [
     ["flaggedForDataset", 1],
+    ["created", -1],
+  ],
+  [
+    ["scope", 1],
     ["created", -1],
   ],
 ];

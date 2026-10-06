@@ -159,6 +159,13 @@ describe("LocalTraceStore", () => {
     const bySession = await store.list({sessionId: "sess-b"});
     expect(bySession.data.map((row) => row.id)).toEqual([newer.id]);
 
+    // Harness tasks set scope and tags on the trace they create.
+    await registerObsTrace().updateOne({_id: newer.id}, {scope: "ws-1", tags: ["beta"]});
+    const byScope = await store.list({scope: "ws-1"});
+    expect(byScope.data.map((row) => ({id: row.id, scope: row.scope, tags: row.tags}))).toEqual([
+      {id: newer.id, scope: "ws-1", tags: ["beta"]},
+    ]);
+
     const bySensitive = await store.list({sensitive: true});
     expect(bySensitive.data.map((row) => row.id)).toEqual([newer.id]);
 

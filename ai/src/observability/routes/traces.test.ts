@@ -94,6 +94,21 @@ describe("observability trace routes", () => {
     expect(listed.body.total).toBe(1);
   });
 
+  it("filters the trace list by scope", async () => {
+    const startedAt = DateTime.utc().toISO() ?? "";
+    const base = {name: "scoped", prompts: [], sensitive: false, spans: [], startedAt};
+    const inScope = await store.exportTrace({...base, id: "a", status: "ok"});
+    await store.exportTrace({...base, id: "b", status: "ok"});
+    await registerObsTrace().updateOne({_id: inScope.id}, {scope: "ws-1"});
+
+    const agent = await authAsUser(app, "admin");
+    const listed = await agent.get("/ai/observability/traces?scope=ws-1");
+    expect(listed.status).toBe(200);
+    expect(
+      listed.body.data.map((row: {id: string; scope?: string}) => [row.id, row.scope])
+    ).toEqual([[inScope.id, "ws-1"]]);
+  });
+
   it("forbids non-admins from listing traces", async () => {
     const agent = await authAsUser(app, "notAdmin");
     const res = await agent.get("/ai/observability/traces");

@@ -40,7 +40,7 @@ export {AIDataset} from "./models/aiDataset";
 export {AIRequest} from "./models/aiRequest";
 export {FileAttachment} from "./models/fileAttachment";
 export {GptHistory} from "./models/gptHistory";
-export {Project} from "./models/project";
+export {getProjectModel, Project} from "./models/project";
 export {AI_OBSERVABILITY_GROUP, observabilityAdminScreens} from "./observability/adminScreens";
 export {LocalDatasetStore} from "./observability/local/datasetStore";
 export {LocalEvaluatorStore} from "./observability/local/evaluatorStore";

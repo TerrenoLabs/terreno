@@ -57,7 +57,7 @@ export const AccordionOnToggleDemo = () => {
   }, [isCollapsed]);
 
   return (
-    <Box color="base" style={{width: containerWidth}}>
+    <Box color="base" width={containerWidth}>
       <Box padding={4} width="100%">
         <Accordion
           isCollapsed={isCollapsed}

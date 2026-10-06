@@ -4,7 +4,7 @@ import {forwardRef, type ReactElement, type ReactNode, type Ref, useImperativeHa
 import {type ScaledSize, ScrollView, StyleSheet, useWindowDimensions, View} from "react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 
-import {getRounding} from "./Common";
+import {getRounding, getSpacing} from "./Common";
 import {SplitPage} from "./SplitPage";
 import {renderWithTheme} from "./test-utils";
 
@@ -1327,54 +1327,179 @@ describe("SplitPage", () => {
 
       const page = getByTestId("split-page-mobile-child-0");
       const style = flattenedStyle(page.props.style);
-      const navRowHeight = 8 + 32 + 24;
-      expect(style.height).toBe(360 - navRowHeight);
+      const edge = getSpacing(2);
+      const navButton = 32;
+      const bottomNav = 24;
+      const columnHeight = 360 - (edge + edge + navButton + edge + bottomNav);
+      expect(style.height).toBe(columnHeight);
       expect(style.overflow).toBe("hidden");
       expect(style.borderRadius).toBe(getRounding("md"));
       expect(style.paddingBottom).toBeUndefined();
       expect(style.width).toBe(320);
       expect(style.position).toBeUndefined();
       expectBoundedNarrowChild(page);
+      expect(flattenedStyle(getByTestId("split-page-mobile-child-1").props.style).height).toBe(
+        columnHeight
+      );
       const swiper = flattenedStyle(getByTestId("swiper-flatlist").props.style);
-      expect(swiper.height).toBe(360 - navRowHeight);
+      expect(swiper.height).toBe(columnHeight);
       expect(swiper.overflow).toBeUndefined();
+      expect(flattenedStyle(getByTestId("split-page-column-top-space").props.style).height).toBe(
+        edge
+      );
 
       const nav = getByTestId("split-page-column-nav");
       const navStyle = flattenedStyle(nav.props.style);
       expect(navStyle.position).toBeUndefined();
       expect(navStyle.flexDirection).toBe("row");
       expect(navStyle.justifyContent).toBe("space-between");
-      expect(navStyle.height).toBe(navRowHeight);
-      expect(navStyle.paddingBottom).toBe(24);
+      expect(navStyle.height).toBe(navButton);
+      expect(navStyle.marginTop).toBe(edge);
+      expect(navStyle.paddingBottom).toBeUndefined();
+      expect(navStyle.paddingHorizontal).toBe(getSpacing(4));
+      expect(flattenedStyle(getByTestId("split-page-column-bottom-space").props.style).height).toBe(
+        edge + bottomNav
+      );
       expect(page.findAll((node) => node.props?.testID === "split-page-column-nav")).toHaveLength(
         0
       );
+
+      const previousSlot = getByTestId("split-page-column-previous-slot");
+      const nextSlot = getByTestId("split-page-column-next-slot");
+      const slotStyle = {height: navButton, width: navButton};
+      expect(flattenedStyle(previousSlot.props.style)).toMatchObject(slotStyle);
+      expect(flattenedStyle(nextSlot.props.style)).toMatchObject(slotStyle);
+      expect(previousSlot.props.accessible).toBe(false);
+      expect(nextSlot.props.accessible).toBe(false);
       expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-previous")).toBeUndefined();
+      expect(
+        previousSlot.findAll((node) => node.props?.testID === "split-page-column-previous")
+      ).toHaveLength(0);
       const next = getIconButtonByTestId(UNSAFE_root, "split-page-column-next");
       expect(next.props.accessibilityLabel).toBe("Show next column: Notes");
       expect(next.props.iconName).toBe("chevron-right");
-      expect(nav.findAll((node) => node.props?.testID === "split-page-column-next")).toHaveLength(
-        1
+      expect(
+        nextSlot.findAll((node) => node.props?.testID === "split-page-column-next")
+      ).toHaveLength(1);
+      const back = getIconButtonByTestId(UNSAFE_root, "split-page-back-to-list");
+      expect(
+        findAncestor(back, (node) => flattenedStyle(node.props.style).position === "absolute")
+      ).toBeUndefined();
+      expect(findAncestor(back, (node) => node.props?.testID === "split-page-column-nav")).toBe(
+        nav
+      );
+      expect(flattenedStyle(getByTestId("split-page-column-back-slot").props.style)).toMatchObject(
+        slotStyle
       );
 
       await act(async () => {
         next.props.onClick();
       });
       expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-next")).toBeUndefined();
+      expect(
+        getByTestId("split-page-column-next-slot").findAll(
+          (node) => node.props?.testID === "split-page-column-next"
+        )
+      ).toHaveLength(0);
       const previous = getIconButtonByTestId(UNSAFE_root, "split-page-column-previous");
       expect(previous.props.accessibilityLabel).toBe("Show previous column: Summary");
       expect(previous.props.iconName).toBe("chevron-left");
       expect(
-        getByTestId("split-page-column-nav").findAll(
+        getByTestId("split-page-column-previous-slot").findAll(
           (node) => node.props?.testID === "split-page-column-previous"
         )
       ).toHaveLength(1);
-      const back = getIconButtonByTestId(UNSAFE_root, "split-page-back-to-list");
-      const backFrame = findAncestor(
-        back,
-        (node) => flattenedStyle(node.props.style).position === "absolute"
+      expect(
+        flattenedStyle(getByTestId("split-page-column-previous-slot").props.style)
+      ).toMatchObject(slotStyle);
+      expect(flattenedStyle(getByTestId("split-page-column-next-slot").props.style)).toMatchObject(
+        slotStyle
       );
-      expect(flattenedStyle(backFrame?.props.style).bottom).toBe(navRowHeight);
+      expect(flattenedStyle(getByTestId("split-page-column-nav").props.style).height).toBe(
+        navButton
+      );
+      expect(flattenedStyle(getByTestId("split-page-mobile-child-0").props.style).height).toBe(
+        columnHeight
+      );
+      expect(flattenedStyle(getByTestId("split-page-mobile-child-1").props.style).height).toBe(
+        columnHeight
+      );
+    });
+
+    it("keeps labeled nav slots stationary across the first, middle, and last columns", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId, UNSAFE_root} = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          bottomNavBarHeight={20}
+          narrowViewportChildLabels={["Summary", "Notes", "History"]}
+          narrowViewportListButtonLabel="Back to list"
+          tabs={["Summary", "Notes", "History"]}
+        >
+          <View testID="child-1" />
+          <View testID="child-2" />
+          <View testID="child-3" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      layoutPager(getByTestId("split-page-mobile-children"), 500, 340);
+
+      const edge = getSpacing(2);
+      const columnHeight = 500 - (edge + edge + 32 + edge + 20);
+      const slotStyle = {height: 32, width: 32};
+      const expectStationaryChrome = (): void => {
+        expect(flattenedStyle(getByTestId("split-page-mobile-child-0").props.style).height).toBe(
+          columnHeight
+        );
+        expect(flattenedStyle(getByTestId("split-page-mobile-child-1").props.style).height).toBe(
+          columnHeight
+        );
+        expect(flattenedStyle(getByTestId("split-page-mobile-child-2").props.style).height).toBe(
+          columnHeight
+        );
+        expect(flattenedStyle(getByTestId("split-page-column-nav").props.style)).toMatchObject({
+          height: 32,
+          marginTop: edge,
+        });
+        expect(
+          flattenedStyle(getByTestId("split-page-column-previous-slot").props.style)
+        ).toMatchObject(slotStyle);
+        expect(
+          flattenedStyle(getByTestId("split-page-column-next-slot").props.style)
+        ).toMatchObject(slotStyle);
+        expect(
+          flattenedStyle(getByTestId("split-page-column-back-slot").props.style)
+        ).toMatchObject(slotStyle);
+        expect(
+          flattenedStyle(getByTestId("split-page-column-bottom-space").props.style).height
+        ).toBe(edge + 20);
+      };
+
+      expectStationaryChrome();
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-previous")).toBeUndefined();
+      expect(getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.iconName).toBe(
+        "chevron-right"
+      );
+
+      await act(async () => {
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      expectStationaryChrome();
+      expect(getIconButtonByTestId(UNSAFE_root, "split-page-column-previous").props.iconName).toBe(
+        "chevron-left"
+      );
+      expect(
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.accessibilityLabel
+      ).toBe("Show next column: History");
+
+      await act(async () => {
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      expectStationaryChrome();
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-next")).toBeUndefined();
+      expect(
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-previous").props.accessibilityLabel
+      ).toBe("Show previous column: Notes");
     });
 
     it("bounds dotted narrow pages to the measured pane and keeps pagination room", async () => {

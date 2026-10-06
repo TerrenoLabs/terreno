@@ -83,7 +83,7 @@ export const SplitPageConfiguration: DemoConfiguration = {
     },
     "Narrow labeled scroll": {
       description:
-        "Labeled narrow pager. The pane stays clipped and the child scrolls inside it. Select a list item first.",
+        "Labeled narrow pager. Previous and next stay in a row under the column. Select a list item first.",
       render: () => <SplitPageNarrowLabeledScroll />,
     },
     "Narrow dotted scroll": {

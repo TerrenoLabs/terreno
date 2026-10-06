@@ -106,8 +106,8 @@ export const SplitPageNarrowBelowWidth: React.FC = (): React.ReactElement => {
   );
 };
 
-const columnLines = (label: string): React.ReactElement[] => {
-  return Array.from({length: 24}, (_, index) => {
+const columnLines = (label: string, count = 24): React.ReactElement[] => {
+  return Array.from({length: count}, (_, index) => {
     const lineNumber = index + 1;
     return <Text key={`${label}-${lineNumber}`}>{`${label} line ${lineNumber}`}</Text>;
   });
@@ -243,14 +243,15 @@ export const SplitPageMinWidthHorizontal: React.FC = (): React.ReactElement => {
 
 export const SplitPageNarrowLabeledScroll: React.FC = (): React.ReactElement => {
   return (
-    <Box height={420} width="100%">
+    <Box flex="grow" height="100%" width="100%">
       <SplitPage
         childColumnRounding="lg"
         listViewData={LIST_ITEMS}
         narrowBelowWidth={4000}
-        narrowViewportChildLabels={["Summary", "Notes"]}
+        narrowViewportChildLabels={["Summary", "Notes", "History"]}
         narrowViewportListButtonLabel="Back to list"
         renderListViewItem={renderListItem}
+        tabs={["Summary", "Notes", "History"]}
       >
         <Box color="base" height="100%" width="100%">
           <Box padding={3}>
@@ -258,17 +259,23 @@ export const SplitPageNarrowLabeledScroll: React.FC = (): React.ReactElement => 
             <Text>Labeled pager. This header stays put.</Text>
           </Box>
           <Box flex="grow" padding={3} scroll>
-            {columnLines("Summary")}
+            {columnLines("Summary", 40)}
             <Text>Summary end</Text>
           </Box>
         </Box>
         <Box color="base" height="100%" width="100%">
           <Box padding={3}>
             <Heading size="sm">Notes</Heading>
+            <Text>Short column. The pane stays the same height.</Text>
+          </Box>
+        </Box>
+        <Box color="base" height="100%" width="100%">
+          <Box padding={3}>
+            <Heading size="sm">History</Heading>
           </Box>
           <Box flex="grow" padding={3} scroll>
-            {columnLines("Notes")}
-            <Text>Notes end</Text>
+            {columnLines("History", 40)}
+            <Text>History end</Text>
           </Box>
         </Box>
       </SplitPage>

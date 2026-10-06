@@ -1,6 +1,8 @@
 import {describe, it} from "bun:test";
 import {spawnSync} from "node:child_process";
-import {join} from "node:path";
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {dirname, join} from "node:path";
 import {assert} from "chai";
 
 interface HookResult {
@@ -21,21 +23,34 @@ const hookHosts = [
   "devin",
 ] as const;
 
+const writeMarker = (path: string): void => {
+  mkdirSync(dirname(path), {recursive: true});
+  writeFileSync(path, "{}\n");
+};
+
 const runHook = ({
   analysisStatus = 0,
+  depsRoot,
   hookHost,
   hookInput = "{}",
+  installStatus = 0,
   lintStatus,
   typecheckStatus,
 }: {
   analysisStatus?: number;
+  depsRoot?: string;
   hookHost: (typeof hookHosts)[number];
   hookInput?: string;
+  installStatus?: number;
   lintStatus: number;
   typecheckStatus: number;
 }): HookResult => {
   const command = `
 bun() {
+  if [[ "$*" == "install --frozen-lockfile" ]]; then
+    echo "install output" >&2
+    return "$INSTALL_STATUS"
+  fi
   if [[ "$*" == "run lint" ]]; then
     echo "lint output" >&2
     return "$LINT_STATUS"
@@ -53,17 +68,24 @@ bun() {
 export -f bun
 exec "$QUALITY_CHECK_SCRIPT" "$HOOK_HOST"
 `;
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ANALYSIS_STATUS: String(analysisStatus),
+    HOOK_HOST: hookHost,
+    INSTALL_STATUS: String(installStatus),
+    LINT_STATUS: String(lintStatus),
+    QUALITY_CHECK_SCRIPT: qualityCheckScript,
+    TYPECHECK_STATUS: String(typecheckStatus),
+  };
+  if (depsRoot) {
+    env.QUALITY_CHECK_DEPS_ROOT = depsRoot;
+  } else {
+    delete env.QUALITY_CHECK_DEPS_ROOT;
+  }
   const result = spawnSync("bash", ["-c", command], {
     cwd: repositoryRoot,
     encoding: "utf8",
-    env: {
-      ...process.env,
-      ANALYSIS_STATUS: String(analysisStatus),
-      HOOK_HOST: hookHost,
-      LINT_STATUS: String(lintStatus),
-      QUALITY_CHECK_SCRIPT: qualityCheckScript,
-      TYPECHECK_STATUS: String(typecheckStatus),
-    },
+    env,
     input: hookInput,
   });
 
@@ -84,6 +106,69 @@ describe("quality-check hook", (): void => {
       assert.include(result.stderr, "lint output");
       assert.include(result.stderr, "typecheck output");
       assert.include(result.stderr, "analysis output");
+      assert.notInclude(result.stderr, "installing workspace dependencies");
+    }
+  });
+
+  it("installs when TypeScript is present but a workspace package is not linked", (): void => {
+    const depsRoot = mkdtempSync(join(tmpdir(), "quality-check-deps-"));
+    try {
+      writeMarker(join(depsRoot, "node_modules/typescript/package.json"));
+      const result = runHook({
+        depsRoot,
+        hookHost: "cursor",
+        lintStatus: 0,
+        typecheckStatus: 0,
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), {});
+      assert.include(result.stderr, "installing workspace dependencies");
+      assert.include(result.stderr, "install output");
+      assert.include(result.stderr, "typecheck output");
+    } finally {
+      rmSync(depsRoot, {recursive: true});
+    }
+  });
+
+  it("installs when TypeScript is missing", (): void => {
+    const depsRoot = mkdtempSync(join(tmpdir(), "quality-check-deps-"));
+    try {
+      const result = runHook({
+        depsRoot,
+        hookHost: "cursor",
+        lintStatus: 0,
+        typecheckStatus: 0,
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.include(result.stderr, "installing workspace dependencies");
+      assert.include(result.stderr, "install output");
+    } finally {
+      rmSync(depsRoot, {recursive: true});
+    }
+  });
+
+  it("blocks when install fails because a workspace package is not linked", (): void => {
+    const depsRoot = mkdtempSync(join(tmpdir(), "quality-check-deps-"));
+    try {
+      writeMarker(join(depsRoot, "node_modules/typescript/package.json"));
+      const result = runHook({
+        depsRoot,
+        hookHost: "cursor",
+        installStatus: 1,
+        lintStatus: 0,
+        typecheckStatus: 0,
+      });
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), {
+        followup_message:
+          "Quality checks failed because workspace dependencies are not installed. Run bun install --frozen-lockfile from the repo root, then retry.",
+      });
+      assert.notInclude(result.stderr, "typecheck output");
+    } finally {
+      rmSync(depsRoot, {recursive: true});
     }
   });
 

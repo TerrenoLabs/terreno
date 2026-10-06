@@ -84,7 +84,7 @@ export const addHarnessConversationRoutes = (
           method: "POST",
           permissions: [Permissions.IsAuthenticated, ownerOnly as PermissionMethod<unknown>],
           summary: "Submit a message to a harness conversation",
-          tag: "harness",
+          tag: "harnessconversations",
         },
       },
       permissions: {

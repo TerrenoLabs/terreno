@@ -20,11 +20,15 @@ const swiperScrollToIndex = mock((_options?: PagerScrollOptions) => {});
 mock.module("react-native-swiper-flatlist", () => ({
   SwiperFlatList: forwardRef(
     (
-      {children}: {children?: ReactNode},
+      {children, style}: {children?: ReactNode; style?: object},
       ref: Ref<{scrollToIndex: (options: PagerScrollOptions) => void}>
     ) => {
       useImperativeHandle(ref, () => ({scrollToIndex: swiperScrollToIndex}));
-      return <View testID="swiper-flatlist">{children}</View>;
+      return (
+        <View style={style} testID="swiper-flatlist">
+          {children}
+        </View>
+      );
     }
   ),
 }));
@@ -1260,6 +1264,125 @@ describe("SplitPage", () => {
         flattenedStyle(segmented.getByTestId("split-page-desktop-segment-child-0").props.style)
           .overflow
       ).toBe("hidden");
+    });
+  });
+
+  describe("narrow child column scrolling", () => {
+    const renderFullHeightChild = (): ReactElement => {
+      return (
+        <View style={{height: "100%"}} testID="bounded-child">
+          <View style={{height: 48}} testID="fixed-section" />
+          <ScrollView testID="internal-scroll">
+            <View style={{height: 4000}} testID="internal-tall" />
+          </ScrollView>
+        </View>
+      );
+    };
+
+    const selectFirst = async (
+      getAllByLabelText: (label: string) => ReactTestInstance[]
+    ): Promise<void> => {
+      const boxes = getAllByLabelText("Select");
+      await act(async () => {
+        fireEvent.press(boxes[0]);
+      });
+    };
+
+    const layoutPager = (node: ReactTestInstance, height: number, width: number): void => {
+      act(() => {
+        node.props.onLayout({
+          nativeEvent: {layout: {height, width, x: 0, y: 0}},
+        });
+      });
+    };
+
+    const expectBoundedNarrowChild = (page: ReactTestInstance): void => {
+      const child = page.findByProps({testID: "bounded-child"});
+      const childStyle = flattenedStyle(child.props.style);
+      expect(childStyle.height).toBe("100%");
+      expect(childStyle.position).toBeUndefined();
+      expect(page.findByProps({testID: "fixed-section"})).toBeTruthy();
+      expect(page.findByProps({testID: "internal-scroll"})).toBeTruthy();
+      expect(page.findByProps({testID: "internal-tall"})).toBeTruthy();
+    };
+
+    it("bounds a labeled narrow page to the measured pane so a height 100% child can scroll inside it", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId, UNSAFE_root} = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          bottomNavBarHeight={24}
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportListButtonLabel="Back to list"
+        >
+          {renderFullHeightChild()}
+          <View testID="other-child" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      const pageBeforeLayout = getByTestId("split-page-mobile-child-0");
+      expect(flattenedStyle(pageBeforeLayout.props.style).height).toBe("100%");
+
+      layoutPager(getByTestId("split-page-mobile-children"), 360, 320);
+
+      const page = getByTestId("split-page-mobile-child-0");
+      const style = flattenedStyle(page.props.style);
+      expect(style.height).toBe(360);
+      expect(style.overflow).toBe("hidden");
+      expect(style.borderRadius).toBe(getRounding("md"));
+      expect(style.paddingBottom).toBe(24);
+      expect(style.width).toBe(320);
+      expectBoundedNarrowChild(page);
+      const swiper = flattenedStyle(getByTestId("swiper-flatlist").props.style);
+      expect(swiper.height).toBe("100%");
+      expect(swiper.overflow).toBeUndefined();
+      const next = getIconButtonByTestId(UNSAFE_root, "split-page-column-next");
+      const controls = findAncestor(
+        next,
+        (node) => flattenedStyle(node.props.style).position === "absolute"
+      );
+      expect(flattenedStyle(controls?.props.style).bottom).toBe(32);
+      expect(getIconButtonByTestId(UNSAFE_root, "split-page-back-to-list")).toBeTruthy();
+    });
+
+    it("bounds dotted narrow pages to the measured pane and keeps pagination room", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps} bottomNavBarHeight={16} childColumnRounding="lg">
+          {renderFullHeightChild()}
+          <View testID="other-child" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      expect(flattenedStyle(getByTestId("split-page-dotted-child-0").props.style).height).toBe(
+        "90%"
+      );
+
+      layoutPager(getByTestId("split-page-dotted-pager"), 400, 300);
+
+      const page = getByTestId("split-page-dotted-child-0");
+      const style = flattenedStyle(page.props.style);
+      expect(style.height).toBe(360);
+      expect(style.overflow).toBe("hidden");
+      expect(style.borderRadius).toBe(getRounding("lg"));
+      expect(style.paddingBottom).toBe(16);
+      expect(style.padding).toBe(4);
+      expect(style.width).toBe(367);
+      expectBoundedNarrowChild(page);
+      const swiper = flattenedStyle(getByTestId("swiper-flatlist").props.style);
+      expect(swiper.height).toBe("100%");
+      expect(swiper.overflow).toBeUndefined();
+    });
+
+    it("bounds a single dotted page to the full measured height", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps}>{renderFullHeightChild()}</SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      layoutPager(getByTestId("split-page-dotted-pager"), 410, 300);
+      expect(flattenedStyle(getByTestId("split-page-dotted-child-0").props.style).height).toBe(410);
+      expectBoundedNarrowChild(getByTestId("split-page-dotted-child-0"));
     });
   });
 });

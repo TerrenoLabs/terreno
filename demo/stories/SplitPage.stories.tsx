@@ -252,7 +252,7 @@ export const SplitPageNarrowLabeledScroll: React.FC = (): React.ReactElement => 
         narrowViewportListButtonLabel="Back to list"
         renderListViewItem={renderListItem}
       >
-        <Box color="base" height={300} width="100%">
+        <Box color="base" height="100%" width="100%">
           <Box padding={3}>
             <Heading size="sm">Summary</Heading>
             <Text>Labeled pager. This header stays put.</Text>
@@ -262,7 +262,7 @@ export const SplitPageNarrowLabeledScroll: React.FC = (): React.ReactElement => 
             <Text>Summary end</Text>
           </Box>
         </Box>
-        <Box color="base" height={300} width="100%">
+        <Box color="base" height="100%" width="100%">
           <Box padding={3}>
             <Heading size="sm">Notes</Heading>
           </Box>
@@ -285,7 +285,7 @@ export const SplitPageNarrowDottedScroll: React.FC = (): React.ReactElement => {
         narrowBelowWidth={4000}
         renderListViewItem={renderListItem}
       >
-        <Box color="base" height={300} width="100%">
+        <Box color="base" height="100%" width="100%">
           <Box padding={3}>
             <Heading size="sm">Dotted page</Heading>
             <Text>Dotted swiper. This header stays put.</Text>

@@ -729,6 +729,9 @@ are one or two children. `childColumnRounding` sets the border radius on each de
 pane (defaults to `md`, 4px); the list column is excluded. The pane clips to that radius. The
 column inside it scrolls: content taller than the pane scrolls in the column, and a child with
 `height: "100%"` fills the visible pane so a scroll view inside that child scrolls on its own.
+On a narrow web viewport the pager page is height-bounded to that same visible pane. Its rounded
+corners still clip, and a `height: "100%"` child scrolls inside the page. Horizontal paging,
+previous/next controls, and `bottomNavBarHeight` padding stay in place.
 `narrowViewportChildLabels`
 opts into a labeled full-width pager on the narrow viewport. `narrowBelowWidth` uses that
 viewport when the window is at or below the given pixel width; when omitted, the narrow

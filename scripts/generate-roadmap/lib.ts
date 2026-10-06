@@ -37,7 +37,7 @@ const DECLINED_STATUS = "Declined";
  */
 const GENERATED_TIMESTAMP_LINE = /^> dates are promised\. Last updated: .+\.$/m;
 
-export const withoutGeneratedTimestamp = (markdown: string): string => {
+const withoutGeneratedTimestamp = (markdown: string): string => {
   return markdown.replace(GENERATED_TIMESTAMP_LINE, "> dates are promised. Last updated: STAMP.");
 };
 

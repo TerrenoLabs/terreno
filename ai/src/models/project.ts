@@ -66,13 +66,12 @@ export const getProjectModel = (): ProjectModel => {
 /**
  * Lazy stand-in for the `Project` model: every access registers it via `getProjectModel`.
  * Statics, `new Project(...)` and `instanceof Project` work, but the proxy is not the model
- * itself (`Project !== mongoose.models.Project`, and `Object.keys(Project)` is empty).
+ * itself (`Project !== mongoose.models.Project`, `Object.keys(Project)` is empty, and reading
+ * `Project.prototype` throws).
  * @deprecated Use `getProjectModel()`.
  */
-// A `function` target keeps the proxy callable and constructible, like a mongoose Model.
-export const Project = new Proxy(function lazyProject() {} as unknown as ProjectModel, {
-  apply: (_target, thisArg, args) =>
-    Reflect.apply(getProjectModel() as unknown as (...a: unknown[]) => unknown, thisArg, args),
+// A class target keeps the proxy constructible, like a mongoose Model.
+export const Project = new Proxy(class LazyProject {} as unknown as ProjectModel, {
   construct: (_target, args) => Reflect.construct(getProjectModel(), args),
   get: (_target, property) => {
     const model = getProjectModel();

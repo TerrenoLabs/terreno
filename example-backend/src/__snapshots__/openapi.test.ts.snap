@@ -13467,6 +13467,14 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
               "type": "number",
             },
           },
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
         ],
         "responses": {
           "200": {

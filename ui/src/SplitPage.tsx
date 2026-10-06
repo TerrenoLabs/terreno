@@ -2,6 +2,8 @@ import {
   Children,
   type ComponentProps,
   type ElementRef,
+  type ReactElement,
+  type ReactNode,
   useCallback,
   useEffect,
   useRef,
@@ -13,6 +15,7 @@ import {
   ScrollView,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from "react-native";
 import {SwiperFlatList} from "react-native-swiper-flatlist";
 
@@ -24,6 +27,49 @@ import {isNarrowViewport} from "./MediaQuery";
 import {SegmentedControl} from "./SegmentedControl";
 import {Spinner} from "./Spinner";
 import {useTheme} from "./Theme";
+
+// flex: 1 (basis 0, shrink 1) sizes the content container to the pane. A height: "100%"
+// child then stays pane-bounded and can scroll internally. A taller child that does not
+// shrink still extends this ScrollView. flexGrow: 1 leaves the basis at the content size,
+// so that same height: "100%" child grows with its content instead of the pane.
+const desktopChildContentContainerStyle = {flex: 1};
+
+const renderDesktopChildColumn = ({
+  borderRadius,
+  columnKey,
+  element,
+  paneStyle,
+  scrollTestID,
+  testID,
+}: {
+  borderRadius: number;
+  columnKey: number;
+  element: ReactNode;
+  paneStyle: ViewStyle;
+  scrollTestID: string;
+  testID: string;
+}): ReactElement => {
+  return (
+    <View
+      key={columnKey}
+      style={{
+        ...paneStyle,
+        borderRadius,
+        height: "100%",
+        overflow: "hidden",
+      }}
+      testID={testID}
+    >
+      <ScrollView
+        contentContainerStyle={desktopChildContentContainerStyle}
+        style={{flex: 1, height: "100%"}}
+        testID={scrollTestID}
+      >
+        {element}
+      </ScrollView>
+    </View>
+  );
+};
 
 // A component for rendering a list on one side and a details view on the right for large screens,
 // and a scrollable list where clicking an item takes you the details view.
@@ -205,25 +251,19 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
             width={activeTabs.length > 1 ? "100%" : "60%"}
           >
             {activeTabs.map((tabIndex, i) => {
-              return (
-                <ScrollView
-                  contentContainerStyle={{
-                    flex: 1,
-                  }}
-                  key={tabIndex}
-                  style={{
-                    borderRadius: childColumnBorderRadius,
-                    flex: 1,
-                    height: "100%",
-                    overflow: "hidden",
-                    paddingLeft: i ? 16 : 0,
-                    paddingRight: i ? 0 : 16,
-                    width: "60%",
-                  }}
-                >
-                  {elementArray[tabIndex]}
-                </ScrollView>
-              );
+              return renderDesktopChildColumn({
+                borderRadius: childColumnBorderRadius,
+                columnKey: tabIndex,
+                element: elementArray[tabIndex],
+                paneStyle: {
+                  flex: 1,
+                  paddingLeft: i ? 16 : 0,
+                  paddingRight: i ? 0 : 16,
+                  width: "60%",
+                },
+                scrollTestID: `split-page-desktop-child-scroll-${i}`,
+                testID: `split-page-desktop-segment-child-${i}`,
+              });
             })}
           </Box>
         </View>
@@ -258,24 +298,19 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
           testID="split-page-desktop-children-scroll"
         >
           {elementArray.map((element, index) => {
-            return (
-              <ScrollView
-                contentContainerStyle={{flexGrow: 1}}
-                key={index}
-                style={{
-                  borderRadius: childColumnBorderRadius,
-                  flexGrow: 0,
-                  flexShrink: 0,
-                  height: "100%",
-                  maxWidth: childWidth,
-                  overflow: "hidden",
-                  width: childWidth,
-                }}
-                testID={`split-page-desktop-child-${index}`}
-              >
-                {element}
-              </ScrollView>
-            );
+            return renderDesktopChildColumn({
+              borderRadius: childColumnBorderRadius,
+              columnKey: index,
+              element,
+              paneStyle: {
+                flexGrow: 0,
+                flexShrink: 0,
+                maxWidth: childWidth,
+                width: childWidth,
+              },
+              scrollTestID: `split-page-desktop-child-scroll-${index}`,
+              testID: `split-page-desktop-child-${index}`,
+            });
           })}
         </ScrollView>
       );
@@ -284,23 +319,17 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
     return (
       <Box alignItems="center" direction="row" flex="grow" justifyContent="center" paddingX={2}>
         {elementArray.map((element, index) => {
-          return (
-            <ScrollView
-              contentContainerStyle={{
-                flex: 1,
-              }}
-              key={index}
-              style={{
-                borderRadius: childColumnBorderRadius,
-                flex: 1,
-                height: "100%",
-                overflow: "hidden",
-                width: "60%",
-              }}
-            >
-              {element}
-            </ScrollView>
-          );
+          return renderDesktopChildColumn({
+            borderRadius: childColumnBorderRadius,
+            columnKey: index,
+            element,
+            paneStyle: {
+              flex: 1,
+              width: "60%",
+            },
+            scrollTestID: `split-page-desktop-child-scroll-${index}`,
+            testID: `split-page-desktop-row-child-${index}`,
+          });
         })}
       </Box>
     );

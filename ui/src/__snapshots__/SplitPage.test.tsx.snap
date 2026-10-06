@@ -249,18 +249,31 @@ exports[`SplitPage renders correctly with children 1`] = `
                   "children": [
                     {
                       "$$typeof": Symbol(react.test.json),
-                      "children": null,
+                      "children": [
+                        {
+                          "$$typeof": Symbol(react.test.json),
+                          "children": null,
+                          "props": {
+                            "style": undefined,
+                            "testID": "child-1",
+                          },
+                          "type": "View",
+                        },
+                      ],
                       "props": {
-                        "style": undefined,
-                        "testID": "child-1",
+                        "contentContainerStyle": {
+                          "flex": 1,
+                        },
+                        "style": {
+                          "flex": 1,
+                          "height": "100%",
+                        },
+                        "testID": "split-page-desktop-child-scroll-0",
                       },
-                      "type": "View",
+                      "type": "ScrollView",
                     },
                   ],
                   "props": {
-                    "contentContainerStyle": {
-                      "flex": 1,
-                    },
                     "style": {
                       "borderRadius": 4,
                       "flex": 1,
@@ -268,26 +281,40 @@ exports[`SplitPage renders correctly with children 1`] = `
                       "overflow": "hidden",
                       "width": "60%",
                     },
+                    "testID": "split-page-desktop-row-child-0",
                   },
-                  "type": "ScrollView",
+                  "type": "View",
                 },
                 {
                   "$$typeof": Symbol(react.test.json),
                   "children": [
                     {
                       "$$typeof": Symbol(react.test.json),
-                      "children": null,
+                      "children": [
+                        {
+                          "$$typeof": Symbol(react.test.json),
+                          "children": null,
+                          "props": {
+                            "style": undefined,
+                            "testID": "child-2",
+                          },
+                          "type": "View",
+                        },
+                      ],
                       "props": {
-                        "style": undefined,
-                        "testID": "child-2",
+                        "contentContainerStyle": {
+                          "flex": 1,
+                        },
+                        "style": {
+                          "flex": 1,
+                          "height": "100%",
+                        },
+                        "testID": "split-page-desktop-child-scroll-1",
                       },
-                      "type": "View",
+                      "type": "ScrollView",
                     },
                   ],
                   "props": {
-                    "contentContainerStyle": {
-                      "flex": 1,
-                    },
                     "style": {
                       "borderRadius": 4,
                       "flex": 1,
@@ -295,8 +322,9 @@ exports[`SplitPage renders correctly with children 1`] = `
                       "overflow": "hidden",
                       "width": "60%",
                     },
+                    "testID": "split-page-desktop-row-child-1",
                   },
-                  "type": "ScrollView",
+                  "type": "View",
                 },
               ],
               "props": {
@@ -950,18 +978,31 @@ exports[`SplitPage renders with tabs when more than 2 children 1`] = `
                       "children": [
                         {
                           "$$typeof": Symbol(react.test.json),
-                          "children": null,
+                          "children": [
+                            {
+                              "$$typeof": Symbol(react.test.json),
+                              "children": null,
+                              "props": {
+                                "style": undefined,
+                                "testID": "child-1",
+                              },
+                              "type": "View",
+                            },
+                          ],
                           "props": {
-                            "style": undefined,
-                            "testID": "child-1",
+                            "contentContainerStyle": {
+                              "flex": 1,
+                            },
+                            "style": {
+                              "flex": 1,
+                              "height": "100%",
+                            },
+                            "testID": "split-page-desktop-child-scroll-0",
                           },
-                          "type": "View",
+                          "type": "ScrollView",
                         },
                       ],
                       "props": {
-                        "contentContainerStyle": {
-                          "flex": 1,
-                        },
                         "style": {
                           "borderRadius": 4,
                           "flex": 1,
@@ -971,26 +1012,40 @@ exports[`SplitPage renders with tabs when more than 2 children 1`] = `
                           "paddingRight": 16,
                           "width": "60%",
                         },
+                        "testID": "split-page-desktop-segment-child-0",
                       },
-                      "type": "ScrollView",
+                      "type": "View",
                     },
                     {
                       "$$typeof": Symbol(react.test.json),
                       "children": [
                         {
                           "$$typeof": Symbol(react.test.json),
-                          "children": null,
+                          "children": [
+                            {
+                              "$$typeof": Symbol(react.test.json),
+                              "children": null,
+                              "props": {
+                                "style": undefined,
+                                "testID": "child-2",
+                              },
+                              "type": "View",
+                            },
+                          ],
                           "props": {
-                            "style": undefined,
-                            "testID": "child-2",
+                            "contentContainerStyle": {
+                              "flex": 1,
+                            },
+                            "style": {
+                              "flex": 1,
+                              "height": "100%",
+                            },
+                            "testID": "split-page-desktop-child-scroll-1",
                           },
-                          "type": "View",
+                          "type": "ScrollView",
                         },
                       ],
                       "props": {
-                        "contentContainerStyle": {
-                          "flex": 1,
-                        },
                         "style": {
                           "borderRadius": 4,
                           "flex": 1,
@@ -1000,8 +1055,9 @@ exports[`SplitPage renders with tabs when more than 2 children 1`] = `
                           "paddingRight": 0,
                           "width": "60%",
                         },
+                        "testID": "split-page-desktop-segment-child-1",
                       },
-                      "type": "ScrollView",
+                      "type": "View",
                     },
                   ],
                   "props": {
@@ -1791,18 +1847,31 @@ exports[`SplitPage filters out null children 1`] = `
                   "children": [
                     {
                       "$$typeof": Symbol(react.test.json),
-                      "children": null,
+                      "children": [
+                        {
+                          "$$typeof": Symbol(react.test.json),
+                          "children": null,
+                          "props": {
+                            "style": undefined,
+                            "testID": "child-1",
+                          },
+                          "type": "View",
+                        },
+                      ],
                       "props": {
-                        "style": undefined,
-                        "testID": "child-1",
+                        "contentContainerStyle": {
+                          "flex": 1,
+                        },
+                        "style": {
+                          "flex": 1,
+                          "height": "100%",
+                        },
+                        "testID": "split-page-desktop-child-scroll-0",
                       },
-                      "type": "View",
+                      "type": "ScrollView",
                     },
                   ],
                   "props": {
-                    "contentContainerStyle": {
-                      "flex": 1,
-                    },
                     "style": {
                       "borderRadius": 4,
                       "flex": 1,
@@ -1810,26 +1879,40 @@ exports[`SplitPage filters out null children 1`] = `
                       "overflow": "hidden",
                       "width": "60%",
                     },
+                    "testID": "split-page-desktop-row-child-0",
                   },
-                  "type": "ScrollView",
+                  "type": "View",
                 },
                 {
                   "$$typeof": Symbol(react.test.json),
                   "children": [
                     {
                       "$$typeof": Symbol(react.test.json),
-                      "children": null,
+                      "children": [
+                        {
+                          "$$typeof": Symbol(react.test.json),
+                          "children": null,
+                          "props": {
+                            "style": undefined,
+                            "testID": "child-2",
+                          },
+                          "type": "View",
+                        },
+                      ],
                       "props": {
-                        "style": undefined,
-                        "testID": "child-2",
+                        "contentContainerStyle": {
+                          "flex": 1,
+                        },
+                        "style": {
+                          "flex": 1,
+                          "height": "100%",
+                        },
+                        "testID": "split-page-desktop-child-scroll-1",
                       },
-                      "type": "View",
+                      "type": "ScrollView",
                     },
                   ],
                   "props": {
-                    "contentContainerStyle": {
-                      "flex": 1,
-                    },
                     "style": {
                       "borderRadius": 4,
                       "flex": 1,
@@ -1837,8 +1920,9 @@ exports[`SplitPage filters out null children 1`] = `
                       "overflow": "hidden",
                       "width": "60%",
                     },
+                    "testID": "split-page-desktop-row-child-1",
                   },
-                  "type": "ScrollView",
+                  "type": "View",
                 },
               ],
               "props": {
@@ -2146,18 +2230,31 @@ exports[`SplitPage renders with bottomNavBarHeight 1`] = `
                   "children": [
                     {
                       "$$typeof": Symbol(react.test.json),
-                      "children": null,
+                      "children": [
+                        {
+                          "$$typeof": Symbol(react.test.json),
+                          "children": null,
+                          "props": {
+                            "style": undefined,
+                            "testID": "child-1",
+                          },
+                          "type": "View",
+                        },
+                      ],
                       "props": {
-                        "style": undefined,
-                        "testID": "child-1",
+                        "contentContainerStyle": {
+                          "flex": 1,
+                        },
+                        "style": {
+                          "flex": 1,
+                          "height": "100%",
+                        },
+                        "testID": "split-page-desktop-child-scroll-0",
                       },
-                      "type": "View",
+                      "type": "ScrollView",
                     },
                   ],
                   "props": {
-                    "contentContainerStyle": {
-                      "flex": 1,
-                    },
                     "style": {
                       "borderRadius": 4,
                       "flex": 1,
@@ -2165,8 +2262,9 @@ exports[`SplitPage renders with bottomNavBarHeight 1`] = `
                       "overflow": "hidden",
                       "width": "60%",
                     },
+                    "testID": "split-page-desktop-row-child-0",
                   },
-                  "type": "ScrollView",
+                  "type": "View",
                 },
               ],
               "props": {

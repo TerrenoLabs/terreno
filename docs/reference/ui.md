@@ -725,8 +725,11 @@ Master-detail layout. Pass `listViewData` plus `renderListViewItem` for the list
 screens the detail replaces the list until the user goes back.
 
 `desktopChildrenMinWidth` opts into a minimum pixel width for each desktop child when there
-are one or two children. `childColumnRounding` sets the border radius on each detail child
-column container (defaults to `md`, 4px); the list column is excluded. `narrowViewportChildLabels`
+are one or two children. `childColumnRounding` sets the border radius on each desktop detail
+pane (defaults to `md`, 4px); the list column is excluded. The pane clips to that radius. The
+column inside it scrolls: content taller than the pane scrolls in the column, and a child with
+`height: "100%"` fills the visible pane so a scroll view inside that child scrolls on its own.
+`narrowViewportChildLabels`
 opts into a labeled full-width pager on the narrow viewport. `narrowBelowWidth` uses that
 viewport when the window is at or below the given pixel width; when omitted, the narrow
 viewport follows `isNarrowViewport()`. These props are web only; the native `SplitPage`

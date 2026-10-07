@@ -1652,6 +1652,8 @@ jobs:
       - resolve_affected_e2e_shards
       - run:
           name: Compile workspace
+          environment:
+            NODE_OPTIONS: "--max-old-space-size=8192"
           command: bun run compile
       - run:
           name: Export example-frontend web
@@ -1660,8 +1662,7 @@ jobs:
           environment:
             CI: "true"
             EXPO_NO_TELEMETRY: "1"
-            NODE_OPTIONS: "--max-old-space-size=8192"
-          command: bun expo export --platform web
+          command: bun run export
       - run:
           name: Archive dist trees
           command: |

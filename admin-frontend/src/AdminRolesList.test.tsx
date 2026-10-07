@@ -135,8 +135,49 @@ describe("AdminRolesList", () => {
     );
 
     expect(getByTestId("admin-permissions-list")).toBeTruthy();
-    expect(getByText("admin:runScripts")).toBeTruthy();
+    expect(getByTestId("admin-permissions-admin")).toBeTruthy();
+    expect(getByText("runScripts")).toBeTruthy();
     expect(getByTestId("admin-roles-add-button")).toBeTruthy();
+  });
+
+  it("groups a role's actions into one row per resource", () => {
+    mockUseListRolesQuery.mockReturnValue({data: ROLES, error: null, isLoading: false});
+    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+
+    expect(getByTestId("admin-roles-item-todoUser-permission-adminTodo")).toBeTruthy();
+    expect(getByTestId("admin-roles-item-todoUser-permission-adminTodo-read")).toBeTruthy();
+    expect(getByTestId("admin-roles-item-todoUser-permission-adminTodo-writeOwned")).toBeTruthy();
+  });
+
+  it("colors permission badges green for read, amber for write, and red for delete", () => {
+    mockUseListStatementsQuery.mockReturnValue({
+      data: {statements: {todo: ["delete", "update", "list", "read"]}},
+      error: null,
+      isLoading: false,
+    });
+    mockUseListRolesQuery.mockReturnValue({data: [], error: null, isLoading: false});
+    const {UNSAFE_root} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+
+    const badges = UNSAFE_root.findAll(
+      (node) =>
+        typeof node.props.testID === "string" &&
+        node.props.testID.startsWith("admin-permissions-todo-") &&
+        typeof node.props.status === "string"
+    );
+    const statusByAction = Object.fromEntries(
+      badges.map((badge) => [badge.props.value, badge.props.status])
+    );
+    assert.deepEqual(statusByAction, {
+      delete: "error",
+      list: "success",
+      read: "success",
+      update: "warning",
+    });
+    // Read actions first, then write, then delete.
+    assert.deepEqual(
+      badges.map((badge) => badge.props.value),
+      ["list", "read", "update", "delete"]
+    );
   });
 
   it("enables editing for non-sealed roles and disables sealed roles", () => {

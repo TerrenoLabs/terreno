@@ -45,6 +45,81 @@ const STANDARD_ACCESS_OPTIONS = [
 const ADMIN_PAGE_RESOURCE = "admin";
 const ADMIN_PAGE_ACTION = "access";
 
+// Actions that only expose data; everything not listed here or in DELETE_ACTIONS mutates data.
+const READ_ACTIONS = new Set(["access", "list", "read"]);
+const DELETE_ACTIONS = new Set(["delete", "destroy", "remove"]);
+
+type PermissionKind = "read" | "write" | "delete";
+
+const PERMISSION_KIND_ORDER: Record<PermissionKind, number> = {delete: 2, read: 0, write: 1};
+
+const PERMISSION_KIND_STATUS: Record<PermissionKind, "success" | "warning" | "error"> = {
+  delete: "error",
+  read: "success",
+  write: "warning",
+};
+
+const permissionKind = (action: string): PermissionKind => {
+  if (READ_ACTIONS.has(action) || action.startsWith("view")) {
+    return "read";
+  }
+  if (DELETE_ACTIONS.has(action)) {
+    return "delete";
+  }
+  return "write";
+};
+
+const sortActionsByKind = (actions: readonly string[]): string[] => {
+  return [...actions].sort(
+    (a, b) =>
+      PERMISSION_KIND_ORDER[permissionKind(a)] - PERMISSION_KIND_ORDER[permissionKind(b)] ||
+      a.localeCompare(b)
+  );
+};
+
+/** One row per resource with color-coded action badges (read green, write amber, delete red). */
+const PermissionRows: React.FC<{
+  permissions: Record<string, readonly string[]>;
+  testIDPrefix: string;
+}> = ({permissions, testIDPrefix}) => {
+  const entries = Object.entries(permissions)
+    .filter(([, actions]) => actions.length > 0)
+    .sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0) {
+    return null;
+  }
+  return (
+    <Box gap={1}>
+      {entries.map(([resource, actions]) => (
+        <Box
+          alignItems="center"
+          direction="row"
+          gap={2}
+          key={resource}
+          testID={`${testIDPrefix}-${resource}`}
+          wrap
+        >
+          <Box minWidth={240}>
+            <Text bold size="sm">
+              {resource}
+            </Text>
+          </Box>
+          <Box direction="row" gap={1} wrap>
+            {sortActionsByKind(actions).map((action) => (
+              <Badge
+                key={action}
+                status={PERMISSION_KIND_STATUS[permissionKind(action)]}
+                testID={`${testIDPrefix}-${resource}-${action}`}
+                value={action}
+              />
+            ))}
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+};
+
 const editorActionsForResource = ({
   actions,
   hasStandardAccess,
@@ -280,13 +355,10 @@ export const AdminRolesList: React.FC<AdminScreenProps> = ({api, apiBase, baseUr
                   {role.name}
                 </Text>
                 {role.description ? <Text size="sm">{role.description}</Text> : null}
-                <Box direction="row" gap={1} wrap>
-                  {Object.entries(role.permissions ?? {}).flatMap(([resource, actions]) =>
-                    actions.map((action) => (
-                      <Badge key={`${resource}:${action}`} value={`${resource}:${action}`} />
-                    ))
-                  )}
-                </Box>
+                <PermissionRows
+                  permissions={role.permissions ?? {}}
+                  testIDPrefix={`admin-roles-item-${role.name}-permission`}
+                />
               </Box>
             ))
           )}
@@ -295,18 +367,9 @@ export const AdminRolesList: React.FC<AdminScreenProps> = ({api, apiBase, baseUr
             <Heading size="md">Available permissions</Heading>
             {areStatementsLoading ? <Spinner /> : null}
             {statementsError ? <Text color="error">Failed to load permissions.</Text> : null}
-            {!areStatementsLoading && !statementsError
-              ? resources.map((resource) => (
-                  <Box gap={1} key={resource}>
-                    <Text bold>{resource}</Text>
-                    <Box direction="row" gap={1} wrap>
-                      {statements[resource].map((action) => (
-                        <Badge key={`${resource}:${action}`} value={`${resource}:${action}`} />
-                      ))}
-                    </Box>
-                  </Box>
-                ))
-              : null}
+            {!areStatementsLoading && !statementsError ? (
+              <PermissionRows permissions={statements} testIDPrefix="admin-permissions" />
+            ) : null}
           </Box>
         </Box>
       </Box>

@@ -240,6 +240,13 @@ const syncConflicts = useConflicts();
 
 ### AdminRolesList
 
+Role cards and the **Available permissions** list show one row per resource, with that
+resource's actions as badges. Badge color shows the kind of access:
+
+- Green: read-only actions (`read`, `list`, `access`, `view*`)
+- Red: destructive actions (`delete`, `destroy`, `remove`)
+- Amber: every other action, which changes data
+
 Role editing starts with a dedicated **Admin page** toggle for `admin:access`. That is the only
 permission that opens the admin panel. Grant it first; model and tool permissions do nothing until
 the role can enter.

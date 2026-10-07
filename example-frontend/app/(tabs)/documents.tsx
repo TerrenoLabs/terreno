@@ -45,14 +45,22 @@ const DocumentsScreen: React.FC = () => {
 
   return (
     <Box flex="grow" testID="documents-screen">
-      <Box paddingX={4} style={{paddingTop: insets.top + 4}}>
-        <SegmentedControl
-          items={SECTIONS.map((s) => s.label)}
-          onChange={handleSectionChange}
-          selectedIndex={selectedIndex}
-          size="sm"
-          testID="documents-section-control"
-        />
+      <Box
+        alignItems="center"
+        // Theme padding cannot include the safe-area inset, so top padding is inline.
+        dangerouslySetInlineStyle={{__style: {paddingTop: insets.top + 16}}}
+        paddingX={4}
+        paddingY={4}
+      >
+        <Box maxWidth={480} width="100%">
+          <SegmentedControl
+            items={SECTIONS.map((s) => s.label)}
+            onChange={handleSectionChange}
+            selectedIndex={selectedIndex}
+            size="lg"
+            testID="documents-section-control"
+          />
+        </Box>
       </Box>
       <Box flex="grow">
         {selectedKey === "files" && (

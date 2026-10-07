@@ -1282,8 +1282,9 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
   narrowViewportListButtonLabel?: string;
   /**
    * Web only. The native SplitPage ignores this prop.
-   * Border radius applied to each detail child column container. The list column is excluded.
-   * Uses the same rounding scale as `Box` (`md` is 4px). Defaults to `md` when omitted.
+   * Border radius applied to each desktop detail child pane. The list column is excluded.
+   * The pane clips to this radius; the column ScrollView inside it does not, so the column
+   * still scrolls. Uses the same rounding scale as `Box` (`md` is 4px). Defaults to `md`.
    */
   childColumnRounding?: Rounding;
 }

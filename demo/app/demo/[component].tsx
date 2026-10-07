@@ -27,9 +27,23 @@ import startCase from "lodash/startCase";
 import type React from "react";
 import {type FC, useEffect, useState} from "react";
 import {Linking, Pressable} from "react-native";
-import MarkdownView from "react-native-markdown-display";
+import MarkdownView, {type MarkdownProps} from "react-native-markdown-display";
 import {controlDefault, storiesForDemo} from "../../catalogContract";
-import {formatPropType} from "../../formatPropType";
+import {formatPropComment, formatPropType} from "../../formatPropType";
+
+// Raw markdown paragraphs are a row. Give them a bounded width so long lines wrap
+// inside the page instead of stretching the demo column past the viewport.
+const demoMarkdownStyle = {
+  body: {maxWidth: "100%", minWidth: 0, width: "100%"},
+  paragraph: {
+    flexDirection: "column" as const,
+    flexShrink: 1,
+    maxWidth: "100%",
+    minWidth: 0,
+    width: "100%",
+  },
+  textgroup: {flexShrink: 1, maxWidth: "100%", minWidth: 0, width: "100%"},
+} as MarkdownProps["style"];
 
 export const generateStaticParams = () => DemoConfig.map((c) => ({component: c.name}));
 
@@ -56,7 +70,7 @@ const ComponentProps = ({props}: {props: DemoConfigurationProp[]}) => {
     {value: p.name},
     {value: formatPropType(p.type)},
     {value: p.flags?.isOptional ? "" : "Required"},
-    {value: p.comment?.summary?.[0]?.text ?? ""},
+    {value: formatPropComment(p.comment?.summary)},
   ]);
 
   return (
@@ -88,9 +102,11 @@ const ComponentStories: FC<{config: DemoConfiguration}> = ({config}) => {
               <Heading size="sm">{s}</Heading>
             </Box>
             {Boolean(config.stories[s]?.description) && (
-              <MarkdownView>{config.stories[s]?.description}</MarkdownView>
+              <MarkdownView style={demoMarkdownStyle}>
+                {config.stories[s]?.description}
+              </MarkdownView>
             )}
-            <Box border="dark" padding={4} rounding="lg">
+            <Box border="dark" maxWidth="100%" minWidth={0} padding={4} rounding="lg" width="100%">
               <ErrorBoundary>{config.stories[s]?.render()}</ErrorBoundary>
             </Box>
           </Box>
@@ -172,7 +188,14 @@ const ComponentDemo = ({config}: {config: DemoConfiguration}) => {
   const hasControls = Object.keys(config.demoOptions?.controls ?? {}).length > 0;
 
   return (
-    <Box direction="column" marginBottom={2} mdDirection="row" width="100%">
+    <Box
+      direction="column"
+      marginBottom={2}
+      maxWidth="100%"
+      mdDirection="row"
+      minWidth={0}
+      width="100%"
+    >
       <Box
         alignItems="center"
         border="dark"
@@ -182,8 +205,11 @@ const ComponentDemo = ({config}: {config: DemoConfiguration}) => {
         marginBottom={4}
         marginLeft={2}
         marginRight={2}
+        maxWidth="100%"
+        minWidth={0}
         padding={4}
         rounding="lg"
+        width="100%"
       >
         <ErrorBoundary>{config.demo?.(propValues)}</ErrorBoundary>
       </Box>
@@ -414,36 +440,38 @@ const ComponentPage: FC = () => {
 
   return (
     <DemoPreviewFrame>
-      <Box flex="grow" height="100%" padding={4} scroll>
-        <Box marginBottom={4}>
-          <Heading size="lg">{config?.name}</Heading>
-        </Box>
-        <Box marginBottom={4}>
-          <Box marginBottom={2}>
-            <Heading size="sm">Description</Heading>
-          </Box>
-          <MarkdownView>{config?.description}</MarkdownView>
-        </Box>
-        <ComponentDemo config={config} key={config.name} />
-        {config.usageExample ? <UsageSnippet example={config.usageExample} /> : null}
-        <ComponentUsage config={config!} />
-        <ComponentA11yNotes config={config!} />
-        <ComponentProps props={config?.props?.children} />
-        <ComponentStatus config={config!} />
-        <ComponentAdditionalDocs config={config!} />
-        {Boolean(config?.related.length) && (
+      <Box flex="grow" height="100%" maxWidth="100%" minWidth={0} padding={4} scroll width="100%">
+        <Box maxWidth="100%" minWidth={0} width="100%">
           <Box marginBottom={4}>
-            <Box marginBottom={2}>
-              <Heading size="sm">Related</Heading>
-            </Box>
-            <RelatedComponents names={config.related} />
+            <Heading size="lg">{config?.name}</Heading>
           </Box>
-        )}
-        <Box marginBottom={2}>
-          <Heading size="sm">Examples</Heading>
+          <Box marginBottom={4} maxWidth="100%" minWidth={0} width="100%">
+            <Box marginBottom={2}>
+              <Heading size="sm">Description</Heading>
+            </Box>
+            <MarkdownView style={demoMarkdownStyle}>{config?.description}</MarkdownView>
+          </Box>
+          <ComponentDemo config={config} key={config.name} />
+          {config.usageExample ? <UsageSnippet example={config.usageExample} /> : null}
+          <ComponentUsage config={config!} />
+          <ComponentA11yNotes config={config!} />
+          <ComponentProps props={config?.props?.children} />
+          <ComponentStatus config={config!} />
+          <ComponentAdditionalDocs config={config!} />
+          {Boolean(config?.related.length) && (
+            <Box marginBottom={4}>
+              <Box marginBottom={2}>
+                <Heading size="sm">Related</Heading>
+              </Box>
+              <RelatedComponents names={config.related} />
+            </Box>
+          )}
+          <Box marginBottom={2}>
+            <Heading size="sm">Examples</Heading>
+          </Box>
+          <ComponentStories config={config!} />
+          {/* <ComponentTestMatrix config={config} /> */}
         </Box>
-        <ComponentStories config={config!} />
-        {/* <ComponentTestMatrix config={config} /> */}
       </Box>
     </DemoPreviewFrame>
   );

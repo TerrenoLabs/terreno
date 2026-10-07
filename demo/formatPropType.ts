@@ -41,3 +41,19 @@ export const formatPropType = (type: TypedocTypeNode | undefined): string => {
 
   return type.name ?? type.type ?? "";
 };
+
+interface TypedocCommentPart {
+  text?: string;
+}
+
+const TYPE_TABLE =
+  /\n*\| Type \| Required \|\n\|[^\n]+\|\n\|[^\n]+\|\n*/g;
+
+/** Drop TypeDoc's embedded type tables so the props table shows the prose. */
+export const formatPropComment = (summary: TypedocCommentPart[] | undefined): string => {
+  if (!summary?.length) {
+    return "";
+  }
+  const raw = summary.map((part) => part.text ?? "").join("");
+  return raw.replace(TYPE_TABLE, " ").replace(/\s+/g, " ").trim();
+};

@@ -245,7 +245,8 @@ resource's actions as badges. Badge color shows the kind of access:
 
 - Green: read-only actions (`read`, `list`, `access`, `view*`)
 - Red: destructive actions (`delete`, `destroy`, `remove`)
-- Amber: every other action, which changes data
+- Amber: every other action. Custom actions (such as screen gates like `adminScreen:syncLab`)
+  fall here because the screen cannot tell from the name whether they only read data
 
 Role editing starts with a dedicated **Admin page** toggle for `admin:access`. That is the only
 permission that opens the admin panel. Grant it first; model and tool permissions do nothing until

@@ -430,7 +430,6 @@
         "react-native-gesture-handler": "catalog:",
         "react-native-haptic-feedback": "^2.0.3",
         "react-native-hyperlink": "^0.1.0",
-        "react-native-markdown-display": "catalog:",
         "react-native-modalize": "catalog:",
         "react-native-reanimated": "catalog:",
         "react-native-safe-area-context": "catalog:",

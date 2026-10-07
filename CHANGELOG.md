@@ -20,6 +20,23 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.12.0] - 2026-10-07
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.12.0.md`](mcp-server/src/docs/upgrades/57.12.0.md).
+
+### Added
+
+- `@terreno/ai` harness: `harness.createTask(def, input, {trace: {scope, tags}, prompts})` writes a scope (tenant, workspace), tags, and prompt versions onto the task's `ObsTrace`; child tasks and subagents share it. `ObsTrace` gains `scope` (indexed with `created`) and `tags`, and the admin trace list filters by `scope`. `rt.runAgent` takes `prompts` and accepts a registry `PromptVersionRef` as `instructions` (its `body` runs, its version is recorded). New subpath exports replace `dist/` deep imports: `@terreno/ai/admin`, `@terreno/ai/harness/{agentLoop,commit,events,internalRuntime}`, and `@terreno/ai/observability/{observabilityApp,localPlugin,promptStore}`. `getProjectModel()` returns the chat `Project` model, and `new AiApp({projects: false})` skips the `/gpt/projects` routes so an app can own a model named `Project`. See [AI harness reference](docs/reference/ai-harness.md#trace-scope-and-prompt-versions). Closes #1533.
+
+### Changed
+
+- Harness task HTTP responses and the task OpenAPI schema omit `lease`. The fencing token stays on the server. Approve, reject, submit, and abort invalidate the same cache tags as the task, approval, and conversation lists (`harnesstasks`, `harnessapprovals`, `harnessconversations`).
+- Importing `@terreno/ai` no longer registers the mongoose `Project` model. The `Project` export is a lazy proxy and is deprecated: the first use of `Project` or `getProjectModel()` registers the model. Statics, `new Project(...)`, and `instanceof Project` still work. The proxy is not the model (`Project !== mongoose.models.Project`, `Object.keys(Project)` is empty, and reading `Project.prototype` throws). Use `getProjectModel()`.
+
+### Fixed
+
+- Web `SplitPage` desktop child columns scroll vertically again. The corner radius and clip sit on the pane, so `overflow: hidden` no longer blocks the column `ScrollView`. A child with `height: "100%"` stays within the visible pane and can scroll internally. Narrow web pager pages use the measured pane height, so that same full-height child can scroll internally while the page still clips its rounded corners. Labeled pager previous and next controls sit in fixed slots in a row under the column, and the column uses the height left after that row and its spacing. `desktopChildrenMinWidth` horizontal scrolling, the list column, and native `SplitPage` are unchanged.
+
 ## [57.11.0] - 2026-10-05
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.11.0.md`](mcp-server/src/docs/upgrades/57.11.0.md).

@@ -68,7 +68,7 @@ exports[`WebAddressAutocomplete renders correctly without Google API key 1`] = `
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -161,7 +161,7 @@ exports[`WebAddressAutocomplete renders with input value 1`] = `
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -347,7 +347,7 @@ exports[`WebAddressAutocomplete renders with includeCounty flag 1`] = `
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",

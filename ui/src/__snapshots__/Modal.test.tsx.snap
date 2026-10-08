@@ -23,7 +23,7 @@ exports[`Modal renders correctly when visible 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "center",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderRadius": 5,
               "height": 3,
               "justifyContent": "center",
@@ -209,7 +209,7 @@ exports[`Modal renders with both buttons 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "center",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderRadius": 5,
               "height": 3,
               "justifyContent": "center",
@@ -544,7 +544,7 @@ exports[`Modal renders with disabled primary button 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "center",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderRadius": 5,
               "height": 3,
               "justifyContent": "center",
@@ -720,7 +720,7 @@ exports[`Modal renders with disabled primary button 1`] = `
                     "style": {
                       "alignItems": "center",
                       "alignSelf": "flex-start",
-                      "backgroundColor": "#9A9A9A",
+                      "backgroundColor": "#949494",
                       "borderColor": undefined,
                       "borderRadius": 360,
                       "borderWidth": undefined,
@@ -798,7 +798,7 @@ exports[`Modal renders with small size 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "center",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderRadius": 5,
               "height": 3,
               "justifyContent": "center",
@@ -982,7 +982,7 @@ exports[`Modal renders with medium size 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "center",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderRadius": 5,
               "height": 3,
               "justifyContent": "center",
@@ -1166,7 +1166,7 @@ exports[`Modal renders with large size 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "center",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderRadius": 5,
               "height": 3,
               "justifyContent": "center",
@@ -1350,7 +1350,7 @@ exports[`Modal renders with persistOnBackgroundClick 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "center",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderRadius": 5,
               "height": 3,
               "justifyContent": "center",

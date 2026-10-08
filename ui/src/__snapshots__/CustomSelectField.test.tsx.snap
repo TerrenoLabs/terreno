@@ -90,7 +90,7 @@ exports[`CustomSelectField renders correctly with default props 1`] = `
                                       "current": null,
                                     },
                                     "style": {
-                                      "borderColor": "#9A9A9A",
+                                      "borderColor": "#949494",
                                       "borderRadius": 4,
                                       "borderWidth": 1,
                                       "color": "#1C1C1C",
@@ -322,7 +322,7 @@ exports[`CustomSelectField renders correctly with default props 1`] = `
                           "props": {
                             "style": {
                               "backgroundColor": "#FFFFFF",
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -367,7 +367,7 @@ exports[`CustomSelectField renders correctly with default props 1`] = `
                       },
                       {
                         "backgroundColor": "#FFFFFF",
-                        "borderColor": "#9A9A9A",
+                        "borderColor": "#949494",
                       },
                       false,
                     ],
@@ -525,7 +525,7 @@ exports[`CustomSelectField renders with title 1`] = `
                                       "current": null,
                                     },
                                     "style": {
-                                      "borderColor": "#9A9A9A",
+                                      "borderColor": "#949494",
                                       "borderRadius": 4,
                                       "borderWidth": 1,
                                       "color": "#1C1C1C",
@@ -757,7 +757,7 @@ exports[`CustomSelectField renders with title 1`] = `
                           "props": {
                             "style": {
                               "backgroundColor": "#FFFFFF",
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -802,7 +802,7 @@ exports[`CustomSelectField renders with title 1`] = `
                       },
                       {
                         "backgroundColor": "#FFFFFF",
-                        "borderColor": "#9A9A9A",
+                        "borderColor": "#949494",
                       },
                       false,
                     ],
@@ -945,7 +945,7 @@ exports[`CustomSelectField renders with placeholder 1`] = `
                                       "current": null,
                                     },
                                     "style": {
-                                      "borderColor": "#9A9A9A",
+                                      "borderColor": "#949494",
                                       "borderRadius": 4,
                                       "borderWidth": 1,
                                       "color": "#1C1C1C",
@@ -1177,7 +1177,7 @@ exports[`CustomSelectField renders with placeholder 1`] = `
                           "props": {
                             "style": {
                               "backgroundColor": "#FFFFFF",
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -1222,7 +1222,7 @@ exports[`CustomSelectField renders with placeholder 1`] = `
                       },
                       {
                         "backgroundColor": "#FFFFFF",
-                        "borderColor": "#9A9A9A",
+                        "borderColor": "#949494",
                       },
                       false,
                     ],
@@ -1365,7 +1365,7 @@ exports[`CustomSelectField renders with selected value 1`] = `
                                       "current": null,
                                     },
                                     "style": {
-                                      "borderColor": "#9A9A9A",
+                                      "borderColor": "#949494",
                                       "borderRadius": 4,
                                       "borderWidth": 1,
                                       "color": "#1C1C1C",
@@ -1597,7 +1597,7 @@ exports[`CustomSelectField renders with selected value 1`] = `
                           "props": {
                             "style": {
                               "backgroundColor": "#FFFFFF",
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -1642,7 +1642,7 @@ exports[`CustomSelectField renders with selected value 1`] = `
                       },
                       {
                         "backgroundColor": "#FFFFFF",
-                        "borderColor": "#9A9A9A",
+                        "borderColor": "#949494",
                       },
                       false,
                     ],
@@ -1785,7 +1785,7 @@ exports[`CustomSelectField renders with custom value (not in options) 1`] = `
                                       "current": null,
                                     },
                                     "style": {
-                                      "borderColor": "#9A9A9A",
+                                      "borderColor": "#949494",
                                       "borderRadius": 4,
                                       "borderWidth": 1,
                                       "color": "#1C1C1C",
@@ -2017,7 +2017,7 @@ exports[`CustomSelectField renders with custom value (not in options) 1`] = `
                           "props": {
                             "style": {
                               "backgroundColor": "#FFFFFF",
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -2062,7 +2062,7 @@ exports[`CustomSelectField renders with custom value (not in options) 1`] = `
                       },
                       {
                         "backgroundColor": "#FFFFFF",
-                        "borderColor": "#9A9A9A",
+                        "borderColor": "#949494",
                       },
                       false,
                     ],
@@ -2171,7 +2171,7 @@ exports[`CustomSelectField renders with custom value (not in options) 1`] = `
               "props": {
                 "style": {
                   "backgroundColor": "#FFFFFF",
-                  "borderColor": "#9A9A9A",
+                  "borderColor": "#949494",
                   "borderRadius": 4,
                   "borderWidth": 1,
                   "flexDirection": "column",
@@ -2309,7 +2309,7 @@ exports[`CustomSelectField renders disabled state 1`] = `
                                       "current": null,
                                     },
                                     "style": {
-                                      "borderColor": "#9A9A9A",
+                                      "borderColor": "#949494",
                                       "borderRadius": 4,
                                       "borderWidth": 1,
                                       "color": "#1C1C1C",
@@ -2541,7 +2541,7 @@ exports[`CustomSelectField renders disabled state 1`] = `
                           "props": {
                             "style": {
                               "backgroundColor": "#FFFFFF",
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -2586,7 +2586,7 @@ exports[`CustomSelectField renders disabled state 1`] = `
                       },
                       {
                         "backgroundColor": "#FFFFFF",
-                        "borderColor": "#9A9A9A",
+                        "borderColor": "#949494",
                       },
                       {
                         "backgroundColor": "#D9D9D9",
@@ -2731,7 +2731,7 @@ exports[`CustomSelectField includes custom option in dropdown 1`] = `
                                       "current": null,
                                     },
                                     "style": {
-                                      "borderColor": "#9A9A9A",
+                                      "borderColor": "#949494",
                                       "borderRadius": 4,
                                       "borderWidth": 1,
                                       "color": "#1C1C1C",
@@ -2963,7 +2963,7 @@ exports[`CustomSelectField includes custom option in dropdown 1`] = `
                           "props": {
                             "style": {
                               "backgroundColor": "#FFFFFF",
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -3008,7 +3008,7 @@ exports[`CustomSelectField includes custom option in dropdown 1`] = `
                       },
                       {
                         "backgroundColor": "#FFFFFF",
-                        "borderColor": "#9A9A9A",
+                        "borderColor": "#949494",
                       },
                       false,
                     ],

@@ -307,7 +307,7 @@ export const Modal: FC<ModalProps> = ({
               style={{
                 alignItems: "center",
                 alignSelf: "center",
-                backgroundColor: "#9A9A9A",
+                backgroundColor: "#949494",
                 borderRadius: 5,
                 height: 3,
                 justifyContent: "center",

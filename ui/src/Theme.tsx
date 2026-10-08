@@ -25,7 +25,7 @@ const defaultPrimitives = {
   neutral200: "#D9D9D9",
   neutral300: "#CDCDCD",
   neutral400: "#B3B3B3",
-  neutral500: "#9A9A9A",
+  neutral500: "#949494",
   neutral600: "#686868",
   neutral700: "#4E4E4E",
   neutral800: "#353535",

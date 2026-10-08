@@ -83,7 +83,7 @@ exports[`UnifiedAddressAutoCompleteField renders plain TextField when no API key
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -191,7 +191,7 @@ exports[`UnifiedAddressAutoCompleteField renders plain TextField when API key is
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -299,7 +299,7 @@ exports[`UnifiedAddressAutoCompleteField renders WebAddressAutocomplete when val
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -515,7 +515,7 @@ exports[`UnifiedAddressAutoCompleteField renders with input value 1`] = `
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -624,7 +624,7 @@ exports[`UnifiedAddressAutoCompleteField renders with testID 1`] = `
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",

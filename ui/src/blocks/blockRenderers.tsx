@@ -1,9 +1,13 @@
 import {
   type Block,
   type BlockAction,
+  type ButtonElement,
+  blockPlainText,
   type ChecklistBlock,
   type ChecklistItem,
+  type CopyAction,
   checklistElementId,
+  type Dataset,
   type DatasetColumn,
   type GalleryBlock,
   type GalleryImage,
@@ -14,8 +18,9 @@ import {
   stepperElementIds,
   type TableBlock,
 } from "@terreno/blocks";
+import * as Clipboard from "expo-clipboard";
 import type React from "react";
-import {useCallback, useState} from "react";
+import {useCallback, useEffect, useState} from "react";
 
 import {Accordion} from "../Accordion";
 import {AreaChart} from "../AreaChart";
@@ -43,6 +48,8 @@ import {fileRefId} from "./useResolvedImages";
 
 export interface BlockRenderContext {
   allowHtml?: boolean;
+  /** The document's top-level blocks, where a copy action looks up its `target`. */
+  blocks?: readonly Block[];
   hostActions?: readonly string[];
   streaming?: boolean;
   loadingIds: ReadonlySet<string>;
@@ -612,6 +619,132 @@ const renderList = (
   );
 };
 
+/** How long "Copied" or "Couldn't copy" stays next to a copy button. */
+const COPY_STATUS_MS = 2000;
+
+const COPY_STATUS_TEXT = {
+  copied: "Copied",
+  failed: "Couldn't copy",
+} as const;
+
+/** Finds a block by id as it is shown now, with any override applied. */
+const findShownBlock = (
+  blocks: readonly Block[],
+  id: string,
+  overrides: Record<string, Block> | undefined
+): Block | undefined => {
+  for (const original of blocks) {
+    const shown =
+      original.id !== undefined && overrides?.[original.id] !== undefined
+        ? overrides[original.id]
+        : original;
+    if (original.id === id || shown.id === id) {
+      return shown;
+    }
+    if (shown.type === "columns" || shown.type === "card") {
+      const found = findShownBlock(shown.children, id, overrides);
+      if (found !== undefined) {
+        return found;
+      }
+    }
+  }
+  return undefined;
+};
+
+/**
+ * The text a copy action writes: its literal `text`, or its target block as shown now (override,
+ * local checklist ticks, and the selected, resolved table dataset applied).
+ */
+const copyActionText = (action: CopyAction, context: BlockRenderContext): string => {
+  if (action.text !== undefined) {
+    return action.text;
+  }
+  if (action.target === undefined) {
+    return "";
+  }
+  const block = findShownBlock(context.blocks ?? [], action.target, context.overrides);
+  if (block === undefined) {
+    return "";
+  }
+  if (block.type === "checklist") {
+    const checked = isChecklistCallbackMode(block, context)
+      ? undefined
+      : context.checklistTicks?.[block.id];
+    return blockPlainText(block, {checked});
+  }
+  if (block.type === "table") {
+    const dataName =
+      (block.id !== undefined ? context.selections[block.id] : undefined) ?? block.data;
+    const dataset = context.resolved[dataName];
+    const datasets: Record<string, Dataset> = dataset === undefined ? {} : {[dataName]: dataset};
+    return blockPlainText({...block, data: dataName}, {datasets});
+  }
+  return blockPlainText(block);
+};
+
+type CopyStatus = keyof typeof COPY_STATUS_TEXT;
+
+/** Writes the text and reports the outcome; empty text counts as a failed copy. */
+const writeClipboard = async (text: string): Promise<CopyStatus> => {
+  if (text === "") {
+    console.warn("Failed to copy block text: the copy target has no text yet");
+    return "failed";
+  }
+  try {
+    await Clipboard.setStringAsync(text);
+    return "copied";
+  } catch (error) {
+    console.warn("Failed to copy block text", error);
+    return "failed";
+  }
+};
+
+/**
+ * Copies on the device and never calls `onAction`. The status sits in a polite live region that
+ * stays mounted, so screen readers announce "Copied" when the text appears.
+ */
+const CopyButton: React.FC<{
+  action: CopyAction;
+  context: BlockRenderContext;
+  testID: string;
+  text: string;
+  variant: ButtonElement["variant"];
+}> = ({action, context, testID, text, variant}) => {
+  // An object, so a repeat copy with the same status still restarts the clear timer.
+  const [feedback, setFeedback] = useState<{status: CopyStatus} | undefined>(undefined);
+
+  // Clears the status 2 s after each copy; a new copy or unmounting cancels the pending clear.
+  useEffect(() => {
+    if (feedback === undefined) {
+      return;
+    }
+    const timer = setTimeout(() => setFeedback(undefined), COPY_STATUS_MS);
+    return (): void => clearTimeout(timer);
+  }, [feedback]);
+
+  const handleCopy = useCallback(async (): Promise<void> => {
+    const status = await writeClipboard(copyActionText(action, context));
+    setFeedback({status});
+  }, [action, context]);
+
+  return (
+    <Box alignItems="center" direction="row" gap={2}>
+      <Button onClick={handleCopy} testID={testID} text={text} variant={variant ?? "primary"} />
+      <Box accessibilityLiveRegion="polite" testID={`${testID}-status`}>
+        {feedback ? (
+          <Text
+            color={feedback.status === "failed" ? "error" : "secondaryLight"}
+            size="sm"
+            testID={`${testID}-status-text`}
+          >
+            {COPY_STATUS_TEXT[feedback.status]}
+          </Text>
+        ) : null}
+      </Box>
+    </Box>
+  );
+};
+
 /** Renders one catalog block with @terreno/ui components. */
 export const renderBlock = (
   block: Block,
@@ -792,6 +925,18 @@ export const renderBlock = (
               );
             }
             const action = element.action;
+            if (action.kind === "copy") {
+              return (
+                <CopyButton
+                  action={action}
+                  context={context}
+                  key={element.id}
+                  testID={`${path}-${element.id}`}
+                  text={element.text}
+                  variant={element.variant}
+                />
+              );
+            }
             const disabled =
               action.kind === "callback" &&
               context.hostActions !== undefined &&

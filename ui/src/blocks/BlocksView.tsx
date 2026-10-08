@@ -26,7 +26,7 @@ const renderBlocks = (
   testID: string | undefined
 ): React.ReactElement => (
   <Box gap={3} testID={testID}>
-    {blocks.map((block, index) => renderBlock(block, `blocks-${index}`, context))}
+    {blocks.map((block, index) => renderBlock(block, `blocks-${index}`, {...context, blocks}))}
   </Box>
 );
 

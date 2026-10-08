@@ -1,8 +1,9 @@
-import {describe, expect, it, mock} from "bun:test";
+import {afterEach, describe, expect, it, jest, mock} from "bun:test";
 import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import type {Block} from "@terreno/blocks";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
+import {setStringAsync} from "expo-clipboard";
 import {ActivityIndicator, Image as NativeImage, ScrollView, StyleSheet} from "react-native";
 
 import {IconButton} from "../IconButton";
@@ -1401,6 +1402,194 @@ blocks:
       expect(placeholder.props.accessibilityLabel).toBe("Apple crumble with custard");
       expect(StyleSheet.flatten(placeholder.props.style)).toMatchObject({height: 149, width: 112});
       expect(view.getByText("Apple crumble with custard")).toBeTruthy();
+    });
+  });
+
+  describe("copy", () => {
+    const mockedSetStringAsync = setStringAsync as unknown as ReturnType<typeof mock>;
+    const COPY_DOC = `v: 1
+datasets:
+  cuts:
+    columns:
+      - {name: cut, type: string}
+      - {name: kg, type: number}
+    rows:
+      - [Leg, 2.4]
+      - [Shoulder, 2]
+  prices:
+    source: ref
+    id: ds_prices
+blocks:
+${STEPPER.split("blocks:\n")[1]}  - type: checklist
+    id: cooking
+    items:
+      - {id: oven, text: Preheat the oven, checked: true}
+      - {id: lamb_in, text: Put the lamb in}
+  - type: table
+    id: cuts_table
+    data: cuts
+  - type: table
+    id: price_table
+    data: prices
+  - type: actions
+    id: copy_actions
+    elements:
+      - {type: button, id: copy_list, text: Copy shopping list, action: {kind: copy, target: guests}}
+      - {type: button, id: copy_note, text: Copy note, action: {kind: copy, text: Bring a bottle of red}}
+      - {type: button, id: copy_steps, text: Copy steps, action: {kind: copy, target: cooking}}
+      - {type: button, id: copy_cuts, text: Copy cuts, action: {kind: copy, target: cuts_table}}
+      - {type: button, id: copy_prices, text: Copy prices, action: {kind: copy, target: price_table}}
+`;
+    const SIX_GUESTS: Block = {
+      callback: {name: "scaleStepper"},
+      id: "guests",
+      items: [
+        {amount: 2.4, decimals: 1, label: "Bone-in leg of lamb", unit: "kg"},
+        {amount: 10, label: "Carrots", round: "up"},
+      ],
+      label: "Number of people",
+      max: 20,
+      min: 1,
+      type: "stepper",
+      unit: "People",
+      value: 6,
+    };
+    const status = (view: RenderedView, elementId: string): string | undefined => {
+      const text = view.queryByTestId(`blocks-4-${elementId}-status-text`);
+      return text === null ? undefined : String(text.props.children);
+    };
+    // Flushes the haptic and clipboard promises without real timers, so fake timers can run.
+    const pressCopy = async (view: RenderedView, elementId: string): Promise<void> => {
+      await act(async () => {
+        fireEvent.press(view.getByTestId(`blocks-4-${elementId}`));
+        for (let index = 0; index < 50; index += 1) {
+          await Promise.resolve();
+        }
+      });
+    };
+
+    afterEach(() => {
+      jest.useRealTimers();
+      mockedSetStringAsync.mockClear();
+    });
+
+    it("copies the scaled shopping list from a stepper at 6 and shows Copied, without calling onAction", async () => {
+      const onAction = mock(() => undefined);
+      const view = renderWithTheme(
+        <BlocksView
+          document={COPY_DOC}
+          hostActions={["scaleStepper"]}
+          onAction={onAction}
+          overrides={{guests: SIX_GUESTS}}
+        />
+      );
+      expect(status(view, "copy_list")).toBeUndefined();
+      await pressCopy(view, "copy_list");
+      expect(mockedSetStringAsync).toHaveBeenCalledTimes(1);
+      expect(mockedSetStringAsync).toHaveBeenCalledWith(
+        "Number of people: 6 People\nBone-in leg of lamb: 2.4 kg\nCarrots: 10"
+      );
+      expect(status(view, "copy_list")).toBe("Copied");
+      expect(onAction).not.toHaveBeenCalled();
+    });
+
+    it("announces the status in a polite live region", async () => {
+      const view = renderWithTheme(<BlocksView document={COPY_DOC} />);
+      expect(view.getByTestId("blocks-4-copy_note-status").props["aria-live"]).toBe("polite");
+      await pressCopy(view, "copy_note");
+      expect(status(view, "copy_note")).toBe("Copied");
+      expect(view.getByTestId("blocks-4-copy_note-status").props["aria-live"]).toBe("polite");
+    });
+
+    it("copies literal text", async () => {
+      const view = renderWithTheme(<BlocksView document={COPY_DOC} />);
+      await pressCopy(view, "copy_note");
+      expect(mockedSetStringAsync).toHaveBeenCalledWith("Bring a bottle of red");
+    });
+
+    it("copies a checklist with the ticks made on the device", async () => {
+      const view = renderWithTheme(<BlocksView document={COPY_DOC} />);
+      await press(view.getByTestId("blocks-1-cooking_lamb_in-row-clickable"));
+      await press(view.getByTestId("blocks-1-cooking_oven-row-clickable"));
+      await pressCopy(view, "copy_steps");
+      expect(mockedSetStringAsync).toHaveBeenCalledWith(
+        "[ ] Preheat the oven\n[x] Put the lamb in"
+      );
+    });
+
+    it("copies an inline table and a ref table once resolveDataset returns its rows", async () => {
+      const resolveDataset = mock(async () => ({
+        columns: [
+          {name: "cut", type: "string" as const},
+          {name: "price", type: "number" as const},
+        ],
+        rows: [["Leg", 32]],
+      }));
+      const view = renderWithTheme(
+        <BlocksView document={COPY_DOC} resolveDataset={resolveDataset} />
+      );
+      await waitFor(() => {
+        expect(view.getByText("32")).toBeTruthy();
+      });
+      await pressCopy(view, "copy_cuts");
+      expect(mockedSetStringAsync).toHaveBeenLastCalledWith("cut\tkg\nLeg\t2.4\nShoulder\t2");
+      await pressCopy(view, "copy_prices");
+      expect(mockedSetStringAsync).toHaveBeenLastCalledWith("cut\tprice\nLeg\t32");
+    });
+
+    it("shows Couldn't copy when the clipboard write fails, and does not throw", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+      mockedSetStringAsync.mockImplementationOnce(() => Promise.reject(new Error("denied")));
+      const view = renderWithTheme(<BlocksView document={COPY_DOC} />);
+      await pressCopy(view, "copy_note");
+      expect(status(view, "copy_note")).toBe("Couldn't copy");
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it("shows Couldn't copy without writing when a ref table has no rows yet", async () => {
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+      const view = renderWithTheme(<BlocksView document={COPY_DOC} />);
+      await pressCopy(view, "copy_prices");
+      expect(mockedSetStringAsync).not.toHaveBeenCalled();
+      expect(status(view, "copy_prices")).toBe("Couldn't copy");
+      warn.mockRestore();
+    });
+
+    it("clears Copied after 2 seconds and cancels the timer on unmount", async () => {
+      jest.useFakeTimers();
+      const view = renderWithTheme(<BlocksView document={COPY_DOC} />);
+      await pressCopy(view, "copy_note");
+      expect(status(view, "copy_note")).toBe("Copied");
+      act(() => {
+        jest.advanceTimersByTime(1999);
+      });
+      expect(status(view, "copy_note")).toBe("Copied");
+      act(() => {
+        jest.advanceTimersByTime(1);
+      });
+      expect(status(view, "copy_note")).toBeUndefined();
+      view.unmount();
+
+      // A fresh view: the Button press cooldown reads Date.now, which fake timers do not move.
+      const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
+      const clearTimeoutSpy = jest.spyOn(globalThis, "clearTimeout");
+      const unmounted = renderWithTheme(<BlocksView document={COPY_DOC} />);
+      await pressCopy(unmounted, "copy_note");
+      expect(status(unmounted, "copy_note")).toBe("Copied");
+      // The status timer is the 2 second one; other components may hold their own timers.
+      const statusTimerIndex = setTimeoutSpy.mock.calls.findIndex(([, delay]) => delay === 2000);
+      expect(statusTimerIndex).toBeGreaterThanOrEqual(0);
+      const statusTimer = setTimeoutSpy.mock.results[statusTimerIndex]?.value;
+      unmounted.unmount();
+      expect(clearTimeoutSpy.mock.calls.some(([id]) => id === statusTimer)).toBe(true);
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    });
+
+    it("keeps copy buttons enabled when hostActions is passed", () => {
+      const view = renderWithTheme(<BlocksView document={COPY_DOC} hostActions={[]} />);
+      expect(view.getByTestId("blocks-4-copy_list").props.accessibilityState.disabled).toBe(false);
     });
   });
 

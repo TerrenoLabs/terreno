@@ -90,6 +90,7 @@ const isValidWidthHeight = (value: number | string): boolean => {
 const NON_STYLE_BOX_PROPS = new Set<string>([
   "accessibilityHint",
   "accessibilityLabel",
+  "accessibilityLiveRegion",
   "accessibilityRole",
   "accessibilityState",
   "avoidKeyboard",
@@ -475,6 +476,7 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
       <View
         {...(accessibilityHint ? {accessibilityHint} : {})}
         {...(accessibilityLabel ? {accessibilityLabel} : {})}
+        {...(props.accessibilityLiveRegion ? {"aria-live": props.accessibilityLiveRegion} : {})}
         {...accessibilityStateProps}
         {...(props.onLayout ? {onLayout: props.onLayout} : {})}
         onPointerEnter={onHoverIn}

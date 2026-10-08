@@ -557,6 +557,21 @@ Test ids: the list `<path>`, each row `<path>-item-<index>`, its thumbnail
 `<path>-item-<index>-gutter`, text column `<path>-item-<index>-body`, and the
 `<path>-item-<index>-meta`, `-title`, and `-text` lines.
 
+A `copy` button writes the clipboard on the device and never calls `onAction`, so
+`hostActions` does not disable it. A press builds the text with `blockPlainText` from
+`@terreno/blocks`: a literal `text` as written, or the `target` block as it is shown now. That
+means the `overrides` replacement (a stepper at 6 copies the scaled amounts), the checklist's
+ticks made on the device, and a table's selected dataset, inline or a `ref` that
+`resolveDataset` has returned. `BlocksView` writes it with `expo-clipboard` `setStringAsync`
+(web and native), then shows "Copied" in small muted text beside the button for 2 seconds. A
+failed write, or a target with no text yet (such as a `ref` table still loading), shows
+"Couldn't copy" in error text for 2 seconds instead, logs `console.warn`, and does not throw.
+The status sits in a `Box` with `accessibilityLiveRegion="polite"`, which stays mounted while
+empty, so screen readers on web and Android announce the status when it appears (`Text` has
+no live-region prop, and VoiceOver on iOS does not announce React Native live regions).
+Test ids: the button `<path>-<element id>`, the live region `<path>-<element id>-status`, and
+the status text `<path>-<element id>-status-text`.
+
 ```tsx
 <BlocksView
   document={reply}
@@ -1208,6 +1223,16 @@ Space on web, as ARIA expects.
   accessibilityState={{checked: false, disabled: isSaving}}
   onClick={toggle}
 />
+```
+
+`Box` also takes `accessibilityLiveRegion` (`polite` or `assertive`) on a Box without
+`onClick`. It is sent as `aria-live`, so screen readers announce changes to the Box's contents
+on web and Android. VoiceOver on iOS does not announce React Native live regions.
+
+```tsx
+<Box accessibilityLiveRegion="polite" testID="copy-status">
+  {status ? <Text size="sm">{status}</Text> : null}
+</Box>
 ```
 
 ## Icons

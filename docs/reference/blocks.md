@@ -296,8 +296,11 @@ are joined with `\n`, with no trailing newline.
 Any other block returns an empty string. Pass the block as it is shown, with a host's
 replacement block applied, so a stepper at 6 copies the scaled amounts.
 
-This release validates the copy action, and the prompt offers it. `BlocksView` does not
-perform the copy yet: it passes the press to `onAction` like any other button.
+`BlocksView` performs the copy on the device. A press builds the text with `blockPlainText`
+from the target as it is shown now (the host's override, the device's checklist ticks, and the
+table's selected dataset once it has rows), writes it with `expo-clipboard`, and shows "Copied"
+next to the button for 2 seconds. It never calls `onAction`. See
+[BlocksView](./ui.md#blocksview).
 
 ## Partial parsing
 

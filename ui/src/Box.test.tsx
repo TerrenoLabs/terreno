@@ -635,6 +635,15 @@ describe("Box", () => {
       expect(view.props["aria-checked"]).toBe(false);
     });
 
+    it("makes a Box a polite live region without putting it in the style", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box accessibilityLiveRegion="polite" testID="status" />
+      );
+      const view = getByTestId("status");
+      expect(view.props["aria-live"]).toBe("polite");
+      expect(view.props.style.accessibilityLiveRegion).toBeUndefined();
+    });
+
     it("toggles a checkbox Box with Space on web", async () => {
       const onClick = mock(() => {});
       const preventDefault = mock(() => {});

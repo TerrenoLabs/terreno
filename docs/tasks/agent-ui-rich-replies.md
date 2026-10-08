@@ -101,7 +101,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: small, muted eyebrow text above the card title.
   - Acceptance: AC7 (eyebrow).
 
-- [ ] **T14** — Copy action writes the clipboard
+- [x] **T14** — Copy action writes the clipboard
   - Depends on: T9, T13
   - Files: `ui/src/blocks/BlocksView.tsx`, `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/BlocksView.test.tsx`, `docs/reference/ui.md`.
   - Delivers: a copy button builds its text with `blockPlainText` from the current block (override and toggles applied), writes it with `expo-clipboard`, and shows "Copied" in a polite live region for 2 s. It never calls `onAction`.

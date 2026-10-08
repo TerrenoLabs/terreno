@@ -77,7 +77,7 @@ Warnings do not block rendering:
 | `stepper` | see [Stepper](#stepper) | | `IconButton` − and +, `Text`, `Heading` |
 | `checklist` | see [Checklist](#checklist) | | `CheckBox` rows, `Text`, `Heading` |
 | `gallery` | see [Gallery](#gallery) | | `Image` tiles in a row or grid, `Text` captions |
-| `list` | see [List](#list) | | Validated; `BlocksView` does not draw it yet |
+| `list` | see [List](#list) | | `Image` thumbnails beside `Text` title, text, and meta |
 | `columns` | `children`: 2–4 blocks | `id` | `Box` row |
 | `card` | `children`: at least 1 block | `title` (1–120), `eyebrow` (1–60), `id` | `Card` |
 
@@ -187,8 +187,9 @@ The third tile validates only when `imageHosts` includes `images.example.com`.
 
 ## List
 
-A `list` is a stack of 1–12 entries, each with a title and an optional thumbnail. This release
-defines and validates the block, and the prompt offers it. `BlocksView` does not draw it yet.
+A `list` is a stack of 1–12 entries, each with a title and an optional thumbnail. `BlocksView`
+draws each item as a row: a 3:4 portrait thumbnail on the left, then the small muted `meta`, the
+bold `title`, and the muted `text` (see [BlocksView](ui.md#blocksview)).
 
 | Field | Required | Rule |
 | --- | --- | --- |

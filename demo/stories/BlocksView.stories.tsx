@@ -175,6 +175,8 @@ export const BlocksViewChecklist: React.FC = () => {
 const SWATCH = {
   carrots:
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGN4VGEERww4OQBybhKRd/XWIwAAAABJRU5ErkJggg==",
+  crumble:
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR42mM40hMERww4OQCDohOZumJuoAAAAABJRU5ErkJggg==",
   gravy:
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGPIc9OFIwacHADQ3QqNcMVzWAAAAABJRU5ErkJggg==",
   greens:
@@ -217,6 +219,61 @@ export const BlocksViewGallery: React.FC = () => {
   return (
     <Box padding={4} width="100%">
       <BlocksView document={GALLERY} resolveImage={resolveDemoImage} />
+    </Box>
+  );
+};
+
+const LIST = `v: 1
+blocks:
+  - type: heading
+    size: sm
+    text: Sunday roast menu
+  - type: list
+    id: menu
+    items:
+      - title: Roast leg of lamb
+        text: Rubbed with garlic and rosemary, then rested for 20 minutes before carving.
+        meta: Main
+        image: {src: "${SWATCH.lamb}", alt: Roast leg of lamb on a carving board}
+      - title: Crisp roast potatoes
+        text: Parboiled, roughed up, and roasted in hot fat until golden.
+        meta: Side
+        image: {src: "${SWATCH.potatoes}", alt: Crisp roast potatoes in a tray}
+      - title: Carrots and parsnips
+        text: "Glazed with honey, thyme, and butter."
+        meta: Side
+        image: {src: "${SWATCH.carrots}", alt: Glazed carrots and parsnips in a white dish}
+      - title: Lemony greens
+        text: Spring greens wilted with butter and a squeeze of lemon.
+        meta: Side
+        image: {src: "${SWATCH.greens}", alt: Buttered spring greens with lemon}
+      - title: Apple crumble
+        text: Bramley apples under an oat crumble, served with custard.
+        meta: Pudding
+        image: {src: "file:crumble", alt: Apple crumble with a jug of custard}
+  - type: heading
+    size: sm
+    text: Mixed thumbnails keep titles aligned
+  - type: list
+    id: extras
+    items:
+      - title: Gravy
+        text: Made from the lamb resting juices.
+        image: {src: "${SWATCH.gravy}", alt: A jug of gravy}
+      - title: Mint sauce
+        text: No photo, so the title keeps the thumbnail gutter.
+      - title: Redcurrant jelly
+        text: The file id has no URL, so a placeholder shows the alt text.
+        image: {src: "file:missing-photo", alt: A dish of redcurrant jelly}
+`;
+
+const resolveListImage = async (fileId: string): Promise<string | undefined> =>
+  fileId === "crumble" ? SWATCH.crumble : undefined;
+
+export const BlocksViewList: React.FC = () => {
+  return (
+    <Box padding={4} width="100%">
+      <BlocksView document={LIST} resolveImage={resolveListImage} />
     </Box>
   );
 };

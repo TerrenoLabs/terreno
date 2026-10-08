@@ -544,6 +544,19 @@ scrolling row `<path>-scroll`, each tile `<path>-image-<index>`, its caption
 `<path>-image-<index>-caption`, and a placeholder `<path>-image-<index>-placeholder`.
 `Image` passes `alt` to the native image as its `accessibilityLabel`.
 
+A `list` draws one row per item, 12 apart (`gap={3}`). The row starts with a 3:4 portrait
+`Image` thumbnail (`fit` cover), always 112 wide and 149 tall, with `alt` as its accessible label.
+Beside it, the optional `meta` sits small and muted above the bold `title`, and the optional
+`text` follows in muted body text. `text` is plain text, not markdown. When any item in the list
+has a thumbnail, an item without one keeps an empty 112-wide gutter so every title starts at the
+same place; a list with no thumbnails draws text only, with no gutter. A `file:` thumbnail loads
+through `resolveImage`, including in a list inside a card. Until it has a URL, or when the lookup
+fails, it is a muted 112 by 149 placeholder that shows the alt text and keeps it as the label.
+Test ids: the list `<path>`, each row `<path>-item-<index>`, its thumbnail
+`<path>-item-<index>-image`, placeholder `<path>-item-<index>-placeholder`, gutter
+`<path>-item-<index>-gutter`, text column `<path>-item-<index>-body`, and the
+`<path>-item-<index>-meta`, `-title`, and `-text` lines.
+
 ```tsx
 <BlocksView
   document={reply}

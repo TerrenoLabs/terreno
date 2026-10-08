@@ -7,6 +7,7 @@ import {ActivityIndicator, Image as NativeImage, ScrollView, StyleSheet} from "r
 
 import {IconButton} from "../IconButton";
 import {Image} from "../Image";
+import {MarkdownView} from "../MarkdownView";
 import {sharedResponsiveBreakpointStore} from "../ResponsiveBreakpoint";
 import {renderWithTheme} from "../test-utils";
 import {BlocksView} from "./BlocksView";
@@ -1197,6 +1198,170 @@ blocks:
       const placeholder = view.getByTestId("blocks-0-0-image-1-placeholder");
       expect(placeholder.props.accessibilityLabel).toBe("A jug of spring flowers");
       expect(view.getByText("A jug of spring flowers")).toBeTruthy();
+    });
+  });
+
+  describe("list", () => {
+    const PIXEL = "data:image/png;base64,iVBORw0KGgo=";
+    const MENU = `v: 1
+blocks:
+  - type: list
+    id: menu
+    items:
+      - title: Roast leg of lamb
+        text: Rubbed with garlic and rosemary.
+        meta: Main
+        image: {src: "${PIXEL}", alt: Roast leg of lamb on a carving board}
+      - title: Crisp potatoes
+        image: {src: "${PIXEL}", alt: Crisp roast potatoes in a tray}
+`;
+    const textProps = (
+      view: RenderedView,
+      testID: string
+    ): {bold?: boolean; children?: unknown; color?: string; size?: string} => {
+      // `Text` is memoized, so the outermost node with the testID carries the props the renderer passed.
+      const [node] = view.UNSAFE_root.findAll((candidate) => candidate.props.testID === testID);
+      if (node === undefined) {
+        throw new Error(`No Text with testID ${testID}`);
+      }
+      return node.props;
+    };
+    // Composite and host nodes share a testID, so ids are deduplicated in render order.
+    const idsIn = (view: RenderedView, testID: string, pattern: RegExp): string[] => [
+      ...new Set(
+        view
+          .getByTestId(testID)
+          .findAll((node) => typeof node.props.testID === "string")
+          .map((node) => String(node.props.testID))
+          .filter((id) => pattern.test(id))
+      ),
+    ];
+
+    it("draws each item as a 112 by 149 (3:4) @terreno/ui Image left of the title, with alt as the accessible label", () => {
+      const view = renderWithTheme(<BlocksView document={MENU} />);
+      expect(view.UNSAFE_getAllByType(Image)).toHaveLength(2);
+      const images = view.UNSAFE_getAllByType(NativeImage);
+      expect(images.map((node) => node.props.accessibilityLabel)).toEqual([
+        "Roast leg of lamb on a carving board",
+        "Crisp roast potatoes in a tray",
+      ]);
+      expect(images.every((node) => node.props.source.uri === PIXEL)).toBe(true);
+      expect(
+        images.map((node) => {
+          const {height, width} = StyleSheet.flatten(node.props.style) as {
+            height?: number;
+            width?: number;
+          };
+          return {height, width};
+        })
+      ).toEqual([
+        {height: 149, width: 112},
+        {height: 149, width: 112},
+      ]);
+      expect(idsIn(view, "blocks-0-item-0", /^blocks-0-item-0-(image|body)$/)).toEqual([
+        "blocks-0-item-0-image",
+        "blocks-0-item-0-body",
+      ]);
+    });
+
+    it("shows the meta small and muted above a bold title, then muted plain text", () => {
+      const view = renderWithTheme(<BlocksView document={MENU} />);
+      expect(idsIn(view, "blocks-0-item-0-body", /^blocks-0-item-0-(meta|title|text)$/)).toEqual([
+        "blocks-0-item-0-meta",
+        "blocks-0-item-0-title",
+        "blocks-0-item-0-text",
+      ]);
+      expect(textProps(view, "blocks-0-item-0-meta")).toMatchObject({
+        children: "Main",
+        color: "secondaryLight",
+        size: "sm",
+      });
+      expect(textProps(view, "blocks-0-item-0-title")).toMatchObject({
+        bold: true,
+        children: "Roast leg of lamb",
+      });
+      expect(textProps(view, "blocks-0-item-0-text")).toMatchObject({
+        children: "Rubbed with garlic and rosemary.",
+        color: "secondaryLight",
+      });
+      expect(view.queryByTestId("blocks-0-item-1-meta")).toBeNull();
+      expect(view.queryByTestId("blocks-0-item-1-text")).toBeNull();
+    });
+
+    it("draws item text as plain text, not markdown", () => {
+      const document = `v: 1
+blocks:
+  - type: list
+    items:
+      - title: Mint sauce
+        text: "**Fresh** mint, sugar, and vinegar"
+`;
+      const view = renderWithTheme(<BlocksView document={document} />);
+      expect(textProps(view, "blocks-0-item-0-text").children).toBe(
+        "**Fresh** mint, sugar, and vinegar"
+      );
+      expect(view.UNSAFE_queryAllByType(MarkdownView)).toHaveLength(0);
+    });
+
+    it("keeps a 112 wide gutter for an item without an image when another item has one, so titles line up", () => {
+      const document = `v: 1
+blocks:
+  - type: list
+    items:
+      - title: Roast leg of lamb
+        image: {src: "${PIXEL}", alt: Roast leg of lamb}
+      - title: Mint sauce
+`;
+      const view = renderWithTheme(<BlocksView document={document} />);
+      expect(view.queryByTestId("blocks-0-item-1-image")).toBeNull();
+      const gutter = view.getByTestId("blocks-0-item-1-gutter");
+      expect(StyleSheet.flatten(gutter.props.style)).toMatchObject({width: 112});
+      expect(view.queryByTestId("blocks-0-item-0-gutter")).toBeNull();
+    });
+
+    it("draws a list with no images as text only, with no gutter", () => {
+      const document = `v: 1
+blocks:
+  - type: list
+    items:
+      - title: Mint sauce
+      - title: Redcurrant jelly
+`;
+      const view = renderWithTheme(<BlocksView document={document} />);
+      expect(view.UNSAFE_queryAllByType(Image)).toHaveLength(0);
+      expect(view.queryByTestId("blocks-0-item-0-gutter")).toBeNull();
+      expect(view.queryByTestId("blocks-0-item-1-gutter")).toBeNull();
+      expect(textProps(view, "blocks-0-item-1-title").children).toBe("Redcurrant jelly");
+    });
+
+    it("loads file: thumbnails inside a card through resolveImage and keeps an unresolved one as a labelled 3:4 placeholder", async () => {
+      const document = `v: 1
+blocks:
+  - type: card
+    children:
+      - type: list
+        items:
+          - title: Roast leg of lamb
+            image: {src: "file:roast-lamb", alt: Roast leg of lamb on a carving board}
+          - title: Apple crumble
+            image: {src: "file:crumble", alt: Apple crumble with custard}
+`;
+      const resolveImage = mock(async (id: string) =>
+        id === "roast-lamb" ? "https://cdn.example/lamb.png" : undefined
+      );
+      const view = renderWithTheme(<BlocksView document={document} resolveImage={resolveImage} />);
+      await waitFor(() => {
+        expect(view.UNSAFE_getAllByType(NativeImage)).toHaveLength(1);
+      });
+      expect(resolveImage).toHaveBeenCalledWith("roast-lamb");
+      expect(resolveImage).toHaveBeenCalledWith("crumble");
+      const [loaded] = view.UNSAFE_getAllByType(NativeImage);
+      expect(loaded?.props.source.uri).toBe("https://cdn.example/lamb.png");
+      expect(loaded?.props.accessibilityLabel).toBe("Roast leg of lamb on a carving board");
+      const placeholder = view.getByTestId("blocks-0-0-item-1-placeholder");
+      expect(placeholder.props.accessibilityLabel).toBe("Apple crumble with custard");
+      expect(StyleSheet.flatten(placeholder.props.style)).toMatchObject({height: 149, width: 112});
+      expect(view.getByText("Apple crumble with custard")).toBeTruthy();
     });
   });
 

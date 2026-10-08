@@ -8,6 +8,8 @@ import {
   type GalleryBlock,
   type GalleryImage,
   type InlineDataset,
+  type ListBlock,
+  type ListItem,
   type StepperBlock,
   stepperElementIds,
   type TableBlock,
@@ -521,6 +523,95 @@ const GalleryBlockView: React.FC<{
   );
 };
 
+/** Fixed thumbnail width; also the gutter an imageless item keeps when another item has a thumbnail. */
+const LIST_THUMBNAIL_WIDTH = 112;
+/** 3:4 portrait: 112 * 4 / 3 = 149.3, rounded. */
+const LIST_THUMBNAIL_HEIGHT = Math.round((LIST_THUMBNAIL_WIDTH * 4) / 3);
+
+const ListThumbnail: React.FC<{
+  image: NonNullable<ListItem["image"]>;
+  testID: string;
+  url?: string;
+}> = ({image, testID, url}) => {
+  if (!url) {
+    return (
+      <Box
+        accessibilityLabel={image.alt}
+        alignItems="center"
+        color="neutralLight"
+        height={LIST_THUMBNAIL_HEIGHT}
+        justifyContent="center"
+        padding={2}
+        rounding="md"
+        testID={`${testID}-placeholder`}
+        width={LIST_THUMBNAIL_WIDTH}
+      >
+        <Text align="center" color="secondaryLight" size="sm">
+          {image.alt}
+        </Text>
+      </Box>
+    );
+  }
+  return (
+    <Box overflow="hidden" rounding="md" testID={`${testID}-image`}>
+      <Image
+        alt={image.alt}
+        color="transparent"
+        fit="cover"
+        naturalWidth={LIST_THUMBNAIL_WIDTH}
+        src={url}
+        style={{height: LIST_THUMBNAIL_HEIGHT, width: LIST_THUMBNAIL_WIDTH}}
+      />
+    </Box>
+  );
+};
+
+/**
+ * One row per item: a 3:4 thumbnail on the left, then the small muted meta, the bold title,
+ * and the muted plain text. When any item has a thumbnail, an item without one keeps an empty
+ * gutter of the same width so every title starts at the same x.
+ */
+const renderList = (
+  block: ListBlock,
+  path: string,
+  context: BlockRenderContext
+): React.ReactElement => {
+  const hasThumbnails = block.items.some((item) => item.image !== undefined);
+  return (
+    <Box gap={3} key={path} testID={path}>
+      {block.items.map((item, index) => {
+        const itemPath = `${path}-item-${index}`;
+        const fileId = item.image === undefined ? undefined : fileRefId(item.image.src);
+        const url = fileId === undefined ? item.image?.src : context.resolvedImages?.[fileId];
+        return (
+          <Box direction="row" gap={3} key={itemPath} testID={itemPath}>
+            {item.image !== undefined ? (
+              <ListThumbnail image={item.image} testID={itemPath} url={url} />
+            ) : hasThumbnails ? (
+              <Box testID={`${itemPath}-gutter`} width={LIST_THUMBNAIL_WIDTH} />
+            ) : null}
+            <Box flex="grow" gap={1} testID={`${itemPath}-body`}>
+              {item.meta ? (
+                <Text color="secondaryLight" size="sm" testID={`${itemPath}-meta`}>
+                  {item.meta}
+                </Text>
+              ) : null}
+              <Text bold testID={`${itemPath}-title`}>
+                {item.title}
+              </Text>
+              {item.text ? (
+                <Text color="secondaryLight" testID={`${itemPath}-text`}>
+                  {item.text}
+                </Text>
+              ) : null}
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+};
+
 /** Renders one catalog block with @terreno/ui components. */
 export const renderBlock = (
   block: Block,
@@ -657,6 +748,8 @@ export const renderBlock = (
       return <TableBlockView block={block} context={context} key={path} path={path} />;
     case "gallery":
       return <GalleryBlockView block={block} context={context} key={path} path={path} />;
+    case "list":
+      return renderList(block, path, context);
     case "stepper":
       return renderStepper(block, path, context);
     case "checklist":

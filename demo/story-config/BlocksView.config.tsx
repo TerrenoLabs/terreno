@@ -6,6 +6,7 @@ import {
   BlocksViewDisplay,
   BlocksViewGallery,
   BlocksViewInvalid,
+  BlocksViewList,
 } from "@stories/BlocksView.stories";
 import {BlocksView} from "@terreno/ui";
 
@@ -14,6 +15,7 @@ export const BlocksViewConfiguration: DemoConfiguration = {
     "Headings, badges, and body text use the same components as the rest of the app, so screen readers read them as headings and text.",
     "Each checklist row is a checkbox labelled with the item text.",
     "Each gallery tile is labelled with its alt text, including a placeholder tile whose image did not load.",
+    "Each list thumbnail is labelled with its alt text; titles and text are plain text read in order after it.",
   ],
   additionalDocumentation: [],
   category: "Pattern",
@@ -49,6 +51,11 @@ export const BlocksViewConfiguration: DemoConfiguration = {
     Invalid: {
       description: "An unknown field shows an error banner. The raw document stays collapsed.",
       render: () => <BlocksViewInvalid />,
+    },
+    List: {
+      description:
+        "The Sunday roast menu: each item has a 3:4 thumbnail, small muted meta, a bold title, and muted text. An item without a photo keeps the thumbnail gutter, and an unresolved file id shows a placeholder.",
+      render: () => <BlocksViewList />,
     },
     Layout: {
       description: "Heading, text, metrics in columns, and a card with a badge, context, and divider.",

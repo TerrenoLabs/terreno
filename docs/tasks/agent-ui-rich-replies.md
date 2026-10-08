@@ -89,7 +89,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: one row of 4:3 `Image` tiles up to 3, a 3-column grid above that, captions, `file:` ids through `useResolvedImages`, and sideways scroll on narrow screens.
   - Acceptance: AC7 (gallery).
 
-- [ ] **T12** — List renders
+- [x] **T12** — List renders
   - Depends on: T7, T11
   - Files: `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/BlocksView.test.tsx`, `demo/stories/BlocksView.stories.tsx`, `docs/reference/ui.md`.
   - Delivers: for each item, a 3:4 thumbnail on the left, a bold title, muted text, and the meta.

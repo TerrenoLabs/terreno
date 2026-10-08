@@ -129,7 +129,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
 
 - [ ] **T17** — Model smoke: a real model writes the roast reply
   - Depends on: T15, T20
-  - Files: `example-backend/scripts/blocksSmoke.ts`, `example-backend/package.json` and root `package.json` (`blocks:smoke` script).
+  - Files: `example-backend/src/scripts/blocksSmoke.ts`, `example-backend/package.json` and root `package.json` (`blocks:smoke` script).
   - Delivers: a script that runs the post's prompt through `AIService` with the opted-in blocks prompt and checks the reply. It skips cleanly when no model key is set.
   - Acceptance: AC12.
 
@@ -143,9 +143,9 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: docs a stranger can follow to build the roast reply without reading the PR.
   - Acceptance: AC13.
 
-- [ ] **T19** — Generated photo library: generate images once and store them
+- [x] **T19** — Generated photo library: generate images once and store them
   - Depends on: none
-  - Files: `example-backend/src/models/photoLibraryEntry.ts`, `example-backend/src/types/models/photoLibraryEntryTypes.ts`, `example-backend/scripts/photoPrompts.ts`, `example-backend/scripts/generatePhotoLibrary.ts`, `example-backend/scripts/generatePhotoLibrary.test.ts`, `example-backend/package.json` (`photos:generate`).
+  - Files: `example-backend/src/models/photoLibraryEntry.ts`, `example-backend/src/types/models/photoLibraryEntryTypes.ts`, `example-backend/src/scripts/photoPrompts.ts`, `example-backend/src/scripts/generatePhotoLibrary.ts`, `example-backend/src/scripts/generatePhotoLibrary.test.ts`, `knip.jsonc` (script entry), `example-backend/package.json` (`photos:generate`).
   - Delivers: the `PhotoLibraryEntry` model and the `photos:generate` script from the IP. It runs AI SDK `generateImage` with the Vertex image model, then `FileStorageService.upload`, then upserts by `prompt`. It validates the required env up front, skips existing prompts, and takes `--force`. Supporting skill: `mongoose-schema-safety`.
   - Acceptance: AC14 (generation half), using a fake image model and fake storage.
 

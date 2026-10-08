@@ -62,6 +62,7 @@
     "migrate:check": "bun ../api/src/migrations/cli.ts check --dir ./migrations",
     "migrate:status": "bun ../api/src/migrations/cli.ts status --dir ./migrations",
     "migrate:up": "bun ../api/src/migrations/cli.ts up --dir ./migrations",
+    "photos:generate": "bun run src/scripts/generatePhotoLibrary.ts",
     "script": "bun run src/scripts/runAdminScript.ts",
     "seed": "bun run src/scripts/seed-test-data.ts",
     "start": "bun run src/index.ts",

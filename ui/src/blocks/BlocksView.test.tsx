@@ -381,6 +381,24 @@ blocks:
       });
     };
 
+    it("sizes the table to its rows so it never spills past the block", () => {
+      const view = renderWithTheme(<BlocksView document={LAMB} />);
+      const frame = view.getByTestId("blocks-0-table-frame");
+      // One header row plus one data row, 54 each, plus the 2px border.
+      expect(flatStyle(frame as unknown as StyledNode).height).toBe(110);
+    });
+
+    it("caps a long table at ten visible rows and lets it scroll", () => {
+      const rows = Array.from(
+        {length: 30},
+        (_, index) => `      - [${index}, 2.4, "2026-03-14", shoulder]`
+      ).join("\n");
+      const long = LAMB.replace('      - [6, 2.4, "2026-03-14", shoulder]', rows);
+      const view = renderWithTheme(<BlocksView document={long} />);
+      const frame = view.getByTestId("blocks-0-table-frame");
+      expect(flatStyle(frame as unknown as StyledNode).height).toBe(11 * 54 + 2);
+    });
+
     it("shows column names with underscores as spaced headers", () => {
       const view = renderWithTheme(<BlocksView document={LAMB} />);
       expect(view.getByText("lamb kg")).toBeTruthy();

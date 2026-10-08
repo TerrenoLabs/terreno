@@ -1,7 +1,9 @@
-import {existsSync} from "node:fs";
+import {existsSync, readFileSync} from "node:fs";
+import path from "node:path";
 import type {Page} from "@playwright/test";
 
 import {expect, test} from "./fixtures/test";
+import {TEST_USER} from "./fixtures/testUsers";
 import {loginAs} from "./helpers/login";
 import {
   askCallRow,
@@ -11,6 +13,7 @@ import {
   mockFileUploads,
   mockGptAskStream,
   mockGptBlocks,
+  mockGptDocument,
   mockGptStream,
   mockGptTurns,
   mockSavedHistory,
@@ -18,6 +21,15 @@ import {
   unmockGptStream,
   userRow,
 } from "./helpers/mockGpt";
+import {
+  type RoastPhotoIds,
+  roastDocument,
+  type SeededHistory,
+  SIGNED_URL_PREFIX,
+  seedGptHistory,
+  seedRoastPhotos,
+  useE2ePhotoStorage,
+} from "./helpers/seedGptHistory";
 
 const PLAN_ASK: MockAsk = {
   input: {
@@ -584,11 +596,141 @@ test.describe("AI Chat", () => {
     }
     await saveChatShot(page, "blocks-chat-reply.png");
   });
+
+  test.describe("rich roast reply", () => {
+    const ROAST_PROMPT =
+      "Give me a plan for a sunday lamb roast, I'm having friends over still figuring out numbers tbh";
+    // Served for every signed photo URL: the only storage call the browser makes.
+    const FIXTURE_IMAGE = readFileSync(
+      path.resolve(__dirname, "../assets/gptMascots/mascot-1.png")
+    );
+    // + scales every amount from the 5-person stepper the agent wrote.
+    const SIX_PERSON_LIST = [
+      "Number of people: 6 People",
+      "Bone-in leg of lamb: 2.4 kg",
+      "Potatoes: 1800 g",
+      "Carrots: 10",
+      "Parsnips: 6",
+      "Tenderstem broccoli: 750 g",
+      "Apples for crumble: 5",
+    ].join("\n");
+
+    let photoIds: RoastPhotoIds = {};
+    let restoreStorage: (() => Promise<void>) | undefined;
+    let history: SeededHistory | undefined;
+
+    test.use({permissions: ["clipboard-read", "clipboard-write"]});
+
+    test.beforeAll(async () => {
+      photoIds = await seedRoastPhotos();
+      restoreStorage = await useE2ePhotoStorage();
+    });
+
+    test.afterAll(async () => {
+      await restoreStorage?.();
+    });
+
+    test.beforeEach(async ({page}) => {
+      // The stored reply is the one the mocked model streams, so callbacks resolve `msg-1` to it.
+      const document = roastDocument(photoIds);
+      history = await seedGptHistory({
+        prompt: ROAST_PROMPT,
+        reply: document,
+        title: "Sunday lamb roast",
+        user: TEST_USER,
+      });
+      await mockGptDocument(page, {
+        document,
+        historyId: history.historyId,
+        title: "Sunday lamb roast",
+      });
+      await page.route(`${SIGNED_URL_PREFIX}**`, (route) =>
+        route.fulfill({body: FIXTURE_IMAGE, contentType: "image/png", status: 200})
+      );
+    });
+
+    test.afterEach(async ({page}) => {
+      await page.unroute(`${SIGNED_URL_PREFIX}**`);
+      await history?.remove();
+    });
+
+    test("user scales the roast, ticks a step, and copies the shopping list", async ({page}) => {
+      const photoUrlRequests = new Set<string>();
+      page.on("response", (response) => {
+        const match = /\/photoLibrary\/([0-9a-f]{24})\/url$/.exec(new URL(response.url()).pathname);
+        if (match?.[1] && response.status() === 200) {
+          photoUrlRequests.add(match[1]);
+        }
+      });
+
+      await page.getByTestId("gpt-input").fill(ROAST_PROMPT);
+      await page.getByTestId("gpt-submit").click();
+
+      const stepperValue = page.getByTestId("blocks-8-0-value");
+      await expect(stepperValue).toHaveText("5");
+      await expect(page.getByTestId("blocks-8-0-items")).toContainText("2.0 kg");
+
+      // Gallery and list photos load through GET /photoLibrary/:id/url and the stubbed download.
+      for (const index of [0, 1, 2]) {
+        await expect(page.getByTestId(`blocks-1-image-${index}`).locator("img")).toBeVisible();
+        await expect(page.getByTestId(`blocks-1-image-${index}-placeholder`)).toHaveCount(0);
+      }
+      for (const index of [0, 1, 2, 3, 4]) {
+        await expect(page.getByTestId(`blocks-5-item-${index}-image`)).toBeVisible();
+      }
+      await expect.poll(() => [...photoUrlRequests].sort()).toEqual(Object.values(photoIds).sort());
+      await page.getByTestId("blocks-1").scrollIntoViewIfNeeded();
+      await saveChatShot(page, "roast-photos.png");
+
+      const scaled = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/gpt/actions") && response.request().method() === "POST"
+      );
+      await page.getByTestId("blocks-8-0-guests_increase").click();
+      const scaleResponse = await scaled;
+      expect(scaleResponse.status()).toBe(200);
+      expect(scaleResponse.request().postDataJSON()).toMatchObject({
+        blockId: "guests",
+        historyId: history?.historyId,
+        messageId: "msg-1",
+        name: "scaleStepper",
+        payload: {value: 6},
+      });
+      await expect(stepperValue).toHaveText("6");
+      await expect(page.getByTestId("blocks-8-0-items")).toContainText("2.4 kg");
+      await expect(page.getByTestId("blocks-8-0-items")).toContainText("1800 g");
+
+      const counter = page.getByTestId("blocks-13-counter");
+      await expect(counter).toHaveText("1 of 8");
+      const ticked = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/gpt/actions") && response.request().method() === "POST"
+      );
+      await page.getByTestId("blocks-13-cooking_prepare_lamb-row-clickable").click();
+      const tickResponse = await ticked;
+      expect(tickResponse.status()).toBe(200);
+      expect(tickResponse.request().postDataJSON()).toMatchObject({
+        blockId: "cooking",
+        name: "toggleChecklist",
+        payload: {checked: true, itemId: "prepare_lamb"},
+      });
+      await expect(counter).toHaveText("2 of 8");
+      await saveChatShot(page, "roast-checklist-ticked.png");
+
+      await page.getByTestId("blocks-8-1-copy_shopping_list").click();
+      await expect(page.getByTestId("blocks-8-1-copy_shopping_list-status-text")).toHaveText(
+        "Copied"
+      );
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(SIX_PERSON_LIST);
+      await page.getByTestId("blocks-8-0").scrollIntoViewIfNeeded();
+      await saveChatShot(page, "roast-scaled-copied.png");
+    });
+  });
 });
 
 /** Cloud agents attach these shots to the PR. CircleCI has no such directory. */
 const saveChatShot = async (page: Page, name: string): Promise<void> => {
-  const dir = "/opt/cursor/artifacts/screenshots";
+  const dir = `${process.env.E2E_ARTIFACTS_DIR ?? "/opt/cursor/artifacts"}/screenshots`;
   if (!existsSync(dir)) {
     return;
   }

@@ -1091,7 +1091,7 @@ const AiScreen: React.FC = () => {
       currentMessages={currentMessages}
       geminiApiKey={geminiApiKey}
       histories={histories}
-      hostActions={["exportDataset", "export_csv"]}
+      hostActions={["exportDataset", "export_csv", "scaleStepper", "toggleChecklist"]}
       isStreaming={isStreaming}
       mascot={mascot}
       mcpTools={mcpTools}

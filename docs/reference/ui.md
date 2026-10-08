@@ -482,7 +482,8 @@ as `document`. Leaf blocks in this slice are `heading`, `text`, `metric`, `badge
 is the column name with underscores shown as spaces (`bone_in_lamb` reads "bone in lamb"). The table
 measures its container with `onLayout` and splits the width evenly across its columns, with
 at least 96 per column; past that it scrolls sideways. Before the first layout each column
-is 120 wide. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the
+is 120 wide. Its height fits the header plus its rows (54 each), up to 10 rows; a longer table
+scrolls inside that height, so it never spills over the next block. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the
 chart shows `loading` while that promise is in flight. A rejected fetch clears that
 loading state. A segmented control highlights the option whose `data` matches the target
 chart or table. A `select` action switches a table the same way it switches a chart.

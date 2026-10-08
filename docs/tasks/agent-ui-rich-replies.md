@@ -115,7 +115,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: the GPT-6 demo reply as one document: the title; the gallery; the summary card with an eyebrow; the menu list; the stepper and copy card; the checklist with its first item checked; the USDA note as `context`; the tips as `text`; and follow-up `reply` buttons. It also includes the GPT-5.6 "How much lamb?" table as a `table` block. Images use `https://images.example.com/...` and validate only with `imageHosts`, so the file lives under `golden/`, not `valid/`.
   - Acceptance: AC10; a playground screenshot under `/opt/cursor/artifacts/`.
 
-- [ ] **T16** — Example app runs the roast reply against the real callback route
+- [x] **T16** — Example app runs the roast reply against the real callback route
   - Depends on: T15, T20, T21
   - Files:
     - `example-backend/src/ai/hostActions.ts`: register `scaleStepper: scaleStepperHostAction` and `toggleChecklist: toggleChecklistHostAction` (`richBlocks` is on by default).

@@ -346,6 +346,20 @@ const tableColumnWidth = ({
   return Math.max(TABLE_MIN_COLUMN_WIDTH, Math.floor(containerWidth / columnCount));
 };
 
+/** DataTable's default header and row height. */
+const TABLE_ROW_HEIGHT = 54;
+/** Rows a table block shows before its body scrolls. */
+const TABLE_MAX_VISIBLE_ROWS = 10;
+/** Top and bottom border of the DataTable frame. */
+const TABLE_BORDER_HEIGHT = 2;
+
+/**
+ * DataTable fills its parent's height, so the block gives it a frame sized to the header plus its
+ * rows; otherwise the table also counts the title and spills over the next block.
+ */
+const tableFrameHeight = (rowCount: number): number =>
+  (Math.min(rowCount, TABLE_MAX_VISIBLE_ROWS) + 1) * TABLE_ROW_HEIGHT + TABLE_BORDER_HEIGHT;
+
 const TableBlockView: React.FC<{
   block: TableBlock;
   context: BlockRenderContext;
@@ -375,13 +389,15 @@ const TableBlockView: React.FC<{
   return (
     <Box gap={2} onLayout={handleLayout} testID={path}>
       {block.title ? <Heading size="sm">{block.title}</Heading> : null}
-      <DataTable
-        columns={columns}
-        data={(dataset?.rows ?? []).map((row) =>
-          indexes.map((index) => ({value: index < 0 ? "" : row[index]}))
-        )}
-        testID={`${path}-table`}
-      />
+      <Box height={tableFrameHeight(dataset?.rows.length ?? 0)} testID={`${path}-table-frame`}>
+        <DataTable
+          columns={columns}
+          data={(dataset?.rows ?? []).map((row) =>
+            indexes.map((index) => ({value: index < 0 ? "" : row[index]}))
+          )}
+          testID={`${path}-table`}
+        />
+      </Box>
     </Box>
   );
 };

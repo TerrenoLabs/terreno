@@ -1434,6 +1434,7 @@ jobs:
 
   maestro-e2e:
     executor: node22_browsers_mongo_rs_heavy
+    resource_class: xlarge
     parameters:
       include-demo:
         type: boolean
@@ -1646,7 +1647,7 @@ jobs:
 
   e2e-prepare:
     executor: node22
-    resource_class: large
+    resource_class: xlarge
     working_directory: ~/project
     steps:
       - checkout

@@ -277,6 +277,30 @@ export interface GalleryBlock {
   type: "gallery";
 }
 
+/** An optional thumbnail on a list item. Follows the `image` src and alt rules. */
+export interface ListItemImage {
+  /** At most `headingTextMaxLength` characters, the same cap as an `image` block's alt. */
+  alt: string;
+  /** Follows the `image` src rules, including `IMAGE_HOST_NOT_ALLOWED`. */
+  src: string;
+}
+
+export interface ListItem {
+  image?: ListItemImage;
+  /** A short label, such as a time or a price. */
+  meta?: string;
+  /** Plain text, not markdown. */
+  text?: string;
+  title: string;
+}
+
+/** A stack of 1 to 12 rows, each with a title and optional text, meta, and thumbnail. */
+export interface ListBlock {
+  id?: string;
+  items: ListItem[];
+  type: "list";
+}
+
 export interface ColumnsBlock {
   children: Block[];
   id?: string;
@@ -306,7 +330,8 @@ export type LeafBlock =
   | DetailsBlock
   | StepperBlock
   | ChecklistBlock
-  | GalleryBlock;
+  | GalleryBlock
+  | ListBlock;
 
 export type Block = LeafBlock | ColumnsBlock | CardBlock;
 
@@ -498,10 +523,13 @@ const calloutSchema = z
 
 const imageSrcSchema = z.string().min(1).max(BLOCK_LIMITS.htmlMaxBytes);
 
+/** The image block's alt cap, shared by list item thumbnails. */
+const imageAltSchema = visibleText(BLOCK_LIMITS.headingTextMaxLength);
+
 const imageSchema = z
   .object({
     ...sharedBlockFields,
-    alt: visibleText(BLOCK_LIMITS.headingTextMaxLength),
+    alt: imageAltSchema,
     src: imageSrcSchema,
     type: z.literal("image"),
   })
@@ -523,6 +551,29 @@ const gallerySchema = z
       .min(BLOCK_LIMITS.galleryImagesMin)
       .max(BLOCK_LIMITS.galleryImagesMax),
     type: z.literal("gallery"),
+  })
+  .strict();
+
+const listItemSchema = z
+  .object({
+    image: z
+      .object({
+        alt: imageAltSchema,
+        src: imageSrcSchema,
+      })
+      .strict()
+      .optional(),
+    meta: visibleText(BLOCK_LIMITS.listItemMetaMaxLength).optional(),
+    text: visibleText(BLOCK_LIMITS.listItemTextMaxLength).optional(),
+    title: visibleText(BLOCK_LIMITS.listItemTitleMaxLength),
+  })
+  .strict();
+
+const listSchema = z
+  .object({
+    ...sharedBlockFields,
+    items: z.array(listItemSchema).min(1).max(BLOCK_LIMITS.listItemsMax),
+    type: z.literal("list"),
   })
   .strict();
 
@@ -622,6 +673,7 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
     stepperSchema,
     checklistSchema,
     gallerySchema,
+    listSchema,
     z
       .object({
         ...sharedBlockFields,

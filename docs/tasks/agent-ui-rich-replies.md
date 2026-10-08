@@ -57,7 +57,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: the `gallery` schema. `IMAGE_HOST_NOT_ALLOWED` names the tile path (`blocks[0].images[2].src`).
   - Acceptance: the gallery rows of AC1 and AC3; an invalid fixture with a disallowed host.
 
-- [ ] **T7** — `list` contract
+- [x] **T7** — `list` contract
   - Depends on: T6
   - Files: `blocks/src/schema.ts`, `blocks/src/limits.ts`, `blocks/src/lint.ts`, `blocks/src/prompt.ts`, `blocks/src/fixtures/{valid,invalid}/list*.yaml`, `blocks/src/parse.test.ts`, `docs/reference/blocks.md`.
   - Delivers: the `list` schema. The optional image on each item goes through image-host lint.

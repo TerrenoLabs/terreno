@@ -72,6 +72,16 @@ const galleryPromptLines = (): string[] => [
 ];
 
 /**
+ * List instructions, offered with rich blocks. The word "list" names only this block in the
+ * prompt, so the model never reads it as a generic instruction. Item image srcs defer to the
+ * image src rules, and the alt cap is the image block's.
+ */
+const listPromptLines = (): string[] => [
+  `list requires items: 1 to ${BLOCK_LIMITS.listItemsMax} entries stacked one under another. Each item requires title, and may set text (plain text, not markdown), meta (a short label such as a time or a price), and image (src and alt, a thumbnail). Each image src follows the image src rules above.`,
+  `A list item title is at most ${BLOCK_LIMITS.listItemTitleMaxLength} characters, its text ${BLOCK_LIMITS.listItemTextMaxLength}, its meta ${BLOCK_LIMITS.listItemMetaMaxLength}, and its image alt ${BLOCK_LIMITS.headingTextMaxLength}.`,
+];
+
+/**
  * The system-prompt section a host prepends when a reply must be one block document.
  * Every cap is read from `BLOCK_LIMITS` so the prompt, the schema, and the reference stay aligned.
  * `richBlocks: false` keeps the prompt as it was before rich blocks, for clients that cannot
@@ -97,7 +107,9 @@ export const blocksPromptSection = ({
   stepperActions?: readonly string[];
 } = {}): string => {
   const offersStepper = richBlocks && stepperActions.length > 0;
-  const richTypes = richBlocks ? `${offersStepper ? ", stepper" : ""}, checklist, gallery` : "";
+  const richTypes = richBlocks
+    ? `${offersStepper ? ", stepper" : ""}, checklist, gallery, list`
+    : "";
   const callbacks =
     hostActions.length === 0
       ? "No callback names are registered. Do not emit kind callback."
@@ -126,6 +138,7 @@ export const blocksPromptSection = ({
     ...(offersStepper ? stepperPromptLines(stepperActions) : []),
     ...(richBlocks ? checklistPromptLines(checklistActions) : []),
     ...(richBlocks ? galleryPromptLines() : []),
+    ...(richBlocks ? listPromptLines() : []),
     "heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.",
     "chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.",
     "table requires data, the name of a dataset. actions requires id and elements.",

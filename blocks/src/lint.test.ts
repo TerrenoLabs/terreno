@@ -753,3 +753,114 @@ describe("gallery lint", () => {
     ).toEqual([{code: "MISSING_REQUIRED", path: "blocks[0].images[0].alt"}]);
   });
 });
+
+const listItems = (count: number): Record<string, unknown>[] =>
+  Array.from({length: count}, (_unused, index) => ({title: `Dish ${index}`}));
+
+const list = (fields: Record<string, unknown> = {}): Record<string, unknown> => ({
+  items: listItems(2),
+  type: "list",
+  ...fields,
+});
+
+describe("list lint", () => {
+  it("accepts items with and without text, meta, and a data:image or file: image", () => {
+    const items = [
+      {
+        image: {alt: "Roast lamb", src: "file:roast-lamb"},
+        meta: "Main",
+        text: "Rubbed with garlic.",
+        title: "Roast lamb",
+      },
+      {image: {alt: "Potatoes", src: "data:image/png;base64,iVBORw0KGgo="}, title: "Potatoes"},
+      {title: "Mint sauce"},
+    ];
+    expect(codesAndPaths(documentWith({blocks: [list({id: "menu", items})]}))).toEqual([]);
+  });
+
+  it("names the item image path when its https host is not in imageHosts", () => {
+    const items = [
+      {title: "Lamb"},
+      {image: {alt: "Potatoes", src: "https://images.example.com/potatoes.jpg"}, title: "Pots"},
+      {image: {alt: "Carrots", src: "https://evil.example.net/carrots.jpg"}, title: "Carrots"},
+    ];
+    const doc = documentWith({blocks: [{type: "divider"}, list({items})]});
+    expect(codesAndPaths(doc)).toEqual([
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[1].items[1].image.src"},
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[1].items[2].image.src"},
+    ]);
+    expect(codesAndPaths(doc, {imageHosts: ["images.example.com"]})).toEqual([
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[1].items[2].image.src"},
+    ]);
+    expect(codesAndPaths(doc, {imageHosts: ["images.example.com", "EVIL.example.net"]})).toEqual(
+      []
+    );
+  });
+
+  it("applies the image src rules to item images inside a card", () => {
+    const items = [
+      {image: {alt: "Lamb", src: "http://images.example.com/lamb.jpg"}, title: "Lamb"},
+      {image: {alt: "Potatoes", src: "file:"}, title: "Potatoes"},
+    ];
+    const doc = documentWith({blocks: [{children: [list({items})], type: "card"}]});
+    expect(codesAndPaths(doc, {imageHosts: ["images.example.com"]})).toEqual([
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[0].children[0].items[0].image.src"},
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[0].children[0].items[1].image.src"},
+    ]);
+  });
+
+  it("caps the item count and field lengths with closed codes", () => {
+    expect(codesAndPaths(documentWith({blocks: [list({items: listItems(1)})]}))).toEqual([]);
+    expect(codesAndPaths(documentWith({blocks: [list({items: listItems(12)})]}))).toEqual([]);
+    expect(codesAndPaths(documentWith({blocks: [list({items: []})]}))).toEqual([
+      {code: "TOO_FEW", path: "blocks[0].items"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [list({items: listItems(13)})]}))).toEqual([
+      {code: "TOO_MANY", path: "blocks[0].items"},
+    ]);
+    const itemWith = (fields: Record<string, unknown>): Record<string, unknown> =>
+      list({items: [{title: "Lamb", ...fields}]});
+    expect(
+      codesAndPaths(
+        documentWith({
+          blocks: [
+            itemWith({
+              image: {alt: "a".repeat(200), src: "file:lamb"},
+              meta: "m".repeat(40),
+              text: "t".repeat(500),
+              title: "T".repeat(120),
+            }),
+          ],
+        })
+      )
+    ).toEqual([]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({title: "T".repeat(121)})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].items[0].title"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({text: "t".repeat(501)})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].items[0].text"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({meta: "m".repeat(41)})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].items[0].meta"},
+    ]);
+    expect(
+      codesAndPaths(
+        documentWith({blocks: [itemWith({image: {alt: "a".repeat(201), src: "file:lamb"}})]})
+      )
+    ).toEqual([{code: "TOO_LONG", path: "blocks[0].items[0].image.alt"}]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({text: "   "})]}))).toEqual([
+      {code: "TOO_SHORT", path: "blocks[0].items[0].text"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({id: "lamb"})]}))).toEqual([
+      {code: "UNKNOWN_KEY", path: "blocks[0].items[0].id"},
+    ]);
+    expect(
+      codesAndPaths(
+        documentWith({blocks: [itemWith({image: {alt: "Lamb", caption: "x", src: "file:a"}})]})
+      )
+    ).toEqual([{code: "UNKNOWN_KEY", path: "blocks[0].items[0].image.caption"}]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({image: {src: "file:a"}})]}))).toEqual([
+      {code: "MISSING_REQUIRED", path: "blocks[0].items[0].image.alt"},
+    ]);
+  });
+});

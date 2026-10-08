@@ -22,6 +22,9 @@ const LEGACY_OPTION_SETS = {
 const STEPPER_LINE_START = "stepper requires";
 const CHECKLIST_LINE_START = "checklist requires";
 const GALLERY_LINE_START = "gallery requires";
+const LIST_LINE_START = "list requires";
+/** Matches the list block by word, so checklist lines do not count. */
+const LIST_WORD = /\blist\b/;
 
 const linesAdded = (section: string, base: string): string[] => {
   const baseLines = new Set(base.split("\n"));
@@ -63,6 +66,7 @@ describe("blocksPromptSection", () => {
         expect(section).not.toContain("stepper");
         expect(section).not.toContain("checklist");
         expect(section).not.toContain("gallery");
+        expect(section).not.toMatch(LIST_WORD);
       });
     }
   });
@@ -220,6 +224,52 @@ describe("blocksPromptSection", () => {
       for (const [, value] of galleryLimits) {
         expect(galleryLines).toContain(String(value));
       }
+    });
+  });
+
+  describe("the list line", () => {
+    const listLines = (): string =>
+      linesAdded(blocksPromptSection(), blocksPromptSection({richBlocks: false}))
+        .filter((line) => LIST_WORD.test(line))
+        .join("\n");
+
+    it("is on by default and lists list as a block type", () => {
+      expect(blocksPromptSection()).toContain(LIST_LINE_START);
+      for (const allowHtml of [false, true]) {
+        const typesLine = blocksPromptSection({allowHtml})
+          .split("\n")
+          .find((line) => line.startsWith("Block types:"));
+        expect(typesLine).toMatch(/, gallery, list[.,]/);
+      }
+    });
+
+    it("names the list block only in its own lines, never as a generic word", () => {
+      const section = blocksPromptSection({
+        checklistActions: ["toggleChecklist"],
+        stepperActions: ["scaleStepper"],
+      });
+      const mentions = section.split("\n").filter((line) => LIST_WORD.test(line));
+      expect(mentions.length).toBe(3);
+      expect(mentions[0]).toStartWith("Block types:");
+      expect(mentions[1]).toStartWith(LIST_LINE_START);
+      expect(mentions[2]).toStartWith("A list item");
+    });
+
+    it("sends item image srcs to the image rules and keeps the https rule tied to imageHosts", () => {
+      const lines = listLines();
+      expect(lines).toContain("image src rules");
+      expect(lines).toContain("plain text");
+      expect(lines).not.toContain("https");
+    });
+
+    it("prints every list limit from BLOCK_LIMITS and the image block's alt limit", () => {
+      const lines = listLines();
+      const listLimits = Object.entries(BLOCK_LIMITS).filter(([key]) => key.startsWith("list"));
+      expect(listLimits.length).toBe(4);
+      for (const [, value] of listLimits) {
+        expect(lines).toContain(String(value));
+      }
+      expect(lines).toContain(`image alt ${BLOCK_LIMITS.headingTextMaxLength}`);
     });
   });
 });

@@ -435,6 +435,21 @@ export const lintDocument = (
         }
       });
     }
+    if (block.type === "list") {
+      block.items.forEach((item, index) => {
+        if (item.image === undefined) {
+          return;
+        }
+        const thumbnailIssue = imageSourceIssue(
+          item.image.src,
+          options?.imageHosts,
+          `${path}.items[${index}].image`
+        );
+        if (thumbnailIssue) {
+          errors.push(thumbnailIssue);
+        }
+      });
+    }
     if (block.id !== undefined) {
       const duplicate = idIssue(block.id, path);
       if (duplicate) {

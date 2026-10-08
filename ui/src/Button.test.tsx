@@ -234,7 +234,7 @@ describe("Button", () => {
       />
     );
 
-    expect(getByTestId("disabled-active")).toHaveStyle({backgroundColor: "#9A9A9A"});
+    expect(getByTestId("disabled-active")).toHaveStyle({backgroundColor: "#949494"});
   });
 
   it("defaults to scale press animation", () => {

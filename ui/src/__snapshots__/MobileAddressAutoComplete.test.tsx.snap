@@ -135,7 +135,7 @@ exports[`MobileAddressAutocomplete renders TextField fallback without Google API
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",

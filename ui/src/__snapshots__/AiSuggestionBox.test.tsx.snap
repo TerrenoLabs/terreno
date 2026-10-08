@@ -158,7 +158,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for not-sta
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -341,7 +341,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for generat
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -789,7 +789,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for ready s
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -1128,7 +1128,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for hidden 
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -1467,7 +1467,7 @@ exports[`AiSuggestionBox in TextArea snapshots should match snapshot for added s
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",

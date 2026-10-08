@@ -31,7 +31,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
 
 ### Phase 2: Tables
 
-- [ ] **T3** — Table block renders typed columns
+- [x] **T3** — Table block renders typed columns
   - Depends on: T1
   - Files: `ui/src/DataTable.tsx` (number and date cells), `ui/src/DataTable.test.tsx`, `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/BlocksView.test.tsx`, `docs/reference/ui.md` (DataTable and BlocksView sections).
   - Delivers: right-aligned `number` cells and Luxon `DATE_MED` `date` cells in `DataTable`. The `table` block maps the dataset column types to these cells, measures its width with `onLayout`, and splits the width evenly, at least 96 per column, scrolling sideways past that.

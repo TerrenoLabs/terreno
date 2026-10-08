@@ -476,7 +476,12 @@ as `document`. Leaf blocks in this slice are `heading`, `text`, `metric`, `badge
 `card` groups children under an optional title. A `callout` draws `Banner` and is not dismissible. An `image` draws `Image` and requires `alt`; pass `imageHosts` to allow `https` hosts. A `details` block draws `Accordion`. A `chart` draws `LineChart`, `BarChart`,
 `AreaChart`, or `DonutChart` from an inline dataset or from `points`. The series is only
 `{label, value}` — a point color in the document is not passed through. A `table` draws
-`DataTable`. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the
+`DataTable` and maps each dataset column type to a cell: `number` to a right-aligned
+`number` cell, `date` to a `date` cell (Luxon `DATE_MED`, such as "Mar 14, 2026"), and
+`string` to `text`. A listed column that the dataset does not have yet is `text`. The table
+measures its container with `onLayout` and splits the width evenly across its columns, with
+at least 96 per column; past that it scrolls sideways. Before the first layout each column
+is 120 wide. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the
 chart shows `loading` while that promise is in flight. A rejected fetch clears that
 loading state. A segmented control highlights the option whose `data` matches the target
 chart or table. A `select` action switches a table the same way it switches a chart.
@@ -1262,6 +1267,21 @@ import {TerrenoProvider} from "@terreno/ui";
   {children}
 </TerrenoProvider>
 ``````
+
+## DataTable column types
+
+`columnType` picks the cell a column draws, unless `customColumnComponentMap` has an entry
+for that type:
+
+| `columnType` | Cell |
+| --- | --- |
+| `text` (and any unmapped type) | The value as a string |
+| `number` | The value as a string, right-aligned, with the header right-aligned to match. A number or a numeric string both work |
+| `date` | An ISO string or a `Date`, formatted with Luxon `DATE_MED` ("Mar 14, 2026") in the local zone. A value Luxon cannot parse is shown as written, and an empty value is blank |
+| `boolean` | A check or a cross icon |
+
+A value that is already formatted, such as "Oct 8, 2026, 3:00 PM", is not ISO, so a `date`
+column shows it unchanged.
 
 ## DataTable server-side filtering
 

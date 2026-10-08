@@ -2,7 +2,7 @@ import {describe, expect, it, mock} from "bun:test";
 import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
-import {ActivityIndicator, Image as NativeImage} from "react-native";
+import {ActivityIndicator, Image as NativeImage, StyleSheet} from "react-native";
 
 import {IconButton} from "../IconButton";
 import {sharedResponsiveBreakpointStore} from "../ResponsiveBreakpoint";
@@ -251,6 +251,89 @@ blocks:
     const {getByText} = renderWithTheme(<BlocksView document={document} />);
     expect(getByText("month")).toBeTruthy();
     expect(getByText("Jan")).toBeTruthy();
+  });
+
+  describe("typed table columns", () => {
+    const LAMB = `v: 1
+datasets:
+  lamb:
+    columns:
+      - name: guests
+        type: number
+      - name: lamb_kg
+        type: number
+      - name: served
+        type: date
+      - name: cut
+        type: string
+    rows:
+      - [6, 2.4, "2026-03-14", shoulder]
+blocks:
+  - type: table
+    title: How much lamb?
+    data: lamb
+`;
+    type StyledNode = {parent: StyledNode | null; props: {style?: unknown}};
+    const flatStyle = (node: StyledNode): {textAlign?: string; width?: number} =>
+      (StyleSheet.flatten(node.props.style as never) ?? {}) as {
+        textAlign?: string;
+        width?: number;
+      };
+    const cellWidth = (node: StyledNode): number | undefined => {
+      let current: StyledNode | null = node;
+      while (current) {
+        const width = flatStyle(current).width;
+        if (typeof width === "number") {
+          return width;
+        }
+        current = current.parent;
+      }
+      return undefined;
+    };
+    const layout = async (view: RenderedView, width: number): Promise<void> => {
+      await act(async () => {
+        fireEvent(view.getByTestId("blocks-0"), "layout", {
+          nativeEvent: {layout: {height: 200, width, x: 0, y: 0}},
+        });
+      });
+    };
+
+    it("maps number columns to right-aligned cells and date columns to DATE_MED", () => {
+      const {getByText, queryByText} = renderWithTheme(<BlocksView document={LAMB} />);
+      expect(flatStyle(getByText("6") as unknown as StyledNode).textAlign).toBe("right");
+      expect(flatStyle(getByText("2.4") as unknown as StyledNode).textAlign).toBe("right");
+      expect(getByText("Mar 14, 2026")).toBeTruthy();
+      expect(queryByText("2026-03-14")).toBeNull();
+      expect(flatStyle(getByText("shoulder") as unknown as StyledNode).textAlign).not.toBe("right");
+    });
+
+    it("uses 120 per column until the table is measured", () => {
+      const {getByText} = renderWithTheme(<BlocksView document={LAMB} />);
+      expect(cellWidth(getByText("shoulder") as unknown as StyledNode)).toBe(120);
+    });
+
+    it("splits the measured width evenly across columns", async () => {
+      const view = renderWithTheme(<BlocksView document={LAMB} />);
+      await layout(view, 600);
+      expect(cellWidth(view.getByText("shoulder") as unknown as StyledNode)).toBe(150);
+      expect(cellWidth(view.getByText("6") as unknown as StyledNode)).toBe(150);
+    });
+
+    it("keeps each column at least 96 wide when the container is narrow", async () => {
+      const view = renderWithTheme(<BlocksView document={LAMB} />);
+      await layout(view, 200);
+      expect(cellWidth(view.getByText("shoulder") as unknown as StyledNode)).toBe(96);
+    });
+
+    it("keeps each listed column's type when the table picks a subset", () => {
+      const document = LAMB.replace(
+        "    data: lamb\n",
+        "    data: lamb\n    columns: [cut, guests]\n"
+      );
+      const {getByText, queryByText} = renderWithTheme(<BlocksView document={document} />);
+      expect(flatStyle(getByText("6") as unknown as StyledNode).textAlign).toBe("right");
+      expect(queryByText("Mar 14, 2026")).toBeNull();
+    });
   });
 
   it("uses the default selection setter when a select button has no host context", async () => {

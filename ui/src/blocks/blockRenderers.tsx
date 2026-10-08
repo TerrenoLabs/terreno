@@ -1,11 +1,14 @@
 import {
   type Block,
   type BlockAction,
+  type DatasetColumn,
   type InlineDataset,
   type StepperBlock,
   stepperElementIds,
+  type TableBlock,
 } from "@terreno/blocks";
 import type React from "react";
+import {useCallback, useState} from "react";
 
 import {Accordion} from "../Accordion";
 import {AreaChart} from "../AreaChart";
@@ -15,6 +18,7 @@ import {BarChart} from "../BarChart";
 import {Box} from "../Box";
 import {Button} from "../Button";
 import {Card} from "../Card";
+import type {DataTableColumn, LayoutChangeEvent} from "../Common";
 import {DataTable} from "../DataTable";
 import {DonutChart} from "../DonutChart";
 import {Heading} from "../Heading";
@@ -178,6 +182,70 @@ const renderStepper = (
   );
 };
 
+/** Column width before the first layout pass reports the container width. */
+const TABLE_DEFAULT_COLUMN_WIDTH = 120;
+/** Narrowest column; past this the table scrolls sideways. */
+const TABLE_MIN_COLUMN_WIDTH = 96;
+
+const DATASET_TO_COLUMN_TYPE: Record<DatasetColumn["type"], DataTableColumn["columnType"]> = {
+  date: "date",
+  number: "number",
+  string: "text",
+};
+
+const tableColumnWidth = ({
+  columnCount,
+  containerWidth,
+}: {
+  columnCount: number;
+  containerWidth?: number;
+}): number => {
+  if (containerWidth === undefined || columnCount === 0) {
+    return TABLE_DEFAULT_COLUMN_WIDTH;
+  }
+  return Math.max(TABLE_MIN_COLUMN_WIDTH, Math.floor(containerWidth / columnCount));
+};
+
+const TableBlockView: React.FC<{
+  block: TableBlock;
+  context: BlockRenderContext;
+  path: string;
+}> = ({block, context, path}) => {
+  const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined);
+  const handleLayout = useCallback((event: LayoutChangeEvent): void => {
+    const {width} = event.nativeEvent.layout;
+    setContainerWidth((previous) => (previous === width ? previous : width));
+  }, []);
+  const dataName =
+    (block.id !== undefined ? context.selections[block.id] : undefined) ?? block.data;
+  const dataset = dataName === undefined ? undefined : context.resolved[dataName];
+  const names = block.columns ?? dataset?.columns.map((column) => column.name) ?? [];
+  const indexes = names.map(
+    (name) => dataset?.columns.findIndex((column) => column.name === name) ?? -1
+  );
+  const width = tableColumnWidth({columnCount: names.length, containerWidth});
+  const columns: DataTableColumn[] = names.map((name, position) => {
+    const datasetType = dataset?.columns[indexes[position] ?? -1]?.type;
+    return {
+      columnType: datasetType === undefined ? "text" : DATASET_TO_COLUMN_TYPE[datasetType],
+      title: name,
+      width,
+    };
+  });
+  return (
+    <Box gap={2} onLayout={handleLayout} testID={path}>
+      {block.title ? <Heading size="sm">{block.title}</Heading> : null}
+      <DataTable
+        columns={columns}
+        data={(dataset?.rows ?? []).map((row) =>
+          indexes.map((index) => ({value: index < 0 ? "" : row[index]}))
+        )}
+        testID={`${path}-table`}
+      />
+    </Box>
+  );
+};
+
 /** Renders one catalog block with @terreno/ui components. */
 export const renderBlock = (
   block: Block,
@@ -310,27 +378,8 @@ export const renderBlock = (
         </Box>
       );
     }
-    case "table": {
-      const dataName =
-        (block.id !== undefined ? context.selections[block.id] : undefined) ?? block.data;
-      const dataset = dataName === undefined ? undefined : context.resolved[dataName];
-      const names = block.columns ?? dataset?.columns.map((column) => column.name) ?? [];
-      const indexes = names.map(
-        (name) => dataset?.columns.findIndex((column) => column.name === name) ?? -1
-      );
-      return (
-        <Box gap={2} key={path} testID={path}>
-          {block.title ? <Heading size="sm">{block.title}</Heading> : null}
-          <DataTable
-            columns={names.map((name) => ({columnType: "text", title: name, width: 120}))}
-            data={(dataset?.rows ?? []).map((row) =>
-              indexes.map((index) => ({value: index < 0 ? "" : row[index]}))
-            )}
-            testID={`${path}-table`}
-          />
-        </Box>
-      );
-    }
+    case "table":
+      return <TableBlockView block={block} context={context} key={path} path={path} />;
     case "stepper":
       return renderStepper(block, path, context);
     case "actions":

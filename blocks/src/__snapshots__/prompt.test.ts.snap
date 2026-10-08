@@ -1,0 +1,353 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`blocksPromptSection with richBlocks false matches the pre-rich-blocks prompt for allowHtml, even with stepper and checklist actions 1`] = `
+"Your entire reply is one document; no prose outside it; no text before tool calls.
+The document is YAML or JSON. Keys, when present, are in this order: v, datasets, blocks.
+v is 1.
+Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, html, callout, image, details.
+An html field is at most 100000 bytes.
+html requires html and may set title and height (sm, md, or lg). It is a display preview: no scripts, no links, no network.
+callout requires text and may set status to info, warning, or alert.
+image requires alt and src. src is a data:image URL, a file: ref, or an https URL on an allowed host.
+Do not emit an https image src. Use a data:image URL or a file: ref.
+details requires title and text.
+heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.
+chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.
+table requires data, the name of a dataset. actions requires id and elements.
+An element is a button (id, text, action) or a segmented control (id, target, options of label and data).
+action.kind is reply (text), open (url or route, exactly one), select (target and data), or callback (name and optional payload).
+columns has 2 to 4 children. card has children and an optional title. Do not nest columns or card inside columns or card.
+At most 50 blocks, including nested blocks.
+Depth is at most 2.
+An actions block has at most 25 elements.
+columns has 2 to 4 children.
+At most 8 datasets.
+An inline dataset has at most 500 rows and 12 columns.
+A ref dataset limit is at most 1000.
+A text block has at most 4000 characters.
+A document has at most 20000 characters of text.
+Heading text is at most 200 characters.
+Badge text is at most 80 characters.
+Context text is at most 280 characters.
+A card title is at most 120 characters.
+A metric label is at most 80 characters, its value 80, its delta 40, and its helper 120.
+A bar chart warns above 60 categories.
+A donut chart warns above 8 slices.
+Use the datasetId a tool returned; never paste more than 500 rows.
+No callback names are registered. Do not emit kind callback.
+Example with data:
+v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+blocks:
+  - type: chart
+    id: signups_chart
+    kind: bar
+    data: signups
+    x: month
+    y: count
+    title: Signups by month
+  - type: actions
+    id: followups
+    elements:
+      - type: button
+        id: weekly
+        text: Show weekly
+        action:
+          kind: reply
+          text: Show weekly signups for this quarter
+Example with prose only:
+v: 1
+blocks:
+  - type: text
+    markdown: I could not find any signups for that range. Try a wider date window."
+`;
+
+exports[`blocksPromptSection with richBlocks false matches the pre-rich-blocks prompt for everything, even with stepper and checklist actions 1`] = `
+"Your entire reply is one document; no prose outside it; no text before tool calls.
+The document is YAML or JSON. Keys, when present, are in this order: v, datasets, blocks.
+v is 1.
+Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, html, callout, image, details.
+An html field is at most 100000 bytes.
+html requires html and may set title and height (sm, md, or lg). It is a display preview: no scripts, no links, no network.
+callout requires text and may set status to info, warning, or alert.
+image requires alt and src. src is a data:image URL, a file: ref, or an https URL on an allowed host.
+An https image src must use one of these hosts: cdn.example.com.
+details requires title and text.
+heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.
+chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.
+table requires data, the name of a dataset. actions requires id and elements.
+An element is a button (id, text, action) or a segmented control (id, target, options of label and data).
+action.kind is reply (text), open (url or route, exactly one), select (target and data), or callback (name and optional payload).
+columns has 2 to 4 children. card has children and an optional title. Do not nest columns or card inside columns or card.
+At most 50 blocks, including nested blocks.
+Depth is at most 2.
+An actions block has at most 25 elements.
+columns has 2 to 4 children.
+At most 8 datasets.
+An inline dataset has at most 500 rows and 12 columns.
+A ref dataset limit is at most 1000.
+A text block has at most 4000 characters.
+A document has at most 20000 characters of text.
+Heading text is at most 200 characters.
+Badge text is at most 80 characters.
+Context text is at most 280 characters.
+A card title is at most 120 characters.
+A metric label is at most 80 characters, its value 80, its delta 40, and its helper 120.
+A bar chart warns above 60 categories.
+A donut chart warns above 8 slices.
+Use the datasetId a tool returned; never paste more than 500 rows.
+A callback name must be one of: approve, scaleStepper.
+Example with data:
+v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+blocks:
+  - type: chart
+    id: signups_chart
+    kind: bar
+    data: signups
+    x: month
+    y: count
+    title: Signups by month
+  - type: actions
+    id: followups
+    elements:
+      - type: button
+        id: weekly
+        text: Show weekly
+        action:
+          kind: reply
+          text: Show weekly signups for this quarter
+Example with prose only:
+v: 1
+blocks:
+  - type: text
+    markdown: I could not find any signups for that range. Try a wider date window."
+`;
+
+exports[`blocksPromptSection with richBlocks false matches the pre-rich-blocks prompt for hostActions, even with stepper and checklist actions 1`] = `
+"Your entire reply is one document; no prose outside it; no text before tool calls.
+The document is YAML or JSON. Keys, when present, are in this order: v, datasets, blocks.
+v is 1.
+Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details. Do not emit type html.
+An html field is at most 100000 bytes.
+callout requires text and may set status to info, warning, or alert.
+image requires alt and src. src is a data:image URL, a file: ref, or an https URL on an allowed host.
+Do not emit an https image src. Use a data:image URL or a file: ref.
+details requires title and text.
+heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.
+chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.
+table requires data, the name of a dataset. actions requires id and elements.
+An element is a button (id, text, action) or a segmented control (id, target, options of label and data).
+action.kind is reply (text), open (url or route, exactly one), select (target and data), or callback (name and optional payload).
+columns has 2 to 4 children. card has children and an optional title. Do not nest columns or card inside columns or card.
+At most 50 blocks, including nested blocks.
+Depth is at most 2.
+An actions block has at most 25 elements.
+columns has 2 to 4 children.
+At most 8 datasets.
+An inline dataset has at most 500 rows and 12 columns.
+A ref dataset limit is at most 1000.
+A text block has at most 4000 characters.
+A document has at most 20000 characters of text.
+Heading text is at most 200 characters.
+Badge text is at most 80 characters.
+Context text is at most 280 characters.
+A card title is at most 120 characters.
+A metric label is at most 80 characters, its value 80, its delta 40, and its helper 120.
+A bar chart warns above 60 categories.
+A donut chart warns above 8 slices.
+Use the datasetId a tool returned; never paste more than 500 rows.
+A callback name must be one of: exportDataset.
+Example with data:
+v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+blocks:
+  - type: chart
+    id: signups_chart
+    kind: bar
+    data: signups
+    x: month
+    y: count
+    title: Signups by month
+  - type: actions
+    id: followups
+    elements:
+      - type: button
+        id: weekly
+        text: Show weekly
+        action:
+          kind: reply
+          text: Show weekly signups for this quarter
+Example with prose only:
+v: 1
+blocks:
+  - type: text
+    markdown: I could not find any signups for that range. Try a wider date window."
+`;
+
+exports[`blocksPromptSection with richBlocks false matches the pre-rich-blocks prompt for imageHosts, even with stepper and checklist actions 1`] = `
+"Your entire reply is one document; no prose outside it; no text before tool calls.
+The document is YAML or JSON. Keys, when present, are in this order: v, datasets, blocks.
+v is 1.
+Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details. Do not emit type html.
+An html field is at most 100000 bytes.
+callout requires text and may set status to info, warning, or alert.
+image requires alt and src. src is a data:image URL, a file: ref, or an https URL on an allowed host.
+An https image src must use one of these hosts: cdn.example.com.
+details requires title and text.
+heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.
+chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.
+table requires data, the name of a dataset. actions requires id and elements.
+An element is a button (id, text, action) or a segmented control (id, target, options of label and data).
+action.kind is reply (text), open (url or route, exactly one), select (target and data), or callback (name and optional payload).
+columns has 2 to 4 children. card has children and an optional title. Do not nest columns or card inside columns or card.
+At most 50 blocks, including nested blocks.
+Depth is at most 2.
+An actions block has at most 25 elements.
+columns has 2 to 4 children.
+At most 8 datasets.
+An inline dataset has at most 500 rows and 12 columns.
+A ref dataset limit is at most 1000.
+A text block has at most 4000 characters.
+A document has at most 20000 characters of text.
+Heading text is at most 200 characters.
+Badge text is at most 80 characters.
+Context text is at most 280 characters.
+A card title is at most 120 characters.
+A metric label is at most 80 characters, its value 80, its delta 40, and its helper 120.
+A bar chart warns above 60 categories.
+A donut chart warns above 8 slices.
+Use the datasetId a tool returned; never paste more than 500 rows.
+No callback names are registered. Do not emit kind callback.
+Example with data:
+v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+blocks:
+  - type: chart
+    id: signups_chart
+    kind: bar
+    data: signups
+    x: month
+    y: count
+    title: Signups by month
+  - type: actions
+    id: followups
+    elements:
+      - type: button
+        id: weekly
+        text: Show weekly
+        action:
+          kind: reply
+          text: Show weekly signups for this quarter
+Example with prose only:
+v: 1
+blocks:
+  - type: text
+    markdown: I could not find any signups for that range. Try a wider date window."
+`;
+
+exports[`blocksPromptSection with richBlocks false matches the pre-rich-blocks prompt for none, even with stepper and checklist actions 1`] = `
+"Your entire reply is one document; no prose outside it; no text before tool calls.
+The document is YAML or JSON. Keys, when present, are in this order: v, datasets, blocks.
+v is 1.
+Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details. Do not emit type html.
+An html field is at most 100000 bytes.
+callout requires text and may set status to info, warning, or alert.
+image requires alt and src. src is a data:image URL, a file: ref, or an https URL on an allowed host.
+Do not emit an https image src. Use a data:image URL or a file: ref.
+details requires title and text.
+heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.
+chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.
+table requires data, the name of a dataset. actions requires id and elements.
+An element is a button (id, text, action) or a segmented control (id, target, options of label and data).
+action.kind is reply (text), open (url or route, exactly one), select (target and data), or callback (name and optional payload).
+columns has 2 to 4 children. card has children and an optional title. Do not nest columns or card inside columns or card.
+At most 50 blocks, including nested blocks.
+Depth is at most 2.
+An actions block has at most 25 elements.
+columns has 2 to 4 children.
+At most 8 datasets.
+An inline dataset has at most 500 rows and 12 columns.
+A ref dataset limit is at most 1000.
+A text block has at most 4000 characters.
+A document has at most 20000 characters of text.
+Heading text is at most 200 characters.
+Badge text is at most 80 characters.
+Context text is at most 280 characters.
+A card title is at most 120 characters.
+A metric label is at most 80 characters, its value 80, its delta 40, and its helper 120.
+A bar chart warns above 60 categories.
+A donut chart warns above 8 slices.
+Use the datasetId a tool returned; never paste more than 500 rows.
+No callback names are registered. Do not emit kind callback.
+Example with data:
+v: 1
+datasets:
+  signups:
+    columns:
+      - name: month
+        type: string
+      - name: count
+        type: number
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+blocks:
+  - type: chart
+    id: signups_chart
+    kind: bar
+    data: signups
+    x: month
+    y: count
+    title: Signups by month
+  - type: actions
+    id: followups
+    elements:
+      - type: button
+        id: weekly
+        text: Show weekly
+        action:
+          kind: reply
+          text: Show weekly signups for this quarter
+Example with prose only:
+v: 1
+blocks:
+  - type: text
+    markdown: I could not find any signups for that range. Try a wider date window."
+`;

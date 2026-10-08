@@ -299,8 +299,11 @@ const stepper = (fields: Record<string, unknown> = {}): Record<string, unknown> 
   ...fields,
 });
 
-const codesAndPaths = (doc: Record<string, unknown>): {code: string; path: string}[] => {
-  const validated = validateBlocks(doc);
+const codesAndPaths = (
+  doc: Record<string, unknown>,
+  options?: Parameters<typeof validateBlocks>[1]
+): {code: string; path: string}[] => {
+  const validated = validateBlocks(doc, options);
   if (validated.ok) {
     return [];
   }
@@ -320,6 +323,64 @@ describe("stepper lint", () => {
     expect(rejected.errors.map((error) => ({code: error.code, path: error.path}))).toEqual([
       {code: "UNKNOWN_HOST_ACTION", path: "blocks[0].callback.name"},
     ]);
+  });
+
+  it("checks the stepper callback name against stepperActions when the host passes them", () => {
+    const doc = documentWith({blocks: [stepper()]});
+    const handled = validateBlocks(doc, {
+      hostActions: ["approve", "scaleStepper"],
+      stepperActions: ["scaleStepper"],
+    });
+    expect(handled.ok).toBe(true);
+    // Registered, but not a stepper action: its buttons would call a handler that is not for steppers.
+    const unhandled = validateBlocks(
+      documentWith({blocks: [stepper({callback: {name: "approve"}})]}),
+      {
+        hostActions: ["approve", "scaleStepper"],
+        stepperActions: ["scaleStepper"],
+      }
+    );
+    expect(unhandled.ok).toBe(false);
+    if (unhandled.ok) {
+      return;
+    }
+    expect(unhandled.errors).toEqual([
+      {
+        code: "UNKNOWN_HOST_ACTION",
+        fix: "Use one of: scaleStepper.",
+        message: expect.any(String),
+        path: "blocks[0].callback.name",
+      },
+    ]);
+    expect(codesAndPaths(doc, {hostActions: ["scaleStepper"], stepperActions: []})).toEqual([
+      {code: "UNKNOWN_HOST_ACTION", path: "blocks[0].callback.name"},
+    ]);
+  });
+
+  it("leaves a button callback to hostActions when stepperActions is set", () => {
+    const doc = documentWith({
+      blocks: [
+        {
+          elements: [
+            {
+              action: {kind: "callback", name: "approve"},
+              id: "ok",
+              text: "Approve",
+              type: "button",
+            },
+          ],
+          id: "row",
+          type: "actions",
+        },
+      ],
+    });
+    expect(
+      codesAndPaths(doc, {
+        checklistActions: [],
+        hostActions: ["approve", "scaleStepper"],
+        stepperActions: ["scaleStepper"],
+      })
+    ).toEqual([]);
   });
 
   it("reports OUT_OF_RANGE when value leaves min and max or min is not below max", () => {

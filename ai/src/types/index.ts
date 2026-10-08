@@ -403,6 +403,12 @@ export interface UiBlocksOptions {
   imageHosts?: readonly string[];
   hostActions?: Record<string, HostAction>;
   repair?: boolean;
+  /**
+   * Default `true`: the prompt offers the rich blocks, and the stepper when a host action has
+   * `handles: "stepper"`. `false` keeps the prompt as it was before them, for clients that cannot
+   * render them yet. Validation accepts the rich blocks either way.
+   */
+  richBlocks?: boolean;
 }
 
 export interface GptRouteOptions {

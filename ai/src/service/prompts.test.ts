@@ -1,4 +1,5 @@
 import {describe, expect, it} from "bun:test";
+import {blocksPromptSection} from "@terreno/blocks";
 
 import {
   askFileHeading,
@@ -6,9 +7,11 @@ import {
   DEFAULT_GPT_MEMORY,
   JSON_VALUE_SYSTEM_PROMPT,
   REMIX_PROMPT,
+  TERRENO_UI_BLOCKS_SYSTEM_PROMPT,
   TITLE_GENERATION_PROMPT,
   TRANSLATION_PROMPT,
   truncatedAskFileNote,
+  uiBlocksSystemPrompt,
   unloadedAskUploadsNote,
 } from "./prompts";
 
@@ -39,5 +42,12 @@ describe("AI prompt constants", () => {
     expect(unloadedAskUploadsNote([{fileId: "f1", filename: "a.png"}])).toBe(
       'Uploads not loaded here: [{"fileId":"f1","filename":"a.png"}]'
     );
+  });
+
+  it("honours the rich-block opt-out when nothing else is configured", () => {
+    expect(uiBlocksSystemPrompt({hostActions: [], richBlocks: false})).toBe(
+      blocksPromptSection({richBlocks: false})
+    );
+    expect(uiBlocksSystemPrompt({hostActions: []})).toBe(TERRENO_UI_BLOCKS_SYSTEM_PROMPT);
   });
 });

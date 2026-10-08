@@ -23,7 +23,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
     - The `logResponse` host-action option. With it off, the log keeps the ids-only prompt plus `value`, with no response.
   - Acceptance: AC4; AC5; the stepper rows of AC1 and AC2. `bun test blocks/`, `cd ui && bun test src/blocks`, and `cd ai && bun test --preload ./src/tests/bunSetup.ts src/service/scaleStepper.test.ts src/routes/gptActions.test.ts` are green.
 
-- [ ] **T2** — Prompt offers the new blocks by default, with an opt-out
+- [x] **T2** — Prompt offers the new blocks by default, with an opt-out
   - Depends on: T1
   - Files: `blocks/src/prompt.ts`, `blocks/src/prompt.test.ts`, `blocks/src/validate.ts` (`stepperActions`), `blocks/src/lint.ts`; `ai/src/types/index.ts` (`uiBlocks.richBlocks`), `ai/src/service/prompts.ts`, `ai/src/service/chatTurn.ts` (derive `stepperActions` and `checklistActions` from the host actions' `handles`; pass `richBlocks`), `ai/src/routes/gpt.test.ts`; `docs/reference/blocks.md`, `docs/reference/ai.md`.
   - Delivers: the default-on table in the IP. It adds the `richBlocks` plumbing (default `true` in both `uiBlocks` and `blocksPromptSection`), the stepper gate (a `handles: "stepper"` action), and the `checklistActions` list that T5 uses. With `richBlocks: false`, the prompt text is byte-identical to `master`, even with a stepper action registered. Later contract tasks add their prompt line under `richBlocks`.

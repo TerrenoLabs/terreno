@@ -96,7 +96,7 @@ replacement stepper (see `scaleStepperHostAction` in [the AI reference](ai.md)).
 | `value`, `min`, `max` | yes | Numbers. `min` < `max` and `min` ≤ `value` ≤ `max`, or `OUT_OF_RANGE` |
 | `step` | no | Above 0 (`OUT_OF_RANGE`). Default 1 |
 | `unit` | no | 1–40, shown under the value ("People") |
-| `callback` | yes | `{name, payload?}`. `name` is checked by `UNKNOWN_HOST_ACTION` when `hostActions` is passed |
+| `callback` | yes | `{name, payload?}`. `name` is checked by `UNKNOWN_HOST_ACTION` against `stepperActions` when that is passed, otherwise against `hostActions` |
 | `itemsTitle` | no | 1–80, a small heading above the items |
 | `items` | no | 0–12 of `{label (1–80), amount, unit? (1–20), decimals? (0–3, default 0), round?: nearest or up (default nearest)}`. `decimals` above 3 is `OUT_OF_RANGE` |
 | `note` | no | 1–280, muted under the items |
@@ -135,7 +135,10 @@ An `actions` block requires `id` and `elements` (1–25). An element is a `butto
 (`target` plus `data`), or `callback` (`name` plus optional `payload`). A `select` target
 that is not a chart or table `id` is `SELECT_TARGET_INVALID`. When `validateBlocks` is
 called with `hostActions`, a callback `name` outside that list is `UNKNOWN_HOST_ACTION`.
-Omitting `hostActions` skips that check.
+Omitting `hostActions` skips that check. A stepper `callback.name` is checked against
+`stepperActions` instead when that list is passed, so a stepper that names a registered action
+that does not handle steppers is `UNKNOWN_HOST_ACTION`. `checklistActions` does the same for
+checklist callbacks.
 
 ## Partial parsing
 
@@ -208,11 +211,11 @@ heuristics and does not fail `ok`.
 | --- | --- |
 | `parseBlocks(text)` | Fence strip, YAML or JSON parse |
 | `parseBlocksPartial(text)` | Completed top-level blocks while a reply is still streaming |
-| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, action, stepper, and html lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names, including a stepper `callback.name`. `options.allowHtml` allows `html` blocks. |
+| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, action, stepper, and html lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names. `options.stepperActions` and `options.checklistActions`, when set, check stepper and checklist `callback.name` instead (`UNKNOWN_HOST_ACTION`). `options.allowHtml` allows `html` blocks. |
 | `wrapAsTextDocument(text)` | Display fallback for a non-document |
 | `blocksSchema` | Zod schema |
 | `blocksJsonSchema` | JSON Schema for the same structure |
-| `blocksPromptSection({hostActions, allowHtml})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. |
+| `blocksPromptSection({hostActions, allowHtml, imageHosts, richBlocks, stepperActions, checklistActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. `richBlocks` (default `true`) offers the rich blocks; `false` returns the prompt as it was before them, whatever the other lists hold. With `richBlocks` on and a non-empty `stepperActions`, the prompt adds `stepper`, its rules and limits, and names those actions as its callbacks; without one it never mentions `stepper`. `checklistActions` names the actions a checklist callback may use. |
 | `BLOCK_LIMITS` | The numbers in the table above |
 | `BLOCK_ERROR_CODES` | The codes in the table above |
 | `BLOCK_WARNING_CODES` | `BAR_TOO_MANY_CATEGORIES`, `DONUT_TOO_MANY_SLICES`, `LINE_SINGLE_POINT` |

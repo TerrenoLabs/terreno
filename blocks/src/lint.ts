@@ -16,10 +16,20 @@ export interface KnownDataset {
 export interface LintBlocksOptions {
   /** When false or omitted, an `html` block fails with `HTML_DISABLED`. */
   allowHtml?: boolean;
+  /**
+   * Host actions that handle a checklist. When set, a checklist `callback.name` outside it fails
+   * with `UNKNOWN_HOST_ACTION`.
+   */
+  checklistActions?: readonly string[];
   hostActions?: readonly string[];
   /** Hostnames allowed on `https` image `src` values. Empty means no https images. */
   imageHosts?: readonly string[];
   knownDatasets?: Record<string, KnownDataset>;
+  /**
+   * Host actions that handle a stepper. When set, a stepper `callback.name` outside it fails with
+   * `UNKNOWN_HOST_ACTION`, even when the name is in `hostActions`. Omitted, `hostActions` applies.
+   */
+  stepperActions?: readonly string[];
 }
 
 const issue = ({code, fix, message, path}: BlockError): BlockError => ({code, fix, message, path});
@@ -115,7 +125,7 @@ const stepperIssues = (
   }
   const unknown = unknownHostActionIssue(
     block.callback.name,
-    options?.hostActions,
+    options?.stepperActions ?? options?.hostActions,
     `${path}.callback.name`
   );
   if (unknown) {

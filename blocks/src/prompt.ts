@@ -35,18 +35,44 @@ blocks:
     markdown: I could not find any signups for that range. Try a wider date window.`;
 
 /**
+ * Stepper instructions, offered only when the host registers an action that handles steppers,
+ * so the model never writes a stepper whose buttons would do nothing.
+ */
+const stepperPromptLines = (stepperActions: readonly string[]): string[] => [
+  "stepper requires id, label, value, min, max, and callback (name and optional payload). It may set step (above 0, default 1), unit, itemsTitle, items, and note. min is below max, and value is between them.",
+  "Its decrease and increase buttons send the callback with payload.value set to the next value. The host returns the updated stepper, so write item amounts for the starting value.",
+  `A stepper callback name must be one of: ${stepperActions.join(", ")}.`,
+  "A stepper item requires label and amount. It may set unit, decimals, and round (nearest or up).",
+  `A stepper id is at most ${BLOCK_LIMITS.stepperIdMaxLength} characters. No other id may be <id>_decrease or <id>_increase.`,
+  `A stepper label and itemsTitle are at most ${BLOCK_LIMITS.stepperLabelMaxLength} characters, its unit ${BLOCK_LIMITS.stepperUnitMaxLength}, and its note ${BLOCK_LIMITS.stepperNoteMaxLength}.`,
+  `A stepper has at most ${BLOCK_LIMITS.stepperItemsMax} items. An item label is at most ${BLOCK_LIMITS.stepperLabelMaxLength} characters, its unit ${BLOCK_LIMITS.stepperItemUnitMaxLength}, and decimals is 0 to ${BLOCK_LIMITS.stepperDecimalsMax}.`,
+];
+
+/**
  * The system-prompt section a host prepends when a reply must be one block document.
  * Every cap is read from `BLOCK_LIMITS` so the prompt, the schema, and the reference stay aligned.
+ * `richBlocks: false` keeps the prompt as it was before rich blocks, for clients that cannot
+ * render them yet. The stepper is offered only with a `stepperActions` entry.
  */
 export const blocksPromptSection = ({
   allowHtml = false,
   hostActions = [],
   imageHosts = [],
+  richBlocks = true,
+  stepperActions = [],
 }: {
   allowHtml?: boolean;
+  /** Host actions a checklist callback may name. Empty or omitted means ticks stay local. */
+  checklistActions?: readonly string[];
   hostActions?: readonly string[];
   imageHosts?: readonly string[];
+  /** Default `true`. `false` leaves every rich block out of the prompt. */
+  richBlocks?: boolean;
+  /** Host actions that handle a stepper. Without one, the prompt never mentions stepper. */
+  stepperActions?: readonly string[];
 } = {}): string => {
+  const offersStepper = richBlocks && stepperActions.length > 0;
+  const richTypes = offersStepper ? ", stepper" : "";
   const callbacks =
     hostActions.length === 0
       ? "No callback names are registered. Do not emit kind callback."
@@ -60,8 +86,8 @@ export const blocksPromptSection = ({
     "The document is YAML or JSON. Keys, when present, are in this order: v, datasets, blocks.",
     "v is 1.",
     allowHtml
-      ? "Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, html, callout, image, details."
-      : "Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details. Do not emit type html.",
+      ? `Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, html, callout, image, details${richTypes}.`
+      : `Block types: heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details${richTypes}. Do not emit type html.`,
     `An html field is at most ${BLOCK_LIMITS.htmlMaxBytes} bytes.`,
     ...(allowHtml
       ? [
@@ -72,6 +98,7 @@ export const blocksPromptSection = ({
     "image requires alt and src. src is a data:image URL, a file: ref, or an https URL on an allowed host.",
     imageHostsLine,
     "details requires title and text.",
+    ...(offersStepper ? stepperPromptLines(stepperActions) : []),
     "heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.",
     "chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.",
     "table requires data, the name of a dataset. actions requires id and elements.",

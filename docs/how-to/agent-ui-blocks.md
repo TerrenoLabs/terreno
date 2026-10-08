@@ -90,6 +90,43 @@ The per-request tool `todoStats` counts the signed-in user's open and completed 
 
 `GPTChat` lists `exportDataset` in `hostActions`, so that callback stays enabled. The e2e mock also allows `export_csv`.
 
+## Give the agent photos
+
+The model cannot make photos on the fly, and an `https` image needs `imageHosts`. The example
+app generates a photo library once, and the agent cites its photos as `file:` ids.
+
+1. Generate the library, once per environment. From `example-backend`, with `GOOGLE_VERTEX_PROJECT`,
+   Application Default Credentials for Vertex, and `GCS_BUCKET` set, run `bun run photos:generate`.
+   Each prompt in `src/scripts/photoPrompts.ts` becomes one `PhotoLibraryEntry`. A re-run skips
+   prompts that already have an entry; pass `--force` to regenerate them. `PHOTO_IMAGE_MODEL`
+   (default `imagen-4.0-fast-generate-001`) and `GOOGLE_VERTEX_LOCATION` (default `us-central1`)
+   are optional.
+2. Register the `findPhotos` tool. `createFindPhotosTool()` from `src/ai/tools.ts` is in the
+   example's per-request tools. `findPhotos({query, count})` matches the query words against each
+   entry's `tags` and `alt`. `count` is 1–6. It returns `{photos: [{src: "file:<entry id>", alt}], note}`.
+   Entries that match more words come first; ties keep entry id order. Soft-deleted entries are
+   left out. When nothing matches, `photos` is empty and `note` tells the model not to invent an
+   id. The tool description tells the model to put each `src` into a `gallery`, `list`, or
+   `image` block exactly as returned.
+3. Serve the URLs. `photoLibraryRouter` (`src/api/photoLibrary.ts`) mounts `/photoLibrary`.
+   List and read need a signed-in user; create, update, and delete return 405.
+   `GET /photoLibrary/:id/url` returns `{url}`, a signed read URL that lasts one hour, to any
+   signed-in user. The library is shared, so the per-user `GET /files/*` route does not fit.
+   An unknown or soft-deleted id is 404. Without a bucket (`GCS_BUCKET` unset and none saved in
+   Profile) it returns 503 `Photo storage is not configured`.
+4. Regenerate the frontend SDK: `cd example-frontend && bun run sdk`. This adds
+   `useLazyPhotoLibraryUrlQuery`.
+5. Pass `resolveImage` to `GPTChat`. The example builds it with `createPhotoImageResolver`
+   (`example-frontend/lib/photoLibraryImages.ts`) around `openapi.useLazyPhotoLibraryUrlQuery`.
+   It fetches each id once while the URL is fresh (50 minutes). A failed lookup returns
+   `undefined`, so the block keeps its labelled placeholder, and a later render tries again.
+
+In the example app, every `file:` image id in a block is a photo library entry id. Nothing else
+in the example writes `file:` image ids, so the ids carry no extra prefix. A host that also cites
+its own files must tell the two apart in its `resolveImage`. An id that is not in the library,
+such as `file:roast-lamb` in the reference examples, resolves to `undefined` and shows the
+placeholder.
+
 ## Render documents in chat
 
 Set `uiBlocks` on `GPTChat`. Assistant `content` is the YAML document. While `isStreaming`

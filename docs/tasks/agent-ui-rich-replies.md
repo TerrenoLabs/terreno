@@ -149,7 +149,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: the `PhotoLibraryEntry` model and the `photos:generate` script from the IP. It runs AI SDK `generateImage` with the Vertex image model, then `FileStorageService.upload`, then upserts by `prompt`. It validates the required env up front, skips existing prompts, and takes `--force`. Supporting skill: `mongoose-schema-safety`.
   - Acceptance: AC14 (generation half), using a fake image model and fake storage.
 
-- [ ] **T20** — `findPhotos` tool and photo URLs in the example app
+- [x] **T20** — `findPhotos` tool and photo URLs in the example app
   - Depends on: T19
   - Files: `example-backend/src/ai/tools.ts` (`findPhotos`), `example-backend/src/ai/tools.test.ts`, `example-backend/src/api/photoLibrary.ts` (`modelRouter` with instance action `url`), `example-backend/src/api/photoLibrary.test.ts`, `example-backend/src/server.ts` (register it), `example-frontend/store/openApiSdk.ts` (regenerated with `bun run sdk`), `example-frontend/app/(tabs)/ai.tsx` (`resolveImage`), `docs/how-to/agent-ui-blocks.md` ("Give the agent photos"; T18 follows it).
   - Delivers: `findPhotos({query, count})` returns `{src: "file:<id>", alt}` from the library. `GET /photoLibrary/:id/url` returns a signed URL to any authenticated user. The example chat resolves `file:` ids through the generated hook. Supporting skills: `model-router-actions`, `generate-sdk`.

@@ -64,6 +64,7 @@ import {commsDevRouter} from "./api/commsDev";
 import {fileUploadsEnabledForRequest} from "./api/fileUploads";
 import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
 import {addDevNotificationRoutes} from "./api/notificationsDev";
+import {photoLibraryRouter} from "./api/photoLibrary";
 import {projectOrgContextPlugin, projectRouter} from "./api/projects";
 import {settingsRouter} from "./api/settings";
 import {todoRouter} from "./api/todos";
@@ -247,6 +248,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       .register(settingsRouter)
       .register(createOpenApiAwareRouteRegistration(addDevNotificationRoutes))
       .register(todoRouter)
+      .register(photoLibraryRouter)
       .register(projectOrgContextPlugin)
       .register(projectRouter)
       .register(usersRouter);

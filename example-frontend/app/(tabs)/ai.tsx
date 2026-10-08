@@ -39,6 +39,7 @@ import {
   withToolResult,
 } from "@/lib/gptAsks";
 import {selectGptMascotIndex} from "@/lib/gptMascot";
+import {createPhotoImageResolver} from "@/lib/photoLibraryImages";
 import {useAppDispatch} from "@/store/index";
 import {
   type GptHistory,
@@ -261,6 +262,12 @@ const AiScreen: React.FC = () => {
   const [postFilesUpload] = usePostFilesUploadMutation();
   const [postGptActions] = usePostGptActionsMutation();
   const [fetchDataset] = openapi.useLazyGetGptDatasetsByIdQuery();
+  const [fetchPhotoUrl] = openapi.useLazyPhotoLibraryUrlQuery();
+  // `file:<id>` image sources are photo library ids from the agent's `findPhotos` tool.
+  const resolveImage = useMemo(
+    () => createPhotoImageResolver({fetchUrl: (id) => fetchPhotoUrl(id, true).unwrap()}),
+    [fetchPhotoUrl]
+  );
   // Uploads each file picked for a `files` ask; without a GCS bucket the server has no file
   // routes, and the resolver sends data URLs instead.
   const resolveAskFiles = useMemo(
@@ -1103,6 +1110,7 @@ const AiScreen: React.FC = () => {
       onUpdateTitle={handleUpdateTitle}
       resolveAskFiles={resolveAskFiles}
       resolveDataset={resolveDataset}
+      resolveImage={resolveImage}
       selectedModel={selectedModel}
       suggestedPrompts={[
         "Tell me a dad joke about TypeScript",

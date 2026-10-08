@@ -1,4 +1,4 @@
-import {type FC, useCallback, useEffect, useRef, useState} from "react";
+import {type FC, type ReactNode, useCallback, useEffect, useRef, useState} from "react";
 import {
   Dimensions,
   type LayoutChangeEvent,
@@ -10,7 +10,9 @@ import {
 } from "react-native";
 
 import type {TooltipPosition, TooltipProps} from "./Common";
+import {createWebPortal} from "./createWebPortal";
 import {Portal} from "./PortalHost";
+import {resolveDocumentBodyPortalTarget} from "./resolveDocumentBodyPortalTarget";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
 
@@ -348,57 +350,73 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
     : {};
   const isPositioned = placement.left !== undefined && placement.top !== undefined;
 
+  // On web the bubble attaches to document.body with fixed positioning, so no
+  // full-screen portal layer sits over the page while the tooltip is open.
+  const webPortalTarget = isWeb ? resolveDocumentBodyPortalTarget() : null;
+
+  const tooltipBubble = (
+    <View
+      onLayout={handleOnLayout}
+      style={{
+        // The trigger is measured on the first layout pass, so keep the tooltip
+        // off screen until then instead of flashing it in the top left corner.
+        left: isPositioned ? placement.left : -9999,
+        opacity: isPositioned ? 1 : 0,
+        position: (webPortalTarget ? "fixed" : "absolute") as ViewStyle["position"],
+        top: isPositioned ? placement.top : -9999,
+        // Match the body-level web overlays (RNW Modal, DropdownPanel) so tooltips
+        // inside them stay on top.
+        zIndex: webPortalTarget ? 9999 : 999,
+      }}
+    >
+      {includeArrow && isWeb && (
+        <View style={arrowContainerStyles as ViewStyle}>
+          <Arrow color={theme.surface.secondaryExtraDark} position={finalPosition} />
+        </View>
+      )}
+      <View
+        style={{
+          backgroundColor: theme.surface.secondaryExtraDark,
+          borderRadius: theme.radius.default,
+          display: "flex",
+          flexShrink: 1,
+          maxWidth: 320,
+          paddingHorizontal: 8,
+          paddingVertical: 2,
+        }}
+      >
+        <Pressable
+          accessibilityHint="Tooltip information"
+          aria-label={text}
+          aria-role="button"
+          onPress={hideTooltip}
+          style={{
+            backgroundColor: theme.surface.secondaryExtraDark,
+            borderRadius: theme.radius.default,
+          }}
+          testID="tooltip-container"
+        >
+          <Text color="inverted" size="sm">
+            {text}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const renderTooltip = (): ReactNode => {
+    if (!visible) {
+      return null;
+    }
+    if (webPortalTarget) {
+      return createWebPortal({children: tooltipBubble, container: webPortalTarget});
+    }
+    return <Portal>{tooltipBubble}</Portal>;
+  };
+
   return (
     <View>
-      {visible && (
-        <Portal>
-          <View
-            onLayout={handleOnLayout}
-            style={{
-              // The trigger is measured on the first layout pass, so keep the tooltip
-              // off screen until then instead of flashing it in the top left corner.
-              left: isPositioned ? placement.left : -9999,
-              opacity: isPositioned ? 1 : 0,
-              position: "absolute",
-              top: isPositioned ? placement.top : -9999,
-              zIndex: 999,
-            }}
-          >
-            {includeArrow && isWeb && (
-              <View style={arrowContainerStyles as ViewStyle}>
-                <Arrow color={theme.surface.secondaryExtraDark} position={finalPosition} />
-              </View>
-            )}
-            <View
-              style={{
-                backgroundColor: theme.surface.secondaryExtraDark,
-                borderRadius: theme.radius.default,
-                display: "flex",
-                flexShrink: 1,
-                maxWidth: 320,
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-              }}
-            >
-              <Pressable
-                accessibilityHint="Tooltip information"
-                aria-label={text}
-                aria-role="button"
-                onPress={hideTooltip}
-                style={{
-                  backgroundColor: theme.surface.secondaryExtraDark,
-                  borderRadius: theme.radius.default,
-                }}
-                testID="tooltip-container"
-              >
-                <Text color="inverted" size="sm">
-                  {text}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Portal>
-      )}
+      {renderTooltip()}
       <View
         hitSlop={{bottom: 10, left: 15, right: 15, top: 10}}
         onPointerEnter={() => {

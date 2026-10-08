@@ -1,7 +1,8 @@
-import {afterEach, beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
 import {act} from "@testing-library/react-native";
 import React from "react";
 
+import * as webPortalModule from "./createWebPortal";
 import {Text} from "./Text";
 import {Arrow, getTooltipPosition, Tooltip} from "./Tooltip";
 import {renderWithTheme} from "./test-utils";
@@ -1655,6 +1656,65 @@ describe("Tooltip", () => {
           });
         });
       }
+    });
+  });
+
+  describe("web body portal", () => {
+    const globalScope = globalThis as {document?: unknown; HTMLElement?: unknown};
+    const originalDocument = globalScope.document;
+    const originalHTMLElement = globalScope.HTMLElement;
+    let Platform: {OS: string};
+    let portalSpy: ReturnType<typeof spyOn>;
+
+    // A stub body that passes `instanceof HTMLElement` routes the tooltip to the web portal.
+    // The spy renders the portal children inline, since react-test-renderer cannot host
+    // a react-dom portal.
+    beforeEach(async () => {
+      const rn = await import("react-native");
+      Platform = rn.Platform;
+      Platform.OS = "web";
+      class FakeHTMLElement {}
+      globalScope.HTMLElement = FakeHTMLElement;
+      globalScope.document = {body: new FakeHTMLElement()};
+      portalSpy = spyOn(webPortalModule, "createWebPortal").mockImplementation(
+        ({children}) => children
+      );
+    });
+
+    afterEach(() => {
+      Platform.OS = "ios";
+      globalScope.document = originalDocument;
+      globalScope.HTMLElement = originalHTMLElement;
+      portalSpy.mockRestore();
+    });
+
+    it("renders the bubble into document.body with fixed positioning", async () => {
+      const {queryByTestId, toJSON} = renderWithTheme(
+        <Tooltip text="Body portal">
+          <Text>Hover me</Text>
+        </Tooltip>
+      );
+
+      const root = (toJSON() as TestNode).children?.[0] as TestNode;
+      await act(async () => {
+        root.props.onPointerEnter?.();
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 900));
+      });
+
+      expect(queryByTestId("tooltip-container")).toBeTruthy();
+      expect(queryByTestId("portal")).toBeNull();
+      expect(portalSpy).toHaveBeenCalled();
+      const [{children, container}] = portalSpy.mock.calls.at(-1) as [
+        {
+          children: React.ReactElement<{style: {position: string; zIndex: number}}>;
+          container: unknown;
+        },
+      ];
+      expect(container).toBe((globalScope.document as {body: unknown}).body);
+      expect(children.props.style.position).toBe("fixed");
+      expect(children.props.style.zIndex).toBe(9999);
     });
   });
 });

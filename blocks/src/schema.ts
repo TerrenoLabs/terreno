@@ -309,6 +309,8 @@ export interface ColumnsBlock {
 
 export interface CardBlock {
   children: Block[];
+  /** A short label shown small and muted above the title. */
+  eyebrow?: string;
   id?: string;
   title?: string;
   type: "card";
@@ -685,6 +687,7 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
       .object({
         ...sharedBlockFields,
         children: z.array(blockSchema).min(1).max(BLOCK_LIMITS.maxBlocks),
+        eyebrow: visibleText(BLOCK_LIMITS.cardEyebrowMaxLength).optional(),
         title: visibleText(BLOCK_LIMITS.cardTitleMaxLength).optional(),
         type: z.literal("card"),
       })

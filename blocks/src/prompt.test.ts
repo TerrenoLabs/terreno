@@ -272,4 +272,23 @@ describe("blocksPromptSection", () => {
       expect(lines).toContain(`image alt ${BLOCK_LIMITS.headingTextMaxLength}`);
     });
   });
+
+  describe("the card eyebrow line", () => {
+    const eyebrowLines = (): string[] =>
+      linesAdded(blocksPromptSection(), blocksPromptSection({richBlocks: false})).filter((line) =>
+        line.includes("eyebrow")
+      );
+
+    it("is offered by default with its limit from BLOCK_LIMITS", () => {
+      const lines = eyebrowLines();
+      expect(lines.length).toBeGreaterThan(0);
+      expect(lines.join("\n")).toContain(`at most ${BLOCK_LIMITS.cardEyebrowMaxLength}`);
+      expect(BLOCK_LIMITS.cardEyebrowMaxLength).toBe(60);
+    });
+
+    it("is absent when richBlocks is false", () => {
+      expect(blocksPromptSection({richBlocks: false})).not.toContain("eyebrow");
+      expect(blocksPromptSection({allowHtml: true, richBlocks: false})).not.toContain("eyebrow");
+    });
+  });
 });

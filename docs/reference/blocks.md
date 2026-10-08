@@ -79,11 +79,14 @@ Warnings do not block rendering:
 | `gallery` | see [Gallery](#gallery) | | Validated; `BlocksView` does not draw it yet |
 | `list` | see [List](#list) | | Validated; `BlocksView` does not draw it yet |
 | `columns` | `children`: 2–4 blocks | `id` | `Box` row |
-| `card` | `children`: at least 1 block | `title` (1–120), `id` | `Card` |
+| `card` | `children`: at least 1 block | `title` (1–120), `eyebrow` (1–60), `id` | `Card` |
 
 `columns` and `card` sit at the top level. Their children are leaf blocks. A layout block
 inside another layout block is `DEPTH_EXCEEDED`. Every block counts toward the 50-block
 cap, including the `card` or `columns` block itself, so a card cannot hold 50 children.
+
+A card's `eyebrow` is a short label meant to sit small and muted above the `title`. This release
+validates it and the prompt offers it. `BlocksView` does not draw it yet.
 
 `id` matches `^[a-z][a-z0-9_]{0,63}$`.
 
@@ -263,6 +266,7 @@ Unknown fields fail with `UNKNOWN_KEY`. `v` must be `1` (`UNSUPPORTED_VERSION`).
 | `list` item `text` | 500 characters |
 | `list` item `meta` | 40 characters |
 | `list` item image `alt` | 200 characters |
+| `card` `eyebrow` | 60 characters |
 | Document version | 1 |
 
 ## Errors
@@ -313,7 +317,7 @@ heuristics and does not fail `ok`.
 | `wrapAsTextDocument(text)` | Display fallback for a non-document |
 | `blocksSchema` | Zod schema |
 | `blocksJsonSchema` | JSON Schema for the same structure |
-| `blocksPromptSection({hostActions, allowHtml, imageHosts, richBlocks, stepperActions, checklistActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. `richBlocks` (default `true`) offers the rich blocks; `false` returns the prompt as it was before them, whatever the other lists hold. With `richBlocks` on and a non-empty `stepperActions`, the prompt adds `stepper`, its rules and limits, and names those actions as its callbacks; without one it never mentions `stepper`. With `richBlocks` on, the prompt adds `checklist`, `gallery`, and `list` with their limits; gallery tile and list item image srcs follow the same image src line as `image`, so `https` is offered only with `imageHosts`. The word `list` appears in the prompt only as this block's name. A non-empty `checklistActions` is named as the callback to set; without one the prompt says to leave `callback` out, so ticks stay local. |
+| `blocksPromptSection({hostActions, allowHtml, imageHosts, richBlocks, stepperActions, checklistActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. `richBlocks` (default `true`) offers the rich blocks; `false` returns the prompt as it was before them, whatever the other lists hold. With `richBlocks` on and a non-empty `stepperActions`, the prompt adds `stepper`, its rules and limits, and names those actions as its callbacks; without one it never mentions `stepper`. With `richBlocks` on, the prompt adds `checklist`, `gallery`, and `list` with their limits, plus the `card` `eyebrow` and its limit; gallery tile and list item image srcs follow the same image src line as `image`, so `https` is offered only with `imageHosts`. The word `list` appears in the prompt only as this block's name. A non-empty `checklistActions` is named as the callback to set; without one the prompt says to leave `callback` out, so ticks stay local. |
 | `BLOCK_LIMITS` | The numbers in the table above |
 | `BLOCK_ERROR_CODES` | The codes in the table above |
 | `BLOCK_WARNING_CODES` | `BAR_TOO_MANY_CATEGORIES`, `DONUT_TOO_MANY_SLICES`, `LINE_SINGLE_POINT` |

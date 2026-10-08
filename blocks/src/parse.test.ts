@@ -9,6 +9,12 @@ import {validateBlocks} from "./validate";
 const fixturesDir = join(import.meta.dir, "fixtures");
 
 const expectedInvalid: Record<string, {code: string; path: string}[]> = {
+  // An empty visibleText string trips both the min(1) and the blank-text checks.
+  "card-eyebrow-empty.yaml": [
+    {code: "TOO_SHORT", path: "blocks[0].eyebrow"},
+    {code: "TOO_SHORT", path: "blocks[0].eyebrow"},
+  ],
+  "card-eyebrow-too-long.yaml": [{code: "TOO_LONG", path: "blocks[0].eyebrow"}],
   "checklist-duplicate-item.yaml": [{code: "DUPLICATE_ID", path: "blocks[0].items[1].id"}],
   "checklist-item-id-too-long.yaml": [{code: "TOO_LONG", path: "blocks[0].items[0].id"}],
   "checklist-reserved-id.yaml": [{code: "DUPLICATE_ID", path: "blocks[1].elements[0].id"}],
@@ -289,5 +295,23 @@ describe("validateBlocks limits", () => {
       }
       expect(validated.errors.some((error) => error.code === code)).toBe(true);
     }
+  });
+});
+
+describe("card eyebrow", () => {
+  it("is accepted by validation, whatever the prompt offers", () => {
+    const parsed = parseBlocks(
+      readFileSync(join(fixturesDir, "valid", "card-eyebrow.yaml"), "utf8")
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+    const validated = validateBlocks(parsed.value);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) {
+      return;
+    }
+    expect(validated.doc.blocks[0]).toMatchObject({eyebrow: "Your dinner plan", type: "card"});
   });
 });

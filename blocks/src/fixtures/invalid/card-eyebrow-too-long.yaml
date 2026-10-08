@@ -1,0 +1,7 @@
+v: 1
+blocks:
+  - type: card
+    eyebrow: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    children:
+      - type: text
+        markdown: Too long.

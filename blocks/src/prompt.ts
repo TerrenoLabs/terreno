@@ -71,6 +71,11 @@ const galleryPromptLines = (): string[] => [
   `A gallery image alt is at most ${BLOCK_LIMITS.galleryAltMaxLength} characters and its caption ${BLOCK_LIMITS.galleryCaptionMaxLength}.`,
 ];
 
+/** Card eyebrow instruction, offered with rich blocks. */
+const cardEyebrowPromptLines = (): string[] => [
+  `A card may set eyebrow, a short label shown small above its title. An eyebrow is at most ${BLOCK_LIMITS.cardEyebrowMaxLength} characters.`,
+];
+
 /**
  * List instructions, offered with rich blocks. The word "list" names only this block in the
  * prompt, so the model never reads it as a generic instruction. Item image srcs defer to the
@@ -139,6 +144,7 @@ export const blocksPromptSection = ({
     ...(richBlocks ? checklistPromptLines(checklistActions) : []),
     ...(richBlocks ? galleryPromptLines() : []),
     ...(richBlocks ? listPromptLines() : []),
+    ...(richBlocks ? cardEyebrowPromptLines() : []),
     "heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.",
     "chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.",
     "table requires data, the name of a dataset. actions requires id and elements.",

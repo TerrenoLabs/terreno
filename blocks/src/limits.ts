@@ -6,6 +6,7 @@ export const BLOCK_LIMITS = {
   badgeTextMaxLength: 80,
   barCategoryWarning: 60,
   blockTextMaxLength: 4_000,
+  cardEyebrowMaxLength: 60,
   cardTitleMaxLength: 120,
   checklistIdMaxLength: 31,
   checklistItemDetailMaxLength: 280,

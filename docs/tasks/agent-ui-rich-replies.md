@@ -63,7 +63,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: the `list` schema. The optional image on each item goes through image-host lint.
   - Acceptance: the list rows of AC1 and AC3.
 
-- [ ] **T8** — `card.eyebrow` contract
+- [x] **T8** — `card.eyebrow` contract
   - Depends on: T7
   - Files: `blocks/src/schema.ts`, `blocks/src/limits.ts`, `blocks/src/prompt.ts`, `blocks/src/fixtures/{valid,invalid}/card-eyebrow*.yaml`, `blocks/src/parse.test.ts`, `docs/reference/blocks.md`.
   - Delivers: an optional `eyebrow` (1–60) on `card`.

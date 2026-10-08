@@ -133,7 +133,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: a script that runs the post's prompt through `AIService` with the opted-in blocks prompt and checks the reply. It skips cleanly when no model key is set.
   - Acceptance: AC12.
 
-- [ ] **T18** — Docs sweep, changelog, rules
+- [x] **T18** — Docs sweep, changelog, rules
   - Depends on: T15, T20, T21
   - Files:
     - `docs/explanation/agent-ui-blocks.md`: the catalog list, adding the missing `callout`, `image`, `details`, and `html`; why the stepper is a callback; the default-on rollout and the `richBlocks: false` opt-out for shipped native builds.

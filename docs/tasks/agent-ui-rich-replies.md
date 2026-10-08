@@ -69,7 +69,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: an optional `eyebrow` (1–60) on `card`.
   - Acceptance: the eyebrow rows of AC1 and AC3.
 
-- [ ] **T9** — `copy` action contract and `blockPlainText`
+- [x] **T9** — `copy` action contract and `blockPlainText`
   - Depends on: T8
   - Files: `blocks/src/schema.ts`, `blocks/src/errors.ts` (`COPY_TARGET_INVALID`), `blocks/src/lint.ts` (exactly one of `text` / `target`, as `open` does), `blocks/src/prompt.ts`, `blocks/src/plainText.ts`, `blocks/src/plainText.test.ts`, `blocks/src/index.ts`, `blocks/src/fixtures/{valid,invalid}/copy*.yaml`, `blocks/src/parse.test.ts`, `docs/reference/blocks.md`.
   - Delivers: the `copy` action kind, target lint, and `blockPlainText` as the IP table describes it.

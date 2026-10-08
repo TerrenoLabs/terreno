@@ -23,6 +23,15 @@ const STEPPER_LINE_START = "stepper requires";
 const CHECKLIST_LINE_START = "checklist requires";
 const GALLERY_LINE_START = "gallery requires";
 const LIST_LINE_START = "list requires";
+const COPY_LINE_START = "action.kind may also be copy";
+
+/** Every option that changes the rich prompt, so the full on-case snapshot catches any drift. */
+const FULL_RICH_OPTIONS = {
+  checklistActions: ["toggleChecklist"],
+  hostActions: ["approve", "scaleStepper", "toggleChecklist"],
+  imageHosts: ["images.example.com"],
+  stepperActions: ["scaleStepper"],
+} as const;
 /** Matches the list block by word, so checklist lines do not count. */
 const LIST_WORD = /\blist\b/;
 
@@ -249,10 +258,11 @@ describe("blocksPromptSection", () => {
         stepperActions: ["scaleStepper"],
       });
       const mentions = section.split("\n").filter((line) => LIST_WORD.test(line));
-      expect(mentions.length).toBe(3);
+      expect(mentions.length).toBe(4);
       expect(mentions[0]).toStartWith("Block types:");
       expect(mentions[1]).toStartWith(LIST_LINE_START);
       expect(mentions[2]).toStartWith("A list item");
+      expect(mentions[3]).toStartWith(COPY_LINE_START);
     });
 
     it("sends item image srcs to the image rules and keeps the https rule tied to imageHosts", () => {
@@ -289,6 +299,49 @@ describe("blocksPromptSection", () => {
     it("is absent when richBlocks is false", () => {
       expect(blocksPromptSection({richBlocks: false})).not.toContain("eyebrow");
       expect(blocksPromptSection({allowHtml: true, richBlocks: false})).not.toContain("eyebrow");
+    });
+  });
+
+  describe("the copy line", () => {
+    const copyLines = (options: Parameters<typeof blocksPromptSection>[0] = {}): string[] =>
+      linesAdded(
+        blocksPromptSection(options),
+        blocksPromptSection({...options, richBlocks: false})
+      ).filter((line) => line.includes("copy"));
+
+    it("is one line, on by default, with the copy text limit from BLOCK_LIMITS", () => {
+      const lines = copyLines();
+      expect(lines.length).toBe(1);
+      expect(lines[0]).toStartWith(COPY_LINE_START);
+      expect(lines[0]).toContain("exactly one of text");
+      expect(lines[0]).toContain(`at most ${BLOCK_LIMITS.copyTextMaxLength} characters`);
+      expect(lines[0]).toContain("never reaches the host");
+    });
+
+    it("names stepper as a copy target only when the stepper is offered", () => {
+      expect(copyLines()[0]).toContain("a checklist, list, table, or text block");
+      expect(copyLines()[0]).not.toContain("stepper");
+      expect(copyLines({stepperActions: ["scaleStepper"]})[0]).toContain(
+        "a stepper, checklist, list, table, or text block"
+      );
+    });
+
+    it("is absent when richBlocks is false", () => {
+      for (const allowHtml of [false, true]) {
+        expect(blocksPromptSection({allowHtml, richBlocks: false})).not.toContain("copy");
+      }
+    });
+  });
+
+  describe("with richBlocks on", () => {
+    it("matches the full rich-blocks prompt with stepper and checklist actions", () => {
+      const section = blocksPromptSection(FULL_RICH_OPTIONS);
+      expect(section).toBe(blocksPromptSection({...FULL_RICH_OPTIONS, richBlocks: true}));
+      expect(section).toMatchSnapshot();
+    });
+
+    it("matches the full rich-blocks prompt with html allowed", () => {
+      expect(blocksPromptSection({...FULL_RICH_OPTIONS, allowHtml: true})).toMatchSnapshot();
     });
   });
 });

@@ -2,6 +2,8 @@
 export const BLOCK_ERROR_CODES = {
   COLUMN_NOT_FOUND: "A chart or table names a column the dataset does not have.",
   COLUMN_TYPE_MISMATCH: "A column value does not match the column type.",
+  COPY_TARGET_INVALID:
+    "A copy action names a block that is not a stepper, checklist, list, table, or text block.",
   DATASET_NOT_FOUND: "A chart or table names a dataset the document does not define.",
   DATASET_TOO_LARGE: "A dataset has more rows or columns than allowed.",
   DEPTH_EXCEEDED: "A columns or card block is nested inside another columns or card block.",

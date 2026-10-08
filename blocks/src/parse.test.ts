@@ -20,6 +20,10 @@ const expectedInvalid: Record<string, {code: string; path: string}[]> = {
   "checklist-reserved-id.yaml": [{code: "DUPLICATE_ID", path: "blocks[1].elements[0].id"}],
   "column-not-found.yaml": [{code: "COLUMN_NOT_FOUND", path: "blocks[0].x"}],
   "column-type.yaml": [{code: "COLUMN_TYPE_MISMATCH", path: "blocks[0].y"}],
+  "copy-missing-text-and-target.yaml": [
+    {code: "MISSING_REQUIRED", path: "blocks[0].elements[0].action"},
+  ],
+  "copy-target.yaml": [{code: "COPY_TARGET_INVALID", path: "blocks[1].elements[0].action.target"}],
   "dataset-not-found.yaml": [{code: "DATASET_NOT_FOUND", path: "blocks[0].data"}],
   "dataset-too-large.yaml": [{code: "DATASET_TOO_LARGE", path: "datasets.signups.columns"}],
   "depth-exceeded.yaml": [{code: "DEPTH_EXCEEDED", path: "blocks[0].children[0]"}],

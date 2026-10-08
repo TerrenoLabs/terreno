@@ -864,3 +864,93 @@ describe("list lint", () => {
     ]);
   });
 });
+
+const copyButton = (action: Record<string, unknown>): Record<string, unknown> => ({
+  elements: [{action, id: "copy_it", text: "Copy", type: "button"}],
+  id: "copy_actions",
+  type: "actions",
+});
+
+const COPY_TARGETS: Record<string, Record<string, unknown>> = {
+  checklist: {id: "target", items: [{id: "oven", text: "Preheat the oven"}], type: "checklist"},
+  list: {id: "target", items: [{title: "Mint sauce"}], type: "list"},
+  stepper: {
+    callback: {name: "scaleStepper"},
+    id: "target",
+    label: "Number of people",
+    max: 20,
+    min: 1,
+    type: "stepper",
+    value: 5,
+  },
+  table: {data: "signups", id: "target", type: "table"},
+  text: {id: "target", markdown: "**Shopping list**", type: "text"},
+};
+
+describe("copy action lint", () => {
+  it("accepts copy text, or a target naming a stepper, checklist, list, table, or text block", () => {
+    expect(
+      codesAndPaths(documentWith({blocks: [copyButton({kind: "copy", text: "2 kg lamb"})]}))
+    ).toEqual([]);
+    for (const [type, target] of Object.entries(COPY_TARGETS)) {
+      const datasets = type === "table" ? {signups: inline} : undefined;
+      const before = documentWith({
+        blocks: [copyButton({kind: "copy", target: "target"}), target],
+        datasets,
+      });
+      const after = documentWith({
+        blocks: [target, copyButton({kind: "copy", target: "target"})],
+        datasets,
+      });
+      const inCard = documentWith({
+        blocks: [{children: [target], type: "card"}, copyButton({kind: "copy", target: "target"})],
+        datasets,
+      });
+      expect({result: codesAndPaths(before), type}).toEqual({result: [], type});
+      expect({result: codesAndPaths(after), type}).toEqual({result: [], type});
+      expect({result: codesAndPaths(inCard), type}).toEqual({result: [], type});
+    }
+  });
+
+  it("requires exactly one of text or target, as an open action does", () => {
+    expect(codesAndPaths(documentWith({blocks: [copyButton({kind: "copy"})]}))).toEqual([
+      {code: "MISSING_REQUIRED", path: "blocks[0].elements[0].action"},
+    ]);
+    expect(
+      codesAndPaths(
+        documentWith({
+          blocks: [COPY_TARGETS.text, copyButton({kind: "copy", target: "target", text: "Hi"})],
+        })
+      )
+    ).toEqual([{code: "MISSING_REQUIRED", path: "blocks[1].elements[0].action"}]);
+  });
+
+  it("rejects a target that names another block type or no block", () => {
+    const heading = {id: "target", text: "Menu", type: "heading"};
+    expect(
+      codesAndPaths(documentWith({blocks: [heading, copyButton({kind: "copy", target: "target"})]}))
+    ).toEqual([{code: "COPY_TARGET_INVALID", path: "blocks[1].elements[0].action.target"}]);
+    expect(
+      codesAndPaths(documentWith({blocks: [copyButton({kind: "copy", target: "missing"})]}))
+    ).toEqual([{code: "COPY_TARGET_INVALID", path: "blocks[0].elements[0].action.target"}]);
+    // An action element id is not a block, so a copy button cannot target its own actions block's buttons.
+    expect(
+      codesAndPaths(documentWith({blocks: [copyButton({kind: "copy", target: "copy_it"})]}))
+    ).toEqual([{code: "COPY_TARGET_INVALID", path: "blocks[0].elements[0].action.target"}]);
+  });
+
+  it("caps copy text from BLOCK_LIMITS and never checks it against hostActions", () => {
+    const withText = (text: string): Record<string, unknown> =>
+      documentWith({blocks: [copyButton({kind: "copy", text})]});
+    expect(codesAndPaths(withText("a".repeat(4_000)), {hostActions: []})).toEqual([]);
+    expect(codesAndPaths(withText("a".repeat(4_001)))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].elements[0].action.text"},
+    ]);
+    expect(codesAndPaths(withText("   "))).toEqual([
+      {code: "TOO_SHORT", path: "blocks[0].elements[0].action.text"},
+    ]);
+    expect(
+      codesAndPaths(documentWith({blocks: [copyButton({kind: "copy", name: "x", text: "Hi"})]}))
+    ).toEqual([{code: "UNKNOWN_KEY", path: "blocks[0].elements[0].action.name"}]);
+  });
+});

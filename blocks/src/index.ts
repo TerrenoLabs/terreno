@@ -126,6 +126,8 @@ export type {ParseBlocksResult} from "./parse";
 export {parseBlocks} from "./parse";
 export type {ParseBlocksPartialResult} from "./parsePartial";
 export {parseBlocksPartial} from "./parsePartial";
+export type {BlockPlainTextOptions} from "./plainText";
+export {blockPlainText} from "./plainText";
 export {blocksPromptSection} from "./prompt";
 export type {
   ActionsBlock,
@@ -143,6 +145,7 @@ export type {
   ChecklistItem,
   ColumnsBlock,
   ContextBlock,
+  CopyAction,
   Dataset,
   DatasetColumn,
   DetailsBlock,
@@ -176,6 +179,7 @@ export {
   CALLOUT_STATUSES,
   CHART_HEIGHTS,
   CHART_KINDS,
+  COPY_TARGET_TYPES,
   DATASET_COLUMN_TYPES,
   DATASET_GRAINS,
   HEADING_SIZES,

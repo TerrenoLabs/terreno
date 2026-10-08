@@ -222,13 +222,73 @@ An `actions` block requires `id` and `elements` (1–25). An element is a `butto
 | `segmented` | `id`, `target` (a chart or table `id`), `options` (2–8 of `{label, data}`) | — |
 
 `action.kind` is `reply` (`text`), `open` (`url` or `route`, exactly one), `select`
-(`target` plus `data`), or `callback` (`name` plus optional `payload`). A `select` target
-that is not a chart or table `id` is `SELECT_TARGET_INVALID`. When `validateBlocks` is
+(`target` plus `data`), `callback` (`name` plus optional `payload`), or `copy` (`text` or
+`target`, exactly one; see [Copy](#copy)). A `select` target that is not a chart or table `id`
+is `SELECT_TARGET_INVALID`. When `validateBlocks` is
 called with `hostActions`, a callback `name` outside that list is `UNKNOWN_HOST_ACTION`.
 Omitting `hostActions` skips that check. A stepper `callback.name` is checked against
 `stepperActions` instead when that list is passed, so a stepper that names a registered action
 that does not handle steppers is `UNKNOWN_HOST_ACTION`. `checklistActions` does the same for
 checklist callbacks.
+
+## Copy
+
+A `copy` action puts text on the device clipboard. It never reaches the host, so `hostActions`
+does not apply to it. It is a `button` element's `action`:
+
+| Field | Rule |
+| --- | --- |
+| `text` | 1–4,000 characters (`BLOCK_LIMITS.copyTextMaxLength`), copied as written |
+| `target` | The `id` of a `stepper`, `checklist`, `list`, `table`, or `text` block in this document (`COPY_TARGET_TYPES`). Any other block, or an id no block has, is `COPY_TARGET_INVALID` |
+
+Set exactly one of the two. Neither or both is `MISSING_REQUIRED` at the action's path, as for
+`open`. The target may sit anywhere in the document, before or after the button, inside a
+`card` or `columns`.
+
+```yaml
+v: 1
+blocks:
+  - type: stepper
+    id: guests
+    label: Number of people
+    unit: People
+    value: 5
+    min: 1
+    max: 20
+    callback: {name: scaleStepper}
+    items:
+      - {label: Bone-in leg of lamb, amount: 2, unit: kg, decimals: 1}
+      - {label: Carrots, amount: 8}
+  - type: actions
+    id: shopping
+    elements:
+      - type: button
+        id: copy_list
+        text: Copy shopping list
+        variant: outline
+        action: {kind: copy, target: guests}
+      - type: button
+        id: copy_note
+        text: Copy note
+        action: {kind: copy, text: "Lamb 2 kg, carrots 8, mint sauce."}
+```
+
+`blockPlainText(block, {datasets?, checked?})` turns a target block into the copied text. Lines
+are joined with `\n`, with no trailing newline.
+
+| Block | Text |
+| --- | --- |
+| `stepper` | `<label>: <value> <unit>`, then one `<item label>: <amount> <unit>` line per item. Amounts use the item's `decimals` (2 at 1 decimal is `2.0`). A missing unit leaves no trailing space. For the example above: `Number of people: 5 People`, `Bone-in leg of lamb: 2.0 kg`, `Carrots: 8` |
+| `checklist` | One `[x] <text>` or `[ ] <text>` line per item. `checked` maps item ids to the current ticks and overrides each item's `checked`; ids the checklist lacks are ignored |
+| `list` | One `- <title>: <text>` line per item, or `- <title>` when the item has no text |
+| `table` | A header row of column names (the table's `columns` in order, or every dataset column), then one row per dataset row, tab-separated. A `null` cell is empty. The table's dataset must be inline in `datasets`; a missing dataset or an unresolved `ref` returns an empty string, so resolve refs first |
+| `text` | The `markdown` as written |
+
+Any other block returns an empty string. Pass the block as it is shown, with a host's
+replacement block applied, so a stepper at 6 copies the scaled amounts.
+
+This release validates the copy action, and the prompt offers it. `BlocksView` does not
+perform the copy yet: it passes the press to `onAction` like any other button.
 
 ## Partial parsing
 
@@ -267,6 +327,7 @@ Unknown fields fail with `UNKNOWN_KEY`. `v` must be `1` (`UNSUPPORTED_VERSION`).
 | `list` item `meta` | 40 characters |
 | `list` item image `alt` | 200 characters |
 | `card` `eyebrow` | 60 characters |
+| `copy` action `text` | 4,000 characters |
 | Document version | 1 |
 
 ## Errors
@@ -279,6 +340,7 @@ heuristics and does not fail `ok`.
 | --- | --- |
 | `COLUMN_NOT_FOUND` | A chart or table names a column the dataset does not have. |
 | `COLUMN_TYPE_MISMATCH` | A column value, or a chart axis, does not match the column type. |
+| `COPY_TARGET_INVALID` | A copy action's `target` names a block that is not a `stepper`, `checklist`, `list`, `table`, or `text` block, or an id no block in the document has. |
 | `DATASET_NOT_FOUND` | A chart or table names a dataset the document does not define. |
 | `DATASET_TOO_LARGE` | A dataset has more than 500 rows or 12 columns. |
 | `DEPTH_EXCEEDED` | A `columns` or `card` block is nested inside another layout block. |
@@ -290,7 +352,7 @@ heuristics and does not fail `ok`.
 | `INVALID_FORMAT` | A string does not match its required format. |
 | `INVALID_TYPE` | A value has the wrong type, including a numeric field below its minimum. |
 | `KEY_ORDER` | Top-level keys are not in the order `v`, `datasets`, `blocks`. |
-| `MISSING_REQUIRED` | A required field is missing. |
+| `MISSING_REQUIRED` | A required field is missing, or an `open` or `copy` action sets neither or both of its two fields. |
 | `NOT_A_DOCUMENT` | The reply is not one YAML or JSON mapping with a `v` field. |
 | `OUT_OF_RANGE` | A number is outside its allowed range: a stepper `value` outside `min` and `max`, `min` not below `max`, `step` at or below 0, or `decimals` above 3. |
 | `SELECT_TARGET_INVALID` | A select action names a block that is not a chart or table. |
@@ -317,12 +379,14 @@ heuristics and does not fail `ok`.
 | `wrapAsTextDocument(text)` | Display fallback for a non-document |
 | `blocksSchema` | Zod schema |
 | `blocksJsonSchema` | JSON Schema for the same structure |
-| `blocksPromptSection({hostActions, allowHtml, imageHosts, richBlocks, stepperActions, checklistActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. `richBlocks` (default `true`) offers the rich blocks; `false` returns the prompt as it was before them, whatever the other lists hold. With `richBlocks` on and a non-empty `stepperActions`, the prompt adds `stepper`, its rules and limits, and names those actions as its callbacks; without one it never mentions `stepper`. With `richBlocks` on, the prompt adds `checklist`, `gallery`, and `list` with their limits, plus the `card` `eyebrow` and its limit; gallery tile and list item image srcs follow the same image src line as `image`, so `https` is offered only with `imageHosts`. The word `list` appears in the prompt only as this block's name. A non-empty `checklistActions` is named as the callback to set; without one the prompt says to leave `callback` out, so ticks stay local. |
+| `blocksPromptSection({hostActions, allowHtml, imageHosts, richBlocks, stepperActions, checklistActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. `richBlocks` (default `true`) offers the rich blocks; `false` returns the prompt as it was before them, whatever the other lists hold. With `richBlocks` on and a non-empty `stepperActions`, the prompt adds `stepper`, its rules and limits, and names those actions as its callbacks; without one it never mentions `stepper`. With `richBlocks` on, the prompt adds `checklist`, `gallery`, and `list` with their limits, plus the `card` `eyebrow` and its limit; gallery tile and list item image srcs follow the same image src line as `image`, so `https` is offered only with `imageHosts`. The word `list` appears in the prompt only as this block's name. A non-empty `checklistActions` is named as the callback to set; without one the prompt says to leave `callback` out, so ticks stay local. With `richBlocks` on, one line offers the `copy` action with its text limit and its target block types, naming `stepper` only when the stepper is offered. |
 | `BLOCK_LIMITS` | The numbers in the table above |
 | `BLOCK_ERROR_CODES` | The codes in the table above |
 | `BLOCK_WARNING_CODES` | `BAR_TOO_MANY_CATEGORIES`, `DONUT_TOO_MANY_SLICES`, `LINE_SINGLE_POINT` |
 | `stepperElementIds(id)` | `{decrease, increase}`: the element ids of a stepper's buttons |
 | `checklistElementId(id, itemId)` | `<id>_<item id>`: the element id of a checklist item's tick. `ChecklistBlock`, `ChecklistItem`, and `ChecklistCallback` are type exports. |
+| `blockPlainText(block, {datasets?, checked?})` | The text a copy action copies for its target block (see [Copy](#copy)). `BlockPlainTextOptions` is a type export |
+| `COPY_TARGET_TYPES` | `stepper`, `checklist`, `list`, `table`, `text`: the blocks a copy `target` may name. `CopyAction` is a type export |
 | `GalleryBlock`, `GalleryImage` | Type exports for the `gallery` block and its tiles |
 | `ListBlock`, `ListItem`, `ListItemImage` | Type exports for the `list` block, its items, and their thumbnails |
 | `STEPPER_ROUNDING` | `nearest`, `up`. `StepperBlock`, `StepperItem`, and `StepperCallback` are type exports. |

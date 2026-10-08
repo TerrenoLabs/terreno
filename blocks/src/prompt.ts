@@ -1,4 +1,5 @@
 import {BLOCK_LIMITS} from "./limits";
+import {COPY_TARGET_TYPES} from "./schema";
 
 const DATA_EXAMPLE = `v: 1
 datasets:
@@ -87,6 +88,16 @@ const listPromptLines = (): string[] => [
 ];
 
 /**
+ * Copy action instruction, offered with rich blocks. The stepper is named as a target only when
+ * the prompt offers it, so the prompt never mentions a stepper without a stepper action.
+ */
+const copyPromptLine = (offersStepper: boolean): string => {
+  const targets = COPY_TARGET_TYPES.filter((type) => offersStepper || type !== "stepper");
+  const named = `${targets.slice(0, -1).join(", ")}, or ${targets.at(-1)}`;
+  return `action.kind may also be copy: it copies to the clipboard on the device and never reaches the host. A copy action sets exactly one of text (at most ${BLOCK_LIMITS.copyTextMaxLength} characters, copied as written) or target (the id of a ${named} block in this document, whose current contents are copied).`;
+};
+
+/**
  * The system-prompt section a host prepends when a reply must be one block document.
  * Every cap is read from `BLOCK_LIMITS` so the prompt, the schema, and the reference stay aligned.
  * `richBlocks: false` keeps the prompt as it was before rich blocks, for clients that cannot
@@ -150,6 +161,7 @@ export const blocksPromptSection = ({
     "table requires data, the name of a dataset. actions requires id and elements.",
     "An element is a button (id, text, action) or a segmented control (id, target, options of label and data).",
     "action.kind is reply (text), open (url or route, exactly one), select (target and data), or callback (name and optional payload).",
+    ...(richBlocks ? [copyPromptLine(offersStepper)] : []),
     "columns has 2 to 4 children. card has children and an optional title. Do not nest columns or card inside columns or card.",
     `At most ${BLOCK_LIMITS.maxBlocks} blocks, including nested blocks.`,
     `Depth is at most ${BLOCK_LIMITS.maxDepth}.`,

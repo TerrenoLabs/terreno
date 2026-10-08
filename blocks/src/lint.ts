@@ -1,13 +1,14 @@
 import {BLOCK_ERROR_CODES, BLOCK_WARNING_CODES, type BlockError} from "./errors";
 import {BLOCK_LIMITS} from "./limits";
-import type {
-  Block,
-  BlocksDocument,
-  ChecklistBlock,
-  Dataset,
-  DatasetColumn,
-  InlineDataset,
-  StepperBlock,
+import {
+  type Block,
+  type BlocksDocument,
+  type ChecklistBlock,
+  COPY_TARGET_TYPES,
+  type Dataset,
+  type DatasetColumn,
+  type InlineDataset,
+  type StepperBlock,
 } from "./schema";
 
 export interface KnownDataset {
@@ -176,6 +177,9 @@ const checklistIssues = (
 const STEPPER_RESERVED_FIX = "A stepper uses <id>_decrease and <id>_increase for its buttons.";
 const CHECKLIST_RESERVED_FIX = "A checklist uses <id>_<item id> for each item's tick.";
 
+const copyTargetTypes: ReadonlySet<string> = new Set(COPY_TARGET_TYPES);
+const COPY_TARGET_FIX = `Set target to the id of a ${COPY_TARGET_TYPES.slice(0, -1).join(", ")}, or ${COPY_TARGET_TYPES.at(-1)} block in this document.`;
+
 const isInline = (dataset: Dataset): dataset is InlineDataset => dataset.source !== "ref";
 
 const columnsFor = (
@@ -330,6 +334,8 @@ export const lintDocument = (
 
   const seenIds = new Set<string>();
   const selectableIds = new Set<string>();
+  // Block ids a copy action may target, collected first so a target may sit before or after it.
+  const copyTargetIds = new Set<string>();
   // Element ids a renderer derives from a block id, mapped to the fix that explains the clash.
   const reservedIds = new Map<string, {fix: string; ownerId: string}>();
   // Two blocks deriving the same element id would send ambiguous callback events. A clash within
@@ -362,6 +368,9 @@ export const lintDocument = (
   for (const {block, path} of walked) {
     if ((block.type === "chart" || block.type === "table") && block.id !== undefined) {
       selectableIds.add(block.id);
+    }
+    if (copyTargetTypes.has(block.type) && block.id !== undefined) {
+      copyTargetIds.add(block.id);
     }
     if (block.type === "stepper") {
       const {decrease, increase} = stepperElementIds(block.id);
@@ -631,6 +640,28 @@ export const lintDocument = (
                 fix: "Set either url or route on an open action.",
                 message: BLOCK_ERROR_CODES.MISSING_REQUIRED,
                 path: `${elementPath}.action`,
+              })
+            );
+          }
+        }
+        if (element.type === "button" && element.action.kind === "copy") {
+          const {target, text} = element.action;
+          if ((target === undefined) === (text === undefined)) {
+            errors.push(
+              issue({
+                code: "MISSING_REQUIRED",
+                fix: "Set either text or target on a copy action.",
+                message: BLOCK_ERROR_CODES.MISSING_REQUIRED,
+                path: `${elementPath}.action`,
+              })
+            );
+          } else if (target !== undefined && !copyTargetIds.has(target)) {
+            errors.push(
+              issue({
+                code: "COPY_TARGET_INVALID",
+                fix: COPY_TARGET_FIX,
+                message: BLOCK_ERROR_CODES.COPY_TARGET_INVALID,
+                path: `${elementPath}.action.target`,
               })
             );
           }

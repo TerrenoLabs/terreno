@@ -9,6 +9,8 @@ export const BADGE_STATUSES = ["info", "error", "warning", "success", "neutral",
 export const METRIC_TRENDS = ["up", "down", "flat"] as const;
 export const LAYOUT_BLOCK_TYPES = ["columns", "card"] as const;
 export const STEPPER_ROUNDING = ["nearest", "up"] as const;
+/** The block types a copy action's `target` may name. */
+export const COPY_TARGET_TYPES = ["stepper", "checklist", "list", "table", "text"] as const;
 
 const visibleText = (maxLength: number): z.ZodString =>
   z
@@ -142,7 +144,19 @@ export interface CallbackAction {
   payload?: Record<string, unknown>;
 }
 
-export type BlockAction = ReplyAction | OpenAction | SelectAction | CallbackAction;
+/**
+ * Copies text to the device clipboard. Sets exactly one of `text` (copied as written) or
+ * `target` (the id of a block whose current contents `blockPlainText` turns into text).
+ * It never reaches the host.
+ */
+export interface CopyAction {
+  kind: "copy";
+  /** The id of a `stepper`, `checklist`, `list`, `table`, or `text` block in this document. */
+  target?: string;
+  text?: string;
+}
+
+export type BlockAction = ReplyAction | OpenAction | SelectAction | CallbackAction | CopyAction;
 
 export interface ButtonElement {
   action: BlockAction;
@@ -467,11 +481,20 @@ const callbackActionSchema = z
   })
   .strict();
 
+const copyActionSchema = z
+  .object({
+    kind: z.literal("copy"),
+    target: z.string().min(1).max(64).optional(),
+    text: visibleText(BLOCK_LIMITS.copyTextMaxLength).optional(),
+  })
+  .strict();
+
 const actionSchema = z.discriminatedUnion("kind", [
   replyActionSchema,
   openActionSchema,
   selectActionSchema,
   callbackActionSchema,
+  copyActionSchema,
 ]);
 
 const buttonElementSchema = z

@@ -18,6 +18,7 @@ export const BLOCK_LIMITS = {
   columnsMax: 4,
   columnsMin: 2,
   contextTextMaxLength: 280,
+  copyTextMaxLength: 4_000,
   datasetColumnMax: 12,
   datasetRowMax: 500,
   documentTextMaxLength: 20_000,

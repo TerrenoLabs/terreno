@@ -111,7 +111,7 @@ const adminHeaders = (token: string): Record<string, string> => ({
  * V4 URLs on the server. The chat and file routes keep the storage they started with.
  * Returns a restore function that clears the storage again, unless it was already configured.
  */
-export const useE2ePhotoStorage = async (): Promise<() => Promise<void>> => {
+export const configureE2ePhotoStorage = async (): Promise<() => Promise<void>> => {
   const api = await request.newContext({baseURL: API_URL});
   const token = await getAdminToken(api);
   const status = await api.get("/settings/gcs", {headers: adminHeaders(token)});

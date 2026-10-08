@@ -25007,6 +25007,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 {
                   "description": "Search tags for the photo (1–12)",
                   "items": {
+                    "description": "One search tag, matched by the findPhotos tool",
                     "type": "string",
                   },
                   "type": "array",
@@ -25088,6 +25089,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "tags": {
                             "description": "Search tags for the photo (1–12)",
                             "items": {
+                              "description": "One search tag, matched by the findPhotos tool",
                               "type": "string",
                             },
                             "type": "array",
@@ -25229,6 +25231,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "tags": {
                       "description": "Search tags for the photo (1–12)",
                       "items": {
+                        "description": "One search tag, matched by the findPhotos tool",
                         "type": "string",
                       },
                       "type": "array",

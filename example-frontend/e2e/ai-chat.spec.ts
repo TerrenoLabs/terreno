@@ -22,13 +22,13 @@ import {
   userRow,
 } from "./helpers/mockGpt";
 import {
+  configureE2ePhotoStorage,
   type RoastPhotoIds,
   roastDocument,
   type SeededHistory,
   SIGNED_URL_PREFIX,
   seedGptHistory,
   seedRoastPhotos,
-  useE2ePhotoStorage,
 } from "./helpers/seedGptHistory";
 
 const PLAN_ASK: MockAsk = {
@@ -623,7 +623,7 @@ test.describe("AI Chat", () => {
 
     test.beforeAll(async () => {
       photoIds = await seedRoastPhotos();
-      restoreStorage = await useE2ePhotoStorage();
+      restoreStorage = await configureE2ePhotoStorage();
     });
 
     test.afterAll(async () => {
@@ -672,7 +672,7 @@ test.describe("AI Chat", () => {
 
       // Gallery and list photos load through GET /photoLibrary/:id/url and the stubbed download.
       for (const index of [0, 1, 2]) {
-        await expect(page.getByTestId(`blocks-1-image-${index}`).locator("img")).toBeVisible();
+        await expect(page.getByTestId(`blocks-1-image-${index}-image`)).toBeVisible();
         await expect(page.getByTestId(`blocks-1-image-${index}-placeholder`)).toHaveCount(0);
       }
       for (const index of [0, 1, 2, 3, 4]) {

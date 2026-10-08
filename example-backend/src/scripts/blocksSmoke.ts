@@ -23,9 +23,9 @@ import {mkdirSync, mkdtempSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import path from "node:path";
 import {AIService, GptHistory, runBufferedChatTurn, type UiBlocksOptions} from "@terreno/ai";
-import {logger} from "@terreno/api";
+import {APIError, logger} from "@terreno/api";
 import {parseBlocks, validateBlocks} from "@terreno/blocks";
-import type {Tool} from "ai";
+import type {LanguageModel, Tool} from "ai";
 import type express from "express";
 import mongoose from "mongoose";
 
@@ -93,7 +93,10 @@ export const parseBlocksSmokeArgs = ({argv}: {argv: string[]}): {outDir?: string
     return {};
   }
   if (flag !== "--out" || !value?.trim() || rest.length > 0) {
-    throw new Error(`Unknown arguments for blocks:smoke: ${argv.join(" ")} (only --out <dir>)`);
+    throw new APIError({
+      status: 400,
+      title: `Unknown arguments for blocks:smoke: ${argv.join(" ")} (only --out <dir>)`,
+    });
   }
   return {outDir: value};
 };
@@ -315,22 +318,39 @@ const ensureSmokeUser = async (): Promise<UserDocument> => {
   return User.create({admin: false, email: BLOCKS_SMOKE_USER_EMAIL, name: BLOCKS_SMOKE_USER_NAME});
 };
 
-const runCli = async (log: BlocksSmokeLogger): Promise<number> => {
-  const {outDir: argOutDir} = parseBlocksSmokeArgs({argv: process.argv.slice(2)});
-  const provider = smokeModelProvider({env: process.env});
+export interface BlocksSmokeCliOptions {
+  argv: string[];
+  connect?: () => Promise<void>;
+  /** Defaults to the server's `createServerModel`, so the smoke uses the model chat would. */
+  createModel?: (modelId?: string) => LanguageModel | undefined;
+  disconnect?: () => Promise<void>;
+  env: Record<string, string | undefined>;
+  logger?: BlocksSmokeLogger;
+}
+
+const runCli = async ({
+  argv,
+  connect = connectToMongoDB,
+  createModel,
+  disconnect = mongoose.disconnect.bind(mongoose),
+  env,
+  logger: log = logger,
+}: BlocksSmokeCliOptions): Promise<number> => {
+  const {outDir: argOutDir} = parseBlocksSmokeArgs({argv});
+  const provider = smokeModelProvider({env});
   if (!provider) {
     log.info("blocks:smoke skipped: no model key (set GOOGLE_VERTEX_PROJECT or GEMINI_API_KEY)");
     return 0;
   }
   // Loaded only with a key, so a skipped run does not set up the chat routes module.
-  const {createServerModel} = await import("../api/ai");
-  const model = createServerModel(process.env.BLOCKS_SMOKE_MODEL?.trim() || undefined);
+  const create = createModel ?? (await import("../api/ai")).createServerModel;
+  const model = create(env.BLOCKS_SMOKE_MODEL?.trim() || undefined);
   if (!model) {
     log.error(`blocks:smoke: ${provider} is configured but no model could be created`);
     return 1;
   }
 
-  await connectToMongoDB();
+  await connect();
   try {
     const photoCount = await PhotoLibraryEntry.countDocuments({deleted: false});
     if (photoCount === 0) {
@@ -341,26 +361,38 @@ const runCli = async (log: BlocksSmokeLogger): Promise<number> => {
     log.info(`blocks:smoke: ${provider} model, ${photoCount} library photos`);
     const result = await runBlocksSmoke({aiService: new AIService({model}), user});
     for (const line of formatSmokeChecks(result.checks)) {
-      (line.startsWith("PASS") ? log.info : log.error)(line);
+      if (line.startsWith("PASS")) {
+        log.info(line);
+      } else {
+        log.error(line);
+      }
     }
     const dir = writeSmokeOutput({
-      outDir: argOutDir ?? process.env.BLOCKS_SMOKE_OUT_DIR?.trim() ?? undefined,
+      outDir: argOutDir ?? env.BLOCKS_SMOKE_OUT_DIR?.trim() ?? undefined,
       result,
     });
     log.info(`blocks:smoke: ${result.ok ? "passed" : "failed"}; reply saved to ${dir}`);
     return result.ok ? 0 : 1;
   } finally {
-    await mongoose.disconnect();
+    await disconnect();
+  }
+};
+
+/**
+ * The `blocks:smoke` command: returns the process exit code (0 passed or skipped, 1 otherwise),
+ * logging why a run could not start.
+ */
+export const runBlocksSmokeCli = async (options: BlocksSmokeCliOptions): Promise<number> => {
+  try {
+    return await runCli(options);
+  } catch (error: unknown) {
+    (options.logger ?? logger).error(
+      `blocks:smoke: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return 1;
   }
 };
 
 if (import.meta.main) {
-  runCli(logger)
-    .then((code) => {
-      process.exit(code);
-    })
-    .catch((error: unknown) => {
-      logger.error(`blocks:smoke: ${error instanceof Error ? error.message : String(error)}`);
-      process.exit(1);
-    });
+  process.exit(await runBlocksSmokeCli({argv: process.argv.slice(2), env: process.env}));
 }

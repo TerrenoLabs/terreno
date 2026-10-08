@@ -5,16 +5,19 @@ import mongoose from "mongoose";
 import {PhotoLibraryEntry} from "../models/photoLibraryEntry";
 import {User} from "../models/user";
 import {
+  createPhotoImageModel,
   DEFAULT_PHOTO_IMAGE_MODEL,
   ensurePhotoLibraryUser,
   generatePhotoLibrary,
   PHOTO_LIBRARY_USER_EMAIL,
+  type PhotoLibraryAuth,
   type PhotoLibraryLogger,
   type PhotoStorage,
   type PhotoUploadParams,
   type PhotoUploadResult,
   parsePhotoLibraryArgs,
   resolvePhotoLibraryEnv,
+  runPhotoLibraryCli,
 } from "./generatePhotoLibrary";
 import {PHOTO_PROMPTS, type PhotoPrompt} from "./photoPrompts";
 
@@ -305,5 +308,263 @@ describe("parsePhotoLibraryArgs", () => {
     expect(parsePhotoLibraryArgs({argv: []})).toEqual({force: false});
     expect(parsePhotoLibraryArgs({argv: ["--force"]})).toEqual({force: true});
     expect(() => parsePhotoLibraryArgs({argv: ["--forse"]})).toThrow(/--forse/);
+  });
+});
+
+describe("createPhotoImageModel", () => {
+  const config = {
+    bucketName: "bucket",
+    imageModelId: DEFAULT_PHOTO_IMAGE_MODEL,
+    location: "us-central1",
+    project: "project",
+  };
+
+  it("builds the Vertex image model for the configured model id", () => {
+    const model = createPhotoImageModel({config, env: {}});
+
+    expect(typeof model).toBe("object");
+    const vertexModel = model as {modelId: string; provider: string};
+    expect(vertexModel.modelId).toBe(DEFAULT_PHOTO_IMAGE_MODEL);
+    expect(vertexModel.provider).toContain("vertex");
+  });
+
+  it("refuses a model outside GOOGLE_VERTEX_ALLOWED_MODELS", () => {
+    expect(() =>
+      createPhotoImageModel({config, env: {GOOGLE_VERTEX_ALLOWED_MODELS: "imagen-other, x"}})
+    ).toThrow("Model not permitted");
+    expect(
+      createPhotoImageModel({
+        config,
+        env: {GOOGLE_VERTEX_ALLOWED_MODELS: ` ${DEFAULT_PHOTO_IMAGE_MODEL} ,`},
+      })
+    ).toBeDefined();
+  });
+
+  it("fails clearly without a project", () => {
+    expect(() => createPhotoImageModel({config: {...config, project: ""}, env: {}})).toThrow(
+      "Vertex AI provider could not be created; check GOOGLE_VERTEX_PROJECT."
+    );
+  });
+});
+
+interface CliLogs {
+  errors: string[];
+  infos: string[];
+  logger: PhotoLibraryLogger;
+}
+
+const cliLogs = (): CliLogs => {
+  const errors: string[] = [];
+  const infos: string[] = [];
+  return {
+    errors,
+    infos,
+    logger: {
+      error: (message: string): void => {
+        errors.push(message);
+      },
+      info: (message: string): void => {
+        infos.push(message);
+      },
+    },
+  };
+};
+
+interface FakeCliDeps {
+  auth: PhotoLibraryAuth;
+  authCalls: number[];
+  connect: () => Promise<void>;
+  disconnect: () => Promise<void>;
+  events: string[];
+}
+
+/** ADC and the database connection stand-ins; the test preload owns the real connection. */
+const fakeCliDeps = ({authError}: {authError?: string} = {}): FakeCliDeps => {
+  const events: string[] = [];
+  const authCalls: number[] = [];
+  return {
+    auth: {
+      getClient: async (): Promise<unknown> => {
+        authCalls.push(authCalls.length);
+        if (authError) {
+          throw new Error(authError);
+        }
+        return {};
+      },
+    },
+    authCalls,
+    connect: async (): Promise<void> => {
+      events.push("connect");
+    },
+    disconnect: async (): Promise<void> => {
+      events.push("disconnect");
+    },
+    events,
+  };
+};
+
+const CLI_ENV = {GCS_BUCKET: "test-bucket", GOOGLE_VERTEX_PROJECT: "test-project"};
+
+describe("runPhotoLibraryCli", () => {
+  it("exits 1 with the usage message for an unknown flag", async () => {
+    const logs = cliLogs();
+    const {authCalls, events, ...deps} = fakeCliDeps();
+
+    const code = await runPhotoLibraryCli({
+      ...deps,
+      argv: ["--forse"],
+      env: CLI_ENV,
+      logger: logs.logger,
+    });
+
+    expect(code).toBe(1);
+    expect(logs.errors).toEqual([
+      "[PhotoLibrary] Unknown arguments for photos:generate: --forse (only --force)",
+    ]);
+    expect(authCalls).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it("exits 1 listing every missing variable before checking credentials", async () => {
+    const logs = cliLogs();
+    const {authCalls, events, ...deps} = fakeCliDeps();
+
+    const code = await runPhotoLibraryCli({...deps, argv: [], env: {}, logger: logs.logger});
+
+    expect(code).toBe(1);
+    expect(logs.errors).toEqual([
+      "[PhotoLibrary] Missing required environment variables for photos:generate: " +
+        "GOOGLE_VERTEX_PROJECT, GCS_BUCKET",
+    ]);
+    expect(authCalls).toEqual([]);
+  });
+
+  it("exits 1 with setup instructions when Application Default Credentials are missing", async () => {
+    const logs = cliLogs();
+    const image = createFakeImageModel();
+    const {authCalls, events, ...deps} = fakeCliDeps({
+      authError: "Could not load the default credentials",
+    });
+
+    const code = await runPhotoLibraryCli({
+      ...deps,
+      argv: [],
+      env: CLI_ENV,
+      imageModel: image.model,
+      logger: logs.logger,
+      prompts: TEST_PROMPTS,
+    });
+
+    expect(code).toBe(1);
+    expect(authCalls).toHaveLength(1);
+    expect(logs.errors).toEqual([
+      "[PhotoLibrary] Vertex credentials not found. Set GOOGLE_APPLICATION_CREDENTIALS or run " +
+        "`gcloud auth application-default login`. (Could not load the default credentials)",
+    ]);
+    expect(events).toEqual([]);
+    expect(image.calls).toEqual([]);
+  });
+
+  it("generates the library, logs a summary, and exits 0", async () => {
+    const logs = cliLogs();
+    const image = createFakeImageModel();
+    const files = createFakeStorage();
+    const {authCalls, events, ...deps} = fakeCliDeps();
+
+    const code = await runPhotoLibraryCli({
+      ...deps,
+      argv: [],
+      env: CLI_ENV,
+      imageModel: image.model,
+      logger: logs.logger,
+      prompts: TEST_PROMPTS,
+      storage: files.storage,
+    });
+
+    expect(code).toBe(0);
+    expect(logs.errors).toEqual([]);
+    expect(logs.infos[0]).toBe(
+      `[PhotoLibrary] 3 prompts, model ${DEFAULT_PHOTO_IMAGE_MODEL}, bucket test-bucket`
+    );
+    expect(logs.infos.at(-1)).toMatch(
+      /^\[PhotoLibrary\] Done in \d+s: 3 created, 0 updated, 0 skipped, 0 failed$/
+    );
+    expect(await PhotoLibraryEntry.countDocuments({})).toBe(3);
+    expect(files.uploads).toHaveLength(3);
+    expect(events).toEqual(["connect", "disconnect"]);
+    expect(await User.countDocuments({email: PHOTO_LIBRARY_USER_EMAIL})).toBe(1);
+  });
+
+  it("regenerates with --force and exits 1 when a prompt fails", async () => {
+    const image = createFakeImageModel();
+    const files = createFakeStorage();
+    await runPhotoLibraryCli({
+      ...fakeCliDeps(),
+      argv: [],
+      env: CLI_ENV,
+      imageModel: image.model,
+      logger: cliLogs().logger,
+      prompts: TEST_PROMPTS,
+      storage: files.storage,
+    });
+    const logs = cliLogs();
+    const failing = createFakeImageModel({failFor: [TEST_PROMPTS[2].prompt]});
+    const {events, authCalls, ...deps} = fakeCliDeps();
+
+    const code = await runPhotoLibraryCli({
+      ...deps,
+      argv: ["--force"],
+      env: CLI_ENV,
+      imageModel: failing.model,
+      logger: logs.logger,
+      prompts: TEST_PROMPTS,
+      storage: files.storage,
+    });
+
+    expect(code).toBe(1);
+    expect(logs.infos[0]).toEndWith(", --force");
+    expect(logs.infos.at(-1)).toMatch(/: 0 created, 2 updated, 0 skipped, 1 failed$/);
+    expect(
+      logs.errors.filter((message) => message.includes(`Failed "${TEST_PROMPTS[2].prompt}"`))
+    ).toHaveLength(2);
+    expect(events).toEqual(["connect", "disconnect"]);
+  });
+
+  it("wires the real Vertex model and GCS storage from the environment", async () => {
+    const logs = cliLogs();
+    const {authCalls, events, ...deps} = fakeCliDeps();
+
+    // No prompts, so nothing calls Vertex or GCS; the run proves the factories construct.
+    const code = await runPhotoLibraryCli({
+      ...deps,
+      argv: [],
+      env: {...CLI_ENV, PHOTO_IMAGE_MODEL: "imagen-4.0-generate-001"},
+      logger: logs.logger,
+      prompts: [],
+    });
+
+    expect(code).toBe(0);
+    expect(logs.errors).toEqual([]);
+    expect(logs.infos[0]).toBe(
+      "[PhotoLibrary] 0 prompts, model imagen-4.0-generate-001, bucket test-bucket"
+    );
+    expect(events).toEqual(["connect", "disconnect"]);
+  });
+
+  it("exits 1 when the environment's allow-list excludes the image model", async () => {
+    const logs = cliLogs();
+    const {authCalls, events, ...deps} = fakeCliDeps();
+
+    const code = await runPhotoLibraryCli({
+      ...deps,
+      argv: [],
+      env: {...CLI_ENV, GOOGLE_VERTEX_ALLOWED_MODELS: "gemini-2.5-flash"},
+      logger: logs.logger,
+      prompts: TEST_PROMPTS,
+    });
+
+    expect(code).toBe(1);
+    expect(logs.errors).toEqual(["[PhotoLibrary] Model not permitted"]);
+    expect(events).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import {describe, expect, it} from "bun:test";
-import {mkdtempSync, readFileSync} from "node:fs";
+import {existsSync, mkdtempSync, readFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import path from "node:path";
 import {AIService, GptHistory} from "@terreno/ai";
@@ -13,10 +13,13 @@ import {User} from "../models/user";
 import type {UserDocument} from "../types/models/userTypes";
 import {
   BLOCKS_SMOKE_PROMPT,
+  BLOCKS_SMOKE_USER_EMAIL,
+  type BlocksSmokeLogger,
   checkBlocksReply,
   formatSmokeChecks,
   parseBlocksSmokeArgs,
   runBlocksSmoke,
+  runBlocksSmokeCli,
   smokeModelProvider,
   writeSmokeOutput,
 } from "./blocksSmoke";
@@ -312,5 +315,216 @@ describe("writeSmokeOutput", () => {
     expect(saved.ok).toBe(true);
     expect(saved.prompt).toBe(BLOCKS_SMOKE_PROMPT);
     expect(saved.foundSrcs).toEqual(["file:abc"]);
+  });
+});
+
+describe("runBlocksSmoke turn failures", () => {
+  it("records a model error as a failed turn and still deletes the history", async () => {
+    const user = await createUser();
+    const model = new MockLanguageModelV3({
+      doStream: async () => {
+        throw new Error("model unavailable");
+      },
+      modelId: "mock-broken-model",
+    });
+
+    const result = await runBlocksSmoke({
+      aiService: new AIService({model: model as unknown as LanguageModel}),
+      user,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors.join(" ")).toContain("model unavailable");
+    const turnCheck = result.checks.find((check) => check.name.startsWith("the turn finished"));
+    expect(turnCheck?.ok).toBe(false);
+    expect(turnCheck?.detail).toContain("model unavailable");
+    expect(await GptHistory.countDocuments({userId: user._id})).toBe(0);
+  });
+});
+
+interface CliLogs {
+  errors: string[];
+  infos: string[];
+  logger: BlocksSmokeLogger;
+}
+
+const cliLogs = (): CliLogs => {
+  const errors: string[] = [];
+  const infos: string[] = [];
+  return {
+    errors,
+    infos,
+    logger: {
+      error: (message: string): void => {
+        errors.push(message);
+      },
+      info: (message: string): void => {
+        infos.push(message);
+      },
+    },
+  };
+};
+
+interface FakeDb {
+  connect: () => Promise<void>;
+  disconnect: () => Promise<void>;
+  events: string[];
+}
+
+/** Stands in for connecting and disconnecting, since the test preload owns the connection. */
+const fakeDb = (): FakeDb => {
+  const events: string[] = [];
+  return {
+    connect: async (): Promise<void> => {
+      events.push("connect");
+    },
+    disconnect: async (): Promise<void> => {
+      events.push("disconnect");
+    },
+    events,
+  };
+};
+
+describe("runBlocksSmokeCli", () => {
+  it("skips with exit 0 when no model key is configured", async () => {
+    const logs = cliLogs();
+    const db = fakeDb();
+    const requested: (string | undefined)[] = [];
+
+    const code = await runBlocksSmokeCli({
+      argv: [],
+      createModel: (modelId) => {
+        requested.push(modelId);
+        return undefined;
+      },
+      ...db,
+      env: {},
+      logger: logs.logger,
+    });
+
+    expect(code).toBe(0);
+    expect(logs.infos).toEqual([
+      "blocks:smoke skipped: no model key (set GOOGLE_VERTEX_PROJECT or GEMINI_API_KEY)",
+    ]);
+    expect(requested).toEqual([]);
+    expect(db.events).toEqual([]);
+  });
+
+  it("exits 1 with the usage message for an unknown flag", async () => {
+    const logs = cliLogs();
+
+    const code = await runBlocksSmokeCli({
+      argv: ["--force"],
+      env: {GEMINI_API_KEY: "k"},
+      logger: logs.logger,
+    });
+
+    expect(code).toBe(1);
+    expect(logs.errors).toEqual([
+      "blocks:smoke: Unknown arguments for blocks:smoke: --force (only --out <dir>)",
+    ]);
+  });
+
+  it("exits 1 before touching the database when no model can be created", async () => {
+    const logs = cliLogs();
+    const db = fakeDb();
+    const requested: (string | undefined)[] = [];
+
+    const code = await runBlocksSmokeCli({
+      argv: [],
+      createModel: (modelId) => {
+        requested.push(modelId);
+        return undefined;
+      },
+      ...db,
+      env: {BLOCKS_SMOKE_MODEL: " gemini-test ", GEMINI_API_KEY: "k"},
+      logger: logs.logger,
+    });
+
+    expect(code).toBe(1);
+    expect(requested).toEqual(["gemini-test"]);
+    expect(logs.errors).toEqual([
+      "blocks:smoke: gemini is configured but no model could be created",
+    ]);
+    expect(db.events).toEqual([]);
+  });
+
+  it("exits 1 and disconnects when the photo library is empty, using the server model", async () => {
+    const logs = cliLogs();
+    const db = fakeDb();
+
+    // No createModel: the server's model factory runs, but the empty library stops the run
+    // before any model call.
+    const code = await runBlocksSmokeCli({
+      argv: [],
+      ...db,
+      env: {GEMINI_API_KEY: "k"},
+      logger: logs.logger,
+    });
+
+    expect(code).toBe(1);
+    expect(logs.errors).toEqual([
+      "blocks:smoke: the photo library is empty; run `bun run photos:generate` first",
+    ]);
+    expect(db.events).toEqual(["connect", "disconnect"]);
+  });
+
+  it("exits 0 and saves the reply to --out when every check passes", async () => {
+    const photos = await seedLibrary();
+    const reply = roastReply({
+      galleryImages: [photos.lamb, photos.potatoes, photos.crumble],
+      listImage: photos.lamb,
+    });
+    const {model} = scriptedModel(reply);
+    const outDir = path.join(mkdtempSync(path.join(tmpdir(), "blocks-smoke-cli-")), "out");
+    const logs = cliLogs();
+    const db = fakeDb();
+
+    const code = await runBlocksSmokeCli({
+      argv: ["--out", outDir],
+      createModel: () => model as unknown as LanguageModel,
+      ...db,
+      env: {BLOCKS_SMOKE_OUT_DIR: "/ignored-when-out-is-passed", GOOGLE_VERTEX_PROJECT: "p"},
+      logger: logs.logger,
+    });
+
+    expect(code).toBe(0);
+    expect(logs.errors).toEqual([]);
+    expect(logs.infos[0]).toBe("blocks:smoke: vertex model, 3 library photos");
+    expect(logs.infos).toContain("PASS reply contains a stepper block");
+    expect(logs.infos.at(-1)).toBe(`blocks:smoke: passed; reply saved to ${outDir}`);
+    expect(readFileSync(path.join(outDir, "reply.yaml"), "utf8")).toBe(reply);
+    expect(db.events).toEqual(["connect", "disconnect"]);
+    // The turn ran as the smoke system user, created on first use.
+    expect(await User.countDocuments({email: BLOCKS_SMOKE_USER_EMAIL})).toBe(1);
+  });
+
+  it("exits 1, logs failures as errors, and saves to BLOCKS_SMOKE_OUT_DIR", async () => {
+    const photos = await seedLibrary();
+    await User.create({admin: false, email: BLOCKS_SMOKE_USER_EMAIL, name: "Blocks smoke"});
+    const {model} = scriptedModel(
+      roastReply({
+        galleryImages: [photos.lamb, photos.potatoes],
+        listImage: photos.lamb,
+        withStepper: false,
+      })
+    );
+    const outDir = path.join(mkdtempSync(path.join(tmpdir(), "blocks-smoke-cli-")), "env-out");
+    const logs = cliLogs();
+
+    const code = await runBlocksSmokeCli({
+      argv: [],
+      createModel: () => model as unknown as LanguageModel,
+      ...fakeDb(),
+      env: {BLOCKS_SMOKE_OUT_DIR: ` ${outDir} `, GEMINI_API_KEY: "k"},
+      logger: logs.logger,
+    });
+
+    expect(code).toBe(1);
+    expect(logs.errors).toEqual(["FAIL reply contains a stepper block"]);
+    expect(logs.infos.at(-1)).toBe(`blocks:smoke: failed; reply saved to ${outDir}`);
+    expect(existsSync(path.join(outDir, "result.json"))).toBe(true);
+    // The existing smoke user is reused, not duplicated.
+    expect(await User.countDocuments({email: BLOCKS_SMOKE_USER_EMAIL})).toBe(1);
   });
 });

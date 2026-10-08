@@ -48,7 +48,14 @@ const photoLibraryEntrySchema: PhotoLibraryEntrySchema = new mongoose.Schema<
     },
     tags: {
       description: `Search tags for the photo (${PHOTO_LIBRARY_LIMITS.tagsMin}–${PHOTO_LIBRARY_LIMITS.tagsMax})`,
-      type: [{minlength: 1, trim: true, type: String}],
+      type: [
+        {
+          description: "One search tag, matched by the findPhotos tool",
+          minlength: 1,
+          trim: true,
+          type: String,
+        },
+      ],
       validate: {
         message: `tags must hold ${PHOTO_LIBRARY_LIMITS.tagsMin}–${PHOTO_LIBRARY_LIMITS.tagsMax} entries`,
         validator: hasTagCount,

@@ -26,7 +26,7 @@
  */
 import {createVertex} from "@ai-sdk/google-vertex";
 import {createVertexProvider, FileStorageService} from "@terreno/ai";
-import {logger} from "@terreno/api";
+import {APIError, logger} from "@terreno/api";
 import {generateImage, type ImageModel} from "ai";
 import {GoogleAuth} from "google-auth-library";
 import {DateTime} from "luxon";
@@ -86,9 +86,10 @@ export const resolvePhotoLibraryEnv = ({
 }): PhotoLibraryConfig => {
   const missing = REQUIRED_PHOTO_ENV.filter((name) => !env[name]?.trim());
   if (missing.length > 0) {
-    throw new Error(
-      `Missing required environment variables for photos:generate: ${missing.join(", ")}`
-    );
+    throw new APIError({
+      status: 400,
+      title: `Missing required environment variables for photos:generate: ${missing.join(", ")}`,
+    });
   }
   return {
     bucketName: (env.GCS_BUCKET ?? "").trim(),
@@ -102,7 +103,10 @@ export const resolvePhotoLibraryEnv = ({
 export const parsePhotoLibraryArgs = ({argv}: {argv: string[]}): {force: boolean} => {
   const unknown = argv.filter((arg) => arg !== "--force");
   if (unknown.length > 0) {
-    throw new Error(`Unknown arguments for photos:generate: ${unknown.join(" ")} (only --force)`);
+    throw new APIError({
+      status: 400,
+      title: `Unknown arguments for photos:generate: ${unknown.join(" ")} (only --force)`,
+    });
   }
   return {force: argv.includes("--force")};
 };
@@ -198,74 +202,122 @@ const parseAllowedModels = (raw?: string): string[] | undefined => {
 };
 
 /** Resolve the Vertex image model through the shared provider, honouring the allow-list. */
-const createPhotoImageModel = (config: PhotoLibraryConfig): ImageModel => {
+export const createPhotoImageModel = ({
+  config,
+  env,
+}: {
+  config: PhotoLibraryConfig;
+  env: Record<string, string | undefined>;
+}): ImageModel => {
   const provider = createVertexProvider({
-    allowedModels: parseAllowedModels(process.env.GOOGLE_VERTEX_ALLOWED_MODELS),
+    allowedModels: parseAllowedModels(env.GOOGLE_VERTEX_ALLOWED_MODELS),
     project: config.project,
     // The shared provider pins chat to the global endpoint; Imagen needs a regional one.
     vertexFactory: ({project}) => createVertex({location: config.location, project}),
   });
   if (!provider) {
-    throw new Error("Vertex AI provider could not be created; check GOOGLE_VERTEX_PROJECT.");
+    throw new APIError({
+      status: 500,
+      title: "Vertex AI provider could not be created; check GOOGLE_VERTEX_PROJECT.",
+    });
   }
   return provider.imageModel(config.imageModelId);
 };
 
-const assertVertexCredentials = async (): Promise<void> => {
+/** The part of `GoogleAuth` the credentials check needs, so tests can stand in for ADC. */
+export interface PhotoLibraryAuth {
+  getClient: () => Promise<unknown>;
+}
+
+const assertVertexCredentials = async (auth: PhotoLibraryAuth): Promise<void> => {
   try {
-    await new GoogleAuth({scopes: [CLOUD_PLATFORM_SCOPE]}).getClient();
+    await auth.getClient();
   } catch (error: unknown) {
-    throw new Error(
-      "Vertex credentials not found. Set GOOGLE_APPLICATION_CREDENTIALS or run " +
-        `\`gcloud auth application-default login\`. (${errorMessage(error)})`
-    );
+    throw new APIError({
+      status: 500,
+      title:
+        "Vertex credentials not found. Set GOOGLE_APPLICATION_CREDENTIALS or run " +
+        `\`gcloud auth application-default login\`. (${errorMessage(error)})`,
+    });
   }
 };
 
-const runCli = async (): Promise<number> => {
-  const {force} = parsePhotoLibraryArgs({argv: process.argv.slice(2)});
-  const config = resolvePhotoLibraryEnv({env: process.env});
-  await assertVertexCredentials();
-  const imageModel = createPhotoImageModel(config);
-  const storage = new FileStorageService({bucketName: config.bucketName});
+export interface PhotoLibraryCliOptions {
+  argv: string[];
+  /** Application Default Credentials; defaults to `GoogleAuth` with the cloud-platform scope. */
+  auth?: PhotoLibraryAuth;
+  connect?: () => Promise<void>;
+  disconnect?: () => Promise<void>;
+  env: Record<string, string | undefined>;
+  /** Defaults to the Vertex image model from `env`. */
+  imageModel?: ImageModel;
+  logger?: PhotoLibraryLogger;
+  prompts?: PhotoPrompt[];
+  /** Defaults to `FileStorageService` on `GCS_BUCKET`. */
+  storage?: PhotoStorage;
+}
 
-  await connectToMongoDB();
+const runCli = async ({
+  argv,
+  auth = new GoogleAuth({scopes: [CLOUD_PLATFORM_SCOPE]}),
+  connect = connectToMongoDB,
+  disconnect = mongoose.disconnect.bind(mongoose),
+  env,
+  imageModel,
+  logger: log = logger,
+  prompts = PHOTO_PROMPTS,
+  storage,
+}: PhotoLibraryCliOptions): Promise<number> => {
+  const {force} = parsePhotoLibraryArgs({argv});
+  const config = resolvePhotoLibraryEnv({env});
+  await assertVertexCredentials(auth);
+  const model = imageModel ?? createPhotoImageModel({config, env});
+  const files = storage ?? new FileStorageService({bucketName: config.bucketName});
+
+  await connect();
   const startedAt = DateTime.now();
   try {
     const user = await ensurePhotoLibraryUser();
-    logger.info(
-      `[PhotoLibrary] ${PHOTO_PROMPTS.length} prompts, model ${config.imageModelId}, ` +
+    log.info(
+      `[PhotoLibrary] ${prompts.length} prompts, model ${config.imageModelId}, ` +
         `bucket ${config.bucketName}${force ? ", --force" : ""}`
     );
     const result = await generatePhotoLibrary({
       force,
-      imageModel,
-      prompts: PHOTO_PROMPTS,
-      storage,
+      imageModel: model,
+      logger: log,
+      prompts,
+      storage: files,
       userId: user._id,
     });
     const seconds = DateTime.now().diff(startedAt, "seconds").seconds.toFixed(0);
-    logger.info(
+    log.info(
       `[PhotoLibrary] Done in ${seconds}s: ${result.created.length} created, ` +
         `${result.updated.length} updated, ${result.skipped.length} skipped, ` +
         `${result.failed.length} failed`
     );
     for (const failure of result.failed) {
-      logger.error(`[PhotoLibrary] Failed "${failure.prompt}": ${failure.error}`);
+      log.error(`[PhotoLibrary] Failed "${failure.prompt}": ${failure.error}`);
     }
     return result.failed.length > 0 ? 1 : 0;
   } finally {
-    await mongoose.disconnect();
+    await disconnect();
+  }
+};
+
+/**
+ * The `photos:generate` command: returns the process exit code, 1 when any prompt failed or the
+ * run could not start (bad flags, missing env, no credentials), logging why.
+ */
+export const runPhotoLibraryCli = async (options: PhotoLibraryCliOptions): Promise<number> => {
+  try {
+    return await runCli(options);
+  } catch (error: unknown) {
+    (options.logger ?? logger).error(`[PhotoLibrary] ${errorMessage(error)}`);
+    return 1;
   }
 };
 
 if (import.meta.main) {
-  runCli()
-    .then((code) => {
-      process.exit(code);
-    })
-    .catch((error: unknown) => {
-      logger.error(`[PhotoLibrary] ${errorMessage(error)}`);
-      process.exit(1);
-    });
+  process.exit(await runPhotoLibraryCli({argv: process.argv.slice(2), env: process.env}));
 }

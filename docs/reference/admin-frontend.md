@@ -240,6 +240,21 @@ const syncConflicts = useConflicts();
 
 ### AdminRolesList
 
+Role cards and the **Available permissions** list split permissions into two groups:
+
+1. **Custom permissions**: actions an app or plugin declared, such as `admin:runScripts` or
+   `user:impersonate`.
+2. **Model permissions**: the actions `modelRouter` and admin model access check: `create`,
+   `list`, `read`, `update`, `delete`, `write`, and `writeOwned`.
+
+A resource with both kinds of action appears in both groups. Each group shows one row per
+resource, with that resource's actions as badges. Badge color shows the kind of access:
+
+- Green: read-only actions (`read`, `list`, `access`, `view*`)
+- Red: destructive actions (`delete`, `destroy`, `remove`)
+- Amber: every other action. Custom actions (such as screen gates like `adminScreen:syncLab`)
+  fall here because the screen cannot tell from the name whether they only read data
+
 Role editing starts with a dedicated **Admin page** toggle for `admin:access`. That is the only
 permission that opens the admin panel. Grant it first; model and tool permissions do nothing until
 the role can enter.

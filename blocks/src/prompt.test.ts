@@ -275,7 +275,7 @@ describe("blocksPromptSection", () => {
     it("prints every list limit from BLOCK_LIMITS and the image block's alt limit", () => {
       const lines = listLines();
       const listLimits = Object.entries(BLOCK_LIMITS).filter(([key]) => key.startsWith("list"));
-      expect(listLimits.length).toBe(4);
+      expect(listLimits.length).toBe(5);
       for (const [, value] of listLimits) {
         expect(lines).toContain(String(value));
       }

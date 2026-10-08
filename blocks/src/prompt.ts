@@ -60,7 +60,7 @@ const checklistPromptLines = (checklistActions: readonly string[]): string[] => 
     ? "Leave callback out of a checklist. Ticks stay on the device."
     : `Set a checklist callback name to one of: ${checklistActions.join(", ")}. Its payload is optional. Each tick sends the callback with payload.itemId, payload.checked, and payload.state, and the host returns the updated checklist.`,
   `A checklist id is at most ${BLOCK_LIMITS.checklistIdMaxLength} characters and an item id ${BLOCK_LIMITS.checklistItemIdMaxLength}. Item ids are unique in the checklist, and no other id may be <id>_<item id>.`,
-  `A checklist has 1 to ${BLOCK_LIMITS.checklistItemsMax} items. Its title is at most ${BLOCK_LIMITS.checklistTitleMaxLength} characters, an item text ${BLOCK_LIMITS.checklistItemTextMaxLength}, an item meta ${BLOCK_LIMITS.checklistItemMetaMaxLength}, and an item detail ${BLOCK_LIMITS.checklistItemDetailMaxLength}.`,
+  `A checklist has ${BLOCK_LIMITS.checklistItemsMin} to ${BLOCK_LIMITS.checklistItemsMax} items. Its title is at most ${BLOCK_LIMITS.checklistTitleMaxLength} characters, an item text ${BLOCK_LIMITS.checklistItemTextMaxLength}, an item meta ${BLOCK_LIMITS.checklistItemMetaMaxLength}, and an item detail ${BLOCK_LIMITS.checklistItemDetailMaxLength}.`,
 ];
 
 /**
@@ -83,7 +83,7 @@ const cardEyebrowPromptLines = (): string[] => [
  * image src rules, and the alt cap is the image block's.
  */
 const listPromptLines = (): string[] => [
-  `list requires items: 1 to ${BLOCK_LIMITS.listItemsMax} entries stacked one under another. Each item requires title, and may set text (plain text, not markdown), meta (a short label such as a time or a price), and image (src and alt, a thumbnail). Each image src follows the image src rules above.`,
+  `list requires items: ${BLOCK_LIMITS.listItemsMin} to ${BLOCK_LIMITS.listItemsMax} entries stacked one under another. Each item requires title, and may set text (plain text, not markdown), meta (a short label such as a time or a price), and image (src and alt, a thumbnail). Each image src follows the image src rules above.`,
   `A list item title is at most ${BLOCK_LIMITS.listItemTitleMaxLength} characters, its text ${BLOCK_LIMITS.listItemTextMaxLength}, its meta ${BLOCK_LIMITS.listItemMetaMaxLength}, and its image alt ${BLOCK_LIMITS.headingTextMaxLength}.`,
 ];
 

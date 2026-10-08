@@ -20,7 +20,7 @@ import {
 } from "@terreno/blocks";
 import * as Clipboard from "expo-clipboard";
 import type React from "react";
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 
 import {Accordion} from "../Accordion";
 import {AreaChart} from "../AreaChart";
@@ -135,8 +135,9 @@ const renderStepper = (
       elementId,
     });
   };
-  const decreaseDisabled = isLocked || block.value <= block.min;
-  const increaseDisabled = isLocked || block.value >= block.max;
+  // A button that would step past a bound is off, since the server rejects a value outside it.
+  const decreaseDisabled = isLocked || stepValue(block.value, -step) < block.min;
+  const increaseDisabled = isLocked || stepValue(block.value, step) > block.max;
   return (
     <Box gap={3} key={path} testID={path}>
       <Text color="secondaryLight" size="sm">
@@ -456,7 +457,7 @@ const GalleryTile: React.FC<{
 }> = ({height, image, testID, url, width}) => (
   <Box gap={1} testID={testID} width={width}>
     {url ? (
-      <Box overflow="hidden" rounding="md">
+      <Box overflow="hidden" rounding="md" testID={`${testID}-image`}>
         <Image
           alt={image.alt}
           color="transparent"
@@ -738,10 +739,17 @@ const CopyButton: React.FC<{
     return (): void => clearTimeout(timer);
   }, [feedback]);
 
+  // BlocksView rebuilds the context every render, so the press reads the latest one from a ref
+  // and the callback keeps one identity.
+  const latest = useRef({action, context});
+  latest.current = {action, context};
+
   const handleCopy = useCallback(async (): Promise<void> => {
-    const status = await writeClipboard(copyActionText(action, context));
+    const status = await writeClipboard(
+      copyActionText(latest.current.action, latest.current.context)
+    );
     setFeedback({status});
-  }, [action, context]);
+  }, []);
 
   return (
     <Box alignItems="center" direction="row" gap={2}>

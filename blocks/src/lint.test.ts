@@ -433,6 +433,11 @@ describe("stepper lint", () => {
     }
     expect(
       codesAndPaths(
+        documentWith({blocks: [stepper({items: [{amount: 2, decimals: -1, label: "Lamb"}]})]})
+      )
+    ).toEqual([{code: "OUT_OF_RANGE", path: "blocks[0].items[0].decimals"}]);
+    expect(
+      codesAndPaths(
         documentWith({blocks: [stepper({items: [{amount: 2, label: "Lamb", round: "down"}]})]})
       )
     ).toEqual([{code: "INVALID_ENUM", path: "blocks[0].items[0].round"}]);

@@ -597,7 +597,7 @@ const listItemSchema = z
 const listSchema = z
   .object({
     ...sharedBlockFields,
-    items: z.array(listItemSchema).min(1).max(BLOCK_LIMITS.listItemsMax),
+    items: z.array(listItemSchema).min(BLOCK_LIMITS.listItemsMin).max(BLOCK_LIMITS.listItemsMax),
     type: z.literal("list"),
   })
   .strict();
@@ -663,7 +663,10 @@ const checklistSchema = z
       .strict()
       .optional(),
     id: blockIdSchema.max(BLOCK_LIMITS.checklistIdMaxLength),
-    items: z.array(checklistItemSchema).min(1).max(BLOCK_LIMITS.checklistItemsMax),
+    items: z
+      .array(checklistItemSchema)
+      .min(BLOCK_LIMITS.checklistItemsMin)
+      .max(BLOCK_LIMITS.checklistItemsMax),
     title: visibleText(BLOCK_LIMITS.checklistTitleMaxLength).optional(),
     type: z.literal("checklist"),
   })

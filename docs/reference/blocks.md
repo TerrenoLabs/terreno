@@ -105,7 +105,7 @@ replacement stepper (see `scaleStepperHostAction` in [the AI reference](ai.md)).
 | `unit` | no | 1–40, shown under the value ("People") |
 | `callback` | yes | `{name, payload?}`. `name` is checked by `UNKNOWN_HOST_ACTION` against `stepperActions` when that is passed, otherwise against `hostActions` |
 | `itemsTitle` | no | 1–80, a small heading above the items |
-| `items` | no | 0–12 of `{label (1–80), amount, unit? (1–20), decimals? (0–3, default 0), round?: nearest or up (default nearest)}`. `decimals` above 3 is `OUT_OF_RANGE` |
+| `items` | no | 0–12 of `{label (1–80), amount, unit? (1–20), decimals? (0–3, default 0), round?: nearest or up (default nearest)}`. `decimals` below 0 or above 3 is `OUT_OF_RANGE` |
 | `note` | no | 1–280, muted under the items |
 
 ```yaml
@@ -291,7 +291,7 @@ are joined with `\n`, with no trailing newline.
 | `stepper` | `<label>: <value> <unit>`, then one `<item label>: <amount> <unit>` line per item. Amounts use the item's `decimals` (2 at 1 decimal is `2.0`). A missing unit leaves no trailing space. For the example above: `Number of people: 5 People`, `Bone-in leg of lamb: 2.0 kg`, `Carrots: 8` |
 | `checklist` | One `[x] <text>` or `[ ] <text>` line per item. `checked` maps item ids to the current ticks and overrides each item's `checked`; ids the checklist lacks are ignored |
 | `list` | One `- <title>: <text>` line per item, or `- <title>` when the item has no text |
-| `table` | A header row of column names (the table's `columns` in order, or every dataset column), then one row per dataset row, tab-separated. A `null` cell is empty. The table's dataset must be inline in `datasets`; a missing dataset or an unresolved `ref` returns an empty string, so resolve refs first |
+| `table` | A header row of column names (the table's `columns` in order, or every dataset column) with each `_` shown as a space, as the table on screen shows them (`lamb_kg` is `lamb kg`), then one row per dataset row, tab-separated. A `null` cell is empty. The table's dataset must be inline in `datasets`; a missing dataset or an unresolved `ref` returns an empty string, so resolve refs first |
 | `text` | The `markdown` as written |
 
 Any other block returns an empty string. Pass the block as it is shown, with a host's
@@ -363,11 +363,11 @@ heuristics and does not fail `ok`.
 | `IMAGE_HOST_NOT_ALLOWED` | An `image`, `gallery` tile, or `list` item image URL is not a `data:image` URL, a `file:` ref, or an `https` URL on an allowed host. A gallery error names the tile (`blocks[0].images[2].src`); a list error names the item (`blocks[0].items[1].image.src`). |
 | `INVALID_ENUM` | A value is not one of the allowed values. |
 | `INVALID_FORMAT` | A string does not match its required format. |
-| `INVALID_TYPE` | A value has the wrong type, including a numeric field below its minimum. |
+| `INVALID_TYPE` | A value has the wrong type, including a ref `limit` below 1. |
 | `KEY_ORDER` | Top-level keys are not in the order `v`, `datasets`, `blocks`. |
 | `MISSING_REQUIRED` | A required field is missing, or an `open` or `copy` action sets neither or both of its two fields. |
 | `NOT_A_DOCUMENT` | The reply is not one YAML or JSON mapping with a `v` field. |
-| `OUT_OF_RANGE` | A number is outside its allowed range: a stepper `value` outside `min` and `max`, `min` not below `max`, `step` at or below 0, or `decimals` above 3. |
+| `OUT_OF_RANGE` | A number is outside its allowed range: a stepper `value` outside `min` and `max`, `min` not below `max`, `step` at or below 0, or `decimals` below 0 or above 3. |
 | `SELECT_TARGET_INVALID` | A select action names a block that is not a chart or table. |
 | `ROW_ARITY_MISMATCH` | A dataset row does not have one value per column. |
 | `TABLE_TOO_WIDE` | A table lists more than 12 columns. |

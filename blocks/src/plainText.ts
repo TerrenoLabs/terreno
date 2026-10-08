@@ -52,7 +52,9 @@ const tableText = (block: TableBlock, datasets: Record<string, Dataset> | undefi
   const rows = dataset.rows.map((row) =>
     indexes.map((index) => (index < 0 ? "" : cellText(row[index]))).join("\t")
   );
-  return [names.join("\t"), ...rows].join("\n");
+  // The header matches the table on screen, which shows underscores in column names as spaces.
+  const header = names.map((name) => name.replaceAll("_", " ")).join("\t");
+  return [header, ...rows].join("\n");
 };
 
 /**

@@ -504,7 +504,8 @@ buttons as loading. `overrides` replaces a block by id.
 A `stepper` draws its `label` as a small muted line, then `IconButton` − and + around the
 value and its `unit`, then `itemsTitle`, a two-column grid of item labels and amounts
 (formatted with `decimals`, so `{amount: 2, unit: kg, decimals: 1}` reads "2.0 kg"), and the
-muted `note`. − is disabled at `min` and + at `max`. Both are disabled while either button's
+muted `note`. − is disabled when `value - step` would fall below `min`, and + when `value + step`
+would pass `max`, so with `max: 20` and `step: 2` + is disabled at 19. Both are disabled while either button's
 element id is in `pendingElementIds`, and when `hostActions` is passed without the stepper's
 `callback.name`. The buttons are labelled "Decrease <label>" and "Increase <label>". A tap
 calls `onAction` with `blockId: <id>`, `elementId: <id>_decrease` or `<id>_increase`, and
@@ -543,8 +544,9 @@ a gallery inside a narrow `columns` child or card also scrolls. Before the first
 is 160 wide. A `file:` tile loads through `resolveImage` like an `image` block. Until it has a
 URL, or when the lookup fails, the tile is a muted 4:3 placeholder that shows the alt text and
 keeps it as the label. Test ids: the gallery `<path>`, each grid row `<path>-row-<n>`, the
-scrolling row `<path>-scroll`, each tile `<path>-image-<index>`, its caption
-`<path>-image-<index>-caption`, and a placeholder `<path>-image-<index>-placeholder`.
+scrolling row `<path>-scroll`, each tile `<path>-image-<index>`, the frame around a loaded
+image `<path>-image-<index>-image`, its caption `<path>-image-<index>-caption`, and a
+placeholder `<path>-image-<index>-placeholder`.
 `Image` passes `alt` to the native image as its `accessibilityLabel`.
 
 A `list` draws one row per item, 12 apart (`gap={3}`). The row starts with a 3:4 portrait

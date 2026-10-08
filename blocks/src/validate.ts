@@ -248,7 +248,21 @@ const mapIssue = (issue: z.core.$ZodIssue, root: unknown): BlockError[] => {
     ];
   }
   if (issue.code === "too_small") {
-    if (issue.origin === "number" || issue.origin === "int") {
+    const isNumber = issue.origin === "number" || issue.origin === "int";
+    // A ref `limit` below 1 has always been INVALID_TYPE; every other numeric floor matches the
+    // OUT_OF_RANGE code its ceiling uses.
+    if (isNumber && !/^datasets\.[^.]+\.limit$/.test(path)) {
+      const minimum = String(issue.minimum);
+      return [
+        error({
+          code: "OUT_OF_RANGE",
+          fix: `Set ${subject(path)} to ${minimum} or more.`,
+          message: `${subject(path)} is below ${minimum}.`,
+          path,
+        }),
+      ];
+    }
+    if (isNumber) {
       return [
         error({
           code: "INVALID_TYPE",

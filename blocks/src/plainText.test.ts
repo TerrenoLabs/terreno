@@ -118,13 +118,19 @@ describe("blockPlainText", () => {
   describe("table", () => {
     it("writes a header row, then the rows, tab-separated, with null cells empty", () => {
       expect(blockPlainText(table, {datasets: {guests}})).toBe(
-        "guests\tlamb_kg\tnote\n4\t1.6\tSmall\n6\t2.4\t"
+        "guests\tlamb kg\tnote\n4\t1.6\tSmall\n6\t2.4\t"
       );
+    });
+
+    it("writes header names with underscores as spaces, as the table shows them", () => {
+      const header = blockPlainText(table, {datasets: {guests}}).split("\n")[0];
+      expect(header).toBe("guests\tlamb kg\tnote");
+      expect(header).not.toContain("_");
     });
 
     it("follows the table's columns in their order", () => {
       expect(blockPlainText({...table, columns: ["lamb_kg", "guests"]}, {datasets: {guests}})).toBe(
-        "lamb_kg\tguests\n1.6\t4\n2.4\t6"
+        "lamb kg\tguests\n1.6\t4\n2.4\t6"
       );
     });
 

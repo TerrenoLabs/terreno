@@ -1,8 +1,9 @@
 import React, {lazy, Suspense, useCallback, useEffect, useMemo} from "react";
-import {Linking, Platform, ScrollView, View} from "react-native";
+import {Linking, Platform, ScrollView} from "react-native";
 import type Markdown from "react-native-markdown-display";
 import {FitImage, renderRules} from "react-native-markdown-display";
 
+import {Box} from "./Box";
 import {MarkdownEmbed} from "./MarkdownEmbed";
 import {isEmbeddableMediaUrl, toMediaEmbedUrl} from "./markdownEmbeds";
 import {Spinner} from "./Spinner";
@@ -222,7 +223,9 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
         }
         return renderRules.link?.(node, children, parent, styles, onLinkPress);
       },
-      // Tables wider than their container scroll sideways instead of squeezing columns.
+      // Tables wider than their container scroll sideways instead of squeezing columns. The
+      // wrapper stays a ScrollView: Box `scroll` fixes its contentContainerStyle and puts the
+      // testID on the inner view, so it cannot give the content `minWidth: 100%`.
       table: (node, children, _parent, styles) => (
         <ScrollView
           contentContainerStyle={TABLE_SCROLL_CONTENT_STYLE}
@@ -230,28 +233,31 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
           key={node.key}
           testID="markdown-table-scroll"
         >
-          <View style={styles._VIEW_SAFE_table} testID="markdown-table">
+          <Box
+            dangerouslySetInlineStyle={{__style: styles._VIEW_SAFE_table}}
+            testID="markdown-table"
+          >
             {children}
-          </View>
+          </Box>
         </ScrollView>
       ),
       td: (node, children, parent, styles) => (
-        <View
+        <Box
+          dangerouslySetInlineStyle={{__style: styles._VIEW_SAFE_td}}
           key={node.key}
-          style={styles._VIEW_SAFE_td}
           testID={`markdown-table-cell-${parent[0]?.index ?? 0}-${node.index}`}
         >
           {children}
-        </View>
+        </Box>
       ),
       th: (node, children, _parent, styles) => (
-        <View
+        <Box
+          dangerouslySetInlineStyle={{__style: styles._VIEW_SAFE_th}}
           key={node.key}
-          style={styles._VIEW_SAFE_th}
           testID={`markdown-table-header-${node.index}`}
         >
           {children}
-        </View>
+        </Box>
       ),
     };
   }, []);

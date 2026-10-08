@@ -883,6 +883,24 @@ blocks:
     expect(disabled(atMax, "Increase")).toBe(true);
     expect(disabled(atMax, "Decrease")).toBe(false);
 
+    // With step 2, a value one partial step from a bound would step past it, so that button is off.
+    const nearBounds = (value: number): string =>
+      STEPPER.replace("value: 5", `value: ${value}\n        step: 2`);
+    const nearMax = renderWithTheme(<BlocksView document={nearBounds(19)} onAction={onAction} />);
+    expect(disabled(nearMax, "Increase")).toBe(true);
+    expect(disabled(nearMax, "Decrease")).toBe(false);
+    await tap(nearMax, "Increase Number of people");
+    expect(onAction).not.toHaveBeenCalled();
+    const nearMin = renderWithTheme(<BlocksView document={nearBounds(2)} onAction={onAction} />);
+    expect(disabled(nearMin, "Decrease")).toBe(true);
+    expect(disabled(nearMin, "Increase")).toBe(false);
+    await tap(nearMin, "Decrease Number of people");
+    expect(onAction).not.toHaveBeenCalled();
+    const fullStep = renderWithTheme(<BlocksView document={nearBounds(18)} />);
+    expect(disabled(fullStep, "Increase")).toBe(false);
+    const fullStepDown = renderWithTheme(<BlocksView document={nearBounds(3)} />);
+    expect(disabled(fullStepDown, "Decrease")).toBe(false);
+
     const pending = renderWithTheme(
       <BlocksView document={STEPPER} onAction={onAction} pendingElementIds={["guests_increase"]} />
     );
@@ -1187,6 +1205,16 @@ ${Array.from({length: count}, (_, index) => {
       ]);
       expect(view.queryByTestId("blocks-0-row-1")).toBeNull();
       expect(view.queryByTestId("blocks-0-scroll")).toBeNull();
+    });
+
+    it("gives each loaded tile image the <tile>-image test ID, like list thumbnails", () => {
+      const view = renderWithTheme(<BlocksView document={galleryOf(3)} />);
+      for (const index of [0, 1, 2]) {
+        const frame = view.getByTestId(`blocks-0-image-${index}-image`);
+        expect(frame.findAllByType(NativeImage)).toHaveLength(1);
+        expect(frame.findByType(NativeImage).props.accessibilityLabel).toBe(`Photo ${index + 1}`);
+      }
+      expect(view.queryByTestId("blocks-0-image-0-placeholder")).toBeNull();
     });
 
     it("shows a caption as small muted text under its tile", () => {
@@ -1514,6 +1542,23 @@ ${STEPPER.split("blocks:\n")[1]}  - type: checklist
       );
       expect(status(view, "copy_list")).toBe("Copied");
       expect(onAction).not.toHaveBeenCalled();
+    });
+
+    it("copies the override that arrived after the first render", async () => {
+      const view = renderWithTheme(
+        <BlocksView document={COPY_DOC} hostActions={["scaleStepper"]} />
+      );
+      view.rerender(
+        <BlocksView
+          document={COPY_DOC}
+          hostActions={["scaleStepper"]}
+          overrides={{guests: SIX_GUESTS}}
+        />
+      );
+      await pressCopy(view, "copy_list");
+      expect(mockedSetStringAsync).toHaveBeenCalledWith(
+        "Number of people: 6 People\nBone-in leg of lamb: 2.4 kg\nCarrots: 10"
+      );
     });
 
     it("announces the status in a polite live region", async () => {

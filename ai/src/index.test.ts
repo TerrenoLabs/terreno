@@ -45,6 +45,7 @@ describe("@terreno/ai public exports", () => {
     "getObservabilityApp",
     "resetObservabilityApp",
     "resolveObservabilityControl",
+    "runBufferedChatTurn",
     "validateObservabilityConfig",
     "setCached",
     "shutdownLangfuseClient",

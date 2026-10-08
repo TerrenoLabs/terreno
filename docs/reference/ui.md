@@ -520,6 +520,23 @@ new stepper, and `overrides[<id>]` paints it.
 
 Demo story: `BlocksView`.
 
+### MarkdownView
+
+`MarkdownView` renders markdown with `react-native-markdown-display` and the current theme.
+GPTChat and the `text` block render through it.
+
+GFM tables use theme colors, never fixed hex values:
+
+- Cell borders draw a grid in `theme.border.default`.
+- Header cells sit on `theme.surface.secondaryLight` and use the bold text font (`text-bold`).
+  Body cells use `text-regular`.
+- Every column gets an equal share of the width, at least 96. A narrow table fills its
+  container. A table wider than its container scrolls sideways in a horizontal `ScrollView`.
+
+Test ids: `markdown-table-scroll` (the scroll view), `markdown-table`,
+`markdown-table-header-<column>`, and `markdown-table-cell-<row>-<column>` (body rows count
+from 0).
+
 ### HtmlFrame
 
 `HtmlFrame` paints one `html` block. On web it is an `<iframe sandbox="" referrerpolicy="no-referrer">` whose `srcdoc` starts with a Content-Security-Policy meta tag (`default-src 'none'`). On native it is a WebView with JavaScript off, and navigation after the first load is rejected. `BlocksView` renders that frame only when `allowHtml` is true and `streaming` is false. Otherwise the block is a card that says the preview is off or still arriving. `GPTChat` passes `allowHtml` through.

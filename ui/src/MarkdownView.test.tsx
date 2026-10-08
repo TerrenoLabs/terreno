@@ -1,10 +1,62 @@
 import {describe, expect, it, mock, spyOn} from "bun:test";
 import assert from "node:assert";
-import {fireEvent, waitFor} from "@testing-library/react-native";
-import {Image, Linking} from "react-native";
+import {fireEvent, render, waitFor} from "@testing-library/react-native";
+import type React from "react";
+import {Image, Linking, StyleSheet} from "react-native";
 
+import type {TerrenoTheme} from "./Common";
 import {MarkdownView} from "./MarkdownView";
+import {ThemeProvider, useTheme} from "./Theme";
 import {renderWithTheme} from "./test-utils";
+
+const LAMB_TABLE = [
+  "| Guests | Bone-in lamb | Potatoes |",
+  "| --- | --- | --- |",
+  "| 4 | 2 kg | 1 kg |",
+  "| 6 | 3 kg | 1.5 kg |",
+  "| 8 | 4 kg | 2 kg |",
+  "| 10 | 5 kg | 2.5 kg |",
+].join("\n");
+
+const DARK_PRIMITIVES = {
+  neutral300: "#3A3A3A",
+  neutral900: "#F5F5F5",
+  secondary100: "#1F3A44",
+};
+
+interface ThemeCapture {
+  theme?: TerrenoTheme;
+}
+
+const ThemeProbe: React.FC<{capture: ThemeCapture}> = ({capture}) => {
+  const {theme} = useTheme();
+  capture.theme = theme;
+  return null;
+};
+
+const renderTable = async ({
+  initialPrimitives,
+  markdown = LAMB_TABLE,
+}: {
+  initialPrimitives?: Record<string, string>;
+  markdown?: string;
+}): Promise<{capture: ThemeCapture; result: ReturnType<typeof render>}> => {
+  const capture: ThemeCapture = {};
+  const result = render(
+    <ThemeProvider initialPrimitives={initialPrimitives}>
+      <ThemeProbe capture={capture} />
+      <MarkdownView>{markdown}</MarkdownView>
+    </ThemeProvider>
+  );
+  await waitFor(() => {
+    expect(result.getByText("Bone-in lamb")).toBeTruthy();
+  });
+  return {capture, result};
+};
+
+const flatStyle = (node: {props: {style?: unknown}}): Record<string, unknown> => {
+  return (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<string, unknown>;
+};
 
 describe("MarkdownView", () => {
   it("renders correctly with simple text", async () => {
@@ -175,5 +227,72 @@ describe("MarkdownView", () => {
       Image.getSize = originalGetSize;
       consoleError.mockRestore();
     }
+  });
+
+  describe("GFM tables", () => {
+    it("draws table cell borders in theme.border.default", async () => {
+      const {capture, result} = await renderTable({});
+      const cell = result.getByTestId("markdown-table-cell-1-1");
+      const header = result.getByTestId("markdown-table-header-0");
+      assert.ok(capture.theme);
+      expect(flatStyle(cell).borderColor).toBe(capture.theme.border.default);
+      expect(flatStyle(header).borderColor).toBe(capture.theme.border.default);
+      expect(flatStyle(cell).borderRightWidth).toBe(1);
+      expect(flatStyle(cell).borderBottomWidth).toBe(1);
+      expect(flatStyle(result.getByTestId("markdown-table")).borderColor).toBe(
+        capture.theme.border.default
+      );
+    });
+
+    it("renders a bold header row on theme.surface.secondaryLight", async () => {
+      const {capture, result} = await renderTable({});
+      assert.ok(capture.theme);
+      for (const index of [0, 1, 2]) {
+        expect(
+          flatStyle(result.getByTestId(`markdown-table-header-${index}`)).backgroundColor
+        ).toBe(capture.theme.surface.secondaryLight);
+      }
+      expect(flatStyle(result.getByText("Bone-in lamb")).fontFamily).toBe("text-bold");
+      expect(flatStyle(result.getByText("1.5 kg")).fontFamily).toBe("text-regular");
+      expect(flatStyle(result.getByTestId("markdown-table-cell-1-1")).backgroundColor).toBe(
+        undefined
+      );
+    });
+
+    it("wraps the table in a horizontal scroll view that fills a narrow container", async () => {
+      const {result} = await renderTable({});
+      const scroll = result.getByTestId("markdown-table-scroll");
+      expect(scroll.props.horizontal).toBe(true);
+      expect(flatStyle({props: {style: scroll.props.contentContainerStyle}}).minWidth).toBe("100%");
+      const table = result.getByTestId("markdown-table");
+      expect(flatStyle(table).flexGrow).toBe(1);
+      const cellStyle = flatStyle(result.getByTestId("markdown-table-cell-0-0"));
+      expect(cellStyle.flexGrow).toBe(1);
+      expect(cellStyle.minWidth).toBe(96);
+    });
+
+    it("follows a swapped (dark) palette instead of fixed colors", async () => {
+      const {capture, result} = await renderTable({initialPrimitives: DARK_PRIMITIVES});
+      assert.ok(capture.theme);
+      expect(capture.theme.border.default).toBe(DARK_PRIMITIVES.neutral300);
+      expect(flatStyle(result.getByTestId("markdown-table-cell-0-0")).borderColor).toBe(
+        DARK_PRIMITIVES.neutral300
+      );
+      expect(flatStyle(result.getByTestId("markdown-table-header-0")).backgroundColor).toBe(
+        DARK_PRIMITIVES.secondary100
+      );
+      expect(flatStyle(result.getByText("Guests")).color).toBe(DARK_PRIMITIVES.neutral900);
+      expect(JSON.stringify(result.toJSON())).not.toContain("#000000");
+    });
+
+    it("leaves markdown without a table free of table scroll views", async () => {
+      const {queryByTestId, getByText} = renderWithTheme(
+        <MarkdownView>{"Just a paragraph with **bold** text."}</MarkdownView>
+      );
+      await waitFor(() => {
+        expect(getByText("bold")).toBeTruthy();
+      });
+      expect(queryByTestId("markdown-table-scroll")).toBeNull();
+    });
   });
 });

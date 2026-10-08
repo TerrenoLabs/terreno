@@ -37,7 +37,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: right-aligned `number` cells and Luxon `DATE_MED` `date` cells in `DataTable`. The `table` block maps the dataset column types to these cells, measures its width with `onLayout`, and splits the width evenly, at least 96 per column, scrolling sideways past that.
   - Acceptance: AC9 (table half); the new tests fail on `master`.
 
-- [ ] **T4** — Markdown tables in `text` get theme styling
+- [x] **T4** — Markdown tables in `text` get theme styling
   - Depends on: T3 (shares `docs/reference/ui.md`; T10 follows T4 for the same reason)
   - Files: `ui/src/MarkdownView.tsx`, `ui/src/MarkdownView.test.tsx`, `docs/reference/ui.md` (MarkdownView section only).
   - Delivers: `border.default` cell borders, a bold header on `surface.secondaryLight`, and horizontal scroll when the table is wide.

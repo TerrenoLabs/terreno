@@ -194,6 +194,45 @@ const tap = async (view: RenderedView, label: string): Promise<void> => {
   });
 };
 
+describe("BlocksView card eyebrow", () => {
+  const eyebrowDoc = (lines: string): string => `v: 1
+blocks:
+  - type: card
+${lines}    children:
+      - type: context
+        text: Serves six.
+`;
+
+  it("draws a small muted eyebrow above the card title", () => {
+    const view = renderWithTheme(
+      <BlocksView
+        document={eyebrowDoc("    eyebrow: Your dinner plan\n    title: Sunday roast\n")}
+      />
+    );
+    const eyebrow = view.getByTestId("blocks-0-eyebrow");
+    expect(eyebrow.props.children).toBe("Your dinner plan");
+    const flat = StyleSheet.flatten(eyebrow.props.style);
+    const label = StyleSheet.flatten(view.getByText("Your dinner plan").props.style);
+    expect(flat.color).toBe(label.color);
+    const json = JSON.stringify(view.toJSON());
+    expect(json.indexOf("Your dinner plan")).toBeLessThan(json.indexOf("Sunday roast"));
+    expect(json.indexOf("Sunday roast")).toBeLessThan(json.indexOf("Serves six."));
+  });
+
+  it("draws an eyebrow on a card with no title, above the children", () => {
+    const view = renderWithTheme(<BlocksView document={eyebrowDoc("    eyebrow: Tonight\n")} />);
+    expect(view.getByTestId("blocks-0-eyebrow")).toBeTruthy();
+    const json = JSON.stringify(view.toJSON());
+    expect(json.indexOf("Tonight")).toBeLessThan(json.indexOf("Serves six."));
+  });
+
+  it("draws no eyebrow when the card has none", () => {
+    const view = renderWithTheme(<BlocksView document={eyebrowDoc("    title: Sunday roast\n")} />);
+    expect(view.queryByTestId("blocks-0-eyebrow")).toBeNull();
+    expect(view.getByText("Sunday roast")).toBeTruthy();
+  });
+});
+
 describe("BlocksView", () => {
   it("renders leaf and layout blocks with Terreno components", async () => {
     const {getByText, getByTestId} = renderWithTheme(<BlocksView document={LAYOUT} />);

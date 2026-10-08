@@ -95,7 +95,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: for each item, a 3:4 thumbnail on the left, a bold title, muted text, and the meta.
   - Acceptance: AC7 (list).
 
-- [ ] **T13** — Card eyebrow renders
+- [x] **T13** — Card eyebrow renders
   - Depends on: T8, T12
   - Files: `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/BlocksView.test.tsx`, `docs/reference/ui.md`.
   - Delivers: small, muted eyebrow text above the card title.

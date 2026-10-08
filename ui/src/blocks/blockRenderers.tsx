@@ -715,6 +715,11 @@ export const renderBlock = (
     case "card":
       return (
         <Card key={path} testID={path}>
+          {block.eyebrow ? (
+            <Text color="secondaryLight" size="sm" testID={`${path}-eyebrow`}>
+              {block.eyebrow}
+            </Text>
+          ) : null}
           {block.title ? <Heading size="sm">{block.title}</Heading> : null}
           {renderChildren(block.children, path, context)}
         </Card>

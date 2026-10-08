@@ -85,8 +85,9 @@ Warnings do not block rendering:
 inside another layout block is `DEPTH_EXCEEDED`. Every block counts toward the 50-block
 cap, including the `card` or `columns` block itself, so a card cannot hold 50 children.
 
-A card's `eyebrow` is a short label meant to sit small and muted above the `title`. This release
-validates it and the prompt offers it. `BlocksView` does not draw it yet.
+A card's `eyebrow` is a short label that sits small and muted above the `title` (or above the
+children when there is no title). `BlocksView` draws it as a `Text` in the same small, muted style
+as the stepper label, with test ID `<card path>-eyebrow`.
 
 `id` matches `^[a-z][a-z0-9_]{0,63}$`.
 

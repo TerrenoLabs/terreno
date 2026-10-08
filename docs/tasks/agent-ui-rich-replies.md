@@ -51,7 +51,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: the `checklist` schema from the IP, including the optional `callback`. Its prompt line sits under `richBlocks` and names the checklist action when there is one.
   - Acceptance: the checklist rows of AC1 and AC3; `bun test blocks/`.
 
-- [ ] **T6** — `gallery` contract
+- [x] **T6** — `gallery` contract
   - Depends on: T5
   - Files: `blocks/src/schema.ts`, `blocks/src/limits.ts`, `blocks/src/lint.ts` (image hosts per tile), `blocks/src/prompt.ts`, `blocks/src/fixtures/{valid,invalid}/gallery*.yaml`, `blocks/src/parse.test.ts`, `docs/reference/blocks.md`.
   - Delivers: the `gallery` schema. `IMAGE_HOST_NOT_ALLOWED` names the tile path (`blocks[0].images[2].src`).

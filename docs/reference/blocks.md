@@ -54,7 +54,7 @@ A dataset name matches `^[a-z][a-z0-9_]{0,63}$`. A document has at most 8 datase
 | `image` | `alt`, `src` | `id` |
 | `details` | `title`, `text` | `id` |
 
-`src` is a `data:image` URL, a `file:` ref (`file:` plus an id), or an `https` URL. `https` is allowed only when the hostname is in `validateBlocks` `imageHosts` (the server option is `uiBlocks.imageHosts`). Anything else is `IMAGE_HOST_NOT_ALLOWED`. An empty list rejects every `https` image. A ref dataset `id` uses 1–80 letters, digits, underscores, or hyphens. A block or action-element `id` stays lowercase and starts with a letter. `limit` of `0` is `INVALID_TYPE` (an integer of at least 1), not `TOO_SHORT`.
+`src` (on an `image` block and on each `gallery` tile) is a `data:image` URL, a `file:` ref (`file:` plus an id), or an `https` URL. `https` is allowed only when the hostname is in `validateBlocks` `imageHosts` (the server option is `uiBlocks.imageHosts`). Anything else is `IMAGE_HOST_NOT_ALLOWED`. An empty list rejects every `https` image. A ref dataset `id` uses 1–80 letters, digits, underscores, or hyphens. A block or action-element `id` stays lowercase and starts with a letter. `limit` of `0` is `INVALID_TYPE` (an integer of at least 1), not `TOO_SHORT`.
 
 Warnings do not block rendering:
 
@@ -76,6 +76,7 @@ Warnings do not block rendering:
 | `context` | `text` (1–280) | `id` | `Text` |
 | `stepper` | see [Stepper](#stepper) | | `IconButton` − and +, `Text`, `Heading` |
 | `checklist` | see [Checklist](#checklist) | | Validated; `BlocksView` does not draw it yet |
+| `gallery` | see [Gallery](#gallery) | | Validated; `BlocksView` does not draw it yet |
 | `columns` | `children`: 2–4 blocks | `id` | `Box` row |
 | `card` | `children`: at least 1 block | `title` (1–120), `id` | `Card` |
 
@@ -149,6 +150,30 @@ Each item's tick has the reserved element id `<id>_<item id>` (`checklistElement
 Another block or action element with that id, or a stepper or checklist that derives the same
 element id, is `DUPLICATE_ID`.
 
+## Gallery
+
+A `gallery` is a set of 2–6 photos shown together. This release defines and validates the block,
+and the prompt offers it. `BlocksView` does not draw it yet.
+
+| Field | Required | Rule |
+| --- | --- | --- |
+| `id` | no | Block id pattern |
+| `images` | yes | 2–6 of `{src, alt (1–200), caption? (1–120)}`. Fewer is `TOO_FEW`, more is `TOO_MANY` |
+
+Each tile's `src` follows the `image` rules above. A tile that breaks them is
+`IMAGE_HOST_NOT_ALLOWED` at that tile's path, such as `blocks[0].images[2].src`.
+
+```yaml
+- type: gallery
+  id: roast_photos
+  images:
+    - {src: "file:roast-lamb", alt: Roast leg of lamb on a carving board, caption: Roast lamb}
+    - {src: "file:roast-potatoes", alt: Crisp roast potatoes in a tray}
+    - {src: "https://images.example.com/carrots.jpg", alt: Glazed carrots, caption: "Honey, thyme, and butter"}
+```
+
+The third tile validates only when `imageHosts` includes `images.example.com`.
+
 ## Actions
 
 An `actions` block requires `id` and `elements` (1–25). An element is a `button` or a
@@ -196,6 +221,9 @@ Unknown fields fail with `UNKNOWN_KEY`. `v` must be `1` (`UNSUPPORTED_VERSION`).
 | Items in one `checklist` | 1–30 |
 | `checklist` id | 31 characters |
 | `checklist` item id | 32 characters |
+| Images in one `gallery` | 2–6 |
+| `gallery` image `alt` | 200 characters |
+| `gallery` image `caption` | 120 characters |
 | Document version | 1 |
 
 ## Errors
@@ -214,7 +242,7 @@ heuristics and does not fail `ok`.
 | `DUPLICATE_ID` | A block id, an action-element id, or a column name is used more than once, an id takes a stepper's `<id>_decrease` or `<id>_increase` or a checklist's `<id>_<item id>`, or a checklist repeats an item id. |
 | `HTML_DISABLED` | An html block is present and this host has not turned HTML on. |
 | `HTML_TOO_LARGE` | An html block is larger than 100,000 bytes. |
-| `IMAGE_HOST_NOT_ALLOWED` | An image URL is not a `data:image` URL, a `file:` ref, or an `https` URL on an allowed host. |
+| `IMAGE_HOST_NOT_ALLOWED` | An `image` or `gallery` tile URL is not a `data:image` URL, a `file:` ref, or an `https` URL on an allowed host. A gallery error names the tile (`blocks[0].images[2].src`). |
 | `INVALID_ENUM` | A value is not one of the allowed values. |
 | `INVALID_FORMAT` | A string does not match its required format. |
 | `INVALID_TYPE` | A value has the wrong type, including a numeric field below its minimum. |
@@ -242,15 +270,16 @@ heuristics and does not fail `ok`.
 | --- | --- |
 | `parseBlocks(text)` | Fence strip, YAML or JSON parse |
 | `parseBlocksPartial(text)` | Completed top-level blocks while a reply is still streaming |
-| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, action, stepper, checklist, and html lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names. `options.stepperActions` and `options.checklistActions`, when set, check stepper and checklist `callback.name` instead (`UNKNOWN_HOST_ACTION`). `options.allowHtml` allows `html` blocks. |
+| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, action, stepper, checklist, image and gallery src, and html lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names. `options.stepperActions` and `options.checklistActions`, when set, check stepper and checklist `callback.name` instead (`UNKNOWN_HOST_ACTION`). `options.allowHtml` allows `html` blocks. |
 | `wrapAsTextDocument(text)` | Display fallback for a non-document |
 | `blocksSchema` | Zod schema |
 | `blocksJsonSchema` | JSON Schema for the same structure |
-| `blocksPromptSection({hostActions, allowHtml, imageHosts, richBlocks, stepperActions, checklistActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. `richBlocks` (default `true`) offers the rich blocks; `false` returns the prompt as it was before them, whatever the other lists hold. With `richBlocks` on and a non-empty `stepperActions`, the prompt adds `stepper`, its rules and limits, and names those actions as its callbacks; without one it never mentions `stepper`. With `richBlocks` on, the prompt adds `checklist` and its limits. A non-empty `checklistActions` is named as the callback to set; without one the prompt says to leave `callback` out, so ticks stay local. |
+| `blocksPromptSection({hostActions, allowHtml, imageHosts, richBlocks, stepperActions, checklistActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. `richBlocks` (default `true`) offers the rich blocks; `false` returns the prompt as it was before them, whatever the other lists hold. With `richBlocks` on and a non-empty `stepperActions`, the prompt adds `stepper`, its rules and limits, and names those actions as its callbacks; without one it never mentions `stepper`. With `richBlocks` on, the prompt adds `checklist` and `gallery` with their limits; gallery tile srcs follow the same image src line as `image`, so `https` is offered only with `imageHosts`. A non-empty `checklistActions` is named as the callback to set; without one the prompt says to leave `callback` out, so ticks stay local. |
 | `BLOCK_LIMITS` | The numbers in the table above |
 | `BLOCK_ERROR_CODES` | The codes in the table above |
 | `BLOCK_WARNING_CODES` | `BAR_TOO_MANY_CATEGORIES`, `DONUT_TOO_MANY_SLICES`, `LINE_SINGLE_POINT` |
 | `stepperElementIds(id)` | `{decrease, increase}`: the element ids of a stepper's buttons |
 | `checklistElementId(id, itemId)` | `<id>_<item id>`: the element id of a checklist item's tick. `ChecklistBlock`, `ChecklistItem`, and `ChecklistCallback` are type exports. |
+| `GalleryBlock`, `GalleryImage` | Type exports for the `gallery` block and its tiles |
 | `STEPPER_ROUNDING` | `nearest`, `up`. `StepperBlock`, `StepperItem`, and `StepperCallback` are type exports. |
 | `HTML_HEIGHTS`, `CALLOUT_STATUSES` | Allowed `html` heights and `callout` statuses. `HtmlBlock`, `CalloutBlock`, `ImageBlock`, and `DetailsBlock` are type exports. |

@@ -659,3 +659,97 @@ describe("checklist lint", () => {
     ]);
   });
 });
+
+const galleryImages = (count: number): Record<string, unknown>[] =>
+  Array.from({length: count}, (_unused, index) => ({alt: `Photo ${index}`, src: `file:p${index}`}));
+
+const gallery = (fields: Record<string, unknown> = {}): Record<string, unknown> => ({
+  images: galleryImages(3),
+  type: "gallery",
+  ...fields,
+});
+
+describe("gallery lint", () => {
+  it("accepts data:image and file: tiles without imageHosts, with or without captions", () => {
+    const images = [
+      {alt: "Roast lamb", caption: "Roast lamb", src: "file:roast-lamb"},
+      {alt: "Potatoes", src: "data:image/png;base64,iVBORw0KGgo="},
+    ];
+    expect(codesAndPaths(documentWith({blocks: [gallery({id: "photos", images})]}))).toEqual([]);
+  });
+
+  it("names the tile path when a tile's https host is not in imageHosts", () => {
+    const images = [
+      {alt: "Lamb", src: "file:lamb"},
+      {alt: "Potatoes", src: "https://images.example.com/potatoes.jpg"},
+      {alt: "Carrots", src: "https://evil.example.net/carrots.jpg"},
+    ];
+    const doc = documentWith({blocks: [{type: "divider"}, gallery({images})]});
+    expect(codesAndPaths(doc)).toEqual([
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[1].images[1].src"},
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[1].images[2].src"},
+    ]);
+    expect(codesAndPaths(doc, {imageHosts: ["images.example.com"]})).toEqual([
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[1].images[2].src"},
+    ]);
+    expect(codesAndPaths(doc, {imageHosts: ["images.example.com", "EVIL.example.net"]})).toEqual(
+      []
+    );
+  });
+
+  it("applies the image src rules to tiles inside a card", () => {
+    const images = [
+      {alt: "Lamb", src: "http://images.example.com/lamb.jpg"},
+      {alt: "Potatoes", src: "file:"},
+    ];
+    const doc = documentWith({blocks: [{children: [gallery({images})], type: "card"}]});
+    expect(codesAndPaths(doc, {imageHosts: ["images.example.com"]})).toEqual([
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[0].children[0].images[0].src"},
+      {code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[0].children[0].images[1].src"},
+    ]);
+  });
+
+  it("caps the tile count, alt, and caption with closed codes", () => {
+    expect(codesAndPaths(documentWith({blocks: [gallery({images: galleryImages(2)})]}))).toEqual(
+      []
+    );
+    expect(codesAndPaths(documentWith({blocks: [gallery({images: galleryImages(6)})]}))).toEqual(
+      []
+    );
+    expect(codesAndPaths(documentWith({blocks: [gallery({images: galleryImages(1)})]}))).toEqual([
+      {code: "TOO_FEW", path: "blocks[0].images"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [gallery({images: galleryImages(7)})]}))).toEqual([
+      {code: "TOO_MANY", path: "blocks[0].images"},
+    ]);
+    const tileWith = (fields: Record<string, unknown>): Record<string, unknown> =>
+      gallery({
+        images: [
+          {alt: "Lamb", src: "file:lamb", ...fields},
+          {alt: "Pots", src: "file:p"},
+        ],
+      });
+    expect(
+      codesAndPaths(
+        documentWith({blocks: [tileWith({alt: "a".repeat(200), caption: "c".repeat(120)})]})
+      )
+    ).toEqual([]);
+    expect(codesAndPaths(documentWith({blocks: [tileWith({alt: "a".repeat(201)})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].images[0].alt"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [tileWith({caption: "c".repeat(121)})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].images[0].caption"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [tileWith({caption: "   "})]}))).toEqual([
+      {code: "TOO_SHORT", path: "blocks[0].images[0].caption"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [tileWith({title: "Lamb"})]}))).toEqual([
+      {code: "UNKNOWN_KEY", path: "blocks[0].images[0].title"},
+    ]);
+    expect(
+      codesAndPaths(
+        documentWith({blocks: [gallery({images: [{src: "file:a"}, {alt: "B", src: "file:b"}]})]})
+      )
+    ).toEqual([{code: "MISSING_REQUIRED", path: "blocks[0].images[0].alt"}]);
+  });
+});

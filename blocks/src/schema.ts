@@ -263,6 +263,20 @@ export interface ChecklistBlock {
   type: "checklist";
 }
 
+export interface GalleryImage {
+  alt: string;
+  caption?: string;
+  /** Follows the `image` src rules, including `IMAGE_HOST_NOT_ALLOWED`. */
+  src: string;
+}
+
+/** A row of 2 to 6 photos with optional captions. */
+export interface GalleryBlock {
+  id?: string;
+  images: GalleryImage[];
+  type: "gallery";
+}
+
 export interface ColumnsBlock {
   children: Block[];
   id?: string;
@@ -291,7 +305,8 @@ export type LeafBlock =
   | ImageBlock
   | DetailsBlock
   | StepperBlock
-  | ChecklistBlock;
+  | ChecklistBlock
+  | GalleryBlock;
 
 export type Block = LeafBlock | ColumnsBlock | CardBlock;
 
@@ -481,12 +496,33 @@ const calloutSchema = z
   })
   .strict();
 
+const imageSrcSchema = z.string().min(1).max(BLOCK_LIMITS.htmlMaxBytes);
+
 const imageSchema = z
   .object({
     ...sharedBlockFields,
     alt: visibleText(BLOCK_LIMITS.headingTextMaxLength),
-    src: z.string().min(1).max(BLOCK_LIMITS.htmlMaxBytes),
+    src: imageSrcSchema,
     type: z.literal("image"),
+  })
+  .strict();
+
+const galleryImageSchema = z
+  .object({
+    alt: visibleText(BLOCK_LIMITS.galleryAltMaxLength),
+    caption: visibleText(BLOCK_LIMITS.galleryCaptionMaxLength).optional(),
+    src: imageSrcSchema,
+  })
+  .strict();
+
+const gallerySchema = z
+  .object({
+    ...sharedBlockFields,
+    images: z
+      .array(galleryImageSchema)
+      .min(BLOCK_LIMITS.galleryImagesMin)
+      .max(BLOCK_LIMITS.galleryImagesMax),
+    type: z.literal("gallery"),
   })
   .strict();
 
@@ -585,6 +621,7 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
     detailsSchema,
     stepperSchema,
     checklistSchema,
+    gallerySchema,
     z
       .object({
         ...sharedBlockFields,

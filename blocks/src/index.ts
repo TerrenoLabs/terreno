@@ -147,6 +147,8 @@ export type {
   DatasetColumn,
   DetailsBlock,
   DividerBlock,
+  GalleryBlock,
+  GalleryImage,
   HeadingBlock,
   HtmlBlock,
   ImageBlock,

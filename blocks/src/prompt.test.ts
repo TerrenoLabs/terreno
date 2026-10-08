@@ -21,6 +21,7 @@ const LEGACY_OPTION_SETS = {
 
 const STEPPER_LINE_START = "stepper requires";
 const CHECKLIST_LINE_START = "checklist requires";
+const GALLERY_LINE_START = "gallery requires";
 
 const linesAdded = (section: string, base: string): string[] => {
   const baseLines = new Set(base.split("\n"));
@@ -61,6 +62,7 @@ describe("blocksPromptSection", () => {
         expect(section).toMatchSnapshot();
         expect(section).not.toContain("stepper");
         expect(section).not.toContain("checklist");
+        expect(section).not.toContain("gallery");
       });
     }
   });
@@ -170,6 +172,53 @@ describe("blocksPromptSection", () => {
       expect(checklistLimits.length).toBeGreaterThan(0);
       for (const [, value] of checklistLimits) {
         expect(added).toContain(String(value));
+      }
+    });
+  });
+
+  describe("the gallery line", () => {
+    it("is on by default and lists gallery as a block type", () => {
+      const section = blocksPromptSection();
+      expect(section).toContain(GALLERY_LINE_START);
+      for (const allowHtml of [false, true]) {
+        const typesLine = blocksPromptSection({allowHtml})
+          .split("\n")
+          .find((line) => line.startsWith("Block types:"));
+        expect(typesLine).toContain(", gallery");
+      }
+    });
+
+    it("sends gallery srcs to the image rules and keeps the https rule tied to imageHosts", () => {
+      const withoutHosts = linesAdded(
+        blocksPromptSection(),
+        blocksPromptSection({richBlocks: false})
+      )
+        .filter((line) => line.includes("gallery"))
+        .join("\n");
+      expect(withoutHosts).toContain("image src rules");
+      expect(withoutHosts).not.toContain("https");
+      const withHosts = blocksPromptSection({imageHosts: ["cdn.example.com"]});
+      expect(withHosts).toContain(
+        "An https image src must use one of these hosts: cdn.example.com."
+      );
+      expect(blocksPromptSection()).toContain(
+        "Do not emit an https image src. Use a data:image URL or a file: ref."
+      );
+    });
+
+    it("prints every gallery limit from BLOCK_LIMITS in the gallery lines", () => {
+      const galleryLines = linesAdded(
+        blocksPromptSection(),
+        blocksPromptSection({richBlocks: false})
+      )
+        .filter((line) => line.includes("gallery"))
+        .join("\n");
+      const galleryLimits = Object.entries(BLOCK_LIMITS).filter(([key]) =>
+        key.startsWith("gallery")
+      );
+      expect(galleryLimits.length).toBe(4);
+      for (const [, value] of galleryLimits) {
+        expect(galleryLines).toContain(String(value));
       }
     });
   });

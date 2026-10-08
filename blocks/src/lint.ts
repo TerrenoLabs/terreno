@@ -423,6 +423,18 @@ export const lintDocument = (
         errors.push(imageIssue);
       }
     }
+    if (block.type === "gallery") {
+      block.images.forEach((image, index) => {
+        const tileIssue = imageSourceIssue(
+          image.src,
+          options?.imageHosts,
+          `${path}.images[${index}]`
+        );
+        if (tileIssue) {
+          errors.push(tileIssue);
+        }
+      });
+    }
     if (block.id !== undefined) {
       const duplicate = idIssue(block.id, path);
       if (duplicate) {

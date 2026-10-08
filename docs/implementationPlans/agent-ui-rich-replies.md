@@ -134,7 +134,8 @@ The renderer reserves the element ids `<id>_decrease` and `<id>_increase`. Lint 
 
 Rendering: the label as an eyebrow, `IconButton` − and +, then the value with its unit,
 `itemsTitle`, the items as a two-column label / amount grid formatted with `decimals` ("2.0 kg"), then the
-note. − is disabled at `min`, + at `max`. Both are disabled while either element is pending,
+note. − is disabled when one more step would go below `min`, + when it would go above `max`.
+Both are disabled while either element is pending,
 and when `callback.name` is not in `hostActions`. Accessible labels: "Decrease <label>",
 "Increase <label>".
 
@@ -183,13 +184,15 @@ Item ids are unique. The element id of a tick is `<id>_<item id>`, reserved like
 (`DUPLICATE_ID`). Rendering: the title on the left and "n of m" on the right, then one
 `CheckBox` row per item, with `meta` (the time) above a bold `text` and a muted `detail`.
 
-With a `callback` whose name is in `hostActions`, a tick sends
+With a `callback`, an `onAction` handler, and either no `hostActions` list or one that names the
+callback (matching the stepper), a tick sends
 `{kind: "callback", name, payload: {...payload, itemId, checked, state: {<item id>: boolean, ...}}}`
 with `blockId: <id>` and `elementId: <id>_<item id>`. `state` is the full set of ticks after
 this one, because overrides live only in the client (D4). The whole checklist is disabled until
 the reply lands, so a second tick cannot send a `state` that misses the first, and the checklist
 then shows the returned block. Ticks are not applied ahead of
-the reply. Without a `callback`, or when its name is not in `hostActions`, ticks are local.
+the reply. Without a `callback`, without `onAction`, or when a `hostActions` list leaves the name
+out, ticks are local.
 
 `toggleChecklistHostAction` (in `@terreno/ai`, T21) is `{handler, payload, handles: "checklist", logResponse: false}`
 with payload `z.object({itemId: z.string(), checked: z.boolean(), state: z.record(z.string(), z.boolean())}).passthrough()`.
@@ -222,7 +225,7 @@ app generates a library once and stores it.
 
 | Piece | Contract |
 | --- | --- |
-| `PhotoLibraryEntry` model (example-backend) | `{fileAttachmentId, gcsKey, alt (1–200), tags: string[] (1–12), prompt}`, every field with a `description`; `createdUpdatedPlugin`, `isDeletedPlugin` |
+| `PhotoLibraryEntry` model (example-backend) | `{fileAttachmentId, gcsKey, alt (1–200), tags: string[] (1–12), prompt}`, every field with a `description`; `createdUpdatedPlugin`, `isDeletedPlugin`; `prompt` is unique. A soft-deleted entry still holds its prompt, and `--force` leaves the old stored object and its `FileAttachment` behind |
 | `bun run photos:generate` (example-backend script) | Reads `src/scripts/photoPrompts.ts` (about 12 entries: roast lamb, crispy potatoes, honey carrots and parsnips, lemony greens, apple crumble, a laid table, and so on). It runs each through AI SDK `generateImage` with the Vertex image model (`imagen-4.0-fast-generate-001` unless `PHOTO_IMAGE_MODEL` is set), uploads it with `FileStorageService.upload` as a system user, and upserts a `PhotoLibraryEntry` by `prompt`. Re-runs skip prompts that already exist unless `--force` is passed. Requires `GOOGLE_VERTEX_PROJECT`, Application Default Credentials for Vertex, and `GCS_BUCKET`, validated up front; `GOOGLE_VERTEX_LOCATION` (default `us-central1`) picks a regional endpoint for Imagen. Uploads are owned by a find-or-create system user `photo-library@system.invalid`. A failed prompt is logged, the run continues, and the exit code is 1 if any failed |
 | `findPhotos({query, count})` tool | Matches `query` words against `tags` and `alt`, and returns up to `count` (1–6) `{src: "file:<entry id>", alt}` |
 | `photoLibrary` `modelRouter` with an instance action `url` | `GET /photoLibrary/:id/url` returns `{url}` (a `FileStorageService.getSignedUrl`) to any authenticated user. The library is shared, so the per-user `GET /files/*` route does not fit. List and read are `IsAuthenticated`; create, update, and delete are disabled |
@@ -234,7 +237,8 @@ The library holds only generated food photos, no user data.
 
 A new `action.kind`: `{kind: copy, text?, target?}`. Lint requires exactly one of the two,
 reporting `MISSING_REQUIRED` as it does for `open`. `target` must name a `stepper`,
-`checklist`, `list`, `table`, or `text` block (`COPY_TARGET_INVALID`).
+`checklist`, `list`, `table`, or `text` block (`COPY_TARGET_INVALID`). `text` holds at most
+4,000 characters (`copyTextMaxLength`); `target` is a block id.
 `blockPlainText(block, {datasets?, checked?})` in `@terreno/blocks` turns a block into the
 copied text:
 
@@ -256,7 +260,10 @@ T3: `DataTable` gets real `number` and `date` cells. `number` is right-aligned. 
 formatted with Luxon (`DateTime.fromISO(...).toLocaleString(DateTime.DATE_MED)`). The
 `table` block renderer stops forcing every column to `text` and `width: 120`. It maps the
 dataset's column types to these cells. It measures the container with `onLayout` and splits
-the width evenly, at least 96 per column, scrolling sideways past that.
+the width evenly, at least 96 per column, scrolling sideways past that. Number headers
+right-align to match their cells. Headers show column names with underscores as spaces, and the
+copied header row does the same. The table sits in a frame sized to its header plus rows (54
+each, up to 10 rows), so it never spills over the next block; longer tables scroll inside it.
 
 T4: `react-native-markdown-display` already lays GFM tables out as views. T4 adds theme
 styling: `border.default` cell borders, a bold header row on `surface.secondaryLight`, and
@@ -277,9 +284,9 @@ first.
 | AC7 | Gallery, list, and eyebrow render with `@terreno/ui` components only, with `alt` as the accessible label | `BlocksView.test.tsx` |
 | AC8 | Pressing a copy button whose target is a stepper at value 6 writes the scaled list to the clipboard (mocked `expo-clipboard`) and shows "Copied" | `BlocksView.test.tsx` |
 | AC9 | A `number` column renders right-aligned and a `date` column renders Luxon `DATE_MED`. A GFM table in `text` has themed borders, a bold header, and scrolls sideways when wide. Both tests fail on `master` | `DataTable.test.tsx`, `BlocksView.test.tsx`, `MarkdownView.test.tsx` |
-| AC10 | `blocks/src/fixtures/golden/sunday-roast.yaml` reproduces the GPT-6 demo reply (title, gallery, summary card, menu list, stepper + copy card with `itemsTitle`, checklist, note, tips, follow-up buttons) plus the GPT-5.6 "How much lamb?" table. It validates with `hostActions: ["scaleStepper"]`, `stepperActions: ["scaleStepper"]`, and `imageHosts: ["images.example.com"]` in its own test, outside the option-less `valid/` loop | `bun test blocks/` |
-| AC11 | In example-frontend, the roast reply is stored in a real `GptHistory` and streamed by the mocked model. Pressing + changes 5 to 6 through the real `POST /gpt/actions` on example-backend. Copy writes the list. A checklist tick goes through `POST /gpt/actions` and updates the counter. Gallery and list images load through `GET /photoLibrary/:id/url`, with only the storage download stubbed (`page.route` on the signed-URL host serves a fixture image) | `bun run frontend:e2e` (`e2e/ai-chat.spec.ts`), with screenshots and a recording under `/opt/cursor/artifacts/` |
-| AC12 | With a model key set, a generated photo library in the database, and the `findPhotos` tool registered, `bun run blocks:smoke` sends "Give me a plan for a sunday lamb roast, I'm having friends over still figuring out numbers tbh" through `AIService` with the opted-in prompt. It asserts that the reply validates and contains `gallery`, `list`, `stepper`, `checklist`, and a `copy` action, and that every image `src` is a `file:` id that `findPhotos` returned. Without a key it exits 0 and says it skipped | script exit code; output saved under `/opt/cursor/artifacts/` |
+| AC10 | `blocks/src/fixtures/golden/sunday-roast.yaml` reproduces the GPT-6 demo reply (title, gallery, summary card, menu list, stepper + copy card with `itemsTitle`, checklist, note, tips, follow-up buttons) plus the GPT-5.6 "How much lamb?" table. It validates with `hostActions: ["scaleStepper", "toggleChecklist"]`, `stepperActions: ["scaleStepper"]`, `checklistActions: ["toggleChecklist"]`, and `imageHosts: ["images.example.com"]` in its own test, outside the option-less `valid/` loop | `bun test blocks/` |
+| AC11 | In example-frontend, the roast reply is stored in a real `GptHistory` and streamed by the mocked model. Pressing + changes 5 to 6 through the real `POST /gpt/actions` on example-backend. Copy writes the list. A checklist tick goes through `POST /gpt/actions` and updates the counter. Gallery and list images load through `GET /photoLibrary/:id/url`, with only the storage download stubbed (`page.route` on the signed-URL host serves a fixture image) | `bun run frontend:e2e` (`e2e/ai-chat.spec.ts`), with screenshots and a recording attached to the PR (`/opt/cursor/artifacts/` is read-only in this sandbox) |
+| AC12 | With a model key set, a generated photo library in the database, and the `findPhotos` tool registered, `bun run blocks:smoke` sends "Give me a plan for a sunday lamb roast, I'm having friends over still figuring out numbers tbh" through `AIService` with the opted-in prompt. It asserts that the reply validates and contains `gallery`, `list`, `stepper`, `checklist`, and a `copy` action, and that every image `src` is a `file:` id that `findPhotos` returned. Without a key it exits 0 and says it skipped | script exit code; output saved to `--out`. **Partly met:** the checks are unit-tested with a mock model, but no real model has run it (no key in the build sandbox) |
 | AC14 | `photos:generate` with a fake image model and a fake storage service creates one entry per prompt, and a second run creates none. `findPhotos({query: "roast lamb", count: 3})` returns 3 `file:` ids. `GET /photoLibrary/:id/url` returns a URL to a non-admin user, and create returns 405 | `example-backend` tests |
 | AC13 | Docs: reference rows, a how-to "Add a stepper callback", the explanation catalog fixed (it lacks `callout`, `image`, `details`, and `html` today), and a changelog entry | `bun run website:build`, `bun run rules:check` |
 
@@ -293,7 +300,8 @@ first.
 - "The tables" means the GPT-5.6 "How much lamb?" guests table, plus tables in general (Q7).
 - Copy feedback is inline "Copied" text in a live region, as in the demo, not a toast.
 - iOS and Android render through the same `BlocksView`. Builds already shipped do not know
-  the new blocks and would show raw YAML for any reply that uses them. With the default on
+  the new blocks and would show an error banner, with the raw YAML collapsed, for the whole reply
+  that uses them. With the default on
   (D6), a host with such builds must set `richBlocks: false` until they update. X10 (a
   client-declared catalog version) would remove that manual step.
 - The `copy` action never reaches the server, so `hostActions` lint does not apply to it.
@@ -345,5 +353,5 @@ first.
 
 ## Sign-off
 
-Status: approved 2026-10-07 (chat; answers in D2–D5)
+Status: approved 2026-10-07 (chat; answers in D2–D6). Built 2026-10-08; AC12 partly met (see AC table).
 Cut: 2 rounds, 23 findings: 21 fixed, 2 moved to questions or expansions (round 1 F4 → Q7, round 2 F2 → Q8, since answered as D3), 0 rebutted. Sign-off answers changed T5, T10, T16–T21; no cut re-run, since less than half the tasks changed and the tracer did not move

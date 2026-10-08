@@ -1,7 +1,7 @@
 # Task List: Agent UI Rich Replies
 
 **Status:** approved 2026-10-07. Start with T1 (or T19, which is independent).
-**IP:** [`docs/implementationPlans/agent-ui-rich-replies.md`](../implementationPlans/agent-ui-rich-replies.md). The contracts, acceptance criteria (AC1–AC13), and open questions are there.
+**IP:** [`docs/implementationPlans/agent-ui-rich-replies.md`](../implementationPlans/agent-ui-rich-replies.md). The contracts, acceptance criteria (AC1–AC14, including AC6b), and open questions are there.
 **Supporting skills:** `terreno-ui`, `terreno-backend-api`, `ai-prompt-governance`, `update-docs`, `verify-ui-changes`, `backend-test-env`.
 
 Two write chains share files, so their tasks are ordered.

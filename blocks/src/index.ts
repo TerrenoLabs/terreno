@@ -121,6 +121,7 @@ export {BLOCK_ERROR_CODES, BLOCK_WARNING_CODES} from "./errors";
 export {blocksJsonSchema} from "./jsonSchema";
 export {BLOCK_LIMITS} from "./limits";
 export type {KnownDataset, LintBlocksOptions} from "./lint";
+export {stepperElementIds} from "./lint";
 export type {ParseBlocksResult} from "./parse";
 export {parseBlocks} from "./parse";
 export type {ParseBlocksPartialResult} from "./parsePartial";
@@ -154,6 +155,9 @@ export type {
   ReplyAction,
   SegmentedElement,
   SelectAction,
+  StepperBlock,
+  StepperCallback,
+  StepperItem,
   TableBlock,
   TextBlock,
 } from "./schema";
@@ -169,6 +173,7 @@ export {
   HEADING_SIZES,
   HTML_HEIGHTS,
   METRIC_TRENDS,
+  STEPPER_ROUNDING,
   wrapAsTextDocument,
 } from "./schema";
 export type {ValidateBlocksResult} from "./validate";

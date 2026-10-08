@@ -4,6 +4,7 @@ import {join} from "node:path";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {ActivityIndicator, Image as NativeImage} from "react-native";
 
+import {IconButton} from "../IconButton";
 import {sharedResponsiveBreakpointStore} from "../ResponsiveBreakpoint";
 import {renderWithTheme} from "../test-utils";
 import {BlocksView} from "./BlocksView";
@@ -93,11 +94,60 @@ blocks:
       - type: divider
 `;
 
+const STEPPER = `v: 1
+blocks:
+  - type: card
+    children:
+      - type: stepper
+        id: guests
+        label: Number of people
+        unit: People
+        value: 5
+        min: 1
+        max: 20
+        callback:
+          name: scaleStepper
+          payload:
+            recipe: roast
+        itemsTitle: Your shopping quantities
+        items:
+          - label: Bone-in leg of lamb
+            amount: 2
+            unit: kg
+            decimals: 1
+          - label: Carrots
+            amount: 8
+            round: up
+        note: Generous portions, with a little extra.
+`;
+
 // Button presses await a haptic call before running onClick.
 const press = async (element: Parameters<typeof fireEvent.press>[0]): Promise<void> => {
   await act(async () => {
     fireEvent.press(element);
     await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+};
+
+type RenderedView = ReturnType<typeof renderWithTheme>;
+
+// bunSetup replaces IconButton with a null mock, so stepper buttons are found by their props.
+const iconButton = (
+  view: RenderedView,
+  label: string
+): {props: {disabled?: boolean; onClick: () => Promise<void> | void}} => {
+  const found = view
+    .UNSAFE_getAllByType(IconButton)
+    .find((node) => node.props.accessibilityLabel === label);
+  if (found === undefined) {
+    throw new Error(`No IconButton labelled ${label}`);
+  }
+  return found as unknown as {props: {disabled?: boolean; onClick: () => Promise<void> | void}};
+};
+
+const tap = async (view: RenderedView, label: string): Promise<void> => {
+  await act(async () => {
+    await iconButton(view, label).props.onClick();
   });
 };
 
@@ -591,6 +641,100 @@ blocks:
 
     const allowed = renderWithTheme(<BlocksView document={document} imageHosts={["evil.test"]} />);
     expect(allowed.getByText("Pixel")).toBeTruthy();
+  });
+
+  it("renders a stepper with its unit, items grid, and note", () => {
+    const {getByText, getByTestId} = renderWithTheme(<BlocksView document={STEPPER} />);
+    expect(getByText("Number of people")).toBeTruthy();
+    expect(getByTestId("blocks-0-0-value").props.children).toBe("5");
+    expect(getByText("People")).toBeTruthy();
+    expect(getByText("Your shopping quantities")).toBeTruthy();
+    expect(getByText("Bone-in leg of lamb")).toBeTruthy();
+    expect(getByText("2.0 kg")).toBeTruthy();
+    expect(getByText("8")).toBeTruthy();
+    expect(getByText("Generous portions, with a little extra.")).toBeTruthy();
+  });
+
+  it("emits a stepper callback with the agent payload and the next value", async () => {
+    const onAction = mock(() => undefined);
+    const view = renderWithTheme(
+      <BlocksView document={STEPPER} hostActions={["scaleStepper"]} onAction={onAction} />
+    );
+    expect(view.getByTestId("blocks-0-0")).toBeTruthy();
+    await tap(view, "Increase Number of people");
+    await tap(view, "Decrease Number of people");
+    expect(onAction).toHaveBeenNthCalledWith(1, {
+      action: {kind: "callback", name: "scaleStepper", payload: {recipe: "roast", value: 6}},
+      blockId: "guests",
+      elementId: "guests_increase",
+    });
+    expect(onAction).toHaveBeenNthCalledWith(2, {
+      action: {kind: "callback", name: "scaleStepper", payload: {recipe: "roast", value: 4}},
+      blockId: "guests",
+      elementId: "guests_decrease",
+    });
+  });
+
+  it("disables stepper buttons at the bounds, while pending, and for an unregistered callback", async () => {
+    const onAction = mock(() => undefined);
+    const disabled = (view: RenderedView, label: string): boolean =>
+      iconButton(view, `${label} Number of people`).props.disabled === true;
+
+    const atMin = renderWithTheme(
+      <BlocksView document={STEPPER.replace("value: 5", "value: 1")} onAction={onAction} />
+    );
+    expect(disabled(atMin, "Decrease")).toBe(true);
+    expect(disabled(atMin, "Increase")).toBe(false);
+    await tap(atMin, "Decrease Number of people");
+    expect(onAction).not.toHaveBeenCalled();
+
+    const atMax = renderWithTheme(
+      <BlocksView document={STEPPER.replace("value: 5", "value: 20")} />
+    );
+    expect(disabled(atMax, "Increase")).toBe(true);
+    expect(disabled(atMax, "Decrease")).toBe(false);
+
+    const pending = renderWithTheme(
+      <BlocksView document={STEPPER} onAction={onAction} pendingElementIds={["guests_increase"]} />
+    );
+    expect(disabled(pending, "Increase")).toBe(true);
+    expect(disabled(pending, "Decrease")).toBe(true);
+    await tap(pending, "Decrease Number of people");
+    expect(onAction).not.toHaveBeenCalled();
+
+    const unregistered = renderWithTheme(
+      <BlocksView document={STEPPER} hostActions={["other"]} onAction={onAction} />
+    );
+    expect(disabled(unregistered, "Increase")).toBe(true);
+    expect(disabled(unregistered, "Decrease")).toBe(true);
+  });
+
+  it("renders a stepper override with the new value and amounts", () => {
+    const {getByTestId, getByText, queryByText} = renderWithTheme(
+      <BlocksView
+        document={STEPPER}
+        overrides={{
+          guests: {
+            callback: {name: "scaleStepper"},
+            id: "guests",
+            items: [
+              {amount: 2.4, decimals: 1, label: "Bone-in leg of lamb", unit: "kg"},
+              {amount: 10, label: "Carrots", round: "up"},
+            ],
+            label: "Number of people",
+            max: 20,
+            min: 1,
+            type: "stepper",
+            unit: "People",
+            value: 6,
+          },
+        }}
+      />
+    );
+    expect(getByTestId("blocks-0-0-value").props.children).toBe("6");
+    expect(getByText("2.4 kg")).toBeTruthy();
+    expect(getByText("10")).toBeTruthy();
+    expect(queryByText("2.0 kg")).toBeNull();
   });
 
   it("does not use raw react-native views in the blocks folder", () => {

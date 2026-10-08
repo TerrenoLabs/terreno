@@ -24,4 +24,11 @@ export const BLOCK_LIMITS = {
   metricLabelMaxLength: 80,
   metricValueMaxLength: 80,
   refLimitMax: 1_000,
+  stepperDecimalsMax: 3,
+  stepperIdMaxLength: 54,
+  stepperItemsMax: 12,
+  stepperItemUnitMaxLength: 20,
+  stepperLabelMaxLength: 80,
+  stepperNoteMaxLength: 280,
+  stepperUnitMaxLength: 40,
 } as const;

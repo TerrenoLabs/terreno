@@ -21,11 +21,13 @@ describe("@terreno/blocks public exports", () => {
     "HEADING_SIZES",
     "HTML_HEIGHTS",
     "METRIC_TRENDS",
+    "STEPPER_ROUNDING",
     "blocksJsonSchema",
     "blocksPromptSection",
     "blocksSchema",
     "parseBlocks",
     "parseBlocksPartial",
+    "stepperElementIds",
     "validateBlocks",
     "wrapAsTextDocument",
 

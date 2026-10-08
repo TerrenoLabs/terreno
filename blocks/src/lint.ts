@@ -1,6 +1,13 @@
 import {BLOCK_ERROR_CODES, BLOCK_WARNING_CODES, type BlockError} from "./errors";
 import {BLOCK_LIMITS} from "./limits";
-import type {Block, BlocksDocument, Dataset, DatasetColumn, InlineDataset} from "./schema";
+import type {
+  Block,
+  BlocksDocument,
+  Dataset,
+  DatasetColumn,
+  InlineDataset,
+  StepperBlock,
+} from "./schema";
 
 export interface KnownDataset {
   columns: DatasetColumn[];
@@ -47,6 +54,74 @@ const imageSourceIssue = (
     message: BLOCK_ERROR_CODES.IMAGE_HOST_NOT_ALLOWED,
     path: `${path}.src`,
   });
+};
+
+/** The element ids a stepper's − and + buttons use in callback events. */
+export const stepperElementIds = (stepperId: string): {decrease: string; increase: string} => ({
+  decrease: `${stepperId}_decrease`,
+  increase: `${stepperId}_increase`,
+});
+
+const unknownHostActionIssue = (
+  name: string,
+  hostActions: readonly string[] | undefined,
+  path: string
+): BlockError | undefined => {
+  if (hostActions === undefined || hostActions.includes(name)) {
+    return undefined;
+  }
+  return issue({
+    code: "UNKNOWN_HOST_ACTION",
+    fix: `Use one of: ${hostActions.join(", ") || "(none registered)"}.`,
+    message: BLOCK_ERROR_CODES.UNKNOWN_HOST_ACTION,
+    path,
+  });
+};
+
+const stepperIssues = (
+  block: StepperBlock,
+  path: string,
+  options: LintBlocksOptions | undefined
+): BlockError[] => {
+  const found: BlockError[] = [];
+  if (block.min >= block.max) {
+    found.push(
+      issue({
+        code: "OUT_OF_RANGE",
+        fix: "Set max above min.",
+        message: BLOCK_ERROR_CODES.OUT_OF_RANGE,
+        path: `${path}.max`,
+      })
+    );
+  } else if (block.value < block.min || block.value > block.max) {
+    found.push(
+      issue({
+        code: "OUT_OF_RANGE",
+        fix: `Set value between ${block.min} and ${block.max}.`,
+        message: BLOCK_ERROR_CODES.OUT_OF_RANGE,
+        path: `${path}.value`,
+      })
+    );
+  }
+  if (block.step !== undefined && block.step <= 0) {
+    found.push(
+      issue({
+        code: "OUT_OF_RANGE",
+        fix: "Set step above 0, or leave it out for 1.",
+        message: BLOCK_ERROR_CODES.OUT_OF_RANGE,
+        path: `${path}.step`,
+      })
+    );
+  }
+  const unknown = unknownHostActionIssue(
+    block.callback.name,
+    options?.hostActions,
+    `${path}.callback.name`
+  );
+  if (unknown) {
+    found.push(unknown);
+  }
+  return found;
 };
 
 const isInline = (dataset: Dataset): dataset is InlineDataset => dataset.source !== "ref";
@@ -203,12 +278,31 @@ export const lintDocument = (
 
   const seenIds = new Set<string>();
   const selectableIds = new Set<string>();
+  const reservedIds = new Set<string>();
   const walked = walk(doc.blocks, "blocks");
   for (const {block} of walked) {
     if ((block.type === "chart" || block.type === "table") && block.id !== undefined) {
       selectableIds.add(block.id);
     }
+    if (block.type === "stepper") {
+      const {decrease, increase} = stepperElementIds(block.id);
+      reservedIds.add(decrease);
+      reservedIds.add(increase);
+    }
   }
+  const idIssue = (id: string, path: string): BlockError | undefined => {
+    if (!seenIds.has(id) && !reservedIds.has(id)) {
+      return undefined;
+    }
+    return issue({
+      code: "DUPLICATE_ID",
+      fix: reservedIds.has(id)
+        ? `Rename ${path}. A stepper uses <id>_decrease and <id>_increase for its buttons.`
+        : `Give ${path} a unique id.`,
+      message: BLOCK_ERROR_CODES.DUPLICATE_ID,
+      path: `${path}.id`,
+    });
+  };
   for (const {block, path} of walked) {
     if (block.type === "html") {
       if (options?.allowHtml !== true) {
@@ -240,17 +334,14 @@ export const lintDocument = (
       }
     }
     if (block.id !== undefined) {
-      if (seenIds.has(block.id)) {
-        errors.push(
-          issue({
-            code: "DUPLICATE_ID",
-            fix: `Give ${path} a unique id.`,
-            message: BLOCK_ERROR_CODES.DUPLICATE_ID,
-            path: `${path}.id`,
-          })
-        );
+      const duplicate = idIssue(block.id, path);
+      if (duplicate) {
+        errors.push(duplicate);
       }
       seenIds.add(block.id);
+    }
+    if (block.type === "stepper") {
+      errors.push(...stepperIssues(block, path, options));
     }
     if (block.type === "chart") {
       const hasPoints = block.points !== undefined;
@@ -371,15 +462,9 @@ export const lintDocument = (
     if (block.type === "actions") {
       block.elements.forEach((element, index) => {
         const elementPath = `${path}.elements[${index}]`;
-        if (seenIds.has(element.id)) {
-          errors.push(
-            issue({
-              code: "DUPLICATE_ID",
-              fix: `Give ${elementPath} a unique id.`,
-              message: BLOCK_ERROR_CODES.DUPLICATE_ID,
-              path: `${elementPath}.id`,
-            })
-          );
+        const duplicate = idIssue(element.id, elementPath);
+        if (duplicate) {
+          errors.push(duplicate);
         }
         seenIds.add(element.id);
         if (element.type === "segmented" && !selectableIds.has(element.target)) {
@@ -406,20 +491,15 @@ export const lintDocument = (
             })
           );
         }
-        if (
-          element.type === "button" &&
-          element.action.kind === "callback" &&
-          options?.hostActions !== undefined &&
-          !options.hostActions.includes(element.action.name)
-        ) {
-          errors.push(
-            issue({
-              code: "UNKNOWN_HOST_ACTION",
-              fix: `Use one of: ${options.hostActions.join(", ") || "(none registered)"}.`,
-              message: BLOCK_ERROR_CODES.UNKNOWN_HOST_ACTION,
-              path: `${elementPath}.action.name`,
-            })
+        if (element.type === "button" && element.action.kind === "callback") {
+          const unknown = unknownHostActionIssue(
+            element.action.name,
+            options?.hostActions,
+            `${elementPath}.action.name`
           );
+          if (unknown) {
+            errors.push(unknown);
+          }
         }
         if (element.type === "button" && element.action.kind === "open") {
           const hasRoute = element.action.route !== undefined;

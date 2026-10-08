@@ -103,6 +103,7 @@ export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";
 export {addProjectRoutes} from "./routes/projects";
+export {findAgentBlock} from "./service/agentBlocks";
 export type {RegisteredDataset} from "./service/aiDatasets";
 export {configureAiDatasets, registerAiDataset} from "./service/aiDatasets";
 export {AIService, TemperaturePresets} from "./service/aiService";
@@ -131,6 +132,7 @@ export {
   TITLE_GENERATION_PROMPT,
   TRANSLATION_PROMPT,
 } from "./service/prompts";
+export {scaleStepperHostAction} from "./service/scaleStepper";
 export type {
   CreateVertexProviderOptions,
   ListEnabledVertexModelsOptions,

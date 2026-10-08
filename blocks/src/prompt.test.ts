@@ -13,7 +13,9 @@ describe("blocksPromptSection", () => {
     expect(section).toContain("exportDataset");
     expect(section).toContain("Show weekly signups for this quarter");
     expect(section).toContain("I could not find any signups for that range.");
-    for (const value of Object.values(BLOCK_LIMITS)) {
+    // Stepper limits print only when a host registers a stepper action (T2).
+    const ungated = Object.entries(BLOCK_LIMITS).filter(([key]) => !key.startsWith("stepper"));
+    for (const [, value] of ungated) {
       expect(section).toContain(String(value));
     }
   });

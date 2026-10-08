@@ -13,7 +13,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
 
 ### Phase 1: Tracer
 
-- [ ] **T1** — Stepper block round trips through a host callback
+- [x] **T1** — Stepper block round trips through a host callback
   - Depends on: none
   - Files: `blocks/src/schema.ts`, `blocks/src/limits.ts`, `blocks/src/errors.ts` (`OUT_OF_RANGE`), `blocks/src/lint.ts` (stepper `callback.name` in `UNKNOWN_HOST_ACTION`; reserved `<id>_increase` / `<id>_decrease` in `DUPLICATE_ID`), `blocks/src/fixtures/valid/stepper*.yaml`, `blocks/src/fixtures/invalid/stepper*.yaml`, `blocks/src/parse.test.ts`, `blocks/src/lint.test.ts`, `blocks/src/index.ts`; `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/BlocksView.test.tsx`; `ai/src/service/agentBlocks.ts` (`findAgentBlock`), `ai/src/service/agentBlocks.test.ts`, `ai/src/service/scaleStepper.ts`, `ai/src/service/scaleStepper.test.ts`, `ai/src/types/index.ts` (`handles?`, `logResponse?` on host actions), `ai/src/routes/gptActions.ts` (honour `logResponse: false`), `ai/src/routes/gptActions.test.ts`, `ai/src/index.ts`; `docs/reference/blocks.md`, `docs/reference/ai.md`, `docs/reference/ui.md`.
   - Delivers:

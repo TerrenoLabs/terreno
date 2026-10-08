@@ -23,6 +23,9 @@ const expectedInvalid: Record<string, {code: string; path: string}[]> = {
   "select-target.yaml": [
     {code: "SELECT_TARGET_INVALID", path: "blocks[0].elements[0].action.target"},
   ],
+  "stepper-decimals.yaml": [{code: "OUT_OF_RANGE", path: "blocks[0].items[0].decimals"}],
+  "stepper-out-of-range.yaml": [{code: "OUT_OF_RANGE", path: "blocks[0].value"}],
+  "stepper-reserved-id.yaml": [{code: "DUPLICATE_ID", path: "blocks[1].elements[0].id"}],
   "table-too-wide.yaml": [{code: "TABLE_TOO_WIDE", path: "blocks[0].columns"}],
   "too-many-points.yaml": [{code: "TOO_MANY_POINTS", path: "datasets.signups.limit"}],
   "unknown-key.yaml": [{code: "UNKNOWN_KEY", path: "blocks[0].color"}],

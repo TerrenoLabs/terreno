@@ -287,3 +287,93 @@ describe("lintDocument", () => {
     expect(codes.has("DATASET_NOT_FOUND")).toBe(true);
   });
 });
+
+const stepper = (fields: Record<string, unknown> = {}): Record<string, unknown> => ({
+  callback: {name: "scaleStepper"},
+  id: "guests",
+  label: "Number of people",
+  max: 20,
+  min: 1,
+  type: "stepper",
+  value: 5,
+  ...fields,
+});
+
+const codesAndPaths = (doc: Record<string, unknown>): {code: string; path: string}[] => {
+  const validated = validateBlocks(doc);
+  if (validated.ok) {
+    return [];
+  }
+  return validated.errors.map((error) => ({code: error.code, path: error.path}));
+};
+
+describe("stepper lint", () => {
+  it("checks the stepper callback name against hostActions", () => {
+    const doc = documentWith({blocks: [stepper()]});
+    expect(validateBlocks(doc).ok).toBe(true);
+    expect(validateBlocks(doc, {hostActions: ["scaleStepper"]}).ok).toBe(true);
+    const rejected = validateBlocks(doc, {hostActions: ["other"]});
+    expect(rejected.ok).toBe(false);
+    if (rejected.ok) {
+      return;
+    }
+    expect(rejected.errors.map((error) => ({code: error.code, path: error.path}))).toEqual([
+      {code: "UNKNOWN_HOST_ACTION", path: "blocks[0].callback.name"},
+    ]);
+  });
+
+  it("reports OUT_OF_RANGE when value leaves min and max or min is not below max", () => {
+    expect(codesAndPaths(documentWith({blocks: [stepper({value: 0})]}))).toEqual([
+      {code: "OUT_OF_RANGE", path: "blocks[0].value"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [stepper({max: 5, min: 5})]}))).toEqual([
+      {code: "OUT_OF_RANGE", path: "blocks[0].max"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [stepper({value: 20})]}))).toEqual([]);
+  });
+
+  it("reserves the increase and decrease element ids before or after the stepper", () => {
+    const button = (id: string): Record<string, unknown> => ({
+      elements: [{action: {kind: "reply", text: "Hi"}, id, text: "Hi", type: "button"}],
+      id: "row",
+      type: "actions",
+    });
+    expect(codesAndPaths(documentWith({blocks: [button("guests_decrease"), stepper()]}))).toEqual([
+      {code: "DUPLICATE_ID", path: "blocks[0].elements[0].id"},
+    ]);
+    expect(
+      codesAndPaths(documentWith({blocks: [stepper(), {id: "guests_increase", type: "divider"}]}))
+    ).toEqual([{code: "DUPLICATE_ID", path: "blocks[1].id"}]);
+  });
+
+  it("caps the stepper id, items, decimals, and step with closed codes", () => {
+    expect(codesAndPaths(documentWith({blocks: [stepper({id: `g${"x".repeat(54)}`})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].id"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [stepper({id: `g${"x".repeat(53)}`})]}))).toEqual(
+      []
+    );
+    const items = Array.from({length: 13}, (_unused, index) => ({
+      amount: index,
+      label: `i${index}`,
+    }));
+    expect(codesAndPaths(documentWith({blocks: [stepper({items})]}))).toEqual([
+      {code: "TOO_MANY", path: "blocks[0].items"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [stepper({step: 0})]}))).toEqual([
+      {code: "OUT_OF_RANGE", path: "blocks[0].step"},
+    ]);
+    const decimals = validateBlocks(
+      documentWith({blocks: [stepper({items: [{amount: 2, decimals: 4, label: "Lamb"}]})]})
+    );
+    expect(decimals.ok).toBe(false);
+    if (!decimals.ok) {
+      expect(decimals.errors[0]?.fix).toContain("3");
+    }
+    expect(
+      codesAndPaths(
+        documentWith({blocks: [stepper({items: [{amount: 2, label: "Lamb", round: "down"}]})]})
+      )
+    ).toEqual([{code: "INVALID_ENUM", path: "blocks[0].items[0].round"}]);
+  });
+});

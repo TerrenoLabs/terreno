@@ -1,4 +1,10 @@
-import type {Block, BlockAction, InlineDataset} from "@terreno/blocks";
+import {
+  type Block,
+  type BlockAction,
+  type InlineDataset,
+  type StepperBlock,
+  stepperElementIds,
+} from "@terreno/blocks";
 import type React from "react";
 
 import {Accordion} from "../Accordion";
@@ -13,6 +19,7 @@ import {DataTable} from "../DataTable";
 import {DonutChart} from "../DonutChart";
 import {Heading} from "../Heading";
 import {HtmlFrame} from "../HtmlFrame";
+import {IconButton} from "../IconButton";
 import {Image} from "../Image";
 import {LineChart} from "../LineChart";
 import {MarkdownView} from "../MarkdownView";
@@ -65,6 +72,111 @@ const chartFor = {
   donut: DonutChart,
   line: LineChart,
 } as const;
+
+/** Drops float noise such as 0.30000000000000004 from value ± step. */
+const stepValue = (value: number, delta: number): number => Number((value + delta).toFixed(10));
+
+const formatAmount = ({
+  amount,
+  decimals,
+  unit,
+}: {
+  amount: number;
+  decimals?: number;
+  unit?: string;
+}): string => {
+  const formatted = amount.toFixed(decimals ?? 0);
+  return unit ? `${formatted} ${unit}` : formatted;
+};
+
+const renderStepper = (
+  block: StepperBlock,
+  path: string,
+  context: BlockRenderContext
+): React.ReactElement => {
+  const ids = stepperElementIds(block.id);
+  const step = block.step ?? 1;
+  const isPending =
+    context.pendingElementIds?.has(ids.decrease) === true ||
+    context.pendingElementIds?.has(ids.increase) === true;
+  const isUnregistered =
+    context.hostActions !== undefined && !context.hostActions.includes(block.callback.name);
+  const isLocked = isPending || isUnregistered;
+  const send = (elementId: string, value: number): void => {
+    context.onAction?.({
+      action: {
+        kind: "callback",
+        name: block.callback.name,
+        payload: {...(block.callback.payload ?? {}), value},
+      },
+      blockId: block.id,
+      elementId,
+    });
+  };
+  const decreaseDisabled = isLocked || block.value <= block.min;
+  const increaseDisabled = isLocked || block.value >= block.max;
+  return (
+    <Box gap={3} key={path} testID={path}>
+      <Text color="secondaryLight" size="sm">
+        {block.label}
+      </Text>
+      <Box alignItems="center" direction="row" gap={4}>
+        <IconButton
+          accessibilityLabel={`Decrease ${block.label}`}
+          disabled={decreaseDisabled}
+          iconName="minus"
+          onClick={() => {
+            if (decreaseDisabled) {
+              return;
+            }
+            send(ids.decrease, stepValue(block.value, -step));
+          }}
+          testID={`${path}-${ids.decrease}`}
+          variant="secondary"
+        />
+        <Box alignItems="center">
+          <Text bold size="xl" testID={`${path}-value`}>
+            {String(block.value)}
+          </Text>
+          {block.unit ? (
+            <Text color="secondaryLight" size="sm">
+              {block.unit}
+            </Text>
+          ) : null}
+        </Box>
+        <IconButton
+          accessibilityLabel={`Increase ${block.label}`}
+          disabled={increaseDisabled}
+          iconName="plus"
+          onClick={() => {
+            if (increaseDisabled) {
+              return;
+            }
+            send(ids.increase, stepValue(block.value, step));
+          }}
+          testID={`${path}-${ids.increase}`}
+          variant="secondary"
+        />
+      </Box>
+      {block.itemsTitle ? <Heading size="sm">{block.itemsTitle}</Heading> : null}
+      {block.items && block.items.length > 0 ? (
+        <Box gap={1} testID={`${path}-items`}>
+          {block.items.map((item, index) => (
+            <Box direction="row" gap={2} justifyContent="between" key={`${path}-item-${index}`}>
+              <Text>{item.label}</Text>
+              <Text bold>{formatAmount(item)}</Text>
+            </Box>
+          ))}
+        </Box>
+      ) : null}
+      {block.note ? (
+        <Text color="secondaryLight" size="sm">
+          {block.note}
+        </Text>
+      ) : null}
+    </Box>
+  );
+};
 
 /** Renders one catalog block with @terreno/ui components. */
 export const renderBlock = (
@@ -219,6 +331,8 @@ export const renderBlock = (
         </Box>
       );
     }
+    case "stepper":
+      return renderStepper(block, path, context);
     case "actions":
       return (
         <Box direction="row" gap={2} key={path} testID={path} wrap>

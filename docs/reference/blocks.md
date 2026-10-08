@@ -74,6 +74,7 @@ Warnings do not block rendering:
 | `badge` | `text` (1–80) | `status`: `info`, `error`, `warning`, `success`, `neutral`, `active`; `id` | `Badge` |
 | `divider` | — | `id` | `SectionDivider` |
 | `context` | `text` (1–280) | `id` | `Text` |
+| `stepper` | see [Stepper](#stepper) | | `IconButton` − and +, `Text`, `Heading` |
 | `columns` | `children`: 2–4 blocks | `id` | `Box` row |
 | `card` | `children`: at least 1 block | `title` (1–120), `id` | `Card` |
 
@@ -82,6 +83,43 @@ inside another layout block is `DEPTH_EXCEEDED`. Every block counts toward the 5
 cap, including the `card` or `columns` block itself, so a card cannot hold 50 children.
 
 `id` matches `^[a-z][a-z0-9_]{0,63}$`.
+
+## Stepper
+
+A `stepper` is a − value + control. Each tap calls a host callback, and the host returns the
+replacement stepper (see `scaleStepperHostAction` in [the AI reference](ai.md)).
+
+| Field | Required | Rule |
+| --- | --- | --- |
+| `id` | yes | Block id pattern, at most 54 characters |
+| `label` | yes | 1–80 |
+| `value`, `min`, `max` | yes | Numbers. `min` < `max` and `min` ≤ `value` ≤ `max`, or `OUT_OF_RANGE` |
+| `step` | no | Above 0 (`OUT_OF_RANGE`). Default 1 |
+| `unit` | no | 1–40, shown under the value ("People") |
+| `callback` | yes | `{name, payload?}`. `name` is checked by `UNKNOWN_HOST_ACTION` when `hostActions` is passed |
+| `itemsTitle` | no | 1–80, a small heading above the items |
+| `items` | no | 0–12 of `{label (1–80), amount, unit? (1–20), decimals? (0–3, default 0), round?: nearest or up (default nearest)}`. `decimals` above 3 is `OUT_OF_RANGE` |
+| `note` | no | 1–280, muted under the items |
+
+```yaml
+- type: stepper
+  id: guests
+  label: Number of people
+  unit: People
+  value: 5
+  min: 1
+  max: 20
+  callback: {name: scaleStepper}
+  items:
+    - {label: Bone-in leg of lamb, amount: 2, unit: kg, decimals: 1}
+    - {label: Carrots, amount: 8, round: up}
+  note: Generous portions, with a little extra.
+```
+
+The renderer uses the element ids `<id>_decrease` and `<id>_increase` for the − and + buttons
+(`stepperElementIds(id)`). Another block or action element with either id is `DUPLICATE_ID`.
+A tap sends `{kind: callback, name, payload: {...payload, value: value ± step}}` with
+`blockId: <id>`.
 
 ## Actions
 
@@ -122,6 +160,8 @@ Unknown fields fail with `UNKNOWN_KEY`. `v` must be `1` (`UNSUPPORTED_VERSION`).
 | `columns` children | 2–4 |
 | Elements in one `actions` block | 25 |
 | Text in one `text` block | 4,000 characters |
+| Items in one `stepper` | 12 |
+| `stepper` id | 54 characters |
 | Document version | 1 |
 
 ## Errors
@@ -137,7 +177,7 @@ heuristics and does not fail `ok`.
 | `DATASET_NOT_FOUND` | A chart or table names a dataset the document does not define. |
 | `DATASET_TOO_LARGE` | A dataset has more than 500 rows or 12 columns. |
 | `DEPTH_EXCEEDED` | A `columns` or `card` block is nested inside another layout block. |
-| `DUPLICATE_ID` | A block id, an action-element id, or a column name is used more than once. |
+| `DUPLICATE_ID` | A block id, an action-element id, or a column name is used more than once, or an id takes a stepper's `<id>_decrease` or `<id>_increase`. |
 | `HTML_DISABLED` | An html block is present and this host has not turned HTML on. |
 | `HTML_TOO_LARGE` | An html block is larger than 100,000 bytes. |
 | `IMAGE_HOST_NOT_ALLOWED` | An image URL is not a `data:image` URL, a `file:` ref, or an `https` URL on an allowed host. |
@@ -147,6 +187,7 @@ heuristics and does not fail `ok`.
 | `KEY_ORDER` | Top-level keys are not in the order `v`, `datasets`, `blocks`. |
 | `MISSING_REQUIRED` | A required field is missing. |
 | `NOT_A_DOCUMENT` | The reply is not one YAML or JSON mapping with a `v` field. |
+| `OUT_OF_RANGE` | A number is outside its allowed range: a stepper `value` outside `min` and `max`, `min` not below `max`, `step` at or below 0, or `decimals` above 3. |
 | `SELECT_TARGET_INVALID` | A select action names a block that is not a chart or table. |
 | `ROW_ARITY_MISMATCH` | A dataset row does not have one value per column. |
 | `TABLE_TOO_WIDE` | A table lists more than 12 columns. |
@@ -167,7 +208,7 @@ heuristics and does not fail `ok`.
 | --- | --- |
 | `parseBlocks(text)` | Fence strip, YAML or JSON parse |
 | `parseBlocksPartial(text)` | Completed top-level blocks while a reply is still streaming |
-| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, action, and html lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names. `options.allowHtml` allows `html` blocks. |
+| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, action, stepper, and html lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names, including a stepper `callback.name`. `options.allowHtml` allows `html` blocks. |
 | `wrapAsTextDocument(text)` | Display fallback for a non-document |
 | `blocksSchema` | Zod schema |
 | `blocksJsonSchema` | JSON Schema for the same structure |
@@ -175,4 +216,6 @@ heuristics and does not fail `ok`.
 | `BLOCK_LIMITS` | The numbers in the table above |
 | `BLOCK_ERROR_CODES` | The codes in the table above |
 | `BLOCK_WARNING_CODES` | `BAR_TOO_MANY_CATEGORIES`, `DONUT_TOO_MANY_SLICES`, `LINE_SINGLE_POINT` |
+| `stepperElementIds(id)` | `{decrease, increase}`: the element ids of a stepper's buttons |
+| `STEPPER_ROUNDING` | `nearest`, `up`. `StepperBlock`, `StepperItem`, and `StepperCallback` are type exports. |
 | `HTML_HEIGHTS`, `CALLOUT_STATUSES` | Allowed `html` heights and `callout` statuses. `HtmlBlock`, `CalloutBlock`, `ImageBlock`, and `DetailsBlock` are type exports. |

@@ -8,6 +8,7 @@ export const CALLOUT_STATUSES = ["info", "warning", "alert"] as const;
 export const BADGE_STATUSES = ["info", "error", "warning", "success", "neutral", "active"] as const;
 export const METRIC_TRENDS = ["up", "down", "flat"] as const;
 export const LAYOUT_BLOCK_TYPES = ["columns", "card"] as const;
+export const STEPPER_ROUNDING = ["nearest", "up"] as const;
 
 const visibleText = (maxLength: number): z.ZodString =>
   z
@@ -194,6 +195,42 @@ export interface DetailsBlock {
   type: "details";
 }
 
+export interface StepperItem {
+  amount: number;
+  /** Digits after the decimal point, 0 to 3. Default 0. */
+  decimals?: number;
+  label: string;
+  /** How a scaled amount is rounded to `decimals`. Default `nearest`. */
+  round?: (typeof STEPPER_ROUNDING)[number];
+  unit?: string;
+}
+
+/** The host callback that − and + call with `{...payload, value}`. */
+export interface StepperCallback {
+  name: string;
+  payload?: Record<string, unknown>;
+}
+
+/**
+ * A − value + control whose buttons call a host callback. The renderer reserves the element ids
+ * `<id>_decrease` and `<id>_increase`.
+ */
+export interface StepperBlock {
+  callback: StepperCallback;
+  id: string;
+  items?: StepperItem[];
+  itemsTitle?: string;
+  label: string;
+  max: number;
+  min: number;
+  note?: string;
+  /** Default 1. */
+  step?: number;
+  type: "stepper";
+  unit?: string;
+  value: number;
+}
+
 export interface ColumnsBlock {
   children: Block[];
   id?: string;
@@ -220,7 +257,8 @@ export type LeafBlock =
   | HtmlBlock
   | CalloutBlock
   | ImageBlock
-  | DetailsBlock;
+  | DetailsBlock
+  | StepperBlock;
 
 export type Block = LeafBlock | ColumnsBlock | CardBlock;
 
@@ -342,11 +380,15 @@ const selectActionSchema = z
   })
   .strict();
 
+const callbackNameSchema = z.string().regex(/^[a-z][A-Za-z0-9_]{0,63}$/);
+
+const callbackPayloadSchema = z.record(z.string(), z.unknown());
+
 const callbackActionSchema = z
   .object({
     kind: z.literal("callback"),
-    name: z.string().regex(/^[a-z][A-Za-z0-9_]{0,63}$/),
-    payload: z.record(z.string(), z.unknown()).optional(),
+    name: callbackNameSchema,
+    payload: callbackPayloadSchema.optional(),
   })
   .strict();
 
@@ -424,6 +466,38 @@ const detailsSchema = z
   })
   .strict();
 
+const stepperItemSchema = z
+  .object({
+    amount: z.number().finite(),
+    decimals: z.number().int().min(0).max(BLOCK_LIMITS.stepperDecimalsMax).optional(),
+    label: visibleText(BLOCK_LIMITS.stepperLabelMaxLength),
+    round: z.enum(STEPPER_ROUNDING).optional(),
+    unit: visibleText(BLOCK_LIMITS.stepperItemUnitMaxLength).optional(),
+  })
+  .strict();
+
+const stepperSchema = z
+  .object({
+    callback: z
+      .object({
+        name: callbackNameSchema,
+        payload: callbackPayloadSchema.optional(),
+      })
+      .strict(),
+    id: blockIdSchema.max(BLOCK_LIMITS.stepperIdMaxLength),
+    items: z.array(stepperItemSchema).max(BLOCK_LIMITS.stepperItemsMax).optional(),
+    itemsTitle: visibleText(BLOCK_LIMITS.stepperLabelMaxLength).optional(),
+    label: visibleText(BLOCK_LIMITS.stepperLabelMaxLength),
+    max: z.number().finite(),
+    min: z.number().finite(),
+    note: visibleText(BLOCK_LIMITS.stepperNoteMaxLength).optional(),
+    step: z.number().finite().optional(),
+    type: z.literal("stepper"),
+    unit: visibleText(BLOCK_LIMITS.stepperUnitMaxLength).optional(),
+    value: z.number().finite(),
+  })
+  .strict();
+
 const actionsSchema = z
   .object({
     elements: z
@@ -450,6 +524,7 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
     calloutSchema,
     imageSchema,
     detailsSchema,
+    stepperSchema,
     z
       .object({
         ...sharedBlockFields,

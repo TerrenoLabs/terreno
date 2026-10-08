@@ -494,6 +494,16 @@ action also stores the chosen dataset on the target chart for this view. Pass
 `hostActions` and every callback stays enabled. `pendingElementIds` shows those
 buttons as loading. `overrides` replaces a block by id.
 
+A `stepper` draws its `label` as a small muted line, then `IconButton` − and + around the
+value and its `unit`, then `itemsTitle`, a two-column grid of item labels and amounts
+(formatted with `decimals`, so `{amount: 2, unit: kg, decimals: 1}` reads "2.0 kg"), and the
+muted `note`. − is disabled at `min` and + at `max`. Both are disabled while either button's
+element id is in `pendingElementIds`, and when `hostActions` is passed without the stepper's
+`callback.name`. The buttons are labelled "Decrease <label>" and "Increase <label>". A tap
+calls `onAction` with `blockId: <id>`, `elementId: <id>_decrease` or `<id>_increase`, and
+`{kind: "callback", name, payload: {...payload, value: value ± step}}`. A host returns the
+new stepper, and `overrides[<id>]` paints it.
+
 ```tsx
 <BlocksView
   document={reply}

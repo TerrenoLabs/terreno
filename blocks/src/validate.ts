@@ -218,6 +218,16 @@ const mapIssue = (issue: z.core.$ZodIssue, root: unknown): BlockError[] => {
         }),
       ];
     }
+    if (issue.origin === "number" || issue.origin === "int") {
+      return [
+        error({
+          code: "OUT_OF_RANGE",
+          fix: `Set ${subject(path)} to ${maximum} or less.`,
+          message: `${subject(path)} is above ${maximum}.`,
+          path,
+        }),
+      ];
+    }
     if (issue.origin === "array") {
       return [
         error({
@@ -298,7 +308,7 @@ const mapIssue = (issue: z.core.$ZodIssue, root: unknown): BlockError[] => {
     return [
       error({
         code: "INVALID_ENUM",
-        fix: "Set type to heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details, or html.",
+        fix: "Set type to heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details, stepper, or html.",
         message: `${subject(path)} is not a supported block.`,
         path: path === "" ? "type" : `${path}.type`,
       }),

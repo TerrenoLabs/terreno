@@ -16,6 +16,8 @@ export const BLOCK_ERROR_CODES = {
   KEY_ORDER: "Top-level keys are not in the order v, datasets, blocks.",
   MISSING_REQUIRED: "A required field is missing.",
   NOT_A_DOCUMENT: "The reply is not one YAML or JSON mapping with a v field.",
+  OUT_OF_RANGE:
+    "A number is outside its allowed range, such as a stepper value outside min and max.",
   ROW_ARITY_MISMATCH: "A dataset row does not have one value per column.",
   SELECT_TARGET_INVALID: "A select action names a block that is not a chart or table.",
   TABLE_TOO_WIDE: "A table lists more columns than allowed.",

@@ -478,7 +478,8 @@ as `document`. Leaf blocks in this slice are `heading`, `text`, `metric`, `badge
 `{label, value}` — a point color in the document is not passed through. A `table` draws
 `DataTable` and maps each dataset column type to a cell: `number` to a right-aligned
 `number` cell, `date` to a `date` cell (Luxon `DATE_MED`, such as "Mar 14, 2026"), and
-`string` to `text`. A listed column that the dataset does not have yet is `text`. The table
+`string` to `text`. A listed column that the dataset does not have yet is `text`. Each header
+is the column name with underscores shown as spaces (`bone_in_lamb` reads "bone in lamb"). The table
 measures its container with `onLayout` and splits the width evenly across its columns, with
 at least 96 per column; past that it scrolls sideways. Before the first layout each column
 is 120 wide. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the

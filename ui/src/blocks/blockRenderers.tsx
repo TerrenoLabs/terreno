@@ -368,7 +368,7 @@ const TableBlockView: React.FC<{
     const datasetType = dataset?.columns[indexes[position] ?? -1]?.type;
     return {
       columnType: datasetType === undefined ? "text" : DATASET_TO_COLUMN_TYPE[datasetType],
-      title: name,
+      title: name.replaceAll("_", " "),
       width,
     };
   });

@@ -1,33 +1,4 @@
-import {BlocksView, Box, Button, TextArea} from "@terreno/ui";
-import type React from "react";
-import {useState} from "react";
-
-import {SWATCH} from "./BlocksView.stories";
-
-const LAYOUT = `v: 1
-blocks:
-  - type: heading
-    size: lg
-    text: Signups this quarter
-  - type: text
-    markdown: Signups grew **12%** quarter over quarter.
-  - type: metric
-    label: Total
-    value: "403"
-    delta: "+12%"
-    trend: up
-`;
-
-const INVALID = `v: 1
-blocks:
-  - type: heading
-    text: Hello
-    color: primary
-`;
-
-// The Sunday roast golden fixture (blocks/src/fixtures/golden/sunday-roast.yaml) with
-// data:image swatches in place of its https photos, so it renders offline without imageHosts.
-const ROAST = `v: 1
+v: 1
 datasets:
   lamb_by_guests:
     columns:
@@ -46,9 +17,9 @@ blocks:
   - type: gallery
     id: roast_photos
     images:
-      - {src: "${SWATCH.lamb}", alt: Roast lamb}
-      - {src: "${SWATCH.potatoes}", alt: Crispy roast potatoes}
-      - {src: "${SWATCH.table}", alt: Sunday roast inspiration}
+      - {src: "https://images.example.com/sunday-roast/roast-lamb.jpg", alt: Roast lamb}
+      - {src: "https://images.example.com/sunday-roast/crispy-potatoes.jpg", alt: Crispy roast potatoes}
+      - {src: "https://images.example.com/sunday-roast/inspiration.jpg", alt: Sunday roast inspiration}
   - type: text
     markdown: |-
       I'm thinking a proper British-inspired Sunday roast with a little Mediterranean flair. Crispy potatoes, tender rosemary and garlic lamb, seasonal vegetables, and a delicious gravy. The kind of meal where everyone lingers at the table.
@@ -73,19 +44,19 @@ blocks:
     items:
       - title: "The centerpiece: Rosemary and garlic roast lamb"
         text: A classic leg of lamb with lemon, garlic, rosemary and olive oil. Serve carved with homemade gravy and mint sauce.
-        image: {src: "${SWATCH.lamb}", alt: "The centerpiece: Rosemary and garlic roast lamb"}
+        image: {src: "https://images.example.com/sunday-roast/rosemary-lamb.jpg", alt: "The centerpiece: Rosemary and garlic roast lamb"}
       - title: "The essential: Extra-crispy roast potatoes"
         text: Parboiled, shaken to create fluffy edges and roasted until golden. Nonnegotiable!
-        image: {src: "${SWATCH.potatoes}", alt: "The essential: Extra-crispy roast potatoes"}
+        image: {src: "https://images.example.com/sunday-roast/roast-potatoes.jpg", alt: "The essential: Extra-crispy roast potatoes"}
       - title: Honey-roasted carrots and parsnips
         text: Tossed with olive oil, honey and fresh thyme.
-        image: {src: "${SWATCH.carrots}", alt: Honey-roasted carrots and parsnips}
+        image: {src: "https://images.example.com/sunday-roast/carrots-parsnips.jpg", alt: Honey-roasted carrots and parsnips}
       - title: Lemony greens
         text: Tenderstem broccoli with toasted almonds and lemon zest. Something fresh to balance the rich lamb.
-        image: {src: "${SWATCH.greens}", alt: Lemony greens}
+        image: {src: "https://images.example.com/sunday-roast/lemony-greens.jpg", alt: Lemony greens}
       - title: "Dessert: Warm apple crumble"
         text: Serve with vanilla ice cream. Make it the day before and reheat while you're eating.
-        image: {src: "${SWATCH.crumble}", alt: "Dessert: Warm apple crumble"}
+        image: {src: "https://images.example.com/sunday-roast/apple-crumble.jpg", alt: "Dessert: Warm apple crumble"}
   - type: heading
     size: md
     text: 2. How much should you buy?
@@ -201,43 +172,3 @@ blocks:
         text: Make it gluten-free
         variant: outline
         action: {kind: reply, text: Advise on making the lamb roast plan gluten-free}
-`;
-
-// Callbacks the roast document names; the playground has no host, so presses are no-ops.
-const ROAST_HOST_ACTIONS = ["scaleStepper", "toggleChecklist"] as const;
-
-const PRESETS = {
-  Invalid: INVALID,
-  Layout: LAYOUT,
-  Roast: ROAST,
-} as const;
-
-type PresetName = keyof typeof PRESETS;
-
-interface BlocksPlaygroundDemoProps {
-  /** Preset shown first. */
-  initialPreset?: PresetName;
-}
-
-/** Edit a whole-reply document and see it render. Presets match the golden fixtures. */
-export const BlocksPlaygroundDemo: React.FC<BlocksPlaygroundDemoProps> = ({
-  initialPreset = "Layout",
-}) => {
-  const [document, setDocument] = useState<string>(PRESETS[initialPreset]);
-  return (
-    <Box gap={3} padding={4} width="100%">
-      <Box direction="row" gap={2} wrap>
-        <Button onClick={() => setDocument(PRESETS.Layout)} text="Layout" variant="outline" />
-        <Button onClick={() => setDocument(PRESETS.Invalid)} text="Invalid" variant="outline" />
-        <Button onClick={() => setDocument(PRESETS.Roast)} text="Sunday roast" variant="outline" />
-      </Box>
-      <TextArea
-        onChange={setDocument}
-        placeholder="Paste a block document"
-        rows={12}
-        value={document}
-      />
-      <BlocksView document={document} hostActions={ROAST_HOST_ACTIONS} testID="blocks-playground" />
-    </Box>
-  );
-};

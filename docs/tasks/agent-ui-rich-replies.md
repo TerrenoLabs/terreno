@@ -109,7 +109,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
 
 ### Phase 5: The roast reply end to end
 
-- [ ] **T15** — Sunday roast golden document and playground story
+- [x] **T15** — Sunday roast golden document and playground story
   - Depends on: T14
   - Files: `blocks/src/fixtures/golden/sunday-roast.yaml`, `blocks/src/golden.test.ts` (validate with `hostActions: ["scaleStepper"]`, `stepperActions: ["scaleStepper"]`, `imageHosts: ["images.example.com"]`), `demo/stories/BlocksPlayground.stories.tsx` (a roast preset).
   - Delivers: the GPT-6 demo reply as one document: the title; the gallery; the summary card with an eyebrow; the menu list; the stepper and copy card; the checklist with its first item checked; the USDA note as `context`; the tips as `text`; and follow-up `reply` buttons. It also includes the GPT-5.6 "How much lamb?" table as a `table` block. Images use `https://images.example.com/...` and validate only with `imageHosts`, so the file lives under `golden/`, not `valid/`.

@@ -12,15 +12,21 @@ export const BlocksPlaygroundConfiguration: DemoConfiguration = {
   demo: () => <BlocksPlaygroundDemo />,
   demoOptions: {size: "lg"},
   description:
-    "Paste a whole-reply YAML document and see it render. The Invalid preset shows the error banner.",
+    "Paste a whole-reply YAML document and see it render. The Invalid preset shows the error banner. The Sunday roast preset is the golden roast reply with every rich block.",
   interfaceName: "BlocksViewProps",
   name: "BlocksPlayground",
   props: {},
   related: ["BlocksView", "GPTChat", "Text area"],
   stories: {
     Playground: {
-      description: "Layout and Invalid presets. Editing the text area updates the preview.",
+      description:
+        "Layout, Invalid, and Sunday roast presets. Editing the text area updates the preview.",
       render: () => <BlocksPlaygroundDemo />,
+    },
+    "Sunday roast": {
+      description:
+        "The Sunday roast golden document with swatch photos: gallery, summary card, menu list, stepper with a copy button, the lamb table, checklist, and follow-up buttons. Stepper and checklist callbacks are listed in hostActions, but the playground has no host, so presses do nothing.",
+      render: () => <BlocksPlaygroundDemo initialPreset="Roast" />,
     },
   },
   status: {

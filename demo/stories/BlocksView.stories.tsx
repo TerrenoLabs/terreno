@@ -172,7 +172,7 @@ export const BlocksViewChecklist: React.FC = () => {
 };
 
 // Solid 4x3 swatches stand in for photos so the story never loads an external image.
-const SWATCH = {
+export const SWATCH = {
   carrots:
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGN4VGEERww4OQBybhKRd/XWIwAAAABJRU5ErkJggg==",
   crumble:

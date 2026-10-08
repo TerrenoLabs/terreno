@@ -381,6 +381,11 @@ blocks:
       });
     };
 
+    it("shows column names with underscores as spaced headers", () => {
+      const view = renderWithTheme(<BlocksView document={LAMB} />);
+      expect(view.getByText("lamb kg")).toBeTruthy();
+      expect(view.queryByText("lamb_kg")).toBeNull();
+    });
     it("maps number columns to right-aligned cells and date columns to DATE_MED", () => {
       const {getByText, queryByText} = renderWithTheme(<BlocksView document={LAMB} />);
       expect(flatStyle(getByText("6") as unknown as StyledNode).textAlign).toBe("right");

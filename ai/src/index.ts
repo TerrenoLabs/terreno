@@ -108,6 +108,7 @@ export type {RegisteredDataset} from "./service/aiDatasets";
 export {configureAiDatasets, registerAiDataset} from "./service/aiDatasets";
 export {AIService, TemperaturePresets} from "./service/aiService";
 export {createAskTools} from "./service/asks";
+export {runBufferedChatTurn} from "./service/chatTurn";
 export {FileStorageService} from "./service/fileStorage";
 export type {ListGeminiApiModelsOptions} from "./service/gemini";
 export {

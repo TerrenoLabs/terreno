@@ -127,7 +127,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: the seeded roast document uses `file:` ids from a test `PhotoLibraryEntry`. Playwright presses + (5 → 6, the quantities change) and ticks a checklist item, both through the real `POST /gpt/actions`, then presses copy. Only the signed-URL image download is stubbed.
   - Acceptance: AC11.
 
-- [ ] **T17** — Model smoke: a real model writes the roast reply
+- [x] **T17** — Model smoke: a real model writes the roast reply
   - Depends on: T15, T20
   - Files: `example-backend/src/scripts/blocksSmoke.ts`, `example-backend/package.json` and root `package.json` (`blocks:smoke` script).
   - Delivers: a script that runs the post's prompt through `AIService` with the opted-in blocks prompt and checks the reply. It skips cleanly when no model key is set.

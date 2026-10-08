@@ -90,7 +90,9 @@ src/
 
 - **Plugins:** `AiApp`, `LangfuseApp`
 - **Service:** `AIService`, `TemperaturePresets`, `FileStorageService`, `MCPService`,
-  `getMCPTools`
+  `getMCPTools`, `runBufferedChatTurn` (one chat turn to completion without HTTP: the same system
+  prompt, tools, and block checks as `/gpt/histories/:id/turn`; takes `{body: {historyId, prompt},
+  options, req}` where `req` carries `user` and `headers`)
 - **Models:** `AIRequest`, `GptHistory`, `FileAttachment`, `Project` (lazy; prefer `getProjectModel()`)
 - **Routes:** `addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`, `addFileRoutes`, `addProjectRoutes`, `addMcpRoutes`
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`

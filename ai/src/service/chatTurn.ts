@@ -2266,7 +2266,9 @@ interface BufferedTurn {
 /**
  * Runs a turn to completion and returns it as one JSON result, for clients that do not read
  * server-sent events. Nothing is written to the response while the turn runs, so a client that
- * disconnects does not stop it: the turn still finishes and saves.
+ * disconnects does not stop it: the turn still finishes and saves. Scripts that need a real turn
+ * without HTTP (such as a model smoke test) call it with the `req.user` and headers a route would
+ * pass, so the system prompt, tools, and block checks are the ones chat uses.
  */
 export const runBufferedChatTurn = async ({
   body,

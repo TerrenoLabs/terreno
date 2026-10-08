@@ -137,8 +137,9 @@ tick calls `onAction` with `blockId: <id>`, `elementId: <id>_<item id>`, and
 `{kind: "callback", name, payload: {...payload, itemId, checked, state}}`. `state` maps every
 item id to its tick after this one. `BlocksView` disables the checklist while a tick is
 pending, and the tick shows only when the host's returned checklist arrives as an override.
-Without a `callback`, or when its name is not in `hostActions`, ticks stay on the device. No
-built-in host action handles the callback yet.
+Without a `callback`, or when its name is not in `hostActions`, ticks stay on the device. On the
+server, `toggleChecklistHostAction` from `@terreno/ai` handles the callback and returns the stored
+checklist with `checked` from `state` (see [Host actions](ai.md#host-actions)).
 
 | Field | Required | Rule |
 | --- | --- | --- |

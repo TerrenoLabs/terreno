@@ -528,8 +528,9 @@ so a second tick cannot send a `state` that misses the first. The counter change
 `overrides[<id>]` brings the returned checklist. Otherwise a tick stays in this `BlocksView` only and updates the counter at once.
 When an override for the checklist arrives or changes, earlier local ticks on it are dropped
 and the override's `checked` values show.
-The built-in checklist host action, `toggleChecklistHostAction`, is not shipped yet; until then
-a host that wants ticks on the server registers its own callback.
+On the server, `toggleChecklistHostAction` from `@terreno/ai` handles the callback and returns
+the stored checklist with the ticks from `state` (see [Host actions](ai.md#host-actions)). A host
+that records progress registers its own `handles: "checklist"` action.
 
 A `gallery` draws each image as a 4:3 `Image` tile (`fit` cover), with `alt` as the tile's
 accessible label and the optional `caption` as small muted text under it. Tiles are 8 apart

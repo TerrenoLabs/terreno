@@ -155,7 +155,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: `findPhotos({query, count})` returns `{src: "file:<id>", alt}` from the library. `GET /photoLibrary/:id/url` returns a signed URL to any authenticated user. The example chat resolves `file:` ids through the generated hook. Supporting skills: `model-router-actions`, `generate-sdk`.
   - Acceptance: AC14 (tool and route half).
 
-- [ ] **T21** — Checklist ticks round trip through a host callback
+- [x] **T21** — Checklist ticks round trip through a host callback
   - Depends on: T10
   - Files: `ai/src/service/toggleChecklist.ts`, `ai/src/service/toggleChecklist.test.ts`, `ai/src/routes/gptActions.test.ts`, `ai/src/index.ts`, `docs/reference/ai.md`.
   - Delivers: `toggleChecklistHostAction` from the IP, built on `findAgentBlock`.

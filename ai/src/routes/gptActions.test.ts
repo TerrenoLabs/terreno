@@ -5,7 +5,16 @@ import type mongoose from "mongoose";
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
 import {scaleStepperHostAction} from "../service/scaleStepper";
-import {buildApp, createScriptedModel} from "../tests/chatHarness";
+import {toggleChecklistHostAction} from "../service/toggleChecklist";
+import {
+  buildApp,
+  createScriptedModel,
+  modelCall,
+  streamPrompt,
+  systemPromptOf,
+  textStep,
+  USER_PROMPT,
+} from "../tests/chatHarness";
 import {authAsUser, ensureTestUsers} from "../tests/helpers";
 import {HOST_ACTION_TIMEOUT_MS} from "./gptActions";
 
@@ -362,5 +371,152 @@ describe("POST /gpt/actions with scaleStepperHostAction", () => {
     for (const row of errorRows) {
       expect(row.response).toBeUndefined();
     }
+  });
+});
+
+const ROAST_CHECKLIST = `v: 1
+blocks:
+  - type: heading
+    text: Sunday roast
+  - type: card
+    children:
+      - type: checklist
+        id: cook
+        title: Cooking plan
+        callback:
+          name: toggleChecklist
+          payload:
+            recipe: roast
+        items:
+          - {id: preheat, text: Preheat the oven, meta: "12:00"}
+          - {id: lamb, text: Lamb in, meta: "12:15"}
+          - {id: rest, text: Rest the lamb, meta: "13:45"}
+`;
+
+describe("POST /gpt/actions with toggleChecklistHostAction", () => {
+  afterEach(async () => {
+    await AIRequest.deleteMany({});
+    await GptHistory.deleteMany({});
+  });
+
+  const setup = async (
+    assistantPrompts: string[]
+  ): Promise<{agent: Awaited<ReturnType<typeof authAsUser>>; historyId: string}> => {
+    const created = await ensureTestUsers();
+    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const history = await GptHistory.create({
+      prompts: [
+        {text: "Plan a roast", type: "user"},
+        ...assistantPrompts.map((text) => ({text, type: "assistant" as const})),
+      ],
+      userId,
+    });
+    const app = buildApp({
+      model,
+      uiBlocks: {hostActions: {toggleChecklist: toggleChecklistHostAction}},
+    });
+    return {agent: await authAsUser(app, "notAdmin"), historyId: history._id.toString()};
+  };
+
+  const tick = (
+    historyId: string,
+    fields: Record<string, unknown> = {}
+  ): Record<string, unknown> => ({
+    blockId: "cook",
+    elementId: "cook_lamb",
+    historyId,
+    messageId: "msg-1",
+    name: "toggleChecklist",
+    payload: {checked: true, itemId: "lamb", recipe: "roast", state: {lamb: true, preheat: true}},
+    ...fields,
+  });
+
+  it("returns the stored checklist with checked from state and logs only ids", async () => {
+    const {agent, historyId} = await setup([ROAST_CHECKLIST]);
+    const res = await agent.post("/gpt/actions").send(tick(historyId));
+    expect(res.status).toBe(200);
+    expect(res.body.data.replace).toBe("block");
+    expect(res.body.data.blocks.v).toBe(1);
+    expect(res.body.data.blocks.blocks).toHaveLength(1);
+    const checklist = res.body.data.blocks.blocks[0];
+    expect(checklist.type).toBe("checklist");
+    expect(checklist.id).toBe("cook");
+    expect(checklist.callback).toEqual({name: "toggleChecklist", payload: {recipe: "roast"}});
+    expect(
+      checklist.items.map((item: {checked: boolean; id: string}) => [item.id, item.checked])
+    ).toEqual([
+      ["preheat", true],
+      ["lamb", true],
+      ["rest", false],
+    ]);
+
+    const logged = await AIRequest.findExactlyOne({requestType: "ui_action"});
+    expect(logged?.response).toBeUndefined();
+    expect(JSON.parse(logged?.prompt ?? "{}")).toEqual({
+      blockId: "cook",
+      elementId: "cook_lamb",
+      historyId,
+      messageId: "msg-1",
+      name: "toggleChecklist",
+    });
+    expect(logged?.prompt).not.toContain("Preheat");
+  });
+
+  it("returns 400 for an unknown item id, 404 for an unknown block, and 409 when the block is ambiguous", async () => {
+    const {agent, historyId} = await setup([ROAST_CHECKLIST, ROAST_CHECKLIST]);
+    const unknownItem = await agent
+      .post("/gpt/actions")
+      .send(tick(historyId, {payload: {checked: true, itemId: "carve", state: {carve: true}}}));
+    expect(unknownItem.status).toBe(400);
+    expect(unknownItem.body.title).toBe("Unknown checklist item");
+
+    const unknownStateKey = await agent
+      .post("/gpt/actions")
+      .send(tick(historyId, {payload: {checked: true, itemId: "lamb", state: {carve: true}}}));
+    expect(unknownStateKey.status).toBe(400);
+
+    const malformed = await agent
+      .post("/gpt/actions")
+      .send(tick(historyId, {payload: {checked: "yes", itemId: "lamb", state: {}}}));
+    expect(malformed.status).toBe(400);
+    expect(malformed.body.title).toBe("Invalid payload");
+
+    const unknownBlock = await agent.post("/gpt/actions").send(tick(historyId, {blockId: "nope"}));
+    expect(unknownBlock.status).toBe(404);
+
+    const ambiguous = await agent.post("/gpt/actions").send(tick(historyId, {messageId: "msg-9"}));
+    expect(ambiguous.status).toBe(409);
+
+    const direct = await agent.post("/gpt/actions").send(tick(historyId, {messageId: "msg-2"}));
+    expect(direct.status).toBe(200);
+
+    const errorRows = await AIRequest.find({error: {$exists: true}, requestType: "ui_action"});
+    expect(errorRows.length).toBeGreaterThan(0);
+    for (const row of errorRows) {
+      expect(row.response).toBeUndefined();
+    }
+  });
+
+  it("names the registered action as the checklist callback in the chat prompt", async () => {
+    await ensureTestUsers();
+    const chatModel = createScriptedModel({steps: [textStep(ROAST_CHECKLIST)]});
+    const agent = await authAsUser(
+      buildApp({
+        model: chatModel,
+        uiBlocks: {hostActions: {toggleChecklist: toggleChecklistHostAction}},
+      }),
+      "notAdmin"
+    );
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    const system = String(systemPromptOf(modelCall(chatModel, 0)));
+    expect(system).toContain("Set a checklist callback name to one of: toggleChecklist.");
+    expect(system).not.toContain("Leave callback out of a checklist");
+    expect(events.find((event) => "blocks" in event)?.blocks).toEqual({
+      errors: [],
+      ok: true,
+      warnings: [],
+    });
   });
 });

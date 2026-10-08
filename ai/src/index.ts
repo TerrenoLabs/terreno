@@ -133,6 +133,7 @@ export {
   TRANSLATION_PROMPT,
 } from "./service/prompts";
 export {scaleStepperHostAction} from "./service/scaleStepper";
+export {toggleChecklistHostAction} from "./service/toggleChecklist";
 export type {
   CreateVertexProviderOptions,
   ListEnabledVertexModelsOptions,

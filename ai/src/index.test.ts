@@ -81,6 +81,7 @@ describe("@terreno/ai public exports", () => {
     "TERRENO_ASKS_SYSTEM_PROMPT",
     "scaleStepperHostAction",
     "TITLE_GENERATION_PROMPT",
+    "toggleChecklistHostAction",
     "TRANSLATION_PROMPT",
     "TemperaturePresets",
   ] as const;

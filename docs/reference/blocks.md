@@ -75,7 +75,7 @@ Warnings do not block rendering:
 | `divider` | — | `id` | `SectionDivider` |
 | `context` | `text` (1–280) | `id` | `Text` |
 | `stepper` | see [Stepper](#stepper) | | `IconButton` − and +, `Text`, `Heading` |
-| `checklist` | see [Checklist](#checklist) | | Validated; `BlocksView` does not draw it yet |
+| `checklist` | see [Checklist](#checklist) | | `CheckBox` rows, `Text`, `Heading` |
 | `gallery` | see [Gallery](#gallery) | | Validated; `BlocksView` does not draw it yet |
 | `list` | see [List](#list) | | Validated; `BlocksView` does not draw it yet |
 | `columns` | `children`: 2–4 blocks | `id` | `Box` row |
@@ -129,9 +129,15 @@ A tap sends `{kind: callback, name, payload: {...payload, value: value ± step}}
 
 ## Checklist
 
-A `checklist` is a list of tickable items. This release defines and validates the block, and the
-prompt offers it. `BlocksView` does not draw it yet, and no built-in host action handles its
-callback yet.
+A `checklist` is a list of tickable items with an "n of m" counter. `BlocksView` draws the title
+and counter, then one `CheckBox` row per item with `meta` above a bold `text` and a muted
+`detail`. With a `callback` whose name is in `hostActions` (or with `hostActions` omitted), a
+tick calls `onAction` with `blockId: <id>`, `elementId: <id>_<item id>`, and
+`{kind: "callback", name, payload: {...payload, itemId, checked, state}}`. `state` maps every
+item id to its tick after this one. `BlocksView` disables the checklist while a tick is
+pending, and the tick shows only when the host's returned checklist arrives as an override.
+Without a `callback`, or when its name is not in `hostActions`, ticks stay on the device. No
+built-in host action handles the callback yet.
 
 | Field | Required | Rule |
 | --- | --- | --- |

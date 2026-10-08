@@ -1,6 +1,9 @@
 import {
   type Block,
   type BlockAction,
+  type ChecklistBlock,
+  type ChecklistItem,
+  checklistElementId,
   type DatasetColumn,
   type InlineDataset,
   type StepperBlock,
@@ -18,6 +21,7 @@ import {BarChart} from "../BarChart";
 import {Box} from "../Box";
 import {Button} from "../Button";
 import {Card} from "../Card";
+import {CheckBox} from "../CheckBox";
 import type {DataTableColumn, LayoutChangeEvent} from "../Common";
 import {DataTable} from "../DataTable";
 import {DonutChart} from "../DonutChart";
@@ -46,6 +50,9 @@ export interface BlockRenderContext {
   resolvedImages?: Record<string, string | undefined>;
   /** Dataset name currently bound on a chart or table id, before any local selection. */
   boundData?: Record<string, string>;
+  /** Local ticks by checklist id, then item id, for checklists that tick on the device. */
+  checklistTicks?: Record<string, Record<string, boolean>>;
+  setChecklistTick?: (target: {checked: boolean; checklistId: string; itemId: string}) => void;
   selections: Record<string, string>;
   setSelection: (target: string, data: string) => void;
 }
@@ -178,6 +185,128 @@ const renderStepper = (
           {block.note}
         </Text>
       ) : null}
+    </Box>
+  );
+};
+
+const ChecklistRowContent: React.FC<{
+  checkboxTestID: string;
+  isChecked: boolean;
+  item: ChecklistItem;
+}> = ({checkboxTestID, isChecked, item}) => (
+  <>
+    <Box paddingY={1}>
+      <CheckBox selected={isChecked} testID={checkboxTestID} />
+    </Box>
+    <Box flex="grow" gap={1}>
+      {item.meta ? (
+        <Text color="secondaryLight" size="sm">
+          {item.meta}
+        </Text>
+      ) : null}
+      <Text bold>{item.text}</Text>
+      {item.detail ? (
+        <Text color="secondaryLight" size="sm">
+          {item.detail}
+        </Text>
+      ) : null}
+    </Box>
+  </>
+);
+
+/**
+ * Ticks go to the host when the checklist names a callback, the host listens with `onAction`,
+ * and `hostActions` is omitted (as for the stepper) or lists that callback. Otherwise they stay
+ * on the device.
+ */
+const isChecklistCallbackMode = (block: ChecklistBlock, context: BlockRenderContext): boolean =>
+  block.callback !== undefined &&
+  context.onAction !== undefined &&
+  (context.hostActions === undefined || context.hostActions.includes(block.callback.name));
+
+const renderChecklist = (
+  block: ChecklistBlock,
+  path: string,
+  context: BlockRenderContext
+): React.ReactElement => {
+  const isCallbackMode = isChecklistCallbackMode(block, context);
+  // One pending tick locks every item, so a second tick cannot send a `state` that misses it.
+  const isAnyPending = block.items.some(
+    (item) => context.pendingElementIds?.has(checklistElementId(block.id, item.id)) === true
+  );
+  const localTicks = isCallbackMode ? undefined : context.checklistTicks?.[block.id];
+  const state: Record<string, boolean> = {};
+  for (const item of block.items) {
+    state[item.id] = localTicks?.[item.id] ?? item.checked === true;
+  }
+  const checkedCount = Object.values(state).filter(Boolean).length;
+  const toggle = (item: ChecklistItem, elementId: string): void => {
+    const checked = !state[item.id];
+    if (!isCallbackMode || block.callback === undefined) {
+      context.setChecklistTick?.({checked, checklistId: block.id, itemId: item.id});
+      return;
+    }
+    context.onAction?.({
+      action: {
+        kind: "callback",
+        name: block.callback.name,
+        payload: {
+          ...(block.callback.payload ?? {}),
+          checked,
+          itemId: item.id,
+          state: {...state, [item.id]: checked},
+        },
+      },
+      blockId: block.id,
+      elementId,
+    });
+  };
+  return (
+    <Box gap={3} key={path} testID={path}>
+      <Box alignItems="center" direction="row" gap={2} justifyContent="between">
+        <Box flex="shrink">{block.title ? <Heading size="sm">{block.title}</Heading> : null}</Box>
+        <Text color="secondaryLight" size="sm" testID={`${path}-counter`}>
+          {`${checkedCount} of ${block.items.length}`}
+        </Text>
+      </Box>
+      <Box gap={2}>
+        {block.items.map((item) => {
+          const elementId = checklistElementId(block.id, item.id);
+          const itemPath = `${path}-${elementId}`;
+          const isChecked = state[item.id] === true;
+          const isLocked = isCallbackMode
+            ? isAnyPending
+            : context.pendingElementIds?.has(elementId) === true;
+          return (
+            <Box key={itemPath} testID={itemPath}>
+              <Box
+                accessibilityHint={
+                  isChecked ? "Marks this item as not done" : "Marks this item as done"
+                }
+                accessibilityLabel={item.text}
+                accessibilityRole="checkbox"
+                accessibilityState={{checked: isChecked, disabled: isLocked}}
+                direction="row"
+                gap={3}
+                onClick={() => {
+                  if (isLocked) {
+                    return;
+                  }
+                  toggle(item, elementId);
+                }}
+                testID={`${itemPath}-row`}
+                {...(isLocked ? {dangerouslySetInlineStyle: {__style: {opacity: 0.5}}} : {})}
+              >
+                <ChecklistRowContent
+                  checkboxTestID={`${itemPath}-checkbox`}
+                  isChecked={isChecked}
+                  item={item}
+                />
+              </Box>
+            </Box>
+          );
+        })}
+      </Box>
     </Box>
   );
 };
@@ -382,6 +511,8 @@ export const renderBlock = (
       return <TableBlockView block={block} context={context} key={path} path={path} />;
     case "stepper":
       return renderStepper(block, path, context);
+    case "checklist":
+      return renderChecklist(block, path, context);
     case "actions":
       return (
         <Box direction="row" gap={2} key={path} testID={path} wrap>

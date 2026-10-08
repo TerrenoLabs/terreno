@@ -77,10 +77,10 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
 
 ### Phase 4: Renderers
 
-- [ ] **T10** — Checklist renders and toggles
+- [x] **T10** — Checklist renders and toggles
   - Depends on: T3, T4, T5
   - Files: `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/useChecklistState.ts`, `ui/src/blocks/BlocksView.tsx`, `ui/src/blocks/BlocksView.test.tsx`, `demo/stories/BlocksView.stories.tsx`, `docs/reference/ui.md`.
-  - Delivers: a `CheckBox` row per item (meta, bold text, detail) and the "n of m" counter. With a callback in `hostActions`, a tick emits `{...payload, itemId, checked, state}`, disables that item while pending, and shows the returned block. Without one, ticks are local for each rendered document.
+  - Delivers: a `CheckBox` row per item (meta, bold text, detail) and the "n of m" counter. With a callback in `hostActions`, a tick emits `{...payload, itemId, checked, state}`, disables the whole checklist while a tick is pending (so a second tick cannot send a stale `state`), and shows the returned block. Without one, ticks are local for each rendered document.
   - Acceptance: AC6.
 
 - [ ] **T11** — Gallery renders

@@ -186,8 +186,9 @@ Item ids are unique. The element id of a tick is `<id>_<item id>`, reserved like
 With a `callback` whose name is in `hostActions`, a tick sends
 `{kind: "callback", name, payload: {...payload, itemId, checked, state: {<item id>: boolean, ...}}}`
 with `blockId: <id>` and `elementId: <id>_<item id>`. `state` is the full set of ticks after
-this one, because overrides live only in the client (D4). That item is disabled until the
-reply lands, and the checklist then shows the returned block. Ticks are not applied ahead of
+this one, because overrides live only in the client (D4). The whole checklist is disabled until
+the reply lands, so a second tick cannot send a `state` that misses the first, and the checklist
+then shows the returned block. Ticks are not applied ahead of
 the reply. Without a `callback`, or when its name is not in `hostActions`, ticks are local.
 
 `toggleChecklistHostAction` (in `@terreno/ai`, T21) is `{handler, payload, handles: "checklist", logResponse: false}`
@@ -271,7 +272,7 @@ first.
 | AC3 | With `richBlocks: false`, `blocksPromptSection` output is byte-identical to `master`, even when a stepper action is registered. With `richBlocks` unset, `addGptRoutes` and `blocksPromptSection` both behave as `true`. On, the prompt has one line per new block (added as each contract lands; the full snapshot is taken in T9), limits come from `BLOCK_LIMITS`, and the stepper line names the stepper actions | prompt snapshot tests |
 | AC4 | Tapping + on a 5-person stepper emits a callback with `payload.value: 6`. An item `{amount: 2, unit: kg, decimals: 1}` renders "2.0 kg". Rendering an override with `value: 6` shows 6 and the new amounts | `ui/src/blocks/BlocksView.test.tsx` |
 | AC5 | Through `POST /gpt/actions`, with a stored stepper (5 people; lamb `2` kg / 1 dp; parsnips `7` / up; broccoli `625` g / nearest) and `value: 6`: the result is `{replace: "block", blocks: {v: 1, blocks: [stepper]}}` with lamb 2.4, parsnips 9 (nearest would give 8), and broccoli 750. An extra agent `callback.payload` key is accepted. `value: 21` (max 20) returns 400. An unknown `blockId` returns 404. Two stored prompts with the same stepper id and a missed `msg-<n>` return 409. The `AIRequest` row has the ids and `value`, and no `response` | `ai/src/service/scaleStepper.test.ts`, `ai/src/routes/gptActions.test.ts` |
-| AC6 | Without a callback, toggling an item changes "1 of 8" to "2 of 8" on the device. With a callback in `hostActions`, the tick emits `payload: {itemId, checked: true, state}` with all 8 items, disables that item while pending, and the counter shows "2 of 8" only after the override arrives | `BlocksView.test.tsx` |
+| AC6 | Without a callback, toggling an item changes "1 of 8" to "2 of 8" on the device. With a callback in `hostActions`, the tick emits `payload: {itemId, checked: true, state}` with all 8 items, disables the whole checklist while the tick is pending, and the counter shows "2 of 8" only after the override arrives | `BlocksView.test.tsx` |
 | AC6b | Through `POST /gpt/actions`, `toggleChecklistHostAction` returns the stored checklist with `checked` from `state`. An unknown item id returns 400. The `AIRequest` row has no `response` | `ai/src/service/toggleChecklist.test.ts`, `ai/src/routes/gptActions.test.ts` |
 | AC7 | Gallery, list, and eyebrow render with `@terreno/ui` components only, with `alt` as the accessible label | `BlocksView.test.tsx` |
 | AC8 | Pressing a copy button whose target is a stepper at value 6 writes the scaled list to the clipboard (mocked `expo-clipboard`) and shows "Copied" | `BlocksView.test.tsx` |

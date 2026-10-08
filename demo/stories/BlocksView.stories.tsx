@@ -151,6 +151,26 @@ export const BlocksViewDisplay: React.FC = () => {
   );
 };
 
+const CHECKLIST = `v: 1
+blocks:
+  - type: checklist
+    id: cooking
+    title: Cooking checklist
+    items:
+      - {id: oven, meta: "1:00 pm", text: Preheat the oven, detail: "220 C, fan off.", checked: true}
+      - {id: lamb_in, meta: "1:30 pm", text: Put the lamb in, detail: Fat side up on the rack.}
+      - {id: potatoes, meta: "2:15 pm", text: Roast the potatoes}
+      - {id: rest, meta: "3:00 pm", text: Rest the lamb, detail: Cover loosely with foil.}
+`;
+
+export const BlocksViewChecklist: React.FC = () => {
+  return (
+    <Box padding={4} width="100%">
+      <BlocksView document={CHECKLIST} />
+    </Box>
+  );
+};
+
 export const BlocksViewInvalid: React.FC = () => {
   return (
     <Box padding={4} width="100%">

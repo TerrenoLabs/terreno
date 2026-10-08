@@ -60,6 +60,18 @@ const ALIGN_SELF = {
 
 const BORDER_WIDTH = 1;
 
+// react-native's Pressable does not type the web `onKeyDown` event, but React Native Web
+// forwards it.
+interface WebKeyDownEvent {
+  key: string;
+  preventDefault: () => void;
+  repeat?: boolean;
+}
+
+interface WebKeyDownProps {
+  onKeyDown?: (event: WebKeyDownEvent) => void;
+}
+
 const isValidPercentage = (value: string): boolean => {
   return /^\d+(\.\d+)?%$/.test(value);
 };
@@ -79,6 +91,7 @@ const NON_STYLE_BOX_PROPS = new Set<string>([
   "accessibilityHint",
   "accessibilityLabel",
   "accessibilityRole",
+  "accessibilityState",
   "avoidKeyboard",
   "children",
   "dangerouslySetInlineStyle",
@@ -392,24 +405,60 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
 
   let box: React.ReactElement;
 
+  const accessibilityState = props.accessibilityState;
+  const accessibilityStateProps = accessibilityState
+    ? {
+        accessibilityState,
+        ...(accessibilityState.checked !== undefined
+          ? {"aria-checked": accessibilityState.checked}
+          : {}),
+        ...(accessibilityState.disabled !== undefined
+          ? {"aria-disabled": accessibilityState.disabled}
+          : {}),
+      }
+    : {};
+
   // Adding the accessibilityRole of button throws a warning in React Native since we nest buttons
   // within Box and RN does not support nested buttons — so this stays on `aria-role` (which RN
   // itself translates to accessibilityRole under the hood) by default; an explicit
   // `accessibilityRole` prop is only forwarded literally when the caller opts in.
   if (props.onClick) {
     const explicitAccessibilityRole = (props as AccessibilityProps).accessibilityRole;
+    const isDisabled = accessibilityState?.disabled === true;
+    // Per ARIA, Space toggles a checkbox or switch; react-native-web only maps Space to buttons.
+    const toggleKeyDownProps: WebKeyDownProps =
+      explicitAccessibilityRole === "checkbox" || explicitAccessibilityRole === "switch"
+        ? {
+            onKeyDown: (event) => {
+              if (event.key !== " " && event.key !== "Spacebar") {
+                return;
+              }
+              event.preventDefault();
+              if (isDisabled || event.repeat) {
+                return;
+              }
+              void props.onClick?.();
+            },
+          }
+        : {};
     box = (
       <Pressable
+        {...toggleKeyDownProps}
         accessibilityHint={(props as AccessibilityProps).accessibilityHint}
         {...(explicitAccessibilityRole
           ? {accessibilityRole: explicitAccessibilityRole as never}
           : {})}
+        {...accessibilityStateProps}
         aria-label={(props as AccessibilityProps).accessibilityLabel}
         aria-role="button"
+        {...(isDisabled ? {disabled: true} : {})}
         onLayout={props.onLayout}
         onPointerEnter={onHoverIn}
         onPointerLeave={onHoverOut}
         onPress={async () => {
+          if (isDisabled) {
+            return;
+          }
           await Unifier.utils.haptic();
           await props.onClick?.();
         }}
@@ -426,6 +475,7 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
       <View
         {...(accessibilityHint ? {accessibilityHint} : {})}
         {...(accessibilityLabel ? {accessibilityLabel} : {})}
+        {...accessibilityStateProps}
         {...(props.onLayout ? {onLayout: props.onLayout} : {})}
         onPointerEnter={onHoverIn}
         onPointerLeave={onHoverOut}

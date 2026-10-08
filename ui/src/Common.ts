@@ -674,7 +674,18 @@ export interface AccessibilityProps {
   accessibilityRole?: string;
 }
 
+/** Checked and disabled state a `Box` reports to screen readers. */
+export interface BoxAccessibilityState {
+  checked?: boolean;
+  disabled?: boolean;
+}
+
 export interface BoxPropsBase extends WithTestID {
+  /**
+   * Checked and disabled state for screen readers, sent as `accessibilityState` and as
+   * `aria-checked` / `aria-disabled`. On a clickable Box, `disabled: true` also stops presses.
+   */
+  accessibilityState?: BoxAccessibilityState;
   alignContent?: AlignContent;
   alignItems?: AlignItems;
   alignSelf?: AlignSelf;

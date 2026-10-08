@@ -1,6 +1,7 @@
 import type {DemoConfiguration} from "@config";
 import {
   BlocksViewActions,
+  BlocksViewChecklist,
   BlocksViewDemo,
   BlocksViewDisplay,
   BlocksViewInvalid,
@@ -10,6 +11,7 @@ import {BlocksView} from "@terreno/ui";
 export const BlocksViewConfiguration: DemoConfiguration = {
   a11yNotes: [
     "Headings, badges, and body text use the same components as the rest of the app, so screen readers read them as headings and text.",
+    "Each checklist row is a checkbox labelled with the item text.",
   ],
   additionalDocumentation: [],
   category: "Pattern",
@@ -27,6 +29,11 @@ export const BlocksViewConfiguration: DemoConfiguration = {
       description:
         "Segmented control switches the chart dataset. Reply and open buttons stay in the document.",
       render: () => <BlocksViewActions />,
+    },
+    Checklist: {
+      description:
+        "A cooking checklist with times and an n of m counter. Without a callback, ticks stay on the device.",
+      render: () => <BlocksViewChecklist />,
     },
     Display: {
       description: "A warning callout, a receipt image, and invoice notes in an accordion.",

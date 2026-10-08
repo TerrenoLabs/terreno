@@ -1,6 +1,7 @@
 import {describe, expect, it, mock} from "bun:test";
 import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
+import type {Block} from "@terreno/blocks";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {ActivityIndicator, Image as NativeImage, StyleSheet} from "react-native";
 
@@ -120,6 +121,46 @@ blocks:
             round: up
         note: Generous portions, with a little extra.
 `;
+
+const CHECKLIST_ITEMS = `    items:
+      - {id: oven, meta: "1:00 pm", text: Preheat the oven, detail: "220 C, fan off.", checked: true}
+      - {id: lamb_in, meta: "1:30 pm", text: Put the lamb in}
+      - {id: veg, text: Peel the vegetables}
+      - {id: parsnips, text: Par-boil the parsnips}
+      - {id: potatoes, text: Roast the potatoes}
+      - {id: gravy, text: Make the gravy}
+      - {id: rest, text: Rest the lamb}
+      - {id: carve, text: Carve and serve}
+`;
+
+const CHECKLIST = `v: 1
+blocks:
+  - type: checklist
+    id: cooking
+    title: Cooking checklist
+    callback:
+      name: toggleChecklist
+      payload:
+        recipe: roast
+${CHECKLIST_ITEMS}`;
+
+const LOCAL_CHECKLIST = `v: 1
+blocks:
+  - type: checklist
+    id: cooking
+    title: Cooking checklist
+${CHECKLIST_ITEMS}`;
+
+const CHECKLIST_ITEM_IDS = [
+  "oven",
+  "lamb_in",
+  "veg",
+  "parsnips",
+  "potatoes",
+  "gravy",
+  "rest",
+  "carve",
+] as const;
 
 // Button presses await a haptic call before running onClick.
 const press = async (element: Parameters<typeof fireEvent.press>[0]): Promise<void> => {
@@ -818,6 +859,207 @@ blocks:
     expect(getByText("2.4 kg")).toBeTruthy();
     expect(getByText("10")).toBeTruthy();
     expect(queryByText("2.0 kg")).toBeNull();
+  });
+
+  describe("checklist", () => {
+    const counter = (view: RenderedView): string =>
+      String(view.getByTestId("blocks-0-counter").props.children);
+    const tick = async (view: RenderedView, itemId: string): Promise<void> => {
+      await press(view.getByTestId(`blocks-0-cooking_${itemId}-row-clickable`));
+    };
+    const isTicked = (view: RenderedView, itemId: string): boolean =>
+      view.getByTestId(`blocks-0-cooking_${itemId}-checkbox`).props.style.backgroundColor !==
+      "transparent";
+    const rowState = (view: RenderedView, itemId: string): unknown =>
+      view.getByTestId(`blocks-0-cooking_${itemId}-row-clickable`).props.accessibilityState;
+    const overrideWith = (checkedIds: readonly string[]): Record<string, Block> => ({
+      cooking: {
+        callback: {name: "toggleChecklist", payload: {recipe: "roast"}},
+        id: "cooking",
+        items: CHECKLIST_ITEM_IDS.map((id) => ({
+          checked: checkedIds.includes(id),
+          id,
+          text: `Step ${id}`,
+        })),
+        title: "Cooking checklist",
+        type: "checklist",
+      },
+    });
+
+    it("renders the title, the n of m counter, and a row per item", () => {
+      const view = renderWithTheme(<BlocksView document={CHECKLIST} />);
+      expect(view.getByText("Cooking checklist")).toBeTruthy();
+      expect(counter(view)).toBe("1 of 8");
+      expect(view.getByText("1:00 pm")).toBeTruthy();
+      expect(view.getByText("Preheat the oven")).toBeTruthy();
+      expect(view.getByText("220 C, fan off.")).toBeTruthy();
+      expect(view.getByText("Carve and serve")).toBeTruthy();
+      expect(isTicked(view, "oven")).toBe(true);
+      expect(isTicked(view, "lamb_in")).toBe(false);
+      expect(view.getByTestId("blocks-0-cooking_lamb_in-row-clickable").props["aria-label"]).toBe(
+        "Put the lamb in"
+      );
+    });
+
+    it("exposes each row as a labelled checkbox with its checked state, kept while locked", () => {
+      const props = {document: CHECKLIST, hostActions: ["toggleChecklist"], onAction: () => {}};
+      const view = renderWithTheme(<BlocksView {...props} />);
+      const row = (itemId: string): {props: Record<string, unknown>} =>
+        view.getByTestId(`blocks-0-cooking_${itemId}-row-clickable`);
+      expect(row("oven").props.accessibilityRole).toBe("checkbox");
+      expect(row("oven").props["aria-label"]).toBe("Preheat the oven");
+      expect(row("oven").props["aria-checked"]).toBe(true);
+      expect(rowState(view, "oven")).toEqual({checked: true, disabled: false});
+      expect(row("lamb_in").props["aria-checked"]).toBe(false);
+      expect(rowState(view, "lamb_in")).toEqual({checked: false, disabled: false});
+
+      view.rerender(<BlocksView {...props} pendingElementIds={["cooking_oven"]} />);
+      expect(row("lamb_in").props.accessibilityRole).toBe("checkbox");
+      expect(row("lamb_in").props["aria-label"]).toBe("Put the lamb in");
+      expect(row("lamb_in").props["aria-disabled"]).toBe(true);
+      expect(rowState(view, "oven")).toEqual({checked: true, disabled: true});
+    });
+
+    it("ticks items on the device when the checklist has no callback", async () => {
+      const onAction = mock(() => undefined);
+      const view = renderWithTheme(
+        <BlocksView
+          document={LOCAL_CHECKLIST}
+          hostActions={["toggleChecklist"]}
+          onAction={onAction}
+        />
+      );
+      await tick(view, "lamb_in");
+      expect(counter(view)).toBe("2 of 8");
+      expect(isTicked(view, "lamb_in")).toBe(true);
+      await tick(view, "oven");
+      expect(counter(view)).toBe("1 of 8");
+      expect(isTicked(view, "oven")).toBe(false);
+      expect(onAction).not.toHaveBeenCalled();
+    });
+
+    it("keeps ticks local to each rendered document", async () => {
+      const first = renderWithTheme(<BlocksView document={LOCAL_CHECKLIST} />);
+      await tick(first, "veg");
+      // Testing Library ignores presses outside the latest render, so the second view mounts after.
+      const second = renderWithTheme(<BlocksView document={LOCAL_CHECKLIST} />);
+      expect(counter(first)).toBe("2 of 8");
+      expect(counter(second)).toBe("1 of 8");
+    });
+
+    it("ticks locally when the callback is not a registered host action", async () => {
+      const onAction = mock(() => undefined);
+      const view = renderWithTheme(
+        <BlocksView document={CHECKLIST} hostActions={["other"]} onAction={onAction} />
+      );
+      await tick(view, "lamb_in");
+      expect(counter(view)).toBe("2 of 8");
+      expect(onAction).not.toHaveBeenCalled();
+    });
+
+    it("emits the tick with the full state and waits for the override", async () => {
+      const onAction = mock(() => undefined);
+      const view = renderWithTheme(
+        <BlocksView document={CHECKLIST} hostActions={["toggleChecklist"]} onAction={onAction} />
+      );
+      await tick(view, "lamb_in");
+      expect(onAction).toHaveBeenCalledTimes(1);
+      expect(onAction).toHaveBeenCalledWith({
+        action: {
+          kind: "callback",
+          name: "toggleChecklist",
+          payload: {
+            checked: true,
+            itemId: "lamb_in",
+            recipe: "roast",
+            state: {
+              carve: false,
+              gravy: false,
+              lamb_in: true,
+              oven: true,
+              parsnips: false,
+              potatoes: false,
+              rest: false,
+              veg: false,
+            },
+          },
+        },
+        blockId: "cooking",
+        elementId: "cooking_lamb_in",
+      });
+      expect(counter(view)).toBe("1 of 8");
+      expect(isTicked(view, "lamb_in")).toBe(false);
+
+      view.rerender(
+        <BlocksView
+          document={CHECKLIST}
+          hostActions={["toggleChecklist"]}
+          onAction={onAction}
+          pendingElementIds={["cooking_lamb_in"]}
+        />
+      );
+      expect(rowState(view, "lamb_in")).toEqual({checked: false, disabled: true});
+      expect(counter(view)).toBe("1 of 8");
+
+      view.rerender(
+        <BlocksView
+          document={CHECKLIST}
+          hostActions={["toggleChecklist"]}
+          onAction={onAction}
+          overrides={overrideWith(["oven", "lamb_in"])}
+        />
+      );
+      expect(counter(view)).toBe("2 of 8");
+      expect(isTicked(view, "lamb_in")).toBe(true);
+    });
+
+    it("disables the whole checklist while a tick is pending", async () => {
+      const onAction = mock(() => undefined);
+      const props = {document: CHECKLIST, hostActions: ["toggleChecklist"], onAction};
+      const view = renderWithTheme(<BlocksView {...props} />);
+      await tick(view, "lamb_in");
+      view.rerender(<BlocksView {...props} pendingElementIds={["cooking_lamb_in"]} />);
+      expect(rowState(view, "veg")).toEqual({checked: false, disabled: true});
+      await tick(view, "veg");
+      expect(onAction).toHaveBeenCalledTimes(1);
+
+      view.rerender(<BlocksView {...props} overrides={overrideWith(["oven", "lamb_in"])} />);
+      await tick(view, "veg");
+      expect(onAction).toHaveBeenCalledTimes(2);
+      const [event] = onAction.mock.calls[1] as unknown as [
+        {action: {payload: {itemId: string; state: Record<string, boolean>}}},
+      ];
+      expect(event.action.payload.itemId).toBe("veg");
+      expect(event.action.payload.state).toMatchObject({lamb_in: true, oven: true, veg: true});
+    });
+
+    it("emits the tick when hostActions is omitted, like the stepper", async () => {
+      const onAction = mock(() => undefined);
+      const view = renderWithTheme(<BlocksView document={CHECKLIST} onAction={onAction} />);
+      await tick(view, "oven");
+      expect(onAction).toHaveBeenCalledTimes(1);
+      const [event] = onAction.mock.calls[0] as unknown as [
+        {action: {payload: {checked: boolean; itemId: string}}},
+      ];
+      expect(event.action.payload.itemId).toBe("oven");
+      expect(event.action.payload.checked).toBe(false);
+      expect(counter(view)).toBe("1 of 8");
+    });
+
+    it("drops local ticks when an override for the checklist arrives", async () => {
+      const view = renderWithTheme(<BlocksView document={LOCAL_CHECKLIST} />);
+      await tick(view, "veg");
+      expect(counter(view)).toBe("2 of 8");
+      view.rerender(
+        <BlocksView
+          document={LOCAL_CHECKLIST}
+          overrides={overrideWith(["gravy", "rest", "carve"])}
+        />
+      );
+      expect(counter(view)).toBe("3 of 8");
+      expect(isTicked(view, "veg")).toBe(false);
+      expect(isTicked(view, "gravy")).toBe(true);
+    });
   });
 
   it("does not use raw react-native views in the blocks folder", () => {

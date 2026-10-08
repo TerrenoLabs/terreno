@@ -5,6 +5,8 @@ import {
   type ChecklistItem,
   checklistElementId,
   type DatasetColumn,
+  type GalleryBlock,
+  type GalleryImage,
   type InlineDataset,
   type StepperBlock,
   stepperElementIds,
@@ -22,7 +24,7 @@ import {Box} from "../Box";
 import {Button} from "../Button";
 import {Card} from "../Card";
 import {CheckBox} from "../CheckBox";
-import type {DataTableColumn, LayoutChangeEvent} from "../Common";
+import {type DataTableColumn, getSpacing, type LayoutChangeEvent} from "../Common";
 import {DataTable} from "../DataTable";
 import {DonutChart} from "../DonutChart";
 import {Heading} from "../Heading";
@@ -375,6 +377,150 @@ const TableBlockView: React.FC<{
   );
 };
 
+/** Most tiles in one gallery row; more images wrap into further rows. */
+const GALLERY_COLUMNS = 3;
+/** Narrowest tile, and the tile width before the first layout pass; past this the row scrolls sideways. */
+const GALLERY_MIN_TILE_WIDTH = 160;
+/** Box `gap` step between tiles. */
+const GALLERY_GAP = 2;
+
+interface GalleryLayout {
+  isScrolling: boolean;
+  rows: GalleryImage[][];
+  tileHeight: number;
+  tileWidth: number;
+}
+
+const chunk = <T,>(items: readonly T[], size: number): T[][] => {
+  const rows: T[][] = [];
+  for (let start = 0; start < items.length; start += size) {
+    rows.push(items.slice(start, start + size));
+  }
+  return rows;
+};
+
+const galleryLayout = ({
+  containerWidth,
+  images,
+}: {
+  containerWidth?: number;
+  images: readonly GalleryImage[];
+}): GalleryLayout => {
+  const columns = Math.min(GALLERY_COLUMNS, images.length);
+  const gap = getSpacing(GALLERY_GAP);
+  const fitWidth =
+    containerWidth === undefined || columns === 0
+      ? GALLERY_MIN_TILE_WIDTH
+      : Math.floor((containerWidth - gap * (columns - 1)) / columns);
+  const isScrolling = fitWidth < GALLERY_MIN_TILE_WIDTH;
+  const tileWidth = isScrolling ? GALLERY_MIN_TILE_WIDTH : fitWidth;
+  return {
+    isScrolling,
+    rows: isScrolling ? [[...images]] : chunk(images, GALLERY_COLUMNS),
+    tileHeight: Math.round((tileWidth * 3) / 4),
+    tileWidth,
+  };
+};
+
+const GalleryTile: React.FC<{
+  height: number;
+  image: GalleryImage;
+  testID: string;
+  url?: string;
+  width: number;
+}> = ({height, image, testID, url, width}) => (
+  <Box gap={1} testID={testID} width={width}>
+    {url ? (
+      <Box overflow="hidden" rounding="md">
+        <Image
+          alt={image.alt}
+          color="transparent"
+          fit="cover"
+          naturalWidth={width}
+          src={url}
+          style={{height, width}}
+        />
+      </Box>
+    ) : (
+      <Box
+        accessibilityLabel={image.alt}
+        alignItems="center"
+        color="neutralLight"
+        height={height}
+        justifyContent="center"
+        padding={2}
+        rounding="md"
+        testID={`${testID}-placeholder`}
+      >
+        <Text align="center" color="secondaryLight" size="sm">
+          {image.alt}
+        </Text>
+      </Box>
+    )}
+    {image.caption ? (
+      <Text color="secondaryLight" size="sm" testID={`${testID}-caption`}>
+        {image.caption}
+      </Text>
+    ) : null}
+  </Box>
+);
+
+/**
+ * Up to three tiles share one row; more wrap into a three-column grid. When the measured width
+ * would make a tile narrower than GALLERY_MIN_TILE_WIDTH, every tile sits in one row that
+ * scrolls sideways instead.
+ */
+const GalleryBlockView: React.FC<{
+  block: GalleryBlock;
+  context: BlockRenderContext;
+  path: string;
+}> = ({block, context, path}) => {
+  const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined);
+  const handleLayout = useCallback((event: LayoutChangeEvent): void => {
+    const {width} = event.nativeEvent.layout;
+    setContainerWidth((previous) => (previous === width ? previous : width));
+  }, []);
+  const layout = galleryLayout({containerWidth, images: block.images});
+  const indexOf = new Map(block.images.map((image, index) => [image, index]));
+  const renderTile = (image: GalleryImage): React.ReactElement => {
+    const index = indexOf.get(image) ?? 0;
+    const fileId = fileRefId(image.src);
+    const url = fileId === undefined ? image.src : context.resolvedImages?.[fileId];
+    return (
+      <GalleryTile
+        height={layout.tileHeight}
+        image={image}
+        key={`${path}-image-${index}`}
+        testID={`${path}-image-${index}`}
+        url={url}
+        width={layout.tileWidth}
+      />
+    );
+  };
+  return (
+    <Box onLayout={handleLayout} testID={path}>
+      {layout.isScrolling ? (
+        <Box direction="row" gap={GALLERY_GAP} overflow="scrollX" scroll testID={`${path}-scroll`}>
+          {block.images.map(renderTile)}
+        </Box>
+      ) : (
+        <Box gap={GALLERY_GAP}>
+          {layout.rows.map((row, rowIndex) => (
+            <Box
+              direction="row"
+              gap={GALLERY_GAP}
+              key={`${path}-row-${rowIndex}`}
+              testID={`${path}-row-${rowIndex}`}
+            >
+              {row.map(renderTile)}
+            </Box>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+};
+
 /** Renders one catalog block with @terreno/ui components. */
 export const renderBlock = (
   block: Block,
@@ -509,6 +655,8 @@ export const renderBlock = (
     }
     case "table":
       return <TableBlockView block={block} context={context} key={path} path={path} />;
+    case "gallery":
+      return <GalleryBlockView block={block} context={context} key={path} path={path} />;
     case "stepper":
       return renderStepper(block, path, context);
     case "checklist":

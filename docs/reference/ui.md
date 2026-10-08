@@ -530,6 +530,20 @@ and the override's `checked` values show.
 The built-in checklist host action, `toggleChecklistHostAction`, is not shipped yet; until then
 a host that wants ticks on the server registers its own callback.
 
+A `gallery` draws each image as a 4:3 `Image` tile (`fit` cover), with `alt` as the tile's
+accessible label and the optional `caption` as small muted text under it. Tiles are 8 apart
+(the `gap={2}` spacing step). The gallery measures its container with `onLayout`: up to three
+images share one row at equal widths, and more wrap into a three-column grid whose last row
+keeps the same tile width. When that width would fall under 160, every tile stays 160 wide in
+one row that scrolls sideways. A measured width decides this rather than the `sm` breakpoint, so
+a gallery inside a narrow `columns` child or card also scrolls. Before the first layout each tile
+is 160 wide. A `file:` tile loads through `resolveImage` like an `image` block. Until it has a
+URL, or when the lookup fails, the tile is a muted 4:3 placeholder that shows the alt text and
+keeps it as the label. Test ids: the gallery `<path>`, each grid row `<path>-row-<n>`, the
+scrolling row `<path>-scroll`, each tile `<path>-image-<index>`, its caption
+`<path>-image-<index>-caption`, and a placeholder `<path>-image-<index>-placeholder`.
+`Image` passes `alt` to the native image as its `accessibilityLabel`.
+
 ```tsx
 <BlocksView
   document={reply}

@@ -3,9 +3,10 @@ import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import type {Block} from "@terreno/blocks";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
-import {ActivityIndicator, Image as NativeImage, StyleSheet} from "react-native";
+import {ActivityIndicator, Image as NativeImage, ScrollView, StyleSheet} from "react-native";
 
 import {IconButton} from "../IconButton";
+import {Image} from "../Image";
 import {sharedResponsiveBreakpointStore} from "../ResponsiveBreakpoint";
 import {renderWithTheme} from "../test-utils";
 import {BlocksView} from "./BlocksView";
@@ -1059,6 +1060,143 @@ blocks:
       expect(counter(view)).toBe("3 of 8");
       expect(isTicked(view, "veg")).toBe(false);
       expect(isTicked(view, "gravy")).toBe(true);
+    });
+  });
+
+  describe("gallery", () => {
+    const PIXEL = "data:image/png;base64,iVBORw0KGgo=";
+    const galleryOf = (count: number): string =>
+      `v: 1
+blocks:
+  - type: gallery
+    id: roast_photos
+    images:
+${Array.from({length: count}, (_, index) => {
+  const caption = index === 0 ? "\n        caption: Roast lamb" : "";
+  return `      - src: "${PIXEL}"\n        alt: Photo ${index + 1}${caption}`;
+}).join("\n")}
+`;
+    const measure = async (view: RenderedView, testID: string, width: number): Promise<void> => {
+      await act(async () => {
+        fireEvent(view.getByTestId(testID), "layout", {
+          nativeEvent: {layout: {height: 300, width, x: 0, y: 0}},
+        });
+      });
+    };
+    const imageSizes = (view: RenderedView): {height?: number; width?: number}[] =>
+      view
+        .UNSAFE_getAllByType(NativeImage)
+        .map((node) => StyleSheet.flatten(node.props.style) as {height?: number; width?: number})
+        .map(({height, width}) => ({height, width}));
+    // Composite and host nodes share a testID, so ids are deduplicated in render order.
+    const tileIdsIn = (view: RenderedView, rowTestID: string): string[] => [
+      ...new Set(
+        view
+          .getByTestId(rowTestID)
+          .findAll((node) => typeof node.props.testID === "string")
+          .map((node) => String(node.props.testID))
+          .filter((id) => /^blocks-0-image-\d+$/.test(id))
+      ),
+    ];
+
+    it("draws up to three @terreno/ui Image tiles in one 4:3 row with alt as the accessible label", async () => {
+      const view = renderWithTheme(<BlocksView document={galleryOf(3)} />);
+      await measure(view, "blocks-0", 600);
+      expect(view.UNSAFE_getAllByType(Image)).toHaveLength(3);
+      const images = view.UNSAFE_getAllByType(NativeImage);
+      expect(images.map((node) => node.props.accessibilityLabel)).toEqual([
+        "Photo 1",
+        "Photo 2",
+        "Photo 3",
+      ]);
+      expect(images.every((node) => node.props.source.uri === PIXEL)).toBe(true);
+      // (600 - 2 gaps of 8) / 3 = 194.67, floored; 194 * 3 / 4 = 145.5, rounded.
+      expect(imageSizes(view)).toEqual([
+        {height: 146, width: 194},
+        {height: 146, width: 194},
+        {height: 146, width: 194},
+      ]);
+      expect(tileIdsIn(view, "blocks-0-row-0")).toEqual([
+        "blocks-0-image-0",
+        "blocks-0-image-1",
+        "blocks-0-image-2",
+      ]);
+      expect(view.queryByTestId("blocks-0-row-1")).toBeNull();
+      expect(view.queryByTestId("blocks-0-scroll")).toBeNull();
+    });
+
+    it("shows a caption as small muted text under its tile", () => {
+      const view = renderWithTheme(<BlocksView document={galleryOf(2)} />);
+      const caption = view.getByTestId("blocks-0-image-0-caption");
+      expect(caption.props.children).toBe("Roast lamb");
+      expect(view.queryByTestId("blocks-0-image-1-caption")).toBeNull();
+    });
+
+    it("splits two images across the row as equal halves", async () => {
+      const view = renderWithTheme(<BlocksView document={galleryOf(2)} />);
+      await measure(view, "blocks-0", 408);
+      expect(imageSizes(view)).toEqual([
+        {height: 150, width: 200},
+        {height: 150, width: 200},
+      ]);
+    });
+
+    it("wraps more than three images into a three-column grid", async () => {
+      const view = renderWithTheme(<BlocksView document={galleryOf(5)} />);
+      await measure(view, "blocks-0", 600);
+      expect(tileIdsIn(view, "blocks-0-row-0")).toEqual([
+        "blocks-0-image-0",
+        "blocks-0-image-1",
+        "blocks-0-image-2",
+      ]);
+      expect(tileIdsIn(view, "blocks-0-row-1")).toEqual(["blocks-0-image-3", "blocks-0-image-4"]);
+      expect(imageSizes(view).every(({width}) => width === 194)).toBe(true);
+    });
+
+    it("uses 160 wide tiles until the gallery is measured", () => {
+      const view = renderWithTheme(<BlocksView document={galleryOf(3)} />);
+      expect(imageSizes(view)[0]).toEqual({height: 120, width: 160});
+      expect(view.getByTestId("blocks-0-row-0")).toBeTruthy();
+    });
+
+    it("scrolls one row sideways when tiles would be narrower than 160", async () => {
+      const view = renderWithTheme(<BlocksView document={galleryOf(5)} />);
+      await measure(view, "blocks-0", 320);
+      expect(view.queryByTestId("blocks-0-row-0")).toBeNull();
+      expect(tileIdsIn(view, "blocks-0-scroll")).toHaveLength(5);
+      expect(view.UNSAFE_getAllByType(ScrollView).some((node) => node.props.horizontal)).toBe(true);
+      expect(imageSizes(view).every(({height, width}) => width === 160 && height === 120)).toBe(
+        true
+      );
+    });
+
+    it("loads file: tiles inside a card through resolveImage and keeps an unresolved tile as a labelled placeholder", async () => {
+      const document = `v: 1
+blocks:
+  - type: card
+    children:
+      - type: gallery
+        images:
+          - src: file:table-setting
+            alt: A table set for six
+          - src: file:flowers
+            alt: A jug of spring flowers
+`;
+      const resolveImage = mock(async (id: string) =>
+        id === "table-setting" ? "https://cdn.example/table.png" : undefined
+      );
+      const view = renderWithTheme(<BlocksView document={document} resolveImage={resolveImage} />);
+      await waitFor(() => {
+        expect(view.UNSAFE_getAllByType(NativeImage)).toHaveLength(1);
+      });
+      expect(resolveImage).toHaveBeenCalledWith("table-setting");
+      expect(resolveImage).toHaveBeenCalledWith("flowers");
+      const [loaded] = view.UNSAFE_getAllByType(NativeImage);
+      expect(loaded?.props.source.uri).toBe("https://cdn.example/table.png");
+      expect(loaded?.props.accessibilityLabel).toBe("A table set for six");
+      const placeholder = view.getByTestId("blocks-0-0-image-1-placeholder");
+      expect(placeholder.props.accessibilityLabel).toBe("A jug of spring flowers");
+      expect(view.getByText("A jug of spring flowers")).toBeTruthy();
     });
   });
 

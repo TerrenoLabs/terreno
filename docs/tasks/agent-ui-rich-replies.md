@@ -83,7 +83,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Delivers: a `CheckBox` row per item (meta, bold text, detail) and the "n of m" counter. With a callback in `hostActions`, a tick emits `{...payload, itemId, checked, state}`, disables the whole checklist while a tick is pending (so a second tick cannot send a stale `state`), and shows the returned block. Without one, ticks are local for each rendered document.
   - Acceptance: AC6.
 
-- [ ] **T11** — Gallery renders
+- [x] **T11** — Gallery renders
   - Depends on: T6, T10
   - Files: `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/BlocksView.test.tsx`, `demo/stories/BlocksView.stories.tsx`, `docs/reference/ui.md`.
   - Delivers: one row of 4:3 `Image` tiles up to 3, a 3-column grid above that, captions, `file:` ids through `useResolvedImages`, and sideways scroll on narrow screens.

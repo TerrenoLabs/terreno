@@ -76,7 +76,7 @@ Warnings do not block rendering:
 | `context` | `text` (1–280) | `id` | `Text` |
 | `stepper` | see [Stepper](#stepper) | | `IconButton` − and +, `Text`, `Heading` |
 | `checklist` | see [Checklist](#checklist) | | `CheckBox` rows, `Text`, `Heading` |
-| `gallery` | see [Gallery](#gallery) | | Validated; `BlocksView` does not draw it yet |
+| `gallery` | see [Gallery](#gallery) | | `Image` tiles in a row or grid, `Text` captions |
 | `list` | see [List](#list) | | Validated; `BlocksView` does not draw it yet |
 | `columns` | `children`: 2–4 blocks | `id` | `Box` row |
 | `card` | `children`: at least 1 block | `title` (1–120), `eyebrow` (1–60), `id` | `Card` |
@@ -162,8 +162,9 @@ element id, is `DUPLICATE_ID`.
 
 ## Gallery
 
-A `gallery` is a set of 2–6 photos shown together. This release defines and validates the block,
-and the prompt offers it. `BlocksView` does not draw it yet.
+A `gallery` is a set of 2–6 photos shown together. `BlocksView` draws up to three in one row of
+equal 4:3 tiles and wraps more into a three-column grid. On a narrow screen the tiles keep a
+minimum width and the row scrolls sideways (see [BlocksView](ui.md#blocksview)).
 
 | Field | Required | Rule |
 | --- | --- | --- |

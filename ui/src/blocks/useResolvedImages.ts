@@ -21,6 +21,14 @@ const collectFileIds = (blocks: readonly Block[], ids: Set<string>): void => {
         ids.add(id);
       }
     }
+    if (block.type === "gallery") {
+      for (const image of block.images) {
+        const id = fileRefId(image.src);
+        if (id !== undefined) {
+          ids.add(id);
+        }
+      }
+    }
     if (block.type === "columns" || block.type === "card") {
       collectFileIds(block.children, ids);
     }

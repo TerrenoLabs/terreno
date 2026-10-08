@@ -35,6 +35,7 @@ export class Image extends React.Component<ImageProps, {}> {
     return (
       <Box color={this.props.color}>
         <NativeImage
+          {...(this.props.alt ? {accessibilityLabel: this.props.alt, accessible: true} : {})}
           resizeMode={this.resizeMode(this.props.fit)}
           source={{cache: "force-cache", uri: this.props.src}}
           style={{

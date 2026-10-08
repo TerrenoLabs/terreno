@@ -4,6 +4,7 @@ import {
   BlocksViewChecklist,
   BlocksViewDemo,
   BlocksViewDisplay,
+  BlocksViewGallery,
   BlocksViewInvalid,
 } from "@stories/BlocksView.stories";
 import {BlocksView} from "@terreno/ui";
@@ -12,6 +13,7 @@ export const BlocksViewConfiguration: DemoConfiguration = {
   a11yNotes: [
     "Headings, badges, and body text use the same components as the rest of the app, so screen readers read them as headings and text.",
     "Each checklist row is a checkbox labelled with the item text.",
+    "Each gallery tile is labelled with its alt text, including a placeholder tile whose image did not load.",
   ],
   additionalDocumentation: [],
   category: "Pattern",
@@ -38,6 +40,11 @@ export const BlocksViewConfiguration: DemoConfiguration = {
     Display: {
       description: "A warning callout, a receipt image, and invoice notes in an accordion.",
       render: () => <BlocksViewDisplay />,
+    },
+    Gallery: {
+      description:
+        "Three photos in one row of 4:3 tiles, then five in a three-column grid. A file id loads through resolveImage; one with no URL shows a placeholder. Narrow screens scroll the row sideways.",
+      render: () => <BlocksViewGallery />,
     },
     Invalid: {
       description: "An unknown field shows an error banner. The raw document stays collapsed.",

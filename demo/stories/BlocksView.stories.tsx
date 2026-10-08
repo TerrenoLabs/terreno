@@ -171,6 +171,56 @@ export const BlocksViewChecklist: React.FC = () => {
   );
 };
 
+// Solid 4x3 swatches stand in for photos so the story never loads an external image.
+const SWATCH = {
+  carrots:
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGN4VGEERww4OQBybhKRd/XWIwAAAABJRU5ErkJggg==",
+  gravy:
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGPIc9OFIwacHADQ3QqNcMVzWAAAAABJRU5ErkJggg==",
+  greens:
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGOI6gmAIwacHAAcCg6J4LtSEwAAAABJRU5ErkJggg==",
+  lamb: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGOYFmQDRww4OQAPVg2x06ZVAQAAAABJRU5ErkJggg==",
+  potatoes:
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGO4tioKjhhwcgC3ShY5GUQEVQAAAABJRU5ErkJggg==",
+  table:
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGPYsqAHjhhwcgC41haBHdFpowAAAABJRU5ErkJggg==",
+} as const;
+
+const GALLERY = `v: 1
+blocks:
+  - type: heading
+    size: sm
+    text: Three photos share one row
+  - type: gallery
+    id: roast_photos
+    images:
+      - {src: "${SWATCH.lamb}", alt: Roast leg of lamb on a carving board, caption: Roast lamb}
+      - {src: "${SWATCH.potatoes}", alt: Crisp roast potatoes in a tray, caption: Roast potatoes}
+      - {src: "${SWATCH.carrots}", alt: Glazed carrots in a white dish, caption: "Honey, thyme, and butter"}
+  - type: heading
+    size: sm
+    text: More than three wrap into a grid
+  - type: gallery
+    id: table_photos
+    images:
+      - {src: "file:table-setting", alt: A table set for six, caption: Loaded through resolveImage}
+      - {src: "${SWATCH.greens}", alt: Buttered spring greens}
+      - {src: "${SWATCH.gravy}", alt: A jug of gravy}
+      - {src: "${SWATCH.lamb}", alt: Sliced lamb on a platter}
+      - {src: "file:missing-photo", alt: A jug of spring flowers, caption: "No URL, so a placeholder"}
+`;
+
+const resolveDemoImage = async (fileId: string): Promise<string | undefined> =>
+  fileId === "table-setting" ? SWATCH.table : undefined;
+
+export const BlocksViewGallery: React.FC = () => {
+  return (
+    <Box padding={4} width="100%">
+      <BlocksView document={GALLERY} resolveImage={resolveDemoImage} />
+    </Box>
+  );
+};
+
 export const BlocksViewInvalid: React.FC = () => {
   return (
     <Box padding={4} width="100%">

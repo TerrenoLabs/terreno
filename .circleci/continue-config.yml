@@ -1460,6 +1460,8 @@ jobs:
       - run:
           name: Compile workspace
           no_output_timeout: 15m
+          environment:
+            NODE_OPTIONS: "--max-old-space-size=6144"
           command: bun run compile
       - when:
           condition: << parameters.include-demo >>
@@ -1484,8 +1486,8 @@ jobs:
             CI: "true"
             EXPO_NO_TELEMETRY: "1"
             EXPO_PUBLIC_API_URL: http://localhost:4000
-            NODE_OPTIONS: "--max-old-space-size=8192"
-          command: bun expo export --platform web
+            NODE_OPTIONS: "--max-old-space-size=6144"
+          command: bun run export
       - run:
           name: Seed example-backend
           working_directory: ~/project/example-backend
@@ -1892,7 +1894,7 @@ jobs:
 
   deploy-frontend-preview:
     executor: node22
-    resource_class: large
+    resource_class: xlarge
     steps:
       - skip_if_fork_deploy
       - require_netlify_context:

@@ -25,6 +25,7 @@ describe("@terreno/blocks public exports", () => {
     "blocksJsonSchema",
     "blocksPromptSection",
     "blocksSchema",
+    "checklistElementId",
     "parseBlocks",
     "parseBlocksPartial",
     "stepperElementIds",

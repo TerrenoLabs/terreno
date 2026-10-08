@@ -308,7 +308,7 @@ const mapIssue = (issue: z.core.$ZodIssue, root: unknown): BlockError[] => {
     return [
       error({
         code: "INVALID_ENUM",
-        fix: "Set type to heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details, stepper, or html.",
+        fix: "Set type to heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details, stepper, checklist, or html.",
         message: `${subject(path)} is not a supported block.`,
         path: path === "" ? "type" : `${path}.type`,
       }),

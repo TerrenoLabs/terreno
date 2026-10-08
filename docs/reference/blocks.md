@@ -75,6 +75,7 @@ Warnings do not block rendering:
 | `divider` | — | `id` | `SectionDivider` |
 | `context` | `text` (1–280) | `id` | `Text` |
 | `stepper` | see [Stepper](#stepper) | | `IconButton` − and +, `Text`, `Heading` |
+| `checklist` | see [Checklist](#checklist) | | Validated; `BlocksView` does not draw it yet |
 | `columns` | `children`: 2–4 blocks | `id` | `Box` row |
 | `card` | `children`: at least 1 block | `title` (1–120), `id` | `Card` |
 
@@ -121,6 +122,33 @@ The renderer uses the element ids `<id>_decrease` and `<id>_increase` for the �
 A tap sends `{kind: callback, name, payload: {...payload, value: value ± step}}` with
 `blockId: <id>`.
 
+## Checklist
+
+A `checklist` is a list of tickable items. This release defines and validates the block, and the
+prompt offers it. `BlocksView` does not draw it yet, and no built-in host action handles its
+callback yet.
+
+| Field | Required | Rule |
+| --- | --- | --- |
+| `id` | yes | Block id pattern, at most 31 characters |
+| `title` | no | 1–120 |
+| `callback` | no | `{name, payload?}`. `name` is checked by `UNKNOWN_HOST_ACTION` against `checklistActions` when that is passed, otherwise against `hostActions` |
+| `items` | yes | 1–30 of `{id, text (1–120), detail? (1–280), meta? (1–40), checked?: boolean}`. An item `id` uses the block id pattern, at most 32 characters, and is unique in the checklist (`DUPLICATE_ID`) |
+
+```yaml
+- type: checklist
+  id: cooking
+  title: Cooking checklist
+  callback: {name: toggleChecklist}
+  items:
+    - {id: oven, meta: "1:00 pm", text: Preheat the oven, detail: "220 C, fan off.", checked: true}
+    - {id: lamb_in, meta: "1:30 pm", text: Put the lamb in}
+```
+
+Each item's tick has the reserved element id `<id>_<item id>` (`checklistElementId(id, itemId)`).
+Another block or action element with that id, or a stepper or checklist that derives the same
+element id, is `DUPLICATE_ID`.
+
 ## Actions
 
 An `actions` block requires `id` and `elements` (1–25). An element is a `button` or a
@@ -165,6 +193,9 @@ Unknown fields fail with `UNKNOWN_KEY`. `v` must be `1` (`UNSUPPORTED_VERSION`).
 | Text in one `text` block | 4,000 characters |
 | Items in one `stepper` | 12 |
 | `stepper` id | 54 characters |
+| Items in one `checklist` | 1–30 |
+| `checklist` id | 31 characters |
+| `checklist` item id | 32 characters |
 | Document version | 1 |
 
 ## Errors
@@ -180,7 +211,7 @@ heuristics and does not fail `ok`.
 | `DATASET_NOT_FOUND` | A chart or table names a dataset the document does not define. |
 | `DATASET_TOO_LARGE` | A dataset has more than 500 rows or 12 columns. |
 | `DEPTH_EXCEEDED` | A `columns` or `card` block is nested inside another layout block. |
-| `DUPLICATE_ID` | A block id, an action-element id, or a column name is used more than once, or an id takes a stepper's `<id>_decrease` or `<id>_increase`. |
+| `DUPLICATE_ID` | A block id, an action-element id, or a column name is used more than once, an id takes a stepper's `<id>_decrease` or `<id>_increase` or a checklist's `<id>_<item id>`, or a checklist repeats an item id. |
 | `HTML_DISABLED` | An html block is present and this host has not turned HTML on. |
 | `HTML_TOO_LARGE` | An html block is larger than 100,000 bytes. |
 | `IMAGE_HOST_NOT_ALLOWED` | An image URL is not a `data:image` URL, a `file:` ref, or an `https` URL on an allowed host. |
@@ -211,14 +242,15 @@ heuristics and does not fail `ok`.
 | --- | --- |
 | `parseBlocks(text)` | Fence strip, YAML or JSON parse |
 | `parseBlocksPartial(text)` | Completed top-level blocks while a reply is still streaming |
-| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, action, stepper, and html lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names. `options.stepperActions` and `options.checklistActions`, when set, check stepper and checklist `callback.name` instead (`UNKNOWN_HOST_ACTION`). `options.allowHtml` allows `html` blocks. |
+| `validateBlocks(doc, options?)` | Structure, then dataset, chart, table, action, stepper, checklist, and html lint. `options.knownDatasets` checks `ref` columns. `options.hostActions` checks callback names. `options.stepperActions` and `options.checklistActions`, when set, check stepper and checklist `callback.name` instead (`UNKNOWN_HOST_ACTION`). `options.allowHtml` allows `html` blocks. |
 | `wrapAsTextDocument(text)` | Display fallback for a non-document |
 | `blocksSchema` | Zod schema |
 | `blocksJsonSchema` | JSON Schema for the same structure |
-| `blocksPromptSection({hostActions, allowHtml, imageHosts, richBlocks, stepperActions, checklistActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. `richBlocks` (default `true`) offers the rich blocks; `false` returns the prompt as it was before them, whatever the other lists hold. With `richBlocks` on and a non-empty `stepperActions`, the prompt adds `stepper`, its rules and limits, and names those actions as its callbacks; without one it never mentions `stepper`. `checklistActions` names the actions a checklist callback may use. |
+| `blocksPromptSection({hostActions, allowHtml, imageHosts, richBlocks, stepperActions, checklistActions})` | System-prompt section. Limits come from `BLOCK_LIMITS`. `allowHtml` adds the `html` block. `richBlocks` (default `true`) offers the rich blocks; `false` returns the prompt as it was before them, whatever the other lists hold. With `richBlocks` on and a non-empty `stepperActions`, the prompt adds `stepper`, its rules and limits, and names those actions as its callbacks; without one it never mentions `stepper`. With `richBlocks` on, the prompt adds `checklist` and its limits. A non-empty `checklistActions` is named as the callback to set; without one the prompt says to leave `callback` out, so ticks stay local. |
 | `BLOCK_LIMITS` | The numbers in the table above |
 | `BLOCK_ERROR_CODES` | The codes in the table above |
 | `BLOCK_WARNING_CODES` | `BAR_TOO_MANY_CATEGORIES`, `DONUT_TOO_MANY_SLICES`, `LINE_SINGLE_POINT` |
 | `stepperElementIds(id)` | `{decrease, increase}`: the element ids of a stepper's buttons |
+| `checklistElementId(id, itemId)` | `<id>_<item id>`: the element id of a checklist item's tick. `ChecklistBlock`, `ChecklistItem`, and `ChecklistCallback` are type exports. |
 | `STEPPER_ROUNDING` | `nearest`, `up`. `StepperBlock`, `StepperItem`, and `StepperCallback` are type exports. |
 | `HTML_HEIGHTS`, `CALLOUT_STATUSES` | Allowed `html` heights and `callout` statuses. `HtmlBlock`, `CalloutBlock`, `ImageBlock`, and `DetailsBlock` are type exports. |

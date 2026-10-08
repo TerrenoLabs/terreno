@@ -20,6 +20,12 @@ const LEGACY_OPTION_SETS = {
 } as const;
 
 const STEPPER_LINE_START = "stepper requires";
+const CHECKLIST_LINE_START = "checklist requires";
+
+const linesAdded = (section: string, base: string): string[] => {
+  const baseLines = new Set(base.split("\n"));
+  return section.split("\n").filter((line) => !baseLines.has(line));
+};
 
 describe("blocksPromptSection", () => {
   it("embeds the reply rule, the ref rule, both examples, and every limit", () => {
@@ -54,6 +60,7 @@ describe("blocksPromptSection", () => {
         });
         expect(section).toMatchSnapshot();
         expect(section).not.toContain("stepper");
+        expect(section).not.toContain("checklist");
       });
     }
   });
@@ -87,7 +94,7 @@ describe("blocksPromptSection", () => {
         stepperActions: ["scaleStepper", "scalePortions"],
       });
       const typesLine = section.split("\n").find((line) => line.startsWith("Block types:"));
-      expect(typesLine).toContain("details, stepper.");
+      expect(typesLine).toContain(", stepper");
       expect(section).toContain(
         "A stepper callback name must be one of: scaleStepper, scalePortions."
       );
@@ -108,6 +115,60 @@ describe("blocksPromptSection", () => {
       );
       expect(stepperLimits.length).toBeGreaterThan(0);
       for (const [, value] of stepperLimits) {
+        expect(added).toContain(String(value));
+      }
+    });
+  });
+
+  describe("the checklist line", () => {
+    it("is on by default and lists checklist as a block type", () => {
+      const section = blocksPromptSection();
+      expect(section).toContain(CHECKLIST_LINE_START);
+      expect(section).toBe(blocksPromptSection({richBlocks: true}));
+      const typesLine = section.split("\n").find((line) => line.startsWith("Block types:"));
+      expect(typesLine).toContain(", checklist");
+      const allowHtmlTypes = blocksPromptSection({allowHtml: true})
+        .split("\n")
+        .find((line) => line.startsWith("Block types:"));
+      expect(allowHtmlTypes).toContain(", checklist");
+    });
+
+    it("tells the model to leave callback out when no checklist action is registered", () => {
+      const section = blocksPromptSection({hostActions: ["toggleChecklist"]});
+      const added = linesAdded(
+        section,
+        blocksPromptSection({hostActions: ["toggleChecklist"], richBlocks: false})
+      );
+      const callbackLine = added.find(
+        (line) => line.includes("checklist") && line.includes("callback")
+      );
+      expect(callbackLine).toContain("Leave callback out of a checklist");
+      expect(added.join("\n")).not.toContain("toggleChecklist");
+      expect(blocksPromptSection({checklistActions: []})).toBe(blocksPromptSection());
+    });
+
+    it("names every checklist action as the callback to set when the host registers them", () => {
+      const section = blocksPromptSection({
+        checklistActions: ["toggleChecklist", "recordProgress"],
+        hostActions: ["approve", "toggleChecklist", "recordProgress"],
+      });
+      expect(section).toContain(
+        "Set a checklist callback name to one of: toggleChecklist, recordProgress."
+      );
+      expect(section).not.toContain("Leave callback out of a checklist");
+      expect(section).not.toContain("stepper");
+    });
+
+    it("prints every checklist limit from BLOCK_LIMITS in the lines it adds", () => {
+      const added = linesAdded(
+        blocksPromptSection(),
+        blocksPromptSection({richBlocks: false})
+      ).join("\n");
+      const checklistLimits = Object.entries(BLOCK_LIMITS).filter(([key]) =>
+        key.startsWith("checklist")
+      );
+      expect(checklistLimits.length).toBeGreaterThan(0);
+      for (const [, value] of checklistLimits) {
         expect(added).toContain(String(value));
       }
     });

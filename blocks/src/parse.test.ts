@@ -9,6 +9,9 @@ import {validateBlocks} from "./validate";
 const fixturesDir = join(import.meta.dir, "fixtures");
 
 const expectedInvalid: Record<string, {code: string; path: string}[]> = {
+  "checklist-duplicate-item.yaml": [{code: "DUPLICATE_ID", path: "blocks[0].items[1].id"}],
+  "checklist-item-id-too-long.yaml": [{code: "TOO_LONG", path: "blocks[0].items[0].id"}],
+  "checklist-reserved-id.yaml": [{code: "DUPLICATE_ID", path: "blocks[1].elements[0].id"}],
   "column-not-found.yaml": [{code: "COLUMN_NOT_FOUND", path: "blocks[0].x"}],
   "column-type.yaml": [{code: "COLUMN_TYPE_MISMATCH", path: "blocks[0].y"}],
   "dataset-not-found.yaml": [{code: "DATASET_NOT_FOUND", path: "blocks[0].data"}],

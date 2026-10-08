@@ -438,3 +438,224 @@ describe("stepper lint", () => {
     ).toEqual([{code: "INVALID_ENUM", path: "blocks[0].items[0].round"}]);
   });
 });
+
+const checklist = (fields: Record<string, unknown> = {}): Record<string, unknown> => ({
+  id: "cooking",
+  items: [
+    {id: "oven", text: "Preheat the oven"},
+    {checked: true, id: "lamb", text: "Put the lamb in"},
+  ],
+  type: "checklist",
+  ...fields,
+});
+
+const checklistItems = (count: number): Record<string, unknown>[] =>
+  Array.from({length: count}, (_unused, index) => ({id: `i${index}`, text: `Step ${index}`}));
+
+describe("checklist lint", () => {
+  it("accepts a checklist without a callback whatever actions the host registers", () => {
+    const doc = documentWith({blocks: [checklist()]});
+    expect(codesAndPaths(doc)).toEqual([]);
+    expect(codesAndPaths(doc, {checklistActions: [], hostActions: []})).toEqual([]);
+  });
+
+  it("checks the checklist callback name against hostActions when checklistActions is omitted", () => {
+    const doc = documentWith({blocks: [checklist({callback: {name: "toggleChecklist"}})]});
+    expect(codesAndPaths(doc)).toEqual([]);
+    expect(codesAndPaths(doc, {hostActions: ["toggleChecklist"]})).toEqual([]);
+    expect(codesAndPaths(doc, {hostActions: ["other"]})).toEqual([
+      {code: "UNKNOWN_HOST_ACTION", path: "blocks[0].callback.name"},
+    ]);
+  });
+
+  it("checks the checklist callback name against checklistActions when the host passes them", () => {
+    const options = {
+      checklistActions: ["toggleChecklist"],
+      hostActions: ["approve", "toggleChecklist"],
+    };
+    expect(
+      codesAndPaths(
+        documentWith({blocks: [checklist({callback: {name: "toggleChecklist"}})]}),
+        options
+      )
+    ).toEqual([]);
+    // Registered, but not a checklist action: a tick would call a handler that is not for checklists.
+    const unhandled = validateBlocks(
+      documentWith({blocks: [checklist({callback: {name: "approve"}})]}),
+      options
+    );
+    expect(unhandled.ok).toBe(false);
+    if (unhandled.ok) {
+      return;
+    }
+    expect(unhandled.errors).toEqual([
+      {
+        code: "UNKNOWN_HOST_ACTION",
+        fix: "Use one of: toggleChecklist.",
+        message: expect.any(String),
+        path: "blocks[0].callback.name",
+      },
+    ]);
+    expect(
+      codesAndPaths(documentWith({blocks: [checklist({callback: {name: "toggleChecklist"}})]}), {
+        checklistActions: [],
+        hostActions: ["toggleChecklist"],
+      })
+    ).toEqual([{code: "UNKNOWN_HOST_ACTION", path: "blocks[0].callback.name"}]);
+  });
+
+  it("does not let stepperActions decide a checklist callback, or checklistActions a stepper's", () => {
+    const doc = documentWith({
+      blocks: [checklist({callback: {name: "toggleChecklist"}}), stepper()],
+    });
+    expect(
+      codesAndPaths(doc, {
+        checklistActions: ["toggleChecklist"],
+        hostActions: ["scaleStepper", "toggleChecklist"],
+        stepperActions: ["scaleStepper"],
+      })
+    ).toEqual([]);
+    expect(
+      codesAndPaths(doc, {
+        checklistActions: ["scaleStepper"],
+        hostActions: ["scaleStepper", "toggleChecklist"],
+        stepperActions: ["toggleChecklist"],
+      })
+    ).toEqual([
+      {code: "UNKNOWN_HOST_ACTION", path: "blocks[0].callback.name"},
+      {code: "UNKNOWN_HOST_ACTION", path: "blocks[1].callback.name"},
+    ]);
+  });
+
+  it("rejects a repeated item id within one checklist but not across checklists", () => {
+    const repeated = checklist({
+      items: [
+        {id: "oven", text: "Preheat the oven"},
+        {id: "oven", text: "Turn the oven off"},
+      ],
+    });
+    expect(codesAndPaths(documentWith({blocks: [repeated]}))).toEqual([
+      {code: "DUPLICATE_ID", path: "blocks[0].items[1].id"},
+    ]);
+    expect(
+      codesAndPaths(
+        documentWith({
+          blocks: [checklist(), checklist({id: "prep", items: [{id: "oven", text: "Clean"}]})],
+        })
+      )
+    ).toEqual([]);
+  });
+
+  it("reserves <id>_<item id> before or after the checklist and names the checklist in the fix", () => {
+    const button = (id: string): Record<string, unknown> => ({
+      elements: [{action: {kind: "reply", text: "Hi"}, id, text: "Hi", type: "button"}],
+      id: "row",
+      type: "actions",
+    });
+    const before = validateBlocks(documentWith({blocks: [button("cooking_oven"), checklist()]}));
+    expect(before.ok).toBe(false);
+    if (before.ok) {
+      return;
+    }
+    expect(before.errors.map((error) => ({code: error.code, path: error.path}))).toEqual([
+      {code: "DUPLICATE_ID", path: "blocks[0].elements[0].id"},
+    ]);
+    expect(before.errors[0]?.fix).toContain("<id>_<item id>");
+    expect(
+      codesAndPaths(documentWith({blocks: [checklist(), {id: "cooking_lamb", type: "divider"}]}))
+    ).toEqual([{code: "DUPLICATE_ID", path: "blocks[1].id"}]);
+  });
+
+  it("reports a repeated block id once, not once per derived element id", () => {
+    expect(codesAndPaths(documentWith({blocks: [stepper(), stepper()]}))).toEqual([
+      {code: "DUPLICATE_ID", path: "blocks[1].id"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [checklist(), checklist()]}))).toEqual([
+      {code: "DUPLICATE_ID", path: "blocks[1].id"},
+    ]);
+  });
+
+  it("rejects two ticks that would share an element id", () => {
+    const first = checklist({id: "a_b", items: [{id: "c", text: "One"}]});
+    const second = checklist({id: "a", items: [{id: "b_c", text: "Two"}]});
+    expect(codesAndPaths(documentWith({blocks: [first, second]}))).toEqual([
+      {code: "DUPLICATE_ID", path: "blocks[1].items[0].id"},
+    ]);
+    expect(
+      codesAndPaths(
+        documentWith({
+          blocks: [
+            stepper({id: "a_b"}),
+            checklist({id: "a", items: [{id: "b_increase", text: "Up"}]}),
+          ],
+        })
+      )
+    ).toEqual([{code: "DUPLICATE_ID", path: "blocks[1].items[0].id"}]);
+    expect(
+      codesAndPaths(
+        documentWith({
+          blocks: [
+            checklist({id: "a", items: [{id: "b_increase", text: "Up"}]}),
+            stepper({id: "a_b"}),
+          ],
+        })
+      )
+    ).toEqual([{code: "DUPLICATE_ID", path: "blocks[1].id"}]);
+  });
+
+  it("caps the checklist id, item ids, item count, and text fields with closed codes", () => {
+    expect(codesAndPaths(documentWith({blocks: [checklist({id: `c${"x".repeat(31)}`})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].id"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [checklist({id: `c${"x".repeat(30)}`})]}))).toEqual(
+      []
+    );
+    const itemWith = (fields: Record<string, unknown>): Record<string, unknown> =>
+      checklist({items: [{id: "oven", text: "Preheat", ...fields}]});
+    expect(codesAndPaths(documentWith({blocks: [itemWith({id: `i${"x".repeat(32)}`})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].items[0].id"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({id: `i${"x".repeat(31)}`})]}))).toEqual(
+      []
+    );
+    expect(codesAndPaths(documentWith({blocks: [itemWith({id: "Oven"})]}))).toEqual([
+      {code: "INVALID_FORMAT", path: "blocks[0].items[0].id"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [checklist({items: checklistItems(30)})]}))).toEqual(
+      []
+    );
+    expect(codesAndPaths(documentWith({blocks: [checklist({items: checklistItems(31)})]}))).toEqual(
+      [{code: "TOO_MANY", path: "blocks[0].items"}]
+    );
+    expect(codesAndPaths(documentWith({blocks: [checklist({items: []})]}))).toEqual([
+      {code: "TOO_FEW", path: "blocks[0].items"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [checklist({title: "t".repeat(121)})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].title"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({text: "t".repeat(121)})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].items[0].text"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({detail: "d".repeat(281)})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].items[0].detail"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({meta: "m".repeat(41)})]}))).toEqual([
+      {code: "TOO_LONG", path: "blocks[0].items[0].meta"},
+    ]);
+    expect(
+      codesAndPaths(
+        documentWith({
+          blocks: [
+            itemWith({detail: "d".repeat(280), meta: "m".repeat(40), text: "t".repeat(120)}),
+          ],
+        })
+      )
+    ).toEqual([]);
+    expect(codesAndPaths(documentWith({blocks: [itemWith({checked: "yes"})]}))).toEqual([
+      {code: "INVALID_TYPE", path: "blocks[0].items[0].checked"},
+    ]);
+    expect(codesAndPaths(documentWith({blocks: [checklist({items: [{id: "oven"}]})]}))).toEqual([
+      {code: "MISSING_REQUIRED", path: "blocks[0].items[0].text"},
+    ]);
+  });
+});

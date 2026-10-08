@@ -49,13 +49,29 @@ const stepperPromptLines = (stepperActions: readonly string[]): string[] => [
 ];
 
 /**
+ * Checklist instructions, offered with rich blocks. A tick only reaches the host through a
+ * checklist action, so without one the model is told to leave callback out and ticks stay local.
+ */
+const checklistPromptLines = (checklistActions: readonly string[]): string[] => [
+  "checklist requires id and items, and may set title. It shows a done count such as 2 of 8.",
+  "A checklist item requires id and text. It may set meta (a short label above the text, such as a time), detail (a muted line under it), and checked (true or false).",
+  checklistActions.length === 0
+    ? "Leave callback out of a checklist. Ticks stay on the device."
+    : `Set a checklist callback name to one of: ${checklistActions.join(", ")}. Its payload is optional. Each tick sends the callback with payload.itemId, payload.checked, and payload.state, and the host returns the updated checklist.`,
+  `A checklist id is at most ${BLOCK_LIMITS.checklistIdMaxLength} characters and an item id ${BLOCK_LIMITS.checklistItemIdMaxLength}. Item ids are unique in the checklist, and no other id may be <id>_<item id>.`,
+  `A checklist has 1 to ${BLOCK_LIMITS.checklistItemsMax} items. Its title is at most ${BLOCK_LIMITS.checklistTitleMaxLength} characters, an item text ${BLOCK_LIMITS.checklistItemTextMaxLength}, an item meta ${BLOCK_LIMITS.checklistItemMetaMaxLength}, and an item detail ${BLOCK_LIMITS.checklistItemDetailMaxLength}.`,
+];
+
+/**
  * The system-prompt section a host prepends when a reply must be one block document.
  * Every cap is read from `BLOCK_LIMITS` so the prompt, the schema, and the reference stay aligned.
  * `richBlocks: false` keeps the prompt as it was before rich blocks, for clients that cannot
- * render them yet. The stepper is offered only with a `stepperActions` entry.
+ * render them yet. The stepper is offered only with a `stepperActions` entry, and the checklist
+ * names its callback only with a `checklistActions` entry.
  */
 export const blocksPromptSection = ({
   allowHtml = false,
+  checklistActions = [],
   hostActions = [],
   imageHosts = [],
   richBlocks = true,
@@ -72,7 +88,7 @@ export const blocksPromptSection = ({
   stepperActions?: readonly string[];
 } = {}): string => {
   const offersStepper = richBlocks && stepperActions.length > 0;
-  const richTypes = offersStepper ? ", stepper" : "";
+  const richTypes = richBlocks ? `${offersStepper ? ", stepper" : ""}, checklist` : "";
   const callbacks =
     hostActions.length === 0
       ? "No callback names are registered. Do not emit kind callback."
@@ -99,6 +115,7 @@ export const blocksPromptSection = ({
     imageHostsLine,
     "details requires title and text.",
     ...(offersStepper ? stepperPromptLines(stepperActions) : []),
+    ...(richBlocks ? checklistPromptLines(checklistActions) : []),
     "heading requires text. text requires markdown. metric requires label and value. badge requires text. context requires text.",
     "chart kind is line, bar, area, or donut. Bind it with data, x, and y, or with points of label and value.",
     "table requires data, the name of a dataset. actions requires id and elements.",

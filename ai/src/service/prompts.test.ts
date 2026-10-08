@@ -49,5 +49,16 @@ describe("AI prompt constants", () => {
       blocksPromptSection({richBlocks: false})
     );
     expect(uiBlocksSystemPrompt({hostActions: []})).toBe(TERRENO_UI_BLOCKS_SYSTEM_PROMPT);
+    expect(TERRENO_UI_BLOCKS_SYSTEM_PROMPT).toContain("checklist requires");
+    expect(uiBlocksSystemPrompt({hostActions: [], richBlocks: false})).not.toContain("checklist");
+  });
+
+  it("names the checklist action in the prompt when the host registers one", () => {
+    const section = uiBlocksSystemPrompt({
+      checklistActions: ["toggleChecklist"],
+      hostActions: ["toggleChecklist"],
+    });
+    expect(section).toContain("Set a checklist callback name to one of: toggleChecklist.");
+    expect(uiBlocksSystemPrompt({hostActions: []})).toContain("Leave callback out of a checklist");
   });
 });

@@ -3,6 +3,7 @@ import {BLOCK_LIMITS} from "./limits";
 import type {
   Block,
   BlocksDocument,
+  ChecklistBlock,
   Dataset,
   DatasetColumn,
   InlineDataset,
@@ -72,6 +73,10 @@ export const stepperElementIds = (stepperId: string): {decrease: string; increas
   increase: `${stepperId}_increase`,
 });
 
+/** The element id a checklist item's tick uses in callback events. */
+export const checklistElementId = (checklistId: string, itemId: string): string =>
+  `${checklistId}_${itemId}`;
+
 const unknownHostActionIssue = (
   name: string,
   hostActions: readonly string[] | undefined,
@@ -133,6 +138,43 @@ const stepperIssues = (
   }
   return found;
 };
+
+const checklistIssues = (
+  block: ChecklistBlock,
+  path: string,
+  options: LintBlocksOptions | undefined
+): BlockError[] => {
+  const found: BlockError[] = [];
+  const seenItemIds = new Set<string>();
+  block.items.forEach((item, index) => {
+    if (seenItemIds.has(item.id)) {
+      found.push(
+        issue({
+          code: "DUPLICATE_ID",
+          fix: `Give ${path}.items[${index}] an id no other item in this checklist uses.`,
+          message: BLOCK_ERROR_CODES.DUPLICATE_ID,
+          path: `${path}.items[${index}].id`,
+        })
+      );
+    }
+    seenItemIds.add(item.id);
+  });
+  if (block.callback === undefined) {
+    return found;
+  }
+  const unknown = unknownHostActionIssue(
+    block.callback.name,
+    options?.checklistActions ?? options?.hostActions,
+    `${path}.callback.name`
+  );
+  if (unknown) {
+    found.push(unknown);
+  }
+  return found;
+};
+
+const STEPPER_RESERVED_FIX = "A stepper uses <id>_decrease and <id>_increase for its buttons.";
+const CHECKLIST_RESERVED_FIX = "A checklist uses <id>_<item id> for each item's tick.";
 
 const isInline = (dataset: Dataset): dataset is InlineDataset => dataset.source !== "ref";
 
@@ -288,27 +330,65 @@ export const lintDocument = (
 
   const seenIds = new Set<string>();
   const selectableIds = new Set<string>();
-  const reservedIds = new Set<string>();
+  // Element ids a renderer derives from a block id, mapped to the fix that explains the clash.
+  const reservedIds = new Map<string, {fix: string; ownerId: string}>();
+  // Two blocks deriving the same element id would send ambiguous callback events. A clash within
+  // one block id is a repeated item or block id, which DUPLICATE_ID already reports elsewhere.
+  const reserve = ({
+    elementId,
+    fix,
+    ownerId,
+    path,
+  }: {
+    elementId: string;
+    fix: string;
+    ownerId: string;
+    path: string;
+  }): void => {
+    const taken = reservedIds.get(elementId);
+    if (taken !== undefined && taken.ownerId !== ownerId) {
+      errors.push(
+        issue({
+          code: "DUPLICATE_ID",
+          fix: `Rename ${path}. Its element id ${elementId} is already used. ${taken.fix}`,
+          message: BLOCK_ERROR_CODES.DUPLICATE_ID,
+          path,
+        })
+      );
+    }
+    reservedIds.set(elementId, {fix, ownerId});
+  };
   const walked = walk(doc.blocks, "blocks");
-  for (const {block} of walked) {
+  for (const {block, path} of walked) {
     if ((block.type === "chart" || block.type === "table") && block.id !== undefined) {
       selectableIds.add(block.id);
     }
     if (block.type === "stepper") {
       const {decrease, increase} = stepperElementIds(block.id);
-      reservedIds.add(decrease);
-      reservedIds.add(increase);
+      for (const elementId of [decrease, increase]) {
+        reserve({elementId, fix: STEPPER_RESERVED_FIX, ownerId: block.id, path: `${path}.id`});
+      }
+    }
+    if (block.type === "checklist") {
+      block.items.forEach((item, index) => {
+        reserve({
+          elementId: checklistElementId(block.id, item.id),
+          fix: CHECKLIST_RESERVED_FIX,
+          ownerId: block.id,
+          path: `${path}.items[${index}].id`,
+        });
+      });
     }
   }
   const idIssue = (id: string, path: string): BlockError | undefined => {
-    if (!seenIds.has(id) && !reservedIds.has(id)) {
+    const reservedFix = reservedIds.get(id)?.fix;
+    if (!seenIds.has(id) && reservedFix === undefined) {
       return undefined;
     }
     return issue({
       code: "DUPLICATE_ID",
-      fix: reservedIds.has(id)
-        ? `Rename ${path}. A stepper uses <id>_decrease and <id>_increase for its buttons.`
-        : `Give ${path} a unique id.`,
+      fix:
+        reservedFix === undefined ? `Give ${path} a unique id.` : `Rename ${path}. ${reservedFix}`,
       message: BLOCK_ERROR_CODES.DUPLICATE_ID,
       path: `${path}.id`,
     });
@@ -352,6 +432,9 @@ export const lintDocument = (
     }
     if (block.type === "stepper") {
       errors.push(...stepperIssues(block, path, options));
+    }
+    if (block.type === "checklist") {
+      errors.push(...checklistIssues(block, path, options));
     }
     if (block.type === "chart") {
       const hasPoints = block.points !== undefined;

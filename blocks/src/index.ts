@@ -121,7 +121,7 @@ export {BLOCK_ERROR_CODES, BLOCK_WARNING_CODES} from "./errors";
 export {blocksJsonSchema} from "./jsonSchema";
 export {BLOCK_LIMITS} from "./limits";
 export type {KnownDataset, LintBlocksOptions} from "./lint";
-export {stepperElementIds} from "./lint";
+export {checklistElementId, stepperElementIds} from "./lint";
 export type {ParseBlocksResult} from "./parse";
 export {parseBlocks} from "./parse";
 export type {ParseBlocksPartialResult} from "./parsePartial";
@@ -138,6 +138,9 @@ export type {
   CalloutBlock,
   CardBlock,
   ChartBlock,
+  ChecklistBlock,
+  ChecklistCallback,
+  ChecklistItem,
   ColumnsBlock,
   ContextBlock,
   Dataset,

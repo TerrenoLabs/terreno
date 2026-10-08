@@ -231,6 +231,38 @@ export interface StepperBlock {
   value: number;
 }
 
+export interface ChecklistItem {
+  checked?: boolean;
+  /** Muted line under the text. */
+  detail?: string;
+  /** Unique within the checklist. The tick's element id is `<checklist id>_<item id>`. */
+  id: string;
+  /** A short label above the text, such as a time. */
+  meta?: string;
+  text: string;
+}
+
+/**
+ * The host callback a tick sends with `{...payload, itemId, checked, state}`. Without one, or
+ * when its name is not a registered host action, ticks stay on the device.
+ */
+export interface ChecklistCallback {
+  name: string;
+  payload?: Record<string, unknown>;
+}
+
+/**
+ * A list of tickable items with an "n of m" counter. The renderer reserves the element id
+ * `<id>_<item id>` for each item's tick.
+ */
+export interface ChecklistBlock {
+  callback?: ChecklistCallback;
+  id: string;
+  items: ChecklistItem[];
+  title?: string;
+  type: "checklist";
+}
+
 export interface ColumnsBlock {
   children: Block[];
   id?: string;
@@ -258,7 +290,8 @@ export type LeafBlock =
   | CalloutBlock
   | ImageBlock
   | DetailsBlock
-  | StepperBlock;
+  | StepperBlock
+  | ChecklistBlock;
 
 export type Block = LeafBlock | ColumnsBlock | CardBlock;
 
@@ -498,6 +531,32 @@ const stepperSchema = z
   })
   .strict();
 
+const checklistItemSchema = z
+  .object({
+    checked: z.boolean().optional(),
+    detail: visibleText(BLOCK_LIMITS.checklistItemDetailMaxLength).optional(),
+    id: blockIdSchema.max(BLOCK_LIMITS.checklistItemIdMaxLength),
+    meta: visibleText(BLOCK_LIMITS.checklistItemMetaMaxLength).optional(),
+    text: visibleText(BLOCK_LIMITS.checklistItemTextMaxLength),
+  })
+  .strict();
+
+const checklistSchema = z
+  .object({
+    callback: z
+      .object({
+        name: callbackNameSchema,
+        payload: callbackPayloadSchema.optional(),
+      })
+      .strict()
+      .optional(),
+    id: blockIdSchema.max(BLOCK_LIMITS.checklistIdMaxLength),
+    items: z.array(checklistItemSchema).min(1).max(BLOCK_LIMITS.checklistItemsMax),
+    title: visibleText(BLOCK_LIMITS.checklistTitleMaxLength).optional(),
+    type: z.literal("checklist"),
+  })
+  .strict();
+
 const actionsSchema = z
   .object({
     elements: z
@@ -525,6 +584,7 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
     imageSchema,
     detailsSchema,
     stepperSchema,
+    checklistSchema,
     z
       .object({
         ...sharedBlockFields,

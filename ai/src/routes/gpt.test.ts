@@ -3312,7 +3312,7 @@ blocks:
     const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
 
     const system = String(systemPromptOf(modelCall(model, 0)));
-    expect(system).toContain("details, stepper.");
+    expect(system).toContain("details, stepper, checklist.");
     expect(system).toContain("A stepper callback name must be one of: scaleStepper.");
     expect(blocksEventOf(events)).toEqual({errors: [], ok: true, warnings: []});
   });

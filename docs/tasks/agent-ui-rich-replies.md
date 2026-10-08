@@ -45,7 +45,7 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
 
 ### Phase 3: Contracts
 
-- [ ] **T5** — `checklist` contract
+- [x] **T5** — `checklist` contract
   - Depends on: T2
   - Files: `blocks/src/schema.ts`, `blocks/src/limits.ts`, `blocks/src/lint.ts` (item ids; reserved `<id>_<item id>` element ids; checklist `callback.name` against `checklistActions`), `blocks/src/prompt.ts`, `blocks/src/fixtures/{valid,invalid}/checklist*.yaml`, `blocks/src/parse.test.ts`, `docs/reference/blocks.md`.
   - Delivers: the `checklist` schema from the IP, including the optional `callback`. Its prompt line sits under `richBlocks` and names the checklist action when there is one.

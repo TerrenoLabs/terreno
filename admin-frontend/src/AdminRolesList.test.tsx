@@ -135,7 +135,7 @@ describe("AdminRolesList", () => {
     );
 
     expect(getByTestId("admin-permissions-list")).toBeTruthy();
-    expect(getByTestId("admin-permissions-admin")).toBeTruthy();
+    expect(getByTestId("admin-permissions-custom-admin")).toBeTruthy();
     expect(getByText("runScripts")).toBeTruthy();
     expect(getByTestId("admin-roles-add-button")).toBeTruthy();
   });
@@ -144,9 +144,51 @@ describe("AdminRolesList", () => {
     mockUseListRolesQuery.mockReturnValue({data: ROLES, error: null, isLoading: false});
     const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
 
-    expect(getByTestId("admin-roles-item-todoUser-permission-adminTodo")).toBeTruthy();
+    expect(getByTestId("admin-roles-item-todoUser-permission-model-adminTodo")).toBeTruthy();
     expect(getByTestId("admin-roles-item-todoUser-permission-adminTodo-read")).toBeTruthy();
     expect(getByTestId("admin-roles-item-todoUser-permission-adminTodo-writeOwned")).toBeTruthy();
+  });
+
+  it("lists custom permissions before model permissions, splitting mixed resources", () => {
+    mockUseListStatementsQuery.mockReturnValue({
+      data: {
+        statements: {
+          admin: ["access", "runScripts"],
+          user: ["create", "impersonate", "read"],
+        },
+      },
+      error: null,
+      isLoading: false,
+    });
+    mockUseListRolesQuery.mockReturnValue({data: [], error: null, isLoading: false});
+    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+
+    const sectionIDs = [
+      ...new Set(
+        collectTestIDs(getByTestId("admin-permissions-list")).filter(
+          (id) => id === "admin-permissions-custom" || id === "admin-permissions-model"
+        )
+      ),
+    ];
+    assert.deepEqual(sectionIDs, ["admin-permissions-custom", "admin-permissions-model"]);
+
+    const customIDs = collectTestIDs(getByTestId("admin-permissions-custom"));
+    assert.includeMembers(customIDs, [
+      "admin-permissions-custom-admin",
+      "admin-permissions-admin-runScripts",
+      "admin-permissions-custom-user",
+      "admin-permissions-user-impersonate",
+    ]);
+    assert.notInclude(customIDs, "admin-permissions-user-create");
+
+    const modelIDs = collectTestIDs(getByTestId("admin-permissions-model"));
+    assert.includeMembers(modelIDs, [
+      "admin-permissions-model-user",
+      "admin-permissions-user-create",
+      "admin-permissions-user-read",
+    ]);
+    assert.notInclude(modelIDs, "admin-permissions-user-impersonate");
+    assert.notInclude(modelIDs, "admin-permissions-model-admin");
   });
 
   it("colors permission badges green for read, amber for write, and red for delete", () => {

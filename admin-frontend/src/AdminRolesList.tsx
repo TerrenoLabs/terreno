@@ -77,43 +77,90 @@ const sortActionsByKind = (actions: readonly string[]): string[] => {
   );
 };
 
-/** One row per resource with color-coded action badges (read green, write amber, delete red). */
+// Actions modelRouter generates (CRUD) or the admin model access selector grants. Every other
+// action was declared by the app or a plugin, so it is listed separately as a custom permission.
+const MODEL_ROUTER_ACTIONS = new Set([
+  "create",
+  "delete",
+  "list",
+  "read",
+  "update",
+  "write",
+  "writeOwned",
+]);
+
+type PermissionGroupKey = "custom" | "model";
+
+const PERMISSION_GROUPS: readonly {key: PermissionGroupKey; label: string}[] = [
+  {key: "custom", label: "Custom permissions"},
+  {key: "model", label: "Model permissions"},
+];
+
+const groupPermissions = (
+  permissions: Record<string, readonly string[]>
+): Record<PermissionGroupKey, [string, string[]][]> => {
+  const grouped: Record<PermissionGroupKey, [string, string[]][]> = {custom: [], model: []};
+  const resources = Object.keys(permissions).sort((a, b) => a.localeCompare(b));
+  for (const resource of resources) {
+    const actions = permissions[resource] ?? [];
+    const customActions = actions.filter((action) => !MODEL_ROUTER_ACTIONS.has(action));
+    const modelActions = actions.filter((action) => MODEL_ROUTER_ACTIONS.has(action));
+    if (customActions.length > 0) {
+      grouped.custom.push([resource, customActions]);
+    }
+    if (modelActions.length > 0) {
+      grouped.model.push([resource, modelActions]);
+    }
+  }
+  return grouped;
+};
+
+/**
+ * Custom permissions first, then model permissions. Each group has one row per resource with
+ * color-coded action badges (read green, write amber, delete red).
+ */
 const PermissionRows: React.FC<{
   permissions: Record<string, readonly string[]>;
   testIDPrefix: string;
 }> = ({permissions, testIDPrefix}) => {
-  const entries = Object.entries(permissions)
-    .filter(([, actions]) => actions.length > 0)
-    .sort(([a], [b]) => a.localeCompare(b));
-  if (entries.length === 0) {
+  const grouped = groupPermissions(permissions);
+  const groups = PERMISSION_GROUPS.filter((group) => grouped[group.key].length > 0);
+  if (groups.length === 0) {
     return null;
   }
   return (
-    <Box gap={1}>
-      {entries.map(([resource, actions]) => (
-        <Box
-          alignItems="center"
-          direction="row"
-          gap={2}
-          key={resource}
-          testID={`${testIDPrefix}-${resource}`}
-          wrap
-        >
-          <Box minWidth={240}>
-            <Text bold size="sm">
-              {resource}
-            </Text>
-          </Box>
-          <Box direction="row" gap={1} wrap>
-            {sortActionsByKind(actions).map((action) => (
-              <Badge
-                key={action}
-                status={PERMISSION_KIND_STATUS[permissionKind(action)]}
-                testID={`${testIDPrefix}-${resource}-${action}`}
-                value={action}
-              />
-            ))}
-          </Box>
+    <Box gap={3}>
+      {groups.map((group) => (
+        <Box gap={1} key={group.key} testID={`${testIDPrefix}-${group.key}`}>
+          <Text color="secondaryDark" size="sm">
+            {group.label}
+          </Text>
+          {grouped[group.key].map(([resource, actions]) => (
+            <Box
+              alignItems="center"
+              direction="row"
+              gap={2}
+              key={resource}
+              testID={`${testIDPrefix}-${group.key}-${resource}`}
+              wrap
+            >
+              <Box minWidth={240}>
+                <Text bold size="sm">
+                  {resource}
+                </Text>
+              </Box>
+              <Box direction="row" gap={1} wrap>
+                {sortActionsByKind(actions).map((action) => (
+                  <Badge
+                    key={action}
+                    status={PERMISSION_KIND_STATUS[permissionKind(action)]}
+                    testID={`${testIDPrefix}-${resource}-${action}`}
+                    value={action}
+                  />
+                ))}
+              </Box>
+            </Box>
+          ))}
         </Box>
       ))}
     </Box>

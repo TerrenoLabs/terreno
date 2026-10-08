@@ -197,7 +197,7 @@ const ComponentDemo = ({config}: {config: DemoConfiguration}) => {
       width="100%"
     >
       <Box
-        alignItems="center"
+        alignItems="start"
         border="dark"
         direction="column"
         flex="grow"

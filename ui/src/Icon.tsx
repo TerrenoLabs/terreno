@@ -20,9 +20,16 @@ interface FontAwesomeGlyphProps {
   thin: boolean;
 }
 
+/**
+ * Static web HTML sets `__EXPO_ROUTER_HYDRATE__` and never clears it. Remember that the
+ * first hydration pass finished so later-mounted glyphs paint immediately.
+ */
+let didFinishStaticHydration = false;
+let placeholderCommits = 0;
+
 /** True only while a static web export is rendering or hydrating. Native and client-only web paint immediately. */
 const isWebStaticHydration = (): boolean => {
-  if (Platform.OS !== "web") {
+  if (didFinishStaticHydration || Platform.OS !== "web") {
     return false;
   }
   if (typeof document === "undefined") {
@@ -30,6 +37,15 @@ const isWebStaticHydration = (): boolean => {
   }
   return (globalThis as {__EXPO_ROUTER_HYDRATE__?: boolean}).__EXPO_ROUTER_HYDRATE__ === true;
 };
+
+/** Test hook so hydration cases do not leak across files. */
+export const resetIconStaticHydrationForTests = (): void => {
+  didFinishStaticHydration = false;
+  placeholderCommits = 0;
+};
+
+/** How many times a glyph rendered the empty SSR placeholder. */
+export const iconPlaceholderCommitsForTests = (): number => placeholderCommits;
 
 const FontAwesomeGlyph: FC<FontAwesomeGlyphProps> = ({
   brand,
@@ -44,14 +60,20 @@ const FontAwesomeGlyph: FC<FontAwesomeGlyphProps> = ({
   testID,
   thin,
 }) => {
-  const [hasMounted, setHasMounted] = useState(false);
+  const deferGlyph = isWebStaticHydration();
+  const [showGlyph, setShowGlyph] = useState(!deferGlyph);
 
-  // Keep the first client paint aligned with static SSR, where the glyph font is absent.
+  // Swap the SSR placeholder for the glyph once, and stop deferring icons mounted later.
   useEffect(() => {
-    setHasMounted(true);
-  }, []);
+    if (!deferGlyph) {
+      return;
+    }
+    didFinishStaticHydration = true;
+    setShowGlyph(true);
+  }, [deferGlyph]);
 
-  if (isWebStaticHydration() && !hasMounted) {
+  if (!showGlyph) {
+    placeholderCommits += 1;
     return <View style={{height: size, width: size}} testID={testID} />;
   }
 

@@ -36,7 +36,7 @@ export const ButtonConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=3260-8839",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=301-4654&t=J847q9JMSjR8oQmN-1",
     ios: "ready",
     android: "ready",
     web: "ready",

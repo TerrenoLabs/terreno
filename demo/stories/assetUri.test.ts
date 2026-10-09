@@ -1,4 +1,5 @@
 import {describe, expect, it} from "bun:test";
+import {Image} from "react-native";
 
 import {assetUri} from "./assetUri";
 
@@ -9,6 +10,10 @@ describe("assetUri", () => {
 
   it("reads the uri from a web asset object", () => {
     expect(assetUri({uri: "/assets/greens.jpg"})).toBe("/assets/greens.jpg");
+  });
+
+  it("resolves a native numeric asset id with React Native by default", () => {
+    expect(assetUri(7)).toBe(Image.resolveAssetSource?.(7)?.uri);
   });
 
   it("resolves a native numeric asset id", () => {

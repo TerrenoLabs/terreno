@@ -1,4 +1,4 @@
-import {Image} from "react-native";
+import {assetUri} from "./assetUri";
 
 /**
  * Public-domain food photos bundled with the demo (see assets/blocks/ATTRIBUTION.md). Block
@@ -13,29 +13,6 @@ const PHOTO_MODULES: Record<string, unknown> = {
   "roast-plate": require("../assets/blocks/roast-plate.jpg"),
   "roast-potatoes": require("../assets/blocks/roast-potatoes.jpg"),
   "roasted-carrots": require("../assets/blocks/roasted-carrots.jpg"),
-};
-
-/**
- * Metro bundles an image as `{uri}` (or a URL string) on web and as a numeric asset id on native.
- * Test runners wrap it in `{default}`.
- */
-const assetUri = (asset: unknown): string | undefined => {
-  if (typeof asset === "string") {
-    return asset;
-  }
-  if (typeof asset === "number") {
-    return Image.resolveAssetSource?.(asset)?.uri;
-  }
-  if (typeof asset === "object" && asset !== null) {
-    const record = asset as {default?: unknown; uri?: unknown};
-    if (typeof record.uri === "string") {
-      return record.uri;
-    }
-    if (record.default !== undefined) {
-      return assetUri(record.default);
-    }
-  }
-  return undefined;
 };
 
 /** `resolveImage` for demo documents: a bundled photo's URI, or undefined for any other id. */

@@ -98,7 +98,7 @@ exports[`OAuthButtons renders correctly with all props 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "stretch",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderColor": "#dadce0",
               "borderRadius": 360,
               "borderWidth": 1,
@@ -164,7 +164,7 @@ exports[`OAuthButtons renders correctly with all props 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "stretch",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderColor": "#24292e",
               "borderRadius": 360,
               "borderWidth": 1,
@@ -230,7 +230,7 @@ exports[`OAuthButtons renders correctly with all props 1`] = `
             "style": {
               "alignItems": "center",
               "alignSelf": "stretch",
-              "backgroundColor": "#9A9A9A",
+              "backgroundColor": "#949494",
               "borderColor": "#000000",
               "borderRadius": 360,
               "borderWidth": 1,

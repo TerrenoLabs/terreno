@@ -18,6 +18,7 @@ import {
   Icon,
   type IconName,
   Link,
+  MarkdownView,
   Text,
   type TextColor,
 } from "@terreno/ui";
@@ -27,23 +28,8 @@ import startCase from "lodash/startCase";
 import type React from "react";
 import {type FC, useEffect, useState} from "react";
 import {Linking, Pressable} from "react-native";
-import MarkdownView, {type MarkdownProps} from "react-native-markdown-display";
 import {controlDefault, storiesForDemo} from "../../catalogContract";
 import {formatPropComment, formatPropType} from "../../formatPropType";
-
-// Raw markdown paragraphs are a row. Give them a bounded width so long lines wrap
-// inside the page instead of stretching the demo column past the viewport.
-const demoMarkdownStyle = {
-  body: {maxWidth: "100%", minWidth: 0, width: "100%"},
-  paragraph: {
-    flexDirection: "column" as const,
-    flexShrink: 1,
-    maxWidth: "100%",
-    minWidth: 0,
-    width: "100%",
-  },
-  textgroup: {flexShrink: 1, maxWidth: "100%", minWidth: 0, width: "100%"},
-} as MarkdownProps["style"];
 
 export const generateStaticParams = () => DemoConfig.map((c) => ({component: c.name}));
 
@@ -102,9 +88,7 @@ const ComponentStories: FC<{config: DemoConfiguration}> = ({config}) => {
               <Heading size="sm">{s}</Heading>
             </Box>
             {Boolean(config.stories[s]?.description) && (
-              <MarkdownView style={demoMarkdownStyle}>
-                {config.stories[s]?.description}
-              </MarkdownView>
+              <MarkdownView>{config.stories[s]?.description}</MarkdownView>
             )}
             <Box border="dark" maxWidth="100%" minWidth={0} padding={4} rounding="lg" width="100%">
               <ErrorBoundary>{config.stories[s]?.render()}</ErrorBoundary>
@@ -449,7 +433,7 @@ const ComponentPage: FC = () => {
             <Box marginBottom={2}>
               <Heading size="sm">Description</Heading>
             </Box>
-            <MarkdownView style={demoMarkdownStyle}>{config?.description}</MarkdownView>
+            <MarkdownView>{config?.description}</MarkdownView>
           </Box>
           <ComponentDemo config={config} key={config.name} />
           {config.usageExample ? <UsageSnippet example={config.usageExample} /> : null}

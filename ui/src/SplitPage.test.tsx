@@ -1,10 +1,10 @@
 import {afterAll, afterEach, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
-import {forwardRef, type ReactNode, type Ref, useImperativeHandle} from "react";
-import {type ScaledSize, StyleSheet, useWindowDimensions, View} from "react-native";
+import {forwardRef, type ReactElement, type ReactNode, type Ref, useImperativeHandle} from "react";
+import {type ScaledSize, ScrollView, StyleSheet, useWindowDimensions, View} from "react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 
-import {getRounding} from "./Common";
+import {getRounding, getSpacing} from "./Common";
 import {SplitPage} from "./SplitPage";
 import {renderWithTheme} from "./test-utils";
 
@@ -20,11 +20,15 @@ const swiperScrollToIndex = mock((_options?: PagerScrollOptions) => {});
 mock.module("react-native-swiper-flatlist", () => ({
   SwiperFlatList: forwardRef(
     (
-      {children}: {children?: ReactNode},
+      {children, style}: {children?: ReactNode; style?: object},
       ref: Ref<{scrollToIndex: (options: PagerScrollOptions) => void}>
     ) => {
       useImperativeHandle(ref, () => ({scrollToIndex: swiperScrollToIndex}));
-      return <View testID="swiper-flatlist">{children}</View>;
+      return (
+        <View style={style} testID="swiper-flatlist">
+          {children}
+        </View>
+      );
     }
   ),
 }));
@@ -52,6 +56,10 @@ const setWindowWidth = (width: number): (() => void) => {
 const styleWidth = (style: unknown): unknown => StyleSheet.flatten(style)?.width;
 
 const styleBorderRadius = (style: unknown): unknown => StyleSheet.flatten(style)?.borderRadius;
+
+const flattenedStyle = (style: unknown): ReturnType<typeof StyleSheet.flatten> => {
+  return StyleSheet.flatten(style) ?? {};
+};
 
 const setDesktop = () => {
   mock.module("./MediaQuery", () => ({
@@ -1072,6 +1080,466 @@ describe("SplitPage", () => {
       expect(styleBorderRadius(getByTestId("split-page-mobile-child-1").props.style)).toBe(
         getRounding("md")
       );
+    });
+  });
+
+  describe("desktop child column scrolling", () => {
+    const tallChild = (testID: string): ReactElement => {
+      return <View style={{height: 4000}} testID={testID} />;
+    };
+
+    const renderFullHeightChild = (): ReactElement => {
+      return (
+        <View style={{height: "100%"}} testID="bounded-child">
+          <View style={{height: 48}} testID="fixed-section" />
+          <ScrollView testID="internal-scroll">
+            <View style={{height: 4000}} testID="internal-tall" />
+          </ScrollView>
+        </View>
+      );
+    };
+
+    const expectClippingPane = (
+      pane: ReactTestInstance,
+      borderRadius: number,
+      width: number | string
+    ): void => {
+      const style = flattenedStyle(pane.props.style);
+      expect(style.borderRadius).toBe(borderRadius);
+      expect(style.height).toBe("100%");
+      expect(style.overflow).toBe("hidden");
+      expect(style.width).toBe(width);
+    };
+
+    const expectVerticalChildScroll = (scroll: ReactTestInstance, tallTestID: string): void => {
+      const style = flattenedStyle(scroll.props.style);
+      expect(style.overflow).toBeUndefined();
+      expect(style.flex).toBe(1);
+      expect(style.height).toBe("100%");
+      expect(scroll.props.horizontal).toBeFalsy();
+      expect(scroll.props.contentContainerStyle).toEqual({flex: 1});
+      expect(scroll.findByProps({testID: tallTestID})).toBeTruthy();
+    };
+
+    const expectBoundedFullHeightChild = (scroll: ReactTestInstance): void => {
+      const child = scroll.findByProps({testID: "bounded-child"});
+      const childStyle = flattenedStyle(child.props.style);
+      expect(childStyle.height).toBe("100%");
+      expect(childStyle.position).toBeUndefined();
+      expect(scroll.props.contentContainerStyle).toEqual({flex: 1});
+      expect(child.findByProps({testID: "fixed-section"})).toBeTruthy();
+      expect(child.findByProps({testID: "internal-scroll"})).toBeTruthy();
+      expect(child.findByProps({testID: "internal-tall"})).toBeTruthy();
+    };
+
+    it("scrolls ordinary tall content in desktopChildrenMinWidth columns and keeps the pane clipped", () => {
+      setDesktop();
+      const {getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps} desktopChildrenMinWidth={200}>
+          {tallChild("tall-0")}
+          {tallChild("tall-1")}
+        </SplitPage>
+      );
+
+      expectClippingPane(getByTestId("split-page-desktop-child-0"), getRounding("md"), 200);
+      expectClippingPane(getByTestId("split-page-desktop-child-1"), getRounding("md"), 200);
+      expectVerticalChildScroll(getByTestId("split-page-desktop-child-scroll-0"), "tall-0");
+      expectVerticalChildScroll(getByTestId("split-page-desktop-child-scroll-1"), "tall-1");
+      expect(
+        flattenedStyle(getByTestId("split-page-desktop-children-scroll").props.style).overflow
+      ).toBeUndefined();
+    });
+
+    it("scrolls ordinary tall content in the default one and two child row", () => {
+      setDesktop();
+      const {getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps}>
+          {tallChild("tall-0")}
+          {tallChild("tall-1")}
+        </SplitPage>
+      );
+
+      expectClippingPane(getByTestId("split-page-desktop-row-child-0"), getRounding("md"), "60%");
+      expectClippingPane(getByTestId("split-page-desktop-row-child-1"), getRounding("md"), "60%");
+      expect(flattenedStyle(getByTestId("split-page-desktop-row-child-0").props.style).flex).toBe(
+        1
+      );
+      expectVerticalChildScroll(getByTestId("split-page-desktop-child-scroll-0"), "tall-0");
+      expectVerticalChildScroll(getByTestId("split-page-desktop-child-scroll-1"), "tall-1");
+    });
+
+    it("scrolls ordinary tall content in the segmented layout", () => {
+      setDesktop();
+      const {getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps} tabs={["One", "Two", "Three"]}>
+          {tallChild("tall-0")}
+          {tallChild("tall-1")}
+          {tallChild("tall-2")}
+        </SplitPage>
+      );
+
+      expectClippingPane(
+        getByTestId("split-page-desktop-segment-child-0"),
+        getRounding("md"),
+        "60%"
+      );
+      expectClippingPane(
+        getByTestId("split-page-desktop-segment-child-1"),
+        getRounding("md"),
+        "60%"
+      );
+      expect(
+        flattenedStyle(getByTestId("split-page-desktop-segment-child-0").props.style).paddingRight
+      ).toBe(16);
+      expect(
+        flattenedStyle(getByTestId("split-page-desktop-segment-child-1").props.style).paddingLeft
+      ).toBe(16);
+      expectVerticalChildScroll(getByTestId("split-page-desktop-child-scroll-0"), "tall-0");
+      expectVerticalChildScroll(getByTestId("split-page-desktop-child-scroll-1"), "tall-1");
+    });
+
+    it("preserves a custom childColumnRounding on every desktop child layout", () => {
+      setDesktop();
+      const minWidth = renderWithTheme(
+        <SplitPage {...defaultProps} childColumnRounding="lg" desktopChildrenMinWidth={220}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+        </SplitPage>
+      );
+      expect(
+        styleBorderRadius(minWidth.getByTestId("split-page-desktop-child-0").props.style)
+      ).toBe(getRounding("lg"));
+
+      const row = renderWithTheme(
+        <SplitPage {...defaultProps} childColumnRounding="sm">
+          <View testID="child-1" />
+        </SplitPage>
+      );
+      expect(styleBorderRadius(row.getByTestId("split-page-desktop-row-child-0").props.style)).toBe(
+        getRounding("sm")
+      );
+
+      const segmented = renderWithTheme(
+        <SplitPage {...defaultProps} childColumnRounding="xl" tabs={["One", "Two", "Three"]}>
+          <View testID="child-1" />
+          <View testID="child-2" />
+          <View testID="child-3" />
+        </SplitPage>
+      );
+      expect(
+        styleBorderRadius(segmented.getByTestId("split-page-desktop-segment-child-0").props.style)
+      ).toBe(getRounding("xl"));
+    });
+
+    it("keeps a height 100% child bounded to the pane with its own scroll view", () => {
+      setDesktop();
+      const minWidth = renderWithTheme(
+        <SplitPage {...defaultProps} desktopChildrenMinWidth={240}>
+          {renderFullHeightChild()}
+          <View testID="other-child" />
+        </SplitPage>
+      );
+      const minWidthPane = minWidth.getByTestId("split-page-desktop-child-0");
+      expect(flattenedStyle(minWidthPane.props.style).height).toBe("100%");
+      expect(flattenedStyle(minWidthPane.props.style).overflow).toBe("hidden");
+      expectBoundedFullHeightChild(minWidth.getByTestId("split-page-desktop-child-scroll-0"));
+
+      const row = renderWithTheme(
+        <SplitPage {...defaultProps}>{renderFullHeightChild()}</SplitPage>
+      );
+      expectBoundedFullHeightChild(row.getByTestId("split-page-desktop-child-scroll-0"));
+      expect(
+        flattenedStyle(row.getByTestId("split-page-desktop-row-child-0").props.style).height
+      ).toBe("100%");
+
+      const segmented = renderWithTheme(
+        <SplitPage {...defaultProps} tabs={["One", "Two", "Three"]}>
+          {renderFullHeightChild()}
+          <View testID="child-2" />
+          <View testID="child-3" />
+        </SplitPage>
+      );
+      expectBoundedFullHeightChild(segmented.getByTestId("split-page-desktop-child-scroll-0"));
+      expect(
+        flattenedStyle(segmented.getByTestId("split-page-desktop-segment-child-0").props.style)
+          .overflow
+      ).toBe("hidden");
+    });
+  });
+
+  describe("narrow child column scrolling", () => {
+    const renderFullHeightChild = (): ReactElement => {
+      return (
+        <View style={{height: "100%"}} testID="bounded-child">
+          <View style={{height: 48}} testID="fixed-section" />
+          <ScrollView testID="internal-scroll">
+            <View style={{height: 4000}} testID="internal-tall" />
+          </ScrollView>
+        </View>
+      );
+    };
+
+    const selectFirst = async (
+      getAllByLabelText: (label: string) => ReactTestInstance[]
+    ): Promise<void> => {
+      const boxes = getAllByLabelText("Select");
+      await act(async () => {
+        fireEvent.press(boxes[0]);
+      });
+    };
+
+    const layoutPager = (node: ReactTestInstance, height: number, width: number): void => {
+      act(() => {
+        node.props.onLayout({
+          nativeEvent: {layout: {height, width, x: 0, y: 0}},
+        });
+      });
+    };
+
+    const expectBoundedNarrowChild = (page: ReactTestInstance): void => {
+      const child = page.findByProps({testID: "bounded-child"});
+      const childStyle = flattenedStyle(child.props.style);
+      expect(childStyle.height).toBe("100%");
+      expect(childStyle.position).toBeUndefined();
+      expect(page.findByProps({testID: "fixed-section"})).toBeTruthy();
+      expect(page.findByProps({testID: "internal-scroll"})).toBeTruthy();
+      expect(page.findByProps({testID: "internal-tall"})).toBeTruthy();
+    };
+
+    it("bounds a labeled narrow page to the measured pane so a height 100% child can scroll inside it", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId, UNSAFE_root} = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          bottomNavBarHeight={24}
+          narrowViewportChildLabels={["Summary", "Notes"]}
+          narrowViewportListButtonLabel="Back to list"
+        >
+          {renderFullHeightChild()}
+          <View testID="other-child" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      const pageBeforeLayout = getByTestId("split-page-mobile-child-0");
+      expect(flattenedStyle(pageBeforeLayout.props.style).height).toBe("100%");
+
+      layoutPager(getByTestId("split-page-mobile-children"), 360, 320);
+
+      const page = getByTestId("split-page-mobile-child-0");
+      const style = flattenedStyle(page.props.style);
+      const edge = getSpacing(2);
+      const navButton = 32;
+      const bottomNav = 24;
+      const columnHeight = 360 - (edge + edge + navButton + edge + bottomNav);
+      expect(style.height).toBe(columnHeight);
+      expect(style.overflow).toBe("hidden");
+      expect(style.borderRadius).toBe(getRounding("md"));
+      expect(style.paddingBottom).toBeUndefined();
+      expect(style.width).toBe(320);
+      expect(style.position).toBeUndefined();
+      expectBoundedNarrowChild(page);
+      expect(flattenedStyle(getByTestId("split-page-mobile-child-1").props.style).height).toBe(
+        columnHeight
+      );
+      const swiper = flattenedStyle(getByTestId("swiper-flatlist").props.style);
+      expect(swiper.height).toBe(columnHeight);
+      expect(swiper.overflow).toBeUndefined();
+      expect(flattenedStyle(getByTestId("split-page-column-top-space").props.style).height).toBe(
+        edge
+      );
+
+      const nav = getByTestId("split-page-column-nav");
+      const navStyle = flattenedStyle(nav.props.style);
+      expect(navStyle.position).toBeUndefined();
+      expect(navStyle.flexDirection).toBe("row");
+      expect(navStyle.justifyContent).toBe("space-between");
+      expect(navStyle.height).toBe(navButton);
+      expect(navStyle.marginTop).toBe(edge);
+      expect(navStyle.paddingBottom).toBeUndefined();
+      expect(navStyle.paddingHorizontal).toBe(getSpacing(4));
+      expect(flattenedStyle(getByTestId("split-page-column-bottom-space").props.style).height).toBe(
+        edge + bottomNav
+      );
+      expect(page.findAll((node) => node.props?.testID === "split-page-column-nav")).toHaveLength(
+        0
+      );
+
+      const previousSlot = getByTestId("split-page-column-previous-slot");
+      const nextSlot = getByTestId("split-page-column-next-slot");
+      const slotStyle = {height: navButton, width: navButton};
+      expect(flattenedStyle(previousSlot.props.style)).toMatchObject(slotStyle);
+      expect(flattenedStyle(nextSlot.props.style)).toMatchObject(slotStyle);
+      expect(previousSlot.props.accessible).toBe(false);
+      expect(nextSlot.props.accessible).toBe(false);
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-previous")).toBeUndefined();
+      expect(
+        previousSlot.findAll((node) => node.props?.testID === "split-page-column-previous")
+      ).toHaveLength(0);
+      const next = getIconButtonByTestId(UNSAFE_root, "split-page-column-next");
+      expect(next.props.accessibilityLabel).toBe("Show next column: Notes");
+      expect(next.props.iconName).toBe("chevron-right");
+      expect(
+        nextSlot.findAll((node) => node.props?.testID === "split-page-column-next")
+      ).toHaveLength(1);
+      const back = getIconButtonByTestId(UNSAFE_root, "split-page-back-to-list");
+      expect(
+        findAncestor(back, (node) => flattenedStyle(node.props.style).position === "absolute")
+      ).toBeUndefined();
+      expect(findAncestor(back, (node) => node.props?.testID === "split-page-column-nav")).toBe(
+        nav
+      );
+      expect(flattenedStyle(getByTestId("split-page-column-back-slot").props.style)).toMatchObject(
+        slotStyle
+      );
+
+      await act(async () => {
+        next.props.onClick();
+      });
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-next")).toBeUndefined();
+      expect(
+        getByTestId("split-page-column-next-slot").findAll(
+          (node) => node.props?.testID === "split-page-column-next"
+        )
+      ).toHaveLength(0);
+      const previous = getIconButtonByTestId(UNSAFE_root, "split-page-column-previous");
+      expect(previous.props.accessibilityLabel).toBe("Show previous column: Summary");
+      expect(previous.props.iconName).toBe("chevron-left");
+      expect(
+        getByTestId("split-page-column-previous-slot").findAll(
+          (node) => node.props?.testID === "split-page-column-previous"
+        )
+      ).toHaveLength(1);
+      expect(
+        flattenedStyle(getByTestId("split-page-column-previous-slot").props.style)
+      ).toMatchObject(slotStyle);
+      expect(flattenedStyle(getByTestId("split-page-column-next-slot").props.style)).toMatchObject(
+        slotStyle
+      );
+      expect(flattenedStyle(getByTestId("split-page-column-nav").props.style).height).toBe(
+        navButton
+      );
+      expect(flattenedStyle(getByTestId("split-page-mobile-child-0").props.style).height).toBe(
+        columnHeight
+      );
+      expect(flattenedStyle(getByTestId("split-page-mobile-child-1").props.style).height).toBe(
+        columnHeight
+      );
+    });
+
+    it("keeps labeled nav slots stationary across the first, middle, and last columns", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId, UNSAFE_root} = renderWithTheme(
+        <SplitPage
+          {...defaultProps}
+          bottomNavBarHeight={20}
+          narrowViewportChildLabels={["Summary", "Notes", "History"]}
+          narrowViewportListButtonLabel="Back to list"
+          tabs={["Summary", "Notes", "History"]}
+        >
+          <View testID="child-1" />
+          <View testID="child-2" />
+          <View testID="child-3" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      layoutPager(getByTestId("split-page-mobile-children"), 500, 340);
+
+      const edge = getSpacing(2);
+      const columnHeight = 500 - (edge + edge + 32 + edge + 20);
+      const slotStyle = {height: 32, width: 32};
+      const expectStationaryChrome = (): void => {
+        expect(flattenedStyle(getByTestId("split-page-mobile-child-0").props.style).height).toBe(
+          columnHeight
+        );
+        expect(flattenedStyle(getByTestId("split-page-mobile-child-1").props.style).height).toBe(
+          columnHeight
+        );
+        expect(flattenedStyle(getByTestId("split-page-mobile-child-2").props.style).height).toBe(
+          columnHeight
+        );
+        expect(flattenedStyle(getByTestId("split-page-column-nav").props.style)).toMatchObject({
+          height: 32,
+          marginTop: edge,
+        });
+        expect(
+          flattenedStyle(getByTestId("split-page-column-previous-slot").props.style)
+        ).toMatchObject(slotStyle);
+        expect(
+          flattenedStyle(getByTestId("split-page-column-next-slot").props.style)
+        ).toMatchObject(slotStyle);
+        expect(
+          flattenedStyle(getByTestId("split-page-column-back-slot").props.style)
+        ).toMatchObject(slotStyle);
+        expect(
+          flattenedStyle(getByTestId("split-page-column-bottom-space").props.style).height
+        ).toBe(edge + 20);
+      };
+
+      expectStationaryChrome();
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-previous")).toBeUndefined();
+      expect(getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.iconName).toBe(
+        "chevron-right"
+      );
+
+      await act(async () => {
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      expectStationaryChrome();
+      expect(getIconButtonByTestId(UNSAFE_root, "split-page-column-previous").props.iconName).toBe(
+        "chevron-left"
+      );
+      expect(
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.accessibilityLabel
+      ).toBe("Show next column: History");
+
+      await act(async () => {
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-next").props.onClick();
+      });
+      expectStationaryChrome();
+      expect(queryIconButtonByTestId(UNSAFE_root, "split-page-column-next")).toBeUndefined();
+      expect(
+        getIconButtonByTestId(UNSAFE_root, "split-page-column-previous").props.accessibilityLabel
+      ).toBe("Show previous column: Notes");
+    });
+
+    it("bounds dotted narrow pages to the measured pane and keeps pagination room", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps} bottomNavBarHeight={16} childColumnRounding="lg">
+          {renderFullHeightChild()}
+          <View testID="other-child" />
+        </SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      expect(flattenedStyle(getByTestId("split-page-dotted-child-0").props.style).height).toBe(
+        "90%"
+      );
+
+      layoutPager(getByTestId("split-page-dotted-pager"), 400, 300);
+
+      const page = getByTestId("split-page-dotted-child-0");
+      const style = flattenedStyle(page.props.style);
+      expect(style.height).toBe(360);
+      expect(style.overflow).toBe("hidden");
+      expect(style.borderRadius).toBe(getRounding("lg"));
+      expect(style.paddingBottom).toBe(16);
+      expect(style.padding).toBe(4);
+      expect(style.width).toBe(367);
+      expectBoundedNarrowChild(page);
+      const swiper = flattenedStyle(getByTestId("swiper-flatlist").props.style);
+      expect(swiper.height).toBe("100%");
+      expect(swiper.overflow).toBeUndefined();
+    });
+
+    it("bounds a single dotted page to the full measured height", async () => {
+      setMobile();
+      const {getAllByLabelText, getByTestId} = renderWithTheme(
+        <SplitPage {...defaultProps}>{renderFullHeightChild()}</SplitPage>
+      );
+      await selectFirst(getAllByLabelText);
+      layoutPager(getByTestId("split-page-dotted-pager"), 410, 300);
+      expect(flattenedStyle(getByTestId("split-page-dotted-child-0").props.style).height).toBe(410);
+      expectBoundedNarrowChild(getByTestId("split-page-dotted-child-0"));
     });
   });
 });

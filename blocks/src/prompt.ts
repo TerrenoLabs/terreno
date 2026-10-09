@@ -55,7 +55,7 @@ const stepperPromptLines = (stepperActions: readonly string[]): string[] => [
  */
 const checklistPromptLines = (checklistActions: readonly string[]): string[] => [
   "checklist requires id and items, and may set title. It shows a done count such as 2 of 8.",
-  "A checklist item requires id and text. It may set meta (a short label above the text, such as a time), detail (a muted line under it), and checked (true or false).",
+  "A checklist item requires id and text. It may set meta (a short label such as a time, shown under the text), detail (a muted line under that), and checked (true or false).",
   checklistActions.length === 0
     ? "Leave callback out of a checklist. Ticks stay on the device."
     : `Set a checklist callback name to one of: ${checklistActions.join(", ")}. Its payload is optional. Each tick sends the callback with payload.itemId, payload.checked, and payload.state, and the host returns the updated checklist.`,

@@ -513,13 +513,14 @@ calls `onAction` with `blockId: <id>`, `elementId: <id>_decrease` or `<id>_incre
 new stepper, and `overrides[<id>]` paints it.
 
 A `checklist` draws its `title` on the left and an "n of m" counter on the right, then one
-`CheckBox` row per item: the small muted `meta` (such as a time), the bold `text`, and the
-muted `detail`. Each row is a pressable `Box` with the `checkbox` role, labelled with the item
+`CheckBox` row per item: the bold `text` first, then the small muted `meta` (such as a time),
+then the muted `detail`. Each row is a pressable `Box` with the `checkbox` role, labelled with the item
 text, that reports `accessibilityState` `{checked, disabled}` (`aria-checked` and
 `aria-disabled` on web); Space toggles a focused row on web. A locked row keeps its role and
 label and reports `disabled: true`. Test ids are stable across states: the item wrapper is
 `<path>-<id>_<item id>`, the pressable row `<path>-<id>_<item id>-row-clickable`, its
-`CheckBox` `<path>-<id>_<item id>-checkbox`, and the counter `<path>-counter`. A tick goes to the host when the checklist has a `callback`,
+`CheckBox` `<path>-<id>_<item id>-checkbox`, its lines `<path>-<id>_<item id>-text`, `-meta`,
+and `-detail`, and the counter `<path>-counter`. A tick goes to the host when the checklist has a `callback`,
 `onAction` is passed, and `hostActions` is omitted (as for the stepper) or lists
 `callback.name`. Then a tap calls `onAction` with `blockId: <id>`,
 `elementId: <id>_<item id>`, and `{kind: "callback", name, payload: {...payload, itemId,

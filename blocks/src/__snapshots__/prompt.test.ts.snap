@@ -370,7 +370,7 @@ A stepper id is at most 54 characters. No other id may be <id>_decrease or <id>_
 A stepper label and itemsTitle are at most 80 characters, its unit 40, and its note 280.
 A stepper has at most 12 items. An item label is at most 80 characters, its unit 20, and decimals is 0 to 3.
 checklist requires id and items, and may set title. It shows a done count such as 2 of 8.
-A checklist item requires id and text. It may set meta (a short label above the text, such as a time), detail (a muted line under it), and checked (true or false).
+A checklist item requires id and text. It may set meta (a short label such as a time, shown under the text), detail (a muted line under that), and checked (true or false).
 Set a checklist callback name to one of: toggleChecklist. Its payload is optional. Each tick sends the callback with payload.itemId, payload.checked, and payload.state, and the host returns the updated checklist.
 A checklist id is at most 31 characters and an item id 32. Item ids are unique in the checklist, and no other id may be <id>_<item id>.
 A checklist has 1 to 30 items. Its title is at most 120 characters, an item text 120, an item meta 40, and an item detail 280.
@@ -459,7 +459,7 @@ A stepper id is at most 54 characters. No other id may be <id>_decrease or <id>_
 A stepper label and itemsTitle are at most 80 characters, its unit 40, and its note 280.
 A stepper has at most 12 items. An item label is at most 80 characters, its unit 20, and decimals is 0 to 3.
 checklist requires id and items, and may set title. It shows a done count such as 2 of 8.
-A checklist item requires id and text. It may set meta (a short label above the text, such as a time), detail (a muted line under it), and checked (true or false).
+A checklist item requires id and text. It may set meta (a short label such as a time, shown under the text), detail (a muted line under that), and checked (true or false).
 Set a checklist callback name to one of: toggleChecklist. Its payload is optional. Each tick sends the callback with payload.itemId, payload.checked, and payload.state, and the host returns the updated checklist.
 A checklist id is at most 31 characters and an item id 32. Item ids are unique in the checklist, and no other id may be <id>_<item id>.
 A checklist has 1 to 30 items. Its title is at most 120 characters, an item text 120, an item meta 40, and an item detail 280.

@@ -14,9 +14,17 @@ The same check is `validateBlocks` in `@terreno/blocks`. Field tables are in the
 ## Preview a document in the playground
 
 1. Open the component demo and choose **BlocksPlayground**.
-2. Start from Layout or Invalid, or paste your own document into the text area.
+2. Start from a preset: **All blocks** (one of each block type), **Block type** (one preset per
+   block type, with every chart kind, callout status, and action kind), Layout, Invalid, or
+   Sunday roast. Or paste your own document into the text area.
 3. The preview updates as you type. An invalid document shows the error banner and keeps
    the raw text collapsed.
+4. Press the controls. The playground has no server: a stepper's − and + and a checklist tick
+   run on the device with `scaleStepperBlock` and `applyChecklistState` from `@terreno/blocks`
+   (the helpers `scaleStepperHostAction` and `toggleChecklistHostAction` use), and a toast names
+   the callback and its result, such as "scaleStepper → 6 People". A reply, open, select, or
+   other callback shows a toast describing the event instead. Copy writes the clipboard.
+   Editing the text drops the local results.
 
 ## Require documents from the model
 

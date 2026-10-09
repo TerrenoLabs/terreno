@@ -247,11 +247,11 @@ export interface StepperBlock {
 
 export interface ChecklistItem {
   checked?: boolean;
-  /** Muted line under the text. */
+  /** Muted line under the text and meta. */
   detail?: string;
   /** Unique within the checklist. The tick's element id is `<checklist id>_<item id>`. */
   id: string;
-  /** A short label above the text, such as a time. */
+  /** A short label, such as a time, shown small and muted under the bold text. */
   meta?: string;
   text: string;
 }

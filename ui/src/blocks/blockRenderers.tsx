@@ -201,24 +201,27 @@ const renderStepper = (
   );
 };
 
+/** One row: the tick, then the bold text, the small muted meta (such as a time), and the detail. */
 const ChecklistRowContent: React.FC<{
-  checkboxTestID: string;
   isChecked: boolean;
   item: ChecklistItem;
-}> = ({checkboxTestID, isChecked, item}) => (
+  itemPath: string;
+}> = ({isChecked, item, itemPath}) => (
   <>
     <Box paddingY={1}>
-      <CheckBox selected={isChecked} testID={checkboxTestID} />
+      <CheckBox selected={isChecked} testID={`${itemPath}-checkbox`} />
     </Box>
     <Box flex="grow" gap={1}>
+      <Text bold testID={`${itemPath}-text`}>
+        {item.text}
+      </Text>
       {item.meta ? (
-        <Text color="secondaryLight" size="sm">
+        <Text color="secondaryLight" size="sm" testID={`${itemPath}-meta`}>
           {item.meta}
         </Text>
       ) : null}
-      <Text bold>{item.text}</Text>
       {item.detail ? (
-        <Text color="secondaryLight" size="sm">
+        <Text color="secondaryLight" size="sm" testID={`${itemPath}-detail`}>
           {item.detail}
         </Text>
       ) : null}
@@ -309,11 +312,7 @@ const renderChecklist = (
                 testID={`${itemPath}-row`}
                 {...(isLocked ? {dangerouslySetInlineStyle: {__style: {opacity: 0.5}}} : {})}
               >
-                <ChecklistRowContent
-                  checkboxTestID={`${itemPath}-checkbox`}
-                  isChecked={isChecked}
-                  item={item}
-                />
+                <ChecklistRowContent isChecked={isChecked} item={item} itemPath={itemPath} />
               </Box>
             </Box>
           );

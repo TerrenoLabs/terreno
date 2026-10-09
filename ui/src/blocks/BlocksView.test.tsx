@@ -984,6 +984,37 @@ blocks:
       );
     });
 
+    it("shows each row's bold text first, then the small muted meta, then the muted detail", () => {
+      const view = renderWithTheme(<BlocksView document={CHECKLIST} />);
+      const rowPath = "blocks-0-cooking_oven";
+      const ids = [
+        ...new Set(
+          view
+            .getByTestId(rowPath)
+            .findAll((node) => typeof node.props.testID === "string")
+            .map((node) => String(node.props.testID))
+            .filter((id) => /-(text|meta|detail)$/.test(id))
+        ),
+      ];
+      expect(ids).toEqual([`${rowPath}-text`, `${rowPath}-meta`, `${rowPath}-detail`]);
+      const propsOf = (testID: string): Record<string, unknown> => {
+        const [node] = view.UNSAFE_root.findAll((candidate) => candidate.props.testID === testID);
+        return node?.props ?? {};
+      };
+      expect(propsOf(`${rowPath}-text`)).toMatchObject({bold: true, children: "Preheat the oven"});
+      expect(propsOf(`${rowPath}-meta`)).toMatchObject({
+        children: "1:00 pm",
+        color: "secondaryLight",
+        size: "sm",
+      });
+      expect(propsOf(`${rowPath}-detail`)).toMatchObject({
+        children: "220 C, fan off.",
+        color: "secondaryLight",
+      });
+      expect(view.queryByTestId("blocks-0-cooking_veg-meta")).toBeNull();
+      expect(view.queryByTestId("blocks-0-cooking_veg-detail")).toBeNull();
+    });
+
     it("exposes each row as a labelled checkbox with its checked state, kept while locked", () => {
       const props = {document: CHECKLIST, hostActions: ["toggleChecklist"], onAction: () => {}};
       const view = renderWithTheme(<BlocksView {...props} />);

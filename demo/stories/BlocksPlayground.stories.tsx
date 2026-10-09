@@ -87,7 +87,7 @@ export const BlocksPlaygroundDemo: React.FC<BlocksPlaygroundDemoProps> = ({
   );
 
   return (
-    <Box gap={3} padding={4} width="100%">
+    <Box gap={3} padding={4} scroll width="100%">
       <Box direction="row" gap={2} wrap>
         {MAIN_PRESET_NAMES.map((name) => (
           <Button
@@ -114,7 +114,7 @@ export const BlocksPlaygroundDemo: React.FC<BlocksPlaygroundDemoProps> = ({
       <TextArea
         onChange={setDocument}
         placeholder="Paste a block document"
-        rows={12}
+        rows={8}
         testID="blocks-playground-editor"
         value={document}
       />

@@ -64,7 +64,7 @@ blocks:
 
 export const BlocksViewDemo: React.FC = () => {
   return (
-    <Box padding={4} width="100%">
+    <Box padding={4} scroll width="100%">
       <BlocksView document={SAMPLE} />
     </Box>
   );
@@ -126,7 +126,7 @@ blocks:
 
 export const BlocksViewActions: React.FC = () => {
   return (
-    <Box padding={4} width="100%">
+    <Box padding={4} scroll width="100%">
       <BlocksView document={ACTIONS} hostActions={["export_csv"]} />
     </Box>
   );
@@ -147,7 +147,7 @@ blocks:
 
 export const BlocksViewDisplay: React.FC = () => {
   return (
-    <Box padding={4} width="100%">
+    <Box padding={4} scroll width="100%">
       <BlocksView document={DISPLAY} resolveImage={resolveBlocksPhoto} />
     </Box>
   );
@@ -167,7 +167,7 @@ blocks:
 
 export const BlocksViewChecklist: React.FC = () => {
   return (
-    <Box padding={4} width="100%">
+    <Box padding={4} scroll width="100%">
       <BlocksView document={CHECKLIST} />
     </Box>
   );
@@ -199,7 +199,7 @@ blocks:
 
 export const BlocksViewGallery: React.FC = () => {
   return (
-    <Box padding={4} width="100%">
+    <Box padding={4} scroll width="100%">
       <BlocksView document={GALLERY} resolveImage={resolveBlocksPhoto} />
     </Box>
   );
@@ -251,7 +251,7 @@ blocks:
 
 export const BlocksViewList: React.FC = () => {
   return (
-    <Box padding={4} width="100%">
+    <Box padding={4} scroll width="100%">
       <BlocksView document={LIST} resolveImage={resolveBlocksPhoto} />
     </Box>
   );
@@ -259,7 +259,7 @@ export const BlocksViewList: React.FC = () => {
 
 export const BlocksViewInvalid: React.FC = () => {
   return (
-    <Box padding={4} width="100%">
+    <Box padding={4} scroll width="100%">
       <BlocksView document={INVALID} />
     </Box>
   );

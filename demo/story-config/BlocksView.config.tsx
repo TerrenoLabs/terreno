@@ -45,7 +45,7 @@ export const BlocksViewConfiguration: DemoConfiguration = {
     },
     Gallery: {
       description:
-        "Three photos in one row of 4:3 tiles, then five in a three-column grid. A file id loads through resolveImage; one with no URL shows a placeholder. Narrow screens scroll the row sideways.",
+        "Three bundled food photos in one row of 4:3 tiles, then five in a three-column grid. Every src is a file: id that resolveImage turns into a bundled photo; one with no photo shows a placeholder. Narrow screens scroll the row sideways.",
       render: () => <BlocksViewGallery />,
     },
     Invalid: {
@@ -54,7 +54,7 @@ export const BlocksViewConfiguration: DemoConfiguration = {
     },
     List: {
       description:
-        "The Sunday roast menu: each item has a 3:4 thumbnail, small muted meta, a bold title, and muted text. An item without a photo keeps the thumbnail gutter, and an unresolved file id shows a placeholder.",
+        "The Sunday roast menu: each item has a 3:4 photo thumbnail loaded through resolveImage, small muted meta, a bold title, and muted text. An item without a photo keeps the thumbnail gutter, and an unresolved file id shows a placeholder.",
       render: () => <BlocksViewList />,
     },
     Layout: {

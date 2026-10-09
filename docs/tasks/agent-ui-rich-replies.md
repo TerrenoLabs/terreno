@@ -160,3 +160,29 @@ Each renderer task also waits for its own contract task. T4 sits in the renderer
   - Files: `ai/src/service/toggleChecklist.ts`, `ai/src/service/toggleChecklist.test.ts`, `ai/src/routes/gptActions.test.ts`, `ai/src/index.ts`, `docs/reference/ai.md`.
   - Delivers: `toggleChecklistHostAction` from the IP, built on `findAgentBlock`.
   - Acceptance: AC6b.
+
+### Phase 6: Playground follow-up (D7)
+
+- [x] **T22** — Every block type has a playground preset
+  - Depends on: T15
+  - Files: `demo/stories/BlocksPlayground.stories.tsx`, `demo/story-config/BlocksPlayground.config.tsx`, a demo test that every schema block type appears in a preset and every preset validates.
+  - Delivers: one preset per block type plus "All blocks", covering every action kind and the segmented control.
+  - Acceptance: the coverage test fails when a block type has no preset; every preset validates; runtime screenshots at 1280 and 390.
+
+- [x] **T23** — Stepper and checklist callbacks run in the playground
+  - Depends on: T22
+  - Files: `blocks/src/hostActionLogic.ts` (or similar) + tests + `blocks/src/index.ts`, `ai/src/service/scaleStepper.ts`, `ai/src/service/toggleChecklist.ts`, `demo/stories/BlocksPlayground.stories.tsx`, `docs/reference/blocks.md`.
+  - Delivers: pure `scaleStepperBlock` and `applyChecklistState` in `@terreno/blocks`, used by both host actions and the playground; other actions show a toast.
+  - Acceptance: in the playground, + shows 6 and "2.4 kg", a tick shows "2 of 8", a reply button shows a toast; ai host-action tests unchanged and green.
+
+- [x] **T24** — Checklist rows read bold title, then time, then description
+  - Depends on: none
+  - Files: `ui/src/blocks/blockRenderers.tsx`, `ui/src/blocks/BlocksView.test.tsx`, `docs/reference/ui.md`.
+  - Delivers: the row order from D7, test IDs unchanged.
+  - Acceptance: a test asserts the order; the e2e roast spec still passes.
+
+- [x] **T25** — Demo blocks use real photos
+  - Depends on: T22
+  - Files: `demo/assets/blocks/*.jpg`, `demo/assets/blocks/ATTRIBUTION.md`, `demo/stories/BlocksView.stories.tsx`, `demo/stories/BlocksPlayground.stories.tsx`.
+  - Delivers: gallery, list, and image presets and stories show bundled public-domain photos through `file:` ids and `resolveImage`.
+  - Acceptance: in the browser every photo loads (`naturalWidth` 800); attribution lists each source and license.

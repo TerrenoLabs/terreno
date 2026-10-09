@@ -1,6 +1,8 @@
 import {BlocksView, Box} from "@terreno/ui";
 import type React from "react";
 
+import {resolveBlocksPhoto} from "./blocksPhotos";
+
 const SAMPLE = `v: 1
 datasets:
   signups:
@@ -136,8 +138,8 @@ blocks:
     status: warning
     text: Seats renew on Friday.
   - type: image
-    alt: Receipt
-    src: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==
+    alt: Tables set for dinner
+    src: "file:dinner-table"
   - type: details
     title: Invoice notes
     text: Twelve seats, billed monthly.
@@ -146,7 +148,7 @@ blocks:
 export const BlocksViewDisplay: React.FC = () => {
   return (
     <Box padding={4} width="100%">
-      <BlocksView document={DISPLAY} />
+      <BlocksView document={DISPLAY} resolveImage={resolveBlocksPhoto} />
     </Box>
   );
 };
@@ -171,23 +173,6 @@ export const BlocksViewChecklist: React.FC = () => {
   );
 };
 
-// Solid 4x3 swatches stand in for photos so the story never loads an external image.
-export const SWATCH = {
-  carrots:
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGN4VGEERww4OQBybhKRd/XWIwAAAABJRU5ErkJggg==",
-  crumble:
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR42mM40hMERww4OQCDohOZumJuoAAAAABJRU5ErkJggg==",
-  gravy:
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGPIc9OFIwacHADQ3QqNcMVzWAAAAABJRU5ErkJggg==",
-  greens:
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGOI6gmAIwacHAAcCg6J4LtSEwAAAABJRU5ErkJggg==",
-  lamb: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGOYFmQDRww4OQAPVg2x06ZVAQAAAABJRU5ErkJggg==",
-  potatoes:
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGO4tioKjhhwcgC3ShY5GUQEVQAAAABJRU5ErkJggg==",
-  table:
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGPYsqAHjhhwcgC41haBHdFpowAAAABJRU5ErkJggg==",
-} as const;
-
 const GALLERY = `v: 1
 blocks:
   - type: heading
@@ -196,29 +181,26 @@ blocks:
   - type: gallery
     id: roast_photos
     images:
-      - {src: "${SWATCH.lamb}", alt: Roast leg of lamb on a carving board, caption: Roast lamb}
-      - {src: "${SWATCH.potatoes}", alt: Crisp roast potatoes in a tray, caption: Roast potatoes}
-      - {src: "${SWATCH.carrots}", alt: Glazed carrots in a white dish, caption: "Honey, thyme, and butter"}
+      - {src: "file:roast-lamb", alt: Roast leg of lamb on a carving board, caption: Roast lamb}
+      - {src: "file:roast-potatoes", alt: Crisp roast potatoes in a tray, caption: Roast potatoes}
+      - {src: "file:roast-plate", alt: A plated Sunday roast with gravy, caption: Sunday roast}
   - type: heading
     size: sm
     text: More than three wrap into a grid
   - type: gallery
     id: table_photos
     images:
-      - {src: "file:table-setting", alt: A table set for six, caption: Loaded through resolveImage}
-      - {src: "${SWATCH.greens}", alt: Buttered spring greens}
-      - {src: "${SWATCH.gravy}", alt: A jug of gravy}
-      - {src: "${SWATCH.lamb}", alt: Sliced lamb on a platter}
+      - {src: "file:dinner-table", alt: A table set for dinner, caption: Loaded through resolveImage}
+      - {src: "file:greens", alt: Buttered spring greens}
+      - {src: "file:roasted-carrots", alt: Honey-roasted carrots and parsnips}
+      - {src: "file:apple-crumble", alt: Warm apple crumble}
       - {src: "file:missing-photo", alt: A jug of spring flowers, caption: "No URL, so a placeholder"}
 `;
-
-const resolveDemoImage = async (fileId: string): Promise<string | undefined> =>
-  fileId === "table-setting" ? SWATCH.table : undefined;
 
 export const BlocksViewGallery: React.FC = () => {
   return (
     <Box padding={4} width="100%">
-      <BlocksView document={GALLERY} resolveImage={resolveDemoImage} />
+      <BlocksView document={GALLERY} resolveImage={resolveBlocksPhoto} />
     </Box>
   );
 };
@@ -234,23 +216,23 @@ blocks:
       - title: Roast leg of lamb
         text: Rubbed with garlic and rosemary, then rested for 20 minutes before carving.
         meta: Main
-        image: {src: "${SWATCH.lamb}", alt: Roast leg of lamb on a carving board}
+        image: {src: "file:roast-lamb", alt: Roast leg of lamb on a carving board}
       - title: Crisp roast potatoes
         text: Parboiled, roughed up, and roasted in hot fat until golden.
         meta: Side
-        image: {src: "${SWATCH.potatoes}", alt: Crisp roast potatoes in a tray}
+        image: {src: "file:roast-potatoes", alt: Crisp roast potatoes in a tray}
       - title: Carrots and parsnips
         text: "Glazed with honey, thyme, and butter."
         meta: Side
-        image: {src: "${SWATCH.carrots}", alt: Glazed carrots and parsnips in a white dish}
+        image: {src: "file:roasted-carrots", alt: Glazed carrots and parsnips in a white dish}
       - title: Lemony greens
         text: Spring greens wilted with butter and a squeeze of lemon.
         meta: Side
-        image: {src: "${SWATCH.greens}", alt: Buttered spring greens with lemon}
+        image: {src: "file:greens", alt: Buttered spring greens with lemon}
       - title: Apple crumble
         text: Bramley apples under an oat crumble, served with custard.
         meta: Pudding
-        image: {src: "file:crumble", alt: Apple crumble with a jug of custard}
+        image: {src: "file:apple-crumble", alt: Apple crumble with a jug of custard}
   - type: heading
     size: sm
     text: Mixed thumbnails keep titles aligned
@@ -259,7 +241,7 @@ blocks:
     items:
       - title: Gravy
         text: Made from the lamb resting juices.
-        image: {src: "${SWATCH.gravy}", alt: A jug of gravy}
+        image: {src: "file:roast-plate", alt: A plated roast with gravy}
       - title: Mint sauce
         text: No photo, so the title keeps the thumbnail gutter.
       - title: Redcurrant jelly
@@ -267,13 +249,10 @@ blocks:
         image: {src: "file:missing-photo", alt: A dish of redcurrant jelly}
 `;
 
-const resolveListImage = async (fileId: string): Promise<string | undefined> =>
-  fileId === "crumble" ? SWATCH.crumble : undefined;
-
 export const BlocksViewList: React.FC = () => {
   return (
     <Box padding={4} width="100%">
-      <BlocksView document={LIST} resolveImage={resolveListImage} />
+      <BlocksView document={LIST} resolveImage={resolveBlocksPhoto} />
     </Box>
   );
 };

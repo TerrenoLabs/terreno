@@ -182,7 +182,8 @@ after the bump. The changelog entry says so under a "Behaviour change" heading a
 `{type: checklist, id (at most 31 characters), title? (1–120), callback?: {name, payload?}, items: 1–30 of {id (at most 32 characters), text (1–120), detail? (1–280), meta? (1–40), checked?: boolean}}`.
 Item ids are unique. The element id of a tick is `<id>_<item id>`, reserved like the stepper's
 (`DUPLICATE_ID`). Rendering: the title on the left and "n of m" on the right, then one
-`CheckBox` row per item, with `meta` (the time) above a bold `text` and a muted `detail`.
+`CheckBox` row per item: the bold `text` first, then `meta` (the time, small and muted), then a muted
+`detail` (D7).
 
 With a `callback`, an `onAction` handler, and either no `hostActions` list or one that names the
 callback (matching the stepper), a tick sends
@@ -350,6 +351,7 @@ first.
 | D4 | Q2: Should stepper and checklist changes survive a page reload? | "No (Recommended)" | Overrides stay in client memory. X9 stays parked. |
 | D5 | Approve the plan? | "Approve (Recommended)", given with D2–D4 | Status set to approved with these answers applied. |
 | D6 | (unprompted) | "enable rich blocks by default" | `uiBlocks.richBlocks` and `blocksPromptSection` default to `true`; `false` opts out. AC3 now pins the `false` case to `master` and checks the default. The changelog flags the behaviour change. The stepper still needs a `handles: "stepper"` action. |
+| D7 | (review of the built PR) | "in blocks playground, ensure every kind of block is available. also the serving callback doesn't work. if it cant work, wire up toasts or something. flip the checkboxes to be bold title, then time, then description. none of the images render." | The playground offers a preset per block type and an "All blocks" preset. The stepper and checklist callbacks run locally there through pure `scaleStepperBlock` / `applyChecklistState` helpers moved into `@terreno/blocks` (the host actions call the same helpers); other actions show a toast. Checklist rows read bold title, time, description. Demo stories and presets use bundled public-domain food photos through `file:` ids instead of colour swatches. Tasks T22–T25. |
 
 ## Sign-off
 

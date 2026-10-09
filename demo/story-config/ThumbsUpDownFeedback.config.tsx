@@ -19,7 +19,7 @@ export const ThumbsUpDownFeedbackConfiguration: DemoConfiguration = {
     documentation: "planned",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=3800-6018",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=3800-6006",
     ios: "ready",
     android: "ready",
     web: "ready",

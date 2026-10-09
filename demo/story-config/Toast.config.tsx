@@ -17,7 +17,7 @@ export const ToastConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=3611-6847&t=Oy9DQ55rqjZ987fn-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=3611-6847",
     ios: "ready",
     android: "ready",
     web: "ready",

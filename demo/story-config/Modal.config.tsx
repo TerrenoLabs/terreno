@@ -7,7 +7,7 @@ import {Modal} from "@terreno/ui";
 // component: InnerModalContent, related: ["Modals"], description:
 // "This component populates the interior of standard modals.
 // This component uses the custom content block – see how to use that by clicking here.", a11yNotes:
-// [], category: ["Layout", "Utility"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A24093&mode=design&t=iCiJI3xbrm6rrXPg-1",
+// [], category: ["Layout", "Utility"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23999",
 // ios: "ready", android: "ready", web: "ready", }, additionalDocumentation: [], interfaceName:
 // "InnerModalContentProps", usage: { do: [ "Use the right variant for the device you’re designing
 // for (desktop, mobile).", "Center align your content when there’s 1-2 sentences;
@@ -35,7 +35,7 @@ export const ModalConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A24105&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-24000",
     ios: "ready",
     android: "ready",
     web: "ready",

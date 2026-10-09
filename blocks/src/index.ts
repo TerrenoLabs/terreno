@@ -118,6 +118,13 @@ export {validateAskInput} from "./asks/validateInput";
 export {validateAskResponse} from "./asks/validateResponse";
 export type {BlockError, BlockErrorCode, BlockWarningCode} from "./errors";
 export {BLOCK_ERROR_CODES, BLOCK_WARNING_CODES} from "./errors";
+export type {ChecklistTick} from "./interactive";
+export {
+  applyChecklistState,
+  isStepperValueAllowed,
+  scaleStepperBlock,
+  unknownChecklistItemIds,
+} from "./interactive";
 export {blocksJsonSchema} from "./jsonSchema";
 export {BLOCK_LIMITS} from "./limits";
 export type {KnownDataset, LintBlocksOptions} from "./lint";

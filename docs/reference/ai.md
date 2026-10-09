@@ -314,7 +314,7 @@ Its payload schema is `z.object({value: z.number()}).passthrough()`, so extra ke
 2. Checks that `value` is within `min` and `max` and on the `step` grid from the agent's `value`. Otherwise 400 `Invalid stepper value`.
 3. Returns `{replace: "block", blocks: {v: 1, blocks: [stepper]}}`. The stepper has the new `value`, and each item's `amount` is `amount × value / agent value`, rounded to its `decimals` (`round: up` rounds up). A stepper the agent wrote with `value: 0` keeps its amounts.
 
-Scaling always starts from the stored original, so rounding does not drift tap after tap. The owner of a history can edit its stored prompts with `PATCH /gpt/histories/:id`, so an app whose numbers matter (prices, stock) registers its own `handles: "stepper"` action over its own data.
+Steps 2 and 3 are `isStepperValueAllowed` and `scaleStepperBlock` from `@terreno/blocks`, so a client without a server (the demo playground) scales the same way. Scaling always starts from the stored original, so rounding does not drift tap after tap. The owner of a history can edit its stored prompts with `PATCH /gpt/histories/:id`, so an app whose numbers matter (prices, stock) registers its own `handles: "stepper"` action over its own data.
 
 `toggleChecklistHostAction` is an opt-in `checklist` action: `{handler, payload, handles: "checklist", logResponse: false}`. Register it under the name the agent writes in `callback.name`; the prompt then tells the model to set a checklist's `callback` to that name:
 
@@ -331,7 +331,7 @@ Its payload schema is `z.object({itemId: z.string(), checked: z.boolean(), state
 2. Checks that `itemId` and every `state` key are item ids of that checklist. Otherwise 400 `Unknown checklist item`.
 3. Returns `{replace: "block", blocks: {v: 1, blocks: [checklist]}}`. Each item's `checked` is its `state` value; an item missing from `state` is unchecked (the client always sends every item). The ticked `itemId` always takes `checked`.
 
-It saves nothing, and its `ui_action` log row holds only the ids (no `itemId`, `checked`, or `state`). An app that records progress registers its own `handles: "checklist"` action.
+Steps 2 and 3 are `unknownChecklistItemIds` and `applyChecklistState` from `@terreno/blocks`. It saves nothing, and its `ui_action` log row holds only the ids (no `itemId`, `checked`, or `state`). An app that records progress registers its own `handles: "checklist"` action.
 
 `findAgentBlock({history, messageId, blockId, type})` returns the block of `type` with id `blockId` that an assistant prompt holds, including inside `card` and `columns`. When `messageId` is `msg-<n>` it reads `history.prompts[n]` first (stored prompts have no ids). Otherwise, or when that prompt does not hold the block, it uses the only assistant prompt that does. Several matches throw 409 `Block is ambiguous`; none throws 404 `Block not found`.
 

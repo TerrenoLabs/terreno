@@ -131,8 +131,8 @@ A tap sends `{kind: callback, name, payload: {...payload, value: value ± step}}
 ## Checklist
 
 A `checklist` is a list of tickable items with an "n of m" counter. `BlocksView` draws the title
-and counter, then one `CheckBox` row per item with `meta` above a bold `text` and a muted
-`detail`. With a `callback` whose name is in `hostActions` (or with `hostActions` omitted), a
+and counter, then one `CheckBox` row per item: the bold `text`, then the small muted `meta` (such
+as a time), then the muted `detail`. With a `callback` whose name is in `hostActions` (or with `hostActions` omitted), a
 tick calls `onAction` with `blockId: <id>`, `elementId: <id>_<item id>`, and
 `{kind: "callback", name, payload: {...payload, itemId, checked, state}}`. `state` maps every
 item id to its tick after this one. `BlocksView` disables the checklist while a tick is
@@ -398,6 +398,10 @@ heuristics and does not fail `ok`.
 | `BLOCK_WARNING_CODES` | `BAR_TOO_MANY_CATEGORIES`, `DONUT_TOO_MANY_SLICES`, `LINE_SINGLE_POINT` |
 | `stepperElementIds(id)` | `{decrease, increase}`: the element ids of a stepper's buttons |
 | `checklistElementId(id, itemId)` | `<id>_<item id>`: the element id of a checklist item's tick. `ChecklistBlock`, `ChecklistItem`, and `ChecklistCallback` are type exports. |
+| `scaleStepperBlock(original, value)` | The stepper at `value` with each item's `amount` scaled linearly from `original` (`amount × value / original value`), rounded to its `decimals` (`round: up` rounds up). An `original` with `value: 0` keeps its amounts. Always pass the block the agent wrote, so rounding does not drift. `scaleStepperHostAction` and the demo playground use it |
+| `isStepperValueAllowed(stepper, value)` | `true` when `value` is finite, within `min` and `max`, and a whole number of `step`s from the stepper's `value` |
+| `applyChecklistState(checklist, {itemId, checked, state})` | The checklist with each item's `checked` from `state`; an item missing from `state` is unchecked and `itemId` takes `checked`. `toggleChecklistHostAction` and the demo playground use it. `ChecklistTick` is a type export |
+| `unknownChecklistItemIds(checklist, tick)` | The ids in a tick's `itemId` and `state` that the checklist has no item for, each once |
 | `blockPlainText(block, {datasets?, checked?})` | The text a copy action copies for its target block (see [Copy](#copy)). `BlockPlainTextOptions` is a type export |
 | `COPY_TARGET_TYPES` | `stepper`, `checklist`, `list`, `table`, `text`: the blocks a copy `target` may name. `CopyAction` is a type export |
 | `GalleryBlock`, `GalleryImage` | Type exports for the `gallery` block and its tiles |

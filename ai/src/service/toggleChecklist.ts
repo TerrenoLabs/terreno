@@ -1,14 +1,13 @@
 import {APIError, z} from "@terreno/api";
-import type {ChecklistBlock} from "@terreno/blocks";
+import {
+  applyChecklistState,
+  type ChecklistBlock,
+  type ChecklistTick,
+  unknownChecklistItemIds,
+} from "@terreno/blocks";
 
 import type {HostAction, HostActionResult} from "../types";
 import {blocksDocument, findAgentBlock} from "./agentBlocks";
-
-interface ChecklistTick {
-  checked: boolean;
-  itemId: string;
-  state: Record<string, boolean>;
-}
 
 const unknownItemError = (itemIds: string[], checklist: ChecklistBlock): APIError =>
   new APIError({
@@ -28,20 +27,13 @@ const unknownItemError = (itemIds: string[], checklist: ChecklistBlock): APIErro
  */
 export const toggleChecklistHostAction: HostAction = {
   handler: ({blockId, history, messageId, payload}): HostActionResult => {
-    const {checked, itemId, state} = payload as ChecklistTick;
+    const tick = payload as ChecklistTick;
     const checklist = findAgentBlock({blockId, history, messageId, type: "checklist"});
-    const itemIds = new Set(checklist.items.map((item) => item.id));
-    const unknownIds = [itemId, ...Object.keys(state)].filter((id) => !itemIds.has(id));
+    const unknownIds = unknownChecklistItemIds(checklist, tick);
     if (unknownIds.length > 0) {
-      throw unknownItemError([...new Set(unknownIds)], checklist);
+      throw unknownItemError(unknownIds, checklist);
     }
-    const ticked: ChecklistBlock = {
-      ...checklist,
-      items: checklist.items.map((item) => ({
-        ...item,
-        checked: item.id === itemId ? checked : state[item.id] === true,
-      })),
-    };
+    const ticked = applyChecklistState(checklist, tick);
     return {blocks: blocksDocument([ticked]), replace: "block"};
   },
   handles: "checklist",

@@ -24,7 +24,8 @@ export const SliderConfiguration: DemoConfiguration = {
   category: ["Component", "Form"],
   status: {
     documentation: "ready",
-    figma: "planned",
+    figma: "ready",
+    figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23983",
     ios: "ready",
     android: "ready",
     web: "ready",

@@ -18,7 +18,8 @@ export const RadioConfiguration: DemoConfiguration = {
   status: {
     android: "ready",
     documentation: "ready",
-    figma: "planned",
+    figma: "ready",
+    figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23976",
     ios: "ready",
     web: "ready",
   },

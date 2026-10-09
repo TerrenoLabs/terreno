@@ -215,7 +215,7 @@ export interface DemoConfiguration extends DemoConfigurationBase {
 // represents messages in conversation threads, mimicking speech bubbles for intuitive
 // communication.", a11yNotes: [ "Chat bubbles are wonderfully accessible as-is.",
 // "Make sure to use colors that are accessible. The current design is accessible.", ], category:
-// ["Communication", "Feedback"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23454&mode=design&t=AKQ8wyFQBA4qC5eF-1",
+// ["Communication", "Feedback"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23981",
 // ios: "ready", android: "ready", web: "ready", }, additionalDocumentation: [{name: "Github demo
 // link", link: "https://github.com/gestalt/gestalt"}], interfaceName: "ChatBubbleProps", usage: {
 // do: [ "Use the appropriate colors for each user group.",
@@ -228,7 +228,7 @@ export interface DemoConfiguration extends DemoConfigurationBase {
 // FilteredItem, related: ["Pills"], description: "A component that shows members, pods,
 // etc that have been filtered into a list. Users can interact with this component by dismissing it
 // (removing the filter) or occasionally, editing it.", a11yNotes: [], category: ["Filter",
-// "Utility"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23503&mode=design&t=iCiJI3xbrm6rrXPg-1",
+// "Utility"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23985",
 // ios: "ready", android: "ready", web: "ready", }, additionalDocumentation: [], interfaceName:
 // "FilteredItemProps", usage: { do: [ "Allow 8pt of space between each filtered item.",
 // "Use the same component between desktop and mobile.", "Truncate the text if it’s too long.", ],
@@ -240,7 +240,7 @@ export interface DemoConfiguration extends DemoConfigurationBase {
 // const MessageConfiguration: DemoConfiguration = { name: "Message", component: Message, related:
 // ["Avatar", "Chat bubble"], description: "This component allows the user to click into a specific
 // chat. There are separate variants for both devices and user groups.", a11yNotes: [], category:
-// ["Communication", "Feedback"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23418&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+// ["Communication", "Feedback"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23978",
 // ios: "ready", android: "ready", web: "ready", }, additionalDocumentation: [], interfaceName:
 // "MessageProps", usage: { do: [ "Use the patient variant for the member portal,
 // and the staff variant for the staff portal.", "Use the appropriate icons for the user groups in

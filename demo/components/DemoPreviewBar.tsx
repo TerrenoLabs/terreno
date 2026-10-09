@@ -1,6 +1,6 @@
 import {BooleanField, Box, IconButton, Modal, SelectField, Text} from "@terreno/ui";
 import type React from "react";
-import {useCallback, useState} from "react";
+import {useCallback, useEffect, useState} from "react";
 import {useWindowDimensions} from "react-native";
 import type {DemoPreviewState} from "../previewState";
 
@@ -35,6 +35,13 @@ export const DemoPreviewBar: React.FC<{
   state: DemoPreviewState;
 }> = ({onChange, shareQuery, state}) => {
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
+  const {width} = useWindowDimensions();
+
+  // Static export SSR has no reliable window width; default to the wide layout until mount.
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const update = useCallback(
     (patch: Partial<DemoPreviewState>): void => {
@@ -47,7 +54,7 @@ export const DemoPreviewBar: React.FC<{
     setIsSettingsVisible(false);
   }, []);
 
-  const isCompact = useWindowDimensions().width < COMPACT_MAX_WIDTH;
+  const isCompact = hasMounted && width < COMPACT_MAX_WIDTH;
   const hasAdvancedOverrides = state.rtl || state.reducedMotion || state.locale !== "en";
   const hasQuickOverrides =
     state.theme !== "light" || state.viewport !== "full" || state.background !== "default";

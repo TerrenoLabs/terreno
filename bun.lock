@@ -175,6 +175,7 @@
       },
       "peerDependencies": {
         "@ai-sdk/google-vertex": "^4.0.142",
+        "@ai-sdk/provider": "^4.0.26",
         "@terreno/api": "workspace:*",
         "@terreno/jobs": "workspace:*",
         "mongoose": "^8.0.0 || ^9.0.0",

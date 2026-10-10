@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-10-04T18:56:30.566Z.
+> dates are promised. Last updated: 2026-10-10T11:47:58.124Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -57,6 +57,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### dx
 
+- [Agent UI Rich Replies: steppers, checklists, galleries, and copy](https://github.com/TerrenoLabs/terreno/issues/1546) (Feature, Planned) — IP: [agent-ui-rich-replies](docs/implementationPlans/agent-ui-rich-replies.md) · Tasks: [agent-ui-rich-replies](docs/tasks/agent-ui-rich-replies.md)
 - [create-terreno-app scaffolding CLI](https://github.com/TerrenoLabs/terreno/issues/1174) (Feature, Shipped) — IP: [create-terreno-app](docs/implementationPlans/create-terreno-app.md) · Tasks: [create-terreno-app](docs/tasks/create-terreno-app.md)
 - [Demo workshop](https://github.com/TerrenoLabs/terreno/issues/1470) (Feature, Planned) — IP: [demo-workshop](docs/implementationPlans/demo-workshop.md) · Tasks: [demo-workshop](docs/tasks/demo-workshop.md)
 - [Migrate CI/CD to CircleCI](https://github.com/TerrenoLabs/terreno/issues/1088) (Improvement, Shipped) — IP: [migrate-cicd-to-circleci](docs/implementationPlans/migrate-cicd-to-circleci.md) · Tasks: [migrate-cicd-to-circleci](docs/tasks/migrate-cicd-to-circleci.md)

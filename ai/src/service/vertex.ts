@@ -1,3 +1,4 @@
+import type {ImageModelV4, LanguageModelV4} from "@ai-sdk/provider";
 import {APIError, logger} from "@terreno/api";
 import type {ImageModel, LanguageModel} from "ai";
 
@@ -24,8 +25,10 @@ const MODEL_LIST_PAGE_SIZE = "200";
 
 /** Provider returned by `@ai-sdk/google-vertex` `createVertex`. */
 export interface VertexLanguageModelProvider {
-  (modelId: string): LanguageModel;
-  image: (modelId: string) => ImageModel;
+  /** `@ai-sdk/google-vertex` v4+ returns `LanguageModelV4`; older `ai` majors still type `LanguageModel` as v2/v3 only. */
+  (modelId: string): LanguageModel | LanguageModelV4;
+  /** `@ai-sdk/google-vertex` v4+ returns `ImageModelV4`; older `ai` majors still type `ImageModel` as v2/v3 only. */
+  image: (modelId: string) => ImageModel | ImageModelV4;
 }
 
 interface VertexModule {
@@ -202,12 +205,12 @@ export const createVertexProvider = (
     allowedModels,
     imageModel: (modelId: string): ImageModel => {
       assertAllowed(modelId);
-      return raw.image(modelId);
+      return raw.image(modelId) as ImageModel;
     },
     isModelAllowed: (modelId: string): boolean => isVertexModelAllowed(modelId, allowedModels),
     languageModel: (modelId: string): LanguageModel => {
       assertAllowed(modelId);
-      return raw(modelId);
+      return raw(modelId) as LanguageModel;
     },
     location,
     project,

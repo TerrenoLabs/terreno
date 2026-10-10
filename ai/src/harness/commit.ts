@@ -17,6 +17,7 @@ import type {
   HarnessMessageModel,
   HarnessOwnerModel,
   HarnessOwnership,
+  HarnessPromptRef,
   HarnessReplayPolicy,
   HarnessResolveInterruptedOptions,
   HarnessTaskDefinition,
@@ -151,6 +152,94 @@ const findByRequestId = async ({
 };
 
 /**
+ * Prompt refs as stored on `ObsTrace.prompts` (`{label?, name, version}`; a registry
+ * `body` is dropped), once each. Throws `invalidRequest` for a ref without a name, with a
+ * non-string label, or without a positive integer version.
+ */
+export const tracePromptRefs = (refs: HarnessPromptRef[] | undefined): HarnessPromptRef[] => {
+  if (refs === undefined) {
+    return [];
+  }
+  if (!Array.isArray(refs)) {
+    throw harnessError({detail: "prompts must be an array", kind: "invalidRequest"});
+  }
+  const unique = new Map<string, HarnessPromptRef>();
+  for (const ref of refs) {
+    if (typeof ref?.name !== "string" || !ref.name.trim()) {
+      throw harnessError({detail: "Each prompt ref needs a name", kind: "invalidRequest"});
+    }
+    if (!Number.isInteger(ref.version) || ref.version < 1) {
+      throw harnessError({
+        detail: `Prompt ref "${ref.name}" needs a positive integer version`,
+        kind: "invalidRequest",
+      });
+    }
+    if (ref.label !== undefined && typeof ref.label !== "string") {
+      throw harnessError({
+        detail: `Prompt ref "${ref.name}" label must be a string`,
+        kind: "invalidRequest",
+      });
+    }
+    const normalized = {
+      ...(ref.label !== undefined ? {label: ref.label} : {}),
+      name: ref.name,
+      version: ref.version,
+    };
+    unique.set(JSON.stringify(normalized), normalized);
+  }
+  return [...unique.values()];
+};
+
+/** The `scope` and `tags` written onto a root task's `ObsTrace`. */
+const traceFields = (
+  trace: HarnessCreateTaskOptions["trace"]
+): {scope?: string; tags?: string[]} => {
+  if (trace === undefined) {
+    return {};
+  }
+  const {scope, tags} = trace;
+  if (scope !== undefined && (typeof scope !== "string" || !scope.trim())) {
+    throw harnessError({detail: "trace.scope must be a non-empty string", kind: "invalidRequest"});
+  }
+  const isBlankTag = (tag: unknown): boolean => typeof tag !== "string" || !tag.trim();
+  if (tags !== undefined && (!Array.isArray(tags) || tags.some(isBlankTag))) {
+    throw harnessError({
+      detail: "trace.tags must be an array of non-empty strings",
+      kind: "invalidRequest",
+    });
+  }
+  return {
+    ...(scope !== undefined ? {scope} : {}),
+    ...(tags !== undefined ? {tags: [...new Set(tags)]} : {}),
+  };
+};
+
+/**
+ * Record `refs` on `traceId`'s `ObsTrace.prompts`, once each. Pass `session` to write
+ * inside a commit's transaction.
+ */
+export const addTracePrompts = async ({
+  models,
+  refs,
+  session,
+  traceId,
+}: {
+  models: HarnessModels;
+  refs: HarnessPromptRef[];
+  session?: ClientSession;
+  traceId: mongoose.Types.ObjectId;
+}): Promise<void> => {
+  if (refs.length === 0) {
+    return;
+  }
+  await models.trace.updateOne(
+    {_id: traceId},
+    {$addToSet: {prompts: {$each: refs}}},
+    session ? {session} : {}
+  );
+};
+
+/**
  * Insert a root task with its `ObsTrace` and root `CHAIN` span in one transaction.
  * A repeated `requestId` hits the unique index, rolls the whole transaction back (so no
  * orphan trace survives), and returns the task that already owns it.
@@ -185,11 +274,24 @@ export const createTaskRecords = async ({
   const startedAt = traceStartedAt.toJSDate();
   const userId = toObjectId(options.userId);
   const spanIdentity = taskSpanIdentity(definition, input);
+  const prompts = tracePromptRefs(options.prompts);
+  const traceExtras = traceFields(options.trace);
 
   try {
     return await inTransaction(async (session) => {
       await models.trace.create(
-        [{_id: traceId, input, name: definition.key, startedAt, status: "ok", userId}],
+        [
+          {
+            _id: traceId,
+            input,
+            name: definition.key,
+            prompts,
+            startedAt,
+            status: "ok",
+            userId,
+            ...traceExtras,
+          },
+        ],
         {session}
       );
       await models.span.create(

@@ -2,6 +2,8 @@ import {
   Children,
   type ComponentProps,
   type ElementRef,
+  type ReactElement,
+  type ReactNode,
   useCallback,
   useEffect,
   useRef,
@@ -13,17 +15,66 @@ import {
   ScrollView,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from "react-native";
 import {SwiperFlatList} from "react-native-swiper-flatlist";
 
 import {Box} from "./Box";
-import {getRounding, type SplitPageListItem, type SplitPageProps} from "./Common";
+import {getRounding, getSpacing, type SplitPageListItem, type SplitPageProps} from "./Common";
 import {FlatList} from "./FlatList";
 import {IconButton} from "./IconButton";
 import {isNarrowViewport} from "./MediaQuery";
 import {SegmentedControl} from "./SegmentedControl";
 import {Spinner} from "./Spinner";
 import {useTheme} from "./Theme";
+
+// flex: 1 (basis 0, shrink 1) sizes the content container to the pane. A height: "100%"
+// child then stays pane-bounded and can scroll internally. A taller child that does not
+// shrink still extends this ScrollView. flexGrow: 1 leaves the basis at the content size,
+// so that same height: "100%" child grows with its content instead of the pane.
+const desktopChildContentContainerStyle = {flex: 1};
+
+// Matches IconButton's default box. The labeled pager reserves this slot even when the
+// arrow is hidden, so the other arrow does not reflow.
+const labeledColumnNavButtonHeight = 32;
+const labeledPagerEdgeSpacing = getSpacing(2);
+
+const renderDesktopChildColumn = ({
+  borderRadius,
+  columnKey,
+  element,
+  paneStyle,
+  scrollTestID,
+  testID,
+}: {
+  borderRadius: number;
+  columnKey: number;
+  element: ReactNode;
+  paneStyle: ViewStyle;
+  scrollTestID: string;
+  testID: string;
+}): ReactElement => {
+  return (
+    <View
+      key={columnKey}
+      style={{
+        ...paneStyle,
+        borderRadius,
+        height: "100%",
+        overflow: "hidden",
+      }}
+      testID={testID}
+    >
+      <ScrollView
+        contentContainerStyle={desktopChildContentContainerStyle}
+        style={{flex: 1, height: "100%"}}
+        testID={scrollTestID}
+      >
+        {element}
+      </ScrollView>
+    </View>
+  );
+};
 
 // A component for rendering a list on one side and a details view on the right for large screens,
 // and a scrollable list where clicking an item takes you the details view.
@@ -62,8 +113,10 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   const activeChildIndexRef = useRef(activeChildIndex);
   activeChildIndexRef.current = activeChildIndex;
   const swiperRef = useRef<ElementRef<typeof SwiperFlatList> | null>(null);
+  const narrowPagerRef = useRef<ElementRef<typeof View> | null>(null);
   const [desktopScrollWidth, setDesktopScrollWidth] = useState(0);
   const [measuredPageWidth, setMeasuredPageWidth] = useState(0);
+  const [measuredPageHeight, setMeasuredPageHeight] = useState(0);
 
   const isNarrowLayout =
     narrowBelowWidth === undefined ? isNarrowViewport() : windowWidth <= narrowBelowWidth;
@@ -108,6 +161,50 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
       index: activeChildIndexRef.current,
     });
   }, [measuredPageWidth, windowWidth]);
+
+  const rememberNarrowPagerSize = useCallback((width: number, height: number): void => {
+    if (width > 0) {
+      setMeasuredPageWidth((current) => (current === width ? current : width));
+    }
+    if (height > 0) {
+      setMeasuredPageHeight((current) => (current === height ? current : height));
+    }
+  }, []);
+
+  const onNarrowPagerLayout = useCallback(
+    (event: LayoutChangeEvent): void => {
+      const {height, width} = event.nativeEvent.layout;
+      rememberNarrowPagerSize(width, height);
+    },
+    [rememberNarrowPagerSize]
+  );
+
+  // The pager frame is already the visible height. Reading it here covers the case where
+  // the view's onLayout callback does not run after the frame settles.
+  useEffect(() => {
+    if (!isNarrowLayout || !isDetailActive) {
+      return;
+    }
+    const node = narrowPagerRef.current as unknown as HTMLElement | null;
+    if (
+      node == null ||
+      typeof node.offsetHeight !== "number" ||
+      typeof ResizeObserver === "undefined"
+    ) {
+      return;
+    }
+    const measure = (): void => {
+      rememberNarrowPagerSize(node.offsetWidth, node.offsetHeight);
+    };
+    measure();
+    const observer = new ResizeObserver(() => {
+      measure();
+    });
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+    };
+  }, [rememberNarrowPagerSize, isNarrowLayout, isDetailActive]);
 
   if (!children && !renderContent) {
     console.warn("A child node is required");
@@ -205,25 +302,19 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
             width={activeTabs.length > 1 ? "100%" : "60%"}
           >
             {activeTabs.map((tabIndex, i) => {
-              return (
-                <ScrollView
-                  contentContainerStyle={{
-                    flex: 1,
-                  }}
-                  key={tabIndex}
-                  style={{
-                    borderRadius: childColumnBorderRadius,
-                    flex: 1,
-                    height: "100%",
-                    overflow: "hidden",
-                    paddingLeft: i ? 16 : 0,
-                    paddingRight: i ? 0 : 16,
-                    width: "60%",
-                  }}
-                >
-                  {elementArray[tabIndex]}
-                </ScrollView>
-              );
+              return renderDesktopChildColumn({
+                borderRadius: childColumnBorderRadius,
+                columnKey: tabIndex,
+                element: elementArray[tabIndex],
+                paneStyle: {
+                  flex: 1,
+                  paddingLeft: i ? 16 : 0,
+                  paddingRight: i ? 0 : 16,
+                  width: "60%",
+                },
+                scrollTestID: `split-page-desktop-child-scroll-${i}`,
+                testID: `split-page-desktop-segment-child-${i}`,
+              });
             })}
           </Box>
         </View>
@@ -258,24 +349,19 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
           testID="split-page-desktop-children-scroll"
         >
           {elementArray.map((element, index) => {
-            return (
-              <ScrollView
-                contentContainerStyle={{flexGrow: 1}}
-                key={index}
-                style={{
-                  borderRadius: childColumnBorderRadius,
-                  flexGrow: 0,
-                  flexShrink: 0,
-                  height: "100%",
-                  maxWidth: childWidth,
-                  overflow: "hidden",
-                  width: childWidth,
-                }}
-                testID={`split-page-desktop-child-${index}`}
-              >
-                {element}
-              </ScrollView>
-            );
+            return renderDesktopChildColumn({
+              borderRadius: childColumnBorderRadius,
+              columnKey: index,
+              element,
+              paneStyle: {
+                flexGrow: 0,
+                flexShrink: 0,
+                maxWidth: childWidth,
+                width: childWidth,
+              },
+              scrollTestID: `split-page-desktop-child-scroll-${index}`,
+              testID: `split-page-desktop-child-${index}`,
+            });
           })}
         </ScrollView>
       );
@@ -284,23 +370,17 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
     return (
       <Box alignItems="center" direction="row" flex="grow" justifyContent="center" paddingX={2}>
         {elementArray.map((element, index) => {
-          return (
-            <ScrollView
-              contentContainerStyle={{
-                flex: 1,
-              }}
-              key={index}
-              style={{
-                borderRadius: childColumnBorderRadius,
-                flex: 1,
-                height: "100%",
-                overflow: "hidden",
-                width: "60%",
-              }}
-            >
-              {element}
-            </ScrollView>
-          );
+          return renderDesktopChildColumn({
+            borderRadius: childColumnBorderRadius,
+            columnKey: index,
+            element,
+            paneStyle: {
+              flex: 1,
+              width: "60%",
+            },
+            scrollTestID: `split-page-desktop-child-scroll-${index}`,
+            testID: `split-page-desktop-row-child-${index}`,
+          });
         })}
       </Box>
     );
@@ -362,19 +442,47 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
     swiperRef.current?.scrollToIndex({animated: true, index: destination});
   };
 
+  // The horizontal pager's content container sizes to its children, so height: "100%" on a page
+  // grows with the child instead of the visible pane. overflowY: hidden on that pager then clips
+  // the extra height. A measured pixel height gives the page a definite box: rounded corners still
+  // clip, and a height: "100%" child can scroll inside that box.
+  const narrowPageHeight = (ratio: number): number | "100%" | "90%" => {
+    if (measuredPageHeight > 0) {
+      return measuredPageHeight * ratio;
+    }
+    return ratio === 1 ? "100%" : "90%";
+  };
+
   const renderLabeledMobilePager = (labels: string[]) => {
     const pageWidth = measuredPageWidth > 0 ? measuredPageWidth : windowWidth;
     const lastIndex = elementArray.length - 1;
-    const controlBottom = (bottomNavBarHeight ?? 0) + 8;
+    const navInset = bottomNavBarHeight ?? 0;
+    const labeledChromeHeight =
+      labeledPagerEdgeSpacing +
+      labeledPagerEdgeSpacing +
+      labeledColumnNavButtonHeight +
+      labeledPagerEdgeSpacing +
+      navInset;
+    const columnHeight =
+      measuredPageHeight > 0 ? Math.max(measuredPageHeight - labeledChromeHeight, 0) : undefined;
+    const navSlotStyle: ViewStyle = {
+      alignItems: "center",
+      flexShrink: 0,
+      height: labeledColumnNavButtonHeight,
+      justifyContent: "center",
+      width: labeledColumnNavButtonHeight,
+    };
     return (
       <View
-        onLayout={(event: LayoutChangeEvent) => {
-          const nextWidth = event.nativeEvent.layout.width;
-          setMeasuredPageWidth((current) => (current === nextWidth ? current : nextWidth));
-        }}
-        style={{flex: 1, width: "100%"}}
+        onLayout={onNarrowPagerLayout}
+        ref={narrowPagerRef}
+        style={{flex: 1, height: "100%", minHeight: 0, width: "100%"}}
         testID="split-page-mobile-children"
       >
+        <View
+          style={{flexShrink: 0, height: labeledPagerEdgeSpacing}}
+          testID="split-page-column-top-space"
+        />
         <SwiperFlatList
           getItemLayout={(_data, index) => ({
             index,
@@ -387,7 +495,13 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
           }}
           ref={swiperRef}
           renderAll
-          style={{width: "100%"}}
+          style={{
+            flexGrow: columnHeight === undefined ? 1 : 0,
+            flexShrink: 1,
+            height: columnHeight,
+            minHeight: 0,
+            width: "100%",
+          }}
         >
           {elementArray.map((element, index) => {
             return (
@@ -395,10 +509,9 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
                 key={index}
                 style={{
                   borderRadius: childColumnBorderRadius,
-                  height: "100%",
+                  height: columnHeight ?? "100%",
                   overflow: "hidden",
                   padding: 0,
-                  paddingBottom: bottomNavBarHeight,
                   width: pageWidth,
                 }}
                 testID={`split-page-mobile-child-${index}`}
@@ -408,55 +521,67 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
             );
           })}
         </SwiperFlatList>
-        {narrowViewportListButtonLabel ? (
-          <View
-            style={{
-              bottom: controlBottom,
-              left: 16,
-              position: "absolute",
-              zIndex: 1,
-            }}
-          >
-            <IconButton
-              accessibilityHint={narrowViewportListButtonLabel}
-              accessibilityLabel={narrowViewportListButtonLabel}
-              iconName="arrow-left"
-              onClick={() => onItemDeselect()}
-              testID="split-page-back-to-list"
-            />
-          </View>
-        ) : null}
         <View
           style={{
-            bottom: controlBottom,
+            alignItems: "center",
             flexDirection: "row",
-            gap: 8,
-            position: "absolute",
-            right: 16,
-            zIndex: 1,
+            flexShrink: 0,
+            height: labeledColumnNavButtonHeight,
+            justifyContent: "space-between",
+            marginTop: labeledPagerEdgeSpacing,
+            paddingHorizontal: getSpacing(4),
           }}
+          testID="split-page-column-nav"
         >
-          {activeChildIndex > 0 ? (
-            <IconButton
-              accessibilityLabel={`Show previous column: ${labels[activeChildIndex - 1]}`}
-              iconName="chevron-left"
-              onClick={() => {
-                showMobileChild(activeChildIndex - 1);
-              }}
-              testID="split-page-column-previous"
-            />
-          ) : null}
-          {activeChildIndex < lastIndex ? (
-            <IconButton
-              accessibilityLabel={`Show next column: ${labels[activeChildIndex + 1]}`}
-              iconName="chevron-right"
-              onClick={() => {
-                showMobileChild(activeChildIndex + 1);
-              }}
-              testID="split-page-column-next"
-            />
-          ) : null}
+          <View
+            style={{
+              alignItems: "center",
+              flexDirection: "row",
+              flexShrink: 0,
+              gap: labeledPagerEdgeSpacing,
+            }}
+          >
+            {narrowViewportListButtonLabel ? (
+              <View style={navSlotStyle} testID="split-page-column-back-slot">
+                <IconButton
+                  accessibilityHint={narrowViewportListButtonLabel}
+                  accessibilityLabel={narrowViewportListButtonLabel}
+                  iconName="arrow-left"
+                  onClick={() => onItemDeselect()}
+                  testID="split-page-back-to-list"
+                />
+              </View>
+            ) : null}
+            <View accessible={false} style={navSlotStyle} testID="split-page-column-previous-slot">
+              {activeChildIndex > 0 ? (
+                <IconButton
+                  accessibilityLabel={`Show previous column: ${labels[activeChildIndex - 1]}`}
+                  iconName="chevron-left"
+                  onClick={() => {
+                    showMobileChild(activeChildIndex - 1);
+                  }}
+                  testID="split-page-column-previous"
+                />
+              ) : null}
+            </View>
+          </View>
+          <View accessible={false} style={navSlotStyle} testID="split-page-column-next-slot">
+            {activeChildIndex < lastIndex ? (
+              <IconButton
+                accessibilityLabel={`Show next column: ${labels[activeChildIndex + 1]}`}
+                iconName="chevron-right"
+                onClick={() => {
+                  showMobileChild(activeChildIndex + 1);
+                }}
+                testID="split-page-column-next"
+              />
+            ) : null}
+          </View>
         </View>
+        <View
+          style={{flexShrink: 0, height: labeledPagerEdgeSpacing + navInset}}
+          testID="split-page-column-bottom-space"
+        />
       </View>
     );
   };
@@ -473,32 +598,41 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
     ) {
       return renderLabeledMobilePager(narrowViewportChildLabels);
     }
+    const pageRatio = elementArray.length > 1 ? 0.9 : 1;
     return (
-      <SwiperFlatList
-        nestedScrollEnabled
-        paginationStyle={{justifyContent: "center", width: "95%"}}
-        renderAll
-        showPagination
-        style={{width: "100%"}}
+      <View
+        onLayout={onNarrowPagerLayout}
+        ref={narrowPagerRef}
+        style={{flex: 1, height: "100%", minHeight: 0, width: "100%"}}
+        testID="split-page-dotted-pager"
       >
-        {elementArray.map((element, i) => {
-          return (
-            <View
-              key={i}
-              style={{
-                borderRadius: childColumnBorderRadius,
-                height: elementArray.length > 1 ? "90%" : "100%",
-                overflow: "hidden",
-                padding: 4,
-                paddingBottom: bottomNavBarHeight,
-                width: windowWidth - 8,
-              }}
-            >
-              {element}
-            </View>
-          );
-        })}
-      </SwiperFlatList>
+        <SwiperFlatList
+          nestedScrollEnabled
+          paginationStyle={{justifyContent: "center", width: "95%"}}
+          renderAll
+          showPagination
+          style={{height: "100%", width: "100%"}}
+        >
+          {elementArray.map((element, i) => {
+            return (
+              <View
+                key={i}
+                style={{
+                  borderRadius: childColumnBorderRadius,
+                  height: narrowPageHeight(pageRatio),
+                  overflow: "hidden",
+                  padding: 4,
+                  paddingBottom: bottomNavBarHeight,
+                  width: windowWidth - 8,
+                }}
+                testID={`split-page-dotted-child-${i}`}
+              >
+                {element}
+              </View>
+            );
+          })}
+        </SwiperFlatList>
+      </View>
     );
   };
 

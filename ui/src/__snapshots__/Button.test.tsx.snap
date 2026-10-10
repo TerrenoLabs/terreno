@@ -487,7 +487,7 @@ exports[`Button renders disabled state 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#9A9A9A",
+      "backgroundColor": "#949494",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -559,7 +559,7 @@ exports[`Button applies disabled styles when disabled 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#9A9A9A",
+      "backgroundColor": "#949494",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,

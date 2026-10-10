@@ -79,6 +79,21 @@ describe("AiApp", () => {
     expect(projects.status).toBe(200);
   });
 
+  it("skips the project routes with projects: false", async () => {
+    const {AIService} = await import("./service/aiService");
+    const aiService = new AIService({model: createMockModel() as unknown as LanguageModel});
+    const plugin = new AiApp({aiService, projects: false});
+    const app = new TerrenoApp({
+      configureApp: (router) => plugin.register(router as unknown as express.Application),
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+
+    const agent = await authAsUser(app);
+    expect((await agent.get("/gpt/histories")).status).toBe(200);
+    expect((await agent.get("/gpt/projects")).status).toBe(404);
+  });
+
   it("passes asks to the gpt routes, so the model is offered the ask tools", async () => {
     const {AIService} = await import("./service/aiService");
     const model = createMockModel();

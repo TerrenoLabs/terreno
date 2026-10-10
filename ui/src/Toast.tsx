@@ -1,5 +1,5 @@
 import type React from "react";
-import {Platform, Pressable, View} from "react-native";
+import {Platform, Pressable, StyleSheet, View} from "react-native";
 
 import type {IconName, SurfaceColor, TextColor, ToastProps} from "./Common";
 import {Heading} from "./Heading";
@@ -10,6 +10,13 @@ import {useToastNotifications} from "./ToastNotifications";
 import {isAPIError, printAPIError} from "./Utilities";
 
 const TOAST_DURATION_MS = 3 * 1000;
+
+// The layout wrapper is wider than the visible toast, so it passes clicks through to the page
+// beside the toast. pointerEvents must be registered here: react-native-web drops it from
+// inline styles.
+const styles = StyleSheet.create({
+  wrapper: {pointerEvents: "box-none"},
+});
 
 /**
  * Base testID of the action button. Suffixed with the toast id when the caller
@@ -148,17 +155,20 @@ export const Toast = ({
 
   return (
     <View
-      style={{
-        display: "flex",
-        flexDirection: "row",
-        flexGrow: 1,
-        justifyContent: "center",
-        marginTop: theme.spacing.sm,
-        maxWidth: Platform.OS === "web" ? 900 : "100%",
-        paddingLeft: Platform.OS === "web" ? "10%" : theme.spacing.sm,
-        paddingRight: Platform.OS === "web" ? "10%" : theme.spacing.sm,
-        width: "100%",
-      }}
+      style={[
+        styles.wrapper,
+        {
+          display: "flex",
+          flexDirection: "row",
+          flexGrow: 1,
+          justifyContent: "center",
+          marginTop: theme.spacing.sm,
+          maxWidth: Platform.OS === "web" ? 900 : "100%",
+          paddingLeft: Platform.OS === "web" ? "10%" : theme.spacing.sm,
+          paddingRight: Platform.OS === "web" ? "10%" : theme.spacing.sm,
+          width: "100%",
+        },
+      ]}
     >
       <View
         style={{

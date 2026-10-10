@@ -4,6 +4,26 @@ import type {Duration, DurationLike} from "luxon";
 import type mongoose from "mongoose";
 
 import type {ExecutionEnv} from "../harness/executionEnv";
+import type {ObsPromptRef} from "./observability";
+
+/**
+ * A prompt version a task used, recorded on its `ObsTrace.prompts`. A `PromptVersionRef`
+ * from `promptRegistry.get` fits as-is; its `body` is ignored.
+ */
+export type HarnessPromptRef = ObsPromptRef;
+
+/** A registry prompt passed as instructions: its `body` is used and its version recorded. */
+export interface HarnessPromptInstructions extends HarnessPromptRef {
+  body: string;
+}
+
+/** Fields written onto the task's `ObsTrace`, shared by every child task and subagent. */
+export interface HarnessTraceOptions {
+  /** App-defined scope (tenant, workspace) for metering; indexed with `created`. */
+  scope?: string;
+  /** App-defined labels for grouping traces. */
+  tags?: string[];
+}
 
 /** Every lifecycle status a harness task can hold. */
 export const HARNESS_TASK_STATUSES = {
@@ -374,8 +394,13 @@ export interface HarnessMemo {
 export interface HarnessRunAgentOptions<Result> {
   /** The subagent's user message. A non-string value is sent as JSON. */
   input: unknown;
-  /** Replaces the agent's instructions for this subagent conversation only. */
-  instructions?: string;
+  /**
+   * Replaces the agent's instructions for this subagent conversation only. A registry
+   * prompt (`promptRegistry.get`) is used by its `body` and recorded on the trace.
+   */
+  instructions?: HarnessPromptInstructions | string;
+  /** Prompt versions this subagent used, recorded on the task's `ObsTrace.prompts`. */
+  prompts?: HarnessPromptRef[];
   /**
    * Structured output schema; defaults to the agent's own `output`. Requested through the
    * AI SDK's `Output.object`, then validated with this schema before it is returned.
@@ -442,8 +467,12 @@ export interface HarnessAbortOptions {
 }
 
 export interface HarnessCreateTaskOptions {
+  /** Prompt versions the task uses, recorded on its `ObsTrace.prompts`. */
+  prompts?: HarnessPromptRef[];
   /** Idempotency key: a second create with the same id returns the existing task. */
   requestId?: string;
+  /** Scope and tags for the task's `ObsTrace`; child tasks and subagents share it. */
+  trace?: HarnessTraceOptions;
   userId?: mongoose.Types.ObjectId | string;
 }
 

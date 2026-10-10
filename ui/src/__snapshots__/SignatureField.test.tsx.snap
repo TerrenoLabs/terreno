@@ -55,7 +55,7 @@ exports[`SignatureField renders correctly with default props 1`] = `
               ],
               "props": {
                 "style": {
-                  "borderColor": "#9A9A9A",
+                  "borderColor": "#949494",
                   "borderWidth": 1,
                   "maxWidth": 300,
                   "width": "100%",

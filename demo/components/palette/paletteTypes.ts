@@ -59,7 +59,7 @@ export const TONE_LOCK_HINTS: Partial<Record<MainFamily | StatusFamily, string>>
 export const DEFAULT_ANCHORS: PaletteAnchors = {
   accent: "#d69c0e",
   error: "#d33232",
-  neutral: "#9a9a9a",
+  neutral: "#949494",
   primary: "#0086b3",
   secondary: "#2b6072",
   success: "#3ea45c",

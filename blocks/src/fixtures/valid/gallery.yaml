@@ -1,0 +1,22 @@
+v: 1
+blocks:
+  - type: gallery
+    id: roast_photos
+    images:
+      - src: file:roast-lamb
+        alt: Roast leg of lamb on a carving board
+        caption: Roast lamb
+      - src: file:roast-potatoes
+        alt: Crisp roast potatoes in a tray
+        caption: Roast potatoes
+      - src: "data:image/png;base64,iVBORw0KGgo="
+        alt: Glazed carrots in a white dish
+  - type: card
+    title: Table ideas
+    children:
+      - type: gallery
+        images:
+          - src: file:table-setting
+            alt: A table set for six
+          - src: file:flowers
+            alt: A jug of spring flowers

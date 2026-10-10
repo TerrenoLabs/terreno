@@ -27,6 +27,42 @@ const signIn = async (): Promise<{token: string; user: UserDocument}> => {
   return {token, user};
 };
 
+const ROAST_REPLY = `v: 1
+blocks:
+  - type: stepper
+    id: guests
+    label: Number of people
+    value: 5
+    min: 1
+    max: 20
+    callback: {name: scaleStepper}
+    items:
+      - {label: Bone-in leg of lamb, amount: 2, unit: kg, decimals: 1}
+      - {label: Carrots, amount: 8, round: up}
+  - type: checklist
+    id: cooking
+    callback: {name: toggleChecklist}
+    items:
+      - {id: prep_ahead, text: Prep ahead, checked: true}
+      - {id: prepare_lamb, text: Prepare the lamb}
+      - {id: start_roasting, text: Start roasting}
+`;
+
+const buildActionsApp = (): express.Express =>
+  new TerrenoApp({skipListen: true, userModel: UserModel as never})
+    .register({
+      register: (expressApp, openApi) => {
+        const router = express.Router();
+        addGptRoutes(router, {
+          aiService: createDemoAgentService(),
+          openApiOptions: {openApi},
+          uiBlocks: exampleUiBlocksOptions,
+        });
+        expressApp.use(router);
+      },
+    })
+    .build() as express.Express;
+
 describe("example ui blocks", () => {
   beforeEach(async () => {
     process.env.TOKEN_SECRET = process.env.TOKEN_SECRET || "test-secret";
@@ -116,21 +152,8 @@ describe("example ui blocks", () => {
   it("runs exportDataset through POST /gpt/actions", async () => {
     const {token, user} = await signIn();
     const history = await GptHistory.create({prompts: [], userId: user._id});
-    const app = new TerrenoApp({skipListen: true, userModel: UserModel as never})
-      .register({
-        register: (expressApp, openApi) => {
-          const router = express.Router();
-          addGptRoutes(router, {
-            aiService: createDemoAgentService(),
-            openApiOptions: {openApi},
-            uiBlocks: exampleUiBlocksOptions,
-          });
-          expressApp.use(router);
-        },
-      })
-      .build();
 
-    const response = await supertest(app)
+    const response = await supertest(buildActionsApp())
       .post("/gpt/actions")
       .set("Authorization", `Bearer ${token}`)
       .send({
@@ -145,5 +168,48 @@ describe("example ui blocks", () => {
     expect(response.status).toBe(200);
     expect(response.body.data.replace).toBe("block");
     expect(validateBlocks(response.body.data.blocks).ok).toBe(true);
+  });
+
+  it("scales the stored stepper and ticks the stored checklist through POST /gpt/actions", async () => {
+    const {token, user} = await signIn();
+    const history = await GptHistory.create({
+      prompts: [
+        {text: "Plan a roast", type: "user"},
+        {text: ROAST_REPLY, type: "assistant"},
+      ],
+      userId: user._id,
+    });
+    const app = buildActionsApp();
+    const post = (body: Record<string, unknown>): supertest.Test =>
+      supertest(app)
+        .post("/gpt/actions")
+        .set("Authorization", `Bearer ${token}`)
+        .send({historyId: history._id.toString(), messageId: "msg-1", ...body});
+
+    const scaled = await post({
+      blockId: "guests",
+      elementId: "guests_increase",
+      name: "scaleStepper",
+      payload: {value: 6},
+    });
+    const ticked = await post({
+      blockId: "cooking",
+      elementId: "cooking_prepare_lamb",
+      name: "toggleChecklist",
+      payload: {checked: true, itemId: "prepare_lamb", state: {prep_ahead: true}},
+    });
+
+    expect(scaled.status).toBe(200);
+    expect(scaled.body.data.blocks.blocks[0]).toMatchObject({
+      items: [
+        {amount: 2.4, label: "Bone-in leg of lamb"},
+        {amount: 10, label: "Carrots"},
+      ],
+      value: 6,
+    });
+    expect(ticked.status).toBe(200);
+    expect(
+      ticked.body.data.blocks.blocks[0].items.map((item: {checked: boolean}) => item.checked)
+    ).toEqual([true, true, false]);
   });
 });

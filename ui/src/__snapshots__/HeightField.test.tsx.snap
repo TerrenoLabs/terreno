@@ -40,7 +40,7 @@ exports[`HeightField snapshots should match snapshot with default props 1`] = `
             "style": {
               "alignItems": "center",
               "backgroundColor": "#FFFFFF",
-              "borderColor": "#9A9A9A",
+              "borderColor": "#949494",
               "borderRadius": 4,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -802,7 +802,7 @@ exports[`HeightField snapshots should match snapshot with value 1`] = `
             "style": {
               "alignItems": "center",
               "backgroundColor": "#FFFFFF",
-              "borderColor": "#9A9A9A",
+              "borderColor": "#949494",
               "borderRadius": 4,
               "borderWidth": 1,
               "flexDirection": "row",

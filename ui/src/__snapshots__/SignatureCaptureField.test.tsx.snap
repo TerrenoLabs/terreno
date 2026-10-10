@@ -29,7 +29,7 @@ exports[`SignatureCaptureField renders a read-only drawn image when disabled wit
           "uri": "data:image/png;base64,xyz",
         },
         "style": {
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderWidth": 1,
           "height": 80,
           "marginVertical": 8,

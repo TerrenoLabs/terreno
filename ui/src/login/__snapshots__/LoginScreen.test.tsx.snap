@@ -388,7 +388,7 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                 "style": {
                                   "alignItems": "center",
                                   "alignSelf": "stretch",
-                                  "backgroundColor": "#9A9A9A",
+                                  "backgroundColor": "#949494",
                                   "borderColor": undefined,
                                   "borderRadius": 360,
                                   "borderWidth": undefined,
@@ -471,7 +471,7 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                 "style": {
                                   "alignItems": "center",
                                   "alignSelf": "flex-start",
-                                  "backgroundColor": "#9A9A9A",
+                                  "backgroundColor": "#949494",
                                   "borderColor": undefined,
                                   "borderRadius": 360,
                                   "borderWidth": undefined,
@@ -555,7 +555,7 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                 "style": {
                                   "alignItems": "center",
                                   "alignSelf": "stretch",
-                                  "backgroundColor": "#9A9A9A",
+                                  "backgroundColor": "#949494",
                                   "borderColor": undefined,
                                   "borderRadius": 360,
                                   "borderWidth": undefined,

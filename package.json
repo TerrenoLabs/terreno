@@ -205,6 +205,7 @@
     "blocks:compile": "bun run --filter '@terreno/blocks' compile",
     "blocks:lint": "bun run --filter '@terreno/blocks' lint",
     "blocks:test": "bun run --filter '@terreno/blocks' test",
+    "blocks:smoke": "bun run --filter '@terreno/example-backend' blocks:smoke",
     "bootstrap": "bun install && bun run compile",
     "bootstrap:update": "bun install && bun run compile",
     "analyze:dependency-baseline": "bun run scripts/static-analysis/full.ts --write-dependency-baseline",

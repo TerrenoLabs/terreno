@@ -10,16 +10,43 @@ export const TERRENO_UI_BLOCKS_SYSTEM_PROMPT = blocksPromptSection();
 export const UI_BLOCKS_REPAIR_SYSTEM_PROMPT =
   "The document you wrote failed validation. Reply with only the corrected document. Do not explain the changes.";
 
-/** The blocks prompt for this host's callback names. */
-export const uiBlocksSystemPrompt = (
-  hostActions: readonly string[],
+/**
+ * The blocks prompt for this host's callbacks, html and image settings, and rich-block opt-out.
+ * Runtime values are injected here because they are host configuration, not user data.
+ */
+export const uiBlocksSystemPrompt = ({
   allowHtml = false,
-  imageHosts: readonly string[] = []
-): string => {
-  if (hostActions.length === 0 && !allowHtml && imageHosts.length === 0) {
+  checklistActions = [],
+  hostActions,
+  imageHosts = [],
+  richBlocks = true,
+  stepperActions = [],
+}: {
+  allowHtml?: boolean;
+  checklistActions?: readonly string[];
+  hostActions: readonly string[];
+  imageHosts?: readonly string[];
+  richBlocks?: boolean;
+  stepperActions?: readonly string[];
+}): string => {
+  const isDefault =
+    richBlocks &&
+    hostActions.length === 0 &&
+    !allowHtml &&
+    imageHosts.length === 0 &&
+    stepperActions.length === 0 &&
+    checklistActions.length === 0;
+  if (isDefault) {
     return TERRENO_UI_BLOCKS_SYSTEM_PROMPT;
   }
-  return blocksPromptSection({allowHtml, hostActions, imageHosts});
+  return blocksPromptSection({
+    allowHtml,
+    checklistActions,
+    hostActions,
+    imageHosts,
+    richBlocks,
+    stepperActions,
+  });
 };
 
 /**

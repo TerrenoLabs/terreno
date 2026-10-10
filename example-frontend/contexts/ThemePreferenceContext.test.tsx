@@ -1,4 +1,5 @@
 import {describe, it} from "bun:test";
+import {TerrenoProvider} from "@terreno/ui";
 import {assert} from "chai";
 import React, {type ReactElement} from "react";
 import TestRenderer, {act} from "react-test-renderer";
@@ -44,7 +45,7 @@ describe("ThemePreferenceContext", () => {
       );
     });
     assert.isDefined(renderer);
-    const provider = renderer.root.findByType("TerrenoProvider");
+    const provider = renderer.root.findByType(TerrenoProvider);
     const probe = renderer.root.findByType("PreferenceProbe");
     assert.equal(provider.props.openAPISpecUrl, "http://example.test/openapi.json");
     assert.equal(provider.props.colorScheme, probe.props.colorSchemeSetting);

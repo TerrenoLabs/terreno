@@ -1434,6 +1434,7 @@ jobs:
 
   maestro-e2e:
     executor: node22_browsers_mongo_rs_heavy
+    resource_class: xlarge
     parameters:
       include-demo:
         type: boolean
@@ -1460,6 +1461,8 @@ jobs:
       - run:
           name: Compile workspace
           no_output_timeout: 15m
+          environment:
+            NODE_OPTIONS: "--max-old-space-size=6144"
           command: bun run compile
       - when:
           condition: << parameters.include-demo >>
@@ -1484,8 +1487,8 @@ jobs:
             CI: "true"
             EXPO_NO_TELEMETRY: "1"
             EXPO_PUBLIC_API_URL: http://localhost:4000
-            NODE_OPTIONS: "--max-old-space-size=3072"
-          command: bun expo export --platform web
+            NODE_OPTIONS: "--max-old-space-size=8192"
+          command: bun run export
       - run:
           name: Seed example-backend
           working_directory: ~/project/example-backend
@@ -1644,7 +1647,7 @@ jobs:
 
   e2e-prepare:
     executor: node22
-    resource_class: large
+    resource_class: xlarge
     working_directory: ~/project
     steps:
       - checkout
@@ -1652,6 +1655,8 @@ jobs:
       - resolve_affected_e2e_shards
       - run:
           name: Compile workspace
+          environment:
+            NODE_OPTIONS: "--max-old-space-size=8192"
           command: bun run compile
       - run:
           name: Export example-frontend web
@@ -1660,8 +1665,7 @@ jobs:
           environment:
             CI: "true"
             EXPO_NO_TELEMETRY: "1"
-            NODE_OPTIONS: "--max-old-space-size=3072"
-          command: bun expo export --platform web
+          command: bun run export
       - run:
           name: Archive dist trees
           command: |
@@ -1891,7 +1895,7 @@ jobs:
 
   deploy-frontend-preview:
     executor: node22
-    resource_class: large
+    resource_class: xlarge
     steps:
       - skip_if_fork_deploy
       - require_netlify_context:
@@ -1902,6 +1906,9 @@ jobs:
       - run:
           name: Deploy example frontend preview to Netlify
           no_output_timeout: 25m
+          environment:
+            # Match example-frontend `web` script; Expo export can exceed default heap in CI.
+            NODE_OPTIONS: "--max-old-space-size=8192"
           command: |
             set -euo pipefail
             # Frontend paths also set run-cd-backend, so gcp-cd-preview deploys

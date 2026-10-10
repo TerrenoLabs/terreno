@@ -41,7 +41,7 @@
     "react-native-calendars": "catalog:",
     "react-native-drawer-layout": "catalog:",
     "react-native-gesture-handler": "catalog:",
-    "react-native-haptic-feedback": "^2.0.3",
+    "react-native-haptic-feedback": "^3.0.0",
     "react-native-hyperlink": "^0.1.0",
     "react-native-modalize": "catalog:",
     "react-native-reanimated": "catalog:",
@@ -53,7 +53,7 @@
     "react-native-webview": "catalog:",
     "react-native-worklets": "catalog:",
     "stream-browserify": "^3.0.0",
-    "swiper": "^12.1.2"
+    "swiper": "^14.2.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
@@ -63,7 +63,7 @@
     "@types/bun": "catalog:",
     "@types/lodash": "catalog:",
     "@types/luxon": "catalog:",
-    "@types/node": "^22.19.19",
+    "@types/node": "^26.6.2",
     "@types/react": "catalog:",
     "babel-preset-expo": "catalog:",
     "react-test-renderer": "catalog:",

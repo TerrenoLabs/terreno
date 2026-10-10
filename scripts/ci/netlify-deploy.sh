@@ -61,6 +61,7 @@ case "$target" in
     publish_dir="demo/dist"
     ;;
   frontend)
+    export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}"
     node .github/scripts/compile-workspace-deps.js example-frontend admin-frontend api ai
     bun run --filter '@terreno/admin-frontend' --filter '@terreno/api' --filter '@terreno/ai' compile
     prod_url="https://prod---terreno-backend-example-7knxlrnpqq-uc.a.run.app"

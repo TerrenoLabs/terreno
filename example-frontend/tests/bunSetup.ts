@@ -2,6 +2,12 @@ import "../../ui/src/bunSetup";
 import {mock} from "bun:test";
 import React from "react";
 
+// Loaded after the UI test preload mocks react-native. Static imports would be
+// evaluated too early and parse react-native's Flow entry.
+const actualUi = await import("@terreno/ui");
+const actualSdk = await import("@/store/sdk");
+const actualSyncDbSdk = await import("@/store/syncDbSdk");
+
 (
   globalThis as typeof globalThis & {
     IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -76,18 +82,30 @@ const uiMocks = {
   useStoredState: () => ["", async (): Promise<void> => undefined, false],
 };
 
-mock.module("@terreno/ui", () => uiMocks);
-mock.module("../../ui/dist/index.js", () => uiMocks);
-mock.module("../../ui/src/index.tsx", () => uiMocks);
+// Chart and notification stand-ins stay mocked. Other UI exports stay real so
+// screens such as Documents can render SegmentedControl.
+const uiModuleMock = {
+  ...actualUi,
+  ...uiMocks,
+  TerrenoProvider: actualUi.TerrenoProvider,
+};
 
-mock.module("@/store/sdk", () => ({
+mock.module("@terreno/ui", () => uiModuleMock);
+mock.module("../../ui/dist/index.js", () => uiModuleMock);
+mock.module("../../ui/src/index.tsx", () => uiModuleMock);
+
+const sdkModuleMock = {
+  ...actualSdk,
   useSummarizeExampleTextMutation: () => [
     () => ({unwrap: async (): Promise<{output: string}> => ({output: ""})}),
     {isLoading: false},
   ],
-}));
+};
+
+mock.module("@/store/sdk", () => sdkModuleMock);
 
 const syncDbSdkMocks = {
+  ...actualSyncDbSdk,
   useTodos: () => ({data: []}),
 };
 

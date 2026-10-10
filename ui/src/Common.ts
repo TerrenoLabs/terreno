@@ -935,7 +935,8 @@ export interface SegmentedControlBadgeConfig {
 export interface SegmentedControlProps extends WithTestID {
   testIDs?: SegmentedControlTestIDs;
   items: string[];
-  size?: "md" | "lg"; // default "md"
+  /** `sm` is 28px and hugs its labels. `md` (default, 36px) and `lg` (44px) stretch. */
+  size?: "sm" | "md" | "lg";
   onChange: (activeIndex: number) => void;
   selectedIndex?: number;
   maxItems?: number;

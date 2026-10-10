@@ -51,7 +51,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/forgotPassword.tsx`,
       `${APP}/resetPassword.tsx`,
       `${APP}/verifyEmail.tsx`,
-      `${APP}/(tabs)/consents.tsx`,
+      `${APP}/(tabs)/documents.tsx`,
     ],
     specs: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],
   },
@@ -61,8 +61,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
     routes: [
       `${APP}/(tabs)/profile.tsx`,
       `${APP}/(tabs)/ai.tsx`,
-      `${APP}/(tabs)/pdf.tsx`,
-      `${APP}/(tabs)/files.tsx`,
+      `${APP}/(tabs)/documents.tsx`,
       `${APP}/notifications.tsx`,
       `${APP}/todo-windows/**`,
     ],

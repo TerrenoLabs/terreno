@@ -62,3 +62,8 @@ output "mcp_image_repo" {
   value       = module.mcp_artifact_registry.docker_repo_url
   description = "Docker image prefix for the MCP server."
 }
+
+output "example_documents_bucket" {
+  value       = google_storage_bucket.example_documents.name
+  description = "GCS bucket backing the example app's Documents tab (GCS_BUCKET on the backend)."
+}

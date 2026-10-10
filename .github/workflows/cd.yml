@@ -30,6 +30,8 @@ env:
   GCP_TASKS_QUEUE: terreno-example-jobs-v2
   GCP_TASKS_INVOKER_SA: terreno-jobs-invoker@flourish-terreno.iam.gserviceaccount.com
   GCP_BACKEND_RUNTIME_SA: terreno-backend-runtime@flourish-terreno.iam.gserviceaccount.com
+  # Terraform-managed (terraform/main.tf google_storage_bucket.example_documents).
+  GCP_DOCUMENTS_BUCKET: flourish-terreno-example-documents
   GCP_MCP_REGION: us-east1
   GCP_MCP_SERVICE: terreno-mcp
   TF_DEPLOYMENT: terreno-prod
@@ -361,6 +363,7 @@ jobs:
             ADMIN_SPA_ENABLED=true
             CORS_ORIGINS=https://terreno-frontend.netlify.app
             CROSS_DOMAIN_AUTH_COOKIES=true
+            GCS_BUCKET=${{ env.GCP_DOCUMENTS_BUCKET }}
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
@@ -588,6 +591,8 @@ jobs:
             CORS_ORIGINS=https://pr-${{ github.event.pull_request.number }}--terreno-frontend.netlify.app
             CROSS_DOMAIN_AUTH_COOKIES=true
             MONGO_DB_NAME=terreno-example-pr-${{ github.event.pull_request.number }}
+            GCS_BUCKET=${{ env.GCP_DOCUMENTS_BUCKET }}
+            GCS_FOLDER_PREFIX=pr-${{ github.event.pull_request.number }}/
             SEED_DEFAULTS=true
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}

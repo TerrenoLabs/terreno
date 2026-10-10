@@ -179,6 +179,8 @@ an isolated `pr-N` backend: `deploy-frontend-preview` always points
 up to 20 minutes for its `/health` before publishing, because `gcp-cd-preview`
 runs in a separate workflow.
 
+Those backend deploys set `GCS_BUCKET` to `flourish-terreno-example-documents` (override with `GCP_DOCUMENTS_BUCKET`). Preview revisions also set `GCS_FOLDER_PREFIX=pr-<number>/` so each PR keeps its own folder. Without `GCS_BUCKET`, `GET /documents/` returns 503 and the Files section shows “Storage is not configured.”
+
 Backend previews prune not-Ready tagged revisions from traffic
 (`rebuild-cloud-run-ready-traffic.sh`), deploy untagged with
 `--revision-suffix`, then point the `pr-N` tag at that revision. Terraform

@@ -5,8 +5,11 @@ import {Badge} from "./Badge";
 import type {SegmentedControlProps} from "./Common";
 import {Heading} from "./Heading";
 import {Icon} from "./Icon";
+import {Text} from "./Text";
 import {useTheme} from "./Theme";
 import {resolveSegmentedControlTestIDsFromProps} from "./testing/resolveTestId";
+
+const HEIGHT_BY_SIZE = {lg: 44, md: 36, sm: 28} as const;
 
 export const SegmentedControl: FC<SegmentedControlProps> = ({
   items,
@@ -18,7 +21,8 @@ export const SegmentedControl: FC<SegmentedControlProps> = ({
   testID,
   testIDs,
 }) => {
-  const height = size === "md" ? 36 : 44;
+  const height = HEIGHT_BY_SIZE[size];
+  const hugsContent = size === "sm";
   const {theme} = useTheme();
   const segmentedControlTestIDs = resolveSegmentedControlTestIDsFromProps({testID, testIDs});
   const [startIndex, setStartIndex] = useState(0);
@@ -58,18 +62,19 @@ export const SegmentedControl: FC<SegmentedControlProps> = ({
           <Icon
             color={canScrollLeft ? "linkLight" : "extraLight"}
             iconName="chevron-left"
-            size="lg"
+            size={hugsContent ? "sm" : "lg"}
           />
         </Pressable>
       )}
       <View
         style={{
           alignItems: "center",
+          ...(hugsContent ? {alignSelf: "flex-start" as const} : {}),
           backgroundColor: theme.surface.neutralLight,
           borderRadius: theme.primitives.radius3xl,
           display: "flex",
           flexDirection: "row",
-          flexGrow: 1,
+          flexGrow: hugsContent ? 0 : 1,
           flexShrink: 1,
           height,
           maxHeight: height,
@@ -80,10 +85,10 @@ export const SegmentedControl: FC<SegmentedControlProps> = ({
           style={{
             display: "flex",
             flexDirection: "row",
-            flexGrow: 1,
+            flexGrow: hugsContent ? 0 : 1,
             gap: 4,
             height: height - 4,
-            paddingHorizontal: 4,
+            paddingHorizontal: hugsContent ? 2 : 4,
           }}
         >
           {visibleItems.map((item, index) => {
@@ -98,17 +103,23 @@ export const SegmentedControl: FC<SegmentedControlProps> = ({
                   backgroundColor: actualIndex === selectedIndex ? theme.surface.base : undefined,
                   borderRadius: theme.primitives.radius3xl,
                   display: "flex",
-                  flexBasis: 0,
+                  flexBasis: hugsContent ? "auto" : 0,
                   flexDirection: "row",
-                  flexGrow: 1,
+                  flexGrow: hugsContent ? 0 : 1,
                   gap: 8,
                   height: "100%",
                   justifyContent: "center",
                   overflow: "hidden",
-                  paddingHorizontal: 2,
+                  paddingHorizontal: hugsContent ? 12 : 2,
                 }}
               >
-                <Heading size="sm">{item}</Heading>
+                {hugsContent ? (
+                  <Text size="sm" skipLinking>
+                    {item}
+                  </Text>
+                ) : (
+                  <Heading size="sm">{item}</Heading>
+                )}
                 {visibleBadges[index] && (
                   <Badge
                     status={visibleBadges[index].status ?? "info"}
@@ -130,7 +141,7 @@ export const SegmentedControl: FC<SegmentedControlProps> = ({
           <Icon
             color={canScrollRight ? "linkLight" : "extraLight"}
             iconName="chevron-right"
-            size="lg"
+            size={hugsContent ? "sm" : "lg"}
           />
         </Pressable>
       )}

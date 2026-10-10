@@ -318,7 +318,8 @@
         "jspdf-native-stub.js",
         "fingerprint.config.js",
         "playwright.circleci.config.ts",
-        "tests/bunSetup.ts"
+        "tests/bunSetup.ts",
+        "tests/testPreload.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

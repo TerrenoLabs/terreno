@@ -259,6 +259,32 @@ status. `AuditEvent` itself is never audited.
 
 **Important:** Only expose models that should be editable via admin panel. Avoid sensitive internal models.
 
+## Document storage
+
+`DocumentStorageApp` mounts a GCS file browser at `basePath` (default `/documents`): list, upload, download, create folder, and delete.
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `bucketName` | `GCS_BUCKET` | 503 `Storage not configured` when neither is set |
+| `folderPrefix` | `""` | Root inside the bucket. A non-empty value without a trailing `/` gets one, so `pr-5` and `pr-5/` both scope to `pr-5/` |
+| `access` | `"admin"` | `"authenticated"` also admits signed-in non-admins, confined to `{folderPrefix}users/<userId>/`. Admins always see the whole `folderPrefix` |
+| `uploadRateLimit` | off | `{max, windowMs, store?, keyBy?}` on `POST basePath/` only. Keys by IP by default. See [Rate limiting](../how-to/rate-limiting.md#limit-one-route) |
+| `allowedMimeTypes`, `maxFileSize` | images, PDF, text, Office; 10 MB | Upload filter |
+| `fileUploadsEnabled` | `true` | `false` or `(req) => boolean` rejects uploads; list, download, delete stay on |
+
+```typescript
+new DocumentStorageApp({
+  access: "authenticated",
+  basePath: "/documents",
+  bucketName: process.env.GCS_BUCKET ?? "",
+  uploadRateLimit: {max: 1, store: "mongo", windowMs: 60_000},
+});
+```
+
+Pair it with `DocumentStorageBrowser` from `@terreno/admin-frontend`. Pass `backButton={false}` when the browser is embedded outside admin. Upload failures (including 429) show inline.
+
+Example-backend deploys set `GCS_BUCKET` to the example documents bucket. PR previews also set `GCS_FOLDER_PREFIX` to `pr-<number>/`. Unset `GCS_BUCKET` is the only path that returns 503 `Storage not configured`. A bucket GCS reports as missing lists as an empty folder.
+
 ## Best Practices
 
 - Add `description` to all model fields — flows through to admin UI

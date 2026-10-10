@@ -1,6 +1,7 @@
 import {type ConsentHistoryEntry, generateConsentHistoryPdf} from "@terreno/admin-frontend";
 import {Box, Button, Card, Heading, Page, Text} from "@terreno/ui";
 import {DateTime} from "luxon";
+import type React from "react";
 import {useCallback, useState} from "react";
 
 const SAMPLE_ENTRY: ConsentHistoryEntry = {
@@ -28,7 +29,7 @@ const SAMPLE_ENTRY: ConsentHistoryEntry = {
   userAgent: "Mozilla/5.0 (Example Browser)",
 };
 
-const PdfScreen: React.FC = () => {
+export const DocumentsPdfSection: React.FC = () => {
   const [status, setStatus] = useState<"idle" | "generating" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -97,5 +98,3 @@ const PdfScreen: React.FC = () => {
     </Page>
   );
 };
-
-export default PdfScreen;

@@ -22,6 +22,8 @@ export GCP_BACKEND_RUNTIME_SA="${GCP_BACKEND_RUNTIME_SA:-terreno-backend-runtime
 export GCP_MCP_REGION="${GCP_MCP_REGION:-us-east1}"
 export GCP_MCP_SERVICE="${GCP_MCP_SERVICE:-terreno-mcp}"
 export TF_DEPLOYMENT="${TF_DEPLOYMENT:-terreno-prod}"
+# Same bucket terraform creates as ${project_id}-example-documents.
+export GCP_DOCUMENTS_BUCKET="${GCP_DOCUMENTS_BUCKET:-flourish-terreno-example-documents}"
 
 # shellcheck source=scripts/ci/github-deployment-lib.sh
 source scripts/ci/github-deployment-lib.sh
@@ -85,7 +87,7 @@ deploy_backend() {
   docker push "$image"
 
   secrets="MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest,LANGFUSE_SECRET_KEY=${GCP_BACKEND_SERVICE}-langfuse-secret-key:latest,LANGFUSE_PUBLIC_KEY=${GCP_BACKEND_SERVICE}-langfuse-public-key:latest"
-  env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,JOBS_START_WORKER=true,$(jobs_env_vars "$tag")"
+  env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,JOBS_START_WORKER=true,GCS_BUCKET=${GCP_DOCUMENTS_BUCKET},$(jobs_env_vars "$tag")"
   args=(
     run deploy "$GCP_BACKEND_SERVICE"
     "--project=$GCP_PROJECT_ID"
@@ -131,7 +133,7 @@ deploy_backend() {
     # when an older pr-* tag points at a revision that never became Ready.
     revision_suffix="pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-$(date +%s)}"
     args+=(--no-traffic --no-cpu-throttling --cpu-boost "--memory=1Gi" "--revision-suffix=$revision_suffix")
-    env_vars+=",CORS_ORIGINS=https://pr-${PR_NUMBER}--terreno-frontend.netlify.app,MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},SEED_DEFAULTS=true"
+    env_vars+=",CORS_ORIGINS=https://pr-${PR_NUMBER}--terreno-frontend.netlify.app,MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},SEED_DEFAULTS=true,GCS_FOLDER_PREFIX=pr-${PR_NUMBER}/"
     .github/workflows/scripts/rebuild-cloud-run-ready-traffic.sh "$GCP_BACKEND_SERVICE" "$GCP_BACKEND_REGION"
   fi
   args+=("--set-secrets=$secrets" "--set-env-vars=$env_vars")

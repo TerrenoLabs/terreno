@@ -652,7 +652,7 @@ const ToastContainer = forwardRef<ToastContainerRef, ToastContainerProps>((props
         behavior={Platform.OS === "ios" ? "position" : undefined}
         style={[containerStyles.container, style]}
       >
-        <SafeAreaView>
+        <SafeAreaView style={containerStyles.safeArea}>
           {toasts
             .filter((t) => !t.placement || t.placement === "bottom")
             .map((toast) => (
@@ -675,7 +675,7 @@ const ToastContainer = forwardRef<ToastContainerRef, ToastContainerProps>((props
         behavior={Platform.OS === "ios" ? "position" : undefined}
         style={[containerStyles.container, style]}
       >
-        <SafeAreaView>
+        <SafeAreaView style={containerStyles.safeArea}>
           {toasts
             .filter((t) => t.placement === "top")
             .map((toast) => (
@@ -758,6 +758,9 @@ const containerStyles = StyleSheet.create({
   message: {
     color: "#333",
   },
+  // The safe area spans the full container width, so it must also pass clicks through or
+  // it blocks the page beside every toast.
+  safeArea: {pointerEvents: "box-none"},
 });
 
 // ============================================================================

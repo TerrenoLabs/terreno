@@ -188,6 +188,42 @@ describe("ToastNotifications", () => {
   });
 
   describe("Toast functionality", () => {
+    it("lets clicks pass through the full-width safe area around toasts", async () => {
+      let toastRef: ToastType | null = null;
+
+      const TestComponent = () => {
+        const toast = useToastNotifications();
+        toastRef = toast;
+        return <Text>Test</Text>;
+      };
+
+      const {UNSAFE_root} = render(
+        <ToastProvider swipeEnabled={false}>
+          <TestComponent />
+        </ToastProvider>
+      );
+
+      await waitFor(() => {
+        expect(toastRef?.show).toBeDefined();
+      });
+      await act(async () => {
+        toastRef?.show("Pass through", {placement: "top"});
+        toastRef?.show("Pass through", {placement: "bottom"});
+      });
+
+      const safeAreas = UNSAFE_root.findAll(
+        (node: {type: unknown}) => node.type === "SafeAreaView",
+        {deep: true}
+      );
+      expect(safeAreas.length).toBe(2);
+      for (const safeArea of safeAreas) {
+        const style = Object.assign({}, ...[safeArea.props.style].flat()) as {
+          pointerEvents?: string;
+        };
+        expect(style.pointerEvents).toBe("box-none");
+      }
+    });
+
     it("should show a toast and return an id", async () => {
       let toastRef: ToastType | null = null;
 

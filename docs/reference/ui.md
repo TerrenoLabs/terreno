@@ -890,6 +890,8 @@ The bubble stays off screen at `opacity: 0` until the trigger is measured, then 
 
 On web, that container is portaled to `document.body` (`position: fixed`, `z-index: 999999`, `pointerEvents: "box-none"`), so a toast stays above an open `Modal` and its backdrop. The web container is sized with `100%` rather than the measured window, so statically exported pages (where `Dimensions` reports 0×0 at build time) still center the toast on screen. Native iOS and Android keep the in-tree absolute container sized to the window.
 
+Only the visible toast takes clicks. Every full-width layer around it (the container, its safe area, and the `Toast` layout wrapper) uses `pointerEvents: "box-none"`, so a button at the same height as an open toast stays clickable. Declare that style through `StyleSheet.create`; react-native-web drops `pointerEvents` from inline styles.
+
 ## Authentication Components
 
 ### SocialLoginButton

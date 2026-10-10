@@ -1,7 +1,7 @@
 import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {type FC, useState} from "react";
-import {Platform} from "react-native";
+import {Platform, StyleSheet} from "react-native";
 
 import type {DataTableCustomComponentMap, DataTableProps} from "./Common";
 import {DataTable} from "./DataTable";
@@ -812,5 +812,116 @@ describe("DataTable", () => {
         sortButton.props.onPress();
       });
     }
+  });
+
+  describe("typed cells", () => {
+    const textAlignOf = (node: {props: {style?: unknown}}): unknown =>
+      (StyleSheet.flatten(node.props.style as never) as {textAlign?: string} | undefined)
+        ?.textAlign;
+
+    it("right-aligns number cells whether the value is a number or a numeric string", () => {
+      const {getByText} = renderWithTheme(
+        <DataTable
+          columns={[
+            {columnType: "text", title: "Name", width: 150},
+            {columnType: "number", title: "Guests", width: 100},
+          ]}
+          data={[
+            [{value: "Ada"}, {value: 42}],
+            [{value: "Bo"}, {value: "7.5"}],
+          ]}
+        />
+      );
+      expect(textAlignOf(getByText("42"))).toBe("right");
+      expect(textAlignOf(getByText("7.5"))).toBe("right");
+      expect(textAlignOf(getByText("Ada"))).not.toBe("right");
+    });
+
+    it("right-aligns the header of a number column so it lines up with its cells", () => {
+      const {getByText} = renderWithTheme(
+        <DataTable
+          columns={[
+            {columnType: "text", title: "Name", width: 150},
+            {columnType: "number", title: "Guests", width: 100},
+          ]}
+          data={[[{value: "Ada"}, {value: 42}]]}
+        />
+      );
+      expect(textAlignOf(getByText("Guests"))).toBe("right");
+      expect(textAlignOf(getByText("Name"))).toBe("left");
+    });
+
+    it("renders an empty number cell without crashing", () => {
+      const {getByTestId} = renderWithTheme(
+        <DataTable
+          columns={[{columnType: "number", title: "Guests", width: 100}]}
+          data={[[{value: null}]]}
+          testID="table"
+        />
+      );
+      expect(getByTestId("table")).toBeTruthy();
+    });
+
+    it("formats ISO date cells as Luxon DATE_MED", () => {
+      const {getByText, queryByText} = renderWithTheme(
+        <DataTable
+          columns={[
+            {columnType: "date", title: "Day", width: 150},
+            {columnType: "date", title: "At", width: 150},
+          ]}
+          data={[[{value: "2026-03-14"}, {value: "2026-10-08T15:30:00"}]]}
+        />
+      );
+      expect(getByText("Mar 14, 2026")).toBeTruthy();
+      expect(getByText("Oct 8, 2026")).toBeTruthy();
+      expect(queryByText("2026-03-14")).toBeNull();
+    });
+
+    it("formats a Date value in a date cell", () => {
+      const {getByText} = renderWithTheme(
+        <DataTable
+          columns={[{columnType: "date", title: "Day", width: 150}]}
+          data={[[{value: new Date(2026, 2, 14, 12)}]]}
+        />
+      );
+      expect(getByText("Mar 14, 2026")).toBeTruthy();
+    });
+
+    it("shows invalid date strings as written and empty dates as blank", () => {
+      const {getByText, getByTestId} = renderWithTheme(
+        <DataTable
+          columns={[
+            {columnType: "date", title: "Day", width: 150},
+            {columnType: "date", title: "Other", width: 150},
+          ]}
+          data={[
+            [{value: "next Tuesday"}, {value: ""}],
+            [{value: undefined}, {value: "Oct 8, 2026, 3:00 PM"}],
+          ]}
+          testID="table"
+        />
+      );
+      expect(getByText("next Tuesday")).toBeTruthy();
+      expect(getByText("Oct 8, 2026, 3:00 PM")).toBeTruthy();
+      expect(getByTestId("table")).toBeTruthy();
+    });
+
+    it("lets customColumnComponentMap override number and date cells", () => {
+      const Custom: DataTableCustomComponentMap[string] = ({cellData}) => (
+        <Text>{`Custom ${String(cellData.value)}`}</Text>
+      );
+      const {getByText} = renderWithTheme(
+        <DataTable
+          columns={[
+            {columnType: "number", title: "Guests", width: 100},
+            {columnType: "date", title: "Day", width: 150},
+          ]}
+          customColumnComponentMap={{date: Custom, number: Custom}}
+          data={[[{value: 6}, {value: "2026-03-14"}]]}
+        />
+      );
+      expect(getByText("Custom 6")).toBeTruthy();
+      expect(getByText("Custom 2026-03-14")).toBeTruthy();
+    });
   });
 });

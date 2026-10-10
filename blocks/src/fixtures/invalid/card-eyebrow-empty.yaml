@@ -1,0 +1,7 @@
+v: 1
+blocks:
+  - type: card
+    eyebrow: ""
+    children:
+      - type: text
+        markdown: Empty.

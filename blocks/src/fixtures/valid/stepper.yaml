@@ -1,0 +1,35 @@
+v: 1
+blocks:
+  - type: card
+    title: How much should you buy?
+    children:
+      - type: stepper
+        id: guests
+        label: Number of people
+        unit: People
+        value: 5
+        min: 1
+        max: 20
+        callback:
+          name: scaleStepper
+          payload:
+            recipe: roast
+        itemsTitle: Your shopping quantities
+        items:
+          - label: Bone-in leg of lamb
+            amount: 2
+            unit: kg
+            decimals: 1
+          - label: Carrots
+            amount: 8
+            round: up
+        note: Generous portions, with a little extra.
+  - type: stepper
+    id: servings
+    label: Servings
+    value: 2
+    min: 0
+    max: 10
+    step: 0.5
+    callback:
+      name: scaleStepper

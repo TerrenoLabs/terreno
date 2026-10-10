@@ -36,6 +36,7 @@ import type {
   GptHistoryPendingAsk,
   GptHistoryPrompt,
   GptRouteOptions,
+  HostAction,
   MessageContentPart,
   UiBlocksOptions,
 } from "../types";
@@ -1233,9 +1234,33 @@ const withTurnSystemPrompt = ({
   return [systemPrompt, ...sections].filter(Boolean).join("\n\n");
 };
 
+interface BlockCallbackNames {
+  checklistActions?: readonly string[];
+  hostActions?: readonly string[];
+  stepperActions?: readonly string[];
+}
+
+/**
+ * The callback allowlists for validation and the prompt. Stepper and checklist callbacks must name
+ * an action that handles that block. With no `hostActions`, callback names are not checked.
+ */
+const blockCallbackNames = (uiBlocks: UiBlocksOptions | undefined): BlockCallbackNames => {
+  if (uiBlocks?.hostActions === undefined) {
+    return {};
+  }
+  const entries = Object.entries(uiBlocks.hostActions);
+  const handling = (block: HostAction["handles"]): string[] =>
+    entries.filter(([, action]) => action.handles === block).map(([name]) => name);
+  return {
+    checklistActions: handling("checklist"),
+    hostActions: entries.map(([name]) => name),
+    stepperActions: handling("stepper"),
+  };
+};
+
 const checkBlockDocument = (
   text: string,
-  hostActions: readonly string[] | undefined,
+  callbackNames: BlockCallbackNames,
   allowHtml: boolean,
   imageHosts?: readonly string[]
 ): {errors: BlockError[]; ok: boolean; warnings: BlockError[]} => {
@@ -1245,7 +1270,7 @@ const checkBlockDocument = (
   }
   const validated = validateBlocks(parsed.value, {
     ...(allowHtml ? {allowHtml: true} : {}),
-    ...(hostActions ? {hostActions} : {}),
+    ...callbackNames,
     ...(imageHosts ? {imageHosts} : {}),
   });
   return {
@@ -1736,14 +1761,18 @@ export const runChatTurn = async ({
     surface,
   });
   const uiBlocks = resolveUiBlocks(options.uiBlocks);
+  const callbackNames = blockCallbackNames(uiBlocks);
   const system = withTurnSystemPrompt({
     askKinds: offeredAskKinds,
     blocksPrompt: uiBlocks
-      ? uiBlocksSystemPrompt(
-          Object.keys(uiBlocks.hostActions ?? {}),
-          uiBlocks.html === true,
-          uiBlocks.imageHosts ?? []
-        )
+      ? uiBlocksSystemPrompt({
+          allowHtml: uiBlocks.html === true,
+          checklistActions: callbackNames.checklistActions,
+          hostActions: callbackNames.hostActions ?? [],
+          imageHosts: uiBlocks.imageHosts ?? [],
+          richBlocks: uiBlocks.richBlocks !== false,
+          stepperActions: callbackNames.stepperActions,
+        })
       : undefined,
     surface,
     systemPrompt: effectiveSystemPrompt,
@@ -2009,8 +2038,6 @@ export const runChatTurn = async ({
     const {askCalls, generatedImages} = record;
     let {fullResponse} = record;
     const streamedResponse = fullResponse;
-    const hostActionNames =
-      uiBlocks?.hostActions === undefined ? undefined : Object.keys(uiBlocks.hostActions);
     const allowHtml = uiBlocks?.html === true;
     const imageHosts = uiBlocks?.imageHosts;
     if (uiBlocks && fullResponse.trim() !== "") {
@@ -2021,7 +2048,7 @@ export const runChatTurn = async ({
     }
     let blocksCheck =
       uiBlocks && fullResponse.trim() !== ""
-        ? checkBlockDocument(fullResponse, hostActionNames, allowHtml, imageHosts)
+        ? checkBlockDocument(fullResponse, callbackNames, allowHtml, imageHosts)
         : undefined;
     let repaired = false;
     if (blocksCheck && !blocksCheck.ok && uiBlocks?.repair === true) {
@@ -2033,14 +2060,14 @@ export const runChatTurn = async ({
       if (next !== undefined) {
         fullResponse = next;
         repaired = true;
-        blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml, imageHosts);
+        blocksCheck = checkBlockDocument(fullResponse, callbackNames, allowHtml, imageHosts);
       }
     }
     if (allowHtml && blocksCheck?.ok) {
       const sanitized = sanitizeBlocksText(fullResponse);
       if (sanitized.changed) {
         fullResponse = sanitized.text;
-        blocksCheck = checkBlockDocument(fullResponse, hostActionNames, allowHtml, imageHosts);
+        blocksCheck = checkBlockDocument(fullResponse, callbackNames, allowHtml, imageHosts);
       }
     }
     const storedResponse =
@@ -2239,7 +2266,9 @@ interface BufferedTurn {
 /**
  * Runs a turn to completion and returns it as one JSON result, for clients that do not read
  * server-sent events. Nothing is written to the response while the turn runs, so a client that
- * disconnects does not stop it: the turn still finishes and saves.
+ * disconnects does not stop it: the turn still finishes and saves. Scripts that need a real turn
+ * without HTTP (such as a model smoke test) call it with the `req.user` and headers a route would
+ * pass, so the system prompt, tools, and block checks are the ones chat uses.
  */
 export const runBufferedChatTurn = async ({
   body,

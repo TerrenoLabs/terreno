@@ -37,6 +37,12 @@ const payloadFields = (
   return fields;
 };
 
+/** With `logResponse: false`, only a numeric `payload.value` joins the ids in the log. */
+const loggedValue = (payload: unknown): {value?: number} => {
+  const value = (payload as {value?: unknown} | undefined)?.value;
+  return typeof value === "number" ? {value} : {};
+};
+
 const withTimeout = async <T>(work: Promise<T>, timeoutMs: number): Promise<T> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -183,7 +189,15 @@ export const addGptActionRoutes = (router: express.Router, options: GptRouteOpti
       }
 
       const started = DateTime.now();
-      const prompt = JSON.stringify({blockId, elementId, historyId, messageId, name});
+      const isResponseLogged = action.logResponse !== false;
+      const prompt = JSON.stringify({
+        blockId,
+        elementId,
+        historyId,
+        messageId,
+        name,
+        ...(isResponseLogged ? {} : loggedValue(parsedPayload)),
+      });
       let result: HostActionResult | undefined;
       try {
         result = await withTimeout(
@@ -245,7 +259,7 @@ export const addGptActionRoutes = (router: express.Router, options: GptRouteOpti
       };
       await logAction({
         prompt,
-        response: JSON.stringify(data),
+        response: isResponseLogged ? JSON.stringify(data) : undefined,
         responseTime: DateTime.now().toMillis() - started.toMillis(),
         userId,
       });

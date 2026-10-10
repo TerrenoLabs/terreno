@@ -103,10 +103,12 @@ export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";
 export {addProjectRoutes} from "./routes/projects";
+export {findAgentBlock} from "./service/agentBlocks";
 export type {RegisteredDataset} from "./service/aiDatasets";
 export {configureAiDatasets, registerAiDataset} from "./service/aiDatasets";
 export {AIService, TemperaturePresets} from "./service/aiService";
 export {createAskTools} from "./service/asks";
+export {runBufferedChatTurn} from "./service/chatTurn";
 export {FileStorageService} from "./service/fileStorage";
 export type {ListGeminiApiModelsOptions} from "./service/gemini";
 export {
@@ -131,6 +133,8 @@ export {
   TITLE_GENERATION_PROMPT,
   TRANSLATION_PROMPT,
 } from "./service/prompts";
+export {scaleStepperHostAction} from "./service/scaleStepper";
+export {toggleChecklistHostAction} from "./service/toggleChecklist";
 export type {
   CreateVertexProviderOptions,
   ListEnabledVertexModelsOptions,

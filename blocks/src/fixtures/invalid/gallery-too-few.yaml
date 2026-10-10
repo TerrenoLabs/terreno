@@ -1,0 +1,6 @@
+v: 1
+blocks:
+  - type: gallery
+    images:
+      - src: file:roast-lamb
+        alt: Roast leg of lamb

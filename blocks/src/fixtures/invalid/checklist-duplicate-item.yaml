@@ -1,0 +1,9 @@
+v: 1
+blocks:
+  - type: checklist
+    id: cooking
+    items:
+      - id: oven
+        text: Preheat the oven
+      - id: oven
+        text: Turn the oven off

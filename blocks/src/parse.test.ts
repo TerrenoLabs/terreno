@@ -9,20 +9,42 @@ import {validateBlocks} from "./validate";
 const fixturesDir = join(import.meta.dir, "fixtures");
 
 const expectedInvalid: Record<string, {code: string; path: string}[]> = {
+  // An empty visibleText string trips both the min(1) and the blank-text checks.
+  "card-eyebrow-empty.yaml": [
+    {code: "TOO_SHORT", path: "blocks[0].eyebrow"},
+    {code: "TOO_SHORT", path: "blocks[0].eyebrow"},
+  ],
+  "card-eyebrow-too-long.yaml": [{code: "TOO_LONG", path: "blocks[0].eyebrow"}],
+  "checklist-duplicate-item.yaml": [{code: "DUPLICATE_ID", path: "blocks[0].items[1].id"}],
+  "checklist-item-id-too-long.yaml": [{code: "TOO_LONG", path: "blocks[0].items[0].id"}],
+  "checklist-reserved-id.yaml": [{code: "DUPLICATE_ID", path: "blocks[1].elements[0].id"}],
   "column-not-found.yaml": [{code: "COLUMN_NOT_FOUND", path: "blocks[0].x"}],
   "column-type.yaml": [{code: "COLUMN_TYPE_MISMATCH", path: "blocks[0].y"}],
+  "copy-missing-text-and-target.yaml": [
+    {code: "MISSING_REQUIRED", path: "blocks[0].elements[0].action"},
+  ],
+  "copy-target.yaml": [{code: "COPY_TARGET_INVALID", path: "blocks[1].elements[0].action.target"}],
   "dataset-not-found.yaml": [{code: "DATASET_NOT_FOUND", path: "blocks[0].data"}],
   "dataset-too-large.yaml": [{code: "DATASET_TOO_LARGE", path: "datasets.signups.columns"}],
   "depth-exceeded.yaml": [{code: "DEPTH_EXCEEDED", path: "blocks[0].children[0]"}],
   "duplicate-id.yaml": [{code: "DUPLICATE_ID", path: "blocks[1].id"}],
+  "gallery-caption-too-long.yaml": [{code: "TOO_LONG", path: "blocks[0].images[1].caption"}],
+  "gallery-image-host.yaml": [{code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[0].images[2].src"}],
+  "gallery-too-few.yaml": [{code: "TOO_FEW", path: "blocks[0].images"}],
   "invalid-enum.yaml": [{code: "INVALID_ENUM", path: "blocks[0].size"}],
   "key-order.yaml": [{code: "KEY_ORDER", path: "blocks"}],
+  "list-image-host.yaml": [{code: "IMAGE_HOST_NOT_ALLOWED", path: "blocks[0].items[1].image.src"}],
+  "list-missing-title.yaml": [{code: "MISSING_REQUIRED", path: "blocks[0].items[0].title"}],
+  "list-too-many.yaml": [{code: "TOO_MANY", path: "blocks[0].items"}],
   "missing-required.yaml": [{code: "MISSING_REQUIRED", path: "blocks[0].markdown"}],
   "not-a-document.txt": [{code: "NOT_A_DOCUMENT", path: ""}],
   "row-arity.yaml": [{code: "ROW_ARITY_MISMATCH", path: "datasets.signups.rows[0]"}],
   "select-target.yaml": [
     {code: "SELECT_TARGET_INVALID", path: "blocks[0].elements[0].action.target"},
   ],
+  "stepper-decimals.yaml": [{code: "OUT_OF_RANGE", path: "blocks[0].items[0].decimals"}],
+  "stepper-out-of-range.yaml": [{code: "OUT_OF_RANGE", path: "blocks[0].value"}],
+  "stepper-reserved-id.yaml": [{code: "DUPLICATE_ID", path: "blocks[1].elements[0].id"}],
   "table-too-wide.yaml": [{code: "TABLE_TOO_WIDE", path: "blocks[0].columns"}],
   "too-many-points.yaml": [{code: "TOO_MANY_POINTS", path: "datasets.signups.limit"}],
   "unknown-key.yaml": [{code: "UNKNOWN_KEY", path: "blocks[0].color"}],
@@ -277,5 +299,23 @@ describe("validateBlocks limits", () => {
       }
       expect(validated.errors.some((error) => error.code === code)).toBe(true);
     }
+  });
+});
+
+describe("card eyebrow", () => {
+  it("is accepted by validation, whatever the prompt offers", () => {
+    const parsed = parseBlocks(
+      readFileSync(join(fixturesDir, "valid", "card-eyebrow.yaml"), "utf8")
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+    const validated = validateBlocks(parsed.value);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) {
+      return;
+    }
+    expect(validated.doc.blocks[0]).toMatchObject({eyebrow: "Your dinner plan", type: "card"});
   });
 });

@@ -1319,6 +1319,18 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 
 ---
 
+## agent-ui-rich-replies
+
+**Title:** `Agent UI Rich Replies: steppers, checklists, galleries, and copy`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`agent-ui-rich-replies`, Status=`Planned`
+
+- **Implementation plan:** [agent-ui-rich-replies.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-rich-replies.md)
+- **Tasks:** [agent-ui-rich-replies.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/agent-ui-rich-replies.md)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

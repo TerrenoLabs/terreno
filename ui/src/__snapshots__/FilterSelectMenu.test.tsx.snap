@@ -301,7 +301,7 @@ exports[`FilterSelectMenu renders correctly with default props 1`] = `
                       },
                       {
                         "backgroundColor": "#FFFFFF",
-                        "borderColor": "#9A9A9A",
+                        "borderColor": "#949494",
                       },
                       false,
                     ],

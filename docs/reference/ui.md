@@ -473,10 +473,17 @@ rows, answers, and errors. Steps: [Add agent asks to a chat](../how-to/agent-ui-
 `BlocksView` paints a whole-reply document from `@terreno/blocks`. Pass the assistant text
 as `document`. Leaf blocks in this slice are `heading`, `text`, `metric`, `badge`,
 `divider`, and `context`. `columns` is a row from the `md` breakpoint and a stack on `sm`.
-`card` groups children under an optional title. A `callout` draws `Banner` and is not dismissible. An `image` draws `Image` and requires `alt`; pass `imageHosts` to allow `https` hosts. A `details` block draws `Accordion`. A `chart` draws `LineChart`, `BarChart`,
+`card` groups children under an optional title, with an optional small muted `eyebrow` above it (test ID `<card path>-eyebrow`). A `callout` draws `Banner` and is not dismissible. An `image` draws `Image` and requires `alt`; pass `imageHosts` to allow `https` hosts. A `details` block draws `Accordion`. A `chart` draws `LineChart`, `BarChart`,
 `AreaChart`, or `DonutChart` from an inline dataset or from `points`. The series is only
 `{label, value}` — a point color in the document is not passed through. A `table` draws
-`DataTable`. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the
+`DataTable` and maps each dataset column type to a cell: `number` to a right-aligned
+`number` cell, `date` to a `date` cell (Luxon `DATE_MED`, such as "Mar 14, 2026"), and
+`string` to `text`. A listed column that the dataset does not have yet is `text`. Each header
+is the column name with underscores shown as spaces (`bone_in_lamb` reads "bone in lamb"). The table
+measures its container with `onLayout` and splits the width evenly across its columns, with
+at least 96 per column; past that it scrolls sideways. Before the first layout each column
+is 120 wide. Its height fits the header plus its rows (54 each), up to 10 rows; a longer table
+scrolls inside that height, so it never spills over the next block. A `ref` dataset stays empty until `resolveDataset` returns its rows, and the
 chart shows `loading` while that promise is in flight. A rejected fetch clears that
 loading state. A segmented control highlights the option whose `data` matches the target
 chart or table. A `select` action switches a table the same way it switches a chart.
@@ -494,6 +501,83 @@ action also stores the chosen dataset on the target chart for this view. Pass
 `hostActions` and every callback stays enabled. `pendingElementIds` shows those
 buttons as loading. `overrides` replaces a block by id.
 
+A `stepper` draws its `label` as a small muted line, then `IconButton` − and + around the
+value and its `unit`, then `itemsTitle`, a two-column grid of item labels and amounts
+(formatted with `decimals`, so `{amount: 2, unit: kg, decimals: 1}` reads "2.0 kg"), and the
+muted `note`. − is disabled when `value - step` would fall below `min`, and + when `value + step`
+would pass `max`, so with `max: 20` and `step: 2` + is disabled at 19. Both are disabled while either button's
+element id is in `pendingElementIds`, and when `hostActions` is passed without the stepper's
+`callback.name`. The buttons are labelled "Decrease <label>" and "Increase <label>". A tap
+calls `onAction` with `blockId: <id>`, `elementId: <id>_decrease` or `<id>_increase`, and
+`{kind: "callback", name, payload: {...payload, value: value ± step}}`. A host returns the
+new stepper, and `overrides[<id>]` paints it.
+
+A `checklist` draws its `title` on the left and an "n of m" counter on the right, then one
+`CheckBox` row per item: the bold `text` first, then the small muted `meta` (such as a time),
+then the muted `detail`. Each row is a pressable `Box` with the `checkbox` role, labelled with the item
+text, that reports `accessibilityState` `{checked, disabled}` (`aria-checked` and
+`aria-disabled` on web); Space toggles a focused row on web. A locked row keeps its role and
+label and reports `disabled: true`. Test ids are stable across states: the item wrapper is
+`<path>-<id>_<item id>`, the pressable row `<path>-<id>_<item id>-row-clickable`, its
+`CheckBox` `<path>-<id>_<item id>-checkbox`, its lines `<path>-<id>_<item id>-text`, `-meta`,
+and `-detail`, and the counter `<path>-counter`. A tick goes to the host when the checklist has a `callback`,
+`onAction` is passed, and `hostActions` is omitted (as for the stepper) or lists
+`callback.name`. Then a tap calls `onAction` with `blockId: <id>`,
+`elementId: <id>_<item id>`, and `{kind: "callback", name, payload: {...payload, itemId,
+checked, state}}`, where `state` maps every item id to its tick after this one. The tick is
+not drawn ahead of the reply. `BlocksView` disables the checklist while a tick is pending:
+while any of its `<id>_<item id>` element ids is in `pendingElementIds`, no row is pressable,
+so a second tick cannot send a `state` that misses the first. The counter changes when
+`overrides[<id>]` brings the returned checklist. Otherwise a tick stays in this `BlocksView` only and updates the counter at once.
+When an override for the checklist arrives or changes, earlier local ticks on it are dropped
+and the override's `checked` values show.
+On the server, `toggleChecklistHostAction` from `@terreno/ai` handles the callback and returns
+the stored checklist with the ticks from `state` (see [Host actions](ai.md#host-actions)). A host
+that records progress registers its own `handles: "checklist"` action.
+
+A `gallery` draws each image as a 4:3 `Image` tile (`fit` cover), with `alt` as the tile's
+accessible label and the optional `caption` as small muted text under it. Tiles are 8 apart
+(the `gap={2}` spacing step). The gallery measures its container with `onLayout`: up to three
+images share one row at equal widths, and more wrap into a three-column grid whose last row
+keeps the same tile width. When that width would fall under 160, every tile stays 160 wide in
+one row that scrolls sideways. A measured width decides this rather than the `sm` breakpoint, so
+a gallery inside a narrow `columns` child or card also scrolls. Before the first layout each tile
+is 160 wide. A `file:` tile loads through `resolveImage` like an `image` block. Until it has a
+URL, or when the lookup fails, the tile is a muted 4:3 placeholder that shows the alt text and
+keeps it as the label. Test ids: the gallery `<path>`, each grid row `<path>-row-<n>`, the
+scrolling row `<path>-scroll`, each tile `<path>-image-<index>`, the frame around a loaded
+image `<path>-image-<index>-image`, its caption `<path>-image-<index>-caption`, and a
+placeholder `<path>-image-<index>-placeholder`.
+`Image` passes `alt` to the native image as its `accessibilityLabel`.
+
+A `list` draws one row per item, 12 apart (`gap={3}`). The row starts with a 3:4 portrait
+`Image` thumbnail (`fit` cover), always 112 wide and 149 tall, with `alt` as its accessible label.
+Beside it, the optional `meta` sits small and muted above the bold `title`, and the optional
+`text` follows in muted body text. `text` is plain text, not markdown. When any item in the list
+has a thumbnail, an item without one keeps an empty 112-wide gutter so every title starts at the
+same place; a list with no thumbnails draws text only, with no gutter. A `file:` thumbnail loads
+through `resolveImage`, including in a list inside a card. Until it has a URL, or when the lookup
+fails, it is a muted 112 by 149 placeholder that shows the alt text and keeps it as the label.
+Test ids: the list `<path>`, each row `<path>-item-<index>`, its thumbnail
+`<path>-item-<index>-image`, placeholder `<path>-item-<index>-placeholder`, gutter
+`<path>-item-<index>-gutter`, text column `<path>-item-<index>-body`, and the
+`<path>-item-<index>-meta`, `-title`, and `-text` lines.
+
+A `copy` button writes the clipboard on the device and never calls `onAction`, so
+`hostActions` does not disable it. A press builds the text with `blockPlainText` from
+`@terreno/blocks`: a literal `text` as written, or the `target` block as it is shown now. That
+means the `overrides` replacement (a stepper at 6 copies the scaled amounts), the checklist's
+ticks made on the device, and a table's selected dataset, inline or a `ref` that
+`resolveDataset` has returned. `BlocksView` writes it with `expo-clipboard` `setStringAsync`
+(web and native), then shows "Copied" in small muted text beside the button for 2 seconds. A
+failed write, or a target with no text yet (such as a `ref` table still loading), shows
+"Couldn't copy" in error text for 2 seconds instead, logs `console.warn`, and does not throw.
+The status sits in a `Box` with `accessibilityLiveRegion="polite"`, which stays mounted while
+empty, so screen readers on web and Android announce the status when it appears (`Text` has
+no live-region prop, and VoiceOver on iOS does not announce React Native live regions).
+Test ids: the button `<path>-<element id>`, the live region `<path>-<element id>-status`, and
+the status text `<path>-<element id>-status-text`.
+
 ```tsx
 <BlocksView
   document={reply}
@@ -504,6 +588,23 @@ buttons as loading. `overrides` replaces a block by id.
 ```
 
 Demo story: `BlocksView`.
+
+### MarkdownView
+
+`MarkdownView` renders markdown with `react-native-markdown-display` and the current theme.
+GPTChat and the `text` block render through it.
+
+GFM tables use theme colors, never fixed hex values:
+
+- Cell borders draw a grid in `theme.border.default`.
+- Header cells sit on `theme.surface.secondaryLight` and use the bold text font (`text-bold`).
+  Body cells use `text-regular`.
+- Every column gets an equal share of the width, at least 96. A narrow table fills its
+  container. A table wider than its container scrolls sideways in a horizontal `ScrollView`.
+
+Test ids: `markdown-table-scroll` (the scroll view), `markdown-table`,
+`markdown-table-header-<column>`, and `markdown-table-cell-<row>-<column>` (body rows count
+from 0).
 
 ### HtmlFrame
 
@@ -771,6 +872,17 @@ Buttons use a scale animation by default. Set `pressAnimation="opacity"` for an 
 ``````
 
 Disabled and loading buttons use a non-interactive pressable regardless of the selected animation.
+
+### Tooltip
+
+`Tooltip` (and `tooltipText` on `Button` / `IconButton`) renders its bubble outside the trigger's clipping and stacking context:
+
+| Platform | Mount point | Positioning |
+| --- | --- | --- |
+| Web | `document.body` | `position: fixed`, `z-index: 9999`, so it shows above an open `Modal` and nothing else covers the page |
+| iOS / Android | `TerrenoProvider` portal host | `position: absolute`, `z-index: 999` |
+
+The bubble stays off screen at `opacity: 0` until the trigger is measured, then `getTooltipPosition` places it at `idealPosition` or the first side that fits on screen.
 
 ### Toast
 
@@ -1116,6 +1228,32 @@ Responsive `Box` direction props update automatically when the window resizes or
 All responsive Boxes share one dimension listener; non-responsive Boxes do not subscribe.
 When multiple direction props match, the largest active breakpoint wins (`xl` over `lg` over `md` over `sm`).
 
+`Box` takes an optional `accessibilityState` of `{checked?, disabled?}`. It is sent to screen
+readers as `accessibilityState` and as `aria-checked` / `aria-disabled`, on both a plain and a
+clickable Box. On a clickable Box, `disabled: true` also stops presses while the role and
+label stay. A clickable Box with `accessibilityRole` `checkbox` or `switch` also toggles on
+Space on web, as ARIA expects.
+
+```tsx
+<Box
+  accessibilityHint="Marks this item as done"
+  accessibilityLabel="Preheat the oven"
+  accessibilityRole="checkbox"
+  accessibilityState={{checked: false, disabled: isSaving}}
+  onClick={toggle}
+/>
+```
+
+`Box` also takes `accessibilityLiveRegion` (`polite` or `assertive`) on a Box without
+`onClick`. It is sent as `aria-live`, so screen readers announce changes to the Box's contents
+on web and Android. VoiceOver on iOS does not announce React Native live regions.
+
+```tsx
+<Box accessibilityLiveRegion="polite" testID="copy-status">
+  {status ? <Text size="sm">{status}</Text> : null}
+</Box>
+```
+
 ## Icons
 
 Terreno uses **FontAwesome 6** by default. Pass icon names via `iconName` on `Icon`, `Button`, `IconButton`, form fields, `Badge`, and other icon-aware components.
@@ -1254,6 +1392,21 @@ import {TerrenoProvider} from "@terreno/ui";
   {children}
 </TerrenoProvider>
 ``````
+
+## DataTable column types
+
+`columnType` picks the cell a column draws, unless `customColumnComponentMap` has an entry
+for that type:
+
+| `columnType` | Cell |
+| --- | --- |
+| `text` (and any unmapped type) | The value as a string |
+| `number` | The value as a string, right-aligned, with the header right-aligned to match. A number or a numeric string both work |
+| `date` | An ISO string or a `Date`, formatted with Luxon `DATE_MED` ("Mar 14, 2026") in the local zone. A value Luxon cannot parse is shown as written, and an empty value is blank |
+| `boolean` | A check or a cross icon |
+
+A value that is already formatted, such as "Oct 8, 2026, 3:00 PM", is not ISO, so a `date`
+column shows it unchanged.
 
 ## DataTable server-side filtering
 

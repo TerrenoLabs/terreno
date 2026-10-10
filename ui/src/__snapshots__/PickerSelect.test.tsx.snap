@@ -259,7 +259,7 @@ exports[`PickerSelect renders correctly with default props 1`] = `
       },
       {
         "backgroundColor": "#FFFFFF",
-        "borderColor": "#9A9A9A",
+        "borderColor": "#949494",
       },
       false,
     ],
@@ -528,7 +528,7 @@ exports[`PickerSelect renders with selected value 1`] = `
       },
       {
         "backgroundColor": "#FFFFFF",
-        "borderColor": "#9A9A9A",
+        "borderColor": "#949494",
       },
       false,
     ],
@@ -797,7 +797,7 @@ exports[`PickerSelect renders disabled state 1`] = `
       },
       {
         "backgroundColor": "#FFFFFF",
-        "borderColor": "#9A9A9A",
+        "borderColor": "#949494",
       },
       {
         "backgroundColor": "#D9D9D9",
@@ -1058,7 +1058,7 @@ exports[`PickerSelect renders without placeholder when placeholder is empty obje
       },
       {
         "backgroundColor": "#FFFFFF",
-        "borderColor": "#9A9A9A",
+        "borderColor": "#949494",
       },
       false,
     ],
@@ -1317,7 +1317,7 @@ exports[`PickerSelect matches items by itemKey 1`] = `
       },
       {
         "backgroundColor": "#FFFFFF",
-        "borderColor": "#9A9A9A",
+        "borderColor": "#949494",
       },
       false,
     ],
@@ -1506,7 +1506,7 @@ exports[`PickerSelect renders custom InputAccessoryView 1`] = `
       },
       {
         "backgroundColor": "#FFFFFF",
-        "borderColor": "#9A9A9A",
+        "borderColor": "#949494",
       },
       false,
     ],
@@ -1776,7 +1776,7 @@ exports[`PickerSelect passes textInputProps to TextInput 1`] = `
       },
       {
         "backgroundColor": "#FFFFFF",
-        "borderColor": "#9A9A9A",
+        "borderColor": "#949494",
       },
       false,
     ],

@@ -1,0 +1,16 @@
+v: 1
+blocks:
+  - type: checklist
+    id: cooking
+    items:
+      - id: oven
+        text: Preheat the oven
+  - type: actions
+    id: more
+    elements:
+      - type: button
+        id: cooking_oven
+        text: Oven help
+        action:
+          kind: reply
+          text: How hot should the oven be?

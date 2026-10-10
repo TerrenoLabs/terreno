@@ -1,4 +1,5 @@
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import {DateTime} from "luxon";
 import type React from "react";
 import {
   type FC,
@@ -71,6 +72,47 @@ const TextCell: FC<{
   );
 };
 
+const NumberCell: FC<{
+  cellData: DataTableCellData;
+  column: DataTableColumn;
+}> = ({cellData}) => {
+  return (
+    <Box flex="grow" justifyContent="center" width="100%">
+      <Text align="right" size={cellData.textSize || "md"}>
+        {String(cellData.value ?? "")}
+      </Text>
+    </Box>
+  );
+};
+
+/** Formats ISO strings and Dates as Luxon DATE_MED; anything unparseable is shown as written. */
+const formatDataTableDate = (value: unknown): string => {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  let date: DateTime | undefined;
+  if (value instanceof Date) {
+    date = DateTime.fromJSDate(value);
+  } else if (typeof value === "string") {
+    date = DateTime.fromISO(value);
+  }
+  if (!date?.isValid) {
+    return String(value);
+  }
+  return date.toLocaleString(DateTime.DATE_MED);
+};
+
+const DateCell: FC<{
+  cellData: DataTableCellData;
+  column: DataTableColumn;
+}> = ({cellData}) => {
+  return (
+    <Box flex="grow" justifyContent="center">
+      <Text size={cellData.textSize || "md"}>{formatDataTableDate(cellData.value)}</Text>
+    </Box>
+  );
+};
+
 const CheckedCell: FC<{
   cellData: DataTableCellData;
   column: DataTableColumn;
@@ -111,6 +153,10 @@ const DataTableCellComponent: FC<InternalDataTableCellProps> = ({
     Component = customColumnComponentMap[columnDef.columnType];
   } else if (columnDef.columnType === "boolean") {
     Component = CheckedCell;
+  } else if (columnDef.columnType === "number") {
+    Component = NumberCell;
+  } else if (columnDef.columnType === "date") {
+    Component = DateCell;
   }
   const cellData = value.textSize === textSize ? value : {...value, textSize};
 
@@ -303,6 +349,8 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
 }) => {
   const {theme} = useTheme();
   const sort = sortColumn?.column === index ? sortColumn.direction : undefined;
+  // Number cells are right-aligned, so their header sits on the same edge.
+  const isNumberColumn = column.columnType === "number";
 
   return (
     <View
@@ -313,7 +361,7 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
         borderBottomWidth: 1,
         flexDirection: "row",
         height: headerHeight ?? rowHeight,
-        justifyContent: "space-between",
+        justifyContent: isNumberColumn ? "flex-end" : "space-between",
         padding: 16,
         width: column.width,
         ...(isPinnedHorizontal && {
@@ -325,7 +373,11 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
     >
       {[
         column.title ? (
-          <TableTitle align="left" key="data-table-header-title" title={column.title!} />
+          <TableTitle
+            align={isNumberColumn ? "right" : "left"}
+            key="data-table-header-title"
+            title={column.title!}
+          />
         ) : null,
         <View key="data-table-header-tools" style={{alignItems: "center", flexDirection: "row"}}>
           {column.filter && onFilterValuesChange && Platform.OS === "web" ? (

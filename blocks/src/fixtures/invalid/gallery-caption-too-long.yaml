@@ -1,0 +1,9 @@
+v: 1
+blocks:
+  - type: gallery
+    images:
+      - src: file:roast-lamb
+        alt: Roast leg of lamb
+      - src: file:roast-potatoes
+        alt: Roast potatoes
+        caption: Crisp roast potatoes, par-boiled for ten minutes, shaken in the pan to rough up the edges, then roasted in hot fat for an hour

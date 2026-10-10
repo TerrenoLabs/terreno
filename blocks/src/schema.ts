@@ -8,6 +8,9 @@ export const CALLOUT_STATUSES = ["info", "warning", "alert"] as const;
 export const BADGE_STATUSES = ["info", "error", "warning", "success", "neutral", "active"] as const;
 export const METRIC_TRENDS = ["up", "down", "flat"] as const;
 export const LAYOUT_BLOCK_TYPES = ["columns", "card"] as const;
+export const STEPPER_ROUNDING = ["nearest", "up"] as const;
+/** The block types a copy action's `target` may name. */
+export const COPY_TARGET_TYPES = ["stepper", "checklist", "list", "table", "text"] as const;
 
 const visibleText = (maxLength: number): z.ZodString =>
   z
@@ -141,7 +144,19 @@ export interface CallbackAction {
   payload?: Record<string, unknown>;
 }
 
-export type BlockAction = ReplyAction | OpenAction | SelectAction | CallbackAction;
+/**
+ * Copies text to the device clipboard. Sets exactly one of `text` (copied as written) or
+ * `target` (the id of a block whose current contents `blockPlainText` turns into text).
+ * It never reaches the host.
+ */
+export interface CopyAction {
+  kind: "copy";
+  /** The id of a `stepper`, `checklist`, `list`, `table`, or `text` block in this document. */
+  target?: string;
+  text?: string;
+}
+
+export type BlockAction = ReplyAction | OpenAction | SelectAction | CallbackAction | CopyAction;
 
 export interface ButtonElement {
   action: BlockAction;
@@ -194,6 +209,112 @@ export interface DetailsBlock {
   type: "details";
 }
 
+export interface StepperItem {
+  amount: number;
+  /** Digits after the decimal point, 0 to 3. Default 0. */
+  decimals?: number;
+  label: string;
+  /** How a scaled amount is rounded to `decimals`. Default `nearest`. */
+  round?: (typeof STEPPER_ROUNDING)[number];
+  unit?: string;
+}
+
+/** The host callback that − and + call with `{...payload, value}`. */
+export interface StepperCallback {
+  name: string;
+  payload?: Record<string, unknown>;
+}
+
+/**
+ * A − value + control whose buttons call a host callback. The renderer reserves the element ids
+ * `<id>_decrease` and `<id>_increase`.
+ */
+export interface StepperBlock {
+  callback: StepperCallback;
+  id: string;
+  items?: StepperItem[];
+  itemsTitle?: string;
+  label: string;
+  max: number;
+  min: number;
+  note?: string;
+  /** Default 1. */
+  step?: number;
+  type: "stepper";
+  unit?: string;
+  value: number;
+}
+
+export interface ChecklistItem {
+  checked?: boolean;
+  /** Muted line under the text and meta. */
+  detail?: string;
+  /** Unique within the checklist. The tick's element id is `<checklist id>_<item id>`. */
+  id: string;
+  /** A short label, such as a time, shown small and muted under the bold text. */
+  meta?: string;
+  text: string;
+}
+
+/**
+ * The host callback a tick sends with `{...payload, itemId, checked, state}`. Without one, or
+ * when its name is not a registered host action, ticks stay on the device.
+ */
+export interface ChecklistCallback {
+  name: string;
+  payload?: Record<string, unknown>;
+}
+
+/**
+ * A list of tickable items with an "n of m" counter. The renderer reserves the element id
+ * `<id>_<item id>` for each item's tick.
+ */
+export interface ChecklistBlock {
+  callback?: ChecklistCallback;
+  id: string;
+  items: ChecklistItem[];
+  title?: string;
+  type: "checklist";
+}
+
+export interface GalleryImage {
+  alt: string;
+  caption?: string;
+  /** Follows the `image` src rules, including `IMAGE_HOST_NOT_ALLOWED`. */
+  src: string;
+}
+
+/** A row of 2 to 6 photos with optional captions. */
+export interface GalleryBlock {
+  id?: string;
+  images: GalleryImage[];
+  type: "gallery";
+}
+
+/** An optional thumbnail on a list item. Follows the `image` src and alt rules. */
+export interface ListItemImage {
+  /** At most `headingTextMaxLength` characters, the same cap as an `image` block's alt. */
+  alt: string;
+  /** Follows the `image` src rules, including `IMAGE_HOST_NOT_ALLOWED`. */
+  src: string;
+}
+
+export interface ListItem {
+  image?: ListItemImage;
+  /** A short label, such as a time or a price. */
+  meta?: string;
+  /** Plain text, not markdown. */
+  text?: string;
+  title: string;
+}
+
+/** A stack of 1 to 12 rows, each with a title and optional text, meta, and thumbnail. */
+export interface ListBlock {
+  id?: string;
+  items: ListItem[];
+  type: "list";
+}
+
 export interface ColumnsBlock {
   children: Block[];
   id?: string;
@@ -202,6 +323,8 @@ export interface ColumnsBlock {
 
 export interface CardBlock {
   children: Block[];
+  /** A short label shown small and muted above the title. */
+  eyebrow?: string;
   id?: string;
   title?: string;
   type: "card";
@@ -220,7 +343,11 @@ export type LeafBlock =
   | HtmlBlock
   | CalloutBlock
   | ImageBlock
-  | DetailsBlock;
+  | DetailsBlock
+  | StepperBlock
+  | ChecklistBlock
+  | GalleryBlock
+  | ListBlock;
 
 export type Block = LeafBlock | ColumnsBlock | CardBlock;
 
@@ -342,11 +469,23 @@ const selectActionSchema = z
   })
   .strict();
 
+const callbackNameSchema = z.string().regex(/^[a-z][A-Za-z0-9_]{0,63}$/);
+
+const callbackPayloadSchema = z.record(z.string(), z.unknown());
+
 const callbackActionSchema = z
   .object({
     kind: z.literal("callback"),
-    name: z.string().regex(/^[a-z][A-Za-z0-9_]{0,63}$/),
-    payload: z.record(z.string(), z.unknown()).optional(),
+    name: callbackNameSchema,
+    payload: callbackPayloadSchema.optional(),
+  })
+  .strict();
+
+const copyActionSchema = z
+  .object({
+    kind: z.literal("copy"),
+    target: z.string().min(1).max(64).optional(),
+    text: visibleText(BLOCK_LIMITS.copyTextMaxLength).optional(),
   })
   .strict();
 
@@ -355,6 +494,7 @@ const actionSchema = z.discriminatedUnion("kind", [
   openActionSchema,
   selectActionSchema,
   callbackActionSchema,
+  copyActionSchema,
 ]);
 
 const buttonElementSchema = z
@@ -406,12 +546,59 @@ const calloutSchema = z
   })
   .strict();
 
+const imageSrcSchema = z.string().min(1).max(BLOCK_LIMITS.htmlMaxBytes);
+
+/** The image block's alt cap, shared by list item thumbnails. */
+const imageAltSchema = visibleText(BLOCK_LIMITS.headingTextMaxLength);
+
 const imageSchema = z
   .object({
     ...sharedBlockFields,
-    alt: visibleText(BLOCK_LIMITS.headingTextMaxLength),
-    src: z.string().min(1).max(BLOCK_LIMITS.htmlMaxBytes),
+    alt: imageAltSchema,
+    src: imageSrcSchema,
     type: z.literal("image"),
+  })
+  .strict();
+
+const galleryImageSchema = z
+  .object({
+    alt: visibleText(BLOCK_LIMITS.galleryAltMaxLength),
+    caption: visibleText(BLOCK_LIMITS.galleryCaptionMaxLength).optional(),
+    src: imageSrcSchema,
+  })
+  .strict();
+
+const gallerySchema = z
+  .object({
+    ...sharedBlockFields,
+    images: z
+      .array(galleryImageSchema)
+      .min(BLOCK_LIMITS.galleryImagesMin)
+      .max(BLOCK_LIMITS.galleryImagesMax),
+    type: z.literal("gallery"),
+  })
+  .strict();
+
+const listItemSchema = z
+  .object({
+    image: z
+      .object({
+        alt: imageAltSchema,
+        src: imageSrcSchema,
+      })
+      .strict()
+      .optional(),
+    meta: visibleText(BLOCK_LIMITS.listItemMetaMaxLength).optional(),
+    text: visibleText(BLOCK_LIMITS.listItemTextMaxLength).optional(),
+    title: visibleText(BLOCK_LIMITS.listItemTitleMaxLength),
+  })
+  .strict();
+
+const listSchema = z
+  .object({
+    ...sharedBlockFields,
+    items: z.array(listItemSchema).min(BLOCK_LIMITS.listItemsMin).max(BLOCK_LIMITS.listItemsMax),
+    type: z.literal("list"),
   })
   .strict();
 
@@ -421,6 +608,67 @@ const detailsSchema = z
     text: visibleText(BLOCK_LIMITS.blockTextMaxLength),
     title: visibleText(BLOCK_LIMITS.headingTextMaxLength),
     type: z.literal("details"),
+  })
+  .strict();
+
+const stepperItemSchema = z
+  .object({
+    amount: z.number().finite(),
+    decimals: z.number().int().min(0).max(BLOCK_LIMITS.stepperDecimalsMax).optional(),
+    label: visibleText(BLOCK_LIMITS.stepperLabelMaxLength),
+    round: z.enum(STEPPER_ROUNDING).optional(),
+    unit: visibleText(BLOCK_LIMITS.stepperItemUnitMaxLength).optional(),
+  })
+  .strict();
+
+const stepperSchema = z
+  .object({
+    callback: z
+      .object({
+        name: callbackNameSchema,
+        payload: callbackPayloadSchema.optional(),
+      })
+      .strict(),
+    id: blockIdSchema.max(BLOCK_LIMITS.stepperIdMaxLength),
+    items: z.array(stepperItemSchema).max(BLOCK_LIMITS.stepperItemsMax).optional(),
+    itemsTitle: visibleText(BLOCK_LIMITS.stepperLabelMaxLength).optional(),
+    label: visibleText(BLOCK_LIMITS.stepperLabelMaxLength),
+    max: z.number().finite(),
+    min: z.number().finite(),
+    note: visibleText(BLOCK_LIMITS.stepperNoteMaxLength).optional(),
+    step: z.number().finite().optional(),
+    type: z.literal("stepper"),
+    unit: visibleText(BLOCK_LIMITS.stepperUnitMaxLength).optional(),
+    value: z.number().finite(),
+  })
+  .strict();
+
+const checklistItemSchema = z
+  .object({
+    checked: z.boolean().optional(),
+    detail: visibleText(BLOCK_LIMITS.checklistItemDetailMaxLength).optional(),
+    id: blockIdSchema.max(BLOCK_LIMITS.checklistItemIdMaxLength),
+    meta: visibleText(BLOCK_LIMITS.checklistItemMetaMaxLength).optional(),
+    text: visibleText(BLOCK_LIMITS.checklistItemTextMaxLength),
+  })
+  .strict();
+
+const checklistSchema = z
+  .object({
+    callback: z
+      .object({
+        name: callbackNameSchema,
+        payload: callbackPayloadSchema.optional(),
+      })
+      .strict()
+      .optional(),
+    id: blockIdSchema.max(BLOCK_LIMITS.checklistIdMaxLength),
+    items: z
+      .array(checklistItemSchema)
+      .min(BLOCK_LIMITS.checklistItemsMin)
+      .max(BLOCK_LIMITS.checklistItemsMax),
+    title: visibleText(BLOCK_LIMITS.checklistTitleMaxLength).optional(),
+    type: z.literal("checklist"),
   })
   .strict();
 
@@ -450,6 +698,10 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
     calloutSchema,
     imageSchema,
     detailsSchema,
+    stepperSchema,
+    checklistSchema,
+    gallerySchema,
+    listSchema,
     z
       .object({
         ...sharedBlockFields,
@@ -461,6 +713,7 @@ const blockSchema: z.ZodType<Block> = z.lazy(() =>
       .object({
         ...sharedBlockFields,
         children: z.array(blockSchema).min(1).max(BLOCK_LIMITS.maxBlocks),
+        eyebrow: visibleText(BLOCK_LIMITS.cardEyebrowMaxLength).optional(),
         title: visibleText(BLOCK_LIMITS.cardTitleMaxLength).optional(),
         type: z.literal("card"),
       })

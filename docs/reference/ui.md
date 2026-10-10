@@ -873,6 +873,17 @@ Buttons use a scale animation by default. Set `pressAnimation="opacity"` for an 
 
 Disabled and loading buttons use a non-interactive pressable regardless of the selected animation.
 
+### Tooltip
+
+`Tooltip` (and `tooltipText` on `Button` / `IconButton`) renders its bubble outside the trigger's clipping and stacking context:
+
+| Platform | Mount point | Positioning |
+| --- | --- | --- |
+| Web | `document.body` | `position: fixed`, `z-index: 9999`, so it shows above an open `Modal` and nothing else covers the page |
+| iOS / Android | `TerrenoProvider` portal host | `position: absolute`, `z-index: 999` |
+
+The bubble stays off screen at `opacity: 0` until the trigger is measured, then `getTooltipPosition` places it at `idealPosition` or the first side that fits on screen.
+
 ### Toast
 
 `TerrenoProvider` mounts the toast container. Call `useToast()` for `success`, `info`, `warn`, `error`, `show`, `hide`, and `catch`.

@@ -167,14 +167,17 @@ export interface ThemePrimitiveColors {
   accent900: string;
 
   error000: string;
+  error050: string;
   error100: string;
   error200: string;
 
   warning000: string;
+  warning050: string;
   warning100: string;
   warning200: string;
 
   success000: string;
+  success050: string;
   success100: string;
   success200: string;
 }
@@ -223,6 +226,7 @@ export interface TextThemeConfig {
 export interface SurfaceThemeConfig {
   base: keyof ThemePrimitiveColors;
   baseAlternate: keyof ThemePrimitiveColors;
+  ai: keyof ThemePrimitiveColors;
   baseHover: keyof ThemePrimitiveColors;
   primary: keyof ThemePrimitiveColors;
   secondaryExtraLight: keyof ThemePrimitiveColors;
@@ -230,6 +234,7 @@ export interface SurfaceThemeConfig {
   secondaryDark: keyof ThemePrimitiveColors;
   secondaryExtraDark: keyof ThemePrimitiveColors;
   neutral: keyof ThemePrimitiveColors;
+  neutralExtraLight: keyof ThemePrimitiveColors;
   neutralLight: keyof ThemePrimitiveColors;
   neutralDark: keyof ThemePrimitiveColors;
   disabled: keyof ThemePrimitiveColors;
@@ -246,6 +251,7 @@ export interface BorderThemeConfig {
   dark: keyof ThemePrimitiveColors;
   activeNeutral: keyof ThemePrimitiveColors;
   activeAccent: keyof ThemePrimitiveColors;
+  ai: keyof ThemePrimitiveColors;
   hover: keyof ThemePrimitiveColors;
   focus: keyof ThemePrimitiveColors;
   error: keyof ThemePrimitiveColors;
@@ -294,6 +300,7 @@ export interface TextTheme {
 export interface SurfaceTheme {
   base: string;
   baseAlternate: string;
+  ai: string;
   baseHover: string;
   primary: string;
   secondaryExtraLight: string;
@@ -301,6 +308,7 @@ export interface SurfaceTheme {
   secondaryDark: string;
   secondaryExtraDark: string;
   neutral: string;
+  neutralExtraLight: string;
   neutralLight: string;
   neutralDark: string;
   disabled: string;
@@ -317,6 +325,7 @@ export interface BorderTheme {
   dark: string;
   activeNeutral: string;
   activeAccent: string;
+  ai: string;
   hover: string;
   focus: string;
   error: string;

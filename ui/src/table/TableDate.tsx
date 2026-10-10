@@ -3,11 +3,13 @@ import {type FC, useState} from "react";
 import {Text} from "react-native";
 
 import type {TableDateProps} from "../Common";
+import {useTheme} from "../Theme";
 
 export const TableDate: FC<TableDateProps> = ({value, annotated = false}) => {
   const initialDate =
     typeof value === "string" ? DateTime.fromISO(value) : DateTime.fromJSDate(value);
   const [dateVal] = useState(initialDate);
+  const {theme} = useTheme();
 
   // TODO: Formatting date with annotations should be in DateUtilities and tested.
   const formatDate = (date: DateTime) => {
@@ -29,7 +31,7 @@ export const TableDate: FC<TableDateProps> = ({value, annotated = false}) => {
   };
 
   return (
-    <Text style={{fontSize: 16}}>
+    <Text style={{color: theme.text.primary, fontSize: 16}}>
       {annotated ? formatDate(dateVal) : dateVal.toFormat("MM/dd/yyyy")}
     </Text>
   );

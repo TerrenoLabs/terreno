@@ -1,15 +1,22 @@
 import {DevHomePage} from "@components/DevHomePage";
 import {DemoConfig} from "@config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {router, useRootNavigationState} from "expo-router";
-import {type ReactElement, useEffect} from "react";
+import {useTheme} from "@terreno/ui";
+import {router, useGlobalSearchParams, useRootNavigationState} from "expo-router";
+import {type ReactElement, useEffect, useRef} from "react";
 import {StyleSheet, View} from "react-native";
+import {activePreviewParams} from "../../previewState";
 
 const ASYNC_STORAGE_KEY = "CURRENT_ROUTE";
 
 const Dev = (): ReactElement => {
   // TODO create a shared hook for saving navigation state to AsyncStorage
   const navigationState = useRootNavigationState();
+  const searchParams = useGlobalSearchParams();
+  const previewParams = activePreviewParams(searchParams);
+  const previewParamsRef = useRef(previewParams);
+  previewParamsRef.current = previewParams;
+  const {theme} = useTheme();
   // Save the current navigation state to AsyncStorage
   useEffect(() => {
     const saveCurrentRoute = async () => {
@@ -35,15 +42,19 @@ const Dev = (): ReactElement => {
     void saveCurrentRoute();
   }, [navigationState]);
 
-  // Restore the route from AsyncStorage
+  // Restore the saved story once. A later preview change must not navigate again,
+  // or Expo Router drops the other preview params and remounts the story.
   useEffect(() => {
-    const restoreRoute = async () => {
+    const restoreRoute = async (): Promise<void> => {
       try {
         const savedRoute = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
         if (savedRoute) {
           const {component, story} = JSON.parse(savedRoute);
           if (component && story) {
-            router.navigate(`dev/${component}?story=${story}`);
+            router.navigate({
+              params: {component, story, ...previewParamsRef.current},
+              pathname: "/dev/[component]",
+            });
           }
         }
       } catch (error) {
@@ -58,14 +69,17 @@ const Dev = (): ReactElement => {
     <View
       style={{
         ...styles.container,
-        backgroundColor: "#fff",
+        backgroundColor: theme.surface.base,
         width: "100%",
       }}
     >
       <DevHomePage
         demoConfig={DemoConfig}
         onPress={(component: string, story: string) => {
-          router.navigate(`dev/${component}?story=${story}`);
+          router.navigate({
+            params: {component, story, ...previewParams},
+            pathname: "/dev/[component]",
+          });
         }}
       />
     </View>
@@ -74,7 +88,6 @@ const Dev = (): ReactElement => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#fff",
     height: "100%",
     maxHeight: "100%",
     overflow: "hidden",

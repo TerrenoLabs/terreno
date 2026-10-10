@@ -74,7 +74,7 @@ exports[`SignatureCaptureField renders a placeholder box when disabled with a dr
       "children": null,
       "props": {
         "style": {
-          "backgroundColor": "#D9D9D9",
+          "backgroundColor": "#CDCDCD",
           "height": 90,
           "marginVertical": 8,
           "width": 300,

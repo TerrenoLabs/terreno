@@ -1,5 +1,6 @@
 import {afterEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
+import {assert} from "chai";
 import type {ScaledSize} from "react-native";
 import {useWindowDimensions} from "react-native";
 
@@ -29,10 +30,11 @@ describe("DemoPreviewBar", () => {
 
   it("shows the theme, viewport, and background dropdowns in the header on wide windows", () => {
     setWindowWidth(1400);
-    const {queryByTestId} = renderWithTheme(
+    const {queryByTestId, UNSAFE_getAllByProps} = renderWithTheme(
       <DemoPreviewBar onChange={noop} shareQuery="" state={defaultPreviewState()} />
     );
     expect(queryByTestId("preview-theme")).toBeTruthy();
+    assert.isAtLeast(UNSAFE_getAllByProps({label: "Follow system"}).length, 1);
     expect(queryByTestId("preview-viewport")).toBeTruthy();
     expect(queryByTestId("preview-background")).toBeTruthy();
   });

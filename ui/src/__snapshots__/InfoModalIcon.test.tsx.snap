@@ -281,7 +281,7 @@ exports[`InfoModalIcon opens modal when pressed 1`] = `
                                 ],
                                 "props": {
                                   "style": {
-                                    "color": "#FFFFFF",
+                                    "color": "#092E3A",
                                     "fontSize": 16,
                                     "fontWeight": "700",
                                   },

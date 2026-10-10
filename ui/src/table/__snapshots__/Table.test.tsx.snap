@@ -385,7 +385,7 @@ exports[`Table renders correctly with basic setup 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -722,7 +722,7 @@ exports[`Table renders multiple rows 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -1500,7 +1500,7 @@ exports[`Table renders with percentage-based columns 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -1737,7 +1737,7 @@ exports[`Table renders with maxHeight 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -1974,7 +1974,7 @@ exports[`Table renders without sticky header 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },

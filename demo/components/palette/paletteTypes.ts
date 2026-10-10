@@ -6,7 +6,7 @@ import {
   STATUS_FAMILIES,
   type StatusFamily,
 } from "./colorUtils";
-// DARK_ROLE_MAP is derived from DARK_THEME_CONFIG (the source applied to the live preview) so the
+// DARK_ROLE_MAP is derived from darkThemeConfig (the source applied to the live preview) so the
 // dark-mode WCAG audit always evaluates the same primitives the preview renders. `import type` in
 // darkTheme keeps this from being a runtime import cycle.
 import {DARK_ROLE_MAP} from "./darkTheme";

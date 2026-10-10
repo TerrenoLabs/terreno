@@ -140,7 +140,7 @@ exports[`DecimalRangeActionSheet renders correctly 1`] = `
                                                   ],
                                                   "props": {
                                                     "style": {
-                                                      "color": "#FFFFFF",
+                                                      "color": "#092E3A",
                                                       "fontSize": 16,
                                                       "fontWeight": "700",
                                                     },
@@ -819,7 +819,7 @@ exports[`DecimalRangeActionSheet renders with different min/max range 1`] = `
                                                   ],
                                                   "props": {
                                                     "style": {
-                                                      "color": "#FFFFFF",
+                                                      "color": "#092E3A",
                                                       "fontSize": 16,
                                                       "fontWeight": "700",
                                                     },

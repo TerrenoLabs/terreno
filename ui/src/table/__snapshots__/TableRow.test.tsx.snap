@@ -285,7 +285,7 @@ exports[`TableRow renders correctly with children 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -477,7 +477,7 @@ exports[`TableRow renders header row with thicker border 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -764,7 +764,7 @@ exports[`TableRow renders with drawer contents 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -1051,7 +1051,7 @@ exports[`TableRow renders drawer with expand button 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -1288,7 +1288,7 @@ exports[`TableRow renders with custom color 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -1575,7 +1575,7 @@ exports[`TableRow renders a placeholder cell when sibling row has drawer content
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },

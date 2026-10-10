@@ -70,7 +70,7 @@ export const SegmentedControl: FC<SegmentedControlProps> = ({
         style={{
           alignItems: "center",
           ...(hugsContent ? {alignSelf: "flex-start" as const} : {}),
-          backgroundColor: theme.primitives.neutral300,
+          backgroundColor: theme.surface.neutralLight,
           borderRadius: theme.primitives.radius3xl,
           display: "flex",
           flexDirection: "row",

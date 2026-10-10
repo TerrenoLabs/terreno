@@ -10,93 +10,11 @@ import {
 } from "@terreno/ui";
 import {useContext, useState} from "react";
 
-const darkPrimitives = {
-  accent000: "#332400",
-  accent050: "#543C00",
-  accent100: "#956A00",
-  accent200: "#B58201",
-  accent300: "#D69C0E",
-  accent400: "#E5B132",
-  accent500: "#F2CB62",
-  accent600: "#F7D582",
-  accent700: "#F9E0A1",
-  accent800: "#FCECC2",
-  accent900: "#FFFDF7",
-
-  error000: "#BD1111",
-  error100: "#D33232",
-  error200: "#FDD7D7",
-  neutral000: "#1C1C1C",
-  neutral050: "#353535",
-  neutral100: "#4E4E4E",
-  neutral200: "#686868",
-  neutral300: "#9A9A9A",
-  neutral400: "#B3B3B3",
-  neutral500: "#CDCDCD",
-  neutral600: "#D9D9D9",
-  neutral700: "#E6E6E6",
-  neutral800: "#121212",
-  neutral900: "#FFFFFF",
-
-  primary000: "#013749",
-  primary050: "#004B64",
-  primary100: "#035D7E",
-  primary200: "#0A7092",
-  primary300: "#0086B3",
-  primary400: "#0E9DCD",
-  primary500: "#40B8E0",
-  primary600: "#73CAE8",
-  primary700: "#90D8F0",
-  primary800: "#BCE9F7",
-  primary900: "#EBFAFF",
-  radius2xl: 128,
-  radius3xl: 360,
-  radiusLg: 16,
-  radiusMd: 3,
-
-  radiusSm: 1,
-  radiusXl: 32,
-
-  secondary000: "#041E27",
-  secondary050: "#092E3A",
-  secondary100: "#0F3D4D",
-  secondary200: "#1C4E5F",
-  secondary300: "#2B6072",
-  secondary400: "#608997",
-  secondary500: "#87A1AA",
-  secondary600: "#9EB7BF",
-  secondary700: "#B6CDD5",
-  secondary800: "#D7E5EA",
-  secondary900: "#F2F9FA",
-
-  spacing0: 0,
-  spacing1: 4,
-  spacing2: 8,
-  spacing3: 12,
-  spacing4: 16,
-  spacing5: 24,
-  spacing6: 32,
-  spacing7: 40,
-  spacing8: 48,
-  spacing9: 56,
-  spacing10: 64,
-  spacing11: 72,
-  spacing12: 80,
-
-  success000: "#1A7F36",
-  success100: "#3EA45C",
-  success200: "#DCF2E2",
-
-  warning000: "#B14202",
-  warning100: "#F36719",
-  warning200: "#FFE3C6",
-};
-
 type ThemeName = "default" | "pink" | "dark";
 
 export const ThemeComponentStories = () => {
   const [themeName, setThemeName] = useState<ThemeName>("default");
-  const {resetTheme, setPrimitives} = useContext(ThemeContext);
+  const {resetTheme, setColorScheme, setPrimitives} = useContext(ThemeContext);
 
   return (
     <Box
@@ -114,16 +32,18 @@ export const ThemeComponentStories = () => {
           onChange={(value: string) => {
             const nextTheme = value as ThemeName;
             setThemeName(nextTheme);
+            resetTheme();
             if (nextTheme === "pink") {
+              setColorScheme("light");
               setPrimitives({
                 primary400: "#e0218a",
                 secondary100: "#ed5c9b",
                 secondary500: "#f18dbc",
               });
             } else if (nextTheme === "dark") {
-              setPrimitives(darkPrimitives);
+              setColorScheme("dark");
             } else {
-              resetTheme();
+              setColorScheme("light");
             }
           }}
           options={[
@@ -131,6 +51,7 @@ export const ThemeComponentStories = () => {
             {label: "Pink", value: "pink"},
             {label: "Dark", value: "dark"},
           ]}
+          title="Theme"
           value={themeName}
         />
       </Box>

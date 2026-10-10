@@ -206,7 +206,7 @@ exports[`SignatureField renders disabled state without value 1`] = `
       "children": null,
       "props": {
         "style": {
-          "backgroundColor": "#D9D9D9",
+          "backgroundColor": "#CDCDCD",
           "height": 90,
           "marginVertical": 8,
           "width": 300,

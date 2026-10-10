@@ -12,13 +12,11 @@ import {
   TextField,
   type ThemePrimitiveColors,
   ThemeProvider,
-  useTheme,
 } from "@terreno/ui";
-import React, {useCallback, useEffect, useMemo, useState} from "react";
+import React, {useCallback, useMemo, useState} from "react";
 import {View} from "react-native";
 
 import {ErrorBoundary} from "../ErrorBoundary";
-import {DARK_THEME_CONFIG} from "./darkTheme";
 import type {ThemeMode} from "./paletteTypes";
 
 /**
@@ -31,24 +29,6 @@ import type {ThemeMode} from "./paletteTypes";
 interface ComponentPreviewProps {
   primitives: Partial<ThemePrimitiveColors>;
 }
-
-/**
- * Applies the dark role remapping to the nested provider once it has mounted. Dark mode remaps
- * semantic roles rather than inverting primitives, so `setTheme` is the right lever here.
- */
-const ThemeModeApplier: React.FC<{mode: ThemeMode; children: React.ReactNode}> = ({
-  mode,
-  children,
-}) => {
-  const {setTheme} = useTheme();
-  // Applied on mount (the provider is remounted whenever mode/palette change via its key).
-  useEffect(() => {
-    if (mode === "dark") {
-      setTheme(DARK_THEME_CONFIG);
-    }
-  }, [mode, setTheme]);
-  return <>{children}</>;
-};
 
 const CARD_WIDTH = 260;
 const CARD_PREVIEW_HEIGHT = 160;
@@ -174,7 +154,7 @@ export const ComponentPreview: React.FC<ComponentPreviewProps> = ({primitives}) 
 
   const baseHex =
     mode === "dark"
-      ? ((primitives as Record<string, string>).neutral900 ?? "#1c1c1c")
+      ? ((primitives as Record<string, string>).neutral800 ?? "#353535")
       : ((primitives as Record<string, string>).neutral000 ?? "#ffffff");
 
   return (
@@ -203,10 +183,8 @@ export const ComponentPreview: React.FC<ComponentPreviewProps> = ({primitives}) 
         padding={4}
         rounding="md"
       >
-        <ThemeProvider initialPrimitives={primitives} key={paletteKey}>
-          <ThemeModeApplier mode={mode}>
-            {view === 0 ? <ShowcaseCard /> : <AllComponentsGrid />}
-          </ThemeModeApplier>
+        <ThemeProvider colorScheme={mode} initialPrimitives={primitives} key={paletteKey}>
+          {view === 0 ? <ShowcaseCard /> : <AllComponentsGrid />}
         </ThemeProvider>
       </Box>
     </Box>

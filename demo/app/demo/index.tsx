@@ -1,11 +1,15 @@
 import {DemoHomePage} from "@components/DemoHomePage";
-import {Host} from "@terreno/ui";
-import {router} from "expo-router";
+import {Host, useTheme} from "@terreno/ui";
+import {router, useGlobalSearchParams} from "expo-router";
 import {StyleSheet, View} from "react-native";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
+import {activePreviewParams} from "../../previewState";
 
 const App = () => {
   const insets = useSafeAreaInsets();
+  const {theme} = useTheme();
+  const searchParams = useGlobalSearchParams();
+  const previewParams = activePreviewParams(searchParams);
 
   // Update when we have new fonts picked, these look baaad.
   // const [loaded] = useFonts({
@@ -25,7 +29,7 @@ const App = () => {
       <View
         style={{
           ...styles.container,
-          backgroundColor: "#fff",
+          backgroundColor: theme.surface.base,
           paddingBottom: insets.bottom,
           paddingLeft: insets.left,
           paddingRight: insets.right,
@@ -33,10 +37,16 @@ const App = () => {
           width: "100%",
         }}
       >
-        <View style={styles.body} testID="demo-home-screen">
+        <View
+          style={[styles.body, {backgroundColor: theme.surface.baseAlternate}]}
+          testID="demo-home-screen"
+        >
           <DemoHomePage
             onPress={(component: string) => {
-              router.push(`demo/${encodeURIComponent(component)}`);
+              router.push({
+                params: {component, ...previewParams},
+                pathname: "/demo/[component]",
+              });
             }}
           />
         </View>
@@ -47,7 +57,6 @@ const App = () => {
 
 const styles = StyleSheet.create({
   body: {
-    backgroundColor: "#eee",
     display: "flex",
     flex: 1,
     flexDirection: "column",
@@ -56,7 +65,6 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   container: {
-    backgroundColor: "#fff",
     height: "100%",
     maxHeight: "100%",
     overflow: "hidden",

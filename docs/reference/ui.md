@@ -61,6 +61,55 @@ const customStyle: StyleProp<ViewStyle> = {
 - Ensures type compatibility when passing styles to @terreno/ui components
 - Simplifies imports (one package instead of two)
 
+## Theme modes
+
+`TerrenoProvider` defaults to the Flourish Health light mode exported from
+Figma. Select the matching Figma dark mode explicitly or follow the operating
+system:
+
+``````tsx
+import {TerrenoProvider} from "@terreno/ui";
+
+<TerrenoProvider colorScheme="system">
+  <App />
+</TerrenoProvider>
+``````
+
+`colorScheme` accepts `"light"`, `"dark"`, or `"system"` and defaults to
+`"light"` for deterministic server rendering. `"system"` follows the operating
+system. Change the choice after startup with `setColorScheme`:
+
+``````tsx
+import {SelectField, themeColorSchemeOptions, useTheme, type ThemeColorScheme} from "@terreno/ui";
+
+const AppearanceSetting = () => {
+  const {colorSchemeSetting, setColorScheme} = useTheme();
+  return (
+    <SelectField
+      onChange={(value) => {
+        setColorScheme(value as ThemeColorScheme);
+      }}
+      options={themeColorSchemeOptions}
+      title="Appearance"
+      value={colorSchemeSetting}
+    />
+  );
+};
+``````
+
+Dark `surface.warningLight` uses `warning200`. The lighter warning orange, `warning100`, is 2.52:1 against warning text and misses WCAG AA. Highlighted `DataTable` cells switch to `text.inverted` when `text.primary` is below 4.5:1 on that fill. Inverted `MarkdownView` code uses `surface.neutralDark` when `surface.neutralLight` is below 4.5:1 against that text, and blockquotes do the same with `surface.baseAlternate`. Primary `Button` labels use `text.secondaryDark` when that pair meets 4.5:1 on `surface.primary`, and `text.inverted` otherwise, so `setTheme(darkThemeConfig)` stays readable without changing `colorScheme`. The demo palette generator emits status `050` steps so custom palettes update those dark error, success, and warning surfaces.
+
+`themeColorSchemeOptions` labels those values Light, Dark, and Follow system.
+`useTheme()` also returns the resolved `colorScheme` (`"light"` or `"dark"`)
+with `theme`, `setTheme`, `setPrimitives`, and `resetTheme`. An explicit
+`colorScheme` prop replaces the current choice whenever the parent changes it.
+
+The public `lightThemeConfig`, `darkThemeConfig`, and
+`defaultThemePrimitives` exports are the canonical token maps. They include the
+Figma AI surface/border roles and the dark status ramps. Custom overrides set
+through `useTheme()` are layered over the active mode; `resetTheme()` removes
+those overrides without changing the provider's selected mode.
+
 ### DashboardGrid and DashboardGridItem
 
 Eager layout-only wrapping grid. Default columns `{sm: 1, md: 2, lg: 3}`. Children stay caller-supplied `Card`s. Cell width is `(rowWidth - gap × (columns - 1)) / columns` so flex `gap` does not wrap extra columns.
@@ -839,7 +888,8 @@ top spacing, the navigation row, bottom spacing, and `bottomNavBarHeight`.
 opts into a labeled full-width pager on the narrow viewport. `narrowBelowWidth` uses that
 viewport when the window is at or below the given pixel width; when omitted, the narrow
 viewport follows `isNarrowViewport()`. These props are web only; the native `SplitPage`
-ignores them. See `SplitPageProps` for when each prop applies and what is ignored.
+ignores them. See `SplitPageProps` for when each prop applies and what is ignored. An unset
+`color` is `baseAlternate` on web and native.
 `IconButton`'s `backgroundOpacity` tints only that button's background.
 
 ```typescript
@@ -1373,8 +1423,8 @@ const buttonStyles = toggle(isPressed, pressedStyles, defaultStyles);
 
 @terreno/ui components do not require environment variables. All configuration is done at runtime via:
 
-- **TerrenoProvider props** — Theme customization, custom icon registry (`icons`), OpenAPI spec URL
-- **Theme hooks** — `useTheme()`, `setTheme()`, `setPrimitives()`
+- **TerrenoProvider props** — `colorScheme`, `initialPrimitives`, custom icons, and OpenAPI spec URL
+- **Theme hooks** — `useTheme()`, `setColorScheme()`, `setTheme()`, `setPrimitives()`
 - **Component props** — Direct prop overrides for individual components
 
 **Example configuration:**
@@ -1383,11 +1433,8 @@ const buttonStyles = toggle(isPressed, pressedStyles, defaultStyles);
 import {TerrenoProvider} from "@terreno/ui";
 
 <TerrenoProvider
-  baseUrl="https://api.example.com"
-  theme={{
-    surface: {primary: "secondary500"},
-  }}
-  onError={(error) => console.error(error)}
+  colorScheme="system"
+  openAPISpecUrl="https://api.example.com/openapi.json"
 >
   {children}
 </TerrenoProvider>

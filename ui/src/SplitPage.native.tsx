@@ -150,7 +150,7 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   return (
     <Box
       avoidKeyboard
-      color={color || "neutralLight"}
+      color={color || "baseAlternate"}
       flex="grow"
       height="100%"
       keyboardOffset={keyboardOffset}

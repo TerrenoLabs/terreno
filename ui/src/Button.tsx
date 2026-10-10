@@ -20,6 +20,7 @@ import {
 
 import {Box} from "./Box";
 import type {ButtonPressAnimation, ButtonProps} from "./Common";
+import {contrastRatio, WCAG_NORMAL_TEXT_CONTRAST} from "./colorContrast";
 import {useCustomIcon} from "./IconRegistry";
 import {isNarrowViewport} from "./MediaQuery";
 import {useTheme} from "./Theme";
@@ -115,7 +116,15 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
     let bgColor = theme.surface.primary;
     let bColor: string | undefined;
     let bWidth: number | undefined;
+    // secondaryDark is the light-mode on-primary label. Dark tokens make that
+    // role too light for the primary fill, so fall back to inverted.
     let textColor = theme.text.inverted;
+    if (
+      variant === "primary" &&
+      contrastRatio(theme.text.secondaryDark, theme.surface.primary) >= WCAG_NORMAL_TEXT_CONTRAST
+    ) {
+      textColor = theme.text.secondaryDark;
+    }
 
     if (disabled) {
       bgColor = theme.surface.disabled;

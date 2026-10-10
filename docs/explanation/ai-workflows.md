@@ -49,9 +49,10 @@ Maintains centralized agent guidance and generates the matching configuration fo
 
 Rulesync generates native hooks from `.rulesync/hooks.json`. Biome checks changed files
 after edits and staged files before commits. At agent stop,
-`.rulesync/hooks/quality-check.sh` runs lint, TypeScript compilation, Knip, and
-dependency-cruiser. It keeps stdout machine-readable for each host and prevents
-retry-triggered Stop hooks from rerunning the commands.
+`.rulesync/hooks/quality-check.sh` runs `bun install --frozen-lockfile` when
+`node_modules/typescript` or any workspace package link is missing, then runs lint,
+TypeScript compilation, Knip, and dependency-cruiser. It keeps stdout machine-readable
+for each host and prevents retry-triggered Stop hooks from rerunning the commands.
 
 Existing findings are ratcheted so the checks reject new debt without requiring unrelated
 cleanup. See [Static analysis](static-analysis.md).

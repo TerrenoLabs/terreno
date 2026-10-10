@@ -678,6 +678,7 @@ mock.module("expo-router", () => ({
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
+    setParams: mock(() => {}),
   },
   Slot: ({children, ...props}: MockComponentProps) => React.createElement("Slot", props, children),
   Stack: ({children, ...props}: MockComponentProps) =>
@@ -927,12 +928,6 @@ mock.module("expo-localization", () => ({
   locale: "en-US",
   locales: ["en-US"],
   timezone: "America/New_York",
-}));
-
-// Mock @expo/vector-icons
-mock.module("@expo/vector-icons", () => ({
-  default: mock(() => null),
-  FontAwesome6: mock(() => null),
 }));
 
 // Mock @expo/vector-icons/FontAwesome6

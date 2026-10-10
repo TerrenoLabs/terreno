@@ -179,6 +179,8 @@ an isolated `pr-N` backend: `deploy-frontend-preview` always points
 up to 20 minutes for its `/health` before publishing, because `gcp-cd-preview`
 runs in a separate workflow.
 
+Those backend deploys set `GCS_BUCKET` to `flourish-terreno-example-documents` (override with `GCP_DOCUMENTS_BUCKET`). Preview revisions also set `GCS_FOLDER_PREFIX=pr-<number>/` so each PR keeps its own folder. Without `GCS_BUCKET`, `GET /documents/` returns 503 and the Files section shows “Storage is not configured.”
+
 Backend previews prune not-Ready tagged revisions from traffic
 (`rebuild-cloud-run-ready-traffic.sh`), deploy untagged with
 `--revision-suffix`, then point the `pr-N` tag at that revision. Terraform
@@ -254,8 +256,12 @@ the review script so a PR cannot rewrite the reviewer.
 Netlify and GCP jobs **validate their context as the first step** and fail,
 before checkout or `bun install`, listing the missing variables. Preview jobs
 halt earlier on fork PRs, where CircleCI withholds contexts. Docker Layer
-Caching is off (200 credits per job). The docs Netlify target disables
-Docusaurus minification so the build stays within the 8 GB `large` executor.
+Caching is off (200 credits per job). The docs Netlify target builds only the
+current docs tree, disables Docusaurus minification, and pins SSG to one worker
+thread so the build peaks near 3 GB and fits the 4 GB `medium` executor.
+Released versions are not rebuilt: `archive-docs-version` (in `publish-release`,
+`X.Y.0` tags only) builds each one once and uploads it to its GitHub release, and
+`deploy-docs` unpacks those archives under `/<version>/`. See `website/README.md`.
 
 `terreno-gcp` uses CircleCI OIDC (`CIRCLE_OIDC_TOKEN_V2`), never a JSON service
 account key. Set `circleci_org_id`, `circleci_project_id`, and

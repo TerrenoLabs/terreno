@@ -52,6 +52,23 @@ Pass `{store: "mongo"}`. Hits live in `rateLimitHits` on the same mongoose conne
 
 Unauthenticated keys use `req.ip`. Express `trust proxy` defaults to **off** so a client cannot rotate `X-Forwarded-For` to bypass the auth bucket. On Cloud Run (one hop via GFE), pass `trustProxy: 1`. Extra proxies: hop count or a subnet list. `trustProxy: false` is the same as the default.
 
+## Limit one route
+
+Use `createRouteRateLimitMiddleware` for a stricter limit on one expensive route. It works with or without the global limiter.
+
+```typescript
+import {createRouteRateLimitMiddleware} from "@terreno/api";
+
+const uploadLimit = createRouteRateLimitMiddleware({
+  name: "uploads",
+  max: 1,
+  windowMs: 60_000,
+  store: "mongo",
+});
+```
+
+`DocumentStorageApp` takes the same options as `uploadRateLimit`. The example backend allows one upload per IP per minute and sets `trust proxy` to `1` on Cloud Run so the key is the real client IP.
+
 ## Auth vs API buckets
 
 | Path | Bucket |

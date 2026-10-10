@@ -102,6 +102,40 @@ describe("Harness task routes", () => {
     await owner.patch(`/harness/tasks/${task._id}`).send({name: "x"}).expect(405);
   });
 
+  it("omits the lease from the task read and tags mutations with the task collection", async () => {
+    const {app, harness, login, ownerId} = await setup();
+    const task = await harness.createTask(parked, {}, {userId: ownerId});
+    await TaskModel.updateOne(
+      {_id: task._id},
+      {
+        $set: {
+          lease: {
+            owner: "runner-1",
+            token: "fence-secret",
+          },
+        },
+      }
+    );
+    const owner = await login(OWNER);
+    const read = await owner.get(`/harness/tasks/${task._id}`).expect(200);
+    expect(read.body.data.lease).toBeUndefined();
+    expect(read.body.data.name).toBe("test.parked");
+    expect((await TaskModel.findExactlyOne({_id: task._id})).lease?.token).toBe("fence-secret");
+
+    const spec = await supertest(app).get("/openapi.json").expect(200);
+    const taskRead = spec.body.paths["/harness/tasks/{id}"].get;
+    const taskSchema = taskRead.responses["200"].content["application/json"].schema;
+    expect(taskSchema.properties.lease).toBeUndefined();
+    expect(taskRead.tags).toEqual(["harnesstasks"]);
+    expect(spec.body.paths["/harness/tasks/{id}/abort"].post.tags).toEqual(["harnesstasks"]);
+    expect(spec.body.paths["/harness/approvals/{id}/approve"].post.tags).toEqual([
+      "harnessapprovals",
+    ]);
+    expect(spec.body.paths["/harness/conversations/{id}/submit"].post.tags).toEqual([
+      "harnessconversations",
+    ]);
+  });
+
   it("abort: the owner or an admin aborts with a reason; others get 403; ended tasks 409", async () => {
     const {harness, login, ownerId} = await setup({start: true});
     const first = await harness.createTask(parked, {}, {userId: ownerId});

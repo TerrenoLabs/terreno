@@ -218,6 +218,16 @@ const mapIssue = (issue: z.core.$ZodIssue, root: unknown): BlockError[] => {
         }),
       ];
     }
+    if (issue.origin === "number" || issue.origin === "int") {
+      return [
+        error({
+          code: "OUT_OF_RANGE",
+          fix: `Set ${subject(path)} to ${maximum} or less.`,
+          message: `${subject(path)} is above ${maximum}.`,
+          path,
+        }),
+      ];
+    }
     if (issue.origin === "array") {
       return [
         error({
@@ -238,7 +248,21 @@ const mapIssue = (issue: z.core.$ZodIssue, root: unknown): BlockError[] => {
     ];
   }
   if (issue.code === "too_small") {
-    if (issue.origin === "number" || issue.origin === "int") {
+    const isNumber = issue.origin === "number" || issue.origin === "int";
+    // A ref `limit` below 1 has always been INVALID_TYPE; every other numeric floor matches the
+    // OUT_OF_RANGE code its ceiling uses.
+    if (isNumber && !/^datasets\.[^.]+\.limit$/.test(path)) {
+      const minimum = String(issue.minimum);
+      return [
+        error({
+          code: "OUT_OF_RANGE",
+          fix: `Set ${subject(path)} to ${minimum} or more.`,
+          message: `${subject(path)} is below ${minimum}.`,
+          path,
+        }),
+      ];
+    }
+    if (isNumber) {
       return [
         error({
           code: "INVALID_TYPE",
@@ -298,7 +322,7 @@ const mapIssue = (issue: z.core.$ZodIssue, root: unknown): BlockError[] => {
     return [
       error({
         code: "INVALID_ENUM",
-        fix: "Set type to heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details, or html.",
+        fix: "Set type to heading, text, metric, badge, divider, context, chart, table, actions, columns, card, callout, image, details, stepper, checklist, gallery, list, or html.",
         message: `${subject(path)} is not a supported block.`,
         path: path === "" ? "type" : `${path}.type`,
       }),

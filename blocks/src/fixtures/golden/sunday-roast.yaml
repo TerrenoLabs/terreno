@@ -1,0 +1,174 @@
+v: 1
+datasets:
+  lamb_by_guests:
+    columns:
+      - {name: guests, type: number}
+      - {name: bone_in_lamb, type: string}
+      - {name: potatoes, type: string}
+    rows:
+      - [4, "3–4 lb", "2 lb"]
+      - [6, "4–5 lb", "3 lb"]
+      - [8, "5–6 lb", "4 lb"]
+      - [10, "6–7½ lb", "5 lb"]
+blocks:
+  - type: heading
+    size: lg
+    text: Your Sunday lamb roast 🍷
+  - type: gallery
+    id: roast_photos
+    images:
+      - {src: "https://images.example.com/sunday-roast/roast-lamb.jpg", alt: Roast lamb}
+      - {src: "https://images.example.com/sunday-roast/crispy-potatoes.jpg", alt: Crispy roast potatoes}
+      - {src: "https://images.example.com/sunday-roast/inspiration.jpg", alt: Sunday roast inspiration}
+  - type: text
+    markdown: |-
+      I'm thinking a proper British-inspired Sunday roast with a little Mediterranean flair. Crispy potatoes, tender rosemary and garlic lamb, seasonal vegetables, and a delicious gravy. The kind of meal where everyone lingers at the table.
+
+      Since you haven't finalized your guest list, we'll build a flexible menu that scales with your headcount.
+  - type: card
+    id: dinner_plan
+    eyebrow: Your dinner plan
+    title: Sunday roast with friends
+    children:
+      - type: text
+        markdown: |-
+          - **Style:** Cozy, generous, slightly elevated
+          - **Prep:** Most work happens before guests arrive
+          - **Cooking:** Approximately 2 to 3 hours, depending on the lamb
+          - **Serving:** Family-style, with everything in the middle of the table
+  - type: heading
+    size: md
+    text: 1. The menu
+  - type: list
+    id: menu
+    items:
+      - title: "The centerpiece: Rosemary and garlic roast lamb"
+        text: A classic leg of lamb with lemon, garlic, rosemary and olive oil. Serve carved with homemade gravy and mint sauce.
+        image: {src: "https://images.example.com/sunday-roast/rosemary-lamb.jpg", alt: "The centerpiece: Rosemary and garlic roast lamb"}
+      - title: "The essential: Extra-crispy roast potatoes"
+        text: Parboiled, shaken to create fluffy edges and roasted until golden. Nonnegotiable!
+        image: {src: "https://images.example.com/sunday-roast/roast-potatoes.jpg", alt: "The essential: Extra-crispy roast potatoes"}
+      - title: Honey-roasted carrots and parsnips
+        text: Tossed with olive oil, honey and fresh thyme.
+        image: {src: "https://images.example.com/sunday-roast/carrots-parsnips.jpg", alt: Honey-roasted carrots and parsnips}
+      - title: Lemony greens
+        text: Tenderstem broccoli with toasted almonds and lemon zest. Something fresh to balance the rich lamb.
+        image: {src: "https://images.example.com/sunday-roast/lemony-greens.jpg", alt: Lemony greens}
+      - title: "Dessert: Warm apple crumble"
+        text: Serve with vanilla ice cream. Make it the day before and reheat while you're eating.
+        image: {src: "https://images.example.com/sunday-roast/apple-crumble.jpg", alt: "Dessert: Warm apple crumble"}
+  - type: heading
+    size: md
+    text: 2. How much should you buy?
+  - type: text
+    markdown: Adjust the guest count below to calculate your shopping quantities. This assumes everyone eats lamb and includes you in the total.
+  - type: card
+    id: shopping
+    children:
+      - type: stepper
+        id: guests
+        label: Number of people
+        unit: People
+        value: 5
+        min: 1
+        max: 20
+        callback: {name: scaleStepper}
+        itemsTitle: Your shopping quantities
+        items:
+          - {label: Bone-in leg of lamb, amount: 2, unit: kg, decimals: 1}
+          - {label: Potatoes, amount: 1500, unit: g}
+          - {label: Carrots, amount: 8, round: up}
+          - {label: Parsnips, amount: 5, round: up}
+          - {label: Tenderstem broccoli, amount: 625, unit: g}
+          - {label: Apples for crumble, amount: 4, round: up}
+        note: Generous portions, with a little extra. Lamb weight includes the bone. Ask your butcher for help selecting the closest available size.
+      - type: actions
+        id: shopping_actions
+        elements:
+          - type: button
+            id: copy_shopping_list
+            text: Copy shopping list
+            variant: outline
+            iconName: copy
+            action: {kind: copy, target: guests}
+  - type: text
+    markdown: Also pick up garlic, rosemary, thyme, lemons, honey, almonds, olive oil, gravy ingredients, mint sauce, crumble topping and vanilla ice cream.
+  - type: table
+    id: lamb_table
+    title: How much lamb?
+    data: lamb_by_guests
+  - type: heading
+    size: md
+    text: 3. Your Sunday cooking timeline
+  - type: text
+    markdown: Let's assume you're eating at **5 PM.** This example uses a roughly 2.4 kg bone-in leg of lamb for six people. Adjust the roasting time to your actual joint.
+  - type: checklist
+    id: cooking
+    title: Cooking checklist
+    callback: {name: toggleChecklist}
+    items:
+      - id: prep_ahead
+        meta: Saturday
+        text: Prep ahead
+        detail: Make the crumble, prepare the lamb marinade, check your serving dishes and set the table.
+        checked: true
+      - id: prepare_lamb
+        meta: "12:30 PM"
+        text: Prepare the lamb
+        detail: Season with garlic, rosemary, lemon and olive oil. Refrigerate until closer to roasting.
+      - id: start_roasting
+        meta: "1:30 PM"
+        text: Start roasting
+        detail: Preheat the oven and roast the lamb. Use a meat thermometer rather than relying only on timing.
+      - id: prepare_sides
+        meta: "2:30 PM"
+        text: Prepare the sides
+        detail: Peel and chop vegetables. Parboil potatoes, drain and rough up their edges.
+      - id: check_lamb
+        meta: "3:30 PM"
+        text: Check the lamb
+        detail: Monitor its internal temperature. Once cooked, rest it loosely covered. Roast the potatoes and vegetables while it rests.
+      - id: finish_everything
+        meta: "4:15 PM"
+        text: Finish everything
+        detail: Make the gravy, cook the greens and warm the serving dishes.
+      - id: carve_serve
+        meta: "4:45 PM"
+        text: Carve and serve
+        detail: Check the potatoes and vegetables, carve the lamb and bring everything to the table.
+      - id: dinner
+        meta: "5:00 PM"
+        text: Dinner!
+        detail: Enjoy. Reheat the apple crumble while everyone finishes their main course.
+  - type: context
+    id: usda_note
+    text: For food safety, the USDA recommends cooking whole cuts of lamb to an internal temperature of 145°F, followed by at least a three-minute rest. Your actual cooking time will vary by joint size and oven.
+  - type: heading
+    size: md
+    text: 4. Three hosting tips
+  - type: text
+    id: hosting_tips
+    markdown: |-
+      - **Buy the lamb last:** Confirm your numbers before purchasing. Your butcher can help you choose the right size.
+      - **Make dessert ahead:** One less thing to think about on Sunday.
+      - **Protect your oven space:** The lamb and potatoes both need room. If you're cooking for eight or more, consider two smaller roasting trays and prepare the vegetables ahead.
+  - type: text
+    markdown: My one addition would be a simple starter of olives, good bread and whipped feta. Guests can nibble while you finish cooking, without spoiling their appetites.
+  - type: actions
+    id: follow_ups
+    elements:
+      - type: button
+        id: adjust_for_five
+        text: Adjust the plan for 5 guests
+        variant: outline
+        action: {kind: reply, text: Help me adjust the lamb roast plan for 5 guests}
+      - type: button
+        id: vegetarian_sides
+        text: Add vegetarian sides
+        variant: outline
+        action: {kind: reply, text: Add vegetarian side dish options for the lamb roast menu}
+      - type: button
+        id: gluten_free
+        text: Make it gluten-free
+        variant: outline
+        action: {kind: reply, text: Advise on making the lamb roast plan gluten-free}

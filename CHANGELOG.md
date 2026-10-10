@@ -20,6 +20,47 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.12.0] - 2026-10-07
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.12.0.md`](mcp-server/src/docs/upgrades/57.12.0.md).
+
+### Added
+
+- `@terreno/ai` harness: `harness.createTask(def, input, {trace: {scope, tags}, prompts})` writes a scope (tenant, workspace), tags, and prompt versions onto the task's `ObsTrace`; child tasks and subagents share it. `ObsTrace` gains `scope` (indexed with `created`) and `tags`, and the admin trace list filters by `scope`. `rt.runAgent` takes `prompts` and accepts a registry `PromptVersionRef` as `instructions` (its `body` runs, its version is recorded). New subpath exports replace `dist/` deep imports: `@terreno/ai/admin`, `@terreno/ai/harness/{agentLoop,commit,events,internalRuntime}`, and `@terreno/ai/observability/{observabilityApp,localPlugin,promptStore}`. `getProjectModel()` returns the chat `Project` model, and `new AiApp({projects: false})` skips the `/gpt/projects` routes so an app can own a model named `Project`. See [AI harness reference](docs/reference/ai-harness.md#trace-scope-and-prompt-versions). Closes #1533.
+
+### Changed
+
+- Harness task HTTP responses and the task OpenAPI schema omit `lease`. The fencing token stays on the server. Approve, reject, submit, and abort invalidate the same cache tags as the task, approval, and conversation lists (`harnesstasks`, `harnessapprovals`, `harnessconversations`).
+- Importing `@terreno/ai` no longer registers the mongoose `Project` model. The `Project` export is a lazy proxy and is deprecated: the first use of `Project` or `getProjectModel()` registers the model. Statics, `new Project(...)`, and `instanceof Project` still work. The proxy is not the model (`Project !== mongoose.models.Project`, `Object.keys(Project)` is empty, and reading `Project.prototype` throws). Use `getProjectModel()`.
+
+### Fixed
+
+- Web `SplitPage` desktop child columns scroll vertically again. The corner radius and clip sit on the pane, so `overflow: hidden` no longer blocks the column `ScrollView`. A child with `height: "100%"` stays within the visible pane and can scroll internally. Narrow web pager pages use the measured pane height, so that same full-height child can scroll internally while the page still clips its rounded corners. Labeled pager previous and next controls sit in fixed slots in a row under the column, and the column uses the height left after that row and its spacing. `desktopChildrenMinWidth` horizontal scrolling, the list column, and native `SplitPage` are unchanged.
+
+## [57.11.0] - 2026-10-05
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.11.0.md`](mcp-server/src/docs/upgrades/57.11.0.md).
+
+### Added
+
+- `@terreno/ai/harness/jobsRunner`: `JobsRunner` runs durable harness phases as `@terreno/jobs` jobs (`terreno.harness.phase`) on every instance, for multi-instance deploys such as Cloud Run. The task lease decides who commits, so duplicate or late jobs are harmless. `@terreno/jobs` is an optional peer; importing `@terreno/ai` never loads it. Adds `HarnessTask.claims` (default 0, no migration). See [Run the harness on multiple instances](docs/how-to/run-harness-on-multiple-instances.md).
+- `@terreno/api` can manage one Slack workspace with `SLACK_BOT_TOKEN`: `createSlackPrivateChannel` creates a private channel, invites member ids, and posts an optional first message; `inviteSlackUsersToChannel` adds staff to a channel the bot already belongs to; `postSlackMessage` posts as the bot; `findSlackChannelByName` resolves a visible channel name to its id.
+- `@terreno/syncdb` query windows: `queryCollections` config, `client.queryWindows`, and the `useWindowQuery` hook (plus generated `use{Collection}Window` hooks) run server-filtered, paged list queries (`where`, `sort`, `pageSize`, `fetchNextPage`, `refetch`, `hasMore`, `total`) over a shared, deduplicated entity table. Overlapping windows store each row once and update it once; each window lists only its own members. `fullSync: true` adds windows to a collection that still snapshot-syncs.
+- `useQuery` / `useEntityIds` accept the same Mongo-style `where`, string sort specs, and `limit` for local queries.
+- Window refetches learn the route's `maxLimit` and pipeline page requests with a `console.warn` instead of silently truncating.
+- `modelRouter` list requests that filter on a field missing from `queryFields` now return a 400 naming the field, model, and allowed fields (`meta.allowedQueryFields`), checked before query validation so the filter can never be silently stripped. syncdb raises it as `QueryFieldNotAllowedError`.
+- `terreno-prd` interviews the app owner and writes a product PRD with measurable success metrics before Grow. Invoke `/terreno-prd` in Cursor, `/terreno:prd` in Claude Code, or `$terreno-prd` in Codex.
+
+### Changed
+
+- `@terreno/ai/harness`: `InProcessRunner` now runs up to 8 claimed tasks at once (new `concurrency` option, default 8), each under its own task lease, and `stop()` waits for all of them. Expect parallel model calls (watch provider rate limits and cost) and more stream-counter transaction retries. Turns of one conversation stay serial. Pass `new InProcessRunner({concurrency: 1})` to keep the previous one-at-a-time behavior. See [AI harness reference → InProcessRunner](docs/reference/ai-harness.md#inprocessrunner).
+
+### Fixed
+
+- Outline `Button`s match solid buttons in width and height. The border width is subtracted from horizontal padding as well as vertical, at the default and `sm` sizes.
+- `@terreno/ui` date and table components import `FontAwesome6` from `@expo/vector-icons/FontAwesome6`, so the named export resolves on iOS. The public component API is unchanged.
+- Web `SplitPage` navigation IconButtons use the default variant, and detail child columns get a default `md` corner radius with `overflow: hidden`. Pass `childColumnRounding` to override that radius. The list column is unchanged. Native `SplitPage` is unchanged.
+
 ## [57.10.1] - 2026-10-04
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.10.1.md`](mcp-server/src/docs/upgrades/57.10.1.md).

@@ -89,10 +89,13 @@ export interface ObsTraceDocument extends mongoose.Document<mongoose.Types.Objec
   name: string;
   output?: unknown;
   prompts: ObsPromptRef[];
+  /** App-defined scope (tenant, workspace) set by `harness.createTask({trace: {scope}})`. */
+  scope?: string;
   sensitive: boolean;
   sessionId?: string;
   startedAt: Date;
   status: "error" | "ok";
+  tags: string[];
   updated: Date;
   usage?: ObsPromptUsage;
   userId?: mongoose.Types.ObjectId;

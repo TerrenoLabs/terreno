@@ -1,4 +1,4 @@
-import {type FC, useCallback, useEffect, useRef, useState} from "react";
+import {type FC, type ReactNode, useCallback, useEffect, useRef, useState} from "react";
 import {
   Dimensions,
   type LayoutChangeEvent,
@@ -10,7 +10,9 @@ import {
 } from "react-native";
 
 import type {TooltipPosition, TooltipProps} from "./Common";
+import {createWebPortal} from "./createWebPortal";
 import {Portal} from "./PortalHost";
+import {resolveDocumentBodyPortalTarget} from "./resolveDocumentBodyPortalTarget";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
 
@@ -45,6 +47,30 @@ interface ChildrenProps {
   onHoverOut?: () => void;
 }
 
+const isPositiveFinite = (value: unknown): boolean =>
+  typeof value === "number" && Number.isFinite(value) && value > 0;
+
+const isFiniteNumber = (value: unknown): boolean =>
+  typeof value === "number" && Number.isFinite(value);
+
+// A detached or collapsed trigger measures as zero-sized at (0, 0), which would place the
+// tooltip in the top left corner of the screen on top of whatever is there.
+export const isValidTooltipMeasurement = ({
+  children,
+  tooltip,
+}: Pick<Measurement, "children" | "tooltip">): boolean => {
+  const {width, height, pageX, pageY} = children as Partial<ChildrenMeasurement>;
+  const {width: tooltipWidth, height: tooltipHeight} = tooltip as Partial<LayoutRectangle>;
+  return (
+    isPositiveFinite(width) &&
+    isPositiveFinite(height) &&
+    isFiniteNumber(pageX) &&
+    isFiniteNumber(pageY) &&
+    isPositiveFinite(tooltipWidth) &&
+    isPositiveFinite(tooltipHeight)
+  );
+};
+
 export const getTooltipPosition = ({
   children,
   tooltip,
@@ -53,6 +79,9 @@ export const getTooltipPosition = ({
 }: Measurement): Partial<TooltipPlacement> => {
   if (!measured) {
     console.debug("No measurements for child yet, cannot show tooltip yet.");
+    return {};
+  }
+  if (!isValidTooltipMeasurement({children, tooltip})) {
     return {};
   }
 
@@ -193,6 +222,8 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
   const hideTooltipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const childrenWrapperRef = useRef<View>(null);
   const touched = useRef(false);
+  // Bumped on every hide so async measure callbacks from an earlier show are ignored.
+  const showGeneration = useRef(0);
   const isWeb = Platform.OS === "web";
   const resetMeasurement = useCallback(() => {
     setMeasurement({
@@ -209,6 +240,7 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
       clearTimeout(hideTooltipTimer.current);
     }
 
+    showGeneration.current += 1;
     touched.current = false;
     setVisible(false);
     resetMeasurement();
@@ -255,31 +287,44 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
 
   const handleOnLayout = useCallback(
     ({nativeEvent: {layout}}: LayoutChangeEvent) => {
-      if (childrenWrapperRef?.current && !childrenWrapperRef?.current?.measure) {
-        console.error("Tooltip: childrenWrapperRef does not have a measure method.");
+      // An empty first layout pass is followed by another onLayout once the content has size.
+      if (!isPositiveFinite(layout.width) || !isPositiveFinite(layout.height)) {
+        console.debug("Tooltip: tooltip has no size yet, waiting for next layout.");
         return;
-      } else if (!childrenWrapperRef?.current) {
-        console.error("Tooltip: childrenWrapperRef is null.");
+      }
+      if (!childrenWrapperRef?.current) {
+        console.error("Tooltip: childrenWrapperRef is null, hiding tooltip.");
+        hideTooltip();
+        return;
+      }
+      if (!childrenWrapperRef.current.measure) {
+        console.error(
+          "Tooltip: childrenWrapperRef does not have a measure method, hiding tooltip."
+        );
+        hideTooltip();
+        return;
       }
 
-      childrenWrapperRef?.current?.measure((_x, _y, width, height, pageX, pageY) => {
-        setMeasurement({
-          children: {height, pageX, pageY, width},
-          measured: true,
-          tooltip: {...layout},
-        });
-        const position = getTooltipPosition({
-          children: {height, pageX, pageY, width},
-          idealPosition,
-          measured: true,
-          tooltip: {...layout},
-        });
+      const generation = showGeneration.current;
+      childrenWrapperRef.current.measure((_x, _y, width, height, pageX, pageY) => {
+        if (generation !== showGeneration.current) {
+          return;
+        }
+        const children = {height, pageX, pageY, width};
+        const tooltip = {...layout};
+        if (!isValidTooltipMeasurement({children, tooltip})) {
+          console.error("Tooltip: invalid measurements, hiding tooltip.", {children, tooltip});
+          hideTooltip();
+          return;
+        }
+        setMeasurement({children, measured: true, tooltip});
+        const position = getTooltipPosition({children, idealPosition, measured: true, tooltip});
         if (position.finalPosition) {
           setFinalPosition(position.finalPosition);
         }
       });
     },
-    [idealPosition]
+    [hideTooltip, idealPosition]
   );
 
   const handleTouchStart = useCallback(() => {
@@ -348,57 +393,73 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
     : {};
   const isPositioned = placement.left !== undefined && placement.top !== undefined;
 
+  // On web the bubble attaches to document.body with fixed positioning, so no
+  // full-screen portal layer sits over the page while the tooltip is open.
+  const webPortalTarget = isWeb ? resolveDocumentBodyPortalTarget() : null;
+
+  const tooltipBubble = (
+    <View
+      onLayout={handleOnLayout}
+      style={{
+        // The trigger is measured on the first layout pass, so keep the tooltip
+        // off screen until then instead of flashing it in the top left corner.
+        left: isPositioned ? placement.left : -9999,
+        opacity: isPositioned ? 1 : 0,
+        position: (webPortalTarget ? "fixed" : "absolute") as ViewStyle["position"],
+        top: isPositioned ? placement.top : -9999,
+        // Match the body-level web overlays (RNW Modal, DropdownPanel) so tooltips
+        // inside them stay on top.
+        zIndex: webPortalTarget ? 9999 : 999,
+      }}
+    >
+      {includeArrow && isWeb && (
+        <View style={arrowContainerStyles as ViewStyle}>
+          <Arrow color={theme.surface.secondaryExtraDark} position={finalPosition} />
+        </View>
+      )}
+      <View
+        style={{
+          backgroundColor: theme.surface.secondaryExtraDark,
+          borderRadius: theme.radius.default,
+          display: "flex",
+          flexShrink: 1,
+          maxWidth: 320,
+          paddingHorizontal: 8,
+          paddingVertical: 2,
+        }}
+      >
+        <Pressable
+          accessibilityHint="Tooltip information"
+          aria-label={text}
+          aria-role="button"
+          onPress={hideTooltip}
+          style={{
+            backgroundColor: theme.surface.secondaryExtraDark,
+            borderRadius: theme.radius.default,
+          }}
+          testID="tooltip-container"
+        >
+          <Text color="inverted" size="sm">
+            {text}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const renderTooltip = (): ReactNode => {
+    if (!visible) {
+      return null;
+    }
+    if (webPortalTarget) {
+      return createWebPortal({children: tooltipBubble, container: webPortalTarget});
+    }
+    return <Portal>{tooltipBubble}</Portal>;
+  };
+
   return (
     <View>
-      {visible && (
-        <Portal>
-          <View
-            onLayout={handleOnLayout}
-            style={{
-              // The trigger is measured on the first layout pass, so keep the tooltip
-              // off screen until then instead of flashing it in the top left corner.
-              left: isPositioned ? placement.left : -9999,
-              opacity: isPositioned ? 1 : 0,
-              position: "absolute",
-              top: isPositioned ? placement.top : -9999,
-              zIndex: 999,
-            }}
-          >
-            {includeArrow && isWeb && (
-              <View style={arrowContainerStyles as ViewStyle}>
-                <Arrow color={theme.surface.secondaryExtraDark} position={finalPosition} />
-              </View>
-            )}
-            <View
-              style={{
-                backgroundColor: theme.surface.secondaryExtraDark,
-                borderRadius: theme.radius.default,
-                display: "flex",
-                flexShrink: 1,
-                maxWidth: 320,
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-              }}
-            >
-              <Pressable
-                accessibilityHint="Tooltip information"
-                aria-label={text}
-                aria-role="button"
-                onPress={hideTooltip}
-                style={{
-                  backgroundColor: theme.surface.secondaryExtraDark,
-                  borderRadius: theme.radius.default,
-                }}
-                testID="tooltip-container"
-              >
-                <Text color="inverted" size="sm">
-                  {text}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </Portal>
-      )}
+      {renderTooltip()}
       <View
         hitSlop={{bottom: 10, left: 15, right: 15, top: 10}}
         onPointerEnter={() => {

@@ -85,8 +85,10 @@ jobs:
           GH_TOKEN: ${{ secrets.ROADMAP_PROJECT_TOKEN }}
           ROADMAP_BRANCH: automation/roadmap-${{ github.run_id }}
         run: |
+          # roadmap:generate leaves the file untouched when the only difference
+          # is the Last updated stamp, so a quiet diff means no pull request.
           if git diff --quiet ROADMAP.md; then
-            echo "ROADMAP.md unchanged"
+            echo "ROADMAP.md unchanged (including timestamp-only refreshes)"
             exit 0
           fi
           git config user.name "github-actions[bot]"

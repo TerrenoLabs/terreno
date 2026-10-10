@@ -1005,7 +1005,7 @@ jobs:
       - install_bun_and_deps
       - setup_remote_docker
       - compile_packages:
-          packages: api mcp-server
+          packages: blocks api mcp-server
       - run:
           name: Production install for image context
           command: |
@@ -1028,7 +1028,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui rtk admin-frontend
+          packages: blocks ui rtk admin-frontend syncdb
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1812,7 +1812,7 @@ jobs:
 
   deploy-docs:
     executor: node22
-    resource_class: large
+    resource_class: medium
     steps:
       - require_netlify_context:
           site-id-var: NETLIFY_DOCS_SITE_ID
@@ -1919,7 +1919,7 @@ jobs:
 
   deploy-docs-preview:
     executor: node22
-    resource_class: large
+    resource_class: medium
     steps:
       - skip_if_fork_deploy
       - require_netlify_context:
@@ -2152,6 +2152,53 @@ jobs:
               -H "Authorization: Bearer ${ZOOM_WEBHOOK_TOKEN}" \
               --data "$(jq -n --arg version "$CIRCLE_TAG" '{message:("Terreno release " + $version + " failed in CircleCI")}')" \
               "$ZOOM_WEBHOOK_URL"
+
+  # Docs for a minor release are snapshotted and built exactly once, here. The
+  # production docs deploy unpacks the uploaded site under /<version>/ instead of
+  # rebuilding every version (scripts/ci/docs-archive.sh).
+  archive-docs-version:
+    executor: node22
+    resource_class: medium
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - run:
+          name: Snapshot docs for this release
+          command: |
+            set -euo pipefail
+            scripts/ci/validate-env.sh REPO_ADMIN_TOKEN
+            bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile
+            bun run --filter '@terreno/ui' types
+            cd website
+            bun run generate
+            bun run docs:version "$CIRCLE_TAG"
+            bun run prune-versions
+      - run:
+          name: Build and upload the archived docs site
+          command: |
+            set -euo pipefail
+            scripts/ci/docs-archive.sh build "$CIRCLE_TAG" /tmp/docs-site.tar.gz
+            GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/docs-archive.sh upload "$CIRCLE_TAG" /tmp/docs-site.tar.gz
+      - run:
+          name: Commit the docs snapshot to master
+          command: |
+            set -euo pipefail
+            git config user.name "terreno-circleci"
+            git config user.email "josh@nang.io"
+            git add website/versioned_docs website/versioned_sidebars website/versions.json
+            if git diff --cached --quiet; then
+              echo "No docs version changes to commit"
+              exit 0
+            fi
+            git commit --no-verify -m "chore: cut docs version ${CIRCLE_TAG}"
+            snapshot_commit="$(git rev-parse HEAD)"
+            git remote set-url origin "https://x-access-token:${REPO_ADMIN_TOKEN}@github.com/TerrenoLabs/terreno.git"
+            git fetch origin master
+            # The tag is behind master; the snapshot only touches website/version* files.
+            git checkout --force -B docs-version origin/master
+            git cherry-pick "$snapshot_commit"
+            git pull --rebase origin master
+            git push origin HEAD:master
 
 workflows:
   # Never put GITHUB_TOKEN or CURSOR_API_KEY in project env vars (injected into
@@ -2535,6 +2582,17 @@ workflows:
               ignore: /.*/
             tags:
               only: /^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$/
+      - archive-docs-version:
+          context: [terreno-release]
+          # Runs after publish-release pushes its version bump, so the two master
+          # pushes do not race.
+          requires:
+            - publish-release
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^[0-9]+\.[0-9]+\.0$/
       # Builds from source, not npm, so it runs alongside publish-release.
       - deploy-demo:
           context: [terreno-netlify, terreno-github-deployments]

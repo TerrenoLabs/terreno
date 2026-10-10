@@ -32,6 +32,26 @@ export const AREA_ORDER = [
 const DECLINED_STATUS = "Declined";
 
 /**
+ * The generated stamp sits on its own blockquote line. Content comparisons
+ * ignore it so a daily refresh does not open a pull request.
+ */
+const GENERATED_TIMESTAMP_LINE = /^> dates are promised\. Last updated: .+\.$/m;
+
+const withoutGeneratedTimestamp = (markdown: string): string => {
+  return markdown.replace(GENERATED_TIMESTAMP_LINE, "> dates are promised. Last updated: STAMP.");
+};
+
+export const roadmapContentIsUnchanged = ({
+  existing,
+  next,
+}: {
+  existing: string;
+  next: string;
+}): boolean => {
+  return withoutGeneratedTimestamp(existing) === withoutGeneratedTimestamp(next);
+};
+
+/**
  * Roadmap issues are marked with the `roadmap` label, not a title prefix. Older
  * issues were titled `[Roadmap] <thing>`, so that legacy prefix is stripped
  * here — both for rendering and for matching a board issue to a seed entry.

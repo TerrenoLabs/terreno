@@ -585,6 +585,86 @@ describe("Box", () => {
     });
   });
 
+  describe("accessibility state", () => {
+    it("forwards checked and disabled to a clickable Box", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Toggles the item"
+          accessibilityLabel="Preheat the oven"
+          accessibilityRole="checkbox"
+          accessibilityState={{checked: true, disabled: false}}
+          onClick={() => {}}
+          testID="row"
+        />
+      );
+      const pressable = getByTestId("row-clickable");
+      expect(pressable.props.accessibilityState).toEqual({checked: true, disabled: false});
+      expect(pressable.props["aria-checked"]).toBe(true);
+      expect(pressable.props["aria-disabled"]).toBe(false);
+      expect(pressable.props.accessibilityRole).toBe("checkbox");
+      expect(pressable.props.style.accessibilityState).toBeUndefined();
+    });
+
+    it("keeps a disabled clickable Box labelled but does not call onClick", async () => {
+      const onClick = mock(() => {});
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Toggles the item"
+          accessibilityLabel="Preheat the oven"
+          accessibilityRole="checkbox"
+          accessibilityState={{checked: false, disabled: true}}
+          onClick={onClick}
+          testID="row"
+        />
+      );
+      const pressable = getByTestId("row-clickable");
+      expect(pressable.props["aria-label"]).toBe("Preheat the oven");
+      expect(pressable.props.accessibilityState.disabled).toBe(true);
+      await act(async () => {
+        fireEvent.press(pressable);
+      });
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it("forwards checked to a Box without onClick", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box accessibilityState={{checked: false}} testID="plain" />
+      );
+      const view = getByTestId("plain");
+      expect(view.props.accessibilityState).toEqual({checked: false});
+      expect(view.props["aria-checked"]).toBe(false);
+    });
+
+    it("makes a Box a polite live region without putting it in the style", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box accessibilityLiveRegion="polite" testID="status" />
+      );
+      const view = getByTestId("status");
+      expect(view.props["aria-live"]).toBe("polite");
+      expect(view.props.style.accessibilityLiveRegion).toBeUndefined();
+    });
+
+    it("toggles a checkbox Box with Space on web", async () => {
+      const onClick = mock(() => {});
+      const preventDefault = mock(() => {});
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Toggles the item"
+          accessibilityLabel="Preheat the oven"
+          accessibilityRole="checkbox"
+          onClick={onClick}
+          testID="row"
+        />
+      );
+      await act(async () => {
+        getByTestId("row-clickable").props.onKeyDown({key: " ", preventDefault});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(preventDefault).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("scroll behavior", () => {
     it("should render ScrollView when scroll is enabled", () => {
       const {root} = renderWithTheme(<Box scroll />);

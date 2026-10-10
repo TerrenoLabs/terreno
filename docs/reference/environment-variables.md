@@ -136,8 +136,11 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
 | `GCS_BUCKET` | example-backend, admin | ❌ | — | No | server |
+| `GCS_FOLDER_PREFIX` | example-backend `DocumentStorageApp` (`folderPrefix`) | ❌ | — | No | server |
 | `GCS_PROJECT_ID` | GCS clients | ❌ | — | No | server |
 | `GCS_SERVICE_ACCOUNT_KEY` | GCS clients | ❌ | — | Yes | server |
+
+Example-backend Cloud Run deploys set `GCS_BUCKET` (default `flourish-terreno-example-documents`). Preview deploys also set `GCS_FOLDER_PREFIX=pr-<number>/`.
 
 ## Feature flags
 
@@ -223,7 +226,7 @@ There is **no** `RATE_LIMIT_ENABLED` (or similar) read by `@terreno/api`. Apps t
 |----------|---------|----------|---------|--------|-------|
 | `SLACK_WEBHOOKS` | `@terreno/api` | ❌ | — | Yes | server |
 | `SLACK_WEBHOOK_URL` | scripts | ❌ | — | Yes | server |
-| `SLACK_BOT_TOKEN` | `@terreno/api` `lookupSlackUserIdByEmail` | ❌ | — | Yes | server |
+| `SLACK_BOT_TOKEN` | `@terreno/api` Slack Web API (`lookupSlackUserIdByEmail`, private channels, invites, `chat.postMessage`) | ❌ | — | Yes | server |
 | `GOOGLE_CHAT_WEBHOOKS` | `@terreno/api` | ❌ | — | Yes | server |
 | `GOOGLE_CHAT_WEBHOOK_URL` | scripts | ❌ | — | Yes | server |
 | `ZOOM_CHAT_WEBHOOKS` | `@terreno/api` | ❌ | — | Yes | server |

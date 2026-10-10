@@ -26,7 +26,9 @@ test.describe("Admin Panel", () => {
 
   test("admin panel shows custom screens", async ({page}) => {
     await expect(page.getByText("AI Requests").first()).toBeVisible();
-    await expect(page.getByText("Documents").first()).toBeVisible();
+    // The app tab is also titled Documents and stays mounted hidden. Box onClick
+    // puts the nav test id on the pressable as `${testID}-clickable`.
+    await expect(page.getByTestId("admin-shell-nav-screen-documents-clickable")).toBeVisible();
   });
 
   test("can navigate to model table", async ({page}) => {
@@ -119,7 +121,7 @@ test.describe("Admin Panel", () => {
     });
 
     await page.goto("/admin/roles");
-    await expect(page.getByTestId("admin-permissions-list")).toContainText("todo:update");
+    await expect(page.getByTestId("admin-permissions-todo-update")).toBeVisible();
     await page.getByTestId("admin-roles-add-button").click();
     await page.getByTestId("admin-role-name").fill(roleName);
     await page.getByTestId("admin-role-display-name").fill("E2E Role Editor");
@@ -130,12 +132,16 @@ test.describe("Admin Panel", () => {
     await saveButton.click();
 
     const roleItem = page.getByTestId(`admin-roles-item-${roleName}`);
-    await expect(roleItem).toContainText("todo:read");
+    await expect(
+      roleItem.getByTestId(`admin-roles-item-${roleName}-permission-todo-read`)
+    ).toBeVisible();
     await page.getByTestId(`admin-roles-edit-${roleName}`).click();
     await permissionControl(page, "todo", "update").click();
     await saveButton.scrollIntoViewIfNeeded();
     await saveButton.click();
-    await expect(roleItem).toContainText("todo:update");
+    await expect(
+      roleItem.getByTestId(`admin-roles-item-${roleName}-permission-todo-update`)
+    ).toBeVisible();
 
     await request.delete(`${API_URL}/rbac/roles/${roleName}`, {
       headers: {authorization: `Bearer ${token}`},

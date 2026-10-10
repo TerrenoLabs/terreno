@@ -45,6 +45,128 @@ const STANDARD_ACCESS_OPTIONS = [
 const ADMIN_PAGE_RESOURCE = "admin";
 const ADMIN_PAGE_ACTION = "access";
 
+// Actions that only expose data; everything not listed here or in DELETE_ACTIONS mutates data.
+const READ_ACTIONS = new Set(["access", "list", "read"]);
+const DELETE_ACTIONS = new Set(["delete", "destroy", "remove"]);
+
+type PermissionKind = "read" | "write" | "delete";
+
+const PERMISSION_KIND_ORDER: Record<PermissionKind, number> = {delete: 2, read: 0, write: 1};
+
+const PERMISSION_KIND_STATUS: Record<PermissionKind, "success" | "warning" | "error"> = {
+  delete: "error",
+  read: "success",
+  write: "warning",
+};
+
+const permissionKind = (action: string): PermissionKind => {
+  if (READ_ACTIONS.has(action) || action.startsWith("view")) {
+    return "read";
+  }
+  if (DELETE_ACTIONS.has(action)) {
+    return "delete";
+  }
+  return "write";
+};
+
+const sortActionsByKind = (actions: readonly string[]): string[] => {
+  return [...actions].sort(
+    (a, b) =>
+      PERMISSION_KIND_ORDER[permissionKind(a)] - PERMISSION_KIND_ORDER[permissionKind(b)] ||
+      a.localeCompare(b)
+  );
+};
+
+// Actions modelRouter generates (CRUD) or the admin model access selector grants. Every other
+// action was declared by the app or a plugin, so it is listed separately as a custom permission.
+const MODEL_ROUTER_ACTIONS = new Set([
+  "create",
+  "delete",
+  "list",
+  "read",
+  "update",
+  "write",
+  "writeOwned",
+]);
+
+type PermissionGroupKey = "custom" | "model";
+
+const PERMISSION_GROUPS: readonly {key: PermissionGroupKey; label: string}[] = [
+  {key: "custom", label: "Custom permissions"},
+  {key: "model", label: "Model permissions"},
+];
+
+const groupPermissions = (
+  permissions: Record<string, readonly string[]>
+): Record<PermissionGroupKey, [string, string[]][]> => {
+  const grouped: Record<PermissionGroupKey, [string, string[]][]> = {custom: [], model: []};
+  const resources = Object.keys(permissions).sort((a, b) => a.localeCompare(b));
+  for (const resource of resources) {
+    const actions = permissions[resource] ?? [];
+    const customActions = actions.filter((action) => !MODEL_ROUTER_ACTIONS.has(action));
+    const modelActions = actions.filter((action) => MODEL_ROUTER_ACTIONS.has(action));
+    if (customActions.length > 0) {
+      grouped.custom.push([resource, customActions]);
+    }
+    if (modelActions.length > 0) {
+      grouped.model.push([resource, modelActions]);
+    }
+  }
+  return grouped;
+};
+
+/**
+ * Custom permissions first, then model permissions. Each group has one row per resource with
+ * color-coded action badges (read green, write amber, delete red).
+ */
+const PermissionRows: React.FC<{
+  permissions: Record<string, readonly string[]>;
+  testIDPrefix: string;
+}> = ({permissions, testIDPrefix}) => {
+  const grouped = groupPermissions(permissions);
+  const groups = PERMISSION_GROUPS.filter((group) => grouped[group.key].length > 0);
+  if (groups.length === 0) {
+    return null;
+  }
+  return (
+    <Box gap={3}>
+      {groups.map((group) => (
+        <Box gap={1} key={group.key} testID={`${testIDPrefix}-${group.key}`}>
+          <Text color="secondaryDark" size="sm">
+            {group.label}
+          </Text>
+          {grouped[group.key].map(([resource, actions]) => (
+            <Box
+              alignItems="center"
+              direction="row"
+              gap={2}
+              key={resource}
+              testID={`${testIDPrefix}-${group.key}-${resource}`}
+              wrap
+            >
+              <Box minWidth={240}>
+                <Text bold size="sm">
+                  {resource}
+                </Text>
+              </Box>
+              <Box direction="row" gap={1} wrap>
+                {sortActionsByKind(actions).map((action) => (
+                  <Badge
+                    key={action}
+                    status={PERMISSION_KIND_STATUS[permissionKind(action)]}
+                    testID={`${testIDPrefix}-${resource}-${action}`}
+                    value={action}
+                  />
+                ))}
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      ))}
+    </Box>
+  );
+};
+
 const editorActionsForResource = ({
   actions,
   hasStandardAccess,
@@ -280,13 +402,10 @@ export const AdminRolesList: React.FC<AdminScreenProps> = ({api, apiBase, baseUr
                   {role.name}
                 </Text>
                 {role.description ? <Text size="sm">{role.description}</Text> : null}
-                <Box direction="row" gap={1} wrap>
-                  {Object.entries(role.permissions ?? {}).flatMap(([resource, actions]) =>
-                    actions.map((action) => (
-                      <Badge key={`${resource}:${action}`} value={`${resource}:${action}`} />
-                    ))
-                  )}
-                </Box>
+                <PermissionRows
+                  permissions={role.permissions ?? {}}
+                  testIDPrefix={`admin-roles-item-${role.name}-permission`}
+                />
               </Box>
             ))
           )}
@@ -295,18 +414,9 @@ export const AdminRolesList: React.FC<AdminScreenProps> = ({api, apiBase, baseUr
             <Heading size="md">Available permissions</Heading>
             {areStatementsLoading ? <Spinner /> : null}
             {statementsError ? <Text color="error">Failed to load permissions.</Text> : null}
-            {!areStatementsLoading && !statementsError
-              ? resources.map((resource) => (
-                  <Box gap={1} key={resource}>
-                    <Text bold>{resource}</Text>
-                    <Box direction="row" gap={1} wrap>
-                      {statements[resource].map((action) => (
-                        <Badge key={`${resource}:${action}`} value={`${resource}:${action}`} />
-                      ))}
-                    </Box>
-                  </Box>
-                ))
-              : null}
+            {!areStatementsLoading && !statementsError ? (
+              <PermissionRows permissions={statements} testIDPrefix="admin-permissions" />
+            ) : null}
           </Box>
         </Box>
       </Box>

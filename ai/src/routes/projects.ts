@@ -9,7 +9,7 @@ import {
 import type express from "express";
 import type mongoose from "mongoose";
 
-import {Project} from "../models/project";
+import {getProjectModel} from "../models/project";
 import type {ProjectDocument} from "../types";
 
 export const addProjectRoutes = (
@@ -41,7 +41,7 @@ export const addProjectRoutes = (
         throw new APIError({status: 400, title: "text is required"});
       }
 
-      const project = await Project.findById(id);
+      const project = await getProjectModel().findById(id);
       if (!project) {
         throw new APIError({status: 404, title: "Project not found"});
       }
@@ -73,7 +73,7 @@ export const addProjectRoutes = (
       const {id, memoryId} = req.params;
       const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id;
 
-      const project = await Project.findById(id);
+      const project = await getProjectModel().findById(id);
       if (!project) {
         throw new APIError({status: 404, title: "Project not found"});
       }
@@ -95,7 +95,7 @@ export const addProjectRoutes = (
 
   router.use(
     "/gpt/projects",
-    modelRouter(Project, {
+    modelRouter(getProjectModel(), {
       ...options?.openApiOptions,
       permissions: {
         create: [Permissions.IsAuthenticated],

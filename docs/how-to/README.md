@@ -53,6 +53,8 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Add a GPT chat mascot](add-gpt-chat-mascot.md) — Optional consumer-owned character on empty `GPTChat`
 - [Add agent asks to a chat](agent-ui-asks.md) — Turn on `asks`, show and answer them in `GPTChat`, try the keyless demo agent, and answer asks from an Apple Watch or another small client
 - [Validate a block document locally](agent-ui-blocks.md) — `terreno-blocks validate` for a whole-reply YAML document
+- [Add a stepper callback](agent-ui-blocks.md#add-a-stepper-callback) — `scaleStepperHostAction` or your own `handles: "stepper"` action; checklist ticks, copy buttons, the `richBlocks: false` opt-out, and the `blocks:smoke` model check are on the same page
+- [Give the agent photos](agent-ui-blocks.md#give-the-agent-photos) — Generate a stored photo library once and let the agent cite it with `findPhotos`
 
 ## Admin
 

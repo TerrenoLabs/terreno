@@ -1,8 +1,9 @@
 import React, {lazy, Suspense, useCallback, useEffect, useMemo} from "react";
-import {Linking, Platform} from "react-native";
+import {Linking, Platform, ScrollView} from "react-native";
 import type Markdown from "react-native-markdown-display";
 import {FitImage, renderRules} from "react-native-markdown-display";
 
+import {Box} from "./Box";
 import {MarkdownEmbed} from "./MarkdownEmbed";
 import {isEmbeddableMediaUrl, toMediaEmbedUrl} from "./markdownEmbeds";
 import {Spinner} from "./Spinner";
@@ -25,6 +26,9 @@ const MARKDOWN_SIZES = {
 const MONO_FONT = IS_WEB ? "monospace" : Platform.select({android: "monospace", ios: "Menlo"});
 const TEXT_FONT_SIZE = IS_WEB ? 16 : 14;
 const TEXT_LINE_HEIGHT = IS_WEB ? 24 : 20;
+// Keeps columns readable; past this width per column the table scrolls sideways.
+const TABLE_MIN_COLUMN_WIDTH = 96;
+const TABLE_SCROLL_CONTENT_STYLE = {minWidth: "100%"} as const;
 
 interface MarkdownViewProps {
   children: React.ReactNode;
@@ -47,6 +51,18 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
   const textColor = inverted ? theme.text.inverted : theme.text.primary;
   const markdownStyle = useMemo<React.ComponentProps<typeof Markdown>["style"]>(() => {
     const color = {color: textColor};
+    const tableCellStyle = {
+      borderBottomWidth: 1,
+      borderColor: theme.border.default,
+      borderRightWidth: 1,
+      // Replaces the library's `flex: 1` so cells keep a minimum width in the scroll view.
+      flex: undefined,
+      flexBasis: 0,
+      flexGrow: 1,
+      flexShrink: 0,
+      minWidth: TABLE_MIN_COLUMN_WIDTH,
+      padding: 8,
+    };
     const markdownTextStyle = {
       fontFamily: "text-regular",
       fontSize: TEXT_FONT_SIZE,
@@ -146,10 +162,26 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
         ...markdownTextStyle,
       },
       paragraph: {flexShrink: 1, width: "100%", ...markdownTextStyle},
+      // Grid borders: the table draws top/left, every cell draws right/bottom.
+      table: {
+        borderColor: theme.border.default,
+        borderLeftWidth: 1,
+        borderRadius: 0,
+        borderTopWidth: 1,
+        borderWidth: 0,
+        flexGrow: 1,
+      },
+      td: {...tableCellStyle, fontFamily: "text-regular"},
       text: color,
       textgroup: {flexShrink: 1, minWidth: 0},
+      th: {
+        ...tableCellStyle,
+        backgroundColor: theme.surface.secondaryLight,
+        fontFamily: "text-bold",
+      },
+      tr: {borderBottomWidth: 0, borderColor: theme.border.default, flexDirection: "row"},
     };
-  }, [textColor, theme.border.default, theme.surface.neutralLight]);
+  }, [textColor, theme.border.default, theme.surface.neutralLight, theme.surface.secondaryLight]);
 
   const handleLinkPress = useCallback((url: string): boolean => {
     void Linking.openURL(url);
@@ -191,6 +223,42 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
         }
         return renderRules.link?.(node, children, parent, styles, onLinkPress);
       },
+      // Tables wider than their container scroll sideways instead of squeezing columns. The
+      // wrapper stays a ScrollView: Box `scroll` fixes its contentContainerStyle and puts the
+      // testID on the inner view, so it cannot give the content `minWidth: 100%`.
+      table: (node, children, _parent, styles) => (
+        <ScrollView
+          contentContainerStyle={TABLE_SCROLL_CONTENT_STYLE}
+          horizontal
+          key={node.key}
+          testID="markdown-table-scroll"
+        >
+          <Box
+            dangerouslySetInlineStyle={{__style: styles._VIEW_SAFE_table}}
+            testID="markdown-table"
+          >
+            {children}
+          </Box>
+        </ScrollView>
+      ),
+      td: (node, children, parent, styles) => (
+        <Box
+          dangerouslySetInlineStyle={{__style: styles._VIEW_SAFE_td}}
+          key={node.key}
+          testID={`markdown-table-cell-${parent[0]?.index ?? 0}-${node.index}`}
+        >
+          {children}
+        </Box>
+      ),
+      th: (node, children, _parent, styles) => (
+        <Box
+          dangerouslySetInlineStyle={{__style: styles._VIEW_SAFE_th}}
+          key={node.key}
+          testID={`markdown-table-header-${node.index}`}
+        >
+          {children}
+        </Box>
+      ),
     };
   }, []);
 

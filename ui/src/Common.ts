@@ -674,7 +674,24 @@ export interface AccessibilityProps {
   accessibilityRole?: string;
 }
 
+/** Checked and disabled state a `Box` reports to screen readers. */
+export interface BoxAccessibilityState {
+  checked?: boolean;
+  disabled?: boolean;
+}
+
 export interface BoxPropsBase extends WithTestID {
+  /**
+   * Checked and disabled state for screen readers, sent as `accessibilityState` and as
+   * `aria-checked` / `aria-disabled`. On a clickable Box, `disabled: true` also stops presses.
+   */
+  accessibilityState?: BoxAccessibilityState;
+  /**
+   * Makes a non-clickable Box a live region, sent as `aria-live`: screen readers announce
+   * changes to its contents (`polite` waits for a pause). It works on web and Android;
+   * VoiceOver on iOS does not announce React Native live regions.
+   */
+  accessibilityLiveRegion?: "polite" | "assertive";
   alignContent?: AlignContent;
   alignItems?: AlignItems;
   alignSelf?: AlignSelf;
@@ -918,7 +935,8 @@ export interface SegmentedControlBadgeConfig {
 export interface SegmentedControlProps extends WithTestID {
   testIDs?: SegmentedControlTestIDs;
   items: string[];
-  size?: "md" | "lg"; // default "md"
+  /** `sm` is 28px and hugs its labels. `md` (default, 36px) and `lg` (44px) stretch. */
+  size?: "sm" | "md" | "lg";
   onChange: (activeIndex: number) => void;
   selectedIndex?: number;
   maxItems?: number;
@@ -1280,6 +1298,13 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
    * When omitted, that button is not rendered.
    */
   narrowViewportListButtonLabel?: string;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Border radius applied to each desktop detail child pane. The list column is excluded.
+   * The pane clips to this radius; the column ScrollView inside it does not, so the column
+   * still scrolls. Uses the same rounding scale as `Box` (`md` is 4px). Defaults to `md`.
+   */
+  childColumnRounding?: Rounding;
 }
 
 export type PermissionKind =
@@ -2016,7 +2041,10 @@ export interface BlocksViewProps extends WithTestID {
   hostActions?: readonly string[];
   /** Hostnames allowed on https image sources. Empty rejects every https image. */
   imageHosts?: readonly string[];
-  /** Called for reply, open, select, and callback. Select also updates the target chart locally. */
+  /**
+   * Called for reply, open, select, and callback. Select also updates the target chart locally.
+   * A copy button writes the clipboard itself and never calls this.
+   */
   onAction?: (event: {action: BlockAction; blockId: string; elementId: string}) => void;
   /** Block ids replaced in place. The key is the original block id. */
   overrides?: Record<string, Block>;

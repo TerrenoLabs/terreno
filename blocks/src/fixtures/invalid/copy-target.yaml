@@ -1,0 +1,14 @@
+v: 1
+blocks:
+  - type: heading
+    id: title
+    text: Sunday roast
+  - type: actions
+    id: copy_actions
+    elements:
+      - type: button
+        id: copy_title
+        text: Copy
+        action:
+          kind: copy
+          target: title

@@ -147,6 +147,34 @@ resource "google_secret_manager_secret_iam_member" "backend_runtime_legacy_refre
   member    = "serviceAccount:${google_service_account.backend_runtime.email}"
 }
 
+# Uploads for the example app's Documents tab (DocumentStorageApp). Anyone can sign up
+# for the public demo, so objects are private, rate limited in the API, and expire.
+resource "google_storage_bucket" "example_documents" {
+  project                     = var.project_id
+  name                        = "${var.project_id}-example-documents"
+  location                    = upper(var.backend_region)
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  labels                      = local.common_labels
+
+  lifecycle_rule {
+    condition {
+      age = 30
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  depends_on = [module.bootstrap]
+}
+
+resource "google_storage_bucket_iam_member" "backend_runtime_example_documents" {
+  bucket = google_storage_bucket.example_documents.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.backend_runtime.email}"
+}
+
 module "backend_secret_mongodb_uri" {
   source = "./modules/secret"
 

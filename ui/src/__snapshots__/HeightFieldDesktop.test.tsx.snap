@@ -44,7 +44,7 @@ exports[`HeightField (desktop/web path) snapshots matches snapshot with default 
                 "style": {
                   "alignItems": "center",
                   "backgroundColor": "#FFFFFF",
-                  "borderColor": "#9A9A9A",
+                  "borderColor": "#949494",
                   "borderRadius": 4,
                   "borderWidth": 1,
                   "flexDirection": "row",
@@ -130,7 +130,7 @@ exports[`HeightField (desktop/web path) snapshots matches snapshot with default 
                 "style": {
                   "alignItems": "center",
                   "backgroundColor": "#FFFFFF",
-                  "borderColor": "#9A9A9A",
+                  "borderColor": "#949494",
                   "borderRadius": 4,
                   "borderWidth": 1,
                   "flexDirection": "row",
@@ -248,7 +248,7 @@ exports[`HeightField (desktop/web path) snapshots matches snapshot with value 1`
                 "style": {
                   "alignItems": "center",
                   "backgroundColor": "#FFFFFF",
-                  "borderColor": "#9A9A9A",
+                  "borderColor": "#949494",
                   "borderRadius": 4,
                   "borderWidth": 1,
                   "flexDirection": "row",
@@ -334,7 +334,7 @@ exports[`HeightField (desktop/web path) snapshots matches snapshot with value 1`
                 "style": {
                   "alignItems": "center",
                   "backgroundColor": "#FFFFFF",
-                  "borderColor": "#9A9A9A",
+                  "borderColor": "#949494",
                   "borderRadius": 4,
                   "borderWidth": 1,
                   "flexDirection": "row",

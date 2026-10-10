@@ -50,6 +50,7 @@
   "private": true,
   "scripts": {
     "announcements:pack": "bun run src/scripts/announcement-pack.ts",
+    "blocks:smoke": "bun run src/scripts/blocksSmoke.ts",
     "build": "bun build src/index.ts --outdir ./dist --target bun --packages external",
     "compile": "tsc",
     "compile:watch": "tsc -w",
@@ -62,6 +63,7 @@
     "migrate:check": "bun ../api/src/migrations/cli.ts check --dir ./migrations",
     "migrate:status": "bun ../api/src/migrations/cli.ts status --dir ./migrations",
     "migrate:up": "bun ../api/src/migrations/cli.ts up --dir ./migrations",
+    "photos:generate": "bun run src/scripts/generatePhotoLibrary.ts",
     "script": "bun run src/scripts/runAdminScript.ts",
     "seed": "bun run src/scripts/seed-test-data.ts",
     "start": "bun run src/index.ts",

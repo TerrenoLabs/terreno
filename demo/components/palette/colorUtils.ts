@@ -37,8 +37,8 @@ export const SHADE_KEYS = [
   "900",
 ] as const;
 
-/** The 3 shade steps used by the status families (error/warning/success). */
-export const STATUS_SHADE_KEYS = ["000", "100", "200"] as const;
+/** Shade steps for status families. 050 is the dark-mode error, success, and warning surface. */
+export const STATUS_SHADE_KEYS = ["000", "050", "100", "200"] as const;
 
 /** @internal */
 export type ShadeKey = (typeof SHADE_KEYS)[number];
@@ -47,7 +47,7 @@ export type StatusShadeKey = (typeof STATUS_SHADE_KEYS)[number];
 
 /** The four main tonal families the generator produces full 000-900 ramps for. */
 export const MAIN_FAMILIES = ["neutral", "primary", "secondary", "accent"] as const;
-/** Status families use a compact 000/100/200 ramp. */
+/** Status families use a compact 000/050/100/200 ramp. */
 export const STATUS_FAMILIES = ["error", "warning", "success"] as const;
 
 export type MainFamily = (typeof MAIN_FAMILIES)[number];
@@ -74,6 +74,7 @@ const SHADE_BLEND: Record<Exclude<ShadeKey, "500">, number> = {
 /** Blend factors for the compact status ramp; the anchor is kept verbatim at 100. */
 const STATUS_BLEND: Record<StatusShadeKey, number> = {
   "000": 0.82,
+  "050": 0.55,
   "100": 0,
   "200": -0.28,
 };
@@ -243,7 +244,7 @@ export const generateColorScale = (anchorHex: string): Record<ShadeKey, string> 
   return result;
 };
 
-/** Generate the compact 000/100/200 ramp for a status family from an anchor color. */
+/** Generate the compact 000/050/100/200 ramp for a status family from an anchor color. */
 /** @internal */
 export const generateStatusScale = (anchorHex: string): Record<StatusShadeKey, string> => {
   const anchorHsl = hexToHsl(anchorHex);

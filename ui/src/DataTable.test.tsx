@@ -297,6 +297,27 @@ describe("DataTable", () => {
     expect(toJSON()).toBeTruthy();
   });
 
+  it("uses inverted text on low-contrast highlights for text, number, and date cells", () => {
+    const highlightColumns = [
+      {columnType: "text", title: "Name", width: 150},
+      {columnType: "number", title: "Count", width: 100},
+      {columnType: "date", title: "Due", width: 150},
+    ];
+    const highlightData = [
+      [
+        {highlight: "error", value: "Overdue"},
+        {highlight: "error", value: 42},
+        {highlight: "error", value: "2024-01-15"},
+      ],
+    ];
+    const {getByText} = renderWithTheme(
+      <DataTable columns={highlightColumns} data={highlightData} />
+    );
+    for (const label of ["Overdue", "42", "Jan 15, 2024"]) {
+      expect(StyleSheet.flatten(getByText(label).props.style).color).toBe("#FFFFFF");
+    }
+  });
+
   it("renders with moreContentExtraData", () => {
     const MoreContent: MoreContentComponent = ({rowIndex, extraInfo}) => (
       <Text>

@@ -3,7 +3,7 @@ import {useFonts} from "expo-font";
 import {Stack, useRouter, useSegments} from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, {type FC, type ReactNode, useCallback, useEffect, useState} from "react";
-import {Platform} from "react-native";
+import {Platform, StatusBar} from "react-native";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 import "react-native-reanimated";
 import {OpenFeatureProvider} from "@openfeature/react-sdk";
@@ -27,15 +27,16 @@ import {
   ConflictSheet,
   ConsentNavigator,
   Spinner,
-  TerrenoProvider,
   Text,
   UpgradeRequiredScreen,
+  useTheme,
 } from "@terreno/ui";
 import {Provider, useSelector} from "react-redux";
 import {PersistGate} from "redux-persist/integration/react";
 import {SyncConflictsProvider} from "@/components/SyncConflictsController";
 import {SyncHealthToast} from "@/components/SyncHealthToast";
 import {SyncLabRuntime} from "@/components/SyncLabRuntime";
+import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
 import {getSessionToken} from "@/lib/betterAuth";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
@@ -121,12 +122,6 @@ const RootLayout = (): React.ReactElement | null => {
     }
   }, [error]);
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
   if (!loaded) {
     return null;
   }
@@ -135,16 +130,33 @@ const RootLayout = (): React.ReactElement | null => {
     <GestureHandlerRootView style={{flex: 1}}>
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
-          <TerrenoProvider openAPISpecUrl={`${baseUrl}/openapi.json`}>
+          <AppThemeProvider openAPISpecUrl={`${baseUrl}/openapi.json`}>
             <RootLayoutNav />
-          </TerrenoProvider>
+          </AppThemeProvider>
         </PersistGate>
       </Provider>
     </GestureHandlerRootView>
   );
 };
 
+const ThemedStatusBar: FC = () => {
+  const {colorScheme, theme} = useTheme();
+  return (
+    <StatusBar
+      backgroundColor={theme.surface.base}
+      barStyle={colorScheme === "dark" ? "light-content" : "dark-content"}
+    />
+  );
+};
+
 const RootLayoutNav = (): React.ReactElement => {
+  const {theme} = useTheme();
+
+  // AppThemeProvider withholds this tree until the stored theme resolves, so the
+  // splash stays up through that wait instead of uncovering a blank, wrong-scheme frame.
+  useEffect(() => {
+    void SplashScreen.hideAsync();
+  }, []);
   const userId = useSelector(selectBetterAuthUserId) ?? undefined;
   // The initial syncBetterAuthSession() call below is async (it awaits
   // authClient.getSession()), so userId is undefined for one or more render
@@ -274,6 +286,7 @@ const RootLayoutNav = (): React.ReactElement => {
   if (isAuthLoading || (Boolean(userId) && isProfileLoading)) {
     return (
       <Box alignItems="center" flex="grow" justifyContent="center" testID="app-auth-loading">
+        <ThemedStatusBar />
         <Spinner />
       </Box>
     );
@@ -281,13 +294,16 @@ const RootLayoutNav = (): React.ReactElement => {
 
   if (isRequired) {
     return (
-      <UpgradeRequiredScreen
-        canUpdate={canUpdate}
-        message={
-          requiredMessage ?? "This version is no longer supported. Please update to continue."
-        }
-        onUpdate={onUpdate}
-      />
+      <>
+        <ThemedStatusBar />
+        <UpgradeRequiredScreen
+          canUpdate={canUpdate}
+          message={
+            requiredMessage ?? "This version is no longer supported. Please update to continue."
+          }
+          onUpdate={onUpdate}
+        />
+      </>
     );
   }
 
@@ -303,7 +319,12 @@ const RootLayoutNav = (): React.ReactElement => {
   ) : null;
 
   const stack = (
-    <Stack screenOptions={{headerShown: false}}>
+    <Stack
+      screenOptions={{
+        contentStyle: {backgroundColor: theme.surface.base},
+        headerShown: false,
+      }}
+    >
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="admin" />
       <Stack.Screen name="login" />
@@ -406,7 +427,12 @@ const RootLayoutNav = (): React.ReactElement => {
       profileLoaded: !!profile,
       userId,
     });
-    return <ConsentNavigator api={terrenoApi}>{announcementWrapped}</ConsentNavigator>;
+    return (
+      <>
+        <ThemedStatusBar />
+        <ConsentNavigator api={terrenoApi}>{announcementWrapped}</ConsentNavigator>
+      </>
+    );
   }
 
   console.debug("[RootLayout] Skipping ConsentNavigator", {
@@ -414,7 +440,12 @@ const RootLayoutNav = (): React.ReactElement => {
     profileLoaded: !!profile,
     userId: userId ?? "none",
   });
-  return announcementWrapped;
+  return (
+    <>
+      <ThemedStatusBar />
+      {announcementWrapped}
+    </>
+  );
 };
 
 export default RootLayout;

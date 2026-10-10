@@ -1,13 +1,18 @@
-import {BooleanField, Box, IconButton, Modal, SelectField, Text} from "@terreno/ui";
+import {
+  BooleanField,
+  Box,
+  IconButton,
+  Modal,
+  SelectField,
+  Text,
+  themeColorSchemeOptions,
+} from "@terreno/ui";
 import type React from "react";
 import {useCallback, useState} from "react";
 import {useWindowDimensions} from "react-native";
 import type {DemoPreviewState} from "../previewState";
 
-const THEME_OPTIONS = [
-  {label: "Light", value: "light"},
-  {label: "Dark", value: "dark"},
-];
+const THEME_OPTIONS = themeColorSchemeOptions;
 const VIEWPORT_OPTIONS = [
   {label: "Full width", value: "full"},
   {label: "320px", value: "320"},
@@ -60,7 +65,7 @@ export const DemoPreviewBar: React.FC<{
 
   const quickSelects = (
     <>
-      <Box width={isCompact ? "100%" : 110}>
+      <Box width={isCompact ? "100%" : 168}>
         <SelectField
           disableSearch
           onChange={(theme): void => {

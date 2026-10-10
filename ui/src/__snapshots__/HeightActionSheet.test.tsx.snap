@@ -155,7 +155,7 @@ exports[`HeightActionSheet renders correctly 1`] = `
                                                   ],
                                                   "props": {
                                                     "style": {
-                                                      "color": "#FFFFFF",
+                                                      "color": "#092E3A",
                                                       "fontSize": 16,
                                                       "fontWeight": "700",
                                                     },
@@ -846,7 +846,7 @@ exports[`HeightActionSheet renders with different height value 1`] = `
                                                   ],
                                                   "props": {
                                                     "style": {
-                                                      "color": "#FFFFFF",
+                                                      "color": "#092E3A",
                                                       "fontSize": 16,
                                                       "fontWeight": "700",
                                                     },

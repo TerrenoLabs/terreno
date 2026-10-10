@@ -83,9 +83,14 @@ describe("generateColorScale", () => {
 });
 
 describe("generateStatusScale", () => {
-  it("produces the compact 3-step ramp", () => {
+  it("produces the compact ramp, including the dark-mode 050 step", () => {
     const scale = generateStatusScale("#d33232");
     expect(Object.keys(scale).sort()).toEqual([...STATUS_SHADE_KEYS].sort());
+    expect(scale["050"]).toBeDefined();
+    const luminances = STATUS_SHADE_KEYS.map((shade) => relativeLuminance(scale[shade]));
+    for (let i = 1; i < luminances.length; i += 1) {
+      expect(luminances[i]).toBeLessThanOrEqual(luminances[i - 1] + 0.0001);
+    }
   });
 });
 
@@ -108,8 +113,11 @@ describe("generatePrimitivesFromAnchors", () => {
     expect(primitives.error100).toBeDefined();
     expect(primitives.warning200).toBeDefined();
     expect(primitives.success000).toBeDefined();
-    // 4 families * 11 shades + 3 status families * 3 shades = 53 keys
-    expect(Object.keys(primitives).length).toBe(53);
+    expect(primitives.error050).toBeDefined();
+    expect(primitives.success050).toBeDefined();
+    expect(primitives.warning050).toBeDefined();
+    // 4 families * 11 shades + 3 status families * 4 shades = 56 keys
+    expect(Object.keys(primitives).length).toBe(56);
   });
 });
 

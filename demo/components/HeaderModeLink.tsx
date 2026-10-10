@@ -2,6 +2,8 @@ import {Box, isNarrowViewport, Text} from "@terreno/ui";
 import {router, useGlobalSearchParams} from "expo-router";
 import type React from "react";
 
+import {activePreviewParams} from "../previewState";
+
 interface HeaderModeLinkProps {
   target: "demo" | "dev";
 }
@@ -13,8 +15,8 @@ const MODE_LABELS: Record<HeaderModeLinkProps["target"], string> = {
 
 /** Header link that switches between the demo catalog and the dev story browser. */
 export const HeaderModeLink: React.FC<HeaderModeLinkProps> = ({target}) => {
-  const {theme} = useGlobalSearchParams<{theme?: string | string[]}>();
-  const selectedTheme = Array.isArray(theme) ? theme[0] : theme;
+  const searchParams = useGlobalSearchParams();
+  const previewParams = activePreviewParams(searchParams);
 
   return (
     <Box
@@ -26,7 +28,7 @@ export const HeaderModeLink: React.FC<HeaderModeLinkProps> = ({target}) => {
       marginRight={isNarrowViewport() ? 0 : 4}
       onClick={(): void => {
         router.navigate({
-          params: selectedTheme ? {theme: selectedTheme} : undefined,
+          params: Object.keys(previewParams).length > 0 ? previewParams : undefined,
           pathname: `/${target}`,
         });
       }}

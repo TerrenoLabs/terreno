@@ -62,17 +62,23 @@ const DATA_TABLE_MAX_TO_RENDER_PER_BATCH = 10;
 const DATA_TABLE_WINDOW_SIZE = 5;
 const DATA_TABLE_VERTICAL_SCROLL_SYNC_RELEASE_MS = 50;
 
+/** Inverted text when primary text falls below WCAG AA on the cell's highlight fill. */
+const useHighlightTextColor = (cellData: DataTableCellData): "inverted" | undefined => {
+  const {theme} = useTheme();
+  const highlightColor = cellData.highlight ? theme.surface[cellData.highlight] : undefined;
+  if (!highlightColor) {
+    return undefined;
+  }
+  return readableTextColor(theme.text.primary, theme.text.inverted, highlightColor) === "inverted"
+    ? "inverted"
+    : undefined;
+};
+
 const TextCell: FC<{
   cellData: DataTableCellData;
   column: DataTableColumn;
 }> = ({cellData}) => {
-  const {theme} = useTheme();
-  const highlightColor = cellData.highlight ? theme.surface[cellData.highlight] : undefined;
-  const textColor =
-    highlightColor &&
-    readableTextColor(theme.text.primary, theme.text.inverted, highlightColor) === "inverted"
-      ? "inverted"
-      : undefined;
+  const textColor = useHighlightTextColor(cellData);
 
   return (
     <Box flex="grow" justifyContent="center">
@@ -87,9 +93,11 @@ const NumberCell: FC<{
   cellData: DataTableCellData;
   column: DataTableColumn;
 }> = ({cellData}) => {
+  const textColor = useHighlightTextColor(cellData);
+
   return (
     <Box flex="grow" justifyContent="center" width="100%">
-      <Text align="right" size={cellData.textSize || "md"}>
+      <Text align="right" color={textColor} size={cellData.textSize || "md"}>
         {String(cellData.value ?? "")}
       </Text>
     </Box>
@@ -117,9 +125,13 @@ const DateCell: FC<{
   cellData: DataTableCellData;
   column: DataTableColumn;
 }> = ({cellData}) => {
+  const textColor = useHighlightTextColor(cellData);
+
   return (
     <Box flex="grow" justifyContent="center">
-      <Text size={cellData.textSize || "md"}>{formatDataTableDate(cellData.value)}</Text>
+      <Text color={textColor} size={cellData.textSize || "md"}>
+        {formatDataTableDate(cellData.value)}
+      </Text>
     </Box>
   );
 };

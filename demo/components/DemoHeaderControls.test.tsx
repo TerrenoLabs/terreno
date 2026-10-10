@@ -1,6 +1,6 @@
 import {afterEach, describe, it} from "bun:test";
 import {SelectField} from "@terreno/ui";
-import {act} from "@testing-library/react-native";
+import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import {router, useGlobalSearchParams} from "expo-router";
 import type {ScaledSize} from "react-native";
@@ -22,6 +22,8 @@ interface SetParamsMock {
   mockClear: () => void;
 }
 
+type NavigateMock = SetParamsMock;
+
 const setWindowWidth = (width: number): void => {
   (useWindowDimensions as MockableUseWindowDimensions).mockImplementation?.(() => ({
     fontScale: 1,
@@ -33,12 +35,14 @@ const setWindowWidth = (width: number): void => {
 
 const searchParams = useGlobalSearchParams as unknown as SearchParamsMock;
 const setParams = router.setParams as unknown as SetParamsMock;
+const navigate = router.navigate as unknown as NavigateMock;
 
 describe("DemoHeaderControls", () => {
   afterEach(() => {
     setWindowWidth(375);
     searchParams.mockImplementation(() => ({}));
     setParams.mockClear();
+    navigate.mockClear();
   });
 
   it("keeps the theme switcher in the nav header", () => {
@@ -74,6 +78,26 @@ describe("DemoHeaderControls", () => {
       rtl: "",
       theme: "dark",
       viewport: "",
+    });
+  });
+
+  it("keeps every active preview param when switching modes", async () => {
+    setWindowWidth(1400);
+    searchParams.mockImplementation(() => ({
+      locale: "es",
+      rtl: "1",
+      theme: "dark",
+      viewport: "375",
+    }));
+    const {getByTestId} = renderWithTheme(<DemoHeaderControls modeTarget="dev" />);
+
+    await act(async () => {
+      fireEvent.press(getByTestId("header-mode-dev-clickable"));
+    });
+
+    assert.deepEqual(navigate.mock.calls[0]?.[0], {
+      params: {locale: "es", rtl: "1", theme: "dark", viewport: "375"},
+      pathname: "/dev",
     });
   });
 });

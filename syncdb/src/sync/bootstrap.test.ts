@@ -1,9 +1,16 @@
 import {describe, expect, it} from "bun:test";
 
 import {createSyncStore, type SyncStore} from "../storage/store";
-import type {SyncSnapshotResponse} from "../types";
-import {type BootstrapProgress, bootstrapStream} from "./bootstrap";
-import {getCursor, markStreamBootstrapped, setCursor, setSnapshotCursor} from "./cursor";
+import type {SyncSnapshotBatchRequest, SyncSnapshotResponse} from "../types";
+import {type BootstrapProgress, bootstrapStream, bootstrapStreamsBatch} from "./bootstrap";
+import {
+  getCursor,
+  getSnapshotCursor,
+  isStreamBootstrapped,
+  markStreamBootstrapped,
+  setCursor,
+  setSnapshotCursor,
+} from "./cursor";
 import {applyDelta} from "./deltaApplier";
 import type {FetchSnapshotPageArgs} from "./httpChannel";
 
@@ -482,5 +489,204 @@ describe("bootstrapStream", () => {
     // fires if each upsert were its own transaction).
     expect(fireCount).toBe(2);
     expect(store.listEntities({collection: "todos"})).toHaveLength(5);
+  });
+});
+
+const NOTES_STREAM = "notes|owner:u1";
+
+/** Entities with seqs `from..to` (inclusive) for a snapshot page. */
+const entitiesFor = (from: number, to: number): SyncSnapshotResponse["entities"] =>
+  Array.from({length: to - from + 1}, (_unused, index) => ({
+    data: {title: `row ${from + index}`},
+    deleted: false,
+    id: `e${from + index}`,
+    seq: from + index,
+  }));
+
+/**
+ * Batch fetch stub: each stream's page comes from `pageFor(stream, cursor)`; every
+ * request is recorded along with the order of fetches relative to other events.
+ */
+const makeBatchFetch = (
+  pageFor: (args: {stream: string; cursor: number; legacyCursor?: string}) => SyncSnapshotResponse,
+  events: string[] = []
+): {
+  fetchSnapshotBatch: (
+    request: SyncSnapshotBatchRequest
+  ) => Promise<{pages: SyncSnapshotResponse[]}>;
+  requests: SyncSnapshotBatchRequest[];
+} => {
+  const requests: SyncSnapshotBatchRequest[] = [];
+  return {
+    fetchSnapshotBatch: async (request) => {
+      requests.push(request);
+      events.push(`fetch:${request.streams.map((item) => item.stream).join(",")}`);
+      return {pages: request.streams.map(pageFor)};
+    },
+    requests,
+  };
+};
+
+describe("bootstrapStreamsBatch", () => {
+  const streams = [
+    {collection: "todos", stream: STREAM},
+    {collection: "notes", stream: NOTES_STREAM},
+  ];
+
+  it("pages every stream to its head, re-requesting only streams with more", async () => {
+    const store = makeStore();
+    const {fetchSnapshotBatch, requests} = makeBatchFetch(({stream, cursor}) => {
+      if (stream === NOTES_STREAM) {
+        return page({cursor: 1, entities: entitiesFor(1, 1), stream});
+      }
+      return cursor === 0
+        ? page({cursor: 2, entities: entitiesFor(1, 2), frontierSeq: 3, hasMore: true})
+        : page({cursor: 3, entities: entitiesFor(3, 3)});
+    });
+
+    const completed = await bootstrapStreamsBatch({
+      fetchSnapshotBatch,
+      limit: 2000,
+      store,
+      streams,
+    });
+
+    expect(completed).toBe(true);
+    expect(requests).toEqual([
+      {
+        limit: 2000,
+        streams: [
+          {cursor: 0, legacyCursor: undefined, stream: STREAM},
+          {cursor: 0, legacyCursor: undefined, stream: NOTES_STREAM},
+        ],
+      },
+      {limit: 2000, streams: [{cursor: 2, legacyCursor: undefined, stream: STREAM}]},
+    ]);
+    expect(store.getEntity({collection: "todos", id: "e3"})?.stream).toBe(STREAM);
+    expect(store.getEntity({collection: "notes", id: "e1"})?.stream).toBe(NOTES_STREAM);
+    expect(getCursor({store, stream: STREAM})).toBe(3);
+    expect(getCursor({store, stream: NOTES_STREAM})).toBe(1);
+    expect(isStreamBootstrapped({store, stream: STREAM})).toBe(true);
+    expect(isStreamBootstrapped({store, stream: NOTES_STREAM})).toBe(true);
+  });
+
+  it("sends the next round before writing the current one", async () => {
+    const store = makeStore();
+    const events: string[] = [];
+    const {fetchSnapshotBatch} = makeBatchFetch(
+      ({cursor}) =>
+        cursor === 0
+          ? page({cursor: 1, entities: entitiesFor(1, 1), frontierSeq: 2, hasMore: true})
+          : page({cursor: 2, entities: entitiesFor(2, 2)}),
+      events
+    );
+
+    await bootstrapStreamsBatch({
+      fetchSnapshotBatch,
+      onProgress: (progress) => events.push(`write:${progress.cursor}`),
+      store,
+      streams: [{collection: "todos", stream: STREAM}],
+    });
+
+    expect(events).toEqual([`fetch:${STREAM}`, `fetch:${STREAM}`, "write:1", "write:2"]);
+  });
+
+  it("writes a large page in chunks, yielding between them, and advances the cursor last", async () => {
+    const store = makeStore();
+    const {fetchSnapshotBatch} = makeBatchFetch(() =>
+      page({cursor: 5, entities: entitiesFor(1, 5)})
+    );
+    let transactions = 0;
+    store.raw.addDidFinishTransactionListener(() => {
+      transactions += 1;
+    });
+    const cursorsAtYield: number[] = [];
+
+    await bootstrapStreamsBatch({
+      applyChunkSize: 2,
+      fetchSnapshotBatch,
+      store,
+      streams: [{collection: "todos", stream: STREAM}],
+      yieldToHost: async () => {
+        cursorsAtYield.push(getCursor({store, stream: STREAM}));
+      },
+    });
+
+    // Chunks of 2, 2, 1: two yields, and the cursor only moves in the final chunk.
+    expect(cursorsAtYield).toEqual([0, 0]);
+    expect(transactions).toBeGreaterThanOrEqual(3);
+    expect(getCursor({store, stream: STREAM})).toBe(5);
+    expect(getSnapshotCursor({store, stream: STREAM})).toBe(5);
+    expect(store.getEntity({collection: "todos", id: "e5"})?.seq).toBe(5);
+  });
+
+  it("stops without writing when superseded while a round was in flight", async () => {
+    const store = makeStore();
+    const {fetchSnapshotBatch} = makeBatchFetch(() =>
+      page({cursor: 1, entities: entitiesFor(1, 1)})
+    );
+
+    const completed = await bootstrapStreamsBatch({
+      fetchSnapshotBatch,
+      isSuperseded: () => true,
+      store,
+      streams: [{collection: "todos", stream: STREAM}],
+    });
+
+    expect(completed).toBe(false);
+    expect(store.getEntity({collection: "todos", id: "e1"})).toBeUndefined();
+    expect(getCursor({store, stream: STREAM})).toBe(0);
+  });
+
+  it("C7: purges a stream whose cursor fell below the retained floor and re-pages it from 0", async () => {
+    const store = makeStore();
+    seedBootstrappedStream({seq: 4, store});
+    store.upsertEntity({
+      collection: "todos",
+      data: {title: "stale"},
+      id: "gone",
+      seq: 2,
+      stream: STREAM,
+    });
+    const {fetchSnapshotBatch, requests} = makeBatchFetch(({cursor}) =>
+      cursor === 4
+        ? page({cursor: 9, entities: [], oldestRetainedSeq: 6})
+        : page({cursor: 9, entities: entitiesFor(9, 9), oldestRetainedSeq: 6})
+    );
+
+    await bootstrapStreamsBatch({
+      fetchSnapshotBatch,
+      store,
+      streams: [{collection: "todos", stream: STREAM}],
+    });
+
+    expect(requests.map((request) => request.streams[0]?.cursor)).toEqual([4, 0]);
+    expect(store.getEntity({collection: "todos", id: "gone"})).toBeUndefined();
+    expect(store.getEntity({collection: "todos", id: "e9"})?.seq).toBe(9);
+    expect(getCursor({store, stream: STREAM})).toBe(9);
+  });
+
+  it("rejects a response that leaves out a requested stream", async () => {
+    const store = makeStore();
+    await expect(
+      bootstrapStreamsBatch({
+        fetchSnapshotBatch: async () => ({pages: [page({cursor: 0})]}),
+        store,
+        streams,
+      })
+    ).rejects.toThrow(`missing stream ${NOTES_STREAM}`);
+  });
+
+  it("caps each request at the server's 500-stream limit", async () => {
+    const store = makeStore();
+    const many = Array.from({length: 501}, (_unused, index) => ({
+      collection: "todos",
+      stream: `todos|owner:u${index}`,
+    }));
+    const {fetchSnapshotBatch, requests} = makeBatchFetch(({stream}) => page({cursor: 0, stream}));
+
+    await bootstrapStreamsBatch({fetchSnapshotBatch, store, streams: many});
+
+    expect(requests.map((request) => request.streams.length)).toEqual([500, 1]);
   });
 });

@@ -1,4 +1,4 @@
-import type {MergeableContent, MergeableStore} from "tinybase";
+import type {ContentHashes, MergeableContent, MergeableStore} from "tinybase";
 import {createCustomPersister, type Persister, Persists} from "tinybase/persisters";
 
 import type {PayloadCodec} from "../crypto/types";
@@ -10,6 +10,9 @@ const RECORD_KEY = "content";
 
 /** Default trailing debounce applied to saves (autosave can fire per transaction). */
 const DEFAULT_SAVE_DEBOUNCE_MS = 500;
+
+const sameHashes = (a: ContentHashes, b: ContentHashes | undefined): boolean =>
+  b !== undefined && a[0] === b[0] && a[1] === b[1];
 
 interface PendingSave {
   promise: Promise<void>;
@@ -35,9 +38,10 @@ interface PendingSave {
  *
  * Saves are debounced with a trailing edge (default 500ms) since TinyBase's
  * autosave fires on every transaction: each write waits out the debounce
- * window, and follow-up saves whose serialized content matches the last
- * written snapshot are skipped, coalescing a burst of transactions into a
- * single encode + IndexedDB put.
+ * window, and follow-up saves whose content hashes match the last written
+ * snapshot are skipped, coalescing a burst of transactions into a single
+ * encode + IndexedDB put. The store is serialized only when a write actually
+ * happens, never per transaction.
  */
 export const createEncryptedIndexedDbPersister = ({
   store,
@@ -68,7 +72,9 @@ export const createEncryptedIndexedDbPersister = ({
   /** Test-only override for the IndexedDB write (default: the real `idbSet`). */
   idbSetImpl?: typeof idbSet;
 }): Persister<Persists.MergeableStoreOnly> & SyncPersister => {
-  let lastWrittenJson: string | undefined;
+  // Content hashes of the last snapshot that reached IndexedDB. TinyBase keeps
+  // them incrementally, so comparing is O(1) where re-serializing is O(store).
+  let lastWrittenHashes: ContentHashes | undefined;
   let pendingSave: PendingSave | undefined;
   // E3(e): the debounce timer scheduling `flushPendingSave` — tracked so
   // `destroy()` can cancel it. Without this, a pending debounced save would
@@ -81,7 +87,7 @@ export const createEncryptedIndexedDbPersister = ({
   // a newer snapshot's write.
   let writeChain: Promise<void> = Promise.resolve();
 
-  const writeJson = (json: string): Promise<void> => {
+  const writeJson = (json: string, hashes: ContentHashes): Promise<void> => {
     const write = writeChain.then(async () => {
       // E3(e): destroy() may have run while this write was already chained
       // behind an earlier one — never let it land after destroy() completes.
@@ -90,7 +96,7 @@ export const createEncryptedIndexedDbPersister = ({
       }
       const payload = await codec.encode(json);
       await idbSetImpl({databaseName, key: RECORD_KEY, value: payload});
-      lastWrittenJson = json;
+      lastWrittenHashes = hashes;
     });
     // Keep the chain alive after a failed write; the failure still propagates
     // to the caller through `write`.
@@ -107,7 +113,8 @@ export const createEncryptedIndexedDbPersister = ({
     try {
       // Trailing edge: snapshot the store at flush time so a burst of
       // transactions during the debounce window lands as one fresh write.
-      await writeJson(JSON.stringify(store.getMergeableContent()));
+      const hashes = store.getMergeableContentHashes();
+      await writeJson(JSON.stringify(store.getMergeableContent()), hashes);
       pending.resolve();
     } catch (error) {
       pending.reject(error);
@@ -126,12 +133,12 @@ export const createEncryptedIndexedDbPersister = ({
       return;
     }
 
-    const json = JSON.stringify(store.getMergeableContent());
-    if (json === lastWrittenJson) {
+    const hashes = store.getMergeableContentHashes();
+    if (sameHashes(hashes, lastWrittenHashes)) {
       return;
     }
     try {
-      await writeJson(json);
+      await writeJson(JSON.stringify(store.getMergeableContent()), hashes);
     } catch (error) {
       onSaveFailure?.(error);
       throw error;
@@ -168,20 +175,20 @@ export const createEncryptedIndexedDbPersister = ({
   };
 
   const setPersisted = async (getContent: () => MergeableContent): Promise<void> => {
-    const json = JSON.stringify(getContent());
     if (saveDebounceMs <= 0) {
       try {
-        await writeJson(json);
+        await writeJson(JSON.stringify(getContent()), store.getMergeableContentHashes());
       } catch (error) {
         onSaveFailure?.(error);
         throw error;
       }
       return;
     }
-    // TinyBase serializes setPersisted calls, so per-transaction autosaves
-    // arrive one at a time; skipping saves whose content already matches the
-    // last written snapshot is what coalesces a rapid burst into one write.
-    if (json === lastWrittenJson && !pendingSave) {
+    // TinyBase queues one setPersisted per transaction and runs them one at a
+    // time, so a burst of N transactions arrives here N times, mostly after the
+    // write that already captured them. Skipping saves whose content already
+    // matches the last written snapshot is what coalesces the burst into one write.
+    if (!pendingSave && sameHashes(store.getMergeableContentHashes(), lastWrittenHashes)) {
       return;
     }
     if (!pendingSave) {

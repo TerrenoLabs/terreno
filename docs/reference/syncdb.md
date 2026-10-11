@@ -70,7 +70,7 @@ Expo autolinking walks the app's own dependencies; a nested copy leaves the nati
        │   sync:mutate ─────────────────────────────►│               │
        │   sync:ack / sync:nack ◄────────────────────┘               │
        │   sync:delta ◄──────────────────────────────────────────────┘
-       │   GET /sync/snapshot (bootstrap + catch-up, HTTP)
+       │   POST /sync/snapshot/batch (bootstrap + catch-up, HTTP)
        └── POST /sync/mutate (fallback while the socket is down)
 ```
 
@@ -201,7 +201,7 @@ be passed to `betterAuthAdapter` directly.
 | `goOffline()` | Simulated outage: disconnect transport, pause replay/reconcile/timer; local mutations keep queueing. |
 | `goOnline()` | End simulated outage; reconnect triggers reconcile + outbox replay. |
 | `mutate({collection, operation, id?, data?})` | Optimistic local write + durable outbox enqueue + fire-and-forget replay. Returns `{mutationId, id}`. |
-| `reconcile()` | HTTP snapshot catch-up for every known stream; runs tombstone compaction on success. Also runs automatically on (re)connect, on a rate-limited seq-jump hint, and on the periodic timer; each `sync:subscribed` confirmation additionally pages just the streams it names. |
+| `reconcile()` | HTTP snapshot catch-up for every known stream, batched into `POST /sync/snapshot/batch` rounds (see [Snapshot bootstrap](#snapshot-bootstrap)); runs tombstone compaction on success. Also runs automatically on (re)connect, on a rate-limited seq-jump hint, and on the periodic timer; `sync:subscribed` confirmations additionally page just the streams they name, and confirmations arriving while that catch-up request is in flight are paged together in the next one. |
 | `hydrateWindow({collection, ids, restRows?})` | Admin window upsert: REST rows (optional) land immediately; every requested id is also fetched from `GET /sync/entities` before this resolves so seq/deleted metadata is canonical for immediate update/delete. A `{collection}|admin` delta that lands while the fetch is in flight wins, so hydration never rewinds a row to an older seq. Unknown ids are ignored. |
 | `queryWindows` | Server query windows for `queryCollections`: `fetchWindow({query, nextPage?})`, `getWindow(query)`, `retain(query)` → release, `refetchRetained()`, `pruneUnretained()`, `subscribe(cb)`, `keyFor(query)`. See [Query windows](#query-windows). |
 | `forceResync()` | Purge every known stream locally and re-bootstrap from cursor 0 (outbox/conflicts untouched). Returns `{ok, reason?, streams, purged, repaired}`. After discovery and each stream bootstrap it waits for in-flight `start`/`stop`/auth-change work, then abandons with `reason: "superseded"` when that work switched users or generations. |
@@ -587,11 +587,31 @@ sync: {
 
 ## Sync protocol
 
+### Snapshot bootstrap
+
+The client pages every stream it belongs to through `POST /sync/snapshot/batch`, not one
+`GET /sync/snapshot` per stream. With 100 collections, a reconnect that finds nothing new
+is 2 requests (`GET /sync/streams` plus one batch) instead of 101.
+
+- **Rounds:** each round asks for every stream that still has pages. Streams that reached
+  their head drop out, so later rounds give the remaining streams a larger share of the
+  5,000-entity budget.
+- **Pipelining:** the next round is sent as soon as a response arrives, because its
+  cursors come from the response. The client writes the current round while the next
+  one downloads.
+- **Chunked apply:** each page is written in store transactions of 500 entities, with a
+  yield to the event loop between them, so a large page never freezes the UI in one block.
+  A stream's cursor advances in the transaction holding its last entity, so a page cut
+  short by a crash is fetched again and re-applied as a no-op.
+- **Older servers:** a 404 from the batch route switches the client to per-stream
+  `GET /sync/snapshot` paging for the rest of the session.
+
 ### HTTP routes (`SyncApp`, all authenticated)
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /sync/snapshot?collection=&stream=&cursor=&limit=` | Bootstrap + catch-up per stream |
+| `GET /sync/snapshot?collection=&stream=&cursor=&limit=` | Bootstrap + catch-up for one stream (`limit` max 100) |
+| `POST /sync/snapshot/batch` | Bootstrap + catch-up for many streams in one round trip. Body `{streams: [{stream, cursor?, legacyCursor?}], limit?}`, at most 500 streams, no repeats. `limit` (default 5,000, max 10,000) is the entity budget for the whole response, split evenly across the streams. Returns `{pages}`, one `GET /sync/snapshot`-shaped page per stream in request order. Any stream the caller may not read fails the whole request |
 | `GET /sync/streams` | Current stream membership for the user |
 | `GET /sync/entities` | Point lookup for entity repair and admin window hydrate. Admin-window callers (`admin:access` with RBAC, else `user.admin`) on `adminBroadcast` collections receive requested ids across product streams. When AdminApp registered a scope, list/read/`queryFilter` still apply; unknown or out-of-scope ids are omitted |
 | `POST /sync/mutate` | Single mutation (HTTP fallback). Optional `mutationMode: "adminWindow"` validates `adminBroadcast`, admin-window access, and a registered AdminApp write scope, then runs the shared sync executor with **AdminApp** pre/post hooks (not product `modelRouter` hooks), plus the same permission (including org membership), stripping, and audit semantics as `/admin` REST. HTTP mutate binds `X-Organization-Id` into org context |
@@ -634,6 +654,11 @@ const syncDb = createSyncDb({
   keyProvider: createLocalKeyProvider(),
 });
 ```
+
+Saves are debounced (500 ms). The store is serialized once per write, not once per
+transaction: autosave compares TinyBase's content hashes (O(1)) to skip saves the last
+write already covered, so a bootstrap of many pages costs a few writes instead of one
+full-store serialization per page.
 
 Undecryptable persisted data triggers wipe + re-bootstrap by default (`onDecryptFailure` to override). Storage read errors surface `persistence: "error"` without overwriting the blob.
 

@@ -41,6 +41,15 @@ Terreno 57.
 5. **Backend sync registration** — Every synced collection needs `syncPlugin`, `isDeletedPlugin`, and a `sync` block on `modelRouter`, plus `SyncApp` and `RealtimeApp` on the server. Optional `sync.adminBroadcast: true` also emits `sync:delta` to `{collection}|admin`. Admin clients subscribe with `mode: "window"` (`createSyncDb({windowCollections})`) so they do not snapshot or reconcile that collection; they call `hydrateWindow` (REST membership ids + `GET /sync/entities`). Pass the same `accessControl` into `SyncApp` that `AdminApp` uses so `{collection}|admin` requires `admin:access`. `AdminApp.register` also installs that model's admin list/read/`queryFilter` on the admin window so hydrate and live `|admin` deltas match `/admin` REST. Without RBAC, `user.admin` is enough for the shell gate. Live deltas on that stream apply only to ids already in the window; Refresh is a REST re-query plus `hydrateWindow`.
 6. **Collections too large to sync whole** — List them in `createSyncDb({queryCollections})`. They skip snapshot bootstrap; screens load server-filtered *query windows* (`useWindowQuery`) from the `modelRouter` list endpoint. A window stores only membership (ordered ids); rows live once in the shared entity table. Overlapping windows therefore share rows — one delta updates both views — while each view lists only its own query's members, plus cached rows that newly match its `where` inside the loaded range. Live deltas still arrive on the user's normal streams; windows on screen refetch on reconnect to cover deltas missed offline.
 
+## First load and reconnects
+
+A fresh device has to download every row the user can see before the UI is complete. The
+client asks for all of the user's streams in one batched request per round, writes each
+round while the next one downloads, and writes rows in small chunks so the screen stays
+responsive. Reconnects use the same path: when nothing changed, catching up costs two
+requests however many collections the app syncs. Collections too large to download whole
+belong in `queryCollections` instead.
+
 ## Tradeoffs
 
 **Gains:** instant UI, offline writes with a durable outbox, simpler screen code, and one write path on the server (sync and REST share `modelRouter`).

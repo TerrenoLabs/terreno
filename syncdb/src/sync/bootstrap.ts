@@ -33,7 +33,12 @@
  */
 
 import type {SyncStore} from "../storage/store";
-import type {SyncSnapshotEntity} from "../types";
+import type {
+  SyncSnapshotBatchRequest,
+  SyncSnapshotBatchResponse,
+  SyncSnapshotEntity,
+  SyncSnapshotResponse,
+} from "../types";
 import {
   getCursor,
   getSnapshotCursor,
@@ -102,11 +107,206 @@ const applySnapshotEntity = ({
   return true;
 };
 
+/** Entities written per store transaction before yielding to the host event loop. */
+const DEFAULT_APPLY_CHUNK_SIZE = 500;
+
+/** Most streams named in one `POST /sync/snapshot/batch` request (server cap). */
+const MAX_SNAPSHOT_BATCH_STREAMS = 500;
+
+const defaultYieldToHost = (): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+/** Per-stream paging state shared by single-stream and batch bootstrap. */
+interface StreamPagingState {
+  stream: string;
+  collection: string;
+  cursor: number;
+  legacyCursor?: string;
+  hasMore: boolean;
+  retentionChecked: boolean;
+  /** True when the server itself reported the stream head was reached. */
+  reachedHead: boolean;
+}
+
+/**
+ * What one fetched page means for the local store. Planning only touches paging state,
+ * so the next request can go out before this page is written.
+ */
+interface PagePlan {
+  stream: string;
+  collection: string;
+  /** C7: purge the stream (and drop this page) before anything else is written. */
+  purge: boolean;
+  entities: SyncSnapshotEntity[];
+  /** Seq both cursors advance to once the entities land. */
+  advanceTo?: number;
+  /** True when this is the stream's last page and the server reported its head. */
+  completesStream: boolean;
+  progress: Omit<BootstrapProgress, "applied">;
+}
+
+const initialPagingState = ({
+  store,
+  stream,
+  collection,
+}: {
+  store: SyncStore;
+  stream: string;
+  collection: string;
+}): StreamPagingState => {
+  // Until a snapshot pass has reached the stream head, resume from snapshot progress
+  // (`snapshotSeq`) rather than the applied-seq cursor: a live delta can push the latter
+  // to the head mid-bootstrap, and resuming there would skip every unpaged seq below it
+  // forever. Once bootstrapped, the applied-seq cursor IS the correct catch-up point.
+  const bootstrapped = isStreamBootstrapped({store, stream});
+  return {
+    collection,
+    cursor: bootstrapped ? getCursor({store, stream}) : getSnapshotCursor({store, stream}),
+    hasMore: true,
+    legacyCursor: undefined,
+    reachedHead: false,
+    retentionChecked: false,
+    stream,
+  };
+};
+
+/**
+ * Advance `state` past one fetched page (C7 retention check, C3 legacy stratum, C1
+ * frontier clamp) and describe the writes that page needs.
+ */
+const planSnapshotPage = ({
+  state,
+  page,
+}: {
+  state: StreamPagingState;
+  page: SyncSnapshotResponse;
+}): PagePlan => {
+  const {collection, stream} = state;
+  const base = {collection, completesStream: false, entities: page.entities, stream};
+  // C7: a stored cursor below the retained floor means compacted tombstones were
+  // missed — purge and re-bootstrap this stream from 0 exactly once.
+  if (!state.retentionChecked) {
+    state.retentionChecked = true;
+    if (state.cursor > 0 && state.cursor < page.oldestRetainedSeq) {
+      state.cursor = 0;
+      state.legacyCursor = undefined;
+      return {
+        ...base,
+        entities: [],
+        progress: {collection, cursor: 0, fetched: 0, hasMore: true, stream},
+        purge: true,
+      };
+    }
+  }
+
+  if (page.legacyCursor !== undefined) {
+    // C3: still draining the seq-0 stratum — echo the token, cursor stays 0.
+    const advanced = page.legacyCursor !== state.legacyCursor;
+    state.legacyCursor = page.legacyCursor;
+    state.hasMore = advanced;
+    return {
+      ...base,
+      progress: {
+        collection,
+        cursor: 0,
+        fetched: page.entities.length,
+        hasMore: state.hasMore,
+        stream,
+      },
+      purge: false,
+    };
+  }
+  // Legacy stratum done (or never present) — proceed by seq.
+  state.legacyCursor = undefined;
+
+  // C1: never advance past the stable frontier; the server already clamped page.cursor.
+  const clampedCursor = Math.min(page.cursor, page.frontierSeq);
+  const madeProgress = clampedCursor > state.cursor;
+  // Guard against a server reporting hasMore without advancing (would loop forever).
+  state.hasMore = page.hasMore && madeProgress;
+  // Only the server saying "no more pages" proves the head was reached; exiting via the
+  // guard above means the pass is incomplete and must resume from snapshot progress.
+  state.reachedHead = !page.hasMore;
+  state.cursor = Math.max(state.cursor, clampedCursor);
+  return {
+    ...base,
+    advanceTo: madeProgress ? clampedCursor : undefined,
+    completesStream: !state.hasMore && state.reachedHead,
+    progress: {
+      collection,
+      cursor: state.cursor,
+      fetched: page.entities.length,
+      hasMore: state.hasMore,
+      stream,
+    },
+    purge: false,
+  };
+};
+
+/**
+ * Write a planned page. Entities land in transactions of `chunkSize` with a yield to the
+ * host between them, so a large page never blocks the UI thread in one piece. The cursor
+ * advance rides in the last chunk's transaction: if the app dies mid-page, the page is
+ * re-fetched, and the seq guards make re-applying it a no-op.
+ */
+const writePagePlan = async ({
+  store,
+  plan,
+  chunkSize,
+  yieldToHost,
+  onProgress,
+  now,
+}: {
+  store: SyncStore;
+  plan: PagePlan;
+  chunkSize: number;
+  yieldToHost: () => Promise<void>;
+  onProgress?: (progress: BootstrapProgress) => void;
+  now?: () => string;
+}): Promise<void> => {
+  const {collection, stream, entities, advanceTo} = plan;
+  if (plan.purge) {
+    store.purgeStream({stream});
+    store.addKnownStream({collection, stream});
+    return;
+  }
+  let applied = 0;
+  let offset = 0;
+  do {
+    const chunk = entities.slice(offset, offset + chunkSize);
+    offset += chunkSize;
+    const isLastChunk = offset >= entities.length;
+    // E4: one transaction per chunk, so TinyBase fires listeners (and the autosave
+    // persister's did-finish-transaction write) once per chunk rather than once per row.
+    applied += store.raw.transaction(() => {
+      let count = 0;
+      for (const entity of chunk) {
+        if (applySnapshotEntity({collection, entity, store, stream})) {
+          count += 1;
+        }
+      }
+      if (isLastChunk && advanceTo !== undefined) {
+        setCursor({now, seq: advanceTo, store, stream});
+        setSnapshotCursor({seq: advanceTo, store, stream});
+      }
+      return count;
+    });
+    if (!isLastChunk) {
+      await yieldToHost();
+    }
+  } while (offset < entities.length);
+  if (plan.completesStream) {
+    markStreamBootstrapped({store, stream});
+  }
+  onProgress?.({...plan.progress, applied});
+};
+
 /**
  * Page a single stream from its current cursor to the server's head. Handles the C3
  * legacy stratum (echoing `legacyCursor`), C1 frontier clamping, and C7 retention-gap
- * re-bootstrap. Idempotent and incremental — safe to call for both initial bootstrap and
- * reconcile.
+ * re-bootstrap.
  */
 export const bootstrapStream = async ({
   store,
@@ -116,6 +316,8 @@ export const bootstrapStream = async ({
   limit,
   onProgress,
   now,
+  applyChunkSize = DEFAULT_APPLY_CHUNK_SIZE,
+  yieldToHost = defaultYieldToHost,
 }: {
   store: SyncStore;
   channel: Pick<HttpChannel, "fetchSnapshotPage">;
@@ -124,94 +326,119 @@ export const bootstrapStream = async ({
   limit?: number;
   onProgress?: (progress: BootstrapProgress) => void;
   now?: () => string;
+  applyChunkSize?: number;
+  yieldToHost?: () => Promise<void>;
 }): Promise<void> => {
-  // Until a snapshot pass has reached the stream head, resume from snapshot progress
-  // (`snapshotSeq`) rather than the applied-seq cursor: a live delta can push the latter
-  // to the head mid-bootstrap, and resuming there would skip every unpaged seq below it
-  // forever. Once bootstrapped, the applied-seq cursor IS the correct catch-up point.
-  const bootstrapped = isStreamBootstrapped({store, stream});
-  let cursor = bootstrapped ? getCursor({store, stream}) : getSnapshotCursor({store, stream});
-  let legacyCursor: string | undefined;
-  let hasMore = true;
-  let retentionChecked = false;
-  /** True when the server itself reported the stream head was reached. */
-  let reachedHead = false;
-
-  while (hasMore) {
-    const page = await channel.fetchSnapshotPage({cursor, legacyCursor, limit, stream});
-
-    // C7: a stored cursor below the retained floor means compacted tombstones were
-    // missed — purge and re-bootstrap this stream from 0 exactly once.
-    if (!retentionChecked) {
-      retentionChecked = true;
-      if (cursor > 0 && cursor < page.oldestRetainedSeq) {
-        store.purgeStream({stream});
-        store.addKnownStream({collection, stream});
-        cursor = 0;
-        legacyCursor = undefined;
-        continue;
-      }
-    }
-
-    if (page.legacyCursor !== undefined) {
-      // C3: still draining the seq-0 stratum — echo the token, cursor stays 0. Apply the
-      // whole page in one transaction (E4) so listeners/autosave fire once per page.
-      const applied = store.raw.transaction(() => {
-        let count = 0;
-        for (const entity of page.entities) {
-          if (applySnapshotEntity({collection, entity, store, stream})) {
-            count += 1;
-          }
-        }
-        return count;
-      });
-      const advanced = page.legacyCursor !== legacyCursor;
-      legacyCursor = page.legacyCursor;
-      hasMore = advanced;
-      onProgress?.({
-        applied,
-        collection,
-        cursor: 0,
-        fetched: page.entities.length,
-        hasMore,
-        stream,
-      });
-      continue;
-    }
-    // Legacy stratum done (or never present) — proceed by seq.
-    legacyCursor = undefined;
-
-    // C1: never advance past the stable frontier; the server already clamped page.cursor.
-    const clampedCursor = Math.min(page.cursor, page.frontierSeq);
-    const madeProgress = clampedCursor > cursor;
-    // E4: apply the whole page plus its cursor advance inside ONE store transaction —
-    // TinyBase batches listener notifications (and the autosave persister's
-    // did-finish-transaction write) to fire ONCE per transaction rather than once per
-    // row. Without this, a page of N entities triggers N table-listener calls (and N
-    // autosave attempts) instead of one, which is O(N²) across a full bootstrap.
-    const applied = store.raw.transaction(() => {
-      let count = 0;
-      for (const entity of page.entities) {
-        if (applySnapshotEntity({collection, entity, store, stream})) {
-          count += 1;
-        }
-      }
-      if (madeProgress) {
-        setCursor({now, seq: clampedCursor, store, stream});
-        setSnapshotCursor({seq: clampedCursor, store, stream});
-      }
-      return count;
+  const state = initialPagingState({collection, store, stream});
+  while (state.hasMore) {
+    const page = await channel.fetchSnapshotPage({
+      cursor: state.cursor,
+      legacyCursor: state.legacyCursor,
+      limit,
+      stream,
     });
-    // Guard against a server reporting hasMore without advancing (would loop forever).
-    hasMore = page.hasMore && madeProgress;
-    // Only the server saying "no more pages" proves the head was reached; exiting via the
-    // guard above means the pass is incomplete and must resume from snapshot progress.
-    reachedHead = !page.hasMore;
-    cursor = Math.max(cursor, clampedCursor);
-    onProgress?.({applied, collection, cursor, fetched: page.entities.length, hasMore, stream});
+    const plan = planSnapshotPage({page, state});
+    await writePagePlan({chunkSize: applyChunkSize, now, onProgress, plan, store, yieldToHost});
+  }
+};
+
+/** Fetches one page for each requested stream in a single round trip. */
+type FetchSnapshotBatch = (request: SyncSnapshotBatchRequest) => Promise<SyncSnapshotBatchResponse>;
+
+/**
+ * Page many streams through `POST /sync/snapshot/batch`: one round trip per round
+ * instead of one per stream per page. `limit` is the server's entity budget for the
+ * whole response, shared across the requested streams. Rounds are pipelined: the next
+ * request leaves as soon as a response arrives (its cursors come from the response,
+ * not the store), and the current round is written while it is in flight.
+ *
+ * Returns false when `isSuperseded` fired and the pass stopped early.
+ */
+export const bootstrapStreamsBatch = async ({
+  store,
+  fetchSnapshotBatch,
+  streams,
+  limit,
+  onProgress,
+  now,
+  isSuperseded,
+  applyChunkSize = DEFAULT_APPLY_CHUNK_SIZE,
+  yieldToHost = defaultYieldToHost,
+}: {
+  store: SyncStore;
+  fetchSnapshotBatch: FetchSnapshotBatch;
+  streams: {stream: string; collection: string}[];
+  limit?: number;
+  onProgress?: (progress: BootstrapProgress) => void;
+  now?: () => string;
+  /** Checked after every response and every written page; true stops the pass. */
+  isSuperseded?: () => boolean;
+  applyChunkSize?: number;
+  yieldToHost?: () => Promise<void>;
+}): Promise<boolean> => {
+  const states = new Map<string, StreamPagingState>();
+  for (const {stream, collection} of streams) {
+    states.set(stream, initialPagingState({collection, store, stream}));
   }
 
-  if (reachedHead) {
-    markStreamBootstrapped({store, stream});
+  const requestRound = (): Promise<SyncSnapshotBatchResponse> | undefined => {
+    const pending = [...states.values()]
+      .filter((state) => state.hasMore)
+      .slice(0, MAX_SNAPSHOT_BATCH_STREAMS);
+    if (pending.length === 0) {
+      return undefined;
+    }
+    return fetchSnapshotBatch({
+      limit,
+      streams: pending.map((state) => ({
+        cursor: state.cursor,
+        legacyCursor: state.legacyCursor,
+        stream: state.stream,
+      })),
+    }).then((response) => {
+      const answered = new Set(response.pages.map((page) => page.stream));
+      for (const state of pending) {
+        if (!answered.has(state.stream)) {
+          throw new Error(`Snapshot batch response is missing stream ${state.stream}`);
+        }
+      }
+      return response;
+    });
+  };
+
+  let inFlight = requestRound();
+  try {
+    while (inFlight !== undefined) {
+      const {pages} = await inFlight;
+      inFlight = undefined;
+      if (isSuperseded?.()) {
+        return false;
+      }
+      const plans: PagePlan[] = [];
+      for (const page of pages) {
+        const state = states.get(page.stream);
+        if (state) {
+          plans.push(planSnapshotPage({page, state}));
+        }
+      }
+      inFlight = requestRound();
+      for (const plan of plans) {
+        await writePagePlan({
+          chunkSize: applyChunkSize,
+          now,
+          onProgress,
+          plan,
+          store,
+          yieldToHost,
+        });
+        if (isSuperseded?.()) {
+          return false;
+        }
+      }
+    }
+    return true;
+  } finally {
+    // An early exit abandons the prefetched round; never leave its rejection unhandled.
+    inFlight?.catch(() => {});
   }
 };

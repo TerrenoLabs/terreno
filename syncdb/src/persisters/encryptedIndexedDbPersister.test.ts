@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 
-import {describe, expect, it, mock} from "bun:test";
+import {describe, expect, it, mock, spyOn} from "bun:test";
 import {assert} from "chai";
 
 import {createAesGcmCodec} from "../crypto/aesGcmCodec";
@@ -302,6 +302,49 @@ describe("createEncryptedIndexedDbPersister", () => {
       store: target.raw,
     }).load();
     expect(target.getEntity({collection: "todos", id: "t1"})?.data).toEqual({title: "three"});
+  });
+
+  it("serializes the store once per write, not once per queued autosave", async () => {
+    const databaseName = uniqueDbName();
+    let encodeCount = 0;
+    const countingCodec: PayloadCodec = {
+      decode: identityCodec.decode,
+      encode: (plaintext) => {
+        encodeCount += 1;
+        return identityCodec.encode(plaintext);
+      },
+    };
+    const source = makeStore();
+    const persister = createEncryptedIndexedDbPersister({
+      codec: countingCodec,
+      databaseName,
+      saveDebounceMs: 20,
+      store: source.raw,
+    });
+    await persister.startAutoSave();
+    const stringify = spyOn(JSON, "stringify");
+    // Each upsert is its own transaction, so TinyBase queues one autosave per row.
+    for (let i = 0; i < 50; i++) {
+      source.upsertEntity({collection: "todos", data: {title: `row ${i}`}, id: `t${i}`});
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const storeSerializations = stringify.mock.calls.filter(
+      ([value]) => Array.isArray(value) && value.length === 2
+    ).length;
+    stringify.mockRestore();
+    // One write captures the whole burst; the 49 queued saves behind it are no-ops.
+    expect(encodeCount).toBe(2);
+    expect(storeSerializations).toBe(1);
+    await persister.destroy();
+
+    const target = makeStore();
+    await createEncryptedIndexedDbPersister({
+      codec: countingCodec,
+      databaseName,
+      saveDebounceMs: 0,
+      store: target.raw,
+    }).load();
+    expect(target.getEntity({collection: "todos", id: "t49"})?.data).toEqual({title: "row 49"});
   });
 
   it("flush() persists the latest store state without waiting for the save debounce", async () => {

@@ -185,6 +185,7 @@ be passed to `betterAuthAdapter` directly.
 | `wipeOnSignOut` | `boolean` | `false` | `signOut()` also wipes local data |
 | `batchSize` | `number` | `50` (server caps at 100) | Max mutations per batched drain send |
 | `haltQueueOnConflict` | `boolean` | `false` | `true` = conflict halts entire drain; `false` = per-entity blocking |
+| `snapshotConcurrency` | `number` | `6` | Streams snapshot-paged at once by reconcile, subscribe catch-up, `forceResync` and wipe re-bootstrap. Each stream runs one pass at a time. `1` pages one stream at a time |
 | `onDecryptFailure` | `() => void` | wipe + re-bootstrap (with `console.warn`) | Override web decrypt-failure recovery |
 | `tombstoneRetentionMs` | `number` | `7776000000` (90 days); `0` disables | Client tombstone compaction after successful reconcile |
 | `startAuthRetryAttempts` | `number` | `3`; `1` disables | `start()` attempts to resolve `getUserId()` |

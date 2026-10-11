@@ -264,7 +264,7 @@ throw new APIError({status: 403, title: "Not a member"}); // in preCreate — ha
 throw new APIError({status: 422, title: "Not a member"});
 ```
 
-**Wrong: rendering the empty state from `useQuery` before the stream bootstraps.** An empty array before bootstrap looks the same as an empty collection. Gate on the stream's `bootstrapped` cell. See `docs/how-to/use-syncdb-correctly.md` for this and the other pitfalls (serial snapshot startup, dropped ack warnings, phantom creates, unresolved conflicts).
+**Wrong: rendering the empty state from `useQuery` before the stream bootstraps.** An empty array before bootstrap looks the same as an empty collection. Gate on the stream's `bootstrapped` cell. See `docs/how-to/use-syncdb-correctly.md` for this and the other pitfalls (cold-start cost per stream, dropped ack warnings, phantom creates, unresolved conflicts).
 
 ## Example Invocations
 

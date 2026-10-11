@@ -1,36 +1,25 @@
 # How to Use syncdb Correctly
 
-This page lists `@terreno/syncdb` behavior that a working app has to account for. Each entry says what the library does today, what breaks if you ignore it, and what to do instead. It was checked against `syncdb/src` and `api/src/sync` at 57.13.0. Where an entry is a library gap rather than intended behavior, it says so. Delete the entry when the gap is fixed.
+This page lists `@terreno/syncdb` behavior that a working app has to account for. Each entry says what the library does today, what breaks if you ignore it, and what to do instead. It was checked against `syncdb/src` and `api/src/sync` at 57.13.0. Several entries are library gaps rather than intended behavior. Delete an entry when its gap is fixed.
 
 Read [Local-first data](../explanation/local-first-data.md) and [Migrate from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md) first.
 
 ## Startup and snapshots
 
-### Snapshots page one stream at a time (library gap)
+### Cold start costs one round trip per stream
 
-Every snapshot path in `syncdb/src/client.ts` awaits `bootstrapStream` for one stream before it starts the next. That applies to `runReconcile`, `catchUpSubscribedStreams`, `forceResync` and `wipeAndRebootstrap`. A stream is one collection in one scope, so the number of streams is roughly the number of synced collections times the number of tenants the user belongs to. Each stream costs at least one `GET /sync/snapshot` round trip, even when it is empty.
+A stream is one collection in one scope, so a user has roughly (synced collections) × (tenants they belong to) streams. Each stream costs at least one `GET /sync/snapshot` round trip, even when it is empty. Reconcile, subscribe catch-up, `forceResync` and wipe re-bootstrap page up to `snapshotConcurrency` streams side by side (default 6). Each stream runs one pass at a time, and a pass that purges (force resync, wipe) waits for the stream's in-flight pass to finish first.
 
-Measured with a fake HTTP channel at 150 ms latency, 13 collections and 2 workspaces (26 streams): 26 snapshot requests, at most **1** in flight, 4.1 s before the first reconcile finished. A parallel pass would take roughly two round trips.
-
-`HttpChannel` has no queue or concurrency limit, and the server's snapshot route is stateless per request. The serialization comes only from the client's loops.
-
-Until this is fixed:
+Measured with a fake HTTP channel at 150 ms latency, 13 collections and 2 workspaces (26 streams): 4.1 s to the first full reconcile when paging one stream at a time, 0.95 s at the default concurrency.
 
 | Do | Why |
 | --- | --- |
-| Sync only the collections the client reads. | Each collection adds one round trip per tenant to cold start. |
-| Gate each screen on its **own** stream's bootstrap (see [No loading flag on synced reads](#no-loading-flag-on-synced-reads)), not on "sync finished". | The stream a screen needs may be last in the serial order. |
-| Don't call `forceResync()` on a hot path. | It purges and re-pages every stream serially, and waits for lifecycle idle after each one. |
+| Sync only the collections the client reads. | Each collection adds one stream per tenant to cold start. |
+| Gate each screen on its **own** stream's bootstrap (see [No loading flag on synced reads](#no-loading-flag-on-synced-reads)), not on "sync finished". | The stream a screen needs may land after others. |
+| Don't call `forceResync()` on a hot path. | It purges and re-pages every stream. |
+| Raise `snapshotConcurrency` only if the backend can take it. | Each in-flight stream is one concurrent snapshot query on the server. |
 
-The fix belongs in `client.ts`: run a bounded pool (about 4 workers) over the stream list. Each worker should check `isSuperseded()` before taking a stream. Run `compactTombstones` and `repairAllMarkedEntities` only after every stream succeeds. Rethrow `AuthRequiredError` first so the pool still auth-pauses. `syncStreams` (leaves and joins) must still finish before any paging starts.
-
-### The same stream can be paged twice at once (library gap)
-
-`catchUpSubscribedStreams` deliberately bypasses the `reconcile()` coalescer, and nothing dedupes passes per stream. At startup the socket sends one `sync:subscribed` per collection. Each one starts a catch-up that runs alongside the startup reconcile, so a cold start pages most streams twice.
-
-This is usually harmless. Cursors only move forward, and entity applies are seq-guarded. The exception is a purge that lands during another pass on the same stream. That purge can come from `forceResync`, from the retention-gap check in `bootstrapStream`, or from a membership leave. The other pass then writes its high cursor back and marks the stream `bootstrapped`. If the purging pass then fails, the stream is marked complete but is missing every row below that cursor.
-
-Don't call `forceResync()` while a reconcile or reconnect is in flight. The library fix is a per-stream single-flight map. `forceResync` should await the in-flight pass before it purges, and catch-up should chain one more pass after the in-flight one.
+The startup reconcile and each collection's `sync:subscribed` catch-up both page the same streams. A catch-up queues behind a pass that started before the room join, because that pass may have missed a write. So a cold start still pages each stream twice, one pass after the other.
 
 ### No loading flag on synced reads
 

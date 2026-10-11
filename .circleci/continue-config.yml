@@ -1713,18 +1713,23 @@ jobs:
 
   admin-spa-integration:
     executor: node22_browsers_mongo_rs_heavy
+    resource_class: xlarge
     steps:
       - checkout
       - install_bun_and_deps
       - init_mongo_replica
       - run:
           name: Compile workspace
+          environment:
+            NODE_OPTIONS: "--max-old-space-size=8192"
           command: bun run compile
       - run:
           name: Build admin-spa web
           working_directory: ~/project/admin-spa
+          no_output_timeout: 15m
           environment:
             CI: "true"
+            NODE_OPTIONS: "--max-old-space-size=8192"
           command: bun run build:web
       - resolve_e2e_secrets
       - run:

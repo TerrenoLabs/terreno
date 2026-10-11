@@ -421,6 +421,40 @@ describe("bootstrapStream", () => {
     expect(second.calls.map((call) => call.cursor)).toEqual([40]);
   });
 
+  it("writes nothing when superseded while a page was in flight", async () => {
+    const store = makeStore();
+    const channel = makeChannel({0: page({cursor: 1, entities: entitiesFor(1, 1)})});
+    await bootstrapStream({
+      channel,
+      collection: "todos",
+      isSuperseded: () => true,
+      store,
+      stream: STREAM,
+    });
+    expect(store.getEntity({collection: "todos", id: "e1"})).toBeUndefined();
+    expect(getCursor({store, stream: STREAM})).toBe(0);
+  });
+
+  it("stops mid-page when superseded during a chunk yield", async () => {
+    const store = makeStore();
+    const channel = makeChannel({0: page({cursor: 4, entities: entitiesFor(1, 4)})});
+    let superseded = false;
+    await bootstrapStream({
+      applyChunkSize: 2,
+      channel,
+      collection: "todos",
+      isSuperseded: () => superseded,
+      store,
+      stream: STREAM,
+      yieldToHost: async () => {
+        superseded = true;
+      },
+    });
+    expect(store.getEntity({collection: "todos", id: "e2"})).toBeDefined();
+    expect(store.getEntity({collection: "todos", id: "e3"})).toBeUndefined();
+    expect(getCursor({store, stream: STREAM})).toBe(0);
+  });
+
   it("reports progress per page and forwards the limit", async () => {
     const store = makeStore();
     store.upsertEntity({
@@ -636,6 +670,32 @@ describe("bootstrapStreamsBatch", () => {
     expect(completed).toBe(false);
     expect(store.getEntity({collection: "todos", id: "e1"})).toBeUndefined();
     expect(getCursor({store, stream: STREAM})).toBe(0);
+  });
+
+  it("stops mid-page when superseded during a chunk yield, leaving the cursor unmoved", async () => {
+    const store = makeStore();
+    const {fetchSnapshotBatch} = makeBatchFetch(() =>
+      page({cursor: 5, entities: entitiesFor(1, 5)})
+    );
+    let superseded = false;
+
+    const completed = await bootstrapStreamsBatch({
+      applyChunkSize: 2,
+      fetchSnapshotBatch,
+      isSuperseded: () => superseded,
+      store,
+      streams: [{collection: "todos", stream: STREAM}],
+      yieldToHost: async () => {
+        // A sign-out or user switch wipes the store while the page is being written.
+        superseded = true;
+      },
+    });
+
+    expect(completed).toBe(false);
+    expect(store.getEntity({collection: "todos", id: "e2"})).toBeDefined();
+    expect(store.getEntity({collection: "todos", id: "e3"})).toBeUndefined();
+    expect(getCursor({store, stream: STREAM})).toBe(0);
+    expect(isStreamBootstrapped({store, stream: STREAM})).toBe(false);
   });
 
   it("C7: purges a stream whose cursor fell below the retained floor and re-pages it from 0", async () => {

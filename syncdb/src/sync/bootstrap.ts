@@ -250,12 +250,16 @@ const planSnapshotPage = ({
  * host between them, so a large page never blocks the UI thread in one piece. The cursor
  * advance rides in the last chunk's transaction: if the app dies mid-page, the page is
  * re-fetched, and the seq guards make re-applying it a no-op.
+ *
+ * Returns false when `isSuperseded` fired during a yield: a sign-out or user switch may
+ * have wiped the store, so the rest of the page must not be written into it.
  */
 const writePagePlan = async ({
   store,
   plan,
   chunkSize,
   yieldToHost,
+  isSuperseded,
   onProgress,
   now,
 }: {
@@ -263,14 +267,15 @@ const writePagePlan = async ({
   plan: PagePlan;
   chunkSize: number;
   yieldToHost: () => Promise<void>;
+  isSuperseded?: () => boolean;
   onProgress?: (progress: BootstrapProgress) => void;
   now?: () => string;
-}): Promise<void> => {
+}): Promise<boolean> => {
   const {collection, stream, entities, advanceTo} = plan;
   if (plan.purge) {
     store.purgeStream({stream});
     store.addKnownStream({collection, stream});
-    return;
+    return true;
   }
   let applied = 0;
   let offset = 0;
@@ -295,12 +300,16 @@ const writePagePlan = async ({
     });
     if (!isLastChunk) {
       await yieldToHost();
+      if (isSuperseded?.()) {
+        return false;
+      }
     }
   } while (offset < entities.length);
   if (plan.completesStream) {
     markStreamBootstrapped({store, stream});
   }
   onProgress?.({...plan.progress, applied});
+  return true;
 };
 
 /**
@@ -316,6 +325,7 @@ export const bootstrapStream = async ({
   limit,
   onProgress,
   now,
+  isSuperseded,
   applyChunkSize = DEFAULT_APPLY_CHUNK_SIZE,
   yieldToHost = defaultYieldToHost,
 }: {
@@ -326,6 +336,8 @@ export const bootstrapStream = async ({
   limit?: number;
   onProgress?: (progress: BootstrapProgress) => void;
   now?: () => string;
+  /** Checked after every response and every chunk yield; true stops the pass unwritten. */
+  isSuperseded?: () => boolean;
   applyChunkSize?: number;
   yieldToHost?: () => Promise<void>;
 }): Promise<void> => {
@@ -337,8 +349,22 @@ export const bootstrapStream = async ({
       limit,
       stream,
     });
+    if (isSuperseded?.()) {
+      return;
+    }
     const plan = planSnapshotPage({page, state});
-    await writePagePlan({chunkSize: applyChunkSize, now, onProgress, plan, store, yieldToHost});
+    const written = await writePagePlan({
+      chunkSize: applyChunkSize,
+      isSuperseded,
+      now,
+      onProgress,
+      plan,
+      store,
+      yieldToHost,
+    });
+    if (!written) {
+      return;
+    }
   }
 };
 
@@ -423,15 +449,16 @@ export const bootstrapStreamsBatch = async ({
       }
       inFlight = requestRound();
       for (const plan of plans) {
-        await writePagePlan({
+        const written = await writePagePlan({
           chunkSize: applyChunkSize,
+          isSuperseded,
           now,
           onProgress,
           plan,
           store,
           yieldToHost,
         });
-        if (isSuperseded?.()) {
+        if (!written || isSuperseded?.()) {
           return false;
         }
       }

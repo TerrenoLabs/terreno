@@ -25,7 +25,7 @@ Local-first data layer for Terreno apps. A TinyBase `MergeableStore` (encrypted 
        │   sync:mutate ─────────────────────────────►│               │
        │   sync:ack / sync:nack ◄────────────────────┘               │
        │   sync:delta ◄──────────────────────────────────────────────┘
-       │   GET /sync/snapshot (bootstrap + catch-up, HTTP)
+       │   POST /sync/snapshot/batch (bootstrap + catch-up, HTTP)
        └── POST /sync/mutate (fallback while the socket is down)
 ```
 
@@ -102,7 +102,7 @@ const todoRouter = modelRouter("/todos", Todo, {
 
 new TerrenoApp({userModel: User})
   .register(todoRouter)
-  .register(new SyncApp()) // GET /sync/snapshot, POST /sync/mutate, GET /sync/key
+  .register(new SyncApp()) // POST /sync/snapshot/batch, GET /sync/snapshot, POST /sync/mutate, GET /sync/key
   .register(new RealtimeApp()) // Socket.io server; installs sync:subscribe/sync:mutate handlers
   .start();
 ```
@@ -168,6 +168,7 @@ const client = createSyncDb({
   seqJumpReconcileMinIntervalMs?, // seq-jump reconcile rate limit (default 30s)
   batchSize?,                     // max mutations per batched drain send (default 50; server caps at 100)
   haltQueueOnConflict?,           // conflict policy — see "Conflict handling modes" below (default false)
+  snapshotConcurrency?,           // per-stream GET /sync/snapshot passes at once (default 6; 1 = one at a time)
   onDecryptFailure?,              // override the default wipe+re-bootstrap on undecryptable data (web)
   tombstoneRetentionMs?,          // client-side tombstone compaction window (default 90 days; 0 disables)
   onAuthRequired?,                // fires once per auth-pause episode — prompt for re-login
@@ -322,6 +323,7 @@ Sequencing guarantees: validation failures never consume a seq (the claim happen
 | Endpoint | Purpose | Auth |
 |---|---|---|
 | `GET /sync/snapshot?collection=&cursor=&limit=` | Bootstrap + catch-up. Returns `{entities: [{id, data, seq, deleted}], cursor, hasMore}`. `cursor=0` = full snapshot (legacy docs without `_syncSeq` arrive in the first page with seq 0). Default page 100, max 100. | Model `list` permissions + server-enforced scope filter |
+| `POST /sync/snapshot/batch` | Bootstrap + catch-up for many streams in one round trip. Body `{streams: [{stream, cursor?, legacyCursor?}], limit?}` (max 500 streams; `limit` is the entity budget for the whole response, default 5,000, max 10,000). Returns `{pages}`, one `GET /sync/snapshot`-shaped page per stream in request order. | Same as `GET /sync/snapshot`, per stream; any denied stream fails the request |
 | `POST /sync/mutate` | HTTP fallback for outbox replay (same handler as the socket channel). Body: `{mutationId, collection, operation, id?, data?, baseVersion?}`. Returns `{ack}` or `{nack}` with status 409 (conflict), 403 (unauthorized), 422 (validation), 429 (rate_limited, carries `retryAfterMs`), 500 (error). | modelRouter create/update/delete write path |
 | `POST /sync/mutate/batch` | HTTP fallback for batched outbox replay. Body: `{mutations: SyncMutateRequest[]}` (max 100; intra-batch duplicate `mutationId`s rejected up front). Returns `{results: ({type:"ack",ack}\|{type:"nack",nack})[]}` — applied strictly in array order, stopping at the first non-ack (a shorter `results` array than the request means everything after it was never attempted). | modelRouter create/update/delete write path, per mutation |
 | `GET /sync/key` | Caller's per-user key material for the server key provider (32 random bytes, base64; created on first call). | Own key only |
@@ -449,8 +451,9 @@ This writes `store/syncDbSdk.ts` with `SYNC_COLLECTIONS`, entity types, and hook
 - **Multi-tab web**: two tabs of the same user share one IndexedDB blob; concurrent persister saves are last-writer-wins at the blob level and can drop the other tab's queued outbox rows. Single-writer coordination (Web Locks) is not implemented yet — avoid relying on offline writes from multiple simultaneous tabs.
 - **`Model.bulkWrite` is unavailable on synced models**: it skips Mongoose middleware, so it can never stamp seqs. `registerSync` replaces the static with one that throws — bulk updates to a synced collection have to loop per document.
 - **Native plaintext by design**: no SQLCipher; the OS sandbox is deemed sufficient.
-- **Whole-store persistence**: each save serializes and (on web) encrypts the full store — cost scales with store size, not change size. Bound it by scoping which collections sync; saves are debounced.
+- **Whole-store persistence**: each save serializes and (on web) encrypts the full store — cost scales with store size, not change size. Bound it by scoping which collections sync; saves are debounced, and a burst of transactions costs one serialization per write, not one per transaction.
 - **`realtime` + `sync` coexistence**: a model may enable both (distinct events, `sync` vs `sync:delta`, so clients never double-apply), at the cost of double emission work. `modelRouter` `realtime` is **deprecated and will be removed in Terreno 58**; use `sync` only.
+- **Cold start scales with row count, not stream count**: streams page together through `POST /sync/snapshot/batch`, one round trip per round of up to 5,000 rows. Against a server without that route, every stream costs at least one `GET /sync/snapshot` round trip (`snapshotConcurrency` at a time, default 6). Sync only the collections the client reads. See [Use syncdb correctly](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/use-syncdb-correctly.md) for this and the write-path pitfalls apps must handle.
 - **Seq counter write amplification**: every synced write does an atomic `$inc` on a per-stream counter doc. Acceptable at current scale; Redis-based counters are the documented upgrade path.
 
 ## Documentation

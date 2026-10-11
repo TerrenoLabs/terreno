@@ -225,6 +225,16 @@ export interface HttpChannelConfig {
   organizationIdProvider?: () => string | undefined;
 }
 
+/** The `title` of an @terreno/api APIError response body, or undefined for any other body. */
+const readErrorTitle = async (response: Response): Promise<string | undefined> => {
+  try {
+    const body = (await response.json()) as {title?: unknown} | null;
+    return typeof body?.title === "string" ? body.title : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 /** Create an {@link HttpChannel} speaking @terreno/api's `/sync/*` routes. */
 export const createHttpChannel = ({
   baseUrl,
@@ -278,7 +288,13 @@ export const createHttpChannel = ({
       method: "POST",
     });
     if (response.status === 404) {
-      return {type: "unsupported"};
+      // A missing route (older server) is a bare 404. An APIError 404 (e.g. an unknown
+      // collection) has a JSON `title` and is a real failure, not a reason to stop batching.
+      const title = await readErrorTitle(response);
+      if (title === undefined) {
+        return {type: "unsupported"};
+      }
+      throw new Error(`Snapshot batch request failed with status 404: ${title}`);
     }
     if (!response.ok) {
       throw new Error(`Snapshot batch request failed with status ${response.status}`);

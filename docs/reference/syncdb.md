@@ -185,6 +185,7 @@ be passed to `betterAuthAdapter` directly.
 | `wipeOnSignOut` | `boolean` | `false` | `signOut()` also wipes local data |
 | `batchSize` | `number` | `50` (server caps at 100) | Max mutations per batched drain send |
 | `haltQueueOnConflict` | `boolean` | `false` | `true` = conflict halts entire drain; `false` = per-entity blocking |
+| `snapshotConcurrency` | `number` | `6` | Streams paged at once with `GET /sync/snapshot`: by `forceResync`, and by every other pass against a server without `POST /sync/snapshot/batch`. Each stream runs one pass at a time. `1` pages one stream at a time |
 | `onDecryptFailure` | `() => void` | wipe + re-bootstrap (with `console.warn`) | Override web decrypt-failure recovery |
 | `tombstoneRetentionMs` | `number` | `7776000000` (90 days); `0` disables | Client tombstone compaction after successful reconcile |
 | `startAuthRetryAttempts` | `number` | `3`; `1` disables | `start()` attempts to resolve `getUserId()` |
@@ -603,8 +604,13 @@ is 2 requests (`GET /sync/streams` plus one batch) instead of 101.
   yield to the event loop between them, so a large page never freezes the UI in one block.
   A stream's cursor advances in the transaction holding its last entity, so a page cut
   short by a crash is fetched again and re-applied as a no-op.
-- **Older servers:** a 404 from the batch route switches the client to per-stream
-  `GET /sync/snapshot` paging for the rest of the session.
+- **Older servers:** a 404 without an APIError body (the route does not exist) switches
+  the client to per-stream `GET /sync/snapshot` paging, `snapshotConcurrency` streams at
+  a time, for the rest of the session. An APIError 404, such as an unknown collection,
+  fails that pass and keeps batching on.
+- **One pass per stream:** a batch pass owns each of its streams the way a per-stream
+  pass does, so a purge (`forceResync`, wipe) waits for it, and a pass that is superseded
+  by a sign-out or user switch stops between chunks without writing the rest.
 
 ### HTTP routes (`SyncApp`, all authenticated)
 

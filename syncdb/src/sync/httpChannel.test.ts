@@ -338,10 +338,22 @@ describe("createHttpChannel", () => {
       expect(headersOf(requests[0]).Authorization).toBe("Bearer token-123");
     });
 
-    it("maps 404 to unsupported", async () => {
-      const {fetchImpl} = makeFetch(() => json({}, 404));
+    it("maps a missing-route 404 to unsupported", async () => {
+      const {fetchImpl} = makeFetch(
+        () => new Response("Cannot POST /sync/snapshot/batch", {status: 404})
+      );
       const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
       await expect(channel.fetchSnapshotBatch?.(batch)).resolves.toEqual({type: "unsupported"});
+    });
+
+    it("rejects an APIError 404 instead of reporting the route unsupported", async () => {
+      const {fetchImpl} = makeFetch(() =>
+        json({status: 404, title: "Unknown sync collection: notes"}, 404)
+      );
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).rejects.toThrow(
+        "status 404: Unknown sync collection: notes"
+      );
     });
 
     it("rejects 401 with AuthRequiredError", async () => {

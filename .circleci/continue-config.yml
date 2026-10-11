@@ -2166,12 +2166,30 @@ jobs:
             bun run generate
             bun run docs:version "$CIRCLE_TAG"
             bun run prune-versions
-      # Commit before the archive upload so a failed upload does not keep the
-      # snapshot off master.
+            touch /tmp/docs-snapshot-ready
+      # Build from the tag plus its snapshot, attach to the draft, then publish,
+      # so the master push below only deploys docs once the archive is public.
       - run:
-          name: Commit the docs snapshot to master
+          name: Build and upload the archived docs site
           command: |
             set -euo pipefail
+            scripts/ci/docs-archive.sh build "$CIRCLE_TAG" /tmp/docs-site.tar.gz
+            GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/docs-archive.sh upload "$CIRCLE_TAG" /tmp/docs-site.tar.gz
+      - run:
+          name: Publish the GitHub release
+          command: |
+            set -euo pipefail
+            GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/github-release.sh publish "$CIRCLE_TAG"
+      # Runs even when the upload failed so the snapshot still reaches master.
+      - run:
+          name: Commit the docs snapshot to master
+          when: always
+          command: |
+            set -euo pipefail
+            if [ ! -f /tmp/docs-snapshot-ready ]; then
+              echo "Docs snapshot did not finish; nothing to commit"
+              exit 0
+            fi
             git config user.name "terreno-circleci"
             git config user.email "josh@nang.io"
             git add website/versioned_docs website/versioned_sidebars website/versions.json
@@ -2186,21 +2204,13 @@ jobs:
             # A rerun after the snapshot already landed has nothing to push.
             if git cat-file -e "origin/master:website/versioned_docs/version-${CIRCLE_TAG}" 2>/dev/null; then
               echo "Docs snapshot ${CIRCLE_TAG} is already on master"
-            else
-              # The tag is behind master; the snapshot only touches website/version* files.
-              git checkout --force -B docs-version origin/master
-              git cherry-pick "$snapshot_commit"
-              git pull --rebase origin master
-              git push origin HEAD:master
+              exit 0
             fi
-            # Build the archive from the tag plus its snapshot, not from master.
-            git checkout --force "$snapshot_commit"
-      - run:
-          name: Build and upload the archived docs site
-          command: |
-            set -euo pipefail
-            scripts/ci/docs-archive.sh build "$CIRCLE_TAG" /tmp/docs-site.tar.gz
-            GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/docs-archive.sh upload "$CIRCLE_TAG" /tmp/docs-site.tar.gz
+            # The tag is behind master; the snapshot only touches website/version* files.
+            git checkout --force -B docs-version origin/master
+            git cherry-pick "$snapshot_commit"
+            git pull --rebase origin master
+            git push origin HEAD:master
 
   # Releases start as drafts so the docs archive can be attached before
   # immutable releases lock the assets. This publishes the draft last.
@@ -2608,18 +2618,8 @@ workflows:
               ignore: /.*/
             tags:
               only: /^[0-9]+\.[0-9]+\.0$/
-      # Minor releases publish the draft after the docs archive is attached.
-      - publish-github-release:
-          name: publish-github-release-minor
-          context: [terreno-release]
-          requires:
-            - archive-docs-version
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: /^[0-9]+\.[0-9]+\.0$/
-      # Patch and prerelease tags have no docs archive; publish after npm.
+      # Minor releases publish in archive-docs-version after the archive is
+      # attached. Patch and prerelease tags have no archive; publish after npm.
       - publish-github-release:
           context: [terreno-release]
           requires:

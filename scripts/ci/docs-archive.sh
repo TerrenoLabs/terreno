@@ -63,6 +63,11 @@ upload_archive() {
   release="$(github_api "https://api.github.com/repos/${repo}/releases/${release_id}")"
   # Immutable releases lock assets on publish; GitHub would answer 422.
   if [ "$(jq -r '.draft' <<<"$release")" != "true" ]; then
+    # A rerun after a successful upload and publish has nothing left to do.
+    if jq -e --arg name "$asset_name" 'any(.assets[]; .name == $name)' <<<"$release" >/dev/null; then
+      echo "Release ${version} is already published with ${asset_name}; nothing to upload."
+      return 0
+    fi
     echo "Release ${version} is already published, and immutable releases cannot take new assets." >&2
     echo "The release skill must create it with 'gh release create --draft'; CI publishes it after this upload." >&2
     exit 1

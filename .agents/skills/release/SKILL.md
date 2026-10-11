@@ -18,7 +18,7 @@ One `/release` finishes the release. Do not stop after opening a pull request or
 - CircleCI publishes these packages, all at the same version: `@terreno/api`, `@terreno/test`, `@terreno/blocks`, `@terreno/ui`, `@terreno/rtk`, `@terreno/admin-backend`, `@terreno/admin-frontend`, `@terreno/admin-spa`, `@terreno/ai`, `@terreno/api-health`, `@terreno/announcements`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/jobs`, `create-terreno-app`, `@terreno/mcp`, `@terreno/syncdb`. (`demo`, the example apps, and `@terreno/cli` are not in that job.)
 - `publish-release` runs `bun run check:upgrade-docs` against the tag first. That check fails the release when the tag's `CHANGELOG.md` has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` section for the version but `mcp-server/src/docs/upgrades/<version>.md` is missing. The assembled changelog and the upgrade note must already be on master.
 - Prerelease tags (`-beta`, `-alpha`) publish to their prerelease npm dist-tag and skip the master version bump. `deploy-demo` runs only for tags with no prerelease suffix.
-- GitHub releases start as **drafts**. This repo has immutable releases on, so publishing a release locks its assets and GitHub answers `422` to any later upload. For `X.Y.0` tags, CircleCI `archive-docs-version` commits the docs snapshot (`chore: cut docs version X.Y.0`) to master, then attaches `docs-site.tar.gz` to the draft, and `publish-github-release-minor` publishes it. For patch and prerelease tags, `publish-github-release` publishes the draft after `publish-release`. Never publish the draft yourself: that locks the release before the archive is attached. Do not dispatch the GitHub publish workflow to cut docs.
+- GitHub releases start as **drafts**. This repo has immutable releases on, so publishing a release locks its assets and GitHub answers `422` to any later upload. For `X.Y.0` tags, CircleCI `archive-docs-version` attaches `docs-site.tar.gz` to the draft, publishes the release, then commits the docs snapshot (`chore: cut docs version X.Y.0`) to master. For patch and prerelease tags, `publish-github-release` publishes the draft after `publish-release`. Never publish the draft yourself: that locks the release before the archive is attached. Do not dispatch the GitHub publish workflow to cut docs.
 
 ## Step 1: Preflight
 
@@ -183,7 +183,7 @@ Create the draft right after the tag push. The CI jobs that need it wait up to 1
    gh release view "$VERSION" --json isDraft,assets --jq '{isDraft, assets: [.assets[].name]}'
    ```
 
-   A release still in draft means `archive-docs-version` or `publish-github-release` failed. Rerun the failed CircleCI job; both are safe to rerun.
+   A release still in draft means `archive-docs-version` (`X.Y.0`) or `publish-github-release` (other tags) failed. Rerun the failed CircleCI job; both are safe to rerun.
 
 2. Verify every package CircleCI publishes is live on npm (allow a couple of minutes of registry lag):
 

@@ -46,9 +46,10 @@ one bundle and needed more than 8 GB.
 - `/<version>/` is a prebuilt site for each release in `versions.json`. The navbar
   "Versions" dropdown lists them.
 - On each `X.Y.0` tag, the CircleCI `archive-docs-version` job snapshots the docs,
-  commits the snapshot to `master`, builds that version once with
-  `baseUrl: /<version>/`, and uploads it as `docs-site.tar.gz` on the **draft**
-  GitHub release. `publish-github-release-minor` then publishes the release.
+  builds that version once with `baseUrl: /<version>/`, uploads it as
+  `docs-site.tar.gz` on the **draft** GitHub release, publishes the release, and
+  then commits the snapshot to `master`. The commit runs even when the upload
+  fails, and comes last so the docs deploy it starts can download the archive.
   The repo has immutable releases on, so assets can only be added while the
   release is a draft. The release keeps the newest four versions
   (`bun run prune-versions`).

@@ -6,18 +6,18 @@ Read [Local-first data](../explanation/local-first-data.md) and [Migrate from @t
 
 ## Startup and snapshots
 
-### Cold start costs one round trip per stream
+### Cold start costs one round trip per round, not per stream
 
-A stream is one collection in one scope, so a user has roughly (synced collections) × (tenants they belong to) streams. Each stream costs at least one `GET /sync/snapshot` round trip, even when it is empty. Reconcile, subscribe catch-up, `forceResync` and wipe re-bootstrap page up to `snapshotConcurrency` streams side by side (default 6). Each stream runs one pass at a time, and a pass that purges (force resync, wipe) waits for the stream's in-flight pass to finish first.
+A stream is one collection in one scope, so a user has roughly (synced collections) × (tenants they belong to) streams. Reconcile, subscribe catch-up and wipe re-bootstrap page every stream through `POST /sync/snapshot/batch`: one round trip per round, with up to 5,000 rows per response shared across the streams. Empty streams cost nothing extra. `forceResync`, and every pass against a server without the batch route, still page with one `GET /sync/snapshot` per stream, `snapshotConcurrency` streams side by side (default 6). Each stream runs one pass at a time, and a pass that purges (force resync, wipe) waits for the stream's in-flight pass to finish first.
 
-Measured with a fake HTTP channel at 150 ms latency, 13 collections and 2 workspaces (26 streams): 4.1 s to the first full reconcile when paging one stream at a time, 0.95 s at the default concurrency.
+Measured with a fake HTTP channel at 150 ms latency, 13 collections and 2 workspaces (26 streams): 4.1 s to the first full reconcile when paging one stream at a time, 0.95 s at the default concurrency. In a browser with 100 collections and 10k rows, batching cut a reconnect with no changes from 101 requests to 2.
 
 | Do | Why |
 | --- | --- |
 | Sync only the collections the client reads. | Each collection adds one stream per tenant to cold start. |
 | Gate each screen on its **own** stream's bootstrap (see [No loading flag on synced reads](#no-loading-flag-on-synced-reads)), not on "sync finished". | The stream a screen needs may land after others. |
 | Don't call `forceResync()` on a hot path. | It purges and re-pages every stream. |
-| Raise `snapshotConcurrency` only if the backend can take it. | Each in-flight stream is one concurrent snapshot query on the server. |
+| Raise `snapshotConcurrency` only if the backend can take it. | Without the batch route, each in-flight stream is one concurrent snapshot query on the server. |
 
 The startup reconcile and each collection's `sync:subscribed` catch-up both page the same streams. A catch-up queues behind a pass that started before the room join, because that pass may have missed a write. So a cold start still pages each stream twice, one pass after the other.
 

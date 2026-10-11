@@ -16,7 +16,7 @@ import {SYNC_SCHEMA_VERSION} from "./storage/schema";
 import {createSyncStore, type SyncStore} from "./storage/store";
 import {CURSORS_TABLE, KNOWN_STREAMS_TABLE} from "./storage/types";
 import {wipeLocalData} from "./storage/wipe";
-import {bootstrapStream} from "./sync/bootstrap";
+import {bootstrapStream, bootstrapStreamsBatch} from "./sync/bootstrap";
 import {getAllCursors} from "./sync/cursor";
 import {applyDelta} from "./sync/deltaApplier";
 import {repairMarkedEntities} from "./sync/entityRepair";
@@ -52,6 +52,15 @@ export const DEFAULT_SNAPSHOT_CONCURRENCY = 6;
 
 /** E5: default local tombstone retention window (90 days), matching the server's (C7). */
 export const DEFAULT_TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000;
+
+/**
+ * Entities one `POST /sync/snapshot/batch` response may carry, shared across its streams.
+ * Bounds both the response size (about 2 MB of typical rows) and the work per round.
+ */
+const SNAPSHOT_BATCH_LIMIT = 5_000;
+
+/** The server has no `POST /sync/snapshot/batch` route (404). */
+class SnapshotBatchUnsupportedError extends Error {}
 
 /**
  * `start()` auth-resolution retry defaults. A host app only calls `start()` once it
@@ -458,6 +467,9 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
   // refresh has already run for the CURRENT pause episode.
   let authPaused = false;
   let refreshAttempted = false;
+  // Set once the server answers 404 to the snapshot batch route; per-stream paging is
+  // used for the rest of this client's life.
+  let snapshotBatchUnsupported = false;
   // E1: lifecycle serialization. `generation` bumps on every start()/stop() so
   // an in-flight operation that resumes after an await can detect it has been
   // superseded (a rapid stop()-then-start() for a new user) and abort instead
@@ -512,7 +524,9 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
   };
 
   /**
-   * Run a snapshot pass for one stream, single-flight per stream.
+   * Run a snapshot pass over `streams`, single-flight per stream. Each stream is either
+   * joined to its latest pass or owned by this one; `run` receives the owned streams once
+   * every pass it queued behind has settled.
    *
    * - `join`: share the stream's latest pass when one exists (reconcile — any pass to
    *   the head will do).
@@ -522,6 +536,61 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
    * - `exclusive`: always queue behind whatever is in flight (force resync and wipe
    *   re-bootstrap purge first, which must never overlap another pass's paging).
    */
+  const runStreamsPass = ({
+    mode,
+    run,
+    streams,
+  }: {
+    mode: "join" | "fresh" | "exclusive";
+    run: (owned: string[]) => Promise<void>;
+    streams: string[];
+  }): Promise<void> => {
+    const joined: Promise<void>[] = [];
+    const owned: string[] = [];
+    const previous: Promise<void>[] = [];
+    for (const stream of streams) {
+      const existing = streamPasses.get(stream);
+      const current =
+        existing && existing.generation === generation && existing.userId === currentUserId
+          ? existing
+          : undefined;
+      if (current && (mode === "join" || (mode === "fresh" && !current.started))) {
+        joined.push(current.promise);
+        continue;
+      }
+      owned.push(stream);
+      if (existing) {
+        previous.push(existing.promise);
+      }
+    }
+    if (owned.length === 0) {
+      return Promise.all(joined).then(() => undefined);
+    }
+    const entry = {generation, promise: Promise.resolve(), started: false, userId: currentUserId};
+    entry.promise = (async (): Promise<void> => {
+      // The previous passes' failures belong to their own callers.
+      await Promise.all(previous.map((pass) => pass.catch(() => undefined)));
+      // A stop()/start() or user switch while this pass was queued supersedes it:
+      // paging now would write into a store that belongs to a newer lifecycle.
+      if (entry.generation !== generation || entry.userId !== currentUserId) {
+        return;
+      }
+      entry.started = true;
+      await run(owned);
+    })().finally(() => {
+      for (const stream of owned) {
+        if (streamPasses.get(stream) === entry) {
+          streamPasses.delete(stream);
+        }
+      }
+    });
+    for (const stream of owned) {
+      streamPasses.set(stream, entry);
+    }
+    return Promise.all([entry.promise, ...joined]).then(() => undefined);
+  };
+
+  /** {@link runStreamsPass} for a single stream. */
   const runStreamPass = ({
     mode,
     run,
@@ -530,37 +599,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     mode: "join" | "fresh" | "exclusive";
     run: () => Promise<void>;
     stream: string;
-  }): Promise<void> => {
-    const existing = streamPasses.get(stream);
-    const current =
-      existing && existing.generation === generation && existing.userId === currentUserId
-        ? existing
-        : undefined;
-    if (current && (mode === "join" || (mode === "fresh" && !current.started))) {
-      return current.promise;
-    }
-    const entry = {generation, promise: Promise.resolve(), started: false, userId: currentUserId};
-    const previous = existing?.promise;
-    entry.promise = (async (): Promise<void> => {
-      if (previous) {
-        // The previous pass's failure belongs to its own caller.
-        await previous.catch(() => undefined);
-      }
-      // A stop()/start() or user switch while this pass was queued supersedes it:
-      // paging now would write into a store that belongs to a newer lifecycle.
-      if (entry.generation !== generation || entry.userId !== currentUserId) {
-        return;
-      }
-      entry.started = true;
-      await run();
-    })().finally(() => {
-      if (streamPasses.get(stream) === entry) {
-        streamPasses.delete(stream);
-      }
-    });
-    streamPasses.set(stream, entry);
-    return entry.promise;
-  };
+  }): Promise<void> => runStreamsPass({mode, run: () => run(), streams: [stream]});
 
   /**
    * Run `worker` over `items` with at most `snapshotConcurrency` in flight. Stops taking
@@ -850,6 +889,84 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     return serverSet;
   };
 
+  /**
+   * Page `streams` to their heads as one single-flight pass (see {@link runStreamsPass}).
+   * One `POST /sync/snapshot/batch` round trip per round covers every owned stream;
+   * against a server without that route, falls back to `GET /sync/snapshot` per stream,
+   * `snapshotConcurrency` streams at a time.
+   */
+  const pageStreams = async ({
+    streams,
+    mode,
+    isSuperseded,
+    purgeFirst = false,
+  }: {
+    streams: {stream: string; collection: string}[];
+    mode: "join" | "fresh" | "exclusive";
+    isSuperseded: () => boolean;
+    /** Purge each owned stream before paging it from 0 (wipe re-bootstrap). */
+    purgeFirst?: boolean;
+  }): Promise<void> => {
+    const channel = httpChannel;
+    if (!channel || streams.length === 0) {
+      return;
+    }
+    const collections = new Map(streams.map(({stream, collection}) => [stream, collection]));
+    await runStreamsPass({
+      mode,
+      run: async (owned) => {
+        const ownedStreams = owned.map((stream) => ({
+          collection: collections.get(stream) as string,
+          stream,
+        }));
+        if (purgeFirst) {
+          for (const {stream, collection} of ownedStreams) {
+            store.purgeStream({stream});
+            store.addKnownStream({collection, stream});
+          }
+        }
+        const fetchSnapshotBatch = channel.fetchSnapshotBatch;
+        if (fetchSnapshotBatch && !snapshotBatchUnsupported) {
+          try {
+            await bootstrapStreamsBatch({
+              fetchSnapshotBatch: async (request) => {
+                const result = await fetchSnapshotBatch(request);
+                if (result.type === "unsupported") {
+                  throw new SnapshotBatchUnsupportedError();
+                }
+                return result;
+              },
+              isSuperseded,
+              limit: SNAPSHOT_BATCH_LIMIT,
+              store,
+              streams: ownedStreams,
+            });
+            return;
+          } catch (error) {
+            if (!(error instanceof SnapshotBatchUnsupportedError)) {
+              throw error;
+            }
+            // Every round before the 404 is already written, so per-stream paging
+            // resumes from the store's cursors without losing anything.
+            snapshotBatchUnsupported = true;
+            debugLog?.record({
+              direction: "system",
+              label: "snapshot batch unsupported by server; paging per stream",
+              type: "reconcile",
+            });
+          }
+        }
+        await runSnapshotPool({
+          isSuperseded,
+          items: ownedStreams,
+          worker: ({stream, collection}) =>
+            bootstrapStream({channel, collection, isSuperseded, store, stream}),
+        });
+      },
+      streams: streams.map(({stream}) => stream),
+    });
+  };
+
   const runReconcile = async (): Promise<void> => {
     // Simulated offline severs all network activity, including the HTTP
     // channel; an auth pause stands down every network trigger (INV-2) until
@@ -882,18 +999,12 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
         // lifecycle/user while awaiting discovery.
         return;
       }
-      const channel = httpChannel;
-      await runSnapshotPool({
+      await pageStreams({
         isSuperseded,
-        items: [...streams].filter(
-          ([stream, collection]) => !skipSnapshotPaging({collection, stream})
-        ),
-        worker: ([stream, collection]) =>
-          runStreamPass({
-            mode: "join",
-            run: () => bootstrapStream({channel, collection, store, stream}),
-            stream,
-          }),
+        mode: "join",
+        streams: [...streams]
+          .filter(([stream, collection]) => !skipSnapshotPaging({collection, stream}))
+          .map(([stream, collection]) => ({collection, stream})),
       });
       if (isSuperseded()) {
         return;
@@ -962,6 +1073,67 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     return promise;
   };
 
+  // Streams confirmed by `sync:subscribed` and not yet paged, tagged with the lifecycle
+  // and user that confirmed them. One confirmation arrives per collection; those landing
+  // while a catch-up request is in flight are paged together in the next one.
+  const pendingCatchUp = new Map<
+    string,
+    {collection: string; generation: number; userId: string | undefined}
+  >();
+  let isCatchUpDraining = false;
+
+  const drainCatchUp = async (): Promise<void> => {
+    if (isCatchUpDraining) {
+      return;
+    }
+    isCatchUpDraining = true;
+    addSyncing(1);
+    try {
+      while (pendingCatchUp.size > 0) {
+        const myGeneration = generation;
+        const myUserId = currentUserId;
+        const isSuperseded = (): boolean =>
+          generation !== myGeneration || currentUserId !== myUserId;
+        const streams: {stream: string; collection: string}[] = [];
+        for (const [stream, pending] of pendingCatchUp) {
+          if (pending.generation === myGeneration && pending.userId === myUserId) {
+            streams.push({collection: pending.collection, stream});
+          }
+        }
+        pendingCatchUp.clear();
+        if (!httpChannel || simulatedOffline || authPaused) {
+          return;
+        }
+        if (streams.length === 0) {
+          continue;
+        }
+        await pageStreams({isSuperseded, mode: "fresh", streams});
+        if (isSuperseded()) {
+          return;
+        }
+        debugLog?.record({
+          detail: {streams: streams.map(({stream}) => stream)},
+          direction: "system",
+          label: `subscribe catch-up: ${streams.map(({stream}) => stream).join(", ")}`,
+          type: "reconcile",
+        });
+      }
+    } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        setAuthPaused(true);
+        return;
+      }
+      throw error;
+    } finally {
+      isCatchUpDraining = false;
+      addSyncing(-1);
+      // Confirmations for a newer lifecycle can queue while a superseded pass unwinds.
+      if (pendingCatchUp.size > 0) {
+        void drainCatchUp().catch(warn("subscribe catch-up failed"));
+      }
+    }
+  };
+
   /**
    * Catch up the streams the server just confirmed this socket joined
    * (`sync:subscribed`).
@@ -978,8 +1150,9 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
    * confirmed stream from its cursor here makes snapshot + delta coverage contiguous.
    * It deliberately does NOT go through `reconcile()`: that call coalesces onto a pass
    * which may have started before the join (exactly the pass that could have missed the
-   * write). Per-stream paging is idempotent and cursor-guarded, so running it beside an
-   * in-flight reconcile is safe.
+   * write). For the same reason a confirmation arriving while a catch-up request is in
+   * flight waits for the next request rather than joining that one. Paging is
+   * idempotent and cursor-guarded, so running it beside an in-flight reconcile is safe.
    */
   const catchUpSubscribedStreams = async ({
     collection,
@@ -999,42 +1172,24 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     if (mode === "window" || isWindowCollection(collection)) {
       return;
     }
-    const myGeneration = generation;
-    const myUserId = currentUserId;
-    const isSuperseded = (): boolean => generation !== myGeneration || currentUserId !== myUserId;
-    addSyncing(1);
-    try {
-      const channel = httpChannel;
-      await runSnapshotPool({
-        isSuperseded,
-        items: streams.filter((stream) => !skipSnapshotPaging({collection, mode, stream})),
-        worker: (stream) => {
-          store.addKnownStream({collection, stream});
-          return runStreamPass({
-            mode: "fresh",
-            run: () => bootstrapStream({channel, collection, store, stream}),
-            stream,
-          });
-        },
-      });
-      if (isSuperseded()) {
-        return;
+    for (const stream of streams) {
+      if (skipSnapshotPaging({collection, mode, stream})) {
+        continue;
       }
-      debugLog?.record({
-        detail: {collection, streams},
-        direction: "system",
-        label: `subscribe catch-up: ${streams.join(", ")}`,
-        type: "reconcile",
-      });
-    } catch (error) {
-      if (error instanceof AuthRequiredError) {
-        setAuthPaused(true);
-        return;
+      store.addKnownStream({collection, stream});
+      // A queued pass that has not started yet already starts after this join.
+      const queued = streamPasses.get(stream);
+      if (
+        queued &&
+        !queued.started &&
+        queued.generation === generation &&
+        queued.userId === currentUserId
+      ) {
+        continue;
       }
-      throw error;
-    } finally {
-      addSyncing(-1);
+      pendingCatchUp.set(stream, {collection, generation, userId: currentUserId});
     }
+    await drainCatchUp();
   };
 
   /**
@@ -1168,7 +1323,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
               }
               purged += store.purgeStream({stream});
               store.addKnownStream({collection, stream});
-              await bootstrapStream({channel, collection, store, stream});
+              await bootstrapStream({channel, collection, isSuperseded, store, stream});
             },
             stream,
           });
@@ -1425,23 +1580,14 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
       // INV-2 auth-pause case (returns undefined on a 401) — skip bootstrap then.
       const streams = await syncStreams();
       if (streams) {
-        const channel = httpChannel;
-        await runSnapshotPool({
+        await pageStreams({
           isSuperseded: () => false,
-          items: [...streams],
-          worker: ([stream, collection]) =>
-            runStreamPass({
-              mode: "exclusive",
-              // A pass that was paging when the wipe ran can write its cursor and
-              // `bootstrapped` mark into the wiped store before this one starts. Purge
-              // again so this pass pages from 0 instead of resuming from that cursor.
-              run: async () => {
-                store.purgeStream({stream});
-                store.addKnownStream({collection, stream});
-                await bootstrapStream({channel, collection, store, stream});
-              },
-              stream,
-            }),
+          mode: "exclusive",
+          // A pass that was paging when the wipe ran can write its cursor and
+          // `bootstrapped` mark into the wiped store before this one starts. Purge
+          // again so this pass pages from 0 instead of resuming from that cursor.
+          purgeFirst: true,
+          streams: [...streams].map(([stream, collection]) => ({collection, stream})),
         });
       }
     }

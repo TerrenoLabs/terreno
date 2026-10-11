@@ -403,6 +403,114 @@ describe("sync routes", () => {
     });
   });
 
+  describe("POST /sync/snapshot/batch", () => {
+    const ownerStream = (): string => `routeStuff|owner:${notAdminId}`;
+    const tenantStream = "routeProjects|tenant:org1";
+
+    it("requires authentication", async () => {
+      await server
+        .post("/sync/snapshot/batch")
+        .send({streams: [{stream: "routeStuff|owner:x"}]})
+        .expect(401);
+    });
+
+    it("returns one scoped page per stream, in request order", async () => {
+      await RouteStuffModel.create({name: "mine", ownerId: notAdminId});
+      await RouteStuffModel.create({name: "theirs", ownerId: "someoneElse"});
+      await RouteProjectModel.create({orgId: "org1", title: "visible"});
+      await RouteProjectModel.create({orgId: "org2", title: "hidden"});
+
+      const res = await agent
+        .post("/sync/snapshot/batch")
+        .send({streams: [{stream: tenantStream}, {cursor: 0, stream: ownerStream()}]})
+        .expect(200);
+
+      expect(res.body.pages.map((page: {stream: string}) => page.stream)).toEqual([
+        tenantStream,
+        ownerStream(),
+      ]);
+      expect(res.body.pages[0].entities.map((e: SnapshotEntity) => e.data.title)).toEqual([
+        "visible",
+      ]);
+      expect(res.body.pages[1].entities.map((e: SnapshotEntity) => e.data.name)).toEqual(["mine"]);
+      expect(res.body.pages[1].hasMore).toBe(false);
+      expect(res.body.pages[1].cursor).toBe(res.body.pages[1].frontierSeq);
+    });
+
+    it("splits the entity budget across streams and resumes from each stream's cursor", async () => {
+      for (let i = 1; i <= 5; i++) {
+        await RouteStuffModel.create({name: `item ${i}`, ownerId: notAdminId});
+      }
+      await RouteProjectModel.create({orgId: "org1", title: "project"});
+
+      const first = await agent
+        .post("/sync/snapshot/batch")
+        .send({limit: 4, streams: [{stream: ownerStream()}, {stream: tenantStream}]})
+        .expect(200);
+      const [ownerPage, tenantPage] = first.body.pages;
+      expect(ownerPage.entities).toHaveLength(2);
+      expect(ownerPage.hasMore).toBe(true);
+      expect(tenantPage.entities).toHaveLength(1);
+      expect(tenantPage.hasMore).toBe(false);
+
+      const second = await agent
+        .post("/sync/snapshot/batch")
+        .send({limit: 4, streams: [{cursor: ownerPage.cursor, stream: ownerStream()}]})
+        .expect(200);
+      expect(second.body.pages[0].entities.map((e: SnapshotEntity) => e.data.name)).toEqual([
+        "item 3",
+        "item 4",
+        "item 5",
+      ]);
+      expect(second.body.pages[0].hasMore).toBe(false);
+    });
+
+    it("serves the same page as GET /sync/snapshot for the same stream and cursor", async () => {
+      for (let i = 1; i <= 3; i++) {
+        await RouteStuffModel.create({name: `item ${i}`, ownerId: notAdminId});
+      }
+      const single = await agent
+        .get(`/sync/snapshot?stream=${encodeURIComponent(ownerStream())}&limit=2&cursor=1`)
+        .expect(200);
+      const batch = await agent
+        .post("/sync/snapshot/batch")
+        .send({limit: 2, streams: [{cursor: 1, stream: ownerStream()}]})
+        .expect(200);
+      expect(batch.body.pages[0]).toEqual(single.body);
+    });
+
+    it("rejects the whole request when any stream is not the caller's", async () => {
+      await agent
+        .post("/sync/snapshot/batch")
+        .send({streams: [{stream: ownerStream()}, {stream: "routeStuff|owner:someoneElse"}]})
+        .expect(403);
+    });
+
+    it("rejects malformed bodies", async () => {
+      const tooMany = Array.from({length: 501}, (_unused, index) => ({
+        stream: `routeStuff|owner:u${index}`,
+      }));
+      const bodies: unknown[] = [
+        {},
+        {streams: []},
+        {streams: "routeStuff"},
+        {streams: tooMany},
+        {streams: [{cursor: 0}]},
+        {streams: [{stream: ownerStream()}, {stream: ownerStream()}]},
+        {streams: [{cursor: -1, stream: ownerStream()}]},
+        {streams: [{legacyCursor: 5, stream: ownerStream()}]},
+        {limit: "lots", streams: [{stream: ownerStream()}]},
+        {streams: [{stream: "notAStreamKey"}]},
+      ];
+      for (const body of bodies) {
+        await agent
+          .post("/sync/snapshot/batch")
+          .send(body as object)
+          .expect(400);
+      }
+    });
+  });
+
   describe("buildSnapshotScopeFilter", () => {
     it("500s for a custom scope entry that has no snapshotFilter result", () => {
       // Registration rejects this shape up front, so build the entry directly.

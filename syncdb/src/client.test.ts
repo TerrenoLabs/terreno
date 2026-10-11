@@ -15,7 +15,13 @@ import {CURSORS_TABLE} from "./storage/types";
 import {AuthRequiredError, type HttpChannel} from "./sync/httpChannel";
 import type {SyncTransport} from "./sync/transport";
 import {createFakeTransport, type FakeTransport} from "./testing/fakeTransport";
-import type {AuthProvider, SyncDelta, SyncSnapshotResponse, SyncStreamInfo} from "./types";
+import type {
+  AuthProvider,
+  SyncDelta,
+  SyncSnapshotBatchRequest,
+  SyncSnapshotResponse,
+  SyncStreamInfo,
+} from "./types";
 
 let nameCounter = 0;
 const uniqueName = (): string => {
@@ -576,6 +582,110 @@ describe("createSyncDb", () => {
       await client.start();
       await new Promise((resolve) => setTimeout(resolve, 70));
       assert.deepEqual(snapshotStreams, []);
+      await client.stop();
+    });
+  });
+
+  describe("snapshot batch", () => {
+    const NOTES_STREAM = "notes|owner:u1";
+
+    /** Harness whose channel also serves `POST /sync/snapshot/batch` from `state.pages`. */
+    const makeBatchHarness = (): Harness & {
+      batchRequests: SyncSnapshotBatchRequest[];
+      setBatchUnsupported: (unsupported: boolean) => void;
+      gateNextBatch: () => () => void;
+    } => {
+      const harness = makeHarness({collections: ["todos", "notes"]});
+      harness.http.state.streams = [
+        {collection: "todos", stream: DEFAULT_STREAM},
+        {collection: "notes", stream: NOTES_STREAM},
+      ];
+      const batchRequests: SyncSnapshotBatchRequest[] = [];
+      let isUnsupported = false;
+      let gate: Promise<void> | undefined;
+      harness.http.channel.fetchSnapshotBatch = async (request) => {
+        batchRequests.push(request);
+        const pending = gate;
+        gate = undefined;
+        await pending;
+        if (isUnsupported) {
+          return {type: "unsupported"};
+        }
+        return {
+          pages: request.streams.map(
+            ({stream}) => harness.http.state.pages[stream] ?? emptyPage(stream)
+          ),
+          type: "pages",
+        };
+      };
+      return {
+        ...harness,
+        batchRequests,
+        gateNextBatch: (): (() => void) => {
+          let release = (): void => {};
+          gate = new Promise<void>((resolve) => {
+            release = (): void => resolve();
+          });
+          return release;
+        },
+        setBatchUnsupported: (unsupported: boolean): void => {
+          isUnsupported = unsupported;
+        },
+      };
+    };
+
+    it("bootstraps every stream with one batch request instead of one request per stream", async () => {
+      const harness = makeBatchHarness();
+      harness.http.state.pages[NOTES_STREAM] = {
+        ...emptyPage(NOTES_STREAM, 3),
+        entities: [{data: {body: "hello"}, deleted: false, id: "n1", seq: 3}],
+      };
+      const client = createSyncDb(harness.config);
+      await client.start();
+      await waitUntil(() => client.store.getEntity({collection: "notes", id: "n1"}) !== undefined);
+
+      expect(harness.batchRequests).toHaveLength(1);
+      expect(harness.batchRequests[0]?.streams.map(({stream}) => stream)).toEqual([
+        DEFAULT_STREAM,
+        NOTES_STREAM,
+      ]);
+      expect(harness.batchRequests[0]?.limit).toBe(5000);
+      expect(harness.http.state.fetchCount).toBe(0);
+      await client.stop();
+    });
+
+    it("falls back to per-stream paging when the server has no batch route, and remembers", async () => {
+      const harness = makeBatchHarness();
+      harness.setBatchUnsupported(true);
+      const client = createSyncDb(harness.config);
+      await client.start();
+      await waitUntil(() => harness.http.state.fetchCount === 2);
+
+      await client.reconcile();
+
+      expect(harness.batchRequests).toHaveLength(1);
+      expect(harness.http.state.fetchCount).toBe(4);
+      await client.stop();
+    });
+
+    it("pages confirmations that arrive during a catch-up together in the next request", async () => {
+      const harness = makeBatchHarness();
+      const client = createSyncDb(harness.config);
+      await client.start();
+      await flush();
+      harness.batchRequests.length = 0;
+
+      const release = harness.gateNextBatch();
+      harness.transport.confirmSubscribed({collection: "todos", streams: [DEFAULT_STREAM]});
+      harness.transport.confirmSubscribed({collection: "notes", streams: [NOTES_STREAM]});
+      harness.transport.confirmSubscribed({collection: "notes", streams: ["notes|owner:shared"]});
+      release();
+      await waitUntil(() => harness.batchRequests.length === 2);
+      await flush();
+
+      expect(
+        harness.batchRequests.map((request) => request.streams.map(({stream}) => stream))
+      ).toEqual([[DEFAULT_STREAM], [NOTES_STREAM, "notes|owner:shared"]]);
       await client.stop();
     });
   });

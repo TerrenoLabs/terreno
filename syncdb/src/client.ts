@@ -546,6 +546,11 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
         // The previous pass's failure belongs to its own caller.
         await previous.catch(() => undefined);
       }
+      // A stop()/start() or user switch while this pass was queued supersedes it:
+      // paging now would write into a store that belongs to a newer lifecycle.
+      if (entry.generation !== generation || entry.userId !== currentUserId) {
+        return;
+      }
       entry.started = true;
       await run();
     })().finally(() => {
@@ -1427,7 +1432,14 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
           worker: ([stream, collection]) =>
             runStreamPass({
               mode: "exclusive",
-              run: () => bootstrapStream({channel, collection, store, stream}),
+              // A pass that was paging when the wipe ran can write its cursor and
+              // `bootstrapped` mark into the wiped store before this one starts. Purge
+              // again so this pass pages from 0 instead of resuming from that cursor.
+              run: async () => {
+                store.purgeStream({stream});
+                store.addKnownStream({collection, stream});
+                await bootstrapStream({channel, collection, store, stream});
+              },
               stream,
             }),
         });

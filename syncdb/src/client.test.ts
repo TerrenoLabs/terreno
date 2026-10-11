@@ -3432,6 +3432,27 @@ describe("snapshot paging concurrency", () => {
     await client.stop();
   });
 
+  it("drops a queued catch-up when the client stops before it starts", async () => {
+    const harness = makeHarness();
+    const pages = trackSnapshotPages(harness);
+    const client = createSyncDb(harness.config);
+    await client.start();
+    await waitUntil(() => pages.pending() === 1);
+    harness.transport.confirmSubscribed({collection: "todos", streams: [DEFAULT_STREAM]});
+    await flush();
+
+    const stopped = client.stop();
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      pages.releaseAll();
+      await flush();
+    }
+    await stopped;
+
+    // Only the startup pass paged; the catch-up queued behind it belonged to the
+    // stopped lifecycle.
+    expect(pages.fetched).toEqual([DEFAULT_STREAM]);
+  });
+
   it("forceResync waits for an in-flight pass before purging the stream", async () => {
     const harness = makeHarness();
     harness.http.state.pages[DEFAULT_STREAM] = {

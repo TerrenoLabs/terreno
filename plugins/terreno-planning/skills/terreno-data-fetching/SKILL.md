@@ -19,7 +19,7 @@ Never call `axios`, raw `fetch`, React Query, or SWR from application screens.
 
 ## Documentation
 
-1. Read `docs/reference/syncdb.md`, `docs/how-to/migrate-rtk-to-syncdb.md`, and auth/realtime explanation pages before changing fetch, cache, or session behavior.
+1. Read `docs/reference/syncdb.md`, `docs/how-to/migrate-rtk-to-syncdb.md`, `docs/how-to/use-syncdb-correctly.md`, and auth/realtime explanation pages before changing fetch, cache, or session behavior.
 2. Implement against that design.
 3. Update those pages in the same slice with `update-docs`.
 4. Ship without matching docs is a failed slice.
@@ -251,6 +251,20 @@ const {data: profile} = useGetMeQuery();
 ```bash
 cd example-frontend && bun run sdk
 ```
+
+**Wrong: refusing a synced write with 403 from a router hook**
+
+```typescript
+throw new APIError({status: 403, title: "Not a member"}); // in preCreate — halts the client outbox
+```
+
+**Right: 422, so syncdb nacks it as `validation`**
+
+```typescript
+throw new APIError({status: 422, title: "Not a member"});
+```
+
+**Wrong: rendering the empty state from `useQuery` before the stream bootstraps.** An empty array before bootstrap looks the same as an empty collection. Gate on the stream's `bootstrapped` cell. See `docs/how-to/use-syncdb-correctly.md` for this and the other pitfalls (cold-start cost per stream, dropped ack warnings, phantom creates, unresolved conflicts).
 
 ## Example Invocations
 

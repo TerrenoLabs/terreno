@@ -47,6 +47,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid` (ops-dashboard scorecards and spans: [dashboard-chart-parity](../implementationPlans/dashboard-chart-parity.md))
 - [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md) — PNG goldens for the chart visual gallery, not JSON snapshots
 - [Migrate from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md) — Move data sync to the local-first layer
+- [Use syncdb correctly](use-syncdb-correctly.md) — Serial snapshot startup, outbox-halting 403s, phantom creates, conflicts, and other library behavior apps must handle
 - [Generate a REST CLI from OpenAPI](generate-a-rest-cli.md) — Scaffold `terreno generate rest-cli` for an app API
 - [In-app notifications](in-app-notifications.md) — Register `NotificationsApp`, syncdb inbox, and UI bell
 - [Add organizations](add-organizations.md) — Opt into Membership-backed tenancy, RBAC, admin, and seeded examples

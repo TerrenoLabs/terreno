@@ -168,6 +168,7 @@ const client = createSyncDb({
   seqJumpReconcileMinIntervalMs?, // seq-jump reconcile rate limit (default 30s)
   batchSize?,                     // max mutations per batched drain send (default 50; server caps at 100)
   haltQueueOnConflict?,           // conflict policy — see "Conflict handling modes" below (default false)
+  snapshotConcurrency?,           // streams snapshot-paged at once (default 6; 1 = one at a time)
   onDecryptFailure?,              // override the default wipe+re-bootstrap on undecryptable data (web)
   tombstoneRetentionMs?,          // client-side tombstone compaction window (default 90 days; 0 disables)
   onAuthRequired?,                // fires once per auth-pause episode — prompt for re-login
@@ -451,6 +452,7 @@ This writes `store/syncDbSdk.ts` with `SYNC_COLLECTIONS`, entity types, and hook
 - **Native plaintext by design**: no SQLCipher; the OS sandbox is deemed sufficient.
 - **Whole-store persistence**: each save serializes and (on web) encrypts the full store — cost scales with store size, not change size. Bound it by scoping which collections sync; saves are debounced.
 - **`realtime` + `sync` coexistence**: a model may enable both (distinct events, `sync` vs `sync:delta`, so clients never double-apply), at the cost of double emission work. `modelRouter` `realtime` is **deprecated and will be removed in Terreno 58**; use `sync` only.
+- **Cold start scales with stream count**: every stream (one collection in one scope) costs at least one `GET /sync/snapshot` round trip, even when empty. Streams page side by side (`snapshotConcurrency`, default 6), so cold start is about `streams / 6` round trips. Sync only the collections the client reads. See [Use syncdb correctly](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/use-syncdb-correctly.md) for this and the write-path pitfalls apps must handle.
 - **Seq counter write amplification**: every synced write does an atomic `$inc` on a per-stream counter doc. Acceptable at current scale; Redis-based counters are the documented upgrade path.
 
 ## Documentation

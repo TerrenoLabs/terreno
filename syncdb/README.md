@@ -451,6 +451,7 @@ This writes `store/syncDbSdk.ts` with `SYNC_COLLECTIONS`, entity types, and hook
 - **Native plaintext by design**: no SQLCipher; the OS sandbox is deemed sufficient.
 - **Whole-store persistence**: each save serializes and (on web) encrypts the full store — cost scales with store size, not change size. Bound it by scoping which collections sync; saves are debounced.
 - **`realtime` + `sync` coexistence**: a model may enable both (distinct events, `sync` vs `sync:delta`, so clients never double-apply), at the cost of double emission work. `modelRouter` `realtime` is **deprecated and will be removed in Terreno 58**; use `sync` only.
+- **Snapshot bootstrap is serial**: reconcile, subscribe catch-up, `forceResync` and wipe-rebootstrap page one stream at a time, so cold start costs one round trip per stream (collections × tenants). There is also no per-stream single-flight, so a cold start pages most streams twice. See [Use syncdb correctly](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/use-syncdb-correctly.md) for both gaps and the other write-path pitfalls.
 - **Seq counter write amplification**: every synced write does an atomic `$inc` on a per-stream counter doc. Acceptable at current scale; Redis-based counters are the documented upgrade path.
 
 ## Documentation

@@ -4,6 +4,7 @@ import type Markdown from "react-native-markdown-display";
 import {FitImage, renderRules} from "react-native-markdown-display";
 
 import {Box} from "./Box";
+import {contrastRatio, WCAG_NORMAL_TEXT_CONTRAST} from "./colorContrast";
 import {MarkdownEmbed} from "./MarkdownEmbed";
 import {isEmbeddableMediaUrl, toMediaEmbedUrl} from "./markdownEmbeds";
 import {Spinner} from "./Spinner";
@@ -70,7 +71,26 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
       ...color,
     };
 
+    const blockquoteBackground =
+      contrastRatio(textColor, theme.surface.baseAlternate) >= WCAG_NORMAL_TEXT_CONTRAST
+        ? theme.surface.baseAlternate
+        : theme.surface.neutralDark;
+    // Inverted text on neutralLight is about 2:1 in dark mode. Prefer that fill, then
+    // neutralDark, so code stays on the lighter chip when primary text already passes.
+    const codeBackground =
+      contrastRatio(textColor, theme.surface.neutralLight) >= WCAG_NORMAL_TEXT_CONTRAST
+        ? theme.surface.neutralLight
+        : theme.surface.neutralDark;
+
     return {
+      blockquote: {
+        backgroundColor: blockquoteBackground,
+        borderColor: theme.border.default,
+        borderLeftWidth: 4,
+        marginLeft: 0,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+      },
       body: {width: "100%", ...markdownTextStyle},
       bullet_list: {width: "100%"},
       bullet_list_content: {flex: 1, flexShrink: 1, minWidth: 0},
@@ -83,7 +103,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
         ...markdownTextStyle,
       },
       code_block: {
-        backgroundColor: theme.surface.neutralLight,
+        backgroundColor: codeBackground,
         borderColor: theme.border.default,
         borderRadius: 4,
         borderWidth: 1,
@@ -93,7 +113,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
         ...color,
       },
       code_inline: {
-        backgroundColor: theme.surface.neutralLight,
+        backgroundColor: codeBackground,
         borderColor: theme.border.default,
         borderRadius: 3,
         borderWidth: 1,
@@ -104,7 +124,7 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
         ...color,
       },
       fence: {
-        backgroundColor: theme.surface.neutralLight,
+        backgroundColor: codeBackground,
         borderColor: theme.border.default,
         borderRadius: 4,
         borderWidth: 1,
@@ -181,7 +201,14 @@ const MarkdownViewComponent: React.FC<MarkdownViewProps> = ({children, inverted,
       },
       tr: {borderBottomWidth: 0, borderColor: theme.border.default, flexDirection: "row"},
     };
-  }, [textColor, theme.border.default, theme.surface.neutralLight, theme.surface.secondaryLight]);
+  }, [
+    textColor,
+    theme.border.default,
+    theme.surface.baseAlternate,
+    theme.surface.neutralDark,
+    theme.surface.neutralLight,
+    theme.surface.secondaryLight,
+  ]);
 
   const handleLinkPress = useCallback((url: string): boolean => {
     void Linking.openURL(url);

@@ -3,7 +3,7 @@ export interface DemoPreviewState {
   locale: string;
   reducedMotion: boolean;
   rtl: boolean;
-  theme: "light" | "dark";
+  theme: "light" | "dark" | "system";
   viewport: "full" | "320" | "375" | "1024" | "1280";
 }
 
@@ -33,7 +33,7 @@ export const previewStateFromQuery = (
 ): DemoPreviewState => {
   const state = defaultPreviewState();
   const theme = one(query.theme);
-  if (theme === "dark" || theme === "light") {
+  if (theme === "dark" || theme === "light" || theme === "system") {
     state.theme = theme;
   }
   const viewport = one(query.viewport);
@@ -73,4 +73,12 @@ export const previewParamsFromState = (state: DemoPreviewState): Record<string, 
     theme: state.theme === "light" ? "" : state.theme,
     viewport: state.viewport === "full" ? "" : state.viewport,
   };
+};
+
+/** Non-default preview params to carry when opening another demo or dev route. */
+export const activePreviewParams = (
+  query: Record<string, string | string[] | undefined>
+): Record<string, string> => {
+  const params = previewParamsFromState(previewStateFromQuery(query));
+  return Object.fromEntries(Object.entries(params).filter((entry) => entry[1] !== ""));
 };

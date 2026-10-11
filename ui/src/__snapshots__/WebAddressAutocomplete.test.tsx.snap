@@ -253,7 +253,7 @@ exports[`WebAddressAutocomplete renders disabled state 1`] = `
       ],
       "props": {
         "style": {
-          "backgroundColor": "#D9D9D9",
+          "backgroundColor": "#CDCDCD",
           "borderColor": "#4E4E4E",
           "borderRadius": 4,
           "borderWidth": 1,

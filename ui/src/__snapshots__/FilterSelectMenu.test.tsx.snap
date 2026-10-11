@@ -66,6 +66,7 @@ exports[`FilterSelectMenu renders correctly with default props 1`] = `
                               "$$typeof": Symbol(react.test.json),
                               "children": null,
                               "props": {
+                                "accessibilityLabel": "Please select an option.",
                                 "editable": false,
                                 "multiline": true,
                                 "style": {

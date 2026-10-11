@@ -61,7 +61,7 @@ export const AvatarSizes = () => {
 };
 export const AvatarOutlines = () => {
   return (
-    <Box color="neutral" direction="column" display="flex">
+    <Box color="baseAlternate" direction="column" display="flex">
       <Text>XS</Text>
       <Avatar name="Tony Stark" size="xs" status="online" />
       <Text>SM</Text>

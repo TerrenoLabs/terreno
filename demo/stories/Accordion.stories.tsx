@@ -29,7 +29,7 @@ export const AccordionDevDemo = () => {
     );
   };
   return (
-    <View style={{backgroundColor: "white", width: isMobile ? "100%" : "50%"}}>
+    <Box color="base" width={isMobile ? "100%" : "50%"}>
       <View style={{padding: 15, width: "100%"}}>
         <Accordion
           includeInfoModal
@@ -44,7 +44,7 @@ export const AccordionDevDemo = () => {
           </Box>
         </Accordion>
       </View>
-    </View>
+    </Box>
   );
 };
 
@@ -54,7 +54,7 @@ export const AccordionOnToggleDemo = () => {
   const isMobile = isNarrowViewport();
 
   return (
-    <View style={{backgroundColor: "white", width: isMobile ? "100%" : isCollapsed ? 150 : 450}}>
+    <Box color="base" width={isMobile ? "100%" : isCollapsed ? 150 : 450}>
       <View style={{padding: 15, width: "100%"}}>
         <Accordion
           isCollapsed={isCollapsed}
@@ -70,6 +70,6 @@ export const AccordionOnToggleDemo = () => {
           </Box>
         </Accordion>
       </View>
-    </View>
+    </Box>
   );
 };

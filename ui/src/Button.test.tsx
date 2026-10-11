@@ -1,6 +1,7 @@
 import {describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
+import {type FC, type ReactNode, useEffect} from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 
 import {Button} from "./Button";
@@ -134,6 +135,43 @@ describe("Button", () => {
       <Button onClick={() => {}} text="Primary" variant="primary" />
     );
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it("uses accessible Figma text colors for primary buttons in both modes", () => {
+    const light = renderWithTheme(
+      <Button onClick={() => {}} text="Light primary" variant="primary" />
+    );
+    const dark = render(
+      <ThemeModule.ThemeProvider colorScheme="dark">
+        <Button onClick={() => {}} text="Dark primary" variant="primary" />
+      </ThemeModule.ThemeProvider>
+    );
+
+    assert.equal(light.getByText("Light primary").props.style.color, "#092E3A");
+    assert.equal(dark.getByText("Dark primary").props.style.color, "#353535");
+  });
+
+  it("keeps primary text readable when dark tokens are applied in light colorScheme", async () => {
+    const DarkTokens: FC<{children: ReactNode}> = ({children}) => {
+      const {setTheme} = ThemeModule.useTheme();
+      // Apply darkThemeConfig without changing colorScheme, the theme-story path.
+      useEffect(() => {
+        setTheme(ThemeModule.darkThemeConfig);
+      }, [setTheme]);
+      return children;
+    };
+
+    const {getByText} = render(
+      <ThemeModule.ThemeProvider>
+        <DarkTokens>
+          <Button onClick={() => {}} text="Dark tokens" variant="primary" />
+        </DarkTokens>
+      </ThemeModule.ThemeProvider>
+    );
+
+    await waitFor(() => {
+      assert.equal(getByText("Dark tokens").props.style.color, "#353535");
+    });
   });
 
   it("renders secondary variant", () => {

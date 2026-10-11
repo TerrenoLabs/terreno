@@ -18,7 +18,13 @@ const TabLayout: React.FC = () => {
     <Tabs
       screenOptions={{
         headerShown: false,
+        sceneStyle: {backgroundColor: theme.surface.base},
         tabBarActiveTintColor: theme.surface.primary,
+        tabBarInactiveTintColor: theme.text.secondaryLight,
+        tabBarStyle: {
+          backgroundColor: theme.surface.base,
+          borderTopColor: theme.border.default,
+        },
       }}
     >
       <Tabs.Screen

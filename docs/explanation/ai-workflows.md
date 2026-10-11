@@ -164,6 +164,7 @@ Ensures preview environments don't accumulate and waste resources.
 **Requirements for auto-merge:**
 - All CI checks pass
 - Dependabot PR (created by Dependabot)
+- Not a semver-major bump (for a grouped PR, no bump in the group is major); majors wait for a human review
 - No conflicts
 
 **Learn more:** [Dependency Management](dependency-management.md)

@@ -1911,14 +1911,8 @@ jobs:
           bun run docs:version "$VERSION"
           bun run prune-versions
 
-      - name: Build and upload the archived docs site
-        env:
-          GITHUB_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
-        run: |
-          VERSION="${{ needs.check-changes.outputs.version }}"
-          scripts/ci/docs-archive.sh build "$VERSION" "$RUNNER_TEMP/docs-site.tar.gz"
-          scripts/ci/docs-archive.sh upload "$VERSION" "$RUNNER_TEMP/docs-site.tar.gz"
-
+      # Commit before the archive upload so a failed upload does not keep the
+      # snapshot off master.
       - name: Commit versioned docs
         run: |
           VERSION="${{ needs.check-changes.outputs.version }}"
@@ -1930,6 +1924,46 @@ jobs:
             git pull --rebase origin master
             git push origin master
           fi
+
+      - name: Build and upload the archived docs site
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: |
+          VERSION="${{ needs.check-changes.outputs.version }}"
+          scripts/ci/docs-archive.sh build "$VERSION" "$RUNNER_TEMP/docs-site.tar.gz"
+          scripts/ci/docs-archive.sh upload "$VERSION" "$RUNNER_TEMP/docs-site.tar.gz"
+
+  # Releases start as drafts so the docs archive can be attached before
+  # immutable releases lock the assets. This publishes the draft last.
+  publish-github-release:
+    needs: [check-changes, update-version-on-master, cut-docs-version]
+    if: |
+      always() &&
+      needs.check-changes.result == 'success' &&
+      (needs.update-version-on-master.result == 'success' || needs.check-changes.outputs.isPrerelease == 'true') &&
+      needs.cut-docs-version.result != 'failure' &&
+      needs.cut-docs-version.result != 'cancelled'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Validate required secrets
+        env:
+          REPO_ADMIN_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: |
+          missing=()
+          if [ -z "$REPO_ADMIN_TOKEN" ]; then missing+=("REPO_ADMIN_TOKEN"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6.0.3
+
+      - name: Publish the GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: scripts/ci/github-release.sh publish "${{ needs.check-changes.outputs.version }}"
 
   notify:
     needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]

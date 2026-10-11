@@ -3,12 +3,14 @@
 #
 # Each released version is built once, at release time, from its
 # website/versioned_docs snapshot with baseUrl /<version>/, and stored as the
-# docs-site.tar.gz asset on that version's GitHub release. Production deploys
+# docs-site.tar.gz asset on that version's GitHub release. The release is still
+# a draft at upload time (immutable releases lock assets on publish); CI
+# publishes it afterwards with github-release.sh. Production deploys
 # download those archives into the publish dir instead of rebuilding every
 # version, so a docs build only ever bundles one docs tree.
 #
 #   docs-archive.sh build <version> <out.tar.gz>   build one version's site
-#   docs-archive.sh upload <version> <file.tar.gz> attach it to the GitHub release (GITHUB_TOKEN)
+#   docs-archive.sh upload <version> <file.tar.gz> attach it to the draft GitHub release (GITHUB_TOKEN)
 #   docs-archive.sh fetch <publish-dir>            unpack every version in versions.json
 set -euo pipefail
 
@@ -55,10 +57,16 @@ github_api() {
 upload_archive() {
   local version="$1" file="$2"
   "$repo_root/scripts/ci/validate-env.sh" GITHUB_TOKEN
-  local release
-  release="$(github_api "https://api.github.com/repos/${repo}/releases/tags/${version}")"
   local release_id
-  release_id="$(jq -r '.id' <<<"$release")"
+  release_id="$("$repo_root/scripts/ci/github-release.sh" id "$version")"
+  local release
+  release="$(github_api "https://api.github.com/repos/${repo}/releases/${release_id}")"
+  # Immutable releases lock assets on publish; GitHub would answer 422.
+  if [ "$(jq -r '.draft' <<<"$release")" != "true" ]; then
+    echo "Release ${version} is already published, and immutable releases cannot take new assets." >&2
+    echo "The release skill must create it with 'gh release create --draft'; CI publishes it after this upload." >&2
+    exit 1
+  fi
   # Re-runs replace the asset instead of failing on a duplicate name.
   local existing_id
   existing_id="$(jq -r --arg name "$asset_name" '.assets[] | select(.name == $name) | .id' <<<"$release")"

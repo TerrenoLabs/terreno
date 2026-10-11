@@ -18,7 +18,7 @@ One `/release` finishes the release. Do not stop after opening a pull request or
 - CircleCI publishes these packages, all at the same version: `@terreno/api`, `@terreno/test`, `@terreno/blocks`, `@terreno/ui`, `@terreno/rtk`, `@terreno/admin-backend`, `@terreno/admin-frontend`, `@terreno/admin-spa`, `@terreno/ai`, `@terreno/api-health`, `@terreno/announcements`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/jobs`, `create-terreno-app`, `@terreno/mcp`, `@terreno/syncdb`. (`demo`, the example apps, and `@terreno/cli` are not in that job.)
 - `publish-release` runs `bun run check:upgrade-docs` against the tag first. That check fails the release when the tag's `CHANGELOG.md` has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` section for the version but `mcp-server/src/docs/upgrades/<version>.md` is missing. The assembled changelog and the upgrade note must already be on master.
 - Prerelease tags (`-beta`, `-alpha`) publish to their prerelease npm dist-tag and skip the master version bump. `deploy-demo` runs only for tags with no prerelease suffix.
-- Docs version snapshots are not cut by the tag pipeline. Do not wait for a `chore: cut docs version` commit, and do not dispatch the GitHub publish workflow to cut them.
+- GitHub releases start as **drafts**. This repo has immutable releases on, so publishing a release locks its assets and GitHub answers `422` to any later upload. For `X.Y.0` tags, CircleCI `archive-docs-version` attaches `docs-site.tar.gz` to the draft, publishes the release, then commits the docs snapshot (`chore: cut docs version X.Y.0`) to master. For patch and prerelease tags, `publish-github-release` publishes the draft after `publish-release`. Never publish the draft yourself: that locks the release before the archive is attached. Do not dispatch the GitHub publish workflow to cut docs.
 
 ## Step 1: Preflight
 
@@ -152,11 +152,17 @@ Never commit the release directly to master, and never tag before this pull requ
 
 ## Step 6: Create the release
 
-Only after Step 5c is on master. This pushes the tag and starts CircleCI `publish-release`:
+Only after Step 5c is on master. Push the tag on the squash commit (this starts CircleCI `publish-release`), then create the release as a draft:
 
 ```bash
-gh release create "$VERSION" --target master --title "$VERSION" --notes-file /tmp/release-notes.md
+git fetch origin master
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)"  # the Step 5 squash commit
+git tag "$VERSION" origin/master
+git push origin "refs/tags/$VERSION"
+gh release create "$VERSION" --draft --verify-tag --title "$VERSION" --notes-file /tmp/release-notes.md
 ```
+
+Create the draft right after the tag push. The CI jobs that need it wait up to 10 minutes, then fail. Keep `--draft`, and do not publish the draft by hand: CI publishes it once the docs archive is attached.
 
 ## Step 7: Monitor the publish and verify npm
 
@@ -170,6 +176,14 @@ gh release create "$VERSION" --target master --title "$VERSION" --notes-file /tm
    ```
 
    For a stable `X.Y.Z` tag, `ci/circleci: deploy-demo` runs alongside publish and should also succeed.
+
+   Then confirm CI published the release (`isDraft` is `false`). For `X.Y.0` the release must also carry `docs-site.tar.gz`:
+
+   ```bash
+   gh release view "$VERSION" --json isDraft,assets --jq '{isDraft, assets: [.assets[].name]}'
+   ```
+
+   A release still in draft means `archive-docs-version` (`X.Y.0`) or `publish-github-release` (other tags) failed. Rerun the failed CircleCI job; both are safe to rerun.
 
 2. Verify every package CircleCI publishes is live on npm (allow a couple of minutes of registry lag):
 
@@ -190,6 +204,6 @@ gh release create "$VERSION" --target master --title "$VERSION" --notes-file /tm
 ## Step 8: If a publish job fails
 
 1. Open the `ci/circleci: publish-release` target URL from the tag status. CircleCI holds the job log.
-2. Transient failure (network, registry flake): rerun the failed CircleCI job.
-3. Real failure needing a code fix: fix it via a normal PR, merge it when CI is green, and release the next patch version. Do not reuse the failed tag. npm versions are immutable once any package has published, and this repo also rejects recreating a tag after `gh release create` — deleting the release does not free the name (`tag_name was used by an immutable release`). Move the changelog section and upgrade note to the new version before tagging. Do not dispatch `.github/workflows/publish-on-tag.yml` for a version CircleCI already published.
+2. Transient failure (network, registry flake): rerun the failed CircleCI job. The release stays a draft until the publish jobs succeed.
+3. Real failure needing a code fix: fix it via a normal PR, merge it when CI is green, and release the next patch version. Do not reuse the failed tag. npm versions are immutable once any package has published, and once a release is published this repo rejects recreating its tag — deleting the release does not free the name (`tag_name was used by an immutable release`). Delete the failed version's leftover draft with `gh release delete "$VERSION"` (keep the tag). Move the changelog section and upgrade note to the new version before tagging. Do not dispatch `.github/workflows/publish-on-tag.yml` for a version CircleCI already published.
 4. Report the final per-package publish status either way.

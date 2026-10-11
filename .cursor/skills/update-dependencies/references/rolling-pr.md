@@ -1,13 +1,14 @@
 # Rolling daily PR
 
-This skill runs **daily**. There is at most one open dependency-update PR.
+This skill runs **daily**. There is at most one open dependency-update PR, and
+this skill pushes to it at most once per run (twice when step 7 reverts a bump).
 
 Constants (do not invent a second name): `scripts/planning/updateDependenciesPr.ts`
 
 | Constant | Value |
 | --- | --- |
 | Branch | `chore/update-dependencies` |
-| Title | `chore(deps): daily dependency updates` |
+| Title | `Daily dependency updates` |
 | Body marker | `<!-- terreno-update-dependencies -->` |
 
 ## Find or attach
@@ -55,7 +56,7 @@ The PR body is the memory across days. Preserve prior rows. Update in place.
 
 Required sections after the marker:
 
-1. **Last run** — ISO date (UTC), agent/run id if known, `bun outdated` summary count
+1. **Last run** — ISO date (UTC), agent/run id if known, `bun outdated` summary count, local gate result (`prepush` green, infra jobs run or not run), CI rounds this run (0–2) and the stop reason if CI stayed red
 2. **Landed** — package, old → new, exercise test path + command, fingerprint unchanged
 3. **Failed** — package, attempted version, date, cause (test path + error snippet, fingerprint hash change, install failure). Keep the row until a later run lands it or a human drops it.
 4. **Skipped** — fingerprint-skip, cooldown (<7 days), already at target
@@ -74,6 +75,8 @@ Do not delete failure history when the PR is still open. After merge, the next d
 
 - Date: 2026-09-08
 - Landed 1, failed 1, skipped 4 (2 fingerprint, 2 cooldown)
+- Local gate: `bun run prepush` green; Playwright `app` shard run; Maestro not run (no frontend bump)
+- CI rounds: 1, green
 
 ### Run log
 - 2026-09-07: opened; landed axios; failed chai (exercise `api/src/foo.test.ts`)

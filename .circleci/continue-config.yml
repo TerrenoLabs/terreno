@@ -593,6 +593,27 @@ commands:
               exit 1
             fi
 
+  require_vercel_context:
+    description: Fail before checkout/install when terreno-vercel is missing the token or project id
+    parameters:
+      project-id-var:
+        type: string
+    steps:
+      - run:
+          name: Validate terreno-vercel context
+          command: |
+            set -euo pipefail
+            project_id_var="<< parameters.project-id-var >>"
+            missing=()
+            for name in VERCEL_TOKEN VERCEL_ORG_ID "$project_id_var"; do
+              if [ -z "${!name:-}" ]; then missing+=("$name"); fi
+            done
+            if [ ${#missing[@]} -ne 0 ]; then
+              echo "terreno-vercel is missing required variables: ${missing[*]}"
+              echo "Fill the context (see docs/how-to/deploy-to-vercel.md) and rerun."
+              exit 1
+            fi
+
   resolve_affected_e2e_shards:
     description: Record which Playwright shards the branch can break (fails open)
     steps:
@@ -1947,6 +1968,39 @@ jobs:
                 name: Deploy backend and isolated tasks preview
                 command: scripts/ci/gcp-deploy.sh backend-preview
 
+  # Runs beside the Netlify and Cloud Run deploys while Vercel hosting is evaluated.
+  vercel-deploy:
+    executor: node22
+    resource_class: large
+    parameters:
+      target:
+        type: enum
+        enum: [backend, frontend, demo]
+      mode:
+        type: enum
+        enum: [production, preview]
+      project-id-var:
+        type: string
+    steps:
+      - when:
+          condition:
+            equal: [preview, << parameters.mode >>]
+          steps:
+            - skip_if_fork_deploy
+      - require_vercel_context:
+          project-id-var: << parameters.project-id-var >>
+      - checkout
+      - install_bun_and_deps
+      - when:
+          condition:
+            equal: [preview, << parameters.mode >>]
+          steps:
+            - resolve_preview_pr_number
+      - run:
+          name: Deploy << parameters.target >> << parameters.mode >> to Vercel
+          no_output_timeout: 25m
+          command: scripts/ci/vercel-deploy.sh << parameters.target >> << parameters.mode >> "${PR_NUMBER:-}"
+
   deploy-preview-manual:
     executor: node22
     resource_class: large
@@ -2462,6 +2516,18 @@ workflows:
               only: master
             tags:
               ignore: /.*/
+      - vercel-deploy:
+          name: vercel-demo-production
+          target: demo
+          mode: production
+          project-id-var: VERCEL_DEMO_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-demo-production
+          filters:
+            branches:
+              only: master
+            tags:
+              ignore: /.*/
 
   deploy-frontend-production:
     when:
@@ -2472,6 +2538,18 @@ workflows:
       - deploy-frontend:
           context: [terreno-netlify, terreno-github-deployments]
           serial-group: << pipeline.project.slug >>/netlify-frontend-production
+          filters:
+            branches:
+              only: master
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-frontend-production
+          target: frontend
+          mode: production
+          project-id-var: VERCEL_FRONTEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-frontend-production
           filters:
             branches:
               only: master
@@ -2511,6 +2589,18 @@ workflows:
               only: master
             tags:
               ignore: /.*/
+      - vercel-deploy:
+          name: vercel-backend-production
+          target: backend
+          mode: production
+          project-id-var: VERCEL_BACKEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-backend-production
+          filters:
+            branches:
+              only: master
+            tags:
+              ignore: /.*/
 
   deploy-demo-preview:
     when: << pipeline.parameters.run-deploy-demo >>
@@ -2523,6 +2613,18 @@ workflows:
               ignore: master
             tags:
               ignore: /.*/
+      - vercel-deploy:
+          name: vercel-demo-preview
+          target: demo
+          mode: preview
+          project-id-var: VERCEL_DEMO_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-demo-preview-<< pipeline.git.branch >>
+          filters:
+            branches:
+              ignore: master
+            tags:
+              ignore: /.*/
 
   deploy-frontend-preview:
     when: << pipeline.parameters.run-deploy-frontend >>
@@ -2530,6 +2632,18 @@ workflows:
       - deploy-frontend-preview:
           context: [terreno-netlify, terreno-github-deployments]
           serial-group: << pipeline.project.slug >>/netlify-frontend-preview-<< pipeline.git.branch >>
+          filters:
+            branches:
+              ignore: master
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-frontend-preview
+          target: frontend
+          mode: preview
+          project-id-var: VERCEL_FRONTEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-frontend-preview-<< pipeline.git.branch >>
           filters:
             branches:
               ignore: master
@@ -2557,6 +2671,18 @@ workflows:
       - gcp-cd-preview:
           context: [terreno-gcp, terreno-github-deployments]
           serial-group: << pipeline.project.slug >>/gcp-preview-<< pipeline.git.branch >>
+          filters:
+            branches:
+              ignore: master
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-backend-preview
+          target: backend
+          mode: preview
+          project-id-var: VERCEL_BACKEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-backend-preview-<< pipeline.git.branch >>
           filters:
             branches:
               ignore: master

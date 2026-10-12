@@ -12,6 +12,8 @@ bun add @terreno/ai @terreno/api mongoose
 
 Also install a Vercel AI SDK provider in your app (e.g. `bun add @ai-sdk/google`).
 
+`@terreno/ai` is provider-agnostic through the Vercel AI SDK. That is a model library and is unrelated to Vercel hosting; to host a Terreno app on Vercel, see [Deploy to Vercel](../docs/how-to/deploy-to-vercel.md).
+
 ## Quick start
 
 ```typescript

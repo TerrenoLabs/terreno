@@ -176,6 +176,23 @@ export const useWebSocket = () => {
 };
 ``````
 
+#### Transports
+
+`useSocketConnection` starts with HTTP long-polling and upgrades to WebSocket (`transports: ["polling", "websocket"]`), so a restarting dev server does not fail the first handshake. Polling needs every request of a session to reach the same server process. Hosts without session affinity, such as Vercel Functions, need WebSocket only:
+
+``````typescript
+useSocketConnection({
+  baseUrl,
+  shouldConnect: !!userId,
+  getAuthToken,
+  transports: ["websocket"],
+});
+``````
+
+`@terreno/syncdb` takes the same list as `createSyncDb({socketTransports: ["websocket"]})`. Cloud Run with `--session-affinity` works with the default. See [Run Terreno WebSockets on Vercel Functions](vercel-function-websockets.md).
+
+`baseWebsocketsUrl` replaces `api.` with `ws.` in the API host (`https://api.example.com` becomes `ws.example.com`), for deployments that run sockets on a separate host. If sockets are served by the API host itself, as on Vercel, pass `baseUrl` instead.
+
 ### 3. Subscribe to Events in Components
 
 ``````typescript
@@ -373,6 +390,13 @@ This logs:
 - `useSocketConnection` automatically reconnects (5 attempts)
 - Tokens are refreshed if expiring within 60 seconds
 - Toast notifications inform users after 9+ seconds
+- On Vercel Functions, every socket closes at the Function max duration (300s by default); see [reconnects](vercel-function-websockets.md#reconnects)
+
+### "Session ID unknown" or a 400 on `transport=polling`
+
+**Cause:** Polling requests for one session reached different server instances (no session affinity).
+
+**Solution:** Pass `transports: ["websocket"]` to `useSocketConnection` and `socketTransports: ["websocket"]` to `createSyncDb`, or enable session affinity on the host.
 
 ### Events not received
 
@@ -414,4 +438,5 @@ This logs:
 - [@terreno/syncdb Reference](../reference/syncdb.md) — Local-first data layer (replaces RTK for synced collections)
 - [@terreno/rtk Reference (legacy)](../reference/legacy/rtk.md) — RTK Query utilities during the support window
 - [Authentication Architecture](../explanation/authentication.md) — JWT system deep-dive
+- [Run Terreno WebSockets on Vercel Functions](vercel-function-websockets.md) — Vercel's WebSocket beta: transports, reconnects, cross-instance state
 - [Socket.io Documentation](https://socket.io/docs/v4/) — Official Socket.io docs

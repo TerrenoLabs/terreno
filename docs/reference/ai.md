@@ -2,6 +2,8 @@
 
 AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI SDK, request logging, GPT history, projects, file uploads, MCP tools, and optional Langfuse integration.
 
+> `@terreno/ai` is provider-agnostic via the Vercel AI SDK (the `ai` package and its `@ai-sdk/*` providers). That is a model library, unrelated to Vercel hosting; on this page "Vercel" means the AI SDK unless it says hosting. To host on Vercel, see [Deploy to Vercel](../how-to/deploy-to-vercel.md).
+
 ## Table of Contents
 
 - [Install](#install)
@@ -164,7 +166,7 @@ All generation methods log to `AIRequest` via private `logRequest()`. Logging fa
 
 - Default to `TemperaturePresets.DETERMINISTIC` when `temperature` is omitted.
 - Use `JSON_VALUE_SYSTEM_PROMPT` when `systemPrompt` is omitted.
-- Run model text through `normalizeLlmJsonTextForStructuredOutput` before Vercel `Output.*` parsing (strips fences, preamble, balanced JSON slice, trailing commas, smart-quote repair).
+- Run model text through `normalizeLlmJsonTextForStructuredOutput` before the Vercel AI SDK's `Output.*` parsing (strips fences, preamble, balanced JSON slice, trailing commas, smart-quote repair).
 - On failure: `logger.error` records prompt, system prompt, raw model text, and error details; `AIRequest` stores `response` (raw text or sentinel), `error`, and `metadata` (`system`, `finishReason`, `errorStack`, `rawModelTextCaptured`).
 
 Standalone helpers:
@@ -695,7 +697,7 @@ Subpath imports for tree-shaking: `@terreno/ai/langfuseClient`, `@terreno/ai/lan
 ## Subpath exports
 
 Import these instead of `dist/` paths. Deep `dist/` imports break when a bundler (such as
-Vercel's) inlines them and their bare `@terreno/api` imports no longer resolve. Each
+Vercel hosting's build) inlines them and their bare `@terreno/api` imports no longer resolve. Each
 subpath shares module instances with `@terreno/ai/harness`.
 
 | Subpath | Exports |

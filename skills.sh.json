@@ -61,7 +61,8 @@
         "generate-release-announcements",
         "update-dependencies",
         "upgrading-terreno",
-        "deploy-gcp"
+        "deploy-gcp",
+        "deploy-vercel"
       ],
       "title": "GitHub and shipping"
     },

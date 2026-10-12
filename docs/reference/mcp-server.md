@@ -695,17 +695,12 @@ _(No model files found.)_
 _Unavailable: set `MONGO_URI` in `backend/.env` or export `MONGO_URI` to include live collections._
 ``````
 
-Known issue (Terreno 57.15, Bun 1.4.2, Mongoose 9.7): when a URI is found, both database tools fail
-before connecting. The dynamic `import("mongoose")` namespace has no `connection` property, so the
-call returns JSON-RPC error `-32603` with
-`undefined is not an object (evaluating 'mongoose.connection.readyState')`. Use `MONGO_URI` with
-`mongosh` until this is fixed.
-
 #### database_query
 
-Run one read-only query. Each call connects and disconnects; queries time out after 10 seconds
-(`maxTimeMS`), and `aggregate` runs with `allowDiskUse: false`. Same URI resolution and known issue
-as `database_schema`.
+Run one read-only query. Each call opens its own connection and closes it afterwards; queries time
+out after 10 seconds (`maxTimeMS`), and `aggregate` runs with `allowDiskUse: false`. Same URI
+resolution as `database_schema`. Results are returned unredacted, so avoid collections that hold
+credentials (Better Auth keeps password hashes in `account`).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -718,6 +713,23 @@ as `database_schema`.
 
 Results: `find` and `aggregate` return `{collection, count, rows}`; `countDocuments` returns
 `{collection, count}`; `distinct` returns `{collection, field, truncated, values}`.
+
+``````json
+{"name":"database_query","arguments":{"collection":"todos","operation":"aggregate","pipeline":[{"$group":{"_id":"$completed","count":{"$sum":1}}},{"$sort":{"_id":1}}]}}
+``````
+
+``````json
+{
+  "collection": "todos",
+  "count": 1,
+  "rows": [
+    {
+      "_id": false,
+      "count": 2
+    }
+  ]
+}
+``````
 
 ``````json
 {"name":"database_query","arguments":{"collection":"todos","operation":"aggregate","pipeline":[{"$out":"x"}]}}
@@ -1201,7 +1213,7 @@ own process: model files are read as text, and the app's runtime is reached only
 | Surface | How |
 |---------|-----|
 | Package manifests | Root and backend/frontend workspace `package.json` files (declared ranges); `bun.lock` presence only |
-| MongoDB | `MONGO_URI` from the environment or `backend/.env`; collections, indexes, counts, and read-only queries (see the [known issue](#database_schema)) |
+| MongoDB | `MONGO_URI` from the environment or `backend/.env`; collections, indexes, counts, and read-only queries |
 | Model source | First 80 lines of each `backend/src/models/*.ts`, as text |
 | Backend and browser logs | `app.log` and `browser.log` JSONL under `.terreno/logs/` in `backend/`, `example-backend/`, or the root |
 | Metro | `/json/list` targets and the `/events` socket |

@@ -117,6 +117,12 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 1.3
   - Acceptance: against a real Metro, `read_logs` with source `app` connects to a debuggable target without a preload shim; when another debugger takes the session, the status names Metro's close reason; tests cover the header and the close-reason hint; `bun run mcp:build` succeeds.
 
+- [x] **Task 5.6**: Make the local database tools load Mongoose under Bun
+  - Description: Found by Task 2.1. `database_schema` and `database_query` call `await import("mongoose")` and read `.connection` on the namespace object; under Bun with Mongoose 9 that property is undefined, so both tools fail with `undefined is not an object (evaluating 'mongoose.connection.readyState')` whenever a Mongo URI is found. Use the module's default export, and add a test that exercises the real import path against the in-memory Mongo used by the package tests.
+  - Files: `mcp-server/src/local/tools/databaseSchema.ts`, `mcp-server/src/local/tools/databaseQuery.ts`, their tests
+  - Depends on: Task 2.1
+  - Acceptance: against the running example database, `database_schema` and `database_query` return real results through `terreno-mcp-local`; tests fail before the fix and pass after; `bun run mcp:build` succeeds.
+
 ## Phase 6: Verification
 
 - [ ] **Task 6.1**: Run the loop end to end and capture evidence

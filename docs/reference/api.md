@@ -1444,6 +1444,9 @@ once and then drops the batch without reporting anything. A missing route (404) 
 shows up only as an empty `browser.log`. Only uncaught errors whose thrown value is an `Error`
 carry a `stack`. `console.error`, `console.warn`, and unhandled-rejection entries do not.
 
+On the client, `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb` posts to this
+route in `__DEV__` builds. The `@terreno/rtk` export of the same name is a deprecated re-export.
+
 ### Message style
 
 - Start with what happened, then optional detail: `User export finished`, not `finished`.

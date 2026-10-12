@@ -208,11 +208,12 @@ return <>{ids.map((id) => <TodoRow id={id} key={id} />)}</>; // TodoRow calls us
 
 ### Public API surface
 
-The package has three entry points, and only what they export is API:
+The package has four entry points, and only what they export is API:
 
 - `@terreno/syncdb` — the client (`createSyncDb`), protocol/status/conflict types, the Better Auth adapter, key providers and codecs, persister factories, the transport/HTTP-channel constructors (for DI), `wipeLocalData`, `generateMutationId`, `listConflicts`, and `OUTBOX_TABLE` for inspecting queued mutations via `client.store.raw.getTable(...)`.
 - `@terreno/syncdb/react` — the hooks above plus `SyncDbProvider` (a separate subpath because `react` is an optional peer dependency).
 - `@terreno/syncdb/testing` — test doubles (`createFakeTransport`), kept out of production bundles.
+- `@terreno/syncdb/devConsoleLogger` — `installTerrenoDevConsoleLogger` by itself, so a caller can install the dev console logger without bundling the sync client. The same function is exported from `@terreno/syncdb`.
 
 Everything else under `src/` is internal and can change in a patch release. In particular the cursor mutators, outbox/conflict writers, raw row shapes, the IndexedDB helpers, and the debug broadcast bridge are deliberately unexported: writing to a reserved table behind the client's back breaks the invariants replay and reconcile depend on.
 

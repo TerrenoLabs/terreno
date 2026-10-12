@@ -93,7 +93,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 1.1, PR #869 merged
   - Acceptance: both names work; the response identifies the detected layer; the alias description marks it deprecated; all four test cases pass; `bun run mcp:build` succeeds.
 
-- [ ] **Task 5.2**: `[RTK]` Relocate the dev console logger
+- [x] **Task 5.2**: `[RTK]` Relocate the dev console logger
   - Description: Per IP question AI2, move `installTerrenoDevConsoleLogger` from `rtk/src/devConsoleLogger.ts` to the syncdb package, keeping a re-export from `@terreno/rtk` for the deprecation window so existing consumers are unaffected. Move its tests with it. Update the bootstrap `_layout` template and `example-frontend/app/_layout.tsx` to import from the new location. Add the re-export to the RTK deprecation notes.
   - Files: `syncdb/src/devConsoleLogger.ts` (moved), `rtk/src/devConsoleLogger.ts` (re-export), `rtk/src/index.ts`, `syncdb/src/index.ts`, `mcp-server/src/docs/templates/bootstrap/frontend/app/_layout.template.tsx`, `example-frontend/app/_layout.tsx`, tests
   - Depends on: Task 5.1

@@ -9,7 +9,6 @@ import "react-native-reanimated";
 import {OpenFeatureProvider} from "@openfeature/react-sdk";
 import {
   baseUrl,
-  installTerrenoDevConsoleLogger,
   selectBetterAuthIsLoading,
   selectBetterAuthUserId,
   setRealtimeSocket,
@@ -18,6 +17,7 @@ import {
   useTerrenoFeatureFlags,
   useUpgradeCheck,
 } from "@terreno/rtk";
+import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
 import {SyncDbProvider} from "@terreno/syncdb/react";
 import {
   AnnouncementNavigator,
@@ -44,7 +44,7 @@ import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
 
-installTerrenoDevConsoleLogger();
+installTerrenoDevConsoleLogger({baseUrl});
 
 interface ProfileData {
   _id: string;

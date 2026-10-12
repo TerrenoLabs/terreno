@@ -137,14 +137,31 @@ this package at build time (`bun run sync-package-guidelines`). Defined in `src/
 The following AI coding assistant configuration files need to be created:
 
 - `.rulesync/rules/00-root.md`
-- `.rulesync/rules/01-claudecode-root.md`
 - `backend/AGENTS.md`
 - `backend/CLAUDE.md`
 - `frontend/AGENTS.md`
 - `frontend/CLAUDE.md`
 - `rulesync.jsonc`
+
+## Instructions
+
+1. **Create all the files listed above.** Each file's content is provided below.
+…
+3. **Before generating, move hand-written rules into `.rulesync/rules/`.** `rulesync generate` overwrites the root `CLAUDE.md`, `AGENTS.md`, and `.github/copilot-instructions.md` and deletes every file under `.claude/rules/`, `.cursor/rules/`, `.github/instructions/`, and `.agents/memories/` that it did not generate. …
+
+4. **Delete the stale `.cursorrules`** that `create-terreno-app` wrote. …
+
+5. **Generate the editor files with rulesync:**
+   ```bash
+   bunx rulesync@9 generate
+   ```
 …
 ``````
+
+`rulesync.jsonc` targets `cursor`, `claudecode`, `copilot`, and `agentsmd`. The one
+`root: true` rule in `00-root.md` covers all four. See
+[Agent guidelines](../explanation/agent-guidelines.md#terreno_bootstrap_ai_rules) for the
+generated editor files and how to add project rules.
 
 #### terreno_search_docs
 

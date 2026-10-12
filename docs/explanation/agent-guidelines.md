@@ -8,7 +8,7 @@ and every other copy is generated from it.
 | --- | --- | --- | --- |
 | Hosted MCP docs | `docs/`, `website/versioned_docs/`, `mcp-server/src/docs/resources/` | `terreno_search_docs`, `terreno_get_component_docs`, `terreno://docs/*` resources | Shipped |
 | Per-package guidelines | `<package>/.ai/guidelines/core.md` | Merged into the files `terreno_bootstrap_ai_rules` returns | Shipped |
-| App rule files | The app's `.rulesync/rules/` | Generated per editor by `rulesync generate` | Shipped, with a known gap |
+| App rule files | The app's `.rulesync/rules/` | Generated per editor by `rulesync generate` | Shipped |
 | Agent skills | `plugins/terreno-planning/skills/`, `plugins/terreno-scan/skills/`, `.rulesync/skills/` | `npx skills add TerrenoLabs/terreno` or a host plugin | Shipped |
 
 The runtime side of the loop, meaning what the agent can see in a running app, is covered
@@ -68,11 +68,10 @@ write files. It returns their contents and instructions, and the agent writes th
 
 | File | Contents |
 | --- | --- |
-| `.rulesync/rules/00-root.md` | Root rule for Cursor, Windsurf, and Copilot: app description, code style, and the merged `core.md` of `api`, `ui`, `rtk`, `syncdb` |
-| `.rulesync/rules/01-claudecode-root.md` | The same body for Claude Code, as a `localRoot` rule |
+| `.rulesync/rules/00-root.md` | The one root rule, for Cursor, Claude Code, Copilot, and `AGENTS.md`: app description, code style, and the merged `core.md` of `api`, `ui`, `rtk`, `syncdb` |
 | `backend/AGENTS.md`, `backend/CLAUDE.md` | Backend conventions, plus the `admin-backend` guidelines when requested |
 | `frontend/AGENTS.md`, `frontend/CLAUDE.md` | Frontend conventions, the MCP servers to use, plus the `admin-frontend` guidelines when requested |
-| `rulesync.jsonc` | rulesync config: `rules` feature, four targets, `delete: true` |
+| `rulesync.jsonc` | rulesync config: `rules` feature, targets `cursor`, `claudecode`, `copilot`, `agentsmd`, `delete: true` |
 
 `packages` narrows the merge. Pass the app's `@terreno/*` dependencies so a project without
 the admin panel gets no admin guidance. Unknown ids are dropped, and an empty result falls
@@ -85,13 +84,18 @@ direct output, written as-is.
 `terreno_bootstrap` prompt tells the agent to run `create-terreno-app` first and this tool
 second.
 
-**Known gap.** The returned files target an older rulesync. This repository pins rulesync
-`^9.6.3`, and with 9.8.0 `rulesync generate` rejects the `windsurf` target in both
-`rulesync.jsonc` and the root rule's frontmatter. It also rejects a `localRoot` Claude Code
-rule when no `root` rule targets Claude Code. The returned instructions say
-`rulesync sync`, which rulesync 9 does not have. Until the tool is updated, drop
-`windsurf`, change `localRoot: true` to `root: true` in `01-claudecode-root.md`, and run
-`rulesync generate`.
+The returned instructions run `bunx rulesync@9 generate`, the major this repository pins.
+A test in `mcp-server` runs `rulesync generate` on the returned files. From `00-root.md`,
+rulesync writes `.cursor/rules/00-root.mdc`, `CLAUDE.md`, `.github/copilot-instructions.md`,
+and `AGENTS.md`. Windsurf, Codex, and other agents read
+`AGENTS.md`; rulesync 9 has no `windsurf` target. The generated `CLAUDE.md` replaces the
+one `create-terreno-app` wrote, and `.cursor/rules/00-root.mdc` supersedes its
+`.cursorrules`, so delete that file. The root rule contains everything both files said,
+including the "Adding Features" steps.
+
+Earlier versions of the tool also returned `.rulesync/rules/01-claudecode-root.md`, a
+`localRoot` rule that rulesync 9 rejects without a Claude Code `root` rule. Delete that file
+when you re-bootstrap. The root rule now covers Claude Code.
 
 ## The `.rulesync/` pattern
 
@@ -119,17 +123,24 @@ on the next run.
 
 Regeneration replaces two kinds of file. rulesync replaces every generated editor file. A
 re-run of `terreno_bootstrap_ai_rules` returns fresh copies of everything in its table,
-including `00-root.md`, `01-claudecode-root.md`, `rulesync.jsonc`, and the
-`backend/`/`frontend/` agent files. Anything you add to those files is lost.
+including `00-root.md`, `rulesync.jsonc`, and the `backend/`/`frontend/` agent files. Anything you add to those files is lost.
+
+`rulesync generate` runs with `delete: true`. It overwrites the root `CLAUDE.md`,
+`AGENTS.md`, and `.github/copilot-instructions.md`. It deletes every file under
+`.claude/rules/`, `.cursor/rules/`, `.github/instructions/`, and `.agents/memories/` that
+it did not generate. Before the first `rulesync generate`, and before every later one,
+move any edits to those root files and any hand-written files in those directories into
+`.rulesync/rules/10-project.md` or another `.rulesync/rules/*.md` source. Otherwise they
+are lost.
 
 Keep your conventions in rulesync sources the tool never emits:
 
-1. Leave `00-root.md` and `01-claudecode-root.md` untouched. Treat them as Terreno-owned.
-2. Add one or more files such as `.rulesync/rules/10-project.md`. Use a number above `01`
+1. Leave `00-root.md` untouched. Treat it as Terreno-owned.
+2. Add one or more files such as `.rulesync/rules/10-project.md`. Use a number above `00`
    and a name the tool does not use.
 3. Scope with `globs` instead of editing `backend/AGENTS.md` or `frontend/AGENTS.md`. A rule
    with `globs: ["backend/**"]` applies to backend files in every editor.
-4. Run `rulesync generate` and commit the sources and the output together.
+4. Run `bunx rulesync@9 generate` and commit the sources and the output together.
 
 ```markdown
 ---
@@ -145,8 +156,9 @@ globs: ["backend/**"]
 ```
 
 From one source, rulesync 9 writes `.cursor/rules/10-project.mdc` (`globs`),
-`.claude/rules/10-project.md` (`paths`), and `.github/instructions/10-project.instructions.md`
-(`applyTo`). A re-bootstrap followed by `rulesync generate` leaves these files in place and
+`.claude/rules/10-project.md` (`paths`), `.github/instructions/10-project.instructions.md`
+(`applyTo`), and `.agents/memories/10-project.md` (linked from `AGENTS.md`). A re-bootstrap
+followed by `rulesync generate` leaves these files in place and
 replaces only the Terreno-owned ones.
 
 If you changed `rulesync.jsonc`, for example to add a target, reapply that change after a

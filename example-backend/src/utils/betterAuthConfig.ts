@@ -21,7 +21,7 @@ export const getAuthProvider = (): AuthProvider => {
  * (never the `*` wildcard) and allow credentials. Set `CORS_ORIGINS` (comma-separated)
  * in deployed envs to add the hosted frontend origin(s).
  */
-export const getWebOrigins = (): string[] => {
+const getWebOrigins = (): string[] => {
   const origins = new Set<string>(DEFAULT_WEB_ORIGINS);
   const fromEnv = process.env.CORS_ORIGINS?.split(",")
     .map((value) => value.trim())
@@ -31,6 +31,29 @@ export const getWebOrigins = (): string[] => {
   }
   return [...origins];
 };
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Converts a `CORS_ORIGINS` entry to what the `cors` middleware matches. An entry with `*`
+ * (for example `https://terreno-frontend-*-terrenolabs.vercel.app`, Vercel's per-deployment
+ * preview hostname) becomes an anchored RegExp where `*` matches one DNS label fragment —
+ * letters, digits, and hyphens, never a dot — so it cannot widen to another domain.
+ */
+export const toCorsOrigin = (origin: string): string | RegExp => {
+  if (!origin.includes("*")) {
+    return origin;
+  }
+  const pattern = origin.split("*").map(escapeRegExp).join("[a-z0-9-]+");
+  return new RegExp(`^${pattern}$`, "i");
+};
+
+/**
+ * Origins for `TerrenoApp`'s `corsOrigin`. Same list as {@link getWebOrigins}; wildcard
+ * entries become RegExps, while Better Auth `trustedOrigins` receives the raw patterns and
+ * applies its own wildcard matching.
+ */
+export const getCorsOrigins = (): Array<string | RegExp> => getWebOrigins().map(toCorsOrigin);
 
 /**
  * Builds Better Auth configuration for the example backend.

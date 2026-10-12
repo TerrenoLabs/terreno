@@ -25,6 +25,10 @@ export const withLocalMongoDb = async (
     return await run(db);
   } finally {
     // destroy() also drops the connection from mongoose.connections, so repeated calls do not accumulate.
-    await connection.destroy().catch(() => undefined);
+    try {
+      await connection.destroy();
+    } catch {
+      // A failed teardown must not mask the tool result or the original error.
+    }
   }
 };

@@ -187,6 +187,36 @@ production. Each tag also uses `terreno-example-pr-<number>`, so concurrent PRs 
 workers nor job rows. CircleCI `preview-cleanup` (started on PR close by
 `.github/workflows/preview-cleanup.yml`) removes the API and tasks tags.
 
+## Hosted MCP hostname
+
+The public MCP URL is `https://mcp.terreno.app/mcp`. The legacy
+`https://mcp.terreno.flourish.health/mcp` must keep serving the same `terreno-mcp` service.
+
+Neither hostname is managed by this Terraform. `module.mcp_service` is plain Cloud Run with
+direct ingress; `output.mcp_url` is the `*.run.app` URL. The legacy hostname is a CNAME to
+`ghs.googlehosted.com` (a Cloud Run domain mapping in `flourish-terreno`, `us-east1`) in the
+`flourish.health` DNS zone. `terreno.app` DNS is on Cloudflare. Both live outside this repo.
+
+Cutover, by an operator with access to both zones:
+
+1. Verify `terreno.app` (or `mcp.terreno.app`) in Google Search Console for the identity that
+   creates the mapping.
+2. Map the new hostname to the same service, alongside the old mapping:
+   `gcloud beta run domain-mappings create --service=terreno-mcp --domain=mcp.terreno.app --region=us-east1 --project=flourish-terreno`.
+3. In Cloudflare, add `mcp CNAME ghs.googlehosted.com` as **DNS only** (grey cloud). A proxied
+   record blocks Google's managed certificate.
+4. Wait for the mapping's certificate, then check
+   `curl https://mcp.terreno.app/` returns `{"mcpEndpoint":"/mcp","service":"terreno-mcp","status":"ok"}`.
+5. Ship the release whose docs and `create-terreno-app` default use `mcp.terreno.app`.
+
+Keep the `mcp.terreno.flourish.health` mapping and CNAME unchanged for at least one full release
+after step 5. Do not replace it with an HTTP redirect: MCP clients send JSON-RPC as `POST`, and
+many clients do not follow a redirect on `POST`. Retire it only after Cloud Run request logs show
+no meaningful traffic with that host, by deleting the domain mapping and then the CNAME.
+
+To bring the hostnames under Terraform later, import both mappings as
+`google_cloud_run_domain_mapping` resources next to `module.mcp_service`.
+
 ## Adding a third service account
 
 The `local.service_accounts` map in `main.tf` is the single source of truth. Add a new entry with its role set; Terraform will create the SA, bind project IAM, and grant `workloadIdentityUser` for every `github_repos` entry. Then read the new email out of `module.github_oidc.service_account_emails["<name>"]`.

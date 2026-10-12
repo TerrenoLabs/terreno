@@ -14,7 +14,7 @@ Add `.cursor/mcp.json` at the app repository root:
   "mcpServers": {
     "terreno": {
       "type": "http",
-      "url": "https://mcp.terreno.flourish.health/mcp"
+      "url": "https://mcp.terreno.app/mcp"
     },
     "terreno-local": {
       "command": "bunx",
@@ -29,9 +29,30 @@ Add `.cursor/mcp.json` at the app repository root:
 Use the same project-scoped `.mcp.json`, or register the servers from the repository root:
 
 ```bash
-claude mcp add --transport http terreno https://mcp.terreno.flourish.health/mcp
+claude mcp add --transport http terreno https://mcp.terreno.app/mcp
 claude mcp add terreno-local -- bunx terreno-mcp-local
 ```
+
+## Hosted endpoint
+
+The hosted server's URL is `https://mcp.terreno.app/mcp`. It speaks MCP Streamable HTTP
+(`"type": "http"`); `POST /` is accepted as an alias, but configure the `/mcp` path.
+`create-terreno-app` writes this URL into `.cursor/mcp.json`.
+
+### Moving off `mcp.terreno.flourish.health`
+
+Earlier docs and scaffolds used `https://mcp.terreno.flourish.health/mcp`. That hostname serves the
+same Cloud Run service and keeps working for at least one release after the release that announces
+`mcp.terreno.app`. Replace the old URL in `.cursor/mcp.json`, `.mcp.json`, and any
+`claude mcp add` registration:
+
+```bash
+claude mcp remove terreno
+claude mcp add --transport http terreno https://mcp.terreno.app/mcp
+```
+
+The operator cutover (domain mapping, DNS, retiring the old hostname) is in the
+[terraform README](https://github.com/TerrenoLabs/terreno/blob/master/terraform/README.md#hosted-mcp-hostname).
 
 ## Configure local discovery
 

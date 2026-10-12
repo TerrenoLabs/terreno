@@ -105,7 +105,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 2.1
   - Acceptance: exceeding the limit returns a structured error naming the limit and retry window; the limit is configurable by environment variable; three test cases pass; the limit is documented.
 
-- [ ] **Task 5.4**: Handle the MCP domain change
+- [x] **Task 5.4**: Handle the MCP domain change
   - Description: If program question P4 / IP question AI6 was answered in favor of moving off `mcp.terreno.flourish.health`, update every occurrence of the URL: `README.md`, `docs/reference/mcp-server.md`, `mcp-server/README.md`, `mcp-server/src/**` defaults, bootstrap templates, and `infra/flourish/` deployment config. Keep the old hostname serving with a redirect or CNAME for at least one release and document the cutover. If the decision was to keep the current domain, make no change and record that.
   - Files: various (grep `rg -n "mcp\.terreno"`)
   - Depends on: Task 2.1

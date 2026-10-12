@@ -162,7 +162,7 @@ Every `@terreno/ui` component, live, with its variants and states. Source:
 ### More
 
 - [Docs](https://terreno-docs.netlify.app)
-- MCP server: `https://mcp.terreno.app`
+- MCP server: `https://mcp.terreno.app/mcp`
 
 To deploy your own apps, follow [Deploy to GCP](docs/how-to/deploy-to-gcp.md).
 
@@ -178,8 +178,8 @@ Add this to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "terreno": {
-      "type": "sse",
-      "url": "https://mcp.terreno.app"
+      "type": "http",
+      "url": "https://mcp.terreno.app/mcp"
     }
   }
 }
@@ -191,8 +191,8 @@ Add this to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "terreno": {
-      "type": "sse",
-      "url": "https://mcp.terreno.app"
+      "type": "http",
+      "url": "https://mcp.terreno.app/mcp"
     }
   }
 }

@@ -37,7 +37,7 @@ Optional flags:
 | `appName` (positional) | yes | — kebab-case directory and package name (`^[a-z][a-z0-9-]*$`) |
 | `--display-name` | unless `--yes` | derived from `appName` when `--yes` |
 | `--description` | no | empty |
-| `--mcp-server-url` | no | `https://mcp.terreno.app` |
+| `--mcp-server-url` | no | `https://mcp.terreno.app` (base URL; the CLI appends `/mcp`) |
 | `--yes` | no | off |
 
 The CLI creates `<cwd>/<appName>/`. Package source: [`create-terreno-app/`](https://github.com/TerrenoLabs/terreno/tree/master/create-terreno-app) in the Terreno monorepo.

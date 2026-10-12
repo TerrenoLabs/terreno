@@ -19,7 +19,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: PR #802 merged
   - Acceptance: every tool in the corrected table is greppable in the source; every environment variable cites its reading file; the PR body lists what differed from the pre-merge IP.
 
-- [ ] **Task 1.2**: Verify the log pipeline end to end
+- [x] **Task 1.2**: Verify the log pipeline end to end
   - Description: Start the example backend and frontend, then exercise each `read_logs` source and record real output: `backend` (winston JSONL file transport), `app` (console output over Metro CDP), `metro` (bundler events), and `browser` (POST fallback). Deliberately break something to produce an error and confirm `last_error` returns it with a stack. Note which sources required extra setup and what happens when Metro is not running. Save the real outputs for use in the documentation tasks.
   - Files: none (findings recorded for later tasks)
   - Depends on: Task 1.1
@@ -59,7 +59,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 2.1
   - Acceptance: all five stages present with real tool names from the inventory; the tool/process table is present and links the companion page; the cannot-see section has at least four honest limitations; no shell commands; listed in the explanation index.
 
-- [ ] **Task 3.2**: Write `docs/explanation/agent-guidelines.md`
+- [x] **Task 3.2**: Write `docs/explanation/agent-guidelines.md`
   - Description: Explainer on how conventions reach an agent: the hosted server's docs resources and search, per-package `.ai/guidelines/` shipped in npm tarballs (verify whether #802 Phase 2 shipped this before documenting it — if not, describe only what exists and note the rest as planned), `terreno_bootstrap_ai_rules` for generating editor-specific rule files, and the `.rulesync/` source-of-truth pattern with its generated targets. Add a section for consumers on extending the generated rules with their own project conventions without losing them on regeneration.
   - Files: `docs/explanation/agent-guidelines.md` (new), `docs/explanation/README.md`
   - Depends on: Task 1.1

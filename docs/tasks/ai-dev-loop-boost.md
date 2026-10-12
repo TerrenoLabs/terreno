@@ -13,7 +13,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
 
 ## Phase 1: Reconcile with merged #802
 
-- [ ] **Task 1.1**: Inventory the actual MCP surface
+- [x] **Task 1.1**: Inventory the actual MCP surface
   - Description: Read `mcp-server/src/tools.ts`, `mcp-server/src/prompts.ts`, `mcp-server/src/resources.ts`, `mcp-server/src/local/localTools.ts`, and every file under `mcp-server/src/local/tools/`. Produce a table of every tool with its exact name, input schema, and which server hosts it. Separately list every environment variable the servers read (`TERRENO_MCP_EVAL`, `TERRENO_METRO_URL`, `TERRENO_PROJECT_ROOT`, `TERRENO_LOG_FILE`, `TERRENO_BROWSER_LOGS`, and any others found). Compare against the tool table in the IP and correct the IP where it is wrong. Put the deltas in the PR body.
   - Files: `docs/implementationPlans/ai-dev-loop-boost.md`
   - Depends on: PR #802 merged

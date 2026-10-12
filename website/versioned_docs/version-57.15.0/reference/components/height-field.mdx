@@ -1,0 +1,45 @@
+---
+title: "Height field"
+description: "Use the Height field to allow users to input their height. The field stores the value as total inches and displays it as feet and inches. On web, two text inputs accept feet and inches separately. On iOS, tapping the field opens an action sheet for selection. On Android, two dropdowns allow selection of feet and inches. Supports optional min/max props to constrain the allowed height range."
+sidebar_label: "Height field"
+slug: /reference/components/height-field
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Height field
+
+Use the Height field to allow users to input their height. The field stores the value as total inches and displays it as feet and inches. On web, two text inputs accept feet and inches separately. On iOS, tapping the field opens an action sheet for selection. On Android, two dropdowns allow selection of feet and inches. Supports optional min/max props to constrain the allowed height range.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `HeightFieldProps`  
+**Story source:** [`demo/stories/Heightfield.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Heightfield.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Height field" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onChange` | `OnChangeCallback` | Yes |  |
+| `blurOnSubmit` | `boolean` |  |  |
+| `disabled` | `boolean` |  |  |
+| `errorText` | `string` |  |  |
+| `helperText` | `string` |  |  |
+| `iconName` | `IconName` |  |  |
+| `id` | `string` |  |  |
+| `max` | `number` |  | Maximum height in total inches |
+| `min` | `number` |  | Minimum height in total inches |
+| `onBlur` | `OnChangeCallback` |  |  |
+| `onEnter` | `reflection` |  |  |
+| `onFocus` | `reflection` |  |  |
+| `onIconClick` | `reflection` |  |  |
+| `onSubmitEditing` | `reflection` |  |  |
+| `placeholder` | `string` |  |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `testIDs` | `FieldTestIDs` |  |  |
+| `title` | `string` |  |  |
+| `value` | `string` |  |  |

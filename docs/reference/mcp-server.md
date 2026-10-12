@@ -25,6 +25,7 @@ connection.
 - [Tools](#tools)
 - [Prompts](#prompts)
 - [Environment Variables](#environment-variables)
+- [Rate limiting](#rate-limiting)
 - [Development](#development)
 
 ## Overview
@@ -586,12 +587,56 @@ Returns comprehensive code style guide from project documentation.
 | `TERRENO_METRO_URL` | Frontend script port or `http://localhost:8082` | Metro origin used for `/events` and CDP discovery |
 | `TERRENO_MCP_EVAL` | Disabled | Set to `1` to enable local MCP `evaluate`, `navigate`, and SyncDB state-changing actions |
 | `TERRENO_BROWSER_LOGS` | Enabled only when `NODE_ENV=development` | Set to `true` to opt in in another non-production environment or `false` to disable; production rejects the route, and non-loopback clients must authenticate |
+| `TERRENO_MCP_RATE_LIMIT_MAX` | `120` | Hosted server: JSON-RPC requests allowed per client IP per window. `0` disables the limit. See [Rate limiting](#rate-limiting) |
+| `TERRENO_MCP_RATE_LIMIT_WINDOW_MS` | `60000` | Hosted server: rate-limit window in milliseconds |
+| `TERRENO_MCP_TRUST_PROXY_HOPS` | `1` on Cloud Run (`K_SERVICE` set), else `0` | Hosted server: reverse-proxy hops trusted for the client IP in `X-Forwarded-For` |
 
 **Example:**
 
 ``````bash
 PORT=3001 HOST=localhost bun run start
 ``````
+
+## Rate limiting
+
+The hosted HTTP server (`terreno-mcp`) limits its JSON-RPC routes per client IP: `/mcp` (all methods)
+and `POST /` share one bucket. The `GET /` health check is never limited. The local stdio server
+(`terreno-mcp-local`) has no limit.
+
+- **Default:** 120 requests per 60 seconds per client IP, a fixed window. Search, codegen, and docs
+  calls are cheap per call (the search index is built once at startup), and an agent session makes
+  a few dozen calls a minute, so the default leaves room for several agents behind one NAT while
+  capping one abusive client at about 2 requests per second.
+- **Configure:** `TERRENO_MCP_RATE_LIMIT_MAX` (`0` turns the limit off, for example in local
+  development) and `TERRENO_MCP_RATE_LIMIT_WINDOW_MS`. An invalid value stops the server at startup
+  rather than running unlimited.
+- **Per instance:** counters live in memory on each Cloud Run instance. With `N` instances, one
+  client can make up to `N` times the limit in a window if its requests land on different
+  instances.
+- **Client IP:** on Cloud Run the server trusts one proxy hop, so the client IP is the address the
+  Google Front End appended to `X-Forwarded-For`. Entries a client writes into that header itself
+  are ignored, so a forged header cannot switch buckets. Off Cloud Run no proxy is trusted and the
+  socket address is used. Set `TERRENO_MCP_TRUST_PROXY_HOPS` when you add a proxy layer (for
+  example `2` behind an external HTTPS load balancer).
+
+A request over the limit gets HTTP `429` with `Retry-After`, `RateLimit`, and `RateLimit-Policy`
+headers and a JSON-RPC error body. `id` echoes the request id when the body is a single request
+with a string or number id; otherwise it is `null`.
+
+``````json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32029,
+    "message": "Rate limit exceeded: 120 requests per 60 seconds per client IP. Retry after 42s.",
+    "data": {"limit": 120, "windowMs": 60000, "retryAfterSeconds": 42}
+  },
+  "id": 7
+}
+``````
+
+`-32029` is in the JSON-RPC range reserved for implementation-defined server errors. Clients
+should wait `retryAfterSeconds` (or `Retry-After`) before retrying.
 
 ## Development
 
@@ -644,7 +689,9 @@ npx @modelcontextprotocol/inspector bun run ./mcp-server/dist/index.js
 ``````
 mcp-server/
 ├── src/
-│   ├── index.ts          # Express server + JSON-RPC handlers
+│   ├── index.ts          # Entry point: reads env, starts the HTTP server
+│   ├── httpApp.ts        # Express app: JSON-RPC handlers, routes, health check
+│   ├── rateLimit.ts      # Per-IP JSON-RPC rate limit and trust-proxy config
 │   ├── resources.ts      # Documentation resource loader
 │   ├── tools.ts          # Code generation tools
 │   ├── prompts.ts        # Workflow prompts

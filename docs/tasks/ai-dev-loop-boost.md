@@ -99,7 +99,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 5.1
   - Acceptance: both import paths work; tests pass from the new location; `bun run compile` succeeds across the workspace; the example app still ships browser logs to the backend route (verify by producing a `console.error` and reading it back with `read_logs`).
 
-- [ ] **Task 5.3**: Add rate limiting to the hosted MCP server
+- [x] **Task 5.3**: Add rate limiting to the hosted MCP server
   - Description: Per IP question AI5 — a launch prerequisite. Add per-IP rate limiting to the hosted server's JSON-RPC endpoint. Choose limits appropriate to the workload (search and codegen are cheap per call; the index is built once at startup) and make them configurable by environment variable with a sensible default. Return a clear JSON-RPC error when exceeded, naming the limit and the retry window. Add tests for under-limit, at-limit, and over-limit behavior. Document the limit in `docs/reference/mcp-server.md`.
   - Files: `mcp-server/src/index.ts`, tests under `mcp-server/src/`, `docs/reference/mcp-server.md`, `docs/reference/environment-variables.md`
   - Depends on: Task 2.1

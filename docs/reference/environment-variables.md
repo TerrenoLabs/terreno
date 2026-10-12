@@ -258,6 +258,9 @@ secrets and `PUBLIC_API_URL` / `COMMS_WEBHOOK_PUBLIC_URL` as above. See
 | `TERRENO_MCP_DOCS_DIR` | `@terreno/mcp` | ❌ | — | No | tooling |
 | `TERRENO_MCP_EVAL` | MCP eval | ❌ | — | No | tooling |
 | `TERRENO_PROJECT_ROOT` | MCP local | ❌ | — | No | tooling |
+| `TERRENO_MCP_RATE_LIMIT_MAX` | `@terreno/mcp` hosted server | ❌ | `120` (`0` disables) | No | server |
+| `TERRENO_MCP_RATE_LIMIT_WINDOW_MS` | `@terreno/mcp` hosted server | ❌ | `60000` | No | server |
+| `TERRENO_MCP_TRUST_PROXY_HOPS` | `@terreno/mcp` hosted server | ❌ | `1` when `K_SERVICE` is set (Cloud Run), else `0` | No | server |
 
 ## Background jobs
 

@@ -179,6 +179,18 @@ export interface SyncSnapshotResponse {
   legacyCursor?: string;
 }
 
+/** Body of `POST /sync/snapshot/batch`: one page request per stream. */
+export interface SyncSnapshotBatchRequest {
+  streams: {stream: string; cursor: number; legacyCursor?: string}[];
+  /** Entity budget for the whole response, shared across `streams`; server default when omitted. */
+  limit?: number;
+}
+
+/** Response of `POST /sync/snapshot/batch`: one page per requested stream. */
+export interface SyncSnapshotBatchResponse {
+  pages: SyncSnapshotResponse[];
+}
+
 /** Response shape of a `modelRouter` list endpoint (`GET /{collection}`), used by query windows. */
 export interface ListResponse {
   data: unknown[];

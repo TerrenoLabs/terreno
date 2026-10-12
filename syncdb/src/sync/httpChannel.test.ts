@@ -308,6 +308,73 @@ describe("createHttpChannel", () => {
     });
   });
 
+  describe("fetchSnapshotBatch", () => {
+    const batch = {
+      limit: 2000,
+      streams: [
+        {cursor: 0, stream: "todos|owner:u1"},
+        {cursor: 4, legacyCursor: "abc", stream: "notes|owner:u1"},
+      ],
+    };
+    const page = {
+      cursor: 5,
+      entities: [],
+      frontierSeq: 5,
+      hasMore: false,
+      oldestRetainedSeq: 0,
+      stream: "todos|owner:u1",
+    };
+
+    it("POSTs the stream list with the bearer token and returns the pages", async () => {
+      const {fetchImpl, requests} = makeFetch(() => json({pages: [page]}));
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).resolves.toEqual({
+        pages: [page],
+        type: "pages",
+      });
+      expect(requests[0]?.input).toBe("http://api/sync/snapshot/batch");
+      expect(requests[0]?.init?.method).toBe("POST");
+      expect(JSON.parse(String(requests[0]?.init?.body))).toEqual(batch);
+      expect(headersOf(requests[0]).Authorization).toBe("Bearer token-123");
+    });
+
+    it("maps a missing-route 404 to unsupported", async () => {
+      const {fetchImpl} = makeFetch(
+        () => new Response("Cannot POST /sync/snapshot/batch", {status: 404})
+      );
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).resolves.toEqual({type: "unsupported"});
+    });
+
+    it("rejects an APIError 404 instead of reporting the route unsupported", async () => {
+      const {fetchImpl} = makeFetch(() =>
+        json({status: 404, title: "Unknown sync collection: notes"}, 404)
+      );
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).rejects.toThrow(
+        "status 404: Unknown sync collection: notes"
+      );
+    });
+
+    it("rejects 401 with AuthRequiredError", async () => {
+      const {fetchImpl} = makeFetch(() => json({}, 401));
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).rejects.toBeInstanceOf(AuthRequiredError);
+    });
+
+    it("rejects other error statuses", async () => {
+      const {fetchImpl} = makeFetch(() => json({}, 403));
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).rejects.toThrow("status 403");
+    });
+
+    it("rejects when pages is missing", async () => {
+      const {fetchImpl} = makeFetch(() => json({}));
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).rejects.toThrow("missing pages");
+    });
+  });
+
   it("uses global fetch when no fetchImpl is provided (network error path)", async () => {
     const channel = createHttpChannel({
       authProvider,

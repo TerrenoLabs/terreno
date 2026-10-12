@@ -169,7 +169,7 @@ non-PR branch builds.
 | `example-frontend/**`, `admin-frontend/**`, `rtk/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
 | `docs/**`, `website/**` | `run-deploy-docs` | `deploy-docs-preview` | `deploy-docs` |
 | `example-backend/**`, `api/**`, `comms/**`, `jobs/**`, `admin-spa/**`, `feature-flags/**`, `announcements/**`, plus every frontend path above | `run-cd-backend` | `gcp-cd-preview` | `gcp-cd-prod` |
-| `terraform/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
+| `terraform/**`, `infra/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
 | `mcp-server/**`, `ui/**` | `run-cd-mcp` | _(none)_ | `gcp-cd-prod` (runs `mcp-server` `test:ci` first) |
 
 The backend image bundles the admin SPA (ui, rtk, admin-frontend, syncdb), so
@@ -260,12 +260,14 @@ Caching is off (200 credits per job). The docs Netlify target builds only the
 current docs tree, disables Docusaurus minification, and pins SSG to one worker
 thread so the build peaks near 3 GB and fits the 4 GB `medium` executor.
 Released versions are not rebuilt: `archive-docs-version` (in `publish-release`,
-`X.Y.0` tags only) builds each one once and uploads it to its GitHub release, and
-`deploy-docs` unpacks those archives under `/<version>/`. See `website/README.md`.
+`X.Y.0` tags only) builds each version once, uploads it to its **draft** GitHub
+release, publishes the release, and then commits the docs snapshot to master, so
+the `deploy-docs` run that commit starts can unpack the archive under
+`/<version>/`. See `website/README.md`.
 
 `terreno-gcp` uses CircleCI OIDC (`CIRCLE_OIDC_TOKEN_V2`), never a JSON service
 account key. Set `circleci_org_id`, `circleci_project_id`, and
-`circleci_gcp_context_id` in `terraform/terraform.tfvars`, apply once with an
+`circleci_gcp_context_id` in `infra/flourish/terraform.tfvars`, apply once with an
 existing Terraform admin identity, then copy `circleci_workload_identity_provider`
 into the context as `GCP_WIF_PROVIDER_PROD`. The WIF condition requires the
 `terreno-gcp` context UUID so a PR job without that context cannot exchange the
@@ -378,6 +380,17 @@ dependencies and runs `test:ci` when that script exists, not `test`.
 `@terreno/ui`'s `test` is `bun test --watch` and would hang. If a package's
 tag version is already on npm, `publish-package.sh` skips it so a recut of
 the same tag can finish the rest.
+
+The release skill pushes the tag and creates the GitHub release with
+`gh release create --draft`. The repository has immutable releases on: a
+published release cannot take new assets (GitHub answers `422`). So CI publishes
+the draft last with `scripts/ci/github-release.sh publish`.
+`archive-docs-version` does it right after the upload on `X.Y.0` tags.
+`publish-github-release` does it after `publish-release` on every other tag.
+Both wait up to 10 minutes for the draft and are safe to rerun: a rerun skips
+an upload that already landed on a published release and a snapshot already on
+master. A
+release still in draft after the pipeline means one of them failed.
 
 Only stable tags (`57.3.0`) run `deploy-demo`. It builds the demo from source,
 so it runs alongside `publish-release` instead of waiting for it. Use

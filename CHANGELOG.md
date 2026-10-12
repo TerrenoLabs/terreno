@@ -20,6 +20,35 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.15.0] - 2026-10-11
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.15.0.md`](mcp-server/src/docs/upgrades/57.15.0.md).
+
+### Changed
+
+- SyncDB bootstraps and reconciles every stream through one `POST /sync/snapshot/batch` request
+  per round instead of one `GET /sync/snapshot` per stream. A reconnect with nothing new now costs
+  2 requests however many collections the app syncs. The client sends the next round while it
+  writes the current one and writes rows in chunks of 500 so the UI keeps responding. Clients fall
+  back to per-stream paging against servers without the batch route. The web IndexedDB persister
+  no longer serializes the whole store once per transaction: it serializes once per write.
+
+## [57.14.0] - 2026-10-11
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.14.0.md`](mcp-server/src/docs/upgrades/57.14.0.md).
+
+### Changed
+
+- `@terreno/syncdb` now pages snapshot streams side by side instead of one at a time, so cold
+  start no longer costs one sequential round trip per stream. Reconcile, subscribe catch-up,
+  `forceResync` and wipe re-bootstrap run up to `snapshotConcurrency` streams at once (new
+  `createSyncDb` option, default 6; `1` restores the old behavior). Each stream now runs one pass
+  at a time: a subscribe catch-up queues behind a pass that started before the room join, and a
+  force resync waits for the stream's in-flight pass before purging it, so a concurrent pass can
+  no longer mark a purged stream bootstrapped over rows it never paged. A new how-to,
+  [Use syncdb correctly](docs/how-to/use-syncdb-correctly.md), lists the library behavior
+  apps have to handle.
+
 ## [57.13.0] - 2026-10-10
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.13.0.md`](mcp-server/src/docs/upgrades/57.13.0.md).

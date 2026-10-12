@@ -34,6 +34,19 @@ gcp_auth() {
   scripts/ci/gcp-auth.sh
 }
 
+# Infra Manager uploads only the --local-source directory. The root module in
+# infra/flourish/ reaches the shared modules through its modules -> ../../terraform/modules
+# symlink, so copy it with symlinks dereferenced (tar -h) into a self-contained
+# source, leaving out local .terraform caches.
+stage_terraform_source() {
+  local staged
+  staged="$(mktemp -d)"
+  # $(...) does not inherit set -e, so fail explicitly on a partial copy.
+  tar -C infra/flourish -chf - --exclude=.terraform --exclude=.terraform.lock.hcl . | tar -C "$staged" -xf - || return 1
+  [ -f "$staged/main.tf" ] && [ -d "$staged/modules" ] && [ ! -L "$staged/modules" ] || return 1
+  echo "$staged"
+}
+
 configure_registry() {
   local region="$1"
   gcloud auth configure-docker "${region}-docker.pkg.dev" --quiet
@@ -189,13 +202,14 @@ case "$action" in
     location="${GCP_INFRA_MANAGER_LOCATION:-us-central1}"
     preview_id="${TF_DEPLOYMENT}-pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-manual}"
     trap 'gcloud infra-manager previews delete "$preview_id" --location="$location" --project="$GCP_PROJECT_ID" --quiet || true' EXIT
+    tf_source="$(stage_terraform_source)"
     preview_create_status=0
     gcloud infra-manager previews create "$preview_id" \
       "--project=$GCP_PROJECT_ID" \
       "--location=$location" \
       "--deployment=projects/${GCP_PROJECT_ID}/locations/${location}/deployments/${TF_DEPLOYMENT}" \
       "--service-account=projects/${GCP_PROJECT_ID}/serviceAccounts/${GCP_TF_ADMIN_SA_PROD}" \
-      --local-source=terraform \
+      "--local-source=$tf_source" \
       --quiet || preview_create_status=$?
     # Dump errorCode/errorLogs even when create fails. gcloud often prints an
     # empty "failed while running step:" line and nothing else.
@@ -211,11 +225,12 @@ case "$action" in
     export GCP_SERVICE_ACCOUNT="${GCP_TF_ADMIN_SA_PROD:-}"
     gcp_auth
     location="${GCP_INFRA_MANAGER_LOCATION:-us-central1}"
+    tf_source="$(stage_terraform_source)"
     gcloud infra-manager deployments apply "$TF_DEPLOYMENT" \
       "--project=$GCP_PROJECT_ID" \
       "--location=$location" \
       "--service-account=projects/${GCP_PROJECT_ID}/serviceAccounts/${GCP_TF_ADMIN_SA_PROD}" \
-      --local-source=terraform \
+      "--local-source=$tf_source" \
       --quiet
     ;;
   backend-prod)

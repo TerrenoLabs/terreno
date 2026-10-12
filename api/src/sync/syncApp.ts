@@ -12,8 +12,9 @@ export const getSyncAppOptions = (app: express.Application): SyncAppOptions | un
 
 /**
  * TerrenoPlugin mounting the SyncDB local-first sync HTTP routes
- * (`GET /sync/snapshot`, `POST /sync/mutate`, `GET /sync/key`). Models opt in via
- * modelRouter's `sync` option; this plugin serves the registered collections.
+ * (`GET /sync/snapshot`, `POST /sync/snapshot/batch`, `POST /sync/mutate`, `GET /sync/key`).
+ * Models opt in via modelRouter's `sync` option; this plugin serves the registered
+ * collections.
  *
  * Registration attaches the plugin's options (notably `getUserScopes`) to this Express
  * application so RealtimeApp's connection handler can install the socket

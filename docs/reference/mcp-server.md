@@ -55,7 +55,9 @@ connection.
 | Response | An SSE stream of `event: message` frames (`responseMode: "auto"`) |
 | Logging | Every `tools/call` and `prompts/get` is logged with its name and arguments (`logger.info`), and the server is wrapped with `Sentry.wrapMcpServerWithSentry`. Do not put secrets or PHI in tool arguments. |
 
-`mcp.terreno.flourish.health` is the legacy hostname for the same service.
+`mcp.terreno.flourish.health` is the legacy hostname for the same service. Use
+`https://mcp.terreno.flourish.health/mcp` while `mcp.terreno.app` does not resolve
+(`getaddrinfo ENOTFOUND mcp.terreno.app`).
 
 Editor entry (the Terreno servers `create-terreno-app` writes to `.cursor/mcp.json` and
 `.mcp.json`; the full files are in [Set up Terreno MCP](../how-to/set-up-terreno-mcp.md)):
@@ -610,7 +612,9 @@ message. An unknown tool name returns the text `Unknown tool: <name>`.
 ### Local tools
 
 All schemas set `additionalProperties: false`. Every tool returns one text block, JSON for most
-tools.
+tools. The server does not validate arguments against the schema: an unknown argument, such as
+`projection` on `database_query`, is ignored, not rejected. Check a result against the parameter
+table when it looks unfiltered.
 
 | Tool | Purpose | Gated by `TERRENO_MCP_EVAL` |
 |------|---------|------|
@@ -757,7 +761,7 @@ Merge log entries from up to four sources, sort them by timestamp, and return th
 | Source | Reads | Written by | Notes |
 |--------|-------|-----------|-------|
 | `backend` | `app.log` in each existing `<root>/backend/.terreno/logs`, `<root>/example-backend/.terreno/logs`, `<root>/.terreno/logs` | `@terreno/api` logger JSONL transport (see `TERRENO_LOG_FILE`) at `<backend cwd>/.terreno/logs/app.log` | No `stack` field: `logger.error` stacks are inside `message` |
-| `browser` | `browser.log` in the same directories | [`POST /__terreno/browser-logs`](api.md#development-browser-log-ingestion), fed by `installTerrenoDevConsoleLogger` from `@terreno/rtk` | `console.error` entries carry no stack; uncaught errors carry `stack` |
+| `browser` | `browser.log` in the same directories | [`POST /__terreno/browser-logs`](api.md#development-browser-log-ingestion), fed by `installTerrenoDevConsoleLogger` from `@terreno/syncdb` | `console.error` entries carry no stack; uncaught errors carry `stack`. A render error caught by an error boundary is a `console.error` entry: no `stack`, unformatted `%o`/`%s` placeholders, and the component name in `message` |
 | `metro` | In-memory ring (2000) from Metro's `ws://<metro>/events` | Metro dev server | Always empty with Expo CLI 57 (see [Metro and CDP connection](#metro-and-cdp-connection)) |
 | `app` | In-memory ring (2000) of Hermes `Runtime.consoleAPICalled` over CDP | The running Hermes app | Needs a Hermes target; `stack` is a JSON string of the first 8 call frames; timestamps are receipt time |
 
@@ -1273,7 +1277,7 @@ own process: model files are read as text, and the app's runtime is reached only
 | `TERRENO_LOG_FILE` | `@terreno/api` logger | on when `NODE_ENV !== "production"` | Backend JSONL transport to `<cwd>/.terreno/logs/app.log` (5 MB × 3 files, level `debug`). `false`/`0` forces off, `true`/`1` forces on. A toggle, not a path. |
 | `TERRENO_BROWSER_LOGS` | `@terreno/api` `TerrenoApp` | on only when `NODE_ENV === "development"` | Registers `POST /__terreno/browser-logs`, which appends to `<cwd>/.terreno/logs/browser.log`. `true`/`1` opts in outside development, `false`/`0` disables; production never registers it. See [Development browser-log ingestion](api.md#development-browser-log-ingestion). |
 | `NODE_ENV` | `@terreno/api` | unset | Drives both defaults above |
-| `TERRENO_DEV_CONSOLE_LOGGER_TEST` | `@terreno/rtk` `installTerrenoDevConsoleLogger` | unset | Test-only: `true` lets the console logger install outside `__DEV__` |
+| `TERRENO_DEV_CONSOLE_LOGGER_TEST` | `@terreno/syncdb` `installTerrenoDevConsoleLogger` | unset | Test-only: `true` lets the console logger install outside `__DEV__` |
 
 The full cross-package list is in [Environment variables](environment-variables.md).
 
@@ -1297,10 +1301,20 @@ bun run lint
 
 ### Docker
 
+Build from the repository root, as `scripts/ci/gcp-deploy.sh mcp-prod` does. The image needs the
+monorepo (`api/`, `blocks/`, `ui/`, `docs/`, `website/versioned_docs/`):
+
 ``````bash
-docker build -t terreno-mcp-server ./mcp-server
+docker build --file mcp-server/Dockerfile -t terreno-mcp-server .
 docker run --rm -p 8080:8080 terreno-mcp-server
 ``````
+
+`mcp-server/src/docs/ui-types-documentation.json` and `mcp-server/src/docs/versioned/` are
+git-ignored, so the builder stage generates them. `bun run --filter "@terreno/ui" types` writes the
+TypeDoc JSON that `terreno_get_component_docs` reads. `sync-versioned-docs` and
+`sync-package-guidelines` fill the `terreno_search_docs` corpus. Without that step the image served
+the one-component test fixture (`No component named "Badge". Examples: Button`) and searched only
+`resources/*.md`.
 
 ### Testing with MCP Inspector
 

@@ -200,6 +200,9 @@ Add this to `.cursor/mcp.json`:
 }
 ```
 
+If `mcp.terreno.app` does not resolve on your network yet, use
+`https://mcp.terreno.flourish.health/mcp`, which serves the same server.
+
 Claude Desktop config paths: macOS `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows `%APPDATA%\Claude\claude_desktop_config.json`.
 
 Restart the assistant after saving.

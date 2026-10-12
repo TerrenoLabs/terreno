@@ -11,7 +11,7 @@ what each tool does. Every tool output below was copied unchanged from a real ru
 |---------|------------|------|
 | API returns 500 | `last_error` with `sources: ["backend"]`. The stack is inside `message`. | `read_logs` with `sources: ["backend"]` and `since` to see the requests around it. |
 | API returns 403 (or another 4xx) | `read_logs` with `sources: ["backend"]` and `level: "warn"`. Every `APIError` under 500 is logged at `warn` as `ForbiddenError(403): <title> — <detail>`, so `last_error` does not show it. | `database_query` to compare the document's `ownerId` with the user in the log line. |
-| App crashes on a screen | Web: `last_error` with `sources: ["browser"]`. Browser entries carry a separate `stack` field. Native: `last_error` with `sources: ["app"]`. | Native: `navigate` to the screen and call `last_error` again. Web: the `browser` tool. |
+| App crashes on a screen | Web: `last_error` with `sources: ["browser"]`. An uncaught error carries a separate `stack` field. A render error caught by an error boundary has no `stack`; its `message` names the component instead (see [A screen crashes on web](#a-screen-crashes-on-web)). Native: `last_error` with `sources: ["app"]`. | Native: `navigate` to the screen and call `last_error` again. Web: the `browser` tool. |
 | Data looks wrong | `database_query` to read what the server stored. | `get_client_state` (RTK cache) or `get_syncdb_state` (SyncDB) to compare the client's copy. |
 | Screen renders empty | `get_client_state` or `get_syncdb_state` on native. On web, `browser` with `snapshot`. | `read_logs` with `sources: ["backend"]` to check that the list request ran and returned 200. |
 | Bundler fails | The terminal that runs `expo start`. The `metro` source is always empty under Expo CLI 57: the `/events` socket connects but Expo never sends on it. | On native, `read_logs` with `sources: ["app"]` once the app loads again. |
@@ -280,6 +280,13 @@ Each step returns the page state, for example the click:
 }
 ```
 
+On a user's first login, the example app shows one-time Terms of Service and Privacy Policy
+consent forms before the Todos screen. The Terms form needs a drawn signature, which `browser`
+cannot draw. For a scripted run, sign in with `POST /api/auth/sign-in/email`, list the forms with
+`GET /consents/pending`, and accept each one with `POST /consents/respond` and the body
+`{"consentFormId": "<id>", "agreed": true, "locale": "en", "signature": "<data URL>"}`. Then
+`reload` the page.
+
 Send the same malformed body from the page, the way a web client would:
 
 ```json
@@ -323,6 +330,39 @@ Then take a screenshot of the todo list:
 The screenshot shows My Todos with `3 todos · 3 remaining · 0 completed`: the seeded todos plus the
 single `Buy milk`, with no extra row from the rejected requests. A final `read_logs` for
 backend errors since the restart still returned `"entries": []`. The fix is verified.
+
+## A screen crashes on web
+
+A second run used the same setup on ports 4400 and 8482. A new priority badge on each todo row
+read `data.priority.toUpperCase()`, and todos created before the field existed have no
+`priority`. The Todos screen showed `Something went wrong` with
+`Cannot read properties of undefined (reading 'toUpperCase')`.
+
+```json
+{"name":"last_error","arguments":{"sources":["backend","browser"]}}
+```
+
+```json
+{"level":"error","message":"%o\n\n%s\n\n%s\n TypeError: Cannot read properties of undefined (reading 'toUpperCase') The above error occurred in the <SyncTodoItem> component. React will try to recreate this component tree from scratch using the error boundary you provided, Try.","source":"browser","timestamp":"2026-10-12T03:30:28.321+00:00"}
+```
+
+React caught the error in an error boundary and reported it with `console.error`, so:
+
+- There is no `stack` field. Only uncaught errors carry one.
+- The message starts with React's unformatted `%o` and `%s` placeholders. Read past them.
+- The component is named: `<SyncTodoItem>`. Search the code for it and for the property in the
+  error, here `toUpperCase`.
+
+`database_query` with `{"priority": {"$exists": false}}` on `todos` returned three rows, which
+confirmed that the data, not the server, triggers the crash. `read_logs` with
+`sources: ["backend"]` and `level: "error"` returned no entries. Restoring the guard
+(`data.priority ? <Badge …/> : null`) fixed it. `navigate` returned the same
+`No debuggable Hermes/React Native target` error as in step 8, so the check used `browser`:
+`open`, `scroll` to a todo row, then `screenshot`. The row with a priority showed its badge, and the
+rows without one rendered.
+
+A later `last_error` may return an unrelated older error, because it has no `since`. Use
+`read_logs` with `level: "error"` and `since` set to the time of the fix instead.
 
 ## Tool reference
 

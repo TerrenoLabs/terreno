@@ -119,6 +119,18 @@ send `Accept: application/json, text/event-stream`; MCP clients do this for you.
 `create-terreno-app` writes this URL into `.cursor/mcp.json` and `.mcp.json`. Use
 `--mcp-server-url` to point a new app at a different deployment.
 
+Check that the host answers:
+
+```bash
+curl -s https://mcp.terreno.app/
+```
+
+A working host returns `{"mcpEndpoint":"/mcp","service":"terreno-mcp","status":"ok"}`. If the
+command prints `Could not resolve host: mcp.terreno.app`, or the editor reports
+`getaddrinfo ENOTFOUND mcp.terreno.app`, that hostname does not resolve yet. Until it does, set the
+`terreno` URL to `https://mcp.terreno.flourish.health/mcp` in `.cursor/mcp.json` and `.mcp.json`. It
+serves the same service and tools.
+
 ### Moving off `mcp.terreno.flourish.health`
 
 Earlier docs and scaffolds used `https://mcp.terreno.flourish.health/mcp`. That hostname serves the

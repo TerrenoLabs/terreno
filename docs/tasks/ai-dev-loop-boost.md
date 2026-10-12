@@ -125,7 +125,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
 
 ## Phase 6: Verification
 
-- [ ] **Task 6.1**: Run the loop end to end and capture evidence
+- [x] **Task 6.1**: Run the loop end to end and capture evidence
   - Description: In a fresh agent session with both MCP servers configured per `docs/how-to/set-up-terreno-mcp.md`, complete a full loop: ask for a small feature, let the agent generate it, run the app, introduce a bug, use `last_error` and `read_logs` to find it, fix it, and verify with `navigate` plus a screenshot. Capture the transcript highlights and screenshots to `/opt/cursor/artifacts/`. Fix any documentation gap the run exposed.
   - Files: any documentation needing correction
   - Depends on: Task 4.2, Task 5.1, Task 5.3

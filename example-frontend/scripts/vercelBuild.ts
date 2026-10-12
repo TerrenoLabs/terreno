@@ -11,7 +11,7 @@
  */
 import {spawnSync} from "node:child_process";
 import {readFileSync, writeFileSync} from "node:fs";
-import {resolve} from "node:path";
+import {dirname, resolve} from "node:path";
 
 interface AppJson {
   expo: {extra?: Record<string, unknown>} & Record<string, unknown>;
@@ -44,29 +44,35 @@ export const withVercelManifest = ({
   };
 };
 
-const main = (): void => {
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+// --clear: Metro caches the manifest, and a cached build keeps the previous BASE_URL.
+const EXPO_WEB_EXPORT = ["bun", "expo", "export", "--platform", "web", "--clear"];
+
+interface RunVercelBuildOptions {
+  apiUrl: string | undefined;
+  appJsonPath?: string;
+  /** Command that runs the web export, from the app directory. */
+  exportCommand?: string[];
+}
+
+/** Writes the Vercel manifest values into app.json, then exports. Returns the exit status. */
+export const runVercelBuild = ({
+  apiUrl,
+  appJsonPath = resolve(import.meta.dir, "../app.json"),
+  exportCommand = EXPO_WEB_EXPORT,
+}: RunVercelBuildOptions): number => {
   if (!apiUrl) {
     console.error(
       "EXPO_PUBLIC_API_URL is not set. Set it on the Vercel project for this environment " +
         "(production and preview) so the bundle does not call localhost."
     );
-    process.exit(1);
+    return 1;
   }
-
-  const appJsonPath = resolve(import.meta.dir, "../app.json");
   const appJson = JSON.parse(readFileSync(appJsonPath, "utf8")) as AppJson;
   writeFileSync(appJsonPath, `${JSON.stringify(withVercelManifest({apiUrl, appJson}), null, 2)}\n`);
   console.info(`Building web export against ${new URL(apiUrl).origin}`);
-
-  // --clear: Metro caches the manifest, and a cached build keeps the previous BASE_URL.
-  const result = spawnSync("bun", ["expo", "export", "--platform", "web", "--clear"], {
-    cwd: resolve(import.meta.dir, ".."),
-    stdio: "inherit",
-  });
-  process.exit(result.status ?? 1);
+  const [command, ...args] = exportCommand;
+  const result = spawnSync(command, args, {cwd: dirname(appJsonPath), stdio: "inherit"});
+  return result.status ?? 1;
 };
 
-if (import.meta.main) {
-  main();
-}
+if (import.meta.main) process.exit(runVercelBuild({apiUrl: process.env.EXPO_PUBLIC_API_URL}));

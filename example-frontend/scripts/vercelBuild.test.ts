@@ -1,6 +1,9 @@
-import {describe, expect, it} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it} from "bun:test";
+import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 
-import {withVercelManifest} from "./vercelBuild";
+import {runVercelBuild, withVercelManifest} from "./vercelBuild";
 
 const appJson = {
   expo: {
@@ -34,5 +37,53 @@ describe("withVercelManifest", (): void => {
 
   it("rejects a value that is not a URL", (): void => {
     expect(() => withVercelManifest({apiUrl: "terreno-backend.vercel.app", appJson})).toThrow();
+  });
+});
+
+describe("runVercelBuild", (): void => {
+  let dir: string;
+  let appJsonPath: string;
+
+  beforeEach((): void => {
+    dir = mkdtempSync(join(tmpdir(), "vercel-build-"));
+    appJsonPath = join(dir, "app.json");
+    writeFileSync(appJsonPath, JSON.stringify(appJson));
+  });
+
+  afterEach((): void => {
+    rmSync(dir, {force: true, recursive: true});
+  });
+
+  it("fails without exporting when EXPO_PUBLIC_API_URL is missing", (): void => {
+    const marker = join(dir, "exported");
+    const status = runVercelBuild({
+      apiUrl: undefined,
+      appJsonPath,
+      exportCommand: ["touch", marker],
+    });
+    expect(status).toBe(1);
+    expect(existsSync(marker)).toBe(false);
+    expect(JSON.parse(readFileSync(appJsonPath, "utf8"))).toEqual(appJson);
+  });
+
+  it("writes the manifest, then runs the export from the app directory", (): void => {
+    // The export copies app.json as it sees it, proving the manifest is written first.
+    const status = runVercelBuild({
+      apiUrl: "https://terrenolabs-backend.vercel.app",
+      appJsonPath,
+      exportCommand: ["cp", "app.json", "seen-by-export.json"],
+    });
+    expect(status).toBe(0);
+    const seen = JSON.parse(readFileSync(join(dir, "seen-by-export.json"), "utf8"));
+    expect(seen.expo.extra).toMatchObject({
+      BASE_URL: "https://terrenolabs-backend.vercel.app",
+      SOCKET_TRANSPORTS: "websocket",
+    });
+  });
+
+  it("returns the export's failing status", (): void => {
+    expect(
+      runVercelBuild({apiUrl: "https://api.example.com", appJsonPath, exportCommand: ["false"]})
+    ).toBe(1);
   });
 });

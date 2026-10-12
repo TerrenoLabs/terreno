@@ -1,16 +1,15 @@
-/** Verifies the Vercel Functions entry boots onto a host-owned http.Server. */
+/** Verifies the Vercel Functions entry (src/app.ts) boots onto a host-owned http.Server. */
 import {afterAll, beforeAll, describe, expect, it} from "bun:test";
 import type {Server} from "node:http";
 import type {AddressInfo} from "node:net";
 
-import {createVercelServer} from "./vercelServer";
-
-describe("createVercelServer", () => {
+describe("Vercel entry", () => {
   let server: Server;
   let baseUrl: string;
 
   beforeAll(async () => {
-    ({server} = await createVercelServer());
+    // Importing the entry boots it, as Vercel's launcher does.
+    server = (await import("./app")).default;
   });
 
   afterAll(async () => {

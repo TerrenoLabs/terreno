@@ -507,7 +507,7 @@ Installs workspace dependencies and compiles all packages (`bun install && bun r
 
 ### Cloud VM toolchain
 
-Shared install script (in **flourish** repo): `bash /agent/repos/flourish/scripts/install-cloud-dev-tools.sh` then `source ~/.cloud-dev-tools.env`. Provides **terraform**, **gcloud**, **gh**, **Playwright** (after `bun bootstrap` in packages with `@playwright/test`), **Appium**, and **Android emulator** helpers. Terreno/terraform details: `terraform/README.md`.
+Shared install script (in **flourish** repo): `bash /agent/repos/flourish/scripts/install-cloud-dev-tools.sh` then `source ~/.cloud-dev-tools.env`. Provides **terraform**, **gcloud**, **gh**, **Playwright** (after `bun bootstrap` in packages with `@playwright/test`), **Appium**, and **Android emulator** helpers. Terreno GCP infrastructure details: `infra/flourish/README.md`; reusable modules: `terraform/README.md`.
 
 ### Example full stack
 

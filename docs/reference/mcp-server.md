@@ -1385,5 +1385,5 @@ mcp-server/
 The hosted server runs as the `terreno-mcp` Cloud Run service. CircleCI's continuous-delivery
 pipeline (`.circleci/config.yml`, triggered by changes under `mcp-server/`) builds and rolls the
 image; Terraform owns the service's structure, and its hostname cutover is in
-[terraform/README.md](../../terraform/README.md#hosted-mcp-hostname).
+[infra/flourish/README.md](../../infra/flourish/README.md#hosted-mcp-hostname).
 - Workload Identity Federation setup

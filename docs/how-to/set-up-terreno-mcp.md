@@ -147,7 +147,7 @@ claude mcp add --scope local --transport http terreno https://mcp.terreno.app/mc
 ```
 
 The operator cutover (domain mapping, DNS, retiring the old hostname) is in the
-[terraform README](https://github.com/TerrenoLabs/terreno/blob/master/terraform/README.md#hosted-mcp-hostname).
+[infra/flourish README](https://github.com/TerrenoLabs/terreno/blob/master/infra/flourish/README.md#hosted-mcp-hostname).
 
 ## 4. Give the local server what it needs
 

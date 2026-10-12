@@ -41,11 +41,13 @@ terreno logs --entries 100 --level error --sources backend,browser,metro,app
 Check authentication and non-synced RTK Query cache state:
 
 ```json
-{"name":"get_rtk_state","arguments":{"slice":"rtk","query":"todos"}}
+{"name":"get_client_state","arguments":{"slice":"rtk","query":"todos"}}
 ```
 
 The tool reads `globalThis.__TERRENO_STORE__` registered by the app, using CDP when the MCP process
-cannot access the app heap directly. `slice: "auth"` prefers the Better Auth slice and falls back to
+cannot access the app heap directly. It also detects a SyncDB client created with `debug: true`, and
+its `layer` field reports what it found: `rtk`, `syncdb`, `syncdb+rtk` (both payloads returned), or
+`none` (with a setup hint). `get_rtk_state` is a deprecated alias for one release. `slice: "auth"` prefers the Better Auth slice and falls back to
 legacy JWT auth; pass `betterAuth` to request that exact slice. The CLI equivalent is:
 
 Sensitive fields whose names include `password`, `token`, `secret`, `authorization`, or `cookie` are

@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {lastError, readLogs} from "../tools/readLogs";
-import {getRtkState, navigate} from "../tools/runtime";
+import {getClientState, navigate} from "../tools/runtime";
 import {
   cdpRuntimeEvaluate,
   ensureCdpConnected,
@@ -150,10 +150,12 @@ describe("Metro development session", () => {
     expect(entry).toMatchObject({level: "warn", message: "hello", source: "app"});
 
     expect(await cdpRuntimeEvaluate("1 + 1", true)).toEqual({value: 2});
-    const state = JSON.parse(await getRtkState({slice: "auth"})) as {
-      auth?: {userId?: string};
+    const state = JSON.parse(await getClientState({slice: "auth"})) as {
+      layer?: string;
+      rtk?: {auth?: {userId?: string}};
     };
-    expect(state.auth?.userId).toBe("cdp-user");
+    expect(state.layer).toBe("rtk");
+    expect(state.rtk?.auth?.userId).toBe("cdp-user");
     const logs = JSON.parse(await readLogs({sources: ["app"]})) as {
       entries: Array<{message?: string}>;
     };

@@ -25,7 +25,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 1.1
   - Acceptance: all four sources produced output, or any that did not is documented with the reason; `last_error` output captured verbatim including a stack trace.
 
-- [ ] **Task 1.3**: Reproduce the Hermes CDP contention symptom
+- [x] **Task 1.3**: Reproduce the Hermes CDP contention symptom
   - Description: With `read_logs` connected and streaming `app` source entries, open React Native DevTools (press `j` in Metro) and observe what happens to the log tool. Record the exact status message or failure the tool reports. Then close DevTools and confirm whether the tool recovers automatically. This becomes the documented symptom and workaround.
   - Files: none (findings recorded for later tasks)
   - Depends on: Task 1.2
@@ -87,7 +87,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
 
 ## Phase 5: Gap fixes
 
-- [ ] **Task 5.1**: `[RTK]` Rename `get_rtk_state` to `get_client_state`
+- [x] **Task 5.1**: `[RTK]` Rename `get_rtk_state` to `get_client_state`
   - Description: Per IP question AI1, rename the tool to `get_client_state` and extend it to detect either store type, returning a field identifying which layer it found (RTK Query cache versus syncdb store). Keep `get_rtk_state` registered as an alias whose description marks it deprecated and names the replacement. Update the tool description to explain what it returns for each layer. Add tests covering: syncdb store present, RTK store present, neither present, and the alias resolving to the same handler.
   - Files: `mcp-server/src/local/tools/runtime.ts`, `mcp-server/src/local/localTools.ts`, tests under `mcp-server/src/local/`
   - Depends on: Task 1.1, PR #869 merged

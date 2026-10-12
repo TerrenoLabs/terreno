@@ -3,7 +3,7 @@
 Published npm package for the Terreno Model Context Protocol (MCP) server. The monorepo directory is still `mcp-server/`. The package exposes:
 
 - **`terreno-mcp`** — HTTP server used in Cloud Run and local debugging (`src/index.ts`)
-- **`terreno-mcp-local`** — stdio server for project runtime tools (`src/local/index.ts`): app/database/log/browser diagnostics, Redux/RTK inspection, and SyncDB state/action/snapshot tools. `evaluate`, `navigate`, and SyncDB state changes are gated by `TERRENO_MCP_EVAL`. Metro URL defaults from `frontend/package.json` `--port` or `TERRENO_METRO_URL`. `application_info` reads bootstrap `backend/` + `frontend/`, or this monorepo's `example-backend/` + `example-frontend/` (bootstrap names win when both exist).
+- **`terreno-mcp-local`** — stdio server for project runtime tools (`src/local/index.ts`): app/database/log/browser diagnostics, client data-layer inspection (`get_client_state` returns `layer`: `rtk`, `syncdb`, `syncdb+rtk`, or `none`; `get_rtk_state` is a deprecated alias kept for one release), and SyncDB state/action/snapshot tools. `evaluate`, `navigate`, and SyncDB state changes are gated by `TERRENO_MCP_EVAL`. Metro URL defaults from `frontend/package.json` `--port` or `TERRENO_METRO_URL`. `application_info` reads bootstrap `backend/` + `frontend/`, or this monorepo's `example-backend/` + `example-frontend/` (bootstrap names win when both exist).
 
 It provides AI coding assistants with documentation access, code generation tools, and workflow prompts.
 For editor configuration and runtime prerequisites, see

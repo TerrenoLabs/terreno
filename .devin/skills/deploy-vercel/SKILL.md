@@ -78,12 +78,12 @@ Follow the guide's "Backend on Vercel Functions" section:
 Print exactly what the backend must allow, for example:
 
 ```text
-CORS_ORIGINS=https://<web-project>.vercel.app,https://<web-project>-*-<team>.vercel.app
+CORS_ORIGINS=https://<web-project>.vercel.app,https://<fixed-preview-alias>.vercel.app
 ```
 
 For a backend that is not `example-backend`, show the equivalent `corsOrigin` array (strings and `RegExp`s) and the `trustedOrigins` entries, including the native deep-link schemes the app already uses. Point out that:
 
-- the wildcard trusts every matching name on the shared `vercel.app` namespace, so a custom preview domain is safer;
+- list exact origins; never suggest a `*` pattern on `vercel.app`, a shared namespace where another account can claim a matching project name. Wildcards are only for a preview domain the user controls;
 - OAuth providers need each redirect URI registered exactly, so social sign-in works only on fixed origins.
 
 **Stop here** until the user confirms the backend change is deployed. Do not edit a deployed backend's environment yourself.

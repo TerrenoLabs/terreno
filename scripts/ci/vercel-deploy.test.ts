@@ -41,6 +41,14 @@ describe("vercel-deploy.sh plan", () => {
     assert.equal(backend.runtime_env, undefined);
   });
 
+  it("ignores an ambient EXPO_PUBLIC_API_URL so a PR frontend cannot target another backend", () => {
+    const result = run(["frontend", "preview", "42", "--plan"], {
+      EXPO_PUBLIC_API_URL: "https://terrenolabs-backend.vercel.app",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^api_url=https:\/\/terrenolabs-backend-pr-42\.vercel\.app$/m);
+  });
+
   it("points a PR frontend at the same PR's backend host", () => {
     const frontend = plan(["frontend", "preview", "42"]);
     assert.deepEqual(frontend.host, ["terrenolabs-frontend-pr-42.vercel.app"]);
@@ -54,7 +62,7 @@ describe("vercel-deploy.sh plan", () => {
       "MONGO_DB_NAME=terreno-example-pr-42",
       "SEED_DEFAULTS=true",
       "BETTER_AUTH_URL=https://terrenolabs-backend-pr-42.vercel.app",
-      "CORS_ORIGINS=https://terrenolabs-frontend-pr-42.vercel.app,https://terreno-frontend-*-terrenolabs.vercel.app",
+      "CORS_ORIGINS=https://terrenolabs-frontend-pr-42.vercel.app",
     ]);
   });
 

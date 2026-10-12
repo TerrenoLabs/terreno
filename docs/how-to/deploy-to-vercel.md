@@ -126,7 +126,7 @@ Set these in **Settings → Environment Variables** for the Production environme
 | `AUTH_PROVIDER` | `better-auth` |
 | `BETTER_AUTH_SECRET` | Same secret as the Cloud Run backend, so sessions work on both |
 | `BETTER_AUTH_URL` | `https://terrenolabs-backend.vercel.app` |
-| `CORS_ORIGINS` | `https://terrenolabs-frontend.vercel.app,https://terreno-frontend-*-terrenolabs.vercel.app` |
+| `CORS_ORIGINS` | `https://terrenolabs-frontend.vercel.app` |
 | `CROSS_DOMAIN_AUTH_COOKIES` | `true` (web and API are on different origins) |
 | `NODE_ENV` | `production` |
 | `JOBS_START_WORKER` | `false` |
@@ -210,28 +210,30 @@ A new origin breaks two backend settings until you allow it.
 
 The web app calls the backend with credentials (Better Auth sends `credentials: "include"`), so the backend must answer with the exact requesting origin in `Access-Control-Allow-Origin` and set `Access-Control-Allow-Credentials: true`. `TerrenoApp`'s `corsOrigin` accepts a string, a `RegExp`, or an array of both (`CorsOrigin` in `api/src/terrenoApp.ts`).
 
-`example-backend` builds that list from `CORS_ORIGINS` (`example-backend/src/utils/betterAuthConfig.ts`). Entries are comma-separated, and an entry may contain `*`. `toCorsOrigin` turns such an entry into an anchored, case-insensitive `RegExp` in which `*` matches one run of letters, digits, and hyphens and never a dot, so it cannot reach into another domain:
+`example-backend` builds that list from `CORS_ORIGINS` (`example-backend/src/utils/betterAuthConfig.ts`). Entries are comma-separated, and an entry may contain `*`. `toCorsOrigin` turns such an entry into an anchored, case-insensitive `RegExp` in which `*` matches one run of letters, digits, and hyphens and never a dot. Use wildcards only on a domain you control:
 
 ```typescript
-// CORS_ORIGINS=https://terrenolabs-frontend.vercel.app,https://terreno-frontend-*-terrenolabs.vercel.app
+// CORS_ORIGINS=https://app.example.com,https://*.preview.example.com
 new TerrenoApp({
   corsOrigin: getCorsOrigins(),
   // [
   //   "http://localhost:8082", "http://127.0.0.1:8082",
-  //   "https://terrenolabs-frontend.vercel.app",
-  //   /^https:\/\/terreno-frontend-[a-z0-9-]+-terrenolabs\.vercel\.app$/i,
+  //   "https://app.example.com",
+  //   /^https:\/\/[a-z0-9-]+\.preview\.example\.com$/i,
   // ]
   // ...
 });
 ```
 
+Terreno's own Vercel deploys list exact origins only: production allows `https://terrenolabs-frontend.vercel.app`, and each PR backend allows only its PR alias. The per-deployment URLs (`terreno-frontend-<hash>-terrenolabs.vercel.app`) are not allowed, so open a preview through its PR alias.
+
 Do not use `corsOrigin: true` or `"*"` in production. `true` reflects whatever origin the request names, and because the browser sends the user's session cookie with credentialed requests, any website the user visits could then call your API as that user and read the responses. `"*"` is rejected by browsers for credentialed requests, so it fails instead of leaking, but it is still the wrong fix.
 
-Even the wildcard pattern trusts every hostname of that shape on `vercel.app`, which is a shared namespace. A project's production domain is `<project-name>.vercel.app` when that name is free, so another Vercel account could create a project named, for example, `terreno-frontend-x-terrenolabs` and get a hostname that matches. For anything beyond a demo, serve previews from a custom domain you control (for example `*.preview.example.com`) and allow that pattern instead.
+Never put a wildcard on `vercel.app`. It is a shared namespace: a project's production domain is `<project-name>.vercel.app` when that name is free, so another Vercel account could name a project `terreno-frontend-x-terrenolabs` and get a hostname matching `https://terreno-frontend-*-terrenolabs.vercel.app`. For wildcard previews, serve them from a custom domain you control (for example `*.preview.example.com`).
 
 ### Better Auth `trustedOrigins`
 
-Better Auth checks the request origin separately, against `trustedOrigins` (`api/src/betterAuth.ts`). `example-backend` passes the native deep-link schemes (`frontend://`, `terreno://`, `exp://`) plus the same raw `CORS_ORIGINS` entries. Better Auth matches `*` patterns itself. Its wildcard is broader than the CORS `RegExp`: in an `https://` pattern, `*` can also match dots. Keep patterns as specific as you can.
+Better Auth checks the request origin separately, against `trustedOrigins` (`api/src/betterAuth.ts`). `example-backend` passes the native deep-link schemes (`frontend://`, `terreno://`, `exp://`) plus the same raw `CORS_ORIGINS` entries. Better Auth matches `*` patterns itself, and its wildcard is broader than the CORS `RegExp`: in an `https://` pattern, `*` can also match dots. On a domain you control that only widens trust to your own subdomains, which is one more reason to keep wildcards off shared namespaces.
 
 Set `BETTER_AUTH_URL` to the backend's own public URL in each environment. Terreno's PR backends get `BETTER_AUTH_URL=https://terrenolabs-backend-pr-<N>.vercel.app` per deployment.
 
@@ -248,7 +250,7 @@ When the backend is on Vercel too, each PR backend preview gets these runtime va
 | `MONGO_DB_NAME` | `terreno-example-pr-<N>` (the PR database the Cloud Run preview seeds and preview cleanup drops) |
 | `SEED_DEFAULTS` | `true` |
 | `BETTER_AUTH_URL` | `https://terrenolabs-backend-pr-<N>.vercel.app` |
-| `CORS_ORIGINS` | `https://terrenolabs-frontend-pr-<N>.vercel.app,https://terreno-frontend-*-terrenolabs.vercel.app` |
+| `CORS_ORIGINS` | `https://terrenolabs-frontend-pr-<N>.vercel.app` |
 
 ## Deploy
 

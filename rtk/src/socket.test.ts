@@ -229,23 +229,29 @@ describe("useSocketConnection", () => {
     expect(lastSocket().options.transports).toEqual(["websocket"]);
   });
 
-  it("keeps one socket when the caller passes an equal transports array each render", async () => {
+  it("recreates the socket only when the transports change by value", async () => {
     const {rerender} = renderHook(
-      () =>
+      ({transports}: {transports: string[]}) =>
         useSocketConnection({
           baseUrl: "https://example.com",
           getAuthToken: async (): Promise<string | null> => "auth-token",
           shouldConnect: false,
-          transports: ["websocket"],
+          transports,
         }),
-      {wrapper: createWrapper(createStore())}
+      {initialProps: {transports: ["websocket"]}, wrapper: createWrapper(createStore())}
     );
     await waitFor(() => {
       expect(sockets).toHaveLength(1);
     });
-    rerender({});
-    rerender({});
+    // A fresh but equal array keeps the socket.
+    rerender({transports: ["websocket"]});
     expect(sockets).toHaveLength(1);
+    // A different list opens a socket with the new transports.
+    rerender({transports: ["polling", "websocket"]});
+    await waitFor(() => {
+      expect(sockets).toHaveLength(2);
+    });
+    expect(lastSocket().options.transports).toEqual(["polling", "websocket"]);
   });
 
   it("creates a socket that does not auto connect and connects it with the auth token", async () => {

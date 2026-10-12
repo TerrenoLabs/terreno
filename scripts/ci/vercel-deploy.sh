@@ -61,13 +61,17 @@ if [ "$target" = "backend" ] && [ "$mode" = "preview" ]; then
     "MONGO_DB_NAME=terreno-example-pr-${pr_number}"
     "SEED_DEFAULTS=true"
     "BETTER_AUTH_URL=https://${host}"
-    "CORS_ORIGINS=https://terrenolabs-frontend-pr-${pr_number}.vercel.app,https://terreno-frontend-*-terrenolabs.vercel.app"
+    # Exact origin only: vercel.app is a shared namespace, so a wildcard such as
+    # terreno-frontend-*-terrenolabs.vercel.app can match another team's project.
+    "CORS_ORIGINS=https://terrenolabs-frontend-pr-${pr_number}.vercel.app"
   )
 fi
 
+# Only the frontend build reads it, always from this deploy's backend host, so a PR frontend
+# can never be built against another environment's backend.
 api_url=""
 if [ "$target" = "frontend" ]; then
-  api_url="${EXPO_PUBLIC_API_URL:-https://${backend_host}}"
+  api_url="https://${backend_host}"
 fi
 
 if [ "$plan_only" = true ]; then
@@ -117,7 +121,13 @@ fi
 
 deploy() {
   bunx "vercel@${VERCEL_CLI_VERSION}" pull --yes "--environment=${vercel_env}"
-  EXPO_PUBLIC_API_URL="$api_url" bunx "vercel@${VERCEL_CLI_VERSION}" build --yes ${prod_flag[@]+"${prod_flag[@]}"}
+  # The CLI's file trace parses the 45 MB backend bundle and exceeds Node's default heap.
+  export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=6144"
+  if [ -n "$api_url" ]; then
+    EXPO_PUBLIC_API_URL="$api_url" bunx "vercel@${VERCEL_CLI_VERSION}" build --yes ${prod_flag[@]+"${prod_flag[@]}"}
+  else
+    bunx "vercel@${VERCEL_CLI_VERSION}" build --yes ${prod_flag[@]+"${prod_flag[@]}"}
+  fi
 
   local env_flags=()
   for entry in ${runtime_env[@]+"${runtime_env[@]}"}; do

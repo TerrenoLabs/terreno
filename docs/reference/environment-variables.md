@@ -76,7 +76,7 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `ALLOW_MIGRATIONS` | `@terreno/api` `terreno-migrate` | ❌ | unset | No | server |
 | `MIGRATIONS_DIR` | example-backend Dockerfile / `resolveMigrationDir` | ❌ | `<cwd>/migrations` when `dir` is `$bunfs` | No | server |
 
-`CORS_ORIGINS` is comma-separated. An entry may contain `*`, for Vercel preview hostnames such as `https://terreno-frontend-*-terrenolabs.vercel.app`. For `corsOrigin`, `*` becomes a `RegExp` that matches letters, digits, and hyphens but never a dot. Better Auth `trustedOrigins` receives the raw pattern and applies its own, broader wildcard matching. Never use `corsOrigin: true` in production; see [Deploy to Vercel](../how-to/deploy-to-vercel.md#cors). Set `CROSS_DOMAIN_AUTH_COOKIES=true` when the web app and API are on different sites.
+`CORS_ORIGINS` is comma-separated. An entry may contain `*` (for example `https://*.preview.example.com`); use it only on a domain you control, never on a shared namespace like `vercel.app`. For `corsOrigin`, `*` becomes a `RegExp` that matches letters, digits, and hyphens but never a dot. Better Auth `trustedOrigins` receives the raw pattern and applies its own, broader wildcard matching. Never use `corsOrigin: true` in production; see [Deploy to Vercel](../how-to/deploy-to-vercel.md#cors). Set `CROSS_DOMAIN_AUTH_COOKIES=true` when the web app and API are on different sites.
 
 ## Client / build-time
 

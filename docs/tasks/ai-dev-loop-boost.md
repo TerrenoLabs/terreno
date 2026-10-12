@@ -111,7 +111,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 2.1
   - Acceptance: `rg -n "mcp\.terreno\.flourish\.health"` returns only intentional legacy references; a bootstrapped app's `mcp.json` uses the new URL; the cutover plan is documented; or the no-change decision is recorded in the PR body.
 
-- [ ] **Task 5.5**: Let `terreno-mcp-local` attach to Metro's inspector proxy
+- [x] **Task 5.5**: Let `terreno-mcp-local` attach to Metro's inspector proxy
   - Description: Found by Task 1.3. `@react-native/dev-middleware` 0.86 (Expo 57) rejects debugger WebSocket upgrades that carry no `Origin` header (`InspectorProxy.js` `verifyClient`), and neither Bun nor Node sends one, so the `app` log source and every CDP-backed tool fail with `CDP websocket error: ... Expected 101 status code`. Send an `Origin` matching the Metro base URL's loopback origin on the CDP socket, and surface Metro's close code and reason (for example `[NEW_DEBUGGER_OPENED]`) in the status hint instead of the bare `CDP disconnected`. Add tests at the session seam.
   - Files: `mcp-server/src/local/metro/metroDevSession.ts`, its tests
   - Depends on: Task 1.3

@@ -33,7 +33,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
 
 ## Phase 2: Reference completeness
 
-- [ ] **Task 2.1**: Update `docs/reference/mcp-server.md`
+- [x] **Task 2.1**: Update `docs/reference/mcp-server.md`
   - Description: Rewrite the tool sections to match the Task 1.1 inventory exactly. Split clearly into "Hosted server (`terreno-mcp`)" and "Local server (`terreno-mcp-local`)" sections. For each tool: name, purpose, input schema table, example call, and example output. Add an "Environment variables" section listing every variable from Task 1.1 with its effect and default. Add a "What the local server can and cannot see" section — it reads `package.json`/lockfiles, connects to Mongo via the consumer's `.env`, tails log files, and attaches over CDP; it never imports consumer code. Document the Hermes limitation from Task 1.3. Update the hosted URL per IP question AI6 if the domain decision has been made.
   - Files: `docs/reference/mcp-server.md`
   - Depends on: Task 1.1, Task 1.3

@@ -41,6 +41,7 @@ import {getSessionToken} from "@/lib/betterAuth";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
+import {socketTransports} from "@/store/socketTransports";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
 
@@ -198,6 +199,7 @@ const RootLayoutNav = (): React.ReactElement => {
     baseUrl,
     getAuthToken,
     shouldConnect: Boolean(userId),
+    transports: socketTransports,
   });
 
   useRealtimeDebug(baseUrl, socket?.connected);

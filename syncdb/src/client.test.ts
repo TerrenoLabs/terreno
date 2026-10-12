@@ -1,7 +1,10 @@
 import "fake-indexeddb/auto";
 
 import {describe, expect, it} from "bun:test";
+import {createServer} from "node:http";
+import type {AddressInfo} from "node:net";
 import {assert} from "chai";
+import {Server} from "socket.io";
 
 import {createSyncDb, type SyncDbConfig} from "./client";
 import {createLocalKeyProvider, DEFAULT_KEY_CACHE_DB_NAME} from "./crypto/keyProviders";
@@ -252,6 +255,39 @@ describe("createSyncDb", () => {
       streams: {},
       totalThisDrain: 0,
     });
+  });
+
+  it("opens the default socket with the configured socketTransports", async () => {
+    const httpServer = createServer();
+    const io = new Server(httpServer);
+    const firstTransports: string[] = [];
+    io.on("connection", (socket) => {
+      firstTransports.push(socket.conn.transport.name);
+    });
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const {port} = httpServer.address() as AddressInfo;
+
+    const harness = makeHarness();
+    const client = createSyncDb({
+      ...harness.config,
+      baseUrl: `http://127.0.0.1:${port}`,
+      socketTransports: ["websocket"],
+      transport: undefined,
+    });
+    try {
+      await client.start();
+      for (let attempt = 0; attempt < 50 && firstTransports.length === 0; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(firstTransports).toEqual(["websocket"]);
+    } finally {
+      await client.stop();
+      io.disconnectSockets(true);
+      httpServer.closeAllConnections();
+      await new Promise<void>((resolve) => {
+        io.close(() => resolve());
+      });
+    }
   });
 
   it("start() rejects without an authenticated user", async () => {

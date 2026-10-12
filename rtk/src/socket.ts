@@ -21,7 +21,15 @@ export interface UseSocketConnectionOptions {
   getAuthToken: () => Promise<string | null>;
   shouldConnect: boolean;
   captureEvent?: (eventName: string, data: Record<string, unknown>) => void;
+  /**
+   * Socket.io transports, in order. Defaults to polling then websocket. Pass `["websocket"]`
+   * for hosts without session affinity, such as Vercel Functions, where a polling request
+   * can land on a different instance than the one holding the session.
+   */
+  transports?: string[];
 }
+
+const DEFAULT_TRANSPORTS = ["polling", "websocket"];
 
 export const useSocketConnection = ({
   baseUrl,
@@ -32,6 +40,7 @@ export const useSocketConnection = ({
   getAuthToken,
   shouldConnect, // Whether we have a logged in user.
   captureEvent,
+  transports = DEFAULT_TRANSPORTS,
 }: UseSocketConnectionOptions): {
   socket: Socket | null;
   isSocketConnected: SocketConnection;
@@ -52,6 +61,9 @@ export const useSocketConnection = ({
     isConnectedRef.current = isSocketConnected;
   }, [isSocketConnected]);
 
+  // Compare by value so a caller passing a fresh array each render keeps the same socket.
+  const transportsKey = transports.join(",");
+
   // Initialize socket connection
   useEffect(() => {
     const socketIo = io(baseUrl, {
@@ -60,9 +72,9 @@ export const useSocketConnection = ({
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      // Start with polling so dev server restarts don't fail the initial websocket-only
-      // handshake; Socket.io upgrades to websocket once the connection is established.
-      transports: ["polling", "websocket"],
+      // The default starts with polling so dev server restarts don't fail the initial
+      // websocket-only handshake; Socket.io upgrades to websocket once connected.
+      transports: transportsKey.split(","),
     });
 
     socketRef.current = socketIo;
@@ -72,7 +84,7 @@ export const useSocketConnection = ({
       socketIo.disconnect();
       socketRef.current = null;
     };
-  }, [baseUrl]);
+  }, [baseUrl, transportsKey]);
 
   const hideDisconnectedToast = useCallback((): void => {
     if (disconnectedToastId.current) {

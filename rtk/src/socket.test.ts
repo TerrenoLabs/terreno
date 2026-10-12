@@ -220,6 +220,34 @@ describe("useSocketConnection", () => {
     });
   });
 
+  it("uses only the transports the caller passes, for hosts without session affinity", async () => {
+    renderSocket({transports: ["websocket"]});
+
+    await waitFor(() => {
+      expect(sockets).toHaveLength(1);
+    });
+    expect(lastSocket().options.transports).toEqual(["websocket"]);
+  });
+
+  it("keeps one socket when the caller passes an equal transports array each render", async () => {
+    const {rerender} = renderHook(
+      () =>
+        useSocketConnection({
+          baseUrl: "https://example.com",
+          getAuthToken: async (): Promise<string | null> => "auth-token",
+          shouldConnect: false,
+          transports: ["websocket"],
+        }),
+      {wrapper: createWrapper(createStore())}
+    );
+    await waitFor(() => {
+      expect(sockets).toHaveLength(1);
+    });
+    rerender({});
+    rerender({});
+    expect(sockets).toHaveLength(1);
+  });
+
   it("creates a socket that does not auto connect and connects it with the auth token", async () => {
     const {result} = renderSocket();
 

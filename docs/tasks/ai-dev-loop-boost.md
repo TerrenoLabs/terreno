@@ -39,7 +39,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 1.1, Task 1.3
   - Acceptance: tool list matches the inventory one-to-one; every environment variable documented; the can/cannot-see section is present; the Hermes symptom is quoted from Task 1.3.
 
-- [ ] **Task 2.2**: Sync `mcp-server/README.md`
+- [x] **Task 2.2**: Sync `mcp-server/README.md`
   - Description: Bring the package README's tool list in line with the reference page (it is known to omit `terreno_search_docs`, `terreno_get_component_docs`, and `terreno_get_upgrade_guide`). Keep the README short — the six-section template from [`docs-reference-coverage`](../implementationPlans/docs-reference-coverage.md) — and link the reference page for full detail.
   - Files: `mcp-server/README.md`
   - Depends on: Task 2.1

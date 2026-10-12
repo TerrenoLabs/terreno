@@ -419,7 +419,10 @@ const ProductListScreen: React.FC = () => {
 
 #### terreno_generate_form_fields
 
-Generate `@terreno/ui` form fields and their state declarations.
+Generate `@terreno/ui` form fields and their state declarations. Fields use the real
+`@terreno/ui` props (`title`, `value`, `onChange`, `errorText`); `password` renders
+`TextField type="password"`, and `number` and date values are strings. A required field adds an
+`errors` state and `errorText={errors.<name>}`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -436,6 +439,8 @@ File path: `your form component file`
 …
 // State declarations (add to your component):
   const [title, setTitle] = useState("");
+  …
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
 
 // Form fields (add inside your component's return):
 …
@@ -443,7 +448,9 @@ File path: `your form component file`
 
 #### terreno_validate_model_schema
 
-Check schema source text against Terreno conventions and list issues and suggestions.
+Check schema source text against Terreno conventions and list issues and suggestions. The
+model's `<Name>Document` type may be declared in the file or imported from the app's type files
+(`src/modelInterfaces.ts`, `src/types/models/`); "Missing TypeScript interfaces" means neither.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

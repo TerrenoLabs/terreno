@@ -7,6 +7,7 @@ import {
   Pressable,
   type StyleProp,
   TextInput,
+  type TextInputChangeEvent,
   View,
 } from "react-native";
 
@@ -216,10 +217,21 @@ export const TextField: FC<TextFieldProps> = ({
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const oscillationRef = useRef(createTextFieldOscillationState());
+  // RN Web calls onChange with the DOM input event just before onChangeText, so this
+  // carries the pending change's `inputType` across to handleChangeText.
+  const pendingInputTypeRef = useRef<string | undefined>(undefined);
   valueRef.current = value;
   onChangeRef.current = onChange;
 
+  const handleWebChange = useCallback((event: TextInputChangeEvent): void => {
+    // On web, nativeEvent is the DOM InputEvent, which RN's types don't describe.
+    const {inputType} = event.nativeEvent as {inputType?: unknown};
+    pendingInputTypeRef.current = typeof inputType === "string" ? inputType : undefined;
+  }, []);
+
   const handleChangeText = useCallback((text: string): void => {
+    const inputType = pendingInputTypeRef.current;
+    pendingInputTypeRef.current = undefined;
     const currentValue = valueRef.current ?? "";
     if (text === currentValue) {
       return;
@@ -230,6 +242,7 @@ export const TextField: FC<TextFieldProps> = ({
     if (
       shouldSuppressTextFieldOscillation({
         currentValue,
+        inputType,
         now,
         state: oscillationState,
         text,
@@ -297,6 +310,7 @@ export const TextField: FC<TextFieldProps> = ({
             multiline={multiline}
             nativeID={id}
             numberOfLines={rows || 4}
+            {...(Platform.OS === "web" ? {onChange: handleWebChange} : {})}
             onBlur={() => {
               if (disabled) {
                 return;

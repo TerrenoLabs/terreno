@@ -2222,6 +2222,12 @@ jobs:
           name: Publish the GitHub release
           command: |
             set -euo pipefail
+            # X.Y.0 releases are published by archive-docs-version after the docs
+            # archive upload; publishing here first would lock the release.
+            if [[ "$CIRCLE_TAG" =~ ^[0-9]+\.[0-9]+\.0$ ]]; then
+              echo "Skipping: ${CIRCLE_TAG} is published by archive-docs-version."
+              exit 0
+            fi
             scripts/ci/validate-env.sh REPO_ADMIN_TOKEN
             GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/github-release.sh publish "$CIRCLE_TAG"
 
@@ -2620,6 +2626,8 @@ workflows:
               only: /^[0-9]+\.[0-9]+\.0$/
       # Minor releases publish in archive-docs-version after the archive is
       # attached. Patch and prerelease tags have no archive; publish after npm.
+      # CircleCI disregards `ignore` when `only` is set (57.15.0 ran this job and
+      # locked the release before the archive upload), so `only` must exclude X.Y.0.
       - publish-github-release:
           context: [terreno-release]
           requires:
@@ -2628,8 +2636,9 @@ workflows:
             branches:
               ignore: /.*/
             tags:
-              only: /^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$/
-              ignore: /^[0-9]+\.[0-9]+\.0$/
+              only:
+                - /^[0-9]+\.[0-9]+\.[1-9][0-9]*$/
+                - /^[0-9]+\.[0-9]+\.[0-9]+[-.][0-9A-Za-z.-]+$/
       # Builds from source, not npm, so it runs alongside publish-release.
       - deploy-demo:
           context: [terreno-netlify, terreno-github-deployments]

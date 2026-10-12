@@ -248,7 +248,7 @@ When the backend is on Vercel too, each PR backend preview gets these runtime va
 | Variable | Value |
 |---|---|
 | `MONGO_DB_NAME` | `terreno-example-pr-<N>` (the PR database the Cloud Run preview seeds and preview cleanup drops) |
-| `SEED_DEFAULTS` | `true` |
+| `SEED_DEFAULTS` | `false` (the Cloud Run preview seeds the database; the seed runs an in-process supertest server, which cannot bind a port inside a Function) |
 | `BETTER_AUTH_URL` | `https://terrenolabs-backend-pr-<N>.vercel.app` |
 | `CORS_ORIGINS` | `https://terrenolabs-frontend-pr-<N>.vercel.app` |
 

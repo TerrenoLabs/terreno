@@ -59,7 +59,9 @@ runtime_env=()
 if [ "$target" = "backend" ] && [ "$mode" = "preview" ]; then
   runtime_env+=(
     "MONGO_DB_NAME=terreno-example-pr-${pr_number}"
-    "SEED_DEFAULTS=true"
+    # The Cloud Run preview seeds this database. The seed creates users through an in-process
+    # supertest server, which cannot bind a port inside a Vercel Function.
+    "SEED_DEFAULTS=false"
     "BETTER_AUTH_URL=https://${host}"
     # Exact origin only: vercel.app is a shared namespace, so a wildcard such as
     # terreno-frontend-*-terrenolabs.vercel.app can match another team's project.
@@ -119,14 +121,20 @@ if [ "$mode" = "production" ]; then
   prod_flag=(--prod)
 fi
 
+# Runs the pinned CLI with no stdin and no prompts: a newer release makes the CLI ask
+# "Would you like to upgrade now?", which otherwise hangs CI until its no-output timeout.
+vercel_cli() {
+  bunx "vercel@${VERCEL_CLI_VERSION}" "$@" --non-interactive </dev/null
+}
+
 deploy() {
-  bunx "vercel@${VERCEL_CLI_VERSION}" pull --yes "--environment=${vercel_env}"
+  vercel_cli pull --yes "--environment=${vercel_env}"
   # The CLI's file trace parses the 45 MB backend bundle and exceeds Node's default heap.
   export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--max-old-space-size=6144"
   if [ -n "$api_url" ]; then
-    EXPO_PUBLIC_API_URL="$api_url" bunx "vercel@${VERCEL_CLI_VERSION}" build --yes ${prod_flag[@]+"${prod_flag[@]}"}
+    EXPO_PUBLIC_API_URL="$api_url" vercel_cli build --yes ${prod_flag[@]+"${prod_flag[@]}"}
   else
-    bunx "vercel@${VERCEL_CLI_VERSION}" build --yes ${prod_flag[@]+"${prod_flag[@]}"}
+    vercel_cli build --yes ${prod_flag[@]+"${prod_flag[@]}"}
   fi
 
   local env_flags=()
@@ -134,14 +142,15 @@ deploy() {
     env_flags+=(--env "$entry")
   done
   local result
-  result="$(bunx "vercel@${VERCEL_CLI_VERSION}" deploy --prebuilt --yes --format json \
+  result="$(vercel_cli deploy --prebuilt --yes --format json \
     ${prod_flag[@]+"${prod_flag[@]}"} ${env_flags[@]+"${env_flags[@]}"})"
   local url
   url="$(jq -r '.deployment.url' <<<"$result")"
   echo "Deployed ${url}"
 
   if [ "$mode" = "preview" ]; then
-    bunx "vercel@${VERCEL_CLI_VERSION}" alias set "$url" "$host"
+    # `alias set` ignores VERCEL_ORG_ID and would look in the token owner's personal scope.
+    vercel_cli alias set "$url" "$host" --scope "$VERCEL_ORG_ID"
   fi
 
   # The CLI reporting success is a claim about the build; the probe is the site answering.

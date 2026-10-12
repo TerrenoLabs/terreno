@@ -60,7 +60,7 @@ describe("vercel-deploy.sh plan", () => {
     const backend = plan(["backend", "preview", "42"]);
     assert.deepEqual(backend.runtime_env, [
       "MONGO_DB_NAME=terreno-example-pr-42",
-      "SEED_DEFAULTS=true",
+      "SEED_DEFAULTS=false",
       "BETTER_AUTH_URL=https://terrenolabs-backend-pr-42.vercel.app",
       "CORS_ORIGINS=https://terrenolabs-frontend-pr-42.vercel.app",
     ]);

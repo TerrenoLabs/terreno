@@ -1844,6 +1844,7 @@ jobs:
                 name: Validate and apply Terraform
                 command: |
                   terraform -chdir=terraform fmt -check -recursive
+                  terraform -chdir=infra/flourish fmt -check
                   scripts/ci/gcp-deploy.sh terraform-apply
       - when:
           condition:
@@ -1942,6 +1943,7 @@ jobs:
                 command: |
                   set -euo pipefail
                   terraform -chdir=terraform fmt -check -recursive
+                  terraform -chdir=infra/flourish fmt -check
                   for dir in terraform/modules/*/; do
                     [ -d "${dir}tests" ] || continue
                     terraform -chdir="$dir" init -backend=false -input=false

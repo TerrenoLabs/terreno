@@ -32,7 +32,7 @@ Read the [deployment baseline](../explanation/deployment-baseline.md) — seven 
 
 ## Operator-specific deployment
 
-Vendor-specific infrastructure (hardcoded project IDs, CI deploy workflows) lives outside these generalized guides. New deployments should follow the guides above with your own `$PROJECT_ID` and bucket names.
+Vendor-specific infrastructure (hardcoded project IDs, CI deploy workflows) lives outside these generalized guides. Terreno's own deployment of its example backend and hosted MCP server is in [`infra/flourish/`](https://github.com/TerrenoLabs/terreno/tree/master/infra/flourish) and is not a template. New deployments should follow the guides above with your own `$PROJECT_ID` and bucket names.
 
 ## Related
 

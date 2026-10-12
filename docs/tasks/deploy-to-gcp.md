@@ -53,7 +53,7 @@ See: [`docs/implementationPlans/deploy-to-gcp.md`](../implementationPlans/deploy
   - Acceptance: `terraform init && terraform validate` passes in the module directory; `rg -i flourish terraform/modules/` returns nothing; every variable has a `description`.
   - Implementation note: secrets start empty, and Cloud Run rejects a revision that references a versionless secret, so the module does not mount secret env refs at creation. The `set_secrets_flag` output supplies the `--set-secrets` flag for the first real `gcloud run deploy`, consistent with the existing "Terraform owns structure, deploy owns payload" split (`lifecycle.ignore_changes` on env).
 
-- [ ] **Task 2.2**: Relocate Flourish-specific terraform
+- [x] **Task 2.2**: Relocate Flourish-specific terraform
   - Description: Move Flourish's environment configuration from `terraform/` to `infra/flourish/`, leaving only `terraform/modules/` behind. Update every path reference: `.github/workflows/cd.yml`, `terraform/README.md` (split into a generic module README and `infra/flourish/README.md`), `AGENTS.md` / `CLAUDE.md` if they reference `terraform/README.md`, and any script under `scripts/`. Use `git mv` so history is preserved.
   - Files: `infra/flourish/**` (moved), `terraform/README.md`, `.github/workflows/cd.yml`, `AGENTS.md`, `CLAUDE.md`, `scripts/**`
   - Depends on: Task 2.1

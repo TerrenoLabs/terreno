@@ -250,6 +250,11 @@ describe("generateAllFiles", () => {
       readme,
       "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/build-for-web.md"
     );
+    assert.include(
+      readme,
+      "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md"
+    );
+    assert.include(readme, "terreno-mcp-local");
   });
 
   test("declares mongodb as a direct backend dependency for Better Auth ESM resolution", () => {

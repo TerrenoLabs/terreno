@@ -79,7 +79,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 1.2, Task 4.1
   - Acceptance: all tool outputs are verbatim from Task 1.2; the symptom-to-tool table has at least five rows; the walkthrough ends with a verified fix.
 
-- [ ] **Task 4.3**: Add discovery paths for the local server
+- [x] **Task 4.3**: Add discovery paths for the local server
   - Description: Nothing currently tells a developer that `terreno-mcp-local` exists. Add links to `docs/how-to/set-up-terreno-mcp.md` from: the README's MCP section, `docs/README.md` quick links, `docs/tutorials/README.md`, and the `terreno://docs/overview` MCP resource. Also confirm `terreno_bootstrap_app` output includes a comment or README line pointing at the setup guide.
   - Files: `README.md`, `docs/README.md`, `docs/tutorials/README.md`, `mcp-server/src/docs/resources/overview.md`, `mcp-server/src/docs/templates/bootstrap/**`
   - Depends on: Task 4.1

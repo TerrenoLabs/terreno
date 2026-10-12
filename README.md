@@ -170,6 +170,8 @@ To deploy your own apps, follow [Deploy to GCP](docs/how-to/deploy-to-gcp.md).
 
 Terreno's MCP server is the **tool** layer of the AI-native pillar: codegen, documentation search, and component reference. Pair it with the `/terreno-*` SDLC pipeline described in [positioning.md](docs/explanation/positioning.md) (the **process** layer; consumer packaging is still in progress).
 
+A second server, `terreno-mcp-local`, runs inside your app repository and adds what the hosted server cannot see: merged backend and client logs, `last_error`, client state, and read-only database inspection. [Set up Terreno MCP](docs/how-to/set-up-terreno-mcp.md) configures both servers; the snippets below cover only the hosted one.
+
 ### Cursor
 
 Add this to `.cursor/mcp.json`:

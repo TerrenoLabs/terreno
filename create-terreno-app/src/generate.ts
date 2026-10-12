@@ -151,6 +151,8 @@ const DEPLOY_BACKEND_CLOUD_RUN_DOC =
   "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/deploy-backend-to-cloud-run.md";
 const BUILD_FOR_WEB_DOC =
   "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/build-for-web.md";
+const SET_UP_TERRENO_MCP_DOC =
+  "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md";
 
 const generateRootReadme = (args: BootstrapArgs): string => {
   const {appDisplayName, appName} = args;
@@ -200,6 +202,10 @@ After backend route changes, regenerate the OpenAPI SDK:
 \`\`\`bash
 cd frontend && bun run sdk
 \`\`\`
+
+## AI-assisted development
+
+\`.cursor/mcp.json\` and \`.mcp.json\` connect your editor to the hosted Terreno MCP and \`terreno-mcp-local\` (logs, last error, client state, database); see [Set up Terreno MCP](${SET_UP_TERRENO_MCP_DOC}).
 
 ## Deploy
 

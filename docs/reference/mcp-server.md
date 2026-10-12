@@ -137,14 +137,31 @@ this package at build time (`bun run sync-package-guidelines`). Defined in `src/
 The following AI coding assistant configuration files need to be created:
 
 - `.rulesync/rules/00-root.md`
-- `.rulesync/rules/01-claudecode-root.md`
 - `backend/AGENTS.md`
 - `backend/CLAUDE.md`
 - `frontend/AGENTS.md`
 - `frontend/CLAUDE.md`
 - `rulesync.jsonc`
+
+## Instructions
+
+1. **Create all the files listed above.** Each file's content is provided below.
+…
+3. **Before generating, move hand-written rules into `.rulesync/rules/`.** `rulesync generate` overwrites the root `CLAUDE.md`, `AGENTS.md`, and `.github/copilot-instructions.md` and deletes every file under `.claude/rules/`, `.cursor/rules/`, `.github/instructions/`, and `.agents/memories/` that it did not generate. …
+
+4. **Delete the stale `.cursorrules`** that `create-terreno-app` wrote. …
+
+5. **Generate the editor files with rulesync:**
+   ```bash
+   bunx rulesync@9 generate
+   ```
 …
 ``````
+
+`rulesync.jsonc` targets `cursor`, `claudecode`, `copilot`, and `agentsmd`. The one
+`root: true` rule in `00-root.md` covers all four. See
+[Agent guidelines](../explanation/agent-guidelines.md#terreno_bootstrap_ai_rules) for the
+generated editor files and how to add project rules.
 
 #### terreno_search_docs
 
@@ -419,7 +436,10 @@ const ProductListScreen: React.FC = () => {
 
 #### terreno_generate_form_fields
 
-Generate `@terreno/ui` form fields and their state declarations.
+Generate `@terreno/ui` form fields and their state declarations. Fields use the real
+`@terreno/ui` props (`title`, `value`, `onChange`, `errorText`); `password` renders
+`TextField type="password"`, and `number` and date values are strings. A required field adds an
+`errors` state and `errorText={errors.<name>}`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -436,6 +456,8 @@ File path: `your form component file`
 …
 // State declarations (add to your component):
   const [title, setTitle] = useState("");
+  …
+  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
 
 // Form fields (add inside your component's return):
 …
@@ -443,7 +465,9 @@ File path: `your form component file`
 
 #### terreno_validate_model_schema
 
-Check schema source text against Terreno conventions and list issues and suggestions.
+Check schema source text against Terreno conventions and list issues and suggestions. The
+model's `<Name>Document` type may be declared in the file or imported from the app's type files
+(`src/modelInterfaces.ts`, `src/types/models/`); "Missing TypeScript interfaces" means neither.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

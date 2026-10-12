@@ -249,7 +249,11 @@ of labor, including when a flow should become a Maestro test.
 With the backend and frontend running, check the runtime tools too:
 
 - Call `read_logs` with `{"sources":["backend","browser"]}`. An empty `entries` array is valid
-  before the app logs anything.
+  before the app logs anything. A `create-terreno-app` app sends web console errors and warnings
+  to the backend with `installTerrenoDevConsoleLogger({baseUrl})` in `frontend/app/_layout.tsx`.
+  Its `backend/.env` sets `NODE_ENV=development`, which the backend needs to accept them. In
+  another app, add the same call at startup and run the backend with `NODE_ENV=development` or
+  `TERRENO_BROWSER_LOGS=true`.
 - Call `browser` with `{"action":"open","url":"http://localhost:8082"}`, then
   `{"action":"snapshot"}`, to confirm the agent can inspect the web app. Finish with
   `{"action":"close"}`.

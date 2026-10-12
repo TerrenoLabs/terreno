@@ -160,13 +160,16 @@ export const installTerrenoDevConsoleLogger = ({
   if (errorUtils?.setGlobalHandler) {
     const prev = errorUtils.getGlobalHandler?.();
     errorUtils.setGlobalHandler((error: unknown, isFatal?: boolean) => {
+      // Record the error only once a handler has consumed it. Web's default handler rethrows,
+      // so the error is still propagating and its caller may recover: Metro reports a missing
+      // split-bundle module here while Expo's web asyncRequire probes an `import()` target
+      // synchronously, then catches the rethrow and loads the bundle. A rethrown error that
+      // nothing catches reaches the window "error" / "unhandledrejection" listeners below.
+      prev?.(error, isFatal);
       if (error instanceof Error) {
         push("error", error.message, error.stack);
       } else {
         push("error", String(error));
-      }
-      if (prev) {
-        prev(error, isFatal);
       }
     });
     restoreErrorUtils = (): void => {
@@ -178,7 +181,8 @@ export const installTerrenoDevConsoleLogger = ({
 
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     window.addEventListener("unhandledrejection", (ev: PromiseRejectionEvent) => {
-      push("error", String(ev.reason ?? "unhandledrejection"));
+      const st = ev.reason instanceof Error ? ev.reason.stack : undefined;
+      push("error", String(ev.reason ?? "unhandledrejection"), st);
     });
     window.addEventListener("error", (ev: ErrorEvent) => {
       const st = ev.error instanceof Error ? ev.error.stack : undefined;

@@ -261,9 +261,9 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("TextField");
-      expect(content).toContain('label="Full Name"');
+      expect(content).toContain('title="Full Name"');
       expect(content).toContain("value={name}");
-      expect(content).toContain("onChangeText={setName}");
+      expect(content).toContain("onChange={setName}");
     });
 
     test("should generate email field", async () => {
@@ -274,7 +274,7 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("EmailField");
-      expect(content).toContain("error={errors.email}");
+      expect(content).toContain("errorText={errors.email}");
     });
 
     test("should generate select field with options", async () => {
@@ -296,7 +296,9 @@ describe("tools", () => {
       expect(content).toContain("SelectField");
       expect(content).toContain("USA");
       expect(content).toContain("Canada");
-      expect(content).toContain("onChangeValue={setCountry}");
+      expect(content).toContain("onChange={setCountry}");
+      expect(content).not.toContain("onChangeValue");
+      expect(content).not.toContain('label="Country"');
     });
 
     test("should generate boolean field", async () => {
@@ -318,7 +320,7 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("DateTimeField");
-      expect(content).toContain('mode="date"');
+      expect(content).toContain('type="date"');
     });
 
     test("should generate multiple fields", async () => {
@@ -407,6 +409,82 @@ describe("tools", () => {
 
       expect(result.content[0].text).toContain("findOne");
       expect(result.content[0].text).toContain("findOneOrThrow");
+    });
+
+    const conventionalOptions = `{
+          strict: "throw",
+          toJSON: {virtuals: true},
+          toObject: {virtuals: true},
+        }`;
+
+    test("accepts Document and Model types imported from src/types/models/", async () => {
+      // The example backend layout: types live in src/types/models/todoTypes.ts.
+      const schema = `
+        import mongoose from "mongoose";
+        import type {TodoDocument, TodoModel} from "../types/models/todoTypes";
+        import {addDefaultPlugins} from "./modelPlugins";
+
+        const todoSchema = new mongoose.Schema<TodoDocument, TodoModel>({
+          title: {description: "Title", type: String},
+        }, ${conventionalOptions});
+        addDefaultPlugins(todoSchema);
+      `;
+
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+      expect(result.content[0].text).toContain("✓");
+    });
+
+    test("accepts Document and Model types imported from modelInterfaces", async () => {
+      const schema = `
+        import mongoose from "mongoose";
+        import {
+          UserDocument,
+          UserModel,
+        } from "../modelInterfaces";
+
+        const userSchema = new mongoose.Schema<UserDocument, UserModel>({}, ${conventionalOptions});
+        addDefaultPlugins(userSchema);
+      `;
+
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+    });
+
+    test("accepts the create-terreno-app types barrel and inline type aliases", async () => {
+      const fromTypes = `
+        import type {UserDocument, UserModel} from "../types";
+        const userSchema = new mongoose.Schema<UserDocument, UserModel>({}, ${conventionalOptions});
+        addDefaultPlugins(userSchema);
+      `;
+      const inlineAlias = `
+        export type NoteDocument = DefaultDoc & {body: string};
+        const noteSchema = new mongoose.Schema<NoteDocument>({}, ${conventionalOptions});
+        addDefaultPlugins(noteSchema);
+      `;
+
+      for (const schema of [fromTypes, inlineAlias]) {
+        const result = await handleToolCall("terreno_validate_model_schema", {schema});
+        expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+      }
+    });
+
+    test("still reports missing types when the model has none", async () => {
+      // mongoose's own Document types are not the model's Document type.
+      const schema = `
+        import mongoose, {type HydratedDocument, Document} from "mongoose";
+        const todoSchema = new mongoose.Schema({
+          title: {description: "Title", type: String},
+        }, ${conventionalOptions});
+        addDefaultPlugins(todoSchema);
+      `;
+
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(result.content[0].text).toContain("Missing TypeScript interfaces");
+      expect(result.content[0].text).toContain("src/types/models/");
     });
 
     test("should detect Date usage", async () => {
@@ -528,9 +606,11 @@ describe("tools", () => {
       });
       const content = result.content[0].text;
 
-      expect(content).toContain("PasswordField");
-      expect(content).toContain('label="Password"');
-      expect(content).toContain("error={errors.password}");
+      // PasswordField is a placeholder with no props; TextField type="password" is the real one.
+      expect(content).not.toContain("PasswordField");
+      expect(content).toContain('type="password"');
+      expect(content).toContain('title="Password"');
+      expect(content).toContain("errorText={errors.password}");
     });
 
     test("should generate textarea field", async () => {
@@ -549,7 +629,7 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("DateTimeField");
-      expect(content).toContain('mode="datetime"');
+      expect(content).toContain('type="datetime"');
     });
 
     test("should generate select field with empty options", async () => {

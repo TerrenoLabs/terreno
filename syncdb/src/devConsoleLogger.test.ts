@@ -181,4 +181,82 @@ describe("installTerrenoDevConsoleLogger", () => {
       }
     }
   });
+
+  // Web's default ErrorUtils handler rethrows. Metro reports a missing split-bundle module
+  // through it while Expo's web asyncRequire probes `import()` targets synchronously, then
+  // catches the rethrow and loads the bundle — so nothing failed and nothing should be logged.
+  it("does not log an error that the previous web handler rethrows to a catching caller", async (): Promise<void> => {
+    type GlobalHandler = (error: unknown, isFatal?: boolean) => void;
+    const globalRecord = globalThis as typeof globalThis & Record<string, unknown>;
+    const originalErrorUtils = Object.getOwnPropertyDescriptor(globalThis, "ErrorUtils");
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    const rethrowingHandler: GlobalHandler = (error: unknown): void => {
+      throw error;
+    };
+    let globalHandler: GlobalHandler = rethrowingHandler;
+    const listeners = new Map<string, (event: unknown) => void>();
+    const fetchMock = mock((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(new Response(null, {status: 204}))
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    Object.defineProperty(globalThis, "ErrorUtils", {
+      configurable: true,
+      value: {
+        getGlobalHandler: (): GlobalHandler => rethrowingHandler,
+        setGlobalHandler: (handler: GlobalHandler): void => {
+          globalHandler = handler;
+        },
+      },
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        addEventListener: (name: string, listener: (event: unknown) => void): void => {
+          listeners.set(name, listener);
+        },
+      },
+    });
+
+    try {
+      installTerrenoDevConsoleLogger({baseUrl: BASE_URL});
+      const probeError = new Error('Requiring unknown module "2746".');
+      let caught: unknown;
+      try {
+        globalHandler(probeError, true);
+      } catch (error) {
+        caught = error;
+      }
+      assert.strictEqual(caught, probeError);
+
+      // A rethrown error that nobody catches reaches the window listeners, with its stack.
+      const uncaught = new Error("lazy chunk failed");
+      listeners.get("unhandledrejection")?.({reason: uncaught});
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 450);
+      });
+
+      assert.equal(fetchMock.mock.calls.length, 1);
+      const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+        entries: Array<{message: string; stack?: string}>;
+      };
+      assert.deepEqual(
+        body.entries.map((entry) => entry.message),
+        ["Error: lazy chunk failed"]
+      );
+      assert.include(body.entries[0]?.stack ?? "", "lazy chunk failed");
+    } finally {
+      resetTerrenoDevConsoleLoggerForTests();
+      if (originalErrorUtils) {
+        Object.defineProperty(globalThis, "ErrorUtils", originalErrorUtils);
+      } else {
+        Reflect.deleteProperty(globalRecord, "ErrorUtils");
+      }
+      if (originalWindow) {
+        Object.defineProperty(globalThis, "window", originalWindow);
+      } else {
+        Reflect.deleteProperty(globalRecord, "window");
+      }
+    }
+  });
 });

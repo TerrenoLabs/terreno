@@ -61,7 +61,7 @@ cd .. && bunx create-terreno-app my-app --yes
 | `frontend/` | Expo universal app (`@terreno/ui`, `@terreno/syncdb`, `@terreno/rtk`) |
 | `Dockerfile` | Consumer backend image (`backend/` only — not the Terreno monorepo) |
 | `.dockerignore` | Excludes local env secrets, dependencies, and build output from the image context |
-| `backend/.env`, `frontend/.env` | Gitignored local-dev defaults (written on scaffold) |
+| `backend/.env`, `frontend/.env` | Gitignored local-dev defaults (written on scaffold). `backend/.env` sets `NODE_ENV=development`, which turns on the dev-only `POST /__terreno/browser-logs` route |
 | `backend/.env.example`, `frontend/.env.example` | Committed templates for production and export |
 | `.github/workflows/` | Backend and frontend CI |
 | `.cursor/mcp.json`, `.mcp.json`, `.cursorrules`, `CLAUDE.md` | Agent tooling ([Set up Terreno MCP](set-up-terreno-mcp.md)) |
@@ -129,6 +129,8 @@ Terminal 2 — web UI (port `8082`):
 Open `http://localhost:8082` and sign in as `test@example.com` / `testpassword123`.
 
 `frontend/.env` defaults `EXPO_PUBLIC_API_URL` to `http://localhost:4000`. For production web builds, set it **before** export — see [Build for web](build-for-web.md).
+
+In development, `frontend/app/_layout.tsx` calls `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb` at startup. It sends console errors, warnings, and uncaught errors to the backend's `POST /__terreno/browser-logs`, which writes `backend/.terreno/logs/browser.log`. `terreno-mcp-local` reads that file for `read_logs` and `last_error` with the `browser` source. The call does nothing in production builds. See [Set up Terreno MCP](set-up-terreno-mcp.md).
 
 ## Deploy
 

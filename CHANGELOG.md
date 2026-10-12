@@ -20,6 +20,27 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.16.1] - 2026-10-12
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.16.1.md`](mcp-server/src/docs/upgrades/57.16.1.md).
+
+### Added
+
+- `terraform/modules/terreno-backend` provisions one Terreno backend on Cloud Run: Artifact Registry, a least-privilege runtime service account, empty Secret Manager secrets, and a websocket-safe service (session affinity, 3600s timeout, one minimum instance). Set `github_deploy` for a keyless GitHub Actions deployer. See [Deploy backend to Cloud Run](docs/how-to/deploy-backend-to-cloud-run.md#manage-with-terraform).
+
+### Changed
+
+- `terraform/` now holds only reusable modules. Terreno's own GCP deployment (example backend, jobs worker, hosted MCP server) moved to `infra/flourish/`, which uses the shared modules through a symlink; CI stages a dereferenced copy for Infra Manager. No infrastructure changes: resource addresses are unchanged.
+
+### Fixed
+
+- `TextField` and `TextArea` on web no longer drop a typo fix made within half a second. The
+  oscillation guard used to suppress any change that undid the previous one within 500ms, so
+  typing a character and backspacing it right away put the character back. Changes the user
+  types, deletes, pastes, drops or undoes (judged by the DOM input event's `inputType`) now
+  bypass the guard. Spellcheck replacements, IME composition and changes with no input event
+  stay guarded.
+
 ## [57.15.0] - 2026-10-11
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.15.0.md`](mcp-server/src/docs/upgrades/57.15.0.md).

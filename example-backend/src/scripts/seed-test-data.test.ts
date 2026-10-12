@@ -91,7 +91,7 @@ describe("seedDefaultData", () => {
       (entry) => entry.name === "example-summarize"
     );
     assert.equal(prompt?.folder, "examples");
-    assert.equal(prompt?.latestVersion, 2);
+    assert.equal(prompt?.latestVersion, 3);
     assert.equal(prompt?.production, 1);
     assert.equal(prompt?.type, "chat");
     const promptDetail = await promptStore.getDetail("example-summarize");

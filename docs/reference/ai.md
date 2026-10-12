@@ -492,6 +492,8 @@ new AiApp({
 | `toolChoice` | `"auto"` \| `"none"` \| `"required"` (default `"auto"` when tools present) |
 | `maxSteps` | Max tool-calling steps (default 5) |
 | `titleModelId` | Cheaper model for conversation title generation |
+| `systemPromptName` | Observability prompt registry name used as the default system prompt. Its body is prepended to the request's system prompt, and the trace records the version. Skipped when no `ObservabilityApp` is registered, the label has no version, or an admin request selects `promptName` |
+| `systemPromptLabel` | Registry label read for `systemPromptName` (default `production`) |
 | `openApiOptions` | Passed to route OpenAPI builders |
 | `projects` | Default `true`. `false` skips the `/gpt/projects` routes, so `AiApp` never registers the `Project` model |
 

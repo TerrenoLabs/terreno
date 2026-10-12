@@ -112,6 +112,25 @@ that key exists.
    evaluator. On a database that already booted, run Admin → Scripts →
    `seedChatSafetyDataset` as a wet run, or
    `cd example-backend && bun run script seedChatSafetyDataset --wet`.
+
+   The same seed also fills every observability screen, so you do not have to build data
+   by hand:
+
+   | Screen | Seeded data |
+   | --- | --- |
+   | Prompts | `example-summarize` v3 (staging, output capped at 120 characters); `joke-generator` and `chat-assistant` v1 (production) and v2 (staging); judge prompts `eval-judge-correctness` and `eval-judge-helpfulness` |
+   | Evaluators | `correctness-human`, `helpfulness-human`, `schema-assert`, and the `correctness` and `helpfulness` LLM judges |
+   | Datasets | `example-summarize-gold` (8 proofread rows, 2 unproofread), `joke-generator-topics` (6), `chat-assistant-gold` (6) |
+   | Experiments | `Summarize v1 vs v2 (gold)`: v1 fails correctness, v2 passes. `Summarize v2 vs v3 (length cap)`: v3 fails `schema-assert` on 2 rows. `Jokes v1 vs v2 (one-liners)` and `Chat assistant v1 vs v2 (brevity)`: v1 fails helpfulness, v2 passes |
+   | Traces | 18 Todos → Summarize traces over the past week (2 errors, 1 sensitive, 2 flagged for the dataset), 6 `joke-generator` traces, and 6 `chat-assistant` turns (4 with a tool span); user-feedback, LLM-judge, and code scores |
+   | Review | 14 items: 9 pending, 1 in progress, 3 done, 1 skipped |
+
+   Seeded experiments run through the real experiment runner with a deterministic
+   `seed-fixture` client, so they need no API key. Seeded traces use session IDs that
+   start with `seed-obs-`. Production stays on v1 for every prompt, so promoting v2 from
+   an experiment changes what the app sends. On a database that already booted, run
+   Admin → Scripts → `seedAiObservabilityDemo`, or
+   `cd example-backend && bun run script seedAiObservabilityDemo --wet`.
 3. Start `bun run backend:dev` and `bun run frontend:web`, then sign in as the seeded
    admin.
 4. Open **AI Observability → Prompts** to inspect or save a new immutable version. Move
@@ -136,6 +155,13 @@ that key exists.
 
 6. Open its `example-summarize` trace, send it to Review, score **correct**, and submit
    until the queue reports **Queue clear**.
+
+The example chat reads two more registry prompts. `addGptRoutes` takes
+`systemPromptName: "chat-assistant"`, so each chat turn prepends that prompt's `production`
+version to the system prompt and its trace records the version. The chat's `generate_joke`
+tool calls `generateText` with `promptName: "joke-generator"` and falls back to a built-in
+prompt when the registry has no `production` version. Move either label in **Prompts** and
+the next chat message uses the new version.
 
 The example app also calls this route from the UI: **Todos → Summarize** sends the user's todo
 list, so each press produces a trace with the production prompt reference, `userId`, and a

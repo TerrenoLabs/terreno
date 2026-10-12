@@ -57,7 +57,7 @@ duplicating sprint planning.
 **Title:** `Deploy to GCP (generalized)`
 
 **Labels:** `area:deploy`, `type:docs`  
-**Project fields:** Area=`deploy`, Target=`Next`, Impact=`Improvement`, IP=`deploy-to-gcp`, Status=`Planned`
+**Project fields:** Area=`deploy`, Target=`Next`, Impact=`Improvement`, IP=`deploy-to-gcp`, Status=`In progress`
 
 Turns Terreno's GCP deployment story from Flourish-specific infrastructure into a reusable
 guide any Terreno app can follow. It documents Cloud Run backend hosting, GCS plus CDN for

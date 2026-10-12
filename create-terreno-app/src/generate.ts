@@ -110,8 +110,10 @@ const generateMcpSettings = (args: BootstrapArgs): string => {
           type: "http",
           url: `${mcpUrl}/mcp`,
         },
+        // Generated apps do not depend on @terreno/mcp, and no npm package is named
+        // `terreno-mcp-local`, so bunx must be told which package provides the bin.
         "terreno-local": {
-          args: ["terreno-mcp-local"],
+          args: ["-p", "@terreno/mcp", "terreno-mcp-local"],
           command: "bunx",
         },
       },
@@ -2770,6 +2772,7 @@ export const generateAllFiles = (args: BootstrapArgs): GeneratedFile[] => {
     {content: generateRootDockerfile(), path: "Dockerfile"},
     {content: generateCursorRules(args), path: ".cursorrules"},
     {content: generateMcpSettings(args), path: ".cursor/mcp.json"},
+    {content: generateMcpSettings(args), path: ".mcp.json"},
     {content: generateClaudeMd(args), path: "CLAUDE.md"},
 
     // Backend files

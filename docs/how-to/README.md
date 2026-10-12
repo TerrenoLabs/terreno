@@ -30,7 +30,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Password reset and email verification](password-reset.md) — JWT routes, comms templates, Better Auth hooks
 - [Add WebSocket integration](websocket-integration.md) — Set up real-time Socket.io connections
 - [Expose Model Context Protocol tools](expose-mcp-tools.md) — Turn `modelRouter` models into MCP tools an LLM can call
-- [Set up Terreno MCP](set-up-terreno-mcp.md) — Configure hosted docs/codegen and local runtime tools
+- [Set up Terreno MCP](set-up-terreno-mcp.md) — Connect Cursor or Claude Code to the hosted docs/codegen server and the local runtime server
 - [Debug with MCP](debug-with-mcp.md) — Diagnose backend, browser, Metro, app, and client-state failures
 - [Connect an MCP client with a service token](connect-mcp-service-token.md) — Mint a personal `mcp_` key for Perplexity and other remote clients
 - [Install agent skills](install-agent-skills.md) — `npx skills`, the Cursor plugin, the Codex plugin, or the Claude Code plugin

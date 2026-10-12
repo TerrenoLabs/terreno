@@ -64,7 +64,7 @@ cd .. && bunx create-terreno-app my-app --yes
 | `backend/.env`, `frontend/.env` | Gitignored local-dev defaults (written on scaffold) |
 | `backend/.env.example`, `frontend/.env.example` | Committed templates for production and export |
 | `.github/workflows/` | Backend and frontend CI |
-| `.cursor/mcp.json`, `.cursorrules`, `CLAUDE.md` | Agent tooling |
+| `.cursor/mcp.json`, `.mcp.json`, `.cursorrules`, `CLAUDE.md` | Agent tooling ([Set up Terreno MCP](set-up-terreno-mcp.md)) |
 | `README.md` | App-specific next steps and deploy links |
 
 Generated `@terreno/*` dependencies pin to `^<create-terreno-app version>` at scaffold time.

@@ -57,13 +57,14 @@ connection.
 
 `mcp.terreno.flourish.health` is the legacy hostname for the same service.
 
-Editor entry (the shape `create-terreno-app` writes to `.cursor/mcp.json`):
+Editor entry (the Terreno servers `create-terreno-app` writes to `.cursor/mcp.json` and
+`.mcp.json`; the full files are in [Set up Terreno MCP](../how-to/set-up-terreno-mcp.md)):
 
 ``````json
 {
   "mcpServers": {
     "terreno": {"type": "http", "url": "https://mcp.terreno.app/mcp"},
-    "terreno-local": {"command": "bunx", "args": ["terreno-mcp-local"]}
+    "terreno-local": {"command": "bunx", "args": ["-p", "@terreno/mcp", "terreno-mcp-local"]}
   }
 }
 ``````
@@ -590,7 +591,9 @@ should wait `retryAfterSeconds` (or `Retry-After`) before retrying.
 
 ### Running the local server
 
-Run it from the app repository root with `bunx terreno-mcp-local`. The bin is
+Run it from the app repository root with `bunx -p @terreno/mcp terreno-mcp-local`. The bin and the
+package have different names, so `bunx` needs `-p` unless `@terreno/mcp` is already installed in
+the project (as in this monorepo). The bin is
 `#!/usr/bin/env bun`, so it needs Bun; the `browser` tool needs Bun 1.4 or newer. It registers tools
 only.
 

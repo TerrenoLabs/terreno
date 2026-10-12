@@ -67,7 +67,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
 
 ## Phase 4: Setup and debug how-tos
 
-- [ ] **Task 4.1**: Write `docs/how-to/set-up-terreno-mcp.md`
+- [x] **Task 4.1**: Write `docs/how-to/set-up-terreno-mcp.md`
   - Description: Per-editor setup for both Terreno servers. Cover at minimum Cursor (`.cursor/mcp.json`) and Claude Code, with the exact JSON for each including the hosted HTTP entry and the `bunx terreno-mcp-local` stdio entry. Then: what `terreno-mcp-local` needs to work (project root discovery and the `TERRENO_PROJECT_ROOT` override, a reachable `MONGO_URI`, the backend log file, Metro running for app logs); an optional section on adding `expo-mcp` and Playwright MCP with the division of labor from Task 3.1; and a verification section — ask the agent to call `application_info` and confirm it reports the project's `@terreno/*` versions. Compare the JSON against what `terreno_bootstrap_app` actually generates and make them identical.
   - Files: `docs/how-to/set-up-terreno-mcp.md` (new), `docs/how-to/README.md`
   - Depends on: Task 2.1

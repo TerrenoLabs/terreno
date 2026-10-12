@@ -87,7 +87,7 @@ use `setLocalEntity` from `syncdb_snapshot` `get`.
 State changes require an explicit local opt-in:
 
 ```bash
-TERRENO_MCP_EVAL=1 bunx terreno-mcp-local
+TERRENO_MCP_EVAL=1 bunx -p @terreno/mcp terreno-mcp-local
 ```
 
 Then use `syncdb_action`. Normal writes should use `mutate`; `flush` drains the
@@ -140,7 +140,7 @@ terreno web http://localhost:8082 \
 Navigation and arbitrary evaluation are disabled by default. Opt in only for local debugging:
 
 ```bash
-TERRENO_MCP_EVAL=1 bunx terreno-mcp-local
+TERRENO_MCP_EVAL=1 bunx -p @terreno/mcp terreno-mcp-local
 ```
 
 Then call `navigate` with `{"path":"/profile"}` or run:

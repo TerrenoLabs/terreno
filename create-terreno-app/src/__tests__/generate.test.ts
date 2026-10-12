@@ -17,6 +17,7 @@ const EXPECTED_PATHS = [
   ".github/workflows/backend-ci.yml",
   ".github/workflows/frontend-ci.yml",
   ".gitignore",
+  ".mcp.json",
   "CLAUDE.md",
   "Dockerfile",
   "README.md",
@@ -146,7 +147,23 @@ describe("generateAllFiles", () => {
       `@playwright/mcp@${PLAYWRIGHT_MCP_PACKAGE_VERSION}`,
     ]);
     assert.equal(mcpJson.mcpServers["terreno-local"].command, "bunx");
-    assert.deepEqual(mcpJson.mcpServers["terreno-local"].args, ["terreno-mcp-local"]);
+    assert.deepEqual(mcpJson.mcpServers["terreno-local"].args, [
+      "-p",
+      "@terreno/mcp",
+      "terreno-mcp-local",
+    ]);
+  });
+
+  test("writes the same MCP servers for Claude Code as for Cursor", () => {
+    const files = generateAllFiles({
+      appDisplayName: "Claude MCP",
+      appName: "claude-mcp",
+    });
+    const cursorJson = files.find((file) => file.path === ".cursor/mcp.json")?.content;
+    const claudeJson = files.find((file) => file.path === ".mcp.json")?.content;
+
+    assert.isString(claudeJson);
+    assert.equal(claudeJson, cursorJson);
   });
 
   test("uses a custom MCP server URL", () => {

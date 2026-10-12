@@ -185,7 +185,7 @@ The division of labor:
   keep proving it becomes a Maestro flow, so CI repeats the check on every change.
 
 `create-terreno-app` writes `expo` and `playwright` entries next to the two Terreno servers
-in the app's `.cursor/mcp.json`, so a new app starts with all four.
+in the app's `.cursor/mcp.json` and `.mcp.json`, so a new app starts with all four.
 
 ## Related
 

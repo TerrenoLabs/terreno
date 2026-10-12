@@ -217,6 +217,8 @@ describe("generateAllFiles", () => {
 
     assert.include(backendEnv, "MONGO_URI=mongodb://127.0.0.1:27017/env_app?replicaSet=rs0");
     assert.include(backendEnv, "PORT=4000");
+    // TerrenoApp registers POST /__terreno/browser-logs only when NODE_ENV=development.
+    assert.include(backendEnv, "\nNODE_ENV=development\n");
     assert.include(backendEnvExample, "MONGO_URI=");
     assert.include(backendEnvExample, "BETTER_AUTH_SECRET=");
     assert.include(backendEnvExample, "PORT=8080");
@@ -460,6 +462,22 @@ describe("generated frontend Terreno 57 compatibility", () => {
     assert.include(syncdb, "sessionAtom");
     assert.include(syncdb, "getSession: () => betterAuthClient.getSession()");
     assert.notInclude(syncdb, "betterAuthClient as unknown as BetterAuthClientLike");
+  });
+
+  test("root layout ships dev console errors to the backend browser-log route", () => {
+    const rootLayout = read("frontend/app/_layout.tsx");
+    const frontendPackage = JSON.parse(read("frontend/package.json")) as {
+      dependencies: Record<string, string>;
+    };
+
+    assert.include(rootLayout, 'import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";');
+    assert.match(rootLayout, /import \{baseUrl,[^}]*\} from "@terreno\/rtk";/);
+    assert.include(rootLayout, "\ninstallTerrenoDevConsoleLogger({baseUrl});\n");
+    assert.isBelow(
+      rootLayout.indexOf("installTerrenoDevConsoleLogger({baseUrl});"),
+      rootLayout.indexOf("export default function RootLayout")
+    );
+    assert.equal(frontendPackage.dependencies["@terreno/syncdb"], TERRENO_RANGE);
   });
 
   test("OpenAPI SDK uses Better Auth base API, not JWT emptySplitApi", () => {

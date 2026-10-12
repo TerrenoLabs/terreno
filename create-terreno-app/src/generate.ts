@@ -1571,12 +1571,18 @@ import {Stack} from "expo-router";
 import {useEffect} from "react";
 import "react-native-reanimated";
 import {baseUrl, selectBetterAuthIsLoading, selectBetterAuthUserId} from "@terreno/rtk";
+import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
 import {SyncDbProvider} from "@terreno/syncdb/react";
 import {Spinner, TerrenoProvider} from "@terreno/ui";
 import {Provider, useSelector} from "react-redux";
 import {PersistGate} from "redux-persist/integration/react";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
+
+// Dev-only: forwards console errors/warnings and uncaught errors to the backend's
+// POST /__terreno/browser-logs so terreno-mcp-local \`read_logs\` / \`last_error\` can read them.
+// No-op outside __DEV__.
+installTerrenoDevConsoleLogger({baseUrl});
 
 export {ErrorBoundary} from "expo-router";
 
@@ -2525,6 +2531,8 @@ TOKEN_ISSUER=${appName}-dev
 REFRESH_TOKEN_SECRET=dev-refresh-secret
 SESSION_SECRET=dev-session-secret
 PORT=4000
+# TerrenoApp registers POST /__terreno/browser-logs (terreno-mcp-local read_logs) only in development.
+NODE_ENV=development
 `;
 };
 

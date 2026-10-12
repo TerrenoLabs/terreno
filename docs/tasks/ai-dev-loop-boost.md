@@ -45,7 +45,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 2.1
   - Acceptance: the README and reference page list identical tool sets; the README follows the standard template; all links absolute.
 
-- [ ] **Task 2.3**: Document the browser-log route
+- [x] **Task 2.3**: Document the browser-log route
   - Description: Add `POST /__terreno/browser-logs` to `docs/reference/api.md` (or the appropriate reference page) documenting: that it is registered only when `NODE_ENV !== "production"`, that it 404s in production, the `TERRENO_BROWSER_LOGS=false` override, the JSONL file it appends to, and the payload shape. Verify all of this against `api/src/browserLogsRoute.ts` in the merged tree.
   - Files: `docs/reference/api.md`, `docs/reference/environment-variables.md`
   - Depends on: Task 1.1
@@ -110,6 +110,12 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Files: various (grep `rg -n "mcp\.terreno"`)
   - Depends on: Task 2.1
   - Acceptance: `rg -n "mcp\.terreno\.flourish\.health"` returns only intentional legacy references; a bootstrapped app's `mcp.json` uses the new URL; the cutover plan is documented; or the no-change decision is recorded in the PR body.
+
+- [ ] **Task 5.5**: Let `terreno-mcp-local` attach to Metro's inspector proxy
+  - Description: Found by Task 1.3. `@react-native/dev-middleware` 0.86 (Expo 57) rejects debugger WebSocket upgrades that carry no `Origin` header (`InspectorProxy.js` `verifyClient`), and neither Bun nor Node sends one, so the `app` log source and every CDP-backed tool fail with `CDP websocket error: ... Expected 101 status code`. Send an `Origin` matching the Metro base URL's loopback origin on the CDP socket, and surface Metro's close code and reason (for example `[NEW_DEBUGGER_OPENED]`) in the status hint instead of the bare `CDP disconnected`. Add tests at the session seam.
+  - Files: `mcp-server/src/local/metro/metroDevSession.ts`, its tests
+  - Depends on: Task 1.3
+  - Acceptance: against a real Metro, `read_logs` with source `app` connects to a debuggable target without a preload shim; when another debugger takes the session, the status names Metro's close reason; tests cover the header and the close-reason hint; `bun run mcp:build` succeeds.
 
 ## Phase 6: Verification
 

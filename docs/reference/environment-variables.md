@@ -70,7 +70,7 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `FRONTEND_URL` | example-backend CORS and `authOptions.publicAppUrl` | ❌ | `http://localhost:8082` | No | server |
 | `API_URL` | microservice split | ❌ | — | No | server |
 | `DISABLE_LOG_ALL_REQUESTS` | `@terreno/api` logging | ❌ | — | No | server |
-| `TERRENO_BROWSER_LOGS` | `@terreno/api` dev log ingestion | ❌ | enabled only in development; loopback or authenticated requests only | No | server |
+| `TERRENO_BROWSER_LOGS` | `@terreno/api` `TerrenoApp` (`POST /__terreno/browser-logs`) | ❌ | on only when `NODE_ENV=development`. `false`/`0` turns it off. `true`/`1` turns it on in any non-production environment. Ignored when `NODE_ENV=production`: the route is never registered and returns 404. See [Development browser-log ingestion](api.md#development-browser-log-ingestion). | No | server |
 | `ALLOW_MIGRATIONS` | `@terreno/api` `terreno-migrate` | ❌ | unset | No | server |
 | `MIGRATIONS_DIR` | example-backend Dockerfile / `resolveMigrationDir` | ❌ | `<cwd>/migrations` when `dir` is `$bunfs` | No | server |
 
@@ -206,7 +206,7 @@ for authenticated test sends.
 | `USE_SENTRY_LOGGING` | `@terreno/api` | ❌ | `false` | No | server |
 | `SLOW_REQUEST_THRESHOLD_MS` | `@terreno/api` | ❌ | `5000` | No | server |
 | `SLOW_DB_QUERY_THRESHOLD_MS` | `@terreno/api` | ❌ | `100` | No | server |
-| `TERRENO_LOG_FILE` | logger | ❌ | — | No | server |
+| `TERRENO_LOG_FILE` | `@terreno/api` logger | ❌ | on unless `NODE_ENV=production`. An on/off switch, not a path: `false`/`0` turns it off, and `true`/`1` turns it on even in production. Writes JSONL to `<cwd>/.terreno/logs/app.log`. | No | server |
 | `TRACE_SAMPLING_RATE` | example-backend OTEL | ❌ | `0.1` | No | server |
 | `MEMORY_SAMPLE_INTERVAL_MS` | example-backend | ❌ | `60000` | No | server |
 | `JOB_TRACE_LOGS` | workers | ❌ | — | No | server |

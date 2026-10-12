@@ -134,7 +134,7 @@ None. `installTerrenoDevConsoleLogger` is invisible instrumentation.
 2. **Reference completeness** — update `docs/reference/mcp-server.md` to the real surface.
 3. **The loop explainer** — `ai-development-loop.md`.
 4. **Setup and debug how-tos** — including composed servers.
-5. **Gap fixes** — the `get_client_state` rename (`@terreno/syncdb` is on `master`), logger relocation, hosted rate limiting, discovery paths.
+5. **Gap fixes** — the `get_client_state` rename (`@terreno/syncdb` is on `master`), logger relocation, hosted rate limiting, discovery paths, and the CDP `Origin` header fix that Task 1.3 found (Task 5.5).
 6. **Agent guidelines explainer** — how guidelines reach agents and how consumers extend them.
 
 ## Feature Flags & Migrations

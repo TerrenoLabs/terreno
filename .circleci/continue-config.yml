@@ -1936,6 +1936,17 @@ jobs:
       - when:
           condition: << pipeline.parameters.run-cd-terraform >>
           steps:
+            - install_terraform
+            - run:
+                name: Terraform format and module tests
+                command: |
+                  set -euo pipefail
+                  terraform -chdir=terraform fmt -check -recursive
+                  for dir in terraform/modules/*/; do
+                    [ -d "${dir}tests" ] || continue
+                    terraform -chdir="$dir" init -backend=false -input=false
+                    terraform -chdir="$dir" test
+                  done
             - run:
                 name: Terraform preview
                 command: scripts/ci/gcp-deploy.sh terraform-preview

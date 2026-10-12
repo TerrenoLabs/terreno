@@ -18,6 +18,10 @@ Read the [deployment baseline](../explanation/deployment-baseline.md) — seven 
 
 [GCP deployment architecture](../explanation/deployment-architecture-gcp.md) — topology diagram, component roles, and tradeoffs (Cloud Run vs GKE, static vs SSR).
 
+## Terraform
+
+- [`terraform/modules/terreno-backend`](https://github.com/TerrenoLabs/terreno/tree/master/terraform/modules/terreno-backend) — Cloud Run, Artifact Registry, secrets, and service accounts for one backend. See [Manage with Terraform](deploy-backend-to-cloud-run.md#manage-with-terraform).
+
 ## Scripts
 
 - [`scripts/setup-gcs-hosting.sh`](https://github.com/TerrenoLabs/terreno/blob/master/scripts/setup-gcs-hosting.sh) — parameterized GCS + CDN provisioning for one site

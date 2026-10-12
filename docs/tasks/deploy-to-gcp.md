@@ -46,11 +46,12 @@ See: [`docs/implementationPlans/deploy-to-gcp.md`](../implementationPlans/deploy
 
 ## Phase 2: Terraform module and Flourish separation
 
-- [ ] **Task 2.1**: Extract the generic backend module
+- [x] **Task 2.1**: Extract the generic backend module
   - Description: Create `terraform/modules/terreno-backend/` with `main.tf`, `variables.tf`, `outputs.tf`, and `README.md`. Resources: Artifact Registry repository, Cloud Run v2 service (session affinity, timeout, min/max instances, secret env refs), Secret Manager secrets (created empty, values supplied out-of-band), runtime service account with `secretmanager.secretAccessor` and object admin on a supplied uploads bucket, and optional Workload Identity Federation pool for CI. Every value that could differ between users must be a variable with a description and no Flourish default. Outputs: service URL, service account email, registry path.
   - Files: `terraform/modules/terreno-backend/main.tf`, `variables.tf`, `outputs.tf`, `README.md` (all new)
   - Depends on: Task 1.1
   - Acceptance: `terraform init && terraform validate` passes in the module directory; `rg -i flourish terraform/modules/` returns nothing; every variable has a `description`.
+  - Implementation note: secrets start empty, and Cloud Run rejects a revision that references a versionless secret, so the module does not mount secret env refs at creation. The `set_secrets_flag` output supplies the `--set-secrets` flag for the first real `gcloud run deploy`, consistent with the existing "Terraform owns structure, deploy owns payload" split (`lifecycle.ignore_changes` on env).
 
 - [ ] **Task 2.2**: Relocate Flourish-specific terraform
   - Description: Move Flourish's environment configuration from `terraform/` to `infra/flourish/`, leaving only `terraform/modules/` behind. Update every path reference: `.github/workflows/cd.yml`, `terraform/README.md` (split into a generic module README and `infra/flourish/README.md`), `AGENTS.md` / `CLAUDE.md` if they reference `terraform/README.md`, and any script under `scripts/`. Use `git mv` so history is preserved.

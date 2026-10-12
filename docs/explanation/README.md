@@ -15,6 +15,7 @@ Understanding-oriented documentation: concepts, architecture, and context.
 - [Loop engineering](loop-engineering.md) — Fresh-invocation lifecycle, state, evidence, and orchestration boundaries
 - [GitHub issue lifecycle](../how-to/github-issue-lifecycle.md) — Pick-ready issues and plan comments for Pick/Roast
 - [Install agent skills](../how-to/install-agent-skills.md) — `npx skills add TerrenoLabs/terreno`
+- [AI development loop](ai-development-loop.md) — The five-stage Ask, Generate, Run, Observe, Fix loop, what the agent can and cannot see, and how it composes with expo-mcp, Playwright MCP, and Maestro
 - [Agent guidelines](agent-guidelines.md) — How hosted docs, per-package `.ai/` guidelines, and `.rulesync/` rules reach an agent, and how apps extend them
 - [AI observability](ai-observability.md) — Two planes (telemetry vs control), plugins vs LangfuseApp, SOP loop
 - [Durable agent harness](durable-agent-harness.md) — Phases, checkpoints, and why the audit span shares the checkpoint transaction

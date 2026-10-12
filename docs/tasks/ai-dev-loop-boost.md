@@ -53,7 +53,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
 
 ## Phase 3: The loop explainer
 
-- [ ] **Task 3.1**: Write `docs/explanation/ai-development-loop.md`
+- [x] **Task 3.1**: Write `docs/explanation/ai-development-loop.md`
   - Description: Explainer covering the five stages (Ask, Generate, Run, Observe, Fix) with the mermaid diagram from the IP. For each stage, name the tools involved and what they contribute. Then a "Tool layer versus process layer" section using the table from the IP, stating that this page covers the tool layer and that the `/terreno-*` SDLC pipeline is the process layer, with a link to `docs/explanation/agentic-sdlc.md` — do not duplicate that page's content. Then a "What makes this different" section built on one narrow, defensible claim: the agent observes what the app actually did rather than a description of it. Then a "What the agent cannot see" section — production logs, native crash reports outside the dev loop, anything requiring a physical device not attached to a dev server, and the Hermes single-connection limitation. Then a "How this composes" section covering `expo-mcp` for simulator interaction, Playwright MCP for web, and Maestro for durable E2E flows, with the division of labor. No commands — this is conceptual.
   - Files: `docs/explanation/ai-development-loop.md` (new), `docs/explanation/README.md`
   - Depends on: Task 2.1

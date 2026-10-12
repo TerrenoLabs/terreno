@@ -1462,8 +1462,12 @@ or off (see [Environment variables](environment-variables.md#observability)).
 captures `console.error`, `console.warn`, uncaught errors, and unhandled rejections. It sends them
 in batches of up to 100, about 400 ms after the first one is queued. If a post fails, it retries
 once and then drops the batch without reporting anything. A missing route (404) or a 403 therefore
-shows up only as an empty `browser.log`. Only uncaught errors whose thrown value is an `Error`
-carry a `stack`. `console.error`, `console.warn`, and unhandled-rejection entries do not.
+shows up only as an empty `browser.log`. Uncaught errors and unhandled rejections whose value is
+an `Error` carry a `stack`. `console.error` and `console.warn` entries do not. An error passed to
+React Native's `ErrorUtils` handler is logged only after the previous handler returns. On web the
+default handler rethrows, so the logger skips that error: its caller may still catch it, as Expo's
+web `import()` does while it loads a split bundle. If nothing catches it, the window `error` or
+`unhandledrejection` listener logs it.
 
 On the client, `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb` posts to this
 route in `__DEV__` builds. The `@terreno/rtk` export of the same name is a deprecated re-export.

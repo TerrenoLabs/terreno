@@ -73,7 +73,7 @@ See: [`docs/implementationPlans/ai-dev-loop-boost.md`](../implementationPlans/ai
   - Depends on: Task 2.1
   - Acceptance: configuration for at least two editors, each verified by actually loading it; the JSON matches bootstrap output byte-for-byte in structure; the `application_info` verification step works.
 
-- [ ] **Task 4.2**: Write `docs/how-to/debug-with-mcp.md`
+- [x] **Task 4.2**: Write `docs/how-to/debug-with-mcp.md`
   - Description: Task-focused guide using the real failure and real outputs captured in Task 1.2. Structure: the symptom; `last_error` to locate it; `read_logs` with source filtering to see the surrounding context; `database_query` to check the data; `get_client_state` to check the client; `navigate` plus a screenshot from the composed server to confirm the fix. Include a "which tool for which symptom" table (app crashes on a screen; API returns 403; data looks wrong; screen renders empty; bundler fails). Use verbatim tool output.
   - Files: `docs/how-to/debug-with-mcp.md` (new), `docs/how-to/README.md`
   - Depends on: Task 1.2, Task 4.1

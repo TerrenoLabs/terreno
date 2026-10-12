@@ -1130,6 +1130,27 @@ See [Schema metadata explanation](../explanation/schema-metadata.md).
 
 ## Middleware
 
+### Error middleware
+
+`TerrenoApp` ends the app with `apiUnauthorizedMiddleware`, `apiErrorMiddleware`,
+and `apiFallthroughErrorMiddleware`, in that order. `apiErrorMiddleware` answers with a JSONAPI
+error body for these errors:
+
+| Error | Status | Title |
+|-------|--------|-------|
+| `APIError` (or a subclass) | its `status` | its `title` |
+| Mongoose `ValidationError` or `CastError` | 400 | `Validation failed`, with `meta.fields` |
+| Malformed JSON or urlencoded body (`entity.parse.failed`) | 400 | `Malformed request body` |
+| Body over the parser `limit` (`entity.too.large`, `parameters.too.many`) | 413 | `Request body too large` |
+| Unsupported body charset or encoding | 415 | `Unsupported request body encoding` |
+| Aborted or truncated body (`request.aborted`, `request.size.invalid`) | 400 | `Request body incomplete` |
+
+Body-parser errors keep the parser's message in `detail`, are logged at `warn`, and skip Sentry.
+`bodyParserErrorToAPIError(err)` and `mongooseErrorToAPIError(err)` are exported for custom error
+handlers; each returns `null` for errors it does not handle. Anything else reaches
+`apiFallthroughErrorMiddleware`, which logs `Fallthrough error: <error>` with the stack at `error`
+level and answers `500 {"status":500,"title":"Internal server error"}`.
+
 ### openApiEtagMiddleware
 
 Adds ETag support to the `/openapi.json` endpoint for efficient caching.

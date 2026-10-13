@@ -18,6 +18,7 @@ import {
   Icon,
   type IconName,
   Link,
+  MarkdownView,
   Text,
   type TextColor,
 } from "@terreno/ui";
@@ -27,7 +28,6 @@ import startCase from "lodash/startCase";
 import type React from "react";
 import {type FC, useEffect, useState} from "react";
 import {Linking, Pressable} from "react-native";
-import MarkdownView from "react-native-markdown-display";
 import {controlDefault, storiesForDemo} from "../../catalogContract";
 
 export const generateStaticParams = () => DemoConfig.map((c) => ({component: c.name}));

@@ -1,0 +1,32 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which account should I bill?",
+    "select": "one",
+    "allowDecline": false,
+    "options": [
+      {"id": "personal", "label": "Personal"},
+      {"id": "work", "label": "Work"}
+    ]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Which account should I bill?",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "option:personal",
+        "label": "Personal",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["personal"]}}
+      },
+      {
+        "id": "option:work",
+        "label": "Work",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["work"]}}
+      }
+    ]
+  }
+}

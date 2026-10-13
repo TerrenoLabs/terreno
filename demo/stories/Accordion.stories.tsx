@@ -1,4 +1,4 @@
-import {Accordion, Box, Heading, isMobileDevice, Text} from "@terreno/ui";
+import {Accordion, Box, Heading, isNarrowViewport, Text} from "@terreno/ui";
 import React from "react";
 import {View} from "react-native";
 
@@ -20,7 +20,7 @@ export const AccordionDemo = () => {
 };
 
 export const AccordionDevDemo = () => {
-  const isMobile = isMobileDevice();
+  const isMobile = isNarrowViewport();
   const InfoChild = () => {
     return (
       <Box>
@@ -29,7 +29,7 @@ export const AccordionDevDemo = () => {
     );
   };
   return (
-    <View style={{backgroundColor: "white", width: isMobile ? "100%" : "50%"}}>
+    <Box color="base" width={isMobile ? "100%" : "50%"}>
       <View style={{padding: 15, width: "100%"}}>
         <Accordion
           includeInfoModal
@@ -44,17 +44,17 @@ export const AccordionDevDemo = () => {
           </Box>
         </Accordion>
       </View>
-    </View>
+    </Box>
   );
 };
 
 export const AccordionOnToggleDemo = () => {
   const [isCollapsed, setIsCollapsed] = React.useState(true);
   const [title, setTitle] = React.useState("Sm Title");
-  const isMobile = isMobileDevice();
+  const isMobile = isNarrowViewport();
 
   return (
-    <View style={{backgroundColor: "white", width: isMobile ? "100%" : isCollapsed ? 150 : 450}}>
+    <Box color="base" width={isMobile ? "100%" : isCollapsed ? 150 : 450}>
       <View style={{padding: 15, width: "100%"}}>
         <Accordion
           isCollapsed={isCollapsed}
@@ -70,6 +70,6 @@ export const AccordionOnToggleDemo = () => {
           </Box>
         </Accordion>
       </View>
-    </View>
+    </Box>
   );
 };

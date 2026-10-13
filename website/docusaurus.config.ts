@@ -1,12 +1,48 @@
+import {readFileSync} from "node:fs";
+import {join} from "node:path";
 import type * as Preset from "@docusaurus/preset-classic";
 import type {Config} from "@docusaurus/types";
 import {themes as prismThemes} from "prism-react-renderer";
 
 const demoUrl = process.env.DEMO_URL ?? "https://terreno-demo.netlify.app";
 const docsUrl = process.env.DOCS_URL ?? "https://terreno-docs.netlify.app";
-// PR previews only need the current docs tree. Historical versions live in
-// website/versioned_docs and dominate `docusaurus build` time (~4 extra trees).
+// Search is skipped on PR previews to keep them fast.
 const isPreview = process.env.DOCS_PREVIEW === "true";
+// Set when building one released version once, at release time, from its
+// website/versioned_docs snapshot. Production deploys unpack those prebuilt sites
+// under /<version>/ instead of rebuilding every version (see scripts/ci/docs-archive.sh).
+const archiveVersion = process.env.DOCS_ARCHIVE_VERSION?.trim() || undefined;
+// Newest first; the release job keeps this list pruned.
+const releasedVersions: string[] = JSON.parse(
+  readFileSync(join(__dirname, "versions.json"), "utf8")
+);
+
+// pathname:// links skip baseUrl, so the same hrefs work from the root site and
+// from every archived site.
+const versionDropdown = {
+  items: [
+    {label: "Latest (master)", target: "_self", to: "pathname:///"},
+    ...releasedVersions.map((version) => ({
+      label: version,
+      target: "_self",
+      to: `pathname:///${version}/`,
+    })),
+  ],
+  label: archiveVersion ?? "Latest",
+  position: "right" as const,
+  type: "dropdown" as const,
+};
+
+const docsSource = archiveVersion
+  ? {
+      path: `versioned_docs/version-${archiveVersion}`,
+      sidebarPath: `./versioned_sidebars/version-${archiveVersion}-sidebars.json`,
+    }
+  : {
+      editUrl: "https://github.com/TerrenoLabs/terreno/tree/master/docs/",
+      path: "../docs",
+      sidebarPath: "./sidebars.ts",
+    };
 
 const searchTheme: [string, Record<string, unknown>] = [
   require.resolve("@easyops-cn/docusaurus-search-local"),
@@ -19,7 +55,7 @@ const searchTheme: [string, Record<string, unknown>] = [
 ];
 
 const config: Config = {
-  baseUrl: "/",
+  baseUrl: archiveVersion ? `/${archiveVersion}/` : "/",
   favicon: "img/favicon.png",
   future: {
     faster: true,
@@ -37,33 +73,32 @@ const config: Config = {
   onBrokenLinks: "warn",
   onBrokenMarkdownLinks: "warn",
   organizationName: "TerrenoLabs",
-  plugins: [
-    [
-      "@docusaurus/plugin-client-redirects",
-      {
-        redirects: [
+  plugins: archiveVersion
+    ? []
+    : [
+        [
+          "@docusaurus/plugin-client-redirects",
           {
-            from: "/next/reference/rtk",
-            to: isPreview ? "/how-to/migrate-rtk-to-syncdb" : "/next/how-to/migrate-rtk-to-syncdb",
+            // The site used to serve unreleased docs under /next; keep those links working.
+            createRedirects: (existingPath: string): string[] => [`/next${existingPath}`],
+            redirects: [{from: "/next/reference/rtk", to: "/how-to/migrate-rtk-to-syncdb"}],
           },
         ],
-      },
-    ],
-  ],
+      ],
   presets: [
     [
       "classic",
       {
         blog: false,
         docs: {
-          disableVersioning: isPreview,
-          editUrl: "https://github.com/TerrenoLabs/terreno/tree/master/docs/",
+          ...docsSource,
+          // Every build holds one docs tree. Building all versions together put ~4,300
+          // pages in one rspack bundle and pushed builds past 8 GB.
+          disableVersioning: true,
           exclude: ["**/implementationPlans/**", "**/tasks/**"],
-          path: "../docs",
           routeBasePath: "/",
           showLastUpdateAuthor: false,
           showLastUpdateTime: false,
-          sidebarPath: "./sidebars.ts",
         },
         theme: {
           customCss: "./src/css/custom.css",
@@ -74,6 +109,15 @@ const config: Config = {
   projectName: "terreno",
   tagline: "Terreno is Django/Rails for TypeScript — with universal app support.",
   themeConfig: {
+    ...(archiveVersion
+      ? {
+          announcementBar: {
+            content: `These docs are for Terreno ${archiveVersion}. <a href="/">Read the latest docs</a>.`,
+            id: `archived-${archiveVersion}`,
+            isCloseable: false,
+          },
+        }
+      : {}),
     customFields: {
       demoUrl,
     },
@@ -122,7 +166,7 @@ const config: Config = {
     ],
     navbar: {
       items: [
-        // Enable docsVersionDropdown after the first `bun run docs:version` cut on release.
+        versionDropdown,
         {
           href: "https://github.com/TerrenoLabs/terreno",
           label: "GitHub",

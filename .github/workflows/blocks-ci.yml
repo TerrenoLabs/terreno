@@ -1,0 +1,50 @@
+name: Blocks CI
+
+# Disabled after migration to CircleCI; retained for rollback.
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
+
+defaults:
+  run:
+    working-directory: blocks
+
+jobs:
+  test:
+    name: Lint, compile, and test blocks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+
+      - name: Install dependencies
+        working-directory: .
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Compile
+        run: bun run compile
+
+      - name: Test with coverage threshold
+        run: bun run test:coverage
+        env:
+          CI: true
+      - name: Upload coverage to Codecov
+        uses: ./.github/actions/upload-codecov
+        with:
+          directory: blocks
+          flag: blocks
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Gate new files from LCOV
+        env:
+          COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash scripts/ci/check-new-file-coverage-lcov.sh blocks
+        working-directory: .

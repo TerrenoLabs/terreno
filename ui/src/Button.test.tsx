@@ -1,10 +1,12 @@
 import {describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
+import {type FC, type ReactNode, useEffect} from "react";
+import type {ReactTestInstance} from "react-test-renderer";
 
 import {Button} from "./Button";
 import type {ButtonProps} from "./Common";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import * as ThemeModule from "./Theme";
 import {renderWithIcons, renderWithTheme, TEST_CUSTOM_ICON_TEST_ID} from "./test-utils";
 import {Unifier} from "./Unifier";
@@ -31,6 +33,22 @@ interface CancelablePress {
   cancel: () => void;
 }
 
+const LONG_LABEL = "Go team 🎉🎉🎉🎉🎉…";
+
+const hostParentOf = (node: ReactTestInstance | null): ReactTestInstance | null => {
+  let parent = node?.parent ?? null;
+  while (parent && typeof parent.type !== "string") {
+    parent = parent.parent;
+  }
+  return parent;
+};
+
+/** The label and the icon and spinner rows around it, innermost first. */
+const labelAndRows = (label: ReactTestInstance): (ReactTestInstance | null)[] => {
+  const iconRow = hostParentOf(label);
+  return [label, iconRow, hostParentOf(iconRow)];
+};
+
 describe("Button", () => {
   it("renders correctly with default props", () => {
     const {toJSON} = renderWithTheme(<Button onClick={() => {}} text="Click me" />);
@@ -49,6 +67,61 @@ describe("Button", () => {
     expect(getByTestId("test-button")).toBeTruthy();
   });
 
+  it("keeps a long label on one line by default", () => {
+    const {getByTestId, getByText} = renderWithTheme(
+      <Button onClick={() => {}} size="sm" testID="one-line" text={LONG_LABEL} />
+    );
+
+    const [label, iconRow, spinnerRow] = labelAndRows(getByText(LONG_LABEL));
+    for (const node of [label, iconRow, spinnerRow]) {
+      expect(node?.props.style).not.toHaveProperty("flexShrink");
+    }
+    expect(label?.props.style).not.toHaveProperty("textAlign");
+    const style = getByTestId("one-line").props.style;
+    expect(style).toMatchObject({height: 28, paddingVertical: 0});
+    expect(style).not.toHaveProperty("maxWidth");
+    expect(style).not.toHaveProperty("minHeight");
+  });
+
+  it("fits its container and wraps a long label onto centered lines with wrapText", () => {
+    const {getByTestId, getByText} = renderWithTheme(
+      <Button onClick={() => {}} testID="wrapping" text={LONG_LABEL} wrapText />
+    );
+
+    const [label, iconRow, spinnerRow] = labelAndRows(getByText(LONG_LABEL));
+    expect(label?.props.style).toMatchObject({flexShrink: 1, textAlign: "center"});
+    for (const row of [iconRow, spinnerRow]) {
+      expect(row?.props.style).toMatchObject({flexShrink: 1});
+    }
+    const style = getByTestId("wrapping").props.style;
+    expect(style).toMatchObject({maxWidth: "100%", paddingVertical: 8});
+    expect(style.height).toBeUndefined();
+    expect(style).not.toHaveProperty("minHeight");
+  });
+
+  for (const {paddingVertical, variant} of [
+    {paddingVertical: 4, variant: "primary"},
+    {paddingVertical: 2, variant: "outline"},
+  ] as const) {
+    it(`grows a sm ${variant} button from 28px instead of clipping a wrapped label`, () => {
+      const {getByTestId, getByText} = renderWithTheme(
+        <Button
+          onClick={() => {}}
+          size="sm"
+          testID="sm-wrap"
+          text={LONG_LABEL}
+          variant={variant}
+          wrapText
+        />
+      );
+
+      const style = getByTestId("sm-wrap").props.style;
+      expect(style.height).toBeUndefined();
+      expect(style).toMatchObject({maxWidth: "100%", minHeight: 28, paddingVertical});
+      expect(getByText(LONG_LABEL).props.style).toMatchObject({flexShrink: 1, fontSize: 14});
+    });
+  }
+
   it("supports an accessible name distinct from visible text", () => {
     const {getByTestId} = renderWithTheme(
       <Button accessibilityLabel="Filter Name" onClick={() => {}} testID="filter-button" text="" />
@@ -62,6 +135,43 @@ describe("Button", () => {
       <Button onClick={() => {}} text="Primary" variant="primary" />
     );
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it("uses accessible Figma text colors for primary buttons in both modes", () => {
+    const light = renderWithTheme(
+      <Button onClick={() => {}} text="Light primary" variant="primary" />
+    );
+    const dark = render(
+      <ThemeModule.ThemeProvider colorScheme="dark">
+        <Button onClick={() => {}} text="Dark primary" variant="primary" />
+      </ThemeModule.ThemeProvider>
+    );
+
+    assert.equal(light.getByText("Light primary").props.style.color, "#092E3A");
+    assert.equal(dark.getByText("Dark primary").props.style.color, "#353535");
+  });
+
+  it("keeps primary text readable when dark tokens are applied in light colorScheme", async () => {
+    const DarkTokens: FC<{children: ReactNode}> = ({children}) => {
+      const {setTheme} = ThemeModule.useTheme();
+      // Apply darkThemeConfig without changing colorScheme, the theme-story path.
+      useEffect(() => {
+        setTheme(ThemeModule.darkThemeConfig);
+      }, [setTheme]);
+      return children;
+    };
+
+    const {getByText} = render(
+      <ThemeModule.ThemeProvider>
+        <DarkTokens>
+          <Button onClick={() => {}} text="Dark tokens" variant="primary" />
+        </DarkTokens>
+      </ThemeModule.ThemeProvider>
+    );
+
+    await waitFor(() => {
+      assert.equal(getByText("Dark tokens").props.style.color, "#353535");
+    });
   });
 
   it("renders secondary variant", () => {
@@ -122,6 +232,35 @@ describe("Button", () => {
     expect(getByTestId("outline-active").props.style.borderWidth).toBeUndefined();
   });
 
+  for (const size of ["default", "sm"] as const) {
+    it(`renders ${size} outline button with the same outer box as solid buttons`, () => {
+      const {getByTestId} = renderWithTheme(
+        <>
+          <Button onClick={() => {}} size={size} testID="solid" text="Solid" />
+          <Button
+            onClick={() => {}}
+            size={size}
+            testID="outline"
+            text="Outline"
+            variant="outline"
+          />
+        </>
+      );
+      const outerBox = (style: Record<string, number | undefined>): Record<string, number> => {
+        const border = style.borderWidth ?? 0;
+        return {
+          height: style.height ?? 0,
+          horizontal: (style.paddingHorizontal ?? 0) + border,
+          vertical: style.height === undefined ? (style.paddingVertical ?? 0) + border : 0,
+        };
+      };
+
+      expect(outerBox(getByTestId("outline").props.style)).toEqual(
+        outerBox(getByTestId("solid").props.style)
+      );
+    });
+  }
+
   it("keeps disabled styling when state is active", () => {
     const {getByTestId} = renderWithTheme(
       <Button
@@ -133,7 +272,7 @@ describe("Button", () => {
       />
     );
 
-    expect(getByTestId("disabled-active")).toHaveStyle({backgroundColor: "#9A9A9A"});
+    expect(getByTestId("disabled-active")).toHaveStyle({backgroundColor: "#949494"});
   });
 
   it("defaults to scale press animation", () => {
@@ -228,7 +367,7 @@ describe("Button", () => {
 
   it("skips equivalent parent updates and redraws changed props", () => {
     const handleClick = mock(() => Promise.resolve());
-    const mobileDeviceMock = isMobileDevice as ReturnType<typeof mock>;
+    const mobileDeviceMock = isNarrowViewport as ReturnType<typeof mock>;
     mobileDeviceMock.mockClear();
     const {rerender} = renderWithTheme(<Button onClick={handleClick} text="Stable" />);
     const initialRenderCalls = mobileDeviceMock.mock.calls.length;
@@ -615,9 +754,9 @@ describe("Button", () => {
     expect(tree).toBeTruthy();
   });
 
-  it("does not render tooltip wrapper when isMobileDevice is true", () => {
+  it("does not render tooltip wrapper when isNarrowViewport is true", () => {
     const nativeSpy = spyOn(Utilities, "isNative").mockReturnValue(false);
-    (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => true);
+    (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => true);
 
     const {getByText, toJSON} = renderWithTheme(
       <Button onClick={() => {}} text="No Tooltip" tooltipText="Should not wrap" />
@@ -627,12 +766,12 @@ describe("Button", () => {
     const tree = JSON.stringify(toJSON());
     expect(tree).not.toContain("Should not wrap");
     nativeSpy.mockRestore();
-    (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => false);
+    (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => false);
   });
 
   it("renders tooltip wrapper when tooltipText is provided and not native", () => {
     const nativeSpy = spyOn(Utilities, "isNative").mockReturnValue(false);
-    (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => false);
+    (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => false);
 
     const {getByText} = renderWithTheme(
       <Button onClick={() => {}} text="With Tooltip" tooltipText="Helpful tip" />
@@ -640,7 +779,7 @@ describe("Button", () => {
 
     expect(getByText("With Tooltip")).toBeTruthy();
     nativeSpy.mockRestore();
-    (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => false);
+    (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => false);
   });
 
   it("resets loading and rethrows when onClick rejects", async () => {

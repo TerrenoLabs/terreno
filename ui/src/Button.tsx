@@ -8,12 +8,21 @@ import {
 } from "pressto";
 import type React from "react";
 import {lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {ActivityIndicator, Pressable, type PressableProps, Text, View} from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  type PressableProps,
+  Text,
+  type TextStyle,
+  View,
+  type ViewStyle,
+} from "react-native";
 
 import {Box} from "./Box";
 import type {ButtonPressAnimation, ButtonProps} from "./Common";
+import {contrastRatio, WCAG_NORMAL_TEXT_CONTRAST} from "./colorContrast";
 import {useCustomIcon} from "./IconRegistry";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {useTheme} from "./Theme";
 import {Tooltip} from "./Tooltip";
 import {Unifier} from "./Unifier";
@@ -95,6 +104,7 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
   text,
   variant = "primary",
   withConfirmation = false,
+  wrapText = false,
 }) => {
   const {theme} = useTheme();
   const CustomIcon = useCustomIcon(iconName);
@@ -106,7 +116,15 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
     let bgColor = theme.surface.primary;
     let bColor: string | undefined;
     let bWidth: number | undefined;
+    // secondaryDark is the light-mode on-primary label. Dark tokens make that
+    // role too light for the primary fill, so fall back to inverted.
     let textColor = theme.text.inverted;
+    if (
+      variant === "primary" &&
+      contrastRatio(theme.text.secondaryDark, theme.surface.primary) >= WCAG_NORMAL_TEXT_CONTRAST
+    ) {
+      textColor = theme.text.secondaryDark;
+    }
 
     if (disabled) {
       bgColor = theme.surface.disabled;
@@ -157,6 +175,20 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
     isPressDisabled ? Pressable : PRESSABLE_BY_ANIMATION[pressAnimation]
   ) as React.ComponentType<ButtonPressableProps>;
   const pressableInteractionProps = isPressDisabled ? {disabled: true} : {enabled: true};
+  // `maxWidth` lets a button in a row fit the row instead of its one-line label. The fixed `sm`
+  // height would clip a wrapped second line, so a wrapping `sm` button grows from 28px instead.
+  const wrapBoxStyle: ViewStyle | undefined = wrapText
+    ? {
+        maxWidth: "100%",
+        ...(size === "sm"
+          ? {height: undefined, minHeight: 28, paddingVertical: 4 - (borderWidth ?? 0)}
+          : undefined),
+      }
+    : undefined;
+  const wrapRowStyle: ViewStyle | undefined = wrapText ? {flexShrink: 1} : undefined;
+  const wrapLabelStyle: TextStyle | undefined = wrapText
+    ? {flexShrink: 1, textAlign: "center"}
+    : undefined;
 
   return (
     <PressableComponent
@@ -178,14 +210,17 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
         flexDirection: "column",
         height: size === "sm" ? 28 : undefined,
         justifyContent: "center",
-        paddingHorizontal: size === "sm" ? 16 : 20,
+        paddingHorizontal: (size === "sm" ? 16 : 20) - (borderWidth ?? 0),
         paddingVertical: size === "sm" ? 0 : 8 - (borderWidth ?? 0),
         width: fullWidth ? "100%" : "auto",
+        ...wrapBoxStyle,
       }}
       testID={testID}
     >
-      <View style={{flexDirection: "row"}}>
-        <View style={{flexDirection: iconPosition === "left" ? "row" : "row-reverse"}}>
+      <View style={{flexDirection: "row", ...wrapRowStyle}}>
+        <View
+          style={{flexDirection: iconPosition === "left" ? "row" : "row-reverse", ...wrapRowStyle}}
+        >
           {Boolean(iconName) && (
             <View
               style={{
@@ -201,7 +236,11 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
               )}
             </View>
           )}
-          <Text style={{color, fontSize: size === "sm" ? 14 : 16, fontWeight: "700"}}>{text}</Text>
+          <Text
+            style={{color, fontSize: size === "sm" ? 14 : 16, fontWeight: "700", ...wrapLabelStyle}}
+          >
+            {text}
+          </Text>
         </View>
         {isLoading && (
           <Box marginLeft={2}>
@@ -307,7 +346,7 @@ const ConfirmationButton: React.FC<ButtonProps> = ({
 
 const ButtonRender: React.FC<ButtonProps> = (props) => {
   const {tooltipText, tooltipIdealPosition, tooltipIncludeArrow = false} = props;
-  const isMobileOrNative = isMobileDevice() || isNative();
+  const isMobileOrNative = isNarrowViewport() || isNative();
   const button = props.withConfirmation ? (
     <ConfirmationButton {...props} />
   ) : (

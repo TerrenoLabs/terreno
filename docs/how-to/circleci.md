@@ -80,7 +80,8 @@ for `.circleci/**`); the kitchen-sink does not start a second copy. If the same
 pipeline already set `run-api`, `run-ui`, `run-e2e`, `run-example-backend`, or
 `run-admin-spa`, that kitchen-sink workflow is skipped so jobs are not doubled.
 `comms/**` also sets `run-example-backend` and `run-example-backend-script`,
-matching the GitHub Actions twins.
+matching the GitHub Actions twins. `blocks/**` sets `run-blocks` plus every
+parameter `ai/**` sets, because `@terreno/ai` depends on `@terreno/blocks`.
 
 The example-backend Docker job runs only when its image recipe changes
 (`Dockerfile`, `.dockerignore`, package manifests, or `bun.lock`). API/source
@@ -165,10 +166,10 @@ non-PR branch builds.
 | Path (examples) | Parameter | PR job | `master` job |
 | --- | --- | --- | --- |
 | `demo/**`, `ui/**` | `run-deploy-demo` | `deploy-demo-preview` | `deploy-demo` |
-| `example-frontend/**`, `admin-frontend/**`, `rtk/**`, `ui/**`, `ai/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
+| `example-frontend/**`, `admin-frontend/**`, `rtk/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
 | `docs/**`, `website/**` | `run-deploy-docs` | `deploy-docs-preview` | `deploy-docs` |
 | `example-backend/**`, `api/**`, `comms/**`, `jobs/**`, `admin-spa/**`, `feature-flags/**`, `announcements/**`, plus every frontend path above | `run-cd-backend` | `gcp-cd-preview` | `gcp-cd-prod` |
-| `terraform/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
+| `terraform/**`, `infra/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
 | `mcp-server/**`, `ui/**` | `run-cd-mcp` | _(none)_ | `gcp-cd-prod` (runs `mcp-server` `test:ci` first) |
 
 The backend image bundles the admin SPA (ui, rtk, admin-frontend, syncdb), so
@@ -177,6 +178,8 @@ an isolated `pr-N` backend: `deploy-frontend-preview` always points
 `EXPO_PUBLIC_API_URL` at it (the prod backend rejects preview CORS) and waits
 up to 20 minutes for its `/health` before publishing, because `gcp-cd-preview`
 runs in a separate workflow.
+
+Those backend deploys set `GCS_BUCKET` to `flourish-terreno-example-documents` (override with `GCP_DOCUMENTS_BUCKET`). Preview revisions also set `GCS_FOLDER_PREFIX=pr-<number>/` so each PR keeps its own folder. Without `GCS_BUCKET`, `GET /documents/` returns 503 and the Files section shows “Storage is not configured.”
 
 Backend previews prune not-Ready tagged revisions from traffic
 (`rebuild-cloud-run-ready-traffic.sh`), deploy untagged with
@@ -242,9 +245,10 @@ restrict `terreno-release` and `terreno-npm` to tag/manual release pipelines.
 Until contexts exist, e2e jobs may use **project env vars for `E2E_*` secrets only**
 (or the in-job `ci-e2e-*-secret` fallbacks). **Do not** put `GITHUB_TOKEN` (or any
 GitHub PAT) in project env vars — those are injected into every job, including
-`bun` scripts from the PR. Create `terreno-github-api`, restrict it to this
-project, leave fork-PR secret passing off, and attach that context **only** to
-`dco` and `architectural-pr-review`. DCO skips if `GITHUB_TOKEN` is unset.
+`bun` scripts from the PR. `terreno-github-api` must hold the PAT as
+`GITHUB_TOKEN`; restrict it to this project and leave fork-PR secret passing off.
+The `always` workflow attaches it **only** to `dco` and `architectural-pr-review`
+(the latter also gets `terreno-agentic`). DCO skips if `GITHUB_TOKEN` is unset.
 `architectural-pr-review` also skips if `GITHUB_TOKEN` or `CURSOR_API_KEY` is
 unset, and it skips fork PRs. The job checks out `origin/master` before running
 the review script so a PR cannot rewrite the reviewer.
@@ -252,12 +256,18 @@ the review script so a PR cannot rewrite the reviewer.
 Netlify and GCP jobs **validate their context as the first step** and fail,
 before checkout or `bun install`, listing the missing variables. Preview jobs
 halt earlier on fork PRs, where CircleCI withholds contexts. Docker Layer
-Caching is off (200 credits per job). The docs Netlify target disables
-Docusaurus minification so the build stays within the 8 GB `large` executor.
+Caching is off (200 credits per job). The docs Netlify target builds only the
+current docs tree, disables Docusaurus minification, and pins SSG to one worker
+thread so the build peaks near 3 GB and fits the 4 GB `medium` executor.
+Released versions are not rebuilt: `archive-docs-version` (in `publish-release`,
+`X.Y.0` tags only) builds each version once, uploads it to its **draft** GitHub
+release, publishes the release, and then commits the docs snapshot to master, so
+the `deploy-docs` run that commit starts can unpack the archive under
+`/<version>/`. See `website/README.md`.
 
 `terreno-gcp` uses CircleCI OIDC (`CIRCLE_OIDC_TOKEN_V2`), never a JSON service
 account key. Set `circleci_org_id`, `circleci_project_id`, and
-`circleci_gcp_context_id` in `terraform/terraform.tfvars`, apply once with an
+`circleci_gcp_context_id` in `infra/flourish/terraform.tfvars`, apply once with an
 existing Terraform admin identity, then copy `circleci_workload_identity_provider`
 into the context as `GCP_WIF_PROVIDER_PROD`. The WIF condition requires the
 `terreno-gcp` context UUID so a PR job without that context cannot exchange the
@@ -268,7 +278,7 @@ ambient OIDC token for GCP impersonation.
 Branch protection must require the CircleCI job names below. Remove disabled
 GitHub check names or pull requests will wait for checks that can no longer run.
 
-Dedicated package jobs (`api-ci`, `ai-ci`, `rtk-ci`, `ui-ci`, `syncdb-ci`,
+Dedicated package jobs (`api-ci`, `ai-ci`, `blocks-ci`, `rtk-ci`, `ui-ci`, `syncdb-ci`,
 `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run `bun run test:coverage`
 (`scripts/check-coverage.ts`, 95% functions and lines). Isolated `syncdb` tests
 are included by that script. Published packages without a dedicated workflow
@@ -287,6 +297,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Admin backend lint, compile, coverage | `packages-ci` (`admin-backend`) |
 | Admin frontend lint, compile, coverage | `packages-ci` (`admin-frontend`) |
 | Run all tests (AI CI) | `ai-ci` |
+| Lint, compile, and test blocks | `blocks-ci` |
 | RTK Lint and Build | `rtk-ci` |
 | Syncdb Lint, Build, and Tests | `syncdb-ci` |
 | UI Lint, Build, Types, and Tests + demo typecheck | `ui-ci` |
@@ -369,6 +380,17 @@ dependencies and runs `test:ci` when that script exists, not `test`.
 `@terreno/ui`'s `test` is `bun test --watch` and would hang. If a package's
 tag version is already on npm, `publish-package.sh` skips it so a recut of
 the same tag can finish the rest.
+
+The release skill pushes the tag and creates the GitHub release with
+`gh release create --draft`. The repository has immutable releases on: a
+published release cannot take new assets (GitHub answers `422`). So CI publishes
+the draft last with `scripts/ci/github-release.sh publish`.
+`archive-docs-version` does it right after the upload on `X.Y.0` tags.
+`publish-github-release` does it after `publish-release` on every other tag.
+Both wait up to 10 minutes for the draft and are safe to rerun: a rerun skips
+an upload that already landed on a published release and a snapshot already on
+master. A
+release still in draft after the pipeline means one of them failed.
 
 Only stable tags (`57.3.0`) run `deploy-demo`. It builds the demo from source,
 so it runs alongside `publish-release` instead of waiting for it. Use

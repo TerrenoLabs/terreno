@@ -1,0 +1,6 @@
+v: 1
+blocks:
+  - &item
+    type: text
+    markdown: Hello
+  - *item

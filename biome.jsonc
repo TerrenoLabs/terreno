@@ -60,6 +60,7 @@
       "!!**/.expo",
       "!!**/.next",
       "!!**/generated",
+      "!!**/expo-env.d.ts",
       "!!**/.git",
       "!!api/src/populate.ts",
       "!!example-frontend/expo-env.d.ts"

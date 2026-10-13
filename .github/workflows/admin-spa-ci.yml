@@ -24,7 +24,7 @@ jobs:
 
       # Compile workspace dependencies (server plugin + app typecheck need their types).
       - name: Build workspace dependencies
-        run: bun run --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
+        run: bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
         working-directory: .
 
       - name: Lint

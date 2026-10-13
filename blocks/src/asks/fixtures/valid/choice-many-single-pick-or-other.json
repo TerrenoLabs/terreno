@@ -1,0 +1,29 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Where did you hear about us?",
+    "select": "many",
+    "options": [
+      {"id": "search", "label": "Search engine"},
+      {"id": "friend", "label": "A friend"}
+    ],
+    "maxSelected": 1,
+    "allowOther": true,
+    "default": ["friend"]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Where did you hear about us?",
+    "handoff": true,
+    "buttons": [
+      {
+        "id": "use-default",
+        "label": "Use suggested",
+        "style": "primary",
+        "response": {"action": "accept", "content": {"selected": ["friend"]}}
+      },
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

@@ -48,6 +48,10 @@ jobs:
       - name: Install root dependencies (workspace)
         run: bun install --frozen-lockfile
 
+      - name: Build blocks dependency
+        working-directory: blocks
+        run: bun run compile
+
       - name: Build UI dependency
         run: bun run compile
         working-directory: ui

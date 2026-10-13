@@ -6,7 +6,7 @@ import {AIRequestExplorer, type AIRequestExplorerData} from "./AIRequestExplorer
 import {renderWithTheme} from "./test-utils";
 
 const fullRequest: AIRequestExplorerData = {
-  aiModel: "gemini-2.5-flash",
+  aiModel: "gemini-3.8-flash",
   created: "2024-06-15T14:30:45.000Z",
   error: "A warning",
   prompt: "Summarize this request",
@@ -38,7 +38,7 @@ describe("AIRequestExplorer", () => {
     );
 
     expect(getByText("Jane Example")).toBeTruthy();
-    expect(getByText("gemini-2.5-flash")).toBeTruthy();
+    expect(getByText("gemini-3.8-flash")).toBeTruthy();
     expect(getByText("Summarize this request")).toBeTruthy();
     expect(getByText("Summary response")).toBeTruthy();
     expect(getByText("42")).toBeTruthy();

@@ -18,7 +18,7 @@
   description: "@terreno/admin-backend, admin-frontend, admin-spa"
 - name: area:ai
   color: "B60205"
-  description: "@terreno/ai and AI routes"
+  description: "@terreno/ai, @terreno/blocks, and AI routes"
 - name: area:mcp
   color: "D93F0B"
   description: "@terreno/mcp server and agent tooling"

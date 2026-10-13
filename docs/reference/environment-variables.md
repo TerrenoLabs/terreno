@@ -23,6 +23,7 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `TERRENO_TEST_MONGODB_URI` | `@terreno/test` | ❌ | auto | Yes | tooling |
 | `TERRENO_TEST_USE_MEMORY_MONGO` | `@terreno/test` | ❌ | — | No | tooling |
 | `TERRENO_TEST_USE_REPLSET` | `@terreno/test` | ❌ | — | No | tooling |
+| `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` | `@terreno/test` | ❌ | `60000` | No | tooling |
 | `TERRENO_TEST_USE_FIXTURE_CACHE` | `@terreno/test` | ❌ | — | No | tooling |
 | `TERRENO_TEST_CACHE_DIR` | `@terreno/test` | ❌ | — | No | tooling |
 | `BUN_TEST_DISABLE_DB` | test harness | ❌ | — | No | tooling |
@@ -120,7 +121,7 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 | `GEMINI_API_KEY` | `@terreno/ai` | ❌ | — | Yes | server |
 | `OPENAI_API_KEY` | `@terreno/ai` | ❌ | — | Yes | server |
 | `GOOGLE_VERTEX_PROJECT` | `@terreno/ai` | ❌ | — | No | server |
-| `GOOGLE_VERTEX_LOCATION` | `@terreno/ai` | ❌ | — | No | server |
+| `GOOGLE_VERTEX_LOCATION` | `@terreno/ai` | ❌ | `global` | No | server |
 | `GOOGLE_VERTEX_ALLOWED_MODELS` | `@terreno/ai` | ❌ | all | No | server |
 | `CLAUDE_KEY` | tooling | ❌ | — | Yes | tooling |
 | `LANGFUSE_SECRET_KEY` | `@terreno/ai` | ❌ | — | Yes | server |
@@ -135,8 +136,11 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
 | `GCS_BUCKET` | example-backend, admin | ❌ | — | No | server |
+| `GCS_FOLDER_PREFIX` | example-backend `DocumentStorageApp` (`folderPrefix`) | ❌ | — | No | server |
 | `GCS_PROJECT_ID` | GCS clients | ❌ | — | No | server |
 | `GCS_SERVICE_ACCOUNT_KEY` | GCS clients | ❌ | — | Yes | server |
+
+Example-backend Cloud Run deploys set `GCS_BUCKET` (default `flourish-terreno-example-documents`). Preview deploys also set `GCS_FOLDER_PREFIX=pr-<number>/`.
 
 ## Feature flags
 
@@ -222,7 +226,7 @@ There is **no** `RATE_LIMIT_ENABLED` (or similar) read by `@terreno/api`. Apps t
 |----------|---------|----------|---------|--------|-------|
 | `SLACK_WEBHOOKS` | `@terreno/api` | ❌ | — | Yes | server |
 | `SLACK_WEBHOOK_URL` | scripts | ❌ | — | Yes | server |
-| `SLACK_BOT_TOKEN` | `@terreno/api` `lookupSlackUserIdByEmail` | ❌ | — | Yes | server |
+| `SLACK_BOT_TOKEN` | `@terreno/api` Slack Web API (`lookupSlackUserIdByEmail`, private channels, invites, `chat.postMessage`) | ❌ | — | Yes | server |
 | `GOOGLE_CHAT_WEBHOOKS` | `@terreno/api` | ❌ | — | Yes | server |
 | `GOOGLE_CHAT_WEBHOOK_URL` | scripts | ❌ | — | Yes | server |
 | `ZOOM_CHAT_WEBHOOKS` | `@terreno/api` | ❌ | — | Yes | server |

@@ -1,7 +1,12 @@
 import {afterEach, describe, expect, it} from "bun:test";
+import {assert} from "chai";
 import {Platform} from "react-native";
 
-import {getDashboardCellBoxStyle, getDashboardCellWidth} from "./dashboardGridLayout";
+import {
+  getDashboardCellBoxStyle,
+  getDashboardCellWidth,
+  getDashboardSpanCellBoxStyle,
+} from "./dashboardGridLayout";
 
 const originalOS = Platform.OS;
 
@@ -62,6 +67,59 @@ describe("getDashboardCellBoxStyle", () => {
         rowWidth: 0,
       }).width
     ).toBe("calc((100% - 32px) / 3)");
+  });
+
+  it("adds the internal gap when a measured cell spans two columns", () => {
+    assert.deepInclude(
+      getDashboardSpanCellBoxStyle({
+        columnCount: 4,
+        gapPx: 16,
+        rowWidth: 332,
+        span: 2,
+      }),
+      {width: 156}
+    );
+  });
+
+  it("clamps measured spans to the available columns", () => {
+    const fullSpan = getDashboardSpanCellBoxStyle({
+      columnCount: 4,
+      gapPx: 16,
+      rowWidth: 332,
+      span: 8,
+    });
+    assert.equal(fullSpan.width, 328);
+
+    const minimumSpan = getDashboardSpanCellBoxStyle({
+      columnCount: 4,
+      gapPx: 16,
+      rowWidth: 332,
+      span: 0,
+    });
+    assert.equal(minimumSpan.width, 70);
+  });
+
+  it("uses responsive web calc widths before measurement", () => {
+    Platform.OS = "web";
+
+    assert.equal(
+      getDashboardSpanCellBoxStyle({
+        columnCount: 4,
+        gapPx: 16,
+        rowWidth: 0,
+        span: 2,
+      }).width,
+      "calc(((100% - 48px) / 4) * 2 + 16px)"
+    );
+    assert.equal(
+      getDashboardSpanCellBoxStyle({
+        columnCount: 4,
+        gapPx: 16,
+        rowWidth: 0,
+        span: 4,
+      }).width,
+      "100%"
+    );
   });
 
   it("falls back to a full-width cell on native, which has no calc", () => {

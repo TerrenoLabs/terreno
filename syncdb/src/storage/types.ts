@@ -35,6 +35,12 @@ export const KNOWN_STREAMS_TABLE = "_knownStreams";
  */
 export const NEEDS_REPAIR_TABLE = "_needsRepair";
 
+/**
+ * Server query-window membership (see `query/queryWindows.ts`); rowId = window key.
+ * Holds ordered member ids only — the rows themselves live in the shared entity table.
+ */
+export const QUERY_WINDOWS_TABLE = "_queryWindows";
+
 /** Prefix marking reserved (non-collection) tables. */
 export const RESERVED_TABLE_PREFIX = "_";
 

@@ -1,0 +1,39 @@
+{
+  "kind": "markdown",
+  "input": {
+    "prompt": "Here is a draft announcement. Edit anything, then send it back.",
+    "title": "Launch announcement",
+    "initial": "# We're live\n\nToday we launched **Terreno Asks**: your agent can now ask you a question and wait for the answer.\n\n- Pick from options\n- Approve or deny\n- Edit a draft like this one\n",
+    "maxLength": 2000,
+    "submitLabel": "Send it back"
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "approve",
+        "label": "Approve draft",
+        "response": {
+          "action": "accept",
+          "content": {
+            "changed": false,
+            "markdown": "# We're live\n\nToday we launched **Terreno Asks**: your agent can now ask you a question and wait for the answer.\n\n- Pick from options\n- Approve or deny\n- Edit a draft like this one\n"
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "markdown",
+    "text": "Here is a draft announcement. Edit anything, then send it back.",
+    "title": "Launch announcement",
+    "toolCallId": "call_fixture"
+  }
+}

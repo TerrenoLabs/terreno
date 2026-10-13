@@ -1,5 +1,5 @@
 import {getCalendars} from "expo-localization";
-import {type FC, useCallback, useMemo, useRef, useState} from "react";
+import {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   type DimensionValue,
   type KeyboardTypeOptions,
@@ -7,6 +7,7 @@ import {
   Pressable,
   type StyleProp,
   TextInput,
+  type TextInputChangeEvent,
   View,
 } from "react-native";
 
@@ -89,6 +90,7 @@ export const TextField: FC<TextFieldProps> = ({
   multiline,
   rows = 1,
   grow,
+  maxHeight,
   returnKeyType,
   onBlur,
   onFocus,
@@ -112,6 +114,13 @@ export const TextField: FC<TextFieldProps> = ({
   const [height, setHeight] = useState(rows * 40);
   const [isValueRevealed, setIsValueRevealed] = useState(false);
   const textInputRef = useRef<TextInput | null>(null);
+
+  // Clear stale measured height so the next typed character starts at the default row height.
+  useEffect(() => {
+    if (grow && !value) {
+      setHeight(rows * 40);
+    }
+  }, [grow, rows, value]);
 
   const isPasswordField = type === "password";
   const hasVisibilityToggle = isPasswordField && showVisibilityToggle;
@@ -164,7 +173,9 @@ export const TextField: FC<TextFieldProps> = ({
 
   const calculatedHeight: DimensionValue = useMemo(() => {
     if (grow) {
-      return Math.max(40, height);
+      // React Native Web never reports a smaller content size, so an emptied field resets.
+      const grownHeight = value ? Math.max(40, height) : rows * 40;
+      return maxHeight ? Math.min(grownHeight, maxHeight) : grownHeight;
     } else if (multiline) {
       return height || "100%";
     } else {
@@ -172,7 +183,7 @@ export const TextField: FC<TextFieldProps> = ({
       // single-line inputs need extra vertical room beyond 16px text.
       return Platform.OS === "ios" ? 24 : 22;
     }
-  }, [grow, height, multiline]);
+  }, [grow, height, maxHeight, multiline, rows, value]);
 
   const defaultTextInputStyles = useMemo(() => {
     const style: StyleProp<TextStyleWithOutline> = {
@@ -206,10 +217,21 @@ export const TextField: FC<TextFieldProps> = ({
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   const oscillationRef = useRef(createTextFieldOscillationState());
+  // RN Web calls onChange with the DOM input event just before onChangeText, so this
+  // carries the pending change's `inputType` across to handleChangeText.
+  const pendingInputTypeRef = useRef<string | undefined>(undefined);
   valueRef.current = value;
   onChangeRef.current = onChange;
 
+  const handleWebChange = useCallback((event: TextInputChangeEvent): void => {
+    // On web, nativeEvent is the DOM InputEvent, which RN's types don't describe.
+    const {inputType} = event.nativeEvent as {inputType?: unknown};
+    pendingInputTypeRef.current = typeof inputType === "string" ? inputType : undefined;
+  }, []);
+
   const handleChangeText = useCallback((text: string): void => {
+    const inputType = pendingInputTypeRef.current;
+    pendingInputTypeRef.current = undefined;
     const currentValue = valueRef.current ?? "";
     if (text === currentValue) {
       return;
@@ -220,6 +242,7 @@ export const TextField: FC<TextFieldProps> = ({
     if (
       shouldSuppressTextFieldOscillation({
         currentValue,
+        inputType,
         now,
         state: oscillationState,
         text,
@@ -287,6 +310,7 @@ export const TextField: FC<TextFieldProps> = ({
             multiline={multiline}
             nativeID={id}
             numberOfLines={rows || 4}
+            {...(Platform.OS === "web" ? {onChange: handleWebChange} : {})}
             onBlur={() => {
               if (disabled) {
                 return;

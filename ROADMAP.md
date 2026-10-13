@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-09-29T12:00:32.618Z.
+> dates are promised. Last updated: 2026-10-12T05:21:35.983Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -32,14 +32,17 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 - [Charts and dashboard primitives](https://github.com/TerrenoLabs/terreno/issues/1175) (Feature, Shipped) — IP: [charts-and-dashboards](docs/implementationPlans/charts-and-dashboards.md) · Tasks: [charts-and-dashboards](docs/tasks/charts-and-dashboards.md)
 - [First-class dark mode](https://github.com/TerrenoLabs/terreno/issues/1176) (Feature, Planned)
 - [Native module baseline for the next major release](https://github.com/TerrenoLabs/terreno/issues/1026) (Breaking, Shipped) — IP: [native-module-baseline](docs/implementationPlans/native-module-baseline.md) · Tasks: [native-module-baseline](docs/tasks/native-module-baseline.md)
+- [Ops dashboard chart parity](https://github.com/TerrenoLabs/terreno/issues/1494) (Feature, Planned) — IP: [dashboard-chart-parity](docs/implementationPlans/dashboard-chart-parity.md) · Tasks: [dashboard-chart-parity](docs/tasks/dashboard-chart-parity.md)
 
 ### ai
 
+- [Agent UI Asks — agents ask the user for a typed answer inside the chat](https://github.com/TerrenoLabs/terreno/issues/1501) (Feature, In progress) — IP: [agent-ui-asks](docs/implementationPlans/agent-ui-asks.md) · Tasks: [agent-ui-asks](docs/tasks/agent-ui-asks.md)
 - [Agent UI Blocks — a strict YAML DSL for agent-rendered Terreno components](https://github.com/TerrenoLabs/terreno/issues/1389) (Feature, Planned) — IP: [agent-ui-blocks](docs/implementationPlans/agent-ui-blocks.md) · Tasks: [agent-ui-blocks](docs/tasks/agent-ui-blocks.md)
+- [Durable agent harness (@terreno/ai/harness)](https://github.com/TerrenoLabs/terreno/issues/1503) (Feature, Planned) — IP: [durable-agent-harness](docs/implementationPlans/durable-agent-harness.md) · Tasks: [durable-agent-harness](docs/tasks/durable-agent-harness.md)
 
 ### mcp
 
-- [AI development loop (MCP Boost)](https://github.com/TerrenoLabs/terreno/issues/1014) (Feature, In review) — IP: [ai-dev-loop-boost](docs/implementationPlans/ai-dev-loop-boost.md) · Tasks: [ai-dev-loop-boost](docs/tasks/ai-dev-loop-boost.md)
+- [AI development loop (MCP Boost)](https://github.com/TerrenoLabs/terreno/issues/1014) (Feature, Planned) — IP: [ai-dev-loop-boost](docs/implementationPlans/ai-dev-loop-boost.md) · Tasks: [ai-dev-loop-boost](docs/tasks/ai-dev-loop-boost.md)
 - [MCP Boost parity](https://github.com/TerrenoLabs/terreno/issues/1085) (Feature, Shipped) — IP: [mcp-boost-parity](docs/implementationPlans/mcp-boost-parity.md)
 
 ### docs
@@ -49,11 +52,12 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### deploy
 
-- [Deploy to GCP (generalized)](https://github.com/TerrenoLabs/terreno/issues/1005) (Improvement, Planned) — IP: [deploy-to-gcp](docs/implementationPlans/deploy-to-gcp.md) · Tasks: [deploy-to-gcp](docs/tasks/deploy-to-gcp.md)
+- [Deploy to GCP (generalized)](https://github.com/TerrenoLabs/terreno/issues/1005) (Improvement, In progress) — IP: [deploy-to-gcp](docs/implementationPlans/deploy-to-gcp.md) · Tasks: [deploy-to-gcp](docs/tasks/deploy-to-gcp.md)
 - [Deploy to Vercel](https://github.com/TerrenoLabs/terreno/issues/1012) (Improvement, Planned) — IP: [deploy-to-vercel](docs/implementationPlans/deploy-to-vercel.md) · Tasks: [deploy-to-vercel](docs/tasks/deploy-to-vercel.md)
 
 ### dx
 
+- [Agent UI Rich Replies: steppers, checklists, galleries, and copy](https://github.com/TerrenoLabs/terreno/issues/1546) (Feature, Planned) — IP: [agent-ui-rich-replies](docs/implementationPlans/agent-ui-rich-replies.md) · Tasks: [agent-ui-rich-replies](docs/tasks/agent-ui-rich-replies.md)
 - [create-terreno-app scaffolding CLI](https://github.com/TerrenoLabs/terreno/issues/1174) (Feature, Shipped) — IP: [create-terreno-app](docs/implementationPlans/create-terreno-app.md) · Tasks: [create-terreno-app](docs/tasks/create-terreno-app.md)
 - [Demo workshop](https://github.com/TerrenoLabs/terreno/issues/1470) (Feature, Planned) — IP: [demo-workshop](docs/implementationPlans/demo-workshop.md) · Tasks: [demo-workshop](docs/tasks/demo-workshop.md)
 - [Migrate CI/CD to CircleCI](https://github.com/TerrenoLabs/terreno/issues/1088) (Improvement, Shipped) — IP: [migrate-cicd-to-circleci](docs/implementationPlans/migrate-cicd-to-circleci.md) · Tasks: [migrate-cicd-to-circleci](docs/tasks/migrate-cicd-to-circleci.md)
@@ -82,7 +86,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 ### ai
 
 - [AI agents and provider failover](https://github.com/TerrenoLabs/terreno/issues/1397) (Feature, Shaping) — IP: [ai-agents-and-failover](docs/implementationPlans/ai-agents-and-failover.md) · Tasks: [ai-agents-and-failover](docs/tasks/ai-agents-and-failover.md)
-- [AI observability (Langfuse-light, pluggable)](https://github.com/TerrenoLabs/terreno/issues/1393) (Feature, Shaping) — IP: [ai-observability](docs/implementationPlans/ai-observability.md) · Tasks: [ai-observability](docs/tasks/ai-observability.md)
+- [AI observability (Langfuse-light, pluggable)](https://github.com/TerrenoLabs/terreno/issues/1393) (Feature, Planned) — IP: [ai-observability](docs/implementationPlans/ai-observability.md) · Tasks: [ai-observability](docs/tasks/ai-observability.md)
 - [Support answering agent (@terreno/support)](https://github.com/TerrenoLabs/terreno/issues/1396) (Feature, Shaping) — IP: [support-agent](docs/implementationPlans/support-agent.md) · Tasks: [support-agent](docs/tasks/support-agent.md)
 
 ### mcp

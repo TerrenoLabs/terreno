@@ -496,10 +496,13 @@ const mergeDateRangeQueryParams = <T>(
 };
 
 // Ensures query params are allowed. Also checks nested query params when using $and/$or.
+// The error names the field, the model, and the allowed list so a missing `queryFields`
+// entry is obvious from the client (syncdb raises it as QueryFieldNotAllowedError).
 const checkQueryParamAllowed = (
   queryParam: string,
   queryParamValue: unknown,
-  queryFields: string[] = []
+  queryFields: string[] = [],
+  modelName = "this model"
 ) => {
   // Cast for iteration through complex query values
   const complexValue = queryParamValue as Array<Record<string, unknown>>;
@@ -509,15 +512,20 @@ const checkQueryParamAllowed = (
     // Complex query of the form `$and: [{key1: value1}, {key2: value2}]`
     for (const subQuery of complexValue) {
       for (const subKey of Object.keys(subQuery)) {
-        checkQueryParamAllowed(subKey, subQuery[subKey], queryFields);
+        checkQueryParamAllowed(subKey, subQuery[subKey], queryFields, modelName);
       }
     }
     return;
   }
   if (!queryFields.includes(queryParam)) {
+    const allowed = queryFields.length > 0 ? queryFields.join(", ") : "(none)";
     throw new BadRequestError({
       code: "query-param-not-allowed",
-      detail: `${queryParam} is not allowed as a query param.`,
+      detail:
+        `${queryParam} is not allowed as a query param. ` +
+        `Add "${queryParam}" to queryFields on the ${modelName} modelRouter to filter on it. ` +
+        `Allowed: ${allowed}.`,
+      meta: {allowedQueryFields: [...queryFields], model: modelName, queryParam},
       source: {parameter: queryParam},
       title: "Query parameter not allowed",
     });
@@ -829,6 +837,22 @@ const _buildModelRouter = <T>(
       authenticateMiddleware(options.allowAnonymous),
       permissionMiddleware(model, options),
       listOpenApiMiddleware(model, options, routePath),
+      // Runs before query validation so a field missing from queryFields is always
+      // reported with this error, whatever the validator's settings.
+      (req: Request, _res: Response, next: NextFunction): void => {
+        for (const queryParam of Object.keys(req.query)) {
+          if (PAGINATION_QUERY_PARAMS.includes(queryParam)) {
+            continue;
+          }
+          checkQueryParamAllowed(
+            queryParam,
+            req.query[queryParam],
+            options.queryFields,
+            model.modelName
+          );
+        }
+        next();
+      },
       queryValidation,
     ],
     asyncHandler(async (req: Request, res: Response) => {
@@ -841,7 +865,12 @@ const _buildModelRouter = <T>(
         if (PAGINATION_QUERY_PARAMS.includes(queryParam)) {
           continue;
         }
-        checkQueryParamAllowed(queryParam, req.query[queryParam], options.queryFields);
+        checkQueryParamAllowed(
+          queryParam,
+          req.query[queryParam],
+          options.queryFields,
+          model.modelName
+        );
 
         // Not sure if this is necessary or if mongoose does the right thing.
         if (req.query[queryParam] === "true") {
@@ -1375,15 +1404,36 @@ const _buildModelRouter = <T>(
     });
   };
 
-  const arrayPost = async (req: Request, res: Response) => {
+  // Array routes are `/:id/:field`. A non-ObjectId id is another resource under the
+  // same prefix (for example POST /ai/observability/evaluators), so leave the router
+  // and let a later registration handle it.
+  const continueUnlessDocumentId = (req: Request, next: NextFunction): boolean => {
+    const id = req.params.id;
+    if (typeof id === "string" && isValidObjectId(id)) {
+      return false;
+    }
+    next("router");
+    return true;
+  };
+
+  const arrayPost = async (req: Request, res: Response, next: NextFunction) => {
+    if (continueUnlessDocumentId(req, next)) {
+      return;
+    }
     return arrayOperation(req, res, "POST");
   };
 
-  const arrayPatch = async (req: Request, res: Response) => {
+  const arrayPatch = async (req: Request, res: Response, next: NextFunction) => {
+    if (continueUnlessDocumentId(req, next)) {
+      return;
+    }
     return arrayOperation(req, res, "PATCH");
   };
 
-  const arrayDelete = async (req: Request, res: Response) => {
+  const arrayDelete = async (req: Request, res: Response, next: NextFunction) => {
+    if (continueUnlessDocumentId(req, next)) {
+      return;
+    }
     return arrayOperation(req, res, "DELETE");
   };
   // Set up routes for managing array fields. Check if there any array fields to add this for.

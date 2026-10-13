@@ -1,33 +1,29 @@
+import {DemoHeaderControls} from "@components/DemoHeaderControls";
 import {EmbedModeProvider} from "@contexts/EmbedModeContext";
-import {isMobileDevice} from "@terreno/ui";
-import {router, Stack, useGlobalSearchParams} from "expo-router";
+import {isNarrowViewport, useTheme} from "@terreno/ui";
+import {Stack, useGlobalSearchParams} from "expo-router";
 import {StatusBar} from "expo-status-bar";
-import {Pressable, StyleSheet, Text} from "react-native";
+import type {ReactElement} from "react";
 
-const Layout = () => {
+const DemoStackHeaderRight = (): ReactElement => <DemoHeaderControls modeTarget="dev" />;
+
+const Layout = (): ReactElement => {
   const {embed} = useGlobalSearchParams<{embed?: string}>();
   const isEmbedMode = embed === "1" || embed === "true";
+  const {colorScheme, theme} = useTheme();
 
   return (
     <EmbedModeProvider isEmbedMode={isEmbedMode}>
-      <StatusBar style="auto" />
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
       <Stack
         screenOptions={{
+          contentStyle: {backgroundColor: theme.surface.base},
           headerBackTitle: "Back",
-          headerBackVisible: !isEmbedMode && isMobileDevice(),
-          headerRight: isEmbedMode
-            ? undefined
-            : () => (
-                <Pressable
-                  onPress={async () => {
-                    router.navigate("dev");
-                  }}
-                  style={styles.header}
-                >
-                  <Text style={{fontWeight: "bold"}}>Dev Mode</Text>
-                </Pressable>
-              ),
+          headerBackVisible: !isEmbedMode && isNarrowViewport(),
+          headerRight: isEmbedMode ? undefined : DemoStackHeaderRight,
           headerShown: !isEmbedMode,
+          headerStyle: {backgroundColor: theme.surface.base},
+          headerTintColor: theme.text.primary,
         }}
       >
         <Stack.Screen name="sidebar-navigation" options={{headerShown: false}} />
@@ -37,12 +33,3 @@ const Layout = () => {
 };
 
 export default Layout;
-
-const styles = StyleSheet.create({
-  header: {
-    alignItems: "center",
-    height: "100%",
-    justifyContent: "center",
-    marginRight: isMobileDevice() ? 0 : 16,
-  },
-});

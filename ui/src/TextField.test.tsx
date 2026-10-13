@@ -790,6 +790,22 @@ describe("TextField", () => {
       ).not.toThrow();
     });
 
+    it("clears the measured grow height after the controlled value is emptied", async () => {
+      const {getByDisplayValue, rerender} = renderWithTheme(
+        <TextField grow multiline onChange={mockOnChange} value="long note" />
+      );
+      fireEvent(getByDisplayValue("long note"), "contentSizeChange", {
+        nativeEvent: {contentSize: {height: 120}},
+      });
+
+      rerender(<TextField grow multiline onChange={mockOnChange} value="" />);
+      await act(async () => {});
+      rerender(<TextField grow multiline onChange={mockOnChange} value="n" />);
+
+      const styles = [getByDisplayValue("n").props.style].flat(Infinity);
+      assert.isTrue(styles.some((style) => style?.height === 40));
+    });
+
     it("invokes the onFocus callback when the input is focused", () => {
       const {getByDisplayValue} = renderWithTheme(
         <TextField onChange={mockOnChange} onFocus={mockOnFocus} value="" />
@@ -920,6 +936,46 @@ describe("TextField", () => {
         expect(onChange.mock.calls[0]?.[0]).toBe(withSpace);
         expect(value).toBe(withSpace);
       } finally {
+        PlatformModule.OS = savedOS;
+      }
+    });
+
+    it("keeps a typo fix the user backspaces within the oscillation window", async () => {
+      const savedOS = PlatformModule.OS;
+      const originalNow = performance.now.bind(performance);
+      let fakeNow = 20_000;
+
+      try {
+        PlatformModule.OS = "web";
+        performance.now = () => fakeNow;
+
+        let value = "hello";
+        const onChange = mock((next: string) => {
+          value = next;
+        });
+        const renderField = (): ReactElement => (
+          <TextField onChange={onChange} testID="memory-text" type="text" value={value} />
+        );
+        const view = renderWithTheme(renderField());
+
+        // RN Web fires onChange (the DOM input event) and then onChangeText for each key.
+        const typeKey = async (text: string, inputType: string): Promise<void> => {
+          const input = view.getByDisplayValue(value);
+          await act(async () => {
+            fireEvent(input, "change", {nativeEvent: {inputType, text}});
+            fireEvent.changeText(input, text);
+          });
+          view.rerender(renderField());
+        };
+
+        await typeKey("hellox", "insertText");
+        fakeNow += 150;
+        await typeKey("hello", "deleteContentBackward");
+
+        expect(onChange.mock.calls.map((call) => call[0])).toEqual(["hellox", "hello"]);
+        expect(value).toBe("hello");
+      } finally {
+        performance.now = originalNow;
         PlatformModule.OS = savedOS;
       }
     });

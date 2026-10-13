@@ -3,13 +3,18 @@ import {TerrenoApp} from "@terreno/api";
 import {jsonSchema, type LanguageModel, type Tool, tool} from "ai";
 import {assert} from "chai";
 import type express from "express";
+import {DateTime} from "luxon";
 import mongoose from "mongoose";
 import type supertest from "supertest";
 
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
 import {Project} from "../models/project";
+import {MemoryTraceSink} from "../observability/local/traceStore";
+import {ObservabilityApp, resetObservabilityApp} from "../observability/observabilityApp";
+import type {ObservabilityPlugin} from "../observability/types";
 import {AIService} from "../service/aiService";
+import type {FileStorageService} from "../service/fileStorage";
 import type {MCPService} from "../service/mcpService";
 import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
 import {addAiRequestsExplorerRoutes} from "./aiRequestsExplorer";
@@ -95,7 +100,7 @@ const createImageModel = () => ({
       },
     }),
   })),
-  modelId: "gemini-2.5-flash-image",
+  modelId: "gemini-3-pro-image",
   provider: "mock-provider",
   specificationVersion: "v2" as const,
   supportedUrls: {},
@@ -198,6 +203,7 @@ describe("AI Routes", () => {
 
   afterEach(async () => {
     streamTextOverride = undefined;
+    resetObservabilityApp();
     await AIRequest.deleteMany({});
     await GptHistory.deleteMany({});
   });
@@ -237,6 +243,15 @@ describe("AI Routes", () => {
       const res = await agent.post("/gpt/remix").send({});
 
       expect(res.status).toBe(400);
+    });
+
+    it("forbids non-admin prompt registry selection", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .post("/gpt/remix")
+        .send({promptLabel: "latest", promptName: "private-prompt", text: "Hello"});
+
+      assert.equal(res.status, 403);
     });
 
     it("returns demo response when no aiService configured", async () => {
@@ -288,6 +303,90 @@ describe("AI Routes", () => {
 
       const histories = await GptHistory.find({});
       expect(histories.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("forbids non-admin prompt registry selection", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Hi", promptLabel: "latest", promptName: "private-prompt"});
+
+      assert.equal(res.status, 403);
+    });
+
+    it("does not let client sensitive false downgrade a sensitive prompt", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {
+          get: async () => ({
+            body: "Sensitive system prompt",
+            label: "production",
+            name: "sensitive-prompt",
+            sensitive: true,
+            version: 1,
+          }),
+        },
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+
+      const agent = await authAsUser(app, "admin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Hi", promptName: "sensitive-prompt", sensitive: false})
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.equal(res.status, 200);
+      assert.equal(sink.traces.length, 1);
+      assert.isTrue(sink.traces[0]?.sensitive);
+    });
+
+    it("emits a memory-sink trace with userId and sessionId", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {get: async () => undefined},
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+
+      const agent = await authAsUser(app, "notAdmin");
+      const user = await UserModel.findOne({email: "notAdmin@example.com"});
+      const res = await agent
+        .post("/gpt/prompt")
+        .set("x-ai-session-id", "sess-gpt-1")
+        .send({prompt: "Hi"})
+        .buffer(true)
+        .parse(sseCollect);
+
+      expect(res.status).toBe(200);
+      expect(sink.traces.length).toBe(1);
+      expect(sink.traces[0].sessionId).toBe("sess-gpt-1");
+      expect(sink.traces[0].userId).toBe(user?._id.toString());
     });
 
     it("sends demo response when no ai service configured", async () => {
@@ -345,11 +444,11 @@ describe("AI Routes", () => {
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
         .post("/gpt/prompt")
-        .send({model: "gemini-2.5-pro", prompt: "Hi"})
+        .send({model: "gemini-3.1-pro-preview", prompt: "Hi"})
         .buffer(true)
         .parse(sseCollect);
       expect(res.status).toBe(200);
-      expect(createServerModelFn).toHaveBeenCalledWith("gemini-2.5-pro");
+      expect(createServerModelFn).toHaveBeenCalledWith("gemini-3.1-pro-preview");
     });
 
     it("falls back to default aiService when createServerModelFn returns null", async () => {
@@ -717,6 +816,25 @@ describe("AI Routes", () => {
     });
 
     it("forwards model tool-call and tool-result stream events via SSE", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {get: async () => undefined},
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+
       const toolModel = {
         doGenerate: mock(async () => ({
           content: [{text: "ok", type: "text" as const}],
@@ -741,15 +859,29 @@ describe("AI Routes", () => {
                 type: "tool-call" as const,
               });
               controller.enqueue({
-                output: {
+                providerExecuted: true,
+                result: {
                   fileData: "data:application/pdf;base64,AAAA",
                   filename: "result.pdf",
                   mimeType: "application/pdf",
                   results: ["item1"],
                 },
-                providerExecuted: true,
                 toolCallId: "tc1",
                 toolName: "search",
+                type: "tool-result" as const,
+              });
+              controller.enqueue({
+                input: {id: "second"},
+                providerExecuted: true,
+                toolCallId: "tc2",
+                toolName: "lookup",
+                type: "tool-call" as const,
+              });
+              controller.enqueue({
+                providerExecuted: true,
+                result: {value: "second-result"},
+                toolCallId: "tc2",
+                toolName: "lookup",
                 type: "tool-result" as const,
               });
               controller.enqueue({
@@ -772,6 +904,7 @@ describe("AI Routes", () => {
             aiService: new AIService({model: toolModel as unknown as LanguageModel}),
             openApiOptions: options,
             tools: {
+              lookup: {description: "Lookup item"} as unknown as Tool,
               search: {description: "Web search"} as unknown as Tool,
             },
           });
@@ -789,6 +922,29 @@ describe("AI Routes", () => {
       const body = (res as SseResponse).body;
       expect(body).toContain("toolCall");
       expect(body).toContain("toolResult");
+      assert.equal(sink.traces.length, 1);
+      const trace = sink.traces[0];
+      assert.equal(trace.spans[0]?.kind, "CHAIN");
+      assert.equal(trace.spans.length, 3);
+      const toolSpans = trace.spans.filter((span) => span.kind === "TOOL");
+      assert.sameMembers(
+        toolSpans.map((span) => span.name),
+        ["search", "lookup"]
+      );
+      const toolSpan = toolSpans.find((span) => span.name === "search");
+      assert.isDefined(toolSpan);
+      assert.equal(toolSpan?.name, "search");
+      assert.deepEqual(toolSpan?.input, {q: "hello"});
+      assert.deepEqual(toolSpan?.output, {
+        filename: "result.pdf",
+        mimeType: "application/pdf",
+        results: ["item1"],
+      });
+      assert.equal(toolSpan?.parentSpanId, trace.spans[0]?.id);
+      assert.equal(
+        toolSpans.find((span) => span.name === "lookup")?.parentSpanId,
+        trace.spans[0]?.id
+      );
     });
 
     it("emits a file SSE event when a tool execution returns fileData", async () => {
@@ -1242,7 +1398,522 @@ describe("AI Routes", () => {
     });
   });
 
+  describe("GPT Prompt durable attachments and resumable streams", () => {
+    const getNotAdminId = async (): Promise<mongoose.Types.ObjectId> => {
+      const notAdmin = (await UserModel.findOne({
+        email: "notAdmin@example.com",
+      })) as mongoose.Document & {_id: mongoose.Types.ObjectId};
+      return notAdmin._id;
+    };
+
+    const createFakeStorage = () => {
+      const upload = mock(
+        async ({filename, mimeType}: {buffer: Buffer; filename: string; mimeType: string}) => ({
+          filename,
+          gcsKey: `uploads/test/${filename}`,
+          mimeType,
+          size: 5,
+          url: `https://storage.googleapis.com/bucket/uploads/test/${filename}`,
+        })
+      );
+      const getSignedUrl = mock(async (gcsKey: string) => `https://signed.example.com/${gcsKey}`);
+      return {
+        getSignedUrl,
+        service: {getSignedUrl, upload} as unknown as FileStorageService,
+        upload,
+      };
+    };
+
+    const textOnlyStream = (capture?: (options: StreamTextOptions) => void) => {
+      streamTextOverride = (streamOptions) => {
+        capture?.(streamOptions);
+        return {
+          files: Promise.resolve([]),
+          fullStream: (async function* () {
+            yield {type: "start-step"};
+            yield {text: "Reply", type: "text-delta"};
+            yield {type: "finish-step"};
+          })(),
+        } as unknown as StreamTextResult;
+      };
+    };
+
+    const buildApp = (extra: Partial<Parameters<typeof addGptRoutes>[1]> = {}) =>
+      new TerrenoApp({
+        configureApp: (router, options) => {
+          addGptRoutes(router, {aiService, openApiOptions: options, ...extra});
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+
+    it("rejects attachments when file uploads are disabled", async () => {
+      const gated = buildApp({fileUploadsEnabled: async () => false});
+      const agent = await authAsUser(gated, "notAdmin");
+      const res = await agent.post("/gpt/prompt").send({
+        attachments: [{mimeType: "image/png", type: "image", url: "data:image/png;base64,aGk="}],
+        prompt: "What is this?",
+      });
+      expect(res.status).toBe(403);
+      expect(res.body.title).toBe("File uploads are disabled");
+      expect(await GptHistory.countDocuments({})).toBe(0);
+    });
+
+    it("rejects client-only attachment URLs before streaming", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent.post("/gpt/prompt").send({
+        attachments: [{mimeType: "image/png", type: "image", url: "blob:http://localhost/abc"}],
+        prompt: "What is this?",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.body.title).toContain("Attachment URL must be an http(s) or data: URL");
+      expect(await GptHistory.countDocuments({})).toBe(0);
+    });
+
+    it("rejects file: attachment URLs", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent.post("/gpt/prompt").send({
+        attachments: [
+          {filename: "a.pdf", mimeType: "application/pdf", type: "file", url: "file:///a.pdf"},
+        ],
+        prompt: "Read this",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.body.title).toContain("Attachment URL");
+    });
+
+    it("uploads data: attachments and stores a durable reference", async () => {
+      const storage = createFakeStorage();
+      let modelMessages: unknown;
+      textOnlyStream((streamOptions) => {
+        modelMessages = streamOptions.messages;
+      });
+      const agent = await authAsUser(buildApp({fileStorageService: storage.service}), "notAdmin");
+      const dataUrl = "data:image/png;base64,aGVsbG8=";
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({
+          attachments: [{filename: "pic.png", mimeType: "image/png", type: "image", url: dataUrl}],
+          prompt: "Describe",
+        })
+        .buffer(true)
+        .parse(sseCollect);
+      expect(res.status).toBe(200);
+
+      expect(storage.upload).toHaveBeenCalledTimes(1);
+      const uploadArgs = storage.upload.mock.calls[0][0];
+      expect(uploadArgs.buffer.toString()).toBe("hello");
+      expect(uploadArgs.mimeType).toBe("image/png");
+
+      const history = await GptHistory.findExactlyOne({"prompts.text": "Describe"});
+      const imagePart = history.prompts[0].content?.find((p) => p.type === "image");
+      expect(imagePart?.gcsKey).toBe("uploads/test/pic.png");
+      expect(imagePart?.url).toBe("https://storage.googleapis.com/bucket/uploads/test/pic.png");
+      // The model still receives the original data for this turn
+      expect(JSON.stringify(modelMessages)).toContain("aGVsbG8=");
+    });
+
+    it("decodes non-base64 data: attachments and names unnamed uploads", async () => {
+      const storage = createFakeStorage();
+      textOnlyStream();
+      const agent = await authAsUser(buildApp({fileStorageService: storage.service}), "notAdmin");
+      await agent
+        .post("/gpt/prompt")
+        .send({
+          attachments: [{mimeType: "text/plain", type: "file", url: "data:text/plain,hi%20there"}],
+          prompt: "Read",
+        })
+        .buffer(true)
+        .parse(sseCollect);
+      const uploadArgs = storage.upload.mock.calls[0][0];
+      expect(uploadArgs.buffer.toString()).toBe("hi there");
+      expect(uploadArgs.filename).toMatch(/^attachment-\d+\.plain$/);
+    });
+
+    it("keeps data: attachments inline when no storage is configured", async () => {
+      textOnlyStream();
+      const agent = await authAsUser(app, "notAdmin");
+      await agent
+        .post("/gpt/prompt")
+        .send({
+          attachments: [
+            {mimeType: "image/png", type: "image", url: "data:image/png;base64,aGVsbG8="},
+          ],
+          prompt: "Inline",
+        })
+        .buffer(true)
+        .parse(sseCollect);
+      const history = await GptHistory.findExactlyOne({"prompts.text": "Inline"});
+      const imagePart = history.prompts[0].content?.find((p) => p.type === "image");
+      expect(imagePart?.url).toBe("data:image/png;base64,aGVsbG8=");
+      expect(imagePart?.gcsKey).toBeUndefined();
+    });
+
+    it("returns 502 when the attachment upload fails", async () => {
+      const failingStorage = {
+        getSignedUrl: mock(async () => ""),
+        upload: mock(async () => {
+          throw new Error("bucket unavailable");
+        }),
+      } as unknown as FileStorageService;
+      const agent = await authAsUser(buildApp({fileStorageService: failingStorage}), "notAdmin");
+      const res = await agent.post("/gpt/prompt").send({
+        attachments: [{mimeType: "image/png", type: "image", url: "data:image/png;base64,aGk="}],
+        prompt: "Fail",
+      });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.body.title).toBe("Attachment upload failed");
+    });
+
+    it("signs stored attachment URLs for earlier turns", async () => {
+      const storage = createFakeStorage();
+      let modelMessages: unknown;
+      textOnlyStream((streamOptions) => {
+        modelMessages = streamOptions.messages;
+      });
+      const history = await GptHistory.create({
+        prompts: [
+          {
+            content: [
+              {text: "Look", type: "text"},
+              {
+                gcsKey: "uploads/test/old.png",
+                mimeType: "image/png",
+                type: "image",
+                url: "https://storage.googleapis.com/bucket/uploads/test/old.png",
+              },
+            ],
+            text: "Look",
+            type: "user",
+          },
+          {status: "complete", text: "Nice", type: "assistant"},
+        ],
+        userId: await getNotAdminId(),
+      });
+      const agent = await authAsUser(buildApp({fileStorageService: storage.service}), "notAdmin");
+      await agent
+        .post("/gpt/prompt")
+        .send({historyId: history._id.toString(), prompt: "And now?"})
+        .buffer(true)
+        .parse(sseCollect);
+      expect(storage.getSignedUrl).toHaveBeenCalledWith("uploads/test/old.png");
+      expect(JSON.stringify(modelMessages)).toContain("signed.example.com/uploads/test/old.png");
+    });
+
+    it("emits a started event and saves the completed reply with its streamId", async () => {
+      textOnlyStream();
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Hello"})
+        .buffer(true)
+        .parse(sseCollect);
+      const body = (res as SseResponse).body;
+      const firstEvent = JSON.parse(body.split("\n\n")[0].slice(6));
+      expect(firstEvent.started).toBe(true);
+      expect(typeof firstEvent.historyId).toBe("string");
+      expect(typeof firstEvent.streamId).toBe("string");
+
+      const history = await GptHistory.findExactlyOne({_id: firstEvent.historyId});
+      const assistant = history.prompts.filter((p) => p.type === "assistant");
+      expect(assistant).toHaveLength(1);
+      expect(assistant[0].status).toBe("complete");
+      expect(assistant[0].streamId).toBe(firstEvent.streamId);
+      expect(assistant[0].text).toBe("Reply");
+    });
+
+    it("persists partial assistant text while the reply streams", async () => {
+      let persistedDuringStream: {status?: string; text?: string} | undefined;
+      streamTextOverride = () =>
+        ({
+          files: Promise.resolve([]),
+          fullStream: (async function* () {
+            yield {type: "start-step"};
+            yield {text: "partial ", type: "text-delta"};
+            const deadline = DateTime.now().plus({seconds: 3});
+            while (DateTime.now() < deadline) {
+              const doc = await GptHistory.findOne({"prompts.text": "Stream me"});
+              const reply = doc?.prompts.find((p) => p.type === "assistant");
+              if (reply?.text) {
+                persistedDuringStream = {status: reply.status, text: reply.text};
+                break;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 10));
+            }
+            yield {text: "done", type: "text-delta"};
+            yield {type: "finish-step"};
+          })(),
+        }) as unknown as StreamTextResult;
+      const agent = await authAsUser(buildApp({streamPersistIntervalMs: 10}), "notAdmin");
+      await agent.post("/gpt/prompt").send({prompt: "Stream me"}).buffer(true).parse(sseCollect);
+      expect(persistedDuringStream).toEqual({status: "streaming", text: "partial "});
+      const history = await GptHistory.findExactlyOne({"prompts.text": "Stream me"});
+      expect(history.prompts.find((p) => p.type === "assistant")?.text).toBe("partial done");
+    });
+
+    it("keeps partial text marked as error when the stream fails", async () => {
+      streamTextOverride = () =>
+        ({
+          files: Promise.resolve([]),
+          fullStream: (async function* () {
+            yield {text: "half an ans", type: "text-delta"};
+            throw new Error("provider dropped");
+          })(),
+        }) as unknown as StreamTextResult;
+      const agent = await authAsUser(app, "notAdmin");
+      await agent.post("/gpt/prompt").send({prompt: "Break"}).buffer(true).parse(sseCollect);
+      const history = await GptHistory.findExactlyOne({"prompts.text": "Break"});
+      const assistant = history.prompts.find((p) => p.type === "assistant");
+      expect(assistant?.status).toBe("error");
+      expect(assistant?.text).toBe("half an ans");
+    });
+
+    it("drops the placeholder when the stream fails before any output", async () => {
+      streamTextOverride = () =>
+        ({
+          files: Promise.resolve([]),
+          fullStream: (async function* () {
+            yield {type: "start-step"};
+            throw new Error("provider dropped");
+          })(),
+        }) as unknown as StreamTextResult;
+      const agent = await authAsUser(app, "notAdmin");
+      await agent.post("/gpt/prompt").send({prompt: "Nothing"}).buffer(true).parse(sseCollect);
+      const history = await GptHistory.findExactlyOne({"prompts.text": "Nothing"});
+      expect(history.prompts.map((p) => p.type)).toEqual(["user"]);
+    });
+
+    it("resumes an in-flight reply and finishes when it completes", async () => {
+      const history = await GptHistory.create({
+        prompts: [
+          {text: "Q", type: "user"},
+          {status: "streaming", streamId: "s1", text: "Hello", type: "assistant"},
+        ],
+        userId: await getNotAdminId(),
+      });
+      const agent = await authAsUser(buildApp({streamResumePollIntervalMs: 10}), "notAdmin");
+      setTimeout(() => {
+        void GptHistory.updateOne(
+          {_id: history._id},
+          {
+            $set: {
+              "prompts.1.content": [{mimeType: "image/png", type: "image", url: "https://x/i.png"}],
+              "prompts.1.status": "complete",
+              "prompts.1.text": "Hello world",
+              title: "Greeting",
+            },
+          }
+        ).exec();
+      }, 60);
+      const res = await agent
+        .get(`/gpt/histories/${history._id}/stream`)
+        .buffer(true)
+        .parse(sseCollect);
+      expect(res.status).toBe(200);
+      const events = (res as SseResponse).body
+        .split("\n\n")
+        .filter(Boolean)
+        .map((e) => JSON.parse(e.slice(6)));
+      expect(events[0]).toEqual({historyId: history._id.toString(), resumed: true, streamId: "s1"});
+      expect(events.filter((e) => e.text).map((e) => e.text)).toEqual(["Hello", " world"]);
+      expect(events).toContainEqual({image: {mimeType: "image/png", url: "https://x/i.png"}});
+      expect(events[events.length - 1]).toEqual({
+        done: true,
+        historyId: history._id.toString(),
+        title: "Greeting",
+      });
+    });
+
+    it("skips text the client already shows via offset", async () => {
+      const history = await GptHistory.create({
+        prompts: [
+          {text: "Q", type: "user"},
+          {status: "complete", streamId: "s2", text: "Hello world", type: "assistant"},
+        ],
+        userId: await getNotAdminId(),
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .get(`/gpt/histories/${history._id}/stream?streamId=s2&offset=5`)
+        .buffer(true)
+        .parse(sseCollect);
+      const body = (res as SseResponse).body;
+      assert.include(body, '"replace":true,"text":"Hello world"');
+    });
+
+    it("replaces a stale client placeholder on the first resume poll", async () => {
+      const history = await GptHistory.create({
+        prompts: [
+          {text: "Q", type: "user"},
+          {status: "complete", streamId: "s2", text: "Answer", type: "assistant"},
+        ],
+        userId: await getNotAdminId(),
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .get(`/gpt/histories/${history._id}/stream?streamId=s2&offset=12`)
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.include((res as SseResponse).body, '"replace":true,"text":"Answer"');
+    });
+
+    it("sends a replace event when persisted text is rewritten", async () => {
+      const history = await GptHistory.create({
+        prompts: [
+          {text: "Q", type: "user"},
+          {status: "streaming", streamId: "s3", text: "thinking...", type: "assistant"},
+        ],
+        userId: await getNotAdminId(),
+      });
+      const agent = await authAsUser(buildApp({streamResumePollIntervalMs: 10}), "notAdmin");
+      setTimeout(() => {
+        void GptHistory.updateOne(
+          {_id: history._id},
+          {$set: {"prompts.1.status": "complete", "prompts.1.text": "Answer"}}
+        ).exec();
+      }, 60);
+      const res = await agent
+        .get(`/gpt/histories/${history._id}/stream`)
+        .buffer(true)
+        .parse(sseCollect);
+      expect((res as SseResponse).body).toContain('"replace":true,"text":"Answer"');
+    });
+
+    it("finishes immediately when nothing is streaming", async () => {
+      const history = await GptHistory.create({
+        prompts: [{text: "Q", type: "user"}],
+        userId: await getNotAdminId(),
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .get(`/gpt/histories/${history._id}/stream`)
+        .buffer(true)
+        .parse(sseCollect);
+      const body = (res as SseResponse).body;
+      expect(body).toContain('"resumed":true');
+      expect(body).toContain('"done":true');
+    });
+
+    it("marks a stale streaming reply as interrupted", async () => {
+      const history = await GptHistory.create({
+        prompts: [
+          {text: "Q", type: "user"},
+          {status: "streaming", streamId: "s4", text: "Par", type: "assistant"},
+        ],
+        userId: await getNotAdminId(),
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const agent = await authAsUser(buildApp({streamStaleAfterMs: 5}), "notAdmin");
+      const res = await agent
+        .get(`/gpt/histories/${history._id}/stream`)
+        .buffer(true)
+        .parse(sseCollect);
+      const body = (res as SseResponse).body;
+      expect(body).toContain("interrupted");
+      expect(body).toContain('"done":true');
+      const updated = await GptHistory.findExactlyOne({_id: history._id});
+      expect(updated.prompts[1].status).toBe("error");
+    });
+
+    it("reports an interrupted reply that already ended in error", async () => {
+      const history = await GptHistory.create({
+        prompts: [
+          {text: "Q", type: "user"},
+          {status: "error", streamId: "s5", text: "Par", type: "assistant"},
+        ],
+        userId: await getNotAdminId(),
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .get(`/gpt/histories/${history._id}/stream?streamId=s5`)
+        .buffer(true)
+        .parse(sseCollect);
+      expect((res as SseResponse).body).toContain("interrupted");
+    });
+
+    it("rejects resume for other users and missing histories", async () => {
+      const history = await GptHistory.create({
+        prompts: [{text: "Q", type: "user"}],
+        userId: await getNotAdminId(),
+      });
+      const admin = await authAsUser(app, "admin");
+      const forbidden = await admin.get(`/gpt/histories/${history._id}/stream`);
+      expect(forbidden.status).toBe(403);
+      const missing = await admin.get(
+        `/gpt/histories/${new mongoose.Types.ObjectId().toString()}/stream`
+      );
+      expect(missing.status).toBe(404);
+    });
+  });
+
   describe("GPT Prompt error handling", () => {
+    it("preserves completed tool spans when the stream later fails", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {get: async () => undefined},
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+      streamTextOverride = () =>
+        ({
+          files: Promise.resolve([]),
+          fullStream: (async function* () {
+            yield {type: "start-step"};
+            yield {
+              input: {query: "before failure"},
+              toolCallId: "tc-error",
+              toolName: "search",
+              type: "tool-call",
+            };
+            yield {
+              output: {items: ["one"]},
+              toolCallId: "tc-error",
+              toolName: "search",
+              type: "tool-result",
+            };
+            throw new Error("stream failed after tool");
+          })(),
+        }) as unknown as StreamTextResult;
+      const errApp = new TerrenoApp({
+        configureApp: (router, options) => {
+          addGptRoutes(router, {
+            aiService,
+            openApiOptions: options,
+            tools: {search: {description: "Search"} as unknown as Tool},
+          });
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+      const agent = await authAsUser(errApp, "notAdmin");
+
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Search, then fail"})
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.equal(res.status, 200);
+      assert.equal(sink.traces.length, 1);
+      assert.equal(sink.traces[0]?.status, "error");
+      const toolSpan = sink.traces[0]?.spans.find((span) => span.kind === "TOOL");
+      assert.deepEqual(toolSpan?.input, {query: "before failure"});
+      assert.deepEqual(toolSpan?.output, {items: ["one"]});
+    });
+
     it("sends an outer SSE error when error handling itself fails after streaming starts", async () => {
       streamTextOverride = () =>
         ({

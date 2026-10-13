@@ -10,11 +10,20 @@
  * (and RNW) compatible.
  */
 
-import {useCallback, useRef, useSyncExternalStore} from "react";
+import {useCallback, useEffect, useMemo, useRef, useSyncExternalStore} from "react";
 
 import type {SyncDebugEvent, SyncDebugLog, SyncDebugStats} from "../debug/debugLog";
 import {listConflicts} from "../mutations/conflicts";
-import {CONFLICTS_TABLE, CURSORS_TABLE, OUTBOX_TABLE} from "../storage/types";
+import {applyLocalQuery, type QuerySort} from "../query/localQuery";
+import {
+  type QueryWindowState,
+  selectWindowView,
+  type WindowQuery,
+  windowKeyFor,
+} from "../query/queryWindows";
+import type {SortSpec} from "../query/sort";
+import type {WhereFilter} from "../query/where";
+import {CONFLICTS_TABLE, CURSORS_TABLE, OUTBOX_TABLE, QUERY_WINDOWS_TABLE} from "../storage/types";
 import type {ConflictResolutionStrategy, SyncConflict, SyncStatus} from "../types";
 import {useSyncDbClient} from "./provider";
 
@@ -147,13 +156,43 @@ export const useEntity = <TData = Record<string, unknown>>(
 };
 
 export interface UseQueryOptions<TData> {
+  /**
+   * Mongo-style filter over decoded data (`{status: "open", created: {$gte: iso}}`).
+   * Same syntax as `useWindowQuery` and `modelRouter` list params. Compared by
+   * value, so inline objects are fine.
+   */
+  where?: WhereFilter;
   /** Keep only entities whose decoded data passes the predicate (runs in JS). */
   filter?: (data: TData) => boolean;
-  /** Sort comparator over decoded data (runs in JS on a copy). */
-  sort?: (a: TData, b: TData) => number;
+  /** Comparator, or a sort spec such as `"-created"` / `{created: "descending"}`. */
+  sort?: QuerySort<TData>;
+  /** Keep only the first N results after filter and sort. */
+  limit?: number;
   /** Include soft-deleted (tombstoned) entities; excluded by default. */
   includeDeleted?: boolean;
 }
+
+/**
+ * Value-stable copies of the serializable query options, so an inline
+ * `where: {...}` or `sort: "-created"` does not invalidate the snapshot cache on
+ * every render. Function options keep reference identity.
+ */
+const useStableQueryOptions = <TData>(
+  options: UseQueryOptions<TData> | undefined
+): UseQueryOptions<TData> => {
+  const {filter, includeDeleted, limit, sort, where} = options ?? {};
+  const whereKey = where === undefined ? "" : JSON.stringify(where);
+  const sortKey = sort === undefined || typeof sort === "function" ? "" : JSON.stringify(sort);
+  const stableWhere = useMemo(() => where, [whereKey]);
+  const stableSortSpec = useMemo(
+    () => sort,
+    [sortKey, typeof sort === "function" ? sort : undefined]
+  );
+  return useMemo(
+    () => ({filter, includeDeleted, limit, sort: stableSortSpec, where: stableWhere}),
+    [filter, includeDeleted, limit, stableSortSpec, stableWhere]
+  );
+};
 
 /**
  * Subscribe to a collection; returns the entities' decoded data and re-renders
@@ -172,7 +211,7 @@ export const useQuery = <TData = Record<string, unknown>>(
   options?: UseQueryOptions<TData>
 ): TData[] => {
   const client = useSyncDbClient();
-  const {filter, includeDeleted, sort} = options ?? {};
+  const {filter, includeDeleted, limit, sort, where} = useStableQueryOptions(options);
 
   const subscribe = useCallback(
     (onChange: () => void): (() => void) => {
@@ -188,17 +227,10 @@ export const useQuery = <TData = Record<string, unknown>>(
     const entities = client.store.listEntities<TData>({collection, includeDeleted});
     // E4: a corrupt/legacy row decodes to `data: null` (store.ts's decodeData
     // swallows JSON.parse failures and returns null rather than throwing) —
-    // skip it here rather than letting it crash list consumers that assume
-    // every row's data matches TData (e.g. destructuring a field off it).
-    let results = entities.filter((entity) => entity.data !== null).map((entity) => entity.data);
-    if (filter) {
-      results = results.filter(filter);
-    }
-    if (sort) {
-      results = [...results].sort(sort);
-    }
-    return results;
-  }, [client, collection, filter, includeDeleted, sort]);
+    // applyLocalQuery skips it rather than letting it crash list consumers that
+    // assume every row's data matches TData (e.g. destructuring a field off it).
+    return applyLocalQuery(entities, {filter, limit, sort, where}).map((entity) => entity.data);
+  }, [client, collection, filter, includeDeleted, limit, sort, where]);
 
   return useCachedExternalStore(subscribe, select);
 };
@@ -223,7 +255,7 @@ export const useEntityIds = <TData = Record<string, unknown>>(
   options?: UseQueryOptions<TData>
 ): string[] => {
   const client = useSyncDbClient();
-  const {filter, includeDeleted, sort} = options ?? {};
+  const {filter, includeDeleted, limit, sort, where} = useStableQueryOptions(options);
 
   const subscribe = useCallback(
     (onChange: () => void): (() => void) => {
@@ -237,17 +269,143 @@ export const useEntityIds = <TData = Record<string, unknown>>(
 
   const select = useCallback((): string[] => {
     const entities = client.store.listEntities<TData>({collection, includeDeleted});
-    let results = entities.filter((entity) => entity.data !== null);
-    if (filter) {
-      results = results.filter((entity) => filter(entity.data));
-    }
-    if (sort) {
-      results = [...results].sort((a, b) => sort(a.data, b.data));
-    }
-    return results.map((entity) => entity.id);
-  }, [client, collection, filter, includeDeleted, sort]);
+    return applyLocalQuery(entities, {filter, limit, sort, where}).map((entity) => entity.id);
+  }, [client, collection, filter, includeDeleted, limit, sort, where]);
 
   return useCachedExternalStore(subscribe, select, idsEqual);
+};
+
+export interface UseWindowQueryOptions {
+  /** Mongo-style filter sent as list params (fields must be in the route's `queryFields`). */
+  where?: WhereFilter;
+  /** Server sort (`"-created"`); also orders the local view. */
+  sort?: SortSpec;
+  /** Server page size (default 50). */
+  pageSize?: number;
+  /** Do not retain or fetch the window (e.g. while a required param is missing). */
+  skip?: boolean;
+  /**
+   * Show cached rows that newly match `where` inside the loaded range (live
+   * deltas, local creates) without waiting for a refetch. Default true.
+   */
+  liveMatch?: boolean;
+}
+
+export interface UseWindowQueryResult<TData> {
+  /** This window's rows, decoded, in view order. */
+  data: TData[];
+  /** Ids matching `data`. */
+  ids: string[];
+  /** True until the first page lands and no cached membership exists. */
+  isLoading: boolean;
+  /** True while any request for this window is in flight. */
+  isFetching: boolean;
+  isError: boolean;
+  error?: string;
+  /**
+   * Server error code of the last failure. `"query-param-not-allowed"` means a
+   * `where` field is missing from the route's `queryFields` (also logged with
+   * console.error and thrown as `QueryFieldNotAllowedError` from `refetch`).
+   */
+  errorCode?: string;
+  /** More server pages exist past the loaded range. */
+  hasMore: boolean;
+  /** Server-reported total, when available. */
+  total?: number;
+  /** Append the next server page. */
+  fetchNextPage: () => Promise<void>;
+  /** Refetch every loaded page, replacing membership. */
+  refetch: () => Promise<void>;
+}
+
+interface WindowSnapshot<TData> {
+  entities: Array<{id: string; data: TData}>;
+  window: QueryWindowState | undefined;
+}
+
+/**
+ * Server-filtered list over a `queryCollections` collection — the syncdb
+ * counterpart of an RTK list query (`where`, `sort`, `limit`/`page`).
+ *
+ * Each distinct query keeps its own membership, while rows are stored once per
+ * id in the shared entity table: two screens whose filters overlap share those
+ * rows, a delta for one of them is applied once and re-renders both, and each
+ * screen still lists only the rows its own query returned (plus rows that
+ * newly match it locally, see `liveMatch`). Cached membership renders
+ * immediately offline; the window revalidates once per session and on reconnect.
+ */
+export const useWindowQuery = <TData = Record<string, unknown>>(
+  collection: string,
+  options?: UseWindowQueryOptions
+): UseWindowQueryResult<TData> => {
+  const client = useSyncDbClient();
+  const {liveMatch = true, pageSize, skip = false, sort, where} = options ?? {};
+  const queryKey = windowKeyFor({collection, pageSize, sort, where});
+  const query = useMemo((): WindowQuery => ({collection, pageSize, sort, where}), [queryKey]);
+
+  // Retain the window while mounted so it fetches once per session and refetches on reconnect.
+  useEffect(() => {
+    if (skip) {
+      return undefined;
+    }
+    return client.queryWindows.retain(query);
+  }, [client, query, skip]);
+
+  const subscribe = useCallback(
+    (onChange: () => void): (() => void) => {
+      const tableListener = client.store.raw.addTableListener(collection, onChange);
+      const windowListener = client.store.raw.addRowListener(
+        QUERY_WINDOWS_TABLE,
+        queryKey,
+        onChange
+      );
+      const unsubscribeStatus = client.queryWindows.subscribe(onChange);
+      return () => {
+        client.store.raw.delListener(tableListener);
+        client.store.raw.delListener(windowListener);
+        unsubscribeStatus();
+      };
+    },
+    [client, collection, queryKey]
+  );
+
+  const select = useCallback((): WindowSnapshot<TData> => {
+    const window = client.queryWindows.getWindow(query);
+    const entities = selectWindowView<TData>({liveMatch, query, store: client.store, window});
+    return {
+      entities: entities.map((entity) => ({data: entity.data, id: entity.id})),
+      window,
+    };
+  }, [client, liveMatch, query]);
+
+  const snapshot = useCachedExternalStore(subscribe, select);
+
+  const fetchNextPage = useCallback(async (): Promise<void> => {
+    await client.queryWindows.fetchWindow({nextPage: true, query});
+  }, [client, query]);
+
+  const refetch = useCallback(async (): Promise<void> => {
+    await client.queryWindows.fetchWindow({query});
+  }, [client, query]);
+
+  return useMemo((): UseWindowQueryResult<TData> => {
+    const {window} = snapshot;
+    const isFetching = window?.status === "loading";
+    return {
+      data: snapshot.entities.map((entity) => entity.data),
+      error: window?.error,
+      errorCode: window?.errorCode,
+      fetchNextPage,
+      hasMore: window?.hasMore ?? false,
+      ids: snapshot.entities.map((entity) => entity.id),
+      isError: window?.status === "error",
+      isFetching,
+      isLoading:
+        !skip && (window === undefined || (window.pages === 0 && window.status !== "error")),
+      refetch,
+      total: window?.total,
+    };
+  }, [fetchNextPage, refetch, skip, snapshot]);
 };
 
 export interface UseMutateResult {

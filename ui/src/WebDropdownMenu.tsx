@@ -14,8 +14,11 @@ import {
 } from "react-native";
 
 import {createWebPortal} from "./createWebPortal";
+import {resolveDocumentBodyPortalTarget} from "./resolveDocumentBodyPortalTarget";
 import {useTheme} from "./Theme";
 import {createBoxShadow} from "./Utilities";
+
+export {resolveDocumentBodyPortalTarget};
 
 export const scheduleAfterPaint = (callback: () => void): void => {
   if (typeof requestAnimationFrame === "function") {
@@ -23,13 +26,6 @@ export const scheduleAfterPaint = (callback: () => void): void => {
   } else {
     setTimeout(callback, 0);
   }
-};
-
-export const resolveDocumentBodyPortalTarget = (): HTMLElement | null => {
-  if (typeof document === "undefined" || typeof HTMLElement === "undefined") {
-    return null;
-  }
-  return document.body instanceof HTMLElement ? document.body : null;
 };
 
 export interface WebDropdownMenuOption {

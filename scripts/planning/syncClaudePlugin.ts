@@ -23,7 +23,8 @@ export const CANONICAL_PLUGIN_DIRECTORY = "plugins/terreno-planning";
 export const CLAUDE_PLUGIN_DIRECTORY = "plugins/terreno-claude";
 export const CLAUDE_PLUGIN_NAME = "terreno";
 
-const LONG_SKILL_NAME_PATTERN = /terreno-([1-5]-[a-z]+|pick-roast-loop|planning-loop|taste-sweep)/g;
+const LONG_SKILL_NAME_PATTERN =
+  /terreno-([1-5]-[a-z]+|pick-roast-loop|planning-loop|taste-sweep|prd)/g;
 const LONG_SCAN_SKILL_NAME_PATTERN = /terreno-scan-([1-5]-[a-z]+|campaign|loop)/g;
 
 interface ClaudePluginTarget {

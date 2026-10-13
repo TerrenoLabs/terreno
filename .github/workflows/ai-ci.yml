@@ -39,6 +39,10 @@ jobs:
         working-directory: api
         run: bun run compile
 
+      - name: Build blocks dependency
+        working-directory: blocks
+        run: bun run compile
+
       - name: Lint
         run: bun run lint
       - name: Build

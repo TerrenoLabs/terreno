@@ -1,0 +1,23 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which weekly summary should I turn on first?",
+    "select": "one",
+    "options": [
+      {"id": "managers", "label": "Weekly summary email for managers"},
+      {"id": "engineers", "label": "Weekly summary email for engineers"},
+      {"id": "sales", "label": "Sales digest"},
+      {"id": "support", "label": "Support digest"}
+    ],
+    "default": ["managers"]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Which weekly summary should I turn on first?",
+    "handoff": true,
+    "buttons": [
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

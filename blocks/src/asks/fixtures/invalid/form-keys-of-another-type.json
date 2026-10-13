@@ -1,0 +1,39 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "name",
+        "type": "text",
+        "label": "Name",
+        "min": 1
+      },
+      {
+        "id": "count",
+        "type": "number",
+        "label": "Count",
+        "maxLength": 3
+      },
+      {
+        "id": "pick",
+        "type": "select",
+        "label": "Pick"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].min",
+      "code": "UNKNOWN_KEY"
+    },
+    {
+      "path": "fields[1].maxLength",
+      "code": "UNKNOWN_KEY"
+    },
+    {
+      "path": "fields[2].options",
+      "code": "MISSING_REQUIRED"
+    }
+  ]
+}

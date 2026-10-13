@@ -428,7 +428,7 @@ exports[`BooleanField renders disabled state 1`] = `
                         "style": {
                           "alignItems": "center",
                           "backgroundColor": "#FFFFFF",
-                          "borderColor": "#9A9A9A",
+                          "borderColor": "#949494",
                           "borderRadius": 10,
                           "borderWidth": 1,
                           "height": 20,
@@ -471,8 +471,8 @@ exports[`BooleanField renders disabled state 1`] = `
               ],
               "props": {
                 "style": {
-                  "backgroundColor": "#9A9A9A",
-                  "borderColor": "#9A9A9A",
+                  "backgroundColor": "#949494",
+                  "borderColor": "#949494",
                   "borderRadius": 20,
                   "borderWidth": 1,
                   "height": 20,

@@ -402,7 +402,7 @@ do not claim completion until done.
 | Workflow | Trigger | Purpose |
 | -------- | ------- | ------- |
 | [`.github/workflows/triage.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/triage.yml) | Issue opened | `status:needs-triage` + `area:*` from package dropdown + `type:*` from Kind when present; `area:*` / `type:*` labels the issue was opened with win, so `roadmap:sync` issues are not asked for an area |
-| [`.github/workflows/roadmap-generate.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-generate.yml) | Daily + manual | `roadmap:sync --check` for board drift, then regenerate `ROADMAP.md` from the board and open a pull request when it changes |
+| [`.github/workflows/roadmap-generate.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-generate.yml) | Daily + manual | `roadmap:sync --check` for board drift, then regenerate `ROADMAP.md` from the board and open a pull request when roadmap content changes. A new **Last updated** timestamp alone does not open a pull request |
 | [`.github/workflows/roadmap-sync.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-sync.yml) | Taxonomy files change on `master` + manual | Apply labels and reconcile the board's fields and items |
 | [`.github/workflows/roadmap-reconcile.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/workflows/roadmap-reconcile.yml) | IP or task files change on `master` + manual | Advance status from IP headers, add an entry for every new IP, open its tracking issue, push to the board, regenerate `ROADMAP.md` |
 All three share the `roadmap` concurrency group. They write the same board, and interleaving
@@ -495,4 +495,6 @@ GITHUB_TOKEN=$(gh auth token) TERRENO_PROJECT_NUMBER=... bun run roadmap:generat
 ```
 
 The generator exits non-zero when the project cannot be read, so a bad project number or a
-token without `read:project` fails loudly instead of writing an empty `ROADMAP.md`.
+token without `read:project` fails loudly instead of writing an empty `ROADMAP.md`. When the
+rendered list matches the file already on disk, it keeps that file's **Last updated** stamp
+and does not write. The daily workflow then sees a clean diff and does not open a pull request.

@@ -1,0 +1,16 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which plan?",
+    "select": "one",
+    "options": [
+      {"id": "team", "label": "Team"},
+      {"id": "solo", "label": "Solo"}
+    ],
+    "default": ["team", "gold"]
+  },
+  "errors": [
+    {"path": "default", "code": "SELECTION_COUNT"},
+    {"path": "default[1]", "code": "DEFAULT_NOT_IN_OPTIONS"}
+  ]
+}

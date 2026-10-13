@@ -678,12 +678,14 @@ mock.module("expo-router", () => ({
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
+    setParams: mock(() => {}),
   },
   Slot: ({children, ...props}: MockComponentProps) => React.createElement("Slot", props, children),
   Stack: ({children, ...props}: MockComponentProps) =>
     React.createElement("Stack", props, children),
   Tabs: ({children, ...props}: MockComponentProps) => React.createElement("Tabs", props, children),
   useFocusEffect: mock(() => undefined),
+  useGlobalSearchParams: mock(() => ({})),
   useLocalSearchParams: mock(() => ({})),
   useNavigation: mock(() => ({
     addListener: mock(() => () => undefined),
@@ -698,6 +700,7 @@ mock.module("expo-router", () => ({
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
+    setParams: mock(() => {}),
   })),
   useSearchParams: mock(() => ({})),
   useSegments: mock(() => []),
@@ -850,8 +853,9 @@ mock.module("react-native-actions-sheet", () => ({
 
 // Mock MediaQuery
 mock.module("./MediaQuery", () => ({
-  isMobileDevice: mock(() => false),
+  isNarrowViewport: mock(() => false),
   mediaQueryLargerThan: mock(() => false),
+  mediaQuerySmallerThan: mock(() => false),
 }));
 
 // Mock expo-image-manipulator
@@ -895,6 +899,7 @@ mock.module("expo-haptics", () => ({
 mock.module("expo-clipboard", () => ({
   getStringAsync: mock(() => Promise.resolve("")),
   hasStringAsync: mock(() => Promise.resolve(false)),
+  setImageAsync: mock(() => Promise.resolve(undefined)),
   setStringAsync: mock(() => Promise.resolve(undefined)),
 }));
 
@@ -925,12 +930,6 @@ mock.module("expo-localization", () => ({
   locale: "en-US",
   locales: ["en-US"],
   timezone: "America/New_York",
-}));
-
-// Mock @expo/vector-icons
-mock.module("@expo/vector-icons", () => ({
-  default: mock(() => null),
-  FontAwesome6: mock(() => null),
 }));
 
 // Mock @expo/vector-icons/FontAwesome6

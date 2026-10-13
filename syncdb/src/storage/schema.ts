@@ -6,6 +6,7 @@ import {
   KNOWN_STREAMS_TABLE,
   NEEDS_REPAIR_TABLE,
   OUTBOX_TABLE,
+  QUERY_WINDOWS_TABLE,
 } from "./types";
 
 /**
@@ -88,6 +89,18 @@ export const buildTablesSchema = ({collections}: {collections: string[]}): Table
       operation: {type: "string"},
       status: {type: "string"},
       userId: {type: "string"},
+    },
+    [QUERY_WINDOWS_TABLE]: {
+      collection: {type: "string"},
+      /** JSON-encoded {id: seq} of cached rows the last full fetch proved stale for the window. */
+      excluded: {type: "string"},
+      fetchedAt: {type: "string"},
+      hasMore: {type: "boolean"},
+      /** JSON-encoded ordered member ids. */
+      ids: {type: "string"},
+      pages: {type: "number"},
+      /** Server total, or -1 when the endpoint did not report one. */
+      total: {type: "number"},
     },
   };
   for (const collection of collections) {

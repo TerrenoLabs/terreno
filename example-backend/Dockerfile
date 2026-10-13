@@ -8,8 +8,10 @@ COPY . .
 RUN bun install --frozen-lockfile --ignore-scripts
 RUN bun run --filter "@terreno/api" compile
 RUN bun run --filter "@terreno/api-health" compile
-RUN bun run --filter "@terreno/ai" compile
+RUN bun run --filter "@terreno/blocks" compile
+# @terreno/ai type-checks its optional JobsRunner against @terreno/jobs, so jobs compiles first.
 RUN bun run --filter "@terreno/jobs" compile
+RUN bun run --filter "@terreno/ai" compile
 RUN bun run --filter "@terreno/admin-backend" compile
 RUN bun run --filter "@terreno/announcements" compile
 RUN bun run --filter "@terreno/comms" compile

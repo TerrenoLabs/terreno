@@ -951,6 +951,33 @@ describe("AdminShell", () => {
     assert.isNotNull(getByTestId("admin-shell-nav-model-Todo-clickable"));
   });
 
+  it("renders grouped custom screens separately from ungrouped Screens", () => {
+    restoreWindowWidth?.();
+    restoreWindowWidth = setWindowWidth(1024);
+    configState.config = {
+      ...buildConfig(),
+      customScreens: [
+        {displayName: "AI Requests", name: "ai-requests"},
+        {displayName: "Prompts", group: "AI Observability", name: "ai-prompts"},
+        {displayName: "Traces", group: "AI Observability", name: "ai-traces"},
+        {displayName: "Review queue", group: "AI Observability", name: "ai-review"},
+      ],
+    };
+
+    const {getByTestId, getByText} = renderWithTheme(
+      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+        <React.Fragment />
+      </AdminShell>
+    );
+
+    expect(getByTestId("admin-shell-nav-group-ai-observability")).toBeTruthy();
+    expect(getByText("AI Observability")).toBeTruthy();
+    expect(getByTestId("admin-shell-nav-screen-ai-prompts-clickable")).toBeTruthy();
+    expect(getByTestId("admin-shell-nav-screen-ai-review-clickable")).toBeTruthy();
+    expect(getByTestId("admin-shell-nav-screens")).toBeTruthy();
+    expect(getByTestId("admin-shell-nav-screen-ai-requests-clickable")).toBeTruthy();
+  });
+
   it("closes the mobile drawer when the viewport expands to desktop width", async () => {
     const {getByTestId, queryByTestId, rerender} = renderWithTheme(
       <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">

@@ -3,7 +3,7 @@ import {fireEvent} from "@testing-library/react-native";
 import {forwardRef} from "react";
 import {Text, View} from "react-native";
 
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {renderWithTheme} from "./test-utils";
 import {UnifiedAddressAutoCompleteField} from "./UnifiedAddressAutoComplete";
 
@@ -136,11 +136,11 @@ describe("UnifiedAddressAutoCompleteField", () => {
 
   describe("mobile/native branch", () => {
     afterEach(() => {
-      (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => false);
+      (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => false);
     });
 
-    it("renders MobileAddressAutocomplete when isMobileDevice + isNative + valid key", () => {
-      (isMobileDevice as ReturnType<typeof mock>).mockImplementation(() => true);
+    it("renders MobileAddressAutocomplete when isNarrowViewport + isNative + valid key", () => {
+      (isNarrowViewport as ReturnType<typeof mock>).mockImplementation(() => true);
       const {getByTestId} = renderWithTheme(
         <UnifiedAddressAutoCompleteField
           {...defaultProps}

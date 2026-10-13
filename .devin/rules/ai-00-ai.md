@@ -33,6 +33,9 @@ src/
     index.ts             # Route exports
   service/
     aiService.ts         # Provider-agnostic AI service class
+    asks.ts              # Ask tools, ask pause/answer bookkeeping, approval asks
+    askFiles.ts          # Load and check files named by a `files` ask answer
+    chatTurn.ts          # One chat turn, shared by /gpt/prompt (SSE) and the headless turn action
     prompts.ts           # System prompt constants
     index.ts             # Service exports
   types/
@@ -52,7 +55,7 @@ import {AIService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
 const aiService = new AIService({
-  model: google("gemini-2.5-flash"),
+  model: google("gemini-3.8-flash"),
   defaultTemperature: 1.0,  // optional
 });
 ```
@@ -148,8 +151,9 @@ addGptRoutes(router, {aiService, openApiOptions: options});
 |----------|--------|-------------|
 | `/gpt/prompt` | POST | SSE streaming chat with history persistence |
 | `/gpt/remix` | POST | Non-streaming text remix |
+| `/gpt/histories/:id/stream` | GET | SSE resume of an in-flight `/gpt/prompt` reply |
 
-Both require authentication. `/gpt/prompt` accepts `{prompt, historyId?, systemPrompt?}` and streams via Server-Sent Events.
+All require authentication. `/gpt/prompt` accepts `{prompt, historyId?, systemPrompt?, attachments?}` and streams via Server-Sent Events. Attachment URLs must be `http(s):` or `data:` (client-only `blob:`/`file:` URLs get 400); with `fileStorageService`, `data:` attachments are uploaded and history stores `url` + `gcsKey`. `fileUploadsEnabled: false` (or a function that returns false) rejects uploads and attachments with 403. The reply is persisted as a `status: "streaming"` assistant prompt with throttled partial text, so clients can resume after a reload. See `docs/reference/ai.md`.
 
 ### addGptHistoryRoutes(router, options)
 
@@ -158,6 +162,85 @@ Standard modelRouter CRUD at `/gpt/histories`:
 - **Read/Update/Delete**: `IsOwner`
 - Query filtered by `userId`
 - Sorted by `-updated`
+
+## Agent UI Asks
+
+Opt-in typed questions from the agent to the user. Human docs: `docs/how-to/agent-ui-asks.md`,
+`docs/reference/agent-ui-asks.md`, `docs/explanation/agent-ui-asks.md`. Contracts (schemas,
+validators, error codes, limits, simple cards) live in `@terreno/blocks` — import them from there,
+never redefine them here.
+
+```typescript
+new AiApp({aiService, asks: true}).register(app);   // also adds the headless actions
+
+// With the route registrars, pass the same chat options to both:
+const chat = {aiService, asks: {kinds: ["choice", "confirm"], approvals: {deleteCompletedTodos: () => ({prompt: "Delete every completed todo?"})}}};
+addGptHistoryRoutes(router, {chat});
+addGptRoutes(router, chat);
+```
+
+- `asks` unset or `false`: tools, system prompt, SSE events, and endpoints are unchanged.
+  `true`/`{}` offers every kind in `ASK_KINDS` (`choice`, `confirm`, `markdown`, `form`, `files`);
+  `{kinds}` limits them; `{maxFileSizeBytes}` caps `files` answers (and `/files/upload` in `AiApp`).
+- Each offered kind becomes a client-side tool `ask_<kind>` with no `execute`. The turn pauses on
+  the first ask call; later ask calls in the same step are cancelled with `one_ask_at_a_time`.
+  Host tool names must not start with `ask_` (registration throws).
+- Approval: with asks on, a host tool with the AI SDK's `needsApproval: true` runs only after a
+  server-made `confirm` ask (`origin: "approval"`, `toolName`). `asks.approvals[toolName]` is
+  `(input) => ConfirmAskInput`. With asks off, such a tool never runs. A denied tool returns
+  `{approved: false, reason}` as its result.
+- `/gpt/prompt` body adds `askResponse: {toolCallId, action, content?, reason?}` (sent instead of
+  `prompt`, requires `historyId`) and `surface: "full" | "compact"`. A `prompt` sent while an ask
+  is pending cancels it with `user_sent_message`.
+- SSE events added: `{askResolved: {toolCallId, action}}` first, `{ask: {toolCallId, kind, input,
+  simple, origin?, toolName?}, historyId}` last before `{done}`, and `pendingAsk: {toolCallId}` on
+  `{done}`. Ask tools never emit `{toolCall}` / `{toolResult}`.
+- `GptHistory.pendingAsk` holds the ask the conversation waits on. Only a chat turn writes it:
+  history create/update bodies drop `pendingAsk`. Answering a non-pending ask returns 409.
+- Headless actions (only when `chat` turns asks on): `GET /gpt/histories/pendingAsks` (the caller's
+  pending asks with simple cards) and `POST /gpt/histories/:id/turn` (body `{prompt}`,
+  `{askResponse}`, or `{toolCallId, buttonId}`, plus `surface`; runs the turn to completion and
+  returns `{historyId, text, title?, pendingAsk?, error?}`). Owners only; admins get 403.
+- Validate answers with `validateAskResponse` from `@terreno/blocks`; return 400 `Invalid
+  askResponse` with `meta.fields`. Every number in prompts and errors comes from `ASK_LIMITS`.
+- Ask prompt text (`TERRENO_ASKS_SYSTEM_PROMPT`, `COMPACT_SURFACE_SYSTEM_PROMPT`,
+  `askPromptSection`) follows the `ai-prompt-governance` skill.
+
+## Agent UI Blocks
+
+Opt-in whole-reply YAML documents. Human docs: `docs/how-to/agent-ui-blocks.md`,
+`docs/reference/blocks.md`, `docs/reference/ai.md` (Host actions),
+`docs/explanation/agent-ui-blocks.md`. Block schemas, limits, the prompt section, and error codes
+live in `@terreno/blocks` — never redefine them here.
+
+```typescript
+addGptRoutes(router, {
+  aiService,
+  uiBlocks: {
+    hostActions: {
+      exportDataset: {payload: z.object({dataset: z.string()}).strict(), handler},
+      scaleStepper: scaleStepperHostAction,         // handles: "stepper"
+      toggleChecklist: toggleChecklistHostAction,   // handles: "checklist"
+    },
+    // richBlocks: false,  // keep the pre-rich-blocks prompt for shipped native builds
+  },
+});
+```
+
+- `uiBlocks.richBlocks` defaults to `true`: the prompt offers checklist, gallery, list, card
+  eyebrow, and copy, and offers stepper only when some host action has `handles: "stepper"`.
+  `false` restores the old prompt; validation accepts the rich blocks either way.
+- `HostAction` is `{handler, payload?, handles?, logResponse?}`. `handles` (`"stepper"` |
+  `"checklist"`) puts the action in that block's callback allowlist; a stepper or checklist naming
+  any other action fails `UNKNOWN_HOST_ACTION`. `logResponse: false` keeps the returned document
+  out of the `ui_action` `AIRequest` row.
+- Built-in host actions: `scaleStepperHostAction` (scales items from the agent's stored stepper)
+  and `toggleChecklistHostAction` (returns the stored checklist with `state` applied; saves
+  nothing). Both read the block with `findAgentBlock`, never from the request.
+- Stored history prompts are owner-writable (`PATCH /gpt/histories/:id`). A handler whose numbers
+  matter (prices, stock) computes them from the app's own data, not the stored block.
+- Block prompt text (`blocksPromptSection`, `TERRENO_UI_BLOCKS_SYSTEM_PROMPT`) follows the
+  `ai-prompt-governance` skill.
 
 ### addAiRequestsExplorerRoutes(router, options)
 
@@ -175,7 +258,7 @@ Consuming apps wire up routes in their `setupServer` call:
 import {AIService, addGptRoutes, addGptHistoryRoutes, addAiRequestsExplorerRoutes} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
-const aiService = new AIService({model: google("gemini-2.5-flash")});
+const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 setupServer({
   addRoutes: (router, options) => {

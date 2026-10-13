@@ -21,6 +21,7 @@ const FRONTEND_PREVIEW_PATHS = [
   "rtk/.*",
   "admin-frontend/.*",
   "ai/.*",
+  "blocks/.*",
   "syncdb/.*",
   "bun\\.lock",
 ];
@@ -92,6 +93,22 @@ describe("Cloud Run preview readiness", (): void => {
     assert.notEqual(result.exitCode, 0);
     assert.include(result.stderr, "Timed out waiting for Cloud Run preview health");
     assert.include(result.stderr, '"status":"starting"');
+  });
+
+  it("sets the documents bucket on every backend deploy and isolates preview prefixes", (): void => {
+    assert.include(
+      deployScript,
+      'GCP_DOCUMENTS_BUCKET="${GCP_DOCUMENTS_BUCKET:-flourish-terreno-example-documents}"'
+    );
+    assert.include(deployScript, "GCS_BUCKET=${GCP_DOCUMENTS_BUCKET}");
+    const prodMarker = 'if [ "$tag" = "prod" ]; then';
+    const deployIf = deployScript.indexOf(prodMarker, deployScript.indexOf(prodMarker) + 1);
+    const previewBranch = deployScript.slice(
+      deployIf,
+      deployScript.indexOf("rebuild-cloud-run-ready-traffic.sh")
+    );
+    assert.include(previewBranch, "GCS_FOLDER_PREFIX=pr-${PR_NUMBER}/");
+    assert.notInclude(previewBranch.slice(0, previewBranch.indexOf("else")), "GCS_FOLDER_PREFIX");
   });
 
   it("keeps CPU allocated and gates the preview deployment on health", (): void => {

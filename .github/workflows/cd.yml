@@ -30,6 +30,8 @@ env:
   GCP_TASKS_QUEUE: terreno-example-jobs-v2
   GCP_TASKS_INVOKER_SA: terreno-jobs-invoker@flourish-terreno.iam.gserviceaccount.com
   GCP_BACKEND_RUNTIME_SA: terreno-backend-runtime@flourish-terreno.iam.gserviceaccount.com
+  # Terraform-managed (infra/flourish/main.tf google_storage_bucket.example_documents).
+  GCP_DOCUMENTS_BUCKET: flourish-terreno-example-documents
   GCP_MCP_REGION: us-east1
   GCP_MCP_SERVICE: terreno-mcp
   TF_DEPLOYMENT: terreno-prod
@@ -53,6 +55,7 @@ jobs:
           filters: |
             terraform:
               - 'terraform/**'
+              - 'infra/**'
               - '.github/workflows/cd.yml'
             backend:
               - 'example-backend/**'
@@ -62,6 +65,7 @@ jobs:
               - 'admin-backend/**'
               - 'admin-frontend/**'
               - 'ai/**'
+              - 'blocks/**'
               - 'comms/**'
               - 'jobs/**'
               - 'rtk/**'
@@ -75,6 +79,7 @@ jobs:
               - 'api-health/**'
               - 'admin-backend/**'
               - 'ai/**'
+              - 'blocks/**'
               - 'comms/**'
               - 'jobs/**'
               - '.github/workflows/cd.yml'
@@ -96,7 +101,9 @@ jobs:
         with:
           terraform_version: 1.9.8
       - name: terraform fmt -check
-        run: terraform -chdir=terraform fmt -check -recursive
+        run: |
+          terraform -chdir=terraform fmt -check -recursive
+          terraform -chdir=infra/flourish fmt -check
 
   terraform-preview:
     name: Terraform preview
@@ -131,12 +138,15 @@ jobs:
           PREVIEW_ID="${TF_DEPLOYMENT}-pr${{ github.event.pull_request.number }}-${GITHUB_RUN_ID}"
           echo "preview_id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
           echo "location=$LOCATION" >> "$GITHUB_OUTPUT"
+          TF_SOURCE="$(mktemp -d)"
+          # infra/flourish/modules is a symlink; Infra Manager needs a self-contained source.
+          tar -C infra/flourish -chf - --exclude=.terraform --exclude=.terraform.lock.hcl . | tar -C "$TF_SOURCE" -xf -
           gcloud infra-manager previews create "$PREVIEW_ID" \
             --project="${{ env.GCP_PROJECT_ID }}" \
             --location="$LOCATION" \
             --deployment="projects/${{ env.GCP_PROJECT_ID }}/locations/${LOCATION}/deployments/${TF_DEPLOYMENT}" \
             --service-account="projects/${{ env.GCP_PROJECT_ID }}/serviceAccounts/${{ vars.GCP_TF_ADMIN_SA_PROD }}" \
-            --local-source="terraform" \
+            --local-source="$TF_SOURCE" \
             --quiet
       - name: Describe preview
         if: always() && steps.preview.outputs.preview_id != ''
@@ -192,11 +202,14 @@ jobs:
         run: |
           set -euo pipefail
           LOCATION="${{ vars.GCP_INFRA_MANAGER_LOCATION || 'us-central1' }}"
+          TF_SOURCE="$(mktemp -d)"
+          # infra/flourish/modules is a symlink; Infra Manager needs a self-contained source.
+          tar -C infra/flourish -chf - --exclude=.terraform --exclude=.terraform.lock.hcl . | tar -C "$TF_SOURCE" -xf -
           gcloud infra-manager deployments apply "${TF_DEPLOYMENT}" \
             --project="${{ env.GCP_PROJECT_ID }}" \
             --location="$LOCATION" \
             --service-account="projects/${{ env.GCP_PROJECT_ID }}/serviceAccounts/${{ vars.GCP_TF_ADMIN_SA_PROD }}" \
-            --local-source="terraform" \
+            --local-source="$TF_SOURCE" \
             --quiet
       - name: Show deployment status
         run: |
@@ -212,7 +225,7 @@ jobs:
     name: Backend deploy (prod)
     needs: [detect, terraform-apply]
     # Always run terraform-apply first if it's queued; only deploy if terraform
-    # succeeded or was skipped (no terraform/ changes in this push).
+    # succeeded or was skipped (no terraform/ or infra/ changes in this push).
     if: |
       always() &&
       needs.detect.outputs.backend == 'true' &&
@@ -359,6 +372,7 @@ jobs:
             ADMIN_SPA_ENABLED=true
             CORS_ORIGINS=https://terreno-frontend.netlify.app
             CROSS_DOMAIN_AUTH_COOKIES=true
+            GCS_BUCKET=${{ env.GCP_DOCUMENTS_BUCKET }}
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
@@ -586,6 +600,8 @@ jobs:
             CORS_ORIGINS=https://pr-${{ github.event.pull_request.number }}--terreno-frontend.netlify.app
             CROSS_DOMAIN_AUTH_COOKIES=true
             MONGO_DB_NAME=terreno-example-pr-${{ github.event.pull_request.number }}
+            GCS_BUCKET=${{ env.GCP_DOCUMENTS_BUCKET }}
+            GCS_FOLDER_PREFIX=pr-${{ github.event.pull_request.number }}/
             SEED_DEFAULTS=true
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}

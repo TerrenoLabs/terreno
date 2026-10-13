@@ -1,0 +1,30 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Newsletter preferences.",
+    "fields": [
+      {
+        "id": "subscribe",
+        "type": "boolean",
+        "label": "Send me the monthly newsletter",
+        "required": true
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "Newsletter preferences.",
+    "toolCallId": "call_fixture"
+  }
+}

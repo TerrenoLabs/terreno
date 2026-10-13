@@ -22,7 +22,7 @@ jobs:
           - package: admin-backend
             compile_deps: api jobs
           - package: admin-frontend
-            compile_deps: ui
+            compile_deps: blocks ui
           - package: api-health
             compile_deps: api
           - package: feature-flags

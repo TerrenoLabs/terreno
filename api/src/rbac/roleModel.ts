@@ -4,11 +4,14 @@ import type {APIErrorConstructor} from "../errors";
 import {createdUpdatedPlugin, findExactlyOne, findOneOrNone} from "../plugins";
 import {
   expandRolePermissions as expandRolePermissionSpec,
+  mergeMissingResourcePermissions,
+  OBSERVABILITY_RBAC_RESOURCES,
   type PermissionSet,
   READ_ACTIONS,
   READ_ONLY_ROLE_PERMISSIONS,
   type RolePermissionSpec,
   type Statements,
+  terrenoStatements,
 } from "./statements";
 
 export interface RoleDefinition {
@@ -48,6 +51,27 @@ export type RbacRoleModel = Model<RbacRoleDocument> & {
 
 export {READ_ONLY_ROLE_PERMISSIONS} from "./statements";
 
+const observabilityAdminPermissionSpec = (): PermissionSet => ({
+  aiDataset: [...terrenoStatements.aiDataset],
+  aiEvaluator: [...terrenoStatements.aiEvaluator],
+  aiExperiment: [...terrenoStatements.aiExperiment],
+  aiPrompt: [...terrenoStatements.aiPrompt],
+  aiReview: [...terrenoStatements.aiReview],
+  aiTrace: [...terrenoStatements.aiTrace],
+});
+
+const observabilityReadOnlyPermissionSpec = (statements: Statements): PermissionSet => {
+  const expanded = expandRolePermissions(READ_ONLY_ROLE_PERMISSIONS, statements);
+  const defaults: PermissionSet = {};
+  for (const resource of OBSERVABILITY_RBAC_RESOURCES) {
+    const actions = expanded[resource];
+    if (actions && actions.length > 0) {
+      defaults[resource] = [...actions];
+    }
+  }
+  return defaults;
+};
+
 /**
  * Insert missing default roles. Existing unsealed roles are left unchanged so admin
  * customizations survive process restarts. Sealed roles are refreshed from code.
@@ -61,6 +85,21 @@ const upsertSeededRole = async (
   const existing = await model.findOneOrNone({name: role.name});
   if (existing) {
     if (!existing.isSealed) {
+      if (role.name === "admin") {
+        existing.permissions = mergeMissingResourcePermissions(
+          existing.permissions,
+          permissions,
+          OBSERVABILITY_RBAC_RESOURCES
+        );
+        await existing.save();
+      } else if (role.name === "auditor") {
+        existing.permissions = mergeMissingResourcePermissions(
+          existing.permissions,
+          observabilityReadOnlyPermissionSpec(statements),
+          OBSERVABILITY_RBAC_RESOURCES
+        );
+        await existing.save();
+      }
       return;
     }
     existing.description = role.description;
@@ -121,6 +160,7 @@ export const terrenoDefaultRoles: RoleDefinition[] = [
       adminAnnouncementImpression: ["read"],
       configuration: ["read", "update"],
       user: ["create", "list", "read", "update"],
+      ...observabilityAdminPermissionSpec(),
     },
   },
   {

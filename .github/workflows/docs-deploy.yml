@@ -61,6 +61,11 @@ jobs:
             docs/reference/components
           key: docs-ui-ref-${{ hashFiles('ui/src/**', 'demo/demoConfig.tsx', 'demo/story-config/**', 'website/scripts/generate-component-docs.ts') }}
 
+      - name: Build blocks dependency
+        if: steps.ui-docs-cache.outputs.cache-hit != 'true'
+        working-directory: blocks
+        run: bun run compile
+
       - name: Compile UI package
         if: steps.ui-docs-cache.outputs.cache-hit != 'true'
         run: bun run compile

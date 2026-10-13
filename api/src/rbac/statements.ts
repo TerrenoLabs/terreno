@@ -1,6 +1,29 @@
 const MODEL_CRUD = ["create", "list", "read", "update", "delete"] as const;
 export const ADMIN_MODEL_ACCESS = ["read", "write", "writeOwned"] as const;
 
+export const AI_PROMPT_ACTIONS = [
+  "list",
+  "read",
+  "create",
+  "update",
+  "promote",
+  "playground",
+] as const;
+export const AI_TRACE_ACTIONS = ["list", "read"] as const;
+export const AI_REVIEW_ACTIONS = ["list", "read", "score", "assign"] as const;
+export const AI_EXPERIMENT_ACTIONS = ["list", "read", "create", "promote"] as const;
+
+export const OBSERVABILITY_RBAC_RESOURCES = [
+  "aiPrompt",
+  "aiTrace",
+  "aiReview",
+  "aiDataset",
+  "aiExperiment",
+  "aiEvaluator",
+] as const;
+
+export type ObservabilityRbacResource = (typeof OBSERVABILITY_RBAC_RESOURCES)[number];
+
 /** Resource/action that opens the admin panel. Other admin permissions do not grant entry. */
 export const ADMIN_PAGE_RESOURCE = "admin" as const;
 export const ADMIN_PAGE_ACTION = "access" as const;
@@ -27,6 +50,12 @@ export const terrenoStatements = {
   adminConsentForm: ADMIN_MODEL_ACCESS,
   adminConsentResponse: ADMIN_MODEL_ACCESS,
   adminFeatureFlag: ADMIN_MODEL_ACCESS,
+  aiDataset: MODEL_CRUD,
+  aiEvaluator: MODEL_CRUD,
+  aiExperiment: AI_EXPERIMENT_ACTIONS,
+  aiPrompt: AI_PROMPT_ACTIONS,
+  aiReview: AI_REVIEW_ACTIONS,
+  aiTrace: AI_TRACE_ACTIONS,
   announcement: MODEL_CRUD,
   announcementAcknowledgement: ["list", "read"],
   announcementImpression: ["list", "read"],
@@ -61,6 +90,68 @@ export const mergeStatements = <S extends Statements>(appStatements: S): Stateme
     ...terrenoStatements,
     ...appStatements,
   };
+};
+
+export const terrenoStatementDescriptions: Record<string, Record<string, string>> = {
+  aiDataset: {
+    create: "Create datasets",
+    delete: "Delete datasets",
+    list: "List datasets",
+    read: "View dataset detail and items",
+    update: "Update datasets and items",
+  },
+  aiEvaluator: {
+    create: "Create evaluators",
+    delete: "Delete evaluators",
+    list: "List evaluators and templates",
+    read: "View evaluator detail",
+    update: "Update evaluators",
+  },
+  aiExperiment: {
+    create: "Start experiments and run estimates",
+    list: "List experiments",
+    promote: "Promote a passing prompt version to production",
+    read: "View experiment results",
+  },
+  aiPrompt: {
+    create: "Create prompts",
+    list: "List prompts",
+    playground: "Run the prompt playground",
+    promote: "Move production or staging labels",
+    read: "View prompt detail and versions",
+    update: "Create new prompt versions",
+  },
+  aiReview: {
+    assign: "Assign review items and enqueue traces for review",
+    list: "List the review queue",
+    read: "Open review items",
+    score: "Submit or skip review scores",
+  },
+  aiTrace: {
+    list: "List traces and observability status",
+    read: "View trace detail and run trace test helpers",
+  },
+};
+
+/** Add missing actions for selected resources without removing consumer-defined grants. */
+export const mergeMissingResourcePermissions = (
+  existing: PermissionSet,
+  defaults: PermissionSet,
+  resources: readonly string[]
+): PermissionSet => {
+  const merged: PermissionSet = {...existing};
+  for (const resource of resources) {
+    const defaultActions = defaults[resource];
+    if (!defaultActions || defaultActions.length === 0) {
+      continue;
+    }
+    const current = new Set(merged[resource] ?? []);
+    for (const action of defaultActions) {
+      current.add(action);
+    }
+    merged[resource] = [...current];
+  }
+  return merged;
 };
 
 export const expandRolePermissions = (

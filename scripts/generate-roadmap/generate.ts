@@ -1,8 +1,8 @@
-import {existsSync, readdirSync, writeFileSync} from "node:fs";
+import {existsSync, readdirSync, readFileSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 import {DateTime} from "luxon";
 
-import {type RoadmapItem, renderRoadmapMarkdown} from "./lib";
+import {type RoadmapItem, renderRoadmapMarkdown, roadmapContentIsUnchanged} from "./lib";
 
 const PROJECT_ITEMS_QUERY = `
 query($owner: String!, $projectNumber: Int!, $cursor: String) {
@@ -238,6 +238,16 @@ export const main = async (): Promise<void> => {
   });
 
   const outputPath = join(process.cwd(), "ROADMAP.md");
+  if (existsSync(outputPath)) {
+    const existing = readFileSync(outputPath, "utf8");
+    if (roadmapContentIsUnchanged({existing, next: markdown})) {
+      console.info(
+        "ROADMAP.md content is unchanged. Keeping the existing timestamp so CI does not open a pull request."
+      );
+      return;
+    }
+  }
+
   writeFileSync(outputPath, markdown, "utf8");
   console.info(`Wrote ${outputPath} (${items.length} project items)`);
 };

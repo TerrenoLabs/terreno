@@ -1,23 +1,32 @@
+# Dependabot opens security updates only. `open-pull-requests-limit: 0` turns
+# off version-update PRs for every block; security updates ignore that limit
+# and still honor `ignore`. Routine version upgrades go through the
+# update-dependencies skill (docs/how-to/update-dependencies.md) on the rolling
+# chore/update-dependencies PR.
 version: 2
 updates:
-  # Maintain dependencies for GitHub Actions
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
-    cooldown:
-      default-days: 7
+    open-pull-requests-limit: 0
+    groups:
+      github-actions:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
-  # Maintain dependencies for root package.json (devDependencies, catalog)
+  # Root package.json (devDependencies, catalog)
   - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "monthly"
-    cooldown:
-      default-days: 7
-    # Native/Expo packages change the Expo fingerprint. Agents bump those only
-    # during a release (update-dependencies skill + fingerprintRisk.ts). Keep
-    # this ignore list aligned with isFingerprintSkip.
+    open-pull-requests-limit: 0
+    # Native/Expo packages change the Expo fingerprint, so Dependabot never
+    # touches them. A security fix for one of these is handled by hand in a
+    # release (release + upgrading-expo skills). Keep this list aligned with
+    # isFingerprintSkip in scripts/planning/fingerprintRisk.ts.
     ignore:
       - dependency-name: "@expo/config-plugins"
       - dependency-name: "@react-native-async-storage/async-storage"
@@ -47,11 +56,11 @@ updates:
       - dependency-name: "react-native-worklets"
     groups:
       root:
-        applies-to: version-updates
+        applies-to: security-updates
         patterns:
           - "*"
 
-  # Maintain dependencies for backend packages
+  # Backend packages
   - package-ecosystem: "bun"
     directories:
       - "/admin-backend"
@@ -63,17 +72,15 @@ updates:
       - "/mcp-server"
     schedule:
       interval: "monthly"
-    cooldown:
-      default-days: 7
-    # Group all dependencies into one PR for backend.
-    # Note: security PRs will still be their own for visibility.
+    open-pull-requests-limit: 0
+    # Group security fixes across the backend directories into one PR.
     groups:
       backend:
-        applies-to: version-updates
+        applies-to: security-updates
         patterns:
           - "*"
 
-  # Maintain dependencies for frontend packages
+  # Frontend packages
   - package-ecosystem: "bun"
     directories:
       - "/admin-frontend"
@@ -83,8 +90,7 @@ updates:
       - "/rtk"
     schedule:
       interval: "monthly"
-    cooldown:
-      default-days: 7
+    open-pull-requests-limit: 0
     ignore:
       # These packages are controlled by the catalog in root package.json
       - dependency-name: "@biomejs/biome"
@@ -145,6 +151,6 @@ updates:
       - dependency-name: "typescript"
     groups:
       frontend:
-        applies-to: version-updates
+        applies-to: security-updates
         patterns:
           - "*"

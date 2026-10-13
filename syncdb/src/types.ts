@@ -179,6 +179,29 @@ export interface SyncSnapshotResponse {
   legacyCursor?: string;
 }
 
+/** Body of `POST /sync/snapshot/batch`: one page request per stream. */
+export interface SyncSnapshotBatchRequest {
+  streams: {stream: string; cursor: number; legacyCursor?: string}[];
+  /** Entity budget for the whole response, shared across `streams`; server default when omitted. */
+  limit?: number;
+}
+
+/** Response of `POST /sync/snapshot/batch`: one page per requested stream. */
+export interface SyncSnapshotBatchResponse {
+  pages: SyncSnapshotResponse[];
+}
+
+/** Response shape of a `modelRouter` list endpoint (`GET /{collection}`), used by query windows. */
+export interface ListResponse {
+  data: unknown[];
+  /** True when more pages exist past this one. */
+  more?: boolean;
+  /** Total matching documents across all pages. */
+  total?: number;
+  /** The page size the server applied (lower than requested when `maxLimit` clamped it). */
+  limit?: number;
+}
+
 /** One stream a user currently belongs to, from `GET /sync/streams`. */
 export interface SyncStreamInfo {
   /** Stream key (e.g. "todos|owner:123"). */

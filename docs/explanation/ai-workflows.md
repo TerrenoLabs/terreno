@@ -49,9 +49,10 @@ Maintains centralized agent guidance and generates the matching configuration fo
 
 Rulesync generates native hooks from `.rulesync/hooks.json`. Biome checks changed files
 after edits and staged files before commits. At agent stop,
-`.rulesync/hooks/quality-check.sh` runs lint, TypeScript compilation, Knip, and
-dependency-cruiser. It keeps stdout machine-readable for each host and prevents
-retry-triggered Stop hooks from rerunning the commands.
+`.rulesync/hooks/quality-check.sh` runs `bun install --frozen-lockfile` when
+`node_modules/typescript` or any workspace package link is missing, then runs lint,
+TypeScript compilation, Knip, and dependency-cruiser. It keeps stdout machine-readable
+for each host and prevents retry-triggered Stop hooks from rerunning the commands.
 
 Existing findings are ratcheted so the checks reject new debt without requiring unrelated
 cleanup. See [Static analysis](static-analysis.md).
@@ -158,13 +159,13 @@ Ensures preview environments don't accumulate and waste resources.
 
 #### Dependabot Auto-merge
 **Trigger:** Dependabot pull request opened  
-**Purpose:** Automatically merges dependency updates after CI passes
+**Purpose:** Automatically merges Dependabot security updates after CI passes. Dependabot opens no version-update PRs; routine upgrades run through the `update-dependencies` skill.
 
 **Requirements for auto-merge:**
 - All CI checks pass
 - Dependabot PR (created by Dependabot)
+- Not a semver-major bump (for a grouped PR, no bump in the group is major); majors wait for a human review
 - No conflicts
-- 7-day cooldown for security (see Dependency Management)
 
 **Learn more:** [Dependency Management](dependency-management.md)
 
@@ -207,7 +208,7 @@ Ensures preview environments don't accumulate and waste resources.
 ### Continuous Sync
 - Documentation syncs on every master push
 - Rules sync on every master push
-- Dependencies update daily (Dependabot)
+- Dependencies update daily (`update-dependencies` skill); Dependabot opens security fixes only
 - Quality improvements run daily (JSDoc, tests)
 
 ## Working with AI Workflows
@@ -279,8 +280,8 @@ The docs-audit workflow flags a missing README or reference page and obvious int
 
 ### Dependabot PR doesn't auto-merge
 - Verify all CI checks pass (green checkmarks)
-- Check 7-day cooldown hasn't been violated
 - Ensure no merge conflicts exist
+- If the security fix needs code changes, fold it into the rolling `chore/update-dependencies` PR instead of pushing to the Dependabot branch
 
 ### AI workflow creates poor quality PR
 - Review the workflow definition in `.github/workflows/*.md`
@@ -289,7 +290,7 @@ The docs-audit workflow flags a missing README or reference page and obvious int
 
 ## Related Documentation
 
-- [Dependency Management](dependency-management.md) — Dependabot configuration and auto-merge
+- [Dependency Management](dependency-management.md) — Dependabot security-only configuration, auto-merge, and the update skill
 - [Deploy to GCP](../how-to/deploy-to-gcp.md) — Manual deployment guide
 - [GCP Hosting Architecture](gcp-hosting-architecture.md) — Static site hosting design
 - [Environment Variables](../reference/environment-variables.md) — Configuration reference

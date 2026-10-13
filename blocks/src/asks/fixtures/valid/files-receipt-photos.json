@@ -1,0 +1,24 @@
+{
+  "kind": "files",
+  "input": {
+    "prompt": "Upload a photo of the receipt.",
+    "accept": ["image", "pdf"],
+    "maxFiles": 3
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "skip",
+        "label": "Skip",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "files",
+    "text": "Upload a photo of the receipt.",
+    "toolCallId": "call_fixture"
+  }
+}

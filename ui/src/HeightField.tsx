@@ -8,7 +8,7 @@ import {FieldError} from "./fieldElements/FieldError";
 import {FieldHelperText} from "./fieldElements/FieldHelperText";
 import {FieldTitle} from "./fieldElements/FieldTitle";
 import {HeightActionSheet} from "./HeightActionSheet";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {SelectField} from "./SelectField";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
@@ -158,7 +158,7 @@ export const HeightField: FC<HeightFieldProps> = ({
 }) => {
   const {theme} = useTheme();
   const actionSheetRef = useRef<ActionSheet | null>(null);
-  const isMobileOrNative = isMobileDevice() || isNative();
+  const isMobileOrNative = isNarrowViewport() || isNative();
 
   const minInches = min ?? DEFAULT_MIN_INCHES;
   const maxInches = max ?? DEFAULT_MAX_INCHES;

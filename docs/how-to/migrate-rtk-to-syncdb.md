@@ -152,7 +152,37 @@ import {useQuery} from "@terreno/syncdb/react";
 const todos = useQuery<Todo>("todos", {filter: (t) => !t.completed});
 ```
 
-`filter` / `sort` run in JS — there are no server query params. Tombstones are excluded unless `{includeDeleted: true}`.
+`where` / `filter` / `sort` / `limit` run in JS over the local store. Tombstones are excluded unless `{includeDeleted: true}`.
+
+### Filtered, sorted, and paged list args
+
+RTK list args map to the same syntax. Pick the hook by collection size:
+
+| RTK | Whole collection synced (`collections`) | Too large to sync whole (`queryCollections`) |
+|-----|------------------------------------------|----------------------------------------------|
+| `useGetMessagesQuery({threadId})` | `useQuery("messages", {where: {threadId}})` | `useWindowQuery("messages", {where: {threadId}})` |
+| `{status: {$in: ["open", "pending"]}}` | `where: {status: {$in: [...]}}` | same |
+| `{sort: "-created"}` | `sort: "-created"` | same |
+| `{limit: 20}` | `limit: 20` | `pageSize: 20` |
+| `{page: 2}` / load more | grow `limit` | `fetchNextPage()` |
+| `data.more` / `data.total` | — | `hasMore` / `total` |
+| `isLoading` / `isFetching` / `refetch` | not needed | `isLoading` / `isFetching` / `refetch` |
+| `{skip: !threadId}` | not needed | `skip: !threadId` |
+
+```typescript
+import {useWindowQuery} from "@terreno/syncdb/react";
+
+const {data: messages, hasMore, fetchNextPage, isLoading} = useWindowQuery<Message>("messages", {
+  where: {threadId},
+  sort: "-created",
+  pageSize: 30,
+  skip: !threadId,
+});
+```
+
+Windows with different filters keep separate result lists but share one local row per
+document, so an edit to a message shown in two windows updates once. See
+[Query windows](../reference/syncdb.md#query-windows).
 
 ### Delete this RTK read code
 

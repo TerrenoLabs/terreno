@@ -22,6 +22,13 @@ beforeAll(() => {
 });
 
 describe("Toast", () => {
+  it("lets clicks pass through the layout wrapper beside the toast", () => {
+    const {toJSON} = renderWithTheme(<Toast title="Pass through" />);
+    const wrapper = toJSON() as {props: {style: unknown}};
+    const style = Object.assign({}, ...[wrapper.props.style].flat()) as {pointerEvents?: string};
+    expect(style.pointerEvents).toBe("box-none");
+  });
+
   it("renders correctly with default props", () => {
     const {toJSON} = renderWithTheme(<Toast title="Test message" />);
     expect(toJSON()).toMatchSnapshot();

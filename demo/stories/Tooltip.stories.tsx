@@ -2,14 +2,14 @@ import {
   Box,
   Heading,
   IconButton,
-  isMobileDevice,
+  isNarrowViewport,
   Text,
   Tooltip,
   type TooltipProps,
 } from "@terreno/ui";
 import type React from "react";
 
-const isMobile = isMobileDevice();
+const isMobile = isNarrowViewport();
 export const TooltipDemo = (props: Partial<TooltipProps>) => {
   return (
     <Box alignItems="center" justifyContent="center">

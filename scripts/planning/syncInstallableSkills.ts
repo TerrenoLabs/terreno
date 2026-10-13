@@ -29,8 +29,9 @@ const INSTALLABLE_PLUGIN_DIRECTORIES = ["plugins/terreno-planning", "plugins/ter
 export const SKILL_GROUPS: SkillGroup[] = [
   {
     description:
-      "Bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
+      "PRD seed, then bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
     skills: [
+      "terreno-prd",
       "terreno-1-grow",
       "terreno-2-pick",
       "terreno-3-roast",
@@ -79,6 +80,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "implement-ready-for-dev",
       "respond-to-review",
       "verify-ui-changes",
+      "accessibility-testing",
       "review-chart-visuals",
       "work-github-issues",
       "fix-conflicts",
@@ -123,6 +125,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "expo-cicd-workflows",
       "expo-deployment",
       "expo-dev-client",
+      "store-assets",
       "track-upstream-expo",
       "upgrading-expo",
       "use-dom",

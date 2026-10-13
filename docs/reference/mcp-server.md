@@ -391,6 +391,23 @@ Validate a Mongoose schema against Terreno conventions.
 - Recommendations for fixes
 - Severity levels (error, warning, info)
 
+### terreno_validate_ui_blocks
+
+Check one whole-reply YAML or JSON document. The text is the same report `terreno-blocks validate` prints: each problem is `path  CODE  message — fix`. A valid document with no warnings returns an empty string.
+
+**Parameters:**
+
+``````typescript
+{
+  document: string; // Required — the YAML or JSON document
+}
+``````
+
+**Returns:**
+
+- The CLI report, including a trailing newline when there is at least one line
+- An empty string when the document is valid and has no warnings
+
 ### terreno_bootstrap_ai_rules
 
 Scaffold AI coding assistant rules (AGENTS.md, Cursor/Windsurf rules, Copilot instructions, rulesync config).

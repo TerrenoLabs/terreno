@@ -40,6 +40,8 @@
 `AdminAction` has `id`, `label`, optional `confirm`, `background`, and `patchKeys`.
 
 `AdminContribution` may provide `models`, `customScreens`, `homeWidgets`, and `scripts`.
+`customScreens[].group` becomes a named sidebar heading (`AI Observability`). Screens without
+`group` stay under **Screens** — that is where **AI Requests** remains.
 Model contributions contain `model`, `routePath`, and `admin`. Duplicate `routePath`s
 throw for registered routers; the same Mongoose model at two paths gets unique config
 `name`s so the admin UI can route to each.

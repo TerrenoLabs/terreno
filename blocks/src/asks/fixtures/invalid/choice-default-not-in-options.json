@@ -1,0 +1,13 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which plan?",
+    "select": "one",
+    "options": [
+      {"id": "team", "label": "Team"},
+      {"id": "solo", "label": "Solo"}
+    ],
+    "default": ["gold"]
+  },
+  "errors": [{"path": "default[0]", "code": "DEFAULT_NOT_IN_OPTIONS"}]
+}

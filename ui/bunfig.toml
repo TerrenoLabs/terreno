@@ -1,10 +1,13 @@
 [test]
 preload = ["./src/bunSetup.ts"]
 root = "./src"
+# `src/asks/askTypes.ts` is type-only, so Bun writes no LCOV for it; the new-file coverage gate
+# reads this list instead of scoring it 0%.
 coveragePathIgnorePatterns = [
   "dist/**",
   "src/bunSetup.ts",
   "src/test-utils.tsx",
+  "src/asks/askTypes.ts",
   "**/*.test.ts",
   "**/*.test.tsx",
   "**/*.stories.{ts,tsx}",

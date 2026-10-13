@@ -8,6 +8,7 @@ declare module "@openfeature/core" {
   export type BooleanFlagKey =
     | "ai-features"
     | "dark-mode-toggle"
+    | "file-uploads"
     | "todo-priority"
     | "todo-summary-card";
 

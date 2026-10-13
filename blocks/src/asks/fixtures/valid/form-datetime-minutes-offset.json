@@ -1,0 +1,44 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "When does the flight leave?",
+    "fields": [
+      {
+        "id": "departs",
+        "type": "datetime",
+        "label": "Departs at",
+        "required": true,
+        "default": "2026-10-01T09:30+02:00"
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "submit-defaults",
+        "label": "Submit defaults",
+        "response": {
+          "action": "accept",
+          "content": {
+            "values": {
+              "departs": "2026-10-01T09:30+02:00"
+            }
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "When does the flight leave?",
+    "toolCallId": "call_fixture"
+  }
+}

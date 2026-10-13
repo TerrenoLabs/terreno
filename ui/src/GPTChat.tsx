@@ -1,14 +1,34 @@
+import {
+  type AskValidationError,
+  askResponseSchema,
+  type Block,
+  type BlockAction,
+  type BlocksDocument,
+  parseBlocksPartial,
+} from "@terreno/blocks";
+import {DateTime} from "luxon";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {
+  AccessibilityInfo,
+  findNodeHandle,
+  type Text as NativeText,
   Platform,
   Image as RNImage,
   type ScrollView as RNScrollView,
   type TextInput as RNTextInput,
+  View,
 } from "react-native";
 
 import {AttachmentPreview} from "./AttachmentPreview";
+import {AskCard} from "./asks/AskCard";
+import type {AskFilesResolver} from "./asks/askFileRefs";
+import type {AskSubmitHandler, ChatAsk} from "./asks/askTypes";
 import {Box} from "./Box";
 import {Button} from "./Button";
+import {BlocksView} from "./blocks/BlocksView";
+import type {BlocksViewProps} from "./Common";
+import {DropdownMenuItem} from "./DropdownMenuItem";
+import {DropdownPanel} from "./DropdownPanel";
 import type {SelectedFile} from "./FilePickerButton";
 import {FilePickerButton} from "./FilePickerButton";
 import {Heading} from "./Heading";
@@ -66,8 +86,31 @@ export interface ToolResultInfo {
 // Message Types
 // ============================================================
 
+export interface BlockChatEvent {
+  action: BlockAction;
+  blockId: string;
+  elementId: string;
+  messageId: string;
+}
+
+/** What `onBlockCallback` returns. `replace: "block"` swaps that block. `text` appends a message. */
+export interface BlockCallbackResult {
+  blocks?: Block | BlocksDocument;
+  replace?: "block";
+  text?: string;
+}
+
 export interface GPTChatMessage {
+  /**
+   * Set on a `tool-call` message when the tool call is an agent ask. The chat renders an `AskCard`
+   * instead of the tool call, and hides the ask's `tool-result` message.
+   */
+  ask?: ChatAsk;
+  /** Subtle caption under a block reply, such as "3 components". */
+  blockNote?: string;
   content: string;
+  /** Stable id for block actions. Falls back to the message index. */
+  id?: string;
   contentParts?: MessageContentPart[];
   rating?: "up" | "down";
   role: "user" | "assistant" | "system" | "tool-call" | "tool-result";
@@ -93,16 +136,31 @@ export interface MCPToolDetail {
 }
 
 export interface GPTChatProps {
+  /** Errors for the last answer to each ask, keyed by tool call id, such as a 400's `fields`. */
+  askErrors?: Record<string, AskValidationError[]>;
   attachments?: SelectedFile[];
   availableModels?: Array<{label: string; value: string}>;
   currentHistoryId?: string;
   currentMessages: GPTChatMessage[];
   geminiApiKey?: string;
   histories: GPTChatHistory[];
+  /** Callback names the host will run. A callback outside this list is disabled. */
+  hostActions?: readonly string[];
   isStreaming?: boolean;
   /** Available MCP tools to display in the tools panel. */
   mcpTools?: MCPToolDetail[];
   mcpServers?: MCPServerStatus[];
+  /**
+   * Called when the user answers a pending ask. The pressed control shows a loading state until
+   * the returned promise settles. Without it, asks are shown but cannot be answered.
+   */
+  onAskSubmit?: AskSubmitHandler;
+  /** `open` and `select`. `reply` calls `onSubmit`. `callback` calls `onBlockCallback`. */
+  onBlockAction?: (event: BlockChatEvent) => void;
+  /** Runs a callback button. The button stays loading until the promise settles. */
+  onBlockCallback?: (
+    event: BlockChatEvent
+  ) => BlockCallbackResult | Promise<BlockCallbackResult | undefined> | undefined;
   onAttachFiles?: (files: SelectedFile[]) => void;
   onCreateHistory: () => void;
   onDeleteHistory: (id: string) => void;
@@ -114,6 +172,15 @@ export interface GPTChatProps {
   onSelectHistory: (id: string) => void;
   onSubmit: (prompt: string) => void;
   onUpdateTitle?: (id: string, title: string) => void;
+  /**
+   * Turns the files picked for a `files` ask into the answer's refs: uploads (`{fileId}`) or data
+   * URLs (`{url}`). Defaults to data URLs. Throw to keep the ask open.
+   */
+  resolveAskFiles?: AskFilesResolver;
+  /** Loads a `ref` dataset while `uiBlocks` is on. */
+  resolveDataset?: BlocksViewProps["resolveDataset"];
+  /** Turns a `file:` image id into a URL while `uiBlocks` is on. */
+  resolveImage?: BlocksViewProps["resolveImage"];
   selectedModel?: string;
   /**
    * Optional consumer-owned character for an empty chat. Terreno does not ship a
@@ -124,6 +191,15 @@ export interface GPTChatProps {
   suggestedPrompts?: string[];
   systemMemory?: string;
   testID?: string;
+  /**
+   * Assistant messages are whole-reply documents. A streaming message renders each finished
+   * top-level block and a spinner for the block still arriving.
+   */
+  uiBlocks?: boolean;
+  /** Renders `html` blocks in a sandboxed frame. Off until the host turns it on. */
+  allowHtml?: boolean;
+  /** Hostnames allowed on https image sources. Empty rejects every https image. */
+  imageHosts?: readonly string[];
 }
 
 // ============================================================
@@ -228,18 +304,103 @@ const handleDownloadFile = (url: string, filename: string): void => {
   document.body.removeChild(link);
 };
 
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  "image/gif": "gif",
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+
+const getImageFilename = (part: ImageContentPart): string => {
+  const extension = IMAGE_EXTENSIONS[part.mimeType ?? ""] ?? "png";
+  return `image-${DateTime.now().toMillis()}.${extension}`;
+};
+
+// Browsers reliably accept only PNG on the clipboard, so other formats are redrawn as PNG.
+const convertBlobToPng = async (blob: Blob): Promise<Blob> => {
+  if (blob.type === "image/png") {
+    return blob;
+  }
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((png) => (png ? resolve(png) : reject(new Error("PNG conversion failed"))));
+  });
+};
+
+/** Copies the image itself (not a text placeholder) to the clipboard. */
+const copyImageToClipboard = async (part: ImageContentPart): Promise<void> => {
+  if (Platform.OS === "web") {
+    if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
+      console.warn("Copying images is not supported in this browser");
+      return;
+    }
+    const response = await fetch(part.url);
+    const png = await convertBlobToPng(await response.blob());
+    await navigator.clipboard.write([new ClipboardItem({"image/png": png})]);
+    return;
+  }
+  const Clipboard = await import("expo-clipboard");
+  const base64 = part.url.startsWith("data:") ? part.url.split(",")[1] : undefined;
+  if (base64) {
+    await Clipboard.setImageAsync(base64);
+  } else {
+    await Clipboard.setStringAsync(part.url);
+  }
+};
+
+const ImageActions = ({part}: {part: ImageContentPart}): React.ReactElement => {
+  const handleCopy = useCallback(async (): Promise<void> => {
+    try {
+      await copyImageToClipboard(part);
+    } catch (error) {
+      console.warn("Failed to copy image", error);
+    }
+  }, [part]);
+
+  const handleDownload = useCallback((): void => {
+    handleDownloadFile(part.url, getImageFilename(part));
+  }, [part]);
+
+  return (
+    <Box direction="row" gap={1} testID="gpt-image-actions">
+      <IconButton
+        accessibilityLabel="Copy image"
+        iconName="copy"
+        onClick={handleCopy}
+        testID="gpt-copy-image"
+        variant="ghost"
+      />
+      {Platform.OS === "web" ? (
+        <IconButton
+          accessibilityLabel="Download image"
+          iconName="download"
+          onClick={handleDownload}
+          testID="gpt-download-image"
+          variant="ghost"
+        />
+      ) : null}
+    </Box>
+  );
+};
+
 const MessageContentParts = ({parts}: {parts: MessageContentPart[]}): React.ReactElement => {
   return (
     <Box gap={2}>
       {parts.map((part, index) => {
         if (part.type === "image") {
           return (
-            <RNImage
-              key={`content-${index}`}
-              resizeMode="contain"
-              source={{uri: part.url}}
-              style={{borderRadius: 8, height: 400, maxWidth: 800, minWidth: 400, width: "100%"}}
-            />
+            <Box gap={1} key={`content-${index}`}>
+              <RNImage
+                resizeMode="contain"
+                source={{uri: part.url}}
+                style={{borderRadius: 8, height: 400, maxWidth: 800, minWidth: 400, width: "100%"}}
+              />
+              <ImageActions part={part} />
+            </Box>
           );
         }
         if (part.type === "file") {
@@ -464,25 +625,44 @@ const HistoryItemTitle = ({
     );
   }
   return (
-    <Text color={history.id === currentHistoryId ? "inverted" : "primary"} size="sm" truncate>
-      {history.title ?? "New Chat"}
-    </Text>
+    <Box flex="grow" minWidth={0}>
+      <Text color={history.id === currentHistoryId ? "inverted" : "primary"} size="sm" truncate>
+        {history.title ?? "New Chat"}
+      </Text>
+    </Box>
   );
 };
 
-const HistoryItemActionButton = ({
+const HistoryItemActions = ({
   editingHistoryId,
   handleFinishRename,
   handleStartRename,
   history,
+  isSelected,
+  onDeleteHistory,
   onUpdateTitle,
 }: {
   editingHistoryId: string | null;
   handleFinishRename: () => void;
   handleStartRename: (id: string, title: string) => void;
   history: GPTChatHistory;
+  isSelected: boolean;
+  onDeleteHistory: (id: string) => void;
   onUpdateTitle?: (id: string, title: string) => void;
-}): React.ReactElement | null => {
+}): React.ReactElement => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const title = history.title ?? "New Chat";
+
+  const handleRename = useCallback((): void => {
+    setIsMenuOpen(false);
+    handleStartRename(history.id, history.title ?? "");
+  }, [handleStartRename, history.id, history.title]);
+
+  const handleDelete = useCallback((): void => {
+    setIsMenuOpen(false);
+    onDeleteHistory(history.id);
+  }, [history.id, onDeleteHistory]);
+
   if (editingHistoryId === history.id) {
     return (
       <IconButton
@@ -493,16 +673,45 @@ const HistoryItemActionButton = ({
       />
     );
   }
-  if (!onUpdateTitle) {
-    return null;
-  }
+
   return (
-    <IconButton
-      accessibilityLabel={`Rename chat: ${history.title ?? "New Chat"}`}
-      iconName="pencil"
-      onClick={() => handleStartRename(history.id, history.title ?? "")}
-      testID={`gpt-rename-history-${history.id}`}
-    />
+    <DropdownPanel
+      align="auto"
+      isOpen={isMenuOpen}
+      onOpenChange={setIsMenuOpen}
+      renderTrigger={({toggle}) => (
+        <IconButton
+          accessibilityLabel={`Chat actions: ${title}`}
+          iconName="ellipsis-vertical"
+          onClick={toggle}
+          testID={`gpt-history-menu-${history.id}`}
+          variant={isSelected ? "primary" : "ghost"}
+        />
+      )}
+      showActionButtons={false}
+      testID={`gpt-history-menu-panel-${history.id}`}
+      width={180}
+    >
+      <Box gap={1}>
+        {onUpdateTitle ? (
+          <DropdownMenuItem
+            accessibilityLabel={`Rename chat: ${title}`}
+            iconName="pen-to-square"
+            label="Rename"
+            onClick={handleRename}
+            testID={`gpt-rename-history-${history.id}`}
+          />
+        ) : null}
+        <DropdownMenuItem
+          accessibilityLabel={`Delete chat: ${title}`}
+          color="error"
+          iconName="trash-can"
+          label="Delete"
+          onClick={handleDelete}
+          testID={`gpt-delete-history-${history.id}`}
+        />
+      </Box>
+    </DropdownPanel>
   );
 };
 
@@ -524,7 +733,149 @@ const ContentPartsPreview = ({
   );
 };
 
-const MessageText = ({content, role}: {content: string; role: string}): React.ReactElement => {
+const replacementBlock = (blocks: Block | BlocksDocument): Block | undefined => {
+  if ("type" in blocks) {
+    return blocks;
+  }
+  return blocks.blocks[0];
+};
+
+const documentFromPartial = (partial: ReturnType<typeof parseBlocksPartial>): BlocksDocument => {
+  const doc = {v: 1} as BlocksDocument;
+  if (partial.datasets !== undefined) {
+    doc.datasets = partial.datasets as BlocksDocument["datasets"];
+  }
+  doc.blocks = partial.blocks as Block[];
+  return doc;
+};
+
+const AssistantBlocks = ({
+  allowHtml,
+  content,
+  hostActions,
+  imageHosts,
+  isPartial,
+  messageId,
+  onBlockEvent,
+  overrides,
+  pendingElementIds,
+  resolveDataset,
+  resolveImage,
+}: {
+  allowHtml?: boolean;
+  content: string;
+  hostActions?: readonly string[];
+  imageHosts?: readonly string[];
+  isPartial: boolean;
+  messageId: string;
+  onBlockEvent: (event: BlockChatEvent) => void;
+  overrides?: Record<string, Block>;
+  pendingElementIds?: readonly string[];
+  resolveDataset?: BlocksViewProps["resolveDataset"];
+  resolveImage?: BlocksViewProps["resolveImage"];
+}): React.ReactElement => {
+  if (isPartial) {
+    const partial = parseBlocksPartial(content);
+    return (
+      <Box gap={2} testID={`gpt-blocks-${messageId}`}>
+        {partial.blocks.length > 0 ? (
+          <BlocksView
+            allowHtml={allowHtml}
+            document={documentFromPartial(partial)}
+            hostActions={hostActions}
+            imageHosts={imageHosts}
+            onAction={(event) =>
+              onBlockEvent({
+                action: event.action,
+                blockId: event.blockId,
+                elementId: event.elementId,
+                messageId,
+              })
+            }
+            overrides={overrides}
+            pendingElementIds={pendingElementIds}
+            resolveDataset={resolveDataset}
+            resolveImage={resolveImage}
+            streaming
+          />
+        ) : null}
+        {partial.pending ? (
+          <Box testID="gpt-blocks-pending">
+            <Spinner size="sm" />
+          </Box>
+        ) : null}
+      </Box>
+    );
+  }
+  return (
+    <BlocksView
+      allowHtml={allowHtml}
+      document={content}
+      hostActions={hostActions}
+      imageHosts={imageHosts}
+      onAction={(event) =>
+        onBlockEvent({
+          action: event.action,
+          blockId: event.blockId,
+          elementId: event.elementId,
+          messageId,
+        })
+      }
+      overrides={overrides}
+      pendingElementIds={pendingElementIds}
+      resolveDataset={resolveDataset}
+      resolveImage={resolveImage}
+      testID={`gpt-blocks-${messageId}`}
+    />
+  );
+};
+
+const MessageText = ({
+  allowHtml,
+  content,
+  hostActions,
+  imageHosts,
+  isPartial,
+  messageId,
+  onBlockEvent,
+  overrides,
+  pendingElementIds,
+  resolveDataset,
+  resolveImage,
+  role,
+  uiBlocks,
+}: {
+  allowHtml?: boolean;
+  content: string;
+  hostActions?: readonly string[];
+  imageHosts?: readonly string[];
+  isPartial: boolean;
+  messageId: string;
+  onBlockEvent: (event: BlockChatEvent) => void;
+  overrides?: Record<string, Block>;
+  pendingElementIds?: readonly string[];
+  resolveDataset?: BlocksViewProps["resolveDataset"];
+  resolveImage?: BlocksViewProps["resolveImage"];
+  role: string;
+  uiBlocks: boolean;
+}): React.ReactElement => {
+  if (role === "assistant" && uiBlocks) {
+    return (
+      <AssistantBlocks
+        allowHtml={allowHtml}
+        content={content}
+        hostActions={hostActions}
+        imageHosts={imageHosts}
+        isPartial={isPartial}
+        messageId={messageId}
+        onBlockEvent={onBlockEvent}
+        overrides={overrides}
+        pendingElementIds={pendingElementIds}
+        resolveDataset={resolveDataset}
+        resolveImage={resolveImage}
+      />
+    );
+  }
   if (role === "assistant") {
     return <MarkdownView>{content}</MarkdownView>;
   }
@@ -569,7 +920,7 @@ const AssistantActions = ({
   message,
   onRateFeedback,
 }: {
-  handleCopyMessage: (text: string) => void;
+  handleCopyMessage: (message: GPTChatMessage) => void;
   index: number;
   message: GPTChatMessage;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
@@ -583,7 +934,7 @@ const AssistantActions = ({
       <IconButton
         accessibilityLabel="Copy message"
         iconName="copy"
-        onClick={() => handleCopyMessage(message.content)}
+        onClick={() => handleCopyMessage(message)}
         testID={`gpt-copy-msg-${index}`}
       />
     </Box>
@@ -651,18 +1002,183 @@ const EmptyChatHero = ({
   );
 };
 
+/**
+ * Moves focus to a pending ask when it appears, so keyboard and screen reader users land on it.
+ * On web the ask's group takes keyboard focus. On native, screen reader focus goes to the ask's
+ * question, because it only lands on an accessible element and the group is not one. A raw
+ * `View` because `Box` does not expose its native view to a ref.
+ */
+const AskFocusTarget = ({
+  label,
+  renderCard,
+}: {
+  label: string;
+  renderCard: (promptRef: React.RefObject<NativeText | null>) => React.ReactElement;
+}): React.ReactElement => {
+  const viewRef = useRef<View>(null);
+  const promptRef = useRef<NativeText>(null);
+
+  // Focus the ask once, when it mounts; later renders of the same ask leave focus alone.
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      (viewRef.current as unknown as HTMLElement | null)?.focus?.({preventScroll: true});
+      return;
+    }
+    const node = promptRef.current ? findNodeHandle(promptRef.current) : null;
+    if (node) {
+      AccessibilityInfo.setAccessibilityFocus(node);
+    }
+  }, []);
+
+  return (
+    <View aria-label={label} ref={viewRef} role="group" tabIndex={-1}>
+      {renderCard(promptRef)}
+    </View>
+  );
+};
+
+/** The ask's answer, taken from its `tool-result` message when the host did not set `response`. */
+const withStoredResponse = (ask: ChatAsk, results: Map<string, unknown>): ChatAsk => {
+  if (ask.response || !results.has(ask.toolCallId)) {
+    return ask;
+  }
+  const stored = askResponseSchema.safeParse(results.get(ask.toolCallId));
+  return stored.success ? {...ask, response: stored.data} : ask;
+};
+
+const AskTranscriptItem = ({
+  ask,
+  errors,
+  onAskSubmit,
+  resolveAskFiles,
+}: {
+  ask: ChatAsk;
+  errors?: AskValidationError[];
+  onAskSubmit?: AskSubmitHandler;
+  resolveAskFiles?: AskFilesResolver;
+}): React.ReactElement => {
+  const renderCard = (promptRef?: React.Ref<NativeText>): React.ReactElement => (
+    <AskCard
+      ask={ask}
+      errors={errors}
+      onSubmit={onAskSubmit}
+      promptRef={promptRef}
+      resolveAskFiles={resolveAskFiles}
+      testID={`gpt-ask-${ask.toolCallId}`}
+    />
+  );
+  if (ask.status !== "pending") {
+    return <Box alignItems="start">{renderCard()}</Box>;
+  }
+  return (
+    <Box maxWidth="80%" width="100%">
+      <AskFocusTarget
+        label={ask.input?.title ?? "Question from the assistant"}
+        renderCard={renderCard}
+      />
+    </Box>
+  );
+};
+
 const MessageList = ({
+  allowHtml,
+  appendedByMessage,
+  askErrors,
+  blockOverrides,
   currentMessages,
   handleCopyMessage,
+  hostActions,
+  imageHosts,
+  isStreaming,
+  onAskSubmit,
+  onBlockEvent,
   onRateFeedback,
+  pendingElements,
+  resolveAskFiles,
+  resolveDataset,
+  resolveImage,
+  uiBlocks,
 }: {
+  allowHtml?: boolean;
+  appendedByMessage: Record<string, GPTChatMessage[]>;
+  askErrors?: Record<string, AskValidationError[]>;
+  blockOverrides: Record<string, Record<string, Block>>;
   currentMessages: GPTChatMessage[];
-  handleCopyMessage: (text: string) => void;
+  handleCopyMessage: (message: GPTChatMessage) => void;
+  hostActions?: readonly string[];
+  imageHosts?: readonly string[];
+  isStreaming: boolean;
+  onAskSubmit?: AskSubmitHandler;
+  onBlockEvent: (event: BlockChatEvent) => void;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
+  pendingElements: Record<string, readonly string[]>;
+  resolveAskFiles?: AskFilesResolver;
+  resolveDataset?: BlocksViewProps["resolveDataset"];
+  resolveImage?: BlocksViewProps["resolveImage"];
+  uiBlocks: boolean;
 }): React.ReactElement => {
+  const askToolCallIds = new Set<string>();
+  const toolResults = new Map<string, unknown>();
+  for (const message of currentMessages) {
+    if (message.role === "tool-call" && message.ask) {
+      askToolCallIds.add(message.ask.toolCallId);
+    }
+    if (message.role === "tool-result" && message.toolResult) {
+      toolResults.set(message.toolResult.toolCallId, message.toolResult.result);
+    }
+  }
+
+  // The live reply stays partial after an ask is appended, so a draft document does not
+  // validate as a finished message while the turn is still streaming.
+  const liveAssistantIndex = ((): number => {
+    if (!uiBlocks || !isStreaming) {
+      return -1;
+    }
+    for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
+      const role = currentMessages[index]?.role;
+      if (role === "assistant") {
+        return index;
+      }
+      if (role === "user") {
+        return -1;
+      }
+    }
+    return -1;
+  })();
+  const rows = currentMessages.flatMap((message, sourceIndex) => {
+    const messageKey = message.id ?? `msg-${sourceIndex}`;
+    const extras = appendedByMessage[messageKey] ?? [];
+    return [
+      {message, messageKey, sourceIndex},
+      ...extras.map((extra) => ({
+        message: extra,
+        messageKey: extra.id ?? `${messageKey}-extra`,
+        sourceIndex: -1 as const,
+      })),
+    ];
+  });
+
   return (
     <>
-      {currentMessages.map((message, index) => {
+      {rows.map(({message, messageKey, sourceIndex}, index) => {
+        if (message.role === "tool-call" && message.ask) {
+          return (
+            <AskTranscriptItem
+              ask={withStoredResponse(message.ask, toolResults)}
+              errors={askErrors?.[message.ask.toolCallId]}
+              key={`ask-${message.ask.toolCallId}`}
+              onAskSubmit={onAskSubmit}
+              resolveAskFiles={resolveAskFiles}
+            />
+          );
+        }
+        if (
+          message.role === "tool-result" &&
+          message.toolResult &&
+          askToolCallIds.has(message.toolResult.toolCallId)
+        ) {
+          return null;
+        }
         if (message.role === "tool-call" && message.toolCall) {
           return (
             <Box alignItems="start" key={`msg-${index}`} maxWidth="80%">
@@ -679,8 +1195,9 @@ const MessageList = ({
         }
 
         const hasImages = message.contentParts?.some((p) => p.type === "image");
+        const messageId = messageKey;
         return (
-          <Box alignItems={message.role === "user" ? "end" : "start"} key={`msg-${index}`}>
+          <Box alignItems={message.role === "user" ? "end" : "start"} key={messageKey}>
             <Box
               color={message.role === "user" ? "primary" : "neutralLight"}
               maxWidth={hasImages ? "90%" : "80%"}
@@ -691,12 +1208,31 @@ const MessageList = ({
                 hasContent={Boolean(message.content)}
                 parts={message.contentParts}
               />
-              <MessageText content={message.content} role={message.role} />
+              <MessageText
+                allowHtml={allowHtml}
+                content={message.content}
+                hostActions={hostActions}
+                imageHosts={imageHosts}
+                isPartial={liveAssistantIndex >= 0 && sourceIndex === liveAssistantIndex}
+                messageId={messageId}
+                onBlockEvent={onBlockEvent}
+                overrides={blockOverrides[messageId]}
+                pendingElementIds={pendingElements[messageId]}
+                resolveDataset={resolveDataset}
+                resolveImage={resolveImage}
+                role={message.role}
+                uiBlocks={uiBlocks}
+              />
+              {message.blockNote ? (
+                <Text color="secondaryLight" size="sm" testID={`gpt-block-note-${messageId}`}>
+                  {message.blockNote}
+                </Text>
+              ) : null}
               <AssistantActions
                 handleCopyMessage={handleCopyMessage}
-                index={index}
+                index={sourceIndex}
                 message={message}
-                onRateFeedback={onRateFeedback}
+                onRateFeedback={sourceIndex >= 0 ? onRateFeedback : undefined}
               />
             </Box>
           </Box>
@@ -858,16 +1394,26 @@ const ApiKeyModal = ({
 // Main Component
 // ============================================================
 
+/** Pixels of content below the viewport before "Scroll to bottom" appears. */
+const SCROLL_TO_BOTTOM_THRESHOLD = 100;
+/** Height the composer grows to before its text scrolls. */
+const COMPOSER_MAX_HEIGHT = 200;
+
 export const GPTChat = ({
+  askErrors,
   attachments = [],
   availableModels,
   currentHistoryId,
   currentMessages,
   geminiApiKey,
   histories,
+  hostActions,
   isStreaming = false,
   mcpTools,
   mcpServers,
+  onAskSubmit,
+  onBlockAction,
+  onBlockCallback,
   onAttachFiles,
   onCreateHistory,
   onDeleteHistory,
@@ -879,11 +1425,17 @@ export const GPTChat = ({
   onSelectHistory,
   onSubmit,
   onUpdateTitle,
+  resolveAskFiles,
+  resolveDataset,
+  resolveImage,
   selectedModel,
   mascot,
   suggestedPrompts,
   systemMemory,
   testID,
+  uiBlocks = false,
+  allowHtml = false,
+  imageHosts,
 }: GPTChatProps): React.ReactElement => {
   const [inputValue, setInputValue] = useState("");
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -897,6 +1449,83 @@ export const GPTChat = ({
   const [isApiKeyModalVisible, setIsApiKeyModalVisible] = useState(false);
   const [isToolsModalVisible, setIsToolsModalVisible] = useState(false);
   const [apiKeyDraft, setApiKeyDraft] = useState(geminiApiKey ?? "");
+  const [blockOverrides, setBlockOverrides] = useState<Record<string, Record<string, Block>>>({});
+  const [pendingElements, setPendingElements] = useState<Record<string, string[]>>({});
+  const [appendedByMessage, setAppendedByMessage] = useState<Record<string, GPTChatMessage[]>>({});
+  const [blockHistoryId, setBlockHistoryId] = useState(currentHistoryId);
+  const historyIdRef = useRef(currentHistoryId);
+  historyIdRef.current = currentHistoryId;
+  if (blockHistoryId !== currentHistoryId) {
+    setBlockHistoryId(currentHistoryId);
+    setBlockOverrides({});
+    setPendingElements({});
+    setAppendedByMessage({});
+  }
+
+  const runBlockCallback = useCallback(
+    async (event: BlockChatEvent): Promise<void> => {
+      setPendingElements((current) => ({
+        ...current,
+        [event.messageId]: [...(current[event.messageId] ?? []), event.elementId],
+      }));
+      const historyAtStart = historyIdRef.current;
+      try {
+        const result = await onBlockCallback?.(event);
+        if (historyIdRef.current !== historyAtStart) {
+          return;
+        }
+        if (result?.text) {
+          const text = result.text;
+          setAppendedByMessage((current) => {
+            const existing = current[event.messageId] ?? [];
+            return {
+              ...current,
+              [event.messageId]: [
+                ...existing,
+                {
+                  content: text,
+                  id: `block-text-${event.messageId}-${event.elementId}-${existing.length}`,
+                  role: "assistant",
+                },
+              ],
+            };
+          });
+        }
+        if (result?.replace === "block" && result.blocks !== undefined) {
+          const block = replacementBlock(result.blocks);
+          if (block !== undefined) {
+            setBlockOverrides((current) => ({
+              ...current,
+              [event.messageId]: {...(current[event.messageId] ?? {}), [event.blockId]: block},
+            }));
+          }
+        }
+      } finally {
+        setPendingElements((current) => ({
+          ...current,
+          [event.messageId]: (current[event.messageId] ?? []).filter(
+            (id) => id !== event.elementId
+          ),
+        }));
+      }
+    },
+    [onBlockCallback]
+  );
+
+  const handleBlockEvent = useCallback(
+    (event: BlockChatEvent): void => {
+      if (event.action.kind === "reply") {
+        onSubmit(event.action.text);
+        return;
+      }
+      if (event.action.kind === "callback") {
+        void runBlockCallback(event);
+        return;
+      }
+      onBlockAction?.(event);
+    },
+    [onBlockAction, onSubmit, runBlockCallback]
+  );
 
   const handleSubmit = useCallback(() => {
     const trimmed = inputValue.trim();
@@ -943,9 +1572,21 @@ export const GPTChat = ({
     return () => el.removeEventListener("keydown", handler);
   }, [inputElement]);
 
-  const handleCopyMessage = useCallback(async (text: string) => {
+  // Image-only replies have no meaningful text, so copy the image instead of a placeholder.
+  const handleCopyMessage = useCallback(async (message: GPTChatMessage) => {
+    const firstImage = message.contentParts?.find(
+      (part): part is ImageContentPart => part.type === "image"
+    );
+    if (firstImage && !message.content.trim()) {
+      try {
+        await copyImageToClipboard(firstImage);
+      } catch (error) {
+        console.warn("Failed to copy image", error);
+      }
+      return;
+    }
     const Clipboard = await import("expo-clipboard");
-    await Clipboard.setStringAsync(text);
+    await Clipboard.setStringAsync(message.content);
   }, []);
 
   const scrollToBottom = useCallback(() => {
@@ -963,12 +1604,17 @@ export const GPTChat = ({
   const handleScroll = useCallback((offsetY: number) => {
     scrollOffsetRef.current = offsetY;
     const distanceFromBottom = contentHeightRef.current - offsetY - viewportHeightRef.current;
-    setIsScrolledUp(distanceFromBottom > 100);
+    setIsScrolledUp(distanceFromBottom > SCROLL_TO_BOTTOM_THRESHOLD);
   }, []);
 
+  // Growing content (a streaming reply) must not count as the user scrolling up, but content
+  // that shrinks to fit the viewport (switching to a short or empty chat) clears the flag.
   const handleContentLayout = useCallback(
-    (_event: {nativeEvent: {layout: {height: number; width: number; x: number; y: number}}}) => {
-      contentHeightRef.current = _event.nativeEvent.layout.height;
+    (event: {nativeEvent: {layout: {height: number; width: number; x: number; y: number}}}) => {
+      contentHeightRef.current = event.nativeEvent.layout.height;
+      if (contentHeightRef.current <= viewportHeightRef.current + SCROLL_TO_BOTTOM_THRESHOLD) {
+        setIsScrolledUp(false);
+      }
     },
     []
   );
@@ -1095,20 +1741,15 @@ export const GPTChat = ({
               history={history}
               setEditingTitle={setEditingTitle}
             />
-            <Box direction="row" gap={1}>
-              <HistoryItemActionButton
+            <Box marginLeft={1}>
+              <HistoryItemActions
                 editingHistoryId={editingHistoryId}
                 handleFinishRename={handleFinishRename}
                 handleStartRename={handleStartRename}
                 history={history}
+                isSelected={history.id === currentHistoryId}
+                onDeleteHistory={onDeleteHistory}
                 onUpdateTitle={onUpdateTitle}
-              />
-              <IconButton
-                accessibilityLabel={`Delete chat: ${history.title ?? "New Chat"}`}
-                iconName="trash"
-                onClick={() => onDeleteHistory(history.id)}
-                testID={`gpt-delete-history-${history.id}`}
-                variant="destructive"
               />
             </Box>
           </Box>
@@ -1132,18 +1773,43 @@ export const GPTChat = ({
               ) : (
                 <>
                   <MessageList
+                    allowHtml={allowHtml}
+                    appendedByMessage={appendedByMessage}
+                    askErrors={askErrors}
+                    blockOverrides={blockOverrides}
                     currentMessages={currentMessages}
                     handleCopyMessage={handleCopyMessage}
+                    hostActions={hostActions}
+                    imageHosts={imageHosts}
+                    isStreaming={isStreaming}
+                    onAskSubmit={onAskSubmit}
+                    onBlockEvent={handleBlockEvent}
                     onRateFeedback={onRateFeedback}
+                    pendingElements={pendingElements}
+                    resolveAskFiles={resolveAskFiles}
+                    resolveDataset={resolveDataset}
+                    resolveImage={resolveImage}
+                    uiBlocks={uiBlocks}
                   />
-                  <StreamingIndicator isStreaming={isStreaming} />
+                  <StreamingIndicator
+                    isStreaming={
+                      isStreaming &&
+                      !(
+                        uiBlocks &&
+                        currentMessages[currentMessages.length - 1]?.role === "assistant"
+                      )
+                    }
+                  />
                 </>
               )}
             </Box>
           </Box>
         </Box>
 
-        <ScrollToBottomButton isScrolledUp={isScrolledUp} scrollToBottom={scrollToBottom} />
+        <ScrollToBottomButton
+          isScrolledUp={isScrolledUp && !isEmptyChat}
+          scrollToBottom={scrollToBottom}
+        />
         <AttachmentSection attachments={attachments} onRemoveAttachment={onRemoveAttachment} />
 
         {/* Input */}
@@ -1171,7 +1837,9 @@ export const GPTChat = ({
             <TextArea
               blurOnSubmit={false}
               disabled={isStreaming}
+              grow
               inputRef={handleInputRef}
+              maxHeight={COMPOSER_MAX_HEIGHT}
               onChange={setInputValue}
               placeholder="Type a message..."
               testID="gpt-input"

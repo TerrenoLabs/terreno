@@ -1248,7 +1248,7 @@ export const createReplayCoordinator = ({
 
   const replay = ({userId}: {userId: string}): Promise<ReplayResult> => {
     const existing = inFlightReplays.get(userId);
-    if (existing) {
+    if (existing !== undefined) {
       // The running drain may have already taken its final "queue empty"
       // snapshot before this call's mutation was enqueued; request a
       // follow-up check once it settles rather than silently stranding the

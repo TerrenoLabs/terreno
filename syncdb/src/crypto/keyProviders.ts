@@ -51,7 +51,7 @@ const createCachedKeyResolver = ({
 
   const getKey = ({userId}: {userId: string}): Promise<CryptoKey> => {
     const existing = inFlight.get(userId);
-    if (existing) {
+    if (existing !== undefined) {
       return existing;
     }
     const promise = resolveKey({userId}).catch((error) => {

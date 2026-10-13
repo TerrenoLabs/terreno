@@ -137,9 +137,18 @@ describe("Button", () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it("uses accessible Figma text colors for primary buttons in both modes", () => {
+  it("uses inverted labels for primary buttons in both modes", () => {
     const light = renderWithTheme(
       <Button onClick={() => {}} text="Light primary" variant="primary" />
+    );
+    const disabled = renderWithTheme(
+      <Button
+        disabled
+        onClick={() => {}}
+        testID="disabled-primary"
+        text="Disabled primary"
+        variant="primary"
+      />
     );
     const dark = render(
       <ThemeModule.ThemeProvider colorScheme="dark">
@@ -147,7 +156,9 @@ describe("Button", () => {
       </ThemeModule.ThemeProvider>
     );
 
-    assert.equal(light.getByText("Light primary").props.style.color, "#092E3A");
+    assert.equal(light.getByText("Light primary").props.style.color, "#FFFFFF");
+    assert.equal(disabled.getByText("Disabled primary").props.style.color, "#FFFFFF");
+    assert.equal(disabled.getByTestId("disabled-primary").props.style.backgroundColor, "#949494");
     assert.equal(dark.getByText("Dark primary").props.style.color, "#353535");
   });
 

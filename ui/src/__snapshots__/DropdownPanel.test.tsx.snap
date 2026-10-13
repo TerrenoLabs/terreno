@@ -60,7 +60,7 @@ exports[`DropdownPanel renders correctly with default props 1`] = `
                             },
                           ],
                           "props": {
-                            "fill": "#092E3A",
+                            "fill": "#FFFFFF",
                             "height": 16,
                             "testID": undefined,
                             "viewBox": "0 0 512 512",
@@ -86,7 +86,7 @@ exports[`DropdownPanel renders correctly with default props 1`] = `
                       ],
                       "props": {
                         "style": {
-                          "color": "#092E3A",
+                          "color": "#FFFFFF",
                           "fontSize": 16,
                           "fontWeight": "700",
                         },

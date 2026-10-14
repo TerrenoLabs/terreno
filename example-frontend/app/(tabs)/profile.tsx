@@ -3,18 +3,16 @@ import {canOpenAdminPage, selectBetterAuthUserId, useFeatureFlags} from "@terren
 import {
   Badge,
   Banner,
+  BooleanField,
   Box,
   Button,
   Card,
   Heading,
   Page,
-  SelectField,
   Spinner,
   TapToEdit,
   Text,
   TextField,
-  type ThemeColorScheme,
-  themeColorSchemeOptions,
   useStoredState,
   useTheme,
 } from "@terreno/ui";
@@ -42,11 +40,7 @@ const ProfileScreen: React.FC = () => {
     usePostAuthSendVerificationMutation();
   const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
   const {colorScheme} = useTheme();
-  const {
-    colorSchemeSetting,
-    isLoading: isThemePreferenceLoading,
-    setColorScheme,
-  } = useThemePreference();
+  const {isLoading: isThemePreferenceLoading, setColorScheme} = useThemePreference();
 
   const {
     flags,
@@ -400,22 +394,15 @@ const ProfileScreen: React.FC = () => {
         <Card marginBottom={6} testID="profile-dark-mode-card">
           <Box gap={4}>
             <Heading size="lg">Appearance</Heading>
-            <SelectField
+            <BooleanField
               disabled={isThemePreferenceLoading}
-              onChange={(value): void => {
-                void setColorScheme(value as ThemeColorScheme);
+              onChange={(isDark): void => {
+                void setColorScheme(isDark ? "dark" : "light");
               }}
-              options={themeColorSchemeOptions}
-              requireValue
-              testID="profile-color-scheme"
-              title="Color scheme"
-              value={colorSchemeSetting}
+              testID="profile-dark-mode-toggle"
+              title="Dark mode"
+              value={colorScheme === "dark"}
             />
-            <Text color="secondaryLight" size="sm">
-              {colorSchemeSetting === "system"
-                ? `Following your system (${colorScheme})`
-                : `Using ${colorScheme} mode`}
-            </Text>
           </Box>
         </Card>
 

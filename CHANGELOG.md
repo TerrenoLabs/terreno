@@ -20,6 +20,13 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.16.2] - 2026-10-13
+
+### Fixed
+
+- Light-mode primary button labels, icons, and loading indicators are white again,
+  including on disabled primary buttons. (#1567)
+
 ## [57.16.1] - 2026-10-12
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.16.1.md`](mcp-server/src/docs/upgrades/57.16.1.md).

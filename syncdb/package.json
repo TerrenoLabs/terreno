@@ -35,6 +35,10 @@
       "default": "./dist/codegen/generate.js",
       "types": "./dist/codegen/generate.d.ts"
     },
+    "./devConsoleLogger": {
+      "default": "./dist/devConsoleLogger.js",
+      "types": "./dist/devConsoleLogger.d.ts"
+    },
     "./react": {
       "default": "./dist/react/index.js",
       "types": "./dist/react/index.d.ts"

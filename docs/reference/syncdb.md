@@ -30,6 +30,13 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - React (`@terreno/syncdb/react`): `SyncDbProvider`, `useEntity`, `useQuery`, `useEntityIds`, `useWindowQuery`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSyncDebugLog`, `createCollectionHooks`
 - CLI: `terreno-syncdb-codegen` (generates `SYNC_COLLECTIONS` + friendly hooks from OpenAPI)
 - Testing (`@terreno/syncdb/testing`): `createFakeTransport`
+- Dev console logger: `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb`, also
+  `@terreno/syncdb/devConsoleLogger`. In `__DEV__` it batches `console.error` / `console.warn`,
+  React Native `ErrorUtils`, and web `window` errors to `POST {baseUrl}/__terreno/browser-logs`,
+  which `read_logs` / `last_error` read back. An `ErrorUtils` error that the previous handler
+  rethrows (the web default) is left to the `window` listeners, so a caught error is not logged.
+  It does nothing outside `__DEV__`. Moved here from
+  `@terreno/rtk`, which keeps a deprecated re-export.
 
 ## Installation
 

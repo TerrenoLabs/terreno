@@ -41,8 +41,10 @@ New apps: **syncdb + Better Auth** for data and auth; **rtk** for generated SDK 
 
 Use the hosted Terreno MCP for documentation and generators, and `terreno-mcp-local` for package
 versions, read-only Mongo inspection, merged logs, client state, and Metro/CDP runtime tools.
-Configure both with `docs/how-to/set-up-terreno-mcp.md`; follow
-`docs/how-to/debug-with-mcp.md` for the diagnostic workflow. The `terreno` CLI exposes the same
+Configure both with
+[Set up Terreno MCP](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md);
+follow [Debug with MCP](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/debug-with-mcp.md)
+for the diagnostic workflow. The `terreno` CLI exposes the same
 local tools for terminal use.
 
 ## Development

@@ -6,6 +6,15 @@ This guide is **AI-context-first**: it is written for an agent (or human) perfor
 
 `modelRouter` `realtime`, `realtimeList`, `realtimeDocument`, and `setRealtimeSocket` are **deprecated** and **will be removed in Terreno 58**. `RealtimeApp` stays as the socket host for syncdb. Removal checklist: [`docs/tasks/remove-legacy-realtime.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/remove-legacy-realtime.md).
 
+`installTerrenoDevConsoleLogger` moved to `@terreno/syncdb`. The `@terreno/rtk` export is a **deprecated** re-export kept for the deprecation window. Change the import and pass the base URL:
+
+```typescript
+import {baseUrl} from "@terreno/rtk";
+import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
+
+installTerrenoDevConsoleLogger({baseUrl});
+```
+
 ## 1. Before you start
 
 | Decision | Requirement | Why |

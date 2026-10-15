@@ -28,7 +28,7 @@ Commands:
 
   info                            Print local @terreno/* versions
   logs                            Merge backend, browser, Metro, and app logs
-  state                           Inspect auth and RTK Query state
+  state                           Inspect client state (RTK Query and SyncDB)
   eval                            Evaluate JavaScript through Metro CDP
   navigate                        Navigate the Expo app through Metro CDP
   web [url]                       Drive the web app with Bun.WebView
@@ -119,8 +119,9 @@ Requires TERRENO_MCP_EVAL=1. Navigates an Expo Router app through Metro CDP.
 `,
     state: `Usage: terreno state [--slice auth|betterAuth|rtk|<name>] [--query <substring>]
 
-Reads Redux/RTK Query state through the registered dev store or Metro CDP. The auth alias prefers
-the Better Auth slice and falls back to legacy JWT auth.
+Reads client state through the registered dev stores or Metro CDP. The result names the layer it
+found (rtk, syncdb, syncdb+rtk, or none). For RTK, the auth alias prefers the Better Auth slice
+and falls back to legacy JWT auth.
 `,
     validate: `Usage: terreno validate schema --file <path>
 `,

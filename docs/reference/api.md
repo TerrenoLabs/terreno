@@ -1130,6 +1130,27 @@ See [Schema metadata explanation](../explanation/schema-metadata.md).
 
 ## Middleware
 
+### Error middleware
+
+`TerrenoApp` ends the app with `apiUnauthorizedMiddleware`, `apiErrorMiddleware`,
+and `apiFallthroughErrorMiddleware`, in that order. `apiErrorMiddleware` answers with a JSONAPI
+error body for these errors:
+
+| Error | Status | Title |
+|-------|--------|-------|
+| `APIError` (or a subclass) | its `status` | its `title` |
+| Mongoose `ValidationError` or `CastError` | 400 | `Validation failed`, with `meta.fields` |
+| Malformed JSON or urlencoded body (`entity.parse.failed`) | 400 | `Malformed request body` |
+| Body over the parser `limit` (`entity.too.large`, `parameters.too.many`) | 413 | `Request body too large` |
+| Unsupported body charset or encoding | 415 | `Unsupported request body encoding` |
+| Aborted or truncated body (`request.aborted`, `request.size.invalid`) | 400 | `Request body incomplete` |
+
+Body-parser errors keep the parser's message in `detail`, are logged at `warn`, and skip Sentry.
+`bodyParserErrorToAPIError(err)` and `mongooseErrorToAPIError(err)` are exported for custom error
+handlers; each returns `null` for errors it does not handle. Anything else reaches
+`apiFallthroughErrorMiddleware`, which logs `Fallthrough error: <error>` with the stack at `error`
+level and answers `500 {"status":500,"title":"Internal server error"}`.
+
 ### openApiEtagMiddleware
 
 Adds ETag support to the `/openapi.json` endpoint for efficient caching.
@@ -1358,19 +1379,98 @@ To correlate with Cloud Trace, ensure clients or load balancers send `x-cloud-tr
 
 ### Development browser-log ingestion
 
-`TerrenoApp` mounts `POST /__terreno/browser-logs` only when `NODE_ENV=development`, or when
-`TERRENO_BROWSER_LOGS=true` in another non-production environment. Production always returns 404;
-set `TERRENO_BROWSER_LOGS=false` to disable the route in development.
+`POST /__terreno/browser-logs` lets a running client write its console errors and warnings to a
+file on the backend, where the local MCP `read_logs` and `last_error` tools can read them. The
+Terreno dev console logger (`installTerrenoDevConsoleLogger`) is the client that sends them. The
+route lives in `api/src/browserLogsRoute.ts`.
 
-The route accepts loopback requests for local browser development. Non-loopback clients must
-authenticate through the app's normal JWT or Better Auth middleware. `TerrenoApp` mounts the route
-after its optional rate limiter, so configured API limits also apply to ingestion.
+**When the route exists.** `TerrenoApp` calls `addTerrenoDevBrowserLogsRoute(app)` while it builds
+the app. `setupServer` does not register the route. An app built on `setupServer` can call the
+exported `addTerrenoDevBrowserLogsRoute(app)` itself. The check runs once, when the route is added:
 
-The request body is `{entries: Array<{level?, message?, stack?, timestamp?}>}`. Batches are capped
-at 100 entries and 256 kB. Accepted rows are truncated to bounded field lengths and appended as
-mode-`0600` JSONL under `<backend cwd>/.terreno/logs/browser.log`. The file restarts with the latest
-batch before it would exceed 5 MB. The local MCP `read_logs` / `last_error` tools and
-`terreno logs --sources browser` consume that file.
+| `NODE_ENV` | `TERRENO_BROWSER_LOGS` | Route |
+|------------|------------------------|-------|
+| `production` | any value, including `true` | Not registered |
+| anything else, or unset | `false` or `0` | Not registered |
+| anything else, or unset | `true` or `1` | Registered |
+| `development` | unset or any other value | Registered |
+| not `development`, or unset | unset or any other value | Not registered |
+
+An unregistered route falls through to the app's normal not-found handling, so the request gets a
+404. Production always returns 404. `TERRENO_BROWSER_LOGS=true` cannot turn the route on there.
+`NODE_ENV` unset counts as "not `development`", so the route is off unless
+`TERRENO_BROWSER_LOGS=true` is set.
+
+**Who may post.** The route accepts a request when `req.user` is set or when the socket's remote
+address is loopback (`127.0.0.1`, `::1`, or `::ffff:127.0.0.1`). Any other request gets 403. The
+check reads the socket address, not `X-Forwarded-For`. `TerrenoApp` mounts the route after JWT
+decoding, the Better Auth session middleware, and the optional rate limiter. Remote clients can
+authenticate the usual way, and configured API limits apply to ingestion too.
+
+**Request body.**
+
+``````json
+{"entries": [{"level": "error", "message": "Cannot read properties of undefined", "stack": "TypeError: ...", "timestamp": "2026-10-12T00:29:20.067+00:00"}]}
+``````
+
+| Field | Type | Handling |
+|-------|------|----------|
+| `entries` | array | Required and non-empty. At most 100 items. |
+| `entries[].level` | string | Defaults to `info`. Truncated to 32 characters. |
+| `entries[].message` | any | A string is kept as is. Any other value is JSON-stringified. Truncated to 8,000 characters. |
+| `entries[].stack` | string | Optional. Truncated to 16,000 characters. Left out of the line when it is not a string. |
+| `entries[].timestamp` | string | Kept as sent. When missing or empty, the server uses Luxon `DateTime.now().toISO()`. |
+
+Items that are not objects are skipped, and the request still succeeds.
+
+**Responses.**
+
+| Status | When |
+|--------|------|
+| `204` | The batch was accepted and written. |
+| `400` | The body has no `entries` array, or the array is empty: `{"error": "Expected { entries: [...] }"}`. |
+| `403` | The client is neither loopback nor authenticated. |
+| `413` | The parsed body is over 256 kB, or `entries` has more than 100 items. |
+| `404` | The route is not registered (see the table above). |
+
+The route has its own `express.json({limit: "256kb"})` parser. Under `TerrenoApp`, the app-wide
+JSON parser runs first with a larger limit, so the route measures the parsed body itself and
+answers 413.
+
+**Output file.** Each accepted item becomes one JSON line in
+`<process.cwd()>/.terreno/logs/browser.log`. The directory is created if needed, and the file is
+created with mode `0600`. The path follows the backend's working directory. In this monorepo,
+`bun run backend:dev` runs in `example-backend/`, so the file is
+`example-backend/.terreno/logs/browser.log`. A line looks like this:
+
+``````json
+{"level":"warn","message":"TASK-1.2 direct POST probe","source":"browser","timestamp":"2026-10-12T00:29:20.067+00:00"}
+``````
+
+Each line has `level`, `message`, `source` (always `"browser"`), `stack` (only when present), and
+`timestamp`, in that order. There is no rotation and no backup file. If a batch would push the file
+past 5 MB, the file is overwritten with that batch and all earlier lines are lost.
+
+**Who reads it.** The local MCP `read_logs` tool (source `browser`), the `last_error` tool, and
+`terreno logs --sources browser` / `terreno logs last-error` read `browser.log` from each of these
+directories that exists under the project root: `backend/.terreno/logs`,
+`example-backend/.terreno/logs`, and `.terreno/logs`. Backend logs go to `app.log` in the same
+directory. That file comes from the Winston JSONL transport, which `TERRENO_LOG_FILE` switches on
+or off (see [Environment variables](environment-variables.md#observability)).
+
+**Client behavior.** The Terreno dev console logger runs only in development builds (`__DEV__`). It
+captures `console.error`, `console.warn`, uncaught errors, and unhandled rejections. It sends them
+in batches of up to 100, about 400 ms after the first one is queued. If a post fails, it retries
+once and then drops the batch without reporting anything. A missing route (404) or a 403 therefore
+shows up only as an empty `browser.log`. Uncaught errors and unhandled rejections whose value is
+an `Error` carry a `stack`. `console.error` and `console.warn` entries do not. An error passed to
+React Native's `ErrorUtils` handler is logged only after the previous handler returns. On web the
+default handler rethrows, so the logger skips that error: its caller may still catch it, as Expo's
+web `import()` does while it loads a split bundle. If nothing catches it, the window `error` or
+`unhandledrejection` listener logs it.
+
+On the client, `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb` posts to this
+route in `__DEV__` builds. The `@terreno/rtk` export of the same name is a deprecated re-export.
 
 ### Message style
 

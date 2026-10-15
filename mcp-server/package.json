@@ -22,6 +22,7 @@
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
+    "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/luxon": "catalog:",
     "@types/node": "catalog:",

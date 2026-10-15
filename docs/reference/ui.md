@@ -428,6 +428,8 @@ Pass `mascot` when the app owns a character. Terreno ships none. The node render
 
 The composer row (attachment picker, tools, input, Send) is vertically centered, so controls stay aligned with the input as it grows. The composer input grows with its text up to 200px, then scrolls. The attachment cell is omitted when `onAttachFiles` is not provided.
 
+The history sidebar (model selector, toolbar, New chat, and the history list) is a 250px-minimum column. Pass `showHistory={false}` to leave it out so the chat panel takes the full width, as on a phone. The host then owns history navigation and the sidebar's controls. `showHistory` defaults to `true`.
+
 Each history row keeps rename and delete in a three-dot overflow menu (`gpt-history-menu-{id}`), anchored with `DropdownPanel`. Rename uses an outlined pencil in the dark secondary text color. Titles truncate before the menu trigger, so the trigger stays aligned at any sidebar width.
 
 "Scroll to bottom" appears only when content sits more than 100px below the viewport. It never shows in an empty chat.

@@ -49,7 +49,7 @@ This creates `GET /admin/config` plus full CRUD at `/admin/users` and `/admin/to
 ## What's included
 
 - `AdminApp` — registers admin routes and the config metadata endpoint
-- `DocumentStorageApp` — optional GCS document browser routes for admins
+- `DocumentStorageApp` — optional GCS document browser routes for admins, or for every signed-in user in a private folder (`access: "authenticated"`), with optional upload rate limit
 - `runScriptCli` — CLI helper for admin script execution
 - Auto-generated CRUD via `modelRouter` with `IsAdmin` on every route
 - `GET /admin/config` — field metadata extracted from Mongoose schemas and OpenAPI

@@ -26,7 +26,9 @@ test.describe("Admin Panel", () => {
 
   test("admin panel shows custom screens", async ({page}) => {
     await expect(page.getByText("AI Requests").first()).toBeVisible();
-    await expect(page.getByText("Documents").first()).toBeVisible();
+    // The app tab is also titled Documents and stays mounted hidden. Box onClick
+    // puts the nav test id on the pressable as `${testID}-clickable`.
+    await expect(page.getByTestId("admin-shell-nav-screen-documents-clickable")).toBeVisible();
   });
 
   test("can navigate to model table", async ({page}) => {

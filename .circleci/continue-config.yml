@@ -1028,7 +1028,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui rtk admin-frontend
+          packages: blocks ui rtk admin-frontend syncdb
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1844,6 +1844,7 @@ jobs:
                 name: Validate and apply Terraform
                 command: |
                   terraform -chdir=terraform fmt -check -recursive
+                  terraform -chdir=infra/flourish fmt -check
                   scripts/ci/gcp-deploy.sh terraform-apply
       - when:
           condition:
@@ -1936,6 +1937,18 @@ jobs:
       - when:
           condition: << pipeline.parameters.run-cd-terraform >>
           steps:
+            - install_terraform
+            - run:
+                name: Terraform format and module tests
+                command: |
+                  set -euo pipefail
+                  terraform -chdir=terraform fmt -check -recursive
+                  terraform -chdir=infra/flourish fmt -check
+                  for dir in terraform/modules/*/; do
+                    [ -d "${dir}tests" ] || continue
+                    terraform -chdir="$dir" init -backend=false -input=false
+                    terraform -chdir="$dir" test
+                  done
             - run:
                 name: Terraform preview
                 command: scripts/ci/gcp-deploy.sh terraform-preview
@@ -2166,6 +2179,9 @@ jobs:
             bun run generate
             bun run docs:version "$CIRCLE_TAG"
             bun run prune-versions
+            touch /tmp/docs-snapshot-ready
+      # Build from the tag plus its snapshot, attach to the draft, then publish,
+      # so the master push below only deploys docs once the archive is public.
       - run:
           name: Build and upload the archived docs site
           command: |
@@ -2173,9 +2189,20 @@ jobs:
             scripts/ci/docs-archive.sh build "$CIRCLE_TAG" /tmp/docs-site.tar.gz
             GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/docs-archive.sh upload "$CIRCLE_TAG" /tmp/docs-site.tar.gz
       - run:
-          name: Commit the docs snapshot to master
+          name: Publish the GitHub release
           command: |
             set -euo pipefail
+            GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/github-release.sh publish "$CIRCLE_TAG"
+      # Runs even when the upload failed so the snapshot still reaches master.
+      - run:
+          name: Commit the docs snapshot to master
+          when: always
+          command: |
+            set -euo pipefail
+            if [ ! -f /tmp/docs-snapshot-ready ]; then
+              echo "Docs snapshot did not finish; nothing to commit"
+              exit 0
+            fi
             git config user.name "terreno-circleci"
             git config user.email "josh@nang.io"
             git add website/versioned_docs website/versioned_sidebars website/versions.json
@@ -2187,11 +2214,35 @@ jobs:
             snapshot_commit="$(git rev-parse HEAD)"
             git remote set-url origin "https://x-access-token:${REPO_ADMIN_TOKEN}@github.com/TerrenoLabs/terreno.git"
             git fetch origin master
+            # A rerun after the snapshot already landed has nothing to push.
+            if git cat-file -e "origin/master:website/versioned_docs/version-${CIRCLE_TAG}" 2>/dev/null; then
+              echo "Docs snapshot ${CIRCLE_TAG} is already on master"
+              exit 0
+            fi
             # The tag is behind master; the snapshot only touches website/version* files.
             git checkout --force -B docs-version origin/master
             git cherry-pick "$snapshot_commit"
             git pull --rebase origin master
             git push origin HEAD:master
+
+  # Releases start as drafts so the docs archive can be attached before
+  # immutable releases lock the assets. This publishes the draft last.
+  publish-github-release:
+    executor: node22
+    steps:
+      - checkout
+      - run:
+          name: Publish the GitHub release
+          command: |
+            set -euo pipefail
+            # X.Y.0 releases are published by archive-docs-version after the docs
+            # archive upload; publishing here first would lock the release.
+            if [[ "$CIRCLE_TAG" =~ ^[0-9]+\.[0-9]+\.0$ ]]; then
+              echo "Skipping: ${CIRCLE_TAG} is published by archive-docs-version."
+              exit 0
+            fi
+            scripts/ci/validate-env.sh REPO_ADMIN_TOKEN
+            GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/github-release.sh publish "$CIRCLE_TAG"
 
 workflows:
   # Never put GITHUB_TOKEN or CURSOR_API_KEY in project env vars (injected into
@@ -2586,6 +2637,21 @@ workflows:
               ignore: /.*/
             tags:
               only: /^[0-9]+\.[0-9]+\.0$/
+      # Minor releases publish in archive-docs-version after the archive is
+      # attached. Patch and prerelease tags have no archive; publish after npm.
+      # CircleCI disregards `ignore` when `only` is set (57.15.0 ran this job and
+      # locked the release before the archive upload), so `only` must exclude X.Y.0.
+      - publish-github-release:
+          context: [terreno-release]
+          requires:
+            - publish-release
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only:
+                - /^[0-9]+\.[0-9]+\.[1-9][0-9]*$/
+                - /^[0-9]+\.[0-9]+\.[0-9]+[-.][0-9A-Za-z.-]+$/
       # Builds from source, not npm, so it runs alongside publish-release.
       - deploy-demo:
           context: [terreno-netlify, terreno-github-deployments]

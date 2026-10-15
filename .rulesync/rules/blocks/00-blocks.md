@@ -64,3 +64,21 @@ schemas/                 # Committed JSON Schemas, exported as @terreno/blocks/s
 - Framework: `bun test` with `expect`
 - Validate every fixture in `src/asks/fixtures/valid` passes and every one in `invalid` fails
   with its expected code.
+
+## Block documents
+
+Whole-reply YAML documents live at the top of `src/` (`schema.ts`, `limits.ts` `BLOCK_LIMITS`,
+`errors.ts`, `parse.ts`, `parsePartial.ts`, `lint.ts`, `validate.ts`, `prompt.ts`
+`blocksPromptSection`, `plainText.ts` `blockPlainText`, `cli.ts`). Human docs:
+`docs/reference/blocks.md`, `docs/how-to/agent-ui-blocks.md`, `docs/explanation/agent-ui-blocks.md`.
+
+- The catalog is closed. A new block type or field updates `schema.ts`, `limits.ts`, `lint.ts`,
+  the prompt line in `prompt.ts`, valid and invalid fixtures under `src/fixtures/`
+  (`parse.test.ts` `expectedInvalid`), and `docs/reference/blocks.md` in the same change.
+  `blocksDocParity.test.ts` fails when a limit or error code is missing from the reference.
+- Rich blocks (stepper, checklist, gallery, list, card eyebrow, copy) are prompted only under
+  `richBlocks` (default `true`); with `richBlocks: false` the prompt must stay byte-identical to
+  the pre-rich-blocks snapshot. Validation accepts them either way.
+- Fixtures under `fixtures/valid/` validate with no options, so they use `data:image` or `file:`
+  image sources. Documents that need `imageHosts` or action lists go in `fixtures/golden/` or
+  `lint.test.ts`.

@@ -438,6 +438,24 @@ export const mockGptBlocks = async (page: Page): Promise<void> => {
   });
 };
 
+/**
+ * Streams `document` in chunks as the model's reply, ending with `{done}` for `historyId`. Pass
+ * the id of a conversation stored with the same reply (see `seedGptHistory`), so the real
+ * `POST /gpt/actions` finds the blocks the chat shows. Nothing else is mocked.
+ */
+export const mockGptDocument = async (
+  page: Page,
+  {document, historyId, title}: {document: string; historyId: string; title: string}
+): Promise<void> => {
+  await page.route(`${API_URL}/gpt/prompt`, (route) =>
+    fulfillSse(route, [
+      ...chunkText(document, 400),
+      {blocks: {errors: [], ok: true, warnings: []}},
+      {done: true, historyId, title},
+    ])
+  );
+};
+
 export const unmockGptStream = async (page: Page): Promise<void> => {
   await page.unroute(`${API_URL}/gpt/prompt`);
   await page.unroute(/\/gpt\/datasets\/ds_signups/);

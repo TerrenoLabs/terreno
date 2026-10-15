@@ -374,6 +374,21 @@ export interface HostActionContext {
   user: {_id?: mongoose.Types.ObjectId};
 }
 
+/** One host callback that `POST /gpt/actions` runs for a block button. */
+export interface HostAction {
+  handler?: (
+    context: HostActionContext
+  ) => Promise<HostActionResult | undefined> | HostActionResult | undefined;
+  /** The interactive block this action serves. `scaleStepperHostAction` sets `stepper`. */
+  handles?: "stepper" | "checklist";
+  /**
+   * When `false`, the `ui_action` `AIRequest` row keeps the ids-only prompt plus a numeric
+   * `payload.value`, and leaves out the returned document. Default `true` logs the response.
+   */
+  logResponse?: boolean;
+  payload?: HostPayloadSchema;
+}
+
 /** `addGptRoutes` `uiBlocks`. `true` checks every assistant reply. `hostActions` names the callbacks the model may emit. */
 export interface UiBlocksOptions {
   /** Milliseconds before a host callback returns 504. Default 10 seconds. */
@@ -386,16 +401,14 @@ export interface UiBlocksOptions {
   html?: boolean;
   /** Hostnames allowed on `https` image sources. Empty rejects every https image. */
   imageHosts?: readonly string[];
-  hostActions?: Record<
-    string,
-    {
-      handler?: (
-        context: HostActionContext
-      ) => Promise<HostActionResult | undefined> | HostActionResult | undefined;
-      payload?: HostPayloadSchema;
-    }
-  >;
+  hostActions?: Record<string, HostAction>;
   repair?: boolean;
+  /**
+   * Default `true`: the prompt offers the rich blocks, and the stepper when a host action has
+   * `handles: "stepper"`. `false` keeps the prompt as it was before them, for clients that cannot
+   * render them yet. Validation accepts the rich blocks either way.
+   */
+  richBlocks?: boolean;
 }
 
 export interface GptRouteOptions {

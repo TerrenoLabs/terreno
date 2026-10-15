@@ -117,6 +117,10 @@ new TerrenoApp({
 
 Skip: `GET /health`, `/healthz`, `/openapi.json`, `/swagger` (trailing slashes and letter case ignored). 429 is `APIError` `code: "rate-limit-exceeded"` with `Retry-After` and `RateLimit` / `RateLimit-Policy`. JWT login/signup/refresh ignore a stale access token. Operator guide: [Rate limiting](../how-to/rate-limiting.md).
 
+#### Per-route limits
+
+`createRouteRateLimitMiddleware({name, max, windowMs, store?, keyBy?})` returns Express middleware with its own fixed-window bucket, independent of `TerrenoApp` `rateLimit`. `keyBy` is `"ip"` (default, `req.ip`) or `"user"` (falls back to IP). `name` namespaces the bucket. Same stores and 429 shape as the global limiter. Set Express `trust proxy` behind a load balancer so `req.ip` is the client.
+
 ### MCP service tokens
 
 Opt-in. Omitted or `enabled: false` leaves `/mcp/service-tokens` unmounted and ignores `mcp_` Bearer credentials on `/mcp`.

@@ -1,61 +1,14 @@
-import {useEmbedMode} from "@contexts/EmbedModeContext";
-import {Box, useTheme} from "@terreno/ui";
-import {router, useGlobalSearchParams, useNavigation, usePathname} from "expo-router";
+import {Box, ThemeProvider} from "@terreno/ui";
+import {useGlobalSearchParams} from "expo-router";
 import type React from "react";
-import {useCallback, useEffect} from "react";
+import {useEffect} from "react";
 
 import {DemoPreviewContext} from "../previewContext";
-import {
-  type DemoPreviewState,
-  previewParamsFromState,
-  previewQueryFromState,
-  previewStateFromQuery,
-} from "../previewState";
-import {DemoPreviewBar} from "./DemoPreviewBar";
-import {HeaderModeLink} from "./HeaderModeLink";
-import {DARK_THEME_CONFIG} from "./palette/darkTheme";
+import {previewStateFromQuery} from "../previewState";
 
 export const DemoPreviewFrame: React.FC<{children: React.ReactNode}> = ({children}) => {
   const params = useGlobalSearchParams();
-  const {isEmbedMode} = useEmbedMode();
   const state = previewStateFromQuery(params);
-  const shareQuery = previewQueryFromState(state);
-  const {resetTheme, setTheme} = useTheme();
-  const navigation = useNavigation();
-  const isDevRoute = usePathname().startsWith("/dev");
-
-  // Keep the live theme aligned with the shareable preview query, and restore the app theme on leave.
-  useEffect(() => {
-    if (state.theme === "dark") {
-      setTheme(DARK_THEME_CONFIG);
-    } else {
-      resetTheme();
-    }
-    return () => {
-      resetTheme();
-    };
-  }, [resetTheme, setTheme, state.theme]);
-
-  const handleChange = useCallback((next: DemoPreviewState): void => {
-    router.setParams(previewParamsFromState(next));
-  }, []);
-
-  // Mount the preview controls in the navigation header, keeping the demo/dev mode switch beside them.
-  useEffect(() => {
-    if (isEmbedMode) {
-      return;
-    }
-    // Rebuild from the query string so the effect only re-runs when the preview actually changes.
-    const headerState = previewStateFromQuery(Object.fromEntries(new URLSearchParams(shareQuery)));
-    navigation.setOptions({
-      headerRight: () => (
-        <Box alignItems="center" direction="row">
-          <DemoPreviewBar onChange={handleChange} shareQuery={shareQuery} state={headerState} />
-          <HeaderModeLink target={isDevRoute ? "demo" : "dev"} />
-        </Box>
-      ),
-    });
-  }, [handleChange, isDevRoute, isEmbedMode, navigation, shareQuery]);
 
   const frameWidth = state.viewport === "full" ? "100%" : Number(state.viewport);
   const background = state.background === "inverse" ? "primary" : "base";
@@ -75,18 +28,20 @@ export const DemoPreviewFrame: React.FC<{children: React.ReactNode}> = ({childre
 
   return (
     <DemoPreviewContext.Provider value={state}>
-      <Box flex="grow" height="100%" testID="demo-preview-root" width="100%">
-        <Box
-          color={state.background === "transparent" ? undefined : background}
-          flex="grow"
-          height="100%"
-          maxWidth={frameWidth}
-          testID="demo-preview-frame"
-          width={frameWidth}
-        >
-          {children}
+      <ThemeProvider colorScheme={state.theme}>
+        <Box flex="grow" height="100%" testID="demo-preview-root" width="100%">
+          <Box
+            color={state.background === "transparent" ? undefined : background}
+            flex="grow"
+            height="100%"
+            maxWidth={frameWidth}
+            testID="demo-preview-frame"
+            width={frameWidth}
+          >
+            {children}
+          </Box>
         </Box>
-      </Box>
+      </ThemeProvider>
     </DemoPreviewContext.Provider>
   );
 };

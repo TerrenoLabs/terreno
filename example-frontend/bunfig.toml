@@ -1,5 +1,5 @@
 [test]
-preload = ["./tests/bunSetup.ts"]
+preload = ["./tests/testPreload.ts", "./tests/bunSetup.ts"]
 coveragePathIgnorePatterns = [
   "**/*.test.ts",
   "**/*.test.tsx",

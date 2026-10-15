@@ -2,6 +2,8 @@
 export const BLOCK_ERROR_CODES = {
   COLUMN_NOT_FOUND: "A chart or table names a column the dataset does not have.",
   COLUMN_TYPE_MISMATCH: "A column value does not match the column type.",
+  COPY_TARGET_INVALID:
+    "A copy action names a block that is not a stepper, checklist, list, table, or text block.",
   DATASET_NOT_FOUND: "A chart or table names a dataset the document does not define.",
   DATASET_TOO_LARGE: "A dataset has more rows or columns than allowed.",
   DEPTH_EXCEEDED: "A columns or card block is nested inside another columns or card block.",
@@ -16,6 +18,8 @@ export const BLOCK_ERROR_CODES = {
   KEY_ORDER: "Top-level keys are not in the order v, datasets, blocks.",
   MISSING_REQUIRED: "A required field is missing.",
   NOT_A_DOCUMENT: "The reply is not one YAML or JSON mapping with a v field.",
+  OUT_OF_RANGE:
+    "A number is outside its allowed range, such as a stepper value outside min and max.",
   ROW_ARITY_MISMATCH: "A dataset row does not have one value per column.",
   SELECT_TARGET_INVALID: "A select action names a block that is not a chart or table.",
   TABLE_TOO_WIDE: "A table lists more columns than allowed.",

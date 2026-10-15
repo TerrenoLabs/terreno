@@ -90,13 +90,16 @@ src/
 
 - **Plugins:** `AiApp`, `LangfuseApp`
 - **Service:** `AIService`, `TemperaturePresets`, `FileStorageService`, `MCPService`,
-  `getMCPTools`
+  `getMCPTools`, `runBufferedChatTurn` (one chat turn to completion without HTTP: the same system
+  prompt, tools, and block checks as `/gpt/histories/:id/turn`; takes `{body: {historyId, prompt},
+  options, req}` where `req` carries `user` and `headers`)
 - **Models:** `AIRequest`, `GptHistory`, `FileAttachment`, `Project` (lazy; prefer `getProjectModel()`)
 - **Routes:** `addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`, `addFileRoutes`, `addProjectRoutes`, `addMcpRoutes`
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
 - **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
 - **Prompts:** `COMPACT_SURFACE_SYSTEM_PROMPT`, `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TERRENO_ASKS_SYSTEM_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
+- **Block host actions:** `scaleStepperHostAction`, `toggleChecklistHostAction`, `findAgentBlock`, types `HostAction`, `HostActionContext`, `HostActionResult` ([Host actions](#host-actions))
 - **Asks:** `createAskTools({kinds, surface?})`, `TERRENO_ASKS_SYSTEM_PROMPT`, `COMPACT_SURFACE_SYSTEM_PROMPT`, types `AsksOptions`, `ApprovalAskInput`, `AskOrigin`, `GptHistoryPendingAsk`, `GptHistoryPromptAsk`, `GptHistoryAskStatus`, and `Ask`, `AskKind`, `AskResponse`, `AskValidationError`, `SimpleCard`, `SimpleCardButton` re-exported from `@terreno/blocks` ([Agent UI Asks](agent-ui-asks.md))
 - **Web search:** `WebSearchProvider`, `WebSearchResult` types
 - **Harness (subpath `@terreno/ai/harness`):** `Harness`, `defineTask`, `defineAgent`, `defineTool`, `defineExtension`, `section`, `hook`, `wrapTool`, `HarnessExtensionError`, `HARNESS_HOOK_KINDS`, `HarnessConversationHandle`, `HarnessConversationBusyError`, `HarnessConversationOwnedError`, `HARNESS_EVENT_TYPES`, `HARNESS_SUBMIT_DISPOSITIONS`, `HARNESS_WHEN_BUSY`, `HarnessModelCallError`, `HarnessSubagentError`, `isRetryableModelError`, `AGENT_TURN_TASK_NAME`, `AGENT_TOOL_TASK_NAME`, `HARNESS_AGENT_DEFAULT_MAX_STEPS`, `HARNESS_CONVERSATION_STATUSES`, `HARNESS_INTERRUPT_ACTIONS`, `HARNESS_MESSAGE_ROLES`, `HARNESS_MODEL_RETRY_DEFAULTS`, `InProcessRunner`, `HarnessCommitConflictError`, `HARNESS_RESOLVE_ACTIONS`, `HARNESS_RETRY_DEFAULTS`, `HARNESS_TASK_STATUSES`, `HARNESS_WAIT_KINDS`, `HARNESS_WAIT_POLICIES`, `HARNESS_WAIT_RESOLUTIONS`, `IN_PROCESS_RUNNER_ROLES`, `approvalGate`, `approvalTaskInput`, `HarnessApp`, `HarnessApprovalConflictError`, `HARNESS_APPROVAL_STATUSES`, `HARNESS_DEFAULT_APPROVERS` — see [AI harness reference](ai-harness.md)
@@ -273,7 +276,7 @@ GPT project with persistent context and memories. Registered lazily: `getProject
 | `/gpt/histories/:id/stream` | GET | `IsAuthenticated` (owner) | SSE resume of an in-flight reply; query: optional `streamId`, `offset` |
 | `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools (ask tools are not listed) |
 | `/gpt/datasets/:id` | GET | owner (`IsOwner`; another user is 404) | Read a stored dataset. Mounted only when `uiBlocks` is on. Query: `grain` (`hour` \| `day` \| `week` \| `month`), `limit` (default 500, max 1000), `page`. Response `data`: `{columns, rows, rowCount, page, more}`. `grain` buckets the first date column in UTC. An offset is converted before `startOf`. A date with no zone is that UTC day. Null date cells are skipped. Number columns are summed. Without `page`, a series longer than `limit` is LTTB-downsampled and `more` is false. With `page`, rows are a page and `more` is true when another page remains. |
-| `/gpt/actions` | POST | `IsAuthenticated` plus history owner (another user is 403) | Run a host callback. Mounted only when `uiBlocks` is on, on the `/gpt` path. Body: `{historyId, messageId, blockId, elementId, name, payload?}`. Unknown `name` is 404. A payload that fails the host schema is 400 with `meta.fields`. The handler has 10 seconds (`actionTimeoutMs` can set another cap) and then 504. Response `data`: `{text?, blocks?, replace?}`. An invalid `blocks` document is 500. Logged as `AIRequest` `requestType: "ui_action"`. |
+| `/gpt/actions` | POST | `IsAuthenticated` plus history owner (another user is 403) | Run a host callback. Mounted only when `uiBlocks` is on, on the `/gpt` path. Body: `{historyId, messageId, blockId, elementId, name, payload?}`. Unknown `name` is 404. A payload that fails the host schema is 400 with `meta.fields`. The handler has 10 seconds (`actionTimeoutMs` can set another cap) and then 504. Response `data`: `{text?, blocks?, replace?}`. An invalid `blocks` document is 500. Logged as `AIRequest` `requestType: "ui_action"` with an ids-only prompt and the response; an action with `logResponse: false` adds a numeric `payload.value` to the prompt and logs no response. |
 
 Generated images (image-output models such as `gemini-3-pro-image`) arrive as SSE `image` events: `{image: {mimeType, url}}` with a base64 data URL. Each image is sent once, even when the model reports it both as a stream file part and in the final `result.files`. The saved assistant prompt stores one `image` content part per image and `text: ""` when there is no text. On later turns, `buildMessages` sends an image-only assistant prompt to the model as the text `[Generated image]`, because providers reject empty assistant turns.
 
@@ -281,7 +284,56 @@ AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerMo
 
 Pass `asks: true` (or `{kinds: ["choice"]}`) to let the model ask the user typed questions in the chat. Asks are off by default; with them off, tools, system prompt, and SSE events are unchanged. See [Agent UI Asks](agent-ui-asks.md).
 
-Pass `uiBlocks: true` (or `{hostActions, html, imageHosts, repair, datasetTtlDays, datasetMaxRows}`) to require each assistant reply to be a block document. `html: true` allows `html` blocks and sanitizes them before they are stored. `imageHosts` lists hostnames allowed on `https` image sources. The client receives that document once, after missing action ids are filled, `repair: true` rewrites it, and html is sanitized, and before `{ask}`. `{replace: "text", text}` is sent only when text was already streamed and then changed. `datasetTtlDays` defaults to `0` (keep the dataset). `datasetMaxRows` defaults to 50,000. Off by default; with it off, the system prompt, SSE events, `/gpt/datasets`, and `/gpt/actions` are unchanged. When it is on, the system prompt gains `TERRENO_UI_BLOCKS_SYSTEM_PROMPT` (host callback names included when `hostActions` is set). After the final text, the route validates it and sends `{blocks: {ok, errors, warnings}}` before `{done}`. `hostActions` is the callback allowlist: a name outside it fails with `UNKNOWN_HOST_ACTION`. `{repair: true}` runs one repair call when validation fails and stores that reply. A document that is still invalid is stored with a `Block validation errors:` note so the next turn sees it. See [Validate a block document locally](../how-to/agent-ui-blocks.md).
+Pass `uiBlocks: true` (or `{hostActions, html, imageHosts, repair, richBlocks, datasetTtlDays, datasetMaxRows}`) to require each assistant reply to be a block document. `html: true` allows `html` blocks and sanitizes them before they are stored. `imageHosts` lists hostnames allowed on `https` image sources. The client receives that document once, after missing action ids are filled, `repair: true` rewrites it, and html is sanitized, and before `{ask}`. `{replace: "text", text}` is sent only when text was already streamed and then changed. `datasetTtlDays` defaults to `0` (keep the dataset). `datasetMaxRows` defaults to 50,000. Off by default; with it off, the system prompt, SSE events, `/gpt/datasets`, and `/gpt/actions` are unchanged. When it is on, the system prompt gains `TERRENO_UI_BLOCKS_SYSTEM_PROMPT` (host callback names included when `hostActions` is set). After the final text, the route validates it and sends `{blocks: {ok, errors, warnings}}` before `{done}`. `hostActions` is the callback allowlist: a name outside it fails with `UNKNOWN_HOST_ACTION`. A stepper or checklist `callback.name` must also name an action whose `handles` is that block; a stepper that names any other registered action fails with `UNKNOWN_HOST_ACTION`. `{repair: true}` runs one repair call when validation fails and stores that reply. A document that is still invalid is stored with a `Block validation errors:` note so the next turn sees it. See [Validate a block document locally](../how-to/agent-ui-blocks.md).
+
+`uiBlocks.richBlocks` defaults to `true`: the prompt offers the rich blocks, and `stepper` when a host action has `handles: "stepper"`. The `checklist` line names the `handles: "checklist"` actions as its callback, or, without one, tells the model to leave `callback` out so ticks stay local. This is a behaviour change on upgrade: every host with `uiBlocks` on gets the new blocks in its prompt. Set `richBlocks: false` while shipped clients (for example older native builds) cannot render them; the prompt is then the same as before rich blocks, even with a stepper action registered. The opt-out changes only what the model is told to write. Validation accepts the rich blocks either way.
+
+#### Host actions
+
+Each `uiBlocks.hostActions` entry is a `HostAction`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `handler` | `(context) => HostActionResult` | Gets `{blockId, elementId, history, messageId, payload, user}`. Returns `{text?, blocks?, replace?}`; `blocks` is a whole `{v: 1, blocks}` document |
+| `payload` | Zod-like schema? | Checked with `safeParse` before the handler runs. A failure is 400 `Invalid payload` with `meta.fields` |
+| `handles` | `"stepper"` \| `"checklist"`? | The interactive block this action serves. The prompt offers `stepper` only when some action has `handles: "stepper"`, and names those actions as its callbacks. Validation accepts a stepper or checklist only when its `callback.name` is such an action. |
+| `logResponse` | boolean? | Default `true`. `false` keeps the returned document out of the `ui_action` log and adds a numeric `payload.value` to its ids-only prompt |
+
+`scaleStepperHostAction` is an opt-in `stepper` action: `{handler, payload, handles: "stepper", logResponse: false}`. Register it under the name the agent writes in `callback.name`:
+
+```typescript
+addGptRoutes(router, {
+  aiService,
+  uiBlocks: {hostActions: {scaleStepper: scaleStepperHostAction}},
+});
+```
+
+Its payload schema is `z.object({value: z.number()}).passthrough()`, so extra keys from the agent's `callback.payload` pass. The handler:
+
+1. Loads the agent's stepper with `findAgentBlock` (below), not from the request.
+2. Checks that `value` is within `min` and `max` and on the `step` grid from the agent's `value`. Otherwise 400 `Invalid stepper value`.
+3. Returns `{replace: "block", blocks: {v: 1, blocks: [stepper]}}`. The stepper has the new `value`, and each item's `amount` is `amount × value / agent value`, rounded to its `decimals` (`round: up` rounds up). A stepper the agent wrote with `value: 0` keeps its amounts.
+
+Steps 2 and 3 are `isStepperValueAllowed` and `scaleStepperBlock` from `@terreno/blocks`, so a client without a server (the demo playground) scales the same way. Scaling always starts from the stored original, so rounding does not drift tap after tap. The owner of a history can edit its stored prompts with `PATCH /gpt/histories/:id`, so an app whose numbers matter (prices, stock) registers its own `handles: "stepper"` action over its own data.
+
+`toggleChecklistHostAction` is an opt-in `checklist` action: `{handler, payload, handles: "checklist", logResponse: false}`. Register it under the name the agent writes in `callback.name`; the prompt then tells the model to set a checklist's `callback` to that name:
+
+```typescript
+addGptRoutes(router, {
+  aiService,
+  uiBlocks: {hostActions: {toggleChecklist: toggleChecklistHostAction}},
+});
+```
+
+Its payload schema is `z.object({itemId: z.string(), checked: z.boolean(), state: z.record(z.string(), z.boolean())}).passthrough()`, so extra keys from the agent's `callback.payload` pass. The handler:
+
+1. Loads the agent's checklist with `findAgentBlock` (below), not from the request.
+2. Checks that `itemId` and every `state` key are item ids of that checklist. Otherwise 400 `Unknown checklist item`.
+3. Returns `{replace: "block", blocks: {v: 1, blocks: [checklist]}}`. Each item's `checked` is its `state` value; an item missing from `state` is unchecked (the client always sends every item). The ticked `itemId` always takes `checked`.
+
+Steps 2 and 3 are `unknownChecklistItemIds` and `applyChecklistState` from `@terreno/blocks`. It saves nothing, and its `ui_action` log row holds only the ids (no `itemId`, `checked`, or `state`). An app that records progress registers its own `handles: "checklist"` action.
+
+`findAgentBlock({history, messageId, blockId, type})` returns the block of `type` with id `blockId` that an assistant prompt holds, including inside `card` and `columns`. When `messageId` is `msg-<n>` it reads `history.prompts[n]` first (stored prompts have no ids). Otherwise, or when that prompt does not hold the block, it uses the only assistant prompt that does. Several matches throw 409 `Block is ambiguous`; none throws 404 `Block not found`.
 
 With asks on, a host tool with the AI SDK's `needsApproval: true` runs only after the user approves it: the turn pauses on a server-made `confirm` ask. `asks.approvals` sets that ask's input per tool name, as `(input) => ConfirmAskInput` (`ApprovalAskInput`); without an entry, the ask is "Allow &lt;toolName&gt;?" with the tool's description. With asks off, such a tool never runs. See [Approval asks](agent-ui-asks.md#approval-asks).
 

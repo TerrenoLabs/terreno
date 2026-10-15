@@ -34,7 +34,7 @@ import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
 import {exampleUiBlocksOptions} from "../ai/hostActions";
-import {createTodoStatsTool} from "../ai/tools";
+import {createFindPhotosTool, createTodoStatsTool} from "../ai/tools";
 import type {UserDocument} from "../types/models/userTypes";
 import {createDemoAgentService} from "./demoAgent";
 import {fileUploadsEnabledForRequest} from "./fileUploads";
@@ -616,6 +616,7 @@ const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
       historyId: typeof req.body?.historyId === "string" ? req.body.historyId : undefined,
       userId: user?._id,
     }),
+    ...createFindPhotosTool(),
   };
 
   const apiKey = req.headers["x-ai-api-key"] as string | undefined;

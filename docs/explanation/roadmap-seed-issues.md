@@ -57,7 +57,7 @@ duplicating sprint planning.
 **Title:** `Deploy to GCP (generalized)`
 
 **Labels:** `area:deploy`, `type:docs`  
-**Project fields:** Area=`deploy`, Target=`Next`, Impact=`Improvement`, IP=`deploy-to-gcp`, Status=`Planned`
+**Project fields:** Area=`deploy`, Target=`Next`, Impact=`Improvement`, IP=`deploy-to-gcp`, Status=`In progress`
 
 Turns Terreno's GCP deployment story from Flourish-specific infrastructure into a reusable
 guide any Terreno app can follow. It documents Cloud Run backend hosting, GCS plus CDN for
@@ -1316,6 +1316,18 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 
 - **Implementation plan:** [durable-agent-harness.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/durable-agent-harness.md)
 - **Tasks:** [durable-agent-harness.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/durable-agent-harness.md)
+
+---
+
+## agent-ui-rich-replies
+
+**Title:** `Agent UI Rich Replies: steppers, checklists, galleries, and copy`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`agent-ui-rich-replies`, Status=`Planned`
+
+- **Implementation plan:** [agent-ui-rich-replies.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-rich-replies.md)
+- **Tasks:** [agent-ui-rich-replies.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/agent-ui-rich-replies.md)
 
 ---
 

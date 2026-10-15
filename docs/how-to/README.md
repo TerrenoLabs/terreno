@@ -47,12 +47,15 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid` (ops-dashboard scorecards and spans: [dashboard-chart-parity](../implementationPlans/dashboard-chart-parity.md))
 - [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md) — PNG goldens for the chart visual gallery, not JSON snapshots
 - [Migrate from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md) — Move data sync to the local-first layer
+- [Use syncdb correctly](use-syncdb-correctly.md) — Serial snapshot startup, outbox-halting 403s, phantom creates, conflicts, and other library behavior apps must handle
 - [Generate a REST CLI from OpenAPI](generate-a-rest-cli.md) — Scaffold `terreno generate rest-cli` for an app API
 - [In-app notifications](in-app-notifications.md) — Register `NotificationsApp`, syncdb inbox, and UI bell
 - [Add organizations](add-organizations.md) — Opt into Membership-backed tenancy, RBAC, admin, and seeded examples
 - [Add a GPT chat mascot](add-gpt-chat-mascot.md) — Optional consumer-owned character on empty `GPTChat`
 - [Add agent asks to a chat](agent-ui-asks.md) — Turn on `asks`, show and answer them in `GPTChat`, try the keyless demo agent, and answer asks from an Apple Watch or another small client
 - [Validate a block document locally](agent-ui-blocks.md) — `terreno-blocks validate` for a whole-reply YAML document
+- [Add a stepper callback](agent-ui-blocks.md#add-a-stepper-callback) — `scaleStepperHostAction` or your own `handles: "stepper"` action; checklist ticks, copy buttons, the `richBlocks: false` opt-out, and the `blocks:smoke` model check are on the same page
+- [Give the agent photos](agent-ui-blocks.md#give-the-agent-photos) — Generate a stored photo library once and let the agent cite it with `findPhotos`
 
 ## Admin
 

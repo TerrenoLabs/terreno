@@ -1,9 +1,10 @@
-import React, {createContext, useCallback, useMemo, useState} from "react";
+import React, {createContext, useCallback, useContext, useEffect, useMemo, useState} from "react";
+import {useColorScheme} from "react-native";
 
 import type {TerrenoTheme, TerrenoThemeConfig, ThemePrimitives} from "./Common";
 import {TerrenoFontProvider} from "./TerrenoFontProvider";
 
-const defaultPrimitives = {
+export const defaultThemePrimitives: ThemePrimitives = {
   accent000: "#FFFDF7",
   accent050: "#FCECC2",
   accent100: "#F9E0A1",
@@ -17,6 +18,7 @@ const defaultPrimitives = {
   accent900: "#332400",
 
   error000: "#FDD7D7",
+  error050: "#EDA1A1",
   error100: "#D33232",
   error200: "#BD1111",
   neutral000: "#FFFFFF",
@@ -77,18 +79,21 @@ const defaultPrimitives = {
   spacing12: 80,
 
   success000: "#DCF2E2",
+  success050: "#9BE7B2",
   success100: "#3EA45C",
   success200: "#1A7F36",
 
   warning000: "#FFE3C6",
+  warning050: "#FAA372",
   warning100: "#F36719",
   warning200: "#B14202",
 };
 
-const defaultTheme: TerrenoThemeConfig = {
+export const lightThemeConfig: TerrenoThemeConfig = {
   border: {
     activeAccent: "accent500",
     activeNeutral: "neutral700",
+    ai: "primary100",
     dark: "neutral500",
     default: "neutral300",
     error: "error100",
@@ -105,7 +110,7 @@ const defaultTheme: TerrenoThemeConfig = {
     primary: "Nunito",
     title: "Titillium Web",
   },
-  primitives: defaultPrimitives,
+  primitives: defaultThemePrimitives,
   radius: {
     default: "radiusMd",
     full: "radiusLg",
@@ -128,6 +133,7 @@ const defaultTheme: TerrenoThemeConfig = {
     doNotDisturb: "error100",
   },
   surface: {
+    ai: "primary000",
     base: "neutral000",
     baseAlternate: "neutral050",
     baseHover: "secondary000",
@@ -136,7 +142,8 @@ const defaultTheme: TerrenoThemeConfig = {
     errorLight: "error000",
     neutral: "neutral600",
     neutralDark: "neutral800",
-    neutralLight: "neutral200",
+    neutralExtraLight: "neutral200",
+    neutralLight: "neutral300",
     primary: "primary400",
     secondaryDark: "secondary500",
     secondaryExtraDark: "secondary800",
@@ -163,8 +170,117 @@ const defaultTheme: TerrenoThemeConfig = {
   },
 };
 
-type DeepPartial<T> = {
+export const darkThemeConfig: TerrenoThemeConfig = {
+  ...lightThemeConfig,
+  border: {
+    activeAccent: "accent200",
+    activeNeutral: "neutral100",
+    ai: "primary500",
+    dark: "neutral300",
+    default: "neutral400",
+    error: "error050",
+    focus: "primary200",
+    hover: "neutral600",
+    success: "success050",
+    warning: "warning050",
+  },
+  status: {
+    active: "success050",
+    away: "neutral300",
+    doNotDisturb: "error050",
+  },
+  surface: {
+    ai: "primary700",
+    base: "neutral800",
+    baseAlternate: "neutral800",
+    baseHover: "secondary600",
+    disabled: "neutral300",
+    error: "error050",
+    errorLight: "error200",
+    neutral: "neutral200",
+    neutralDark: "neutral050",
+    neutralExtraLight: "neutral600",
+    neutralLight: "neutral600",
+    primary: "primary300",
+    secondaryDark: "secondary300",
+    secondaryExtraDark: "secondary050",
+    secondaryExtraLight: "secondary600",
+    secondaryLight: "secondary600",
+    success: "success050",
+    successLight: "success200",
+    warning: "warning050",
+    // warning200 is the darkest warning fill. warning100 (#F36719) is 2.52:1
+    // against warning text (#FFE3C6), below the 4.5:1 AA bar.
+    warningLight: "warning200",
+  },
+  text: {
+    accent: "accent400",
+    error: "error000",
+    extraLight: "neutral300",
+    inverted: "neutral800",
+    link: "primary200",
+    linkLight: "primary300",
+    primary: "neutral000",
+    secondaryDark: "secondary050",
+    secondaryLight: "neutral200",
+    success: "success000",
+    warning: "warning000",
+  },
+};
+
+export type ThemeColorScheme = "light" | "dark" | "system";
+export type ResolvedThemeColorScheme = Exclude<ThemeColorScheme, "system">;
+
+export const themeColorSchemeOptions: {label: string; value: ThemeColorScheme}[] = [
+  {label: "Light", value: "light"},
+  {label: "Dark", value: "dark"},
+  {label: "Follow system", value: "system"},
+];
+
+export const resolveThemeColorScheme = (
+  colorScheme: ThemeColorScheme,
+  systemColorScheme: string | null | undefined
+): ResolvedThemeColorScheme => {
+  if (colorScheme === "dark") {
+    return "dark";
+  }
+  if (colorScheme === "light") {
+    return "light";
+  }
+  if (systemColorScheme === "dark") {
+    return "dark";
+  }
+  return "light";
+};
+
+export type DeepPartial<T> = {
   [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
+};
+
+const mergeThemeConfig = (
+  baseTheme: DeepPartial<TerrenoThemeConfig>,
+  overrideTheme: DeepPartial<TerrenoThemeConfig>
+): DeepPartial<TerrenoThemeConfig> => {
+  const mergedTheme = {...baseTheme};
+
+  for (const key in overrideTheme) {
+    if (!Object.hasOwn(overrideTheme, key)) {
+      continue;
+    }
+    const overrideSubTheme = overrideTheme[key as keyof TerrenoThemeConfig];
+    const baseSubTheme = baseTheme[key as keyof TerrenoThemeConfig];
+
+    if (overrideSubTheme && typeof overrideSubTheme === "object") {
+      (mergedTheme as Record<string, unknown>)[key] = {
+        ...baseSubTheme,
+        ...overrideSubTheme,
+      };
+      continue;
+    }
+    (mergedTheme as Record<string, unknown>)[key] = overrideSubTheme;
+  }
+
+  return mergedTheme;
 };
 
 const computeTheme = (
@@ -196,24 +312,57 @@ const computeTheme = (
   return {...theme, primitives};
 };
 
-const defaultComputedTheme = computeTheme(defaultTheme, defaultPrimitives);
+const defaultComputedTheme = computeTheme(lightThemeConfig, defaultThemePrimitives);
 
 export const ThemeContext = createContext({
+  colorScheme: "light" as ResolvedThemeColorScheme,
+  colorSchemeSetting: "light" as ThemeColorScheme,
   resetTheme: () => {},
-  setPrimitives: (_primitives: DeepPartial<typeof defaultPrimitives>) => {},
+  setColorScheme: (_colorScheme: ThemeColorScheme) => {},
+  setPrimitives: (_primitives: DeepPartial<ThemePrimitives>) => {},
   setTheme: (_theme: DeepPartial<TerrenoThemeConfig>) => {},
   theme: defaultComputedTheme,
 });
 
-interface ThemeProviderProps {
+export interface ThemeProviderProps {
   children: React.ReactNode;
+  colorScheme?: ThemeColorScheme;
   initialPrimitives?: DeepPartial<ThemePrimitives>;
 }
 
-export const ThemeProvider = ({children, initialPrimitives}: ThemeProviderProps) => {
-  const [providerTheme, setProviderTheme] = useState<DeepPartial<TerrenoThemeConfig>>(defaultTheme);
+export const ThemeProvider: React.FC<ThemeProviderProps> = ({
+  children,
+  colorScheme,
+  initialPrimitives,
+}) => {
+  const systemColorScheme = useColorScheme();
+  const [colorSchemeSetting, setColorSchemeSetting] = useState<ThemeColorScheme>(
+    colorScheme ?? "light"
+  );
+
+  // Keep an explicit parent selection in charge when that selection changes.
+  useEffect(() => {
+    if (colorScheme === undefined) {
+      return;
+    }
+    setColorSchemeSetting(colorScheme);
+  }, [colorScheme]);
+
+  const setColorScheme = useCallback((nextColorScheme: ThemeColorScheme): void => {
+    setColorSchemeSetting(nextColorScheme);
+  }, []);
+
+  const resolvedColorScheme = resolveThemeColorScheme(colorSchemeSetting, systemColorScheme);
+  const baseTheme = resolvedColorScheme === "dark" ? darkThemeConfig : lightThemeConfig;
+  const [providerThemeOverrides, setProviderThemeOverrides] = useState<
+    DeepPartial<TerrenoThemeConfig>
+  >({});
   const [providerPrimitives, setProviderPrimitives] = useState<ThemePrimitives>(
-    initialPrimitives ? {...defaultPrimitives, ...initialPrimitives} : defaultPrimitives
+    initialPrimitives ? {...defaultThemePrimitives, ...initialPrimitives} : defaultThemePrimitives
+  );
+  const providerTheme = useMemo(
+    (): DeepPartial<TerrenoThemeConfig> => mergeThemeConfig(baseTheme, providerThemeOverrides),
+    [baseTheme, providerThemeOverrides]
   );
 
   const computedTheme = useMemo(
@@ -226,36 +375,32 @@ export const ThemeProvider = ({children, initialPrimitives}: ThemeProviderProps)
   }, []);
 
   const setTheme = useCallback((newTheme: DeepPartial<TerrenoThemeConfig>): void => {
-    setProviderTheme((prev) => {
-      const mergedTheme = {...prev};
-
-      for (const key in newTheme) {
-        if (Object.hasOwn(newTheme, key)) {
-          const newSubTheme = newTheme[key as keyof TerrenoThemeConfig];
-          const prevSubTheme = prev[key as keyof TerrenoThemeConfig];
-
-          if (newSubTheme && typeof newSubTheme === "object") {
-            (mergedTheme as Record<string, unknown>)[key] = {
-              ...prevSubTheme,
-              ...newSubTheme,
-            };
-          } else {
-            (mergedTheme as Record<string, unknown>)[key] = newSubTheme;
-          }
-        }
-      }
-
-      return mergedTheme;
-    });
+    setProviderThemeOverrides((previousTheme) => mergeThemeConfig(previousTheme, newTheme));
   }, []);
 
   const resetTheme = useCallback((): void => {
-    setProviderTheme(defaultTheme);
-    setProviderPrimitives(defaultPrimitives);
+    setProviderThemeOverrides({});
+    setProviderPrimitives(defaultThemePrimitives);
   }, []);
   const contextValue = useMemo(
-    () => ({resetTheme, setPrimitives, setTheme, theme: computedTheme}),
-    [computedTheme, resetTheme, setPrimitives, setTheme]
+    () => ({
+      colorScheme: resolvedColorScheme,
+      colorSchemeSetting,
+      resetTheme,
+      setColorScheme,
+      setPrimitives,
+      setTheme,
+      theme: computedTheme,
+    }),
+    [
+      colorSchemeSetting,
+      computedTheme,
+      resetTheme,
+      resolvedColorScheme,
+      setColorScheme,
+      setPrimitives,
+      setTheme,
+    ]
   );
 
   return (
@@ -265,4 +410,4 @@ export const ThemeProvider = ({children, initialPrimitives}: ThemeProviderProps)
   );
 };
 
-export const useTheme = () => React.useContext(ThemeContext);
+export const useTheme = (): React.ContextType<typeof ThemeContext> => useContext(ThemeContext);

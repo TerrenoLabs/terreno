@@ -206,6 +206,42 @@ addGptRoutes(router, chat);
 - Ask prompt text (`TERRENO_ASKS_SYSTEM_PROMPT`, `COMPACT_SURFACE_SYSTEM_PROMPT`,
   `askPromptSection`) follows the `ai-prompt-governance` skill.
 
+## Agent UI Blocks
+
+Opt-in whole-reply YAML documents. Human docs: `docs/how-to/agent-ui-blocks.md`,
+`docs/reference/blocks.md`, `docs/reference/ai.md` (Host actions),
+`docs/explanation/agent-ui-blocks.md`. Block schemas, limits, the prompt section, and error codes
+live in `@terreno/blocks` — never redefine them here.
+
+```typescript
+addGptRoutes(router, {
+  aiService,
+  uiBlocks: {
+    hostActions: {
+      exportDataset: {payload: z.object({dataset: z.string()}).strict(), handler},
+      scaleStepper: scaleStepperHostAction,         // handles: "stepper"
+      toggleChecklist: toggleChecklistHostAction,   // handles: "checklist"
+    },
+    // richBlocks: false,  // keep the pre-rich-blocks prompt for shipped native builds
+  },
+});
+```
+
+- `uiBlocks.richBlocks` defaults to `true`: the prompt offers checklist, gallery, list, card
+  eyebrow, and copy, and offers stepper only when some host action has `handles: "stepper"`.
+  `false` restores the old prompt; validation accepts the rich blocks either way.
+- `HostAction` is `{handler, payload?, handles?, logResponse?}`. `handles` (`"stepper"` |
+  `"checklist"`) puts the action in that block's callback allowlist; a stepper or checklist naming
+  any other action fails `UNKNOWN_HOST_ACTION`. `logResponse: false` keeps the returned document
+  out of the `ui_action` `AIRequest` row.
+- Built-in host actions: `scaleStepperHostAction` (scales items from the agent's stored stepper)
+  and `toggleChecklistHostAction` (returns the stored checklist with `state` applied; saves
+  nothing). Both read the block with `findAgentBlock`, never from the request.
+- Stored history prompts are owner-writable (`PATCH /gpt/histories/:id`). A handler whose numbers
+  matter (prices, stock) computes them from the app's own data, not the stored block.
+- Block prompt text (`blocksPromptSection`, `TERRENO_UI_BLOCKS_SYSTEM_PROMPT`) follows the
+  `ai-prompt-governance` skill.
+
 ### addAiRequestsExplorerRoutes(router, options)
 
 Admin-only endpoint at `GET /aiRequestsExplorer`:

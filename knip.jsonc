@@ -318,7 +318,8 @@
         "jspdf-native-stub.js",
         "fingerprint.config.js",
         "playwright.circleci.config.ts",
-        "tests/bunSetup.ts"
+        "tests/bunSetup.ts",
+        "tests/testPreload.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -376,6 +377,7 @@
         "src/tests/setup.ts",
         "src/scripts/runAdminScript.ts",
         "src/scripts/seed-test-data.ts",
+        "src/scripts/generatePhotoLibrary.ts",
         "src/scripts/syncConsents.ts",
         "src/scripts/configuration-example.ts",
         "src/scripts/seed-admin-spa-admin.ts",

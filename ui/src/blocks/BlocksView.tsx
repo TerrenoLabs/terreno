@@ -7,6 +7,7 @@ import {Spinner} from "../Spinner";
 import {BlocksError} from "./BlocksError";
 import {type BlockRenderContext, renderBlock} from "./blockRenderers";
 import {useBlockSelections} from "./useBlockSelections";
+import {useChecklistState} from "./useChecklistState";
 import {useResolvedDatasets} from "./useResolvedDatasets";
 import {useResolvedImages} from "./useResolvedImages";
 
@@ -25,7 +26,7 @@ const renderBlocks = (
   testID: string | undefined
 ): React.ReactElement => (
   <Box gap={3} testID={testID}>
-    {blocks.map((block, index) => renderBlock(block, `blocks-${index}`, context))}
+    {blocks.map((block, index) => renderBlock(block, `blocks-${index}`, {...context, blocks}))}
   </Box>
 );
 
@@ -67,6 +68,7 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
     resolveDataset,
   });
   const {selections, setSelection} = useBlockSelections();
+  const {checked: checklistTicks, setChecked: setChecklistTick} = useChecklistState({overrides});
   const resolvedImages = useResolvedImages({
     blocks: validated?.ok ? validated.doc.blocks : undefined,
     resolveImage,
@@ -92,6 +94,7 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
   const context: BlockRenderContext = {
     allowHtml,
     boundData,
+    checklistTicks,
     hostActions,
     loadingIds,
     onAction,
@@ -100,6 +103,7 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
     resolved,
     resolvedImages,
     selections,
+    setChecklistTick,
     setSelection,
     streaming,
   };

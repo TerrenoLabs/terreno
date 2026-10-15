@@ -167,14 +167,17 @@ export interface ThemePrimitiveColors {
   accent900: string;
 
   error000: string;
+  error050: string;
   error100: string;
   error200: string;
 
   warning000: string;
+  warning050: string;
   warning100: string;
   warning200: string;
 
   success000: string;
+  success050: string;
   success100: string;
   success200: string;
 }
@@ -223,6 +226,7 @@ export interface TextThemeConfig {
 export interface SurfaceThemeConfig {
   base: keyof ThemePrimitiveColors;
   baseAlternate: keyof ThemePrimitiveColors;
+  ai: keyof ThemePrimitiveColors;
   baseHover: keyof ThemePrimitiveColors;
   primary: keyof ThemePrimitiveColors;
   secondaryExtraLight: keyof ThemePrimitiveColors;
@@ -230,6 +234,7 @@ export interface SurfaceThemeConfig {
   secondaryDark: keyof ThemePrimitiveColors;
   secondaryExtraDark: keyof ThemePrimitiveColors;
   neutral: keyof ThemePrimitiveColors;
+  neutralExtraLight: keyof ThemePrimitiveColors;
   neutralLight: keyof ThemePrimitiveColors;
   neutralDark: keyof ThemePrimitiveColors;
   disabled: keyof ThemePrimitiveColors;
@@ -246,6 +251,7 @@ export interface BorderThemeConfig {
   dark: keyof ThemePrimitiveColors;
   activeNeutral: keyof ThemePrimitiveColors;
   activeAccent: keyof ThemePrimitiveColors;
+  ai: keyof ThemePrimitiveColors;
   hover: keyof ThemePrimitiveColors;
   focus: keyof ThemePrimitiveColors;
   error: keyof ThemePrimitiveColors;
@@ -294,6 +300,7 @@ export interface TextTheme {
 export interface SurfaceTheme {
   base: string;
   baseAlternate: string;
+  ai: string;
   baseHover: string;
   primary: string;
   secondaryExtraLight: string;
@@ -301,6 +308,7 @@ export interface SurfaceTheme {
   secondaryDark: string;
   secondaryExtraDark: string;
   neutral: string;
+  neutralExtraLight: string;
   neutralLight: string;
   neutralDark: string;
   disabled: string;
@@ -317,6 +325,7 @@ export interface BorderTheme {
   dark: string;
   activeNeutral: string;
   activeAccent: string;
+  ai: string;
   hover: string;
   focus: string;
   error: string;
@@ -674,7 +683,24 @@ export interface AccessibilityProps {
   accessibilityRole?: string;
 }
 
+/** Checked and disabled state a `Box` reports to screen readers. */
+export interface BoxAccessibilityState {
+  checked?: boolean;
+  disabled?: boolean;
+}
+
 export interface BoxPropsBase extends WithTestID {
+  /**
+   * Checked and disabled state for screen readers, sent as `accessibilityState` and as
+   * `aria-checked` / `aria-disabled`. On a clickable Box, `disabled: true` also stops presses.
+   */
+  accessibilityState?: BoxAccessibilityState;
+  /**
+   * Makes a non-clickable Box a live region, sent as `aria-live`: screen readers announce
+   * changes to its contents (`polite` waits for a pause). It works on web and Android;
+   * VoiceOver on iOS does not announce React Native live regions.
+   */
+  accessibilityLiveRegion?: "polite" | "assertive";
   alignContent?: AlignContent;
   alignItems?: AlignItems;
   alignSelf?: AlignSelf;
@@ -918,7 +944,8 @@ export interface SegmentedControlBadgeConfig {
 export interface SegmentedControlProps extends WithTestID {
   testIDs?: SegmentedControlTestIDs;
   items: string[];
-  size?: "md" | "lg"; // default "md"
+  /** `sm` is 28px and hugs its labels. `md` (default, 36px) and `lg` (44px) stretch. */
+  size?: "sm" | "md" | "lg";
   onChange: (activeIndex: number) => void;
   selectedIndex?: number;
   maxItems?: number;
@@ -2023,7 +2050,10 @@ export interface BlocksViewProps extends WithTestID {
   hostActions?: readonly string[];
   /** Hostnames allowed on https image sources. Empty rejects every https image. */
   imageHosts?: readonly string[];
-  /** Called for reply, open, select, and callback. Select also updates the target chart locally. */
+  /**
+   * Called for reply, open, select, and callback. Select also updates the target chart locally.
+   * A copy button writes the clipboard itself and never calls this.
+   */
   onAction?: (event: {action: BlockAction; blockId: string; elementId: string}) => void;
   /** Block ids replaced in place. The key is the original block id. */
   overrides?: Record<string, Block>;

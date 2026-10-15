@@ -9,6 +9,8 @@ export const addTagTypes = [
   "notifications",
   "todos",
   "loadtest",
+  "photoLibrary",
+  "photolibraryentries",
   "exampleprojects",
   "admin-users",
   "users",
@@ -673,6 +675,7 @@ const injectedRtkApi = api
           params: {
             prompt: queryArg.prompt,
             promptVersion: queryArg.promptVersion,
+            scope: queryArg.scope,
           },
           url: `/ai/observability/traces`,
         }),
@@ -980,6 +983,23 @@ const injectedRtkApi = api
       getOrgsMine: build.query<GetOrgsMineRes, GetOrgsMineArgs>({
         providesTags: ["organizations"],
         query: () => ({url: `/orgs/mine`}),
+      }),
+      getPhotoLibrary: build.query<GetPhotoLibraryRes, GetPhotoLibraryArgs>({
+        providesTags: ["photolibraryentries"],
+        query: (queryArg) => ({
+          params: {
+            _id: queryArg._id,
+            limit: queryArg.limit,
+            page: queryArg.page,
+            sort: queryArg.sort,
+            tags: queryArg.tags,
+          },
+          url: `/photoLibrary/`,
+        }),
+      }),
+      getPhotoLibraryById: build.query<GetPhotoLibraryByIdRes, GetPhotoLibraryByIdArgs>({
+        providesTags: ["photolibraryentries"],
+        query: (queryArg) => ({url: `/photoLibrary/${queryArg}`}),
       }),
       getProjects: build.query<GetProjectsRes, GetProjectsArgs>({
         providesTags: ["exampleprojects"],
@@ -1316,6 +1336,10 @@ const injectedRtkApi = api
           method: "PATCH",
           url: `/users/${queryArg.id}`,
         }),
+      }),
+      photoLibraryUrl: build.query<PhotoLibraryUrlRes, PhotoLibraryUrlArgs>({
+        providesTags: ["photoLibrary"],
+        query: (queryArg) => ({url: `/photoLibrary/${queryArg}/url`}),
       }),
       postAdminAnnouncementAcknowledgementsBulkPatch: build.mutation<
         PostAdminAnnouncementAcknowledgementsBulkPatchRes,
@@ -2877,6 +2901,70 @@ export type PatchTodosByIdArgs = {
 };
 export type DeleteTodosByIdRes = unknown;
 export type DeleteTodosByIdArgs = string;
+export type PhotoLibraryUrlRes = /** status 200 Successful response */ {
+  data: {
+    url: string;
+  };
+};
+export type PhotoLibraryUrlArgs = string;
+export type GetPhotoLibraryRes = /** status 200 Successful list */ {
+  data?: {
+    /** Alt text for the photo, shown to screen readers and used for search */
+    alt: string;
+    /** The FileAttachment record created when the photo was uploaded */
+    fileAttachmentId: string;
+    /** Object key of the photo in the GCS bucket, used to sign read URLs */
+    gcsKey: string;
+    /** Image-model prompt that generated the photo; the key re-runs upsert by */
+    prompt: string;
+    /** Search tags for the photo (1–12) */
+    tags?: string[];
+    _id: string;
+    /** When this document was last updated */
+    updated: string;
+    /** When this document was created */
+    created: string;
+    /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+    deleted?: boolean;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+export type GetPhotoLibraryArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  tags?:
+    | string[]
+    | {
+        $in?: any[];
+      };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+export type GetPhotoLibraryByIdRes = /** status 200 Successful read */ {
+  /** Alt text for the photo, shown to screen readers and used for search */
+  alt: string;
+  /** The FileAttachment record created when the photo was uploaded */
+  fileAttachmentId: string;
+  /** Object key of the photo in the GCS bucket, used to sign read URLs */
+  gcsKey: string;
+  /** Image-model prompt that generated the photo; the key re-runs upsert by */
+  prompt: string;
+  /** Search tags for the photo (1–12) */
+  tags?: string[];
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+};
+export type GetPhotoLibraryByIdArgs = string;
 export type PostProjectsRes = /** status 201 Successful create */ {
   /** The document id (String so offline sync clients can mint ids) */
   _id: string;
@@ -3905,6 +3993,8 @@ export type GetHarnessTasksByIdRes = /** status 200 Successful read */ {
   attempt?: number;
   /** When true, the task outlives its owning conversation turn */
   background?: boolean;
+  /** Times a runner claimed the task; numbers each runnable visit for job dispatch */
+  claims?: number;
   /** Events received by harness.sendEvent; numbers the task's inbox */
   eventSeq?: number;
   /** Immutable task input */
@@ -4234,6 +4324,7 @@ export type GetAiObservabilityTracesRes = /** status 200 Success */ {
 export type GetAiObservabilityTracesArgs = {
   prompt?: string;
   promptVersion?: number;
+  scope?: string;
 };
 export type GetAiObservabilityTracesByIdRes = /** status 200 Success */ {
   data?: object;
@@ -7627,6 +7718,9 @@ export const {
   useGetTodosByIdQuery,
   usePatchTodosByIdMutation,
   useDeleteTodosByIdMutation,
+  usePhotoLibraryUrlQuery,
+  useGetPhotoLibraryQuery,
+  useGetPhotoLibraryByIdQuery,
   usePostProjectsMutation,
   useGetProjectsQuery,
   useGetProjectsByIdQuery,

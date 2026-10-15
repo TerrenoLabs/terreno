@@ -2237,7 +2237,8 @@ const isHighSignalFile = (filePath: string): boolean => {
     filePath.endsWith(".yml") ||
     filePath.endsWith(".yaml") ||
     filePath.endsWith(".md") ||
-    filePath.startsWith("terraform/")
+    filePath.startsWith("terraform/") ||
+    filePath.startsWith("infra/")
   );
 };
 

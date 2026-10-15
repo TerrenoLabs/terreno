@@ -20,6 +20,102 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.16.2] - 2026-10-13
+
+### Fixed
+
+- Light-mode primary button labels, icons, and loading indicators are white again,
+  including on disabled primary buttons. (#1567)
+
+## [57.16.1] - 2026-10-12
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.16.1.md`](mcp-server/src/docs/upgrades/57.16.1.md).
+
+### Added
+
+- `terraform/modules/terreno-backend` provisions one Terreno backend on Cloud Run: Artifact Registry, a least-privilege runtime service account, empty Secret Manager secrets, and a websocket-safe service (session affinity, 3600s timeout, one minimum instance). Set `github_deploy` for a keyless GitHub Actions deployer. See [Deploy backend to Cloud Run](docs/how-to/deploy-backend-to-cloud-run.md#manage-with-terraform).
+
+### Changed
+
+- `terraform/` now holds only reusable modules. Terreno's own GCP deployment (example backend, jobs worker, hosted MCP server) moved to `infra/flourish/`, which uses the shared modules through a symlink; CI stages a dereferenced copy for Infra Manager. No infrastructure changes: resource addresses are unchanged.
+
+### Fixed
+
+- `TextField` and `TextArea` on web no longer drop a typo fix made within half a second. The
+  oscillation guard used to suppress any change that undid the previous one within 500ms, so
+  typing a character and backspacing it right away put the character back. Changes the user
+  types, deletes, pastes, drops or undoes (judged by the DOM input event's `inputType`) now
+  bypass the guard. Spellcheck replacements, IME composition and changes with no input event
+  stay guarded.
+
+## [57.15.0] - 2026-10-11
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.15.0.md`](mcp-server/src/docs/upgrades/57.15.0.md).
+
+### Changed
+
+- SyncDB bootstraps and reconciles every stream through one `POST /sync/snapshot/batch` request
+  per round instead of one `GET /sync/snapshot` per stream. A reconnect with nothing new now costs
+  2 requests however many collections the app syncs. The client sends the next round while it
+  writes the current one and writes rows in chunks of 500 so the UI keeps responding. Clients fall
+  back to per-stream paging against servers without the batch route. The web IndexedDB persister
+  no longer serializes the whole store once per transaction: it serializes once per write.
+
+## [57.14.0] - 2026-10-11
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.14.0.md`](mcp-server/src/docs/upgrades/57.14.0.md).
+
+### Changed
+
+- `@terreno/syncdb` now pages snapshot streams side by side instead of one at a time, so cold
+  start no longer costs one sequential round trip per stream. Reconcile, subscribe catch-up,
+  `forceResync` and wipe re-bootstrap run up to `snapshotConcurrency` streams at once (new
+  `createSyncDb` option, default 6; `1` restores the old behavior). Each stream now runs one pass
+  at a time: a subscribe catch-up queues behind a pass that started before the room join, and a
+  force resync waits for the stream's in-flight pass before purging it, so a concurrent pass can
+  no longer mark a purged stream bootstrapped over rows it never paged. A new how-to,
+  [Use syncdb correctly](docs/how-to/use-syncdb-correctly.md), lists the library behavior
+  apps have to handle.
+
+## [57.13.0] - 2026-10-10
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.13.0.md`](mcp-server/src/docs/upgrades/57.13.0.md).
+
+### Added
+
+- Agent UI rich replies: a block document can now hold a `stepper` (− value + that calls a host action and gets the replacement stepper back), a `checklist` (ticks with an "n of m" counter, local or sent to a host action), a `gallery` (2–6 photos), a `list` (titled rows with portrait thumbnails), a card `eyebrow`, and a `copy` button action that writes a block's text to the clipboard on the device. See [Add a stepper callback](docs/how-to/agent-ui-blocks.md#add-a-stepper-callback), [UI blocks](docs/reference/blocks.md), and [Agent UI blocks](docs/explanation/agent-ui-blocks.md).
+- `@terreno/blocks` exports the stepper, checklist, gallery, list, and copy action types, `blockPlainText`, `stepperElementIds`, `checklistElementId`, `COPY_TARGET_TYPES`, and the error codes `OUT_OF_RANGE` and `COPY_TARGET_INVALID`. `blocksPromptSection` takes `richBlocks`, `stepperActions`, and `checklistActions`; `validateBlocks` takes the two action lists. The Sunday roast golden document is `blocks/src/fixtures/golden/sunday-roast.yaml`.
+- `@terreno/ai` adds the opt-in host actions `scaleStepperHostAction` and `toggleChecklistHostAction`, `findAgentBlock` for reading the block the agent wrote from the stored history, and `runBufferedChatTurn` for one chat turn without HTTP. A host action can set `handles: "stepper" | "checklist"` and `logResponse: false` (the returned block stays out of the `ui_action` log). `uiBlocks.richBlocks` controls which blocks the prompt offers.
+- `@terreno/ui` `BlocksView` renders the new blocks with Terreno components. `DataTable` has right-aligned `number` and Luxon `date` cells, and the `table` block uses them. `MarkdownView` tables get theme borders, a bold header, and sideways scroll. `Box` takes `accessibilityState` and `accessibilityLiveRegion`. `Image` uses `alt` as its accessible label.
+- The example app generates a stored photo library once (`bun run photos:generate`, Vertex Imagen), gives the agent a `findPhotos` tool, serves `GET /photoLibrary/:id/url`, and registers `scaleStepper` and `toggleChecklist`. `bun run blocks:smoke` checks that a real model writes the roast reply, and skips without a model key.
+- `@terreno/api` exports `createRouteRateLimitMiddleware({name, max, windowMs, store?, keyBy?})`, a fixed-window limit for one route that works without `TerrenoApp` `rateLimit`. See [Rate limiting](docs/how-to/rate-limiting.md). (#1499)
+- `@terreno/admin-backend` `DocumentStorageApp` takes `access: "authenticated"` to open document storage to every signed-in user. Non-admins only see their own `users/<userId>/` folder under `folderPrefix`; admins keep the whole prefix. `uploadRateLimit` limits uploads per client IP (or `keyBy`). A `folderPrefix` without a trailing slash gets one, and a missing bucket lists as empty. (#1499)
+- `@terreno/admin-frontend` `DocumentStorageBrowser` takes `backButton` and shows upload errors inline, including a 429 "Upload limit reached" message. (#1499)
+- `@terreno/ui` `SegmentedControl` takes `size="sm"` (28px, sized to its labels). (#1499)
+
+### Changed
+
+- The admin Roles screen shows one row per resource, with that resource's actions as badges, instead of one badge per `resource:action`. Custom permissions list before model permissions. Badges are green for read actions, amber for writes, and red for destructive actions (`delete`, `destroy`, `remove`). Saved role data is unchanged. (#1540)
+- Behaviour change: hosts with `uiBlocks` on get the new rich blocks (`checklist`, `gallery`, `list`, card `eyebrow`, and `copy`, plus `stepper` when a host action has `handles: "stepper"`) in the chat system prompt by default. A native build released before them shows an error banner for a reply that uses them. Set `uiBlocks.richBlocks: false` to keep the old catalog until those builds update; the prompt is then unchanged from before, even with a stepper action registered. Validation accepts the new blocks either way. See [Keep the old catalog for shipped native builds](docs/how-to/agent-ui-blocks.md#keep-the-old-catalog-for-shipped-native-builds).
+- `DataTable` columns with `columnType: "number"` now right-align their cells and header, and `columnType: "date"` cells format an ISO string or `Date` as Luxon `DATE_MED` (date only, local zone). Values that are already formatted strings show as before. Use `customColumnComponentMap` to keep the old look.
+- `Image` with `alt` now sets it as the accessible label and makes the image its own screen-reader element.
+- `table` blocks show column names with underscores as spaces, size to their rows, and show at most 10 rows before the body scrolls.
+- The `neutral500` theme primitive is now `#949494` (was `#9A9A9A`), so extra-light text meets contrast guidelines. Disabled surfaces, dark borders, the away status, and new `create-terreno-app` projects pick up the new gray. Apps that set their own `neutral500` with `setPrimitives` are unaffected. (#1544)
+
+### Fixed
+
+- On web, an open toast no longer blocks clicks on the rest of the page at the same height.
+  The toast's `SafeAreaView` and the `Toast` layout wrapper span the full width (up to 900px)
+  around the visible toast and swallowed clicks there. Both now use `pointerEvents: "box-none"`,
+  so only the visible toast is interactive.
+- `Tooltip` no longer shows up in the top-left corner and blocks the screen when its trigger measures as zero-sized or off-screen. When the trigger measurement is invalid or the ref cannot be measured, the tooltip hides and logs `console.error`. Measurements left over from an earlier show are ignored. (#1490)
+- `Tooltip` on web no longer mounts a full-screen layer over the app while it is open.
+  The bubble now renders into `document.body` with `position: fixed` instead of through
+  the `PortalHost` layer, so nothing covers the page and the content below stays
+  clickable. Web tooltips also use `zIndex: 9999`, matching the body-level overlays
+  (`Modal`, `DropdownPanel`), so tooltips inside a modal show on top of it. Native keeps
+  the `PortalHost` path.
+
 ## [57.12.0] - 2026-10-07
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.12.0.md`](mcp-server/src/docs/upgrades/57.12.0.md).

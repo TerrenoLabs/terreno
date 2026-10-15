@@ -1,6 +1,6 @@
 import {afterEach, beforeAll, describe, expect, it, spyOn} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
-import {askPromptSection} from "@terreno/blocks";
+import {askPromptSection, blocksPromptSection} from "@terreno/blocks";
 import {jsonSchema, type LanguageModel, type Tool, tool} from "ai";
 import express from "express";
 
@@ -2933,6 +2933,31 @@ blocks:
           name: export_csv
 `;
 
+const stepperReply = (callbackName: string): string => `v: 1
+blocks:
+  - type: stepper
+    id: guests
+    label: Number of people
+    value: 5
+    min: 1
+    max: 20
+    callback:
+      name: ${callbackName}
+`;
+
+const STEPPER_HOST_ACTIONS = {
+  approve: {},
+  scaleStepper: {handles: "stepper" as const},
+};
+
+const blocksEventOf = (
+  events: Record<string, unknown>[]
+): {errors: {code: string; path: string}[]; ok: boolean} =>
+  events.find((event) => "blocks" in event)?.blocks as {
+    errors: {code: string; path: string}[];
+    ok: boolean;
+  };
+
 describe("/gpt/prompt uiBlocks", () => {
   beforeAll(async () => {
     await ensureTestUsers();
@@ -3275,5 +3300,69 @@ blocks:
     };
     expect(allowedBlocks.ok).toBe(true);
     expect(systemPromptOf(modelCall(allowedModel, 0))).toContain("cdn.example.com");
+  });
+
+  it("offers the stepper by default when a host action handles steppers", async () => {
+    const model = createScriptedModel({steps: [textStep(stepperReply("scaleStepper"))]});
+    const agent = await authAsUser(
+      buildApp({model, uiBlocks: {hostActions: STEPPER_HOST_ACTIONS}}),
+      "notAdmin"
+    );
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    const system = String(systemPromptOf(modelCall(model, 0)));
+    expect(system).toContain("details, stepper, checklist, gallery, list.");
+    expect(system).toContain("A stepper callback name must be one of: scaleStepper.");
+    expect(blocksEventOf(events)).toEqual({errors: [], ok: true, warnings: []});
+  });
+
+  it("rejects a stepper whose callback is a host action that does not handle steppers", async () => {
+    const model = createScriptedModel({steps: [textStep(stepperReply("approve"))]});
+    const agent = await authAsUser(
+      buildApp({model, uiBlocks: {hostActions: STEPPER_HOST_ACTIONS}}),
+      "notAdmin"
+    );
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    const blocks = blocksEventOf(events);
+    expect(blocks.ok).toBe(false);
+    expect(blocks.errors.map((error) => ({code: error.code, path: error.path}))).toEqual([
+      {code: "UNKNOWN_HOST_ACTION", path: "blocks[0].callback.name"},
+    ]);
+    const history = await loadHistory(await onlyHistoryId());
+    expect(String(rowsOf(history).find((row) => row.type === "assistant")?.text)).toContain(
+      "UNKNOWN_HOST_ACTION"
+    );
+  });
+
+  it("never mentions the stepper without a stepper action", async () => {
+    const model = createScriptedModel({steps: [textStep(VALID_BLOCKS)]});
+    const agent = await authAsUser(
+      buildApp({model, uiBlocks: {hostActions: {approve: {}}}}),
+      "notAdmin"
+    );
+
+    await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    expect(String(systemPromptOf(modelCall(model, 0)))).not.toContain("stepper");
+  });
+
+  it("keeps the pre-rich-blocks prompt with richBlocks false but still accepts a stepper", async () => {
+    const model = createScriptedModel({steps: [textStep(stepperReply("scaleStepper"))]});
+    const agent = await authAsUser(
+      buildApp({model, uiBlocks: {hostActions: STEPPER_HOST_ACTIONS, richBlocks: false}}),
+      "notAdmin"
+    );
+
+    const {events} = await streamPrompt(agent, {prompt: USER_PROMPT});
+
+    const system = String(systemPromptOf(modelCall(model, 0)));
+    expect(system).not.toContain("stepper");
+    expect(system).toContain(
+      blocksPromptSection({hostActions: ["approve", "scaleStepper"], richBlocks: false})
+    );
+    expect(blocksEventOf(events)).toEqual({errors: [], ok: true, warnings: []});
   });
 });

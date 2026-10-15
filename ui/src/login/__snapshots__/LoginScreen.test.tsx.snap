@@ -131,7 +131,7 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                               ],
                               "props": {
                                 "style": {
-                                  "backgroundColor": "#D9D9D9",
+                                  "backgroundColor": "#CDCDCD",
                                   "borderColor": "#4E4E4E",
                                   "borderRadius": 4,
                                   "borderWidth": 1,
@@ -259,7 +259,7 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                               ],
                               "props": {
                                 "style": {
-                                  "backgroundColor": "#D9D9D9",
+                                  "backgroundColor": "#CDCDCD",
                                   "borderColor": "#4E4E4E",
                                   "borderRadius": 4,
                                   "borderWidth": 1,

@@ -678,12 +678,14 @@ mock.module("expo-router", () => ({
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
+    setParams: mock(() => {}),
   },
   Slot: ({children, ...props}: MockComponentProps) => React.createElement("Slot", props, children),
   Stack: ({children, ...props}: MockComponentProps) =>
     React.createElement("Stack", props, children),
   Tabs: ({children, ...props}: MockComponentProps) => React.createElement("Tabs", props, children),
   useFocusEffect: mock(() => undefined),
+  useGlobalSearchParams: mock(() => ({})),
   useLocalSearchParams: mock(() => ({})),
   useNavigation: mock(() => ({
     addListener: mock(() => () => undefined),
@@ -698,6 +700,7 @@ mock.module("expo-router", () => ({
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
+    setParams: mock(() => {}),
   })),
   useSearchParams: mock(() => ({})),
   useSegments: mock(() => []),

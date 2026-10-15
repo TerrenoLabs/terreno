@@ -1,7 +1,13 @@
 import {describe, it} from "bun:test";
 import {assert} from "chai";
 
-import {defaultPreviewState, previewParamsFromState, previewQueryFromState, previewStateFromQuery} from "./previewState";
+import {
+  activePreviewParams,
+  defaultPreviewState,
+  previewParamsFromState,
+  previewQueryFromState,
+  previewStateFromQuery,
+} from "./previewState";
 
 describe("preview state", () => {
   it("reads the Button dark 375 query and writes it back", () => {
@@ -33,6 +39,18 @@ describe("preview state", () => {
     assert.equal(merged.viewport, "");
     assert.deepEqual(previewStateFromQuery(merged), defaultPreviewState());
     assert.equal(previewQueryFromState(defaultPreviewState()), "");
+  });
+
+  it("forwards only the preview keys that differ from the defaults", () => {
+    assert.deepEqual(activePreviewParams({theme: "dark", viewport: "full"}), {theme: "dark"});
+    assert.deepEqual(activePreviewParams({}), {});
+  });
+
+  it("keeps follow-system as a shareable theme choice", () => {
+    const state = previewStateFromQuery({theme: "system"});
+    assert.equal(state.theme, "system");
+    assert.equal(previewQueryFromState(state), "theme=system");
+    assert.equal(previewParamsFromState(state).theme, "system");
   });
 
   it("ignores unknown viewport and theme values", () => {

@@ -5,7 +5,9 @@ import {
   APIError,
   asyncHandler,
   authenticateMiddleware,
+  createRouteRateLimitMiddleware,
   logger,
+  type RouteRateLimitOptions,
   type TerrenoPlugin,
 } from "@terreno/api";
 import type express from "express";
@@ -22,6 +24,14 @@ export interface DocumentStorageOptions {
   maxFileSize?: number;
   signedUrlExpiration?: number;
   /**
+   * Who may use the routes. `admin` (default) gives admins the whole bucket. `authenticated`
+   * also lets signed-in non-admins in, confined to their own `users/<userId>/` folder
+   * under `folderPrefix`. A prefix without a trailing slash gets one.
+   */
+  access?: "admin" | "authenticated";
+  /** Per-key limit on uploads (`POST basePath/`). Keys by client IP unless `keyBy` is set. */
+  uploadRateLimit?: Omit<RouteRateLimitOptions, "name">;
+  /**
    * When `false` or the function returns `false`, `POST` uploads are rejected.
    * Listing, download, and delete stay available. Omit or pass `true` to leave uploads enabled.
    */
@@ -35,6 +45,11 @@ export interface DocumentFile {
   contentType: string | undefined;
   updated: string;
   isFolder: boolean;
+}
+
+interface ListedStorageFile {
+  metadata: {contentType?: unknown; size?: unknown; updated?: unknown};
+  name: string;
 }
 
 export interface DocumentListResponse {
@@ -80,6 +95,33 @@ const isAdmin = (req: express.Request): boolean => {
   return user?.admin === true;
 };
 
+const userIdOf = (req: express.Request): string | undefined => {
+  const user = req.user as {_id?: unknown; id?: string} | undefined;
+  return user?.id ?? (user?._id != null ? String(user._id) : undefined);
+};
+
+// GCS prefixes are directories. A value without a trailing slash would glue the next
+// segment on (`pr-5users/` instead of `pr-5/users/`).
+// GCS answers a missing bucket with 404 notFound. That is an empty demo, not a broken list.
+const isMissingBucket = (error: unknown): boolean => {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const gcsError = error as {code?: number; errors?: {reason?: string}[]};
+  if (gcsError.code !== 404) {
+    return false;
+  }
+  return gcsError.errors?.some((item) => item.reason === "notFound") === true;
+};
+
+const withTrailingSlash = (folderPrefix: string | undefined): string => {
+  const base = folderPrefix ?? "";
+  if (base.length === 0 || base.endsWith("/")) {
+    return base;
+  }
+  return `${base}/`;
+};
+
 export class DocumentStorageApp implements TerrenoPlugin {
   private options: DocumentStorageOptions;
   private storage: Storage;
@@ -108,8 +150,17 @@ export class DocumentStorageApp implements TerrenoPlugin {
     return this.storage.bucket(bucketName);
   }
 
-  private get prefix() {
-    return this.options.folderPrefix ?? "";
+  // Admins see the whole configured prefix; other users only their own folder.
+  private prefixFor(req: express.Request): string {
+    const base = withTrailingSlash(this.options.folderPrefix);
+    if (isAdmin(req)) {
+      return base;
+    }
+    const userId = userIdOf(req);
+    if (!userId) {
+      throw new APIError({status: 401, title: "Authentication required"});
+    }
+    return `${base}users/${userId}/`;
   }
 
   private get allowedMimeTypes(): Set<string> {
@@ -144,44 +195,65 @@ export class DocumentStorageApp implements TerrenoPlugin {
       storage: multer.memoryStorage(),
     });
 
-    const adminGuard = [
+    const isOpenToUsers = this.options.access === "authenticated";
+    const accessGuard = [
       authenticateMiddleware(),
       (req: express.Request, _res: express.Response, next: express.NextFunction) => {
-        if (!isAdmin(req)) {
+        if (!isOpenToUsers && !isAdmin(req)) {
           throw new APIError({status: 403, title: "Admin access required"});
         }
         next();
       },
     ];
+    const uploadRateLimit: express.RequestHandler[] = this.options.uploadRateLimit
+      ? [
+          createRouteRateLimitMiddleware({
+            ...this.options.uploadRateLimit,
+            name: `documents-upload:${basePath}`,
+          }) as express.RequestHandler,
+        ]
+      : [];
 
     // GET basePath/ — List files and folders
     app.get(
       `${basePath}/`,
-      ...adminGuard,
+      ...accessGuard,
       asyncHandler(async (req: express.Request, res: express.Response) => {
         const queryPrefix = (req.query.prefix as string) ?? "";
-        const fullPrefix = `${this.prefix}${queryPrefix}`;
+        const rootPrefix = this.prefixFor(req);
+        const fullPrefix = `${rootPrefix}${queryPrefix}`;
 
-        const [files, , apiResponse] = await this.bucket.getFiles({
-          delimiter: "/",
-          prefix: fullPrefix,
-        });
+        let files: ListedStorageFile[];
+        let prefixes: string[] = [];
+        try {
+          const listed = await this.bucket.getFiles({
+            delimiter: "/",
+            prefix: fullPrefix,
+          });
+          files = listed[0];
+          prefixes = (listed[2] as {prefixes?: string[]} | undefined)?.prefixes ?? [];
+        } catch (error) {
+          if (!isMissingBucket(error)) {
+            throw error;
+          }
+          logger.warn("Document storage bucket does not exist; returning an empty list");
+          const empty: DocumentListResponse = {files: [], folders: [], prefix: queryPrefix};
+          return res.json(empty);
+        }
 
         const documentFiles: DocumentFile[] = files
           .filter((file) => file.name !== fullPrefix)
           .map((file) => ({
             contentType: file.metadata.contentType as string | undefined,
-            fullPath: file.name.slice(this.prefix.length),
+            fullPath: file.name.slice(rootPrefix.length),
             isFolder: false,
             name: file.name.split("/").filter(Boolean).pop() ?? file.name,
             size: Number(file.metadata.size ?? 0),
             updated: file.metadata.updated as string,
           }));
 
-        const prefixes =
-          ((apiResponse as {prefixes?: string[]})?.prefixes as string[] | undefined) ?? [];
         const folders = prefixes.map((p) => {
-          const relative = p.slice(this.prefix.length);
+          const relative = p.slice(rootPrefix.length);
           return relative;
         });
 
@@ -198,7 +270,8 @@ export class DocumentStorageApp implements TerrenoPlugin {
     // POST basePath/ — Upload a file
     app.post(
       `${basePath}/`,
-      ...adminGuard,
+      ...accessGuard,
+      ...uploadRateLimit,
       upload.single("file") as unknown as express.RequestHandler,
       asyncHandler(async (req: express.Request, res: express.Response) => {
         await assertFileUploadsEnabled(req, this.options.fileUploadsEnabled);
@@ -209,7 +282,7 @@ export class DocumentStorageApp implements TerrenoPlugin {
 
         const targetPrefix = (req.body.prefix as string) ?? "";
         const sanitizedFilename = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
-        const gcsPath = `${this.prefix}${targetPrefix}${sanitizedFilename}`;
+        const gcsPath = `${this.prefixFor(req)}${targetPrefix}${sanitizedFilename}`;
 
         const gcsFile = this.bucket.file(gcsPath);
         await gcsFile.save(file.buffer, {
@@ -232,14 +305,14 @@ export class DocumentStorageApp implements TerrenoPlugin {
     // GET basePath/download/* — Stream file download
     app.get(
       `${basePath}/download/*filepath`,
-      ...adminGuard,
+      ...accessGuard,
       asyncHandler(async (req: express.Request, res: express.Response) => {
         const filePath = normalizePathParam(req.params.filepath);
         if (!filePath) {
           throw new APIError({status: 400, title: "File path is required"});
         }
 
-        const gcsPath = `${this.prefix}${filePath}`;
+        const gcsPath = `${this.prefixFor(req)}${filePath}`;
         const gcsFile = this.bucket.file(gcsPath);
 
         let metadata: Record<string, unknown>;
@@ -297,7 +370,7 @@ export class DocumentStorageApp implements TerrenoPlugin {
     // POST basePath/folder — Create a folder
     app.post(
       `${basePath}/folder`,
-      ...adminGuard,
+      ...accessGuard,
       asyncHandler(async (req: express.Request, res: express.Response) => {
         const {folderName, prefix} = req.body as {folderName?: string; prefix?: string};
         if (!folderName) {
@@ -306,7 +379,7 @@ export class DocumentStorageApp implements TerrenoPlugin {
 
         const sanitizedName = folderName.replace(/[^a-zA-Z0-9._-]/g, "_");
         const targetPrefix = prefix ?? "";
-        const gcsPath = `${this.prefix}${targetPrefix}${sanitizedName}/`;
+        const gcsPath = `${this.prefixFor(req)}${targetPrefix}${sanitizedName}/`;
 
         const gcsFile = this.bucket.file(gcsPath);
         await gcsFile.save(Buffer.alloc(0), {contentType: "application/x-directory"});
@@ -318,14 +391,14 @@ export class DocumentStorageApp implements TerrenoPlugin {
     // DELETE basePath/folder/* — Delete a folder and all its contents
     app.delete(
       `${basePath}/folder/*folderpath`,
-      ...adminGuard,
+      ...accessGuard,
       asyncHandler(async (req: express.Request, res: express.Response) => {
         const folderPath = normalizePathParam(req.params.folderpath);
         if (!folderPath) {
           throw new APIError({status: 400, title: "Folder path is required"});
         }
 
-        const gcsPrefix = `${this.prefix}${folderPath}`;
+        const gcsPrefix = `${this.prefixFor(req)}${folderPath}`;
         const [files] = await this.bucket.getFiles({prefix: gcsPrefix});
         await Promise.all(files.map((f) => f.delete({ignoreNotFound: true})));
 
@@ -336,14 +409,14 @@ export class DocumentStorageApp implements TerrenoPlugin {
     // DELETE basePath/* — Delete a file
     app.delete(
       `${basePath}/*filepath`,
-      ...adminGuard,
+      ...accessGuard,
       asyncHandler(async (req: express.Request, res: express.Response) => {
         const filePath = normalizePathParam(req.params.filepath);
         if (!filePath) {
           throw new APIError({status: 400, title: "File path is required"});
         }
 
-        const gcsPath = `${this.prefix}${filePath}`;
+        const gcsPath = `${this.prefixFor(req)}${filePath}`;
         const gcsFile = this.bucket.file(gcsPath);
 
         await gcsFile.delete({ignoreNotFound: true});

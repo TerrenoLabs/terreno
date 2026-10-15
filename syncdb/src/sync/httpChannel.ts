@@ -7,6 +7,8 @@ import type {
   SyncMutateBatchRequest,
   SyncMutateRequest,
   SyncNack,
+  SyncSnapshotBatchRequest,
+  SyncSnapshotBatchResponse,
   SyncSnapshotResponse,
   SyncStreamInfo,
 } from "../types";
@@ -35,12 +37,23 @@ export interface FetchSnapshotPageArgs {
   legacyCursor?: string;
 }
 
+/** Outcome of a snapshot batch request; `unsupported` means an older server (404). */
+type FetchSnapshotBatchResult =
+  | ({type: "pages"} & SyncSnapshotBatchResponse)
+  | {type: "unsupported"};
+
 /**
  * HTTP side of the sync protocol: snapshot paging for bootstrap/reconcile and
  * the `POST /sync/mutate` fallback used when the socket is unavailable.
  */
 export interface HttpChannel {
   fetchSnapshotPage: (args: FetchSnapshotPageArgs) => Promise<SyncSnapshotResponse>;
+  /**
+   * POST many streams' page requests to `/sync/snapshot/batch` in one round trip;
+   * resolves `{type: "unsupported"}` on 404 (older server with no batch route), 401
+   * rejects with {@link AuthRequiredError}, anything else non-2xx rejects.
+   */
+  fetchSnapshotBatch?: (request: SyncSnapshotBatchRequest) => Promise<FetchSnapshotBatchResult>;
   /**
    * Point lookup for entity repair: fetch canonical server state for specific ids
    * (`GET /sync/entities`). Used when deltas were skipped while an entity was
@@ -212,6 +225,16 @@ export interface HttpChannelConfig {
   organizationIdProvider?: () => string | undefined;
 }
 
+/** The `title` of an @terreno/api APIError response body, or undefined for any other body. */
+const readErrorTitle = async (response: Response): Promise<string | undefined> => {
+  try {
+    const body = (await response.json()) as {title?: unknown} | null;
+    return typeof body?.title === "string" ? body.title : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 /** Create an {@link HttpChannel} speaking @terreno/api's `/sync/*` routes. */
 export const createHttpChannel = ({
   baseUrl,
@@ -255,6 +278,32 @@ export const createHttpChannel = ({
       throw new Error(`Snapshot request for ${stream} failed with status ${response.status}`);
     }
     return (await response.json()) as SyncSnapshotResponse;
+  };
+
+  const fetchSnapshotBatch = async (
+    batch: SyncSnapshotBatchRequest
+  ): Promise<FetchSnapshotBatchResult> => {
+    const response = await request("/sync/snapshot/batch", {
+      body: JSON.stringify(batch),
+      method: "POST",
+    });
+    if (response.status === 404) {
+      // A missing route (older server) is a bare 404. An APIError 404 (e.g. an unknown
+      // collection) has a JSON `title` and is a real failure, not a reason to stop batching.
+      const title = await readErrorTitle(response);
+      if (title === undefined) {
+        return {type: "unsupported"};
+      }
+      throw new Error(`Snapshot batch request failed with status 404: ${title}`);
+    }
+    if (!response.ok) {
+      throw new Error(`Snapshot batch request failed with status ${response.status}`);
+    }
+    const body = (await response.json()) as Partial<SyncSnapshotBatchResponse>;
+    if (!Array.isArray(body.pages)) {
+      throw new Error("Snapshot batch response is missing pages");
+    }
+    return {pages: body.pages, type: "pages"};
   };
 
   const fetchEntities = async ({
@@ -359,6 +408,7 @@ export const createHttpChannel = ({
     fetchEntities,
     fetchKeyMaterial,
     fetchList,
+    fetchSnapshotBatch,
     fetchSnapshotPage,
     fetchStreams,
     sendMutation,

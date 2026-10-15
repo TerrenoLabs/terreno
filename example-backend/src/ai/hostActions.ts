@@ -1,4 +1,10 @@
-import type {HostActionContext, HostActionResult, UiBlocksOptions} from "@terreno/ai";
+import {
+  type HostActionContext,
+  type HostActionResult,
+  scaleStepperHostAction,
+  toggleChecklistHostAction,
+  type UiBlocksOptions,
+} from "@terreno/ai";
 import {z} from "zod";
 
 const exportPayload = z.object({dataset: z.string().min(1)}).strict();
@@ -19,13 +25,19 @@ const exportDataset = async ({payload}: HostActionContext): Promise<HostActionRe
   return {blocks, replace: "block"};
 };
 
-/** Example chat callbacks. TTL stays at the default, which keeps stored datasets. */
+/**
+ * Example chat callbacks. `scaleStepper` and `toggleChecklist` are the opt-in stepper and
+ * checklist actions, which read the block the agent wrote from the stored history. TTL stays at
+ * the default, which keeps stored datasets.
+ */
 export const exampleUiBlocksOptions: UiBlocksOptions = {
   hostActions: {
     exportDataset: {
       handler: exportDataset,
       payload: exportPayload,
     },
+    scaleStepper: scaleStepperHostAction,
+    toggleChecklist: toggleChecklistHostAction,
   },
   html: true,
   repair: true,

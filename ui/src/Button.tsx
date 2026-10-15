@@ -115,6 +115,8 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
     let bgColor = theme.surface.primary;
     let bColor: string | undefined;
     let bWidth: number | undefined;
+    // Primary labels and icons stay inverted (white in light mode), including
+    // when the button is disabled. The disabled fill is a separate token.
     let textColor = theme.text.inverted;
 
     if (disabled) {

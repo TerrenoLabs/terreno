@@ -170,7 +170,7 @@ exports[`TypedSignatureField renders correctly with default props 1`] = `
             "hitSlop": 8,
             "onPress": [Function],
             "style": {
-              "backgroundColor": "#D9D9D9",
+              "backgroundColor": "#CDCDCD",
               "borderColor": "#D69C0E",
               "borderRadius": 8,
               "borderWidth": 2,

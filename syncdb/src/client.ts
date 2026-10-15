@@ -87,6 +87,12 @@ export interface SyncDbConfig {
   /** Transport override (tests inject a fake; default is the socket transport). */
   transport?: SyncTransport;
   /**
+   * Socket.io transports for the default socket transport, in order. Defaults to polling then
+   * websocket. Pass `["websocket"]` for hosts without session affinity, such as Vercel
+   * Functions, where a polling request can land on a different instance than its session.
+   */
+  socketTransports?: string[];
+  /**
    * Optional selected organization id for `X-Organization-Id` on HTTP sync
    * calls and the `organizationId` field on socket mutate payloads. Read at
    * send time so admin org switches apply without reconnecting.
@@ -357,6 +363,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
       // biome-ignore lint/style/noNonNullAssertion: guarded above — no transport implies baseUrl.
       baseUrl: config.baseUrl!,
       organizationIdProvider: config.organizationIdProvider,
+      transports: config.socketTransports,
     });
   const httpChannel =
     config.httpChannel ??

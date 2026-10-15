@@ -89,6 +89,8 @@ const {socket, isSocketConnected} = useSocketConnection({
 });
 ```
 
+Transports default to polling, then websocket. On hosts without session affinity, such as Vercel Functions, pass `transports: ["websocket"]` (see `docs/how-to/vercel-function-websockets.md`).
+
 ## Exports
 
 - `generateAuthSlice` - Creates auth slice with login/logout/token management

@@ -227,7 +227,7 @@ export const adminScripts: AdminScriptConfig[] = [
   },
   {
     description:
-      "Fill AI Observability with a demo workspace: labelled versions of example-summarize, joke-generator, and chat-assistant, judge prompts, five evaluators, the example-summarize-gold, joke-generator-topics, and chat-assistant-gold datasets, four finished experiments, 30 traces with scores, and review items in every status. Idempotent; runs after the base seed. CLI: bun run script seedAiObservabilityDemo --wet",
+      "Fill AI Observability with a demo workspace: labelled versions of example-summarize, joke-generator, and chat-assistant, judge prompts, eight evaluators (including the summary-review-questions question set and two LLM judges for it), the example-summarize-gold, joke-generator-topics, and chat-assistant-gold datasets, four finished experiments, 30 traces with scores, review items in every status, and a 10-item review batch with 8 answered and both judges compared. Idempotent; runs after the base seed. CLI: bun run script seedAiObservabilityDemo --wet",
     name: "seedAiObservabilityDemo",
     runner: async (wetRun) => {
       const result = await seedAiObservabilityDemo({dryRun: !wetRun});

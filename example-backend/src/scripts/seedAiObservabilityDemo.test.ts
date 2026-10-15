@@ -4,6 +4,7 @@ import {
   LocalEvaluatorStore,
   LocalExperimentRunner,
   LocalPromptStore,
+  LocalReviewBatchStore,
   LocalReviewStore,
 } from "@terreno/ai";
 import {assert} from "chai";
@@ -20,6 +21,10 @@ import {
   SUMMARIZE_EXPERIMENT_V1_V2,
   SUMMARIZE_EXPERIMENT_V2_V3,
   SUMMARIZE_GOLD_DATASET_NAME,
+  SUMMARY_CAREFUL_JUDGE,
+  SUMMARY_QUESTION_SET,
+  SUMMARY_QUICK_JUDGE,
+  SUMMARY_REVIEW_BATCH,
   seedAiObservabilityDemo,
 } from "./seedAiObservabilityDemo";
 
@@ -69,6 +74,9 @@ describe("seedAiObservabilityDemo", () => {
       "helpfulness",
       "helpfulness-human",
       "schema-assert",
+      SUMMARY_QUESTION_SET,
+      SUMMARY_CAREFUL_JUDGE,
+      SUMMARY_QUICK_JUDGE,
     ]);
 
     const dataset = (await new LocalDatasetStore(promptStore).list()).find((entry) => {
@@ -122,12 +130,26 @@ describe("seedAiObservabilityDemo", () => {
     assert.equal(await ObsTrace.countDocuments({sessionId: /^seed-obs-/, status: "error"}), 2);
 
     const {counts} = await new LocalReviewStore().list();
-    assert.deepEqual(counts, {done: 3, in_progress: 1, pending: 9, skipped: 1});
+    assert.deepEqual(counts, {done: 11, in_progress: 1, pending: 11, skipped: 1});
+
+    const batchStore = new LocalReviewBatchStore(promptStore);
+    const [batchRow] = await batchStore.list();
+    assert.equal(batchRow?.name, SUMMARY_REVIEW_BATCH);
+    assert.deepEqual(batchRow?.counts, {done: 8, pending: 2, skipped: 0, total: 10});
+    const batch = await batchStore.get(batchRow?.id ?? "");
+    assert.isTrue(batch.dimensions.every((dimension) => Boolean(dimension.question)));
+    const rates = Object.fromEntries(
+      batch.judges.map((judge) => [judge.evaluatorName, judge.agreement.rate])
+    );
+    assert.closeTo(rates[SUMMARY_CAREFUL_JUDGE] ?? 0, 31 / 32, 0.001);
+    assert.closeTo(rates[SUMMARY_QUICK_JUDGE] ?? 0, 25 / 32, 0.001);
+    assert.equal(batch.judges[0]?.evaluatorName, SUMMARY_CAREFUL_JUDGE);
 
     await seedAiObservabilityDemo({dryRun: false});
     assert.equal(await ObsTrace.countDocuments({sessionId: /^seed-obs-/}), 30);
     assert.lengthOf((await runner.list({limit: 100})).data, 4);
     assert.deepEqual((await new LocalReviewStore().list()).counts, counts);
+    assert.lengthOf(await batchStore.list(), 1);
   });
 
   it("writes nothing on a dry run", async () => {

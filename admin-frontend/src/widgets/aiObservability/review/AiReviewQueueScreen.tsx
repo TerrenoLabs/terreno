@@ -22,6 +22,9 @@ export const AiReviewScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =>
     },
     [prefix]
   );
+  const openBatches = useCallback((): void => {
+    router.push(`${prefix}/ai-review-batches`);
+  }, [prefix]);
   const handleStart = useCallback((): void => {
     const oldest = status === "pending" ? items[0] : undefined;
     if (!oldest) {
@@ -43,6 +46,7 @@ export const AiReviewScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =>
         isError={query.isError}
         isLoading={query.isLoading}
         items={items}
+        onOpenBatches={openBatches}
         onOpenItem={openItem}
         onRetry={query.refetch}
         onStart={handleStart}

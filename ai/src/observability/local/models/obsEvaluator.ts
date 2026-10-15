@@ -27,6 +27,10 @@ const obsEvaluatorSchema = new mongoose.Schema<ObsEvaluatorDocument, ObsEvaluato
             type: String,
           },
           key: {description: "Dimension key written onto scores", required: true, type: String},
+          question: {
+            description: "Question shown to human reviewers for this dimension",
+            type: String,
+          },
           range: {
             description: "Numeric bounds, categorical values, or a free-text hint",
             type: String,

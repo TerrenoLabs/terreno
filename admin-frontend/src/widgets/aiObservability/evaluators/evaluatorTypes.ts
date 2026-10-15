@@ -1,6 +1,8 @@
 export interface EvaluatorDimension {
   dataType: "boolean" | "categorical" | "numeric";
   key: string;
+  /** Question shown to human reviewers in place of the score key. */
+  question?: string;
   range?: string;
   required: boolean;
 }

@@ -42,6 +42,11 @@ export {FileAttachment} from "./models/fileAttachment";
 export {GptHistory} from "./models/gptHistory";
 export {getProjectModel, Project} from "./models/project";
 export {AI_OBSERVABILITY_GROUP, observabilityAdminScreens} from "./observability/adminScreens";
+export {
+  answersAgree,
+  computeJudgeAgreement,
+  type JudgeAgreement,
+} from "./observability/judgeAgreement";
 export {LocalDatasetStore} from "./observability/local/datasetStore";
 export {LocalEvaluatorStore} from "./observability/local/evaluatorStore";
 export {LocalExperimentRunner} from "./observability/local/experimentRunner";
@@ -50,6 +55,13 @@ export {
   createLocalObservabilityPlugin,
 } from "./observability/local/localPlugin";
 export {LocalPromptStore} from "./observability/local/promptStore";
+export {
+  DEFAULT_REVIEW_BATCH_SIZE,
+  LocalReviewBatchStore,
+  MAX_REVIEW_BATCH_SIZE,
+  type ReviewBatchDetail,
+  type ReviewBatchListItem,
+} from "./observability/local/reviewBatchStore";
 export {LocalReviewStore} from "./observability/local/reviewStore";
 export {
   LocalScoreSink,

@@ -8,6 +8,18 @@ const DETAIL_KEY = "aiObservabilityReviewItem";
 const ACTION_KEY = "updateAiObservabilityReviewItem";
 const CURRENT_USER_KEY = "aiObservabilityCurrentUser";
 const STATUS_KEY = "aiObservabilityStatus";
+const BATCH_QUEUE_KEY = "aiObservabilityReviewBatchQueue";
+const BATCHES_KEY = "aiObservabilityReviewBatches";
+const BATCH_KEY = "aiObservabilityReviewBatch";
+const CREATE_BATCH_KEY = "createAiObservabilityReviewBatch";
+const RUN_JUDGE_KEY = "runAiObservabilityReviewBatchJudge";
+
+export interface CreateReviewBatchBody {
+  evaluatorId: string;
+  limit?: number;
+  name?: string;
+  promptName?: string;
+}
 
 export interface ReviewActionBody {
   action: "assign" | "skip" | "submit";
@@ -64,6 +76,53 @@ const createReviewApi = (api: AdminApi) => {
           url: "/ai/observability/status",
         }),
       }),
+      [BATCH_QUEUE_KEY]: build.query({
+        providesTags: ["aiObservabilityReview"],
+        query: ({batchId, status}: {batchId: string; status: ReviewStatus}) => ({
+          method: "GET",
+          params: {batchId, status},
+          url: "/ai/observability/review",
+        }),
+      }),
+      [BATCHES_KEY]: build.query({
+        providesTags: ["aiObservabilityReview"],
+        query: () => ({
+          method: "GET",
+          url: "/ai/observability/review/batches",
+        }),
+      }),
+      [BATCH_KEY]: build.query({
+        providesTags: ["aiObservabilityReview"],
+        query: (id: string) => ({
+          method: "GET",
+          url: `/ai/observability/review/batches/${encodeURIComponent(id)}`,
+        }),
+      }),
+      [CREATE_BATCH_KEY]: build.mutation({
+        invalidatesTags: ["aiObservabilityReview"],
+        query: (body: CreateReviewBatchBody) => ({
+          body,
+          method: "POST",
+          url: "/ai/observability/review/batches",
+        }),
+      }),
+      [RUN_JUDGE_KEY]: build.mutation({
+        invalidatesTags: ["aiObservabilityReview"],
+        query: ({
+          apiKey,
+          batchId,
+          evaluatorId,
+        }: {
+          apiKey?: string;
+          batchId: string;
+          evaluatorId: string;
+        }) => ({
+          body: {evaluatorId},
+          headers: apiKey ? {"x-ai-api-key": apiKey} : undefined,
+          method: "POST",
+          url: `/ai/observability/review/batches/${encodeURIComponent(batchId)}/judgeRuns`,
+        }),
+      }),
     }),
     overrideExisting: true,
   });
@@ -77,6 +136,33 @@ export const useAiObservabilityReviewApi = (api: AdminApi) => {
   return {
     useActionMutation: hooks.useUpdateAiObservabilityReviewItemMutation as () => [
       (args: {body: ReviewActionBody; id: string}) => {unwrap: () => Promise<ReviewDetail>},
+      {isError: boolean; isLoading: boolean},
+    ],
+    useBatchesQuery: hooks.useAiObservabilityReviewBatchesQuery as () => {
+      data?: unknown;
+      isError: boolean;
+      isLoading: boolean;
+      refetch: () => void;
+    },
+    useBatchQuery: hooks.useAiObservabilityReviewBatchQuery as (
+      id: string,
+      options?: QueryOptions
+    ) => {
+      data?: unknown;
+      isError: boolean;
+      isLoading: boolean;
+      refetch: () => void;
+    },
+    useBatchQueueQuery: hooks.useAiObservabilityReviewBatchQueueQuery as (
+      args: {batchId: string; status: ReviewStatus},
+      options?: QueryOptions
+    ) => {
+      data?: unknown;
+      isError: boolean;
+      isLoading: boolean;
+    },
+    useCreateBatchMutation: hooks.useCreateAiObservabilityReviewBatchMutation as () => [
+      (body: CreateReviewBatchBody) => {unwrap: () => Promise<unknown>},
       {isError: boolean; isLoading: boolean},
     ],
     useCurrentUserQuery: hooks.useAiObservabilityCurrentUserQuery as () => {
@@ -98,6 +184,12 @@ export const useAiObservabilityReviewApi = (api: AdminApi) => {
       isLoading: boolean;
       refetch: () => void;
     },
+    useRunJudgeMutation: hooks.useRunAiObservabilityReviewBatchJudgeMutation as () => [
+      (args: {apiKey?: string; batchId: string; evaluatorId: string}) => {
+        unwrap: () => Promise<unknown>;
+      },
+      {isError: boolean; isLoading: boolean},
+    ],
     useStatusQuery: hooks.useAiObservabilityStatusQuery as () => {
       data?: unknown;
       isError: boolean;

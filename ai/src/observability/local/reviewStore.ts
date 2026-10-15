@@ -8,6 +8,7 @@ import type {ScoreRecord, ScoreSink} from "../types";
 import {registerObsEvaluator} from "./models/obsEvaluator";
 import {registerObsPrompt} from "./models/obsPrompt";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
+import {registerObsReviewBatch} from "./models/obsReviewBatch";
 import {registerObsReviewItem} from "./models/obsReviewItem";
 import {registerObsTrace} from "./models/obsTrace";
 import {LocalTraceStore} from "./traceStore";
@@ -16,6 +17,7 @@ export type ReviewStatus = "done" | "in_progress" | "pending" | "skipped";
 
 export interface ReviewListItem {
   assigneeId?: string;
+  batchId?: string;
   enqueuedAt: string;
   evaluatorId: string;
   id: string;
@@ -39,6 +41,7 @@ const toIso = (value: Date): string => {
 
 export class LocalReviewStore {
   async enqueue(params: {
+    batchId?: string;
     evaluatorId: string;
     reason?: "dataset_candidate" | "eval" | "feedback" | "manual";
     spanId?: string;
@@ -71,6 +74,7 @@ export class LocalReviewStore {
         reason: params.reason ?? "manual",
         status: "pending",
         traceId: trace._id,
+        ...(params.batchId ? {batchId: objectId(params.batchId, "batchId")} : {}),
         ...(params.spanId ? {spanId: objectId(params.spanId, "spanId")} : {}),
       });
       created.push(this.toListItem(item, trace.name, trace.prompts[0]?.name));
@@ -78,19 +82,24 @@ export class LocalReviewStore {
     return created;
   }
 
-  async list(status?: ReviewStatus): Promise<{
+  async list(
+    status?: ReviewStatus,
+    options: {batchId?: string} = {}
+  ): Promise<{
     counts: Record<ReviewStatus, number>;
     data: ReviewListItem[];
   }> {
     const ObsReviewItem = registerObsReviewItem();
+    const scope = options.batchId ? {batchId: objectId(options.batchId, "batchId")} : {};
     const counts = {
-      done: await ObsReviewItem.countDocuments({status: "done"}),
-      in_progress: await ObsReviewItem.countDocuments({status: "in_progress"}),
-      pending: await ObsReviewItem.countDocuments({status: "pending"}),
-      skipped: await ObsReviewItem.countDocuments({status: "skipped"}),
+      done: await ObsReviewItem.countDocuments({...scope, status: "done"}),
+      in_progress: await ObsReviewItem.countDocuments({...scope, status: "in_progress"}),
+      pending: await ObsReviewItem.countDocuments({...scope, status: "pending"}),
+      skipped: await ObsReviewItem.countDocuments({...scope, status: "skipped"}),
     };
-    const filter = status ? {status} : {};
-    const rows = await ObsReviewItem.find(filter).sort({enqueuedAt: 1});
+    const filter = status ? {...scope, status} : scope;
+    // Batch items keep their batch order (enqueued together, newest trace first).
+    const rows = await ObsReviewItem.find(filter).sort({_id: 1, enqueuedAt: 1});
     const data: ReviewListItem[] = [];
     for (const row of rows) {
       const trace = await registerObsTrace().findOneOrNone({_id: row.traceId});
@@ -100,6 +109,8 @@ export class LocalReviewStore {
   }
 
   async getDetail(id: string): Promise<{
+    batchId?: string;
+    batchName?: string;
     comment?: string;
     dimensions: EvaluatorDimension[];
     evaluatorId: string;
@@ -121,6 +132,9 @@ export class LocalReviewStore {
       throw new APIError({status: 404, title: "Unknown evaluator"});
     }
     const trace = await registerObsTrace().findOneOrNone({_id: item.traceId});
+    const batch = item.batchId
+      ? await registerObsReviewBatch().findOneOrNone({_id: item.batchId})
+      : undefined;
     const promptRef = trace?.prompts[0];
     let variables:
       | {key: string; label?: string; required: boolean; reviewerNote?: string}[]
@@ -140,6 +154,8 @@ export class LocalReviewStore {
       }
     }
     return {
+      batchId: batch ? String(batch._id) : undefined,
+      batchName: batch?.name,
       comment: item.comment,
       dimensions: evaluator.dimensions,
       evaluatorId: String(evaluator._id),
@@ -240,6 +256,7 @@ export class LocalReviewStore {
     row: {
       _id: mongoose.Types.ObjectId;
       assigneeId?: mongoose.Types.ObjectId;
+      batchId?: mongoose.Types.ObjectId;
       enqueuedAt: Date;
       evaluatorId: mongoose.Types.ObjectId;
       reason: string;
@@ -251,6 +268,7 @@ export class LocalReviewStore {
   ): ReviewListItem {
     return {
       assigneeId: row.assigneeId ? String(row.assigneeId) : undefined,
+      batchId: row.batchId ? String(row.batchId) : undefined,
       enqueuedAt: toIso(row.enqueuedAt),
       evaluatorId: String(row.evaluatorId),
       id: String(row._id),

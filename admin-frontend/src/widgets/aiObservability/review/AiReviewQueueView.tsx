@@ -52,6 +52,7 @@ export interface AiReviewQueueViewProps {
   isError?: boolean;
   isLoading?: boolean;
   items: ReviewListItem[];
+  onOpenBatches?: () => void;
   onOpenItem: (id: string) => void;
   onRetry: () => void;
   onStart: () => void;
@@ -64,6 +65,7 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
   isError,
   isLoading,
   items,
+  onOpenBatches,
   onOpenItem,
   onRetry,
   onStart,
@@ -106,12 +108,23 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
           <Heading size="sm">Human review</Heading>
           <Text color="secondaryDark">Oldest items appear first.</Text>
         </Box>
-        <Button
-          disabled={counts.pending === 0 || status !== "pending"}
-          onClick={onStart}
-          testID="ai-review-start-oldest"
-          text="Start reviewing — oldest first"
-        />
+        <Box direction="row" gap={2} wrap>
+          {onOpenBatches ? (
+            <Button
+              iconName="layer-group"
+              onClick={onOpenBatches}
+              testID="ai-review-open-batches"
+              text="Review batches"
+              variant="secondary"
+            />
+          ) : undefined}
+          <Button
+            disabled={counts.pending === 0 || status !== "pending"}
+            onClick={onStart}
+            testID="ai-review-start-oldest"
+            text="Start reviewing — oldest first"
+          />
+        </Box>
       </Box>
       <SegmentedControl
         badges={REVIEW_STATUSES.map((entry) => ({count: counts[entry]}))}

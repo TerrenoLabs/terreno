@@ -2,7 +2,9 @@
  * Seed a complete local AI observability workspace for the example app. Each prompt the app
  * reads from the registry (example-summarize, joke-generator, chat-assistant) gets labelled
  * versions, a golden dataset, and finished experiments, plus traces with scores and a human
- * review queue in every status. Experiments run through the real LocalExperimentRunner against
+ * review queue in every status. A human question-set batch of the 10 newest summaries has 8 items
+ * answered and two LLM judges run over it, so judge-vs-human agreement shows a judge that matches
+ * reviewers and one that does not. Experiments run through the real LocalExperimentRunner against
  * a deterministic fixture client, so gates, outliers, and promote rules behave as they do for
  * live runs.
  */
@@ -13,6 +15,7 @@ import {
   LocalEvaluatorStore,
   LocalExperimentRunner,
   LocalPromptStore,
+  LocalReviewBatchStore,
   LocalReviewStore,
   LocalScoreSink,
   LocalTraceStore,
@@ -34,6 +37,10 @@ export const SUMMARIZE_EXPERIMENT_V1_V2 = "Summarize v1 vs v2 (gold)";
 export const SUMMARIZE_EXPERIMENT_V2_V3 = "Summarize v2 vs v3 (length cap)";
 export const JOKE_EXPERIMENT = "Jokes v1 vs v2 (one-liners)";
 export const CHAT_EXPERIMENT = "Chat assistant v1 vs v2 (brevity)";
+export const SUMMARY_QUESTION_SET = "summary-review-questions";
+export const SUMMARY_CAREFUL_JUDGE = "summary-questions-judge";
+export const SUMMARY_QUICK_JUDGE = "summary-questions-judge-quick";
+export const SUMMARY_REVIEW_BATCH = "Recent summaries — batch 1";
 
 const SEED_TRACE_SESSION_PREFIX = "seed-obs-";
 const TRACE_MODEL_ID = "gemini-2.5-flash";
@@ -634,6 +641,144 @@ const JUDGE_PROMPTS = [
   },
 ];
 
+const SUMMARY_QUESTION_KEYS = ["faithful", "covers_every_item", "actionable", "concise"];
+
+const summaryQuestionSchema = {
+  properties: {
+    confidence: {type: "number"},
+    ...Object.fromEntries(SUMMARY_QUESTION_KEYS.map((key) => [key, {type: "boolean"}])),
+  },
+  required: [...SUMMARY_QUESTION_KEYS, "confidence"],
+  type: "object",
+};
+
+// Two judges for the same questions: the careful prompt spells out each rule the reviewers use;
+// the quick prompt paraphrases them and reads "concise" as 10 words, so it drifts from humans.
+const SUMMARY_JUDGE_PROMPTS = [
+  {
+    description: "Careful judge prompt for the summary review question set",
+    name: "eval-judge-summary-questions",
+    outputSchema: summaryQuestionSchema,
+    system: [
+      "You review one-sentence summaries of todo lists. The input is the todo list; the model output is the summary.",
+      "Answer each question true or false:",
+      "- faithful: Is every statement backed by the todo list? Rewording and merging are fine; adding a relationship or detail the list does not state is not.",
+      "- covers_every_item: Does the summary mention every todo?",
+      "- actionable: Is each todo still a clear action someone could do? A bare noun like 'plumber call' is not.",
+      "- concise: Is it one sentence of about 20 words or fewer?",
+      "Set confidence from 0 to 1.",
+    ].join("\n"),
+  },
+  {
+    description: "Quick judge prompt for the summary review question set",
+    name: "eval-judge-summary-questions-quick",
+    outputSchema: summaryQuestionSchema,
+    system:
+      "Is the summary faithful, does it cover every item, is it actionable, and is it concise (10 words or fewer)? Answer true or false for each and set confidence from 0 to 1.",
+  },
+];
+
+const SUMMARY_QUESTION_SET_EVALUATOR = {
+  description: "Yes/no questions reviewers answer for every Todos → Summarize output",
+  dimensions: [
+    {
+      dataType: "boolean" as const,
+      key: "faithful",
+      question: "Is every statement backed by the todo list (nothing invented)?",
+      required: true,
+    },
+    {
+      dataType: "boolean" as const,
+      key: "covers_every_item",
+      question: "Does it mention every todo?",
+      required: true,
+    },
+    {
+      dataType: "boolean" as const,
+      key: "actionable",
+      question: "Is each todo still a clear action someone could do?",
+      required: true,
+    },
+    {
+      dataType: "boolean" as const,
+      key: "concise",
+      question: "Is it one sentence of about 20 words or fewer?",
+      required: true,
+    },
+  ],
+  instructions:
+    "Read the todo list and the summary, then answer every question. Rewording is fine; inventing details is not.",
+  name: SUMMARY_QUESTION_SET,
+  target: "full trace" as const,
+  type: "human" as const,
+};
+
+const SUMMARY_JUDGE_EVALUATORS = [
+  {
+    description: "LLM judge for the summary review questions (spells out each reviewer rule)",
+    judgePromptName: "eval-judge-summary-questions",
+    name: SUMMARY_CAREFUL_JUDGE,
+  },
+  {
+    description: "LLM judge for the summary review questions (short paraphrased prompt)",
+    judgePromptName: "eval-judge-summary-questions-quick",
+    name: SUMMARY_QUICK_JUDGE,
+  },
+];
+
+type SummaryAnswers = Record<(typeof SUMMARY_QUESTION_KEYS)[number], boolean>;
+
+const yes = (overrides: Partial<SummaryAnswers> = {}): SummaryAnswers => {
+  return {actionable: true, concise: true, covers_every_item: true, faithful: true, ...overrides};
+};
+
+// Reviewer answers and each judge's answers per seeded summary output. The careful judge misses
+// one call ("plumber call" is not an action); the quick judge says yes to the first three
+// questions and fails "concise" past 10 words.
+const SUMMARY_ANSWERS: Record<
+  string,
+  {careful: SummaryAnswers; human: SummaryAnswers; quick: SummaryAnswers}
+> = {
+  "Add the project archive migration and backfill existing projects.": {
+    careful: yes(),
+    human: yes(),
+    quick: yes(),
+  },
+  "Call the doctor about the refill and pick up the prescription.": {
+    careful: yes(),
+    human: yes(),
+    quick: yes({concise: false}),
+  },
+  "Draft the Q3 roadmap using support feedback and the top five bugs.": {
+    careful: yes({actionable: false, covers_every_item: false, faithful: false}),
+    human: yes({actionable: false, covers_every_item: false, faithful: false}),
+    quick: yes({concise: false}),
+  },
+  "Finish onboarding copy, fix the Android date picker, and book the design review.": {
+    careful: yes(),
+    human: yes(),
+    quick: yes({concise: false}),
+  },
+  "Renew the SSL certificate and rotate staging API keys.": {
+    careful: yes(),
+    human: yes(),
+    quick: yes(),
+  },
+  "Run errands: groceries, plumber call, and dry cleaning.": {
+    careful: yes(),
+    human: yes({actionable: false}),
+    quick: yes(),
+  },
+  "Test offline mode and check the sync status banner.": {
+    careful: yes(),
+    human: yes(),
+    quick: yes(),
+  },
+};
+
+// Reviewers answer the first 8 batch items; the last 2 stay pending for the demo.
+const SUMMARY_BATCH_ANSWERED = 8;
+
 const EVALUATOR_TEMPLATES = [
   "correctness-human",
   "helpfulness-human",
@@ -704,6 +849,18 @@ export const createSeedFixtureClient = (): ObservabilityGenerateClient => {
         return options.prompt.includes(JSON.stringify(candidate.text));
       });
       const confidence = output?.confidence ?? 0.92;
+      const questionJudge =
+        options.schemaName === `${SUMMARY_CAREFUL_JUDGE}-judge`
+          ? "careful"
+          : options.schemaName === `${SUMMARY_QUICK_JUDGE}-judge`
+            ? "quick"
+            : undefined;
+      if (questionJudge) {
+        const summary = Object.entries(SUMMARY_ANSWERS).find(([text]) => {
+          return options.prompt.includes(JSON.stringify(text));
+        });
+        return {confidence: 0.9, ...(summary?.[1][questionJudge] ?? yes())} as OBJECT;
+      }
       if (options.schemaName === "helpfulness-judge") {
         return {confidence, helpfulness: output?.helpfulness ?? 0.8} as OBJECT;
       }
@@ -806,7 +963,7 @@ const ensureJudgePrompts = async (
   promptStore: LocalPromptStore,
   output: AiObservabilityDemoResult
 ): Promise<void> => {
-  for (const judge of JUDGE_PROMPTS) {
+  for (const judge of [...JUDGE_PROMPTS, ...SUMMARY_JUDGE_PROMPTS]) {
     const existing = await findPrompt(promptStore, judge.name);
     output.changes.push({
       change: existing ? "unchanged" : "created",
@@ -849,6 +1006,34 @@ const ensureEvaluators = async (
     if (!existing && !dryRun) {
       await evaluatorStore.installTemplate(templateName);
     }
+  }
+  const questionSet = await evaluatorStore.getByName(SUMMARY_QUESTION_SET);
+  output.changes.push({
+    change: questionSet ? "unchanged" : "created",
+    count: 1,
+    key: JSON.stringify({name: SUMMARY_QUESTION_SET}),
+    model: "ObsEvaluator",
+  });
+  if (!questionSet && !dryRun) {
+    await evaluatorStore.create(SUMMARY_QUESTION_SET_EVALUATOR);
+  }
+  for (const judge of SUMMARY_JUDGE_EVALUATORS) {
+    const existing = await evaluatorStore.getByName(judge.name);
+    output.changes.push({
+      change: existing ? "unchanged" : "created",
+      count: 1,
+      key: JSON.stringify({name: judge.name}),
+      model: "ObsEvaluator",
+    });
+    if (existing || dryRun) {
+      continue;
+    }
+    await evaluatorStore.create({
+      ...judge,
+      dimensions: SUMMARY_QUESTION_SET_EVALUATOR.dimensions.map(({question: _q, ...row}) => row),
+      target: "full trace",
+      type: "llm-judge",
+    });
   }
 };
 
@@ -1338,6 +1523,82 @@ const seedTracesAndReview = async (params: {
   );
 };
 
+// The 10 newest seeded summaries (not app traffic) so canned answers line up with each output.
+const seededSummaryTraceIds = async (traceStore: LocalTraceStore): Promise<string[]> => {
+  const rows: Array<{id: string; startedAt: string}> = [];
+  for (let session = 1; session <= 4; session += 1) {
+    const listed = await traceStore.list({
+      limit: 100,
+      prompt: SUMMARIZE_SUITE.name,
+      sessionId: `${SEED_TRACE_SESSION_PREFIX}todos-${session}`,
+      status: "ok",
+    });
+    rows.push(...listed.data);
+  }
+  return rows
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    .slice(0, 10)
+    .map((row) => row.id);
+};
+
+const seedReviewBatch = async (params: {
+  dryRun: boolean;
+  evaluatorStore: LocalEvaluatorStore;
+  output: AiObservabilityDemoResult;
+  promptStore: LocalPromptStore;
+}): Promise<void> => {
+  const {dryRun, evaluatorStore, output, promptStore} = params;
+  const batchStore = new LocalReviewBatchStore(promptStore);
+  const exists = (await batchStore.list()).some((batch) => batch.name === SUMMARY_REVIEW_BATCH);
+  output.changes.push({
+    change: exists ? "unchanged" : "created",
+    count: 1,
+    key: JSON.stringify({name: SUMMARY_REVIEW_BATCH}),
+    model: "ObsReviewBatch",
+  });
+  if (exists || dryRun) {
+    return;
+  }
+  const questionSet = await evaluatorStore.getByName(SUMMARY_QUESTION_SET);
+  const traceIds = await seededSummaryTraceIds(new LocalTraceStore());
+  if (!questionSet || traceIds.length === 0) {
+    output.results.push("Skipped review batch: question set or seeded summaries are missing");
+    return;
+  }
+  const batch = await batchStore.create({
+    description: "Seeded: reviewers answered 8 of the 10 newest summaries; both judges ran.",
+    evaluatorId: questionSet.id,
+    name: SUMMARY_REVIEW_BATCH,
+    promptName: SUMMARIZE_SUITE.name,
+    traceIds,
+  });
+  const reviewStore = new LocalReviewStore();
+  const sinks = [new LocalScoreSink(new LocalTraceStore())];
+  let answered = 0;
+  for (const item of batch.items.slice(0, SUMMARY_BATCH_ANSWERED)) {
+    const answers = typeof item.output === "string" ? SUMMARY_ANSWERS[item.output] : undefined;
+    if (!answers) {
+      continue;
+    }
+    await reviewStore.submit({id: item.reviewItemId, scores: answers.human, sinks});
+    answered += 1;
+  }
+  const client = createSeedFixtureClient();
+  for (const judge of SUMMARY_JUDGE_EVALUATORS) {
+    const evaluator = await evaluatorStore.getByName(judge.name);
+    if (evaluator) {
+      await batchStore.runJudge({ai: client, batchId: batch.id, evaluatorId: evaluator.id});
+    }
+  }
+  const judged = await batchStore.get(batch.id);
+  const agreement = judged.judges
+    .map((row) => `${row.evaluatorName} ${Math.round((row.agreement.rate ?? 0) * 100)}%`)
+    .join(", ");
+  output.results.push(
+    `Review batch "${SUMMARY_REVIEW_BATCH}": ${answered} of ${batch.items.length} answered; judge agreement ${agreement}`
+  );
+};
+
 export const seedAiObservabilityDemo = async ({
   dryRun,
 }: {
@@ -1359,5 +1620,6 @@ export const seedAiObservabilityDemo = async ({
   }
   await ensureExperiments({datasetIds, datasetStore, dryRun, evaluatorStore, output, promptStore});
   await seedTracesAndReview({dryRun, evaluatorStore, output});
+  await seedReviewBatch({dryRun, evaluatorStore, output, promptStore});
   return output;
 };

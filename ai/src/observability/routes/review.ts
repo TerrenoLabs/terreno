@@ -62,7 +62,8 @@ export const addObservabilityReviewRoutes = (
     ),
     asyncHandler(async (req, res) => {
       const status = req.query.status as ReviewStatus | undefined;
-      return res.json({...(await options.store.list(status)), more: false});
+      const batchId = typeof req.query.batchId === "string" ? req.query.batchId : undefined;
+      return res.json({...(await options.store.list(status, {batchId})), more: false});
     })
   );
 

@@ -492,6 +492,8 @@ new AiApp({
 | `toolChoice` | `"auto"` \| `"none"` \| `"required"` (default `"auto"` when tools present) |
 | `maxSteps` | Max tool-calling steps (default 5) |
 | `titleModelId` | Cheaper model for conversation title generation |
+| `systemPromptName` | Observability prompt registry name used as the default system prompt. Its body is prepended to the request's system prompt, and the trace records the version. Skipped when no `ObservabilityApp` is registered, the label has no version, or an admin request selects `promptName` |
+| `systemPromptLabel` | Registry label read for `systemPromptName` (default `production`) |
 | `openApiOptions` | Passed to route OpenAPI builders |
 | `projects` | Default `true`. `false` skips the `/gpt/projects` routes, so `AiApp` never registers the `Project` model |
 
@@ -566,7 +568,9 @@ server `AIService` when configured, otherwise a request-scoped service built fro
 | `ObsSpan` | Nested span with `kind`, `status`, optional `error`, offsets, usage |
 | `ObsScore` | Scores on a trace/span; many per trace, **no unique index** |
 | `ObsEvaluator` | Evaluator: `type` (`human` \| `llm-judge` \| `json-assert`), `target`, `dimensions[]`, `runModes`, `instructions`, `judgePromptName` (judge), `assertion` (json-assert), `confidenceAlertBelow` (default 0.7) |
-| `ObsReviewItem` | Review queue item: status, evaluator, trace, reason, scores, comment |
+| `ObsReviewItem` | Review queue item: status, evaluator, trace, reason, scores, comment, optional `batchId` |
+| `ObsReviewBatch` | Review batch: `name`, human question-set `evaluatorId`, `traceIds[]`, optional `promptName` and `description` |
+| `ObsJudgeRun` | One LLM judge's answers for every trace in a batch: `batchId`, `evaluatorId`, `modelId`, `results[]` (`traceId`, `scores`, `confidence`, `error`) |
 | `ObsDataset` | Named dataset with optional `inputSchemaPromptName` and `expectedOutputSchema` |
 | `ObsDatasetItem` | Item with `input`, `expectedOutput`, `origin`, `proofread`, `tags`, `outcomeClass`, `sourceTraceId`, `metadata` |
 | `ObsExperiment` | Compares 2–3 prompt versions on a dataset with thresholds and aggregates |
@@ -574,6 +578,8 @@ server `AIService` when configured, otherwise a request-scoped service built fro
 
 `POST /ai/observability/traces/review` requires a `human` `ObsEvaluator`. Its
 `dimensions[]` render as reviewer score fields and `instructions` render above the review form.
+Each dimension may set `question`, which the review screen shows instead of the key; yes/no
+questions render as Yes / No rows with keyboard shortcuts on web.
 Automatic evaluator types return **400** instead of entering the human queue. Submitting a review
 requires every dimension marked `required`; omitted optional dimensions do not create empty score
 rows. The local score store remains the fallback when no external score sink is configured.
@@ -631,6 +637,16 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 | GET | `/ai/observability/review` | Queue by `status` with counts; oldest-first. Response includes `more: false` so RTK preserves the count envelope. Rows include `traceName`, `promptName`, assignee, reason, and enqueue time |
 | GET | `/ai/observability/review/:id` | Item + evaluator dimensions + `given` / `wrote` panels and `rawInput` / `rawOutput` for the Raw JSON disclosure |
 | POST | `/ai/observability/review/:id` | `submit` (scores via ScoreSinks, status `done`), `skip`, or `assign` |
+| GET | `/ai/observability/review/batches` | Batches with `counts` (`done`, `pending`, `skipped`, `total`), `judgeCount`, and `bestJudge` (`aiReview:list`) |
+| POST | `/ai/observability/review/batches` | Create a batch for a human evaluator from `traceIds`, or from the newest `limit` (default 10, max 50) successful traces with output not already batched for that evaluator, optionally filtered by `promptName`. Enqueues one review item per trace. 404 `Unknown trace ids` when any id is missing; a failed enqueue removes the batch so its traces stay available (`aiReview:assign`) |
+| GET | `/ai/observability/review/batches/:id` | Batch detail: question `dimensions`, `items[]` (input, output, status, human `scores`, `judgeAnswers` by judge id), and `judges[]` with `agreement` (`rate`, `matches`, `compared`, `itemsCompared`, `errors`, per-question `questions[]`, `disagreements[]`) sorted best first (`aiReview:read`) |
+| POST | `/ai/observability/review/batches/:id/judgeRuns` | Run an `llm-judge` evaluator over every batch trace (five at a time) and store an `ObsJudgeRun`. 400 when the judge shares no dimension keys with the question set; 503 without an AI client (`aiReview:assign`) |
+
+Judge agreement compares only items with `done` human answers and only dimension keys the judge
+also returns. Booleans and categories must match exactly (case-insensitive for categories);
+numbers match within 10% of the dimension's range (default 0–1). A judge error or missing answer
+counts as a disagreement. `computeJudgeAgreement` and `answersAgree` are exported for custom
+reports. `GET /ai/observability/review` also accepts `batchId` to scope the queue to one batch.
 
 `createLocalObservabilityPlugin()` wires `LocalDatasetStore` and `LocalExperimentRunner` when datasets/experiments primaries are `local`.
 

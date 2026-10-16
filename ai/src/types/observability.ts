@@ -157,6 +157,8 @@ export interface ObsScoreModel extends mongoose.Model<ObsScoreDocument>, ObsScor
 export interface EvaluatorDimension {
   dataType: "boolean" | "categorical" | "numeric";
   key: string;
+  /** Question shown to human reviewers, e.g. "Does the summary mention every todo?" */
+  question?: string;
   range?: string;
   required: boolean;
 }
@@ -193,6 +195,7 @@ export interface ObsEvaluatorModel
 
 export interface ObsReviewItemDocument extends mongoose.Document<mongoose.Types.ObjectId> {
   assigneeId?: mongoose.Types.ObjectId;
+  batchId?: mongoose.Types.ObjectId;
   comment?: string;
   created: Date;
   datasetItemId?: mongoose.Types.ObjectId;
@@ -214,6 +217,49 @@ export interface ObsReviewItemStatics
 export interface ObsReviewItemModel
   extends mongoose.Model<ObsReviewItemDocument>,
     ObsReviewItemStatics {}
+
+export interface ObsReviewBatchDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  created: Date;
+  deleted: boolean;
+  description?: string;
+  evaluatorId: mongoose.Types.ObjectId;
+  name: string;
+  promptName?: string;
+  traceIds: mongoose.Types.ObjectId[];
+  updated: Date;
+}
+
+export interface ObsReviewBatchStatics
+  extends FindExactlyOnePlugin<ObsReviewBatchDocument>,
+    FindOneOrNonePlugin<ObsReviewBatchDocument> {}
+
+export interface ObsReviewBatchModel
+  extends mongoose.Model<ObsReviewBatchDocument>,
+    ObsReviewBatchStatics {}
+
+export interface ObsJudgeRunResult {
+  confidence?: number;
+  error?: string;
+  scores?: Record<string, boolean | number | string>;
+  traceId: mongoose.Types.ObjectId;
+}
+
+export interface ObsJudgeRunDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+  batchId: mongoose.Types.ObjectId;
+  completedAt: Date;
+  created: Date;
+  deleted: boolean;
+  evaluatorId: mongoose.Types.ObjectId;
+  modelId?: string;
+  results: ObsJudgeRunResult[];
+  updated: Date;
+}
+
+export interface ObsJudgeRunStatics
+  extends FindExactlyOnePlugin<ObsJudgeRunDocument>,
+    FindOneOrNonePlugin<ObsJudgeRunDocument> {}
+
+export interface ObsJudgeRunModel extends mongoose.Model<ObsJudgeRunDocument>, ObsJudgeRunStatics {}
 
 export interface ObsDatasetAnnotatedBy {
   label: string;

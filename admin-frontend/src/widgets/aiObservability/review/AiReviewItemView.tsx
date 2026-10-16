@@ -1,7 +1,7 @@
 import {Accordion, Badge, Box, Button, Card, Heading, Text, TextArea} from "@terreno/ui";
 import React from "react";
+import {ReviewQuestionList} from "./ReviewQuestionList";
 import {ReviewReadOnlyPanel} from "./ReviewReadOnlyPanel";
-import {ReviewScoreField} from "./ReviewScoreField";
 import {displayReviewValue, type ReviewDetail, reviewStatusLabel} from "./reviewTypes";
 
 export interface AiReviewItemViewProps {
@@ -9,6 +9,7 @@ export interface AiReviewItemViewProps {
   detail: ReviewDetail;
   isPending: boolean;
   isSaving?: boolean;
+  onAnswerRestYes?: () => void;
   onAssign: () => void;
   onCommentChange: (value: string) => void;
   onNext?: () => void;
@@ -27,6 +28,7 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
   detail,
   isPending,
   isSaving,
+  onAnswerRestYes,
   onAssign,
   onCommentChange,
   onNext,
@@ -42,6 +44,11 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
   <Box gap={4} testID="ai-review-item">
     <Box alignItems="center" direction="row" gap={3} justifyContent="between" wrap>
       <Box gap={1}>
+        {detail.batchName ? (
+          <Text color="secondaryDark" testID="ai-review-batch-name">
+            {detail.batchName}
+          </Text>
+        ) : undefined}
         <Heading size="md">
           {isPending
             ? `Item ${position} of ${totalPending} pending`
@@ -85,22 +92,18 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
 
     <Card padding={3}>
       <Box gap={3}>
-        <Heading size="sm">Score this output</Heading>
-        {detail.instructions ? <Text>{detail.instructions}</Text> : undefined}
-        {detail.dimensions.map((dimension) => (
-          <ReviewScoreField
-            dimension={dimension}
-            key={dimension.key}
-            onChange={(value) => {
-              onScoreChange(dimension.key, value);
-            }}
-            value={scores[dimension.key]}
-          />
-        ))}
+        <ReviewQuestionList
+          dimensions={detail.dimensions}
+          instructions={detail.instructions}
+          onAnswer={onScoreChange}
+          onAnswerRestYes={onAnswerRestYes ?? (() => undefined)}
+          scores={scores}
+        />
         <TextArea
           onChange={onCommentChange}
+          rows={2}
           testID="ai-review-comment"
-          title="Comment (optional)"
+          title="Note (optional)"
           value={comment}
         />
         {submitError ? <Text color="error">{submitError}</Text> : undefined}

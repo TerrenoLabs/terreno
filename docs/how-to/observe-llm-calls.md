@@ -112,6 +112,25 @@ that key exists.
    evaluator. On a database that already booted, run Admin → Scripts →
    `seedChatSafetyDataset` as a wet run, or
    `cd example-backend && bun run script seedChatSafetyDataset --wet`.
+
+   The same seed also fills every observability screen, so you do not have to build data
+   by hand:
+
+   | Screen | Seeded data |
+   | --- | --- |
+   | Prompts | `example-summarize` v3 (staging, output capped at 120 characters); `joke-generator` and `chat-assistant` v1 (production) and v2 (staging); judge prompts `eval-judge-correctness` and `eval-judge-helpfulness` |
+   | Evaluators | `correctness-human`, `helpfulness-human`, `schema-assert`, and the `correctness` and `helpfulness` LLM judges |
+   | Datasets | `example-summarize-gold` (8 proofread rows, 2 unproofread), `joke-generator-topics` (6), `chat-assistant-gold` (6) |
+   | Experiments | `Summarize v1 vs v2 (gold)`: v1 fails correctness, v2 passes. `Summarize v2 vs v3 (length cap)`: v3 fails `schema-assert` on 2 rows. `Jokes v1 vs v2 (one-liners)` and `Chat assistant v1 vs v2 (brevity)`: v1 fails helpfulness, v2 passes |
+   | Traces | 18 Todos → Summarize traces over the past week (2 errors, 1 sensitive, 2 flagged for the dataset), 6 `joke-generator` traces, and 6 `chat-assistant` turns (4 with a tool span); user-feedback, LLM-judge, and code scores |
+   | Review | 14 items: 9 pending, 1 in progress, 3 done, 1 skipped |
+
+   Seeded experiments run through the real experiment runner with a deterministic
+   `seed-fixture` client, so they need no API key. Seeded traces use session IDs that
+   start with `seed-obs-`. Production stays on v1 for every prompt, so promoting v2 from
+   an experiment changes what the app sends. On a database that already booted, run
+   Admin → Scripts → `seedAiObservabilityDemo`, or
+   `cd example-backend && bun run script seedAiObservabilityDemo --wet`.
 3. Start `bun run backend:dev` and `bun run frontend:web`, then sign in as the seeded
    admin.
 4. Open **AI Observability → Prompts** to inspect or save a new immutable version. Move
@@ -136,6 +155,13 @@ that key exists.
 
 6. Open its `example-summarize` trace, send it to Review, score **correct**, and submit
    until the queue reports **Queue clear**.
+
+The example chat reads two more registry prompts. `addGptRoutes` takes
+`systemPromptName: "chat-assistant"`, so each chat turn prepends that prompt's `production`
+version to the system prompt and its trace records the version. The chat's `generate_joke`
+tool calls `generateText` with `promptName: "joke-generator"` and falls back to a built-in
+prompt when the registry has no `production` version. Move either label in **Prompts** and
+the next chat message uses the new version.
 
 The example app also calls this route from the UI: **Todos → Summarize** sends the user's todo
 list, so each press produces a trace with the production prompt reference, `userId`, and a
@@ -194,4 +220,34 @@ saved key and is blocked the same way.
 3. List oldest-first: `GET /ai/observability/review?status=pending` (response includes per-status counts).
 4. Open an item: `GET /ai/observability/review/:id` returns evaluator dimensions plus `given` / `wrote` panels (variable labels when present, otherwise raw keys).
 5. `POST /ai/observability/review/:id` with `action: "submit"` writes dimension-keyed scores through every ScoreSink and marks the item `done` (it leaves the pending list). `skip` and `assign` move status to `skipped` / `in_progress`.
+
+## Check that an LLM judge agrees with people
+
+Use a review batch: a fixed set of traces (one input and one output each) that reviewers answer
+the same list of questions for. Then run LLM judges over the same traces and compare.
+
+1. Create a **question set**: a `human` evaluator with one `boolean` dimension per question. Put
+   the reviewer-facing wording in each dimension's `question`, for example
+   `{key: "covers_every_item", dataType: "boolean", question: "Does it mention every todo?"}`.
+   The seed installs `summary-review-questions` with four questions.
+2. Open **AI Observability → Review batches**, pick the question set and (optionally) a prompt,
+   and press **Grab 10 recent traces**. API: `POST /ai/observability/review/batches` with
+   `{evaluatorId, promptName?, limit?: 10, name?}`. It takes the newest successful traces with an
+   output that are not already in a batch for that question set, so pressing it again gives the
+   next 10. Pass `traceIds` instead to pick traces by hand.
+3. Reviewers press **Answer N remaining**. Each item shows the input and output side by side and
+   every question with Yes / No. On web, `Y` / `N` answer the highlighted question, `Enter`
+   submits and opens the next item in the batch, and `S` skips. **Rest Yes** answers every open
+   yes/no question with Yes.
+4. Create an `llm-judge` evaluator whose dimension keys match the question keys and whose judge
+   prompt returns those keys. On the batch, choose the judge and press **Run on N items**
+   (`POST /ai/observability/review/batches/:id/judgeRuns` with `{evaluatorId}`). The judge runs
+   on every batch trace through `ObservabilityApp.aiService` (or the caller's `x-ai-api-key`).
+5. Read **Which judges match the humans?**: overall and per-question agreement for each judge,
+   counted only on items people answered and questions the judge also answers. 90% or more is
+   green, 75–89% amber. Click a judge to list where it disagrees, then open the item to see why.
+   Re-running a judge after editing its prompt replaces that judge's previous result.
+
+The seed adds the batch `Recent summaries — batch 1` (8 of 10 answered) with two judges run:
+`summary-questions-judge` agrees 97% and `summary-questions-judge-quick` agrees 78%.
 

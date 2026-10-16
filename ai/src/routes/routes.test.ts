@@ -354,6 +354,107 @@ describe("AI Routes", () => {
       assert.isTrue(sink.traces[0]?.sensitive);
     });
 
+    it("prepends the route registry system prompt and records its version", async () => {
+      const sink = new MemoryTraceSink();
+      const lookups: Array<{label?: string; name: string}> = [];
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {
+          get: async (args) => {
+            lookups.push(args);
+            return {
+              body: "Registry assistant prompt",
+              label: "staging",
+              name: "chat-assistant",
+              version: 2,
+            };
+          },
+        },
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+      const model = createMockModel();
+      const registryApp = new TerrenoApp({
+        configureApp: (router, options) => {
+          addGptRoutes(router, {
+            aiService: new AIService({model: model as unknown as LanguageModel}),
+            openApiOptions: options,
+            systemPromptLabel: "staging",
+            systemPromptName: "chat-assistant",
+          });
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+
+      const agent = await authAsUser(registryApp, "notAdmin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Hi", systemPrompt: "Caller context"})
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(lookups, [{label: "staging", name: "chat-assistant"}]);
+      const callOptions = model.doStream.mock.calls[0]?.[0] as unknown as {
+        prompt: Array<{content: unknown; role: string}>;
+      };
+      const system = callOptions.prompt.find((message) => message.role === "system");
+      assert.match(String(system?.content), /^Registry assistant prompt\n\nCaller context/);
+      assert.deepEqual(sink.traces[0]?.prompts, [
+        {label: "staging", name: "chat-assistant", version: 2},
+      ]);
+    });
+
+    it("keeps chatting without a prompt when the route registry prompt is missing", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {get: async () => undefined},
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+      const registryApp = new TerrenoApp({
+        configureApp: (router, options) => {
+          addGptRoutes(router, {aiService, openApiOptions: options, systemPromptName: "absent"});
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+
+      const agent = await authAsUser(registryApp, "notAdmin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Hi"})
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(sink.traces[0]?.prompts, []);
+    });
+
     it("emits a memory-sink trace with userId and sessionId", async () => {
       const sink = new MemoryTraceSink();
       const plugin: ObservabilityPlugin = {

@@ -2964,6 +2964,8 @@ describe("AiObservabilityChrome", () => {
         "ai-prompt-editor",
         "ai-prompts",
         "ai-review",
+        "ai-review-batch",
+        "ai-review-batches",
         "ai-review-item",
         "ai-trace-detail",
         "ai-traces",
@@ -3972,6 +3974,12 @@ describe("AiReviewItemScreen", () => {
             options?.currentUserId === "" ? undefined : {id: options?.currentUserId ?? "user-1"},
           isLoading: false,
         }),
+        useAiObservabilityReviewBatchQueueQuery: () => ({
+          data: undefined,
+          isError: false,
+          isLoading: false,
+          refetch: mock(() => {}),
+        }),
         useAiObservabilityReviewItemQuery: () => ({
           data: detail,
           isError: false,
@@ -4013,6 +4021,12 @@ describe("AiReviewItemScreen", () => {
         enhanceEndpoints: () => loadingApi,
         injectEndpoints: () => ({
           useAiObservabilityCurrentUserQuery: () => ({data: undefined, isLoading: false}),
+          useAiObservabilityReviewBatchQueueQuery: () => ({
+            data: undefined,
+            isError: false,
+            isLoading: false,
+            refetch: mock(() => {}),
+          }),
           useAiObservabilityReviewItemQuery: () => ({
             data: undefined,
             isError: false,
@@ -4056,7 +4070,7 @@ describe("AiReviewItemScreen", () => {
         />
       );
       expect(loaded.getByTestId("ai-review-item")).toBeTruthy();
-      expect(loaded.getByTestId("ai-review-score-boolean-correct")).toBeTruthy();
+      expect(loaded.getByTestId("ai-review-question-correct")).toBeTruthy();
     });
 
     it("requires scores before submit and submits on pass", async () => {
@@ -4073,10 +4087,10 @@ describe("AiReviewItemScreen", () => {
         fireEvent.press(view.getByTestId("ai-review-submit-next"));
         await Promise.resolve();
       });
-      expect(view.getByText("Score correct before submitting.")).toBeTruthy();
+      expect(view.getByText(`Answer "correct" before submitting.`)).toBeTruthy();
 
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-review-score-correct-pass"));
+        fireEvent.press(view.getByTestId("ai-review-question-correct-yes"));
         await Promise.resolve();
       });
       await act(async () => {
@@ -4105,6 +4119,12 @@ describe("AiReviewItemScreen", () => {
         enhanceEndpoints: () => errorApi,
         injectEndpoints: () => ({
           useAiObservabilityCurrentUserQuery: () => ({data: {id: "user-1"}, isLoading: false}),
+          useAiObservabilityReviewBatchQueueQuery: () => ({
+            data: undefined,
+            isError: false,
+            isLoading: false,
+            refetch: mock(() => {}),
+          }),
           useAiObservabilityReviewItemQuery: () => ({
             data: undefined,
             isError: true,
@@ -4212,6 +4232,12 @@ describe("AiReviewItemScreen", () => {
         enhanceEndpoints: () => twoPendingApi,
         injectEndpoints: () => ({
           useAiObservabilityCurrentUserQuery: () => ({data: {id: "user-1"}, isLoading: false}),
+          useAiObservabilityReviewBatchQueueQuery: () => ({
+            data: undefined,
+            isError: false,
+            isLoading: false,
+            refetch: mock(() => {}),
+          }),
           useAiObservabilityReviewItemQuery: () => ({
             data: detail,
             isError: false,
@@ -4256,7 +4282,7 @@ describe("AiReviewItemScreen", () => {
 
       actionImpl.mockClear();
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-review-score-correct-pass"));
+        fireEvent.press(view.getByTestId("ai-review-question-correct-yes"));
         await Promise.resolve();
       });
       await act(async () => {
@@ -4402,7 +4428,7 @@ describe("AiReviewItemView", () => {
         />
       );
       await act(async () => {
-        fireEvent.press(getByTestId("ai-review-score-correct-pass"));
+        fireEvent.press(getByTestId("ai-review-question-correct-yes"));
         await Promise.resolve();
       });
       assert.isAtLeast(onScoreChange.mock.calls.length, 1);

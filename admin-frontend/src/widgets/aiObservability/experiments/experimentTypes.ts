@@ -140,3 +140,33 @@ export const isAutomaticExperimentEvaluator = (evaluator: {type: string}): boole
 export const isValidExperimentVersionCount = (count: number): boolean => {
   return count >= MIN_EXPERIMENT_VERSIONS && count <= MAX_EXPERIMENT_VERSIONS;
 };
+
+const ITEM_COLUMN_WIDTH = 120;
+const PASS_COLUMN_WIDTH = 80;
+const MIN_OUTPUT_COLUMN_WIDTH = 180;
+
+export interface ExperimentItemColumnWidths {
+  item: number;
+  output: number;
+  pass: number;
+}
+
+/**
+ * Split the measured table width so the per-version output columns take every pixel the item and
+ * pass columns leave over, never narrower than the readable minimum.
+ */
+export const experimentItemColumnWidths = ({
+  containerWidth,
+  versionCount,
+}: {
+  containerWidth: number;
+  versionCount: number;
+}): ExperimentItemColumnWidths => {
+  const fixedWidth = ITEM_COLUMN_WIDTH + PASS_COLUMN_WIDTH * versionCount;
+  const available = containerWidth - fixedWidth;
+  const output =
+    versionCount > 0
+      ? Math.max(MIN_OUTPUT_COLUMN_WIDTH, Math.floor(available / versionCount))
+      : MIN_OUTPUT_COLUMN_WIDTH;
+  return {item: ITEM_COLUMN_WIDTH, output, pass: PASS_COLUMN_WIDTH};
+};

@@ -50,6 +50,9 @@ const EVALUATOR_DIMENSIONS_HELP =
 const EVALUATOR_DIMENSION_KEY_HELP =
   "The score label shown on traces and experiment results, such as correct, helpful, or toxicity.";
 
+const EVALUATOR_DIMENSION_QUESTION_HELP =
+  "Shown to human reviewers instead of the score name, such as: Does it mention every todo?";
+
 const EVALUATOR_DIMENSION_MIN_HELP = "Lowest allowed number, such as 0.";
 
 const EVALUATOR_DIMENSION_MAX_HELP = "Highest allowed number, such as 1 or 5.";
@@ -152,6 +155,7 @@ export interface AiEvaluatorNewViewProps {
 
 const DIMENSION_COLUMNS: ObservabilityTableColumn[] = [
   {minWidth: 120, title: "Key"},
+  {grow: 2, minWidth: 200, title: "Reviewer question"},
   {minWidth: 100, title: "Data type"},
   {minWidth: 80, title: "Range"},
   {minWidth: 80, title: "Required"},
@@ -339,6 +343,7 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
       return {
         cells: [
           dimension.key,
+          dimension.question ?? "—",
           dimension.dataType,
           dimension.range ?? "—",
           dimension.required ? "Yes" : "No",
@@ -719,6 +724,17 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
                 title="Score name"
                 value={dimension.key}
               />
+              {type === "human" ? (
+                <TextField
+                  helperText={EVALUATOR_DIMENSION_QUESTION_HELP}
+                  onChange={(value) => {
+                    onDimensionChange(index, {...dimension, question: value || undefined});
+                  }}
+                  testID={`ai-evaluator-dimension-${index}-question`}
+                  title="Reviewer question (optional)"
+                  value={dimension.question ?? ""}
+                />
+              ) : undefined}
               <Box gap={1}>
                 <Text size="sm">Data type</Text>
                 <Box direction="row" gap={1} wrap>

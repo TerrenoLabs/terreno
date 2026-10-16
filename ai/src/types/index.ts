@@ -452,6 +452,14 @@ export interface GptRouteOptions {
    * Falls back gracefully if Langfuse is not configured or the prompt is not found. */
   langfuseSystemPromptName?: string;
   /**
+   * Observability prompt registry name used as the default system prompt (prepended like the
+   * Langfuse prompt). The trace records the version. Skipped when no registry is registered, the
+   * label has no version, or an admin request selects `promptName`.
+   */
+  systemPromptName?: string;
+  /** Registry label read for `systemPromptName`. Defaults to `production`. */
+  systemPromptLabel?: string;
+  /**
    * When `false` or the function returns `false`, prompts that include attachments are rejected.
    * Omit or pass `true` to leave uploads enabled.
    */

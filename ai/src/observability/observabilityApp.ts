@@ -6,6 +6,7 @@ import {LocalDatasetStore} from "./local/datasetStore";
 import {LocalEvaluatorStore} from "./local/evaluatorStore";
 import {LocalExperimentRunner} from "./local/experimentRunner";
 import {LocalPromptStore} from "./local/promptStore";
+import {LocalReviewBatchStore} from "./local/reviewBatchStore";
 import {LocalReviewStore} from "./local/reviewStore";
 import {LocalTraceSink} from "./local/traceStore";
 import {
@@ -18,6 +19,7 @@ import {addObservabilityEvaluatorRoutes} from "./routes/evaluators";
 import {addObservabilityExperimentRoutes} from "./routes/experiments";
 import {addObservabilityPromptRoutes} from "./routes/prompts";
 import {addObservabilityReviewRoutes} from "./routes/review";
+import {addObservabilityReviewBatchRoutes} from "./routes/reviewBatches";
 import {addObservabilityStatusRoutes} from "./routes/status";
 import {addObservabilityTestMultiStageRoutes} from "./routes/testMultiStage";
 import {addObservabilityTraceRoutes} from "./routes/traces";
@@ -149,9 +151,16 @@ export class ObservabilityApp implements TerrenoPlugin {
         ...routeAccess,
         store: evaluatorStore,
       });
+      const reviewStore = new LocalReviewStore();
+      addObservabilityReviewBatchRoutes(app, {
+        ...routeAccess,
+        aiService: this.aiService,
+        requestAiServiceFactory: this.requestAiServiceFactory,
+        store: new LocalReviewBatchStore(promptStore ?? new LocalPromptStore(), reviewStore),
+      });
       addObservabilityReviewRoutes(app, {
         ...routeAccess,
-        store: new LocalReviewStore(),
+        store: reviewStore,
       });
       if (localPlugin.datasetStore instanceof LocalDatasetStore) {
         addObservabilityDatasetRoutes(app, {

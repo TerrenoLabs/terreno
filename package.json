@@ -24,7 +24,7 @@
     "@react-navigation/native": "^7.1.8",
     "@reduxjs/toolkit": "^2.11.1",
     "@rtk-query/codegen-openapi": "^2.2.0",
-    "@sentry/bun": "^10.39.0",
+    "@sentry/bun": "^11.0.0",
     "@sentry/react": "^10.29.0",
     "@sentry/react-native": "~7.2.0",
     "@shopify/flash-list": "2.0.2",

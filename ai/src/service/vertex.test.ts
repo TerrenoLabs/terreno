@@ -371,10 +371,10 @@ describe("vertex helpers", () => {
   describe("createVertexProvider", () => {
     it("returns undefined and logs a warning when factory is not available and module is not installed", () => {
       const provider = createVertexProvider({
+        loadModule: () => undefined,
         project: "demo-project",
         vertexFactory: undefined,
       });
-      // loadVertexModule returns undefined because @ai-sdk/google-vertex is not installed in test env
       expect(provider).toBeUndefined();
     });
 

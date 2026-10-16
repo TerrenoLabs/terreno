@@ -102,6 +102,7 @@ export const dimensionForDataType = (
     return {
       dataType,
       key: dimension.key,
+      ...(dimension.question ? {question: dimension.question} : {}),
       required: dimension.required,
     };
   }

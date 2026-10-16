@@ -2,7 +2,13 @@ import {APIError} from "@terreno/api";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
-import type {EvaluatorDimension, ObsJudgeRunDocument} from "../../types/observability";
+import type {
+  EvaluatorDimension,
+  ObsEvaluatorDocument,
+  ObsJudgeRunDocument,
+  ObsReviewBatchDocument,
+  ObsReviewItemDocument,
+} from "../../types/observability";
 import {type EvaluatorAiClient, runLlmJudgeEvaluator} from "../evaluate";
 import {computeJudgeAgreement, type JudgeAgreement, type ScoreValue} from "../judgeAgreement";
 import {registerObsEvaluator} from "./models/obsEvaluator";
@@ -145,6 +151,15 @@ export class LocalReviewBatchStore {
           : "No recent traces that are not already in a batch for this question set",
       });
     }
+    const traceObjectIds = traceIds.map((id) => objectId(id, "traceId"));
+    const found = await registerObsTrace()
+      .find({_id: {$in: traceObjectIds}})
+      .select({_id: 1});
+    const foundIds = new Set(found.map((trace) => String(trace._id)));
+    const missing = traceIds.filter((id) => !foundIds.has(id));
+    if (missing.length > 0) {
+      throw new APIError({detail: missing.join(", "), status: 404, title: "Unknown trace ids"});
+    }
     const Batch = registerObsReviewBatch();
     const existingCount = await Batch.countDocuments({evaluatorId: evaluator._id});
     const name =
@@ -154,26 +169,56 @@ export class LocalReviewBatchStore {
       evaluatorId: evaluator._id,
       name,
       promptName: params.promptName,
-      traceIds: traceIds.map((id) => objectId(id, "traceId")),
+      traceIds: traceObjectIds,
     });
-    await this.reviewStore.enqueue({
-      batchId: String(batch._id),
-      evaluatorId: String(evaluator._id),
-      reason: "manual",
-      traceIds,
-    });
+    try {
+      await this.reviewStore.enqueue({
+        batchId: String(batch._id),
+        evaluatorId: String(evaluator._id),
+        reason: "manual",
+        traceIds,
+      });
+    } catch (error) {
+      // A half-built batch would hide its traces from later "grab recent" batches.
+      await registerObsReviewItem().deleteMany({batchId: batch._id});
+      await Batch.deleteOne({_id: batch._id});
+      throw error;
+    }
     return this.get(String(batch._id));
   }
 
   async list(): Promise<ReviewBatchListItem[]> {
     const batches = await registerObsReviewBatch().find({}).sort({created: -1});
-    const rows: ReviewBatchListItem[] = [];
-    for (const batch of batches) {
-      const detail = await this.get(String(batch._id));
-      const {dimensions: _d, instructions: _i, items: _items, judges, ...summary} = detail;
-      rows.push(summary);
+    if (batches.length === 0) {
+      return [];
     }
-    return rows;
+    const batchIds = batches.map((batch) => batch._id);
+    const reviewItems = await registerObsReviewItem()
+      .find({batchId: {$in: batchIds}})
+      .select({batchId: 1, scores: 1, status: 1, traceId: 1});
+    const runs = await this.latestJudgeRuns(batchIds);
+    const evaluators = await registerObsEvaluator().find({
+      _id: {
+        $in: [...batches.map((batch) => batch.evaluatorId), ...runs.map((run) => run.evaluatorId)],
+      },
+    });
+    const evaluatorById = new Map(
+      evaluators.map((evaluator) => {
+        return [String(evaluator._id), evaluator];
+      })
+    );
+    return batches.map((batch) => {
+      const batchId = String(batch._id);
+      const evaluator = evaluatorById.get(String(batch.evaluatorId));
+      const items = reviewItems.filter((item) => String(item.batchId) === batchId);
+      const judges = this.summarizeJudges({
+        dimensions: evaluator?.dimensions ?? [],
+        evaluatorById,
+        reviewItems: items,
+        runs: runs.filter((run) => String(run.batchId) === batchId),
+      });
+      return this.toListItem({batch, evaluatorName: evaluator?.name, items, judges});
+    });
   }
 
   async get(id: string): Promise<ReviewBatchDetail> {
@@ -192,47 +237,26 @@ export class LocalReviewBatchStore {
         return [String(trace._id), trace];
       })
     );
-    const judges = await this.latestJudgeRuns(batch._id);
+    const runs = await this.latestJudgeRuns([batch._id]);
     const judgeEvaluators = await registerObsEvaluator().find({
-      _id: {$in: judges.map((run) => run.evaluatorId)},
+      _id: {$in: runs.map((run) => run.evaluatorId)},
     });
-    const judgeEvaluatorById = new Map(
-      judgeEvaluators.map((judge) => {
-        return [String(judge._id), judge];
-      })
-    );
-
-    const humanAnswers = reviewItems
-      .filter((item) => item.status === "done")
-      .map((item) => {
-        return {scores: item.scores, traceId: String(item.traceId)};
-      });
-    const judgeSummaries: ReviewBatchJudgeSummary[] = judges.map((run) => {
-      const judge = judgeEvaluatorById.get(String(run.evaluatorId));
-      return {
-        agreement: computeJudgeAgreement({
-          dimensions,
-          humanAnswers,
-          judgeAnswers: run.results.map((result) => {
-            return {error: result.error, scores: result.scores, traceId: String(result.traceId)};
-          }),
-          judgeKeys: (judge?.dimensions ?? []).map((dimension) => dimension.key),
-        }),
-        completedAt: toIso(run.completedAt),
-        evaluatorId: String(run.evaluatorId),
-        evaluatorName: judge?.name ?? "Deleted judge",
-        judgePromptName: judge?.judgePromptName,
-        modelId: run.modelId,
-        runId: String(run._id),
-      };
+    const judges = this.summarizeJudges({
+      dimensions,
+      evaluatorById: new Map(
+        judgeEvaluators.map((judge) => {
+          return [String(judge._id), judge];
+        })
+      ),
+      reviewItems,
+      runs,
     });
-    judgeSummaries.sort((a, b) => (b.agreement.rate ?? -1) - (a.agreement.rate ?? -1));
 
     const items: ReviewBatchItem[] = reviewItems.map((item) => {
       const traceId = String(item.traceId);
       const trace = traceById.get(traceId);
       const judgeAnswers: ReviewBatchItem["judgeAnswers"] = {};
-      for (const run of judges) {
+      for (const run of runs) {
         const result = run.results.find((entry) => String(entry.traceId) === traceId);
         if (result) {
           judgeAnswers[String(run.evaluatorId)] = {error: result.error, scores: result.scores};
@@ -249,29 +273,12 @@ export class LocalReviewBatchStore {
         traceName: trace?.name ?? "Unknown trace",
       };
     });
-    const counts: ReviewBatchCounts = {
-      done: items.filter((item) => item.status === "done").length,
-      pending: items.filter((item) => item.status === "pending" || item.status === "in_progress")
-        .length,
-      skipped: items.filter((item) => item.status === "skipped").length,
-      total: items.length,
-    };
-    const best = judgeSummaries[0];
     return {
-      bestJudge: best ? {evaluatorName: best.evaluatorName, rate: best.agreement.rate} : undefined,
-      counts,
-      created: toIso(batch.created),
-      description: batch.description,
+      ...this.toListItem({batch, evaluatorName: evaluator?.name, items: reviewItems, judges}),
       dimensions,
-      evaluatorId: String(batch.evaluatorId),
-      evaluatorName: evaluator?.name ?? "Deleted evaluator",
-      id: String(batch._id),
       instructions: evaluator?.instructions,
       items,
-      judgeCount: judgeSummaries.length,
-      judges: judgeSummaries,
-      name: batch.name,
-      promptName: batch.promptName,
+      judges,
     };
   }
 
@@ -348,16 +355,83 @@ export class LocalReviewBatchStore {
     return this.get(String(batch._id));
   }
 
-  private async latestJudgeRuns(batchId: mongoose.Types.ObjectId): Promise<ObsJudgeRunDocument[]> {
-    const runs = await registerObsJudgeRun().find({batchId}).sort({completedAt: -1});
+  private async latestJudgeRuns(
+    batchIds: mongoose.Types.ObjectId[]
+  ): Promise<ObsJudgeRunDocument[]> {
+    const runs = await registerObsJudgeRun()
+      .find({batchId: {$in: batchIds}})
+      .sort({completedAt: -1});
     const latest = new Map<string, ObsJudgeRunDocument>();
     for (const run of runs) {
-      const key = String(run.evaluatorId);
+      const key = `${String(run.batchId)}:${String(run.evaluatorId)}`;
       if (!latest.has(key)) {
         latest.set(key, run);
       }
     }
     return [...latest.values()];
+  }
+
+  // Agreement for each judge's latest run against the done human answers, best match first.
+  private summarizeJudges(params: {
+    dimensions: EvaluatorDimension[];
+    evaluatorById: Map<string, ObsEvaluatorDocument>;
+    reviewItems: Pick<ObsReviewItemDocument, "scores" | "status" | "traceId">[];
+    runs: ObsJudgeRunDocument[];
+  }): ReviewBatchJudgeSummary[] {
+    const humanAnswers = params.reviewItems
+      .filter((item) => item.status === "done")
+      .map((item) => {
+        return {scores: item.scores, traceId: String(item.traceId)};
+      });
+    const summaries = params.runs.map((run) => {
+      const judge = params.evaluatorById.get(String(run.evaluatorId));
+      return {
+        agreement: computeJudgeAgreement({
+          dimensions: params.dimensions,
+          humanAnswers,
+          judgeAnswers: run.results.map((result) => {
+            return {error: result.error, scores: result.scores, traceId: String(result.traceId)};
+          }),
+          judgeKeys: (judge?.dimensions ?? []).map((dimension) => dimension.key),
+        }),
+        completedAt: toIso(run.completedAt),
+        evaluatorId: String(run.evaluatorId),
+        evaluatorName: judge?.name ?? "Deleted judge",
+        judgePromptName: judge?.judgePromptName,
+        modelId: run.modelId,
+        runId: String(run._id),
+      };
+    });
+    summaries.sort((a, b) => (b.agreement.rate ?? -1) - (a.agreement.rate ?? -1));
+    return summaries;
+  }
+
+  private toListItem(params: {
+    batch: ObsReviewBatchDocument;
+    evaluatorName?: string;
+    items: Pick<ObsReviewItemDocument, "status">[];
+    judges: ReviewBatchJudgeSummary[];
+  }): ReviewBatchListItem {
+    const {batch, items, judges} = params;
+    const best = judges[0];
+    return {
+      bestJudge: best ? {evaluatorName: best.evaluatorName, rate: best.agreement.rate} : undefined,
+      counts: {
+        done: items.filter((item) => item.status === "done").length,
+        pending: items.filter((item) => item.status === "pending" || item.status === "in_progress")
+          .length,
+        skipped: items.filter((item) => item.status === "skipped").length,
+        total: items.length,
+      },
+      created: toIso(batch.created),
+      description: batch.description,
+      evaluatorId: String(batch.evaluatorId),
+      evaluatorName: params.evaluatorName ?? "Deleted evaluator",
+      id: String(batch._id),
+      judgeCount: judges.length,
+      name: batch.name,
+      promptName: batch.promptName,
+    };
   }
 
   // Newest successful traces with an output, skipping traces already batched for this question set.

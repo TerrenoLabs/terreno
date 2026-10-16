@@ -3,7 +3,6 @@ import {renderHook} from "@testing-library/react-native";
 import {
   agreementStatus,
   agreementVerdict,
-  answerMatches,
   formatAnswer,
   formatPercent,
   previewText,
@@ -23,17 +22,6 @@ describe("batchTypes", () => {
     expect(agreementStatus(undefined)).toBe("neutral");
     expect(agreementVerdict(0.9)).toBe("Matches humans");
     expect(agreementVerdict(undefined)).toBe("No human answers yet");
-  });
-
-  it("matches answers the same way the backend does", () => {
-    const boolean = {dataType: "boolean" as const, key: "ok", required: true};
-    expect(answerMatches(boolean, true, true)).toBe(true);
-    expect(answerMatches(boolean, true, "yes")).toBe(true);
-    expect(answerMatches(boolean, true, false)).toBe(false);
-    expect(answerMatches(boolean, true, undefined)).toBe(false);
-    const numeric = {dataType: "numeric" as const, key: "n", range: "0-10", required: true};
-    expect(answerMatches(numeric, 5, 6)).toBe(true);
-    expect(answerMatches(numeric, 5, 7)).toBe(false);
   });
 
   it("formats answers and previews", () => {

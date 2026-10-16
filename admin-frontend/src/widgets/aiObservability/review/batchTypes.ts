@@ -115,40 +115,6 @@ export const agreementVerdict = (rate?: number): string => {
   return "Does not match humans";
 };
 
-const toBoolean = (value: ScoreValue | undefined): boolean | undefined => {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (value === "true" || value === "yes") {
-    return true;
-  }
-  if (value === "false" || value === "no") {
-    return false;
-  }
-  return undefined;
-};
-
-/** Mirrors the backend agreement rule so item cells flag the same disagreements. */
-export const answerMatches = (
-  dimension: EvaluatorDimension,
-  human: ScoreValue,
-  judge: ScoreValue | undefined
-): boolean => {
-  if (judge === undefined) {
-    return false;
-  }
-  if (dimension.dataType === "boolean") {
-    const humanBool = toBoolean(human);
-    return humanBool !== undefined && humanBool === toBoolean(judge);
-  }
-  if (dimension.dataType === "numeric") {
-    const matches = dimension.range?.match(/(-?\d+(?:\.\d+)?)\s*(?:-|\.\.)\s*(-?\d+(?:\.\d+)?)/);
-    const span = matches ? Math.abs(Number(matches[2]) - Number(matches[1])) || 1 : 1;
-    return Math.abs(Number(human) - Number(judge)) <= span * 0.1 + 1e-9;
-  }
-  return String(human).trim().toLowerCase() === String(judge).trim().toLowerCase();
-};
-
 export const formatAnswer = (value: ScoreValue | undefined): string => {
   if (value === undefined) {
     return "—";

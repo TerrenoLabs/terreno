@@ -141,11 +141,38 @@ describe("LocalReviewBatchStore", () => {
       store.create({evaluatorId: questionSetId, promptName: "summarize"})
     ).rejects.toThrow(/No recent "summarize" traces/);
 
+    const listed = await store.list();
+    expect(listed.map((row) => [row.name, row.counts.total, row.judgeCount])).toEqual([
+      ["summarize — batch 2", 2, 0],
+      ["summarize — batch 1", 10, 0],
+    ]);
+
     const pending = await new LocalReviewStore().list("pending", {batchId: batch.id});
     expect(pending.data).toHaveLength(10);
     expect(pending.counts.pending).toBe(10);
     const detail = await new LocalReviewStore().getDetail(pending.data[0]?.id ?? "");
     expect(detail.batchName).toBe("summarize — batch 1");
+  });
+
+  it("leaves no batch behind when traces are unknown or enqueue fails", async () => {
+    const trace = await exportTrace({hoursAgo: 1, output: "x", prompt: "summarize"});
+    await expect(
+      store.create({evaluatorId: questionSetId, traceIds: [trace, "64b000000000000000000000"]})
+    ).rejects.toThrow(/Unknown trace ids/);
+
+    const failingReviews = new LocalReviewStore();
+    failingReviews.enqueue = async (): Promise<never> => {
+      throw new Error("enqueue failed");
+    };
+    const failingStore = new LocalReviewBatchStore(promptStore, failingReviews);
+    await expect(failingStore.create({evaluatorId: questionSetId})).rejects.toThrow(
+      "enqueue failed"
+    );
+    expect(await store.list()).toEqual([]);
+
+    // The trace was not claimed by the failed batch, so grabbing recent traces still finds it.
+    const batch = await store.create({evaluatorId: questionSetId});
+    expect(batch.items.map((item) => item.traceId)).toEqual([trace]);
   });
 
   it("rejects non-human question sets and out-of-range limits", async () => {

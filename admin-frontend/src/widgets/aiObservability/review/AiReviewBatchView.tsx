@@ -8,7 +8,6 @@ import {
 import {
   agreementStatus,
   agreementVerdict,
-  answerMatches,
   formatAnswer,
   formatPercent,
   previewText,
@@ -159,6 +158,13 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
     ];
   }, [dimensions]);
 
+  // Disagreements come from the backend so item cells flag exactly what the agreement rate counts.
+  const disagreementKeys = useMemo(() => {
+    return new Set(
+      (selectedJudge?.agreement.disagreements ?? []).map((row) => `${row.traceId}:${row.key}`)
+    );
+  }, [selectedJudge]);
+
   const itemRows: ObservabilityTableRow[] = useMemo(() => {
     return batch.items.map((item, index) => {
       const judgeScores = selectedJudge
@@ -179,10 +185,7 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
           ...dimensions.map((dimension) => {
             const human = item.scores?.[dimension.key];
             const judge = judgeScores?.[dimension.key];
-            const isDisagreement =
-              human !== undefined &&
-              selectedJudge !== undefined &&
-              !answerMatches(dimension, human, judge);
+            const isDisagreement = disagreementKeys.has(`${item.traceId}:${dimension.key}`);
             return (
               <Box gap={1} key={dimension.key}>
                 <Text>{formatAnswer(human)}</Text>
@@ -201,7 +204,7 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
         },
       };
     });
-  }, [batch.items, dimensions, onOpenItem, selectedJudge]);
+  }, [batch.items, dimensions, disagreementKeys, onOpenItem, selectedJudge]);
 
   return (
     <Box gap={4} testID="ai-review-batch">

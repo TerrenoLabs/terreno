@@ -66,6 +66,15 @@ flowchart TD
 
 Native iOS and Android apps call Cloud Run directly; only the web client uses the CDN origin.
 
+## gcloud quickstart vs Terraform
+
+| Approach | Tradeoff |
+|----------|----------|
+| **gcloud commands** | Fastest first deploy; nothing to install beyond the CLI, but resources drift and are hard to recreate |
+| **`terreno-backend` Terraform module** | Reviewable, repeatable infrastructure for production; adds Terraform state to manage |
+
+With the module, Terraform owns the structure (registry, identities, secrets, service settings) and the deploy step owns the payload (image, env vars, secret mounts). The module ignores image and env changes after creation so the two never fight.
+
 ## Durable jobs and PR isolation
 
 Cloud Tasks is a push service; it does not expose a pull-consumer API. Cloud Run worker

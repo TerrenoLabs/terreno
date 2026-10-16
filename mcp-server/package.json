@@ -105,5 +105,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "type": "module",
-  "version": "57.15.0"
+  "version": "57.16.2"
 }

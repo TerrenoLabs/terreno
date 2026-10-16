@@ -310,6 +310,7 @@ workflows:
             ui/src/.* run-deploy-docs true
             netlify\.toml run-deploy-docs true
             terraform/.* run-cd-terraform true
+            infra/.* run-cd-terraform true
             example-backend/.* run-cd-backend true
             api/.* run-cd-backend true
             api-health/.* run-cd-backend true

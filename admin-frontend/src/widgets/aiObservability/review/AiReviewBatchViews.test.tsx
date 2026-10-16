@@ -102,6 +102,31 @@ describe("ReviewQuestionList", () => {
     expect(onAnswer).toHaveBeenCalledWith("concise", false);
     await press(getByTestId("ai-review-questions-rest-yes"));
     expect(onAnswerRestYes).toHaveBeenCalled();
+    await press(getByTestId("ai-review-question-faithful-yes"));
+    expect(onAnswer).toHaveBeenCalledWith("faithful", true);
+  });
+
+  it("answers non-boolean questions through the score field", async () => {
+    const onAnswer = mock(() => {});
+    const {getByTestId, getByText} = renderWithTheme(
+      <ReviewQuestionList
+        dimensions={[
+          {
+            dataType: "categorical",
+            key: "tone",
+            question: "What is the tone?",
+            range: "safe|unsafe",
+            required: true,
+          },
+        ]}
+        onAnswer={onAnswer}
+        onAnswerRestYes={() => {}}
+        scores={{}}
+      />
+    );
+    expect(getByText("1. What is the tone?")).toBeTruthy();
+    await press(getByTestId("ai-review-score-tone-safe"));
+    expect(onAnswer).toHaveBeenCalledWith("tone", "safe");
   });
 });
 
@@ -140,6 +165,16 @@ describe("AiReviewBatchView", () => {
     expect(props.onRunJudge).toHaveBeenCalled();
     await press(getByTestId("ai-review-batch-answer-next"));
     expect(props.onAnswerNext).toHaveBeenCalled();
+  });
+
+  it("selects judges and opens items from table rows", async () => {
+    const {getByTestId, props} = renderBatch();
+    await press(getByTestId("ai-review-batch-judges-table-row-careful-clickable"));
+    expect(props.onSelectJudge).toHaveBeenCalledWith("careful");
+    await press(getByTestId("ai-review-batch-disagreements-table-row-t2-concise-0-clickable"));
+    expect(props.onOpenItem).toHaveBeenCalledWith("r2");
+    await press(getByTestId("ai-review-batch-items-table-row-r1-clickable"));
+    expect(props.onOpenItem).toHaveBeenCalledWith("r1");
   });
 
   it("blocks judge runs and says why when no AI is available", () => {
@@ -196,6 +231,8 @@ describe("AiReviewBatchesView", () => {
     expect(getByText("2 / 3")).toBeTruthy();
     await press(getByTestId("ai-review-batch-grab-recent"));
     expect(onCreate).toHaveBeenCalled();
+    await press(getByTestId("ai-review-batches-table-row-b1-clickable"));
+    expect(onOpenBatch).toHaveBeenCalledWith("b1");
   });
 
   it("shows an empty state", () => {

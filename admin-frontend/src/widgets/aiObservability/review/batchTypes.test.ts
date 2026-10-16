@@ -67,8 +67,13 @@ describe("review question helpers", () => {
       },
       removeEventListener: () => undefined,
     };
+    let removed = 0;
+    (globalThis as {document?: {removeEventListener: () => void}}).document!.removeEventListener =
+      () => {
+        removed += 1;
+      };
     const actions: ReviewShortcutAction[] = [];
-    renderHook(() =>
+    const hook = renderHook(() =>
       useReviewShortcuts({enabled: true, onAction: (action) => actions.push(action)})
     );
     const press = (event: Record<string, unknown>): void => {
@@ -86,5 +91,7 @@ describe("review question helpers", () => {
     press({key: "y", target: {tagName: "TEXTAREA"}});
     press({key: "y", target: {tagName: "DIV"}});
     expect(actions).toEqual(["yes", "no", "yes", "submit", "skip", "yes"]);
+    hook.unmount();
+    expect(removed).toBe(1);
   });
 });

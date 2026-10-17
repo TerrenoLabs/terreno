@@ -1,5 +1,6 @@
 import {TerrenoProvider, type ThemeColorScheme, useStoredState} from "@terreno/ui";
 import {createContext, type FC, type ReactNode, useCallback, useContext, useMemo} from "react";
+import {DEFAULT_COLOR_SCHEME, resolveStoredColorScheme} from "@/utils/storedColorScheme";
 
 const STORAGE_KEY = "themeColorScheme";
 
@@ -9,18 +10,11 @@ interface ThemePreferenceContextValue {
   setColorScheme: (colorScheme: ThemeColorScheme) => Promise<void>;
 }
 
-const DEFAULT_COLOR_SCHEME: ThemeColorScheme = "light";
-
 const ThemePreferenceContext = createContext<ThemePreferenceContextValue>({
   colorSchemeSetting: DEFAULT_COLOR_SCHEME,
   isLoading: false,
   setColorScheme: async () => {},
 });
-
-// The profile offers only Light or Dark, so an older stored "system" choice falls back to light.
-export const resolveStoredColorScheme = (
-  storedColorScheme: ThemeColorScheme | undefined
-): ThemeColorScheme => (storedColorScheme === "dark" ? "dark" : DEFAULT_COLOR_SCHEME);
 
 export const AppThemeProvider: FC<{
   children: ReactNode;

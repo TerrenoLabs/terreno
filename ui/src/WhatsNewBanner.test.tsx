@@ -114,4 +114,32 @@ describe("WhatsNewBanner", () => {
     expect(await findByTestId("whats-new-banner-release-2.0.0")).toBeTruthy();
     expect(queryByTestId("whats-new-banner-release-1.0.0")).toBeNull();
   });
+
+  it("keeps the open notes mounted when marking them seen hides the banner", async () => {
+    mockStoredVersion("1.0.0");
+    let finishSave: () => void = () => undefined;
+    Unifier.storage.setItem = mock(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        })
+    );
+    const {findByTestId, getByTestId, queryByTestId} = renderWithTheme(
+      <WhatsNewBanner releases={RELEASES} storageKey={STORAGE_KEY} />
+    );
+    const openButton = await findByTestId("whats-new-banner-open-button");
+    await act(async () => {
+      fireEvent.press(openButton);
+    });
+    const notesWhileBannerShown = getByTestId("whats-new-banner-notes");
+
+    await act(async () => {
+      finishSave();
+    });
+
+    await waitFor(() => {
+      expect(queryByTestId("whats-new-banner")).toBeNull();
+    });
+    expect(getByTestId("whats-new-banner-notes")).toBe(notesWhileBannerShown);
+  });
 });

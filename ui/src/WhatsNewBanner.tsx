@@ -113,67 +113,67 @@ export const WhatsNewBanner: React.FC<WhatsNewBannerProps> = ({
       title={title}
       visible={isModalVisible}
     >
-      <Box
-        gap={4}
-        maxHeight={Math.round(windowHeight * NOTES_MAX_HEIGHT_RATIO)}
-        scroll
-        testID={`${testID}-notes`}
-      >
-        {modalReleases.map((release) => (
-          <Box gap={2} key={release.version} testID={`${testID}-release-${release.version}`}>
-            <Heading size="sm">
-              {release.date ? `${release.version} (${release.date})` : release.version}
-            </Heading>
-            <MarkdownView>{release.body}</MarkdownView>
-          </Box>
-        ))}
+      {/* Box applies maxHeight to the scroller's content too, so the cap lives on a wrapper. */}
+      <Box maxHeight={Math.round(windowHeight * NOTES_MAX_HEIGHT_RATIO)} testID={`${testID}-notes`}>
+        <Box gap={4} scroll>
+          {modalReleases.map((release) => (
+            <Box gap={2} key={release.version} testID={`${testID}-release-${release.version}`}>
+              <Heading size="sm">
+                {release.date ? `${release.version} (${release.date})` : release.version}
+              </Heading>
+              <MarkdownView>{release.body}</MarkdownView>
+            </Box>
+          ))}
+        </Box>
       </Box>
     </Modal>
   );
 
-  if (isLoading || !latestRelease || unseenReleases.length === 0) {
-    return isModalVisible ? modal : null;
-  }
-
+  const isBannerVisible = !isLoading && Boolean(latestRelease) && unseenReleases.length > 0;
   const moreCount = unseenReleases.length - 1;
   const bannerText =
     moreCount > 0
-      ? `What's new in ${latestRelease.version} and ${moreCount} earlier ${moreCount === 1 ? "release" : "releases"}`
-      : `What's new in ${latestRelease.version}`;
+      ? `What's new in ${latestRelease?.version} and ${moreCount} earlier ${moreCount === 1 ? "release" : "releases"}`
+      : `What's new in ${latestRelease?.version}`;
 
+  // One return shape keeps the modal mounted in place when opening it hides the banner.
   return (
-    <Box
-      alignItems="center"
-      color="secondaryDark"
-      direction="row"
-      marginBottom={3}
-      minHeight={8}
-      padding={1}
-      rounding="md"
-      testID={testID}
-      width="100%"
-    >
-      <Box alignItems="center" direction="row" flex="grow" justifyContent="center" paddingX={2}>
-        <Text bold color="inverted" testID={`${testID}-text`}>
-          {bannerText}
-        </Text>
-      </Box>
-      <Box alignItems="center" direction="row" gap={2} paddingX={2}>
-        <BannerButton
-          buttonOnClick={handleOpen}
-          buttonText="See what's new"
-          testID={`${testID}-open-button`}
-        />
-        <Box testID={`${testID}-dismiss`}>
-          <DismissButton
-            accessibilityHint="Hides the what's new banner until the next release"
-            accessibilityLabel="Dismiss what's new"
-            color="inverted"
-            onClick={markLatestSeen}
-          />
+    <>
+      {isBannerVisible ? (
+        <Box
+          alignItems="center"
+          color="secondaryDark"
+          direction="row"
+          marginBottom={3}
+          minHeight={8}
+          padding={1}
+          rounding="md"
+          testID={testID}
+          width="100%"
+        >
+          <Box alignItems="center" direction="row" flex="grow" justifyContent="center" paddingX={2}>
+            <Text bold color="inverted" testID={`${testID}-text`}>
+              {bannerText}
+            </Text>
+          </Box>
+          <Box alignItems="center" direction="row" gap={2} paddingX={2}>
+            <BannerButton
+              buttonOnClick={handleOpen}
+              buttonText="See what's new"
+              testID={`${testID}-open-button`}
+            />
+            <Box testID={`${testID}-dismiss`}>
+              <DismissButton
+                accessibilityHint="Hides the what's new banner until the next release"
+                accessibilityLabel="Dismiss what's new"
+                color="inverted"
+                onClick={markLatestSeen}
+              />
+            </Box>
+          </Box>
         </Box>
-      </Box>
+      ) : null}
       {modal}
-    </Box>
+    </>
   );
 };

@@ -1,19 +1,30 @@
+import {AsyncLocalStorage} from "node:async_hooks";
 import {toNodeHandler} from "@modelcontextprotocol/node";
 import {createMcpHandler, McpServer} from "@modelcontextprotocol/server";
-import type {Application, Request, Response} from "express";
+import type {Application, NextFunction, Request, Response} from "express";
 
-import type {UserModel} from "../auth";
+import type {User, UserModel} from "../auth";
 import type {BetterAuthInstance} from "../betterAuthSetup";
 import {logger} from "../logger";
 import {setRequestContext} from "../requestContext";
-import {extractUserFromHeaders, type MCPAuthContext} from "./auth";
+import {extractAuthFromHeaders, type MCPAuthContext, type MCPAuthResult} from "./auth";
+import {type ResolvedMcpOAuthOptions, sendMcpOAuthChallenge} from "./oauth";
 import {getAllMCPTools, type MCPToolDefinition} from "./toolGenerator";
 
 export interface MCPServerOptions {
   userModel: UserModel;
   betterAuth?: BetterAuthInstance;
   mcpServiceTokens?: boolean;
+  /**
+   * Resolved `mcpOAuth` options. When set, `/mcp` accepts OAuth access tokens and answers a
+   * request without valid credentials with a 401 RFC 9728 challenge.
+   */
+  mcpOAuth?: ResolvedMcpOAuthOptions;
 }
+
+// Auth is resolved once in the Express handler (which may answer 401) and read back by the
+// per-request MCP server factory, which only sees the request's headers.
+const mcpAuthStorage = new AsyncLocalStorage<{auth?: MCPAuthResult}>();
 
 export const mountMCPServer = (app: Application, options: MCPServerOptions): void => {
   const tools = getAllMCPTools();
@@ -22,6 +33,7 @@ export const mountMCPServer = (app: Application, options: MCPServerOptions): voi
   }
   const authContext: MCPAuthContext = {
     betterAuth: options.betterAuth,
+    mcpOAuth: Boolean(options.mcpOAuth),
     mcpServiceTokens: options.mcpServiceTokens,
     userModel: options.userModel,
   };
@@ -32,15 +44,17 @@ export const mountMCPServer = (app: Application, options: MCPServerOptions): voi
   // 2025-era clients through the SDK's stateless legacy fallback.
   const handler = createMcpHandler(
     async ({requestInfo}) => {
+      const stored = mcpAuthStorage.getStore();
+      if (stored) {
+        return createMcpServerInstance(tools, stored.auth?.user);
+      }
       const headers: Record<string, string> = {};
       requestInfo?.headers.forEach((value, key) => {
         headers[key] = value;
       });
-      const user = await extractUserFromHeaders(headers, authContext);
-      if (user?.id) {
-        setRequestContext({userId: user.id});
-      }
-      return createMcpServerInstance(tools, user);
+      const auth = await extractAuthFromHeaders(headers, authContext);
+      recordMcpAuth(auth);
+      return createMcpServerInstance(tools, auth?.user);
     },
     {
       legacy: "stateless",
@@ -50,16 +64,38 @@ export const mountMCPServer = (app: Application, options: MCPServerOptions): voi
   );
   const nodeHandler = toNodeHandler(handler);
 
-  app.all("/mcp", (req: Request, res: Response) => {
+  app.all("/mcp", async (req: Request, res: Response, next: NextFunction) => {
+    let auth: MCPAuthResult | undefined;
+    try {
+      auth = await extractAuthFromHeaders(req.headers, authContext);
+    } catch (error) {
+      next(error);
+      return;
+    }
+    if (!auth && options.mcpOAuth) {
+      sendMcpOAuthChallenge(res, options.mcpOAuth, {
+        invalidToken: Boolean(req.headers.authorization),
+      });
+      return;
+    }
+    recordMcpAuth(auth);
     // express.json() consumed the request stream, so pass its parsed body explicitly.
-    void nodeHandler(req, res, req.body);
+    mcpAuthStorage.run({auth}, () => {
+      void nodeHandler(req, res, req.body);
+    });
   });
 };
 
-const createMcpServerInstance = (
-  tools: MCPToolDefinition[],
-  user?: Awaited<ReturnType<typeof extractUserFromHeaders>>
-): McpServer => {
+/** Permission functions and hooks read the caller's credential type from the request context. */
+const recordMcpAuth = (auth: MCPAuthResult | undefined): void => {
+  if (!auth?.user.id) {
+    setRequestContext({credential: undefined});
+    return;
+  }
+  setRequestContext({credential: auth.credential, userId: auth.user.id});
+};
+
+const createMcpServerInstance = (tools: MCPToolDefinition[], user?: User): McpServer => {
   const server = new McpServer(
     {
       name: "terreno-api-mcp",

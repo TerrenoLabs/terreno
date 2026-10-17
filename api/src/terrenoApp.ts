@@ -28,6 +28,7 @@ import {
 import {type AddRoutes, type AuthOptions, logRequests} from "./expressServer";
 import {addGitHubAuthRoutes, type GitHubAuthOptions, setupGitHubAuth} from "./githubAuth";
 import {type LoggingOptions, logger, setupLogging} from "./logger";
+import {addMcpOAuthRoutes, type McpOAuthAppOption, resolveMcpOAuthOption} from "./mcp/oauth";
 import {mountMCPServer} from "./mcp/server";
 import {
   addMcpServiceTokenRoutes,
@@ -143,6 +144,14 @@ export interface TerrenoAppOptions {
    * mounts `/mcp/service-tokens` and accepts `Authorization: Bearer mcp_…` on `/mcp`.
    */
   mcpServiceTokens?: McpServiceTokensAppOption;
+  /**
+   * Opt-in OAuth 2.1 authorization server for `/mcp`, so remote MCP clients (Claude.ai
+   * connectors, ChatGPT apps) can connect to a JWT-auth app. Mounts RFC 9728 / RFC 8414
+   * discovery, dynamic client registration, authorize + consent, token, and revocation
+   * endpoints, and makes `/mcp` answer credential-less requests with a 401 challenge. See
+   * [Enable MCP OAuth](../how-to/enable-mcp-oauth.md).
+   */
+  mcpOAuth?: McpOAuthAppOption;
   /**
    * Versioned MongoDB migrations. `runOnStart` defaults to false. When true, wet `up`
    * runs after listen and `ensureSyncIndexes`. Production still requires
@@ -365,6 +374,8 @@ export class TerrenoApp {
 
     const app = express();
     const options = this.options;
+    // Resolve first so a misconfigured issuer or consent URL fails at boot.
+    const mcpOAuth = resolveMcpOAuthOption(options.mcpOAuth);
 
     // Record mount paths on layers for Express 5 → OpenAPI compat
     patchAppUse(app);
@@ -527,8 +538,12 @@ export class TerrenoApp {
         publicMcpUrl: mcpServiceTokens.publicMcpUrl,
       });
     }
+    if (mcpOAuth) {
+      addMcpOAuthRoutes(app, {oauth: mcpOAuth, openApi: oapi, userModel: options.userModel});
+    }
     mountMCPServer(app, {
       betterAuth,
+      mcpOAuth,
       mcpServiceTokens: mcpServiceTokens.enabled,
       userModel: options.userModel,
     });

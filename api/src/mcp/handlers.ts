@@ -492,15 +492,15 @@ export const handleDelete = async (
   return textResult(JSON.stringify({success: true}));
 };
 
-const errorMessage = (error: unknown): string => {
+export const errorMessage = (error: unknown): string => {
   return error instanceof Error ? error.message : String(error);
 };
 
-const textResult = (text: string): MCPToolResult => ({
+export const textResult = (text: string): MCPToolResult => ({
   content: [{text, type: "text" as const}],
 });
 
-const errorResult = (message: string, cause?: unknown): MCPToolResult => {
+export const errorResult = (message: string, cause?: unknown): MCPToolResult => {
   const result: MCPToolResult = {
     content: [{text: JSON.stringify({error: message}), type: "text" as const}],
     isError: true,

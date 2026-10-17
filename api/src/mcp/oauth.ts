@@ -1,0 +1,964 @@
+/**
+ * Terreno-native OAuth 2.1 authorization server for `/mcp`, for apps that authenticate with
+ * Terreno JWTs. Remote MCP clients (Claude.ai connectors, ChatGPT apps) discover it through
+ * RFC 9728 / RFC 8414 metadata, register with RFC 7591 dynamic client registration, and run the
+ * authorization-code flow with PKCE S256. Terreno is backend-only, so the app hosts the consent
+ * screen at `consentUrl` and calls the approve/deny endpoints with the signed-in user's JWT.
+ */
+import {createHash, randomUUID} from "node:crypto";
+import type {Application, NextFunction, Request, RequestHandler, Response} from "express";
+import {DateTime} from "luxon";
+import mongoose from "mongoose";
+
+import {asyncHandler, type OpenApiMiddleware} from "../api";
+import {authenticateMiddleware, type User, type UserModel} from "../auth";
+import {
+  APIError,
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+  UnauthorizedError,
+} from "../errors";
+import {logger} from "../logger";
+import {McpOAuthAuthorization} from "../models/mcpOAuthAuthorization";
+import {McpOAuthClient} from "../models/mcpOAuthClient";
+import {
+  generateMcpOAuthSecret,
+  hashMcpOAuthSecret,
+  MCP_OAUTH_ACCESS_TOKEN_PREFIX,
+  McpOAuthToken,
+} from "../models/mcpOAuthToken";
+import {createOpenApiBuilder} from "../openApiBuilder";
+import type {McpOAuthAuthorizationDocument} from "../types/mcpOAuth";
+
+const DEFAULT_ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
+const DEFAULT_REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+const DEFAULT_AUTHORIZATION_REQUEST_TTL_SECONDS = 10 * 60;
+const DEFAULT_AUTHORIZATION_CODE_TTL_SECONDS = 60;
+const DEFAULT_SCOPES = ["mcp"];
+// Keep a used code's record long enough to detect a replay and revoke what it issued.
+const USED_CODE_RETENTION_SECONDS = 60 * 60;
+
+const SUPPORTED_GRANT_TYPES = ["authorization_code", "refresh_token"];
+const SUPPORTED_RESPONSE_TYPES = ["code"];
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+const CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
+const MAX_CLIENT_NAME_LENGTH = 200;
+const MAX_REDIRECT_URIS = 10;
+
+export interface McpOAuthOptions {
+  /** Turns the authorization server on. Every other field is ignored while false. */
+  enabled: boolean;
+  /**
+   * Public origin of this API, for example `https://api.example.com`. It is the RFC 8414
+   * `issuer`, and every endpoint URL in the metadata is built from it. It must be an origin with
+   * no path, because the well-known documents are served from the root of this app.
+   */
+  issuer: string;
+  /**
+   * App page that hosts the consent screen. `/oauth/authorize` redirects the browser here with
+   * `?request=<id>` added. The page reads the request with `GET /oauth/authorize/:request` and
+   * posts the user's decision to `/oauth/authorize/:request/approve` or `/deny`.
+   */
+  consentUrl: string;
+  /**
+   * Hostnames a client may register redirect URIs on, for example `["claude.ai", "chatgpt.com"]`.
+   * `*.example.com` matches any subdomain. Add `localhost` to allow loopback `http://` redirects
+   * for local clients.
+   */
+  allowedRedirectHosts: string[];
+  /** RFC 8707 resource identifier for `/mcp`. Default: `${issuer}/mcp`. */
+  resource?: string;
+  /** Scopes advertised and accepted. Default: `["mcp"]`. */
+  scopesSupported?: string[];
+  /** Access token lifetime. Default: 3600 (one hour). */
+  accessTokenTtlSeconds?: number;
+  /** Refresh token lifetime. Default: 30 days. */
+  refreshTokenTtlSeconds?: number;
+  /** How long a pending authorization request waits for a consent decision. Default: 600. */
+  authorizationRequestTtlSeconds?: number;
+  /** How long an issued authorization code can be exchanged. Default: 60. */
+  authorizationCodeTtlSeconds?: number;
+}
+
+export type McpOAuthAppOption = McpOAuthOptions;
+
+export interface ResolvedMcpOAuthOptions {
+  accessTokenTtlSeconds: number;
+  allowedRedirectHosts: string[];
+  authorizationCodeTtlSeconds: number;
+  authorizationRequestTtlSeconds: number;
+  consentUrl: string;
+  issuer: string;
+  refreshTokenTtlSeconds: number;
+  resource: string;
+  /** URL of the RFC 9728 protected-resource metadata for {@link resource}. */
+  resourceMetadataUrl: string;
+  scopesSupported: string[];
+}
+
+export interface McpOAuthRoutesOptions {
+  oauth: ResolvedMcpOAuthOptions;
+  openApi?: OpenApiMiddleware;
+  userModel: UserModel;
+}
+
+const misconfigured = (detail: string): APIError =>
+  new APIError({
+    code: "mcp-oauth-misconfigured",
+    detail,
+    status: 500,
+    title: "MCP OAuth is misconfigured",
+  });
+
+const parseAbsoluteUrl = (value: string, field: string): URL => {
+  try {
+    return new URL(value);
+  } catch {
+    throw misconfigured(`mcpOAuth.${field} must be an absolute URL, got "${value}"`);
+  }
+};
+
+const positiveInteger = (value: number | undefined, fallback: number, field: string): number => {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (!Number.isInteger(value) || value <= 0) {
+    throw misconfigured(`mcpOAuth.${field} must be a positive integer`);
+  }
+  return value;
+};
+
+/** RFC 9728 §3.1: the well-known segment goes between the host and the resource's path. */
+const protectedResourceMetadataPath = (resource: string): string => {
+  const {pathname} = new URL(resource);
+  const suffix = pathname === "/" ? "" : pathname.replace(/\/$/, "");
+  return `/.well-known/oauth-protected-resource${suffix}`;
+};
+
+/**
+ * Validate and default the `mcpOAuth` TerrenoApp option. Returns undefined while disabled.
+ * Misconfiguration throws at boot rather than failing the first client's flow.
+ */
+export const resolveMcpOAuthOption = (
+  option: McpOAuthAppOption | undefined
+): ResolvedMcpOAuthOptions | undefined => {
+  if (!option?.enabled) {
+    return undefined;
+  }
+  const issuerUrl = parseAbsoluteUrl(option.issuer, "issuer");
+  if (issuerUrl.pathname !== "/" || issuerUrl.search || issuerUrl.hash) {
+    throw misconfigured("mcpOAuth.issuer must be an origin with no path, query, or fragment");
+  }
+  if (issuerUrl.protocol !== "https:" && !LOOPBACK_HOSTS.has(issuerUrl.hostname)) {
+    throw misconfigured("mcpOAuth.issuer must use https outside localhost");
+  }
+  parseAbsoluteUrl(option.consentUrl, "consentUrl");
+  if (!Array.isArray(option.allowedRedirectHosts) || option.allowedRedirectHosts.length === 0) {
+    throw misconfigured("mcpOAuth.allowedRedirectHosts must list at least one host");
+  }
+  const issuer = issuerUrl.origin;
+  const resource = option.resource ?? `${issuer}/mcp`;
+  parseAbsoluteUrl(resource, "resource");
+  const scopesSupported = option.scopesSupported ?? DEFAULT_SCOPES;
+  if (scopesSupported.length === 0) {
+    throw misconfigured("mcpOAuth.scopesSupported must list at least one scope");
+  }
+  return {
+    accessTokenTtlSeconds: positiveInteger(
+      option.accessTokenTtlSeconds,
+      DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+      "accessTokenTtlSeconds"
+    ),
+    allowedRedirectHosts: option.allowedRedirectHosts.map((host) => host.toLowerCase()),
+    authorizationCodeTtlSeconds: positiveInteger(
+      option.authorizationCodeTtlSeconds,
+      DEFAULT_AUTHORIZATION_CODE_TTL_SECONDS,
+      "authorizationCodeTtlSeconds"
+    ),
+    authorizationRequestTtlSeconds: positiveInteger(
+      option.authorizationRequestTtlSeconds,
+      DEFAULT_AUTHORIZATION_REQUEST_TTL_SECONDS,
+      "authorizationRequestTtlSeconds"
+    ),
+    consentUrl: option.consentUrl,
+    issuer,
+    refreshTokenTtlSeconds: positiveInteger(
+      option.refreshTokenTtlSeconds,
+      DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+      "refreshTokenTtlSeconds"
+    ),
+    resource,
+    resourceMetadataUrl: `${issuer}${protectedResourceMetadataPath(resource)}`,
+    scopesSupported,
+  };
+};
+
+/**
+ * Protocol responses bypass `res.json`, which TerrenoApp wraps to add `requestId`, so clients
+ * get exactly the RFC-defined members.
+ */
+const sendProtocolJson = (res: Response, status: number, body: unknown): void => {
+  res.status(status).type("application/json").send(JSON.stringify(body));
+};
+
+/** RFC 9728 protected-resource metadata. */
+export const buildProtectedResourceMetadata = (
+  oauth: ResolvedMcpOAuthOptions
+): Record<string, unknown> => ({
+  authorization_servers: [oauth.issuer],
+  bearer_methods_supported: ["header"],
+  resource: oauth.resource,
+  scopes_supported: oauth.scopesSupported,
+});
+
+/** RFC 8414 authorization-server metadata. */
+export const buildAuthorizationServerMetadata = (
+  oauth: ResolvedMcpOAuthOptions
+): Record<string, unknown> => ({
+  authorization_endpoint: `${oauth.issuer}/oauth/authorize`,
+  authorization_response_iss_parameter_supported: true,
+  code_challenge_methods_supported: ["S256"],
+  grant_types_supported: SUPPORTED_GRANT_TYPES,
+  issuer: oauth.issuer,
+  registration_endpoint: `${oauth.issuer}/oauth/register`,
+  response_types_supported: SUPPORTED_RESPONSE_TYPES,
+  revocation_endpoint: `${oauth.issuer}/oauth/revoke`,
+  revocation_endpoint_auth_methods_supported: ["none"],
+  scopes_supported: oauth.scopesSupported,
+  token_endpoint: `${oauth.issuer}/oauth/token`,
+  token_endpoint_auth_methods_supported: ["none"],
+});
+
+/**
+ * Answer an unauthenticated `/mcp` request with the RFC 9728 challenge that starts a client's
+ * OAuth discovery. `invalidToken` marks a presented-but-rejected credential so clients refresh.
+ */
+export const sendMcpOAuthChallenge = (
+  res: Response,
+  oauth: ResolvedMcpOAuthOptions,
+  {invalidToken}: {invalidToken: boolean}
+): void => {
+  const params = [`resource_metadata="${oauth.resourceMetadataUrl}"`];
+  if (invalidToken) {
+    params.push('error="invalid_token"');
+  }
+  res.setHeader("WWW-Authenticate", `Bearer ${params.join(", ")}`);
+  sendProtocolJson(res, 401, {
+    error: invalidToken ? "invalid_token" : "unauthorized",
+    error_description: invalidToken
+      ? "The access token is invalid, expired, or revoked"
+      : "Authentication required",
+  });
+};
+
+/** An RFC 6749 §5.2-shaped error, sent as `{error, error_description}` instead of JSON:API. */
+class OAuthProtocolError extends Error {
+  readonly error: string;
+  readonly status: number;
+
+  constructor(error: string, description: string, status = 400) {
+    super(description);
+    this.error = error;
+    this.status = status;
+  }
+}
+
+const oauthHandler = (
+  handler: (req: Request, res: Response) => Promise<void>
+): ((req: Request, res: Response, next: NextFunction) => Promise<void>) => {
+  return async (req, res, next) => {
+    try {
+      await handler(req, res);
+    } catch (error) {
+      if (error instanceof OAuthProtocolError) {
+        res.setHeader("Cache-Control", "no-store");
+        sendProtocolJson(res, error.status, {
+          error: error.error,
+          error_description: error.message,
+        });
+        return;
+      }
+      next(error);
+    }
+  };
+};
+
+const stringParam = (value: unknown): string | undefined => {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+};
+
+const hostMatches = (hostname: string, pattern: string): boolean => {
+  if (pattern.startsWith("*.")) {
+    const suffix = pattern.slice(1);
+    return hostname.endsWith(suffix) && hostname.length > suffix.length;
+  }
+  return hostname === pattern;
+};
+
+/** Returns why a redirect URI is not acceptable, or undefined when it is. */
+const redirectUriProblem = (uri: unknown, allowedHosts: string[]): string | undefined => {
+  if (typeof uri !== "string") {
+    return "redirect_uris must be strings";
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(uri);
+  } catch {
+    return `${uri} is not an absolute URL`;
+  }
+  if (parsed.hash) {
+    return `${uri} must not contain a fragment`;
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  const isLoopback = LOOPBACK_HOSTS.has(hostname);
+  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLoopback)) {
+    return `${uri} must use https (http is allowed only for loopback hosts)`;
+  }
+  if (!allowedHosts.some((pattern) => hostMatches(hostname, pattern))) {
+    return `${hostname} is not an allowed redirect host`;
+  }
+  return undefined;
+};
+
+const parseScope = (scope: string | undefined, supported: string[]): string => {
+  if (!scope) {
+    return supported.join(" ");
+  }
+  const requested = scope.split(" ").filter(Boolean);
+  const unknown = requested.filter((value) => !supported.includes(value));
+  if (unknown.length > 0) {
+    throw new OAuthProtocolError("invalid_scope", `Unsupported scope: ${unknown.join(" ")}`);
+  }
+  return requested.join(" ");
+};
+
+const normalizeResource = (resource: string): string => resource.replace(/\/$/, "");
+
+const pkceS256 = (verifier: string): string =>
+  createHash("sha256").update(verifier).digest("base64url");
+
+const appendParams = (base: string, params: Record<string, string | undefined>): string => {
+  const url = new URL(base);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) {
+      url.searchParams.set(key, value);
+    }
+  }
+  return url.toString();
+};
+
+const userIsDisabled = (user: unknown): boolean => {
+  return Boolean((user as {disabled?: boolean} | null)?.disabled);
+};
+
+const rejectDelegatedCredentials = (req: Request, _res: Response, next: NextFunction): void => {
+  const authorization = req.headers.authorization;
+  const token =
+    typeof authorization === "string" && authorization.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length)
+      : authorization;
+  if (token?.startsWith("mcp_") || token?.startsWith(MCP_OAUTH_ACCESS_TOKEN_PREFIX)) {
+    next(new UnauthorizedError("Delegated MCP credentials cannot decide OAuth requests"));
+    return;
+  }
+  next();
+};
+
+const consentGuards = [rejectDelegatedCredentials, authenticateMiddleware()];
+
+const requireUser = (req: Request): User => {
+  const user = req.user as unknown as User | undefined;
+  if (!user?._id) {
+    throw new UnauthorizedError("Unauthorized");
+  }
+  return user;
+};
+
+/** Load a pending request for the consent endpoints, or explain why it cannot be decided. */
+const loadPendingAuthorization = async (
+  requestId: string
+): Promise<McpOAuthAuthorizationDocument> => {
+  const authorization = await McpOAuthAuthorization.findOneOrNone({requestId});
+  if (!authorization) {
+    throw new NotFoundError("Authorization request not found");
+  }
+  if (authorization.status !== "pending") {
+    throw new ConflictError({
+      code: "mcp-oauth-request-decided",
+      title: "Authorization request was already decided",
+    });
+  }
+  if (DateTime.fromJSDate(authorization.expiresAt) <= DateTime.now()) {
+    throw new BadRequestError({
+      code: "mcp-oauth-request-expired",
+      title: "Authorization request expired",
+    });
+  }
+  return authorization;
+};
+
+const addDiscoveryRoutes = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
+  const protectedResource = (_req: Request, res: Response): void => {
+    sendProtocolJson(res, 200, buildProtectedResourceMetadata(oauth));
+  };
+  app.get("/.well-known/oauth-protected-resource", protectedResource);
+  const resourcePath = protectedResourceMetadataPath(oauth.resource);
+  if (resourcePath !== "/.well-known/oauth-protected-resource") {
+    app.get(resourcePath, protectedResource);
+  }
+  app.get("/.well-known/oauth-authorization-server", (_req: Request, res: Response) => {
+    sendProtocolJson(res, 200, buildAuthorizationServerMetadata(oauth));
+  });
+};
+
+const addRegistrationRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
+  app.post(
+    "/oauth/register",
+    oauthHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const redirectUris = body.redirect_uris;
+      if (!Array.isArray(redirectUris) || redirectUris.length === 0) {
+        throw new OAuthProtocolError("invalid_redirect_uri", "redirect_uris is required");
+      }
+      if (redirectUris.length > MAX_REDIRECT_URIS) {
+        throw new OAuthProtocolError(
+          "invalid_redirect_uri",
+          `At most ${MAX_REDIRECT_URIS} redirect_uris are allowed`
+        );
+      }
+      for (const uri of redirectUris) {
+        const problem = redirectUriProblem(uri, oauth.allowedRedirectHosts);
+        if (problem) {
+          throw new OAuthProtocolError("invalid_redirect_uri", problem);
+        }
+      }
+
+      const authMethod = body.token_endpoint_auth_method ?? "none";
+      if (authMethod !== "none") {
+        throw new OAuthProtocolError(
+          "invalid_client_metadata",
+          "Only public clients are supported: token_endpoint_auth_method must be none"
+        );
+      }
+      const grantTypes = (body.grant_types as unknown[] | undefined) ?? SUPPORTED_GRANT_TYPES;
+      if (
+        !Array.isArray(grantTypes) ||
+        !grantTypes.includes("authorization_code") ||
+        grantTypes.some((grant) => !SUPPORTED_GRANT_TYPES.includes(grant as string))
+      ) {
+        throw new OAuthProtocolError(
+          "invalid_client_metadata",
+          "grant_types must include authorization_code and may add refresh_token"
+        );
+      }
+      const responseTypes =
+        (body.response_types as unknown[] | undefined) ?? SUPPORTED_RESPONSE_TYPES;
+      if (
+        !Array.isArray(responseTypes) ||
+        responseTypes.some((type) => !SUPPORTED_RESPONSE_TYPES.includes(type as string))
+      ) {
+        throw new OAuthProtocolError("invalid_client_metadata", "response_types must be [code]");
+      }
+      const clientName = stringParam(body.client_name)?.slice(0, MAX_CLIENT_NAME_LENGTH);
+      let scope: string | undefined;
+      try {
+        scope = body.scope ? parseScope(stringParam(body.scope), oauth.scopesSupported) : undefined;
+      } catch (error) {
+        throw new OAuthProtocolError("invalid_client_metadata", (error as Error).message);
+      }
+
+      const client = await McpOAuthClient.create({
+        clientId: randomUUID(),
+        clientName,
+        grantTypes: grantTypes as string[],
+        redirectUris: redirectUris as string[],
+        responseTypes: responseTypes as string[],
+        scope,
+      });
+      logger.info("[MCPOAuth] Registered client", {clientId: client.clientId, clientName});
+      res.setHeader("Cache-Control", "no-store");
+      sendProtocolJson(res, 201, {
+        client_id: client.clientId,
+        client_id_issued_at: Math.floor(DateTime.fromJSDate(client.created).toSeconds()),
+        client_name: client.clientName,
+        grant_types: client.grantTypes,
+        redirect_uris: client.redirectUris,
+        response_types: client.responseTypes,
+        scope: client.scope,
+        token_endpoint_auth_method: "none",
+      });
+    })
+  );
+};
+
+const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
+  app.get(
+    "/oauth/authorize",
+    oauthHandler(async (req, res) => {
+      const query = req.query as Record<string, unknown>;
+      const clientId = stringParam(query.client_id);
+      if (!clientId) {
+        throw new OAuthProtocolError("invalid_request", "client_id is required");
+      }
+      const client = await McpOAuthClient.findOneOrNone({clientId});
+      if (!client) {
+        throw new OAuthProtocolError("invalid_request", "Unknown client_id");
+      }
+      // RFC 6749 §4.1.2.1: never redirect to an unverified URI, so these two fail in place.
+      const requestedRedirect = stringParam(query.redirect_uri);
+      const redirectUri =
+        requestedRedirect ??
+        (client.redirectUris.length === 1 ? client.redirectUris[0] : undefined);
+      if (!redirectUri || !client.redirectUris.includes(redirectUri)) {
+        throw new OAuthProtocolError(
+          "invalid_request",
+          "redirect_uri does not match a registered redirect URI"
+        );
+      }
+
+      const state = stringParam(query.state);
+      const redirectError = (error: string, description: string): void => {
+        res.redirect(
+          302,
+          appendParams(redirectUri, {
+            error,
+            error_description: description,
+            iss: oauth.issuer,
+            state,
+          })
+        );
+      };
+
+      if (query.response_type !== "code") {
+        redirectError("unsupported_response_type", "response_type must be code");
+        return;
+      }
+      const codeChallenge = stringParam(query.code_challenge);
+      if (!codeChallenge || !CODE_CHALLENGE_PATTERN.test(codeChallenge)) {
+        redirectError("invalid_request", "A PKCE S256 code_challenge is required");
+        return;
+      }
+      if (query.code_challenge_method !== "S256") {
+        redirectError("invalid_request", "code_challenge_method must be S256");
+        return;
+      }
+      const resource = stringParam(query.resource);
+      if (resource && normalizeResource(resource) !== normalizeResource(oauth.resource)) {
+        redirectError("invalid_target", `resource must be ${oauth.resource}`);
+        return;
+      }
+      let scope: string;
+      try {
+        scope = parseScope(stringParam(query.scope), oauth.scopesSupported);
+      } catch (error) {
+        redirectError("invalid_scope", (error as Error).message);
+        return;
+      }
+
+      const requestId = generateMcpOAuthSecret();
+      await McpOAuthAuthorization.create({
+        clientId,
+        codeChallenge,
+        expiresAt: DateTime.now().plus({seconds: oauth.authorizationRequestTtlSeconds}).toJSDate(),
+        redirectUri,
+        requestId,
+        resource: resource ?? oauth.resource,
+        scope,
+        state,
+        status: "pending",
+      });
+      res.redirect(302, appendParams(oauth.consentUrl, {request: requestId}));
+    })
+  );
+};
+
+const addConsentRoutes = (
+  app: Application,
+  oauth: ResolvedMcpOAuthOptions,
+  openApi?: OpenApiMiddleware
+): void => {
+  const openApiOptions = {openApi};
+
+  app.get(
+    "/oauth/authorize/:request",
+    [
+      ...consentGuards,
+      createOpenApiBuilder(openApiOptions)
+        .withTags(["mcp"])
+        .withOperationId("getMcpOAuthRequest")
+        .withSummary("Read a pending MCP OAuth authorization request")
+        .withDescription(
+          "Returns what the consent screen shows: the client, where the code goes, and the scope."
+        )
+        .withPathParameter("request", {type: "string"})
+        .withResponse(200, {
+          data: {
+            properties: {
+              clientId: {type: "string"},
+              clientName: {type: "string"},
+              expiresAt: {type: "string"},
+              redirectHost: {type: "string"},
+              redirectUri: {type: "string"},
+              requestId: {type: "string"},
+              resource: {type: "string"},
+              scope: {type: "string"},
+            },
+            type: "object",
+          },
+        })
+        .build(),
+    ],
+    asyncHandler(async (req, res) => {
+      requireUser(req);
+      const authorization = await loadPendingAuthorization(String(req.params.request));
+      const client = await McpOAuthClient.findOneOrNone({clientId: authorization.clientId});
+      return res.json({
+        data: {
+          clientId: authorization.clientId,
+          clientName: client?.clientName ?? null,
+          expiresAt: authorization.expiresAt.toISOString(),
+          redirectHost: new URL(authorization.redirectUri).host,
+          redirectUri: authorization.redirectUri,
+          requestId: authorization.requestId,
+          resource: authorization.resource ?? oauth.resource,
+          scope: authorization.scope ?? null,
+        },
+      });
+    })
+  );
+
+  const decisionOpenApi = (operationId: string, summary: string): RequestHandler =>
+    createOpenApiBuilder(openApiOptions)
+      .withTags(["mcp"])
+      .withOperationId(operationId)
+      .withSummary(summary)
+      .withDescription(
+        "Called by the app's consent screen with the signed-in user's JWT. Returns the URL to send the browser to."
+      )
+      .withPathParameter("request", {type: "string"})
+      .withResponse(200, {
+        data: {
+          properties: {redirectUrl: {type: "string"}},
+          type: "object",
+        },
+      })
+      .build();
+
+  app.post(
+    "/oauth/authorize/:request/approve",
+    [
+      ...consentGuards,
+      decisionOpenApi("approveMcpOAuthRequest", "Approve a pending MCP OAuth request"),
+    ],
+    asyncHandler(async (req, res) => {
+      const user = requireUser(req);
+      const pending = await loadPendingAuthorization(String(req.params.request));
+      const code = generateMcpOAuthSecret();
+      const now = DateTime.now();
+      const codeExpiresAt = now.plus({seconds: oauth.authorizationCodeTtlSeconds});
+      const expiresAt = DateTime.max(
+        DateTime.fromJSDate(pending.expiresAt),
+        codeExpiresAt.plus({seconds: USED_CODE_RETENTION_SECONDS})
+      );
+      const approved = await McpOAuthAuthorization.findOneAndUpdate(
+        {_id: pending._id, status: "pending"},
+        {
+          $set: {
+            codeExpiresAt: codeExpiresAt.toJSDate(),
+            codeHash: hashMcpOAuthSecret(code),
+            expiresAt: expiresAt.toJSDate(),
+            status: "approved",
+            userId: new mongoose.Types.ObjectId(String(user._id)),
+          },
+        },
+        {returnDocument: "after"}
+      );
+      if (!approved) {
+        throw new ConflictError({
+          code: "mcp-oauth-request-decided",
+          title: "Authorization request was already decided",
+        });
+      }
+      logger.info("[MCPOAuth] Authorization approved", {
+        clientId: approved.clientId,
+        userId: String(user._id),
+      });
+      return res.json({
+        data: {
+          redirectUrl: appendParams(approved.redirectUri, {
+            code,
+            iss: oauth.issuer,
+            state: approved.state,
+          }),
+        },
+      });
+    })
+  );
+
+  app.post(
+    "/oauth/authorize/:request/deny",
+    [...consentGuards, decisionOpenApi("denyMcpOAuthRequest", "Deny a pending MCP OAuth request")],
+    asyncHandler(async (req, res) => {
+      const user = requireUser(req);
+      const pending = await loadPendingAuthorization(String(req.params.request));
+      const denied = await McpOAuthAuthorization.findOneAndUpdate(
+        {_id: pending._id, status: "pending"},
+        {
+          $set: {
+            status: "denied",
+            userId: new mongoose.Types.ObjectId(String(user._id)),
+          },
+        },
+        {returnDocument: "after"}
+      );
+      if (!denied) {
+        throw new ConflictError({
+          code: "mcp-oauth-request-decided",
+          title: "Authorization request was already decided",
+        });
+      }
+      return res.json({
+        data: {
+          redirectUrl: appendParams(denied.redirectUri, {
+            error: "access_denied",
+            error_description: "The user denied the request",
+            iss: oauth.issuer,
+            state: denied.state,
+          }),
+        },
+      });
+    })
+  );
+};
+
+interface TokenResponse {
+  access_token: string;
+  expires_in: number;
+  refresh_token: string;
+  scope?: string;
+  token_type: "Bearer";
+}
+
+const exchangeAuthorizationCode = async (
+  body: Record<string, unknown>,
+  clientId: string,
+  oauth: ResolvedMcpOAuthOptions,
+  userModel: UserModel
+): Promise<TokenResponse> => {
+  const code = stringParam(body.code);
+  const redirectUri = stringParam(body.redirect_uri);
+  const codeVerifier = stringParam(body.code_verifier);
+  if (!code || !redirectUri || !codeVerifier) {
+    throw new OAuthProtocolError(
+      "invalid_request",
+      "code, redirect_uri, and code_verifier are required"
+    );
+  }
+  const codeHash = hashMcpOAuthSecret(code);
+  const now = DateTime.now();
+  // Consume the code before checking it, so a failed attempt (wrong verifier) burns it too.
+  const consumed = await McpOAuthAuthorization.findOneAndUpdate(
+    {codeHash, status: "approved"},
+    {
+      $set: {
+        expiresAt: now.plus({seconds: USED_CODE_RETENTION_SECONDS}).toJSDate(),
+        status: "used",
+        usedAt: now.toJSDate(),
+      },
+    },
+    {returnDocument: "after"}
+  );
+  if (!consumed) {
+    const replayed = await McpOAuthAuthorization.findOneOrNone({codeHash});
+    if (replayed?.status === "used" && replayed.familyId) {
+      // RFC 6749 §4.1.2: a replayed code revokes the tokens it already issued.
+      logger.warn("[MCPOAuth] Authorization code replayed, revoking its tokens", {
+        clientId: replayed.clientId,
+      });
+      await McpOAuthToken.revokeFamily(replayed.familyId);
+    }
+    throw new OAuthProtocolError("invalid_grant", "Authorization code is invalid or already used");
+  }
+  if (!consumed.codeExpiresAt || DateTime.fromJSDate(consumed.codeExpiresAt) <= now) {
+    throw new OAuthProtocolError("invalid_grant", "Authorization code expired");
+  }
+  if (consumed.clientId !== clientId || consumed.redirectUri !== redirectUri) {
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "Authorization code was issued to another client or redirect_uri"
+    );
+  }
+  if (
+    !CODE_VERIFIER_PATTERN.test(codeVerifier) ||
+    pkceS256(codeVerifier) !== consumed.codeChallenge
+  ) {
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "code_verifier does not match the code_challenge"
+    );
+  }
+  const user = consumed.userId ? await userModel.findById(consumed.userId) : null;
+  if (!user || userIsDisabled(user)) {
+    throw new OAuthProtocolError("invalid_grant", "The authorizing user is not active");
+  }
+
+  const issued = await McpOAuthToken.issue({
+    accessTokenTtlSeconds: oauth.accessTokenTtlSeconds,
+    clientId,
+    refreshTokenTtlSeconds: oauth.refreshTokenTtlSeconds,
+    resource: consumed.resource,
+    scope: consumed.scope,
+    userId: consumed.userId as mongoose.Types.ObjectId,
+  });
+  await McpOAuthAuthorization.updateOne(
+    {_id: consumed._id},
+    {$set: {familyId: issued.mcpOAuthToken.familyId}}
+  );
+  return {
+    access_token: issued.accessToken,
+    expires_in: oauth.accessTokenTtlSeconds,
+    refresh_token: issued.refreshToken,
+    scope: consumed.scope,
+    token_type: "Bearer",
+  };
+};
+
+const exchangeRefreshToken = async (
+  body: Record<string, unknown>,
+  clientId: string,
+  oauth: ResolvedMcpOAuthOptions,
+  userModel: UserModel
+): Promise<TokenResponse> => {
+  const refreshToken = stringParam(body.refresh_token);
+  if (!refreshToken) {
+    throw new OAuthProtocolError("invalid_request", "refresh_token is required");
+  }
+  const refreshTokenHash = hashMcpOAuthSecret(refreshToken);
+  const current = await McpOAuthToken.findOneOrNone({refreshTokenHash});
+  if (!current || current.clientId !== clientId) {
+    throw new OAuthProtocolError("invalid_grant", "Refresh token is invalid");
+  }
+  const now = DateTime.now();
+  // Rotate atomically: only one exchange of a refresh token can win.
+  const rotated = await McpOAuthToken.findOneAndUpdate(
+    {
+      _id: current._id,
+      refreshExpiresAt: {$gt: now.toJSDate()},
+      revokedAt: {$exists: false},
+      rotatedAt: {$exists: false},
+    },
+    {$set: {revokedAt: now.toJSDate(), rotatedAt: now.toJSDate()}},
+    {returnDocument: "after"}
+  );
+  if (!rotated) {
+    if (current.rotatedAt) {
+      // A rotated refresh token came back: someone holds a copy. Kill the whole chain.
+      logger.warn("[MCPOAuth] Refresh token reused, revoking its chain", {
+        clientId,
+        userId: String(current.userId),
+      });
+      await McpOAuthToken.revokeFamily(current.familyId);
+    }
+    throw new OAuthProtocolError("invalid_grant", "Refresh token is invalid, expired, or revoked");
+  }
+  const user = await userModel.findById(rotated.userId);
+  if (!user || userIsDisabled(user)) {
+    await McpOAuthToken.revokeFamily(rotated.familyId);
+    throw new OAuthProtocolError("invalid_grant", "The authorizing user is not active");
+  }
+  const issued = await McpOAuthToken.issue({
+    accessTokenTtlSeconds: oauth.accessTokenTtlSeconds,
+    clientId,
+    familyId: rotated.familyId,
+    refreshTokenTtlSeconds: oauth.refreshTokenTtlSeconds,
+    resource: rotated.resource,
+    scope: rotated.scope,
+    userId: rotated.userId,
+  });
+  return {
+    access_token: issued.accessToken,
+    expires_in: oauth.accessTokenTtlSeconds,
+    refresh_token: issued.refreshToken,
+    scope: rotated.scope,
+    token_type: "Bearer",
+  };
+};
+
+const addTokenRoutes = (
+  app: Application,
+  oauth: ResolvedMcpOAuthOptions,
+  userModel: UserModel
+): void => {
+  app.post(
+    "/oauth/token",
+    oauthHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const clientId = stringParam(body.client_id);
+      if (!clientId) {
+        throw new OAuthProtocolError("invalid_client", "client_id is required", 401);
+      }
+      const client = await McpOAuthClient.findOneOrNone({clientId});
+      if (!client) {
+        throw new OAuthProtocolError("invalid_client", "Unknown client_id", 401);
+      }
+      const grantType = stringParam(body.grant_type);
+      if (!grantType || !client.grantTypes.includes(grantType)) {
+        throw new OAuthProtocolError(
+          "unsupported_grant_type",
+          "grant_type must be authorization_code or refresh_token"
+        );
+      }
+      const tokens =
+        grantType === "authorization_code"
+          ? await exchangeAuthorizationCode(body, clientId, oauth, userModel)
+          : await exchangeRefreshToken(body, clientId, oauth, userModel);
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Pragma", "no-cache");
+      sendProtocolJson(res, 200, tokens);
+    })
+  );
+
+  app.post(
+    "/oauth/revoke",
+    oauthHandler(async (req, res) => {
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const token = stringParam(body.token);
+      if (!token) {
+        throw new OAuthProtocolError("invalid_request", "token is required");
+      }
+      const tokenHash = hashMcpOAuthSecret(token);
+      const issued = await McpOAuthToken.findOneOrNone({
+        $or: [{accessTokenHash: tokenHash}, {refreshTokenHash: tokenHash}],
+      });
+      const clientId = stringParam(body.client_id);
+      // RFC 7009 §2.2: unknown tokens and another client's tokens still get a 200.
+      if (issued && (!clientId || issued.clientId === clientId)) {
+        if (issued.refreshTokenHash === tokenHash) {
+          await McpOAuthToken.revokeFamily(issued.familyId);
+        } else {
+          await McpOAuthToken.updateOne(
+            {_id: issued._id, revokedAt: {$exists: false}},
+            {$set: {revokedAt: DateTime.now().toJSDate()}}
+          );
+        }
+      }
+      res.setHeader("Cache-Control", "no-store");
+      sendProtocolJson(res, 200, {});
+    })
+  );
+};
+
+/**
+ * Mount the MCP OAuth authorization server: discovery documents, client registration,
+ * authorize + consent decision, token, and revocation endpoints.
+ */
+export const addMcpOAuthRoutes = (app: Application, options: McpOAuthRoutesOptions): void => {
+  const {oauth, openApi, userModel} = options;
+  addDiscoveryRoutes(app, oauth);
+  addRegistrationRoute(app, oauth);
+  addAuthorizeRoute(app, oauth);
+  addConsentRoutes(app, oauth, openApi);
+  addTokenRoutes(app, oauth, userModel);
+};

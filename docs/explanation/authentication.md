@@ -12,7 +12,7 @@ Set `AUTH_PROVIDER=better-auth` and register `BetterAuthApp` on the server. On t
 
 Both systems can run in parallel during migration (`AUTH_PROVIDER` selects the primary path; legacy JWT routes stay available).
 
-**MCP service tokens** are a third, opt-in credential. They authenticate the consumer app's `POST /mcp` only. They are not Better Auth sessions, not JWTs, and not a REST personal-access-token. Enable them with `mcpServiceTokens` on `TerrenoApp`. Operator steps: [Connect an MCP client with a service token](../how-to/connect-mcp-service-token.md).
+**MCP service tokens** are a third, opt-in credential. They authenticate the consumer app's `POST /mcp` only. They are not Better Auth sessions, not JWTs, and not a REST personal-access-token. Enable them with `mcpServiceTokens` on `TerrenoApp`. Operator steps: [Connect an MCP client with a service token](../how-to/connect-mcp-service-token.md). **MCP OAuth access tokens** are the fourth, for remote clients that need an OAuth flow; enable them with `mcpOAuth` ([Enable MCP OAuth](../how-to/enable-mcp-oauth.md)).
 
 ## When to choose which
 
@@ -100,9 +100,19 @@ Personal `mcp_` keys for remote MCP clients (Perplexity, Cursor JSON config) tha
 
 `extractUserFromHeaders` on `/mcp` tries a `mcp_` Bearer first, then Better Auth, then JWT. A match loads the owning `User` and updates `lastUsedAt`. Revoked, expired, or disabled-user keys resolve to no user. The same Bearer is ignored on REST, sync, admin, and on the mint/list/revoke routes (a key cannot mint another key).
 
-This is not OAuth 2.1. Interactive MCP clients that cannot send a static key wait for the app MCP OAuth work ([app MCP server](../implementationPlans/app-mcp-server.md)). It is also not the hosted `@terreno/mcp` codegen server ([MCP server reference](../reference/mcp-server.md)).
+This is not OAuth 2.1; interactive clients use MCP OAuth below. It is also not the hosted `@terreno/mcp` codegen server ([MCP server reference](../reference/mcp-server.md)).
 
 **Learn more:** [Connect an MCP client with a service token](../how-to/connect-mcp-service-token.md)
+
+### MCP OAuth (opt-in, `/mcp` only)
+
+Claude.ai connectors and ChatGPT apps cannot paste a static key; they run OAuth 2.1 discovery, dynamic client registration, and the authorization-code flow with PKCE. With `mcpOAuth` on `TerrenoApp`, Terreno is that authorization server for a JWT app. Terreno is backend-only, so the app hosts the consent screen and approves or denies with the signed-in user's JWT. The client then gets opaque, short-lived `mcpat_` access tokens and rotating `mcprt_` refresh tokens, stored as hashes. On `/mcp`, `extractAuthFromHeaders` resolves `mcpat_` alongside the other credentials, and a request with none gets a `401` RFC 9728 challenge that starts discovery. OAuth access tokens are ignored on REST, like service tokens.
+
+**Learn more:** [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md)
+
+### Which credential authenticated the request
+
+`getCurrentRequestContext()?.credential` is `"jwt"`, `"better-auth-session"`, `"mcp-service-token"`, or `"oauth"`. Service tokens and OAuth tokens are delegated: an agent holds them on the user's behalf. Permission code that grants broad access (an admin bypass, cross-tenant reads) should check the credential and keep that access to the user's own session. See [Request credential](../reference/api.md#request-credential).
 
 ### Anonymous Strategy (JWT — legacy)
 

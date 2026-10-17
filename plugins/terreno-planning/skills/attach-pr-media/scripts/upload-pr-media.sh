@@ -48,11 +48,16 @@ for file in "${files[@]}"; do
   fi
 done
 
+if [[ -z "$pr" ]]; then
+  if [[ -n "$repo" ]]; then
+    echo "--repo needs --pr: the current branch's PR may belong to another repo." >&2
+    exit 2
+  fi
+  # gh infers the PR from the current branch only when --repo is not passed.
+  pr=$(gh pr view --json number --jq .number)
+fi
 if [[ -z "$repo" ]]; then
   repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-fi
-if [[ -z "$pr" ]]; then
-  pr=$(gh pr view --repo "$repo" --json number --jq .number)
 fi
 
 visibility=$(gh api "repos/$repo" --jq .visibility)

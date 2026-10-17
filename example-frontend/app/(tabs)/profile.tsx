@@ -14,7 +14,6 @@ import {
   Text,
   TextField,
   useStoredState,
-  useTheme,
 } from "@terreno/ui";
 import {useRouter} from "expo-router";
 import type React from "react";
@@ -39,8 +38,11 @@ const ProfileScreen: React.FC = () => {
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
   const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
-  const {colorScheme} = useTheme();
-  const {isLoading: isThemePreferenceLoading, setColorScheme} = useThemePreference();
+  const {
+    colorSchemeSetting,
+    isLoading: isThemePreferenceLoading,
+    setColorScheme,
+  } = useThemePreference();
 
   const {
     flags,
@@ -401,7 +403,7 @@ const ProfileScreen: React.FC = () => {
               }}
               testID="profile-dark-mode-toggle"
               title="Dark mode"
-              value={colorScheme === "dark"}
+              value={colorSchemeSetting === "dark"}
             />
           </Box>
         </Card>

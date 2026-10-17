@@ -4,7 +4,11 @@ import {assert} from "chai";
 import React, {type ReactElement} from "react";
 import TestRenderer, {act} from "react-test-renderer";
 
-import {AppThemeProvider, useThemePreference} from "./ThemePreferenceContext";
+import {
+  AppThemeProvider,
+  resolveStoredColorScheme,
+  useThemePreference,
+} from "./ThemePreferenceContext";
 
 const PreferenceProbe = (): ReactElement => {
   const {colorSchemeSetting, isLoading, setColorScheme} = useThemePreference();
@@ -54,5 +58,12 @@ describe("ThemePreferenceContext", () => {
       probe.props.onSetDark();
     });
     assert.equal(provider.props.colorScheme, probe.props.colorSchemeSetting);
+  });
+
+  it("keeps a stored dark choice and treats every other stored value as light", () => {
+    assert.equal(resolveStoredColorScheme("dark"), "dark");
+    assert.equal(resolveStoredColorScheme("light"), "light");
+    assert.equal(resolveStoredColorScheme("system"), "light");
+    assert.equal(resolveStoredColorScheme(undefined), "light");
   });
 });

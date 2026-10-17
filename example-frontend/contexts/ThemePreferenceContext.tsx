@@ -17,6 +17,11 @@ const ThemePreferenceContext = createContext<ThemePreferenceContextValue>({
   setColorScheme: async () => {},
 });
 
+// The profile offers only Light or Dark, so an older stored "system" choice falls back to light.
+export const resolveStoredColorScheme = (
+  storedColorScheme: ThemeColorScheme | undefined
+): ThemeColorScheme => (storedColorScheme === "dark" ? "dark" : DEFAULT_COLOR_SCHEME);
+
 export const AppThemeProvider: FC<{
   children: ReactNode;
   openAPISpecUrl: string;
@@ -25,7 +30,7 @@ export const AppThemeProvider: FC<{
     STORAGE_KEY,
     DEFAULT_COLOR_SCHEME
   );
-  const colorSchemeSetting = storedColorScheme ?? DEFAULT_COLOR_SCHEME;
+  const colorSchemeSetting = resolveStoredColorScheme(storedColorScheme);
 
   const setColorScheme = useCallback(
     async (colorScheme: ThemeColorScheme): Promise<void> => {

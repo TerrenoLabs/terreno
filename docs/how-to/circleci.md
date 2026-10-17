@@ -169,7 +169,7 @@ non-PR branch builds.
 | `example-frontend/**`, `admin-frontend/**`, `rtk/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
 | `docs/**`, `website/**` | `run-deploy-docs` | `deploy-docs-preview` | `deploy-docs` |
 | `example-backend/**`, `api/**`, `comms/**`, `jobs/**`, `admin-spa/**`, `feature-flags/**`, `announcements/**`, plus every frontend path above | `run-cd-backend` | `gcp-cd-preview` | `gcp-cd-prod` |
-| `terraform/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
+| `terraform/**`, `infra/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
 | `mcp-server/**`, `ui/**` | `run-cd-mcp` | _(none)_ | `gcp-cd-prod` (runs `mcp-server` `test:ci` first) |
 
 The backend image bundles the admin SPA (ui, rtk, admin-frontend, syncdb), so
@@ -267,7 +267,7 @@ the `deploy-docs` run that commit starts can unpack the archive under
 
 `terreno-gcp` uses CircleCI OIDC (`CIRCLE_OIDC_TOKEN_V2`), never a JSON service
 account key. Set `circleci_org_id`, `circleci_project_id`, and
-`circleci_gcp_context_id` in `terraform/terraform.tfvars`, apply once with an
+`circleci_gcp_context_id` in `infra/flourish/terraform.tfvars`, apply once with an
 existing Terraform admin identity, then copy `circleci_workload_identity_provider`
 into the context as `GCP_WIF_PROVIDER_PROD`. The WIF condition requires the
 `terreno-gcp` context UUID so a PR job without that context cannot exchange the

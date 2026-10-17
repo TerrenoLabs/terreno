@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-10-10T11:47:58.124Z.
+> dates are promised. Last updated: 2026-10-12T05:21:35.983Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -42,7 +42,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### mcp
 
-- [AI development loop (MCP Boost)](https://github.com/TerrenoLabs/terreno/issues/1014) (Feature, In review) — IP: [ai-dev-loop-boost](docs/implementationPlans/ai-dev-loop-boost.md) · Tasks: [ai-dev-loop-boost](docs/tasks/ai-dev-loop-boost.md)
+- [AI development loop (MCP Boost)](https://github.com/TerrenoLabs/terreno/issues/1014) (Feature, Planned) — IP: [ai-dev-loop-boost](docs/implementationPlans/ai-dev-loop-boost.md) · Tasks: [ai-dev-loop-boost](docs/tasks/ai-dev-loop-boost.md)
 - [MCP Boost parity](https://github.com/TerrenoLabs/terreno/issues/1085) (Feature, Shipped) — IP: [mcp-boost-parity](docs/implementationPlans/mcp-boost-parity.md)
 
 ### docs
@@ -52,7 +52,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### deploy
 
-- [Deploy to GCP (generalized)](https://github.com/TerrenoLabs/terreno/issues/1005) (Improvement, Planned) — IP: [deploy-to-gcp](docs/implementationPlans/deploy-to-gcp.md) · Tasks: [deploy-to-gcp](docs/tasks/deploy-to-gcp.md)
+- [Deploy to GCP (generalized)](https://github.com/TerrenoLabs/terreno/issues/1005) (Improvement, In progress) — IP: [deploy-to-gcp](docs/implementationPlans/deploy-to-gcp.md) · Tasks: [deploy-to-gcp](docs/tasks/deploy-to-gcp.md)
 - [Deploy to Vercel](https://github.com/TerrenoLabs/terreno/issues/1012) (Improvement, Planned) — IP: [deploy-to-vercel](docs/implementationPlans/deploy-to-vercel.md) · Tasks: [deploy-to-vercel](docs/tasks/deploy-to-vercel.md)
 
 ### dx

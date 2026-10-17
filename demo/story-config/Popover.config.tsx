@@ -19,7 +19,7 @@ export const PopoverConfiguration: DemoConfiguration = {
     documentation: "planned",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=3774-64",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=3773-4216",
     ios: "ready",
     android: "ready",
     web: "ready",

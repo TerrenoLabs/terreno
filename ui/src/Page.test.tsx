@@ -59,8 +59,12 @@ mock.module("expo-router", () => ({
 }));
 
 import {Page} from "./Page";
+import {SkeletonList} from "./Skeleton";
 import {Text} from "./Text";
 import {renderWithTheme} from "./test-utils";
+
+// Skeletons are hidden from assistive tech, so queries opt in to hidden elements.
+const HIDDEN = {includeHiddenElements: true};
 
 // Restore the global mocks set up by bunSetup.ts after this file finishes so
 // that other test files (e.g. IconButton.test.tsx, ConsentFormScreen.test.tsx)
@@ -326,5 +330,21 @@ describe("Page", () => {
     });
     // No crash; the optional-chained call handles the missing prop.
     expect(getByText("Go")).toBeTruthy();
+  });
+
+  it("renders loadingComponent instead of the spinner when provided", () => {
+    const {getByTestId, queryByText} = renderWithTheme(
+      <Page
+        loading
+        loadingComponent={<SkeletonList testID="page-skeleton" />}
+        navigation={mockNavigation}
+        testID="page"
+      >
+        <Text>Content</Text>
+      </Page>
+    );
+    expect(getByTestId("page-skeleton", HIDDEN)).toBeTruthy();
+    expect(getByTestId("page-loading").props["aria-busy"]).toBe(true);
+    expect(queryByText("Content")).toBeNull();
   });
 });

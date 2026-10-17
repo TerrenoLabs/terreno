@@ -5,6 +5,7 @@ import {Box} from "./Box";
 import {Button} from "./Button";
 import type {CardProps} from "./Common";
 import {Heading} from "./Heading";
+import {SkeletonCard} from "./Skeleton";
 import {Text} from "./Text";
 
 const DEFAULT_DISPLAY_CARD_WIDTH = 600;
@@ -50,6 +51,7 @@ const DisplayCard = ({
   imageAlt,
   imageHeight = 160,
   isMobile,
+  loadingComponent,
   maxWidth = "100%",
   minWidth = 0,
   overflow = "hidden",
@@ -91,6 +93,15 @@ const DisplayCard = ({
       rounding="md"
       width={cardWidth ?? (isMobile ? "100%" : undefined)}
       {...rest}
+      loadingComponent={
+        loadingComponent ?? (
+          <SkeletonCard
+            mediaHeight={imageHeight}
+            showAvatar={false}
+            showMedia={Boolean(imageUri)}
+          />
+        )
+      }
     >
       {imageUri && (
         <Image

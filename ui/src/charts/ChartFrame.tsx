@@ -1,19 +1,20 @@
 import type {FC, ReactNode} from "react";
 
 import {Box} from "../Box";
+import type {LoadingProps} from "../Common";
+import {resolveLoadingContent} from "../Skeleton";
 import {Spinner} from "../Spinner";
 import {Text} from "../Text";
 import {resolveTestID, toTestProps} from "../testing/resolveTestId";
 import {CHART_FOOTER_ROW_HEIGHT} from "./layout";
 
-export interface ChartFrameProps {
+export interface ChartFrameProps extends LoadingProps {
   accessibilityLabel?: string;
   children: ReactNode;
   emptyText: string;
   isEmpty: boolean;
   legendItems?: Array<{color: string; label: string}>;
   legendLabel?: string;
-  loading?: boolean;
   testID?: string;
   tooltipText?: string;
 }
@@ -26,6 +27,9 @@ export const ChartFrame: FC<ChartFrameProps> = ({
   legendItems,
   legendLabel,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   testID,
   tooltipText,
 }) => {
@@ -35,17 +39,23 @@ export const ChartFrame: FC<ChartFrameProps> = ({
   // measured plot width comes from the container instead of the chart's own content.
   return (
     <Box
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={loading ? (loadingLabel ?? "Loading") : accessibilityLabel}
+      accessibilityState={loading ? {busy: true} : undefined}
       alignSelf="stretch"
       minWidth={0}
       width="100%"
       {...toTestProps(testID)}
     >
-      {loading ? (
-        <Box padding={4}>
-          <Spinner testID={resolveTestID(testID, "spinner")} />
-        </Box>
-      ) : null}
+      {resolveLoadingContent({
+        defaultLoadingComponent: (
+          <Box padding={4}>
+            <Spinner testID={resolveTestID(testID, "spinner")} />
+          </Box>
+        ),
+        loading,
+        loadingAnimation,
+        loadingComponent,
+      })}
       {isEmpty && !loading ? <Text skipLinking>{emptyText}</Text> : null}
       {showPlot ? children : null}
       {showPlot ? (

@@ -85,6 +85,9 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   tabs = [],
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   color,
   keyboardOffset,
   renderListViewItem,
@@ -671,13 +674,26 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
       padding={isLabeledPagerBody ? 0 : 2}
       width="100%"
     >
-      {loading === true && (
+      {loading === true && !loadingComponent && (
         <Spinner
           color={theme.text.primary as unknown as ComponentProps<typeof Spinner>["color"]}
           size="md"
         />
       )}
-      {isNarrowLayout ? renderMobileSplitPage() : renderSplitPage()}
+      {loading === true && loadingComponent ? (
+        <Box
+          flex="grow"
+          loading
+          loadingAnimation={loadingAnimation}
+          loadingComponent={loadingComponent}
+          loadingLabel={loadingLabel}
+          testID="split-page-loading"
+        />
+      ) : isNarrowLayout ? (
+        renderMobileSplitPage()
+      ) : (
+        renderSplitPage()
+      )}
     </Box>
   );
 };

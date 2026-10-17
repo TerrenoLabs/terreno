@@ -4,8 +4,12 @@ import {useWindowDimensions} from "react-native";
 import type {ReactTestRendererJSON} from "react-test-renderer";
 
 import {Card} from "./Card";
+import {SkeletonCircle} from "./Skeleton";
 import {Text} from "./Text";
 import {renderWithTheme} from "./test-utils";
+
+// Skeletons are hidden from assistive tech, so queries opt in to hidden elements.
+const HIDDEN = {includeHiddenElements: true};
 
 type WindowDimensionsImpl = () => ScaledSize;
 type MockableUseWindowDimensions = WindowDimensionsImpl & {
@@ -178,6 +182,33 @@ describe("Card", () => {
         <Card testID="display-card" title="My Feature" variant="display" />
       );
       expect(getByTestId("display-card")).toBeTruthy();
+    });
+  });
+
+  describe("loading", () => {
+    it("renders a card skeleton with media for a display card with an image", () => {
+      const {getByTestId, queryByText} = renderWithTheme(
+        <Card
+          description="Description"
+          imageUri="https://example.com/image.png"
+          loading
+          testID="card"
+          title="Title"
+          variant="display"
+        />
+      );
+      expect(queryByText("Title")).toBeNull();
+      expect(getByTestId("card").props["aria-busy"]).toBe(true);
+    });
+
+    it("renders a custom loading component in a container card", () => {
+      const {getByTestId, queryByText} = renderWithTheme(
+        <Card loading loadingComponent={<SkeletonCircle testID="circle" />}>
+          <Text>Body</Text>
+        </Card>
+      );
+      expect(getByTestId("circle", HIDDEN)).toBeTruthy();
+      expect(queryByText("Body")).toBeNull();
     });
   });
 });

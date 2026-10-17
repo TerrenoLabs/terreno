@@ -14,6 +14,9 @@ import {Unifier} from "./Unifier";
 export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   color,
   keyboardOffset,
   renderListViewItem,
@@ -156,8 +159,21 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
       keyboardOffset={keyboardOffset}
       width="100%"
     >
-      {loading === true && <Spinner color="light" size="md" />}
-      {selectedId === undefined ? renderList() : renderMainContent}
+      {loading === true && !loadingComponent && <Spinner color="light" size="md" />}
+      {loading === true && loadingComponent ? (
+        <Box
+          flex="grow"
+          loading
+          loadingAnimation={loadingAnimation}
+          loadingComponent={loadingComponent}
+          loadingLabel={loadingLabel}
+          testID="split-page-loading"
+        />
+      ) : selectedId === undefined ? (
+        renderList()
+      ) : (
+        renderMainContent
+      )}
     </Box>
   );
 };

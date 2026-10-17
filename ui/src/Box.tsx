@@ -27,6 +27,7 @@ import {
   type ResponsiveBreakpoint,
   useResponsiveBreakpoint,
 } from "./ResponsiveBreakpoint";
+import {getLoadingAccessibilityProps, resolveLoadingContent} from "./Skeleton";
 import {useTheme} from "./Theme";
 import {Unifier} from "./Unifier";
 
@@ -97,6 +98,10 @@ const NON_STYLE_BOX_PROPS = new Set<string>([
   "children",
   "dangerouslySetInlineStyle",
   "keyboardOffset",
+  "loading",
+  "loadingAnimation",
+  "loadingComponent",
+  "loadingLabel",
   "onClick",
   "onHoverEnd",
   "onHoverStart",
@@ -406,7 +411,22 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
 
   let box: React.ReactElement;
 
-  const accessibilityState = props.accessibilityState;
+  const isLoading = props.loading === true;
+  const children = resolveLoadingContent({
+    children: props.children,
+    loading: isLoading,
+    loadingAnimation: props.loadingAnimation,
+    loadingComponent: props.loadingComponent,
+  });
+  const loadingAccessibilityProps = getLoadingAccessibilityProps({
+    loading: isLoading,
+    loadingLabel: props.loadingLabel,
+  });
+
+  const accessibilityState =
+    props.accessibilityState || isLoading
+      ? {...props.accessibilityState, ...loadingAccessibilityProps.accessibilityState}
+      : undefined;
   const accessibilityStateProps = accessibilityState
     ? {
         accessibilityState,
@@ -416,6 +436,7 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
         ...(accessibilityState.disabled !== undefined
           ? {"aria-disabled": accessibilityState.disabled}
           : {}),
+        ...(accessibilityState.busy !== undefined ? {"aria-busy": accessibilityState.busy} : {}),
       }
     : {};
 
@@ -425,7 +446,8 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
   // `accessibilityRole` prop is only forwarded literally when the caller opts in.
   if (props.onClick) {
     const explicitAccessibilityRole = (props as AccessibilityProps).accessibilityRole;
-    const isDisabled = accessibilityState?.disabled === true;
+    // Content is not there yet while loading, so presses are held until it is.
+    const isDisabled = accessibilityState?.disabled === true || isLoading;
     // Per ARIA, Space toggles a checkbox or switch; react-native-web only maps Space to buttons.
     const toggleKeyDownProps: WebKeyDownProps =
       explicitAccessibilityRole === "checkbox" || explicitAccessibilityRole === "switch"
@@ -450,7 +472,10 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
           ? {accessibilityRole: explicitAccessibilityRole as never}
           : {})}
         {...accessibilityStateProps}
-        aria-label={(props as AccessibilityProps).accessibilityLabel}
+        aria-label={
+          loadingAccessibilityProps.accessibilityLabel ??
+          (props as AccessibilityProps).accessibilityLabel
+        }
         aria-role="button"
         {...(isDisabled ? {disabled: true} : {})}
         onLayout={props.onLayout}
@@ -466,12 +491,14 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
         style={boxStyle}
         testID={resolvedTestID ? `${resolvedTestID}-clickable` : undefined}
       >
-        {props.children}
+        {children}
       </Pressable>
     );
   } else {
     const accessibilityHint = (props as AccessibilityProps).accessibilityHint;
-    const accessibilityLabel = (props as AccessibilityProps).accessibilityLabel;
+    const accessibilityLabel =
+      loadingAccessibilityProps.accessibilityLabel ??
+      (props as AccessibilityProps).accessibilityLabel;
     box = (
       <View
         {...(accessibilityHint ? {accessibilityHint} : {})}
@@ -484,7 +511,7 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
         style={boxStyle}
         testID={resolvedTestID}
       >
-        {props.children}
+        {children}
       </View>
     );
   }

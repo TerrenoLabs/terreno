@@ -101,6 +101,13 @@ bun run check:lifecycle-skills
 
 Do not hand-edit `skills/`.
 
+A `.rulesync/skills/` skill that links a lifecycle reference as
+`references/<name>.md` (for example `references/push-ownership.md`) gets its own copy of
+`plugins/terreno-planning/references/<name>.md`, so the link still resolves once the skill
+is installed elsewhere. `skills:sync` rewrites those copies and `skills:check` fails when
+one drifts. Edit the plugin reference, never the copy, then run `bun run skills:sync` and
+`bun run rules`.
+
 ## Keep native hooks in sync
 
 Repository-level hooks are canonical in `.rulesync/hooks.json`; shared commands live in

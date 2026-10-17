@@ -12,7 +12,7 @@ Review comments on a PR resolved from `$ARGUMENTS` or the current branch, then p
 implement focused fixes. If a human decision is required, return it as a blocker. Taste
 owns commit/push/result emission; the outer loop owns later observation. Invoked directly
 by a human, hand the verified diff to `terreno-5-taste` in standalone entry so the push
-is watched until green or escalated, per push ownership (`plugins/terreno-planning/references/push-ownership.md`).
+is watched until green or escalated, per [push ownership](references/push-ownership.md).
 
 ## Step 0: Validate Input
 

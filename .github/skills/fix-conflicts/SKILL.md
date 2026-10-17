@@ -8,7 +8,7 @@ description: >-
 # Fix Conflicts
 
 Pull the latest base, resolve merge conflicts, and validate the affected areas. The push
-follows push ownership (`plugins/terreno-planning/references/push-ownership.md`): someone must watch the new head until it is green or
+follows [push ownership](references/push-ownership.md): someone must watch the new head until it is green or
 escalated.
 
 ## Instructions

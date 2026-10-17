@@ -38,6 +38,17 @@ export const registerMCPModel = <T>(
   });
 };
 
+/**
+ * Catalog a pathless modelRouter whose actions opt into MCP but whose CRUD does not, so the
+ * action tools can find its model and options. Routers with a path are cataloged already.
+ */
+export const registerMCPActionModel = <T>(
+  model: Model<T>,
+  options: ModelRouterOptions<T>
+): void => {
+  registerCollection({model, options, routePath: mcpRoutePathForModel(model)});
+};
+
 export const updateMCPRegistryOptions = (
   modelName: string,
   options: ModelRouterOptions<unknown>

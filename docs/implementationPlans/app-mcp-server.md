@@ -250,7 +250,7 @@ Tracer: example-backend custom tool already exists (`users_todo_statuses`). Add 
 - Wire plugin in Better Auth setup used by `BetterAuthApp`.
 - RFC 9728 + 401 `WWW-Authenticate` on `/mcp`.
 - `extractUserFromHeaders` accepts OAuth access tokens.
-- JWT-only apps unchanged.
+- JWT-only apps unchanged by this phase: they use the Terreno-native `mcpOAuth` server (#1573, [Enable MCP OAuth](../how-to/enable-mcp-oauth.md)). Reuse its well-known builders (`buildProtectedResourceMetadata`, `buildAuthorizationServerMetadata`) and `/mcp` challenge (`sendMcpOAuthChallenge`) here so both stacks share one code path.
 - How-to `docs/how-to/secure-app-mcp.md`; reference well-known paths.
 - Tests with Better Auth test instance: no token → 401 challenge; valid access token → `tools/list` as that user.
 

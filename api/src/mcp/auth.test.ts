@@ -1,13 +1,15 @@
 import {beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {assert} from "chai";
 import jwt from "jsonwebtoken";
+import {DateTime} from "luxon";
 import mongoose, {Schema} from "mongoose";
 
 import type {UserModel} from "../auth";
 import type {BetterAuthInstance} from "../betterAuthSetup";
+import {McpOAuthToken} from "../models/mcpOAuthToken";
 import {McpServiceToken} from "../models/mcpServiceToken";
 import {findOneOrNone} from "../plugins";
-import {extractUserFromHeaders} from "./auth";
+import {extractAuthFromHeaders, extractUserFromHeaders} from "./auth";
 
 interface MCPAuthUserFields {
   _id: mongoose.Types.ObjectId;
@@ -273,5 +275,77 @@ describe("extractUserFromHeaders", () => {
     const user = await extractUserFromHeaders({}, {betterAuth, userModel});
 
     expect(user).toBeUndefined();
+  });
+});
+
+describe("extractAuthFromHeaders", () => {
+  beforeEach(async () => {
+    await UserTestModel.deleteMany({});
+    await McpOAuthToken.deleteMany({});
+    process.env.TOKEN_SECRET = "test-token-secret";
+  });
+
+  const issueOAuthToken = async (userId: mongoose.Types.ObjectId): Promise<string> => {
+    const issued = await McpOAuthToken.issue({
+      accessTokenTtlSeconds: 60,
+      clientId: "client",
+      refreshTokenTtlSeconds: 600,
+      userId,
+    });
+    return issued.accessToken;
+  };
+
+  it("reports jwt for a JWT bearer", async () => {
+    const created = await UserTestModel.create({email: "jwt@example.com"});
+
+    const auth = await extractAuthFromHeaders(
+      {authorization: `Bearer ${signToken({id: String(created._id)})}`},
+      {userModel}
+    );
+
+    expect(auth?.credential).toBe("jwt");
+    expect(String(auth?.user._id)).toBe(String(created._id));
+  });
+
+  it("reports better-auth-session for a Better Auth session", async () => {
+    await UserTestModel.create({betterAuthId: "ba-1", email: "ba@example.com"});
+    const betterAuth = fakeBetterAuth(async () => ({session: {id: "s"}, user: {id: "ba-1"}}));
+
+    const auth = await extractAuthFromHeaders({cookie: "session=1"}, {betterAuth, userModel});
+
+    expect(auth?.credential).toBe("better-auth-session");
+  });
+
+  it("resolves an OAuth access token to its user only when mcpOAuth is on", async () => {
+    const created = await UserTestModel.create({email: "oauth@example.com"});
+    const token = await issueOAuthToken(created._id);
+    const headers = {authorization: `Bearer ${token}`};
+
+    const off = await extractAuthFromHeaders(headers, {userModel});
+    const on = await extractAuthFromHeaders(headers, {mcpOAuth: true, userModel});
+
+    expect(off).toBeUndefined();
+    expect(on?.credential).toBe("oauth");
+    expect(String(on?.user._id)).toBe(String(created._id));
+  });
+
+  it("rejects a revoked OAuth access token and a disabled user's token", async () => {
+    const revokedUser = await UserTestModel.create({email: "revoked@example.com"});
+    const revokedToken = await issueOAuthToken(revokedUser._id);
+    await McpOAuthToken.updateMany({}, {$set: {revokedAt: DateTime.now().toJSDate()}});
+    const disabledUser = await UserTestModel.create({disabled: true, email: "off@example.com"});
+    const disabledToken = await issueOAuthToken(disabledUser._id);
+
+    const revoked = await extractAuthFromHeaders(
+      {authorization: `Bearer ${revokedToken}`},
+      {mcpOAuth: true, userModel}
+    );
+    const disabled = await extractAuthFromHeaders(
+      {authorization: `Bearer ${disabledToken}`},
+      {mcpOAuth: true, userModel}
+    );
+
+    expect(revoked).toBeUndefined();
+    expect(disabled).toBeUndefined();
   });
 });

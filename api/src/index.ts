@@ -53,7 +53,23 @@ export {
 export * from "./githubAuth";
 export * from "./httpClient";
 export * from "./logger";
-export {extractUserFromHeaders, type MCPAuthContext} from "./mcp/auth";
+export {
+  extractAuthFromHeaders,
+  extractUserFromHeaders,
+  type MCPAuthContext,
+  type MCPAuthResult,
+} from "./mcp/auth";
+export {
+  addMcpOAuthRoutes,
+  buildAuthorizationServerMetadata,
+  buildProtectedResourceMetadata,
+  type McpOAuthAppOption,
+  type McpOAuthOptions,
+  type McpOAuthRoutesOptions,
+  type ResolvedMcpOAuthOptions,
+  resolveMcpOAuthOption,
+  sendMcpOAuthChallenge,
+} from "./mcp/oauth";
 export type {MCPCustomTool} from "./mcp/registry";
 export {
   clearMCPRegistry,
@@ -94,6 +110,9 @@ export * from "./migrations/schemaCatalog";
 export * from "./migrations/types";
 export * from "./models/consentForm";
 export * from "./models/consentResponse";
+export {McpOAuthAuthorization} from "./models/mcpOAuthAuthorization";
+export {McpOAuthClient} from "./models/mcpOAuthClient";
+export {McpOAuthToken} from "./models/mcpOAuthToken";
 export * from "./models/mcpServiceToken";
 export * from "./models/notification";
 export * from "./models/notificationPreference";
@@ -292,6 +311,12 @@ export * from "./terrenoPlugin";
 export * from "./transformers";
 export * from "./types/consentForm";
 export * from "./types/consentResponse";
+export type {
+  McpOAuthAuthorizationDocument,
+  McpOAuthAuthorizationStatus,
+  McpOAuthClientDocument,
+  McpOAuthTokenDocument,
+} from "./types/mcpOAuth";
 export * from "./utils";
 export * from "./versionCheckPlugin";
 export type {

@@ -8,8 +8,9 @@ disable-model-invocation: true
 ---
 # Fix Conflicts
 
-Pull the latest base, resolve merge conflicts, and validate the affected areas. Return
-after the push; the outer lifecycle loop owns later CI observation.
+Pull the latest base, resolve merge conflicts, and validate the affected areas. The push
+follows push ownership (`plugins/terreno-planning/references/push-ownership.md`): someone must watch the new head until it is green or
+escalated.
 
 ## Instructions
 
@@ -78,8 +79,12 @@ after the push; the outer lifecycle loop owns later CI observation.
    git push origin HEAD
    ```
 
-8. Return the pushed head and validation evidence. Do not launch a watcher; Brew/Taste
-   emits lifecycle state and the outer loop schedules later observation.
+8. Return the pushed head and validation evidence.
+   - Called from Brew or Taste: return. That stage watches CI on the new head.
+   - Invoked directly by a human: start `terreno-5-taste` on the PR in standalone entry.
+     It waits for CI and review bots, fixes what the merge broke for up to three fix
+     rounds, answers bot comments, and escalates if the PR is still red. Never end with
+     a pushed head that nothing is watching.
 
 ## Arguments
 

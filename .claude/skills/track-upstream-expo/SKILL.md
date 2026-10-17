@@ -159,5 +159,12 @@ Push `release-*`. Open or update a draft PR into master. Do not merge. Title:
 `Expo <sdkLine> (<expoVersion>)`. Point the PR body at `loop-log.md` (open
 items + release notes draft). Do not paste the whole log into the PR.
 
+After the push, wait for product CI and review bots on the new head (push ownership:
+`plugins/terreno-planning/references/push-ownership.md`). Fix branch-caused failures and answer every bot thread, for at most three fix
+rounds. Anything still red goes into **Open** with its log link, and the final message
+starts with `BLOCKED — PR #<n> still red after <k> fix rounds` and names those jobs.
+Never end the run quietly on a red PR.
+
 Completion: `git ls-remote --heads origin <releaseBranch>` is non-empty and
-includes `loop-log.md`.
+includes `loop-log.md`; CI on the pushed head is green, or every red job is in
+**Open** and was escalated.

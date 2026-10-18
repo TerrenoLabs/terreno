@@ -280,6 +280,26 @@ and do not expose dismiss or read-state actions.
 | `preferences` | `{inapp, mail, push, sms}` | Current toggles |
 | `onChange` | `(channel, value) => void` | Per-channel updates |
 
+## WhatsNewBanner
+
+Non-blocking release notes banner. It shows `What's new in <version>` (plus a count of earlier
+unseen releases) until the viewer opens or dismisses it, and stays hidden until a newer release
+is listed. **See what's new** opens a `Modal` with each unseen release's Markdown notes.
+Steps: [Show release notes with WhatsNewBanner](../how-to/whats-new-banner.md).
+
+| Prop | Type | Description |
+|---|---|---|
+| `releases` | `WhatsNewRelease[]` | `{version, body, date?}` entries, newest first. `body` is Markdown |
+| `storageKey` | `string` | Device storage key for the last seen version. Default `@TerrenoUI:whatsNew:lastSeenVersion` |
+| `title` | `string` | Modal title. Default `What's new` |
+| `onOpen` | `() => void` | Called when the viewer opens the notes |
+| `testID` | `string` | Default `whats-new-banner`. Children: `-text`, `-open-button`, `-dismiss`, `-modal`, `-release-<version>` |
+
+`getUnseenWhatsNewReleases({releases, lastSeenVersion})` returns the releases newer than
+`lastSeenVersion`; an unknown or missing version counts as nothing seen.
+
+`BannerButton` also accepts an optional `testID`.
+
 ## Component Behaviors
 
 ### Button Layout Behavior

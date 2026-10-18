@@ -191,6 +191,7 @@ export * from "./useConsentForms";
 export * from "./useStoredState";
 export * from "./useSubmitConsent";
 export * from "./WebAddressAutocomplete";
+export * from "./WhatsNewBanner";
 
 // export * from "./Layout";
 // export * from "./Drawer";

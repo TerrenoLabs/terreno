@@ -16,44 +16,32 @@ const fakeSyncDb = {
 } as AdminSyncDb;
 
 describe("isWindowedAdminTable", () => {
-  it("requires syncDb, fetch client, adminBroadcast, syncCollection, and string _id", () => {
+  it("requires syncDb, adminBroadcast, syncCollection, and string _id", () => {
     assert.isTrue(
       isWindowedAdminTable({
-        hasFetchClient: true,
         modelConfig: stringIdConfig,
         syncDb: fakeSyncDb,
       })
     );
     assert.isFalse(
       isWindowedAdminTable({
-        hasFetchClient: true,
         modelConfig: stringIdConfig,
       })
     );
     assert.isFalse(
       isWindowedAdminTable({
-        hasFetchClient: false,
-        modelConfig: stringIdConfig,
-        syncDb: fakeSyncDb,
-      })
-    );
-    assert.isFalse(
-      isWindowedAdminTable({
-        hasFetchClient: true,
         modelConfig: {...stringIdConfig, adminBroadcast: false},
         syncDb: fakeSyncDb,
       })
     );
     assert.isFalse(
       isWindowedAdminTable({
-        hasFetchClient: true,
         modelConfig: {...stringIdConfig, syncCollection: undefined},
         syncDb: fakeSyncDb,
       })
     );
     assert.isFalse(
       isWindowedAdminTable({
-        hasFetchClient: true,
         modelConfig: {
           ...stringIdConfig,
           fields: {_id: {required: true, type: "objectid"}},

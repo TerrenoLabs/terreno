@@ -20,7 +20,7 @@ import {
   statusMeta,
   summarizeOutput,
 } from "./scriptRunUtils";
-import {type AdminApi, type BackgroundTask, resolveAdminBases} from "./types";
+import {type BackgroundTask, resolveAdminBases} from "./types";
 import {useAdminScripts} from "./useAdminScripts";
 
 interface AdminScriptRunModalProps {
@@ -30,7 +30,6 @@ interface AdminScriptRunModalProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   scriptName: string | null;
   scriptDescription?: string;
   visible: boolean;
@@ -107,7 +106,6 @@ export const AdminScriptRunModal: React.FC<AdminScriptRunModalProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   scriptName,
   scriptDescription,
   visible,
@@ -126,7 +124,7 @@ export const AdminScriptRunModal: React.FC<AdminScriptRunModalProps> = ({
   const startingRef = useRef(false);
 
   const {useRunScriptMutation, useGetScriptTaskQuery, useCancelScriptTaskMutation} =
-    useAdminScripts(api, resolvedApiBase);
+    useAdminScripts(resolvedApiBase);
 
   const [runScript] = useRunScriptMutation();
   const [cancelTask, {isLoading: isCancelling}] = useCancelScriptTaskMutation();

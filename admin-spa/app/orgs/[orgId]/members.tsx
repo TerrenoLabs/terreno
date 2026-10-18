@@ -2,7 +2,6 @@ import {OrgMembersScreen} from "@terreno/admin-frontend";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
 import {AdminSpaShell} from "../../../components/AdminSpaShell";
-import {terrenoApi} from "../../../store/sdk";
 
 const OrgMembersRoute: React.FC = () => {
   const {orgId} = useLocalSearchParams<{orgId: string}>();
@@ -14,7 +13,7 @@ const OrgMembersRoute: React.FC = () => {
         {label: "Members"},
       ]}
     >
-      <OrgMembersScreen api={terrenoApi} organizationId={orgId} routeBase="" />
+      <OrgMembersScreen organizationId={orgId} routeBase="" />
     </AdminSpaShell>
   );
 };

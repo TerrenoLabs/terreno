@@ -2,7 +2,6 @@ import {CommsMessageDetail} from "@terreno/admin-frontend";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
 import {AdminSpaShell} from "../../components/AdminSpaShell";
-import {terrenoApi} from "../../store/sdk";
 
 const CommsMessageAdminRoute: React.FC = () => {
   const {id} = useLocalSearchParams<{id: string}>();
@@ -16,7 +15,7 @@ const CommsMessageAdminRoute: React.FC = () => {
         {label: "Message"},
       ]}
     >
-      <CommsMessageDetail api={terrenoApi} messageId={messageId} routeBase="" />
+      <CommsMessageDetail messageId={messageId} routeBase="" />
     </AdminSpaShell>
   );
 };

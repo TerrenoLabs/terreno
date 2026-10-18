@@ -4,9 +4,9 @@
 >
 > RTK Query remains the correct tool for **non-synced** generated OpenAPI routes
 > such as `/auth/me` and AI APIs, Better Auth session Redux wiring, feature
-> flags, and sockets. Built-in admin RPC uses host-bound fetch; ObjectId/API-only
-> admin CRUD keeps RTK compatibility in Terreno 57, then `useAdminApi` and the
-> required admin `api` prop are removed in Terreno 58.
+> flags, and sockets. Built-in admin does not use RTK: every admin request goes
+> through `AdminProvider`'s host-bound fetch client (Terreno 58 removed
+> `useAdminApi` and the admin `api` prop).
 
 Redux Toolkit Query utilities for frontends using @terreno/api backends. JWT auth, token storage, SDK code generation from OpenAPI, and real-time WebSocket connections.
 

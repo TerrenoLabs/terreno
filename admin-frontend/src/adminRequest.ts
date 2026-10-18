@@ -75,9 +75,9 @@ const readErrorPayload = async (response: Response): Promise<{detail?: string; t
 };
 
 /**
- * Native `fetch` helper for admin RPC (config, scripts, roles, …). Not axios and not
- * RTK `injectEndpoints`. Hosts inject auth via {@link bindAdminRequest} /
- * `AdminProvider` `{getAuthHeaders, credentials}`.
+ * Native `fetch` helper for every admin request (model CRUD, config, scripts, roles, …).
+ * Not axios and not RTK Query. Hosts inject auth via {@link bindAdminRequest} /
+ * `AdminProvider` `{getAuthHeaders, credentials, apiOrigin}`.
  */
 export const adminRequest = async <T = unknown>({
   body,

@@ -19,9 +19,6 @@ import {
   resolveAdminSyncCollections,
   setSpaAdminOrganizationId,
 } from "../store/adminSyncDb";
-import {terrenoApi} from "../store/sdk";
-
-const SPA_ADMIN_AUTH_HEADERS = (): HeadersInit => ({});
 
 const BindSpaAdminOrganization: React.FC = () => {
   const organizationId = useOptionalOrgContext()?.organizationId;
@@ -83,10 +80,8 @@ const SyncEnabledAdminProvider: React.FC<{
 
   return (
     <AdminProvider
-      api={terrenoApi}
       apiBase={apiBase}
       credentials="same-origin"
-      getAuthHeaders={SPA_ADMIN_AUTH_HEADERS}
       routeBase=""
       syncConflicts={syncConflicts}
       syncDb={client}
@@ -105,7 +100,7 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
   const pathname = usePathname();
   const routeOrganization = useMemo(() => organizationFromPath(pathname), [pathname]);
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
-  const {config} = useAdminConfig(terrenoApi, apiBase);
+  const {config} = useAdminConfig(apiBase);
   const syncCollections = useMemo(
     (): string[] => resolveAdminSyncCollections(config?.models ?? []),
     [config?.models]
@@ -140,13 +135,7 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
   }
 
   return (
-    <AdminProvider
-      api={terrenoApi}
-      apiBase={apiBase}
-      credentials="same-origin"
-      getAuthHeaders={SPA_ADMIN_AUTH_HEADERS}
-      routeBase=""
-    >
+    <AdminProvider apiBase={apiBase} credentials="same-origin" routeBase="">
       <OrgContextProvider initialOrganization={routeOrganization}>
         <BindSpaAdminOrganization />
         {children}
@@ -161,6 +150,8 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
  *   store + auth client are built from it.
  * - StoreProvider: builds the better-auth client + Redux store, mounts <Provider>.
  * - TerrenoProvider: theme/toast context (inside Provider so theme hooks work).
+ * - AdminProvider (cookie-bound): the same-origin fetch client AdminGate uses for
+ *   `/admin/config`. AdminProviderBridge nests a second AdminProvider with syncDb.
  * - AdminGate (innermost): session + admin authorization, gating the route Stack.
  */
 const RootLayout: React.FC = () => {
@@ -168,11 +159,13 @@ const RootLayout: React.FC = () => {
     <AppConfigGate>
       <StoreProvider>
         <TerrenoProvider>
-          <AdminGate>
-            <AdminProviderBridge>
-              <Stack screenOptions={{headerShown: false}} />
-            </AdminProviderBridge>
-          </AdminGate>
+          <AdminProvider credentials="same-origin" routeBase="">
+            <AdminGate>
+              <AdminProviderBridge>
+                <Stack screenOptions={{headerShown: false}} />
+              </AdminProviderBridge>
+            </AdminGate>
+          </AdminProvider>
         </TerrenoProvider>
       </StoreProvider>
     </AppConfigGate>

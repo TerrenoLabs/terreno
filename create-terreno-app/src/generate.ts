@@ -1406,6 +1406,15 @@ const readSessionToken = async (): Promise<string | null> => {
   }
 };
 
+/** Bearer header for \`@terreno/admin-frontend\`'s \`AdminProvider\` fetch client. */
+export const getAdminAuthHeaders = async (): Promise<HeadersInit> => {
+  const token = await readSessionToken();
+  if (!token) {
+    return {};
+  }
+  return {Authorization: \`Bearer \${token}\`};
+};
+
 const betterAuthBaseQuery = fetchBaseQuery({
   baseUrl,
   credentials: "include",
@@ -1979,11 +1988,24 @@ export default ProfileScreen;
 };
 
 const generateFrontendAdminLayout = (): string => {
-  return `import {Stack} from "expo-router";
+  return `import {AdminProvider} from "@terreno/admin-frontend";
+import {baseUrl} from "@terreno/rtk";
+import {Stack} from "expo-router";
 import type React from "react";
+import {getAdminAuthHeaders} from "@/store/betterAuthApi";
 
+// AdminProvider binds every admin request to the API origin and the Better Auth session.
 const AdminLayout: React.FC = () => {
-  return <Stack screenOptions={{headerShown: false}} />;
+  return (
+    <AdminProvider
+      apiBase="/admin"
+      apiOrigin={baseUrl}
+      getAuthHeaders={getAdminAuthHeaders}
+      routeBase="/admin"
+    >
+      <Stack screenOptions={{headerShown: false}} />
+    </AdminProvider>
+  );
 };
 
 export default AdminLayout;
@@ -1993,16 +2015,9 @@ export default AdminLayout;
 const generateFrontendAdminIndex = (): string => {
   return `import {AdminModelList} from "@terreno/admin-frontend";
 import type React from "react";
-import {adminTerrenoApi} from "@/store/sdk";
 
 const AdminListScreen: React.FC = () => {
-  return (
-    <AdminModelList
-      api={adminTerrenoApi}
-      baseUrl="/admin"
-      configurationPath="/admin/configuration"
-    />
-  );
+  return <AdminModelList baseUrl="/admin" configurationPath="/admin/configuration" />;
 };
 
 export default AdminListScreen;
@@ -2012,10 +2027,9 @@ export default AdminListScreen;
 const generateFrontendAdminConfiguration = (): string => {
   return `import {ConfigurationScreen} from "@terreno/admin-frontend";
 import type React from "react";
-import {adminTerrenoApi} from "@/store/sdk";
 
 const ConfigurationPage: React.FC = () => {
-  return <ConfigurationScreen api={adminTerrenoApi} />;
+  return <ConfigurationScreen />;
 };
 
 export default ConfigurationPage;
@@ -2251,8 +2265,7 @@ export const useSentryAndToast = (): ((errorMessage: string) => void) => {
 };
 
 const generateFrontendStoreSdk = (): string => {
-  return `import type {AdminScreenProps} from "@terreno/admin-frontend";
-import {generateTags} from "@terreno/rtk";
+  return `import {generateTags} from "@terreno/rtk";
 import startCase from "lodash/startCase";
 
 import {addTagTypes, openapi} from "./openApiSdk";
@@ -2299,9 +2312,6 @@ export const terrenoApi = openapi
       ...generateTags(openapi, [...addTagTypes]),
     },
   });
-
-/** Type-erased API instance for @terreno/admin-frontend screens. */
-export const adminTerrenoApi = terrenoApi as unknown as AdminScreenProps["api"];
 
 export const {
   useGetMeQuery,

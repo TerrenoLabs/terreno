@@ -2,7 +2,7 @@ import {AdminModelForm} from "@terreno/admin-frontend";
 import {Box, Button, Card, Text, TextField, useToast} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
-import {terrenoApi, useSetAdminUserPasswordMutation} from "@/store/sdk";
+import {useSetAdminUserPasswordMutation} from "@/store/sdk";
 
 const ADMIN_BASE_URL = "/admin";
 const MIN_PASSWORD_LENGTH = 8;
@@ -88,7 +88,6 @@ const AdminEditScreen: React.FC = () => {
 
   return (
     <AdminModelForm
-      api={terrenoApi}
       baseUrl={ADMIN_BASE_URL}
       footerContent={footerContent}
       itemId={id}

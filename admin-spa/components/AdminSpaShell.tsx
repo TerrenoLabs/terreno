@@ -1,6 +1,6 @@
 import {AdminShellLayout, OrgSwitcher} from "@terreno/admin-frontend";
 import React from "react";
-import {terrenoApi, useGetAdminSpaProfileQuery} from "../store/sdk";
+import {useGetAdminSpaProfileQuery} from "../store/sdk";
 import {useAppConfig} from "./AppConfigGate";
 
 interface AdminSpaShellProps {
@@ -16,13 +16,12 @@ export const AdminSpaShell: React.FC<AdminSpaShellProps> = ({breadcrumbs, childr
   const isOrganizationOperator = roles.includes("operator") || roles.includes("superadmin");
   return (
     <AdminShellLayout
-      api={terrenoApi}
       apiBase={apiBase}
       breadcrumbs={breadcrumbs}
       configurationPath="/configuration"
       isOrganizationOperator={isOrganizationOperator}
       organizationDirectoryPath="/orgs"
-      organizationSwitcher={<OrgSwitcher api={terrenoApi} routeBase="" />}
+      organizationSwitcher={<OrgSwitcher routeBase="" />}
       rolesPath="/roles"
       routeBase=""
     >

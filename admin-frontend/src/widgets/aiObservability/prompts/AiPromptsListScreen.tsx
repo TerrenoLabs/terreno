@@ -15,8 +15,8 @@ import {
 import {useAiObservabilityPromptsApi} from "./useAiObservabilityPromptsApi";
 
 export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useCreateMutation, useListQuery, useStatusQuery} = useAiObservabilityPromptsApi(api);
+  const {routeBase} = props;
+  const {useCreateMutation, useListQuery, useStatusQuery} = useAiObservabilityPromptsApi();
   const {data, error, isError, isLoading, refetch} = useListQuery({include: "usage7d"});
   const statusQuery = useStatusQuery();
   const [createPrompt, createState] = useCreateMutation();

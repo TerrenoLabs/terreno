@@ -12,7 +12,7 @@ import {
   buildAdminSidebarGroups,
 } from "./adminShellNav";
 import {isAuditLogModel} from "./isAuditLogModel";
-import type {AdminApi, AdminConfigResponse, AdminCustomScreen, AdminModelConfig} from "./types";
+import type {AdminConfigResponse, AdminCustomScreen, AdminModelConfig} from "./types";
 import {resolveAdminBases} from "./types";
 import {useAdminConfig} from "./useAdminConfig";
 
@@ -25,7 +25,6 @@ const ADMIN_SHELL_MOBILE_BREAKPOINT = 768;
 export interface AdminShellProps {
   /** @deprecated Use `apiBase`/`routeBase`. */
   baseUrl?: string;
-  api: AdminApi;
   apiBase?: string;
   /** Breadcrumb segments for the top bar */
   breadcrumbs?: AdminBreadcrumbSegment[];
@@ -367,7 +366,6 @@ const AdminShellSidebarNav: React.FC<AdminShellSidebarNavProps> = ({
  * boilerplate in each app.
  */
 export const AdminShell: React.FC<AdminShellProps> = ({
-  api,
   apiBase,
   baseUrl,
   breadcrumbs,
@@ -396,7 +394,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({
     baseUrl,
     routeBase,
   });
-  const {config, error, isLoading} = useAdminConfig(api, resolvedApiBase);
+  const {config, error, isLoading} = useAdminConfig(resolvedApiBase);
 
   const navigate = useCallback(
     (path: string) => {

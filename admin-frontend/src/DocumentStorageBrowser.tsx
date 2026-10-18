@@ -47,7 +47,6 @@ const formatDate = (isoDate: string): string => {
 };
 
 export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
-  api,
   basePath,
   backHref,
   backButton = true,
@@ -73,7 +72,7 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
     useDeleteFolderMutation,
     useCreateFolderMutation,
     useLazyDownloadQuery,
-  } = useDocumentStorageApi(api, basePath);
+  } = useDocumentStorageApi(basePath);
 
   const {
     data: listData,

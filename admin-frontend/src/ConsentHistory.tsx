@@ -19,7 +19,6 @@ import type {ConsentHistoryEntry} from "./useConsentHistory";
 import {useConsentHistory} from "./useConsentHistory";
 
 interface ConsentHistoryProps {
-  api: Parameters<typeof useConsentHistory>[0];
   baseUrl?: string;
   title?: string;
 }
@@ -199,12 +198,8 @@ const ConsentHistoryItem: React.FC<{entry: ConsentHistoryEntry}> = ({entry}) => 
   );
 };
 
-export const ConsentHistory: React.FC<ConsentHistoryProps> = ({
-  api,
-  baseUrl,
-  title = "My Consents",
-}) => {
-  const {entries, isLoading, error, refetch} = useConsentHistory(api, baseUrl);
+export const ConsentHistory: React.FC<ConsentHistoryProps> = ({baseUrl, title = "My Consents"}) => {
+  const {entries, isLoading, error, refetch} = useConsentHistory(baseUrl);
 
   if (isLoading) {
     return (

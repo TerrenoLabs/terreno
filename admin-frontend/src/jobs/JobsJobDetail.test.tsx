@@ -1,13 +1,23 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi} from "../types";
 
 const pushMock = mock(() => {});
 mock.module("expo-router", () => ({
   router: {push: pushMock, replace: mock(() => {})},
 }));
+
+interface FakeResponse {
+  body?: unknown;
+  pending?: boolean;
+  status?: number;
+}
+
+interface FakeRequest {
+  method: string;
+  path: string;
+}
 
 interface DetailState {
   data?: Record<string, unknown>;
@@ -16,36 +26,73 @@ interface DetailState {
 }
 
 const detailState: DetailState = {isLoading: false};
-let retryImpl = mock(
-  async () => ({data: {_id: "retry-1", name: "demo", status: "pending"}}) as unknown
-);
-let requeueImpl = mock(
-  async () => ({data: {_id: "j1", name: "demo", status: "pending"}}) as unknown
-);
-let cancelImpl = mock(
-  async () => ({data: {_id: "j1", name: "demo", status: "cancelled"}}) as unknown
-);
+const okJob = (job: Record<string, unknown>) => mock((): FakeResponse => ({body: {data: job}}));
+let retryImpl = okJob({_id: "retry-1", name: "demo", status: "pending"});
+let requeueImpl = okJob({_id: "j1", name: "demo", status: "pending"});
+let cancelImpl = okJob({_id: "j1", name: "demo", status: "cancelled"});
+const requests: FakeRequest[] = [];
+const originalFetch = globalThis.fetch;
 
-const createJobsApi = (): AdminApi => {
-  const jobsHooks: Record<string, unknown> = {
-    useJobsDashboardCancelMutation: () => [() => ({unwrap: cancelImpl}), {isLoading: false}],
-    useJobsDashboardDetailQuery: () => detailState,
-    useJobsDashboardRequeueMutation: () => [() => ({unwrap: requeueImpl}), {isLoading: false}],
-    useJobsDashboardRetryMutation: () => [() => ({unwrap: retryImpl}), {isLoading: false}],
-  };
-  const hooks = new Proxy(jobsHooks, {
-    get: (target, key: string) =>
-      target[key] ?? (() => ({data: undefined, isLoading: false, isSuccess: true})),
-  });
-  const api = {
-    enhanceEndpoints: () => api,
-    injectEndpoints: () => hooks,
-  };
-  return api as unknown as AdminApi;
+/** Serves `/jobs/:id` and its POST actions from the mutable test state above. */
+const route = (request: FakeRequest): FakeResponse => {
+  if (request.method === "GET" && /^\/jobs\/[^/]+$/.test(request.path)) {
+    if (detailState.isLoading) {
+      return {pending: true};
+    }
+    if (detailState.error) {
+      return {body: {title: "Server error"}, status: 500};
+    }
+    return {body: detailState.data ?? {}};
+  }
+  if (request.method === "POST" && request.path.endsWith("/retry")) {
+    return retryImpl();
+  }
+  if (request.method === "POST" && request.path.endsWith("/requeue")) {
+    return requeueImpl();
+  }
+  if (request.method === "POST" && request.path.endsWith("/cancel")) {
+    return cancelImpl();
+  }
+  return {body: {title: "Not found"}, status: 404};
 };
 
+const installFetch = (): void => {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const request: FakeRequest = {method: init?.method ?? "GET", path: url.split("?")[0] ?? url};
+    requests.push(request);
+    const response = route(request);
+    if (response.pending) {
+      return new Promise<Response>(() => undefined);
+    }
+    return new Response(JSON.stringify(response.body ?? {}), {
+      headers: {"Content-Type": "application/json"},
+      status: response.status ?? 200,
+    });
+  }) as typeof fetch;
+};
+
+const flush = async (): Promise<void> => {
+  await act(async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  });
+};
+
+import {AdminProvider} from "../AdminProvider";
 import {JobsJobDetail} from "./JobsJobDetail";
 import {formatJobTimestamp} from "./jobPayload";
+
+const renderDetail = async (routeBase?: string): Promise<ReturnType<typeof renderWithTheme>> => {
+  const utils = renderWithTheme(
+    <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+      <JobsJobDetail jobId="j1" routeBase={routeBase} />
+    </AdminProvider>
+  );
+  await flush();
+  return utils;
+};
 
 const baseJob = {
   _id: "j1",
@@ -54,33 +101,34 @@ const baseJob = {
 
 describe("JobsJobDetail", () => {
   beforeEach(() => {
+    installFetch();
+    requests.length = 0;
     detailState.data = undefined;
     detailState.error = undefined;
     detailState.isLoading = false;
     pushMock.mockClear();
-    retryImpl = mock(
-      async () => ({data: {_id: "retry-1", name: "demo", status: "pending"}}) as unknown
-    );
-    requeueImpl = mock(
-      async () => ({data: {_id: "j1", name: "demo", status: "pending"}}) as unknown
-    );
-    cancelImpl = mock(
-      async () => ({data: {_id: "j1", name: "demo", status: "cancelled"}}) as unknown
-    );
+    retryImpl = okJob({_id: "retry-1", name: "demo", status: "pending"});
+    requeueImpl = okJob({_id: "j1", name: "demo", status: "pending"});
+    cancelImpl = okJob({_id: "j1", name: "demo", status: "cancelled"});
   });
 
-  it("renders loading and error states", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("renders loading and error states", async () => {
     detailState.isLoading = true;
-    const loading = renderWithTheme(<JobsJobDetail api={createJobsApi()} jobId="j1" />);
+    const loading = await renderDetail();
     expect(loading.getByTestId("jobs-detail-loading")).toBeTruthy();
+    loading.unmount();
 
     detailState.isLoading = false;
     detailState.error = {status: 500};
-    const errored = renderWithTheme(<JobsJobDetail api={createJobsApi()} jobId="j1" />);
+    const errored = await renderDetail();
     expect(errored.getByTestId("jobs-detail-error")).toBeTruthy();
   });
 
-  it("shows attempts, lock info, payload, and action availability for failed jobs", () => {
+  it("shows attempts, lock info, payload, and action availability for failed jobs", async () => {
     detailState.data = {
       data: {
         ...baseJob,
@@ -93,9 +141,7 @@ describe("JobsJobDetail", () => {
         status: "failed",
       },
     };
-    const {getByTestId, getByText} = renderWithTheme(
-      <JobsJobDetail api={createJobsApi()} jobId="j1" routeBase="/admin" />
-    );
+    const {getByTestId, getByText} = await renderDetail("/admin");
     expect(getByTestId("jobs-detail-retry").props.accessibilityState?.disabled).toBe(false);
     expect(getByTestId("jobs-detail-requeue").props.accessibilityState?.disabled).toBe(false);
     expect(getByTestId("jobs-detail-cancel").props.accessibilityState?.disabled).toBe(true);
@@ -107,7 +153,7 @@ describe("JobsJobDetail", () => {
     ).toBeTruthy();
   });
 
-  it("gates actions across dead, running, completed, cancelled, and retried jobs", () => {
+  it("gates actions across dead, running, completed, cancelled, and retried jobs", async () => {
     const cases: Array<{
       cancel: boolean;
       requeue: boolean;
@@ -130,9 +176,7 @@ describe("JobsJobDetail", () => {
           status: jobCase.status,
         },
       };
-      const {getByTestId, unmount} = renderWithTheme(
-        <JobsJobDetail api={createJobsApi()} jobId="j1" />
-      );
+      const {getByTestId, unmount} = await renderDetail();
       expect(getByTestId("jobs-detail-retry").props.accessibilityState?.disabled).toBe(
         !jobCase.retry
       );
@@ -153,9 +197,7 @@ describe("JobsJobDetail", () => {
         status: "dead",
       },
     };
-    const {getAllByText, getByTestId} = renderWithTheme(
-      <JobsJobDetail api={createJobsApi()} jobId="j1" routeBase="/admin" />
-    );
+    const {getAllByText, getByTestId} = await renderDetail("/admin");
 
     await act(async () => {
       fireEvent.press(getByTestId("jobs-detail-retry"));
@@ -164,7 +206,9 @@ describe("JobsJobDetail", () => {
       const confirms = getAllByText("Confirm");
       fireEvent.press(confirms[confirms.length - 1]);
     });
+    await flush();
     expect(retryImpl.mock.calls.length).toBe(1);
+    expect(requests).toContainEqual({method: "POST", path: "/jobs/j1/retry"});
     expect(String(pushMock.mock.calls.at(-1)?.[0])).toBe("/admin/jobs/retry-1");
 
     await act(async () => {
@@ -174,7 +218,9 @@ describe("JobsJobDetail", () => {
       const confirms = getAllByText("Confirm");
       fireEvent.press(confirms[confirms.length - 1]);
     });
+    await flush();
     expect(requeueImpl.mock.calls.length).toBe(1);
+    expect(requests).toContainEqual({method: "POST", path: "/jobs/j1/requeue"});
 
     detailState.data = {
       data: {
@@ -182,9 +228,7 @@ describe("JobsJobDetail", () => {
         status: "running",
       },
     };
-    const running = renderWithTheme(
-      <JobsJobDetail api={createJobsApi()} jobId="j1" routeBase="/admin" />
-    );
+    const running = await renderDetail("/admin");
     await act(async () => {
       fireEvent.press(running.getByTestId("jobs-detail-cancel"));
     });
@@ -192,7 +236,9 @@ describe("JobsJobDetail", () => {
       const confirms = running.getAllByText("Confirm");
       fireEvent.press(confirms[confirms.length - 1]);
     });
+    await flush();
     expect(cancelImpl.mock.calls.length).toBe(1);
+    expect(requests).toContainEqual({method: "POST", path: "/jobs/j1/cancel"});
   });
 
   it("shows redacted and unavailable payload copy", async () => {
@@ -203,7 +249,7 @@ describe("JobsJobDetail", () => {
         status: "dead",
       },
     };
-    const redacted = renderWithTheme(<JobsJobDetail api={createJobsApi()} jobId="j1" />);
+    const redacted = await renderDetail();
     await act(async () => {
       fireEvent.press(redacted.getByTestId("jobs-detail-payload.toggle"));
     });
@@ -215,7 +261,7 @@ describe("JobsJobDetail", () => {
         status: "dead",
       },
     };
-    const unavailable = renderWithTheme(<JobsJobDetail api={createJobsApi()} jobId="j1" />);
+    const unavailable = await renderDetail();
     await act(async () => {
       fireEvent.press(unavailable.getByTestId("jobs-detail-payload.toggle"));
     });
@@ -231,9 +277,7 @@ describe("JobsJobDetail", () => {
         status: "dead",
       },
     };
-    const embedded = renderWithTheme(
-      <JobsJobDetail api={createJobsApi()} jobId="j1" routeBase="/admin" />
-    );
+    const embedded = await renderDetail("/admin");
     await act(async () => {
       fireEvent.press(embedded.getByTestId("jobs-detail-retried-from"));
     });
@@ -244,7 +288,7 @@ describe("JobsJobDetail", () => {
     expect(String(pushMock.mock.calls.at(-1)?.[0])).toBe("/admin/jobs/retry-1");
 
     pushMock.mockClear();
-    const spa = renderWithTheme(<JobsJobDetail api={createJobsApi()} jobId="j1" routeBase="" />);
+    const spa = await renderDetail("");
     await act(async () => {
       fireEvent.press(spa.getByTestId("jobs-detail-retried-by"));
     });

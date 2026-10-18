@@ -64,21 +64,28 @@ const RootLayoutNav: React.FC = () => {
 Wrap admin routes once in `app/admin/_layout.tsx`:
 
 ```tsx
-import {AdminShellLayout} from "@terreno/admin-frontend";
+import {AdminProvider, AdminShellLayout} from "@terreno/admin-frontend";
+import {baseUrl} from "@terreno/rtk";
 import {Stack} from "expo-router";
-import {terrenoApi} from "@/store/sdk";
+import {getAdminAuthHeaders} from "@/store/betterAuthApi";
 
 export default function AdminLayout(): React.ReactElement {
   return (
-    <AdminShellLayout
-      api={terrenoApi}
+    <AdminProvider
       apiBase="/admin"
-      configurationPath="/admin/configuration"
+      apiOrigin={baseUrl}
+      getAuthHeaders={getAdminAuthHeaders}
       routeBase="/admin"
-      versionConfigPath="/version-config"
     >
-      <Stack screenOptions={{headerShown: false, contentStyle: {flex: 1}}} />
-    </AdminShellLayout>
+      <AdminShellLayout
+        apiBase="/admin"
+        configurationPath="/admin/configuration"
+        routeBase="/admin"
+        versionConfigPath="/version-config"
+      >
+        <Stack screenOptions={{headerShown: false, contentStyle: {flex: 1}}} />
+      </AdminShellLayout>
+    </AdminProvider>
   );
 }
 ```

@@ -1,4 +1,4 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles
+// noExplicitAny: test mocks use loosely typed hook doubles
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {describe, expect, it, mock} from "bun:test";
 import React from "react";
@@ -10,13 +10,11 @@ mock.module("../AdminObjectPicker", () => ({
 }));
 
 import {AdminRefField} from "../AdminRefField";
-import type {AdminApi} from "../types";
 
 describe("AdminRefField", () => {
   it("renders an AdminObjectPicker passing through key props", () => {
     const {getByTestId} = renderWithTheme(
       <AdminRefField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         errorText="e"
         helperText="h"

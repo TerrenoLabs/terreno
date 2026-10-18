@@ -13,13 +13,13 @@ import {type EvaluatorUsageRow, unwrapEvaluatorRecord} from "./evaluatorTypes";
 import {useAiObservabilityEvaluatorsApi} from "./useAiObservabilityEvaluatorsApi";
 
 export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const {useDetailQuery} = useAiObservabilityEvaluatorsApi(api);
-  const {useListQuery: useExperimentsQuery} = useAiObservabilityExperimentsApi(api);
-  const {useDetailQuery: usePromptDetailQuery} = useAiObservabilityPromptsApi(api);
+  const {useDetailQuery} = useAiObservabilityEvaluatorsApi();
+  const {useListQuery: useExperimentsQuery} = useAiObservabilityExperimentsApi();
+  const {useDetailQuery: usePromptDetailQuery} = useAiObservabilityPromptsApi();
   const {data, isError, isLoading} = useDetailQuery(id ?? "", {skip: !id});
   const {data: experimentsRaw, isError: isExperimentsError} = useExperimentsQuery();
   const evaluator = useMemo(() => unwrapEvaluatorRecord(data), [data]);

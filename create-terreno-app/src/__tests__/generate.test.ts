@@ -410,16 +410,21 @@ describe("generated frontend Terreno 57 compatibility", () => {
     assert.notInclude(notFound, "flex={1}");
   });
 
-  test("admin screens pass a type-erased AdminApi instance", () => {
+  test("admin screens bind auth through AdminProvider instead of an RTK api", () => {
     const sdk = read("frontend/store/sdk.ts");
+    const betterAuthApi = read("frontend/store/betterAuthApi.ts");
+    const adminLayout = read("frontend/app/(tabs)/admin/_layout.tsx");
     const adminIndex = read("frontend/app/(tabs)/admin/index.tsx");
     const adminConfig = read("frontend/app/(tabs)/admin/configuration.tsx");
 
-    assert.include(sdk, "adminTerrenoApi");
-    assert.include(sdk, 'as unknown as AdminScreenProps["api"]');
-    assert.include(adminIndex, "adminTerrenoApi");
-    assert.include(adminConfig, "adminTerrenoApi");
-    assert.notInclude(adminIndex, "api={terrenoApi}");
+    assert.notInclude(sdk, "adminTerrenoApi");
+    assert.notInclude(sdk, "AdminScreenProps");
+    assert.include(betterAuthApi, "export const getAdminAuthHeaders");
+    assert.include(adminLayout, "<AdminProvider");
+    assert.include(adminLayout, "getAuthHeaders={getAdminAuthHeaders}");
+    assert.include(adminLayout, "apiOrigin={baseUrl}");
+    assert.notInclude(adminIndex, "api=");
+    assert.notInclude(adminConfig, "api=");
   });
 
   test("store wires Better Auth, dev store, and app-local RootState", () => {

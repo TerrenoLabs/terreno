@@ -48,10 +48,10 @@ describe("OrgMembersRoute", () => {
     assert.equal(capturedMembersProps.current?.organizationId, "org-acme-99");
   });
 
-  it("wires OrgMembersScreen with terrenoApi, organizationId, and routeBase", () => {
+  it("wires OrgMembersScreen with organizationId and routeBase and no RTK api", () => {
     renderToString(<OrgMembersRoute />);
 
-    assert.equal(capturedMembersProps.current?.api, mockTerrenoApi);
+    assert.isUndefined(capturedMembersProps.current?.api);
     assert.equal(capturedMembersProps.current?.organizationId, "org-42");
     assert.equal(capturedMembersProps.current?.routeBase, "/admin");
   });

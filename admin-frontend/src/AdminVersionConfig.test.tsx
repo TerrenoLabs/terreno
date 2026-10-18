@@ -1,11 +1,9 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and dynamic endpoint builders
-// biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+// biome-ignore-all lint/suspicious/noExplicitAny: test reads loosely typed request bodies
+import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import type {AdminApi} from "./types";
 
 const routerBack = mock(() => {});
 mock.module("expo-router", () => ({
@@ -26,71 +24,76 @@ const apiState: ApiState = {
   updateImpl: async () => ({}),
 };
 
-const updateCalls: unknown[] = [];
-const querySpecs: unknown[] = [];
-const mutationSpecs: unknown[] = [];
-const makeApi = () => ({
-  injectEndpoints: ({endpoints}: {endpoints: (b: unknown) => Record<string, unknown>}) => {
-    const build = {
-      mutation: (spec: Record<string, unknown>) => {
-        // Invoke the mutation's query lambda so the URL + body builder runs.
-        if (typeof spec?.query === "function") {
-          mutationSpecs.push(spec.query({demo: true}));
-        }
-        return spec;
-      },
-      query: (spec: Record<string, unknown>) => {
-        // Invoke the query lambda so the request descriptor builder runs.
-        if (typeof spec?.query === "function") {
-          querySpecs.push(spec.query());
-        }
-        return spec;
-      },
-    };
-    endpoints(build);
-    return {
-      useAdminVersionConfigQuery: () => ({
-        data: apiState.data,
-        error: apiState.error,
-        isLoading: apiState.isLoading,
-      }),
-      useUpdateVersionConfigMutation: () => [
-        (body: unknown) => ({
-          unwrap: async () => {
-            updateCalls.push(body);
-            return apiState.updateImpl(body);
-          },
-        }),
-        {isLoading: false},
-      ],
-    };
-  },
-});
+const updateCalls: any[] = [];
+const requests: {method: string; url: string}[] = [];
+const originalFetch = globalThis.fetch;
+
+const jsonResponse = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {headers: {"Content-Type": "application/json"}, status});
+
+/** Serves `GET/PUT /admin/version-config` from `apiState`. */
+const installFetch = (): void => {
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    requests.push({method, url: String(url)});
+    if (method === "PUT") {
+      const body = JSON.parse(String(init?.body ?? "{}"));
+      updateCalls.push(body);
+      try {
+        return jsonResponse(await apiState.updateImpl(body));
+      } catch (error) {
+        return jsonResponse({title: String(error)}, 500);
+      }
+    }
+    if (apiState.isLoading) {
+      return new Promise<Response>(() => undefined);
+    }
+    if (apiState.error) {
+      return jsonResponse({title: "boom"}, 500);
+    }
+    return jsonResponse(apiState.data ?? {});
+  }) as typeof fetch;
+};
 
 import {AdminVersionConfig} from "./AdminVersionConfig";
+
+const renderConfig = async (): Promise<ReturnType<typeof renderWithTheme>> => {
+  const rendered = renderWithTheme(<AdminVersionConfig baseUrl="/admin" />);
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+  return rendered;
+};
 
 describe("AdminVersionConfig", () => {
   beforeEach(() => {
     routerBack.mockClear();
     updateCalls.length = 0;
-    querySpecs.length = 0;
-    mutationSpecs.length = 0;
+    requests.length = 0;
     apiState.data = null;
     apiState.error = null;
     apiState.isLoading = false;
     apiState.updateImpl = async () => ({});
+    installFetch();
   });
 
-  it("wires the injected query and mutation endpoints to the version-config URL", () => {
-    renderWithTheme(<AdminVersionConfig api={makeApi() as unknown as AdminApi} baseUrl="/admin" />);
-    expect(querySpecs.length).toBeGreaterThan(0);
-    expect(querySpecs[0]).toEqual({method: "GET", url: "/admin/version-config"});
-    expect(mutationSpecs.length).toBeGreaterThan(0);
-    expect(mutationSpecs[0]).toEqual({
-      body: {demo: true},
-      method: "PUT",
-      url: "/admin/version-config",
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("reads and saves through the version-config URL", async () => {
+    apiState.data = {mobileRequiredVersion: 1};
+    const {getByText} = await renderConfig();
+    await act(async () => {
+      fireEvent.press(getByText("Save"));
+      await new Promise((r) => setTimeout(r, 150));
     });
+    expect(requests).toEqual([
+      {method: "GET", url: "/admin/version-config"},
+      {method: "PUT", url: "/admin/version-config"},
+    ]);
+    expect(updateCalls[0].mobileRequiredVersion).toBe(1);
   });
 
   it("updates form state when a number field changes via handleFieldChange", async () => {
@@ -103,9 +106,7 @@ describe("AdminVersionConfig", () => {
       webRequiredVersion: 3,
       webWarningVersion: 4,
     };
-    const {UNSAFE_root, getByText} = renderWithTheme(
-      <AdminVersionConfig api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {UNSAFE_root, getByText} = await renderConfig();
     const numberNodes = UNSAFE_root.findAll(
       (n: ReactTestInstance) => typeof n.props?.onChange === "function"
     );
@@ -124,19 +125,15 @@ describe("AdminVersionConfig", () => {
     expect(updateCalls.length).toBe(1);
   });
 
-  it("renders loading state", () => {
+  it("renders loading state", async () => {
     apiState.isLoading = true;
-    const {toJSON} = renderWithTheme(
-      <AdminVersionConfig api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {toJSON} = await renderConfig();
     expect(toJSON()).toBeDefined();
   });
 
   it("renders error state and calls back on press", async () => {
     apiState.error = new Error("boom");
-    const {getByText} = renderWithTheme(
-      <AdminVersionConfig api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByText} = await renderConfig();
     await act(async () => {
       fireEvent.press(getByText("Back"));
       await new Promise((r) => setTimeout(r, 150));
@@ -144,11 +141,9 @@ describe("AdminVersionConfig", () => {
     expect(routerBack).toHaveBeenCalled();
   });
 
-  it("populates the form with defaults when data is missing", () => {
+  it("populates the form with defaults when data is missing", async () => {
     apiState.data = null;
-    const {toJSON} = renderWithTheme(
-      <AdminVersionConfig api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {toJSON} = await renderConfig();
     expect(toJSON()).toBeDefined();
   });
 
@@ -163,9 +158,7 @@ describe("AdminVersionConfig", () => {
       webRequiredVersion: 3,
       webWarningVersion: 4,
     };
-    const {getByText} = renderWithTheme(
-      <AdminVersionConfig api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByText} = await renderConfig();
     await act(async () => {
       fireEvent.press(getByText("Save"));
       await new Promise((r) => setTimeout(r, 150));
@@ -182,9 +175,7 @@ describe("AdminVersionConfig", () => {
       webRequiredVersion: 0,
       webWarningVersion: 0,
     };
-    const {getByText} = renderWithTheme(
-      <AdminVersionConfig api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByText} = await renderConfig();
     await act(async () => {
       fireEvent.press(getByText("Save"));
       await new Promise((r) => setTimeout(r, 150));
@@ -198,9 +189,7 @@ describe("AdminVersionConfig", () => {
     apiState.updateImpl = async () => {
       throw new Error("server down");
     };
-    const {getByText} = renderWithTheme(
-      <AdminVersionConfig api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByText} = await renderConfig();
     await act(async () => {
       fireEvent.press(getByText("Save"));
       await new Promise((r) => setTimeout(r, 150));
@@ -210,9 +199,7 @@ describe("AdminVersionConfig", () => {
 
   it("sets updateUrl to null when empty", async () => {
     apiState.data = {updateUrl: null};
-    const {getByText} = renderWithTheme(
-      <AdminVersionConfig api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByText} = await renderConfig();
     await act(async () => {
       fireEvent.press(getByText("Save"));
       await new Promise((r) => setTimeout(r, 150));

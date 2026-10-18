@@ -1,0 +1,7 @@
+---
+category: Breaking
+---
+
+- `@terreno/admin-frontend` no longer takes an RTK `api`. The `api` prop is removed from every admin component (`AdminProvider`, `AdminShellLayout`, `AdminHome`, `AdminModelList`, `AdminModelTable`, `AdminModelForm`, `AdminScreenRouter`, `ConfigurationScreen`, `DocumentStorageBrowser`, `ConsentHistory`, comms, jobs, org, consent, and announcement screens, and widget props), and admin hooks drop their `api` argument (`useAdminConfig(apiBase)`, `useAdminScripts(apiBase)`, `useAdminRoles(apiBase)`, `useConfigurationApi({basePath})`, `useDocumentStorageApi(basePath)`, `useConsentHistory(baseUrl)`, `useOrganizationsApi(basePath)`, `useCommsDashboardApi()`, `useJobsDashboardApi()`, and the `useAiObservability*Api()` hooks).
+- `useAdminApi(api, routePath, modelName)` is removed. Use `useAdminModelApi(routePath, modelName)`, which keeps the same hook names and calls the same `/admin/{routePath}` URLs through the admin fetch client. `AdminApi`, `EndpointBuilder`, and admin `injectEndpoints` are gone; `@reduxjs/toolkit` and `react-redux` are no longer peers of admin-frontend.
+- `AdminProvider` is now the required auth binding for every admin request, including ObjectId and API-only model CRUD. Cookie SPAs pass `credentials="same-origin"`; embedded apps pass `apiOrigin` and `getAuthHeaders`. Product screens that reuse admin components wrap them in `AdminProvider`. See the 58.0.0 upgrade guide.

@@ -1,4 +1,4 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and dynamic mock returns
+// noExplicitAny: test mocks use loosely typed hook doubles and dynamic mock returns
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {SelectField} from "@terreno/ui";
@@ -8,7 +8,6 @@ import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminRolesField} from "./AdminRolesField";
 import {AdminRolesList} from "./AdminRolesList";
-import type {AdminApi} from "./types";
 import {normalizeRoles, normalizeStatements, type RolesQueryResult} from "./useAdminRoles";
 
 const mockUseListRolesQuery = mock(
@@ -39,8 +38,6 @@ mock.module("./useAdminRoles", () => ({
     useUpdateRoleMutation: () => [mockUpdateRole, {isLoading: false}],
   }),
 }));
-
-const mockApi = {} as unknown as AdminApi;
 
 interface RenderedNode {
   props?: {testID?: unknown};
@@ -93,7 +90,7 @@ describe("AdminRolesList", () => {
   it("renders a spinner while loading", () => {
     mockUseListRolesQuery.mockReturnValue({data: undefined, error: null, isLoading: true});
 
-    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     expect(getByTestId("admin-roles-loading")).toBeTruthy();
   });
@@ -105,7 +102,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
     });
 
-    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     expect(getByTestId("admin-roles-error")).toBeTruthy();
   });
@@ -113,9 +110,7 @@ describe("AdminRolesList", () => {
   it("renders roles returned as a bare array", () => {
     mockUseListRolesQuery.mockReturnValue({data: ROLES, error: null, isLoading: false});
 
-    const {getByTestId, getByText} = renderWithTheme(
-      <AdminRolesList api={mockApi} apiBase="/admin" />
-    );
+    const {getByTestId, getByText} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     expect(getByTestId("admin-roles-item-superadmin")).toBeTruthy();
     expect(getByTestId("admin-roles-item-todoUser")).toBeTruthy();
@@ -130,9 +125,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
       refetch: mockRefetch,
     });
-    const {getByTestId, getByText} = renderWithTheme(
-      <AdminRolesList api={mockApi} apiBase="/admin" />
-    );
+    const {getByTestId, getByText} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     expect(getByTestId("admin-permissions-list")).toBeTruthy();
     expect(getByTestId("admin-permissions-custom-admin")).toBeTruthy();
@@ -142,7 +135,7 @@ describe("AdminRolesList", () => {
 
   it("groups a role's actions into one row per resource", () => {
     mockUseListRolesQuery.mockReturnValue({data: ROLES, error: null, isLoading: false});
-    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     expect(getByTestId("admin-roles-item-todoUser-permission-model-adminTodo")).toBeTruthy();
     expect(getByTestId("admin-roles-item-todoUser-permission-adminTodo-read")).toBeTruthy();
@@ -161,7 +154,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
     });
     mockUseListRolesQuery.mockReturnValue({data: [], error: null, isLoading: false});
-    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     const sectionIDs = [
       ...new Set(
@@ -198,7 +191,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
     });
     mockUseListRolesQuery.mockReturnValue({data: [], error: null, isLoading: false});
-    const {UNSAFE_root} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {UNSAFE_root} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     const badges = UNSAFE_root.findAll(
       (node) =>
@@ -229,7 +222,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
       refetch: mockRefetch,
     });
-    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     expect(getByTestId("admin-roles-edit-todoUser").props.disabled).toBeFalsy();
     expect(getByTestId("admin-roles-edit-superadmin").props.disabled).toBeTruthy();
@@ -242,9 +235,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
       refetch: mockRefetch,
     });
-    const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminRolesList api={mockApi} apiBase="/admin" />
-    );
+    const {getByTestId, UNSAFE_root} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     await act(async () => {
       fireEvent.press(getByTestId("admin-roles-edit-todoUser"));
@@ -276,9 +267,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
       refetch: mockRefetch,
     });
-    const {getByTestId, getByText} = renderWithTheme(
-      <AdminRolesList api={mockApi} apiBase="/admin" />
-    );
+    const {getByTestId, getByText} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     await act(async () => {
       fireEvent.press(getByTestId("admin-roles-edit-todoUser"));
@@ -312,7 +301,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
       refetch: mockRefetch,
     });
-    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     const scrollArea = getByTestId("admin-roles-scroll");
     expect(scrollArea).toBeTruthy();
@@ -326,7 +315,7 @@ describe("AdminRolesList", () => {
   it("renders roles returned inside a data envelope", () => {
     mockUseListRolesQuery.mockReturnValue({data: {data: ROLES}, error: null, isLoading: false});
 
-    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     expect(getByTestId("admin-roles-item-superadmin")).toBeTruthy();
   });
@@ -334,7 +323,7 @@ describe("AdminRolesList", () => {
   it("renders an empty state when there are no roles", () => {
     mockUseListRolesQuery.mockReturnValue({data: [], error: null, isLoading: false});
 
-    const {getByText} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByText} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     expect(getByText("No roles found.")).toBeTruthy();
   });
@@ -352,7 +341,7 @@ describe("AdminRolesList", () => {
       isLoading: true,
     });
 
-    const {getByText} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByText} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     expect(getByText("locked")).toBeTruthy();
     expect(getByText("sealed")).toBeTruthy();
@@ -368,7 +357,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
       refetch: mockRefetch,
     });
-    const {getByTestId} = renderWithTheme(<AdminRolesList api={mockApi} apiBase="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     await act(async () => {
       fireEvent.press(getByTestId("admin-roles-add-button"));
@@ -401,9 +390,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
       refetch: mockRefetch,
     });
-    const {getByTestId, getByText} = renderWithTheme(
-      <AdminRolesList api={mockApi} apiBase="/admin" />
-    );
+    const {getByTestId, getByText} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     await act(async () => {
       fireEvent.press(getByTestId("admin-roles-add-button"));
@@ -435,7 +422,7 @@ describe("AdminRolesList", () => {
       refetch: mockRefetch,
     });
     const {getByTestId, queryByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminRolesList api={mockApi} apiBase="/admin" />
+      <AdminRolesList apiBase="/admin" />
     );
 
     await act(async () => {
@@ -457,9 +444,7 @@ describe("AdminRolesList", () => {
       isLoading: false,
       refetch: mockRefetch,
     });
-    const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminRolesList api={mockApi} apiBase="/admin" />
-    );
+    const {getByTestId, UNSAFE_root} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
 
     await act(async () => {
       fireEvent.press(getByTestId("admin-roles-edit-todoUser"));
@@ -499,7 +484,7 @@ describe("AdminRolesList", () => {
       refetch: mockRefetch,
     });
     const {UNSAFE_root, getByTestId, getByText, queryByText} = renderWithTheme(
-      <AdminRolesList api={mockApi} apiBase="/admin" />
+      <AdminRolesList apiBase="/admin" />
     );
 
     await act(async () => {
@@ -550,7 +535,6 @@ describe("AdminRolesField", () => {
     const onChange = mock((_value: unknown) => undefined);
     const {getByTestId, UNSAFE_root} = renderWithTheme(
       <AdminRolesField
-        api={mockApi}
         apiBase="/admin"
         fieldConfig={fieldConfig}
         fieldKey="roles"
@@ -577,7 +561,6 @@ describe("AdminRolesField", () => {
     const onChange = mock((_value: unknown) => undefined);
     const {getByTestId} = renderWithTheme(
       <AdminRolesField
-        api={mockApi}
         apiBase="/admin"
         fieldConfig={fieldConfig}
         fieldKey="roles"

@@ -3,14 +3,12 @@ import type {Href} from "expo-router";
 import {router} from "expo-router";
 import React, {useCallback, useEffect, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
-import type {AdminApi} from "../types";
 import type {OrganizationSummary} from "./OrgDirectoryScreen";
 import {type OrganizationSettings, organizationSettingsOf} from "./organizationSettings";
 import {useOrganizationsApi} from "./useOrganizationsApi";
 import {organizationMatchesRoute} from "./useOrgContext";
 
 export interface OrgSettingsScreenProps {
-  api: AdminApi;
   basePath?: string;
   organizationId: string;
   routeBase?: string;
@@ -33,12 +31,11 @@ const errorTitle = (error: unknown, fallback: string): string => {
 };
 
 export const OrgSettingsScreen: React.FC<OrgSettingsScreenProps> = ({
-  api,
   basePath,
   organizationId,
   routeBase = "/admin",
 }) => {
-  const {useReadQuery, useUpdateMutation} = useOrganizationsApi(api, basePath, organizationId);
+  const {useReadQuery, useUpdateMutation} = useOrganizationsApi(basePath);
   const {data, error, isLoading} = useReadQuery(organizationId);
   const loadedOrganization = (data?.data ?? data) as OrganizationDetail | undefined;
   const isStaleOrganization =

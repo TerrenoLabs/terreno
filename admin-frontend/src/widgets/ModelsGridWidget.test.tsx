@@ -1,11 +1,11 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles
+// noExplicitAny: test mocks use loosely typed hook doubles
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminModelConfig} from "../types";
+import type {AdminModelConfig} from "../types";
 import {ModelsGridWidget} from "./ModelsGridWidget";
 
 const routerPush = mock(() => {});
@@ -18,8 +18,8 @@ let listState: {data?: {total?: number}; isLoading: boolean} = {
   isLoading: false,
 };
 
-mock.module("../useAdminApi", () => ({
-  useAdminApi: () => ({
+mock.module("../useAdminModelApi", () => ({
+  useAdminModelApi: () => ({
     useListQuery: (_args?: unknown, opts?: {skip?: boolean}) => {
       if (opts?.skip) {
         return {data: undefined, isLoading: false};
@@ -39,8 +39,6 @@ const model: AdminModelConfig = {
   routePath: "/admin/users",
 };
 
-const mockApi = {} as unknown as AdminApi;
-
 describe("ModelsGridWidget", () => {
   beforeEach(() => {
     routerPush.mockClear();
@@ -49,7 +47,7 @@ describe("ModelsGridWidget", () => {
 
   it("renders model cards with field and row counts", () => {
     const {getByTestId, getByText} = renderWithTheme(
-      <ModelsGridWidget api={mockApi} models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget models={[model]} routeBase="/admin/" />
     );
 
     expect(getByTestId("admin-home-widget-modelsGrid")).toBeTruthy();
@@ -59,7 +57,7 @@ describe("ModelsGridWidget", () => {
 
   it("navigates to list and create routes from model actions", async () => {
     const {getByTestId} = renderWithTheme(
-      <ModelsGridWidget api={mockApi} models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget models={[model]} routeBase="/admin/" />
     );
 
     await act(async () => {
@@ -82,7 +80,7 @@ describe("ModelsGridWidget", () => {
       permissions: {create: false},
     };
     const {queryByTestId, getByTestId} = renderWithTheme(
-      <ModelsGridWidget api={mockApi} models={[readOnlyModel]} routeBase="/admin" />
+      <ModelsGridWidget models={[readOnlyModel]} routeBase="/admin" />
     );
 
     expect(queryByTestId("admin-home-model-add-AuditLog")).toBeNull();

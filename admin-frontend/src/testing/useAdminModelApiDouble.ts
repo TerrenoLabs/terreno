@@ -29,13 +29,13 @@ const defaultHooks: Record<string, HookFactory> = {
   useUpdateMutation: defaultMutation,
 };
 
-export const configureUseAdminApiDouble = (overrides: Record<string, HookFactory>): void => {
+export const configureAdminModelApiDouble = (overrides: Record<string, HookFactory>): void => {
   for (const [key, factory] of Object.entries(overrides)) {
     hookOverrides.set(key, factory);
   }
 };
 
-export const resetUseAdminApiDouble = (): void => {
+export const resetAdminModelApiDouble = (): void => {
   hookOverrides.clear();
 };
 
@@ -58,8 +58,8 @@ const resolveHook = (prop: string): HookFactory => {
 };
 
 if (process.env.ADMIN_USE_REAL_API !== "1") {
-  mock.module("../useAdminApi", () => ({
-    useAdminApi: () =>
+  mock.module("../useAdminModelApi", () => ({
+    useAdminModelApi: () =>
       new Proxy(
         {},
         {

@@ -67,21 +67,17 @@
       "devDependencies": {
         "@biomejs/biome": "catalog:",
         "@react-native-community/slider": "catalog:",
-        "@reduxjs/toolkit": "catalog:",
         "@testing-library/react-native": "catalog:",
         "@types/lodash": "catalog:",
         "@types/luxon": "catalog:",
         "@types/qs": "catalog:",
         "@types/react": "catalog:",
         "react": "catalog:",
-        "react-redux": "catalog:",
         "typescript": "catalog:",
       },
       "peerDependencies": {
-        "@reduxjs/toolkit": "catalog:",
         "react": "catalog:",
         "react-native-webview": "catalog:",
-        "react-redux": "catalog:",
       },
       "optionalPeers": [
         "react-native-webview",

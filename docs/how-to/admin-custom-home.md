@@ -25,8 +25,14 @@ Built-in IDs include `modelStats`, `modelsGrid`, `scriptRunner`, `versionConfig`
 For an app-specific widget, implement `AdminHomeWidgetProps` and register it:
 
 ```tsx
-<AdminProvider widgets={{home: {operationsSummary: OperationsSummary}}} api={api}>
-  <AdminHome api={api} />
+<AdminProvider
+  apiBase="/admin"
+  apiOrigin={baseUrl}
+  getAuthHeaders={getAdminAuthHeaders}
+  routeBase="/admin"
+  widgets={{home: {operationsSummary: OperationsSummary}}}
+>
+  <AdminHome />
 </AdminProvider>
 ```
 

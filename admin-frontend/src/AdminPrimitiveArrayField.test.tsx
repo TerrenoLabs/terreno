@@ -1,4 +1,4 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and mock.calls access
+// noExplicitAny: test mocks use loosely typed hook doubles and mock.calls access
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
@@ -7,7 +7,6 @@ import {Pressable} from "react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminPrimitiveArrayField} from "./AdminPrimitiveArrayField";
-import type {AdminApi} from "./types";
 
 const press = async (el: ReactTestInstance): Promise<void> => {
   await act(async () => {
@@ -16,16 +15,10 @@ const press = async (el: ReactTestInstance): Promise<void> => {
   });
 };
 
-const mockApi = {
-  endpoints: {},
-  reducerPath: "test",
-} as unknown as AdminApi;
-
 describe("AdminPrimitiveArrayField", () => {
   it("renders empty state when no items", () => {
     const {getByText, getByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="string"
         onChange={() => {}}
@@ -40,7 +33,6 @@ describe("AdminPrimitiveArrayField", () => {
   it("renders existing string items as TextFields", () => {
     const {getByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="string"
         onChange={() => {}}
@@ -58,7 +50,6 @@ describe("AdminPrimitiveArrayField", () => {
     const onChange = mock((_: unknown) => undefined);
     const {getByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="string"
         onChange={onChange}
@@ -76,7 +67,6 @@ describe("AdminPrimitiveArrayField", () => {
     const onChange = mock((_: unknown) => undefined);
     const {getByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="string"
         onChange={onChange}
@@ -94,7 +84,6 @@ describe("AdminPrimitiveArrayField", () => {
     const onChange = mock((_: unknown) => undefined);
     const {getByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="string"
         onChange={onChange}
@@ -112,7 +101,6 @@ describe("AdminPrimitiveArrayField", () => {
     const onChange = mock((_: unknown) => undefined);
     const {getByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="number"
         onChange={onChange}
@@ -129,7 +117,6 @@ describe("AdminPrimitiveArrayField", () => {
     const onChange = mock((_: unknown) => undefined);
     const {getByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="boolean"
         onChange={onChange}
@@ -146,7 +133,6 @@ describe("AdminPrimitiveArrayField", () => {
     const onChange = mock((_: unknown) => undefined);
     const {getByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="number"
         onChange={onChange}
@@ -162,7 +148,6 @@ describe("AdminPrimitiveArrayField", () => {
   it("renders enum items as a SelectField", () => {
     const {toJSON} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemEnum={["low", "medium", "high"]}
         itemType="string"
@@ -179,7 +164,6 @@ describe("AdminPrimitiveArrayField", () => {
     const onChange = mock((_: unknown) => undefined);
     const {UNSAFE_getAllByType} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="boolean"
         onChange={onChange}
@@ -200,7 +184,6 @@ describe("AdminPrimitiveArrayField", () => {
     const onChange = mock((_: unknown) => undefined);
     const {UNSAFE_root} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemEnum={["low", "medium", "high"]}
         itemType="string"
@@ -234,7 +217,6 @@ describe("AdminPrimitiveArrayField", () => {
     );
     const {getByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemRef="User"
         itemType="objectid"
@@ -255,7 +237,6 @@ describe("AdminPrimitiveArrayField", () => {
   it("shows helper and error text and hides add controls in read-only mode", () => {
     const {getByText, queryByTestId} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         errorText="Invalid tags"
         helperText="Comma-separated labels"
@@ -275,7 +256,6 @@ describe("AdminPrimitiveArrayField", () => {
   it("handles non-array values gracefully", () => {
     const {toJSON} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         baseUrl="/admin"
         itemType="string"
         onChange={() => {}}
@@ -290,7 +270,6 @@ describe("AdminPrimitiveArrayField", () => {
     const booleanChange = mock((_: unknown) => undefined);
     const boolean = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         itemType="boolean"
         onChange={booleanChange}
         title="Flags"
@@ -309,7 +288,6 @@ describe("AdminPrimitiveArrayField", () => {
     const enumChange = mock((_: unknown) => undefined);
     const enumField = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         itemEnum={["low", "high"]}
         itemType="string"
         onChange={enumChange}
@@ -329,13 +307,7 @@ describe("AdminPrimitiveArrayField", () => {
   it("keeps non-numeric number input as text", () => {
     const onChange = mock((_: unknown) => undefined);
     const {getByTestId} = renderWithTheme(
-      <AdminPrimitiveArrayField
-        api={mockApi}
-        itemType="number"
-        onChange={onChange}
-        title="Scores"
-        value={[1]}
-      />
+      <AdminPrimitiveArrayField itemType="number" onChange={onChange} title="Scores" value={[1]} />
     );
     fireEvent.changeText(getByTestId("admin-array-item-0"), "invalid");
     expect(onChange).toHaveBeenCalledWith(["invalid"]);
@@ -346,7 +318,6 @@ describe("AdminPrimitiveArrayField", () => {
       React.createElement("CustomRenderer", props);
     const {UNSAFE_root} = renderWithTheme(
       <AdminPrimitiveArrayField
-        api={mockApi}
         apiBase="/admin"
         autocomplete
         itemRef="User"

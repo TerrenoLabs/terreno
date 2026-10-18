@@ -1,70 +1,138 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi} from "../types";
 
 const pushMock = mock(() => {});
 mock.module("expo-router", () => ({
   router: {push: pushMock, replace: mock(() => {})},
 }));
 
+interface FakeResponse {
+  body?: unknown;
+  pending?: boolean;
+  status?: number;
+}
+
+interface FakeRequest {
+  body: unknown;
+  method: string;
+  path: string;
+}
+
 interface DetailState {
-  /** Either the `{data}` envelope or the row Better Auth unwraps it into. */
+  /** Either the `{data}` envelope or a bare row. */
   data?: Record<string, unknown>;
   error?: unknown;
   isLoading: boolean;
 }
 
 const detailState: DetailState = {isLoading: false};
-let retryImpl = mock(async () => ({data: {_id: "new-row"}}) as unknown);
+let retryImpl = mock((): FakeResponse => ({body: {data: {_id: "new-row"}}}));
+const requests: FakeRequest[] = [];
+const originalFetch = globalThis.fetch;
 
-/**
- * Stands in for the host RTK Query API so the real `useCommsDashboardApi` runs.
- * Mocking that module instead would leak process-wide and make the suite order-dependent.
- */
-const createCommsApi = (): AdminApi => {
-  const commsHooks: Record<string, unknown> = {
-    useCommsDashboardDetailQuery: () => detailState,
-    useCommsDashboardRetryMutation: () => [() => ({unwrap: retryImpl}), {isLoading: false}],
-  };
-  // The detail screen also mounts AdminRefField, which injects its own endpoints; answer any
-  // other hook name with an idle query so the picker renders without a second module mock.
-  const hooks = new Proxy(commsHooks, {
-    get: (target, key: string) =>
-      target[key] ?? (() => ({data: undefined, isLoading: false, isSuccess: true})),
-  });
-  const api = {
-    enhanceEndpoints: () => api,
-    injectEndpoints: () => hooks,
-  };
-  return api as unknown as AdminApi;
+/** Serves the message detail and retry routes; AdminRefField lookups get a 404. */
+const route = (request: FakeRequest): FakeResponse => {
+  if (request.method === "GET" && /^\/comms\/messages\/[^/]+$/.test(request.path)) {
+    if (detailState.isLoading) {
+      return {pending: true};
+    }
+    if (detailState.error) {
+      return {body: {title: "Server error"}, status: 500};
+    }
+    return {body: detailState.data ?? null};
+  }
+  if (request.method === "POST" && /^\/comms\/messages\/[^/]+\/retry$/.test(request.path)) {
+    return retryImpl();
+  }
+  return {body: {title: "Not found"}, status: 404};
 };
 
+const installFetch = (): void => {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const request: FakeRequest = {
+      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+      method: init?.method ?? "GET",
+      path: url.split("?")[0] ?? url,
+    };
+    requests.push(request);
+    const response = route(request);
+    if (response.pending) {
+      return new Promise<Response>(() => undefined);
+    }
+    return new Response(JSON.stringify(response.body ?? {}), {
+      headers: {"Content-Type": "application/json"},
+      status: response.status ?? 200,
+    });
+  }) as typeof fetch;
+};
+
+const flush = async (): Promise<void> => {
+  await act(async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  });
+};
+
+import {AdminProvider} from "../AdminProvider";
 import {CommsMessageDetail} from "./CommsMessageDetail";
 import {formatCommsTimestamp} from "./commsMessagePayload";
 
+const renderDetail = async (
+  messageId = "m1",
+  routeBase?: string
+): Promise<ReturnType<typeof renderWithTheme>> => {
+  const utils = renderWithTheme(
+    <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+      <CommsMessageDetail messageId={messageId} routeBase={routeBase} />
+    </AdminProvider>
+  );
+  await flush();
+  return utils;
+};
+
+const confirmRetry = async (utils: Awaited<ReturnType<typeof renderDetail>>): Promise<void> => {
+  await act(async () => {
+    fireEvent.press(utils.getByTestId("comms-detail-retry"));
+  });
+  await act(async () => {
+    const confirms = utils.getAllByText("Confirm");
+    fireEvent.press(confirms[confirms.length - 1]);
+  });
+  await flush();
+};
+
 describe("CommsMessageDetail", () => {
   beforeEach(() => {
+    installFetch();
+    requests.length = 0;
     detailState.data = undefined;
     detailState.error = undefined;
     detailState.isLoading = false;
     pushMock.mockClear();
-    retryImpl = mock(async () => ({data: {_id: "new-row"}}) as unknown);
+    retryImpl = mock((): FakeResponse => ({body: {data: {_id: "new-row"}}}));
   });
 
-  it("renders loading and error states", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("renders loading and error states", async () => {
     detailState.isLoading = true;
-    const loading = renderWithTheme(<CommsMessageDetail api={createCommsApi()} messageId="m1" />);
+    const loading = await renderDetail();
     expect(loading.getByTestId("comms-detail-loading")).toBeTruthy();
+    loading.unmount();
 
     detailState.isLoading = false;
     detailState.error = {status: 500};
-    const errored = renderWithTheme(<CommsMessageDetail api={createCommsApi()} messageId="m1" />);
+    const errored = await renderDetail();
     expect(errored.getByTestId("comms-detail-error")).toBeTruthy();
   });
 
-  it("shows the specific non-retryable reason on the retry control", () => {
+  it("shows the specific non-retryable reason on the retry control", async () => {
     detailState.data = {
       data: {
         _id: "m1",
@@ -88,9 +156,8 @@ describe("CommsMessageDetail", () => {
         to: "a***@example.com",
       },
     };
-    const {getByTestId, getByText} = renderWithTheme(
-      <CommsMessageDetail api={createCommsApi()} messageId="m1" />
-    );
+    const {getByTestId, getByText} = await renderDetail();
+    expect(requests[0]).toMatchObject({method: "GET", path: "/comms/messages/m1"});
     expect(getByTestId("comms-detail-retry").props.accessibilityState?.disabled).toBe(true);
     expect(getByTestId("comms-attempt-0")).toBeTruthy();
     expect(getByTestId("comms-detail-payload")).toBeTruthy();
@@ -102,7 +169,7 @@ describe("CommsMessageDetail", () => {
     ).toBeTruthy();
   });
 
-  it("renders an unwrapped Better Auth detail payload", () => {
+  it("renders an unwrapped detail payload", async () => {
     detailState.data = {
       _id: "m1",
       attempts: [{at: "2026-08-20T00:00:00.000Z", provider: "sendgrid"}],
@@ -112,18 +179,14 @@ describe("CommsMessageDetail", () => {
       status: "failed",
       to: "a***@example.com",
     };
-    const {getByTestId} = renderWithTheme(
-      <CommsMessageDetail api={createCommsApi()} messageId="m1" />
-    );
+    const {getByTestId} = await renderDetail();
     expect(getByTestId("comms-detail-retry")).toBeTruthy();
     expect(getByTestId("comms-attempt-0")).toBeTruthy();
   });
 
-  it("reports a missing message rather than an empty shell", () => {
+  it("reports a missing message rather than an empty shell", async () => {
     detailState.data = undefined;
-    const {getByTestId} = renderWithTheme(
-      <CommsMessageDetail api={createCommsApi()} messageId="m1" />
-    );
+    const {getByTestId} = await renderDetail();
     expect(getByTestId("comms-detail-empty")).toBeTruthy();
   });
 
@@ -148,9 +211,7 @@ describe("CommsMessageDetail", () => {
       to: "a***@example.com",
       userId: "user-1",
     };
-    const {getByTestId} = renderWithTheme(
-      <CommsMessageDetail api={createCommsApi()} messageId="m2" routeBase="/admin" />
-    );
+    const {getByTestId} = await renderDetail("m2", "/admin");
 
     // An unparseable attempt timestamp is shown verbatim instead of crashing the timeline.
     expect(getByTestId("comms-attempt-0-console")).toBeTruthy();
@@ -176,19 +237,11 @@ describe("CommsMessageDetail", () => {
       status: "failed",
       to: "a***@example.com",
     };
-    retryImpl = mock(async () => {
-      throw {status: 400, title: "Retained payload is missing or expired"};
-    });
-    const {getAllByText, getByTestId} = renderWithTheme(
-      <CommsMessageDetail api={createCommsApi()} messageId="m1" />
+    retryImpl = mock(
+      (): FakeResponse => ({body: {title: "Retained payload is missing or expired"}, status: 400})
     );
-    await act(async () => {
-      fireEvent.press(getByTestId("comms-detail-retry"));
-    });
-    await act(async () => {
-      const confirms = getAllByText("Confirm");
-      fireEvent.press(confirms[confirms.length - 1]);
-    });
+    const utils = await renderDetail();
+    await confirmRetry(utils);
     expect(retryImpl).toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });
@@ -202,17 +255,10 @@ describe("CommsMessageDetail", () => {
       status: "failed",
       to: "a***@example.com",
     };
-    retryImpl = mock(async () => ({}) as unknown);
-    const {getAllByText, getByTestId} = renderWithTheme(
-      <CommsMessageDetail api={createCommsApi()} messageId="m1" />
-    );
-    await act(async () => {
-      fireEvent.press(getByTestId("comms-detail-retry"));
-    });
-    await act(async () => {
-      const confirms = getAllByText("Confirm");
-      fireEvent.press(confirms[confirms.length - 1]);
-    });
+    retryImpl = mock((): FakeResponse => ({body: {}}));
+    const utils = await renderDetail();
+    await confirmRetry(utils);
+    expect(retryImpl).toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });
 
@@ -227,17 +273,11 @@ describe("CommsMessageDetail", () => {
         to: "a***@example.com",
       },
     };
-    const {getAllByText, getByTestId} = renderWithTheme(
-      <CommsMessageDetail api={createCommsApi()} messageId="m1" />
+    const utils = await renderDetail();
+    await confirmRetry(utils);
+    expect(requests.some((r) => r.method === "POST" && r.path === "/comms/messages/m1/retry")).toBe(
+      true
     );
-    await act(async () => {
-      fireEvent.press(getByTestId("comms-detail-retry"));
-    });
-    await act(async () => {
-      const confirmButtons = getAllByText("Confirm");
-      fireEvent.press(confirmButtons[confirmButtons.length - 1]);
-    });
-    expect(retryImpl).toHaveBeenCalled();
     expect(pushMock).toHaveBeenCalled();
     const href = String((pushMock.mock.calls[0] as unknown as [string])[0]);
     expect(href).toContain("/admin/comms/new-row");

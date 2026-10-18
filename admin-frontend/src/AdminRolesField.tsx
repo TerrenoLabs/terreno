@@ -18,7 +18,6 @@ const roleNamesFromValue = (value: unknown): string[] => {
  * are not already assigned.
  */
 export const AdminRolesField: React.FC<AdminFieldWidgetProps> = ({
-  api,
   apiBase,
   baseUrl,
   errorText,
@@ -28,7 +27,7 @@ export const AdminRolesField: React.FC<AdminFieldWidgetProps> = ({
   value,
 }) => {
   const {apiBase: resolvedApiBase} = resolveAdminBases({apiBase, baseUrl});
-  const {useListRolesQuery} = useAdminRoles(api, resolvedApiBase);
+  const {useListRolesQuery} = useAdminRoles(resolvedApiBase);
   const {data, error, isLoading} = useListRolesQuery();
   const roles = normalizeRoles(data);
   const selectedRoleNames = roleNamesFromValue(value);

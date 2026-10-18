@@ -33,7 +33,6 @@ const RichTextWidget: React.FC<AdminFieldWidgetProps> = ({
 
 ```tsx
 <AdminProvider
-  api={api}
   apiBase="/admin"
   routeBase="/admin"
   widgets={{fields: {"rich-text": RichTextWidget}}}

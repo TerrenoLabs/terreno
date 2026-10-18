@@ -13,7 +13,6 @@ import {
 } from "@terreno/ui";
 import startCase from "lodash/startCase";
 import React, {useCallback, useMemo, useState} from "react";
-import type {AdminApi} from "./types";
 import {useConfigurationApi} from "./useConfigurationApi";
 
 /**
@@ -47,8 +46,6 @@ interface ConfigurationMetaResponse {
 interface ConfigurationScreenProps {
   /** Base URL for configuration routes (e.g., "/configuration"). */
   basePath?: string;
-  /** RTK Query API instance. */
-  api: AdminApi;
   /** Optional title override. Defaults to "Configuration". */
   title?: string;
 }
@@ -184,19 +181,18 @@ const EmptySections: React.FC = () => (
  * @example
  * ```typescript
  * import {ConfigurationScreen} from "@terreno/admin-frontend";
- * import {api} from "@/store/openApiSdk";
+ * import {} from "@/store/openApiSdk";
  *
  * export default function ConfigScreen() {
- *   return <ConfigurationScreen api={api} />;
+ *   return <ConfigurationScreen />;
  * }
  * ```
  */
 export const ConfigurationScreen: React.FC<ConfigurationScreenProps> = ({
   basePath = "/configuration",
-  api,
   title = "Configuration",
 }) => {
-  const {useMetaQuery, useValuesQuery, useUpdateMutation} = useConfigurationApi({api, basePath});
+  const {useMetaQuery, useValuesQuery, useUpdateMutation} = useConfigurationApi({basePath});
 
   const {data: meta, isLoading: isMetaLoading} = useMetaQuery();
   const {data: valuesResponse, isLoading: isValuesLoading} = useValuesQuery();

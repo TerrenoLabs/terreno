@@ -14,6 +14,18 @@ import {useStoredState} from "./useStoredState";
 const DEFAULT_STORAGE_KEY = "@TerrenoUI:whatsNew:lastSeenVersion";
 /** Share of the window height the release notes may fill before they scroll. */
 const NOTES_MAX_HEIGHT_RATIO = 0.6;
+/** Room the modal's padding, title, and Done button need outside the notes scroller. */
+const MODAL_CHROME_HEIGHT = 240;
+/** Smallest notes area, so very short windows still show a few lines. */
+const NOTES_MIN_HEIGHT = 120;
+
+const getNotesMaxHeight = (windowHeight: number): number =>
+  Math.round(
+    Math.max(
+      NOTES_MIN_HEIGHT,
+      Math.min(windowHeight * NOTES_MAX_HEIGHT_RATIO, windowHeight - MODAL_CHROME_HEIGHT)
+    )
+  );
 
 export interface WhatsNewRelease {
   /** Release version, for example "57.16.2". Identifies what the viewer has already seen. */
@@ -114,7 +126,7 @@ export const WhatsNewBanner: React.FC<WhatsNewBannerProps> = ({
       visible={isModalVisible}
     >
       {/* Box applies maxHeight to the scroller's content too, so the cap lives on a wrapper. */}
-      <Box maxHeight={Math.round(windowHeight * NOTES_MAX_HEIGHT_RATIO)} testID={`${testID}-notes`}>
+      <Box maxHeight={getNotesMaxHeight(windowHeight)} testID={`${testID}-notes`}>
         <Box gap={4} scroll>
           {modalReleases.map((release) => (
             <Box gap={2} key={release.version} testID={`${testID}-release-${release.version}`}>

@@ -1,5 +1,6 @@
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
+import {type ScaledSize, StyleSheet, useWindowDimensions} from "react-native";
 
 import {renderWithTheme} from "./test-utils";
 import {Unifier} from "./Unifier";
@@ -12,6 +13,19 @@ const RELEASES: WhatsNewRelease[] = [
 ];
 
 const STORAGE_KEY = "test:whatsNew";
+
+type MockableUseWindowDimensions = (() => ScaledSize) & {
+  mockImplementation?: (impl: () => ScaledSize) => void;
+};
+
+const setWindowHeight = (height: number): void => {
+  (useWindowDimensions as MockableUseWindowDimensions).mockImplementation?.(() => ({
+    fontScale: 1,
+    height,
+    scale: 2,
+    width: 375,
+  }));
+};
 
 const mockStoredVersion = (version: string | null): void => {
   Unifier.storage.getItem = mock(() => Promise.resolve(version));
@@ -113,6 +127,33 @@ describe("WhatsNewBanner", () => {
     expect(await findByTestId("whats-new-banner-release-3.0.0")).toBeTruthy();
     expect(await findByTestId("whats-new-banner-release-2.0.0")).toBeTruthy();
     expect(queryByTestId("whats-new-banner-release-1.0.0")).toBeNull();
+  });
+
+  it("leaves room for the modal title and Done button on short windows", async () => {
+    const openNotesMaxHeight = async (height: number): Promise<unknown> => {
+      setWindowHeight(height);
+      mockStoredVersion(null);
+      const {findByTestId, getByTestId, unmount} = renderWithTheme(
+        <WhatsNewBanner releases={RELEASES} storageKey={STORAGE_KEY} />
+      );
+      const openButton = await findByTestId("whats-new-banner-open-button");
+      await act(async () => {
+        fireEvent.press(openButton);
+      });
+      const maxHeight = StyleSheet.flatten(
+        getByTestId("whats-new-banner-notes").props.style
+      ).maxHeight;
+      unmount();
+      return maxHeight;
+    };
+
+    try {
+      expect(await openNotesMaxHeight(1000)).toBe(600);
+      expect(await openNotesMaxHeight(400)).toBe(160);
+      expect(await openNotesMaxHeight(300)).toBe(120);
+    } finally {
+      setWindowHeight(812);
+    }
   });
 
   it("keeps the open notes mounted when marking them seen hides the banner", async () => {

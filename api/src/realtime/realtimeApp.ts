@@ -4,7 +4,7 @@ import type express from "express";
 import {Server, type Socket} from "socket.io";
 
 import type {User, UserModel} from "../auth";
-import type {BetterAuthInstance} from "../betterAuthSetup";
+import {findBetterAuthProvider, getProvidedBetterAuth} from "../betterAuthApp";
 import {APIError} from "../errors";
 import {logger} from "../logger";
 import {canSubscribeRealtime} from "../rbac/realtimeAccess";
@@ -391,15 +391,11 @@ export class RealtimeApp implements TerrenoPlugin {
     if (this.config.betterAuth) {
       return {...this.config.betterAuth, userModel: this.config.betterAuth.userModel ?? userModel};
     }
-    const provider = this.terrenoApp
-      ?.getPlugins()
-      .find((plugin) => typeof (plugin as {ensureAuth?: unknown}).ensureAuth === "function") as
-      | {ensureAuth: () => BetterAuthInstance}
-      | undefined;
-    if (!provider) {
+    const auth = getProvidedBetterAuth(findBetterAuthProvider(this.terrenoApp?.getPlugins() ?? []));
+    if (!auth) {
       return undefined;
     }
-    return {auth: provider.ensureAuth(), userModel};
+    return {auth, userModel};
   }
 
   /**

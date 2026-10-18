@@ -5,15 +5,16 @@
  * are process-wide and would break later files that need the real implementations).
  */
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
-import type http from "node:http";
+import http from "node:http";
 import {assert} from "chai";
 import express from "express";
 import {DateTime} from "luxon";
 import mongoose, {Schema} from "mongoose";
+import passportLocalMongoose from "passport-local-mongoose";
 
 import type {UserModel} from "../auth";
 import {BetterAuthApp} from "../betterAuthApp";
-import type {TerrenoApp} from "../terrenoApp";
+import {TerrenoApp} from "../terrenoApp";
 import {RealtimeApp} from "./realtimeApp";
 
 type Handler = (...args: unknown[]) => void;
@@ -365,5 +366,80 @@ describe("RealtimeApp with a registered BetterAuthApp", () => {
     lastIo().sockets.sockets.set("socket-swept", socket);
 
     expect(await expired).toEqual({reason: "disabled"});
+  });
+});
+
+describe("RealtimeApp on a real TerrenoApp with BetterAuthApp", () => {
+  // TerrenoApp's JWT setup needs passport-local-mongoose's createStrategy on the user model.
+  const getTerrenoWiringUserModel = (): mongoose.Model<WiringUserFields> => {
+    try {
+      return mongoose.model<WiringUserFields>("RealtimeTerrenoWiringUser");
+    } catch {
+      const schema = wiringUserSchema.clone();
+      schema.plugin(
+        passportLocalMongoose as unknown as (
+          target: Schema,
+          options?: Record<string, unknown>
+        ) => void,
+        {usernameField: "email"}
+      );
+      return mongoose.model<WiringUserFields>("RealtimeTerrenoWiringUser", schema);
+    }
+  };
+  const TerrenoWiringUser = getTerrenoWiringUserModel();
+  const userModel = TerrenoWiringUser as unknown as UserModel;
+  let realtime: RealtimeApp | undefined;
+
+  beforeEach(async () => {
+    ios = [];
+    await TerrenoWiringUser.deleteMany({});
+  });
+
+  afterEach(async () => {
+    await realtime?.close();
+    realtime = undefined;
+  });
+
+  it("authenticates a Better Auth session at handshake with no manual wiring", async () => {
+    const betterAuthApp = new BetterAuthApp({
+      config: {
+        baseURL: "http://localhost:3000",
+        enabled: true,
+        secret: "test-secret-at-least-32-characters-long",
+      },
+      userModel,
+    });
+    realtime = new RealtimeApp(testRealtimeOptions({sessionRevalidationIntervalMs: 0}));
+    const terrenoApp = new TerrenoApp({
+      httpServer: http.createServer(),
+      userModel: userModel as never,
+    })
+      .register(betterAuthApp)
+      .register(realtime);
+    terrenoApp.start();
+    await terrenoApp.whenReady();
+
+    const created = await betterAuthApp.ensureAuth().api.signUpEmail({
+      body: {
+        email: `terreno-wired-${DateTime.now().toMillis()}@example.com`,
+        name: "Wired User",
+        password: "password-123456",
+      },
+    });
+    const socket: Record<string, unknown> = {
+      handshake: {auth: {token: `Bearer ${created.token as string}`}},
+    };
+    const middleware = lastIo().middleware[0] as (
+      target: unknown,
+      next: (error?: Error) => void
+    ) => void;
+    const error = await new Promise<Error | undefined>((resolve) => {
+      middleware(socket, resolve);
+    });
+    const [appUser] = await TerrenoWiringUser.find({});
+
+    expect(error).toBeUndefined();
+    expect((socket.decodedToken as {authKind?: string; id?: string}).authKind).toBe("better-auth");
+    expect((socket.decodedToken as {id?: string}).id).toBe(String(appUser?._id));
   });
 });

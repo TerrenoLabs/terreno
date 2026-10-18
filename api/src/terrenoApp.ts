@@ -133,11 +133,13 @@ export interface TerrenoAppOptions {
    */
   configureApp?: AddRoutes;
   /**
-   * Optional HTTP rate limiting. Omitted or `undefined` leaves the limiter off
-   * (Terreno 58 will default it on). Pass `{}` or `{store, limits, trustProxy}`
-   * to enable. See [Rate limiting](../how-to/rate-limiting.md).
+   * HTTP rate limiting. On by default: omitted or `undefined` mounts the limiter with the
+   * memory store and default limits (auth 20 / 15 min, api 600 / 15 min). Pass
+   * `{store, limits, trustProxy, skip}` to configure it (`{}` is the same as omitting it).
+   * Pass `false` to turn it off. On Cloud Run pass `trustProxy: 1` so unauthenticated
+   * traffic keys by client IP. See [Rate limiting](../how-to/rate-limiting.md).
    */
-  rateLimit?: RateLimitOptions;
+  rateLimit?: RateLimitOptions | false;
   /**
    * Opt-in personal MCP service tokens. `true` is `{enabled: true}`. When enabled,
    * mounts `/mcp/service-tokens` and accepts `Authorization: Bearer mcp_…` on `/mcp`.
@@ -340,7 +342,7 @@ export class TerrenoApp {
    * Build the Express application without starting the server.
    *
    * Configures the complete middleware stack including:
-   * - CORS, JSON parsing, JWT decode, optional HTTP rate limiting, auth routes
+   * - CORS, JSON parsing, JWT decode, HTTP rate limiting (unless `rateLimit: false`), auth routes
    * - Better Auth session (when BetterAuthApp is registered) before the limiter
    * - Logging, Sentry, OpenAPI, model routers and plugins
    * - Error handling middleware
@@ -414,11 +416,13 @@ export class TerrenoApp {
       betterAuthForLimiter.markSessionMiddlewareMounted?.();
     }
 
-    if (options.rateLimit) {
+    // Rate limiting is on unless the app passes `rateLimit: false`.
+    const rateLimitOptions = options.rateLimit === false ? undefined : (options.rateLimit ?? {});
+    if (rateLimitOptions) {
       const betterAuthBasePath =
-        options.rateLimit.betterAuthBasePath ?? betterAuthForLimiter?.getBetterAuthBasePath?.();
+        rateLimitOptions.betterAuthBasePath ?? betterAuthForLimiter?.getBetterAuthBasePath?.();
       const rateLimit = {
-        ...options.rateLimit,
+        ...rateLimitOptions,
         ...(betterAuthBasePath ? {betterAuthBasePath} : {}),
       };
       applyRateLimitTrustProxy(app, rateLimit);

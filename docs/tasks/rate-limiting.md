@@ -68,3 +68,10 @@ IP: [rate-limiting.md](../implementationPlans/rate-limiting.md)
   - Blocked by: 4.1
   - Skills: `update-docs`
   - Acceptance: seed `Implementation plan` / `Tasks` links are not `*(not yet written)*`
+
+## Phase 5 — Terreno 58
+
+- [x] **Task 5.1**: Default the limiter on
+  - Delivers: omitted `rateLimit` mounts the memory limiter with default limits; `rateLimit: false` turns it off; `{}` / options unchanged; example-backend passes `{trustProxy: 1}` when deployed and `false` locally; 58 upgrade note
+  - Files: `api/src/terrenoApp.ts`, `api/src/rateLimit/rateLimit.test.ts`, `example-backend/src/server.ts`, `docs/how-to/rate-limiting.md`, `docs/reference/api.md`, `mcp-server/src/docs/upgrades/58.0.0.md`, `.rulesync/rules/api/00-api.md`
+  - Acceptance: omitted → 429 on the 21st login; `false` → 25 logins succeed; `{}` → 429 on the 21st login; backend suites stay green

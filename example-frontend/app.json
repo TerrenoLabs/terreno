@@ -51,7 +51,29 @@
       ],
       "expo-font",
       "expo-sharing",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 37,
+            "kotlinVersion": "2.2.21"
+          }
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "enableGooglePay": true,
+          "merchantIdentifier": "merchant.com.terreno.todo"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to use Face ID to confirm it is you."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

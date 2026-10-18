@@ -305,6 +305,11 @@
         "expo-print",
         "expo-sharing",
         "expo-system-ui",
+        // Terreno 58 native module baseline: linked into the binary before any screen imports
+        // them, so later features ship as OTA updates (docs/implementationPlans/native-module-baseline.md).
+        "expo-device",
+        "react-native-purchases",
+        "react-native-purchases-ui",
         "jspdf",
         // EXPO_UNSTABLE_MCP_SERVER in start/web/ios loads the Expo MCP package.
         "expo-mcp",

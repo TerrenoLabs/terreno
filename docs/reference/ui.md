@@ -378,9 +378,9 @@ pickers, sort menus).
 </DropdownPanel>
 ``````
 
-> `Filter` is the former name and stays exported as a deprecated alias (with `FilterProps`)
-> until Terreno 58. The `FilterSelectMenu` / `FilterBoolean` / `FilterAccordion` /
-> `FilterChangesBadge` controls keep their names.
+> `Filter` and `FilterProps`, the former names, were removed in Terreno 58. The
+> `FilterSelectMenu` / `FilterBoolean` / `FilterAccordion` / `FilterChangesBadge` controls
+> keep their names.
 
 #### Positioning
 

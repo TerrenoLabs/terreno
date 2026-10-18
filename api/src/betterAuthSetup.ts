@@ -5,11 +5,12 @@
  * create session middleware, and sync users with the application User model.
  */
 
-import {betterAuth} from "better-auth";
+import {type BetterAuthOptions, betterAuth} from "better-auth";
 import {mongodbAdapter} from "better-auth/adapters/mongodb";
 import {toNodeHandler} from "better-auth/node";
 import {bearer} from "better-auth/plugins";
 import type {Application, NextFunction, Request, Response} from "express";
+import mergeWith from "lodash/mergeWith";
 import type {Db} from "mongodb";
 import mongoose from "mongoose";
 import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
@@ -186,7 +187,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
   const emailHooks = createBetterAuthEmailHooks(config);
   const userModel = options.userModel;
 
-  const auth = betterAuth({
+  const defaults: BetterAuthOptions = {
     advanced: config.crossDomainCookies
       ? {
           defaultCookieAttributes: {
@@ -222,12 +223,6 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
           },
         }
       : {}),
-    // The bearer plugin lets clients authenticate with `Authorization: Bearer <sessionToken>`
-    // instead of the signed session cookie. Required for cross-origin/native clients and for
-    // websocket handshakes (RealtimeApp's Better Auth socket validator forwards the handshake
-    // token as a bearer header) — without it, a raw session token cannot be validated and
-    // socket auth silently fails (the sync client shows perpetually "offline").
-    plugins: [bearer()],
     rateLimit: config.disableRateLimit ? {enabled: false} : undefined,
     secret,
     session: {
@@ -238,6 +233,21 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     },
     socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
     trustedOrigins: config.trustedOrigins ?? [],
+  };
+
+  // Arrays from `options` replace Terreno's; lodash would otherwise merge them by index.
+  const replaceArrays = (_target: unknown, source: unknown): unknown =>
+    Array.isArray(source) ? source : undefined;
+  const merged: BetterAuthOptions = mergeWith({}, defaults, config.options, replaceArrays);
+
+  const auth = betterAuth({
+    ...merged,
+    // The bearer plugin lets clients authenticate with `Authorization: Bearer <sessionToken>`
+    // instead of the signed session cookie. Required for cross-origin/native clients and for
+    // websocket handshakes (RealtimeApp's Better Auth socket validator forwards the handshake
+    // token as a bearer header) — without it, a raw session token cannot be validated and
+    // socket auth silently fails (the sync client shows perpetually "offline").
+    plugins: [bearer(), ...(config.plugins ?? [])],
   });
 
   // Cast through unknown: enabling the bearer plugin narrows betterAuth()'s inferred

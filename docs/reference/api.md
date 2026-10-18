@@ -468,6 +468,16 @@ turns its built-in limiter on when `NODE_ENV=production`, so seeding six demo
 users during a preview smoke test otherwise 429s on the fourth signup. Do not
 set this on the public `BetterAuthApp`.
 
+`options` passes any other Better Auth option, deep-merged over Terreno's defaults (arrays
+replaced, explicit values win), and `plugins` appends Better Auth plugins after `bearer()`.
+See [Pass other Better Auth options and plugins](../how-to/configure-better-auth.md#pass-other-better-auth-options-and-plugins)
+for the defaults each override replaces.
+
+A session whose app `User` has `disabled: true` does not set `req.user`, so protected routes
+answer 401 while Better Auth's own routes, such as sign-out, still work. `RealtimeApp` uses the
+registered `BetterAuthApp` instance for socket sessions. With a user model (its own or the
+`TerrenoApp`'s), the handshake creates the app `User` on first contact and refuses disabled users.
+
 **Endpoints (when enabled):**
 - `POST /api/auth/signup/email` — Email/password signup
 - `POST /api/auth/signin/email` — Email/password signin

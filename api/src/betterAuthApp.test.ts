@@ -1,7 +1,10 @@
 import {afterAll, afterEach, describe, expect, it} from "bun:test";
+import type {BetterAuthPlugin} from "better-auth";
+import {createAuthEndpoint} from "better-auth/api";
 import express from "express";
 import {MongoMemoryServer} from "mongodb-memory-server";
 import mongoose, {Schema} from "mongoose";
+import supertest from "supertest";
 import type {UserModel} from "./auth";
 import type {BetterAuthConfig} from "./betterAuth";
 import {BetterAuthApp} from "./betterAuthApp";
@@ -112,5 +115,26 @@ describe("BetterAuthApp", () => {
 
     expect(() => plugin.register(app)).not.toThrow();
     expect(plugin.getAuth()).toBeDefined();
+  });
+
+  it("mounts endpoints of a plugin passed in config.plugins under the base path", async () => {
+    await setup;
+    const pingPlugin = {
+      endpoints: {
+        terrenoPing: createAuthEndpoint("/terreno-test/ping", {method: "GET"}, async (ctx) =>
+          ctx.json({ok: true})
+        ),
+      },
+      id: "terreno-test",
+    } satisfies BetterAuthPlugin;
+    const app = express();
+    new BetterAuthApp({
+      config: makeConfig({basePath: "/custom/auth", plugins: [pingPlugin]}),
+    }).register(app);
+
+    const res = await supertest(app).get("/custom/auth/terreno-test/ping");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ok: true});
   });
 });

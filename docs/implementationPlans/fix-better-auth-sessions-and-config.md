@@ -40,7 +40,7 @@ Selected: "the better-auth issues from the last day", resolved 2026-10-18T10:52:
   - Fix: store `terrenoApp` in `register`; in `onServerCreated`, resolve `config.betterAuth ?? {auth: ensureAuth(), userModel}` from the registered Better Auth plugin and use it in all three places. Explicit `config.betterAuth` still wins.
   - Proof: `api/src/realtime/realtimeAppSetup.test.ts` tests with `BetterAuthApp` registered and no `betterAuth` option — handshake with a Better Auth bearer authenticates, and the sweep reports `disabled` rather than `invalid-session` — fail on the base and pass on the branch.
   - Closes: #1576 (with T2)
-- [ ] **T4** — Pass Better Auth options and plugins through BetterAuthConfig (#1578)
+- [x] **T4** — Pass Better Auth options and plugins through BetterAuthConfig (#1578)
   - Depends on: T3
   - Files: api/src/betterAuth.ts, api/src/betterAuthSetup.ts, api/src/betterAuthSetup.test.ts, api/src/betterAuthApp.test.ts, docs/how-to/configure-better-auth.md
   - Root cause: `createBetterAuth` builds a fixed options literal and hard-codes `plugins: [bearer()]`.

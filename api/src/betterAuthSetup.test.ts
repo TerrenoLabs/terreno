@@ -1,6 +1,8 @@
 import {afterAll, afterEach, describe, expect, it, mock} from "bun:test";
+import type {BetterAuthPlugin} from "better-auth";
 import {assert} from "chai";
 import express, {type Request, type Response} from "express";
+import {DateTime} from "luxon";
 import {MongoMemoryServer} from "mongodb-memory-server";
 import mongoose, {Schema} from "mongoose";
 import passportLocalMongoose from "passport-local-mongoose";
@@ -1009,6 +1011,76 @@ describe("createBetterAuthSessionMiddleware", () => {
     // Verify user was persisted
     const count = await TestUser.countDocuments();
     expect(count).toBe(1);
+  });
+});
+
+describe("createBetterAuth options and plugins passthrough", () => {
+  const config: BetterAuthConfig = {
+    baseURL: "http://localhost:3000",
+    enabled: true,
+    secret: "test-secret-at-least-32-characters-long",
+  };
+
+  const signInRequest = (email: string): globalThis.Request =>
+    new globalThis.Request("http://localhost:3000/api/auth/sign-in/email", {
+      body: JSON.stringify({email, password: "password-123456"}),
+      headers: {"Content-Type": "application/json"},
+      method: "POST",
+    });
+
+  it("applies requireEmailVerification from options and keeps Terreno's defaults", async () => {
+    await setup;
+    const auth = createBetterAuth({
+      config: {...config, options: {emailAndPassword: {requireEmailVerification: true}}},
+      mongoClient: getClient(),
+    });
+    const email = `unverified-${DateTime.now().toMillis()}@example.com`;
+    await auth.api.signUpEmail({body: {email, name: "Unverified", password: "password-123456"}});
+
+    const response = await auth.handler(signInRequest(email));
+
+    expect(response.status).toBe(403);
+    expect(auth.options.emailAndPassword?.enabled).toBe(true);
+    expect(auth.options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
+    expect(auth.options.session?.cookieCache).toEqual({enabled: true, maxAge: 300});
+  });
+
+  it("lets an explicit option override a Terreno default", async () => {
+    await setup;
+    const auth = createBetterAuth({
+      config: {...config, options: {session: {cookieCache: {enabled: false}}}},
+      mongoClient: getClient(),
+    });
+
+    expect(auth.options.session?.cookieCache).toEqual({enabled: false, maxAge: 300});
+  });
+
+  it("replaces arrays instead of merging them by index", async () => {
+    await setup;
+    const auth = createBetterAuth({
+      config: {
+        ...config,
+        options: {trustedOrigins: ["https://a.example.com"]},
+        trustedOrigins: ["https://b.example.com", "https://c.example.com"],
+      },
+      mongoClient: getClient(),
+    });
+
+    expect(auth.options.trustedOrigins).toEqual(["https://a.example.com"]);
+  });
+
+  it("appends plugins after bearer and leaves defaults alone without the new fields", async () => {
+    await setup;
+    const plugin = {id: "terreno-test"} satisfies BetterAuthPlugin;
+    const withPlugin = createBetterAuth({
+      config: {...config, plugins: [plugin]},
+      mongoClient: getClient(),
+    });
+    const plain = createBetterAuth({config, mongoClient: getClient()});
+
+    expect(withPlugin.options.plugins?.map((p) => p.id)).toEqual(["bearer", "terreno-test"]);
+    expect(plain.options.plugins?.map((p) => p.id)).toEqual(["bearer"]);
+    expect(plain.options.trustedOrigins).toEqual([]);
   });
 });
 

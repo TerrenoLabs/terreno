@@ -99,6 +99,13 @@ names=()
 for file in "${files[@]}"; do
   # Gist file names become URL path segments, so keep them to URL-safe characters.
   name=$prefix-$(basename "$file" | tr -c 'A-Za-z0-9._\n-' '-')
+  # The guarded expansion keeps macOS bash 3.2 from treating an empty array as unset.
+  for existing in ${names[@]+"${names[@]}"}; do
+    if [[ "$existing" == "$name" ]]; then
+      echo "Two files map to the gist name $name; rename one and rerun." >&2
+      exit 2
+    fi
+  done
   cp "$file" "$work/gist/$name"
   names+=("$name")
 done

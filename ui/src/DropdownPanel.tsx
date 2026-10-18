@@ -360,9 +360,3 @@ export const DropdownPanel: FC<DropdownPanelProps> = ({
     </View>
   );
 };
-
-/**
- * @deprecated Renamed to {@link DropdownPanel} — the component is a general
- * compositional dropdown, not filter-specific. Removed in Terreno 58.
- */
-export const Filter = DropdownPanel;

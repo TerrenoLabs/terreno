@@ -187,10 +187,6 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
     reason: "Imperative sheet opened by DateTimeField; DateTimeField stories already open it",
   },
   {
-    name: "Filter",
-    reason: "Deprecated alias of DropdownPanel, which has its own story; removed in Terreno 58",
-  },
-  {
     name: "FilterAccordion",
     reason: "DropdownPanel story already mounts accordion sections",
   },

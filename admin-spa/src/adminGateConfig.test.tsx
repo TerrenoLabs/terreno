@@ -2,7 +2,7 @@ import {describe, expect, it} from "bun:test";
 import type {AdminConfigResponse} from "@terreno/admin-frontend";
 import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {AdminGateConfigProvider, useAdminGateConfig} from "./adminGateConfig";
+import {AdminGateConfigProvider, useAdminGateConfig} from "../components/adminGateConfig";
 
 const config = {
   models: [

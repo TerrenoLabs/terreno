@@ -127,7 +127,7 @@ Never commit the release directly to master, and never tag before this pull requ
    gh pr create --base master --title "Assemble Terreno X.Y.Z release notes" --body-file /tmp/release-pr.md
    ```
 
-3. Wait until every check on the pull request head has finished and succeeded. Pending and failing checks block the merge. A check that was cancelled because a newer run replaced it does not count; the latest run of each workflow must be green. If a check fails for a real reason, fix it on `release/X.Y.Z` and wait again.
+3. Wait until every check on the pull request head has finished and succeeded. Pending and failing checks block the merge. A check that was cancelled because a newer run replaced it does not count; the latest run of each workflow must be green. If a check fails for a real reason, fix it on `release/X.Y.Z` and wait again. Answer every review-bot thread before merging. After three fix rounds still red, stop and escalate per [push ownership](references/push-ownership.md); never leave the release PR red.
 
    ```bash
    gh pr checks --watch

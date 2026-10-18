@@ -20,7 +20,6 @@ import {
   startChangeStreamWatcher,
   stopChangeStreamWatcher,
 } from "../realtime/changeStreamWatcher";
-import {clearRealtimeRegistry, registerRealtime} from "../realtime/registry";
 import {setupDb} from "../tests";
 import {defaultResponseHandler} from "../transformers";
 import {registerAdminBroadcastScope} from "./adminBroadcastScope";
@@ -1554,7 +1553,7 @@ describe("sync:delta — change stream integration", () => {
   });
 
   beforeEach(async () => {
-    clearRealtimeRegistry();
+    clearSyncRegistry();
     registerAll();
     await Promise.all([
       SockStuffModel.collection.deleteMany({}),
@@ -1565,7 +1564,6 @@ describe("sync:delta — change stream integration", () => {
 
   afterEach(async () => {
     await stopChangeStreamWatcher();
-    clearRealtimeRegistry();
     clearSyncRegistry();
   });
 
@@ -1672,42 +1670,33 @@ describe("sync:delta — change stream integration", () => {
     expect((create.data as Record<string, unknown>).orgId).toBe("org2");
   });
 
-  it("a model with both realtime and sync configs emits both event types", async () => {
+  it("never emits the legacy RTK sync event, even to legacy realtime rooms", async () => {
     if (!replicaSetAvailable) {
       return;
     }
-    registerRealtime({
-      collectionName: SockStuffModel.collection.collectionName,
-      config: {methods: ["create", "update", "delete"], roomStrategy: "model"},
-      modelName: "SockStuff",
-      options: permissiveOptions,
-      routePath: "/sockStuff",
-    });
-
     const io = makeTrackedIo();
     io.addSocketToRoom("model:sockStuff", {admin: true, id: "admin"});
-    io.addSocketToRoom(syncRoomForStream("sockStuff|owner:both-user"), {
+    io.addSocketToRoom("authenticated", {admin: true, id: "admin"});
+    io.addSocketToRoom("user:legacy-user", {admin: false, id: "legacy-user"});
+    io.addSocketToRoom(syncRoomForStream("sockStuff|owner:legacy-user"), {
       admin: false,
-      id: "both-user",
+      id: "legacy-user",
     });
     await startWatcherAndSettle(io);
 
-    const doc = await SockStuffModel.create({name: "both", ownerId: "both-user"});
+    const doc = await SockStuffModel.create({name: "legacy", ownerId: "legacy-user"});
     const docId = String(doc._id);
     await waitForDelta(io, (d) => d.id === docId);
 
-    const legacy = io.emissions.filter(
-      (e) => e.event === "sync" && e.payload?.id === docId && e.payload?.method === "create"
-    );
     const deltas = io.emissions.filter(
       (e) => e.event === "sync:delta" && (e.payload as SyncDelta).id === docId
     );
-    expect(legacy.length).toBeGreaterThanOrEqual(1);
     expect(deltas).toHaveLength(1);
     expect((deltas[0].payload as SyncDelta).seq).toBe(1);
+    expect(io.emissions.filter((e) => e.event === "sync")).toHaveLength(0);
   });
 
-  it("a sync-only model emits deltas even without a realtime registry entry", async () => {
+  it("a sync model emits deltas through its sync stream room", async () => {
     if (!replicaSetAvailable) {
       return;
     }

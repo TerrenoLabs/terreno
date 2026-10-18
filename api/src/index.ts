@@ -192,30 +192,10 @@ export {
 } from "./realtime/changeStreamWatcher";
 export {matchesQuery} from "./realtime/queryMatcher";
 export {
-  addQuerySubscription,
-  clearQueryStore,
-  computeQueryId,
-  getQuerySubscriptionsForCollection,
-  removeAllSocketQueries,
-  removeQuerySubscription,
-} from "./realtime/queryStore";
-export {
   installRealtimeSocketHandlers,
-  MAX_DOCUMENT_SUBSCRIPTIONS,
-  MAX_MODEL_SUBSCRIPTIONS,
-  MAX_QUERY_SUBSCRIPTIONS,
   RealtimeApp,
   type RealtimeSocketLike,
 } from "./realtime/realtimeApp";
-export {
-  clearRealtimeRegistry,
-  findRegistryEntryByCollection,
-  findRegistryEntryByRoutePath,
-  getRealtimeRegistry,
-  type RealtimeRegistryEntry,
-  registerRealtime,
-  updateRealtimeRegistryOptions,
-} from "./realtime/registry";
 export {
   DEFAULT_SESSION_REVALIDATION_INTERVAL_MS,
   loadFullUserForSocket,
@@ -242,14 +222,7 @@ export {
   type SocketDataBag,
   type SocketWithDecodedToken,
 } from "./realtime/socketUser";
-export type {
-  ChangeStreamConfig,
-  DocumentSubscription,
-  QuerySubscription,
-  RealtimeAppOptions,
-  RealtimeConfig,
-  RealtimeEvent,
-} from "./realtime/types";
+export type {ChangeStreamConfig, RealtimeAppOptions} from "./realtime/types";
 export * from "./requestContext";
 export {
   type DescribeModelForRouterOptions,

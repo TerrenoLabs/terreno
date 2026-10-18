@@ -42,7 +42,29 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 37,
+            "kotlinVersion": "2.2.21"
+          }
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "enableGooglePay": true,
+          "merchantIdentifier": "merchant.com.terreno.demo"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow $(PRODUCT_NAME) to use Face ID to confirm it is you."
+        }
+      ]
     ],
     "extra": {
       "router": {},

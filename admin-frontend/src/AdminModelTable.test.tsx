@@ -1,4 +1,4 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and UNSAFE_root traversal
+// noExplicitAny: test mocks use loosely typed hook doubles and UNSAFE_root traversal
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
@@ -7,8 +7,11 @@ import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {ADMIN_SEARCH_DEBOUNCE_MS} from "./Constants";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi, AdminConfigResponse} from "./types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
+import type {AdminConfigResponse} from "./types";
 
 const routerPush = mock(() => {});
 const setOptions = mock((_: unknown) => {});
@@ -25,7 +28,7 @@ const configState: {config: AdminConfigResponse | null; isLoading: boolean} = {
 // fetching uses the resolved API base (not the route base).
 const configApiBaseCalls: string[] = [];
 mock.module("./useAdminConfig", () => ({
-  useAdminConfig: (_api: unknown, apiBase: string) => {
+  useAdminConfig: (apiBase: string) => {
     configApiBaseCalls.push(apiBase);
     return {
       config: configState.config,
@@ -124,8 +127,8 @@ describe("AdminModelTable", () => {
   const originalConsoleError = console.error;
 
   beforeEach(() => {
-    resetUseAdminApiDouble();
-    configureUseAdminApiDouble({
+    resetAdminModelApiDouble();
+    configureAdminModelApiDouble({
       useBulkPatchMutation: () => [bulkPatchFn, {isLoading: false}],
       useCreateMutation: () => [mock(() => ({unwrap: async () => ({})})), {isLoading: false}],
       useDeleteMutation: () => [deleteFn, {isLoading: false}],
@@ -172,17 +175,13 @@ describe("AdminModelTable", () => {
 
   it("renders loading page while config is loading", () => {
     configState.isLoading = true;
-    const {toJSON} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {toJSON} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     expect(toJSON()).toBeDefined();
   });
 
   it("renders loading page when model config is missing", () => {
     configState.config = {customScreens: [], models: [], scripts: []};
-    const {toJSON} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {toJSON} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     expect(toJSON()).toBeDefined();
   });
 
@@ -198,7 +197,7 @@ describe("AdminModelTable", () => {
       ],
     };
     const {getByTestId, getByText} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
+      <AdminModelTable baseUrl="/admin" modelName="User" />
     );
     expect(getByTestId("data-table-search")).toBeTruthy();
     expect(getByTestId("data-table-filters-trigger")).toBeTruthy();
@@ -217,9 +216,7 @@ describe("AdminModelTable", () => {
         },
       ],
     };
-    const {getByTestId} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {getByTestId} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
 
     await act(async () => {
       fireEvent.press(getByTestId("data-table-filters-trigger"));
@@ -249,9 +246,7 @@ describe("AdminModelTable", () => {
         },
       ],
     };
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     const [refFilter] = findDataTable(UNSAFE_root).props.additionalFilters;
     const onChange = mock(() => {});
     const rendered = refFilter.renderFilter({
@@ -271,9 +266,7 @@ describe("AdminModelTable", () => {
   it("renders loading state when the list query is loading", () => {
     configState.config = fullConfig;
     listState.isLoading = true;
-    const {toJSON} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {toJSON} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     expect(toJSON()).toBeDefined();
   });
 
@@ -300,9 +293,7 @@ describe("AdminModelTable", () => {
       ],
       total: 2,
     };
-    const {toJSON} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {toJSON} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     expect(toJSON()).toBeDefined();
   });
 
@@ -313,12 +304,7 @@ describe("AdminModelTable", () => {
       total: 1,
     };
     const {toJSON} = renderWithTheme(
-      <AdminModelTable
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        columns={["email"]}
-        modelName="User"
-      />
+      <AdminModelTable baseUrl="/admin" columns={["email"]} modelName="User" />
     );
     expect(toJSON()).toBeDefined();
   });
@@ -358,17 +344,13 @@ describe("AdminModelTable", () => {
       ],
       total: 1,
     };
-    const {toJSON} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="Plain" />
-    );
+    const {toJSON} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="Plain" />);
     expect(toJSON()).toBeDefined();
   });
 
   it("renders the in-page create button and pushes to the create route on click", async () => {
     configState.config = fullConfig;
-    const table = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const table = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     await act(async () => {
       fireEvent.press(table.getByTestId("admin-create-button"));
       await new Promise((r) => setTimeout(r, 50));
@@ -388,9 +370,7 @@ describe("AdminModelTable", () => {
         throw new Error("nope");
       },
     }));
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     // Find the actions cellData.onDelete handler and invoke it directly.
     const nodes = UNSAFE_root.findAll((n: ReactTestInstance) => {
       const v = n.props?.cellData?.value;
@@ -408,12 +388,7 @@ describe("AdminModelTable", () => {
     configState.config = fullConfig;
     listState.data = {data: [{_id: "u1", email: "a@b.com"}], total: 1};
     const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        columnWidths={{email: 999}}
-        modelName="User"
-      />
+      <AdminModelTable baseUrl="/admin" columnWidths={{email: 999}} modelName="User" />
     );
     const tables = UNSAFE_root.findAll((n: ReactTestInstance) => Array.isArray(n.props?.columns));
     expect(tables.length).toBeGreaterThan(0);
@@ -437,9 +412,7 @@ describe("AdminModelTable", () => {
       scripts: [],
     };
     listState.data = {data: [{_id: "u1", email: "a@b.com"}], total: 1};
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     const tables = UNSAFE_root.findAll((n: ReactTestInstance) => Array.isArray(n.props?.columns));
     const cols = (tables[0] as ReactTestInstance).props.columns as {
       title: string;
@@ -462,12 +435,7 @@ describe("AdminModelTable", () => {
     };
     listState.data = {data: [{_id: "u1", email: "a@b.com"}], total: 1};
     const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        columnWidths={{email: 200}}
-        modelName="User"
-      />
+      <AdminModelTable baseUrl="/admin" columnWidths={{email: 200}} modelName="User" />
     );
     const tables = UNSAFE_root.findAll((n: ReactTestInstance) => Array.isArray(n.props?.columns));
     const cols = (tables[0] as ReactTestInstance).props.columns as {
@@ -488,12 +456,7 @@ describe("AdminModelTable", () => {
       total: 1,
     };
     const {UNSAFE_root, toJSON} = renderWithTheme(
-      <AdminModelTable
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        columns={["email"]}
-        modelName="User"
-      />
+      <AdminModelTable baseUrl="/admin" columns={["email"]} modelName="User" />
     );
     // Grab setSortColumn from the rendered DataTable and apply a sort with
     // direction "desc" on column 0 (valid) and then column 5 (out of range).
@@ -516,12 +479,7 @@ describe("AdminModelTable", () => {
     configState.config = fullConfig;
     listState.data = {data: [{_id: "u1", email: "a@b.com"}], total: 1};
     const {UNSAFE_root, getByTestId} = renderWithTheme(
-      <AdminModelTable
-        api={{} as unknown as AdminApi}
-        apiBase="/admin"
-        modelName="User"
-        routeBase="/console"
-      />
+      <AdminModelTable apiBase="/admin" modelName="User" routeBase="/console" />
     );
     // Data fetching must use the API base.
     expect(configApiBaseCalls).toContain("/admin");
@@ -541,9 +499,7 @@ describe("AdminModelTable", () => {
   it("uses baseUrl for both fetching and navigation (backward compat)", () => {
     configState.config = fullConfig;
     listState.data = {data: [{_id: "u1", email: "a@b.com"}], total: 1};
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     expect(configApiBaseCalls).toContain("/admin");
     const tables = UNSAFE_root.findAll((n: ReactTestInstance) => Array.isArray(n.props?.data));
     const rows = (tables[0] as ReactTestInstance).props.data as {value: {href?: string}}[][];
@@ -561,9 +517,7 @@ describe("AdminModelTable", () => {
       ],
       scripts: [],
     };
-    const table = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const table = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     expect(table.queryByTestId("admin-create-button")).toBeNull();
   });
 
@@ -580,9 +534,7 @@ describe("AdminModelTable", () => {
       scripts: [],
     };
     listState.data = {data: [{_id: "u1", active: true, email: "a@b.com"}], total: 1};
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     const tables = UNSAFE_root.findAll((n: ReactTestInstance) => Array.isArray(n.props?.columns));
     const cols = (tables[0] as ReactTestInstance).props.columns as {
       sortable?: boolean;
@@ -608,7 +560,7 @@ describe("AdminModelTable", () => {
     };
     listState.data = {data: [{_id: "u1", active: true, email: "a@b.com"}], total: 1};
     const {queryByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
+      <AdminModelTable baseUrl="/admin" modelName="User" />
     );
     expect(queryByTestId("admin-filter-drawer")).toBeNull();
     const tables = UNSAFE_root.findAll((n: ReactTestInstance) => Array.isArray(n.props?.columns));
@@ -628,9 +580,7 @@ describe("AdminModelTable", () => {
       scripts: [],
     };
     listState.data = {data: [{_id: "u1", email: "a@b.com"}], total: 100};
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     const tables = UNSAFE_root.findAll(
       (n: ReactTestInstance) => typeof n.props?.totalPages === "number"
     );
@@ -641,7 +591,7 @@ describe("AdminModelTable", () => {
     configState.config = interactiveConfig;
     listState.data = {data: interactiveListRows, total: 2};
     const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
+      <AdminModelTable baseUrl="/admin" modelName="User" />
     );
 
     await act(async () => {
@@ -670,7 +620,7 @@ describe("AdminModelTable", () => {
     configState.config = interactiveConfig;
     listState.data = {data: interactiveListRows, total: 2};
     const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
+      <AdminModelTable baseUrl="/admin" modelName="User" />
     );
 
     await act(async () => {
@@ -704,7 +654,7 @@ describe("AdminModelTable", () => {
       unwrap: async () => ({updated: 2}),
     }));
     const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
+      <AdminModelTable baseUrl="/admin" modelName="User" />
     );
 
     await act(async () => {
@@ -738,7 +688,7 @@ describe("AdminModelTable", () => {
       }),
     }));
     const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
+      <AdminModelTable baseUrl="/admin" modelName="User" />
     );
 
     await act(async () => {
@@ -764,7 +714,7 @@ describe("AdminModelTable", () => {
     configState.config = interactiveConfig;
     listState.data = {data: interactiveListRows, total: 2};
     const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
+      <AdminModelTable baseUrl="/admin" modelName="User" />
     );
 
     await act(async () => {
@@ -790,9 +740,7 @@ describe("AdminModelTable", () => {
   it("patches inline boolean fields on toggle and surfaces update failures", async () => {
     configState.config = interactiveConfig;
     listState.data = {data: interactiveListRows, total: 2};
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
 
     const inlineBoolCells = UNSAFE_root.findAll((n: ReactTestInstance) => {
       const value = n.props?.cellData?.value as
@@ -831,9 +779,7 @@ describe("AdminModelTable", () => {
   it("navigates from link and row action cells", async () => {
     configState.config = interactiveConfig;
     listState.data = {data: interactiveListRows, total: 2};
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
 
     const linkCells = UNSAFE_root.findAll((n: ReactTestInstance) => {
       const value = n.props?.cellData?.value as {href?: string; text?: string} | undefined;
@@ -871,7 +817,7 @@ describe("AdminModelTable", () => {
     configState.config = interactiveConfig;
     listState.data = {data: interactiveListRows, total: 40};
     const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
+      <AdminModelTable baseUrl="/admin" modelName="User" />
     );
 
     await act(async () => {
@@ -898,9 +844,7 @@ describe("AdminModelTable", () => {
   it("applies DataTable filters and resets pagination", async () => {
     configState.config = interactiveConfig;
     listState.data = {data: interactiveListRows, total: 40};
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
 
     await act(async () => {
       findDataTable(UNSAFE_root).props.setPage(2);
@@ -918,7 +862,7 @@ describe("AdminModelTable", () => {
     configState.config = interactiveConfig;
     listState.data = {data: interactiveListRows, total: 2};
     const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
+      <AdminModelTable baseUrl="/admin" modelName="User" />
     );
 
     await act(async () => {
@@ -940,9 +884,7 @@ describe("AdminModelTable", () => {
       ],
       total: 2,
     };
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     const tables = UNSAFE_root.findAll((node: ReactTestInstance) =>
       Array.isArray(node.props?.data)
     );
@@ -964,9 +906,7 @@ describe("AdminModelTable", () => {
       data: [{_id: "u1", active: false, email: "a@b.com"}],
       total: 1,
     };
-    const {UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     const link = UNSAFE_root.findAll(
       (node: ReactTestInstance) =>
         node.props?.text === "a@b.com" && typeof node.props?.onClick === "function"

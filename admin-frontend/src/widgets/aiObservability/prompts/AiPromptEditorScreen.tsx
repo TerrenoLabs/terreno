@@ -26,7 +26,7 @@ export interface AiPromptEditorScreenWidgetProps extends AdminScreenWidgetProps 
 
 export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProps> = (props) => {
   const {apiKey, apiKeyLoading = false, playgroundApiKeyHint} = props;
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{name?: string | string[]}>();
   const nameParam = params.name;
   const name = Array.isArray(nameParam) ? nameParam[0] : nameParam;
@@ -36,7 +36,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
     usePlaygroundMutation,
     useSetLabelMutation,
     useStatusQuery,
-  } = useAiObservabilityPromptsApi(api);
+  } = useAiObservabilityPromptsApi();
   const [selectedVersion, setSelectedVersion] = useState<number | undefined>(undefined);
   const [pinnedQueryVersion, setPinnedQueryVersion] = useState<number | undefined>(undefined);
   const [cachedDetail, setCachedDetail] = useState<
@@ -197,7 +197,12 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-prompt-editor">
         <Box gap={2} padding={4}>
           <Text color="error">{`Could not load ${name}.`}</Text>
-          <Button onClick={() => refetch()} text="Retry" />
+          <Button
+            onClick={() => {
+              void refetch();
+            }}
+            text="Retry"
+          />
         </Box>
       </AiObservabilityChrome>
     );

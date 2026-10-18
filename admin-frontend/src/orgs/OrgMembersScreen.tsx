@@ -12,12 +12,10 @@ import {
 } from "@terreno/ui";
 import React, {useCallback, useMemo, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
-import type {AdminApi} from "../types";
 import {normalizeListData} from "./normalizeListData";
 import {useOrganizationsApi} from "./useOrganizationsApi";
 
 export interface OrgMembersScreenProps {
-  api: AdminApi;
   basePath?: string;
   organizationId: string;
   routeBase?: string;
@@ -65,7 +63,6 @@ const membershipUser = (membership: OrgMembership): MembershipUser => {
 };
 
 export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
-  api,
   basePath,
   organizationId,
   routeBase = "/admin",
@@ -79,8 +76,8 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
     useMemberRemoveMutation,
     useMemberUpdateMutation,
     useMembersQuery,
-  } = useOrganizationsApi(api, basePath, organizationId);
-  const {data, error, isLoading} = useMembersQuery(organizationId);
+  } = useOrganizationsApi(basePath);
+  const {data, error, isLoading} = useMembersQuery<OrgMembership>(organizationId);
   const memberships = normalizeListData<OrgMembership>(data);
   const [attachMember, {isLoading: isAttaching}] = useMemberAttachMutation();
   const [updateMember, {isLoading: isUpdating}] = useMemberUpdateMutation();

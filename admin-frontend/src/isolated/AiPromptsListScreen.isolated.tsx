@@ -2,13 +2,22 @@ import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../types";
-import {AiPromptsScreenWidget} from "../widgets/aiObservability/prompts/AiPromptsListScreen";
+import type {AdminConfigResponse} from "../types";
+import {AiPromptsScreenWidget as AiPromptsScreenWidgetBase} from "../widgets/aiObservability/prompts/AiPromptsListScreen";
 import type {PromptListItem} from "../widgets/aiObservability/prompts/promptTypes";
+import {
+  type FakeObservabilityApi,
+  installFakeObservabilityHooks,
+  withFakeObservabilityApi,
+} from "./observabilityFakeApi.isolated";
 import {
   operatorObservabilityStatus,
   readOnlyPromptObservabilityStatus,
 } from "./observabilityStatusFixtures.isolated";
+
+installFakeObservabilityHooks();
+
+const AiPromptsScreenWidget = withFakeObservabilityApi(AiPromptsScreenWidgetBase);
 
 const routerPush = mock(() => undefined);
 
@@ -30,7 +39,7 @@ describe("AiPromptsListScreen", () => {
 
   let lastCreateBody: Record<string, unknown> | undefined;
 
-  const api: AdminApi = {
+  const api: FakeObservabilityApi = {
     enhanceEndpoints: () => api,
     injectEndpoints: () => ({
       useAiObservabilityPromptsQuery: () => ({
@@ -52,7 +61,7 @@ describe("AiPromptsListScreen", () => {
         {isError: false, isLoading: false},
       ],
     }),
-  } as unknown as AdminApi;
+  } as unknown as FakeObservabilityApi;
 
   const config: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
 
@@ -85,7 +94,7 @@ describe("AiPromptsListScreen", () => {
   });
 
   it("hides create when status permissions are read-only", () => {
-    const readOnlyApi: AdminApi = {
+    const readOnlyApi: FakeObservabilityApi = {
       enhanceEndpoints: () => readOnlyApi,
       injectEndpoints: () => ({
         useAiObservabilityPromptsQuery: () => ({
@@ -104,7 +113,7 @@ describe("AiPromptsListScreen", () => {
           {isError: false, isLoading: false},
         ],
       }),
-    } as unknown as AdminApi;
+    } as unknown as FakeObservabilityApi;
     const view = renderWithTheme(
       <AiPromptsScreenWidget
         api={readOnlyApi}

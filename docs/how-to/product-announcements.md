@@ -64,7 +64,7 @@ For release-driven batches, use an [announcement release pack](../reference/anno
 
 ### Admin overview
 
-`AnnouncementOverview` calls `GET /announcements/overview` (via RTK `injectEndpoints`) and shows:
+`AnnouncementOverview` calls `GET /announcements/overview` (through the `AdminProvider` fetch client) and shows:
 
 - Launch workflow guidance (draft → targeting → preview → publish) with a primary **Create announcement** action
 - Summary cards for published, drafts, impressions, acknowledgements, and CTA clicks

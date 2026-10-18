@@ -30,16 +30,16 @@ export interface AiTracesScreenWidgetProps extends AdminScreenWidgetProps {
 const MULTI_STAGE_FEATURE_LABEL = "Multi-stage trace test";
 
 export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props) => {
-  const {api, apiKey, apiKeyHint, apiKeyLoading = false, routeBase} = props;
+  const {apiKey, apiKeyHint, apiKeyLoading = false, routeBase} = props;
   const {
     useEnqueueReviewMutation,
     useEvaluatorsQuery,
     useListQuery,
     useStatusQuery,
     useTestMultiStageMutation,
-  } = useAiObservabilityTracesApi(api);
-  const {useAddTracesMutation, useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi(api);
-  const {useListQuery: usePromptsQuery} = useAiObservabilityPromptsApi(api);
+  } = useAiObservabilityTracesApi();
+  const {useAddTracesMutation, useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi();
+  const {useListQuery: usePromptsQuery} = useAiObservabilityPromptsApi();
   const [filters, setFilters] = useState<TraceListFilters>(emptyTraceFilters);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);

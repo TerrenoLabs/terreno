@@ -4,7 +4,7 @@ import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import {AdminWidgetContext} from "../adminContext";
 import type {AdminRequestArgs} from "../adminRequest";
-import type {AdminApi, AdminProviderValue} from "../types";
+import type {AdminProviderValue} from "../types";
 import {BUILT_IN_SCREEN_WIDGETS} from "../widgets/builtInWidgets";
 import {
   HARNESS_ADMIN_WIDGETS,
@@ -26,7 +26,6 @@ describe("HarnessApprovalsScreenWidget", () => {
     const view = renderWithTheme(
       <AdminWidgetContext.Provider value={{adminRpc: request} as unknown as AdminProviderValue}>
         <HarnessApprovalsScreenWidget
-          api={{} as AdminApi}
           config={{customScreens: [], models: [], scripts: []}}
           routeBase="/admin"
           screenName="harness-approvals"
@@ -46,7 +45,6 @@ describe("HarnessApprovalsScreenWidget", () => {
     const view = renderWithTheme(
       <AdminWidgetContext.Provider value={{adminRpc: request} as unknown as AdminProviderValue}>
         <HarnessApprovalsScreenWidget
-          api={{} as AdminApi}
           config={{customScreens: [], models: [], scripts: []}}
           routeBase="/admin"
           screenName="harness-approvals"

@@ -19,7 +19,6 @@ export interface AiObservabilityChromeProps extends AdminScreenWidgetProps {
 }
 
 export const AiObservabilityChrome: React.FC<AiObservabilityChromeProps> = ({
-  api,
   backHref,
   children,
   error,
@@ -46,7 +45,7 @@ export const AiObservabilityChrome: React.FC<AiObservabilityChromeProps> = ({
     >
       <Box direction="row" gap={3} justifyContent="between" wrap>
         <AdminBreadcrumbs segments={breadcrumbs} />
-        <AiObservabilityStatusChip api={api} error={error} isLoading={isLoading} status={status} />
+        <AiObservabilityStatusChip error={error} isLoading={isLoading} status={status} />
       </Box>
       {localOffReview ? (
         <Box padding={2} testID="ai-observability-review-hidden">

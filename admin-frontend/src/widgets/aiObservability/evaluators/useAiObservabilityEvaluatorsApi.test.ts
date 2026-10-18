@@ -1,113 +1,80 @@
-import {describe, expect, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
-import {assert} from "chai";
-import type {AdminApi, EndpointBuilder} from "../../../types";
+import {afterEach, describe, expect, it} from "bun:test";
+import {act, renderHook} from "@testing-library/react-native";
+import {
+  type CapturedObservabilityRequest,
+  flushObservabilityRequests,
+  ObservabilityTestProvider,
+  stubObservabilityFetch,
+} from "../../../testing/observabilityTestUtils";
 import {useAiObservabilityEvaluatorsApi} from "./useAiObservabilityEvaluatorsApi";
 
-interface CapturedEndpoint {
-  invalidatesTags?: unknown;
-  providesTags?: unknown;
-  query: (arg: never) => {body?: unknown; method: string; url: string};
-}
+let restoreFetch: () => void = () => undefined;
 
-const createApiDouble = () => {
-  const endpoints: Record<string, CapturedEndpoint> = {};
-  const addTagTypes: string[][] = [];
-  const api = {
-    enhanceEndpoints: ({addTagTypes: tags}: {addTagTypes: string[]}) => {
-      addTagTypes.push(tags);
-      return api;
-    },
-    injectEndpoints: ({
-      endpoints: build,
-    }: {
-      endpoints: (builder: EndpointBuilder) => Record<string, CapturedEndpoint>;
-    }) => {
-      const builder = {
-        mutation: (spec: CapturedEndpoint) => spec,
-        query: (spec: CapturedEndpoint) => spec,
-      } as unknown as EndpointBuilder;
-      Object.assign(endpoints, build(builder));
-      return {
-        useAiObservabilityEvaluatorQuery: mock(() => ({isLoading: false})),
-        useAiObservabilityEvaluatorsQuery: mock(() => ({isLoading: false})),
-        useCreateAiObservabilityEvaluatorMutation: mock(() => [mock(() => ({})), {}]),
-      };
-    },
-  } as unknown as AdminApi;
-  return {addTagTypes, api, endpoints};
+const stub = (): CapturedObservabilityRequest[] => {
+  const {calls, restore} = stubObservabilityFetch(() => ({body: {data: {_id: "eval-1"}}}));
+  restoreFetch = restore;
+  return calls;
 };
 
-describe("useAiObservabilityEvaluatorsApi", () => {
-  it("injects evaluator list, detail, and create routes", () => {
-    const {addTagTypes, api, endpoints} = createApiDouble();
-    renderHook(() => useAiObservabilityEvaluatorsApi(api));
+afterEach(() => {
+  restoreFetch();
+});
 
-    assert.deepEqual(addTagTypes[0], ["aiObservabilityEvaluators"]);
-    expect(endpoints.aiObservabilityEvaluators.query({} as never)).toEqual({
-      method: "GET",
-      url: "/ai/observability/evaluators",
+describe("useAiObservabilityEvaluatorsApi", () => {
+  it("reads the evaluator list and detail routes", async () => {
+    const calls = stub();
+    const {result} = renderHook(
+      () => {
+        const api = useAiObservabilityEvaluatorsApi();
+        return {
+          detail: api.useDetailQuery("eval/1"),
+          list: api.useListQuery(),
+          skipped: api.useDetailQuery("eval-2", {skip: true}),
+        };
+      },
+      {wrapper: ObservabilityTestProvider}
+    );
+    await flushObservabilityRequests();
+
+    expect(calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual([
+      "GET /ai/observability/evaluators",
+      "GET /ai/observability/evaluators/eval%2F1",
+    ]);
+    expect(result.current.detail.data).toEqual({_id: "eval-1"});
+  });
+
+  it("creates an evaluator and refetches the list", async () => {
+    const calls = stub();
+    const {result} = renderHook(
+      () => {
+        const api = useAiObservabilityEvaluatorsApi();
+        return {create: api.useCreateMutation(), list: api.useListQuery()};
+      },
+      {wrapper: ObservabilityTestProvider}
+    );
+    await flushObservabilityRequests();
+    calls.length = 0;
+
+    let created: unknown;
+    await act(async () => {
+      created = await result.current.create[0]({
+        dimensions: [],
+        name: "quality",
+        target: "trace",
+        type: "llm-judge",
+      } as never).unwrap();
     });
-    expect(endpoints.aiObservabilityEvaluator.query("eval-1" as never)).toEqual({
-      method: "GET",
-      url: "/ai/observability/evaluators/eval-1",
-    });
-    expect(endpoints.createAiObservabilityEvaluator.query({name: "quality"} as never)).toEqual({
-      body: {name: "quality"},
+    await flushObservabilityRequests();
+
+    expect(created).toEqual({_id: "eval-1"});
+    expect(calls[0]).toMatchObject({
+      body: {dimensions: [], name: "quality", target: "trace", type: "llm-judge"},
       method: "POST",
       url: "/ai/observability/evaluators",
     });
-  });
-
-  it("exposes list, detail, and create hooks", () => {
-    const {api} = createApiDouble();
-    const {result} = renderHook(() => useAiObservabilityEvaluatorsApi(api));
-    expect(typeof result.current.useListQuery).toBe("function");
-    expect(typeof result.current.useDetailQuery).toBe("function");
-    expect(typeof result.current.useCreateMutation).toBe("function");
-  });
-
-  it("tags list, detail, and create mutation cache keys", () => {
-    const {api, endpoints} = createApiDouble();
-    renderHook(() => useAiObservabilityEvaluatorsApi(api));
-
-    const listTags = endpoints.aiObservabilityEvaluators.providesTags;
-    assert.deepEqual(typeof listTags === "function" ? listTags() : listTags, [
-      "aiObservabilityEvaluators",
-    ]);
-
-    const detailTags = endpoints.aiObservabilityEvaluator.providesTags as (
-      result: unknown,
-      error: unknown,
-      id: string
-    ) => unknown;
-    assert.deepEqual(detailTags(undefined, undefined, "eval-9"), [
-      {id: "eval-9", type: "aiObservabilityEvaluators"},
-    ]);
-
-    const createTags = endpoints.createAiObservabilityEvaluator.invalidatesTags;
-    assert.deepEqual(typeof createTags === "function" ? createTags() : createTags, [
-      "aiObservabilityEvaluators",
-    ]);
-  });
-
-  it("injects endpoints when enhanceEndpoints is unavailable", () => {
-    const endpoints: Record<string, CapturedEndpoint> = {};
-    const api = {
-      injectEndpoints: ({
-        endpoints: build,
-      }: {
-        endpoints: (builder: EndpointBuilder) => Record<string, CapturedEndpoint>;
-      }) => {
-        const builder = {
-          mutation: (spec: CapturedEndpoint) => spec,
-          query: (spec: CapturedEndpoint) => spec,
-        } as unknown as EndpointBuilder;
-        Object.assign(endpoints, build(builder));
-        return {};
-      },
-    } as unknown as AdminApi;
-    renderHook(() => useAiObservabilityEvaluatorsApi(api));
-    expect(endpoints.aiObservabilityEvaluators).toBeTruthy();
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toContain(
+      "GET /ai/observability/evaluators"
+    );
+    expect(result.current.create[1]).toMatchObject({data: {_id: "eval-1"}, isError: false});
   });
 });

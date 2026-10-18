@@ -6,60 +6,86 @@ import {assert} from "chai";
 import {DateTime} from "luxon";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../types";
-import {AiDatasetDetailScreenWidget} from "../widgets/aiObservability/datasets/AiDatasetDetailScreen";
-import {AiDatasetsScreenWidget} from "../widgets/aiObservability/datasets/AiDatasetsListScreen";
+import type {AdminConfigResponse} from "../types";
+import {AiDatasetDetailScreenWidget as AiDatasetDetailScreenWidgetBase} from "../widgets/aiObservability/datasets/AiDatasetDetailScreen";
+import {AiDatasetsScreenWidget as AiDatasetsScreenWidgetBase} from "../widgets/aiObservability/datasets/AiDatasetsListScreen";
 import {AiDatasetsListView} from "../widgets/aiObservability/datasets/AiDatasetsListView";
 import type {
   DatasetItemRecord,
   DatasetRecord,
 } from "../widgets/aiObservability/datasets/datasetTypes";
-import {AiEvaluatorDetailScreenWidget} from "../widgets/aiObservability/evaluators/AiEvaluatorDetailScreen";
-import {AiEvaluatorNewScreenWidget} from "../widgets/aiObservability/evaluators/AiEvaluatorNewScreen";
-import {AiEvaluatorsScreenWidget} from "../widgets/aiObservability/evaluators/AiEvaluatorsListScreen";
+import {AiEvaluatorDetailScreenWidget as AiEvaluatorDetailScreenWidgetBase} from "../widgets/aiObservability/evaluators/AiEvaluatorDetailScreen";
+import {AiEvaluatorNewScreenWidget as AiEvaluatorNewScreenWidgetBase} from "../widgets/aiObservability/evaluators/AiEvaluatorNewScreen";
+import {AiEvaluatorsScreenWidget as AiEvaluatorsScreenWidgetBase} from "../widgets/aiObservability/evaluators/AiEvaluatorsListScreen";
 import {AiEvaluatorsListView} from "../widgets/aiObservability/evaluators/AiEvaluatorsListView";
 import type {EvaluatorRecord} from "../widgets/aiObservability/evaluators/evaluatorTypes";
-import {AiExperimentNewScreenWidget} from "../widgets/aiObservability/experiments/AiExperimentNewScreen";
-import {AiExperimentResultsScreenWidget} from "../widgets/aiObservability/experiments/AiExperimentResultsScreen";
+import {AiExperimentNewScreenWidget as AiExperimentNewScreenWidgetBase} from "../widgets/aiObservability/experiments/AiExperimentNewScreen";
+import {AiExperimentResultsScreenWidget as AiExperimentResultsScreenWidgetBase} from "../widgets/aiObservability/experiments/AiExperimentResultsScreen";
 import {AiExperimentResultsView} from "../widgets/aiObservability/experiments/AiExperimentResultsView";
-import {AiExperimentsScreenWidget} from "../widgets/aiObservability/experiments/AiExperimentsListScreen";
+import {AiExperimentsScreenWidget as AiExperimentsScreenWidgetBase} from "../widgets/aiObservability/experiments/AiExperimentsListScreen";
 import {AiExperimentsListView} from "../widgets/aiObservability/experiments/AiExperimentsListView";
 import type {ExperimentRecord} from "../widgets/aiObservability/experiments/experimentTypes";
-import {AiPromptEditorScreenWidget} from "../widgets/aiObservability/prompts/AiPromptEditorScreen";
+import {AiPromptEditorScreenWidget as AiPromptEditorScreenWidgetBase} from "../widgets/aiObservability/prompts/AiPromptEditorScreen";
 import {AiPromptEditorView} from "../widgets/aiObservability/prompts/AiPromptEditorView";
 import {AiPromptPlaygroundView} from "../widgets/aiObservability/prompts/AiPromptPlaygroundView";
-import {AiPromptsScreenWidget} from "../widgets/aiObservability/prompts/AiPromptsListScreen";
+import {AiPromptsScreenWidget as AiPromptsScreenWidgetBase} from "../widgets/aiObservability/prompts/AiPromptsListScreen";
 import {AiPromptsListView} from "../widgets/aiObservability/prompts/AiPromptsListView";
 import type {
   PlaygroundRunResult,
   PromptDetail,
   PromptListItem,
 } from "../widgets/aiObservability/prompts/promptTypes";
-import {AiReviewItemScreenWidget} from "../widgets/aiObservability/review/AiReviewItemScreen";
+import {AiReviewItemScreenWidget as AiReviewItemScreenWidgetBase} from "../widgets/aiObservability/review/AiReviewItemScreen";
 import {AiReviewItemView} from "../widgets/aiObservability/review/AiReviewItemView";
-import {AiReviewScreenWidget} from "../widgets/aiObservability/review/AiReviewQueueScreen";
+import {AiReviewScreenWidget as AiReviewScreenWidgetBase} from "../widgets/aiObservability/review/AiReviewQueueScreen";
 import {AiReviewQueueView} from "../widgets/aiObservability/review/AiReviewQueueView";
 import {ReviewScoreField} from "../widgets/aiObservability/review/ReviewScoreField";
 import type {ReviewDetail, ReviewListItem} from "../widgets/aiObservability/review/reviewTypes";
-import {AiObservabilityChrome} from "../widgets/aiObservability/shell/AiObservabilityChrome";
+import {AiObservabilityChrome as AiObservabilityChromeBase} from "../widgets/aiObservability/shell/AiObservabilityChrome";
 import {AI_OBSERVABILITY_WIDGETS} from "../widgets/aiObservability/shell/AiObservabilityScreenWidgets";
-import {AiObservabilityStatusChip} from "../widgets/aiObservability/shell/AiObservabilityStatusChip";
+import {AiObservabilityStatusChip as AiObservabilityStatusChipBase} from "../widgets/aiObservability/shell/AiObservabilityStatusChip";
 import {
   buildAiObservabilityBreadcrumbs,
   formatObservabilityStatusChip,
   type ObservabilityStatusPayload,
   unwrapObservabilityStatus,
 } from "../widgets/aiObservability/shell/aiObservabilityNav";
-import {AiTraceDetailScreenWidget} from "../widgets/aiObservability/traces/AiTraceDetailScreen";
+import {AiTraceDetailScreenWidget as AiTraceDetailScreenWidgetBase} from "../widgets/aiObservability/traces/AiTraceDetailScreen";
 import {AiTraceDetailView} from "../widgets/aiObservability/traces/AiTraceDetailView";
-import {AiTracesScreenWidget} from "../widgets/aiObservability/traces/AiTracesListScreen";
+import {AiTracesScreenWidget as AiTracesScreenWidgetBase} from "../widgets/aiObservability/traces/AiTracesListScreen";
 import {AiTracesListView} from "../widgets/aiObservability/traces/AiTracesListView";
 import {
   emptyTraceFilters,
   type TraceDetail,
   type TraceListItem,
 } from "../widgets/aiObservability/traces/traceTypes";
+import {
+  type FakeObservabilityApi,
+  installFakeObservabilityHooks,
+  withFakeObservabilityApi,
+} from "./observabilityFakeApi.isolated";
 import {operatorObservabilityStatus} from "./observabilityStatusFixtures.isolated";
+
+installFakeObservabilityHooks();
+
+const AiDatasetDetailScreenWidget = withFakeObservabilityApi(AiDatasetDetailScreenWidgetBase);
+const AiDatasetsScreenWidget = withFakeObservabilityApi(AiDatasetsScreenWidgetBase);
+const AiEvaluatorDetailScreenWidget = withFakeObservabilityApi(AiEvaluatorDetailScreenWidgetBase);
+const AiEvaluatorNewScreenWidget = withFakeObservabilityApi(AiEvaluatorNewScreenWidgetBase);
+const AiEvaluatorsScreenWidget = withFakeObservabilityApi(AiEvaluatorsScreenWidgetBase);
+const AiExperimentNewScreenWidget = withFakeObservabilityApi(AiExperimentNewScreenWidgetBase);
+const AiExperimentResultsScreenWidget = withFakeObservabilityApi(
+  AiExperimentResultsScreenWidgetBase
+);
+const AiExperimentsScreenWidget = withFakeObservabilityApi(AiExperimentsScreenWidgetBase);
+const AiPromptEditorScreenWidget = withFakeObservabilityApi(AiPromptEditorScreenWidgetBase);
+const AiPromptsScreenWidget = withFakeObservabilityApi(AiPromptsScreenWidgetBase);
+const AiReviewItemScreenWidget = withFakeObservabilityApi(AiReviewItemScreenWidgetBase);
+const AiReviewScreenWidget = withFakeObservabilityApi(AiReviewScreenWidgetBase);
+const AiTraceDetailScreenWidget = withFakeObservabilityApi(AiTraceDetailScreenWidgetBase);
+const AiTracesScreenWidget = withFakeObservabilityApi(AiTracesScreenWidgetBase);
+const AiObservabilityChrome = withFakeObservabilityApi(AiObservabilityChromeBase);
+const AiObservabilityStatusChip = withFakeObservabilityApi(AiObservabilityStatusChipBase);
 
 interface ExpoRouterPushMock {
   (...args: unknown[]): void;
@@ -143,7 +169,7 @@ describe("AiDatasetDetailScreen", () => {
     refetch: mock(() => {}),
   };
 
-  const createApi = (createImpl?: () => Promise<unknown>): AdminApi => {
+  const createApi = (createImpl?: () => Promise<unknown>): FakeObservabilityApi => {
     const api = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
@@ -160,7 +186,7 @@ describe("AiDatasetDetailScreen", () => {
         ],
       }),
     };
-    return api as unknown as AdminApi;
+    return api as unknown as FakeObservabilityApi;
   };
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
@@ -352,7 +378,7 @@ describe("AiDatasetDetailScreen", () => {
             {isError: false, isLoading: false},
           ],
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
       const errored = renderWithTheme(
         <AiDatasetDetailScreenWidget
           api={errorApi}
@@ -417,7 +443,7 @@ describe("AiDatasetsListScreen", () => {
   const createApi = (overrides?: {
     createImpl?: () => Promise<unknown>;
     importImpl?: () => Promise<unknown>;
-  }): AdminApi => {
+  }): FakeObservabilityApi => {
     const api = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
@@ -439,7 +465,7 @@ describe("AiDatasetsListScreen", () => {
           ),
       }),
     };
-    return api as unknown as AdminApi;
+    return api as unknown as FakeObservabilityApi;
   };
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
@@ -1114,7 +1140,7 @@ describe("AiEvaluatorDetailScreen", () => {
   let promptIsError = false;
   let promptIsLoading = false;
 
-  const createApi = (): AdminApi => {
+  const createApi = (): FakeObservabilityApi => {
     const api = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
@@ -1150,7 +1176,7 @@ describe("AiEvaluatorDetailScreen", () => {
         }),
       }),
     };
-    return api as unknown as AdminApi;
+    return api as unknown as FakeObservabilityApi;
   };
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
@@ -1353,10 +1379,10 @@ describe("AiEvaluatorNewScreen", () => {
     ],
   };
 
-  const stableApi: AdminApi = {
+  const stableApi: FakeObservabilityApi = {
     enhanceEndpoints: () => stableApi,
     injectEndpoints: () => injectedHooks,
-  } as unknown as AdminApi;
+  } as unknown as FakeObservabilityApi;
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
 
@@ -1687,7 +1713,7 @@ describe("AiEvaluatorsListScreen", () => {
     refetch: mock(() => {}),
   };
 
-  const createApi = (): AdminApi => {
+  const createApi = (): FakeObservabilityApi => {
     const api = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
@@ -1699,7 +1725,7 @@ describe("AiEvaluatorsListScreen", () => {
         }),
       }),
     };
-    return api as unknown as AdminApi;
+    return api as unknown as FakeObservabilityApi;
   };
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
@@ -1988,10 +2014,10 @@ describe("AiExperimentNewScreen", () => {
     ],
   };
 
-  const stableApi: AdminApi = {
+  const stableApi: FakeObservabilityApi = {
     enhanceEndpoints: () => stableApi,
     injectEndpoints: () => injectedHooks,
-  } as unknown as AdminApi;
+  } as unknown as FakeObservabilityApi;
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
 
@@ -2361,10 +2387,10 @@ describe("AiExperimentResultsScreen", () => {
     ],
   };
 
-  const stableApi: AdminApi = {
+  const stableApi: FakeObservabilityApi = {
     enhanceEndpoints: () => stableApi,
     injectEndpoints: () => injectedHooks,
-  } as unknown as AdminApi;
+  } as unknown as FakeObservabilityApi;
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
   const widgetProps = {
@@ -2404,7 +2430,7 @@ describe("AiExperimentResultsScreen", () => {
             {isError: false, isLoading: false},
           ],
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
       const loading = renderWithTheme(
         <AiExperimentResultsScreenWidget
           api={loadingApi}
@@ -2626,7 +2652,7 @@ describe("AiExperimentsListScreen", () => {
     refetch: mock(() => {}),
   };
 
-  const createApi = (): AdminApi => {
+  const createApi = (): FakeObservabilityApi => {
     const api = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
@@ -2638,7 +2664,7 @@ describe("AiExperimentsListScreen", () => {
         }),
       }),
     };
-    return api as unknown as AdminApi;
+    return api as unknown as FakeObservabilityApi;
   };
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
@@ -2781,7 +2807,7 @@ describe("AiObservabilityChrome", () => {
   };
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
-  const stubApi = {} as unknown as AdminApi;
+  const stubApi = {} as unknown as FakeObservabilityApi;
 
   describe("AI observability chrome", () => {
     it("formats the status chip for local on and local off primaries", () => {
@@ -2839,7 +2865,7 @@ describe("AiObservabilityChrome", () => {
             isLoading: true,
           }),
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
       const loading = renderWithTheme(<AiObservabilityStatusChip api={loadingApi} />);
       expect(loading.getByText("Checking observability…")).toBeTruthy();
 
@@ -2852,7 +2878,7 @@ describe("AiObservabilityChrome", () => {
             isLoading: false,
           }),
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
       const errored = renderWithTheme(<AiObservabilityStatusChip api={errorApi} />);
       expect(errored.getByText("Observability unavailable")).toBeTruthy();
 
@@ -2865,7 +2891,7 @@ describe("AiObservabilityChrome", () => {
             isLoading: false,
           }),
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
       const unwrapped = renderWithTheme(<AiObservabilityStatusChip api={unwrappedApi} />);
       expect(
         unwrapped.getByText("Local on · prompts:local · datasets:local · experiments:local")
@@ -2880,43 +2906,29 @@ describe("AiObservabilityChrome", () => {
             isLoading: false,
           }),
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
       const missingStatus = renderWithTheme(<AiObservabilityStatusChip api={missingStatusApi} />);
       expect(missingStatus.getByText("Observability unavailable")).toBeTruthy();
     });
 
-    it("fetches status through the injected api when props are omitted", () => {
-      let statusQuery: (() => {method: string; url: string}) | undefined;
+    it("unwraps a fetched status envelope when props are omitted", () => {
       const api = {
         enhanceEndpoints: () => api,
-        injectEndpoints: (config: {
-          endpoints: (build: {
-            query: (definition: {query: () => {method: string; url: string}}) => {
-              query: () => {method: string; url: string};
-            };
-          }) => Record<string, {query: () => {method: string; url: string}}>;
-        }) => {
-          const endpoints = config.endpoints({
-            query: (definition) => definition,
-          });
-          statusQuery = endpoints.aiObservabilityStatus?.query;
-          return {
-            useAiObservabilityStatusQuery: () => ({
-              data: {data: localOnStatus},
-              isError: false,
-              isLoading: false,
-            }),
-          };
-        },
-      } as unknown as AdminApi;
+        injectEndpoints: () => ({
+          useAiObservabilityStatusQuery: () => ({
+            data: {data: localOnStatus},
+            isError: false,
+            isLoading: false,
+          }),
+        }),
+      } as unknown as FakeObservabilityApi;
       const fetched = renderWithTheme(<AiObservabilityStatusChip api={api} />);
       expect(
         fetched.getByText("Local on · prompts:local · datasets:local · experiments:local")
       ).toBeTruthy();
-      assert.deepEqual(statusQuery?.(), {method: "GET", url: "/ai/observability/status"});
     });
 
-    it("shows unavailable chip when api is omitted and no status props are passed", () => {
+    it("shows unavailable chip when the status fetch returns nothing", () => {
       const missingApi = renderWithTheme(<AiObservabilityStatusChip />);
       expect(missingApi.getByText("Observability unavailable")).toBeTruthy();
     });
@@ -3078,10 +3090,10 @@ describe("AiPromptEditorScreen", () => {
     useRunAiObservabilityPlaygroundMutation: () => [runPlayground, playgroundMutationState],
   };
 
-  const stableApi: AdminApi = {
+  const stableApi: FakeObservabilityApi = {
     enhanceEndpoints: () => stableApi,
     injectEndpoints: () => injectedHooks,
-  } as unknown as AdminApi;
+  } as unknown as FakeObservabilityApi;
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
   const widgetProps = {
@@ -3656,10 +3668,10 @@ describe("AiPromptsListScreen", () => {
     ],
   };
 
-  const stableApi: AdminApi = {
+  const stableApi: FakeObservabilityApi = {
     enhanceEndpoints: () => stableApi,
     injectEndpoints: () => injectedHooks,
-  } as unknown as AdminApi;
+  } as unknown as FakeObservabilityApi;
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
   const widgetProps = {
@@ -3963,7 +3975,7 @@ describe("AiReviewItemScreen", () => {
 
   let actionShouldFail = false;
 
-  const createApi = (options?: {currentUserId?: string}): AdminApi => {
+  const createApi = (options?: {currentUserId?: string}): FakeObservabilityApi => {
     const api = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
@@ -4002,7 +4014,7 @@ describe("AiReviewItemScreen", () => {
         ],
       }),
     };
-    return api as unknown as AdminApi;
+    return api as unknown as FakeObservabilityApi;
   };
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
@@ -4035,7 +4047,7 @@ describe("AiReviewItemScreen", () => {
             {isError: false, isLoading: false},
           ],
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
       const loading = renderWithTheme(
         <AiReviewItemScreenWidget
           api={loadingApi}
@@ -4127,7 +4139,7 @@ describe("AiReviewItemScreen", () => {
             {isError: false, isLoading: false},
           ],
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
       const errored = renderWithTheme(
         <AiReviewItemScreenWidget
           api={errorApi}
@@ -4237,7 +4249,7 @@ describe("AiReviewItemScreen", () => {
             {isError: false, isLoading: false},
           ],
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
 
       routerPush.mockClear();
       const view = renderWithTheme(
@@ -4518,7 +4530,7 @@ describe("AiReviewQueueScreen", () => {
     refetch: mock(() => {}),
   };
 
-  const createApi = (): AdminApi => {
+  const createApi = (): FakeObservabilityApi => {
     const api = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
@@ -4530,7 +4542,7 @@ describe("AiReviewQueueScreen", () => {
         }),
       }),
     };
-    return api as unknown as AdminApi;
+    return api as unknown as FakeObservabilityApi;
   };
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
@@ -4727,7 +4739,7 @@ describe("AiTraceDetailScreen", () => {
 
   const refetch = mock(() => undefined);
 
-  const createApi = (): AdminApi => {
+  const createApi = (): FakeObservabilityApi => {
     const api = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
@@ -4744,7 +4756,7 @@ describe("AiTraceDetailScreen", () => {
         }),
       }),
     };
-    return api as unknown as AdminApi;
+    return api as unknown as FakeObservabilityApi;
   };
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
@@ -5044,13 +5056,15 @@ describe("AiTracesListScreen", () => {
     ],
   };
 
-  const stableApi: AdminApi = {
+  const stableApi: FakeObservabilityApi = {
     enhanceEndpoints: () => stableApi,
     injectEndpoints: () => injectedHooks,
-  } as unknown as AdminApi;
+  } as unknown as FakeObservabilityApi;
 
-  const apiWithPlaygroundSource = (source: "request-key" | "server" | "unavailable"): AdminApi => {
-    const api: AdminApi = {
+  const apiWithPlaygroundSource = (
+    source: "request-key" | "server" | "unavailable"
+  ): FakeObservabilityApi => {
+    const api: FakeObservabilityApi = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
         ...injectedHooks,
@@ -5070,7 +5084,7 @@ describe("AiTracesListScreen", () => {
           isLoading: false,
         }),
       }),
-    } as unknown as AdminApi;
+    } as unknown as FakeObservabilityApi;
     return api;
   };
 
@@ -5299,13 +5313,13 @@ describe("AiTracesListScreen", () => {
     });
 
     it("no-ops enqueue when no evaluator is installed", async () => {
-      const noEvalApi: AdminApi = {
+      const noEvalApi: FakeObservabilityApi = {
         enhanceEndpoints: () => noEvalApi,
         injectEndpoints: () => ({
           ...injectedHooks,
           useAiObservabilityEvaluatorsQuery: () => ({data: [], isLoading: false}),
         }),
-      } as unknown as AdminApi;
+      } as unknown as FakeObservabilityApi;
       enqueueMutation.mockClear();
       const view = renderWithTheme(<AiTracesScreenWidget {...widgetProps} api={noEvalApi} />);
       await act(async () => {

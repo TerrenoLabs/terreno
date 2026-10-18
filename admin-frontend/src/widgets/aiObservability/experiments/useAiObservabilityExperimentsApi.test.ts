@@ -1,140 +1,77 @@
-import {describe, expect, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
-import {assert} from "chai";
-import type {AdminApi, EndpointBuilder} from "../../../types";
+import {afterEach, describe, expect, it} from "bun:test";
+import {act, renderHook} from "@testing-library/react-native";
+import {
+  type CapturedObservabilityRequest,
+  flushObservabilityRequests,
+  ObservabilityTestProvider,
+  stubObservabilityFetch,
+} from "../../../testing/observabilityTestUtils";
 import {useAiObservabilityExperimentsApi} from "./useAiObservabilityExperimentsApi";
 
-interface CapturedEndpoint {
-  invalidatesTags?: unknown;
-  providesTags?: unknown;
-  query: (arg: never) => {body?: unknown; method: string; url: string};
-}
+let restoreFetch: () => void = () => undefined;
 
-const createApiDouble = () => {
-  const endpoints: Record<string, CapturedEndpoint> = {};
-  const addTagTypes: string[][] = [];
-  const api = {
-    enhanceEndpoints: ({addTagTypes: tags}: {addTagTypes: string[]}) => {
-      addTagTypes.push(tags);
-      return api;
-    },
-    injectEndpoints: ({
-      endpoints: build,
-    }: {
-      endpoints: (builder: EndpointBuilder) => Record<string, CapturedEndpoint>;
-    }) => {
-      const builder = {
-        mutation: (spec: CapturedEndpoint) => spec,
-        query: (spec: CapturedEndpoint) => spec,
-      } as unknown as EndpointBuilder;
-      Object.assign(endpoints, build(builder));
-      return {
-        useAiObservabilityExperimentQuery: mock(() => ({isLoading: false})),
-        useAiObservabilityExperimentsQuery: mock(() => ({isLoading: false})),
-        useCreateAiObservabilityExperimentMutation: mock(() => [mock(() => ({})), {}]),
-        useEstimateAiObservabilityExperimentMutation: mock(() => [mock(() => ({})), {}]),
-        usePromoteAiObservabilityExperimentMutation: mock(() => [mock(() => ({})), {}]),
-      };
-    },
-  } as unknown as AdminApi;
-  return {addTagTypes, api, endpoints};
+const stub = (): CapturedObservabilityRequest[] => {
+  const {calls, restore} = stubObservabilityFetch(() => ({body: {data: {_id: "exp-1"}}}));
+  restoreFetch = restore;
+  return calls;
 };
 
+afterEach(() => {
+  restoreFetch();
+});
+
 describe("useAiObservabilityExperimentsApi", () => {
-  it("injects experiment CRUD, estimate, and promote routes", () => {
-    const {addTagTypes, api, endpoints} = createApiDouble();
-    renderHook(() => useAiObservabilityExperimentsApi(api));
-
-    assert.deepEqual(addTagTypes[0], ["aiObservabilityExperiments"]);
-    expect(endpoints.aiObservabilityExperiments.query({} as never)).toEqual({
-      method: "GET",
-      url: "/ai/observability/experiments",
-    });
-    expect(endpoints.aiObservabilityExperiment.query("exp-1" as never)).toEqual({
-      method: "GET",
-      url: "/ai/observability/experiments/exp-1",
-    });
-    expect(endpoints.estimateAiObservabilityExperiment.query({datasetId: "ds-1"} as never)).toEqual(
-      {
-        body: {datasetId: "ds-1"},
-        method: "POST",
-        url: "/ai/observability/experiments/estimate",
-      }
-    );
-    expect(endpoints.createAiObservabilityExperiment.query({name: "run"} as never)).toEqual({
-      body: {name: "run"},
-      method: "POST",
-      url: "/ai/observability/experiments",
-    });
-    expect(
-      endpoints.promoteAiObservabilityExperiment.query({id: "exp-1", version: 2} as never)
-    ).toEqual({
-      body: {version: 2},
-      method: "POST",
-      url: "/ai/observability/experiments/exp-1/promote",
-    });
-  });
-
-  it("exposes list, detail, create, estimate, and promote hooks", () => {
-    const {api} = createApiDouble();
-    const {result} = renderHook(() => useAiObservabilityExperimentsApi(api));
-    expect(typeof result.current.useListQuery).toBe("function");
-    expect(typeof result.current.useDetailQuery).toBe("function");
-    expect(typeof result.current.useCreateMutation).toBe("function");
-    expect(typeof result.current.useEstimateMutation).toBe("function");
-    expect(typeof result.current.usePromoteMutation).toBe("function");
-  });
-
-  it("tags list, detail, create, and promote mutation cache keys", () => {
-    const {api, endpoints} = createApiDouble();
-    renderHook(() => useAiObservabilityExperimentsApi(api));
-
-    const listTags = endpoints.aiObservabilityExperiments.providesTags;
-    assert.deepEqual(typeof listTags === "function" ? listTags() : listTags, [
-      "aiObservabilityExperiments",
-    ]);
-
-    const detailTags = endpoints.aiObservabilityExperiment.providesTags as (
-      result: unknown,
-      error: unknown,
-      id: string
-    ) => unknown;
-    assert.deepEqual(detailTags(undefined, undefined, "exp-9"), [
-      {id: "exp-9", type: "aiObservabilityExperiments"},
-    ]);
-
-    const createTags = endpoints.createAiObservabilityExperiment.invalidatesTags;
-    assert.deepEqual(typeof createTags === "function" ? createTags() : createTags, [
-      "aiObservabilityExperiments",
-    ]);
-
-    const promoteTags = endpoints.promoteAiObservabilityExperiment.invalidatesTags as (
-      result: unknown,
-      error: unknown,
-      args: {id: string}
-    ) => unknown;
-    assert.deepEqual(promoteTags(undefined, undefined, {id: "exp-9"}), [
-      {id: "exp-9", type: "aiObservabilityExperiments"},
-    ]);
-  });
-
-  it("injects endpoints when enhanceEndpoints is unavailable", () => {
-    const endpoints: Record<string, CapturedEndpoint> = {};
-    const api = {
-      injectEndpoints: ({
-        endpoints: build,
-      }: {
-        endpoints: (builder: EndpointBuilder) => Record<string, CapturedEndpoint>;
-      }) => {
-        const builder = {
-          mutation: (spec: CapturedEndpoint) => spec,
-          query: (spec: CapturedEndpoint) => spec,
-        } as unknown as EndpointBuilder;
-        Object.assign(endpoints, build(builder));
-        return {};
+  it("reads the experiment list and detail routes", async () => {
+    const calls = stub();
+    const {result} = renderHook(
+      () => {
+        const api = useAiObservabilityExperimentsApi();
+        return {
+          detail: api.useDetailQuery("exp 1"),
+          list: api.useListQuery(),
+          skipped: api.useDetailQuery("exp-2", {skip: true}),
+        };
       },
-    } as unknown as AdminApi;
-    renderHook(() => useAiObservabilityExperimentsApi(api));
-    expect(endpoints.aiObservabilityExperiments).toBeTruthy();
+      {wrapper: ObservabilityTestProvider}
+    );
+    await flushObservabilityRequests();
+
+    expect(calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual([
+      "GET /ai/observability/experiments",
+      "GET /ai/observability/experiments/exp%201",
+    ]);
+    expect(result.current.detail.data).toEqual({_id: "exp-1"});
+  });
+
+  it("estimates, creates, and promotes experiments", async () => {
+    const calls = stub();
+    const {result} = renderHook(
+      () => {
+        const api = useAiObservabilityExperimentsApi();
+        return {
+          create: api.useCreateMutation(),
+          estimate: api.useEstimateMutation(),
+          promote: api.usePromoteMutation(),
+        };
+      },
+      {wrapper: ObservabilityTestProvider}
+    );
+
+    const base = {datasetId: "ds-1", evaluatorIds: ["eval-1"], versions: [1, 2]};
+    await act(async () => {
+      await result.current.estimate[0](base).unwrap();
+      await result.current.create[0]({...base, name: "run", promptName: "summarize"}).unwrap();
+      await result.current.promote[0]({id: "exp-1", version: 2}).unwrap();
+    });
+
+    expect(calls.map(({body, method, url}) => ({body, method, url}))).toEqual([
+      {body: base, method: "POST", url: "/ai/observability/experiments/estimate"},
+      {
+        body: {...base, name: "run", promptName: "summarize"},
+        method: "POST",
+        url: "/ai/observability/experiments",
+      },
+      {body: {version: 2}, method: "POST", url: "/ai/observability/experiments/exp-1/promote"},
+    ]);
   });
 });

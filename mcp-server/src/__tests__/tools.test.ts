@@ -584,6 +584,10 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("# Install Admin Panel");
+      expect(content).toContain("frontend/app/(tabs)/admin/_layout.tsx");
+      expect(content).toContain("<AdminProvider");
+      expect(content).toContain("getAuthHeaders={getAdminAuthHeaders}");
+      expect(content).not.toContain("api={");
       expect(content).toContain("frontend/app/(tabs)/admin/index.tsx");
       expect(content).toContain("frontend/app/(tabs)/admin/[model].tsx");
       expect(content).toContain("frontend/app/(tabs)/admin/[model]/create.tsx");

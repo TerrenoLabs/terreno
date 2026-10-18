@@ -1,13 +1,11 @@
 import {AIRequestExplorer, type AIRequestExplorerData} from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
 import {withQueryString} from "../adminRpc";
-import {asDynamicHookApi} from "../dynamicHookApi";
-import type {AdminScreenWidgetProps, EndpointBuilder, ScreenWidgetComponent} from "../types";
+import type {AdminScreenWidgetProps, ScreenWidgetComponent} from "../types";
 import {useAdminRpc, useAdminRpcQuery} from "../useAdminRpc";
 
 const EXPLORER_LIMIT = 20;
-const AI_REQUESTS_ENDPOINT_KEY = "adminAiRequestsExplorer";
 
 interface AIRequestsResponse {
   data: AIRequestExplorerData[];
@@ -17,7 +15,7 @@ interface AIRequestsResponse {
   total: number;
 }
 
-export const AIRequestsScreenWidget: React.FC<AdminScreenWidgetProps> = ({api, routeBase}) => {
+export const AIRequestsScreenWidget: React.FC<AdminScreenWidgetProps> = ({routeBase}) => {
   const [page, setPage] = useState(1);
   const [requestTypeFilter, setRequestTypeFilter] = useState<string[]>([]);
   const [startDate, setStartDate] = useState("");
@@ -31,35 +29,10 @@ export const AIRequestsScreenWidget: React.FC<AdminScreenWidgetProps> = ({api, r
     startDate: startDate || undefined,
   };
   const rpc = useAdminRpc();
-  const fetchState = useAdminRpcQuery<AIRequestsResponse>({
+  const {data, isLoading} = useAdminRpcQuery<AIRequestsResponse>({
     rpc,
-    skip: !rpc,
     url: withQueryString({params: explorerParams, url: "/aiRequestsExplorer"}),
   });
-
-  const enhancedApi = useMemo(
-    () =>
-      api.injectEndpoints({
-        endpoints: (build: EndpointBuilder) => ({
-          [AI_REQUESTS_ENDPOINT_KEY]: build.query({
-            query: (params: Record<string, unknown>) => ({
-              method: "GET",
-              params,
-              url: "/aiRequestsExplorer",
-            }),
-          }),
-        }),
-        overrideExisting: true,
-      }),
-    [api]
-  );
-
-  const useExplorerQuery = asDynamicHookApi(enhancedApi).useAdminAiRequestsExplorerQuery;
-  const rtk = useExplorerQuery(explorerParams, {skip: Boolean(rpc)}) as {
-    data?: AIRequestsResponse;
-    isLoading: boolean;
-  };
-  const {data, isLoading} = rpc ? fetchState : rtk;
 
   const handlePageChange = useCallback((nextPage: number): void => {
     setPage(nextPage);

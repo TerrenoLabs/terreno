@@ -47,12 +47,12 @@ references/
 1. **Use syncdb hooks** (`useQuery`, `useEntity`, `useMutate`) for synced collection CRUD.
 2. **Use generated hooks** from `store/openApiSdk.ts` (or `store/sdk.ts`) for non-synced routes.
 3. **Never edit `openApiSdk.ts` manually** — regenerate with `generate-sdk`.
-4. **Never use `axios` or raw `fetch`** in app code. Framework-owned admin RPC
-   is the exception: `@terreno/admin-frontend` binds `adminRequest` from host
-   `credentials` / `getAuthHeaders`.
-5. **Do not add new admin `injectEndpoints`.** String-`_id` models with
-   `adminBroadcast` use windowed syncdb; ObjectId compatibility CRUD remains RTK
-   until Terreno 58 removes `useAdminApi` and the required `api` prop.
+4. **Never use `axios` or raw `fetch`** in app code. Framework-owned admin
+   requests are the exception: `@terreno/admin-frontend` binds `adminRequest` from
+   `AdminProvider` `credentials` / `getAuthHeaders` / `apiOrigin`.
+5. **Admin does not use RTK.** String-`_id` models with `adminBroadcast` use
+   windowed syncdb; ObjectId/API-only CRUD uses `useAdminModelApi`; admin RPC uses
+   `useAdminRpc`. Never pass an `api` prop to admin components (removed in Terreno 58).
 
 ## Quick Start
 
@@ -194,8 +194,8 @@ Need data in a Terreno app?
   |
   |-- Built-in admin?
   |   |-- String id + adminBroadcast -> windowed syncdb
-  |   |-- Framework RPC -> host-bound adminRequest
-  |   \-- ObjectId compatibility CRUD -> useAdminApi until Terreno 58
+  |   |-- Framework RPC -> AdminProvider adminRequest (useAdminRpc)
+  |   \-- ObjectId / API-only CRUD -> useAdminModelApi
   |
   |-- Login/logout?
   |   \-- references/auth-and-tokens.md

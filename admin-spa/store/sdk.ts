@@ -1,11 +1,9 @@
-import type {AdminScreenProps} from "@terreno/admin-frontend";
 import {createSessionApi} from "@terreno/rtk";
 
 /**
- * Base RTK Query API for the admin SPA. Admin CRUD endpoints are injected at runtime
- * by `@terreno/admin-frontend`'s `useAdminApi`/`useAdminConfig` hooks, so no codegen is
- * required for the admin flow itself. We only declare the cache tag types those hooks
- * (and any consumer extensions) expect.
+ * Base RTK Query API for the admin SPA's own session queries (`/auth/me`). Admin
+ * screens from `@terreno/admin-frontend` do not use RTK: they call the backend through
+ * the cookie-bound fetch client that `AdminProvider` creates.
  *
  * Uses the cookie-session API (NOT `emptySplitApi`): the SPA authenticates with the
  * better-auth session cookie on the same origin, and `emptySplitApi`'s JWT base query
@@ -13,7 +11,7 @@ import {createSessionApi} from "@terreno/rtk";
  * token is found in storage.
  */
 export const openapi = createSessionApi().enhanceEndpoints({
-  addTagTypes: ["admin-models", "admin-version-config", "admin-scripts", "profile"],
+  addTagTypes: ["profile"],
 });
 
 interface AdminSpaProfile {
@@ -32,10 +30,3 @@ const profileApi = openapi.injectEndpoints({
 });
 
 export const {useGetAdminSpaProfileQuery} = profileApi;
-
-/**
- * The API instance passed to `@terreno/admin-frontend` screens. Cast to the
- * type-erased `AdminApi` the admin screens accept (RTK's `Api` generics, including the
- * tag-type `unique symbol`s, don't structurally match the `Api<any, ...>` alias).
- */
-export const terrenoApi = openapi as unknown as AdminScreenProps["api"];

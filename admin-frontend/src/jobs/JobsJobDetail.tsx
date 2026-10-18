@@ -14,7 +14,6 @@ import type {Href} from "expo-router";
 import {router} from "expo-router";
 import React, {useCallback, useMemo} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
-import type {AdminApi} from "../types";
 import {JobsStatusBadge} from "./JobsStatusBadge";
 import {
   canCancelJob,
@@ -28,7 +27,6 @@ import {
 import {useJobsDashboardApi} from "./useJobsDashboardApi";
 
 export interface JobsJobDetailProps {
-  api: AdminApi;
   jobId: string;
   routeBase?: string;
 }
@@ -37,10 +35,10 @@ const toJsonMarkdown = (value: unknown): string => {
   return `\`\`\`json\n${JSON.stringify(value ?? null, null, 2)}\n\`\`\``;
 };
 
-export const JobsJobDetail: React.FC<JobsJobDetailProps> = ({api, jobId, routeBase = "/admin"}) => {
+export const JobsJobDetail: React.FC<JobsJobDetailProps> = ({jobId, routeBase = "/admin"}) => {
   const toast = useToast();
   const {useCancelMutation, useDetailQuery, useRequeueMutation, useRetryMutation} =
-    useJobsDashboardApi(api);
+    useJobsDashboardApi();
   const {data, error, isLoading} = useDetailQuery(jobId);
   const [retryJob, retryState] = useRetryMutation();
   const [requeueJob, requeueState] = useRequeueMutation();

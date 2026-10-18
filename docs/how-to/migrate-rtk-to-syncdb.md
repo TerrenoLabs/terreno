@@ -380,7 +380,7 @@ It runs `@rtk-query/codegen-openapi` against `openapi-config.ts` and writes `sto
 
 | Still generated | Stop using for migrated collections |
 |-----------------|-------------------------------------|
-| Auth routes, `GET /auth/me`, AI routes, feature flags, ObjectId admin compatibility CRUD | Collection CRUD — import from `store/syncDbSdk.ts` instead |
+| Auth routes, `GET /auth/me`, AI routes, feature flags | Collection CRUD — import from `store/syncDbSdk.ts` instead |
 | Custom REST / RPC endpoints | Todo `realtimeList` / `realtimeDocument` wiring in `store/sdk.ts` (removed in Terreno 58) |
 
 Keep running `bun run sdk` after backend route changes — non-synced screens still import from `store/sdk.ts`.
@@ -412,10 +412,11 @@ search, sort, pagination, and bulk-patch surface; TinyBase overlays rows and
 `useMutate` handles create/update/delete. Pass the host's `useConflicts()` result
 as `syncConflicts`.
 
-Admin RPC (config, scripts, roles, comms, consent, documents, version config,
-background tasks) uses admin-frontend's host-bound native fetch client. Do not
-add new admin `injectEndpoints`. Terreno 57 keeps `useAdminApi` and the required
-`api` prop only for ObjectId/API-only compatibility; Terreno 58 removes them.
+Every other admin request — ObjectId and API-only model CRUD, config, scripts,
+roles, comms, consent, documents, version config, background tasks — uses
+admin-frontend's host-bound native fetch client from `AdminProvider`. Terreno 58
+removed `useAdminApi` and the admin `api` prop: admin no longer needs the host's
+RTK API at all. Custom admin screens use `useAdminModelApi(routePath, modelName)`.
 
 ## 9. Feature flags
 

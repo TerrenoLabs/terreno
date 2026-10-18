@@ -23,7 +23,7 @@ const buildAdminApiListQueryUrl = (
   return `${routePath}?${queryString}`;
 };
 
-/** RTK Query list request shape for admin model routes. */
+/** List request shape (method + serialized URL) for admin model routes. */
 export const buildAdminApiListQueryRequest = (
   routePath: string,
   params: Record<string, unknown> | undefined

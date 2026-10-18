@@ -100,8 +100,10 @@ export const HarnessApprovalInbox: React.FC<HarnessApprovalInboxProps> = ({
   showHeading = true,
   testID = "harness-approvals",
 }) => {
-  const {approvals, decide, error, hasMore, isAvailable, isFetching, isLoading, refetch} =
-    useHarnessApprovals({baseUrl, request});
+  const {approvals, decide, error, hasMore, isFetching, isLoading, refetch} = useHarnessApprovals({
+    baseUrl,
+    request,
+  });
   const [ownSelected, setOwnSelected] = useState<HarnessApprovalRow | undefined>();
   const isControlled = onSelectedChange !== undefined;
   const selected = isControlled ? selectedProp : ownSelected;
@@ -191,13 +193,6 @@ export const HarnessApprovalInbox: React.FC<HarnessApprovalInboxProps> = ({
   }
 
   const renderBody = (): React.ReactElement => {
-    if (!isAvailable) {
-      return (
-        <Text color="error" testID="harness-approvals-unavailable">
-          No admin request client. Render inside AdminProvider or pass `request`.
-        </Text>
-      );
-    }
     if (isLoading) {
       return (
         <Box alignItems="center" padding={4} testID="harness-approvals-loading">
@@ -246,7 +241,6 @@ export const HarnessApprovalInbox: React.FC<HarnessApprovalInboxProps> = ({
           </Text>
         </Box>
         <Button
-          disabled={!isAvailable}
           iconName="arrows-rotate"
           loading={isFetching && !isLoading}
           onClick={handleRefresh}

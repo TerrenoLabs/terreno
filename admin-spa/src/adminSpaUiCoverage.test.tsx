@@ -65,13 +65,11 @@ const registerAdminSpaShellMocks = ({
   appConfigState,
   capturedOrgSwitcherProps,
   capturedShellProps,
-  mockTerrenoApi,
   profileState,
 }: {
   appConfigState: {appConfig: AdminSpaAppConfig};
   capturedOrgSwitcherProps: {current?: {api?: unknown; routeBase?: string}};
   capturedShellProps: {current?: Record<string, unknown>};
-  mockTerrenoApi: {reducerPath: string};
   profileState: {data?: {roles?: string[]}};
 }): void => {
   const shellModuleUrl = new URL("../components/AdminSpaShell.tsx", import.meta.url);
@@ -86,7 +84,6 @@ const registerAdminSpaShellMocks = ({
     }),
   }));
   mock.module(sdkPath, () => ({
-    terrenoApi: mockTerrenoApi,
     useGetAdminSpaProfileQuery: () => ({data: profileState.data}),
   }));
 };
@@ -104,7 +101,6 @@ describe("AdminSpaShell", () => {
   const profileState: {data?: {roles?: string[]}} = {};
   const capturedShellProps: {current?: Record<string, unknown>} = {};
   const capturedOrgSwitcherProps: {current?: {api?: unknown; routeBase?: string}} = {};
-  const mockTerrenoApi = {reducerPath: "terreno-admin-spa-test-api"};
   const breadcrumbs = [{href: "/", label: "Admin"}, {label: "Members"}];
   let AdminSpaShell: React.FC<{
     breadcrumbs?: {href?: string; label: string}[];
@@ -116,7 +112,6 @@ describe("AdminSpaShell", () => {
       appConfigState,
       capturedOrgSwitcherProps,
       capturedShellProps,
-      mockTerrenoApi,
       profileState,
     });
     ({AdminSpaShell} = await import("../components/AdminSpaShell"));
@@ -221,14 +216,14 @@ describe("AdminSpaShell", () => {
     );
 
     assert.deepEqual(capturedShellProps.current?.breadcrumbs, breadcrumbs);
-    assert.equal(capturedShellProps.current?.api, mockTerrenoApi);
+    assert.isUndefined(capturedShellProps.current?.api);
     assert.equal(capturedShellProps.current?.configurationPath, "/configuration");
     assert.equal(capturedShellProps.current?.organizationDirectoryPath, "/orgs");
     assert.equal(capturedShellProps.current?.rolesPath, "/roles");
     assert.equal(capturedShellProps.current?.routeBase, "");
     assert.isNotNull(getByTestId("admin-shell-layout-mock"));
     assert.isNotNull(getByTestId("admin-spa-shell-child"));
-    assert.equal(capturedOrgSwitcherProps.current?.api, mockTerrenoApi);
+    assert.isUndefined(capturedOrgSwitcherProps.current?.api);
     assert.equal(capturedOrgSwitcherProps.current?.routeBase, "");
   });
 });
@@ -238,14 +233,12 @@ describe("OrgMembersRoute", () => {
   const capturedRouteShellProps: {
     current?: {breadcrumbs?: {href?: string; label: string}[]; children?: React.ReactNode};
   } = {};
-  const mockTerrenoApi = {reducerPath: "terreno-admin-spa-members-test-api"};
   let OrgMembersRoute: React.FC;
 
   beforeAll(async () => {
     const membersModuleUrl = new URL("../app/orgs/[orgId]/members.tsx", import.meta.url);
     const adminSpaShellPath = new URL("../../../components/AdminSpaShell.tsx", membersModuleUrl)
       .pathname;
-    const membersSdkPath = new URL("../../../store/sdk.ts", membersModuleUrl).pathname;
 
     mock.module(adminSpaShellPath, () => ({
       AdminSpaShell: (props: {
@@ -255,9 +248,6 @@ describe("OrgMembersRoute", () => {
         capturedRouteShellProps.current = props;
         return <Text testID="admin-spa-shell-stub">{props.children}</Text>;
       },
-    }));
-    mock.module(membersSdkPath, () => ({
-      terrenoApi: mockTerrenoApi,
     }));
     ({default: OrgMembersRoute} = await import("../app/orgs/[orgId]/members"));
   });
@@ -290,10 +280,10 @@ describe("OrgMembersRoute", () => {
     ]);
   });
 
-  it("wires OrgMembersScreen with the SDK api and route base", () => {
+  it("wires OrgMembersScreen with the route base and no RTK api", () => {
     renderWithTheme(<OrgMembersRoute />);
 
-    assert.equal(capturedMembersProps.current?.api, mockTerrenoApi);
+    assert.isUndefined(capturedMembersProps.current?.api);
     assert.equal(capturedMembersProps.current?.organizationId, "org-42");
     assert.equal(capturedMembersProps.current?.routeBase, "");
     assert.isNotNull(capturedRouteShellProps.current?.children);

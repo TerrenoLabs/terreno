@@ -554,7 +554,7 @@ org-admins manage only the current org. Invites and billing are design-only plac
 - **Implementation plan:** [org-management-ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/org-management-ui.md)
 - **Tasks:** [org-management-ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/org-management-ui.md)
 - **RTK flag:** Partial — custom non-synced routes use the generated SDK;
-  ObjectId admin compatibility may use `useAdminApi` in Terreno 57, while
+  ObjectId admin CRUD uses the admin fetch client (`useAdminModelApi`), while
   eligible String-`_id` CRUD uses windowed syncdb
 - **Depends on:** rbac-permissions
 

@@ -8,8 +8,8 @@ import {type ReviewStatus, unwrapReviewCounts, unwrapReviewList} from "./reviewT
 import {useAiObservabilityReviewApi} from "./useAiObservabilityReviewApi";
 
 export const AiReviewScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useListQuery, useStatusQuery} = useAiObservabilityReviewApi(api);
+  const {routeBase} = props;
+  const {useListQuery, useStatusQuery} = useAiObservabilityReviewApi();
   const [status, setStatus] = useState<ReviewStatus>("pending");
   const query = useListQuery(status);
   const statusQuery = useStatusQuery();

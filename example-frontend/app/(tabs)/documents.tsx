@@ -1,5 +1,5 @@
-import {ConsentHistory, DocumentStorageBrowser} from "@terreno/admin-frontend";
-import {selectBetterAuthUserId, useFeatureFlags} from "@terreno/rtk";
+import {AdminProvider, ConsentHistory, DocumentStorageBrowser} from "@terreno/admin-frontend";
+import {baseUrl, selectBetterAuthUserId, useFeatureFlags} from "@terreno/rtk";
 import {Box, SegmentedControl} from "@terreno/ui";
 import {router, useLocalSearchParams} from "expo-router";
 import type React from "react";
@@ -9,6 +9,7 @@ import {useSelector} from "react-redux";
 
 import {DocumentsPdfSection} from "@/components/DocumentsPdfSection";
 import {fileUploadsEnabledFromFlags} from "@/lib/fileUploads";
+import {getAdminAuthHeaders} from "@/store/betterAuthApi";
 import {terrenoApi} from "@/store/sdk";
 
 // Section order drives both the segmented control labels and the `section` query param.
@@ -62,20 +63,22 @@ const DocumentsScreen: React.FC = () => {
           />
         </Box>
       </Box>
-      <Box flex="grow">
-        {selectedKey === "files" && (
-          <DocumentStorageBrowser
-            allowUpload={allowUpload}
-            api={terrenoApi}
-            backButton={false}
-            basePath="/documents"
-            onSettingsPress={handleSettingsPress}
-            title="Files"
-          />
-        )}
-        {selectedKey === "consents" && <ConsentHistory api={terrenoApi} />}
-        {selectedKey === "pdf" && <DocumentsPdfSection />}
-      </Box>
+      {/* Bind the reused admin-frontend screens to the backend origin and Bearer session. */}
+      <AdminProvider apiOrigin={baseUrl} getAuthHeaders={getAdminAuthHeaders}>
+        <Box flex="grow">
+          {selectedKey === "files" && (
+            <DocumentStorageBrowser
+              allowUpload={allowUpload}
+              backButton={false}
+              basePath="/documents"
+              onSettingsPress={handleSettingsPress}
+              title="Files"
+            />
+          )}
+          {selectedKey === "consents" && <ConsentHistory />}
+          {selectedKey === "pdf" && <DocumentsPdfSection />}
+        </Box>
+      </AdminProvider>
     </Box>
   );
 };

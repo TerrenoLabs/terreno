@@ -3,11 +3,10 @@ import type {AdminScreenWidgetProps, ScreenWidgetComponent} from "../types";
 import {CommsDashboardScreen} from "./CommsDashboardScreen";
 import {useCommsDashboardUrlFilters} from "./useCommsDashboardUrlFilters";
 
-export const CommsDashboardScreenWidget: React.FC<AdminScreenWidgetProps> = ({api, routeBase}) => {
+export const CommsDashboardScreenWidget: React.FC<AdminScreenWidgetProps> = ({routeBase}) => {
   const {filters, onFiltersChange} = useCommsDashboardUrlFilters(routeBase);
   return (
     <CommsDashboardScreen
-      api={api}
       filters={filters}
       onFiltersChange={onFiltersChange}
       routeBase={routeBase}

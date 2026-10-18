@@ -1,11 +1,10 @@
 import {OrgMembersScreen} from "@terreno/admin-frontend";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
-import {terrenoApi} from "@/store/sdk";
 
 const OrgMembersRoute: React.FC = () => {
   const {orgId} = useLocalSearchParams<{orgId: string}>();
-  return <OrgMembersScreen api={terrenoApi} organizationId={orgId} routeBase="/admin" />;
+  return <OrgMembersScreen organizationId={orgId} routeBase="/admin" />;
 };
 
 export default OrgMembersRoute;

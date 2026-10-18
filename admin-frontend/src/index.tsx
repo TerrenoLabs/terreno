@@ -155,9 +155,20 @@ export type {
   ScreenWidgetComponent,
 } from "./types";
 export {resolveAdminBases, SYSTEM_FIELDS} from "./types";
-export {useAdminApi} from "./useAdminApi";
 export {useAdminConfig} from "./useAdminConfig";
-export {useAdminRpc, useAdminRpcMutation, useAdminRpcQuery} from "./useAdminRpc";
+export {
+  type AdminModelApi,
+  type AdminModelMutation,
+  type AdminModelQueryOptions,
+  useAdminModelApi,
+} from "./useAdminModelApi";
+export {
+  type AdminRpcQueryState,
+  unwrapAdminEnvelope,
+  useAdminRpc,
+  useAdminRpcMutation,
+  useAdminRpcQuery,
+} from "./useAdminRpc";
 export {useAdminScripts} from "./useAdminScripts";
 export {useConfigurationApi} from "./useConfigurationApi";
 export * from "./useConsentHistory";

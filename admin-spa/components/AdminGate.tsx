@@ -1,15 +1,15 @@
-import {useAdminConfig} from "@terreno/admin-frontend";
+import {type AdminConfigResponse, useAdminRpc, useAdminRpcQuery} from "@terreno/admin-frontend";
 import {selectBetterAuthIsAuthenticated, selectBetterAuthIsLoading} from "@terreno/rtk";
 import {Box, Spinner} from "@terreno/ui";
 import {usePathname, useRouter} from "expo-router";
 import React, {useEffect} from "react";
 import {useDispatch, useSelector} from "react-redux";
-import {terrenoApi} from "../store/sdk";
 import {useAppConfig} from "./AppConfigGate";
+import {AdminGateConfigProvider} from "./adminGateConfig";
 import {isForbiddenAdminConfigError} from "./adminGateUtils";
 import {useAuth} from "./StoreProvider";
 
-interface RtkError {
+interface AdminRequestError {
   status?: number;
 }
 
@@ -45,8 +45,17 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
   const isAuthenticated = useSelector(selectBetterAuthIsAuthenticated);
 
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
-  const {config, isLoading: isConfigLoading, error} = useAdminConfig(terrenoApi, apiBase);
-  const status = (error as RtkError | undefined)?.status;
+  const rpc = useAdminRpc();
+  // Probe `/admin/config` only with a session so signing in starts a fresh request.
+  const configQuery = useAdminRpcQuery<AdminConfigResponse>({
+    rpc,
+    skip: !isAuthenticated,
+    url: `${apiBase}/config`,
+  });
+  const {data: config, error} = configQuery;
+  // A signed-in session has no answer yet until the probe resolves or fails.
+  const isConfigLoading = configQuery.isLoading || (isAuthenticated && !config && !error);
+  const status = (error as AdminRequestError | null | undefined)?.status;
   const isForbidden = isForbiddenAdminConfigError({
     error,
     isAuthenticated,
@@ -86,13 +95,21 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
     return <LoadingScreen />;
   }
   if (!isAuthenticated || status === 401) {
-    return pathname === "/login" ? children : <LoadingScreen />;
+    return pathname === "/login" ? (
+      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
+    ) : (
+      <LoadingScreen />
+    );
   }
   if (isForbidden) {
-    return pathname === "/forbidden" ? children : <LoadingScreen />;
+    return pathname === "/forbidden" ? (
+      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
+    ) : (
+      <LoadingScreen />
+    );
   }
   if (isConfigLoading) {
     return <LoadingScreen />;
   }
-  return children;
+  return <AdminGateConfigProvider config={config ?? null}>{children}</AdminGateConfigProvider>;
 };

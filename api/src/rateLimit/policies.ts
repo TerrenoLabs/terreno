@@ -78,6 +78,10 @@ const AUTH_EXACT = new Set([
   "/auth/github",
   "/auth/github/callback",
   "/auth/github/failure",
+  "/oauth/register",
+  "/oauth/authorize",
+  "/oauth/token",
+  "/oauth/revoke",
 ]);
 
 const AUTH_PREFIXES = ["/auth/github/"];

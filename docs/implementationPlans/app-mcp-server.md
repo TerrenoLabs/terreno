@@ -65,7 +65,7 @@ When this is done, an operator can:
 | Q2 | Primitive shape | **Factories:** `defineMCPTool` / `defineMCPPrompt` / `defineMCPResource` wrapping `registerMCP*`. |
 | Q3 | Default endpoint | **Keep `/mcp`.** Additive capabilities. No rename. |
 | Q4 | Multiple servers | **Yes, v1.** Named mounts with explicit include lists. Default `/mcp` remains the union of CRUD + globally registered primitives. Extra servers are opt-in and do not auto-include every model tool. |
-| Q5 | Auth | **Bearer (JWT + Better Auth session) plus OAuth 2.1 for MCP** via Better Auth (`@better-auth/mcp` + `@better-auth/oauth-provider`). Same User as REST after token exchange. JWT-only apps keep bearer-only; OAuth metadata mounts only when Better Auth is enabled. |
+| Q5 | Auth | **Bearer (JWT + Better Auth session) plus OAuth 2.1 for MCP** via Better Auth (`@better-auth/mcp` + `@better-auth/oauth-provider`). Same User as REST after token exchange. JWT-only apps get the Terreno-native `mcpOAuth` authorization server instead (#1573); with `mcpOAuth` off they keep bearer-only and mount no OAuth metadata. |
 | Q6 | Tool metadata | **MCP spec hints:** `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, plus optional `outputSchema` + `structuredContent`. |
 | Q7 | Conditional register | **`shouldRegister(user)`** (and optional `shouldRegister: false`). Filter list methods and reject call/get/read if hidden. |
 | Q8 | Response helper | **`mcpResult.text` / `.json` / `.error`.** Images/audio out. |
@@ -161,7 +161,7 @@ Remote MCP clients (Claude connectors, ChatGPT, Cursor HTTP) expect **OAuth 2.1*
 5. Extend `extractUserFromHeaders` to accept an OAuth access token on `Authorization: Bearer`, resolve it through Better Auth, then load the app `User` by `betterAuthId` — same mapping as session cookies today.
 6. Keep JWT verification as a fallback so Inspector, tests, and `useMCPTools` keep working with session/JWT bearer.
 
-**When Better Auth is off (JWT-only):** do not mount OAuth metadata. Bearer JWT behavior is unchanged. Docs state that ChatGPT-class connectors need Better Auth.
+**When Better Auth is off (JWT-only):** set the `mcpOAuth` TerrenoApp option to mount the Terreno-native OAuth 2.1 authorization server ([Enable MCP OAuth](../how-to/enable-mcp-oauth.md)). It serves the RFC 9728 and RFC 8414 documents, dynamic client registration, authorize/consent, token, and revoke, and `/mcp` answers unauthenticated requests with the 401 challenge. The app hosts the consent screen. Bearer JWT keeps working. With `mcpOAuth` off, no OAuth metadata mounts and bearer behavior is unchanged.
 
 **Not in this IP:** social login providers (already documented); infra-mcp’s RBAC/elicitation; replacing Passport JWT for REST.
 
@@ -250,7 +250,7 @@ Tracer: example-backend custom tool already exists (`users_todo_statuses`). Add 
 - Wire plugin in Better Auth setup used by `BetterAuthApp`.
 - RFC 9728 + 401 `WWW-Authenticate` on `/mcp`.
 - `extractUserFromHeaders` accepts OAuth access tokens.
-- JWT-only apps unchanged.
+- JWT-only apps unchanged by this phase: they use the Terreno-native `mcpOAuth` server (#1573, [Enable MCP OAuth](../how-to/enable-mcp-oauth.md)). Reuse its well-known builders (`buildProtectedResourceMetadata`, `buildAuthorizationServerMetadata`) and `/mcp` challenge (`sendMcpOAuthChallenge`) from `api/src/mcp/oauthMetadata.ts`, which does not depend on the JWT authorization-server routes, so both stacks share one code path.
 - How-to `docs/how-to/secure-app-mcp.md`; reference well-known paths.
 - Tests with Better Auth test instance: no token → 401 challenge; valid access token → `tools/list` as that user.
 
@@ -311,7 +311,8 @@ None. Additive APIs. `registerMCPTool` signature may gain optional fields only. 
 - [ ] `invokeMCPTool` can assert a successful custom tool in Bun tests
 - [ ] `MCPService` can list tools over Streamable HTTP against `mountMCPServer`
 - [ ] Better Auth on: unauthenticated `/mcp` returns 401 with resource metadata; a valid OAuth access token runs tools as that user
-- [ ] JWT-only: existing bearer behavior unchanged; no OAuth well-known required
+- [ ] JWT-only with `mcpOAuth` off: existing bearer behavior unchanged; no OAuth well-known mounted
+- [ ] JWT-only with `mcpOAuth` on: RFC 9728/8414 documents mount, unauthenticated `/mcp` returns the 401 challenge, and bearer JWT still works
 - [ ] Hosted `terreno_generate_mcp_tool|prompt|resource` return TypeScript matching the factories
 - [ ] Docs: two MCP layers; prompts/resources; Inspector; OAuth vs bearer; generator tools
 - [ ] `registerMCPTool` without new fields still typechecks and runs

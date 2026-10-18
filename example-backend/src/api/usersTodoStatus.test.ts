@@ -1,5 +1,5 @@
 import {beforeEach, describe, expect, it} from "bun:test";
-import {clearMCPRegistry, getAllMCPTools, type User} from "@terreno/api";
+import {getAllMCPTools, type User} from "@terreno/api";
 
 import {Todo} from "../models/todo";
 import {User as UserModel} from "../models/user";
@@ -104,7 +104,8 @@ describe("listUsersTodoStatuses", () => {
   });
 
   it("registers users_todo_statuses as a custom MCP tool", () => {
-    clearMCPRegistry();
+    // registerMCPTool replaces by name; clearing the shared catalog here would drop the
+    // routers other test files in this process registered.
     registerUsersTodoStatusTool();
     expect(getAllMCPTools().map((tool) => tool.name)).toContain("users_todo_statuses");
   });

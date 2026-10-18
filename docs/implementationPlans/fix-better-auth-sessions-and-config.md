@@ -47,6 +47,13 @@ Selected: "the better-auth issues from the last day", resolved 2026-10-18T10:52:
   - Fix: add `options?: Omit<Partial<BetterAuthOptions>, "plugins" | "basePath">` and `plugins?: BetterAuthPlugin[]`; deep-merge `options` over Terreno's defaults with arrays replaced, and append `plugins` after `bearer()`.
   - Proof: `api/src/betterAuthSetup.test.ts` "requireEmailVerification blocks sign-in" and "plugin endpoints mount under the base path" fail on the base and pass on the branch; existing defaults tests stay green.
   - Closes: #1578
+- [x] **T5** — Resolve a Better Auth user created concurrently on first contact (#1576)
+  - Depends on: T4
+  - Files: api/src/betterAuthSetup.ts, api/src/betterAuthSetup.test.ts
+  - Root cause: found in branch review. The socket handshake (T2) and the first REST calls race to create a new user; the loser's insert hits the unique `_id` index, and the socket reports it as Unauthorized.
+  - Fix: `resolveBetterAuthAppUser` looks the user up again after a duplicate-key error.
+  - Proof: `api/src/betterAuthSetup.test.ts` describe "resolveBetterAuthAppUser" fails on T4's head (8 of 13 runs for the concurrent test, 5 of 5 for the stub test) and passes on the branch.
+  - Closes: #1576 (with T2 and T3)
 
 T2 depends on T1 for the helper. T3 and T4 depend on the previous task only because they edit the same docs page.
 

@@ -22,6 +22,7 @@ import {
   type MongoClientLike,
   mountBetterAuthRoutes,
   readPasswordFromBetterAuthResetRequest,
+  resolveBetterAuthAppUser,
   setupBetterAuthUserSync,
   syncBetterAuthUser,
 } from "./betterAuthSetup";
@@ -1081,6 +1082,64 @@ describe("createBetterAuth options and plugins passthrough", () => {
     expect(withPlugin.options.plugins?.map((p) => p.id)).toEqual(["bearer", "terreno-test"]);
     expect(plain.options.plugins?.map((p) => p.id)).toEqual(["bearer"]);
     expect(plain.options.trustedOrigins).toEqual([]);
+  });
+});
+
+describe("resolveBetterAuthAppUser", () => {
+  it("resolves concurrent first contacts for a new user to one app user", async () => {
+    await setup;
+    const betterAuthUser: BetterAuthUser = {
+      createdAt: new Date(),
+      email: "first-contact@example.com",
+      emailVerified: false,
+      id: new mongoose.Types.ObjectId().toString(),
+      name: "First Contact",
+      updatedAt: new Date(),
+    };
+
+    const results = await Promise.all([
+      resolveBetterAuthAppUser({betterAuthUser, userModel: TestUser}),
+      resolveBetterAuthAppUser({betterAuthUser, userModel: TestUser}),
+      resolveBetterAuthAppUser({betterAuthUser, userModel: TestUser}),
+    ]);
+
+    expect(new Set(results.map((result) => String(result.user.id))).size).toBe(1);
+    expect(await TestUser.countDocuments({betterAuthId: betterAuthUser.id})).toBe(1);
+  });
+
+  it("uses the user a concurrent request created when the insert hits a duplicate key", async () => {
+    // Another request (a REST call racing the socket handshake) inserts the same user
+    // between this lookup and this insert.
+    let insertedByOtherRequest: Record<string, unknown> | null = null;
+    class RacingUser {
+      constructor(doc: Record<string, unknown>) {
+        Object.assign(this, doc);
+      }
+      async save(): Promise<void> {
+        insertedByOtherRequest = {...this, id: "app-user-1"};
+        throw Object.assign(new Error("E11000 duplicate key error"), {code: 11000});
+      }
+      static async findOneOrNone(
+        query: Record<string, unknown>
+      ): Promise<Record<string, unknown> | null> {
+        return query.betterAuthId ? insertedByOtherRequest : null;
+      }
+    }
+
+    const {isDisabled, user} = await resolveBetterAuthAppUser({
+      betterAuthUser: {
+        createdAt: new Date(),
+        email: "raced@example.com",
+        emailVerified: false,
+        id: "ba-raced",
+        name: "Raced",
+        updatedAt: new Date(),
+      },
+      userModel: RacingUser as unknown as UserModel,
+    });
+
+    expect(user.id).toBe("app-user-1");
+    expect(isDisabled).toBe(false);
   });
 });
 

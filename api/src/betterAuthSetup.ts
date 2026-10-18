@@ -419,7 +419,7 @@ export const createBetterAuthSessionMiddleware = (
             // anonymous, rather than answering 401 here, keeps Better Auth's own routes
             // (sign-out, signing in as someone else) reachable, since TerrenoApp mounts this
             // middleware before them.
-            logger.warn(`[better-auth] User ${user.id} is disabled, ignoring their session`);
+            logger.debug(`[better-auth] User ${user.id} is disabled, ignoring their session`);
           } else {
             reqWithSession.user = user as unknown as Request["user"];
             reqWithSession.betterAuthSession = session as unknown as BetterAuthSessionData;
@@ -515,7 +515,13 @@ export const syncBetterAuthUser = async (
     logger.info(`Created new user from Better Auth: ${newUser.id}`);
     return newUser;
   } catch (error) {
-    logger.error(`Error syncing Better Auth user: ${error}`);
+    // A duplicate key means a concurrent request created the user first; callers such as
+    // resolveBetterAuthAppUser recover from it, so it is not an error worth alerting on.
+    if ((error as {code?: number}).code === 11000) {
+      logger.debug(`Better Auth user was created concurrently: ${error}`);
+    } else {
+      logger.error(`Error syncing Better Auth user: ${error}`);
+    }
     throw error;
   }
 };
@@ -539,12 +545,29 @@ export const resolveBetterAuthAppUser = async ({
   userModel,
   betterAuthUser,
 }: ResolveBetterAuthAppUserOptions): Promise<ResolvedBetterAuthAppUser> => {
-  const existingUser = (await findOneOrNoneFor(userModel, {
-    betterAuthId: betterAuthUser.id,
-  })) as unknown as ResolvedBetterAuthAppUser["user"] | null;
-  const user =
-    existingUser ??
-    ((await syncBetterAuthUser(userModel, betterAuthUser)) as ResolvedBetterAuthAppUser["user"]);
+  const findByBetterAuthId = async (): Promise<ResolvedBetterAuthAppUser["user"] | null> =>
+    (await findOneOrNoneFor(userModel, {
+      betterAuthId: betterAuthUser.id,
+    })) as unknown as ResolvedBetterAuthAppUser["user"] | null;
+
+  let user = await findByBetterAuthId();
+  if (!user) {
+    try {
+      user = (await syncBetterAuthUser(
+        userModel,
+        betterAuthUser
+      )) as ResolvedBetterAuthAppUser["user"];
+    } catch (error) {
+      // Right after sign-up the socket handshake and the first REST calls race to create the
+      // same user; the loser's insert hits the unique `_id` (or `betterAuthId`) index.
+      const isDuplicateKey = (error as {code?: number}).code === 11000;
+      const createdConcurrently = isDuplicateKey ? await findByBetterAuthId() : null;
+      if (!createdConcurrently) {
+        throw error;
+      }
+      user = createdConcurrently;
+    }
+  }
   return {isDisabled: Boolean(user.disabled), user};
 };
 

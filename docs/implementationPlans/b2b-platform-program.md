@@ -103,7 +103,7 @@ All decisions resolved by the maintainer on 2026-08-09:
 | [orgs-and-teams](orgs-and-teams.md) | Superseded by [org-management-ui](org-management-ui.md) | — |
 | [org-management-ui](org-management-ui.md) | Draft — awaiting approval | [tasks](../tasks/org-management-ui.md) |
 | [billing-stripe](billing-stripe.md) | Draft | [tasks](../tasks/billing-stripe.md) |
-| [native-module-baseline](native-module-baseline.md) | Draft | [tasks](../tasks/native-module-baseline.md) |
+| [native-module-baseline](native-module-baseline.md) | In progress | [tasks](../tasks/native-module-baseline.md) |
 | [rbac-permissions](rbac-permissions.md) | Complete (PR #932) | — |
 | [notification-center](notification-center.md) | Approved | [tasks](../tasks/notification-center.md) |
 | [framework-audit-log](framework-audit-log.md) | Approved | [tasks](../tasks/framework-audit-log.md) |

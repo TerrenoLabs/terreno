@@ -134,7 +134,7 @@ export const useTerrenoFeatureFlags = (
         terrenoOpenFeatureHookRefCounts.delete(domain);
         void (async (): Promise<void> => {
           const pending = domainProviderSwitchPromises.get(domain);
-          if (pending) {
+          if (pending !== undefined) {
             await pending;
           }
           await OpenFeature.setProviderAndWait(domain, NOOP_PROVIDER);
@@ -170,7 +170,7 @@ export const useTerrenoFeatureFlags = (
     const applyProvider = async (): Promise<void> => {
       const pending = domainProviderSwitchPromises.get(domain);
       const run = (async (): Promise<void> => {
-        if (pending) {
+        if (pending !== undefined) {
           await pending;
         }
         await OpenFeature.setProviderAndWait(domain, new TypedInMemoryProvider(data));

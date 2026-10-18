@@ -4,17 +4,17 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@ai-sdk/mcp": "^1.0.21",
+    "@ai-sdk/mcp": "^2.0.57",
     "@google-cloud/storage": "catalog:",
     "@langfuse/client": "^5.0.1",
     "@langfuse/otel": "^5.0.1",
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-node": "0.217.0",
+    "@opentelemetry/sdk-node": "0.222.0",
     "@terreno/blocks": "workspace:*",
     "ai": "catalog:",
     "ajv": "catalog:",
     "csv-parse": "catalog:",
-    "google-auth-library": "^10.5.0",
+    "google-auth-library": "^11.1.0",
     "luxon": "catalog:",
     "multer": "catalog:",
     "sanitize-html": "catalog:"
@@ -136,6 +136,7 @@
   "name": "@terreno/ai",
   "peerDependencies": {
     "@ai-sdk/google-vertex": "^4.0.142",
+    "@ai-sdk/provider": "^4.0.26",
     "@terreno/api": "workspace:*",
     "@terreno/jobs": "workspace:*",
     "mongoose": "^8.0.0 || ^9.0.0"

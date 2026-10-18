@@ -578,11 +578,6 @@ export interface DropdownPanelProps extends WithTestID {
   maxPanelHeight?: number;
 }
 
-/**
- * @deprecated Renamed to {@link DropdownPanelProps}. Removed in Terreno 58.
- */
-export type FilterProps = DropdownPanelProps;
-
 export type AlignContent = "start" | "end" | "center" | "between" | "around" | "stretch";
 export type AlignSelf = "auto" | "start" | "end" | "center" | "baseline" | "stretch";
 export type AlignItems = "start" | "end" | "center" | "baseline" | "stretch";
@@ -3628,8 +3623,8 @@ export interface SelectFieldPropsBase extends WithTestID {
   /**
    * Web only. When true, the dropdown menu renders in a fixed portal on
    * `document.body` (zIndex 9999) instead of a React Native `Modal`. Use this
-   * when the select lives inside another portaled/high-zIndex overlay (e.g. the
-   * `Filter` panel) where a `Modal` would stack behind the overlay and be
+   * when the select lives inside another portaled/high-zIndex overlay (e.g. a
+   * `DropdownPanel`) where a `Modal` would stack behind the overlay and be
    * invisible and unclickable.
    * @default false
    */

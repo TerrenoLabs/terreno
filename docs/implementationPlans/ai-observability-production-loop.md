@@ -4,6 +4,7 @@
 **Created:** 2026-10-18
 **Branch:** `ai-observability-production-loop` (cut from `seed-ai-observability-demo`, PR #1565; rebase onto `master` once #1565 merges)
 **Task list:** [`docs/tasks/ai-observability-production-loop.md`](../tasks/ai-observability-production-loop.md)
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1593  
 **Depends on:** [AI observability](ai-observability.md) phases 1–4 and PR #1565 (review batches, seeded demo data)
 **Supporting skills:** `terreno-backend-api`, `mongoose-schema-safety`, `ai-prompt-governance`, `backend-test-env`, `building-admin-interfaces`, `terreno-ui`, `dataviz`, `update-docs`, `verify-ui-changes`, `accessibility-testing`
 

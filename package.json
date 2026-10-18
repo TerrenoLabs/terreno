@@ -142,7 +142,7 @@
     "luxon": "catalog:",
     "pixelmatch": "^7.2.0",
     "pngjs": "^7.0.0",
-    "rulesync": "^17.0.0",
+    "rulesync": "^9.6.3",
     "simple-git-hooks": "^2.14.0",
     "ts-node": "^10.9.2",
     "zod": "catalog:"

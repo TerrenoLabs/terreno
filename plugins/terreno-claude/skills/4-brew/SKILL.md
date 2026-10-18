@@ -14,6 +14,7 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 [`PR deployments`](../../references/pr-deployments.md),
 [`product CI`](../../references/product-ci.md),
 [`async review bots`](../../references/async-review-bots.md),
+[`push ownership`](../../references/push-ownership.md),
 [`independent review procedure`](../../references/independent-review.md), and
 [`subagent briefing`](../../references/subagent-briefing.md). All GitHub text
 must follow the [`GitHub attention contract`](../../references/github-attention-contract.md).
@@ -90,7 +91,10 @@ must follow the [`GitHub attention contract`](../../references/github-attention-
 12. **Hand off.** When an outer loop invoked Brew, exit; the outer loop runs Taste.
     When a human invoked Brew directly and the result is `PASS` or `PENDING` with
     `next: taste`, start the Taste skill as the next stage in standalone entry. Do
-    not end the session by telling the human to run Taste later.
+    not end the session by telling the human to run Taste later. If the harness cannot
+    continue into Taste, escalate per
+    [`push ownership`](../../references/push-ownership.md#escalation) instead of ending
+    with a pushed PR that nothing watches.
 
 ## Supporting skills
 

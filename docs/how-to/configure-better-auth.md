@@ -143,6 +143,8 @@ if (betterAuthConfig) {
 const server = app.start();
 ``````
 
+`RealtimeApp` (registered directly or through `TerrenoApp({realtime})`) uses this plugin's Better Auth instance for socket sessions. Do not build a second instance with `createBetterAuth` for sockets.
+
 ### 4. Update User Model
 
 `syncBetterAuthUser` creates the app `User` on the first authenticated request after Better Auth sign-up. Declare `betterAuthId` on that schema. Declare `oauthProvider` only if the app uses social OAuth.

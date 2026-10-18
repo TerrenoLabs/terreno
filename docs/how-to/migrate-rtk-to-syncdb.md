@@ -346,11 +346,13 @@ On connect, the socket transport sends the bearer token from `getToken()`. When 
 
 ### Backend
 
+Register `BetterAuthApp` and `RealtimeApp` on the same `TerrenoApp`. `RealtimeApp` picks up the
+Better Auth instance by itself, so no extra option is needed. Legacy JWT sockets keep working
+alongside it. Only a `RealtimeApp` mounted without `TerrenoApp` needs the instance passed in:
+
 ```typescript
 new RealtimeApp({betterAuth: {auth, userModel: User}})
 ```
-
-Required for Better Auth socket sessions. Legacy JWT sockets continue to work without it.
 
 ## 8. Codegen
 

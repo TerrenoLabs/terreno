@@ -33,9 +33,9 @@ Selected: "the better-auth issues from the last day", resolved 2026-10-18T10:52:
   - Fix: use `resolveBetterAuthAppUser` from T1, so a fresh user is created at handshake and a disabled one is refused.
   - Proof: `api/src/realtime/socketAuth.test.ts` tests "creates the app user" and "rejects a disabled user" fail on the base and pass on the branch.
   - Closes: #1576 (with T3)
-- [ ] **T3** — Find the Better Auth instance for RealtimeApp from the registered plugins (#1576)
+- [x] **T3** — Find the Better Auth instance for RealtimeApp from the registered plugins (#1576)
   - Depends on: T2
-  - Files: api/src/realtime/realtimeApp.ts, api/src/realtime/types.ts, api/src/realtime/realtimeAppSetup.test.ts, example-backend/src/server.ts, docs/how-to/configure-better-auth.md, docs/how-to/migrate-rtk-to-syncdb.md, docs/explanation/authentication.md
+  - Files: api/src/realtime/realtimeApp.ts, api/src/realtime/types.ts, api/src/realtime/realtimeAppSetup.test.ts, example-backend/src/server.ts, docs/how-to/configure-better-auth.md, docs/how-to/migrate-rtk-to-syncdb.md, docs/reference/syncdb.md, docs/explanation/authentication.md
   - Root cause: `RealtimeApp` reads only `config.betterAuth` at startup, in the handshake middleware, and in the revalidation sweep, and ignores the `terrenoApp` passed to `register`.
   - Fix: store `terrenoApp` in `register`; in `onServerCreated`, resolve `config.betterAuth ?? {auth: ensureAuth(), userModel}` from the registered Better Auth plugin and use it in all three places. Explicit `config.betterAuth` still wins.
   - Proof: `api/src/realtime/realtimeAppSetup.test.ts` tests with `BetterAuthApp` registered and no `betterAuth` option — handshake with a Better Auth bearer authenticates, and the sweep reports `disabled` rather than `invalid-session` — fail on the base and pass on the branch.

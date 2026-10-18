@@ -264,6 +264,13 @@ export class TerrenoApp {
   }
 
   /**
+   * The application user model this app authenticates against.
+   */
+  getUserModel(): TerrenoAppOptions["userModel"] {
+    return this.options.userModel;
+  }
+
+  /**
    * Returns only TerrenoPlugin registrations (excludes model routers).
    */
   getPlugins(): TerrenoPlugin[] {

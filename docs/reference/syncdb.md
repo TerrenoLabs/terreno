@@ -132,8 +132,14 @@ new TerrenoApp({userModel: User})
 - **`ensureSyncIndexes`** — `TerrenoApp.start()` binds the HTTP port first (or attaches to `httpServer` if the process already listened), then awaits index builds for snapshot queries and sync bookkeeping (`SyncMutation.mutationId` unique, `SyncCounter.stream` unique, etc.). Registration queues this work without contacting MongoDB, so models can load before the database connects. Hosts that build Express without `TerrenoApp.start()` should await `ensureSyncIndexes()` after connecting.
 
 Socket auth requires at least one configured authentication method. It enables legacy JWT
-validation when `tokenSecret` or `TOKEN_SECRET` is available. Better Auth can be used without
-a JWT secret:
+validation when `tokenSecret` or `TOKEN_SECRET` is available. When a `BetterAuthApp` is
+registered on the same `TerrenoApp`, `RealtimeApp` validates Better Auth sessions with its
+instance automatically, with or without a JWT secret. The handshake creates the app `User` on
+first contact and refuses disabled users. A `RealtimeApp` without its own `userModel` uses the
+`TerrenoApp`'s, for JWT and Better Auth sockets alike: socket authorization reads the user from
+the database instead of the token's claims, and the revalidation sweep disconnects users who
+were disabled or deleted. Pass `betterAuth` only for a `RealtimeApp` mounted without
+`TerrenoApp`:
 
 ```typescript
 new RealtimeApp({betterAuth: {auth, userModel: User}})

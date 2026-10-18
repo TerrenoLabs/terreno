@@ -4,7 +4,7 @@ This guide is **AI-context-first**: it is written for an agent (or human) perfor
 
 `@terreno/syncdb` supersedes `@terreno/rtk` for **data synchronization** (CRUD reads/writes, offline queue, realtime convergence). It does not replace the generated OpenAPI SDK, Better Auth Redux wiring, or feature-flag infrastructure.
 
-`modelRouter` `realtime`, `realtimeList`, `realtimeDocument`, and `setRealtimeSocket` are **deprecated** and **will be removed in Terreno 58**. `RealtimeApp` stays as the socket host for syncdb. Removal checklist: [`docs/tasks/remove-legacy-realtime.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/remove-legacy-realtime.md).
+Terreno 58 **removed** `modelRouter` `realtime`, the server's RTK `sync` event, and the `@terreno/rtk` helpers `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, `getRealtimeSocket`, and `useSyncConnection`. On 58, any collection that needs live updates must use `sync` + syncdb. `RealtimeApp` stays as the socket host for syncdb. See the [58.0.0 upgrade note](https://github.com/TerrenoLabs/terreno/blob/master/mcp-server/src/docs/upgrades/58.0.0.md).
 
 ## 1. Before you start
 
@@ -111,7 +111,7 @@ The example also mounts `SyncDbProvider` at the root (`_layout.tsx`) for `SyncHe
 |---------------|--------------------------------|
 | `generateBetterAuthSlice` / session | `generateAuthSlice` (JWT) once Better Auth ships |
 | `terrenoApi` reducer for **non-synced** routes | `useGetTodosQuery` / todo mutations |
-| `createOfflineMiddleware` + offline slice | `realtimeList` / `realtimeDocument` for that collection |
+| `createOfflineMiddleware` + offline slice | `realtimeList` / `realtimeDocument` for that collection (removed in Terreno 58) |
 | Feature-flag / app-state slices | Per-screen `isLoading` spinners tied to RTK mutations |
 
 **Before** (`origin/master:example-frontend/store/index.ts`): `generateAuthSlice`, `createOfflineMiddleware`, offline payload sessionStorage.
@@ -189,7 +189,7 @@ document, so an edit to a message shown in two windows updates once. See
 - `useGetTodosQuery` / `useGet*Query` for the migrated collection
 - `isLoading`, `isFetching`, `refetch`, `RefreshControl` wired to list fetch
 - `skip: !userId` guards on list queries (replace with `useSyncDbReady` on writes; reads are safe once bootstrapped)
-- `realtimeList("todos")` / `realtimeDocument("todos")` in `store/sdk.ts` for that collection
+- `realtimeList("todos")` / `realtimeDocument("todos")` in `store/sdk.ts` for that collection (these no longer exist in Terreno 58)
 
 ## 4. Writes
 
@@ -381,7 +381,7 @@ It runs `@rtk-query/codegen-openapi` against `openapi-config.ts` and writes `sto
 | Still generated | Stop using for migrated collections |
 |-----------------|-------------------------------------|
 | Auth routes, `GET /auth/me`, AI routes, feature flags, ObjectId admin compatibility CRUD | Collection CRUD — import from `store/syncDbSdk.ts` instead |
-| Custom REST / RPC endpoints | Todo `realtimeList` / `realtimeDocument` wiring in `store/sdk.ts` |
+| Custom REST / RPC endpoints | Todo `realtimeList` / `realtimeDocument` wiring in `store/sdk.ts` (removed in Terreno 58) |
 
 Keep running `bun run sdk` after backend route changes — non-synced screens still import from `store/sdk.ts`.
 
@@ -508,7 +508,7 @@ Before a collection can sync:
 - Generated OpenAPI SDK for non-synced routes
 - Better Auth Redux slice (`generateBetterAuthSlice`)
 - Feature flags (`useTerrenoFeatureFlags` / `useFeatureFlags`)
-- Socket connection for flags and legacy realtime (until removed)
+- Socket connection (`useSocketConnection`) for feature flags
 - `@terreno/rtk` is not being removed
 
 ## Further reading

@@ -64,7 +64,7 @@ const organizationIdFromPayload = (payload: unknown): string | undefined => {
  *   permission for that model is required as well. Confirms with
  *   `sync:subscribed {mode: "window"}` without dumping snapshot pages.
  *   Sync deltas fan out through these dedicated `sync:{stream}` rooms rather than the
- *   legacy realtime rooms so the two event families never overlap.
+ *   per-user rooms joined at connect.
  * - `sync:mutate` — applies a mutation through `applySyncMutation` and replies with
  *   `sync:ack {mutationId, id, seq}` or `sync:nack {mutationId, code, ...}`; when the
  *   client supplied a Socket.io ack callback it also receives `{ack}` / `{nack}`.

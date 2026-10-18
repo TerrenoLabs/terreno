@@ -100,14 +100,20 @@ new TerrenoApp({
 
 ### HTTP rate limiting
 
-Opt-in. Pass `rateLimit: {}` on `TerrenoApp` to enable (omitted = off; Terreno 58 defaults on).
+On by default. Omitted, `undefined`, or `{}` mounts the limiter with the memory store and the defaults below. `rateLimit: false` turns it off. On Cloud Run pass `trustProxy: 1`.
 
 ```typescript
 new TerrenoApp({
   userModel: User,
-  rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined,
+  rateLimit: {trustProxy: 1}, // or `false` to turn the limiter off
 });
 ```
+
+| `rateLimit` | Result |
+|-------------|--------|
+| omitted / `undefined` | On: memory store, default limits |
+| `{}` / `{store, limits, trustProxy, skip, betterAuthBasePath}` | On with those options |
+| `false` | Off |
 
 | Option | Default | Meaning |
 |--------|---------|---------|

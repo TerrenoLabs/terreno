@@ -333,7 +333,7 @@ Self-serve HTTP routes live at `/mcp/service-tokens`. `TerrenoApp` mounts them w
 
 ### MCP OAuth
 
-Opt-in OAuth 2.1 authorization server for `/mcp`, so remote MCP clients (Claude.ai custom connectors, ChatGPT apps) can connect to an app that signs users in with Terreno JWTs. Omitted or `enabled: false` mounts nothing and leaves `/mcp` unchanged.
+Opt-in OAuth 2.1 authorization server for `/mcp`, so remote MCP clients (Claude.ai custom connectors, ChatGPT apps) can connect to an app that signs users in with Terreno JWTs. Everything is off by default. Omitted or `enabled: false` mounts no `/oauth/*` route and no `.well-known/oauth-*` document, and `/mcp` sends no OAuth challenge. Dynamic client registration is a second opt-in on top of `enabled`.
 
 ```typescript
 new TerrenoApp({
@@ -341,6 +341,7 @@ new TerrenoApp({
   mcpOAuth: {
     allowedRedirectHosts: ["claude.ai", "chatgpt.com", "localhost"],
     consentUrl: "https://app.example.com/oauth/consent",
+    dynamicClientRegistration: true, // omit to accept only clients you create
     enabled: true,
     issuer: "https://api.example.com",
   },
@@ -351,7 +352,9 @@ new TerrenoApp({
 | --- | --- | --- |
 | `issuer` | — | Public origin of the API (no path). RFC 8414 `issuer` and base of every endpoint URL. Must be https outside localhost |
 | `consentUrl` | — | App page that hosts the consent screen; receives `?request=<id>` |
-| `allowedRedirectHosts` | — | Hostnames clients may register redirect URIs on. `*.example.com` matches subdomains. Add `localhost` for loopback `http://` redirects |
+| `enabled` | — | Turns the authorization server on. Every other option is ignored while false |
+| `dynamicClientRegistration` | `false` | Mount `POST /oauth/register` and advertise `registration_endpoint`. The endpoint is unauthenticated, so anyone who can reach the API can create a client; leave it off unless clients you cannot pre-register must connect |
+| `allowedRedirectHosts` | `[]` | Hostnames a registering client may put redirect URIs on. Required (non-empty) with `dynamicClientRegistration`, unused without it. `*.example.com` matches subdomains. Add `localhost` for loopback `http://` redirects |
 | `resource` | `${issuer}/mcp` | RFC 8707 resource identifier |
 | `scopesSupported` | `["mcp"]` | Advertised and accepted scopes |
 | `accessTokenTtlSeconds` | 3600 | Access token lifetime |
@@ -359,13 +362,13 @@ new TerrenoApp({
 | `authorizationRequestTtlSeconds` | 600 | How long a request waits for a consent decision |
 | `authorizationCodeTtlSeconds` | 60 | How long a code can be exchanged |
 
-Misconfiguration (an issuer with a path, a non-URL `consentUrl`, no redirect hosts) throws at boot.
+Misconfiguration (an issuer with a path, a non-URL `consentUrl`, registration on with no redirect hosts) throws at boot. With registration off, create clients yourself as `McpOAuthClient` documents (`clientId`, `clientName`, `redirectUris`, `grantTypes: ["authorization_code", "refresh_token"]`, `responseTypes: ["code"]`); `/oauth/register` is then 404 and the metadata has no `registration_endpoint`.
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | GET | `/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/mcp` | none | RFC 9728 metadata: `resource`, `authorization_servers`, `bearer_methods_supported`, `scopes_supported` |
 | GET | `/.well-known/oauth-authorization-server` | none | RFC 8414 metadata: `issuer`, endpoints, `response_types_supported: ["code"]`, `grant_types_supported`, `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported: ["none"]` |
-| POST | `/oauth/register` | none | RFC 7591 dynamic client registration. Public clients only. 201 with `client_id`; `invalid_redirect_uri` for a redirect outside `allowedRedirectHosts`, non-https (except loopback), or with a fragment |
+| POST | `/oauth/register` | none | Only with `dynamicClientRegistration`. RFC 7591 dynamic client registration. Public clients only. 201 with `client_id`; `invalid_redirect_uri` for a redirect outside `allowedRedirectHosts`, non-https (except loopback), or with a fragment |
 | GET | `/oauth/authorize` | none | Validates `client_id`, `redirect_uri`, `response_type=code`, PKCE (`S256` only), `scope`, and `resource`, stores a pending request, and redirects to `consentUrl?request=<id>`. An unknown client or unregistered redirect is a 400 in place; other errors redirect with `error` and `state` |
 | GET | `/oauth/authorize/:request` | JWT or session | What the consent screen shows: `{data: {clientId, clientName, redirectUri, redirectHost, scope, resource, expiresAt}}` |
 | POST | `/oauth/authorize/:request/approve` | JWT or session | `{data: {redirectUrl}}` carrying `code`, `state`, and `iss` |
@@ -375,7 +378,11 @@ Misconfiguration (an issuer with a path, a non-URL `consentUrl`, no redirect hos
 
 The consent endpoints are in OpenAPI (`getMcpOAuthRequest`, `approveMcpOAuthRequest`, `denyMcpOAuthRequest`) and refuse `mcp_` and `mcpat_` bearers, so an agent cannot approve its own grants. A pending request that expired is 400 `Authorization request expired`; one already decided is 409. Protocol endpoints answer `{error, error_description}` per RFC 6749 and never carry the `requestId` member TerrenoApp adds to other JSON bodies. `/oauth/register`, `/oauth/authorize`, `/oauth/token`, and `/oauth/revoke` count against the `auth` rate-limit bucket.
 
-Tokens are opaque (`mcpat_` access, `mcprt_` refresh) and stored only as SHA-256 hashes in `McpOAuthToken`. Each refresh rotates the pair; reusing a rotated refresh token revokes every pair issued from that authorization. Codes are single-use: a failed exchange burns the code, and replaying a used code revokes the tokens it issued. Models: `McpOAuthClient` (`mcpoauthclients`), `McpOAuthAuthorization` (`mcpoauthauthorizations`, TTL on `expiresAt`), `McpOAuthToken` (`mcpoauthtokens`, TTL on `refreshExpiresAt`).
+Tokens are opaque (`mcpat_` access, `mcprt_` refresh) and stored only as SHA-256 hashes in `McpOAuthToken`. Each refresh rotates the pair; reusing a rotated refresh token revokes every pair issued from that authorization (its family). Codes are single-use: a failed exchange burns the code, and replaying a used code revokes the tokens it issued. The code exchange fixes the family id when it consumes the code, so a replay can revoke the family before its tokens exist.
+
+`McpOAuthToken.revokeFamily(familyId)` first writes an `McpOAuthRevokedFamily` tombstone, then revokes every pair in the family. `McpOAuthToken.issue` refuses a tombstoned family with `McpOAuthFamilyRevokedError` (the token endpoint answers `invalid_grant`), and checks again after creating the pair, revoking it if a revoke landed meanwhile. A request that won a rotation or code exchange before a concurrent revoke therefore cannot leave a live pair behind. Tombstones expire after the family's last refresh expiry, and at least one hour after the revoke.
+
+Models: `McpOAuthClient` (`mcpoauthclients`), `McpOAuthAuthorization` (`mcpoauthauthorizations`, TTL on `expiresAt`), `McpOAuthToken` (`mcpoauthtokens`, TTL on `refreshExpiresAt`), `McpOAuthRevokedFamily` (`mcpoauthrevokedfamilies`, unique `familyId`, TTL on `expiresAt`).
 
 With `mcpOAuth` enabled, `/mcp` resolves `mcpat_` access tokens alongside JWTs, Better Auth sessions, and `mcp_` service tokens, and answers any request it cannot authenticate (including `initialize` and `tools/list`) with `401` and `WWW-Authenticate: Bearer resource_metadata="<issuer>/.well-known/oauth-protected-resource/mcp"`, adding `error="invalid_token"` when a credential was presented. Revoked or expired tokens and disabled users are refused. Operator steps: [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md).
 

@@ -33,11 +33,19 @@ export interface McpOAuthOptions {
    */
   consentUrl: string;
   /**
-   * Hostnames a client may register redirect URIs on, for example `["claude.ai", "chatgpt.com"]`.
+   * Mount RFC 7591 dynamic client registration at `POST /oauth/register` and advertise it in the
+   * metadata. Default: false. The endpoint is unauthenticated, so anyone who can reach the API
+   * can create a client; the consent screen is then the only gate. While off, only clients you
+   * create as `McpOAuthClient` documents can run the flow, and `/oauth/register` returns 404.
+   */
+  dynamicClientRegistration?: boolean;
+  /**
+   * Hostnames a registering client may put redirect URIs on, for example
+   * `["claude.ai", "chatgpt.com"]`. Required with `dynamicClientRegistration`, unused without it.
    * `*.example.com` matches any subdomain. Add `localhost` to allow loopback `http://` redirects
    * for local clients.
    */
-  allowedRedirectHosts: string[];
+  allowedRedirectHosts?: string[];
   /** RFC 8707 resource identifier for `/mcp`. Default: `${issuer}/mcp`. */
   resource?: string;
   /** Scopes advertised and accepted. Default: `["mcp"]`. */
@@ -60,6 +68,7 @@ export interface ResolvedMcpOAuthOptions {
   authorizationCodeTtlSeconds: number;
   authorizationRequestTtlSeconds: number;
   consentUrl: string;
+  dynamicClientRegistration: boolean;
   issuer: string;
   refreshTokenTtlSeconds: number;
   resource: string;
@@ -119,8 +128,12 @@ export const resolveMcpOAuthOption = (
     throw misconfigured("mcpOAuth.issuer must use https outside localhost");
   }
   parseAbsoluteUrl(option.consentUrl, "consentUrl");
-  if (!Array.isArray(option.allowedRedirectHosts) || option.allowedRedirectHosts.length === 0) {
-    throw misconfigured("mcpOAuth.allowedRedirectHosts must list at least one host");
+  const dynamicClientRegistration = option.dynamicClientRegistration === true;
+  const allowedRedirectHosts = option.allowedRedirectHosts ?? [];
+  if (dynamicClientRegistration && allowedRedirectHosts.length === 0) {
+    throw misconfigured(
+      "mcpOAuth.allowedRedirectHosts must list at least one host when dynamicClientRegistration is on"
+    );
   }
   const issuer = issuerUrl.origin;
   const resource = option.resource ?? `${issuer}/mcp`;
@@ -135,7 +148,7 @@ export const resolveMcpOAuthOption = (
       DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
       "accessTokenTtlSeconds"
     ),
-    allowedRedirectHosts: option.allowedRedirectHosts.map((host) => host.toLowerCase()),
+    allowedRedirectHosts: allowedRedirectHosts.map((host) => host.toLowerCase()),
     authorizationCodeTtlSeconds: positiveInteger(
       option.authorizationCodeTtlSeconds,
       DEFAULT_AUTHORIZATION_CODE_TTL_SECONDS,
@@ -147,6 +160,7 @@ export const resolveMcpOAuthOption = (
       "authorizationRequestTtlSeconds"
     ),
     consentUrl: option.consentUrl,
+    dynamicClientRegistration,
     issuer,
     refreshTokenTtlSeconds: positiveInteger(
       option.refreshTokenTtlSeconds,
@@ -181,12 +195,14 @@ export const buildProtectedResourceMetadata = (
 export const buildAuthorizationServerMetadata = (
   oauth: ResolvedMcpOAuthOptions
 ): Record<string, unknown> => ({
+  ...(oauth.dynamicClientRegistration
+    ? {registration_endpoint: `${oauth.issuer}/oauth/register`}
+    : {}),
   authorization_endpoint: `${oauth.issuer}/oauth/authorize`,
   authorization_response_iss_parameter_supported: true,
   code_challenge_methods_supported: ["S256"],
   grant_types_supported: SUPPORTED_GRANT_TYPES,
   issuer: oauth.issuer,
-  registration_endpoint: `${oauth.issuer}/oauth/register`,
   response_types_supported: SUPPORTED_RESPONSE_TYPES,
   revocation_endpoint: `${oauth.issuer}/oauth/revoke`,
   revocation_endpoint_auth_methods_supported: ["none"],

@@ -20,11 +20,16 @@ import {
   generateMcpOAuthSecret,
   hashMcpOAuthSecret,
   MCP_OAUTH_ACCESS_TOKEN_PREFIX,
+  McpOAuthFamilyRevokedError,
   McpOAuthToken,
 } from "../models/mcpOAuthToken";
 import {MCP_SERVICE_TOKEN_PREFIX} from "../models/mcpServiceToken";
 import {createOpenApiBuilder} from "../openApiBuilder";
-import type {McpOAuthAuthorizationDocument} from "../types/mcpOAuth";
+import type {
+  McpOAuthAuthorizationDocument,
+  McpOAuthTokenIssueOptions,
+  McpOAuthTokenModel,
+} from "../types/mcpOAuth";
 import {bearerFromHeaders} from "./auth";
 import {
   buildAuthorizationServerMetadata,
@@ -62,6 +67,23 @@ class OAuthProtocolError extends Error {
     this.status = status;
   }
 }
+
+/** Issue a pair into a family; a family revoked by a concurrent request answers `invalid_grant`. */
+const issueOrInvalidGrant = async (
+  options: McpOAuthTokenIssueOptions
+): Promise<Awaited<ReturnType<McpOAuthTokenModel["issue"]>>> => {
+  try {
+    return await McpOAuthToken.issue(options);
+  } catch (error) {
+    if (error instanceof McpOAuthFamilyRevokedError) {
+      logger.warn("[MCPOAuth] Refused to issue into a revoked token family", {
+        clientId: options.clientId,
+      });
+      throw new OAuthProtocolError("invalid_grant", "The grant was revoked");
+    }
+    throw error;
+  }
+};
 
 const oauthHandler = (
   handler: (req: Request, res: Response) => Promise<void>
@@ -555,8 +577,8 @@ const exchangeAuthorizationCode = async (
   }
   const codeHash = hashMcpOAuthSecret(code);
   const now = DateTime.now();
-  // Consume the code before checking it, so a failed attempt (wrong verifier) burns it too. The
-  // family id is fixed here, before any token exists, so a replay can always find what to revoke.
+  // Consume the code before checking it, so a failed attempt (wrong verifier) burns it too.
+  // The family id is fixed here so a replay can revoke it before the tokens exist.
   const consumed = await McpOAuthAuthorization.findOneAndUpdate(
     {codeHash, status: "approved"},
     {
@@ -570,12 +592,8 @@ const exchangeAuthorizationCode = async (
     {returnDocument: "after"}
   );
   if (!consumed) {
-    const replayed = await McpOAuthAuthorization.findOneAndUpdate(
-      {codeHash, familyId: {$exists: true}, status: "used"},
-      {$set: {replayedAt: now.toJSDate()}},
-      {returnDocument: "after"}
-    );
-    if (replayed?.familyId) {
+    const replayed = await McpOAuthAuthorization.findOneOrNone({codeHash});
+    if (replayed?.status === "used" && replayed.familyId) {
       // RFC 6749 §4.1.2: a replayed code revokes the tokens it already issued.
       logger.warn("[MCPOAuth] Authorization code replayed, revoking its tokens", {
         clientId: replayed.clientId,
@@ -584,7 +602,6 @@ const exchangeAuthorizationCode = async (
     }
     throw new OAuthProtocolError("invalid_grant", "Authorization code is invalid or already used");
   }
-  const familyId = consumed.familyId as string;
   if (!consumed.codeExpiresAt || DateTime.fromJSDate(consumed.codeExpiresAt) <= now) {
     throw new OAuthProtocolError("invalid_grant", "Authorization code expired");
   }
@@ -608,21 +625,15 @@ const exchangeAuthorizationCode = async (
     throw new OAuthProtocolError("invalid_grant", "The authorizing user is not active");
   }
 
-  const issued = await McpOAuthToken.issue({
+  const issued = await issueOrInvalidGrant({
     accessTokenTtlSeconds: oauth.accessTokenTtlSeconds,
     clientId,
-    familyId,
+    familyId: consumed.familyId,
     refreshTokenTtlSeconds: oauth.refreshTokenTtlSeconds,
     resource: consumed.resource,
     scope: consumed.scope,
     userId: consumed.userId as mongoose.Types.ObjectId,
   });
-  // A replay that landed before these tokens existed revoked an empty family; catch it here.
-  const afterIssue = await McpOAuthAuthorization.findById(consumed._id);
-  if (afterIssue?.replayedAt) {
-    await McpOAuthToken.revokeFamily(familyId);
-    throw new OAuthProtocolError("invalid_grant", "Authorization code is invalid or already used");
-  }
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,
@@ -648,33 +659,23 @@ const exchangeRefreshToken = async (
     throw new OAuthProtocolError("invalid_grant", "Refresh token is invalid");
   }
   const now = DateTime.now();
-  // Rotate atomically: only one exchange of a refresh token can win.
+  // Rotate atomically: only one exchange of a refresh token can win. The pre-rotate document
+  // tells this request whether it won, independent of what the earlier lookup saw.
   const rotated = await McpOAuthToken.findOneAndUpdate(
-    {
-      _id: current._id,
-      refreshExpiresAt: {$gt: now.toJSDate()},
-      revokedAt: {$exists: false},
-      rotatedAt: {$exists: false},
-    },
-    {$set: {revokedAt: now.toJSDate(), rotatedAt: now.toJSDate()}},
-    {returnDocument: "after"}
+    {_id: current._id, rotatedAt: {$exists: false}},
+    {$min: {revokedAt: now.toJSDate()}, $set: {rotatedAt: now.toJSDate()}},
+    {returnDocument: "before"}
   );
   if (!rotated) {
-    // Check rotation against the stored document, not the read above: a concurrent exchange may
-    // have rotated it in between.
-    const reused = await McpOAuthToken.findOneAndUpdate(
-      {_id: current._id, rotatedAt: {$exists: true}},
-      {$set: {reuseDetectedAt: now.toJSDate()}},
-      {returnDocument: "after"}
-    );
-    if (reused) {
-      // A rotated refresh token came back: someone holds a copy. Kill the whole chain.
-      logger.warn("[MCPOAuth] Refresh token reused, revoking its chain", {
-        clientId,
-        userId: String(current.userId),
-      });
-      await McpOAuthToken.revokeFamily(current.familyId);
-    }
+    // A rotated refresh token came back: someone holds a copy. Kill the whole chain.
+    logger.warn("[MCPOAuth] Refresh token reused, revoking its chain", {
+      clientId,
+      userId: String(current.userId),
+    });
+    await McpOAuthToken.revokeFamily(current.familyId);
+    throw new OAuthProtocolError("invalid_grant", "Refresh token is invalid, expired, or revoked");
+  }
+  if (rotated.revokedAt || DateTime.fromJSDate(rotated.refreshExpiresAt) <= now) {
     throw new OAuthProtocolError("invalid_grant", "Refresh token is invalid, expired, or revoked");
   }
   const user = await userModel.findById(rotated.userId);
@@ -682,7 +683,7 @@ const exchangeRefreshToken = async (
     await McpOAuthToken.revokeFamily(rotated.familyId);
     throw new OAuthProtocolError("invalid_grant", "The authorizing user is not active");
   }
-  const issued = await McpOAuthToken.issue({
+  const issued = await issueOrInvalidGrant({
     accessTokenTtlSeconds: oauth.accessTokenTtlSeconds,
     clientId,
     familyId: rotated.familyId,
@@ -691,12 +692,6 @@ const exchangeRefreshToken = async (
     scope: rotated.scope,
     userId: rotated.userId,
   });
-  // Reuse detected before this pair existed revoked the chain without it; catch it here.
-  const afterIssue = await McpOAuthToken.findById(rotated._id);
-  if (afterIssue?.reuseDetectedAt) {
-    await McpOAuthToken.revokeFamily(rotated.familyId);
-    throw new OAuthProtocolError("invalid_grant", "Refresh token is invalid, expired, or revoked");
-  }
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,
@@ -771,13 +766,15 @@ const addTokenRoutes = (
 };
 
 /**
- * Mount the MCP OAuth authorization server: discovery documents, client registration,
- * authorize + consent decision, token, and revocation endpoints.
+ * Mount the MCP OAuth authorization server: discovery documents, client registration (only with
+ * `dynamicClientRegistration`), authorize + consent decision, token, and revocation endpoints.
  */
 export const addMcpOAuthRoutes = (app: Application, options: McpOAuthRoutesOptions): void => {
   const {oauth, openApi, userModel} = options;
   addDiscoveryRoutes(app, oauth);
-  addRegistrationRoute(app, oauth);
+  if (oauth.dynamicClientRegistration) {
+    addRegistrationRoute(app, oauth);
+  }
   addAuthorizeRoute(app, oauth);
   addConsentRoutes(app, oauth, openApi);
   addTokenRoutes(app, oauth, userModel);

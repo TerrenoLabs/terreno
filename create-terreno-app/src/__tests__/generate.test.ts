@@ -119,10 +119,10 @@ describe("generateAllFiles", () => {
       files.find((file) => file.path === "frontend/package.json")?.content ?? "{}"
     ) as {dependencies: Record<string, string>};
 
-    assert.equal(frontendPackageJson.dependencies.expo, "~57.0.14");
-    assert.equal(frontendPackageJson.dependencies["expo-router"], "~57.0.14");
-    assert.equal(frontendPackageJson.dependencies["expo-constants"], "~57.0.12");
-    assert.equal(frontendPackageJson.dependencies["expo-sqlite"], "~57.0.1");
+    assert.equal(frontendPackageJson.dependencies.expo, "~58.0.14");
+    assert.equal(frontendPackageJson.dependencies["expo-router"], "~58.0.23");
+    assert.equal(frontendPackageJson.dependencies["expo-constants"], "~58.0.12");
+    assert.equal(frontendPackageJson.dependencies["expo-sqlite"], "~58.0.13");
   });
 
   test("generates the default MCP server configuration", () => {

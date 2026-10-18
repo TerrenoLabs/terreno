@@ -26,6 +26,8 @@ Source of versions: root `package.json` `catalog`. Apps must keep `"catalog:"`.
 | `@sentry/react-native` | Native SDK |
 | `@shopify/flash-list` | Native list |
 | `@shopify/react-native-skia` | Native Skia |
+| `@stripe/stripe-react-native` | Native Stripe SDK + config plugin |
+| `react-native-purchases`, `react-native-purchases-ui` | Native RevenueCat SDK (bump together) |
 | `expo` and every `expo-*` / `@expo/*` / `babel-preset-expo` already in the catalog | SDK-aligned native or config-plugin packages |
 | `react`, `react-dom`, `react-test-renderer`, `@types/react` | SDK-coupled JS, not native, but must move with RN |
 

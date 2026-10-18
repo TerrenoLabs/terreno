@@ -668,7 +668,37 @@ if (typeof globalThis.expo === "undefined") {
 }
 
 // Mock expo-router
+const mockNavigationFonts = {
+  bold: {fontFamily: "System", fontWeight: "600"},
+  heavy: {fontFamily: "System", fontWeight: "700"},
+  medium: {fontFamily: "System", fontWeight: "500"},
+  regular: {fontFamily: "System", fontWeight: "400"},
+};
 mock.module("expo-router", () => ({
+  DarkTheme: {
+    colors: {
+      background: "rgb(1, 1, 1)",
+      border: "rgb(39, 39, 41)",
+      card: "rgb(18, 18, 18)",
+      notification: "rgb(255, 69, 58)",
+      primary: "rgb(10, 132, 255)",
+      text: "rgb(229, 229, 231)",
+    },
+    dark: true,
+    fonts: mockNavigationFonts,
+  },
+  DefaultTheme: {
+    colors: {
+      background: "rgb(242, 242, 242)",
+      border: "rgb(216, 216, 216)",
+      card: "rgb(255, 255, 255)",
+      notification: "rgb(255, 59, 48)",
+      primary: "rgb(0, 122, 255)",
+      text: "rgb(28, 28, 30)",
+    },
+    dark: false,
+    fonts: mockNavigationFonts,
+  },
   Link: ({children, ...props}: MockComponentProps) => React.createElement("Link", props, children),
   Navigator: ({children, ...props}: MockComponentProps) =>
     React.createElement("Navigator", props, children),
@@ -684,6 +714,7 @@ mock.module("expo-router", () => ({
   Stack: ({children, ...props}: MockComponentProps) =>
     React.createElement("Stack", props, children),
   Tabs: ({children, ...props}: MockComponentProps) => React.createElement("Tabs", props, children),
+  ThemeProvider: ({children}: MockComponentProps) => children,
   useFocusEffect: mock(() => undefined),
   useGlobalSearchParams: mock(() => ({})),
   useLocalSearchParams: mock(() => ({})),

@@ -126,7 +126,7 @@ export const store = configureStore({
 
 ## WebSocket Integration
 
-> **Deprecated (removed in Terreno 58):** `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, and `getRealtimeSocket` patch RTK Query caches from `sync` events. Use [`@terreno/syncdb`](../syncdb.md). `useSocketConnection` remains for feature flags and other sockets.
+> **Removed in Terreno 58:** `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, `getRealtimeSocket`, `useSyncConnection`, and `RealtimeEvent` patched RTK Query caches from the server's `sync` event, which is also gone. Use [`@terreno/syncdb`](../syncdb.md). `useSocketConnection` remains for feature flags and other sockets.
 
 ### useSocketConnection
 

@@ -69,7 +69,17 @@ fi
 owner=$(gh api user --jq .login)
 # Every PR shares one gist, so file names carry the repo and PR to stay unique.
 description="PR media"
-gist_id=$(gh api gists --paginate --jq ".[] | select(.description == \"$description\") | .id" | head -1)
+gist_id=${PR_MEDIA_GIST_ID:-}
+if [[ -z "$gist_id" ]]; then
+  # Read every match before picking one: under pipefail, `head` closing the pipe early
+  # kills the script. The oldest match wins so a duplicate never takes over the store.
+  matches=$(gh api gists --paginate --jq ".[] | select(.description == \"$description\") | \"\(.created_at) \(.id)\"" | sort)
+  gist_id=$(awk 'NR == 1 {print $2}' <<<"$matches")
+  match_count=$(awk 'NF' <<<"$matches" | wc -l)
+  if (( match_count > 1 )); then
+    echo "Found $match_count gists described \"$description\"; using the oldest, $gist_id. Set PR_MEDIA_GIST_ID to choose one." >&2
+  fi
+fi
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

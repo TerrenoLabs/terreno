@@ -57,6 +57,8 @@ it holds nothing sensitive.
      `Verification` table.
    - `--pr N` and `--repo OWNER/REPO` override the PR found from the current branch.
    - The gist URL is printed to stderr.
+   - Set `PR_MEDIA_GIST_ID` to use a specific gist. Without it, the script uses the
+     oldest of your gists described `PR media`, and warns when there is more than one.
 
 4. Confirm the images render. The script already checks that each raw URL returns 200.
    For a final check, open the comment, or load it in Playwright and assert that each

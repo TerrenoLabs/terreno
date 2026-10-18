@@ -375,8 +375,14 @@ export const validateStageContent = ({
     if (!content.includes("Never hand a wait back to the human")) {
       errors.push(`${prefix}: Taste must not return PENDING to a human`);
     }
-    if (!content.includes("at most 3 fix pushes") || !content.includes("at most 3 hours")) {
-      errors.push(`${prefix}: Taste standalone entry must be bounded by pushes and wait time`);
+    if (!content.includes("at most 3 fix rounds") || !content.includes("at most 3 hours")) {
+      errors.push(`${prefix}: Taste standalone entry must be bounded by fix rounds and wait time`);
+    }
+    if (!content.includes("push-ownership.md") || !content.includes("still red after")) {
+      errors.push(`${prefix}: Taste must escalate a PR that stays red after its fix rounds`);
+    }
+    if (!content.includes("unanswered bot thread")) {
+      errors.push(`${prefix}: Taste must not PASS with an unanswered review-bot thread`);
     }
     if (!content.includes("If step 10 did not push")) {
       errors.push(`${prefix}: Taste must preserve an emit path when no fix was pushed`);

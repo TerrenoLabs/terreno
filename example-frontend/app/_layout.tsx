@@ -1,8 +1,8 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import {useFonts} from "expo-font";
-import {Stack, useRouter, useSegments} from "expo-router";
+import {Stack, ThemeProvider, useRouter, useSegments} from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, {type FC, type ReactNode, useCallback, useEffect, useState} from "react";
+import React, {type FC, type ReactNode, useCallback, useEffect, useMemo, useState} from "react";
 import {Platform, StatusBar} from "react-native";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 import "react-native-reanimated";
@@ -43,6 +43,7 @@ import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
+import {buildNavigationTheme} from "@/utils/navigationTheme";
 
 installTerrenoDevConsoleLogger();
 
@@ -150,7 +151,11 @@ const ThemedStatusBar: FC = () => {
 };
 
 const RootLayoutNav = (): React.ReactElement => {
-  const {theme} = useTheme();
+  const {colorScheme, theme} = useTheme();
+  const navigationTheme = useMemo(
+    () => buildNavigationTheme({colorScheme, theme}),
+    [colorScheme, theme]
+  );
 
   // AppThemeProvider withholds this tree until the stored theme resolves, so the
   // splash stays up through that wait instead of uncovering a blank, wrong-scheme frame.
@@ -319,24 +324,26 @@ const RootLayoutNav = (): React.ReactElement => {
   ) : null;
 
   const stack = (
-    <Stack
-      screenOptions={{
-        contentStyle: {backgroundColor: theme.surface.base},
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="admin" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="signup" />
-      <Stack.Screen name="forgotPassword" />
-      <Stack.Screen name="resetPassword" />
-      <Stack.Screen name="verifyEmail" />
-      <Stack.Screen name="syncdb-debug" options={{presentation: "modal"}} />
-      <Stack.Screen name="settings" />
-      <Stack.Screen name="notifications" />
-      <Stack.Screen name="todo-windows/index" />
-    </Stack>
+    <ThemeProvider value={navigationTheme}>
+      <Stack
+        screenOptions={{
+          contentStyle: {backgroundColor: theme.surface.base},
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="admin" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="signup" />
+        <Stack.Screen name="forgotPassword" />
+        <Stack.Screen name="resetPassword" />
+        <Stack.Screen name="verifyEmail" />
+        <Stack.Screen name="syncdb-debug" options={{presentation: "modal"}} />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="todo-windows/index" />
+      </Stack>
+    </ThemeProvider>
   );
 
   const syncDbStartErrorBanner =

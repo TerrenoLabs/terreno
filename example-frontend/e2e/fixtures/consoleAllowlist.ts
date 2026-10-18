@@ -29,8 +29,4 @@ export const GLOBAL_CONSOLE_ALLOWLIST: ReadonlyArray<string | RegExp> = [
   // offline-simulation-specific messages).
   /\[syncdb\] (startup|reconnect) reconcile failed/,
   "[SocketConnection] Attempting to connect socket, but getAuthToken returned no token.",
-  // @terreno/rtk realtime cache-patching helpers (`realtimeList`,
-  // `realtimeDocument`, `setRealtimeSocket`) are deprecated and removed in
-  // Terreno 58. The example app still wires them until that deletion.
-  "[@terreno/rtk] realtimeList, realtimeDocument, and setRealtimeSocket are deprecated",
 ];

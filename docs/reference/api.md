@@ -48,11 +48,13 @@ REST API framework built on Express and Mongoose. Provides modelRouter (CRUD end
 
 Two patterns for building Terreno APIs:
 
-### Deprecated: modelRouter `realtime`
+### Removed: modelRouter `realtime`
 
-`modelRouter({ realtime })` (RTK cache-patching websocket events) is **deprecated** and **will be removed in Terreno 58**. Use `sync` with [`@terreno/syncdb`](syncdb.md). See [Migrate from RTK to syncdb](../how-to/migrate-rtk-to-syncdb.md).
+Terreno 58 removed `modelRouter({ realtime })` and the legacy RTK `sync` websocket event. Passing `realtime` is now a TypeScript error. Use `sync` with [`@terreno/syncdb`](syncdb.md). See [Migrate from RTK to syncdb](../how-to/migrate-rtk-to-syncdb.md).
 
-`RealtimeApp` is **not** deprecated. It still hosts Socket.io, change streams, and `sync:delta`.
+Also removed: `RealtimeConfig`, `RealtimeEvent`, `DocumentSubscription`, `QuerySubscription`, the realtime registry (`registerRealtime`, `getRealtimeRegistry`, `findRegistryEntryByCollection`, `findRegistryEntryByRoutePath`, `updateRealtimeRegistryOptions`, `clearRealtimeRegistry`, `RealtimeRegistryEntry`), the query-subscription store (`addQuerySubscription`, `removeQuerySubscription`, `removeAllSocketQueries`, `getQuerySubscriptionsForCollection`, `computeQueryId`, `clearQueryStore`), and `MAX_MODEL_SUBSCRIPTIONS` / `MAX_DOCUMENT_SUBSCRIPTIONS` / `MAX_QUERY_SUBSCRIPTIONS`. The server no longer handles `subscribe:model`, `subscribe:document`, or `subscribe:query`.
+
+`RealtimeApp` stays. It hosts Socket.io, socket auth, change streams, and `sync:delta`.
 
 Keep `admin.realtime` when you want admin `admin:model.changed` events.
 
@@ -98,14 +100,20 @@ new TerrenoApp({
 
 ### HTTP rate limiting
 
-Opt-in. Pass `rateLimit: {}` on `TerrenoApp` to enable (omitted = off; Terreno 58 defaults on).
+On by default. Omitted, `undefined`, or `{}` mounts the limiter with the memory store and the defaults below. `rateLimit: false` turns it off. On Cloud Run pass `trustProxy: 1`.
 
 ```typescript
 new TerrenoApp({
   userModel: User,
-  rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined,
+  rateLimit: {trustProxy: 1}, // or `false` to turn the limiter off
 });
 ```
+
+| `rateLimit` | Result |
+|-------------|--------|
+| omitted / `undefined` | On: memory store, default limits |
+| `{}` / `{store, limits, trustProxy, skip, betterAuthBasePath}` | On with those options |
+| `false` | Off |
 
 | Option | Default | Meaning |
 |--------|---------|---------|
@@ -191,7 +199,7 @@ Both patterns create the same middleware stack (CORS, auth, logging, OpenAPI). H
 
 ## Collection catalog
 
-`modelRouter("/path", Model, options)` writes one catalog record per route path. MCP, realtime, and sync surfaces read that record; TerrenoApp calls `replaceCollectionOptions` once when access control is injected. Test helpers `clearMCPRegistry`, `clearRealtimeRegistry`, and `clearSyncRegistry` clear the entire catalog.
+`modelRouter("/path", Model, options)` writes one catalog record per route path. MCP and sync surfaces read that record; TerrenoApp calls `replaceCollectionOptions` once when access control is injected. Test helpers `clearMCPRegistry` and `clearSyncRegistry` clear the entire catalog.
 
 ## modelRouter actions
 

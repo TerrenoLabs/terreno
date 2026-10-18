@@ -218,7 +218,7 @@ for authenticated test sends.
 | `VALKEY_URL` | `@terreno/api` realtime adapter **and** `rateLimit.store: "redis"` | ❌ | — | Yes | server |
 | `REDIS_URL` | `@terreno/api` fallback after `VALKEY_URL` (realtime + Redis rate-limit store) | ❌ | — | Yes | server |
 
-There is **no** `RATE_LIMIT_ENABLED` (or similar) read by `@terreno/api`. Apps that want an env toggle pass `rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined` themselves. See [Rate limiting](../how-to/rate-limiting.md).
+There is **no** `RATE_LIMIT_ENABLED` (or similar) read by `@terreno/api`. The limiter is on by default. Apps that want an env toggle pass `rateLimit: process.env.RATE_LIMIT_DISABLED === "true" ? false : {trustProxy: 1}` themselves. See [Rate limiting](../how-to/rate-limiting.md).
 
 ## Webhooks & notifications
 

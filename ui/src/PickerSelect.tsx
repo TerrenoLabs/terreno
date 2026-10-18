@@ -138,7 +138,7 @@ export interface RNPickerSelectProps {
   /**
    * Web only. When true, the dropdown menu renders in a fixed portal on
    * `document.body` instead of a React Native `Modal`, so it floats above
-   * ancestor portals / high-zIndex overlays (e.g. the `Filter` panel).
+   * ancestor portals / high-zIndex overlays (e.g. a `DropdownPanel`).
    * @default false
    */
   renderMenuInBodyPortal?: boolean;

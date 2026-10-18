@@ -41,6 +41,10 @@ const mcpOAuthAuthorizationSchema = new mongoose.Schema<
       required: true,
       type: String,
     },
+    replayedAt: {
+      description: "When the authorization code was presented again after being exchanged",
+      type: Date,
+    },
     requestId: {
       description: "Opaque id handed to the consent screen to identify this request",
       required: true,

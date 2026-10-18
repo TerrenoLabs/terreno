@@ -555,12 +555,14 @@ const exchangeAuthorizationCode = async (
   }
   const codeHash = hashMcpOAuthSecret(code);
   const now = DateTime.now();
-  // Consume the code before checking it, so a failed attempt (wrong verifier) burns it too.
+  // Consume the code before checking it, so a failed attempt (wrong verifier) burns it too. The
+  // family id is fixed here, before any token exists, so a replay can always find what to revoke.
   const consumed = await McpOAuthAuthorization.findOneAndUpdate(
     {codeHash, status: "approved"},
     {
       $set: {
         expiresAt: now.plus({seconds: USED_CODE_RETENTION_SECONDS}).toJSDate(),
+        familyId: randomUUID(),
         status: "used",
         usedAt: now.toJSDate(),
       },
@@ -568,8 +570,12 @@ const exchangeAuthorizationCode = async (
     {returnDocument: "after"}
   );
   if (!consumed) {
-    const replayed = await McpOAuthAuthorization.findOneOrNone({codeHash});
-    if (replayed?.status === "used" && replayed.familyId) {
+    const replayed = await McpOAuthAuthorization.findOneAndUpdate(
+      {codeHash, familyId: {$exists: true}, status: "used"},
+      {$set: {replayedAt: now.toJSDate()}},
+      {returnDocument: "after"}
+    );
+    if (replayed?.familyId) {
       // RFC 6749 §4.1.2: a replayed code revokes the tokens it already issued.
       logger.warn("[MCPOAuth] Authorization code replayed, revoking its tokens", {
         clientId: replayed.clientId,
@@ -578,6 +584,7 @@ const exchangeAuthorizationCode = async (
     }
     throw new OAuthProtocolError("invalid_grant", "Authorization code is invalid or already used");
   }
+  const familyId = consumed.familyId as string;
   if (!consumed.codeExpiresAt || DateTime.fromJSDate(consumed.codeExpiresAt) <= now) {
     throw new OAuthProtocolError("invalid_grant", "Authorization code expired");
   }
@@ -604,15 +611,18 @@ const exchangeAuthorizationCode = async (
   const issued = await McpOAuthToken.issue({
     accessTokenTtlSeconds: oauth.accessTokenTtlSeconds,
     clientId,
+    familyId,
     refreshTokenTtlSeconds: oauth.refreshTokenTtlSeconds,
     resource: consumed.resource,
     scope: consumed.scope,
     userId: consumed.userId as mongoose.Types.ObjectId,
   });
-  await McpOAuthAuthorization.updateOne(
-    {_id: consumed._id},
-    {$set: {familyId: issued.mcpOAuthToken.familyId}}
-  );
+  // A replay that landed before these tokens existed revoked an empty family; catch it here.
+  const afterIssue = await McpOAuthAuthorization.findById(consumed._id);
+  if (afterIssue?.replayedAt) {
+    await McpOAuthToken.revokeFamily(familyId);
+    throw new OAuthProtocolError("invalid_grant", "Authorization code is invalid or already used");
+  }
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,
@@ -650,7 +660,14 @@ const exchangeRefreshToken = async (
     {returnDocument: "after"}
   );
   if (!rotated) {
-    if (current.rotatedAt) {
+    // Check rotation against the stored document, not the read above: a concurrent exchange may
+    // have rotated it in between.
+    const reused = await McpOAuthToken.findOneAndUpdate(
+      {_id: current._id, rotatedAt: {$exists: true}},
+      {$set: {reuseDetectedAt: now.toJSDate()}},
+      {returnDocument: "after"}
+    );
+    if (reused) {
       // A rotated refresh token came back: someone holds a copy. Kill the whole chain.
       logger.warn("[MCPOAuth] Refresh token reused, revoking its chain", {
         clientId,
@@ -674,6 +691,12 @@ const exchangeRefreshToken = async (
     scope: rotated.scope,
     userId: rotated.userId,
   });
+  // Reuse detected before this pair existed revoked the chain without it; catch it here.
+  const afterIssue = await McpOAuthToken.findById(rotated._id);
+  if (afterIssue?.reuseDetectedAt) {
+    await McpOAuthToken.revokeFamily(rotated.familyId);
+    throw new OAuthProtocolError("invalid_grant", "Refresh token is invalid, expired, or revoked");
+  }
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,

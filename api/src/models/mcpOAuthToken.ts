@@ -60,6 +60,10 @@ const mcpOAuthTokenSchema = new mongoose.Schema<McpOAuthTokenDocument, McpOAuthT
       description: "RFC 8707 resource the tokens are bound to",
       type: String,
     },
+    reuseDetectedAt: {
+      description: "When this refresh token was presented again after rotation",
+      type: Date,
+    },
     revokedAt: {
       description: "When the pair was revoked; unset while it remains active",
       type: Date,

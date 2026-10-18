@@ -38,6 +38,7 @@ export interface McpOAuthAuthorizationDocument extends mongoose.Document {
   expiresAt: Date;
   familyId?: string;
   redirectUri: string;
+  replayedAt?: Date;
   requestId: string;
   resource?: string;
   scope?: string;
@@ -67,6 +68,7 @@ export interface McpOAuthTokenDocument extends mongoose.Document {
   refreshExpiresAt: Date;
   refreshTokenHash: string;
   resource?: string;
+  reuseDetectedAt?: Date;
   revokedAt?: Date;
   rotatedAt?: Date;
   scope?: string;

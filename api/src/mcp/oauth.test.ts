@@ -380,6 +380,28 @@ describe("MCP OAuth authorization server", () => {
       expect(mcp.status).toBe(401);
     });
 
+    it("revokes every token when a code is exchanged twice at once", async () => {
+      const flow = await approvedCode(app, agent);
+
+      const results = await Promise.all([exchangeCode(app, flow), exchangeCode(app, flow)]);
+
+      // Depending on interleaving the winner may also lose its pair; it never keeps one.
+      expect(results.filter((res) => res.status === 200).length).toBeLessThanOrEqual(1);
+      expect(results.some((res) => res.body.error === "invalid_grant")).toBe(true);
+      expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
+    });
+
+    it("revokes tokens issued after a replay landed mid-exchange", async () => {
+      const flow = await approvedCode(app, agent);
+      // Stands in for a replay that arrived after the code was consumed but before issue.
+      await McpOAuthAuthorization.updateMany({}, {$set: {replayedAt: DateTime.now().toJSDate()}});
+
+      const res = await exchangeCode(app, flow);
+
+      expect(res.body.error).toBe("invalid_grant");
+      expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
+    });
+
     it("rejects approving an expired pending request", async () => {
       const clientId = await registerClient(app);
       const authorize = await startAuthorization(app, {
@@ -475,6 +497,33 @@ describe("MCP OAuth authorization server", () => {
       expect(reuse.body.error).toBe("invalid_grant");
       expect(third.body.error).toBe("invalid_grant");
       expect((await callMcp(app, second.access_token)).status).toBe(401);
+    });
+
+    it("revokes the whole chain when a refresh token is exchanged twice at once", async () => {
+      const flow = await approvedCode(app, agent);
+      const first = (await exchangeCode(app, flow)).body;
+
+      const results = await Promise.all([
+        refresh(app, flow.clientId, first.refresh_token),
+        refresh(app, flow.clientId, first.refresh_token),
+      ]);
+
+      // Depending on interleaving the winner may also lose its pair; it never keeps one.
+      expect(results.filter((res) => res.status === 200).length).toBeLessThanOrEqual(1);
+      expect(results.some((res) => res.body.error === "invalid_grant")).toBe(true);
+      expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
+    });
+
+    it("revokes a pair issued after reuse was detected mid-rotation", async () => {
+      const flow = await approvedCode(app, agent);
+      const first = (await exchangeCode(app, flow)).body;
+      // Stands in for a concurrent reuse detected after rotation but before the new pair existed.
+      await McpOAuthToken.updateMany({}, {$set: {reuseDetectedAt: DateTime.now().toJSDate()}});
+
+      const res = await refresh(app, flow.clientId, first.refresh_token);
+
+      expect(res.body.error).toBe("invalid_grant");
+      expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     });
   });
 

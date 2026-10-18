@@ -40,6 +40,4 @@ Use to show degraded UI when the backend is unreachable.
 
 ## Realtime model updates
 
-`modelRouter` `realtime` (RTK cache-patching via `realtimeList` / `realtimeDocument`) is **deprecated** and **will be removed in Terreno 58**. Use `sync` on `modelRouter` with `@terreno/syncdb`. `RealtimeApp` stays as the socket host.
-
-Do not add new `realtimeList` / `realtimeDocument` wiring. After adding `sync` to a backend model, use syncdb hooks on the client.
+Terreno 58 removed `modelRouter` `realtime`, the server's RTK `sync` event, and the `@terreno/rtk` helpers `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, `getRealtimeSocket`, and `useSyncConnection`. For live collection updates, add `sync` to the backend `modelRouter` and read with `@terreno/syncdb` hooks (`useQuery` / `useEntity`). `RealtimeApp` stays as the socket host for `sync:delta`.

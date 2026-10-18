@@ -12,7 +12,6 @@ import {
   installTerrenoDevConsoleLogger,
   selectBetterAuthIsLoading,
   selectBetterAuthUserId,
-  setRealtimeSocket,
   useRealtimeDebug,
   useSocketConnection,
   useTerrenoFeatureFlags,
@@ -206,13 +205,6 @@ const RootLayoutNav = (): React.ReactElement => {
   });
 
   useRealtimeDebug(baseUrl, socket?.connected);
-
-  useEffect(() => {
-    setRealtimeSocket(socket);
-    return (): void => {
-      setRealtimeSocket(null);
-    };
-  }, [socket]);
 
   // Hydrate Better Auth session into Redux on startup.
   useEffect(() => {

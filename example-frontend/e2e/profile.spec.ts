@@ -60,7 +60,12 @@ test.describe("Profile", () => {
     await expect(page.getByTestId("profile-feature-flags-card").first()).toBeVisible();
   });
 
-  test("logout redirects to login", async ({page}) => {
+  test("logout redirects to login", async ({consoleGuard, page}) => {
+    // Logging out while syncDb.start() is still running lets the stop() flush fetch
+    // /sync/key and the transport connect after the session is gone.
+    consoleGuard.allow("Failed to load resource: the server responded with a status of 401");
+    consoleGuard.allow(/\[syncdb\] failed to persist local data .*401 from \/sync\/key/);
+    consoleGuard.allow("[syncdb] transport connect failed; starting offline");
     await page.getByTestId("profile-logout-button").first().click();
     await page.getByTestId("login-screen").waitFor({state: "visible"});
     await expect(page.getByTestId("login-screen")).toBeVisible();

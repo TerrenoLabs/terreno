@@ -6,7 +6,7 @@ Redux Toolkit Query utilities for @terreno/api backends.
 >
 > **Still use @terreno/rtk for:** generated OpenAPI SDK hooks (`bun run sdk`) on non-synced routes, Better Auth session Redux, feature flags, sockets, and legacy JWT auth during migration. See the [migration guide](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md).
 
-> **Removed in Terreno 58:** `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, and `getRealtimeSocket`. `modelRouter` `realtime` is also removed then. `RealtimeApp` stays for syncdb sockets.
+> **Removed in Terreno 58:** `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, `getRealtimeSocket`, `useSyncConnection`, and the `RealtimeEvent` type. `modelRouter` `realtime` and the server's `sync` event are removed too. `RealtimeApp` stays for syncdb sockets, and `useSocketConnection` stays for feature flags and other sockets.
 
 > **Historical note:** the offline mutation queue (`createOfflineMiddleware`, `offlineSlice`, `configureOfflineMutationEndpoints`) and realtime cache patching (`realtimeList`, `realtimeDocument`) were superseded by `@terreno/syncdb` before this deprecation window.
 

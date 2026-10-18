@@ -68,7 +68,6 @@ if (!sentryDsn && process.env.NODE_ENV === "production") {
 if (sentryDsn) {
   Sentry.init({
     dsn: sentryDsn,
-    enableLogs: true,
     environment: process.env.APP_ENV ?? "development",
     ignoreErrors: [/^.*ECONNRESET*$/, /^.*socket hang up*$/],
     integrations: [],

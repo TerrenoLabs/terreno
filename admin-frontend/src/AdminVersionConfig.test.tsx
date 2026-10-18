@@ -1,4 +1,3 @@
-// biome-ignore-all lint/suspicious/noExplicitAny: test reads loosely typed request bodies
 import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
@@ -24,7 +23,7 @@ const apiState: ApiState = {
   updateImpl: async () => ({}),
 };
 
-const updateCalls: any[] = [];
+const updateCalls: Array<Record<string, unknown>> = [];
 const requests: {method: string; url: string}[] = [];
 const originalFetch = globalThis.fetch;
 
@@ -37,7 +36,7 @@ const installFetch = (): void => {
     const method = init?.method ?? "GET";
     requests.push({method, url: String(url)});
     if (method === "PUT") {
-      const body = JSON.parse(String(init?.body ?? "{}"));
+      const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
       updateCalls.push(body);
       try {
         return jsonResponse(await apiState.updateImpl(body));

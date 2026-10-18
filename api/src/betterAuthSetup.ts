@@ -403,18 +403,15 @@ export const createBetterAuthSessionMiddleware = (
           betterAuthSession?: BetterAuthSessionData;
         };
         if (userModel) {
-          // Look up the application user by betterAuthId
-          const appUser = await findOneOrNoneFor(userModel, {
-            betterAuthId: betterAuthUser.id,
-          });
-          if (appUser) {
-            reqWithSession.user = appUser as unknown as Request["user"];
-            reqWithSession.betterAuthSession = session as unknown as BetterAuthSessionData;
-            updateRequestContextFromRequest(req);
+          const {isDisabled, user} = await resolveBetterAuthAppUser({betterAuthUser, userModel});
+          if (isDisabled) {
+            // A disabled account's live sessions stop authenticating. Falling through as
+            // anonymous, rather than answering 401 here, keeps Better Auth's own routes
+            // (sign-out, signing in as someone else) reachable, since TerrenoApp mounts this
+            // middleware before them.
+            logger.warn(`[better-auth] User ${user.id} is disabled, ignoring their session`);
           } else {
-            // User exists in Better Auth but not synced yet - create them
-            const newUser = await syncBetterAuthUser(userModel, betterAuthUser);
-            reqWithSession.user = newUser as unknown as Request["user"];
+            reqWithSession.user = user as unknown as Request["user"];
             reqWithSession.betterAuthSession = session as unknown as BetterAuthSessionData;
             updateRequestContextFromRequest(req);
           }
@@ -511,6 +508,34 @@ export const syncBetterAuthUser = async (
     logger.error(`Error syncing Better Auth user: ${error}`);
     throw error;
   }
+};
+
+export interface ResolveBetterAuthAppUserOptions {
+  userModel: UserModel;
+  betterAuthUser: BetterAuthUser;
+}
+
+export interface ResolvedBetterAuthAppUser {
+  user: MutableUserDoc & {disabled?: boolean};
+  isDisabled: boolean;
+}
+
+/**
+ * Finds the application user for a Better Auth session user, creating it on first contact,
+ * and reports whether the account is disabled. Every Better Auth entry point (REST session
+ * middleware, socket handshake) goes through this so they accept and refuse the same users.
+ */
+export const resolveBetterAuthAppUser = async ({
+  userModel,
+  betterAuthUser,
+}: ResolveBetterAuthAppUserOptions): Promise<ResolvedBetterAuthAppUser> => {
+  const existingUser = (await findOneOrNoneFor(userModel, {
+    betterAuthId: betterAuthUser.id,
+  })) as unknown as ResolvedBetterAuthAppUser["user"] | null;
+  const user =
+    existingUser ??
+    ((await syncBetterAuthUser(userModel, betterAuthUser)) as ResolvedBetterAuthAppUser["user"]);
+  return {isDisabled: Boolean(user.disabled), user};
 };
 
 /**

@@ -4,6 +4,7 @@ import express, {type Request, type Response} from "express";
 import {MongoMemoryServer} from "mongodb-memory-server";
 import mongoose, {Schema} from "mongoose";
 import passportLocalMongoose from "passport-local-mongoose";
+import supertest from "supertest";
 import type {UserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
 import {
@@ -42,6 +43,7 @@ let DualAuthUser: UserModel;
 const testUserSchema = new Schema({
   admin: {default: false, type: Boolean},
   betterAuthId: {type: String},
+  disabled: {default: false, type: Boolean},
   email: {required: true, type: String},
   name: {type: String},
   oauthProvider: {type: String},
@@ -1007,6 +1009,83 @@ describe("createBetterAuthSessionMiddleware", () => {
     // Verify user was persisted
     const count = await TestUser.countDocuments();
     expect(count).toBe(1);
+  });
+});
+
+describe("createBetterAuthSessionMiddleware with disabled users", () => {
+  const config: BetterAuthConfig = {
+    baseURL: "http://localhost:3000",
+    enabled: true,
+    secret: "test-secret-at-least-32-characters-long",
+  };
+
+  // A real bearer session for a Better Auth user linked to an app user.
+  const signUpLinkedUser = async (
+    auth: BetterAuthInstance,
+    email: string,
+    disabled: boolean
+  ): Promise<{token: string; betterAuthId: string}> => {
+    const created = await auth.api.signUpEmail({
+      body: {email, name: "Linked User", password: "password-123456"},
+    });
+    await TestUser.create({betterAuthId: created.user.id, disabled, email});
+    return {betterAuthId: created.user.id, token: created.token as string};
+  };
+
+  // Mounted in TerrenoApp's order: session middleware first, then Better Auth's routes,
+  // then a route that requires an authenticated user.
+  const buildApp = (auth: BetterAuthInstance): express.Application => {
+    const app = express();
+    app.use(createBetterAuthSessionMiddleware(auth, TestUser));
+    mountBetterAuthRoutes(app, auth);
+    app.get("/protected", (req, res) => {
+      if (!req.user) {
+        return res.status(401).json({status: 401, title: "Unauthorized"});
+      }
+      return res.json({id: req.user.id});
+    });
+    return app;
+  };
+
+  it("does not authenticate a session that belongs to a disabled user", async () => {
+    await setup;
+    const auth = createBetterAuth({config, mongoClient: getClient()});
+    const {token} = await signUpLinkedUser(auth, "disabled-session@example.com", true);
+
+    const res = await supertest(buildApp(auth))
+      .get("/protected")
+      .set("authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(401);
+  });
+
+  it("stops authenticating once a user is disabled while their session is live", async () => {
+    await setup;
+    const auth = createBetterAuth({config, mongoClient: getClient()});
+    const {betterAuthId, token} = await signUpLinkedUser(auth, "disabled-later@example.com", false);
+    const app = buildApp(auth);
+
+    const before = await supertest(app).get("/protected").set("authorization", `Bearer ${token}`);
+    expect(before.status).toBe(200);
+
+    await TestUser.updateOne({betterAuthId}, {disabled: true});
+
+    const after = await supertest(app).get("/protected").set("authorization", `Bearer ${token}`);
+    expect(after.status).toBe(401);
+  });
+
+  it("still lets a disabled user sign out", async () => {
+    await setup;
+    const auth = createBetterAuth({config, mongoClient: getClient()});
+    const {token} = await signUpLinkedUser(auth, "disabled-signout@example.com", true);
+
+    const res = await supertest(buildApp(auth))
+      .post("/api/auth/sign-out")
+      .set("authorization", `Bearer ${token}`)
+      .set("origin", "http://localhost:3000")
+      .send({});
+
+    expect(res.status).toBe(200);
   });
 });
 

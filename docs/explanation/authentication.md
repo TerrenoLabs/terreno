@@ -38,7 +38,7 @@ Modern session-based authentication with built-in social OAuth support.
 4. Better Auth creates session in MongoDB
 5. Frontend receives session cookie (web) or bearer session token (native)
 6. On the first authenticated request, session middleware looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`)
-7. `req.user` is that app document for subsequent `modelRouter` permissions
+7. `req.user` is that app document for subsequent `modelRouter` permissions. A session whose app `User` has `disabled: true` no longer authenticates: `req.user` stays unset, so protected routes answer 401 and disabling an account ends its live sessions. Better Auth's own routes, such as sign-out, still work
 
 Email/password create omits `oauthProvider`. Apps that never use social login can keep `strict: "throw"` without declaring that field. OAuth create sets `oauthProvider` and the User schema must declare it.
 

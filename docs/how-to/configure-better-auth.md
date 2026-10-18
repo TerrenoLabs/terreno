@@ -147,6 +147,8 @@ const server = app.start();
 
 `syncBetterAuthUser` creates the app `User` on the first authenticated request after Better Auth sign-up. Declare `betterAuthId` on that schema. Declare `oauthProvider` only if the app uses social OAuth.
 
+To lock an account out, set `disabled: true` on its app `User` (for example with `isDisabledPlugin`). That user's Better Auth sessions stop authenticating: `req.user` is not set, so protected routes answer 401. Sign-out still works.
+
 Email/password sync does **not** write `oauthProvider`. A `strict: "throw"` schema that omits the field stays valid. Social login still passes a provider string and requires the field.
 
 ``````typescript

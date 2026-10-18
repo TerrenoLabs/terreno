@@ -1,12 +1,14 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and UNSAFE_root traversal
+// noExplicitAny: test mocks use type-erased admin model API doubles and UNSAFE_root traversal
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi} from "./types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
 
 interface ListState {
   data: unknown;
@@ -19,8 +21,8 @@ import {AnnouncementList} from "./AnnouncementList";
 
 describe("AnnouncementList", () => {
   beforeEach(() => {
-    resetUseAdminApiDouble();
-    configureUseAdminApiDouble({
+    resetAdminModelApiDouble();
+    configureAdminModelApiDouble({
       useListQuery: () => ({
         data: listState.data,
         error: listState.error,
@@ -34,25 +36,19 @@ describe("AnnouncementList", () => {
 
   it("renders loading state", () => {
     listState.isLoading = true;
-    const {toJSON} = renderWithTheme(
-      <AnnouncementList api={{} as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {toJSON} = renderWithTheme(<AnnouncementList baseUrl="/admin" />);
     expect(toJSON()).toBeDefined();
   });
 
   it("renders error state", () => {
     listState.error = new Error("x");
-    const {getByText} = renderWithTheme(
-      <AnnouncementList api={{} as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByText} = renderWithTheme(<AnnouncementList baseUrl="/admin" />);
     expect(getByText(/Failed to load announcements/)).toBeDefined();
   });
 
   it("renders empty state", () => {
     listState.data = {data: [], total: 0};
-    const {getByText} = renderWithTheme(
-      <AnnouncementList api={{} as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByText} = renderWithTheme(<AnnouncementList baseUrl="/admin" />);
     expect(getByText(/No announcements found/)).toBeDefined();
   });
 
@@ -73,9 +69,7 @@ describe("AnnouncementList", () => {
       ],
       total: 1,
     };
-    const {toJSON} = renderWithTheme(
-      <AnnouncementList api={{} as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {toJSON} = renderWithTheme(<AnnouncementList baseUrl="/admin" />);
     expect(toJSON()).toBeDefined();
   });
 
@@ -98,12 +92,7 @@ describe("AnnouncementList", () => {
     const onCreateNew = mock(() => undefined);
     const onRowClick = mock((_: string) => undefined);
     const {getByTestId} = renderWithTheme(
-      <AnnouncementList
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        onCreateNew={onCreateNew}
-        onRowClick={onRowClick}
-      />
+      <AnnouncementList baseUrl="/admin" onCreateNew={onCreateNew} onRowClick={onRowClick} />
     );
     await act(async () => {
       fireEvent.press(getByTestId("announcement-list-create-button"));
@@ -118,11 +107,7 @@ describe("AnnouncementList", () => {
       total: 1,
     };
     const {UNSAFE_root, toJSON} = renderWithTheme(
-      <AnnouncementList
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        onRowClick={() => undefined}
-      />
+      <AnnouncementList baseUrl="/admin" onRowClick={() => undefined} />
     );
     const tables = UNSAFE_root.findAll(
       (n: ReactTestInstance) => typeof n.props?.setSortColumn === "function"
@@ -146,7 +131,7 @@ describe("AnnouncementList", () => {
     };
     const onRowClick = mock((_: string) => undefined);
     const {UNSAFE_root} = renderWithTheme(
-      <AnnouncementList api={{} as unknown as AdminApi} baseUrl="/admin" onRowClick={onRowClick} />
+      <AnnouncementList baseUrl="/admin" onRowClick={onRowClick} />
     );
     const editButtons = UNSAFE_root.findAll(
       (node: ReactTestInstance) => node.props?.accessibilityLabel === "Edit"
@@ -175,9 +160,7 @@ describe("AnnouncementList", () => {
       ],
       total: 40,
     };
-    const {UNSAFE_root} = renderWithTheme(
-      <AnnouncementList api={{} as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<AnnouncementList baseUrl="/admin" />);
     const tables = UNSAFE_root.findAll(
       (node: ReactTestInstance) => typeof node.props?.setPage === "function"
     );
@@ -190,9 +173,7 @@ describe("AnnouncementList", () => {
 
   it("accepts apiBase and routeBase aliases", () => {
     listState.data = {data: [], total: 0};
-    const {getByText} = renderWithTheme(
-      <AnnouncementList api={{} as unknown as AdminApi} apiBase="/admin" routeBase="/admin" />
-    );
+    const {getByText} = renderWithTheme(<AnnouncementList apiBase="/admin" routeBase="/admin" />);
     expect(getByText(/No announcements found/)).toBeDefined();
   });
 });

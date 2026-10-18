@@ -12,8 +12,8 @@ import {
   Text,
 } from "@terreno/ui";
 import React, {useCallback, useMemo, useState} from "react";
-import {type AdminApi, resolveAdminBases} from "./types";
-import {useAdminApi} from "./useAdminApi";
+import {resolveAdminBases} from "./types";
+import {useAdminModelApi} from "./useAdminModelApi";
 
 interface ConsentFormListProps {
   /** @deprecated Use `apiBase`/`routeBase`. Kept as a backward-compatible alias. */
@@ -22,7 +22,6 @@ interface ConsentFormListProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   onCreateNew?: () => void;
   onRowClick?: (id: string) => void;
 }
@@ -67,7 +66,6 @@ export const ConsentFormList: React.FC<ConsentFormListProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   onCreateNew,
   onRowClick,
 }) => {
@@ -76,7 +74,7 @@ export const ConsentFormList: React.FC<ConsentFormListProps> = ({
   const [sortColumn, setSortColumn] = useState<ColumnSortInterface | undefined>();
 
   const routePath = `${resolvedApiBase}/consent-forms`;
-  const {useListQuery} = useAdminApi(api, routePath, "ConsentForm");
+  const {useListQuery} = useAdminModelApi(routePath, "ConsentForm");
 
   const sortString = buildSortString(sortColumn) ?? "-created";
 

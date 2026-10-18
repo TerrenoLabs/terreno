@@ -1,7 +1,7 @@
 import {type OrganizationSummary, OrgDirectoryScreen, useOrgContext} from "@terreno/admin-frontend";
 import {router} from "expo-router";
 import React, {useCallback} from "react";
-import {terrenoApi, useGetMeQuery} from "@/store/sdk";
+import {useGetMeQuery} from "@/store/sdk";
 
 const OrgDirectoryRoute: React.FC = () => {
   const {data: profile} = useGetMeQuery();
@@ -17,7 +17,6 @@ const OrgDirectoryRoute: React.FC = () => {
   );
   return (
     <OrgDirectoryScreen
-      api={terrenoApi}
       isOperator={isOperator}
       onEnterOrganization={handleEnter}
       routeBase="/admin"

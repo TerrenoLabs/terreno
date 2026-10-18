@@ -19,7 +19,6 @@ import {router} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
 import {CommsStatCard} from "../comms/CommsStatCard";
-import type {AdminApi} from "../types";
 import {JobsStatusBadge} from "./JobsStatusBadge";
 import {formatJobTimestamp, type JobRow, type JobScheduleRow, jobRowId} from "./jobPayload";
 import type {JobsDashboardFilters} from "./jobsDashboardParams";
@@ -50,7 +49,6 @@ const COLUMNS: DataTableColumn[] = [
 ];
 
 export interface JobsDashboardScreenProps {
-  api: AdminApi;
   filters: JobsDashboardFilters;
   onFiltersChange: (next: JobsDashboardFilters) => void;
   routeBase?: string;
@@ -129,7 +127,6 @@ const ScheduleRow: React.FC<{
 };
 
 export const JobsDashboardScreen: React.FC<JobsDashboardScreenProps> = ({
-  api,
   filters,
   onFiltersChange,
   routeBase = "/admin",
@@ -142,7 +139,7 @@ export const JobsDashboardScreen: React.FC<JobsDashboardScreenProps> = ({
     useResumeScheduleMutation,
     useSchedulesQuery,
     useStatsQuery,
-  } = useJobsDashboardApi(api);
+  } = useJobsDashboardApi();
   const page = filters.page ?? 1;
   const listParams = useMemo(
     () => ({

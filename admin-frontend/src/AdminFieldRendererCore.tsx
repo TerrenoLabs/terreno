@@ -98,7 +98,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   modelConfigs,
   parentFormState,
   refRenderers,
@@ -115,7 +114,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   if (FieldWidget && fieldConfig.widget) {
     return (
       <FieldWidget
-        api={api}
         apiBase={apiBase}
         baseUrl={baseUrl}
         errorText={errorText}
@@ -135,7 +133,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   if (fieldKey === "roles" && fieldConfig.type === "array" && fieldConfig.itemType === "string") {
     return (
       <AdminRolesField
-        api={api}
         apiBase={apiBase}
         baseUrl={baseUrl}
         errorText={errorText}
@@ -162,7 +159,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
           : [];
       return (
         <AdminPrimitiveArrayField
-          api={api}
           apiBase={apiBase}
           autocomplete={useAutocomplete}
           baseUrl={baseUrl}
@@ -186,7 +182,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
       if (CustomRenderer) {
         return (
           <CustomRenderer
-            api={api}
             autocomplete={useAutocomplete}
             baseUrl={baseUrl}
             errorText={errorText}
@@ -203,7 +198,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
       if (refModel) {
         return (
           <AdminRefField
-            api={api}
             autocomplete={useAutocomplete}
             baseUrl={baseUrl}
             errorText={errorText}
@@ -252,7 +246,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
     if (CustomRenderer) {
       return (
         <CustomRenderer
-          api={api}
           apiBase={apiBase}
           autocomplete={useAutocomplete}
           baseUrl={baseUrl}
@@ -271,7 +264,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
     if (refModel) {
       return (
         <AdminRefField
-          api={api}
           apiBase={apiBase}
           autocomplete={useAutocomplete}
           baseUrl={baseUrl}
@@ -377,7 +369,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   if (fieldConfig.type === "array" && fieldConfig.itemType && !fieldConfig.items) {
     return (
       <AdminPrimitiveArrayField
-        api={api}
         apiBase={apiBase}
         autocomplete={useAutocomplete}
         baseUrl={baseUrl}

@@ -1,33 +1,31 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles
+// noExplicitAny: test mocks use loosely typed hook doubles
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, type Mock, spyOn} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
+import {router} from "expo-router";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminModelConfig} from "../types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "../testing/useAdminModelApiDouble";
+import type {AdminModelConfig} from "../types";
 import {ModelsGridWidget} from "./ModelsGridWidget";
 
-const routerPush = mock(() => {});
-mock.module("expo-router", () => ({
-  router: {push: routerPush},
-}));
+let routerPush: Mock<(...args: unknown[]) => void>;
 
 let listState: {data?: {total?: number}; isLoading: boolean} = {
   data: {total: 12},
   isLoading: false,
 };
 
-mock.module("../useAdminApi", () => ({
-  useAdminApi: () => ({
-    useListQuery: (_args?: unknown, opts?: {skip?: boolean}) => {
-      if (opts?.skip) {
-        return {data: undefined, isLoading: false};
-      }
-      return listState;
-    },
-  }),
-}));
+const useListQuery = (_args?: unknown, opts?: {skip?: boolean}): typeof listState => {
+  if (opts?.skip) {
+    return {data: undefined, isLoading: false};
+  }
+  return listState;
+};
 
 const model: AdminModelConfig = {
   defaultSort: "-created",
@@ -39,17 +37,23 @@ const model: AdminModelConfig = {
   routePath: "/admin/users",
 };
 
-const mockApi = {} as unknown as AdminApi;
-
 describe("ModelsGridWidget", () => {
   beforeEach(() => {
-    routerPush.mockClear();
+    routerPush = spyOn(router, "push").mockImplementation(() => {}) as unknown as Mock<
+      (...args: unknown[]) => void
+    >;
     listState = {data: {total: 12}, isLoading: false};
+    configureAdminModelApiDouble({useListQuery: useListQuery as (...args: unknown[]) => unknown});
+  });
+
+  afterEach(() => {
+    routerPush.mockRestore();
+    resetAdminModelApiDouble();
   });
 
   it("renders model cards with field and row counts", () => {
     const {getByTestId, getByText} = renderWithTheme(
-      <ModelsGridWidget api={mockApi} models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget models={[model]} routeBase="/admin/" />
     );
 
     expect(getByTestId("admin-home-widget-modelsGrid")).toBeTruthy();
@@ -59,7 +63,7 @@ describe("ModelsGridWidget", () => {
 
   it("navigates to list and create routes from model actions", async () => {
     const {getByTestId} = renderWithTheme(
-      <ModelsGridWidget api={mockApi} models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget models={[model]} routeBase="/admin/" />
     );
 
     await act(async () => {
@@ -82,7 +86,7 @@ describe("ModelsGridWidget", () => {
       permissions: {create: false},
     };
     const {queryByTestId, getByTestId} = renderWithTheme(
-      <ModelsGridWidget api={mockApi} models={[readOnlyModel]} routeBase="/admin" />
+      <ModelsGridWidget models={[readOnlyModel]} routeBase="/admin" />
     );
 
     expect(queryByTestId("admin-home-model-add-AuditLog")).toBeNull();

@@ -11,7 +11,7 @@ import {
   PAGE_WIDTH,
 } from "./pdfUtils";
 
-interface ConsentResponseData {
+export interface ConsentResponseData {
   _id?: string;
   agreed: boolean;
   agreedAt?: string;

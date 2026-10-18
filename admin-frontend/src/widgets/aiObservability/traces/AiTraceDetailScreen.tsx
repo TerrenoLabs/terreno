@@ -8,11 +8,11 @@ import {unwrapTraceDetail} from "./traceTypes";
 import {useAiObservabilityTracesApi} from "./useAiObservabilityTracesApi";
 
 export const AiTraceDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const {useDetailQuery} = useAiObservabilityTracesApi(api);
+  const {useDetailQuery} = useAiObservabilityTracesApi();
   const {data, isError, isLoading, refetch} = useDetailQuery(id ?? "", {skip: !id});
   const detail = useMemo(() => unwrapTraceDetail(data), [data]);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
@@ -47,7 +47,12 @@ export const AiTraceDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-trace-detail">
         <Box gap={2} padding={4}>
           <Text color="error">{`Could not load ${id}.`}</Text>
-          <Button onClick={() => refetch()} text="Retry" />
+          <Button
+            onClick={() => {
+              void refetch();
+            }}
+            text="Retry"
+          />
         </Box>
       </AiObservabilityChrome>
     );

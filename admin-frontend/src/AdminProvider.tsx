@@ -49,7 +49,6 @@ export interface AdminProviderProps extends AdminScreenProps {
 
 export const AdminProvider: React.FC<AdminProviderProps> = ({
   children,
-  api,
   baseUrl,
   apiBase,
   apiOrigin,
@@ -62,16 +61,14 @@ export const AdminProvider: React.FC<AdminProviderProps> = ({
 }) => {
   const bases = resolveAdminBases({apiBase, baseUrl, routeBase});
   const mergedWidgets = useMemo(() => mergeWidgetRegistry(userWidgets), [userWidgets]);
-  const adminRpc = useMemo(() => {
-    if (credentials === undefined && getAuthHeaders === undefined) {
-      return undefined;
-    }
-    return bindAdminRequest({credentials, getAuthHeaders, origin: apiOrigin});
-  }, [apiOrigin, credentials, getAuthHeaders]);
+  // Every admin request (model CRUD and RPC) goes through this host-bound fetch client.
+  const adminRpc = useMemo(
+    () => bindAdminRequest({credentials, getAuthHeaders, origin: apiOrigin}),
+    [apiOrigin, credentials, getAuthHeaders]
+  );
   const value = useMemo(
     (): AdminProviderValue => ({
       adminRpc,
-      api,
       apiBase: bases.apiBase,
       apiOrigin,
       credentials,
@@ -83,7 +80,6 @@ export const AdminProvider: React.FC<AdminProviderProps> = ({
     }),
     [
       adminRpc,
-      api,
       apiOrigin,
       bases.apiBase,
       bases.routeBase,

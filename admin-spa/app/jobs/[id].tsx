@@ -2,7 +2,6 @@ import {AdminShellLayout, JobsJobDetail} from "@terreno/admin-frontend";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
 import {useAppConfig} from "../../components/AppConfigGate";
-import {terrenoApi} from "../../store/sdk";
 
 const JobsJobDetailRoute: React.FC = () => {
   const {id} = useLocalSearchParams<{id: string}>();
@@ -12,14 +11,13 @@ const JobsJobDetailRoute: React.FC = () => {
 
   return (
     <AdminShellLayout
-      api={terrenoApi}
       apiBase={apiBase}
       breadcrumbs={[{href: "/", label: "Admin"}, {href: "/jobs", label: "Jobs"}, {label: "Detail"}]}
       configurationPath="/configuration"
       rolesPath="/roles"
       routeBase=""
     >
-      <JobsJobDetail api={terrenoApi} jobId={jobId} routeBase="" />
+      <JobsJobDetail jobId={jobId} routeBase="" />
     </AdminShellLayout>
   );
 };

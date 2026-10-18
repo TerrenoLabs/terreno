@@ -43,8 +43,9 @@ Reference: [admin-config](../../../../../docs/reference/admin-config.md).
 ## Data and MCP
 
 - Admin String-`_id` collection CRUD: windowed syncdb with `adminBroadcast`.
-- Framework admin RPC: host-bound `adminRequest`; do not add `injectEndpoints`.
-- ObjectId/API-only compatibility CRUD: `useAdminApi` until Terreno 58.
+- ObjectId/API-only model CRUD: `useAdminModelApi(routePath, modelName)`.
+- Framework and custom admin RPC: `useAdminRpc` + `useAdminRpcQuery` /
+  `useAdminRpcMutation` over the `AdminProvider` client; no `injectEndpoints`.
 - After backend route changes: `cd example-frontend && bun run sdk` (non-synced
   only). Do not generate RTK CRUD for synced product collections.
 - MCP: `terreno_install_admin` scaffolds wiring; still follow this skill for

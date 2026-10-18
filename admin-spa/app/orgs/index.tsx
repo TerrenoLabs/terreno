@@ -2,7 +2,7 @@ import {type OrganizationSummary, OrgDirectoryScreen, useOrgContext} from "@terr
 import {router} from "expo-router";
 import React, {useCallback} from "react";
 import {AdminSpaShell} from "../../components/AdminSpaShell";
-import {terrenoApi, useGetAdminSpaProfileQuery} from "../../store/sdk";
+import {useGetAdminSpaProfileQuery} from "../../store/sdk";
 
 const OrgDirectoryRoute: React.FC = () => {
   const {data: profile} = useGetAdminSpaProfileQuery();
@@ -18,12 +18,7 @@ const OrgDirectoryRoute: React.FC = () => {
   );
   return (
     <AdminSpaShell breadcrumbs={[{href: "/", label: "Admin"}, {label: "Organizations"}]}>
-      <OrgDirectoryScreen
-        api={terrenoApi}
-        isOperator={isOperator}
-        onEnterOrganization={handleEnter}
-        routeBase=""
-      />
+      <OrgDirectoryScreen isOperator={isOperator} onEnterOrganization={handleEnter} routeBase="" />
     </AdminSpaShell>
   );
 };

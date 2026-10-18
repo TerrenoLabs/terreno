@@ -17,7 +17,7 @@ import React, {useEffect, useMemo, useState} from "react";
 import {useSelector} from "react-redux";
 import {ADMIN_ROUTE} from "@/constants/adminConstants";
 import {getAdminAuthHeaders} from "@/store/betterAuthApi";
-import {terrenoApi, useGetMeQuery} from "@/store/sdk";
+import {useGetMeQuery} from "@/store/sdk";
 import {adminSyncDb, setAdminSyncOrganizationId} from "@/store/syncdb";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
 import SyncLabScreen from "./SyncLabScreen";
@@ -157,7 +157,6 @@ const AdminLayoutContent: React.FC = () => {
 
   return (
     <AdminProvider
-      api={terrenoApi}
       apiBase={ADMIN_ROUTE}
       apiOrigin={baseUrl}
       getAuthHeaders={getAdminAuthHeaders}
@@ -175,12 +174,11 @@ const AdminLayoutContent: React.FC = () => {
       <OrgContextProvider initialOrganization={routeOrganization}>
         <BindAdminSyncOrganization />
         <AdminShellLayout
-          api={terrenoApi}
           apiBase={ADMIN_ROUTE}
           configurationPath="/admin/configuration"
           isOrganizationOperator={isOrganizationOperator}
           organizationDirectoryPath="/orgs"
-          organizationSwitcher={<OrgSwitcher api={terrenoApi} routeBase={ADMIN_ROUTE} />}
+          organizationSwitcher={<OrgSwitcher routeBase={ADMIN_ROUTE} />}
           rolesPath="/roles"
           routeBase={ADMIN_ROUTE}
           versionConfigPath="/version-config"

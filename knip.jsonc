@@ -113,8 +113,10 @@
         "src/**/*.test.{ts,tsx}",
         "src/*.isolated.{ts,tsx}",
         "src/isolated/**/*.isolated.{ts,tsx}",
-        // `bunfig.toml` test preload for shared RTK doubles; not imported from package entry.
-        "src/testing/useAdminApiDouble.ts"
+        // Test-only helpers: the `bunfig.toml` preload for the shared admin model API double and
+        // the observability fetch-stub helpers. Neither is imported from the package entry.
+        "src/testing/useAdminModelApiDouble.ts",
+        "src/testing/observabilityTestUtils.tsx"
       ]
     },
     "admin-backend": {

@@ -9,12 +9,12 @@ import {unwrapCurrentUserId, unwrapReviewDetail, unwrapReviewList} from "./revie
 import {type ReviewActionBody, useAiObservabilityReviewApi} from "./useAiObservabilityReviewApi";
 
 export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
   const {useActionMutation, useCurrentUserQuery, useDetailQuery, useListQuery, useStatusQuery} =
-    useAiObservabilityReviewApi(api);
+    useAiObservabilityReviewApi();
   const detailQuery = useDetailQuery(id ?? "", {skip: !id});
   const pendingQuery = useListQuery("pending");
   const currentUserQuery = useCurrentUserQuery();
@@ -176,7 +176,12 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
       >
         <Box gap={2} padding={4}>
           <Text color="error">Could not load this review item.</Text>
-          <Button onClick={() => detailQuery.refetch()} text="Retry" />
+          <Button
+            onClick={() => {
+              void detailQuery.refetch();
+            }}
+            text="Retry"
+          />
         </Box>
       </AiObservabilityChrome>
     );

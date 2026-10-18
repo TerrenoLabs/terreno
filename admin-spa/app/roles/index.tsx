@@ -3,7 +3,6 @@ import React from "react";
 
 import {AdminSpaShell} from "../../components/AdminSpaShell";
 import {useAppConfig} from "../../components/AppConfigGate";
-import {terrenoApi} from "../../store/sdk";
 
 const RolesRoute: React.FC = () => {
   const {appConfig} = useAppConfig();
@@ -11,7 +10,7 @@ const RolesRoute: React.FC = () => {
 
   return (
     <AdminSpaShell breadcrumbs={[{href: "/", label: "Admin"}, {label: "Roles"}]}>
-      <AdminRolesList api={terrenoApi} apiBase={apiBase} routeBase="" />
+      <AdminRolesList apiBase={apiBase} routeBase="" />
     </AdminSpaShell>
   );
 };

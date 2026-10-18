@@ -3,14 +3,23 @@ import {act, fireEvent, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../types";
-import {AiPromptEditorScreenWidget} from "../widgets/aiObservability/prompts/AiPromptEditorScreen";
+import type {AdminConfigResponse} from "../types";
+import {AiPromptEditorScreenWidget as AiPromptEditorScreenWidgetBase} from "../widgets/aiObservability/prompts/AiPromptEditorScreen";
 import {AiPromptHubView} from "../widgets/aiObservability/prompts/AiPromptHubView";
 import type {
   PlaygroundRunResult,
   PromptDetail,
 } from "../widgets/aiObservability/prompts/promptTypes";
+import {
+  type FakeObservabilityApi,
+  installFakeObservabilityHooks,
+  withFakeObservabilityApi,
+} from "./observabilityFakeApi.isolated";
 import {operatorObservabilityStatus} from "./observabilityStatusFixtures.isolated";
+
+installFakeObservabilityHooks();
+
+const AiPromptEditorScreenWidget = withFakeObservabilityApi(AiPromptEditorScreenWidgetBase);
 
 interface ExpoRouterPushMock {
   (...args: unknown[]): void;
@@ -167,7 +176,7 @@ describe("AiPromptEditorScreenWidget", () => {
     playgroundAi: {source: "server"},
   };
 
-  const api: AdminApi = {
+  const api: FakeObservabilityApi = {
     enhanceEndpoints: () => api,
     injectEndpoints: () => ({
       useAiObservabilityPromptQuery: (arg: {name: string; promptVersion?: number}) => {
@@ -195,7 +204,7 @@ describe("AiPromptEditorScreenWidget", () => {
       ],
       useRunAiObservabilityPlaygroundMutation: () => [runPlayground, playgroundMutationState],
     }),
-  } as unknown as AdminApi;
+  } as unknown as FakeObservabilityApi;
 
   const config: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
   const widgetProps = {

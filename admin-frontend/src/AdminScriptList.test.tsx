@@ -1,4 +1,4 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and dynamic mock returns
+// noExplicitAny: test mocks use loosely typed hook doubles and dynamic mock returns
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
@@ -6,7 +6,7 @@ import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminScriptList} from "./AdminScriptList";
 import {adminScriptsHarness} from "./adminScriptsHarness.test";
-import type {AdminApi, AdminConfigResponse} from "./types";
+import type {AdminConfigResponse} from "./types";
 
 // Mock useAdminConfig to control returned data
 const mockUseAdminConfig = mock(() => ({
@@ -98,8 +98,6 @@ mock.module("./AdminScriptRunModal", () => ({
   },
 }));
 
-const mockApi = {} as unknown as AdminApi;
-
 describe("AdminScriptList", () => {
   beforeEach(() => {
     mockUseAdminConfig.mockClear();
@@ -121,7 +119,7 @@ describe("AdminScriptList", () => {
       isLoading: true,
     });
 
-    const {getByTestId} = renderWithTheme(<AdminScriptList api={mockApi} baseUrl="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
 
     // Spinner should be rendered during loading
     expect(getByTestId).toBeDefined();
@@ -134,7 +132,7 @@ describe("AdminScriptList", () => {
       isLoading: false,
     });
 
-    const {getByText} = renderWithTheme(<AdminScriptList api={mockApi} baseUrl="/admin" />);
+    const {getByText} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
 
     expect(getByText("Failed to load admin configuration.")).toBeTruthy();
   });
@@ -146,7 +144,7 @@ describe("AdminScriptList", () => {
       isLoading: false,
     });
 
-    const {getByText} = renderWithTheme(<AdminScriptList api={mockApi} baseUrl="/admin" />);
+    const {getByText} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
 
     expect(getByText("No scripts registered.")).toBeTruthy();
   });
@@ -164,9 +162,7 @@ describe("AdminScriptList", () => {
       isLoading: false,
     });
 
-    const {getByText, getByTestId} = renderWithTheme(
-      <AdminScriptList api={mockApi} baseUrl="/admin" />
-    );
+    const {getByText, getByTestId} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
 
     expect(getByText("migrate-data")).toBeTruthy();
     expect(getByText("Migrate old records")).toBeTruthy();
@@ -186,7 +182,7 @@ describe("AdminScriptList", () => {
       isLoading: false,
     });
 
-    const {getByTestId} = renderWithTheme(<AdminScriptList api={mockApi} baseUrl="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
 
     expect(getByTestId("admin-script-run-test-script")).toBeTruthy();
   });
@@ -201,7 +197,7 @@ describe("AdminScriptList", () => {
       isLoading: false,
     });
 
-    const {getByTestId} = renderWithTheme(<AdminScriptList api={mockApi} baseUrl="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
 
     expect(modalCallbacks.visible).toBe(false);
     expect(modalCallbacks.scriptName).toBeNull();
@@ -232,9 +228,7 @@ describe("AdminScriptList", () => {
       isLoading: false,
     });
 
-    const {getByTestId} = renderWithTheme(
-      <AdminScriptList api={mockApi} baseUrl="/admin" isAdmin={false} />
-    );
+    const {getByTestId} = renderWithTheme(<AdminScriptList baseUrl="/admin" isAdmin={false} />);
 
     const button = getByTestId("admin-script-run-test-script");
     // The button should have aria-disabled or similar when disabled
@@ -251,9 +245,7 @@ describe("AdminScriptList", () => {
       isLoading: false,
     });
 
-    const {getByText, getByTestId} = renderWithTheme(
-      <AdminScriptList api={mockApi} baseUrl="/admin" />
-    );
+    const {getByText, getByTestId} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
     expect(getByText(/Last run/)).toBeTruthy();
     expect(getByTestId("admin-script-history-test-script-clickable")).toBeTruthy();
 
@@ -277,7 +269,7 @@ describe("AdminScriptList", () => {
       isLoading: false,
     });
 
-    const {getByText} = renderWithTheme(<AdminScriptList api={mockApi} baseUrl="/admin" />);
+    const {getByText} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
 
     await act(async () => {
       fireEvent.press(getByText(/Run history \(2\)/));
@@ -301,7 +293,7 @@ describe("AdminScriptList", () => {
     });
 
     const {getByTestId, getByText, queryByText} = renderWithTheme(
-      <AdminScriptList api={mockApi} baseUrl="/admin" />
+      <AdminScriptList baseUrl="/admin" />
     );
 
     await act(async () => {
@@ -334,7 +326,7 @@ describe("AdminScriptList", () => {
       return liveRunResult;
     });
 
-    const {getByText} = renderWithTheme(<AdminScriptList api={mockApi} baseUrl="/admin" />);
+    const {getByText} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
     expect(getByText(/live run/)).toBeTruthy();
   });
 
@@ -348,7 +340,7 @@ describe("AdminScriptList", () => {
       error: null,
       isLoading: false,
     });
-    const {queryByTestId} = renderWithTheme(<AdminScriptList api={mockApi} baseUrl="/admin" />);
+    const {queryByTestId} = renderWithTheme(<AdminScriptList baseUrl="/admin" />);
     expect(queryByTestId("admin-script-run-test-script")).toBeTruthy();
   });
 });

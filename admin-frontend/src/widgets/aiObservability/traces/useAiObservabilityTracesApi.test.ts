@@ -1,132 +1,133 @@
-import {describe, expect, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
-import {assert} from "chai";
-import type {AdminApi, EndpointBuilder} from "../../../types";
+import {afterEach, describe, expect, it} from "bun:test";
+import {act, renderHook} from "@testing-library/react-native";
+import {
+  type CapturedObservabilityRequest,
+  flushObservabilityRequests,
+  ObservabilityTestProvider,
+  stubObservabilityFetch,
+} from "../../../testing/observabilityTestUtils";
+import {emptyTraceFilters} from "./traceTypes";
 import {useAiObservabilityTracesApi} from "./useAiObservabilityTracesApi";
 
-interface CapturedEndpoint {
-  invalidatesTags?: unknown;
-  providesTags?: unknown;
-  query: (arg: never) => {
-    body?: unknown;
-    headers?: Record<string, string>;
-    method: string;
-    params?: Record<string, unknown>;
-    url: string;
-  };
-}
+let restoreFetch: () => void = () => undefined;
 
-const createApiDouble = () => {
-  const endpoints: Record<string, CapturedEndpoint> = {};
-  const addTagTypes: string[][] = [];
-  const api = {
-    enhanceEndpoints: ({addTagTypes: tags}: {addTagTypes: string[]}) => {
-      addTagTypes.push(tags);
-      return api;
-    },
-    injectEndpoints: ({
-      endpoints: build,
-    }: {
-      endpoints: (builder: EndpointBuilder) => Record<string, CapturedEndpoint>;
-    }) => {
-      const builder = {
-        mutation: (spec: CapturedEndpoint) => spec,
-        query: (spec: CapturedEndpoint) => spec,
-      } as unknown as EndpointBuilder;
-      Object.assign(endpoints, build(builder));
-      return {
-        useAiObservabilityEvaluatorsQuery: mock(() => ({isLoading: false})),
-        useAiObservabilityStatusQuery: mock(() => ({isLoading: false})),
-        useAiObservabilityTraceQuery: mock(() => ({isLoading: false})),
-        useAiObservabilityTracesQuery: mock(() => ({isLoading: false})),
-        useEnqueueAiObservabilityReviewMutation: mock(() => [mock(() => ({})), {}]),
-        useRunAiObservabilityTestMultiStageMutation: mock(() => [mock(() => ({})), {}]),
-      };
-    },
-  } as unknown as AdminApi;
-  return {addTagTypes, api, endpoints};
+const stub = (): CapturedObservabilityRequest[] => {
+  const {calls, restore} = stubObservabilityFetch((request) => {
+    if (request.url.startsWith("/ai/observability/traces?")) {
+      return {body: {data: [], limit: 20, more: false, page: 1, total: 0}};
+    }
+    return {body: {data: {traceId: "trace-1"}}};
+  });
+  restoreFetch = restore;
+  return calls;
 };
 
-describe("useAiObservabilityTracesApi", () => {
-  it("injects trace list, detail, evaluator lookup, and review enqueue routes", () => {
-    const {addTagTypes, api, endpoints} = createApiDouble();
-    renderHook(() => useAiObservabilityTracesApi(api));
+afterEach(() => {
+  restoreFetch();
+});
 
-    assert.sameMembers(addTagTypes[0] ?? [], ["aiObservabilityReview", "aiObservabilityTraces"]);
-    expect(
-      endpoints.aiObservabilityTraces.query({
-        flaggedForDataset: true,
-        from: "2026-01-01",
-        hasScore: false,
-        page: 2,
-        prompt: "summarize",
-        sensitive: true,
-        sessionId: "sess",
-        status: "error",
-        to: "2026-01-02",
-        userId: "user-1",
-      } as never)
-    ).toEqual({
-      method: "GET",
-      params: {
-        flaggedForDataset: true,
-        from: "2026-01-01",
-        hasScore: false,
-        limit: 20,
-        page: 2,
-        prompt: "summarize",
-        sensitive: true,
-        sessionId: "sess",
-        status: "error",
-        to: "2026-01-02",
-        userId: "user-1",
+const requestLines = (calls: CapturedObservabilityRequest[]): string[] =>
+  calls.map((call) => `${call.method} ${call.url}`).sort();
+
+describe("useAiObservabilityTracesApi", () => {
+  it("sends every trace filter as a query parameter", async () => {
+    const calls = stub();
+    const {result} = renderHook(
+      () =>
+        useAiObservabilityTracesApi().useListQuery({
+          flaggedForDataset: true,
+          from: " 2026-01-01 ",
+          hasScore: false,
+          page: 2,
+          prompt: "summarize",
+          sensitive: true,
+          sessionId: "sess",
+          status: "error",
+          to: "2026-01-02",
+          userId: "user-1",
+        }),
+      {wrapper: ObservabilityTestProvider}
+    );
+    await flushObservabilityRequests();
+
+    const url = new URL(calls[0]?.url ?? "", "http://localhost");
+    expect(url.pathname).toBe("/ai/observability/traces");
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      flaggedForDataset: "true",
+      from: "2026-01-01",
+      hasScore: "false",
+      limit: "20",
+      page: "2",
+      prompt: "summarize",
+      sensitive: "true",
+      sessionId: "sess",
+      status: "error",
+      to: "2026-01-02",
+      userId: "user-1",
+    });
+    expect(result.current.data).toEqual({data: [], limit: 20, more: false, page: 1, total: 0});
+  });
+
+  it("omits blank filters and reads detail, evaluators, and status", async () => {
+    const calls = stub();
+    const {result} = renderHook(
+      () => {
+        const api = useAiObservabilityTracesApi();
+        return {
+          detail: api.useDetailQuery("trace-1"),
+          evaluators: api.useEvaluatorsQuery(),
+          list: api.useListQuery(emptyTraceFilters()),
+          skipped: api.useDetailQuery("trace-2", {skip: true}),
+          status: api.useStatusQuery(),
+        };
       },
-      url: "/ai/observability/traces",
-    });
-    expect(endpoints.aiObservabilityTrace.query("trace-1" as never)).toEqual({
-      method: "GET",
-      url: "/ai/observability/traces/trace-1",
-    });
-    expect(endpoints.aiObservabilityEvaluators.query({} as never)).toEqual({
-      method: "GET",
-      url: "/ai/observability/evaluators",
-    });
-    expect(
-      endpoints.enqueueAiObservabilityReview.query({
+      {wrapper: ObservabilityTestProvider}
+    );
+    await flushObservabilityRequests();
+
+    expect(requestLines(calls)).toEqual([
+      "GET /ai/observability/evaluators",
+      "GET /ai/observability/status",
+      "GET /ai/observability/traces/trace-1",
+      "GET /ai/observability/traces?limit=20&page=1",
+    ]);
+    expect(result.current.detail.data).toEqual({traceId: "trace-1"});
+  });
+
+  it("enqueues review and runs the multi-stage test trace", async () => {
+    const calls = stub();
+    const {result} = renderHook(
+      () => {
+        const api = useAiObservabilityTracesApi();
+        return {
+          enqueue: api.useEnqueueReviewMutation(),
+          testRun: api.useTestMultiStageMutation(),
+        };
+      },
+      {wrapper: ObservabilityTestProvider}
+    );
+
+    await act(async () => {
+      await result.current.enqueue[0]({
         evaluatorId: "eval-1",
         reason: "manual",
         traceIds: ["trace-1"],
-      } as never)
-    ).toEqual({
+      }).unwrap();
+      await result.current.testRun[0]({apiKey: "saved-key"}).unwrap();
+      await result.current.testRun[0](undefined).unwrap();
+    });
+
+    expect(calls[0]).toMatchObject({
       body: {evaluatorId: "eval-1", reason: "manual", traceIds: ["trace-1"]},
       method: "POST",
       url: "/ai/observability/traces/review",
     });
-    expect(endpoints.runAiObservabilityTestMultiStage.query({} as never)).toEqual({
+    expect(calls[1]).toMatchObject({
       body: {input: "Compare two perspectives on local-first AI observability."},
       method: "POST",
       url: "/ai/observability/traces/test-multi-stage",
     });
-    expect(
-      endpoints.runAiObservabilityTestMultiStage.query({apiKey: "saved-key"} as never).headers
-    ).toEqual({"x-ai-api-key": "saved-key"});
-    expect(endpoints.runAiObservabilityTestMultiStage.query(undefined as never).body).toEqual({
-      input: "Compare two perspectives on local-first AI observability.",
-    });
-    expect(endpoints.aiObservabilityStatus.query({} as never)).toEqual({
-      method: "GET",
-      url: "/ai/observability/status",
-    });
-  });
-
-  it("exposes trace hooks for list and detail screens", () => {
-    const {api} = createApiDouble();
-    const {result} = renderHook(() => useAiObservabilityTracesApi(api));
-    expect(typeof result.current.useListQuery).toBe("function");
-    expect(typeof result.current.useDetailQuery).toBe("function");
-    expect(typeof result.current.useEvaluatorsQuery).toBe("function");
-    expect(typeof result.current.useEnqueueReviewMutation).toBe("function");
-    expect(typeof result.current.useTestMultiStageMutation).toBe("function");
-    expect(typeof result.current.useStatusQuery).toBe("function");
+    expect(calls[1]?.headers["x-ai-api-key"]).toBe("saved-key");
+    expect(calls[2]?.headers["x-ai-api-key"]).toBeUndefined();
   });
 });

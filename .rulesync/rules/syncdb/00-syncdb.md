@@ -116,8 +116,9 @@ See `docs/reference/syncdb.md` for `sync` scoping (`owner`, `tenant`, `broadcast
 - **Delete RTK Query hooks** for migrated collections (`useGetXQuery`, `usePostXMutation`, manual optimistic updates, refetch-after-mutate)
 - **Keep RTK Query** for non-synced routes: `/auth/me`, AI, feature flags, and
   custom request/response APIs. Built-in admin String-`_id` collection CRUD uses
-  windowed syncdb when `adminBroadcast` is enabled; admin RPC uses its host-bound
-  fetch client; ObjectId compatibility CRUD remains RTK until Terreno 58.
+  windowed syncdb when `adminBroadcast` is enabled; ObjectId/API-only admin CRUD
+  and admin RPC use admin-frontend's host-bound fetch client (`AdminProvider`),
+  not RTK.
 - Use `useSyncDbReady()` (or equivalent) before calling `mutate()` if `start()` is async
 - Call `wipeLocalData` / `syncDb.stop()` on user change to avoid cross-account local data
 - Use Luxon for dates in entity payloads

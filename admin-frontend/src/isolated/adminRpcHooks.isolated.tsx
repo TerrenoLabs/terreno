@@ -7,7 +7,6 @@ import {AdminObjectPicker} from "../AdminObjectPicker";
 import {AdminProvider} from "../AdminProvider";
 import {AdminVersionConfig} from "../AdminVersionConfig";
 import {useCommsDashboardApi} from "../comms/useCommsDashboardApi";
-import type {AdminApi} from "../types";
 import {useAdminBackgroundTaskMutation} from "../useAdminBackgroundTask";
 import {useAdminConfig} from "../useAdminConfig";
 import {useAdminRoles} from "../useAdminRoles";
@@ -18,77 +17,14 @@ import {useConsentHistory} from "../useConsentHistory";
 import {useDocumentStorageApi} from "../useDocumentStorageApi";
 import {AIRequestsScreenWidget} from "../widgets/AIRequestsScreenWidget";
 
-const makeApi = (): AdminApi => {
-  const api: Record<string, unknown> = {};
-  const hooks = new Proxy(
-    {},
-    {
-      get: (_target, prop: string) => {
-        if (prop.startsWith("use") && prop.endsWith("Mutation")) {
-          return () => [() => ({unwrap: async () => ({})}), {isLoading: false}];
-        }
-        if (typeof prop === "string" && prop.startsWith("use")) {
-          return () => ({
-            data: undefined,
-            error: null,
-            isFetching: false,
-            isLoading: false,
-            refetch: () => undefined,
-          });
-        }
-        return undefined;
-      },
-    }
-  );
-  api.enhanceEndpoints = () => api;
-  api.injectEndpoints = ({
-    endpoints,
-  }: {
-    endpoints: (build: {
-      mutation: (definition: unknown) => unknown;
-      query: (definition: unknown) => unknown;
-    }) => Record<string, unknown>;
-  }) => {
-    const definitions = endpoints({
-      mutation: (definition: unknown): unknown => definition,
-      query: (definition: unknown): unknown => definition,
-    });
-    const representativeArg = {
-      body: {},
-      changes: {},
-      filePath: "file.txt",
-      folderName: "folder",
-      folderPath: "folder",
-      formData: new FormData(),
-      id: "id-1",
-      limit: 20,
-      name: "cleanup",
-      page: 1,
-      params: {},
-      patch: {},
-      prefix: "prefix",
-      roleName: "reviewer",
-      taskId: "task-1",
-      wetRun: false,
-    };
-    for (const definition of Object.values(definitions)) {
-      const query = (definition as {query?: (arg: unknown) => unknown}).query;
-      query?.(representativeArg);
-    }
-    return hooks;
-  };
-  return api as AdminApi;
-};
-
 const runHookWithRpc = <T,>(fn: () => T): T => {
   let captured: T | undefined;
   const Probe: React.FC = () => {
     captured = fn();
     return null;
   };
-  const api = makeApi();
   renderWithTheme(
-    <AdminProvider api={api} apiBase="/admin" credentials="same-origin" getAuthHeaders={() => ({})}>
+    <AdminProvider apiBase="/admin" credentials="same-origin" getAuthHeaders={() => ({})}>
       <Probe />
     </AdminProvider>
   );
@@ -101,7 +37,7 @@ const flushEffects = async (): Promise<void> => {
   });
 };
 
-describe("admin RPC dual-run", () => {
+describe("admin fetch RPC hooks", () => {
   const originalFetch = globalThis.fetch;
   const captured: {method?: string; url: string}[] = [];
 
@@ -122,7 +58,7 @@ describe("admin RPC dual-run", () => {
 
   it("useAdminConfig GETs /admin/config via fetch", async () => {
     mockOkFetch();
-    runHookWithRpc(() => useAdminConfig(makeApi(), "/admin"));
+    runHookWithRpc(() => useAdminConfig("/admin"));
     await flushEffects();
     assert.deepEqual(captured, [{method: "GET", url: "/admin/config"}]);
   });
@@ -130,7 +66,7 @@ describe("admin RPC dual-run", () => {
   it("useAdminScripts run mutation POSTs the script run URL", async () => {
     mockOkFetch();
     const result = runHookWithRpc(() => {
-      const {useRunScriptMutation} = useAdminScripts(makeApi(), "/admin");
+      const {useRunScriptMutation} = useAdminScripts("/admin");
       return useRunScriptMutation();
     });
     await result[0]({name: "migrate", wetRun: false}).unwrap();
@@ -140,7 +76,7 @@ describe("admin RPC dual-run", () => {
   it("useAdminRoles lists roles at the rbac root", async () => {
     mockOkFetch();
     runHookWithRpc(() => {
-      const {useListRolesQuery} = useAdminRoles(makeApi(), "/admin");
+      const {useListRolesQuery} = useAdminRoles("/admin");
       return useListRolesQuery();
     });
     await flushEffects();
@@ -151,7 +87,6 @@ describe("admin RPC dual-run", () => {
     mockOkFetch();
     runHookWithRpc(() => {
       const {useValuesQuery} = useConfigurationApi({
-        api: makeApi(),
         basePath: "/admin/configuration",
       });
       return useValuesQuery();
@@ -163,7 +98,7 @@ describe("admin RPC dual-run", () => {
   it("useDocumentStorageApi lists with a prefix query string", async () => {
     mockOkFetch();
     runHookWithRpc(() => {
-      const {useListQuery} = useDocumentStorageApi(makeApi(), "/documents");
+      const {useListQuery} = useDocumentStorageApi("/documents");
       return useListQuery("inbox");
     });
     await flushEffects();
@@ -172,14 +107,14 @@ describe("admin RPC dual-run", () => {
 
   it("useAdminBackgroundTaskMutation POSTs /admin/background-tasks", async () => {
     mockOkFetch();
-    const [enqueue] = runHookWithRpc(() => useAdminBackgroundTaskMutation(makeApi(), "/admin/"));
+    const [enqueue] = runHookWithRpc(() => useAdminBackgroundTaskMutation("/admin/"));
     await enqueue({kind: "bulk-patch"}).unwrap();
     assert.deepEqual(captured, [{method: "POST", url: "/admin/background-tasks"}]);
   });
 
   it("useConsentHistory GETs /consents/my", async () => {
     mockOkFetch();
-    runHookWithRpc(() => useConsentHistory(makeApi() as never, "/admin"));
+    runHookWithRpc(() => useConsentHistory("/admin"));
     await flushEffects();
     assert.deepEqual(captured, [{method: "GET", url: "/admin/consents/my"}]);
   });
@@ -187,7 +122,7 @@ describe("admin RPC dual-run", () => {
   it("useCommsDashboardApi lists messages with query params", async () => {
     mockOkFetch();
     runHookWithRpc(() => {
-      const {useListQuery} = useCommsDashboardApi(makeApi());
+      const {useListQuery} = useCommsDashboardApi();
       return useListQuery({limit: 20, page: 1} as never);
     });
     await flushEffects();
@@ -198,7 +133,7 @@ describe("admin RPC dual-run", () => {
   it("comms queries and retry mutations preserve RTK invalidation behavior", async () => {
     mockOkFetch();
     const hooks = runHookWithRpc(() => {
-      const comms = useCommsDashboardApi(makeApi());
+      const comms = useCommsDashboardApi();
       comms.useDetailQuery("message-1");
       comms.useListQuery({limit: 10, page: 2} as never);
       comms.useStatsQuery({page: 2} as never);
@@ -222,7 +157,7 @@ describe("admin RPC dual-run", () => {
   it("scripts expose task/history queries and cancel/run mutations", async () => {
     mockOkFetch();
     const hooks = runHookWithRpc(() => {
-      const scripts = useAdminScripts(makeApi(), "/admin");
+      const scripts = useAdminScripts("/admin");
       scripts.useGetScriptTaskQuery("task-1");
       scripts.useListScriptRunsQuery({limit: 5, name: "cleanup", page: 2});
       const [cancel] = scripts.useCancelScriptTaskMutation();
@@ -250,7 +185,6 @@ describe("admin RPC dual-run", () => {
     mockOkFetch();
     const hooks = runHookWithRpc(() => {
       const configuration = useConfigurationApi({
-        api: makeApi(),
         basePath: "/admin/configuration",
       });
       configuration.useMetaQuery();
@@ -275,7 +209,7 @@ describe("admin RPC dual-run", () => {
   it("document storage covers folder, file, list, and upload RPCs", async () => {
     mockOkFetch();
     const hooks = runHookWithRpc(() => {
-      const documents = useDocumentStorageApi(makeApi(), "/documents");
+      const documents = useDocumentStorageApi("/documents");
       documents.useListQuery();
       const [createFolder] = documents.useCreateFolderMutation();
       const [deleteFolder] = documents.useDeleteFolderMutation();
@@ -297,7 +231,7 @@ describe("admin RPC dual-run", () => {
   it("roles cover statements plus create and update RPCs", async () => {
     mockOkFetch();
     const hooks = runHookWithRpc(() => {
-      const roles = useAdminRoles(makeApi(), "/admin");
+      const roles = useAdminRoles("/admin");
       roles.useListStatementsQuery();
       const [create] = roles.useCreateRoleMutation();
       const [update] = roles.useUpdateRoleMutation();
@@ -316,7 +250,7 @@ describe("admin RPC dual-run", () => {
   it("document download uses parseAs blob", async () => {
     mockOkFetch();
     const result = runHookWithRpc(() => {
-      const {useLazyDownloadQuery} = useDocumentStorageApi(makeApi(), "/documents");
+      const {useLazyDownloadQuery} = useDocumentStorageApi("/documents");
       return useLazyDownloadQuery();
     });
     await result[0]("a.pdf").unwrap();
@@ -326,13 +260,8 @@ describe("admin RPC dual-run", () => {
   it("AI explorer GETs /aiRequestsExplorer", async () => {
     mockOkFetch();
     renderWithTheme(
-      <AdminProvider
-        api={makeApi()}
-        apiBase="/admin"
-        credentials="same-origin"
-        getAuthHeaders={() => ({})}
-      >
-        <AIRequestsScreenWidget api={makeApi()} routeBase="/admin" />
+      <AdminProvider apiBase="/admin" credentials="same-origin" getAuthHeaders={() => ({})}>
+        <AIRequestsScreenWidget routeBase="/admin" />
       </AdminProvider>
     );
     await flushEffects();
@@ -346,13 +275,8 @@ describe("admin RPC dual-run", () => {
   it("version-config GETs /admin/version-config", async () => {
     mockOkFetch();
     renderWithTheme(
-      <AdminProvider
-        api={makeApi()}
-        apiBase="/admin"
-        credentials="same-origin"
-        getAuthHeaders={() => ({})}
-      >
-        <AdminVersionConfig api={makeApi()} apiBase="/admin" />
+      <AdminProvider apiBase="/admin" credentials="same-origin" getAuthHeaders={() => ({})}>
+        <AdminVersionConfig apiBase="/admin" />
       </AdminProvider>
     );
     await flushEffects();
@@ -393,14 +317,8 @@ describe("admin RPC dual-run", () => {
   it("AdminObjectPicker reads and searches via fetch", async () => {
     mockOkFetch();
     renderWithTheme(
-      <AdminProvider
-        api={makeApi()}
-        apiBase="/admin"
-        credentials="same-origin"
-        getAuthHeaders={() => ({})}
-      >
+      <AdminProvider apiBase="/admin" credentials="same-origin" getAuthHeaders={() => ({})}>
         <AdminObjectPicker
-          api={makeApi()}
           autocomplete
           onChange={() => undefined}
           refModelName="User"
@@ -418,14 +336,8 @@ describe("admin RPC dual-run", () => {
 
     captured.length = 0;
     const empty = renderWithTheme(
-      <AdminProvider
-        api={makeApi()}
-        apiBase="/admin"
-        credentials="same-origin"
-        getAuthHeaders={() => ({})}
-      >
+      <AdminProvider apiBase="/admin" credentials="same-origin" getAuthHeaders={() => ({})}>
         <AdminObjectPicker
-          api={makeApi()}
           autocomplete
           onChange={() => undefined}
           refModelName="User"

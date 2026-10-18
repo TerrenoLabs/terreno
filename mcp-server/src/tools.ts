@@ -1016,13 +1016,44 @@ export const generateInstallAdmin = (args: {
 
   const files: GeneratedFile[] = [
     {
+      content: `import {AdminProvider} from "@terreno/admin-frontend";
+import {baseUrl, getAuthToken} from "@terreno/rtk";
+import {Stack} from "expo-router";
+import type React from "react";
+
+// Every admin request (model CRUD and admin RPC) goes through AdminProvider's fetch client.
+// Better Auth hosts return the session token here instead of the JWT.
+const getAdminAuthHeaders = async (): Promise<HeadersInit> => {
+  const token = await getAuthToken();
+  if (!token) {
+    return {};
+  }
+  return {Authorization: \`Bearer \${token}\`};
+};
+
+const AdminLayout: React.FC = () => {
+  return (
+    <AdminProvider
+      apiBase="/admin"
+      apiOrigin={baseUrl}
+      getAuthHeaders={getAdminAuthHeaders}
+      routeBase="/admin"
+    >
+      <Stack screenOptions={{headerShown: false}} />
+    </AdminProvider>
+  );
+};
+
+export default AdminLayout;
+`,
+      path: "frontend/app/(tabs)/admin/_layout.tsx",
+    },
+    {
       content: `import {AdminModelList} from "@terreno/admin-frontend";
 import type React from "react";
-import {terrenoApi} from "@/store/sdk";
-import {baseUrl} from "@terreno/rtk";
 
 const AdminIndexScreen: React.FC = () => {
-  return <AdminModelList api={terrenoApi} baseUrl={\`\${baseUrl}/admin\`} />;
+  return <AdminModelList baseUrl="/admin" />;
 };
 
 export default AdminIndexScreen;
@@ -1033,15 +1064,11 @@ export default AdminIndexScreen;
       content: `import {AdminModelTable} from "@terreno/admin-frontend";
 import type React from "react";
 import {useLocalSearchParams} from "expo-router";
-import {terrenoApi} from "@/store/sdk";
-import {baseUrl} from "@terreno/rtk";
 
 const AdminModelScreen: React.FC = () => {
   const {model} = useLocalSearchParams<{model: string}>();
 
-  return (
-    <AdminModelTable api={terrenoApi} baseUrl={\`\${baseUrl}/admin\`} modelName={model!} />
-  );
+  return <AdminModelTable baseUrl="/admin" modelName={model!} />;
 };
 
 export default AdminModelScreen;
@@ -1052,20 +1079,11 @@ export default AdminModelScreen;
       content: `import {AdminModelForm} from "@terreno/admin-frontend";
 import type React from "react";
 import {useLocalSearchParams} from "expo-router";
-import {terrenoApi} from "@/store/sdk";
-import {baseUrl} from "@terreno/rtk";
 
 const AdminCreateScreen: React.FC = () => {
   const {model} = useLocalSearchParams<{model: string}>();
 
-  return (
-    <AdminModelForm
-      api={terrenoApi}
-      baseUrl={\`\${baseUrl}/admin\`}
-      mode="create"
-      modelName={model!}
-    />
-  );
+  return <AdminModelForm baseUrl="/admin" mode="create" modelName={model!} />;
 };
 
 export default AdminCreateScreen;
@@ -1076,21 +1094,11 @@ export default AdminCreateScreen;
       content: `import {AdminModelForm} from "@terreno/admin-frontend";
 import type React from "react";
 import {useLocalSearchParams} from "expo-router";
-import {terrenoApi} from "@/store/sdk";
-import {baseUrl} from "@terreno/rtk";
 
 const AdminEditScreen: React.FC = () => {
   const {model, id} = useLocalSearchParams<{model: string; id: string}>();
 
-  return (
-    <AdminModelForm
-      api={terrenoApi}
-      baseUrl={\`\${baseUrl}/admin\`}
-      itemId={id}
-      mode="edit"
-      modelName={model!}
-    />
-  );
+  return <AdminModelForm baseUrl="/admin" itemId={id} mode="edit" modelName={model!} />;
 };
 
 export default AdminEditScreen;
@@ -1159,9 +1167,11 @@ Add the dependency to \`frontend/package.json\`:
 cd frontend && bun add @terreno/admin-frontend
 \`\`\`
 
-### Step 4: Create the 4 screen files
+### Step 4: Create the admin layout and 3 screen files
 
-Create the files listed above. Each file's content is provided below.
+Create the files listed above. Each file's content is provided below. The \`_layout.tsx\`
+\`AdminProvider\` is required: it binds every admin request to your API origin and auth
+headers. Admin screens do not take an RTK \`api\` prop.
 
 ### Step 5: Add Admin tab to \`frontend/app/(tabs)/_layout.tsx\`
 

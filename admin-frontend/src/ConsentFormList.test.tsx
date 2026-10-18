@@ -1,12 +1,14 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and UNSAFE_root traversal
+// noExplicitAny: test mocks use type-erased admin model API doubles and UNSAFE_root traversal
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi} from "./types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
 
 interface ListState {
   data: unknown;
@@ -19,8 +21,8 @@ import {ConsentFormList} from "./ConsentFormList";
 
 describe("ConsentFormList", () => {
   beforeEach(() => {
-    resetUseAdminApiDouble();
-    configureUseAdminApiDouble({
+    resetAdminModelApiDouble();
+    configureAdminModelApiDouble({
       useListQuery: () => ({
         data: listState.data,
         error: listState.error,
@@ -34,25 +36,19 @@ describe("ConsentFormList", () => {
 
   it("renders loading state", () => {
     listState.isLoading = true;
-    const {toJSON} = renderWithTheme(
-      <ConsentFormList api={{} as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {toJSON} = renderWithTheme(<ConsentFormList baseUrl="/admin" />);
     expect(toJSON()).toBeDefined();
   });
 
   it("renders error state", () => {
     listState.error = new Error("x");
-    const {getByText} = renderWithTheme(
-      <ConsentFormList api={{} as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByText} = renderWithTheme(<ConsentFormList baseUrl="/admin" />);
     expect(getByText(/Failed to load consent forms/)).toBeDefined();
   });
 
   it("renders empty state", () => {
     listState.data = {data: [], total: 0};
-    const {getByText} = renderWithTheme(
-      <ConsentFormList api={{} as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByText} = renderWithTheme(<ConsentFormList baseUrl="/admin" />);
     expect(getByText(/No consent forms found/)).toBeDefined();
   });
 
@@ -62,9 +58,7 @@ describe("ConsentFormList", () => {
       total: 1,
     };
     // No onRowClick is provided. The ActionsCell edit-button path should be hidden.
-    const {toJSON} = renderWithTheme(
-      <ConsentFormList api={{} as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {toJSON} = renderWithTheme(<ConsentFormList baseUrl="/admin" />);
     expect(toJSON()).toBeDefined();
   });
 
@@ -86,12 +80,7 @@ describe("ConsentFormList", () => {
     const onCreateNew = mock(() => undefined);
     const onRowClick = mock((_: string) => undefined);
     const {getAllByLabelText, getByTestId} = renderWithTheme(
-      <ConsentFormList
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        onCreateNew={onCreateNew}
-        onRowClick={onRowClick}
-      />
+      <ConsentFormList baseUrl="/admin" onCreateNew={onCreateNew} onRowClick={onRowClick} />
     );
     await act(async () => {
       fireEvent.press(getByTestId("consent-form-list-create-button"));
@@ -108,11 +97,7 @@ describe("ConsentFormList", () => {
       total: 1,
     };
     const {UNSAFE_root, toJSON} = renderWithTheme(
-      <ConsentFormList
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        onRowClick={() => undefined}
-      />
+      <ConsentFormList baseUrl="/admin" onRowClick={() => undefined} />
     );
     const tables = UNSAFE_root.findAll(
       (n: ReactTestInstance) => typeof n.props?.setSortColumn === "function"

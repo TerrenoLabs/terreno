@@ -2,7 +2,7 @@ import {Box, Heading, Page, Spinner, Text} from "@terreno/ui";
 import React, {useMemo} from "react";
 import {useHomeWidget} from "./AdminProvider";
 import {isAuditLogModel} from "./isAuditLogModel";
-import type {AdminApi, AdminModelConfig} from "./types";
+import type {AdminModelConfig} from "./types";
 import {resolveAdminBases} from "./types";
 import {useAdminConfig} from "./useAdminConfig";
 import {normalizeSidebarWidgets, normalizeWidgetIds} from "./widgets/homeWidgetUtils";
@@ -13,7 +13,6 @@ interface AdminHomeProps {
   baseUrl?: string;
   apiBase?: string;
   routeBase?: string;
-  api: AdminApi;
   /**
    * When true, omits the outer {@link Page} wrapper so the dashboard can sit under a parent
    * screen (for example, the Expo admin index together with tools and model cards).
@@ -22,7 +21,6 @@ interface AdminHomeProps {
 }
 
 const HomeSlotWidget: React.FC<{
-  api: AdminApi;
   apiBase: string;
   auditModel?: AdminModelConfig;
   config: NonNullable<ReturnType<typeof useAdminConfig>["config"]>;
@@ -30,14 +28,13 @@ const HomeSlotWidget: React.FC<{
   models: AdminModelConfig[];
   routeBase: string;
   widgetId: string;
-}> = ({api, apiBase, auditModel, config, featureFlagModel, models, routeBase, widgetId}) => {
+}> = ({apiBase, auditModel, config, featureFlagModel, models, routeBase, widgetId}) => {
   const Widget = useHomeWidget(widgetId);
   if (!Widget) {
     return <MissingWidget bucket="home" widgetId={widgetId} />;
   }
   return (
     <Widget
-      api={api}
       apiBase={apiBase}
       auditModel={auditModel}
       config={config}
@@ -56,7 +53,6 @@ export const AdminHome: React.FC<AdminHomeProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   embedded = false,
 }) => {
   const {apiBase: resolvedApiBase, routeBase: resolvedRouteBase} = resolveAdminBases({
@@ -64,7 +60,7 @@ export const AdminHome: React.FC<AdminHomeProps> = ({
     baseUrl,
     routeBase,
   });
-  const {config, error, isLoading} = useAdminConfig(api, resolvedApiBase);
+  const {config, error, isLoading} = useAdminConfig(resolvedApiBase);
 
   const models = (config?.models ?? []) as AdminModelConfig[];
   const auditModel = useMemo(() => models.find(isAuditLogModel), [models]);
@@ -115,7 +111,6 @@ export const AdminHome: React.FC<AdminHomeProps> = ({
   const title = config.home?.title ?? "Admin";
 
   const slotWidgetProps = {
-    api,
     apiBase: resolvedApiBase,
     auditModel,
     config,

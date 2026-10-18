@@ -2,7 +2,7 @@ import {Box, Button, Card, DraggableList, Heading, IconButton, Text, useTheme} f
 import startCase from "lodash/startCase";
 import React, {useCallback, useMemo, useRef} from "react";
 import {AdminFieldRendererCore} from "./AdminFieldRendererCore";
-import type {AdminApi, AdminFieldConfig, AdminFieldValue, RefRendererMap} from "./types";
+import type {AdminFieldConfig, AdminFieldValue, RefRendererMap} from "./types";
 
 const FIELD_HEIGHT_ESTIMATE = 76;
 const CARD_HEADER_HEIGHT = 44;
@@ -16,7 +16,6 @@ interface AdminNestedArrayFieldProps {
   items: Record<string, AdminFieldConfig>;
   value: Record<string, AdminFieldValue>[];
   onChange: (value: Record<string, AdminFieldValue>[]) => void;
-  api: AdminApi;
   /** @deprecated Use `apiBase`/`routeBase`. Kept as a backward-compatible alias. */
   baseUrl?: string;
   /** Base path where admin API requests are sent. Falls back to `baseUrl`. */
@@ -38,7 +37,6 @@ interface AdminNestedArrayFieldProps {
  * the AdminFieldRenderer wrapper.
  */
 const renderNestedSubField = ({
-  api,
   baseUrl,
   apiBase,
   routeBase,
@@ -52,7 +50,6 @@ const renderNestedSubField = ({
   refRenderers,
   readOnly,
 }: {
-  api: AdminApi;
   baseUrl?: string;
   apiBase?: string;
   routeBase?: string;
@@ -69,7 +66,6 @@ const renderNestedSubField = ({
   if (fieldConfig.type === "array" && fieldConfig.items) {
     return (
       <AdminNestedArrayField
-        api={api}
         apiBase={apiBase}
         baseUrl={baseUrl}
         helperText={fieldConfig.description}
@@ -89,7 +85,6 @@ const renderNestedSubField = ({
 
   return (
     <AdminFieldRendererCore
-      api={api}
       apiBase={apiBase}
       baseUrl={baseUrl}
       fieldConfig={fieldConfig}
@@ -138,7 +133,6 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
   items,
   value,
   onChange,
-  api,
   baseUrl,
   apiBase,
   routeBase,
@@ -259,7 +253,6 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
             </Box>
             {subFieldEntries.map(([fieldKey, fieldConfig]) =>
               renderNestedSubField({
-                api,
                 apiBase,
                 baseUrl,
                 fieldConfig,
@@ -282,7 +275,6 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
       arrayValue,
       idToIndexMap,
       subFieldEntries,
-      api,
       apiBase,
       baseUrl,
       routeBase,
@@ -337,7 +329,6 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
                   </Text>
                   {subFieldEntries.map(([fieldKey, fieldConfig]) =>
                     renderNestedSubField({
-                      api,
                       apiBase,
                       baseUrl,
                       fieldConfig,

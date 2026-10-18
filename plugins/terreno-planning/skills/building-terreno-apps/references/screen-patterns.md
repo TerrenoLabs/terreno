@@ -175,17 +175,10 @@ skill `building-admin-interfaces`.
 ```tsx
 import {AdminScreenRouter} from "@terreno/admin-frontend";
 import {useLocalSearchParams} from "expo-router";
-import {terrenoApi} from "@/store/sdk";
 
+// Rendered inside the AdminProvider in app/admin/_layout.tsx; no RTK `api` prop.
 const AdminModelScreen: React.FC = () => {
   const {model} = useLocalSearchParams<{model: string}>();
-  return (
-    <AdminScreenRouter
-      api={terrenoApi}
-      apiBase="/admin"
-      name={model ?? ""}
-      routeBase="/admin"
-    />
-  );
+  return <AdminScreenRouter apiBase="/admin" name={model ?? ""} routeBase="/admin" />;
 };
 ```

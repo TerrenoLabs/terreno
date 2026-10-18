@@ -4,10 +4,16 @@ import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminProvider} from "./AdminProvider";
-import type {AdminApi} from "./types";
-import {useAdminRpc, useAdminRpcMutation, useAdminRpcQuery} from "./useAdminRpc";
+import {
+  resetAdminRpcWarningForTests,
+  unwrapAdminEnvelope,
+  useAdminRpc,
+  useAdminRpcMutation,
+  useAdminRpcQuery,
+} from "./useAdminRpc";
 
-const api = {} as unknown as AdminApi;
+const jsonResponse = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {headers: {"Content-Type": "application/json"}, status});
 
 const Probe: React.FC<{onValue: (value: unknown) => void; renderValue: () => unknown}> = ({
   onValue,
@@ -24,25 +30,179 @@ describe("useAdminRpc", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("returns undefined rpc outside a fetch-capable provider", () => {
-    let rpc: unknown;
+  it("binds a client inside AdminProvider even without auth options", async () => {
+    const calls: {credentials?: RequestCredentials; url: string}[] = [];
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({credentials: init?.credentials, url: String(url)});
+      return jsonResponse({ok: true});
+    }) as typeof fetch;
+    let rpc: ((args: {url: string}) => Promise<unknown>) | undefined;
     renderWithTheme(
-      <AdminProvider api={api} apiBase="/admin" routeBase="/admin">
+      <AdminProvider apiBase="/admin" apiOrigin="http://api.test" routeBase="/admin">
         <Probe
           onValue={(value) => {
-            rpc = value;
+            rpc = value as typeof rpc;
           }}
           renderValue={useAdminRpc}
         />
       </AdminProvider>
     );
-    assert.isUndefined(rpc);
+    assert.isFunction(rpc);
+    const result = await rpc?.({url: "/admin/config"});
+    assert.deepEqual(result, {ok: true});
+    assert.deepEqual(calls, [{credentials: undefined, url: "http://api.test/admin/config"}]);
+  });
+
+  it("falls back to a same-origin client outside AdminProvider and warns once", async () => {
+    resetAdminRpcWarningForTests();
+    const urls: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      urls.push(String(url));
+      return jsonResponse({ok: true});
+    }) as typeof fetch;
+    const originalWarn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (...args: unknown[]): void => {
+      warnings.push(String(args[0]));
+    };
+    const clients: unknown[] = [];
+    try {
+      renderWithTheme(
+        <>
+          <Probe onValue={(value) => clients.push(value)} renderValue={useAdminRpc} />
+          <Probe onValue={(value) => clients.push(value)} renderValue={useAdminRpc} />
+        </>
+      );
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.lengthOf(clients, 2);
+    assert.strictEqual(clients[0], clients[1]);
+    assert.lengthOf(
+      warnings.filter((warning) => warning.includes("outside AdminProvider")),
+      1
+    );
+    const rpc = clients[0] as (args: {url: string}) => Promise<unknown>;
+    assert.deepEqual(await rpc({url: "/admin/config"}), {ok: true});
+    assert.deepEqual(urls, ["/admin/config"]);
+  });
+
+  it("unwraps single-document envelopes and keeps list envelopes", () => {
+    const list = {data: [{_id: "a"}], limit: 20, more: false, page: 1, total: 1};
+    assert.strictEqual(unwrapAdminEnvelope(list), list);
+    assert.deepEqual(unwrapAdminEnvelope({data: {_id: "a"}}), {_id: "a"});
+    assert.deepEqual(unwrapAdminEnvelope({updated: 2}), {updated: 2});
+    assert.deepEqual(unwrapAdminEnvelope({data: null}), {data: null});
+    assert.deepEqual(unwrapAdminEnvelope([1, 2]), [1, 2]);
+    assert.isNull(unwrapAdminEnvelope(null));
+    assert.equal(unwrapAdminEnvelope("text"), "text");
+  });
+
+  it("sends query headers, transforms responses, and resolves refetch results", async () => {
+    const seen: {headers: Headers; url: string}[] = [];
+    let calls = 0;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls += 1;
+      seen.push({headers: new Headers(init?.headers), url: String(url)});
+      if (calls === 2) {
+        return jsonResponse({title: "Nope"}, 500);
+      }
+      return jsonResponse({data: {_id: "doc-1", n: calls}});
+    }) as typeof fetch;
+
+    let latest:
+      | {
+          data?: {_id: string; n: number};
+          isError: boolean;
+          refetch: () => Promise<{data?: unknown; error?: unknown; isError: boolean}>;
+        }
+      | undefined;
+    const Harness: React.FC = () => {
+      const rpc = useAdminRpc();
+      latest = useAdminRpcQuery<{_id: string; n: number}>({
+        headers: {"X-Organization-Id": "org-1"},
+        rpc,
+        transformResponse: unwrapAdminEnvelope,
+        url: "/admin/foods/doc-1",
+      });
+      return null;
+    };
+    renderWithTheme(
+      <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+        <Harness />
+      </AdminProvider>
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.deepEqual(latest?.data, {_id: "doc-1", n: 1});
+    assert.equal(seen[0]?.headers.get("X-Organization-Id"), "org-1");
+
+    let failedPromise: Promise<{error?: unknown; isError: boolean}> | undefined;
+    await act(async () => {
+      failedPromise = latest?.refetch();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const failed = await failedPromise;
+    assert.isTrue(failed?.isError);
+    assert.isTrue(latest?.isError);
+
+    let succeededPromise: Promise<{data?: unknown; isError: boolean}> | undefined;
+    await act(async () => {
+      succeededPromise = latest?.refetch();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const succeeded = await succeededPromise;
+    assert.isFalse(succeeded?.isError);
+    assert.deepEqual(succeeded?.data, {_id: "doc-1", n: 3});
+  });
+
+  it("resolves refetch immediately when the query is skipped", async () => {
+    let latest: {refetch: () => Promise<{isError: boolean}>} | undefined;
+    const Harness: React.FC = () => {
+      latest = useAdminRpcQuery({rpc: undefined, skip: true, url: "/x"});
+      return null;
+    };
+    renderWithTheme(<Harness />);
+    let resultPromise: Promise<{isError: boolean}> | undefined;
+    await act(async () => {
+      resultPromise = latest?.refetch();
+    });
+    const result = await resultPromise;
+    assert.deepEqual(result, {isError: false});
+  });
+
+  it("transforms mutation responses before unwrap resolves", async () => {
+    globalThis.fetch = (async () => jsonResponse({data: {_id: "new"}})) as typeof fetch;
+    let trigger:
+      | ((args: {method: "POST"; url: string}) => {unwrap: () => Promise<unknown>})
+      | undefined;
+    const Harness: React.FC = () => {
+      const rpc = useAdminRpc();
+      const [mutate] = useAdminRpcMutation(rpc, {transformResponse: unwrapAdminEnvelope});
+      trigger = mutate;
+      return null;
+    };
+    renderWithTheme(
+      <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+        <Harness />
+      </AdminProvider>
+    );
+    let created: unknown;
+    await act(async () => {
+      created = await trigger?.({method: "POST", url: "/admin/foods"}).unwrap();
+    });
+    assert.deepEqual(created, {_id: "new"});
   });
 
   it("skips queries when rpc is missing or skip is true", () => {
     let state: {isLoading?: boolean; data?: unknown} | undefined;
     renderWithTheme(
-      <AdminProvider api={api} apiBase="/admin" routeBase="/admin">
+      <AdminProvider apiBase="/admin" routeBase="/admin">
         <Probe
           onValue={(value) => {
             state = value as {isLoading?: boolean; data?: unknown};
@@ -82,7 +242,6 @@ describe("useAdminRpc", () => {
 
     renderWithTheme(
       <AdminProvider
-        api={api}
         apiBase="/admin"
         credentials="same-origin"
         getAuthHeaders={() => ({})}
@@ -98,7 +257,7 @@ describe("useAdminRpc", () => {
     assert.deepEqual(latest.data, {ok: true});
 
     await act(async () => {
-      latest.refetch();
+      void latest.refetch();
       await Promise.resolve();
     });
     assert.isOk(latest.error);
@@ -147,7 +306,6 @@ describe("useAdminRpc", () => {
 
     const rendered = renderWithTheme(
       <AdminProvider
-        api={api}
         apiBase="/admin"
         credentials="same-origin"
         getAuthHeaders={() => ({})}
@@ -219,7 +377,6 @@ describe("useAdminRpc", () => {
 
     const rendered = renderWithTheme(
       <AdminProvider
-        api={api}
         apiBase="/admin"
         credentials="same-origin"
         getAuthHeaders={() => ({})}

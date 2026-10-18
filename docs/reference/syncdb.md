@@ -128,7 +128,7 @@ new TerrenoApp({userModel: User})
 ```
 
 - **`SyncApp`** — HTTP sync routes (`/sync/snapshot`, `/sync/mutate`, `/sync/mutate/batch`, `/sync/key`, `/sync/streams`, `/sync/entities`).
-- **`RealtimeApp`** — Socket.io server with change-stream-driven `sync:delta` emission. Requires a **MongoDB replica set** (change streams). `modelRouter` `realtime` (RTK `sync` events) is deprecated and removed in Terreno 58; do not add it to new models.
+- **`RealtimeApp`** — Socket.io server with change-stream-driven `sync:delta` emission. Requires a **MongoDB replica set** (change streams). `modelRouter` `realtime` and its RTK `sync` events were removed in Terreno 58; `sync:delta` is the only collection event.
 - **`ensureSyncIndexes`** — `TerrenoApp.start()` binds the HTTP port first (or attaches to `httpServer` if the process already listened), then awaits index builds for snapshot queries and sync bookkeeping (`SyncMutation.mutationId` unique, `SyncCounter.stream` unique, etc.). Registration queues this work without contacting MongoDB, so models can load before the database connects. Hosts that build Express without `TerrenoApp.start()` should await `ensureSyncIndexes()` after connecting.
 
 Socket auth requires at least one configured authentication method. It enables legacy JWT

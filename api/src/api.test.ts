@@ -7,6 +7,7 @@ import type TestAgent from "supertest/lib/agent";
 
 import {addPopulateToQuery, modelRouter} from "./api";
 import {type UserModel as AuthUserModel, addAuthRoutes, setupAuth} from "./auth";
+import {clearCollectionRegistry, getCollection} from "./collectionRegistry";
 import {APIError} from "./errors";
 import {clearMCPRegistry, getMCPRegistry} from "./mcp/registry";
 import {Permissions} from "./permissions";
@@ -2154,7 +2155,7 @@ describe("@terreno/api", () => {
   });
 
   describe("three-arg modelRouter registration", () => {
-    it("returns a ModelRouterRegistration with path and realtime", () => {
+    it("returns a ModelRouterRegistration with path", () => {
       const registration = modelRouter("/food", FoodModel, {
         permissions: {
           create: [Permissions.IsAny],
@@ -2163,7 +2164,6 @@ describe("@terreno/api", () => {
           read: [Permissions.IsAny],
           update: [Permissions.IsAny],
         },
-        realtime: {methods: ["create", "update", "delete"], roomStrategy: "model"},
       });
       expect(registration).toHaveProperty("__type", "modelRouter");
       expect(registration).toHaveProperty("path", "/food");
@@ -2235,8 +2235,9 @@ describe("@terreno/api", () => {
       expect(registered?.options.permissions.list).not.toEqual([Permissions.IsAny]);
     });
 
-    it("logs a warning when realtime config is used without the path form", () => {
-      const router = modelRouter(FoodModel, {
+    it("rejects the removed realtime option and registers no realtime surface", () => {
+      clearCollectionRegistry();
+      const registration = modelRouter("/food", FoodModel, {
         permissions: {
           create: [Permissions.IsAny],
           delete: [Permissions.IsAny],
@@ -2244,11 +2245,12 @@ describe("@terreno/api", () => {
           read: [Permissions.IsAny],
           update: [Permissions.IsAny],
         },
+        // @ts-expect-error `realtime` was removed in Terreno 58; use `sync` with @terreno/syncdb.
         realtime: {methods: ["create", "update", "delete"], roomStrategy: "model"},
       });
-      // Returns a plain Router, not a registration, because no path was given
-      expect(router).toBeDefined();
-      expect(router).not.toHaveProperty("__type");
+      expect(registration).toHaveProperty("path", "/food");
+      expect(getCollection("/food")?.surfaces).toEqual({mcp: false, sync: false});
+      clearCollectionRegistry();
     });
   });
 

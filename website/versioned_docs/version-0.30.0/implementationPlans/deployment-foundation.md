@@ -61,7 +61,7 @@ Expo Router offers three, and the choice determines what hosting works:
 | `static` | per-route HTML | no | no | any static host | usable now; better SEO |
 | `server` | `dist/client` + `dist/server` | yes | yes (alpha, SDK ≥ 55) | needs a Node/Bun/edge runtime | not yet — see the SSR IP |
 
-The repo is currently on Expo `~54.0.29` (root `package.json` catalog), so `server` output with SSR requires the SDK upgrade tracked in PR [#779](https://github.com/flourishhealth/terreno/pull/779). The foundation doc must state this rather than implying SSR is available.
+The repo is currently on Expo `~54.0.29` (root `package.json` catalog), so `server` output with SSR requires the SDK upgrade tracked in PR [#779](https://github.com/TerrenoLabs/terreno/pull/779). The foundation doc must state this rather than implying SSR is available.
 
 ### Backend container
 

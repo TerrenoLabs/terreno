@@ -4,6 +4,7 @@ import {RadioField} from "@terreno/ui";
 import React from "react";
 
 export const RadioFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {RadioField} from \"@terreno/ui\";\n\n<RadioField />",
   name: "Radio field",
   component: RadioField,
   related: ["Radio", "Checkbox"],
@@ -15,12 +16,12 @@ export const RadioFieldConfiguration: DemoConfiguration = {
     "Keyboards should be able to tab back and forth between the radio buttons.",
     "The radio buttons should have a focus state.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23599&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23993",
     ios: "ready",
     android: "ready",
     web: "ready",

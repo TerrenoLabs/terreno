@@ -1,0 +1,30 @@
+---
+title: "DismissButton"
+description: "Small X control for banners and chips."
+sidebar_label: "DismissButton"
+slug: /reference/components/dismissbutton
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# DismissButton
+
+Small X control for banners and chips.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `DismissButtonProps`  
+**Story source:** [`demo/stories/DismissButton.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/DismissButton.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="DismissButton" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `accessibilityHint` | `string` | Yes | The accessibility hint describes the results of performing an action on a control or view. It should be a very brief description of the result of interacting with the button. |
+| `accessibilityLabel` | `string` | Yes | The accessibility label attribute identifies the user interface element. It should be a very brief description of the element, such as "Dismiss". |
+| `onClick` | `reflection` | Yes | A function to call when the button is clicked, function should result in hiding the element rendering the dismiss button. |
+| `color` | `keyof TextTheme` |  | Color of the icon on the dismiss button |

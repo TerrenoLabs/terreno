@@ -1,0 +1,42 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "code",
+        "type": "text",
+        "label": "Code",
+        "maxLength": 4,
+        "default": "ABCDE"
+      },
+      {
+        "id": "bio",
+        "type": "textarea",
+        "label": "Bio",
+        "minLength": 10,
+        "default": "Short"
+      },
+      {
+        "id": "name",
+        "type": "text",
+        "label": "Name",
+        "default": "   "
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].default",
+      "code": "TOO_LONG"
+    },
+    {
+      "path": "fields[1].default",
+      "code": "TOO_SHORT"
+    },
+    {
+      "path": "fields[2].default",
+      "code": "TOO_SHORT"
+    }
+  ]
+}

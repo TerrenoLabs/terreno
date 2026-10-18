@@ -2,9 +2,9 @@
 
 Redux Toolkit Query utilities for @terreno/api backends.
 
-> **Deprecation notice (56.0.0):** `@terreno/rtk` is **deprecated for data synchronization** as of version **56.0.0**. It remains published with a deprecation notice through the **current major line** (56.x beta and stable 0.x) and will **not** be published in the **next major** Terreno release. Superseded by [`@terreno/syncdb`](https://github.com/flourishhealth/terreno/blob/master/syncdb/README.md) for collection reads/writes, offline sync, and realtime convergence.
+> **Deprecation notice (56.0.0):** `@terreno/rtk` is **deprecated for data synchronization** as of version **56.0.0**. It remains published with a deprecation notice through the **current major line** (56.x beta and stable 0.x) and will **not** be published in the **next major** Terreno release. Superseded by [`@terreno/syncdb`](https://github.com/TerrenoLabs/terreno/blob/master/syncdb/README.md) for collection reads/writes, offline sync, and realtime convergence.
 >
-> **Still use @terreno/rtk for:** generated OpenAPI SDK hooks (`bun run sdk`) on non-synced routes, Better Auth session Redux, feature flags, sockets, and legacy JWT auth during migration. See the [migration guide](https://github.com/flourishhealth/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md).
+> **Still use @terreno/rtk for:** generated OpenAPI SDK hooks (`bun run sdk`) on non-synced routes, Better Auth session Redux, feature flags, sockets, and legacy JWT auth during migration. See the [migration guide](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md).
 
 > **Removed in Terreno 58:** `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, and `getRealtimeSocket`. `modelRouter` `realtime` is also removed then. `RealtimeApp` stays for syncdb sockets.
 
@@ -109,9 +109,9 @@ Full upgrade steps (backend + frontend + SDK regen) live in [Add feature flags](
 
 ## Documentation
 
-Archived RTK reference: [docs/reference/legacy/rtk.md](https://github.com/flourishhealth/terreno/blob/master/docs/reference/legacy/rtk.md)
+Archived RTK reference: [docs/reference/legacy/rtk.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/legacy/rtk.md)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/flourishhealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/flourishhealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
 

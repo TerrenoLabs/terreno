@@ -26,7 +26,7 @@ This directory contains detailed technical plans for major features **before imp
 | Plan | Status | Target Version | Discussion |
 |------|--------|----------------|------------|
 | Admin UI v2 (Django parity) | ✅ Approved | TBD | — |
-| Modular API | 📝 Planning | 2.0.0 | [#149](https://github.com/FlourishHealth/terreno/pull/149) |
+| Modular API | 📝 Planning | 2.0.0 | [#149](https://github.com/TerrenoLabs/terreno/pull/149) |
 | Offline Mode | Placeholder | TBD | TBD |
 | MCP Boost Parity | 📝 Planning | TBD | TBD |
 | Docs Site & Versioning | 📝 Planning | TBD | TBD |

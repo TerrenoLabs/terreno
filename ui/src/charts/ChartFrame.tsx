@@ -11,6 +11,7 @@ export interface ChartFrameProps {
   children: ReactNode;
   emptyText: string;
   isEmpty: boolean;
+  legendItems?: Array<{color: string; label: string}>;
   legendLabel?: string;
   loading?: boolean;
   testID?: string;
@@ -22,6 +23,7 @@ export const ChartFrame: FC<ChartFrameProps> = ({
   children,
   emptyText,
   isEmpty,
+  legendItems,
   legendLabel,
   loading = false,
   testID,
@@ -55,7 +57,43 @@ export const ChartFrame: FC<ChartFrameProps> = ({
           ) : null}
         </Box>
       ) : null}
-      {showPlot && legendLabel ? (
+      {showPlot && legendItems && legendItems.length > 0 ? (
+        <Box
+          direction="row"
+          gap={3}
+          height={CHART_FOOTER_ROW_HEIGHT}
+          minWidth={0}
+          overflow="hidden"
+        >
+          {legendItems.map((item, index) => (
+            <Box
+              alignItems="center"
+              dangerouslySetInlineStyle={{__style: {flexBasis: 0, flexGrow: 1, flexShrink: 1}}}
+              direction="row"
+              gap={1}
+              key={`${item.label}-${index}`}
+              minWidth={0}
+              testID={resolveTestID(testID, `legend.${index}.item`)}
+            >
+              <Box
+                dangerouslySetInlineStyle={{
+                  __style: {backgroundColor: item.color, height: 8, width: 8},
+                }}
+                testID={resolveTestID(testID, `legend.${index}.swatch`)}
+              />
+              <Text
+                size="sm"
+                skipLinking
+                testID={resolveTestID(testID, `legend.${index}`)}
+                truncate
+              >
+                {item.label}
+              </Text>
+            </Box>
+          ))}
+        </Box>
+      ) : null}
+      {showPlot && (!legendItems || legendItems.length === 0) && legendLabel ? (
         <Box height={CHART_FOOTER_ROW_HEIGHT} minWidth={0} overflow="hidden">
           <Text size="sm" skipLinking testID={resolveTestID(testID, "legend")} truncate>
             {legendLabel}

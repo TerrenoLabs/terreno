@@ -1,7 +1,7 @@
 # Implementation Plan: Reference Documentation Coverage
 
-**Status:** In progress — remaining README, sanitization, and docs-audit work
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1009
+**Status:** Complete
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1009
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned

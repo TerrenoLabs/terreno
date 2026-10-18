@@ -5,16 +5,20 @@ import {Rect, Svg, Line as SvgLine} from "react-native-svg";
 import {Box} from "./Box";
 import type {BarChartProps, LayoutChangeEvent} from "./Common";
 import {getBarLayout} from "./charts/bars";
+import {ChartFacadeContainer} from "./charts/ChartFacadeContainer";
 import {ChartFrame} from "./charts/ChartFrame";
 import {
+  CHART_ROTATED_X_AXIS_HEIGHT,
   CHART_X_AXIS_HEIGHT,
   getChartAxisWidth,
   getChartPlot,
   getPlotHeight,
   getXTickStyle,
   getYTickStyle,
+  shouldRotateChartXTicks,
 } from "./charts/layout";
 import {createCartesianScales, getYTickValues} from "./charts/scales";
+import {getAxisPoints} from "./charts/series";
 import {getChartPaint} from "./charts/theme";
 import type {ChartPoint} from "./charts/types/chartTypes";
 import {Text} from "./Text";
@@ -37,13 +41,19 @@ const formatChartTooltip = ({
 
 export const BarChart: FC<BarChartProps> = ({
   accessibilityLabel,
+  comparisonData = [],
   data,
   emptyText = "No data",
   formatValue = String,
   height = DEFAULT_HEIGHT,
   legendLabel,
   loading = false,
+  onPeriodPress,
+  periodLabel,
+  series,
   testID,
+  title,
+  xTickPolicy = "auto",
 }) => {
   const {theme} = useTheme();
   const paint = getChartPaint(theme);
@@ -61,27 +71,53 @@ export const BarChart: FC<BarChartProps> = ({
     setActivePointIndex(pointIndex);
   }, []);
 
+  const primarySeries = series && series.length > 0 ? series[0] : undefined;
+  const chartData = primarySeries?.data ?? data;
+  const seriesColor = primarySeries?.color ?? paint.series;
+  const effectiveLegendLabel = primarySeries?.label ?? legendLabel;
+  const axisPoints = getAxisPoints({
+    comparisonData,
+    series: [
+      {data: chartData, id: primarySeries?.id ?? "default", label: effectiveLegendLabel ?? ""},
+    ],
+  });
+  const allPoints = [...chartData, ...comparisonData];
+  const isXTickRotated = shouldRotateChartXTicks({
+    labelCount: axisPoints.length,
+    policy: xTickPolicy,
+  });
+  const xAxisHeight = isXTickRotated ? CHART_ROTATED_X_AXIS_HEIGHT : CHART_X_AXIS_HEIGHT;
   const axisWidth = getChartAxisWidth(chartWidth);
-  const plotHeight = getPlotHeight({hasLegend: Boolean(legendLabel), height});
+  const plotHeight = getPlotHeight({
+    hasLegend: Boolean(effectiveLegendLabel),
+    height,
+    xAxisHeight,
+  });
   const plot = getChartPlot({chartWidth, height: plotHeight});
   const plotWidth = chartWidth - axisWidth;
-  const scales = createCartesianScales({plot, points: data});
-  const yTicks = getYTickValues(data);
+  const scales = createCartesianScales({
+    plot,
+    points: allPoints,
+    xLabels: axisPoints.map((point) => point.label),
+  });
+  const yTicks = getYTickValues(allPoints);
   const baselineY = scales.y(0);
   const barWidth = Math.max(scales.bandwidth * BAR_FILL, 1);
-  const activePoint = activePointIndex === undefined ? undefined : data[activePointIndex];
+  const comparisonBarWidth = Math.max(scales.bandwidth * 0.9, 1);
+  const activePoint = activePointIndex === undefined ? undefined : chartData[activePointIndex];
   const tooltipText = activePoint
     ? formatChartTooltip({formatValue, point: activePoint})
     : undefined;
   const summaryLabel =
-    accessibilityLabel ?? (legendLabel ? `${legendLabel} bar chart` : "Bar chart");
+    accessibilityLabel ??
+    (effectiveLegendLabel ? `${effectiveLegendLabel} bar chart` : "Bar chart");
 
-  return (
+  const chart = (
     <ChartFrame
       accessibilityLabel={summaryLabel}
       emptyText={emptyText}
-      isEmpty={data.length === 0}
-      legendLabel={legendLabel}
+      isEmpty={allPoints.length === 0}
+      legendLabel={effectiveLegendLabel}
       loading={loading}
       testID={testID}
       tooltipText={tooltipText}
@@ -116,7 +152,31 @@ export const BarChart: FC<BarChartProps> = ({
                   />
                 );
               })}
-              {data.map((point) => {
+              {comparisonData.map((point, index) => {
+                const layout = getBarLayout({
+                  barWidth: comparisonBarWidth,
+                  baselineY,
+                  value: point.value,
+                  xCenter: scales.xCenter(point.label),
+                  y: scales.y,
+                });
+                if (layout.height === 0) {
+                  return null;
+                }
+                return (
+                  <Rect
+                    fill={seriesColor}
+                    height={layout.height}
+                    key={`comparison-${point.label}`}
+                    opacity={0.3}
+                    testID={resolveTestID(testID, `comparison.${index}`)}
+                    width={layout.width}
+                    x={layout.x}
+                    y={layout.y}
+                  />
+                );
+              })}
+              {chartData.map((point, index) => {
                 const layout = getBarLayout({
                   barWidth,
                   baselineY,
@@ -129,9 +189,10 @@ export const BarChart: FC<BarChartProps> = ({
                 }
                 return (
                   <Rect
-                    fill={point.color ?? paint.series}
+                    fill={point.color ?? seriesColor}
                     height={layout.height}
                     key={`bar-${point.label}`}
+                    testID={resolveTestID(testID, `current.${index}`)}
                     width={layout.width}
                     x={layout.x}
                     y={layout.y}
@@ -139,7 +200,7 @@ export const BarChart: FC<BarChartProps> = ({
                 );
               })}
             </Svg>
-            {data.map((point, index) => {
+            {chartData.map((point, index) => {
               const onPress = (): void => {
                 handleMarkPress(index);
               };
@@ -174,25 +235,27 @@ export const BarChart: FC<BarChartProps> = ({
         </Box>
         <Box direction="row">
           <Box width={axisWidth} />
-          <Box
-            flex="grow"
-            height={CHART_X_AXIS_HEIGHT}
-            minWidth={0}
-            overflow="hidden"
-            position="relative"
-          >
-            {data.map((point, index) => (
+          <Box flex="grow" height={xAxisHeight} minWidth={0} overflow="hidden" position="relative">
+            {axisPoints.map((point, index) => (
               <Box
                 dangerouslySetInlineStyle={{
                   __style: getXTickStyle({
                     bandwidth: scales.bandwidth,
+                    isRotated: isXTickRotated,
                     xCenter: scales.xCenter(point.label),
                   }),
                 }}
                 key={`xtick-${point.label}`}
                 testID={resolveTestID(testID, `xtick.${index}`)}
               >
-                <Text align="center" color="secondaryDark" size="sm" skipLinking truncate>
+                <Text
+                  align="center"
+                  color="secondaryDark"
+                  numberOfLines={1}
+                  size="sm"
+                  skipLinking
+                  truncate={!isXTickRotated}
+                >
                   {point.label}
                 </Text>
               </Box>
@@ -201,6 +264,17 @@ export const BarChart: FC<BarChartProps> = ({
         </Box>
       </Box>
     </ChartFrame>
+  );
+
+  return (
+    <ChartFacadeContainer
+      onPeriodPress={onPeriodPress}
+      periodLabel={periodLabel}
+      testID={testID}
+      title={title}
+    >
+      {chart}
+    </ChartFacadeContainer>
   );
 };
 

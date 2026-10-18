@@ -1,7 +1,7 @@
 {
   "author": "Josh Gachnang",
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
     "@expo/vector-icons": "catalog:",
@@ -64,7 +64,7 @@
     "src/dist/**",
     "dist/**"
   ],
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "admin",
     "api",
@@ -84,7 +84,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
     "build:web": "expo export --platform web --output-dir dist",
@@ -104,5 +104,5 @@
     "web": "expo start --web --port 8083"
   },
   "types": "./src/dist/index.d.ts",
-  "version": "57.4.0"
+  "version": "57.16.2"
 }

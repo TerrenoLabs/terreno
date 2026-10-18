@@ -4,7 +4,7 @@
     "terreno": "./dist/bin.js"
   },
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
     "@terreno/mcp": "workspace:*",
@@ -37,7 +37,7 @@
     "LICENSE",
     "dist"
   ],
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "terreno",
     "cli",
@@ -52,7 +52,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
     "compile": "bun tsc",

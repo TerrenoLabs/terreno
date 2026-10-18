@@ -1,11 +1,18 @@
 import type {DemoConfiguration} from "@config";
-import {GPTChatDemo, GPTChatEmpty, GPTChatMascot, GPTChatStreaming} from "@stories/GPTChat.stories";
+import {
+  GPTChatDemo,
+  GPTChatEmpty,
+  GPTChatMascot,
+  GPTChatNoHistory,
+  GPTChatStreaming,
+} from "@stories/GPTChat.stories";
 import {GPTChat} from "@terreno/ui";
 
 export const GPTChatConfiguration: DemoConfiguration = {
+  usageExample: "import {GPTChat} from \"@terreno/ui\";\n\n<GPTChat />",
   name: "GPTChat",
   component: GPTChat,
-  related: ["AiSuggestionBox", "MarkdownView"],
+  related: ["AI Suggestion Box", "MarkdownView"],
   description:
     "Streaming chat surface for Terreno AI. This demo uses a static message list — it does not call a live backend.",
   a11yNotes: ["Chat history and message list should remain keyboard reachable."],
@@ -38,6 +45,10 @@ export const GPTChatConfiguration: DemoConfiguration = {
     Mascot: {
       description: "Empty chat with a consumer-supplied mascot above suggested prompts.",
       render: () => <GPTChatMascot />,
+    },
+    NoHistory: {
+      description: "History sidebar hidden with showHistory={false}, for narrow and phone layouts.",
+      render: () => <GPTChatNoHistory />,
     },
     Streaming: {
       description: "Assistant reply in progress.",

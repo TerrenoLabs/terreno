@@ -12,7 +12,16 @@ copy as `terreno` (see [Hosts](#hosts)):
 | 2 | **Pick** (`terreno-2-pick`) | Build one slice, roast it, then pick the next until the list is done |
 | 3 | **Roast** (`terreno-3-roast`) | Prove the current task, then continue the pick-roast inner loop |
 | 4 | **Brew** (`terreno-4-brew`) | Final checks, commit/push, PR/evidence, confirm product CI on every discovered host, wait for review bots, then exit |
-| 5 | **Taste** (`terreno-5-taste`) | Wait for review bots and product CI, one current-head reaction; record last-run failed tests and re-verify them locally before push; pull latest `master`, then run root `prepush` when present (otherwise affected-package checks) in a no-context subagent, then push and watch |
+| 5 | **Taste** (`terreno-5-taste`) | Wait for review bots and product CI, one current-head reaction; record last-run failed tests and re-verify them locally before push; fetch latest `master` (merge only when needed), then run root `prepush` when present (otherwise affected-package checks) in a no-context subagent, then push and watch; invoked directly, repeats bounded reactions until terminal |
+
+**PRD** (`terreno-prd`, `/terreno:prd` in Claude Code) runs ahead of Grow. It interviews the
+app owner with Grow's grilling procedure, then writes and publishes a full product PRD —
+problem, why now, solution, user stories, success metrics and guardrails, constraints,
+rollout, out of scope — sized for one owner and one or two developers. Every metric is
+concrete and measurable, or `TBD` with who decides, so Grow inherits criteria it can
+verify. It forks the product half of Matt Pocock's `to-spec`, adds the interview and
+measurable-metric rule from awesome-copilot's `prd` skill, and is explicit-invoke only. It
+is not a stage.
 
 Stages and outer loops are model-invocable; descriptions keep Pick/Brew/Taste from firing
 on casual chat. Grow, Brew, and Taste never own the full orchestration. Pick and Roast own
@@ -144,7 +153,7 @@ one driver continues after each current-task Roast. Brew and Taste wait until Bu
 CodeQL, and similar review bots on the current head have reported, preferring provider
 CLI watch hooks or harness event subscriptions over sleep polling, then continue. Taste
 then waits in a loop for product CI using GitHub CLI or CircleCI CLI until jobs are
-terminal or the wait times out. Before any push, Taste always pulls latest `master`,
+terminal or the wait times out. Before any push, Taste fetches latest `master` (merging it only when needed),
 then spawns a fresh subagent with no parent conversation. It records last-run failed
 tests from the CI snapshot and re-verifies them locally, then runs the root `prepush`
 package script when present; otherwise it falls back to lint, typecheck, and locally
@@ -164,7 +173,7 @@ under `.rulesync/skills/` and are generated for supported agent ecosystems with
 Install the generated skill set directly with:
 
 ```bash
-npx skills add FlourishHealth/terreno
+npx skills add TerrenoLabs/terreno
 bun run skills:sync
 ```
 
@@ -216,14 +225,14 @@ Codex currently consumes the combined skills without plugin-defined agents.
 Claude Code install:
 
 ```text
-/plugin marketplace add FlourishHealth/terreno
+/plugin marketplace add TerrenoLabs/terreno
 /plugin install terreno@terreno-plugins
 ```
 
 Codex install:
 
 ```text
-codex plugin marketplace add FlourishHealth/terreno
+codex plugin marketplace add TerrenoLabs/terreno
 codex plugin install terreno-planning --source terreno-plugins
 ```
 
@@ -236,5 +245,6 @@ directory. Claude Code resolves a plugin skill's command from the frontmatter `n
 its shortened names cannot live in the shared stage files. `terreno-claude/` is a
 **generated** Claude-only copy: same procedure, stage names shortened to `1-grow` …
 `5-taste`, outer loops shortened to `pick-roast-loop`, `planning-loop`, and
-`taste-sweep`, published under the plugin name `terreno`. Regenerate it with
+`taste-sweep`, the pre-Grow skill shortened to `prd`, published under the plugin name
+`terreno`. Regenerate it with
 `bun run skills:sync`; never hand-edit it.

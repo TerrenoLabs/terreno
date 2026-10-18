@@ -41,7 +41,7 @@ REST API framework built on Express and Mongoose. Provides modelRouter (CRUD end
 - Validation: `configureOpenApiValidator`, `validateRequestBody`, `validateQueryParams`, `createValidator`
 - Middleware: `openApiEtagMiddleware`, `sentryAppVersionMiddleware`
 - Extensibility: `TerrenoPlugin` interface
-- Notifiers: `sendSlackMessage`, `sendGoogleChatMessage`, `sendZoomMessage`
+- Notifiers: `sendToSlack`, `formatSlackUserMention`, `lookupSlackUserIdByEmail`, `createSlackPrivateChannel`, `inviteSlackUsersToChannel`, `postSlackMessage`, `findSlackChannelByName`, `sendToGoogleChat`, `sendToZoom`
 - HTTP client: `createAuthenticatedClient`, `withApiErrorHandling`, `normalizeApiError`, `markRetryUnsafe`
 
 ## Server Setup
@@ -117,6 +117,10 @@ new TerrenoApp({
 
 Skip: `GET /health`, `/healthz`, `/openapi.json`, `/swagger` (trailing slashes and letter case ignored). 429 is `APIError` `code: "rate-limit-exceeded"` with `Retry-After` and `RateLimit` / `RateLimit-Policy`. JWT login/signup/refresh ignore a stale access token. Operator guide: [Rate limiting](../how-to/rate-limiting.md).
 
+#### Per-route limits
+
+`createRouteRateLimitMiddleware({name, max, windowMs, store?, keyBy?})` returns Express middleware with its own fixed-window bucket, independent of `TerrenoApp` `rateLimit`. `keyBy` is `"ip"` (default, `req.ip`) or `"user"` (falls back to IP). `name` namespaces the bucket. Same stores and 429 shape as the global limiter. Set Express `trust proxy` behind a load balancer so `req.ip` is the client.
+
 ### MCP service tokens
 
 Opt-in. Omitted or `enabled: false` leaves `/mcp/service-tokens` unmounted and ignores `mcp_` Bearer credentials on `/mcp`.
@@ -135,7 +139,7 @@ new TerrenoApp({
 
 ### Audit log (`AuditApp`)
 
-Opt-in append-only log. Register the plugin; importing `@terreno/api` does **not** compile `AuditEvent` onto the default mongoose connection.
+Opt-in append-only log. Register the plugin; importing `@terreno/api` does **not** compile `AuditEvent` onto the default mongoose connection. The compiled Mongoose name is `TerrenoAuditEvent` on collection `auditevents`. Admin UI and RBAC keep `AuditEvent` / `adminAuditEvent`.
 
 ```typescript
 import {
@@ -222,6 +226,51 @@ export const todoRouter = modelRouter("/todos", Todo, {
 ```
 
 Do not add `endpoints: (router) => { router.get(...) }` when an action fits.
+Action config supports `allowAnonymous: true` as a per-action override; it does not change authentication for CRUD or sibling actions.
+
+## modelRouter list queries
+
+`GET /{path}` accepts filters on fields listed in `queryFields` (qs syntax, so operators work:
+`?status[$in][0]=open&created[$gte]=2026-01-01`), plus the reserved `limit`, `page`, and `sort`.
+`limit` is clamped to `maxLimit` (default 500); the response echoes the applied `limit` with
+`{data, limit, more, page, total}`.
+
+A filter on a field missing from `queryFields` is rejected before query validation runs, so
+it can never be stripped and silently ignored:
+
+```json
+{
+  "status": 400,
+  "code": "query-param-not-allowed",
+  "title": "Query parameter not allowed",
+  "detail": "title is not allowed as a query param. Add \"title\" to queryFields on the Todo modelRouter to filter on it. Allowed: completed, created, ownerId.",
+  "source": {"parameter": "title"},
+  "meta": {"queryParam": "title", "model": "Todo", "allowedQueryFields": ["completed", "created", "ownerId"]}
+}
+```
+
+`@terreno/syncdb` raises this as `QueryFieldNotAllowedError` (see
+[Query windows](syncdb.md#query-windows)).
+
+## modelRouter array operations
+
+When a model has at least one array field, `modelRouter` provides subroutes for adding,
+updating, and removing array items:
+
+| Method | Path | Operation |
+| --- | --- | --- |
+| `POST` | `/:id/:field` | Append an item |
+| `PATCH` | `/:id/:field/:itemId` | Replace or merge an item |
+| `DELETE` | `/:id/:field/:itemId` | Remove an item |
+
+`:id` must be an ObjectId. Any other id leaves this router so a later route on the same
+prefix can handle it. `POST /ai/observability/evaluators` is not an array push on a model
+mounted at `/ai`.
+
+The `field` path must resolve to an array on the document. Requests for scalar, object,
+or unknown fields run the normal update transform and `preUpdate` hook first so consumer
+authorization remains authoritative, then return `400` with code
+`array-operation-field-not-array` if the hook allows the request.
 
 ## MCP tools
 
@@ -299,6 +348,11 @@ setupServer({
 - `POST /auth/verifyEmail` — `{token}` sets `emailVerified` true
 - `GET /auth/me` — Get current user profile
 - `PATCH /auth/me` — Update current user profile
+
+JWT recovery routes default on. In `authOptions`, set `passwordReset: false` to omit
+forgot-password and both token-reset paths, `emailVerification: false` to omit send/verify
+email, or `legacyResetPasswordRoute: false` to omit only the deprecated
+`POST /resetPassword` alias while retaining `POST /auth/resetPassword`.
 
 Signup and `PATCH /auth/me` drop privileged fields: `admin`, `roles`, `organizationIds`,
 `emailVerified`, and `tokenEpoch`. Request logs redact `password`, `newPassword`,
@@ -811,6 +865,48 @@ await Membership.create({
   userId: user._id,
 });
 ``````
+
+### AI observability RBAC
+
+`terrenoStatements` includes domain-neutral resources for `@terreno/ai` `ObservabilityApp`
+routes. Pass `accessControl` from `createAccess` on `ObservabilityApp` to enforce them; omit
+`accessControl` to keep legacy `user.admin` / `Permissions.IsAdmin` behavior.
+
+| Resource | Actions |
+| --- | --- |
+| `aiPrompt` | `list`, `read`, `create`, `update`, `promote`, `playground` |
+| `aiTrace` | `list`, `read` |
+| `aiReview` | `list`, `read`, `score`, `assign` |
+| `aiDataset` | `create`, `list`, `read`, `update`, `delete` |
+| `aiEvaluator` | `create`, `list`, `read`, `update`, `delete` |
+| `aiExperiment` | `list`, `read`, `create`, `promote` |
+
+Human-readable labels for the admin role editor live in `terrenoStatementDescriptions`
+(optional on `createAccess({ statementDescriptions })`).
+
+| Role | Observability grants |
+| --- | --- |
+| `superadmin` | `*` (every action on every resource) |
+| `admin` (seeded) | Full grants on all six resources |
+| `auditor` | Read-only sentinel expands to `list` and `read` on each observability resource (no `admin:access`) |
+| `aiObservabilityViewer` (example-backend only) | `admin:access` plus `list` and `read` on each observability resource |
+| `aiObservabilityOperator` (example-backend only) | `admin:access` plus full grants on each observability resource |
+
+The seeded `auditor` role does **not** include `admin:access`. Observability `list` / `read`
+grants alone do not open the admin shell — compose a consumer role (for example
+`auditor` + `admin: ["access"]`, or a custom role) when operators should browse observability
+screens.
+
+Re-seeding default roles does not overwrite customized unsealed roles, except seeded
+`admin` and `auditor`: on each `seedDefaults`, Terreno **merges** missing observability
+actions into stored permissions (`admin` — full grants; `auditor` — `list` and `read` per
+resource) without removing consumer-defined grants on other resources.
+
+When `accessControl` is configured, each observability HTTP route checks `admin:access` and
+the mapped resource action. Callers with `user.admin === true` still receive full access
+(legacy compatibility). RBAC-only operators need `admin:access` plus the exact action for
+mutations. Route mapping (for example prompt label moves → `aiPrompt:promote`, review
+submit → `aiReview:score`) is documented in [AI reference — Observability](ai.md#observability).
 
 ## Request Validation
 
@@ -1403,6 +1499,10 @@ new TerrenoApp({userModel: User}).register(
 | `Notification` | `/notifications` | owner | **No** (`create: []`) |
 | `NotificationPreference` | `/notification-preferences` | owner | Yes (lazy defaults) |
 
+The exported models use collision-resistant Mongoose names
+`TerrenoInboxNotification` and `TerrenoNotificationPreference`, while retaining the
+existing `notifications` and `notificationpreferences` MongoDB collections.
+
 `Notification` fields: `ownerId`, `title`, `body`, `href?`, `kind?`, `readAt?` (null = unread),
 `archivedAt?` (null = active inbox).
 Index: `{ownerId: 1, created: -1}`.
@@ -1483,20 +1583,69 @@ nested ids (SendGrid `sg_event_id`). Operator guide: [Receive inbound webhooks](
 
 ### Slack Notifications
 
-``````typescript
-import {sendSlackMessage} from "@terreno/api";
+Incoming webhooks only notify a person when the text contains their **Slack
+member ID** as `<@U012ABCDEF>` (Enterprise Grid ids start with `W`). Putting a
+display name or email in the message does not mention them.
 
-await sendSlackMessage({
-  webhookUrl: process.env.SLACK_WEBHOOK_URL,
-  message: "Deployment complete",
-  blocks: [
-    {
-      type: "section",
-      text: {type: "mrkdwn", text: "*Deployment Status*\nVersion 1.2.3 deployed successfully"},
-    },
-  ],
+Store `slackUserId` on the staff/user record. Resolve it once with
+`lookupSlackUserIdByEmail` (needs a bot token with `users:read.email`) and pass
+the id on every send:
+
+``````typescript
+import {formatSlackUserMention, lookupSlackUserIdByEmail, sendToSlack} from "@terreno/api";
+
+const slackUserId =
+  staff.slackUserId ??
+  (await lookupSlackUserIdByEmail({email: staff.email, token: process.env.SLACK_BOT_TOKEN}));
+
+await sendToSlack("Please review this case", {
+  url: process.env.SLACK_WEBHOOK_URL,
+  mentionUserIds: slackUserId ? [slackUserId] : [],
+});
+
+// Or embed the token yourself:
+await sendToSlack(`${formatSlackUserMention("U012ABCDEF")} Deployment complete`, {
+  url: process.env.SLACK_WEBHOOK_URL,
 });
 ``````
+
+Incoming webhooks are fixed to the channel chosen when the webhook was created.
+Private channels, invites, and messages to a channel id use the bot token for
+one Slack workspace (`SLACK_BOT_TOKEN`):
+
+| Function | Slack method | Bot scopes |
+| --- | --- | --- |
+| `createSlackPrivateChannel` | `conversations.create`, `conversations.invite`, `chat.postMessage` | `groups:write`, `groups:write.invites`, `chat:write` |
+| `inviteSlackUsersToChannel` | `conversations.invite` | `groups:write.invites` for private channels, `channels:write.invites` for public |
+| `postSlackMessage` | `chat.postMessage` | `chat:write` |
+| `findSlackChannelByName` | `conversations.list` | `channels:read`, `groups:read` |
+| `lookupSlackUserIdByEmail` | `users.lookupByEmail` | `users:read.email` |
+
+The bot can post and invite only in channels it belongs to. Creating a private
+channel makes the bot a member. An existing private channel must already
+include the app; a bot cannot join a private channel by itself. Store the
+returned channel id. Names are unique, mutable, and limited to lowercase
+letters, numbers, hyphens, and underscores.
+
+``````typescript
+import {createSlackPrivateChannel, inviteSlackUsersToChannel} from "@terreno/api";
+
+const channel = await createSlackPrivateChannel({
+  name: "case-12345",
+  userIds: ["U012ABCDEF"],
+  initialMessage: "Case opened.",
+  mentionUserIds: ["U012ABCDEF"],
+});
+
+await inviteSlackUsersToChannel({
+  channelId: channel.channelId,
+  userIds: ["U098765432"],
+});
+``````
+
+A taken name throws status 409. `findSlackChannelByName({name})` returns a
+public channel, or a private channel the bot is already in. It returns
+`undefined` when that channel is not visible to the bot.
 
 ### Google Chat Notifications
 
@@ -1830,6 +1979,7 @@ Complete reference of environment variables used by @terreno/api:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `SLACK_WEBHOOKS` | No | — | JSON object mapping names to Slack webhook URLs: `{"default":"https://..."}` |
+| `SLACK_BOT_TOKEN` | No | — | Bot token (`xoxb-…`) for one workspace. Scopes: `users:read.email`, `groups:write`, `groups:write.invites`, `channels:write.invites`, `chat:write`, `channels:read`, `groups:read` |
 | `GOOGLE_CHAT_WEBHOOKS` | No | — | JSON object mapping names to Google Chat webhook URLs |
 | `ZOOM_CHAT_WEBHOOKS` | No | — | JSON object mapping names to Zoom webhook URLs |
 | `WEBHOOK_SECRET` | No | — | Secret for validating incoming webhook signatures |
@@ -1878,4 +2028,4 @@ SENTRY_DSN=https://...@sentry.io/...
 - [How to create a model](../how-to/create-a-model.md)
 - [Add GitHub OAuth](../how-to/add-github-oauth.md)
 - [Authentication architecture](../explanation/authentication.md)
-- [API package source](https://github.com/flourishhealth/terreno/tree/master/api/src)
+- [API package source](https://github.com/TerrenoLabs/terreno/tree/master/api/src)

@@ -50,6 +50,6 @@ markers. Use `syncdb_snapshot` to capture and compare local state.
 offline mode, clear events, and merge snapshots when the local MCP starts with
 `TERRENO_MCP_EVAL=1`.
 
-Full reference: [docs/reference/syncdb.md](https://github.com/FlourishHealth/terreno/blob/master/docs/reference/syncdb.md)
+Full reference: [docs/reference/syncdb.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/syncdb.md)
 
-Migration: [docs/how-to/migrate-rtk-to-syncdb.md](https://github.com/FlourishHealth/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md)
+Migration: [docs/how-to/migrate-rtk-to-syncdb.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md)

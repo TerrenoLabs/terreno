@@ -1,0 +1,20 @@
+v: 1
+datasets:
+  signups:
+    columns:
+      - {name: a, type: string}
+      - {name: b, type: string}
+      - {name: c, type: string}
+      - {name: d, type: string}
+      - {name: e, type: string}
+      - {name: f, type: string}
+      - {name: g, type: string}
+      - {name: h, type: string}
+      - {name: i, type: string}
+      - {name: j, type: string}
+      - {name: k, type: string}
+      - {name: l, type: string}
+      - {name: m, type: string}
+    rows: []
+blocks:
+  - type: divider

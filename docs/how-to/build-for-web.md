@@ -66,4 +66,4 @@ Upload `dist/` to your host. **Client-side routing** requires the host to serve 
 - [Deploy to GCP](deploy-to-gcp.md) — GCS + Cloud CDN (static web) + Cloud Run (backend)
 - Deployment baseline — [seven requirements](../explanation/deployment-baseline.md)
 
-For server-rendered web (future), see [Web SSR and admin SPA](https://github.com/FlourishHealth/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md).
+For server-rendered web (future), see [Web SSR and admin SPA](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md).

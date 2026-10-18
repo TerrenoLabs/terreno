@@ -1,6 +1,6 @@
 # Per-package coverage reports for @terreno/* published packages.
 #
-# CODECOV_TOKEN: required for uploads unless FlourishHealth disables token
+# CODECOV_TOKEN: required for uploads unless TerrenoLabs disables token
 # authentication for public repositories in Codecov org settings
 # (Settings → Global Upload Token). Maintainers must set the same value in:
 #   - CircleCI project Environment Variables (live CI)
@@ -58,6 +58,9 @@ flag_management:
     - name: ai
       paths:
         - ai/
+    - name: blocks
+      paths:
+        - blocks/
     - name: comms
       paths:
         - comms/

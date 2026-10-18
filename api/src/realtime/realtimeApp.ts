@@ -417,7 +417,7 @@ export class RealtimeApp implements TerrenoPlugin {
         createSocketAuthMiddleware({
           betterAuth: this.config.betterAuth,
           issuer: resolveTokenIssuer,
-          ...(tokenSecret ? {tokenSecret} : {}),
+          tokenSecret,
         })
       );
 

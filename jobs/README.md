@@ -47,10 +47,10 @@ process or a dedicated worker entrypoint.
 
 ## Documentation
 
-Full API reference: [docs/reference/jobs.md](https://github.com/flourishhealth/terreno/blob/master/docs/reference/jobs.md)
+Full API reference: [docs/reference/jobs.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/jobs.md)
 
-Operator guide: [docs/how-to/background-jobs.md](https://github.com/flourishhealth/terreno/blob/master/docs/how-to/background-jobs.md)
+Operator guide: [docs/how-to/background-jobs.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/background-jobs.md)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/FlourishHealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/FlourishHealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.

@@ -26,6 +26,7 @@
     "@react-native-picker/picker": "catalog:",
     "@react-navigation/native": "catalog:",
     "@shopify/react-native-skia": "catalog:",
+    "@terreno/blocks": "workspace:*",
     "d3-scale": "^4.0.2",
     "d3-shape": "^3.2.0",
     "emoji-datasource": "^16.0.0",
@@ -162,14 +163,14 @@
     "test:coverage": "TZ=America/New_York bun run ../scripts/check-coverage.ts",
     "types": "bun typedoc"
   },
-  "version": "57.4.0",
+  "version": "57.16.2",
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "keywords": [
     "react-native",

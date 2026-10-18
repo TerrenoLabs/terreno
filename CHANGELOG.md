@@ -20,6 +20,275 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.16.2] - 2026-10-13
+
+### Fixed
+
+- Light-mode primary button labels, icons, and loading indicators are white again,
+  including on disabled primary buttons. (#1567)
+
+## [57.16.1] - 2026-10-12
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.16.1.md`](mcp-server/src/docs/upgrades/57.16.1.md).
+
+### Added
+
+- `terraform/modules/terreno-backend` provisions one Terreno backend on Cloud Run: Artifact Registry, a least-privilege runtime service account, empty Secret Manager secrets, and a websocket-safe service (session affinity, 3600s timeout, one minimum instance). Set `github_deploy` for a keyless GitHub Actions deployer. See [Deploy backend to Cloud Run](docs/how-to/deploy-backend-to-cloud-run.md#manage-with-terraform).
+
+### Changed
+
+- `terraform/` now holds only reusable modules. Terreno's own GCP deployment (example backend, jobs worker, hosted MCP server) moved to `infra/flourish/`, which uses the shared modules through a symlink; CI stages a dereferenced copy for Infra Manager. No infrastructure changes: resource addresses are unchanged.
+
+### Fixed
+
+- `TextField` and `TextArea` on web no longer drop a typo fix made within half a second. The
+  oscillation guard used to suppress any change that undid the previous one within 500ms, so
+  typing a character and backspacing it right away put the character back. Changes the user
+  types, deletes, pastes, drops or undoes (judged by the DOM input event's `inputType`) now
+  bypass the guard. Spellcheck replacements, IME composition and changes with no input event
+  stay guarded.
+
+## [57.15.0] - 2026-10-11
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.15.0.md`](mcp-server/src/docs/upgrades/57.15.0.md).
+
+### Changed
+
+- SyncDB bootstraps and reconciles every stream through one `POST /sync/snapshot/batch` request
+  per round instead of one `GET /sync/snapshot` per stream. A reconnect with nothing new now costs
+  2 requests however many collections the app syncs. The client sends the next round while it
+  writes the current one and writes rows in chunks of 500 so the UI keeps responding. Clients fall
+  back to per-stream paging against servers without the batch route. The web IndexedDB persister
+  no longer serializes the whole store once per transaction: it serializes once per write.
+
+## [57.14.0] - 2026-10-11
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.14.0.md`](mcp-server/src/docs/upgrades/57.14.0.md).
+
+### Changed
+
+- `@terreno/syncdb` now pages snapshot streams side by side instead of one at a time, so cold
+  start no longer costs one sequential round trip per stream. Reconcile, subscribe catch-up,
+  `forceResync` and wipe re-bootstrap run up to `snapshotConcurrency` streams at once (new
+  `createSyncDb` option, default 6; `1` restores the old behavior). Each stream now runs one pass
+  at a time: a subscribe catch-up queues behind a pass that started before the room join, and a
+  force resync waits for the stream's in-flight pass before purging it, so a concurrent pass can
+  no longer mark a purged stream bootstrapped over rows it never paged. A new how-to,
+  [Use syncdb correctly](docs/how-to/use-syncdb-correctly.md), lists the library behavior
+  apps have to handle.
+
+## [57.13.0] - 2026-10-10
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.13.0.md`](mcp-server/src/docs/upgrades/57.13.0.md).
+
+### Added
+
+- Agent UI rich replies: a block document can now hold a `stepper` (− value + that calls a host action and gets the replacement stepper back), a `checklist` (ticks with an "n of m" counter, local or sent to a host action), a `gallery` (2–6 photos), a `list` (titled rows with portrait thumbnails), a card `eyebrow`, and a `copy` button action that writes a block's text to the clipboard on the device. See [Add a stepper callback](docs/how-to/agent-ui-blocks.md#add-a-stepper-callback), [UI blocks](docs/reference/blocks.md), and [Agent UI blocks](docs/explanation/agent-ui-blocks.md).
+- `@terreno/blocks` exports the stepper, checklist, gallery, list, and copy action types, `blockPlainText`, `stepperElementIds`, `checklistElementId`, `COPY_TARGET_TYPES`, and the error codes `OUT_OF_RANGE` and `COPY_TARGET_INVALID`. `blocksPromptSection` takes `richBlocks`, `stepperActions`, and `checklistActions`; `validateBlocks` takes the two action lists. The Sunday roast golden document is `blocks/src/fixtures/golden/sunday-roast.yaml`.
+- `@terreno/ai` adds the opt-in host actions `scaleStepperHostAction` and `toggleChecklistHostAction`, `findAgentBlock` for reading the block the agent wrote from the stored history, and `runBufferedChatTurn` for one chat turn without HTTP. A host action can set `handles: "stepper" | "checklist"` and `logResponse: false` (the returned block stays out of the `ui_action` log). `uiBlocks.richBlocks` controls which blocks the prompt offers.
+- `@terreno/ui` `BlocksView` renders the new blocks with Terreno components. `DataTable` has right-aligned `number` and Luxon `date` cells, and the `table` block uses them. `MarkdownView` tables get theme borders, a bold header, and sideways scroll. `Box` takes `accessibilityState` and `accessibilityLiveRegion`. `Image` uses `alt` as its accessible label.
+- The example app generates a stored photo library once (`bun run photos:generate`, Vertex Imagen), gives the agent a `findPhotos` tool, serves `GET /photoLibrary/:id/url`, and registers `scaleStepper` and `toggleChecklist`. `bun run blocks:smoke` checks that a real model writes the roast reply, and skips without a model key.
+- `@terreno/api` exports `createRouteRateLimitMiddleware({name, max, windowMs, store?, keyBy?})`, a fixed-window limit for one route that works without `TerrenoApp` `rateLimit`. See [Rate limiting](docs/how-to/rate-limiting.md). (#1499)
+- `@terreno/admin-backend` `DocumentStorageApp` takes `access: "authenticated"` to open document storage to every signed-in user. Non-admins only see their own `users/<userId>/` folder under `folderPrefix`; admins keep the whole prefix. `uploadRateLimit` limits uploads per client IP (or `keyBy`). A `folderPrefix` without a trailing slash gets one, and a missing bucket lists as empty. (#1499)
+- `@terreno/admin-frontend` `DocumentStorageBrowser` takes `backButton` and shows upload errors inline, including a 429 "Upload limit reached" message. (#1499)
+- `@terreno/ui` `SegmentedControl` takes `size="sm"` (28px, sized to its labels). (#1499)
+
+### Changed
+
+- The admin Roles screen shows one row per resource, with that resource's actions as badges, instead of one badge per `resource:action`. Custom permissions list before model permissions. Badges are green for read actions, amber for writes, and red for destructive actions (`delete`, `destroy`, `remove`). Saved role data is unchanged. (#1540)
+- Behaviour change: hosts with `uiBlocks` on get the new rich blocks (`checklist`, `gallery`, `list`, card `eyebrow`, and `copy`, plus `stepper` when a host action has `handles: "stepper"`) in the chat system prompt by default. A native build released before them shows an error banner for a reply that uses them. Set `uiBlocks.richBlocks: false` to keep the old catalog until those builds update; the prompt is then unchanged from before, even with a stepper action registered. Validation accepts the new blocks either way. See [Keep the old catalog for shipped native builds](docs/how-to/agent-ui-blocks.md#keep-the-old-catalog-for-shipped-native-builds).
+- `DataTable` columns with `columnType: "number"` now right-align their cells and header, and `columnType: "date"` cells format an ISO string or `Date` as Luxon `DATE_MED` (date only, local zone). Values that are already formatted strings show as before. Use `customColumnComponentMap` to keep the old look.
+- `Image` with `alt` now sets it as the accessible label and makes the image its own screen-reader element.
+- `table` blocks show column names with underscores as spaces, size to their rows, and show at most 10 rows before the body scrolls.
+- The `neutral500` theme primitive is now `#949494` (was `#9A9A9A`), so extra-light text meets contrast guidelines. Disabled surfaces, dark borders, the away status, and new `create-terreno-app` projects pick up the new gray. Apps that set their own `neutral500` with `setPrimitives` are unaffected. (#1544)
+
+### Fixed
+
+- On web, an open toast no longer blocks clicks on the rest of the page at the same height.
+  The toast's `SafeAreaView` and the `Toast` layout wrapper span the full width (up to 900px)
+  around the visible toast and swallowed clicks there. Both now use `pointerEvents: "box-none"`,
+  so only the visible toast is interactive.
+- `Tooltip` no longer shows up in the top-left corner and blocks the screen when its trigger measures as zero-sized or off-screen. When the trigger measurement is invalid or the ref cannot be measured, the tooltip hides and logs `console.error`. Measurements left over from an earlier show are ignored. (#1490)
+- `Tooltip` on web no longer mounts a full-screen layer over the app while it is open.
+  The bubble now renders into `document.body` with `position: fixed` instead of through
+  the `PortalHost` layer, so nothing covers the page and the content below stays
+  clickable. Web tooltips also use `zIndex: 9999`, matching the body-level overlays
+  (`Modal`, `DropdownPanel`), so tooltips inside a modal show on top of it. Native keeps
+  the `PortalHost` path.
+
+## [57.12.0] - 2026-10-07
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.12.0.md`](mcp-server/src/docs/upgrades/57.12.0.md).
+
+### Added
+
+- `@terreno/ai` harness: `harness.createTask(def, input, {trace: {scope, tags}, prompts})` writes a scope (tenant, workspace), tags, and prompt versions onto the task's `ObsTrace`; child tasks and subagents share it. `ObsTrace` gains `scope` (indexed with `created`) and `tags`, and the admin trace list filters by `scope`. `rt.runAgent` takes `prompts` and accepts a registry `PromptVersionRef` as `instructions` (its `body` runs, its version is recorded). New subpath exports replace `dist/` deep imports: `@terreno/ai/admin`, `@terreno/ai/harness/{agentLoop,commit,events,internalRuntime}`, and `@terreno/ai/observability/{observabilityApp,localPlugin,promptStore}`. `getProjectModel()` returns the chat `Project` model, and `new AiApp({projects: false})` skips the `/gpt/projects` routes so an app can own a model named `Project`. See [AI harness reference](docs/reference/ai-harness.md#trace-scope-and-prompt-versions). Closes #1533.
+
+### Changed
+
+- Harness task HTTP responses and the task OpenAPI schema omit `lease`. The fencing token stays on the server. Approve, reject, submit, and abort invalidate the same cache tags as the task, approval, and conversation lists (`harnesstasks`, `harnessapprovals`, `harnessconversations`).
+- Importing `@terreno/ai` no longer registers the mongoose `Project` model. The `Project` export is a lazy proxy and is deprecated: the first use of `Project` or `getProjectModel()` registers the model. Statics, `new Project(...)`, and `instanceof Project` still work. The proxy is not the model (`Project !== mongoose.models.Project`, `Object.keys(Project)` is empty, and reading `Project.prototype` throws). Use `getProjectModel()`.
+
+### Fixed
+
+- Web `SplitPage` desktop child columns scroll vertically again. The corner radius and clip sit on the pane, so `overflow: hidden` no longer blocks the column `ScrollView`. A child with `height: "100%"` stays within the visible pane and can scroll internally. Narrow web pager pages use the measured pane height, so that same full-height child can scroll internally while the page still clips its rounded corners. Labeled pager previous and next controls sit in fixed slots in a row under the column, and the column uses the height left after that row and its spacing. `desktopChildrenMinWidth` horizontal scrolling, the list column, and native `SplitPage` are unchanged.
+
+## [57.11.0] - 2026-10-05
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.11.0.md`](mcp-server/src/docs/upgrades/57.11.0.md).
+
+### Added
+
+- `@terreno/ai/harness/jobsRunner`: `JobsRunner` runs durable harness phases as `@terreno/jobs` jobs (`terreno.harness.phase`) on every instance, for multi-instance deploys such as Cloud Run. The task lease decides who commits, so duplicate or late jobs are harmless. `@terreno/jobs` is an optional peer; importing `@terreno/ai` never loads it. Adds `HarnessTask.claims` (default 0, no migration). See [Run the harness on multiple instances](docs/how-to/run-harness-on-multiple-instances.md).
+- `@terreno/api` can manage one Slack workspace with `SLACK_BOT_TOKEN`: `createSlackPrivateChannel` creates a private channel, invites member ids, and posts an optional first message; `inviteSlackUsersToChannel` adds staff to a channel the bot already belongs to; `postSlackMessage` posts as the bot; `findSlackChannelByName` resolves a visible channel name to its id.
+- `@terreno/syncdb` query windows: `queryCollections` config, `client.queryWindows`, and the `useWindowQuery` hook (plus generated `use{Collection}Window` hooks) run server-filtered, paged list queries (`where`, `sort`, `pageSize`, `fetchNextPage`, `refetch`, `hasMore`, `total`) over a shared, deduplicated entity table. Overlapping windows store each row once and update it once; each window lists only its own members. `fullSync: true` adds windows to a collection that still snapshot-syncs.
+- `useQuery` / `useEntityIds` accept the same Mongo-style `where`, string sort specs, and `limit` for local queries.
+- Window refetches learn the route's `maxLimit` and pipeline page requests with a `console.warn` instead of silently truncating.
+- `modelRouter` list requests that filter on a field missing from `queryFields` now return a 400 naming the field, model, and allowed fields (`meta.allowedQueryFields`), checked before query validation so the filter can never be silently stripped. syncdb raises it as `QueryFieldNotAllowedError`.
+- `terreno-prd` interviews the app owner and writes a product PRD with measurable success metrics before Grow. Invoke `/terreno-prd` in Cursor, `/terreno:prd` in Claude Code, or `$terreno-prd` in Codex.
+
+### Changed
+
+- `@terreno/ai/harness`: `InProcessRunner` now runs up to 8 claimed tasks at once (new `concurrency` option, default 8), each under its own task lease, and `stop()` waits for all of them. Expect parallel model calls (watch provider rate limits and cost) and more stream-counter transaction retries. Turns of one conversation stay serial. Pass `new InProcessRunner({concurrency: 1})` to keep the previous one-at-a-time behavior. See [AI harness reference → InProcessRunner](docs/reference/ai-harness.md#inprocessrunner).
+
+### Fixed
+
+- Outline `Button`s match solid buttons in width and height. The border width is subtracted from horizontal padding as well as vertical, at the default and `sm` sizes.
+- `@terreno/ui` date and table components import `FontAwesome6` from `@expo/vector-icons/FontAwesome6`, so the named export resolves on iOS. The public component API is unchanged.
+- Web `SplitPage` navigation IconButtons use the default variant, and detail child columns get a default `md` corner radius with `overflow: hidden`. Pass `childColumnRounding` to override that radius. The list column is unchanged. Native `SplitPage` is unchanged.
+
+## [57.10.1] - 2026-10-04
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.10.1.md`](mcp-server/src/docs/upgrades/57.10.1.md).
+
+### Breaking
+
+- Security: `GET /files/*gcsKey` (`addFileRoutes`, `AiApp` with `gcsBucket`) now requires authentication and returns a signed URL only for the caller's own upload. Before, anyone could get a signed URL for any stored key, and keys are guessable (`uploads/<userId>/<ms>-<name>`). Another user's file, including for an admin, returns 404 like a missing file, so keys cannot be probed. Send the user's session token with the request; an unauthenticated request now returns 401.
+
+### Added
+
+- Agent UI Asks: the chat agent can pause a turn and ask the user a typed question, then continue with the exact answer. Turn it on with `asks: true` (or `{kinds, approvals, maxFileSizeBytes}`) on `AiApp` or `addGptRoutes`. Asks are off by default: with `asks` unset, tools, the system prompt, SSE events, and endpoints are unchanged. See `docs/how-to/agent-ui-asks.md`, `docs/reference/agent-ui-asks.md`, and `docs/explanation/agent-ui-asks.md`.
+- New package `@terreno/blocks`: the shared Zod contracts for asks (input and answer schemas, `validateAskInput`, `validateAskResponse`, stable error codes, `ASK_LIMITS`), simple cards (`toSimpleCard`, `resolveButtonAnswer`), the compact surface, the headless endpoint bodies, and JSON Schema documents plus fixtures (`@terreno/blocks/schemas/*`, `@terreno/blocks/fixtures/*`) for native clients such as a Swift watch app.
+- Five ask kinds, each a client-side `ask_<kind>` tool: `choice` (select one, or select many with an optional Other text answer), `confirm`, `markdown` (edit a draft), `form` (a few typed fields, one submit), and `files` (upload images or documents the model reads in the same turn, as data URLs or `fileId`s from `POST /files/upload`).
+- Server-enforced approval: with asks on, a host tool marked `needsApproval: true` runs only after the user approves a server-made `confirm` ask. `asks.approvals` sets that ask's text per tool name. With asks off, such a tool never runs.
+- `/gpt/prompt` accepts `askResponse` and `surface: "full" | "compact"`, and streams `{ask}` and `{askResolved}` events plus `pendingAsk` on `{done}`. `GptHistory` stores the pending ask. With `chat` options that turn asks on, `addGptHistoryRoutes` (and `AiApp`) adds `GET /gpt/histories/pendingAsks` and `POST /gpt/histories/:id/turn`, which run a turn to completion and return JSON for clients that do not read server-sent events.
+- `@terreno/ui`: `GPTChat` shows asks as an `AskCard` in the transcript (`GPTChatMessage.ask`, `onAskSubmit`, `askErrors`, `resolveAskFiles`). New `AskCard` and `SimpleAskCard` components. `Button` has a new `wrapText` prop that wraps a long label onto centered lines instead of overflowing its container.
+- The example app's AI screen answers asks end to end, and the example backend runs a scripted keyless demo agent (`terreno-demo-agent`) when no model is configured, so asks can be tried without an API key.
+- Agent UI blocks: a chat reply can be one YAML document of headings, metrics, charts, tables, and actions. Turn it on with `uiBlocks` on `addGptRoutes`. The model is told its whole reply is that document. After the text, the route checks it and sends `{blocks}` before `{done}`. `repair: true` runs one repair call. See `docs/how-to/agent-ui-blocks.md`, `docs/reference/blocks.md`, and `docs/explanation/agent-ui-blocks.md`.
+- `@terreno/blocks` adds `parseBlocks`, `validateBlocks`, `blocksJsonSchema`, and `terreno-blocks validate`. Charts and tables read inline rows or a `ref` dataset. `AIService.generateBlocks` returns one validated document at temperature 0.
+- `@terreno/ai` stores chart rows on `AIDataset` via `registerAiDataset`. `GET /gpt/datasets/:id` is owner-only and can bucket, downsample, or paginate them. `POST /gpt/actions` runs a named host callback after an owner check and a payload check.
+- `@terreno/ui` `BlocksView` paints a document. `GPTChat` `uiBlocks` renders assistant messages through that view, including a spinner while the reply is still streaming.
+- The example backend registers `exportDataset` and a `todoStats` tool that stores open and completed todo counts. The example AI tab loads `ref` charts and posts callbacks.
+- `html` blocks are opt-in (`uiBlocks.html` on the server, `allowHtml` on `GPTChat` or `BlocksView`). The server strips scripts, event handlers, forms, frames, and links, then stores the cleaned document. The client draws it in a sandboxed frame only after the reply finishes.
+- `callout`, `image`, and `details` render as a banner, an image, and an accordion. An `https` image loads only when its host is in `uiBlocks.imageHosts`.
+- A reply that omits an actions block `id` gets one before it is stored. A block document written in the same step as a tool call is kept when the turn would otherwise have no text. The chat receives the document after that fill, repair, and HTML sanitizing, so an invalid draft is not shown. `{replace: "text"}` is sent only when text was already streamed and then changed. A validation banner names the field path once the reply has finished.
+- Example-backend registers `accessControl: access` on `ObservabilityApp` and seeds optional `aiObservabilityViewer` and `aiObservabilityOperator` RBAC roles that demonstrate read-only and full observability access without auto-assigning them to users.
+- `@terreno/ai` ships local prompt versions, nested traces, evaluators, datasets, experiments, and a review queue through `ObservabilityApp`, with the admin screens in `@terreno/admin-frontend`. Prompts, datasets, and experiments have one writer. Traces and scores fan out to every registered sink (local Mongo, Langfuse, or OTLP). Six RBAC resources cover read-only, reviewer, and operator access. See `docs/how-to/observe-llm-calls.md`.
+- `@terreno/ai/harness` runs phased tasks on Mongo that survive a process crash. Each checkpoint and its trace span commit in one transaction. Tasks can wait for a person, retry, abort from the bottom up, and stay pinned to the definition version they started with. `defineTask`, `defineAgent`, and `defineTool` describe the work; approvals have their own permissions and an admin inbox. See `docs/how-to/build-a-durable-workflow.md`.
+
+### Fixed
+
+- `GET` and `DELETE /files/*gcsKey` find uploads by their full key. Express 5 passes the wildcard as path segments, so a key with slashes, such as the `uploads/<userId>/<ms>-<name>` key every upload gets, returned 404.
+
+## [57.9.0] - 2026-10-03
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.9.0.md`](mcp-server/src/docs/upgrades/57.9.0.md).
+
+### Added
+
+- `@terreno/ui` can compose operations dashboards with scorecards, comparison sparklines, multi-series line and area charts, donut center labels, previous-period bar overlays, chart-card headers, and spanning dashboard items.
+- File uploads can be turned off with the `file-uploads` feature flag. `POST /files/upload`, document storage uploads, and chat attachments return 403 when the flag is off. The example app hides the upload controls. A missing flag leaves uploads enabled.
+- `/gpt/prompt` rejects client-only attachment URLs (`blob:`, `file:`, `content:`, `ph:`) with `400` before streaming. With `fileStorageService` configured, `data:` attachments are uploaded and history stores the storage `url` plus `gcsKey`; later turns send the model signed URLs.
+- `/gpt/prompt` saves the turn before streaming, sends a first `{historyId, started: true, streamId}` event, and persists partial reply text about every second with `status: "streaming"`. The finished reply is saved with `status: "complete"`; a failed one keeps its partial text with `status: "error"`.
+- New `GET /gpt/histories/:id/stream` re-attaches to an in-flight reply after a reload or remount (`offset` skips text the client already shows). The example app reopens the last chat after a reload and resumes its live reply.
+- `store-assets` agent skill for Expo apps. It keeps a simulator/emulator dev client in sync with the native fingerprint (downloading a matching EAS build or starting one), captures App Store and Google Play screenshots on store-sized devices with Maestro flows that log in through the `@terreno/ui` LoginScreen, and renders the Play feature graphic and 512×512 icon from a repo's `storeAssets.config.json`. Install with `npx skills add TerrenoLabs/terreno --skill store-assets` or from the `terreno` Claude plugin.
+
+### Changed
+
+- `GPTChat` history rows move rename and delete into a three-dot overflow menu. Rename uses an outlined pencil in the dark secondary color; titles truncate before the menu trigger at any sidebar width.
+- `GPTChat` shows "Scroll to bottom" only when content sits below the viewport, never in an empty chat.
+- The `GPTChat` composer grows with long text up to 200px, then scrolls. `TextField` / `TextArea` accept `maxHeight` to cap `grow`.
+- Generated images in `GPTChat` offer copy-image and (web) download. Copying an image-only reply copies the image instead of text.
+- `FilePickerButton` opens an anchored dropdown instead of a modal. On web, **Document** now opens the file picker, and both options return `data:` URLs instead of `blob:` URLs.
+
+### Fixed
+
+- Web toasts now render above open modals and remain correctly centered in statically exported apps instead of inheriting a zero-width server-rendered viewport.
+
+## [57.8.0] - 2026-10-02
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.8.0.md`](mcp-server/src/docs/upgrades/57.8.0.md).
+
+### Added
+
+- `@terreno/announcements` imports a versioned release pack (`pack.yaml` plus one Markdown file per announcement) through idempotent `POST /announcements/import-release`. Imports default to drafts; pass `publish: true` to publish on import. Re-importing the same product, release version, channel, and slug updates the existing row, and a matching soft-deleted row is restored. Admin auth or `ANNOUNCEMENTS_UPLOAD_TOKEN` can call the route. Request bodies for the import and for impression and click events are strict Zod schemas.
+- `SplitPage` accepts opt-in web layout props. `desktopChildrenMinWidth` keeps one or two desktop children at least that many pixels wide and scrolls horizontally when the row is tighter. `narrowViewportChildLabels`, `narrowViewportSelectionActive`, `narrowViewportSelectionKey`, and `narrowViewportListButtonLabel` replace the dotted narrow swiper with a labeled pager. `narrowBelowWidth` uses the narrow layout at or below that pixel width; omit it to keep `isNarrowViewport()`. Native `SplitPage` ignores these props. `IconButton` accepts `backgroundOpacity` to tint only the button background.
+
+### Changed
+
+- CircleCI `publish-release` compiles every lockstep package once and publishes them in parallel instead of recompiling and retesting each package in turn. Tagged commits already passed CI on master. Releases drop from 25+ minutes to about 4.
+- `deploy-demo` runs alongside `publish-release` instead of after it.
+- `scripts/ci/netlify-deploy.sh` passes `--no-build`, so Netlify deploys no longer rerun the root `netlify.toml` docs build (about 3.5 minutes per demo and frontend deploy).
+
+### Deprecated
+
+- `isMobileDevice` is deprecated. Call `isNarrowViewport` instead. The old function stays exported and returns the same result until it is removed.
+
+### Fixed
+
+- `DropdownPanel` now anchors to its trigger rather than to the row around it. The measured wrapper stretched to fill its container, so the panel opened at the start of that row — visible whenever the trigger is not at the start edge, such as a right-aligned button or a right-to-left layout, where the panel appeared on the opposite side of the screen.
+- `/gpt/prompt` sends each generated image once. Image-output models no longer duplicate the SSE `image` event and saved content part, and image-only responses save empty text instead of the `(image)` placeholder. `GptHistory` prompt `text` is now required only when the prompt has no `content` parts.
+
+## [57.7.0] - 2026-09-28
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.7.0.md`](mcp-server/src/docs/upgrades/57.7.0.md).
+
+### Changed
+
+- CircleCI is now the only continuous deployer for the Netlify demo, example frontend, and docs sites and for GCP terraform, Cloud Run backend/tasks, and MCP. The GitHub Actions deploy workflows are disabled for rollback only, and CircleCI deploy jobs fail instead of skipping when `terreno-netlify` or `terreno-gcp` is missing a value. CircleCI deploys record GitHub Deployments (same environment names as before, plus `docs` and `mcp-production`) when the `terreno-github-deployments` context holds `GITHUB_DEPLOYMENTS_TOKEN`.
+- `@terreno/ui`'s `Filter` is now `DropdownPanel`, reflecting that it is a general compositional dropdown (trigger + anchored panel + optional Apply/Clear/Cancel footer), not a filter-only control. `Filter` and `FilterProps` stay exported as deprecated aliases until Terreno 58; the `FilterSelectMenu` / `FilterBoolean` / `FilterAccordion` / `FilterChangesBadge` controls keep their names.
+- `DropdownPanel` no longer runs off screen. The panel right-aligns to its trigger when a left-aligned panel would cross the right viewport edge, clamps to an 8px screen margin, flips above the trigger when there is no usable room below, and scrolls its body (footer pinned) when the content is taller than the space available. `align` and `maxPanelHeight` override the automatic behavior, and `computeDropdownPanelLayout` is exported for callers that position their own panels.
+- `DropdownPanel` renders through the `TerrenoProvider` portal host on native, so the panel is no longer clipped inside scroll views or cards. Without a host it falls back to the previous inline overlay.
+- `DropdownPanel` triggers are now styleable: `triggerVariant` (any `Button` variant), `applyButtonVariant`, `triggerSize` on labeled triggers, `fullWidth`, and `renderTrigger` for a fully custom trigger.
+- `bun run prepush` now runs the local mirror of every CI job the branch triggers, using the CircleCI path-filter mapping. That covers package `test:coverage` plus the new-file LCOV gate, `ui` types, example-backend and example-frontend tests, every `repo-policies` step, rulesync drift, and the typedoc API reference. It runs every step even after a failure and prints a summary. Use `--dry-run` to see the plan and `--all` to run everything.
+- New `bun run check:test-isolation` blocks new `mock.module` calls in shared Bun test suites (see `docs/explanation/test-isolation.md`).
+- The lifecycle plugin now makes one commit per task after Roast `PASS` with no bookkeeping commits, keeps pushes out of Pick and Roast, has Pick list edge cases before coding, has Roast run the CI-equivalent package gate, and has Taste merge `master` only when the PR conflicts, a failure traces to base drift, or the branch is merge-ready.
+- Taste invoked directly by a human now repeats bounded reactions (at most 3 fix pushes and 3 hours of waiting) until `PASS`, `BLOCKED`, or `FAIL` instead of returning `PENDING`, and a directly invoked Brew starts Taste as its next stage.
+
+## [57.6.1] - 2026-09-25
+
+### Fixed
+
+- `modelRouter` array subroutes now return a structured `400` error when the requested field is not an array, after preserving consumer update authorization hooks, instead of throwing an iterable `TypeError`.
+
+## [57.6.0] - 2026-09-24
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.6.0.md`](mcp-server/src/docs/upgrades/57.6.0.md).
+
+### Added
+
+- `sendToSlack` accepts `mentionUserIds` (Slack member IDs) so incoming webhooks can @-mention people. Names and emails in the message text do not notify anyone. New helpers: `formatSlackUserMention`, `normalizeSlackUserId`, and `lookupSlackUserIdByEmail` (optional `SLACK_BOT_TOKEN` with `users:read.email` to resolve an id from email and store it on the staff/user record).
+- Add full SyncDB support to `terreno-mcp-local`: inspect debugger and local-store
+  state, capture/compare/merge snapshots, mutate or directly edit local entities,
+  flush the outbox, reconcile/resync, resolve conflicts, retry failures, and
+  exercise offline transitions. State-changing operations require
+  `TERRENO_MCP_EVAL=1`; returned state redacts sensitive fields.
+- Add `@terreno/cli` (`terreno`) for docs search, codegen (syncdb, RTK SDK, models, routes, screens, forms, admin), bootstrap, unified backend/browser/Metro/app logs, Redux/RTK state inspection, opt-in CDP evaluation/navigation, Bun 1.4 WebView automation and screenshot proof, read-only database tools, OpenAPI `api list|call|request`, and `generate rest-cli` to scaffold an app CLI from a backend spec.
+
+### Changed
+
+- Terreno moved to the `TerrenoLabs` GitHub organization. The repository is now `TerrenoLabs/terreno`, the roadmap board is `github.com/orgs/TerrenoLabs/projects/1`, and package `repository` URLs, docs links, and plugin/skill install commands (`/plugin marketplace add TerrenoLabs/terreno`, `npx skills add TerrenoLabs/terreno`) point at the new location. Old `FlourishHealth/terreno` URLs redirect.
+- Every tsconfig builds on TypeScript 6 without `ignoreDeprecations`. Node packages (`@terreno/api`, `ai`, `admin-backend`, `announcements`, `api-health`, `comms`, `feature-flags`, `jobs`, `test`, and the `admin-spa` server plugin) now compile with `module: nodenext` to ES2023 CommonJS instead of ES5. Their dynamic `import()` stays a real ESM import, so `loadMigrations` can load migration files by `file://` URL from compiled `dist/`. Frontend libraries (`ui`, `admin-frontend`, `rtk`, `syncdb`) emit ES2022 with bundler resolution and ship declaration maps. `@terreno/test` no longer publishes its compiled Bun tests. `create-terreno-app` scaffolds drop `ignoreDeprecations` and `moduleResolution: node`, and the generated backend moves to TypeScript 6. See `docs/explanation/typescript-configuration.md`.
+
+### Fixed
+
+- Framework Mongoose models added in 57.3 and 57.4 now use `Terreno*` model names
+  without changing their MongoDB collections, preventing collisions with consumer
+  models such as `Notification`, `Membership`, and `Job`. Admin UI keys and
+  `admin<ModelName>` RBAC resources keep the pre-namespace names. JWT recovery
+  routes can be disabled with `authOptions.passwordReset`, `emailVerification`,
+  and `legacyResetPasswordRoute`.
+
 ## [57.4.0] - 2026-09-22
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.4.0.md`](mcp-server/src/docs/upgrades/57.4.0.md).
@@ -297,7 +566,7 @@ Upgrade note: [`mcp-server/src/docs/upgrades/57.3.0.md`](mcp-server/src/docs/upg
 ### Added
 
 - The lifecycle stages now ship as a Claude Code plugin. Add the marketplace with
-  `/plugin marketplace add FlourishHealth/terreno`, install with
+  `/plugin marketplace add TerrenoLabs/terreno`, install with
   `/plugin install terreno@terreno-plugins`, then invoke `/terreno:1-grow`. The marketplace
   name is `terreno-plugins` so it does not collide with the plugin name `terreno` (Claude
   Code's installer breaks when those names match). Claude Code takes a
@@ -306,7 +575,7 @@ Upgrade note: [`mcp-server/src/docs/upgrades/57.3.0.md`](mcp-server/src/docs/upg
   (`bun run skills:sync`). Cursor and `npx skills` are unchanged: plugin
   `terreno-planning`, stages `terreno-1-grow` … `terreno-5-taste`.
 - The lifecycle stages now ship as a Codex plugin. Add the marketplace with
-  `codex plugin marketplace add FlourishHealth/terreno`, install with
+  `codex plugin marketplace add TerrenoLabs/terreno`, install with
   `codex plugin install terreno-planning --source terreno-plugins`, then invoke
   `$terreno-1-grow`. Codex uses the canonical `plugins/terreno-planning/` tree
   (`.codex-plugin/plugin.json`) and the repo marketplace at
@@ -485,7 +754,7 @@ Upgrade note: [`mcp-server/src/docs/upgrades/57.3.0.md`](mcp-server/src/docs/upg
 - GitHub `cd.yml` GCP preview jobs (`terraform-preview`,
   `backend-deploy-preview`) and `preview-cleanup.yml` skip fork pull requests.
   OIDC `id-token` is granted only on jobs that authenticate to GCP, not the
-  whole workflow. Fork PRs keep `repository: FlourishHealth/terreno` on the
+  whole workflow. Fork PRs keep `repository: TerrenoLabs/terreno` on the
   token, so WIF would otherwise accept them.
 - Sync mutation date equality now parses date-only ISO strings as UTC and rejects invalid input instead of throwing. The unused datetime NumberPicker stores UTC ISO so Luxon can round-trip the picker value.
 - The `maestro-e2e` CI job now exports the example-frontend web bundle before starting the
@@ -561,7 +830,7 @@ Upgrade note: [`mcp-server/src/docs/upgrades/57.1.0.md`](mcp-server/src/docs/upg
 - Model Context Protocol support in `modelRouter` via an `mcp` option: opted-in
   models expose their CRUD operations as MCP tools at `POST /mcp`, reusing the
   same permissions, query filters, population, and lifecycle hooks as REST
-  ([#358](https://github.com/FlourishHealth/terreno/pull/358)). `getMCPTools(user)`
+  ([#358](https://github.com/TerrenoLabs/terreno/pull/358)). `getMCPTools(user)`
   in `@terreno/ai` returns those tools as Vercel AI SDK objects for in-process
   chat. MCP list filters accept Mongo comparison operators (`$in`, `$gte`, `$ne`,
   and friends) and top-level `$and` / `$or` on `queryFields`; operators that can
@@ -623,7 +892,7 @@ Upgrade note: [`mcp-server/src/docs/upgrades/57.1.0.md`](mcp-server/src/docs/upg
 - Lifecycle stages now follow a documentation contract: read architecture docs before
   acting, update them in the same slice, and fail user-visible or architectural work that
   ships without matching docs. All agent skills are installable with
-  `npx skills add FlourishHealth/terreno`. The committed `skills/` tree is generated from
+  `npx skills add TerrenoLabs/terreno`. The committed `skills/` tree is generated from
   `.rulesync/skills/`, the planning plugin stages, and `<package>/.ai/skills/` overlays via
   `bun run skills:sync`.
 - Role assignment **preview** no longer writes `RbacAudit` denied-assign rows. Denied
@@ -784,87 +1053,87 @@ Upgrade note: [`mcp-server/src/docs/upgrades/57.1.0.md`](mcp-server/src/docs/upg
 Upgrade note: [`mcp-server/src/docs/upgrades/57.0.0.md`](mcp-server/src/docs/upgrades/57.0.0.md).
 
 First stable release of the Expo SDK 57 line, cut from `master` after
-[`#1065`](https://github.com/FlourishHealth/terreno/pull/1065). Publishes to the npm
+[`#1065`](https://github.com/TerrenoLabs/terreno/pull/1065). Publishes to the npm
 `latest` dist-tag. Apps on `0.x` should stay pinned until they upgrade Expo.
 
 ### Added
 
 - `Filter` and its composable select, boolean, accordion, and change-badge controls in
   `@terreno/ui` for desktop web filtering flows
-  ([#972](https://github.com/FlourishHealth/terreno/pull/972))
+  ([#972](https://github.com/TerrenoLabs/terreno/pull/972))
 
 ### Changed
 
 - Terreno's version major now tracks Expo SDK 57 (`57.x.y`). `npm install @terreno/ui`
   resolves to this line; pin `0.x` if the app has not upgraded Expo yet
-  ([#1065](https://github.com/FlourishHealth/terreno/pull/1065))
+  ([#1065](https://github.com/TerrenoLabs/terreno/pull/1065))
 - Frontend peer/catalog stack moves to Expo SDK 57 / React Native 0.86.2
   (`expo ~57.0.14`, matching React Native DevTools and Hermes V1 fixes from
   `expo@57.0.9+`). React stays at `19.2.3`. Consuming apps should run
   `npx expo install expo@latest --fix` then rebuild native binaries
-  ([#1065](https://github.com/FlourishHealth/terreno/pull/1065))
+  ([#1065](https://github.com/TerrenoLabs/terreno/pull/1065))
 - `@terreno/syncdb` bumps `tinybase` to `^9.5.1` for Expo SDK 57 /
-  `expo-sqlite` type compatibility   ([#1065](https://github.com/FlourishHealth/terreno/pull/1065))
+  `expo-sqlite` type compatibility   ([#1065](https://github.com/TerrenoLabs/terreno/pull/1065))
 
 ## [57.0.0-beta.1] - 2026-08-20
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.0.0-beta.1.md`](mcp-server/src/docs/upgrades/57.0.0-beta.1.md).
 
 First beta of the Expo SDK 57 line, cut from `master` after merging
-[`#1065`](https://github.com/FlourishHealth/terreno/pull/1065). Publishes under the npm
+[`#1065`](https://github.com/TerrenoLabs/terreno/pull/1065). Publishes under the npm
 `beta` dist-tag; `npm install @terreno/ui` still resolves to the stable `0.x` line.
 
 ### Added
 
 - `Filter` and its composable select, boolean, accordion, and change-badge controls in
   `@terreno/ui` for desktop web filtering flows
-  ([#972](https://github.com/FlourishHealth/terreno/pull/972))
+  ([#972](https://github.com/TerrenoLabs/terreno/pull/972))
 
 ### Changed
 
 - Terreno's version major now tracks Expo SDK 57 (`57.x.y`). The stable `0.x` packages are
   unaffected; this beta does not move `latest`
-  ([#1065](https://github.com/FlourishHealth/terreno/pull/1065))
+  ([#1065](https://github.com/TerrenoLabs/terreno/pull/1065))
 - Frontend peer/catalog stack moves to Expo SDK 57 / React Native 0.86.2
   (`expo ~57.0.14`, matching React Native DevTools and Hermes V1 fixes from
   `expo@57.0.9+`). React stays at `19.2.3`. Consuming apps should run
   `npx expo install expo@latest --fix` then rebuild native binaries
-  ([#1065](https://github.com/FlourishHealth/terreno/pull/1065))
+  ([#1065](https://github.com/TerrenoLabs/terreno/pull/1065))
 - `@terreno/syncdb` bumps `tinybase` to `^9.5.1` for Expo SDK 57 /
-  `expo-sqlite` type compatibility ([#1065](https://github.com/FlourishHealth/terreno/pull/1065))
+  `expo-sqlite` type compatibility ([#1065](https://github.com/TerrenoLabs/terreno/pull/1065))
 
 ## [56.0.0-beta.2] - 2026-08-17
 
 Upgrade note: [`mcp-server/src/docs/upgrades/56.0.0-beta.2.md`](mcp-server/src/docs/upgrades/56.0.0-beta.2.md).
 
 Second beta of the Expo SDK 56 line, cut from `master` after merging
-[`#976`](https://github.com/FlourishHealth/terreno/pull/976). Publishes under the npm
+[`#976`](https://github.com/TerrenoLabs/terreno/pull/976). Publishes under the npm
 `beta` dist-tag; `npm install @terreno/ui` still resolves to the stable `0.x` line.
 
 ### Added
 
 - Expo SDK 56 target for frontend packages: `expo ~56.0.12`, `react-native 0.85.3`,
   `react 19.2.3`, TypeScript 6
-  ([#976](https://github.com/FlourishHealth/terreno/pull/976))
+  ([#976](https://github.com/TerrenoLabs/terreno/pull/976))
 - `@terreno/syncdb` local-first data layer (TinyBase MergeableStore, durable outbox,
   websocket delta sync, encrypted web persistence) plus `SyncApp` / sync protocol support
   in `@terreno/api`
-  ([#976](https://github.com/FlourishHealth/terreno/pull/976))
+  ([#976](https://github.com/TerrenoLabs/terreno/pull/976))
 - `SyncStatusBanner` and `ConflictSheet` in `@terreno/ui` for sync UX
-  ([#976](https://github.com/FlourishHealth/terreno/pull/976))
+  ([#976](https://github.com/TerrenoLabs/terreno/pull/976))
 - `@terreno/comms` with pluggable mail, SMS, push, and verification contracts, console
   development providers, delivery logging, owner-scoped push-token routes, an admin delivery
   explorer, and generated RTK Query hooks
-  ([#1037](https://github.com/FlourishHealth/terreno/pull/1037))
+  ([#1037](https://github.com/TerrenoLabs/terreno/pull/1037))
 
 ### Changed
 
 - Terreno's version major now tracks the Expo SDK major it targets (`56.x.y` for Expo 56).
   The stable `0.x` packages are unaffected; this beta does not move `latest`
-  ([#976](https://github.com/FlourishHealth/terreno/pull/976))
+  ([#976](https://github.com/TerrenoLabs/terreno/pull/976))
 - Frontend peer/catalog stack moves to Expo 56 / React Native 0.85 / React 19.2 /
   TypeScript 6 — consuming apps must upgrade Expo before installing this beta
-  ([#976](https://github.com/FlourishHealth/terreno/pull/976))
+  ([#976](https://github.com/TerrenoLabs/terreno/pull/976))
 - `excludeArchivedPlugin` now filters `findOne` the same way as `find`, matching
   `isDeletedPlugin`
 - Sync/REST CRUD executors preserve kebab-case error `code` values
@@ -879,7 +1148,7 @@ Second beta of the Expo SDK 56 line, cut from `master` after merging
   Pour handoff: it checks PR mergeability each cycle, resolves conflicts by merging the
   base branch without rewriting pushed history, re-runs checks and frontend
   verification, and treats a conflicted PR as broken rather than mergeable
-  ([#1039](https://github.com/FlourishHealth/terreno/pull/1039))
+  ([#1039](https://github.com/TerrenoLabs/terreno/pull/1039))
 
 ### Fixed
 
@@ -903,54 +1172,54 @@ Upgrade note: [`mcp-server/src/docs/upgrades/0.31.0.md`](mcp-server/src/docs/upg
 
 - `EditableCard` in `@terreno/ui`: a summary card with an optional icon, badge,
   description, helper text, edit button, and attention state
-  ([#981](https://github.com/FlourishHealth/terreno/pull/981))
+  ([#981](https://github.com/TerrenoLabs/terreno/pull/981))
 - MIT `LICENSE` file in every published package, plus contribution guide, changelog,
-  and GitHub issue/PR templates ([#985](https://github.com/FlourishHealth/terreno/pull/985))
+  and GitHub issue/PR templates ([#985](https://github.com/TerrenoLabs/terreno/pull/985))
 - Public roadmap generated from `docs/` into GitHub, with `roadmap:generate` /
   `roadmap:check` scripts and roadmap discussion setup
-  ([#986](https://github.com/FlourishHealth/terreno/pull/986), [#991](https://github.com/FlourishHealth/terreno/pull/991))
+  ([#986](https://github.com/TerrenoLabs/terreno/pull/986), [#991](https://github.com/TerrenoLabs/terreno/pull/991))
 - `check:upgrade-docs` release gate that fails a tagged publish when a release
   documents breaking, changed, deprecated, or removed behavior without an
-  `mcp-server/src/docs/upgrades/<version>.md` note ([#987](https://github.com/FlourishHealth/terreno/pull/987))
+  `mcp-server/src/docs/upgrades/<version>.md` note ([#987](https://github.com/TerrenoLabs/terreno/pull/987))
 - Deployment foundation for GCP, deploy guides, and agentic SDLC plugin phase 1
-  ([#988](https://github.com/FlourishHealth/terreno/pull/988))
+  ([#988](https://github.com/TerrenoLabs/terreno/pull/988))
 - Reference documentation for `@terreno/ai`, `@terreno/admin-spa`, and `@terreno/test`,
   plus full READMEs for `admin-backend`, `admin-frontend`, `ai`, and `api-health`
-  ([#995](https://github.com/FlourishHealth/terreno/pull/995))
+  ([#995](https://github.com/TerrenoLabs/terreno/pull/995))
 
 ### Changed
 
 - Mongoose 9 support: the workspace runs on Mongoose 9.7.4 and every published
   package widens its `mongoose` peer dependency to `^8.0.0 || ^9.0.0`, so Mongoose 8
-  consumers keep working ([#984](https://github.com/FlourishHealth/terreno/pull/984))
+  consumers keep working ([#984](https://github.com/TerrenoLabs/terreno/pull/984))
 - All published packages are MIT licensed; they were previously Apache-2.0
-  ([#985](https://github.com/FlourishHealth/terreno/pull/985))
+  ([#985](https://github.com/TerrenoLabs/terreno/pull/985))
 - `modelRouter` accepts a wider Mongoose model generic, so models carrying custom
-  query helpers, methods, or virtuals no longer need a cast ([#984](https://github.com/FlourishHealth/terreno/pull/984))
+  query helpers, methods, or virtuals no longer need a cast ([#984](https://github.com/TerrenoLabs/terreno/pull/984))
 - `findOneOrNoneFor` takes `ModelQuery<T>` instead of Mongoose's `FilterQuery<T>`
-  ([#984](https://github.com/FlourishHealth/terreno/pull/984))
+  ([#984](https://github.com/TerrenoLabs/terreno/pull/984))
 - `@terreno/admin-backend` reads array field metadata through Mongoose's public
   `getEmbeddedSchemaType()` (falling back to the Mongoose 8 `caster`) and only emits
-  `itemEnum` when the embedded enum is an array ([#984](https://github.com/FlourishHealth/terreno/pull/984))
-- Local development requires Node >= 20.19.0 ([#984](https://github.com/FlourishHealth/terreno/pull/984))
+  `itemEnum` when the embedded enum is an array ([#984](https://github.com/TerrenoLabs/terreno/pull/984))
+- Local development requires Node >= 20.19.0 ([#984](https://github.com/TerrenoLabs/terreno/pull/984))
 - Positioning copy blocks and an honest framework comparison table
-  ([#993](https://github.com/FlourishHealth/terreno/pull/993))
+  ([#993](https://github.com/TerrenoLabs/terreno/pull/993))
 - Implementation plans and program docs for the infrastructure MCP server, the B2B
   platform program, the IP + roadmap flow, and the RTK-to-syncdb migration strategy,
   with merged plans linked to their roadmap tracking issues
-  ([#990](https://github.com/FlourishHealth/terreno/pull/990), [#996](https://github.com/FlourishHealth/terreno/pull/996), [#998](https://github.com/FlourishHealth/terreno/pull/998), [#999](https://github.com/FlourishHealth/terreno/pull/999), [#1028](https://github.com/FlourishHealth/terreno/pull/1028))
+  ([#990](https://github.com/TerrenoLabs/terreno/pull/990), [#996](https://github.com/TerrenoLabs/terreno/pull/996), [#998](https://github.com/TerrenoLabs/terreno/pull/998), [#999](https://github.com/TerrenoLabs/terreno/pull/999), [#1028](https://github.com/TerrenoLabs/terreno/pull/1028))
 - Test coverage, rule alignment, and explicit-any remediation across `api`, `ui`, and `rtk`
-  ([#946](https://github.com/FlourishHealth/terreno/pull/946), [#977](https://github.com/FlourishHealth/terreno/pull/977), [#978](https://github.com/FlourishHealth/terreno/pull/978), [#979](https://github.com/FlourishHealth/terreno/pull/979), [#980](https://github.com/FlourishHealth/terreno/pull/980), [#982](https://github.com/FlourishHealth/terreno/pull/982), [#983](https://github.com/FlourishHealth/terreno/pull/983), [#1000](https://github.com/FlourishHealth/terreno/pull/1000), [#1001](https://github.com/FlourishHealth/terreno/pull/1001), [#1002](https://github.com/FlourishHealth/terreno/pull/1002))
+  ([#946](https://github.com/TerrenoLabs/terreno/pull/946), [#977](https://github.com/TerrenoLabs/terreno/pull/977), [#978](https://github.com/TerrenoLabs/terreno/pull/978), [#979](https://github.com/TerrenoLabs/terreno/pull/979), [#980](https://github.com/TerrenoLabs/terreno/pull/980), [#982](https://github.com/TerrenoLabs/terreno/pull/982), [#983](https://github.com/TerrenoLabs/terreno/pull/983), [#1000](https://github.com/TerrenoLabs/terreno/pull/1000), [#1001](https://github.com/TerrenoLabs/terreno/pull/1001), [#1002](https://github.com/TerrenoLabs/terreno/pull/1002))
 
 ### Fixed
 
 - CI queues `terreno-example` EAS native builds only for new fingerprints
-  ([#965](https://github.com/FlourishHealth/terreno/pull/965))
+  ([#965](https://github.com/TerrenoLabs/terreno/pull/965))
 - Keep the Dial In PR loop active through slow or pending CI, and only return
   broken checks when no autonomous action can advance them or user direction is
-  required ([#1027](https://github.com/FlourishHealth/terreno/pull/1027))
+  required ([#1027](https://github.com/TerrenoLabs/terreno/pull/1027))
 - Dial In preserves existing PR descriptions instead of overwriting them
-  ([#1030](https://github.com/FlourishHealth/terreno/pull/1030))
+  ([#1030](https://github.com/TerrenoLabs/terreno/pull/1030))
 
 ## [0.30.0] - 2026-08-03
 
@@ -958,12 +1227,12 @@ Upgrade note: [`mcp-server/src/docs/upgrades/0.30.0.md`](mcp-server/src/docs/upg
 
 ### Added
 
-- `ThumbsUpDownFeedback` UI component ([#948](https://github.com/FlourishHealth/terreno/pull/948))
+- `ThumbsUpDownFeedback` UI component ([#948](https://github.com/TerrenoLabs/terreno/pull/948))
 
 ### Fixed
 
 - Pass `APIError` context through `modelRouter` without re-wrapping errors raised
-  inside hooks or Mongoose middleware ([#967](https://github.com/FlourishHealth/terreno/pull/967))
+  inside hooks or Mongoose middleware ([#967](https://github.com/TerrenoLabs/terreno/pull/967))
 - `modelRouter` no longer drops `status`, `title`, `detail`, `code`, and `meta`
   when re-throwing an `APIError` from create/update/delete handlers, populate,
   `queryFilter`, list serialization, or array-operation paths
@@ -979,156 +1248,156 @@ Upgrade note: [`mcp-server/src/docs/upgrades/0.30.0.md`](mcp-server/src/docs/upg
 ### Changed
 
 - Add `errorDetail(error)` helper for nested `APIError` detail in framework wrappers
-- Test coverage, rule alignment, and explicit-any remediation commits ([#959](https://github.com/FlourishHealth/terreno/pull/959), [#963](https://github.com/FlourishHealth/terreno/pull/963), [#968](https://github.com/FlourishHealth/terreno/pull/968), [#969](https://github.com/FlourishHealth/terreno/pull/969))
+- Test coverage, rule alignment, and explicit-any remediation commits ([#959](https://github.com/TerrenoLabs/terreno/pull/959), [#963](https://github.com/TerrenoLabs/terreno/pull/963), [#968](https://github.com/TerrenoLabs/terreno/pull/968), [#969](https://github.com/TerrenoLabs/terreno/pull/969))
 
 ## [0.29.0] - 2026-07-31
 
 ### Added
 
-- Typed and draw/type signature capture fields in `@terreno/ui` ([#958](https://github.com/FlourishHealth/terreno/pull/958))
-- Short-attention-span skill for action-first AI output ([#956](https://github.com/FlourishHealth/terreno/pull/956))
+- Typed and draw/type signature capture fields in `@terreno/ui` ([#958](https://github.com/TerrenoLabs/terreno/pull/958))
+- Short-attention-span skill for action-first AI output ([#956](https://github.com/TerrenoLabs/terreno/pull/956))
 
 ## [0.28.0] - 2026-07-30
 
 ### Added
 
 - Open source launch program: 15 implementation plans, task lists, and the
-  `build-terreno-app` dogfooding skill ([#942](https://github.com/FlourishHealth/terreno/pull/942))
+  `build-terreno-app` dogfooding skill ([#942](https://github.com/TerrenoLabs/terreno/pull/942))
 
 ### Changed
 
-- Redesign `APIError` to use standard `Error` fields for Sentry grouping ([#949](https://github.com/FlourishHealth/terreno/pull/949))
-- Rename `SelectField` `searchable` prop to `disableSearch` ([#954](https://github.com/FlourishHealth/terreno/pull/954))
+- Redesign `APIError` to use standard `Error` fields for Sentry grouping ([#949](https://github.com/TerrenoLabs/terreno/pull/949))
+- Rename `SelectField` `searchable` prop to `disableSearch` ([#954](https://github.com/TerrenoLabs/terreno/pull/954))
 
 ### Fixed
 
-- Queue only missing platform dev builds on EAS PR slow path ([#955](https://github.com/FlourishHealth/terreno/pull/955))
+- Queue only missing platform dev builds on EAS PR slow path ([#955](https://github.com/TerrenoLabs/terreno/pull/955))
 
 ## [0.27.0] - 2026-07-29
 
 ### Added
 
 - Terreno-native agent skills (`building-terreno-apps`, `terreno-data-fetching`,
-  `terreno-backend-api`, `terreno-ui`) ([#941](https://github.com/FlourishHealth/terreno/pull/941))
-- Explicit-any audit script for tracking `any` usage across the monorepo ([#927](https://github.com/FlourishHealth/terreno/pull/927))
-- RBAC permissions API design doc ([#887](https://github.com/FlourishHealth/terreno/pull/887))
+  `terreno-backend-api`, `terreno-ui`) ([#941](https://github.com/TerrenoLabs/terreno/pull/941))
+- Explicit-any audit script for tracking `any` usage across the monorepo ([#927](https://github.com/TerrenoLabs/terreno/pull/927))
+- RBAC permissions API design doc ([#887](https://github.com/TerrenoLabs/terreno/pull/887))
 
 ### Changed
 
-- Document custom icon registration in `@terreno/ui` ([#910](https://github.com/FlourishHealth/terreno/pull/910))
+- Document custom icon registration in `@terreno/ui` ([#910](https://github.com/TerrenoLabs/terreno/pull/910))
 - Change example-backend seed admin user to `admin@example.com` (password
-  unchanged) ([#935](https://github.com/FlourishHealth/terreno/pull/935))
+  unchanged) ([#935](https://github.com/TerrenoLabs/terreno/pull/935))
 - Require frontend app login, feature exercise, and PR evidence in agent
-  workflows ([#915](https://github.com/FlourishHealth/terreno/pull/915))
+  workflows ([#915](https://github.com/TerrenoLabs/terreno/pull/915))
 
 ### Fixed
 
-- Fix `Modal` Confirm button on native Android tablets ([#952](https://github.com/FlourishHealth/terreno/pull/952))
-- Guard `@terreno/rtk` web tests against `IsWeb` platform mock leakage ([#934](https://github.com/FlourishHealth/terreno/pull/934))
+- Fix `Modal` Confirm button on native Android tablets ([#952](https://github.com/TerrenoLabs/terreno/pull/952))
+- Guard `@terreno/rtk` web tests against `IsWeb` platform mock leakage ([#934](https://github.com/TerrenoLabs/terreno/pull/934))
 
 ## [0.26.0] - 2026-07-15
 
 ### Added
 
 - `IconButton` gains an `active` interaction state via `state?: "default" | "active"`
-  ([#885](https://github.com/FlourishHealth/terreno/pull/885))
+  ([#885](https://github.com/TerrenoLabs/terreno/pull/885))
 
 ### Changed
 
 - Remove internal barrel imports; ban new internal barrel `index.ts` files via
-  Biome lint and `check:no-barrel-imports` ([#907](https://github.com/FlourishHealth/terreno/pull/907))
+  Biome lint and `check:no-barrel-imports` ([#907](https://github.com/TerrenoLabs/terreno/pull/907))
 - Order Terreno planning skills by workflow step (`terreno-1-blend` through
-  `terreno-5-dialin`) ([#900](https://github.com/FlourishHealth/terreno/pull/900))
+  `terreno-5-dialin`) ([#900](https://github.com/TerrenoLabs/terreno/pull/900))
 
 ### Fixed
 
 - Fix `Table`/`DataTable` preview cards on the demo home page rendering as a
-  floating overlay ([#911](https://github.com/FlourishHealth/terreno/pull/911))
+  floating overlay ([#911](https://github.com/TerrenoLabs/terreno/pull/911))
 - Fix demo, docs, and example-frontend production Netlify deploys silently
-  no-opping on push to `master` ([#903](https://github.com/FlourishHealth/terreno/pull/903))
+  no-opping on push to `master` ([#903](https://github.com/TerrenoLabs/terreno/pull/903))
 - Fix duplicate `if` keys in example-app E2E and Admin SPA integration workflows
-  ([#901](https://github.com/FlourishHealth/terreno/pull/901))
-- Stabilize AI and admin frontend test suites ([#902](https://github.com/FlourishHealth/terreno/pull/902))
+  ([#901](https://github.com/TerrenoLabs/terreno/pull/901))
+- Stabilize AI and admin frontend test suites ([#902](https://github.com/TerrenoLabs/terreno/pull/902))
 
 ## [0.25.0] - 2026-07-12
 
 ### Added
 
 - `@terreno/api`: HTTP client layer — `createAuthenticatedClient`,
-  `normalizeApiError`, and `withApiErrorHandling` ([#870](https://github.com/FlourishHealth/terreno/pull/870))
+  `normalizeApiError`, and `withApiErrorHandling` ([#870](https://github.com/TerrenoLabs/terreno/pull/870))
 - `SelectField` / `WebDropdownMenu`: type-to-filter searchable dropdown
-  ([#615](https://github.com/FlourishHealth/terreno/pull/615))
-- Demo AI palette generator (`/palette`) with WCAG contrast checks ([#863](https://github.com/FlourishHealth/terreno/pull/863))
+  ([#615](https://github.com/TerrenoLabs/terreno/pull/615))
+- Demo AI palette generator (`/palette`) with WCAG contrast checks ([#863](https://github.com/TerrenoLabs/terreno/pull/863))
 
 ### Changed
 
-- Add repo subagents and upgrade rulesync to v9 ([#892](https://github.com/FlourishHealth/terreno/pull/892))
+- Add repo subagents and upgrade rulesync to v9 ([#892](https://github.com/TerrenoLabs/terreno/pull/892))
 - Include run evidence (screenshots/videos) in PRs via submit and pour skills
-  ([#871](https://github.com/FlourishHealth/terreno/pull/871))
+  ([#871](https://github.com/TerrenoLabs/terreno/pull/871))
 
 ### Fixed
 
 - `@terreno/api`: return `401` (not `500`) for auth failures in `bun build --compile`
-  binaries ([#894](https://github.com/FlourishHealth/terreno/pull/894))
-- Website: prune docs versions correctly so `versions.json` stays valid ([#866](https://github.com/FlourishHealth/terreno/pull/866))
+  binaries ([#894](https://github.com/TerrenoLabs/terreno/pull/894))
+- Website: prune docs versions correctly so `versions.json` stays valid ([#866](https://github.com/TerrenoLabs/terreno/pull/866))
 
 ## [0.24.0] - 2026-07-03
 
 ### Added
 
 - `AiSuggestionBox`: `hidden` suggestion status, condensed collapsed states, race-safe
-  expansion, and refreshed sparkles/thumbs visuals ([#865](https://github.com/FlourishHealth/terreno/pull/865))
+  expansion, and refreshed sparkles/thumbs visuals ([#865](https://github.com/TerrenoLabs/terreno/pull/865))
 
 ### Changed
 
-- Test coverage and explicit-any remediation commits ([#852](https://github.com/FlourishHealth/terreno/pull/852), [#851](https://github.com/FlourishHealth/terreno/pull/851), [#861](https://github.com/FlourishHealth/terreno/pull/861), [#862](https://github.com/FlourishHealth/terreno/pull/862))
+- Test coverage and explicit-any remediation commits ([#852](https://github.com/TerrenoLabs/terreno/pull/852), [#851](https://github.com/TerrenoLabs/terreno/pull/851), [#861](https://github.com/TerrenoLabs/terreno/pull/861), [#862](https://github.com/TerrenoLabs/terreno/pull/862))
 
 ## [0.23.1] - 2026-07-02
 
 ### Added
 
-- Architectural PR review workflow ([#844](https://github.com/FlourishHealth/terreno/pull/844))
+- Architectural PR review workflow ([#844](https://github.com/TerrenoLabs/terreno/pull/844))
 
 ### Changed
 
-- Document Cursor Cloud dev-environment setup for example-backend MongoDB ([#845](https://github.com/FlourishHealth/terreno/pull/845))
-- Demo Appium CI non-blocking unless a mobile build feature changes ([#846](https://github.com/FlourishHealth/terreno/pull/846))
-- Consolidate shared dependencies into Bun catalog ([#848](https://github.com/FlourishHealth/terreno/pull/848))
-- Align dev API port with docs; clear required on warning ([#842](https://github.com/FlourishHealth/terreno/pull/842))
+- Document Cursor Cloud dev-environment setup for example-backend MongoDB ([#845](https://github.com/TerrenoLabs/terreno/pull/845))
+- Demo Appium CI non-blocking unless a mobile build feature changes ([#846](https://github.com/TerrenoLabs/terreno/pull/846))
+- Consolidate shared dependencies into Bun catalog ([#848](https://github.com/TerrenoLabs/terreno/pull/848))
+- Align dev API port with docs; clear required on warning ([#842](https://github.com/TerrenoLabs/terreno/pull/842))
 
 ### Fixed
 
-- Correct example-backend consent enum snapshot ordering ([#628](https://github.com/FlourishHealth/terreno/pull/628))
-- Fix lint regression and iOS Appium smoke timeout ([#843](https://github.com/FlourishHealth/terreno/pull/843))
-- Fix E2E todos web server startup in CI ([#811](https://github.com/FlourishHealth/terreno/pull/811))
-- Resolve UI and demo formatting CI failures ([#789](https://github.com/FlourishHealth/terreno/pull/789))
-- Stop Expo fingerprint churn forcing a native build on every PR ([#849](https://github.com/FlourishHealth/terreno/pull/849))
-- `Button`: use transparent background for ghost variant ([#858](https://github.com/FlourishHealth/terreno/pull/858))
+- Correct example-backend consent enum snapshot ordering ([#628](https://github.com/TerrenoLabs/terreno/pull/628))
+- Fix lint regression and iOS Appium smoke timeout ([#843](https://github.com/TerrenoLabs/terreno/pull/843))
+- Fix E2E todos web server startup in CI ([#811](https://github.com/TerrenoLabs/terreno/pull/811))
+- Resolve UI and demo formatting CI failures ([#789](https://github.com/TerrenoLabs/terreno/pull/789))
+- Stop Expo fingerprint churn forcing a native build on every PR ([#849](https://github.com/TerrenoLabs/terreno/pull/849))
+- `Button`: use transparent background for ghost variant ([#858](https://github.com/TerrenoLabs/terreno/pull/858))
 
 ## [0.23.0] - 2026-06-26
 
 ### Added
 
-- `@terreno/ui` compound components expose predictable dot-suffixed test IDs ([#832](https://github.com/FlourishHealth/terreno/pull/832), [#840](https://github.com/FlourishHealth/terreno/pull/840))
-- Admin Script Runner CLI (`runScriptCli`, declared `args` on scripts) ([#828](https://github.com/FlourishHealth/terreno/pull/828))
+- `@terreno/ui` compound components expose predictable dot-suffixed test IDs ([#832](https://github.com/TerrenoLabs/terreno/pull/832), [#840](https://github.com/TerrenoLabs/terreno/pull/840))
+- Admin Script Runner CLI (`runScriptCli`, declared `args` on scripts) ([#828](https://github.com/TerrenoLabs/terreno/pull/828))
 - Consent response list/read populate `userId`; `ConsentResponseViewer` user section
-  ([#833](https://github.com/FlourishHealth/terreno/pull/833))
+  ([#833](https://github.com/TerrenoLabs/terreno/pull/833))
 
 ### Changed
 
-- Document `GCP_SA_*` service account secrets in cloud agent instructions ([#829](https://github.com/FlourishHealth/terreno/pull/829))
-- Add example-backend Script Runner CI workflow and CLI docs ([#828](https://github.com/FlourishHealth/terreno/pull/828))
+- Document `GCP_SA_*` service account secrets in cloud agent instructions ([#829](https://github.com/TerrenoLabs/terreno/pull/829))
+- Add example-backend Script Runner CI workflow and CLI docs ([#828](https://github.com/TerrenoLabs/terreno/pull/828))
 
 ### Fixed
 
-- Equalize `MarkdownEditor` edit and preview pane heights ([#831](https://github.com/FlourishHealth/terreno/pull/831))
+- Equalize `MarkdownEditor` edit and preview pane heights ([#831](https://github.com/TerrenoLabs/terreno/pull/831))
 
 ## [0.22.2] - 2026-06-24
 
 ### Fixed
 
 - `@terreno/api`: declare `@terreno/test` as a runtime dependency so
-  `@terreno/api/testing` resolves under isolated installs ([#827](https://github.com/FlourishHealth/terreno/pull/827))
+  `@terreno/api/testing` resolves under isolated installs ([#827](https://github.com/TerrenoLabs/terreno/pull/827))
 
 ### Changed
 
@@ -1140,7 +1409,7 @@ Upgrade note: [`mcp-server/src/docs/upgrades/0.30.0.md`](mcp-server/src/docs/upg
 ### Fixed
 
 - `@terreno/test`: pin `qs` to `^6.14.1` instead of a missing `catalog:` entry so
-  the publish workflow succeeds ([#824](https://github.com/FlourishHealth/terreno/pull/824))
+  the publish workflow succeeds ([#824](https://github.com/TerrenoLabs/terreno/pull/824))
 
 ### Changed
 
@@ -1153,13 +1422,13 @@ Upgrade note: [`mcp-server/src/docs/upgrades/0.30.0.md`](mcp-server/src/docs/upg
 ### Added
 
 - New `@terreno/test` package: shared Bun test helpers and in-memory MongoDB fixtures
-  ([#822](https://github.com/FlourishHealth/terreno/pull/822), [#823](https://github.com/FlourishHealth/terreno/pull/823))
-- `Button`: `ghost` variant and `sm` size; fix `outline` button height ([#816](https://github.com/FlourishHealth/terreno/pull/816))
-- `OpenApiMiddlewareBuilder.withOperationId()` for custom OpenAPI `operationId` ([#815](https://github.com/FlourishHealth/terreno/pull/815))
+  ([#822](https://github.com/TerrenoLabs/terreno/pull/822), [#823](https://github.com/TerrenoLabs/terreno/pull/823))
+- `Button`: `ghost` variant and `sm` size; fix `outline` button height ([#816](https://github.com/TerrenoLabs/terreno/pull/816))
+- `OpenApiMiddlewareBuilder.withOperationId()` for custom OpenAPI `operationId` ([#815](https://github.com/TerrenoLabs/terreno/pull/815))
 
 ### Changed
 
-- Add SyncDB local-first data layer plan and tasks ([#739](https://github.com/FlourishHealth/terreno/pull/739))
+- Add SyncDB local-first data layer plan and tasks ([#739](https://github.com/TerrenoLabs/terreno/pull/739))
 
 ## [0.21.0] - 2026-06-22
 
@@ -1167,45 +1436,45 @@ Upgrade note: [`mcp-server/src/docs/upgrades/0.21.0.md`](mcp-server/src/docs/upg
 
 ### Changed
 
-- **Breaking:** `setupServer` removed — use `TerrenoApp` instead ([#795](https://github.com/FlourishHealth/terreno/pull/795))
-- **Breaking:** JSON object responses include `requestId` in the body ([#793](https://github.com/FlourishHealth/terreno/pull/793))
+- **Breaking:** `setupServer` removed — use `TerrenoApp` instead ([#795](https://github.com/TerrenoLabs/terreno/pull/795))
+- **Breaking:** JSON object responses include `requestId` in the body ([#793](https://github.com/TerrenoLabs/terreno/pull/793))
 
 ### Added
 
-- Admin UI v2 backend: `schemaVersion: 2` config, bulk-patch, background tasks ([#782](https://github.com/FlourishHealth/terreno/pull/782))
-- Traceable API logging: `createScopedLogger`, `createFeatureFlaggedLogger` ([#799](https://github.com/FlourishHealth/terreno/pull/799))
-- `Card` redesign: `container` and `display` variants ([#375](https://github.com/FlourishHealth/terreno/pull/375))
-- MCP documentation search: `terreno_search_docs`, `terreno_get_component_docs` ([#796](https://github.com/FlourishHealth/terreno/pull/796))
-- `@terreno/rtk` exports `devStore` utilities ([#782](https://github.com/FlourishHealth/terreno/pull/782))
+- Admin UI v2 backend: `schemaVersion: 2` config, bulk-patch, background tasks ([#782](https://github.com/TerrenoLabs/terreno/pull/782))
+- Traceable API logging: `createScopedLogger`, `createFeatureFlaggedLogger` ([#799](https://github.com/TerrenoLabs/terreno/pull/799))
+- `Card` redesign: `container` and `display` variants ([#375](https://github.com/TerrenoLabs/terreno/pull/375))
+- MCP documentation search: `terreno_search_docs`, `terreno_get_component_docs` ([#796](https://github.com/TerrenoLabs/terreno/pull/796))
+- `@terreno/rtk` exports `devStore` utilities ([#782](https://github.com/TerrenoLabs/terreno/pull/782))
 
 ### Fixed
 
-- Unblock Dependabot by upgrading `@terreno/ai` multer dependency ([#803](https://github.com/FlourishHealth/terreno/pull/803))
-- Fix CI: install workspace deps before Trigger EAS Workflow dispatch ([#805](https://github.com/FlourishHealth/terreno/pull/805))
+- Unblock Dependabot by upgrading `@terreno/ai` multer dependency ([#803](https://github.com/TerrenoLabs/terreno/pull/803))
+- Fix CI: install workspace deps before Trigger EAS Workflow dispatch ([#805](https://github.com/TerrenoLabs/terreno/pull/805))
 
 ## [0.20.2] - 2026-06-17
 
 ### Changed
 
-- Normalize `Badge` height to 20px; add Badge vs SelectBadge demo ([#751](https://github.com/FlourishHealth/terreno/pull/751))
+- Normalize `Badge` height to 20px; add Badge vs SelectBadge demo ([#751](https://github.com/TerrenoLabs/terreno/pull/751))
 
 ## [0.20.1] - 2026-06-16
 
 ### Added
 
-- `@terreno/ui`: support registering custom icons ([#771](https://github.com/FlourishHealth/terreno/pull/771))
-- Expo skills for AI agents ([#777](https://github.com/FlourishHealth/terreno/pull/777))
-- Admin UI v2 IP with Django-style `home.slots` ([#775](https://github.com/FlourishHealth/terreno/pull/775))
-- `@terreno/ai`: export `./parseAiJson` subpath ([#783](https://github.com/FlourishHealth/terreno/pull/783))
+- `@terreno/ui`: support registering custom icons ([#771](https://github.com/TerrenoLabs/terreno/pull/771))
+- Expo skills for AI agents ([#777](https://github.com/TerrenoLabs/terreno/pull/777))
+- Admin UI v2 IP with Django-style `home.slots` ([#775](https://github.com/TerrenoLabs/terreno/pull/775))
+- `@terreno/ai`: export `./parseAiJson` subpath ([#783](https://github.com/TerrenoLabs/terreno/pull/783))
 
 ### Changed
 
-- Normalize skill descriptions to single-line UI summaries ([#772](https://github.com/FlourishHealth/terreno/pull/772))
+- Normalize skill descriptions to single-line UI summaries ([#772](https://github.com/TerrenoLabs/terreno/pull/772))
 
 ### Fixed
 
-- Restore demo CI ordering checks ([#770](https://github.com/FlourishHealth/terreno/pull/770))
-- Fix Appium dev-client smoke tests on Android and iOS ([#773](https://github.com/FlourishHealth/terreno/pull/773))
+- Restore demo CI ordering checks ([#770](https://github.com/TerrenoLabs/terreno/pull/770))
+- Fix Appium dev-client smoke tests on Android and iOS ([#773](https://github.com/TerrenoLabs/terreno/pull/773))
 
 ## [0.16.0] - 2026-06-02
 
@@ -1243,46 +1512,46 @@ Upgrade note: [`mcp-server/src/docs/upgrades/0.20.0.md`](mcp-server/src/docs/upg
 
 - **Breaking:** `@terreno/api` `ConfigurationApp`: `POST {basePath}/list-secrets` is
   now read-only validation/status — it no longer resolves or returns secret values;
-  `PATCH {basePath}` strips `secret: true` fields ([#768](https://github.com/FlourishHealth/terreno/pull/768))
+  `PATCH {basePath}` strips `secret: true` fields ([#768](https://github.com/TerrenoLabs/terreno/pull/768))
 - **`configurationPlugin` no longer adds the `_singleton` unique index by default**
   — opt in via `enforceSingletonIndex: true`
 - **`configurationPlugin` singleton semantics are soft-delete aware**
 - **`configurationPlugin.updateConfig` applies updates via `findOneAndUpdate({$set})`
   with dotted paths** instead of `Object.assign` + `doc.save()`
-- Prefix `terreno-planning` Cursor plugin skills with `terreno-` ([#764](https://github.com/FlourishHealth/terreno/pull/764))
-- Submit skill: merge-first PR body updates ([#765](https://github.com/FlourishHealth/terreno/pull/765))
+- Prefix `terreno-planning` Cursor plugin skills with `terreno-` ([#764](https://github.com/TerrenoLabs/terreno/pull/764))
+- Submit skill: merge-first PR body updates ([#765](https://github.com/TerrenoLabs/terreno/pull/765))
 
 ### Added
 
 - `@terreno/api` configuration and secret upgrades: `CompositeSecretProvider`,
   `CachingSecretProvider`, pluggable `permissions`, `preUpdate`/`postUpdate` hooks,
-  optional `version` on secret resolution ([#768](https://github.com/FlourishHealth/terreno/pull/768))
+  optional `version` on secret resolution ([#768](https://github.com/TerrenoLabs/terreno/pull/768))
 - OpenFeature migration for feature flags: `MongoFeatureFlagProvider`,
-  `GET …/flagConfiguration`, `useTerrenoFeatureFlags` hook ([#761](https://github.com/FlourishHealth/terreno/pull/761))
+  `GET …/flagConfiguration`, `useTerrenoFeatureFlags` hook ([#761](https://github.com/TerrenoLabs/terreno/pull/761))
 - `SecretProvider.getSecret(secretName, version?)` and `flattenToDotPaths` export
 
 ### Deprecated
 
 - Legacy `GET …/evaluate` feature-flag endpoint (sends `Deprecation`/`Sunset` headers)
-  ([#761](https://github.com/FlourishHealth/terreno/pull/761))
+  ([#761](https://github.com/TerrenoLabs/terreno/pull/761))
 
-[57.0.0]: https://github.com/FlourishHealth/terreno/releases/tag/57.0.0
-[57.0.0-beta.1]: https://github.com/FlourishHealth/terreno/releases/tag/57.0.0-beta.1
-[56.0.0-beta.2]: https://github.com/FlourishHealth/terreno/releases/tag/56.0.0-beta.2
-[0.30.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.30.0
-[0.29.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.29.0
-[0.28.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.28.0
-[0.27.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.27.0
-[0.26.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.26.0
-[0.25.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.25.0
-[0.24.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.24.0
-[0.23.1]: https://github.com/FlourishHealth/terreno/releases/tag/0.23.1
-[0.23.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.23.0
-[0.22.2]: https://github.com/FlourishHealth/terreno/releases/tag/0.22.2
-[0.22.1]: https://github.com/FlourishHealth/terreno/releases/tag/0.22.1
-[0.22.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.22.0
-[0.21.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.21.0
-[0.20.2]: https://github.com/FlourishHealth/terreno/releases/tag/0.20.2
-[0.20.1]: https://github.com/FlourishHealth/terreno/releases/tag/0.20.1
-[0.20.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.20.0
-[0.16.0]: https://github.com/FlourishHealth/terreno/releases/tag/0.16.0
+[57.0.0]: https://github.com/TerrenoLabs/terreno/releases/tag/57.0.0
+[57.0.0-beta.1]: https://github.com/TerrenoLabs/terreno/releases/tag/57.0.0-beta.1
+[56.0.0-beta.2]: https://github.com/TerrenoLabs/terreno/releases/tag/56.0.0-beta.2
+[0.30.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.30.0
+[0.29.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.29.0
+[0.28.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.28.0
+[0.27.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.27.0
+[0.26.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.26.0
+[0.25.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.25.0
+[0.24.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.24.0
+[0.23.1]: https://github.com/TerrenoLabs/terreno/releases/tag/0.23.1
+[0.23.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.23.0
+[0.22.2]: https://github.com/TerrenoLabs/terreno/releases/tag/0.22.2
+[0.22.1]: https://github.com/TerrenoLabs/terreno/releases/tag/0.22.1
+[0.22.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.22.0
+[0.21.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.21.0
+[0.20.2]: https://github.com/TerrenoLabs/terreno/releases/tag/0.20.2
+[0.20.1]: https://github.com/TerrenoLabs/terreno/releases/tag/0.20.1
+[0.20.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.20.0
+[0.16.0]: https://github.com/TerrenoLabs/terreno/releases/tag/0.16.0

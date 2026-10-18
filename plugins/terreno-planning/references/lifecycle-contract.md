@@ -24,13 +24,20 @@ include one in-process wait for
 exit, so they can react to those results. Taste then waits in-process for product CI
 with [`product-ci.md`](product-ci.md) on every discovered host, using GitHub CLI or
 CircleCI CLI in a watch loop until jobs are terminal or the wait times out. Before any
-push, Taste always fetches and merges the latest `master`, then records last-run failed
+push, Taste fetches the latest `master` and merges it only when the PR conflicts, a failure
+traces to base drift, or the branch is otherwise merge-ready, then records last-run failed
 tests from the CI snapshot and re-verifies them locally, then spawns a fresh subagent
 with no parent conversation. The subagent runs the root package's `prepush` script when
 present; that script is the repository-owned gate for lint, typecheck, static analysis,
 tests, and other local policy. When it is absent, Taste falls back to lint, typecheck,
 and locally affected tests in each affected package. Taste then pushes and watches
 product CI. Hosts and tokens are on the product-CI page.
+
+Every stage that pushes follows push ownership (`push-ownership.md`, bundled with
+Brew, Taste, and the outer loops): the PR stays
+owned until CI is green on every host and every review-bot comment is addressed, or
+until three fix rounds fail and the human is told. A pushed PR is never left red or
+unwatched.
 
 ## Discover supporting skills
 
@@ -174,7 +181,9 @@ transport.
 - `BLOCKED`: no safe engineering action exists now. Classify `human`, `environment`,
   `access`, or `external`; include the exact action or decision required.
 - `PENDING`: changing external state is not terminal (primarily Taste). Include `wait`;
-  the **outer loop** waits and invokes again. Use `PENDING` for review-bot timeout,
+  the **outer loop** waits and invokes again. With no outer loop (a human invoked
+  Taste or Brew directly), Taste's standalone entry waits and reacts again itself.
+  `PENDING` is never the final answer to a human. Use `PENDING` for review-bot timeout,
   product-CI wait-loop timeout (jobs still pending on GitHub Actions, CircleCI,
   Buildkite, and similar), and after Taste's second post-fix push. Do not emit
   `PENDING` while Bugbot, CodeQL, or similar review bots are still queued or in
@@ -193,6 +202,9 @@ completed work, failed/recovered attempts, decisive evidence, options and impact
 recommended default. It ends with one exact question, then the Demo section when the PR
 has deployment URLs. Objective engineering failures are not human gates while a concrete
 safe action remains.
+
+A PR that is still red after three fix rounds is `BLOCKED` and escalated per push
+ownership (`push-ownership.md`, Escalation). No stage or loop ends silently on a red PR.
 
 Bounded engineering retries must be hypothesis-driven. Taste waits in-process for
 async review bots and for product CI (bounded watch loop). The outer loop reinvokes

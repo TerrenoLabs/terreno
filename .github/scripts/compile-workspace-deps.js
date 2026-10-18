@@ -80,6 +80,17 @@ const compile = (dir) => {
 };
 
 const run = () => {
+  // The monorepo `bun run compile` uses `bun run --filter '*' compile`, which builds
+  // packages in workspace-dependency order, so each @terreno/* dep's dist already exists
+  // before its dependents compile. In that context recompiling deps here is redundant
+  // duplicate work, so the root compile sets TERRENO_SKIP_WORKSPACE_DEPS=1 to skip it.
+  // Isolated per-package compiles (CI per-package jobs, tag publish) do not set the flag,
+  // so the script still builds sibling dists from source for them.
+  if (process.env.TERRENO_SKIP_WORKSPACE_DEPS) {
+    console.log("TERRENO_SKIP_WORKSPACE_DEPS set — skipping workspace dep compile");
+    return;
+  }
+
   const packageDirs =
     process.argv.slice(2).length > 0
       ? process.argv.slice(2).map((dir) => path.resolve(dir))

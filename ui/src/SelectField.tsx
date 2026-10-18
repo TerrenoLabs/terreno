@@ -44,7 +44,10 @@ export const SelectField: FC<SelectFieldProps> = ({
           }}
           placeholder={!requireValue ? clearOption : {}}
           renderMenuInBodyPortal={renderMenuInBodyPortal}
-          textInputProps={{testID: fieldTestIDs.input}}
+          textInputProps={{
+            accessibilityLabel: title ?? placeholder,
+            testID: fieldTestIDs.input,
+          }}
           value={value ?? ""}
         />
       </View>

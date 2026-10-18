@@ -170,7 +170,7 @@ export const todoRouter = modelRouter("/todos", Todo, {
       ownerId: (req.user as unknown as UserDocument)?._id,
     } as TodoDocument;
   },
-  queryFields: ["completed", "ownerId"],
+  queryFields: ["completed", "created", "ownerId"],
   queryFilter: OwnerQueryFilter,
   realtime: {
     methods: ["create", "update", "delete"],

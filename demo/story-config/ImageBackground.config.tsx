@@ -3,6 +3,7 @@ import {ImageBackgroundDemo, ImageBackgroundPlain} from "@stories/ImageBackgroun
 import {ImageBackground} from "@terreno/ui";
 
 export const ImageBackgroundConfiguration: DemoConfiguration = {
+  usageExample: "import {ImageBackground} from \"@terreno/ui\";\n\n<ImageBackground />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

@@ -14,7 +14,7 @@ Turn a discussion the maintainers have accepted into a tracked issue on the **Te
 
 **Acceptance is a human decision.** This skill never decides that an idea is accepted — it acts only after a maintainer says so, and it stops for approval again before creating anything.
 
-Process background, including the full IP ↔ roadmap lifecycle and the promote-vs-item ownership table: [`docs/explanation/roadmap-process.md`](https://github.com/FlourishHealth/terreno/blob/master/docs/explanation/roadmap-process.md).
+Process background, including the full IP ↔ roadmap lifecycle and the promote-vs-item ownership table: [`docs/explanation/roadmap-process.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/explanation/roadmap-process.md).
 
 ## Where this sits in the lifecycle
 
@@ -65,7 +65,7 @@ gh api graphql -f query='
         comments(last:50){nodes{author{login} body}}
       }
     }
-  }' -F owner=FlourishHealth -F repo=terreno -F number="$NUMBER"
+  }' -F owner=TerrenoLabs -F repo=terreno -F number="$NUMBER"
 ```
 
 Capture: the underlying problem, the shape agreed on, objections raised and how they were resolved, and who is willing to help implement.
@@ -76,7 +76,7 @@ State who accepted it and where. If that is not visible, stop and ask. An idea p
 
 ### 3. Draft the tracking issue
 
-Follow the house style in [`docs/explanation/roadmap-seed-issues.md`](https://github.com/FlourishHealth/terreno/blob/master/docs/explanation/roadmap-seed-issues.md):
+Follow the house style in [`docs/explanation/roadmap-seed-issues.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/explanation/roadmap-seed-issues.md):
 
 - **Title:** the outcome in plain language, not the mechanism. **No `[Roadmap]` prefix** — the `roadmap` label marks it
 - **Body:** two or three paragraphs — the problem, what shipping it changes for users, and scope boundaries. No implementation detail; that belongs in the IP
@@ -106,7 +106,7 @@ Print, then **stop and wait**:
 ### 5. Create, after approval
 
 **Do not touch the board directly.** Declare the item in
-[`docs/explanation/roadmap-seed-issues.md`](https://github.com/FlourishHealth/terreno/blob/master/docs/explanation/roadmap-seed-issues.md)
+[`docs/explanation/roadmap-seed-issues.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/explanation/roadmap-seed-issues.md)
 and let the sync tool create it. Hand-added board items are reported as drift on the next
 `roadmap:sync --check`.
 

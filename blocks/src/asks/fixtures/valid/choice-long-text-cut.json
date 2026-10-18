@@ -1,0 +1,41 @@
+{
+  "kind": "choice",
+  "input": {
+    "title": "Pick the onboarding checklist for the new support team",
+    "prompt": "I found three onboarding checklists that match your team size and tools. Which one should I copy into the new project before I invite the support staff tomorrow morning?",
+    "select": "one",
+    "options": [
+      {"id": "support-basics", "label": "Support basics for small teams"},
+      {"id": "support-advanced", "label": "Support with escalation paths"},
+      {"id": "custom", "label": "Start from scratch"}
+    ],
+    "default": ["support-basics"]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "title": "Pick the onboarding checklist for the…",
+    "text": "I found three onboarding checklists that match your team size and tools. Which one should I copy into the new project before I invite the…",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "option:support-basics",
+        "label": "Support basics for…",
+        "style": "primary",
+        "response": {"action": "accept", "content": {"selected": ["support-basics"]}}
+      },
+      {
+        "id": "option:support-advanced",
+        "label": "Support with…",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["support-advanced"]}}
+      },
+      {
+        "id": "option:custom",
+        "label": "Start from scratch",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["custom"]}}
+      }
+    ]
+  }
+}

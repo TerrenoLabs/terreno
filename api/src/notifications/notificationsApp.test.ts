@@ -15,7 +15,10 @@ import {TerrenoApp} from "../terrenoApp";
 import {authAsUser, setupDb, UserModel} from "../tests";
 import {configureNotificationService, getNotificationService} from "./notificationService";
 import {NotificationsApp} from "./notificationsApp";
-import {notificationsBeforeSend} from "./notificationsBeforeSend";
+import {
+  type NotificationsBeforeSendChannel,
+  notificationsBeforeSend,
+} from "./notificationsBeforeSend";
 
 interface FakeComms {
   mailCalls: Array<{html?: string; subject: string; to: string}>;
@@ -336,6 +339,26 @@ describe("NotificationsApp", () => {
       sms: false,
     });
     const result = await notificationsBeforeSend({channel: "verification", userId});
+    assert.isUndefined(result);
+  });
+
+  it("notificationsBeforeSend does not cancel when userId is missing", async () => {
+    const result = await notificationsBeforeSend({channel: "mail"});
+    assert.isUndefined(result);
+  });
+
+  it("notificationsBeforeSend does not cancel for channels without a preference field", async () => {
+    await NotificationPreference.create({
+      inapp: false,
+      mail: false,
+      ownerId: userId,
+      push: false,
+      sms: false,
+    });
+    const result = await notificationsBeforeSend({
+      channel: "inapp" as unknown as NotificationsBeforeSendChannel,
+      userId,
+    });
     assert.isUndefined(result);
   });
 

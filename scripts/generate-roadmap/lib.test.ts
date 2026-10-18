@@ -1,7 +1,13 @@
 import {describe, it} from "bun:test";
 import {assert} from "chai";
 
-import {displayTitle, filterRoadmapItems, renderRoadmapMarkdown, type RoadmapItem} from "./lib";
+import {
+  displayTitle,
+  filterRoadmapItems,
+  type RoadmapItem,
+  renderRoadmapMarkdown,
+  roadmapContentIsUnchanged,
+} from "./lib";
 
 const sampleItems: RoadmapItem[] = [
   {
@@ -11,7 +17,7 @@ const sampleItems: RoadmapItem[] = [
     status: "Shipped",
     target: "Next",
     title: "OSS governance baseline",
-    url: "https://github.com/FlourishHealth/terreno/issues/1",
+    url: "https://github.com/TerrenoLabs/terreno/issues/1",
   },
   {
     area: "docs",
@@ -20,7 +26,7 @@ const sampleItems: RoadmapItem[] = [
     status: "Planned",
     target: "Future",
     title: "AI-first tutorials",
-    url: "https://github.com/FlourishHealth/terreno/issues/2",
+    url: "https://github.com/TerrenoLabs/terreno/issues/2",
   },
   {
     area: "deploy",
@@ -29,7 +35,7 @@ const sampleItems: RoadmapItem[] = [
     status: "Declined",
     target: "Next",
     title: "Declined item",
-    url: "https://github.com/FlourishHealth/terreno/issues/3",
+    url: "https://github.com/TerrenoLabs/terreno/issues/3",
   },
 ];
 
@@ -54,6 +60,50 @@ describe("renderRoadmapMarkdown", () => {
     assert.include(markdown, "oss-governance-baseline");
     assert.include(markdown, "## Target: Future");
     assert.notInclude(markdown, "Declined item");
+  });
+
+  it("links the task list only when one exists", (): void => {
+    const markdown = renderRoadmapMarkdown({
+      generatedAtIso: "2026-08-08T00:00:00.000Z",
+      items: sampleItems,
+      projectUrl: "https://github.com/orgs/FlourishHealth/projects/1",
+      taskSlugs: new Set(["oss-governance-baseline"]),
+    });
+
+    assert.include(
+      markdown,
+      "Tasks: [oss-governance-baseline](docs/tasks/oss-governance-baseline.md)"
+    );
+    assert.notInclude(markdown, "docs/tasks/docs-tutorials-ai-first.md");
+  });
+});
+
+describe("roadmapContentIsUnchanged", (): void => {
+  it("ignores a refreshed Last updated stamp", (): void => {
+    const existing = renderRoadmapMarkdown({
+      generatedAtIso: "2026-10-04T18:56:30.566Z",
+      items: sampleItems,
+      projectUrl: "https://github.com/orgs/TerrenoLabs/projects/1",
+    });
+    const next = renderRoadmapMarkdown({
+      generatedAtIso: "2026-10-05T13:25:14.001Z",
+      items: sampleItems,
+      projectUrl: "https://github.com/orgs/TerrenoLabs/projects/1",
+    });
+
+    assert.notEqual(existing, next);
+    assert.isTrue(roadmapContentIsUnchanged({existing, next}));
+  });
+
+  it("reports a title change", (): void => {
+    const existing = renderRoadmapMarkdown({
+      generatedAtIso: "2026-10-04T18:56:30.566Z",
+      items: sampleItems,
+      projectUrl: "https://github.com/orgs/TerrenoLabs/projects/1",
+    });
+    const next = existing.replace("OSS governance baseline", "Renamed item");
+
+    assert.isFalse(roadmapContentIsUnchanged({existing, next}));
   });
 });
 

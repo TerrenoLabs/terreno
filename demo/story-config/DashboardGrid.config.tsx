@@ -3,6 +3,7 @@ import {DashboardGridDefaultStory, DashboardGridDemo} from "@stories/DashboardGr
 import {DashboardGrid} from "@terreno/ui";
 
 export const DashboardGridConfiguration: DemoConfiguration = {
+  usageExample: "import {DashboardGrid} from \"@terreno/ui\";\n\n<DashboardGrid />",
   name: "DashboardGrid",
   component: DashboardGrid,
   related: ["Card", "LineChart", "BarChart"],

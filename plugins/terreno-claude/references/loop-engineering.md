@@ -87,8 +87,8 @@ per-task results in execution state, and continues to the next frontier task.
 - Brew submits only after every in-scope task has Roast `PASS`.
 - Taste reacts to the current CI/review state until the loop receives `PASS`. It waits
 until Bugbot, CodeQL, and similar review bots have reported, then waits in a loop for
-product CI with `gh` or `circleci`, then acts. Before any push it always pulls latest
-`master`, then spawns a fresh subagent with no parent conversation. When the repository
+product CI with `gh` or `circleci`, then acts. Before any push it fetches latest
+`master` (merging it only when needed), then spawns a fresh subagent with no parent conversation. When the repository
 root defines a `prepush` package script, the subagent runs that authoritative local gate.
 Otherwise it falls back to lint, typecheck, and locally affected tests in affected
 packages. Before that gate, Taste records last-run failed tests from the CI snapshot and
@@ -111,8 +111,8 @@ re-verifies them locally. Taste then pushes and watches CI.
    `next: taste` without implementing fixes.
 2. Taste waits if those bots are still running, then runs the product-CI wait loop
    (`gh pr checks --watch` / `gh run watch` / `circleci run watch`) until jobs on SHA A
-   are terminal. It sees a branch-caused CI failure, fixes it, always pulls latest
-   `master`, records last-run failed tests and re-verifies them locally, then runs the
+   are terminal. It sees a branch-caused CI failure, fixes it, fetches latest
+   `master` (merging it only when needed), records last-run failed tests and re-verifies them locally, then runs the
    root `prepush` script (or fallback lint, typecheck, and affected
    tests) in a fresh subagent with no parent conversation, pushes SHA B, then watches
    review bots and product CI on B, and acts once on those results. A further push emits

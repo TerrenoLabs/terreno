@@ -8,6 +8,7 @@ import {
 import {BarChart} from "@terreno/ui";
 
 export const BarChartConfiguration: DemoConfiguration = {
+  usageExample: "import {BarChart} from \"@terreno/ui\";\n\n<BarChart />",
   name: "BarChart",
   component: BarChart,
   related: ["LineChart", "AreaChart", "DashboardGrid"],

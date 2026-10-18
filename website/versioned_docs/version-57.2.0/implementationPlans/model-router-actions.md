@@ -2,7 +2,7 @@
 
 **Status:** Deferred
 **Closed:** 2026-08-20 — Not pursued; custom `endpoints` callbacks remain the supported pattern for non-CRUD routes.
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1097
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1097
 
 ## Goal
 

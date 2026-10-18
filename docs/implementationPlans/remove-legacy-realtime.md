@@ -1,6 +1,7 @@
 # Implementation Plan: Remove legacy RTK realtime in Terreno 58
 
 **Status:** Approved  
+**Roadmap:** Area=`api`, Target=`58`, Impact=`Breaking`  
 **Branch:** `cursor/deprecate-realtime-for-58`  
 **Owner:** unassigned  
 **Created:** 2026-08-25  

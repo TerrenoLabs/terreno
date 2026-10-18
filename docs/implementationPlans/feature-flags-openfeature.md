@@ -1,6 +1,6 @@
 # Implementation Plan: OpenFeature Adoption for `@terreno/feature-flags`
 
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1082  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1082  
 **Status:** Complete
 
 ## Goal

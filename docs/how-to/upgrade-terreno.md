@@ -10,7 +10,7 @@ From the app root:
 bun pm ls --all | rg '@terreno/'
 ```
 
-Or call MCP `application_info` (`terreno-mcp-local`) and read each `package.json`. Record the lowest `@terreno/*` version as `fromVersion` and the target as `toVersion` (usually the latest tag on [GitHub Releases](https://github.com/FlourishHealth/terreno/releases)).
+Or call MCP `application_info` (`terreno-mcp-local`) and read each `package.json`. Record the lowest `@terreno/*` version as `fromVersion` and the target as `toVersion` (usually the latest tag on [GitHub Releases](https://github.com/TerrenoLabs/terreno/releases)).
 
 ## 2. Fetch notes for the range
 
@@ -38,7 +38,7 @@ Maintainers watching the next SDK beta use `track-upstream-expo` / [`track-upstr
 
 ### Backend vs frontend packages
 
-From `publish-on-tag.yml`: **backend** `api`, `test`, `admin-backend`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`. **frontend** `ui`, `rtk`, `syncdb`, `admin-frontend`, `admin-spa`.
+From `publish-on-tag.yml`: **backend** `api`, `test`, `admin-backend`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`. **frontend** `ui`, `rtk`, `syncdb`, `admin-frontend`, `admin-spa`. `blocks` holds contracts that both `ai` and `ui` depend on, so it moves with the backend step.
 
 ## 4. RTK → syncdb is not a version bump
 

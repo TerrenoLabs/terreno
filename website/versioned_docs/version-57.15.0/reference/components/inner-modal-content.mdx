@@ -1,0 +1,41 @@
+---
+title: "Inner modal content"
+description: "A Modal displays content that requires user interaction. Modals appear on a layer above the page and therefore block the content underneath"
+sidebar_label: "Inner modal content"
+slug: /reference/components/inner-modal-content
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Inner modal content
+
+A Modal displays content that requires user interaction. Modals appear on a layer above the page and therefore block the content underneath, preventing users from interacting with anything else besides the Modal. Modal should be used to gather short bits of information from the user. Also known as dialog or prompt.
+
+**Package:** `@terreno/ui`  
+**Categories:** Layout, Utility  
+**Props interface:** `ModalProps`  
+**Story source:** [`demo/stories/Innermodalcontent.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Innermodalcontent.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Inner modal content" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onDismiss` | `reflection` | Yes |  |
+| `visible` | `boolean` | Yes | If true, the modal will be visible. |
+| `children` | `ReactElement` |  | The content of the modal. |
+| `persistOnBackgroundClick` | `boolean` |  | If true, the modal will be closed when the background is clicked. |
+| `primaryButtonDisabled` | `boolean` |  | If true, the primary button will be disabled. |
+| `primaryButtonOnClick` | `reflection` |  | The function to call when the primary button is clicked. |
+| `primaryButtonText` | `string` |  | The text content of the primary button. |
+| `secondaryButtonOnClick` | `reflection` |  | The function to call when the secondary button is clicked. |
+| `secondaryButtonText` | `string` |  | The text content of the secondary button. |
+| `size` | `union` |  | The size of the modal. |
+| `subtitle` | `string` |  | The subtitle of the modal. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `testIDs` | `ModalTestIDs` |  |  |
+| `text` | `string` |  | The text content of the modal. |
+| `title` | `string` |  | The title of the modal. |

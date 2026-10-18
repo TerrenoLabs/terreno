@@ -6,6 +6,7 @@ import {
 import {UpgradeRequiredScreen} from "@terreno/ui";
 
 export const UpgradeRequiredScreenConfiguration: DemoConfiguration = {
+  usageExample: "import {UpgradeRequiredScreen} from \"@terreno/ui\";\n\n<UpgradeRequiredScreen />",
   a11yNotes: ["The update action must remain keyboard reachable when canUpdate is true."],
   additionalDocumentation: [],
   category: "Pattern",

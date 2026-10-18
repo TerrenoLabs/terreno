@@ -151,8 +151,9 @@ mcpServiceTokenSchema.statics = {
 };
 
 export const McpServiceToken =
-  (mongoose.models.McpServiceToken as McpServiceTokenModel | undefined) ??
+  (mongoose.models.TerrenoMcpServiceToken as McpServiceTokenModel | undefined) ??
   mongoose.model<McpServiceTokenDocument, McpServiceTokenModel>(
-    "McpServiceToken",
-    mcpServiceTokenSchema
+    "TerrenoMcpServiceToken",
+    mcpServiceTokenSchema,
+    "mcpservicetokens"
   );

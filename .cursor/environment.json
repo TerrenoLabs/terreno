@@ -1,0 +1,22 @@
+{
+  "name": "Terreno monorepo",
+  "install": "bash .cursor/scripts/install.sh",
+  "start": "bash .cursor/scripts/start.sh",
+  "chromeExecutablePath": "/home/ubuntu/.local/chrome-bin/chrome",
+  "terminals": [
+    {
+      "name": "backend",
+      "description": "Terreno example API on http://localhost:4000 (health at /health, OpenAPI at /openapi.json).",
+      "command": "export PATH=\"$HOME/.bun/bin:$PATH\"; MONGO_URI=\"mongodb://127.0.0.1:27017/terreno-example?replicaSet=rs0\" TOKEN_SECRET=dev-token-secret TOKEN_ISSUER=terreno-dev REFRESH_TOKEN_SECRET=dev-refresh-secret SESSION_SECRET=dev-session-secret PORT=4000 bun run backend:dev"
+    },
+    {
+      "name": "frontend",
+      "description": "Terreno example universal app (Expo web) on http://localhost:8082, pointed at the local backend.",
+      "command": "export PATH=\"$HOME/.bun/bin:$PATH\"; EXPO_PUBLIC_API_URL=http://localhost:4000 bun run frontend:web"
+    }
+  ],
+  "ports": [
+    {"name": "example-backend", "port": 4000},
+    {"name": "example-frontend web", "port": 8082}
+  ]
+}

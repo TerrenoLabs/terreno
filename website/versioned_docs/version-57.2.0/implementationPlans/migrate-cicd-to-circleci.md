@@ -2,7 +2,7 @@
 
 **Status:** In progress — Phase 1–3 CI config landed (deploys deferred per request)  
 **Discussion:** _(none)_  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1088
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1088
 **Linear:** _(none)_  
 **Priority:** High  
 **Effort:** Large (cross-cutting infra; many workflows)  
@@ -112,7 +112,7 @@ Prefer extending the module (`circleci_oidc` or rename to `ci_oidc` with multipl
 
 ### GitHub ↔ CircleCI integration
 
-- CircleCI GitHub App (or OAuth) on `FlourishHealth/terreno`.
+- CircleCI GitHub App (or OAuth) on `TerrenoLabs/terreno`.
 - Status checks reported to GitHub for branch protection (job names documented in `docs/explanation/repository-settings.md`).
 - PR comments / labels / Deployments API: call GitHub REST via `gh` or `curl` with `terreno-github-api` context (replaces `GITHUB_TOKEN` action privileges).
 - Tag + schedule triggers: CircleCI pipeline triggers (or GitHub → CircleCI API webhook) for cron jobs currently on GHA.

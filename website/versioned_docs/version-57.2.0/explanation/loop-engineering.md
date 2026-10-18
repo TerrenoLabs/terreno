@@ -113,5 +113,5 @@ contain chain-of-thought or transcripts.
   no actionable review findings.
 
 The detailed contract, schemas, and three execution scenarios live under
-[`plugins/terreno-planning/references/`](https://github.com/FlourishHealth/terreno/tree/master/plugins/terreno-planning/references).
+[`plugins/terreno-planning/references/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-planning/references).
 

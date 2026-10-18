@@ -28,6 +28,7 @@ export {
   initializeModels,
   type MemoryMongoHandle,
   type MongoServerOptions,
+  resolveMongoLaunchTimeoutMs,
   restartMongoServer,
   startMongoServer,
   stopMongoServer,

@@ -1,26 +1,26 @@
 {
   "author": "Josh Gachnang",
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@openfeature/server-sdk": "^1.22.0",
-    "@terreno/api": "57.4.0",
-    "express": "^5.2.1",
-    "lodash": "^4.18.1"
+    "@openfeature/server-sdk": "catalog:",
+    "@terreno/api": "workspace:*",
+    "express": "catalog:",
+    "lodash": "catalog:"
   },
   "description": "Feature flags and A/B testing plugin for @terreno/api — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
-    "@biomejs/biome": "^2.3.6",
-    "@terreno/test": "57.4.0",
-    "@types/bun": "^1.4.0",
-    "@types/express": "^5.0.6",
-    "@types/lodash": "^4.17.17",
-    "@types/supertest": "^7.2.0",
-    "supertest": "^7.2.2",
-    "typescript": "~6.0.3"
+    "@biomejs/biome": "catalog:",
+    "@terreno/test": "workspace:*",
+    "@types/bun": "catalog:",
+    "@types/express": "catalog:",
+    "@types/lodash": "catalog:",
+    "@types/supertest": "catalog:",
+    "supertest": "catalog:",
+    "typescript": "catalog:"
   },
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "feature-flags",
     "ab-testing",
@@ -39,7 +39,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
     "compile": "bun tsc",
@@ -53,5 +53,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.4.0"
+  "version": "57.16.2"
 }

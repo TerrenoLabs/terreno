@@ -1,7 +1,7 @@
 # Implementation Plan: RTK Deprecation and SyncDB Migration Docs
 
 **Status:** Complete — syncdb reference, migration guide, agent surfaces, and deprecation signalling shipped on `master`
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1007
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1007
 **Priority:** Critical (gates most of Wave 1)
 **Effort:** Big batch
 **Owner:** unassigned

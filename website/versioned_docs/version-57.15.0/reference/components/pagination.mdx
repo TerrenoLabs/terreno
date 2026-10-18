@@ -1,0 +1,30 @@
+---
+title: "Pagination"
+description: "Break large sets of content into smaller, manageable pages. Used primarily in the staff portal to parse large tables."
+sidebar_label: "Pagination"
+slug: /reference/components/pagination
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Pagination
+
+Break large sets of content into smaller, manageable pages. Used primarily in the staff portal to parse large tables.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `PaginationProps`  
+**Story source:** [`demo/stories/Pagination.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Pagination.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Pagination" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `page` | `number` | Yes |  |
+| `setPage` | `reflection` | Yes |  |
+| `totalPages` | `number` | Yes |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

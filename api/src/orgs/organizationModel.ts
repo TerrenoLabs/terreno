@@ -121,7 +121,7 @@ const membershipSchema = new mongoose.Schema<MembershipDocument, MembershipModel
     organizationId: {
       description: "Organization this membership belongs to",
       index: true,
-      ref: "Organization",
+      ref: "TerrenoOrganization",
       required: true,
       type: mongoose.Schema.Types.ObjectId,
     },
@@ -196,22 +196,27 @@ membershipSchema.statics = {
 };
 
 export const getOrganizationModel = (): OrganizationModel => {
-  const existing = mongoose.models.Organization as OrganizationModel | undefined;
+  const existing = mongoose.models.TerrenoOrganization as OrganizationModel | undefined;
   if (existing) {
     return existing;
   }
   return mongoose.model<OrganizationDocument, OrganizationModel>(
-    "Organization",
-    organizationSchema
+    "TerrenoOrganization",
+    organizationSchema,
+    "organizations"
   );
 };
 
 export const getMembershipModel = (): MembershipModel => {
-  const existing = mongoose.models.Membership as MembershipModel | undefined;
+  const existing = mongoose.models.TerrenoMembership as MembershipModel | undefined;
   if (existing) {
     return existing;
   }
-  return mongoose.model<MembershipDocument, MembershipModel>("Membership", membershipSchema);
+  return mongoose.model<MembershipDocument, MembershipModel>(
+    "TerrenoMembership",
+    membershipSchema,
+    "memberships"
+  );
 };
 
 const createLazyModel = <T extends mongoose.Model<unknown>>(getModel: () => T): T => {

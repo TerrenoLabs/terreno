@@ -1,6 +1,7 @@
 # Implementation Plan: Move mcp-server doc-sync off the compile path
 
-**Status:** Approved (2026-09-22)
+**Status:** Complete
+**Roadmap:** Area=`dx`, Target=`Released`, Impact=`Improvement`  
 **Scan goal:** reduce-cold-compile-time ([charter](../scans/reduce-cold-compile-time/charter.md)) — cold `bun run compile` 305s → 214s
 **Slice:** mcp-doc-sync-off-compile-path (round 1) — **must land before** `compile-pipeline-dedup`
 **Findings:** mcp-doc-sync-on-compile-path (medium, S)

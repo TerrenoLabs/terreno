@@ -1,6 +1,6 @@
 # @terreno/rtk Documentation (legacy)
 
-> **Deprecated for data synchronization** as of `56.0.0`. Use `@terreno/syncdb` for collection CRUD. This resource documents RTK for OpenAPI SDK codegen, Better Auth session Redux, feature flags, and sockets during the support window. See [migrate-rtk-to-syncdb.md](https://github.com/FlourishHealth/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md).
+> **Deprecated for data synchronization** as of `56.0.0`. Use `@terreno/syncdb` for collection CRUD. This resource documents RTK for OpenAPI SDK codegen, Better Auth session Redux, feature flags, and sockets during the support window. See [migrate-rtk-to-syncdb.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md).
 
 Redux Toolkit Query utilities for frontends connecting to @terreno/api backends.
 

@@ -2,7 +2,7 @@
 
 **Status:** Complete
 **Closed:** 2026-08-20 — Shipped via `VersionConfig` model, `VersionCheckPlugin` (`GET /version-check`), `AdminVersionConfig`, `useUpgradeCheck` (`@terreno/rtk`), and `UpgradeRequiredScreen` (`@terreno/ui`).
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1079
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1079
 
 *When an engineer is assigned to a project but before you begin coding, you should fill in the implementation plan and get feedback from the engineering team. Once you have finished or you make any changes, tag Josh with the @ symbol so he can review. Also tag anyone else that needs to be notified, has conflicting work, etc.*
 

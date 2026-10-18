@@ -9,6 +9,7 @@ import {
 import {LineChart} from "@terreno/ui";
 
 export const LineChartConfiguration: DemoConfiguration = {
+  usageExample: "import {LineChart} from \"@terreno/ui\";\n\n<LineChart />",
   name: "LineChart",
   component: LineChart,
   related: ["DashboardGrid", "BarChart", "AreaChart"],

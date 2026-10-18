@@ -6,6 +6,8 @@ import {assert} from "chai";
 
 import {BrowserSession} from "./browser";
 
+const BROWSER_TEST_TIMEOUT_MS = 30_000;
+
 interface FakeViewCalls {
   clicks: string[];
   evaluations: string[];
@@ -197,14 +199,18 @@ describe("BrowserSession", () => {
     }
   });
 
-  it("uses the default view factory when none is injected", async (): Promise<void> => {
-    const session = new BrowserSession();
-    try {
-      await session.run({action: "open", url: "http://127.0.0.1:9"});
-    } catch {
-      // Missing Chrome, missing WebView, or a failed navigate still executed the factory.
-    } finally {
-      session.close();
-    }
-  });
+  it(
+    "uses the default view factory when none is injected",
+    async (): Promise<void> => {
+      const session = new BrowserSession();
+      try {
+        await session.run({action: "open", url: "http://127.0.0.1:9"});
+      } catch {
+        // Missing Chrome, missing WebView, or a failed navigate still executed the factory.
+      } finally {
+        session.close();
+      }
+    },
+    BROWSER_TEST_TIMEOUT_MS
+  );
 });

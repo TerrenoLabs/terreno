@@ -1,0 +1,17 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which toppings?",
+    "select": "many",
+    "options": [
+      {"id": "cheese", "label": "Cheese"},
+      {"id": "olives", "label": "Olives"}
+    ],
+    "default": ["cheese", "cheese", "ham"]
+  },
+  "errors": [
+    {"path": "default", "code": "SELECTION_COUNT"},
+    {"path": "default[1]", "code": "DUPLICATE_ID"},
+    {"path": "default[2]", "code": "DEFAULT_NOT_IN_OPTIONS"}
+  ]
+}

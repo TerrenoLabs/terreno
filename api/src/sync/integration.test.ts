@@ -445,7 +445,7 @@ describe("syncdb end-to-end integration", () => {
     expect(entity?.seq).toBe(baseSeq + 1);
     expect(entity?.pendingMutationId).toBeUndefined();
     await waitFor(() => a.client.getSyncStatus().conflictCount === 0, {
-      label: "conflict cleared after persistence flush",
+      label: "useServer conflict resolution persisted",
     });
     // The server kept its own write.
     const settled = await IntTodoModel.findById(conflictDocId);
@@ -488,7 +488,7 @@ describe("syncdb end-to-end integration", () => {
     // a replay immediately, so the retry drains without waiting for another trigger.
     a.client.resolveConflict({mutationId, strategy: "keepMine"});
     await waitFor(() => a.client.getSyncStatus().conflictCount === 0, {
-      label: "conflict cleared after persistence flush",
+      label: "keepMine conflict resolution persisted",
     });
     expect(a.client.outbox.getMutation({mutationId})).toBeUndefined();
 

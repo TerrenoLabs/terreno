@@ -14,7 +14,7 @@ const announcementImpressionSchema = new mongoose.Schema<
     announcementId: {
       description: "Announcement that was viewed",
       index: true,
-      ref: "Announcement",
+      ref: "TerrenoAnnouncement",
       required: true,
       type: mongoose.Schema.Types.ObjectId,
     },
@@ -52,10 +52,11 @@ announcementImpressionSchema.plugin(findOneOrNone);
 announcementImpressionSchema.index({announcementId: 1, viewedAt: -1});
 
 export const AnnouncementImpression =
-  (mongoose.models.AnnouncementImpression as AnnouncementImpressionModel) ??
+  (mongoose.models.TerrenoAnnouncementImpression as AnnouncementImpressionModel) ??
   mongoose.model<AnnouncementImpressionDocument, AnnouncementImpressionModel>(
-    "AnnouncementImpression",
-    announcementImpressionSchema
+    "TerrenoAnnouncementImpression",
+    announcementImpressionSchema,
+    "announcementimpressions"
   );
 
 export const isValidPlatform = (value: unknown): value is AnnouncementPlatform =>

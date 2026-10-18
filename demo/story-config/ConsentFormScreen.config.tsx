@@ -7,12 +7,13 @@ import {ConsentFormScreenDemo} from "../stories/ConsentFormScreen.stories";
 const renderConsentFormScreenDemo = (): ReactElement => <ConsentFormScreenDemo />;
 
 export const ConsentFormScreenConfiguration: DemoConfiguration = {
+  usageExample: "import {ConsentFormScreen} from \"@terreno/ui\";\n\n<ConsentFormScreen />",
   name: "ConsentFormScreen",
   component: ConsentFormScreen,
   related: ["Button", "Signature field"],
   description: "The consent form screen renders consent content, required acknowledgements, signatures, and actions.",
   a11yNotes: [],
-  category: "Pattern",
+  category: ["Pattern", "Form"],
   status: {
     documentation: "ready",
     figma: "planned",

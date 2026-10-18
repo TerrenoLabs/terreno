@@ -1,7 +1,7 @@
 {
   "author": "Josh Gachnang",
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
     "@ai-sdk/mcp": "^1.0.21",
@@ -10,21 +10,28 @@
     "@langfuse/otel": "^5.0.1",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/sdk-node": "0.217.0",
+    "@terreno/blocks": "workspace:*",
     "ai": "catalog:",
+    "ajv": "catalog:",
+    "csv-parse": "catalog:",
     "google-auth-library": "^10.5.0",
     "luxon": "catalog:",
-    "multer": "catalog:"
+    "multer": "catalog:",
+    "sanitize-html": "catalog:"
   },
   "description": "Provider-agnostic AI service with streaming chat, request logging, and admin tools — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/admin-backend": "workspace:*",
     "@terreno/api": "workspace:*",
+    "@terreno/jobs": "workspace:*",
     "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/express": "catalog:",
     "@types/luxon": "catalog:",
     "@types/multer": "catalog:",
     "@types/supertest": "catalog:",
+    "chai": "catalog:",
     "express": "catalog:",
     "mongoose": "catalog:",
     "passport-local-mongoose": "catalog:",
@@ -38,6 +45,48 @@
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./admin": {
+      "default": "./dist/aiAdminApp.js",
+      "import": "./dist/aiAdminApp.js",
+      "require": "./dist/aiAdminApp.js",
+      "types": "./dist/aiAdminApp.d.ts"
+    },
+    "./harness": {
+      "default": "./dist/harness/harness.js",
+      "import": "./dist/harness/harness.js",
+      "require": "./dist/harness/harness.js",
+      "types": "./dist/harness/harness.d.ts"
+    },
+    "./harness/agentLoop": {
+      "default": "./dist/harness/agentLoop.js",
+      "import": "./dist/harness/agentLoop.js",
+      "require": "./dist/harness/agentLoop.js",
+      "types": "./dist/harness/agentLoop.d.ts"
+    },
+    "./harness/commit": {
+      "default": "./dist/harness/commit.js",
+      "import": "./dist/harness/commit.js",
+      "require": "./dist/harness/commit.js",
+      "types": "./dist/harness/commit.d.ts"
+    },
+    "./harness/events": {
+      "default": "./dist/harness/events.js",
+      "import": "./dist/harness/events.js",
+      "require": "./dist/harness/events.js",
+      "types": "./dist/harness/events.d.ts"
+    },
+    "./harness/internalRuntime": {
+      "default": "./dist/harness/internalRuntime.js",
+      "import": "./dist/harness/internalRuntime.js",
+      "require": "./dist/harness/internalRuntime.js",
+      "types": "./dist/harness/internalRuntime.d.ts"
+    },
+    "./harness/jobsRunner": {
+      "default": "./dist/harness/runners/jobsRunner.js",
+      "import": "./dist/harness/runners/jobsRunner.js",
+      "require": "./dist/harness/runners/jobsRunner.js",
+      "types": "./dist/harness/runners/jobsRunner.d.ts"
+    },
     "./langfuseApp": {
       "default": "./dist/langfuseApp.js",
       "import": "./dist/langfuseApp.js",
@@ -50,6 +99,24 @@
       "require": "./dist/langfuseClient.js",
       "types": "./dist/langfuseClient.d.ts"
     },
+    "./observability/localPlugin": {
+      "default": "./dist/observability/local/localPlugin.js",
+      "import": "./dist/observability/local/localPlugin.js",
+      "require": "./dist/observability/local/localPlugin.js",
+      "types": "./dist/observability/local/localPlugin.d.ts"
+    },
+    "./observability/observabilityApp": {
+      "default": "./dist/observability/observabilityApp.js",
+      "import": "./dist/observability/observabilityApp.js",
+      "require": "./dist/observability/observabilityApp.js",
+      "types": "./dist/observability/observabilityApp.d.ts"
+    },
+    "./observability/promptStore": {
+      "default": "./dist/observability/local/promptStore.js",
+      "import": "./dist/observability/local/promptStore.js",
+      "require": "./dist/observability/local/promptStore.js",
+      "types": "./dist/observability/local/promptStore.d.ts"
+    },
     "./parseAiJson": {
       "default": "./dist/service/parseAiJson.js",
       "import": "./dist/service/parseAiJson.js",
@@ -57,7 +124,7 @@
       "types": "./dist/service/parseAiJson.d.ts"
     }
   },
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "ai",
     "gpt",
@@ -70,10 +137,14 @@
   "peerDependencies": {
     "@ai-sdk/google-vertex": "^4.0.142",
     "@terreno/api": "workspace:*",
+    "@terreno/jobs": "workspace:*",
     "mongoose": "^8.0.0 || ^9.0.0"
   },
   "peerDependenciesMeta": {
     "@ai-sdk/google-vertex": {
+      "optional": true
+    },
+    "@terreno/jobs": {
       "optional": true
     }
   },
@@ -82,7 +153,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
     "compile": "bun tsc",
@@ -97,5 +168,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.4.0"
+  "version": "57.16.2"
 }

@@ -167,6 +167,34 @@ describe("createReplayCoordinator", () => {
     expect(entity?.data).toEqual({title: "t1"});
   });
 
+  it("ignores an ack that resolves after its replay lifecycle is reset", async () => {
+    const harness = makeHarness();
+    enqueue(harness, {entityId: "t1", mutationId: "m1"});
+    let resolveResponse:
+      | ((result: {ack: {id: string; mutationId: string; seq: number}; type: "ack"}) => void)
+      | undefined;
+    harness.transport.respondWith(
+      (request) =>
+        new Promise((resolve) => {
+          resolveResponse = resolve;
+          expect(request.mutationId).toBe("m1");
+        })
+    );
+
+    const replay = harness.coordinator.replay({userId: USER});
+    await Promise.resolve();
+    expect(resolveResponse).toBeDefined();
+
+    // A lifecycle boundary can reset replay state while an HTTP request is still
+    // pending; the mutation can subsequently be restored to queued for a retry.
+    harness.coordinator.reset();
+    harness.outbox.markQueued({mutationId: "m1"});
+    resolveResponse?.({ack: {id: "t1", mutationId: "m1", seq: 42}, type: "ack"});
+
+    await replay;
+    expect(harness.outbox.getMutation({mutationId: "m1"})?.status).toBe("queued");
+  });
+
   it("does not clear a pendingMutationId owned by a newer mutation", async () => {
     const harness = makeHarness();
     enqueue(harness, {entityId: "t1", mutationId: "m1"});

@@ -1,3 +1,4 @@
+import type {Block, BlockAction, BlocksDocument, InlineDataset} from "@terreno/blocks";
 import type {CountryCode} from "libphonenumber-js";
 import type React from "react";
 import type {FC, ReactElement, ReactNode} from "react";
@@ -8,6 +9,7 @@ import type {
   ScrollViewInstance,
   StyleProp,
   TextInputInstance,
+  TextInstance,
   TextStyle,
   ViewStyle,
 } from "react-native";
@@ -19,6 +21,8 @@ import type {
   FontAwesome6RegularNames,
   FontAwesome6SolidNames,
 } from "./CommonIconTypes";
+import type {ChartPoint, ChartSeries} from "./charts/types/chartTypes";
+import type {DropdownPanelAlign} from "./dropdownPanelLayout";
 import type {
   DataTableTestIDs,
   FieldTestIDs,
@@ -163,14 +167,17 @@ export interface ThemePrimitiveColors {
   accent900: string;
 
   error000: string;
+  error050: string;
   error100: string;
   error200: string;
 
   warning000: string;
+  warning050: string;
   warning100: string;
   warning200: string;
 
   success000: string;
+  success050: string;
   success100: string;
   success200: string;
 }
@@ -219,6 +226,7 @@ export interface TextThemeConfig {
 export interface SurfaceThemeConfig {
   base: keyof ThemePrimitiveColors;
   baseAlternate: keyof ThemePrimitiveColors;
+  ai: keyof ThemePrimitiveColors;
   baseHover: keyof ThemePrimitiveColors;
   primary: keyof ThemePrimitiveColors;
   secondaryExtraLight: keyof ThemePrimitiveColors;
@@ -226,6 +234,7 @@ export interface SurfaceThemeConfig {
   secondaryDark: keyof ThemePrimitiveColors;
   secondaryExtraDark: keyof ThemePrimitiveColors;
   neutral: keyof ThemePrimitiveColors;
+  neutralExtraLight: keyof ThemePrimitiveColors;
   neutralLight: keyof ThemePrimitiveColors;
   neutralDark: keyof ThemePrimitiveColors;
   disabled: keyof ThemePrimitiveColors;
@@ -242,6 +251,7 @@ export interface BorderThemeConfig {
   dark: keyof ThemePrimitiveColors;
   activeNeutral: keyof ThemePrimitiveColors;
   activeAccent: keyof ThemePrimitiveColors;
+  ai: keyof ThemePrimitiveColors;
   hover: keyof ThemePrimitiveColors;
   focus: keyof ThemePrimitiveColors;
   error: keyof ThemePrimitiveColors;
@@ -290,6 +300,7 @@ export interface TextTheme {
 export interface SurfaceTheme {
   base: string;
   baseAlternate: string;
+  ai: string;
   baseHover: string;
   primary: string;
   secondaryExtraLight: string;
@@ -297,6 +308,7 @@ export interface SurfaceTheme {
   secondaryDark: string;
   secondaryExtraDark: string;
   neutral: string;
+  neutralExtraLight: string;
   neutralLight: string;
   neutralDark: string;
   disabled: string;
@@ -313,6 +325,7 @@ export interface BorderTheme {
   dark: string;
   activeNeutral: string;
   activeAccent: string;
+  ai: string;
   hover: string;
   focus: string;
   error: string;
@@ -488,8 +501,22 @@ export interface FilterAccordionProps extends WithTestID {
   showChangesBadge?: boolean;
 }
 
-export interface FilterProps extends WithTestID {
-  /** Composed filter controls rendered inside the dropdown panel. */
+/**
+ * Trigger and Apply button styling, mirroring `ButtonProps["variant"]` so a dropdown
+ * trigger can use any button style in the design system.
+ */
+export type DropdownPanelVariant = NonNullable<ButtonProps["variant"]>;
+
+export interface DropdownPanelProps extends WithTestID {
+  /** Horizontal alignment of the panel against its trigger.
+   * `auto` left-aligns and flips to right-aligned when the panel would overflow the
+   * right edge of the viewport.
+   * @default "auto"
+   */
+  align?: DropdownPanelAlign;
+  /** Variant for the footer's Apply button. Defaults to `variant`. */
+  applyButtonVariant?: DropdownPanelVariant;
+  /** Composed controls rendered inside the dropdown panel. */
   children: React.ReactNode;
   /** Trigger button label. */
   label?: string;
@@ -502,8 +529,21 @@ export interface FilterProps extends WithTestID {
    * Use for dense chrome such as table column headers. `label` is ignored.
    */
   iconOnly?: boolean;
-  /** Trigger size when `iconOnly` is set. Defaults to `sm`. */
+  /**
+   * Trigger size. Labeled triggers default to the standard `Button` size; icon-only
+   * triggers default to `sm` (a 24px hit target, 32px at `default`).
+   */
   triggerSize?: "sm" | "default";
+  /** Variant for the trigger button. Defaults to `variant`. */
+  triggerVariant?: DropdownPanelVariant;
+  /**
+   * Replaces the built-in trigger. Use when the trigger needs styling the `Button`
+   * variants do not cover. The returned node is measured to anchor the panel, so it
+   * must render something visible.
+   */
+  renderTrigger?: (props: {isOpen: boolean; toggle: () => void}) => React.ReactNode;
+  /** Stretch the trigger (and its wrapper) to the width of the container. */
+  fullWidth?: boolean;
   /** Controlled open state. Omit to use `defaultOpen`. */
   isOpen?: boolean;
   /** Initial open state when uncontrolled. */
@@ -523,15 +563,25 @@ export interface FilterProps extends WithTestID {
   cancelButtonText?: string;
   /** Called when Apply is pressed. The dropdown then closes. */
   onApply?: () => void;
-  /** Called when Clear is pressed. The dropdown then closes. */
+  /** Called when Clear is pressed. The panel stays open. */
   onClear?: () => void;
   /** Called when Cancel or a click-outside closes the dropdown. */
   onCancel?: () => void;
   /** Primary theming for the trigger and Apply button. */
-  variant?: "primary" | "secondary";
+  variant?: DropdownPanelVariant;
   /** Panel width in pixels. Defaults to 320 per the design spec. */
   width?: number;
+  /**
+   * Ceiling for the panel height. The panel never exceeds the space available on
+   * screen regardless of this value; content beyond it scrolls.
+   */
+  maxPanelHeight?: number;
 }
+
+/**
+ * @deprecated Renamed to {@link DropdownPanelProps}. Removed in Terreno 58.
+ */
+export type FilterProps = DropdownPanelProps;
 
 export type AlignContent = "start" | "end" | "center" | "between" | "around" | "stretch";
 export type AlignSelf = "auto" | "start" | "end" | "center" | "baseline" | "stretch";
@@ -633,7 +683,24 @@ export interface AccessibilityProps {
   accessibilityRole?: string;
 }
 
+/** Checked and disabled state a `Box` reports to screen readers. */
+export interface BoxAccessibilityState {
+  checked?: boolean;
+  disabled?: boolean;
+}
+
 export interface BoxPropsBase extends WithTestID {
+  /**
+   * Checked and disabled state for screen readers, sent as `accessibilityState` and as
+   * `aria-checked` / `aria-disabled`. On a clickable Box, `disabled: true` also stops presses.
+   */
+  accessibilityState?: BoxAccessibilityState;
+  /**
+   * Makes a non-clickable Box a live region, sent as `aria-live`: screen readers announce
+   * changes to its contents (`polite` waits for a pause). It works on web and Android;
+   * VoiceOver on iOS does not announce React Native live regions.
+   */
+  accessibilityLiveRegion?: "polite" | "assertive";
   alignContent?: AlignContent;
   alignItems?: AlignItems;
   alignSelf?: AlignSelf;
@@ -878,7 +945,8 @@ export interface SegmentedControlBadgeConfig {
 export interface SegmentedControlProps extends WithTestID {
   testIDs?: SegmentedControlTestIDs;
   items: string[];
-  size?: "md" | "lg"; // default "md"
+  /** `sm` is 28px and hugs its labels. `md` (default, 36px) and `lg` (44px) stretch. */
+  size?: "sm" | "md" | "lg";
   onChange: (activeIndex: number) => void;
   selectedIndex?: number;
   maxItems?: number;
@@ -956,6 +1024,11 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
 
   grow?: boolean;
+  /**
+   * Caps the height (in pixels) a `grow` field expands to. Past the cap the field
+   * stops growing and its content scrolls.
+   */
+  maxHeight?: number;
   multiline?: boolean;
   rows?: number;
 
@@ -980,10 +1053,22 @@ export interface NumberRangeFieldProps extends BaseFieldProps, HelperTextProps, 
   max: number;
 }
 
+/**
+ * What the typed parts of a {@link DateTimeFieldProps | DateTimeField} hold: nothing, an unfinished
+ * or invalid entry, or a complete value.
+ */
+export type DateTimeEntryStatus = "empty" | "invalid" | "valid";
+
 export interface DateTimeFieldProps extends BaseFieldProps, HelperTextProps, ErrorTextProps {
   type: "date" | "datetime" | "time";
   value?: string; // ISO string always
   onChange: (date: string) => void;
+  /**
+   * Called after each typed change and picker selection with what the field now holds.
+   * `onChange` only fires for complete values, so use this to refuse an unfinished entry
+   * (such as "0 / 5 / 026") or to notice the user cleared the field.
+   */
+  onEntryStatusChange?: (status: DateTimeEntryStatus) => void;
   onTimezoneChange?: (timezone: string) => void;
   dateFormat?: string;
   pickerType?: "default" | "compact" | "inline" | "spinner";
@@ -1063,6 +1148,15 @@ export interface HeadingProps extends WithTestID {
   overflow?: "normal" | "breakWord"; // default "breakWord"
   size?: "sm" | "md" | "lg" | "xl" | "2xl"; // default "sm"
   truncate?: boolean; // default false
+}
+
+export interface HtmlFrameProps {
+  /** Frame height. `sm` is 240px, `md` is 400px, and `lg` is 640px. */
+  height?: "lg" | "md" | "sm";
+  /** Sanitized HTML. The frame prepends a Content-Security-Policy meta tag. */
+  html: string;
+  /** Accessible name for the frame. Defaults to Agent-generated preview. */
+  title?: string;
 }
 
 export interface MetaProps {
@@ -1171,6 +1265,57 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
   listViewMaxWidth?: number;
   renderChild?: () => ReactChild;
   onSelectionChange?: (value?: ListRenderItemInfo<TItem>) => void | Promise<void>;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Use the narrow layout when the window width is less than or equal to this many pixels.
+   * When omitted, the narrow layout follows `isNarrowViewport()`.
+   */
+  narrowBelowWidth?: number;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Minimum width, in pixels, of each child in the desktop side-by-side layout.
+   * Applies only when the viewport is not narrow and there are 1 or 2 non-null children.
+   * When omitted, that layout stays a flex row. When there are more than 2 children, the
+   * segmented-control layout is used and this prop is ignored.
+   */
+  desktopChildrenMinWidth?: number;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Opt-in labels for the narrow-viewport full-width pager, one per non-null child, in child
+   * order. The pager is active only when the narrow layout is active, a detail view is active,
+   * there is more than one non-null child, and this array's length equals that child count.
+   * Otherwise the dotted swiper is used. A length mismatch is ignored and falls back to the
+   * dotted swiper.
+   */
+  narrowViewportChildLabels?: string[];
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * When true, the narrow detail view is active even if the internal list selection is unset.
+   * Detail is active when the internal selection is set or this flag is true.
+   * Showing the list clears only the internal selection. The parent turns this flag off.
+   */
+  narrowViewportSelectionActive?: boolean;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Identity of the record the parent selected.
+   * When this string changes, the narrow pager resets to the first child.
+   * Width and layout measurement changes do not reset it.
+   */
+  narrowViewportSelectionKey?: string;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * When set on the opt-in narrow pager, show a return-to-list button that clears the
+   * internal selection and calls onSelectionChange with undefined.
+   * When omitted, that button is not rendered.
+   */
+  narrowViewportListButtonLabel?: string;
+  /**
+   * Web only. The native SplitPage ignores this prop.
+   * Border radius applied to each desktop detail child pane. The list column is excluded.
+   * The pane clips to this radius; the column ScrollView inside it does not, so the column
+   * still scrolls. Uses the same rounding scale as `Box` (`md` is 4px). Defaults to `md`.
+   */
+  childColumnRounding?: Rounding;
 }
 
 export type PermissionKind =
@@ -1898,6 +2043,39 @@ export type BannerProps =
   | (BannerPropsBase & {buttonOnClick?: undefined})
   | (BannerPropsBase & {buttonOnClick: () => void | Promise<void>} & BannerButtonProps);
 
+export interface BlocksViewProps extends WithTestID {
+  /** When true, an `html` block renders in a sandboxed frame. Otherwise it stays a placeholder. */
+  allowHtml?: boolean;
+  /** A whole-reply YAML or JSON string, or a document that already parsed. */
+  document: string | BlocksDocument;
+  /** Names the host will run. A callback outside this list is disabled. Omit to leave callbacks enabled. */
+  hostActions?: readonly string[];
+  /** Hostnames allowed on https image sources. Empty rejects every https image. */
+  imageHosts?: readonly string[];
+  /**
+   * Called for reply, open, select, and callback. Select also updates the target chart locally.
+   * A copy button writes the clipboard itself and never calls this.
+   */
+  onAction?: (event: {action: BlockAction; blockId: string; elementId: string}) => void;
+  /** Block ids replaced in place. The key is the original block id. */
+  overrides?: Record<string, Block>;
+  /** Element ids whose buttons show a loading state. */
+  pendingElementIds?: readonly string[];
+  /** Loads a `ref` dataset. Inline datasets do not call this. */
+  resolveDataset?: (ref: {
+    grain?: "day" | "hour" | "month" | "week";
+    id: string;
+    limit?: number;
+  }) => Promise<InlineDataset | undefined>;
+  /**
+   * Turns a `file:` image id into a URL. Until it resolves, the image is omitted and the alt
+   * text stays. Data and https sources do not call this.
+   */
+  resolveImage?: (fileId: string) => Promise<string | undefined>;
+  /** While a reply is still streaming, `html` stays a placeholder. */
+  streaming?: boolean;
+}
+
 export interface BodyProps {
   scroll?: boolean;
   loading?: boolean;
@@ -1991,6 +2169,13 @@ export interface ButtonProps extends WithTestID {
    * If true, a confirmation modal will be shown before the onClick action.
    */
   withConfirmation?: boolean;
+  /**
+   * If true, the button is never wider than its container, and a label that does not fit wraps
+   * onto centered lines while the button grows taller. A small button grows from its 28px height.
+   * If false, the label stays on one line.
+   * @default false
+   */
+  wrapText?: boolean;
   /**
    * The function to call when the button is clicked.
    */
@@ -2298,6 +2483,12 @@ export interface IconButtonProps extends WithTestID {
    * @default "primary"
    */
   variant?: "primary" | "secondary" | "muted" | "destructive" | "navigation" | "ghost";
+
+  /**
+   * When set, the variant background is passed through applyColorOpacity and the icon color
+   * stays the opaque variant color. When omitted, the background is unchanged.
+   */
+  backgroundOpacity?: number;
 
   /**
    * If true, a confirmation modal will be shown before the onClick action.
@@ -2648,8 +2839,10 @@ export interface PaginationProps extends WithTestID {
 export interface LineChartProps extends WithTestID {
   /** Summary announced for the whole chart. */
   accessibilityLabel?: string;
+  /** Optional previous-period values drawn as a dotted overlay. */
+  comparisonData?: ChartPoint[];
   /** Single series of labeled numeric points. */
-  data: Array<{color?: string; label: string; value: number}>;
+  data: ChartPoint[];
   /** Copy shown when `data` is empty. */
   emptyText?: string;
   /** Formats the numeric value in tooltips. */
@@ -2660,18 +2853,77 @@ export interface LineChartProps extends WithTestID {
   legendLabel?: string;
   /** When true, shows a spinner instead of the plot. */
   loading?: boolean;
+  /** Makes `periodLabel` pressable when provided. */
+  onPeriodPress?: () => void;
+  /** Relative or absolute reporting period shown with `title`. */
+  periodLabel?: string;
+  /** Named series. When non-empty, these replace the single `data` series. */
+  series?: ChartSeries[];
+  /** Optional chart-card title shortcut. */
+  title?: string;
+  /** X-label collision policy. `auto` rotates when more than seven labels are present. */
+  xTickPolicy?: "auto" | "rotate" | "truncate";
+}
+
+export interface SparklineChartProps extends WithTestID {
+  /** Summary announced for the whole sparkline. */
+  accessibilityLabel?: string;
+  /** Optional previous-period values drawn as a dotted line. */
+  comparisonData?: Array<{label: string; value: number}>;
+  /** Current labeled numeric values. */
+  data: Array<{label: string; value: number}>;
+  /** Whole sparkline height in pixels. */
+  height?: number;
+}
+
+export interface ChartCardProps extends WithTestID {
+  children: React.ReactNode;
+  /** Optional context shown below the title row. */
+  filterSummary?: string;
+  /** Makes the period badge pressable when provided. */
+  onPeriodPress?: () => void;
+  /** Date range or relative period shown in the header. */
+  periodLabel?: string;
+  /** Card heading. */
+  title: string;
+}
+
+export interface ScorecardProps extends WithTestID {
+  /** Optional previous-period sparkline values. */
+  comparisonData?: Array<{label: string; value: number}>;
+  /** Formats numeric values. String values render unchanged. */
+  formatValue?: (value: number) => string;
+  onPeriodPress?: () => void;
+  periodLabel?: string;
+  /** Current-period sparkline values. */
+  sparklineData?: Array<{label: string; value: number}>;
+  title: string;
+  value: number | string;
 }
 
 export interface AreaChartProps extends LineChartProps {}
 export interface BarChartProps extends LineChartProps {}
 
-export interface DonutChartProps extends LineChartProps {}
+export interface DonutChartProps extends LineChartProps {
+  /** Small copy below the center value. */
+  centerTitle?: string;
+  /** Primary copy inside the donut hole. */
+  centerValue?: string;
+  /** Formats each slice's legend share. Defaults to a rounded percentage. */
+  formatShare?: (value: number, total: number) => string;
+}
 
 export interface DashboardGridProps extends WithTestID {
   children?: React.ReactNode;
   /** Column counts by breakpoint. Defaults to `{sm: 1, md: 2, lg: 3}`. */
   columns?: {lg: number; md: number; sm: number};
   gap?: UnsignedUpTo12;
+}
+
+export interface DashboardGridItemProps extends WithTestID {
+  children?: React.ReactNode;
+  /** Number of grid columns occupied at each breakpoint. Defaults to one. */
+  span?: {lg?: number; md?: number; sm?: number};
 }
 
 /**
@@ -2877,6 +3129,8 @@ export interface TableContextProviderProps extends TableContextType {
 }
 
 export interface TextProps extends WithTestID {
+  /** `"header"` marks the text as a heading, so screen readers announce it and can jump to it. */
+  accessibilityRole?: "header";
   align?: "left" | "right" | "center" | "justify"; // default "left"
   children?: React.ReactNode;
   bold?: boolean; // default false
@@ -2886,6 +3140,11 @@ export interface TextProps extends WithTestID {
   truncate?: boolean; // default false
   underline?: boolean;
   numberOfLines?: number;
+  /**
+   * The native text, for example to move screen reader focus to it with
+   * `AccessibilityInfo.setAccessibilityFocus`.
+   */
+  ref?: React.Ref<TextInstance>;
   skipLinking?: boolean;
 }
 

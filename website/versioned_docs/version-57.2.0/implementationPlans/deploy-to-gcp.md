@@ -1,7 +1,7 @@
 # Implementation Plan: Deploy to GCP (Generalized) + `deploy-gcp` Skill
 
 **Status:** Approved — decisions recorded (2026-07-29)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1005
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1005
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned

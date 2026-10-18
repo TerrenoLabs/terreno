@@ -4,6 +4,7 @@ import {DefaultDemo} from "../stories/DefaultDemo";
 import {ThemeComponentStories, ThemeFontStories} from "../stories/Theme.stories";
 
 export const ThemeConfiguration: DemoConfiguration = {
+  usageExample: "import {Box} from \"@terreno/ui\";\n\n<Box />",
   name: "Theme",
   component: () => null,
   related: [],

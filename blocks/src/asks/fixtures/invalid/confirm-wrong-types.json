@@ -1,0 +1,18 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Send the report?",
+    "destructive": "yes",
+    "allowDecline": 1
+  },
+  "errors": [
+    {
+      "path": "allowDecline",
+      "code": "INVALID_TYPE"
+    },
+    {
+      "path": "destructive",
+      "code": "INVALID_TYPE"
+    }
+  ]
+}

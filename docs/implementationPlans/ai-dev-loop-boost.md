@@ -1,13 +1,13 @@
 # Implementation Plan: The AI Development Loop (Boost)
 
 **Status:** Approved — key decisions recorded (2026-07-29)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1014
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1014
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned
 **Created:** 2026-07-27
 **Program:** [OSS launch](oss-launch-program.md)
-**Depends on:** PR [#802](https://github.com/flourishhealth/terreno/pull/802) merging (assumed)
+**Depends on:** PR [#802](https://github.com/TerrenoLabs/terreno/pull/802) merging (assumed)
 **RTK deprecation flag:** **Partial** — `get_rtk_state` and `installTerrenoDevConsoleLogger` are RTK-named surfaces delivered by #802 that must be renamed or relocated after #869. Marked tasks are blocked on both PRs.
 
 ## Goal

@@ -1,10 +1,11 @@
 # Implementation Plan: Support answering agent (`@terreno/support`)
 
 **Status:** Draft — awaiting approval (Grow ran unattended; every Decisions row marked `assumed` is a recommended default the reviewer can change before Approve)  
+**Roadmap:** Area=`ai`, Target=`Future`, Impact=`Feature`  
 **Branch:** `cursor/support-agent-grow-fd63`  
 **Owner:** unassigned  
 **Created:** 2026-09-15  
-**Depends on:** [announcements.md](announcements.md) (`@terreno/announcements`, [PR #1284](https://github.com/FlourishHealth/terreno/pull/1284) — only the announcements adapter task blocks on it), [model-router-mcp.md](model-router-mcp.md) (shipped: `registerMCPTool`, `/mcp`), [model-router-actions.md](model-router-actions.md) (shipped: `collectionActions` / `instanceActions`)  
+**Depends on:** [announcements.md](announcements.md) (`@terreno/announcements`, [PR #1284](https://github.com/TerrenoLabs/terreno/pull/1284) — only the announcements adapter task blocks on it), [model-router-mcp.md](model-router-mcp.md) (shipped: `registerMCPTool`, `/mcp`), [model-router-actions.md](model-router-actions.md) (shipped: `collectionActions` / `instanceActions`)  
 **Related:** [app-mcp-server.md](app-mcp-server.md) (Draft — MCP prompts/resources; this plan uses tools only until that ships), [ai-agents-and-failover.md](ai-agents-and-failover.md) (Draft — explicitly excludes RAG; this plan owns retrieval), [mcp-boost-parity.md](mcp-boost-parity.md) (hosted dev-time MCP; unchanged)  
 **Roadmap issue:** TBD after Approve (`roadmap-item`)
 
@@ -378,7 +379,7 @@ docs/{explanation,reference,how-to}/README.md, AGENTS.md / CLAUDE.md package lis
 
 ## Task List
 
-[`docs/tasks/support-agent.md`](https://github.com/FlourishHealth/terreno/blob/master/docs/tasks/support-agent.md)
+[`docs/tasks/support-agent.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/support-agent.md)
 
 ## Acceptance Criteria
 

@@ -3,6 +3,7 @@ import {SimpleContentCopy, SimpleContentDemo} from "@stories/SimpleContent.stori
 import {SimpleContent} from "@terreno/ui";
 
 export const SimpleContentConfiguration: DemoConfiguration = {
+  usageExample: "import {SimpleContent} from \"@terreno/ui\";\n\n<SimpleContent />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

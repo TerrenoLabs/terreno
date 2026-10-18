@@ -3,6 +3,7 @@ import {ErrorBoundaryCaught, ErrorBoundaryDemo} from "@stories/ErrorBoundary.sto
 import {ErrorBoundary} from "@terreno/ui";
 
 export const ErrorBoundaryConfiguration: DemoConfiguration = {
+  usageExample: "import {ErrorBoundary} from \"@terreno/ui\";\n\n<ErrorBoundary />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

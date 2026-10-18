@@ -3,8 +3,8 @@
 Install Terreno's agent skills into another repo or agent with the skills CLI.
 
 ```bash
-npx skills add FlourishHealth/terreno
-npx skills add FlourishHealth/terreno --skill terreno-1-grow
+npx skills add TerrenoLabs/terreno
+npx skills add TerrenoLabs/terreno --skill terreno-1-grow
 ```
 
 That copies the committed `skills/` tree: lifecycle stages (Grow, Pick, Roast, Brew,
@@ -43,4 +43,4 @@ Do not hand-edit `skills/`.
 Skills read architecture docs before changing code. After a user-visible or architectural
 change, update `docs/` in the same slice using `update-docs`. See
 [lifecycle plugin](../reference/lifecycle-plugin.md) and the
-[documentation contract](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md).
+[documentation contract](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md).

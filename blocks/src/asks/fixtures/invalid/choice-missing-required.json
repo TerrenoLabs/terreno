@@ -1,0 +1,14 @@
+{
+  "kind": "choice",
+  "input": {
+    "options": [
+      {"id": "yes", "label": "Yes"},
+      {"label": "No"}
+    ]
+  },
+  "errors": [
+    {"path": "options[1].id", "code": "MISSING_REQUIRED"},
+    {"path": "prompt", "code": "MISSING_REQUIRED"},
+    {"path": "select", "code": "MISSING_REQUIRED"}
+  ]
+}

@@ -43,27 +43,48 @@ describe("CircleCI credit gates", () => {
     }
   });
 
-  it("halts Netlify jobs before bun install when the context is empty", () => {
+  it("validates the Netlify context before bun install", () => {
     for (const {job, siteIdVar} of netlifyJobs) {
       const block = jobCommandBlock(continueConfig, job);
       assert.ok(block, job);
-      const skipAt = block.indexOf("skip_if_netlify_unconfigured");
+      const skipAt = block.indexOf("require_netlify_context");
       const bunAt = block.indexOf("install_bun_and_deps");
-      assert.notEqual(skipAt, -1, `${job} must skip empty Netlify context`);
+      assert.notEqual(skipAt, -1, `${job} must validate the Netlify context`);
       assert.notEqual(bunAt, -1, `${job} still installs deps after the gate`);
-      assert.ok(skipAt < bunAt, `${job} must halt before bun install`);
+      assert.ok(skipAt < bunAt, `${job} must validate before bun install`);
       assert.match(block, new RegExp(`site-id-var: ${siteIdVar}`));
     }
   });
 
-  it("halts GCP jobs before checkout extras when terreno-gcp is empty", () => {
+  it("halts GitHub App fork deploys before context validation", () => {
+    const command = continueConfig.slice(
+      continueConfig.indexOf("  skip_if_fork_deploy:"),
+      continueConfig.indexOf("  require_netlify_context:")
+    );
+    assert.match(command, /Fork PR detected via GitHub API/);
+    assert.match(command, /repos\/\$\{repository\}\/pulls\/\$\{pr\}/);
+    for (const jobName of [
+      "deploy-demo-preview",
+      "deploy-frontend-preview",
+      "deploy-docs-preview",
+      "gcp-cd-preview",
+    ]) {
+      const block = jobCommandBlock(continueConfig, jobName);
+      assert.ok(block, jobName);
+      const skipAt = block.indexOf("skip_if_fork_deploy");
+      const requireAt = block.search(/require_(netlify|gcp)_context/);
+      assert.ok(skipAt !== -1 && requireAt !== -1 && skipAt < requireAt, jobName);
+    }
+  });
+
+  it("validates terreno-gcp before checkout on GCP jobs", () => {
     for (const jobName of ["gcp-cd-prod", "gcp-cd-preview", "preview-cleanup"]) {
       const block = jobCommandBlock(continueConfig, jobName);
       assert.ok(block, jobName);
-      const skipAt = block.indexOf("skip_if_gcp_unconfigured");
+      const skipAt = block.indexOf("require_gcp_context");
       const checkoutAt = block.indexOf("- checkout");
       assert.notEqual(skipAt, -1, jobName);
-      assert.ok(skipAt < checkoutAt, `${jobName} must skip before checkout`);
+      assert.ok(skipAt < checkoutAt, `${jobName} must validate before checkout`);
     }
   });
 
@@ -76,10 +97,10 @@ describe("CircleCI credit gates", () => {
     assert.match(backendWhen, /setup_remote_docker/);
   });
 
-  it("installs workspace deps on preview-cleanup after the GCP skip so mongodb import works", () => {
+  it("installs workspace deps on preview-cleanup after the GCP check so mongodb import works", () => {
     const block = jobCommandBlock(continueConfig, "preview-cleanup");
     assert.ok(block);
-    const skipAt = block.indexOf("skip_if_gcp_unconfigured");
+    const skipAt = block.indexOf("require_gcp_context");
     const bunAt = block.indexOf("install_bun_and_deps");
     assert.notEqual(skipAt, -1);
     assert.notEqual(bunAt, -1);

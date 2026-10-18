@@ -46,8 +46,8 @@ Then run `bun test` in the package. The preload starts `mongodb-memory-server` w
 
 ## Documentation
 
-Full API reference: [docs/reference/test.md](https://github.com/flourishhealth/terreno/blob/master/docs/reference/test.md)
+Full API reference: [docs/reference/test.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/test.md)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/flourishhealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/flourishhealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.

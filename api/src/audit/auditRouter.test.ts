@@ -133,7 +133,7 @@ describe("modelRouter audit", () => {
   beforeEach(async () => {
     resetAuditRecorderForTests();
     deleteNamedModel("Note");
-    deleteNamedModel("AuditEvent");
+    deleteNamedModel("TerrenoAuditEvent");
     await setupDb();
     await mongoose.connection.collection("auditevents").deleteMany({});
   });
@@ -141,7 +141,7 @@ describe("modelRouter audit", () => {
   afterEach(() => {
     resetAuditRecorderForTests();
     deleteNamedModel("Note");
-    deleteNamedModel("AuditEvent");
+    deleteNamedModel("TerrenoAuditEvent");
   });
 
   it("writes a create event with after only and strips secrets", async () => {
@@ -232,7 +232,7 @@ describe("modelRouter audit", () => {
     await agent.post("/notes").send({title: "A"}).expect(201);
     await agent.post("/notes").send({title: "B"}).expect(201);
     await flushAuditRecorderForTests();
-    assert.isUndefined(mongoose.connection.models.AuditEvent);
+    assert.isUndefined(mongoose.connection.models.TerrenoAuditEvent);
     const auditLogs = errorSpy.mock.calls.filter((call) =>
       String(call[0]).includes("requires AuditApp")
     );
@@ -387,7 +387,7 @@ describe("modelRouter audit", () => {
 describe("maybeRecordAdminAudit", () => {
   beforeEach(async () => {
     deleteNamedModel("Note");
-    deleteNamedModel("AuditEvent");
+    deleteNamedModel("TerrenoAuditEvent");
     resetAuditRecorderForTests();
     await setupDb();
     await mongoose.connection.collection("auditevents").deleteMany({});
@@ -396,7 +396,7 @@ describe("maybeRecordAdminAudit", () => {
   afterEach(() => {
     resetAuditRecorderForTests();
     deleteNamedModel("Note");
-    deleteNamedModel("AuditEvent");
+    deleteNamedModel("TerrenoAuditEvent");
   });
 
   it("does not write when AuditApp is not registered", async () => {

@@ -11,6 +11,7 @@ import {
 import {AiSuggestionBox} from "@terreno/ui";
 
 export const AiSuggestionBoxConfiguration: DemoConfiguration = {
+  usageExample: "import {AiSuggestionBox} from \"@terreno/ui\";\n\n<AiSuggestionBox />",
   name: "AI Suggestion Box",
   component: AiSuggestionBox,
   related: ["Text area", "Text field"],

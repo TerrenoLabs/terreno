@@ -15,7 +15,7 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
 ## Phase 0: Prerequisites
 
 - [ ] **Task 0.1**: Confirm CircleCI org/plan and project link
-  - Description: Verify the requester-created CircleCI organization, plan, and that `FlourishHealth/terreno` is connected with permission to report GitHub checks. Enable **dynamic config** / setup workflows for the project. Record org slug + project slug in the IP header or how-to doc.
+  - Description: Verify the requester-created CircleCI organization, plan, and that `TerrenoLabs/terreno` is connected with permission to report GitHub checks. Enable **dynamic config** / setup workflows for the project. Record org slug + project slug in the IP header or how-to doc.
   - Files: `docs/how-to/circleci.md` (stub OK)
   - Depends on: none (human prerequisite)
   - Acceptance: a manual “hello” pipeline can be triggered from the project; dynamic config is enabled.
@@ -103,19 +103,21 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
   - Files: `.circleci/continue-config.yml`
   - Depends on: Task 0.2, Task 1.3
   - Acceptance: preview deploy URL posted or visible; prod deploy on master path filter.
-  - Note: Path filters and preview jobs exist. Live Netlify still runs on GHA until `terreno-netlify` is filled; CircleCI skips. Cleanup on PR close is GHA `preview-cleanup.yml`.
+  - Note: CircleCI is the only Netlify deployer; jobs fail when `terreno-netlify` is empty. PR close triggers CircleCI `preview-cleanup` through `preview-cleanup.yml`.
 
 - [ ] **Task 4.2**: Preview cleanup port
   - Description: On PR close, clean Netlify/GCP preview resources from CircleCI (webhook or GitHub App → pipeline). Prefer OIDC over `GCP_SA_KEY`.
   - Files: `.circleci/continue-config.yml`
   - Depends on: Task 4.1
   - Acceptance: closing a PR removes preview resources; no orphaned Cloud Run `pr-N` services in a test PR.
+  - Note: Cutover code landed on branch `move-cd-to-circleci` (GHA deploy workflows disabled; CircleCI deploy jobs fail on empty contexts). Check off after contexts are filled and the acceptance is observed.
 
 - [ ] **Task 4.3**: Dual-run cutover for Netlify
   - Description: Delete GHA deploy workflows after CircleCI trusted.
   - Files: `.github/workflows/demo-deploy.yml`, `frontend-example-deploy.yml`, `docs-deploy.yml`, `preview-cleanup.yml`
   - Depends on: Task 4.1, Task 4.2
   - Acceptance: GHA deploy twins deleted.
+  - Note: Cutover code landed on branch `move-cd-to-circleci` (GHA deploy workflows disabled; CircleCI deploy jobs fail on empty contexts). Check off after contexts are filled and the acceptance is observed.
 
 ## Phase 5: EAS + fingerprint
 
@@ -150,13 +152,14 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
   - Files: `.circleci/continue-config.yml`
   - Depends on: Task 6.1
   - Acceptance: terraform preview on PR; apply+deploy on master for a safe test path; GitHub Deployment records optional but documented.
-  - Note: Path filters exist. Live GCP still runs on GHA until `terreno-gcp` is filled; CircleCI skips apply.
+  - Note: CircleCI is the only GCP deployer; jobs fail when `terreno-gcp` is empty. `gcp-cd-prod` runs MCP `test:ci` before the MCP deploy.
 
 - [ ] **Task 6.3**: Dual-run cutover for CD
   - Description: Single deployer: disable GHA `cd.yml` when CircleCI CD is required; remove GitHub OIDC provider only after GHA CD is gone (or keep read-only if other repos need it — document).
   - Files: `.github/workflows/cd.yml`, terraform OIDC
   - Depends on: Task 6.2
   - Acceptance: only CircleCI performs terreno CD; no double apply.
+  - Note: Cutover code landed on branch `move-cd-to-circleci` (GHA deploy workflows disabled; CircleCI deploy jobs fail on empty contexts). Check off after contexts are filled and the acceptance is observed.
 
 ## Phase 7: npm publish
 
@@ -178,7 +181,7 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
   - Description: Port `maestro-e2e` (Chrome + xvfb against example-frontend, optional demo smokes) to CircleCI `node22_browsers_mongo_rs`. Appium Android remains separate.
   - Files: `.circleci/continue-config.yml`, `.circleci/config.yml`, `.github/workflows/maestro-e2e.yml`
   - Depends on: Task 5.2
-  - Acceptance: CircleCI `maestro-e2e` is the writer; GHA workflow is `on: []`.
+  - Acceptance: CircleCI `maestro-e2e` is the writer; GHA workflow is `push.branches-ignore: ["**"]`.
 
 - [ ] **Task 8.2**: Port Appium iOS on CircleCI macOS
   - Description: Select macOS resource class/image with Working WDA; port iOS job; compare flake rate to GHA `macos-15`.
@@ -200,14 +203,14 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
   - Depends on: Task 0.2
   - Acceptance: Security tab still receives results **or** explicit maintainer sign-off on alternative.
 
-- [ ] **Task 9.2**: Replace Dependabot auto-merge + triage + roadmap-generate + docs-audit
+- [ ] **Task 9.2**: Replace Dependabot auto-merge + triage + docs-audit (roadmap workflows stay on GitHub Actions, decided 2026-09-26)
   - Description: Implement CircleCI (or Renovate) equivalents; wire issue/schedule triggers without leaving required logic on GHA.
   - Files: `.circleci/continue-config.yml`, corresponding GHA deletions
   - Depends on: Task 0.2
   - Acceptance: each former workflow’s acceptance behavior has an owner on CircleCI; GHA files deleted.
 
 - [x] **Task 9.3a**: Port architectural PR review
-  - Description: CircleCI `architectural-pr-review` runs `.github/scripts/architectural-pr-review.ts` after checking out `origin/master`. Skips forks and missing `CURSOR_API_KEY` / `GITHUB_TOKEN`. GHA workflow is `on: []`.
+  - Description: CircleCI `architectural-pr-review` runs `.github/scripts/architectural-pr-review.ts` after checking out `origin/master`. Skips forks and missing `CURSOR_API_KEY` / `GITHUB_TOKEN`. GHA workflow is `push.branches-ignore: ["**"]`.
   - Files: `.circleci/continue-config.yml`, `.github/workflows/architectural-pr-review.yml`, `.github/scripts/architectural-pr-review.ts`
   - Depends on: Task 0.2
   - Acceptance: CircleCI job is the writer; Cursor Approval Agent stays on GitHub.

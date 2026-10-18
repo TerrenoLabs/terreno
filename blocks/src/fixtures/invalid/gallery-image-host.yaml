@@ -1,0 +1,10 @@
+v: 1
+blocks:
+  - type: gallery
+    images:
+      - src: file:roast-lamb
+        alt: Roast leg of lamb
+      - src: "data:image/png;base64,iVBORw0KGgo="
+        alt: Roast potatoes
+      - src: https://images.example.com/carrots.jpg
+        alt: Glazed carrots

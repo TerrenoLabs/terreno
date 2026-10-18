@@ -452,6 +452,8 @@ export interface DocumentStorageBrowserProps {
   basePath: string;
   /** Route opened by the standard admin screen back arrow. */
   backHref?: string;
+  /** Show the admin back arrow. Defaults to true; pass false when embedded outside admin. */
+  backButton?: boolean;
   title?: string;
   allowDelete?: boolean;
   allowUpload?: boolean;

@@ -3,6 +3,7 @@ import {OAuthButtonsDemo, OAuthButtonsDisabled} from "@stories/OAuthButtons.stor
 import {OAuthButtons} from "@terreno/ui";
 
 export const OAuthButtonsConfiguration: DemoConfiguration = {
+  usageExample: "import {OAuthButtons} from \"@terreno/ui\";\n\n<OAuthButtons />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

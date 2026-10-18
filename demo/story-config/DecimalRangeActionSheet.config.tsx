@@ -6,9 +6,10 @@ import {
 import {DecimalRangeActionSheet} from "@terreno/ui";
 
 export const DecimalRangeActionSheetConfiguration: DemoConfiguration = {
+  usageExample: "import {DecimalRangeActionSheet} from \"@terreno/ui\";\n\n<DecimalRangeActionSheet />",
   a11yNotes: ["Open from the button; the sheet starts closed."],
   additionalDocumentation: [],
-  category: "Component",
+  category: ["Component", "Form"],
   component: DecimalRangeActionSheet,
   demo: () => <DecimalRangeActionSheetDemo />,
   demoOptions: {size: "lg"},
@@ -16,7 +17,7 @@ export const DecimalRangeActionSheetConfiguration: DemoConfiguration = {
   interfaceName: "DecimalRangeActionSheetProps",
   name: "DecimalRangeActionSheet",
   props: {},
-  related: ["ActionSheet", "NumberField"],
+  related: ["ActionSheet", "Number field"],
   status: {
     android: "ready",
     documentation: "ready",

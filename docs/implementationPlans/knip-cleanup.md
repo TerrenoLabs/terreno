@@ -1,6 +1,7 @@
 # Implementation Plan: Remove the Knip baseline
 
 **Status:** Complete  
+**Roadmap:** Area=`dx`, Target=`Released`, Impact=`Improvement`  
 **Created:** 2026-09-09  
 **Owner:** unassigned  
 **Primary packages:** repo-wide (`knip.jsonc`, `scripts/static-analysis/`, every workspace Knip currently fingerprints)  

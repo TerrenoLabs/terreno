@@ -51,7 +51,7 @@ watch hook while CI runs, 2–5 minutes while review bots report, 15–30 minute
 human holds the PR, and no wait at all while backlog work remains. Ticks that find
 nothing print nothing, and every comment is answered exactly once — answered ids live in
 state. See
-[`heartbeat.md`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-scan/references/heartbeat.md).
+[`heartbeat.md`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-scan/references/heartbeat.md).
 
 ## PR routing
 
@@ -65,7 +65,7 @@ Routing is applied right after Brew reports the PR (`gh pr edit --add-reviewer
 --add-assignee --add-label`) and re-requested once when requested changes are addressed.
 The campaign never approves its own PRs, never dismisses a review, and never merges when
 `mergePolicy` is `human` — the default. See
-[`pr-routing.md`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-scan/references/pr-routing.md).
+[`pr-routing.md`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-scan/references/pr-routing.md).
 
 ## Stage anatomy
 
@@ -74,11 +74,11 @@ produced, Success/Failure/Blocked conditions, and a recommended next stage — t
 shape as the lifecycle stages.
 
 Results use `PASS`, `FAIL`, `BLOCKED`, or `PENDING` and the compact `v: 2`
-[`scan-result.schema.json`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-scan/references/scan-result.schema.json)
+[`scan-result.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-scan/references/scan-result.schema.json)
 (`v`, `stage`, `status`, `next`, `action`; omit empty keys). Campaign state follows
-[`scan-state.schema.json`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-scan/references/scan-state.schema.json)
+[`scan-state.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-scan/references/scan-state.schema.json)
 and findings follow
-[`finding.schema.json`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-scan/references/finding.schema.json).
+[`finding.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-scan/references/finding.schema.json).
 Chat shows `status` / `next` / `action` plus the current metric; the YAML lives in a
 Details toggle.
 
@@ -93,7 +93,7 @@ large, never spawn nested agents, and never edit files. Sift then dedupes by
 keeping it, drops what does not reproduce, and ranks by impact × confidence ÷ effort.
 Dropped shards and capped coverage are always reported; silent truncation is a defect.
 See
-[`mapreduce.md`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-scan/references/mapreduce.md).
+[`mapreduce.md`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-scan/references/mapreduce.md).
 
 ## Goal and metric
 
@@ -102,7 +102,7 @@ came from running it. Track re-runs that command with the charter's protocol eve
 and records the value with its output. A finding that cannot be tied to the metric is
 dismissed in Sift, not deferred. Re-baselining without recording both values, the reason,
 and the round is untrustworthy and Track says so. See
-[`goal-tracking.md`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-scan/references/goal-tracking.md).
+[`goal-tracking.md`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-scan/references/goal-tracking.md).
 
 ## Artifacts
 

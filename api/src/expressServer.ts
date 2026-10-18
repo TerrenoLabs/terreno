@@ -219,6 +219,16 @@ export interface AuthOptions {
   generateJWTPayload?: (user: User) => Record<string, unknown>;
   generateTokenExpiration?: (user: User) => number | jwt.SignOptions["expiresIn"];
   generateRefreshTokenExpiration?: (user: User) => number | jwt.SignOptions["expiresIn"];
+  /** Register JWT forgot-password and token-reset routes. Default true. */
+  passwordReset?: boolean;
+  /**
+   * Register the deprecated `POST /resetPassword` RTK compatibility alias.
+   * Default true. Set false when the host owns that path; `/auth/resetPassword`
+   * remains available when `passwordReset` is enabled.
+   */
+  legacyResetPasswordRoute?: boolean;
+  /** Register JWT send-verification and verify-email routes. Default true. */
+  emailVerification?: boolean;
   /** Public web/app origin used in password-reset and verification links. */
   publicAppUrl?: string;
   /**

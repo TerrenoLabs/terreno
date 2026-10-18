@@ -3,6 +3,7 @@ import {TableBadgeDemo, TableBadgeStates} from "@stories/TableBadge.stories";
 import {Table} from "@terreno/ui";
 
 export const TableBadgeConfiguration: DemoConfiguration = {
+  usageExample: "import {Table} from \"@terreno/ui\";\n\n<Table />",
   name: "Table badge",
   component: Table,
   related: ["Table"],
@@ -13,7 +14,7 @@ export const TableBadgeConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A24165&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-24005",
     ios: "ready",
     android: "ready",
     web: "ready",

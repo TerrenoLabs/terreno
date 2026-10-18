@@ -14,7 +14,18 @@ loops that invoke those stages; they are not stages and must not appear as `stag
 | `terreno-2-pick` | approved task + branch/state | one implemented slice, then Roast, then the next task | Roast, or Brew when the list is done |
 | `terreno-3-roast` | Pick result + current diff | independent requirement/evidence verdict for the current task | emit Pick if tasks remain, else Brew; never invoke Pick; pass a task-scoped briefing; do not spawn two unconstrained reviewers |
 | `terreno-4-brew` | Roast PASS for every in-scope task + branch/evidence | pushed head + PR + product-CI trigger check + review-bot wait + attached evidence | Taste |
-| `terreno-5-taste` | PR + current state | one current-head reaction; before push: pull latest `master`, re-verify last-run failed tests locally, run root `prepush` when present (otherwise affected-package checks) in a no-context subagent, then watch CI | null or fresh Taste |
+| `terreno-5-taste` | PR + current state | one current-head reaction; before push: fetch latest `master` (merge only when needed), re-verify last-run failed tests locally, run root `prepush` when present (otherwise affected-package checks) in a no-context subagent, then watch CI; invoked directly, repeats bounded reactions until terminal | null or fresh Taste |
+
+Pre-Grow skill (not a stage):
+
+| Skill | Input | Primary output | Next |
+| --- | --- | --- | --- |
+| `terreno-prd` | app owner + conversation, prototype, repository | interview, then a published full product PRD (problem, why now, solution, user stories, success metrics and guardrails, constraints, rollout, out of scope); every metric measurable or `TBD` with its decider | Grow, with the PRD as its spec; metrics become acceptance criteria, `TBD`s become grilling questions, settled product decisions are not re-asked |
+
+It is explicit-invoke only (`/terreno-prd`, `$terreno-prd`, `/terreno:prd`). It
+interviews with Grow's grilling procedure over a product tree, is sized for one app owner
+and one or two developers, and carries no implementation or testing decisions; those stay
+in Grow.
 
 Outer loops (not stages):
 
@@ -35,28 +46,33 @@ Every stage includes:
 - Recommended next stage
 
 Results use `PASS`, `FAIL`, `BLOCKED`, or `PENDING` and the compact `v: 2` schema
-[`stage-result.schema.json`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/stage-result.schema.json)
+[`stage-result.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/stage-result.schema.json)
 (`v`, `stage`, `status`, `next`, `action`; omit empty keys). Loop state follows
-[`execution-state.schema.json`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/execution-state.schema.json).
+[`execution-state.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/execution-state.schema.json).
 Chat and PRs show `status` / `next` / `action`; the YAML lives in a Details toggle.
 When the current PR has GitHub Deployments, those demo URLs are the last visible
 section of every wait-for-human or done chat.
 
 The outer loop owns state persistence, Taste `PENDING` reinvocation, Grow/Brew/Taste
 invocation, retries, and escalation. Pick owns the
-[pick-roast inner loop](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/pick-roast-loop.md):
+[pick-roast inner loop](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/pick-roast-loop.md):
 one task, roast it, next task. Roast never invokes Pick. Do not start the next task
 until Roast PASS. Exactly one driver continues after each Roast. Brew and Taste wait
 until async review bots (Bugbot, CodeQL, and similar) on the current head have reported,
 preferring provider CLI watch hooks or harness event subscriptions over sleep polling.
 Taste then waits in a loop for product CI using GitHub CLI (`gh pr checks --watch`,
 `gh run watch`) or CircleCI CLI (`circleci run watch`) until jobs are terminal or the
-wait times out. Before any push, Taste always pulls latest `master`, records last-run
+wait times out. Before any push, Taste fetches latest `master` (merging it only when needed), records last-run
 failed tests and re-verifies them locally, then spawns a
 fresh subagent with no parent conversation. If the repository root defines a `prepush`
 package script, Taste runs it as the authoritative local gate; otherwise it falls back
 to lint, typecheck, and locally affected tests in each affected package. Taste then
 pushes and watches product CI.
+Every stage that pushes follows `references/push-ownership.md`: it owns the PR until
+CI is green on every host and every review-bot comment is fixed, declined with a
+reply, or raised as a decision. After three fix rounds that leave the PR red, Taste
+stops pushing and escalates as `BLOCKED`; the final message starts with
+`BLOCKED — PR #<n> still red after <k> fix rounds`. No stage ends quietly on a red PR.
 Taste observes product CI on every discovered host (GitHub Actions, CircleCI,
 Buildkite, and similar), not only GitHub checks. A documented not-applicable host
 counts as skipped; an unexplained untriggered host prevents Brew `PASS`. Brew still
@@ -91,16 +107,16 @@ These are the only visible PR sections; optional detail is expandable; comments 
 reserved for blocked decisions or non-obvious review resolutions.
 
 Every stage follows the
-[documentation contract](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md):
+[documentation contract](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md):
 read architecture docs before acting, update them in the same slice, and fail the slice
 when user-visible or architectural behavior ships without matching docs. Brew and Taste
 observe product CI per
-[product-ci.md](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/product-ci.md).
+[product-ci.md](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/product-ci.md).
 
 Install the published skill set directly:
 
 ```bash
-npx skills add FlourishHealth/terreno
+npx skills add TerrenoLabs/terreno
 ```
 
 Or install the combined lifecycle and Terreno app plugin:
@@ -112,24 +128,24 @@ Or install the combined lifecycle and Terreno app plugin:
 | Claude Code | `terreno` | `1-grow` … `5-taste`, outer loops | `/terreno:pick-roast-loop` |
 | `npx skills` | — | Canonical stage and outer-loop names | `/terreno-pick-roast-loop` |
 
-Cursor installs `terreno-planning` from [`.cursor-plugin/marketplace.json`](https://github.com/FlourishHealth/terreno/blob/master/.cursor-plugin/marketplace.json). Codex:
+Cursor installs `terreno-planning` from [`.cursor-plugin/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.cursor-plugin/marketplace.json). Codex:
 
 ```text
-codex plugin marketplace add FlourishHealth/terreno
+codex plugin marketplace add TerrenoLabs/terreno
 codex plugin install terreno-planning --source terreno-plugins
 ```
 
-Codex reads [`.agents/plugins/marketplace.json`](https://github.com/FlourishHealth/terreno/blob/master/.agents/plugins/marketplace.json)
+Codex reads [`.agents/plugins/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.agents/plugins/marketplace.json)
 and `.codex-plugin/plugin.json` on the canonical plugin. Claude Code:
 
 ```text
-/plugin marketplace add FlourishHealth/terreno
+/plugin marketplace add TerrenoLabs/terreno
 /plugin install terreno@terreno-plugins
 ```
 
 Claude Code resolves a plugin skill's command from the frontmatter `name`, so the short
 names ship as a generated Claude-only copy at
-[`plugins/terreno-claude/`](https://github.com/FlourishHealth/terreno/tree/master/plugins/terreno-claude).
+[`plugins/terreno-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-claude).
 Stage procedure, Terreno app skills, contracts, agents, and references are generated
 from the canonical `plugins/terreno-planning/` tree.
 

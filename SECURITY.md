@@ -17,7 +17,7 @@ published for the versions below.
 
 ### Primary channel: GitHub private vulnerability reporting
 
-Use [GitHub private vulnerability reporting](https://github.com/FlourishHealth/terreno/security/advisories/new)
+Use [GitHub private vulnerability reporting](https://github.com/TerrenoLabs/terreno/security/advisories/new)
 for this repository. This is the preferred channel because it keeps details
 private until a fix is ready.
 

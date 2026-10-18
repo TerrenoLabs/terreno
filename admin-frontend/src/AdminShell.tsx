@@ -6,7 +6,11 @@ import {useWindowDimensions} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
 import {type AdminBreadcrumbSegment, AdminBreadcrumbs} from "./AdminBreadcrumbs";
 import {isAdminPageForbiddenError} from "./adminPageAccess";
-import {type AdminSidebarGroup, buildAdminSidebarGroups} from "./adminShellNav";
+import {
+  type AdminSidebarGroup,
+  adminScreenGroupTestId,
+  buildAdminSidebarGroups,
+} from "./adminShellNav";
 import {isAuditLogModel} from "./isAuditLogModel";
 import type {AdminApi, AdminConfigResponse, AdminCustomScreen, AdminModelConfig} from "./types";
 import {resolveAdminBases} from "./types";
@@ -185,7 +189,7 @@ const AdminShellSidebarNav: React.FC<AdminShellSidebarNavProps> = ({
               Models
             </Text>
             {visibleSidebarGroups.map(({customScreens, group, models: groupModels}) => (
-              <Box direction="column" gap={1} key={group}>
+              <Box direction="column" gap={1} key={group} testID={adminScreenGroupTestId(group)}>
                 <Text bold color={sectionLabelColor} size="sm">
                   {group}
                 </Text>
@@ -377,10 +381,13 @@ export const AdminShell: React.FC<AdminShellProps> = ({
   organizationSwitcher,
   rolesPath,
   routeBase,
-  sidebarVariant = "colorful",
+  sidebarVariant: requestedSidebarVariant = "colorful",
   versionConfigPath = "/version-config",
 }) => {
-  const {theme} = useTheme();
+  const {colorScheme, theme} = useTheme();
+  // The colorful rail's inverted labels have no dark palette, so dark mode uses the clinical rail.
+  const sidebarVariant: AdminShellSidebarVariant =
+    colorScheme === "dark" ? "clinical" : requestedSidebarVariant;
   const {width: windowWidth} = useWindowDimensions();
   const isMobileLayout = windowWidth < ADMIN_SHELL_MOBILE_BREAKPOINT;
   const [isNavOpen, setIsNavOpen] = useState(false);
@@ -520,7 +527,11 @@ export const AdminShell: React.FC<AdminShellProps> = ({
         ) : null}
         <Box
           dangerouslySetInlineStyle={{
-            __style: {backgroundColor: theme.primitives.neutral050},
+            __style: {
+              // Dark baseAlternate equals base in the Figma modes, so cards need a darker canvas.
+              backgroundColor:
+                colorScheme === "dark" ? theme.primitives.neutral900 : theme.primitives.neutral050,
+            },
           }}
           direction="column"
           flex="grow"

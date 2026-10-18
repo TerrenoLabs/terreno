@@ -1,0 +1,85 @@
+v: 1
+datasets:
+  guests:
+    columns:
+      - name: guests
+        type: number
+      - name: lamb_kg
+        type: number
+    rows:
+      - [4, 1.6]
+      - [6, 2.4]
+blocks:
+  - type: stepper
+    id: people
+    label: Number of people
+    unit: People
+    value: 5
+    min: 1
+    max: 20
+    callback:
+      name: scaleStepper
+    items:
+      - label: Bone-in leg of lamb
+        amount: 2
+        unit: kg
+        decimals: 1
+  - type: checklist
+    id: cooking
+    items:
+      - id: oven
+        text: Preheat the oven
+  - type: card
+    title: Menu
+    children:
+      - type: list
+        id: menu
+        items:
+          - title: Roast leg of lamb
+            text: Rubbed with garlic and rosemary.
+      - type: text
+        id: tips
+        markdown: Rest the lamb for **20 minutes**.
+  - type: table
+    id: lamb_table
+    data: guests
+  - type: actions
+    id: copy_actions
+    elements:
+      - type: button
+        id: copy_shopping
+        text: Copy shopping list
+        variant: outline
+        action:
+          kind: copy
+          target: people
+      - type: button
+        id: copy_checklist
+        text: Copy checklist
+        action:
+          kind: copy
+          target: cooking
+      - type: button
+        id: copy_menu
+        text: Copy menu
+        action:
+          kind: copy
+          target: menu
+      - type: button
+        id: copy_tips
+        text: Copy tips
+        action:
+          kind: copy
+          target: tips
+      - type: button
+        id: copy_table
+        text: Copy table
+        action:
+          kind: copy
+          target: lamb_table
+      - type: button
+        id: copy_note
+        text: Copy note
+        action:
+          kind: copy
+          text: Lamb 2 kg, carrots 8, mint sauce.

@@ -1,6 +1,6 @@
 # Implementation Plan: Documentation Site, Versioned Docs, and Docs-Maintenance Skills
 
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1086
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1086
 *When an engineer is assigned to a project but before you begin coding, you should fill in the implementation plan and get feedback from the engineering team. Once you have finished or you make any changes, tag Josh with the @ symbol so he can review. Also tag anyone else that needs to be notified, has conflicting work, etc.*
 
 ## Overview

@@ -1,7 +1,7 @@
 # Implementation Plan: Comms adapter — Twilio Verify (OTP)
 
 **Status:** Draft
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1021
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1021
 **Priority:** Medium
 **Effort:** Small batch
 **Owner:** unassigned

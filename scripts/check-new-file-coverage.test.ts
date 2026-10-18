@@ -220,6 +220,16 @@ describe("coverageRunArgs", () => {
   it("ignores flags and chained isolated-test shells", () => {
     assert.deepEqual(bunTestFileArgs("bun test --max-concurrency=1 src/"), ["src/"]);
     assert.deepEqual(bunTestFileArgs("bun test && bun test ./src/isolated/*.isolated.ts"), []);
+    assert.deepEqual(bunTestFileArgs("bun test --preload ./src/tests/bunSetup.ts"), []);
+    assert.deepEqual(
+      coverageRunArgs({
+        hasSrcDir: true,
+        packageName: "ai",
+        testScript:
+          'bun test --preload ./src/tests/bunSetup.ts && for f in ./src/isolated/*.isolated.ts; do bun test --preload ./src/tests/bunSetup.ts "$f" || exit 1; done',
+      }),
+      ["src"]
+    );
   });
 
   it("falls back to src or unit-test globs when the script has no paths", () => {

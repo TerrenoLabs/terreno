@@ -1,12 +1,12 @@
 # Implementation Plan: @terreno/syncdb-codegen
 
 **Status:** In progress
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1087
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1087
 **Branch:** cursor/syncdb-codegen-in-package-746d
 **Owner:**
 **Created:** 2026-07-08
 **Approved:** 2026-08-20
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1110
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1110
 **Research:** [syncdb-codegen-research.md](./syncdb-codegen-research.md)
 
 ## Goal

@@ -4,7 +4,7 @@ This guide is **AI-context-first**: it is written for an agent (or human) perfor
 
 `@terreno/syncdb` supersedes `@terreno/rtk` for **data synchronization** (CRUD reads/writes, offline queue, realtime convergence). It does not replace the generated OpenAPI SDK, Better Auth Redux wiring, or feature-flag infrastructure.
 
-`modelRouter` `realtime`, `realtimeList`, `realtimeDocument`, and `setRealtimeSocket` are **deprecated** and **will be removed in Terreno 58**. `RealtimeApp` stays as the socket host for syncdb. Removal checklist: [`docs/tasks/remove-legacy-realtime.md`](https://github.com/FlourishHealth/terreno/blob/master/docs/tasks/remove-legacy-realtime.md).
+`modelRouter` `realtime`, `realtimeList`, `realtimeDocument`, and `setRealtimeSocket` are **deprecated** and **will be removed in Terreno 58**. `RealtimeApp` stays as the socket host for syncdb. Removal checklist: [`docs/tasks/remove-legacy-realtime.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/remove-legacy-realtime.md).
 
 ## 1. Before you start
 
@@ -27,7 +27,7 @@ generated RTK hooks; admin RPC uses its host-bound fetch client.
 
 **Validation (Task 3.5):** The profile screen (`example-frontend/app/(tabs)/profile.tsx`) was reviewed against this guide. `useGetMeQuery` / `usePatchMeMutation` are **non-synced** custom SDK routes — the guide §8 explicitly says to keep them on RTK. No profile migration is required; the guide is sufficient for that case.
 
-Reference: [`docs/reference/syncdb.md`](../reference/syncdb.md), and the package [`syncdb/README.md`](https://github.com/flourishhealth/terreno/blob/release-56.0.0/syncdb/README.md).
+Reference: [`docs/reference/syncdb.md`](../reference/syncdb.md), and the package [`syncdb/README.md`](https://github.com/TerrenoLabs/terreno/blob/release-56.0.0/syncdb/README.md).
 
 ## 2. Install and configure
 
@@ -152,7 +152,37 @@ import {useQuery} from "@terreno/syncdb/react";
 const todos = useQuery<Todo>("todos", {filter: (t) => !t.completed});
 ```
 
-`filter` / `sort` run in JS — there are no server query params. Tombstones are excluded unless `{includeDeleted: true}`.
+`where` / `filter` / `sort` / `limit` run in JS over the local store. Tombstones are excluded unless `{includeDeleted: true}`.
+
+### Filtered, sorted, and paged list args
+
+RTK list args map to the same syntax. Pick the hook by collection size:
+
+| RTK | Whole collection synced (`collections`) | Too large to sync whole (`queryCollections`) |
+|-----|------------------------------------------|----------------------------------------------|
+| `useGetMessagesQuery({threadId})` | `useQuery("messages", {where: {threadId}})` | `useWindowQuery("messages", {where: {threadId}})` |
+| `{status: {$in: ["open", "pending"]}}` | `where: {status: {$in: [...]}}` | same |
+| `{sort: "-created"}` | `sort: "-created"` | same |
+| `{limit: 20}` | `limit: 20` | `pageSize: 20` |
+| `{page: 2}` / load more | grow `limit` | `fetchNextPage()` |
+| `data.more` / `data.total` | — | `hasMore` / `total` |
+| `isLoading` / `isFetching` / `refetch` | not needed | `isLoading` / `isFetching` / `refetch` |
+| `{skip: !threadId}` | not needed | `skip: !threadId` |
+
+```typescript
+import {useWindowQuery} from "@terreno/syncdb/react";
+
+const {data: messages, hasMore, fetchNextPage, isLoading} = useWindowQuery<Message>("messages", {
+  where: {threadId},
+  sort: "-created",
+  pageSize: 30,
+  skip: !threadId,
+});
+```
+
+Windows with different filters keep separate result lists but share one local row per
+document, so an edit to a message shown in two windows updates once. See
+[Query windows](../reference/syncdb.md#query-windows).
 
 ### Delete this RTK read code
 
@@ -484,5 +514,5 @@ Before a collection can sync:
 ## Further reading
 
 - [`docs/reference/syncdb.md`](../reference/syncdb.md) — full API reference
-- [`syncdb/README.md`](https://github.com/flourishhealth/terreno/blob/release-56.0.0/syncdb/README.md) — architecture and protocol detail
+- [`syncdb/README.md`](https://github.com/TerrenoLabs/terreno/blob/release-56.0.0/syncdb/README.md) — architecture and protocol detail
 - [`docs/how-to/configure-better-auth.md`](configure-better-auth.md) — Better Auth setup

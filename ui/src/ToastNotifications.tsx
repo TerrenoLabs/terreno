@@ -58,6 +58,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import type {ToastProps as TerrenoToastPayload} from "./Common";
+import {createWebPortal} from "./createWebPortal";
+import {resolveDocumentBodyPortalTarget} from "./resolveDocumentBodyPortalTarget";
 
 // ============================================================================
 // useDimensions hook
@@ -452,7 +454,16 @@ const toastStyles = StyleSheet.create({
 // Toast Container
 // ============================================================================
 
-const {height, width} = Dimensions.get("window");
+const {height: windowHeight, width: windowWidth} = Dimensions.get("window");
+
+// Static web export renders in Node, where Dimensions reports 0x0 and that size is baked into
+// the HTML. The web container is position:fixed, so percentages track the viewport instead.
+const getContainerSize = (): {height: ViewStyle["height"]; width: ViewStyle["width"]} => {
+  if (Platform.OS === "web") {
+    return {height: "100%", width: "100%"};
+  }
+  return {height: windowHeight, width: windowWidth};
+};
 
 export interface ToastContainerProps extends ToastOptions {
   renderToast?(toast: ToastProps): ReactElement;
@@ -635,14 +646,14 @@ const ToastContainer = forwardRef<ToastContainerRef, ToastContainerProps>((props
       bottom: offsetBottom || offset,
       flexDirection: "column",
       justifyContent: "flex-end",
-      width: width,
+      width: getContainerSize().width,
     };
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "position" : undefined}
         style={[containerStyles.container, style]}
       >
-        <SafeAreaView>
+        <SafeAreaView style={containerStyles.safeArea}>
           {toasts
             .filter((t) => !t.placement || t.placement === "bottom")
             .map((toast) => (
@@ -658,14 +669,14 @@ const ToastContainer = forwardRef<ToastContainerRef, ToastContainerProps>((props
       flexDirection: "column-reverse",
       justifyContent: "flex-start",
       top: offsetTop || offset,
-      width: width,
+      width: getContainerSize().width,
     };
     return (
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "position" : undefined}
         style={[containerStyles.container, style]}
       >
-        <SafeAreaView>
+        <SafeAreaView style={containerStyles.safeArea}>
           {toasts
             .filter((t) => t.placement === "top")
             .map((toast) => (
@@ -677,12 +688,13 @@ const ToastContainer = forwardRef<ToastContainerRef, ToastContainerProps>((props
   }, [toasts, offset, offsetTop]);
 
   const renderCenterToasts = useCallback(() => {
+    const {height, width} = getContainerSize();
     const style: ViewStyle = {
       flexDirection: "column-reverse",
-      height: height,
+      height,
       justifyContent: "center",
       top: offsetTop || offset,
-      width: width,
+      width,
     };
 
     const data = toasts.filter((t) => t.placement === "center");
@@ -704,13 +716,28 @@ const ToastContainer = forwardRef<ToastContainerRef, ToastContainerProps>((props
     );
   }, [toasts, offset, offsetTop]);
 
-  return (
+  const toastStack = (
     <>
       {renderTopToasts()}
       {renderBottomToasts()}
       {renderCenterToasts()}
     </>
   );
+
+  // react-native-web Modal appends its own node to document.body (z-index 9999).
+  // A position:fixed toast left in the app tree stays behind that layer and inherits
+  // the backdrop dim. Portal the same container to document.body so its z-index wins.
+  // Native keeps the in-tree absolute container.
+  if (Platform.OS !== "web") {
+    return toastStack;
+  }
+
+  const portalTarget = resolveDocumentBodyPortalTarget();
+  if (!portalTarget) {
+    return toastStack;
+  }
+
+  return createWebPortal({children: toastStack, container: portalTarget});
 });
 
 ToastContainer.displayName = "ToastContainer";
@@ -732,6 +759,9 @@ const containerStyles = StyleSheet.create({
   message: {
     color: "#333",
   },
+  // The safe area spans the full container width, so it must also pass clicks through or
+  // it blocks the page beside every toast.
+  safeArea: {pointerEvents: "box-none"},
 });
 
 // ============================================================================

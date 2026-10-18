@@ -7,13 +7,14 @@ import {LoginScreenDemo} from "../stories/LoginScreen.stories";
 const renderLoginScreenDemo = (): ReactElement => <LoginScreenDemo />;
 
 export const LoginScreenConfiguration: DemoConfiguration = {
+  usageExample: "import {LoginScreen} from \"@terreno/ui\";\n\n<LoginScreen />",
   name: "LoginScreen",
   component: LoginScreen,
-  related: ["Button", "TextField", "SignUpScreen"],
+  related: ["Button", "Text field", "SignUpScreen"],
   description:
     "Email/password login screen with optional forgot-password and sign-up actions.",
   a11yNotes: [],
-  category: "Pattern",
+  category: ["Pattern", "Form"],
   status: {
     documentation: "ready",
     figma: "planned",

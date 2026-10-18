@@ -1,6 +1,6 @@
 ---
 name: terreno-5-taste
-description: "Perform one reactive iteration against the PR's current head. Wait through provider CLI hooks until async review bots and product CI finish (GitHub CLI or CircleCI CLI in a watch loop), inspect every discovered host, mergeability, and reviews, act on what is actionable. Record failed tests from the last CI run. Before any push: always pull latest master, re-verify those last-run failed tests locally, then run the repository's prepush script when present (otherwise lint and typecheck affected packages) in a no-context subagent, then push and watch CI. Emit state and exit."
+description: "Perform one reactive iteration against the PR's current head. Wait through provider CLI hooks until async review bots and product CI finish (GitHub CLI or CircleCI CLI in a watch loop), inspect every discovered host, mergeability, and reviews, act on what is actionable. Record failed tests from the last CI run. Before any push: fetch latest master (merge only when needed), re-verify those last-run failed tests locally, then run the repository's prepush script when present (otherwise lint and typecheck affected packages) in a no-context subagent, then push and watch CI. Emit state and exit. Invoked directly by a human, it repeats bounded reactions itself until PASS, BLOCKED, or FAIL and never hands a wait back to the human. Never leaves a pushed PR red: answers every review-bot comment and escalates to the human after three failed fix rounds."
 ---
 
 # Taste — react
@@ -16,14 +16,21 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
 [`documentation contract`](references/documentation-contract.md),
 [`PR deployments`](references/pr-deployments.md),
 [`product CI`](references/product-ci.md),
-[`async review bots`](references/async-review-bots.md), and
+[`async review bots`](references/async-review-bots.md),
+[`push ownership`](references/push-ownership.md), and
 [`GitHub attention contract`](references/github-attention-contract.md).
+
+Taste owns the PR until it is clean or escalated. Never leave it red, pending with no
+watcher, or carrying an unanswered bot comment. After three fix rounds that did not
+make it clean, stop and escalate per push ownership.
 
 ## Preconditions
 
 - A PR exists.
 - Current repository/PR access and prior execution state are available.
-- This invocation handles one reactive iteration only.
+- This invocation handles one reactive iteration only. Under an outer loop, that is
+  the whole invocation. Under standalone entry (see below), the invocation repeats
+  reactions itself.
 
 ## Inputs
 
@@ -68,6 +75,9 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
    - terminal/pass, pending/running, branch-caused actionable failure,
      unrelated/flaky/external failure, mechanical conflict, actionable review issue,
      clarification/non-actionable, or human decision.
+   - Every unresolved bot thread or finding is actionable work: fix it, decline it with
+     a one-sentence reply, or raise it as a human decision. "Non-actionable" never
+     leaves a bot thread unanswered.
    - Pending is never passing; old green results never satisfy a new head.
    - Review-bot or product-CI timeout is `PENDING`, not passing.
 8. **Act once on current actionable work.**
@@ -76,12 +86,23 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
      discipline and applicable project skills.
    - For a mechanical conflict, integrate the latest base using repository policy,
      preserve both intended changes, and never rewrite pushed history unless allowed.
-   - Do not push speculative code for unrelated/flaky/external failures.
-9. **Before any push, in this order: pull latest master, re-verify last-run failed tests, run the local pre-push gate, then watch.**
-   1. Always fetch and merge the latest `master` into this branch (use the PR base if it
-      is not `master`). Do this even when git reports no conflict. Preserve both intended
-      changes. Never rewrite pushed history unless allowed. A merge that needs a
-      design/behavior choice is `BLOCKED`.
+   - Answer every unresolved bot thread in this reaction per
+     [`push ownership`](references/push-ownership.md#bot-comments).
+   - Do not push speculative code for unrelated/flaky/external failures. Rerun only
+     the failed jobs instead (`gh run rerun <run-id> --failed`, or the host's
+     rerun-from-failed). A rerun counts as a fix round.
+9. **Before any push, in this order: fetch latest master, re-verify last-run failed tests, run the local pre-push gate, then watch.**
+   1. Always fetch the latest `master` (use the PR base if it is not `master`). Merge it
+      into this branch only when one of these holds:
+      - the PR conflicts with the base;
+      - a failure traces to base drift (a check that is green on the base but red here
+        from code this branch did not touch);
+      - review and CI are otherwise done and the branch is behind the base, as the final
+        pre-merge update.
+      Otherwise skip the merge. Every merge commit starts a full CI run, and a branch
+      that merges the base on every reaction piles up merge commits without new
+      signal. Preserve both intended changes. Never rewrite pushed history unless
+      allowed. A merge that needs a design/behavior choice is `BLOCKED`.
    2. Re-verify last-run failed tests locally with the exact recorded commands. Do this
       even when a root `prepush` script exists; `prepush` is not a substitute. A still
       failing test is `FAIL`; do not push it. If the environment cannot run a recorded
@@ -110,9 +131,10 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
       Capture updated evidence/artifacts. Missing mandatory capability is `BLOCKED`.
       Local pre-push failure is `FAIL` until fixed; do not push it.
 10. **Commit/push if changed, then watch.** Follow repository policy. Record the new
-   head. Resolve an addressed thread silently when the diff is self-explanatory. Reply
-   only when a non-obvious decision must be preserved, using no more than three short
-   sentences. After a push, wait again for review bots and then the product-CI wait
+   head. Record the fix round as a Taste `ledger` entry. Resolve an addressed thread
+   silently when the diff is self-explanatory. Reply only when a non-obvious decision
+   must be preserved, using no more than three short sentences. Reply to and resolve
+   each declined bot thread. After a push, wait again for review bots and then the product-CI wait
    loop on the new head (`gh pr checks <pr> --watch`, `gh run watch`,
    `circleci run watch --sha <sha>`), then act on those results once more in this
    invocation. A further push after that second act is `PENDING`. Do not watch product
@@ -129,9 +151,10 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
 13. **Emit and exit.** If step 10 pushed, do this only after its post-push review-bot
     wait, product-CI wait loop, and at most one follow-up act on those results. If step 10 did not push, emit after the initial observe/act path.
    - Every host has terminal/non-failing jobs or a documented not-applicable skip, with
-     no conflicts and no actionable reviews → `PASS`.
-   - No safe current action because of human/access/external/environment gate →
-     `BLOCKED`.
+     no conflicts, no unanswered bot thread, and no actionable human review → `PASS`.
+   - No safe current action because of human/access/external/environment gate, or
+     three fix rounds spent without a clean PR → `BLOCKED`, escalated per
+     [`push ownership`](references/push-ownership.md#escalation).
    - Otherwise `PENDING` with `next: taste` and `wait`: review-bot timeout, product-CI
      wait timeout, leftover pending jobs after timeout, or a second post-fix push. Do
      not emit `PENDING` while actionable Bugbot/CodeQL findings from the post-push wait
@@ -139,6 +162,38 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
      the wait loop has timed out.
    Update execution state and emit the structured result collapsed per the lifecycle
    contract. Close the chat with PR deployment URLs when the PR has them. Then exit.
+
+## Standalone entry
+
+Taste is in standalone entry when a human invoked it directly, or when Brew started it
+as the human's next stage, with no outer loop (`terreno-planning-loop`,
+`terreno-taste-sweep`, or similar) to consume `PENDING`. A `PENDING` returned to a
+human only tells them to come back later. Never hand a wait back to the human.
+
+Under standalone entry, when step 13 would emit `PENDING`:
+
+1. Record the `PENDING` result in execution state as an intermediate reaction, not the
+   terminal result.
+2. Wait for the requested `wait` in-process. Prefer the harness's native mechanisms: a
+   blocking provider watch (`gh pr checks <pr> --watch`, `circleci run watch --sha
+   <sha>`), a background command that exits when CI is terminal, or a scheduled wakeup.
+   Use a plain timer only as a fallback.
+3. Start the next reaction at step 1 against the current head. Do not reuse
+   conclusions from the previous reaction.
+
+Stop only on `PASS` or `BLOCKED`. A `FAIL` with a new evidence-based hypothesis starts
+the next reaction. A `FAIL` without one is `BLOCKED`. Bounds:
+
+- at most 3 fix rounds (fix pushes plus flaky-job reruns) across all reactions;
+- at most 3 hours of total waiting on CI and review bots.
+
+A reached bound is `BLOCKED` (`kind: external`) and is escalated per
+[`push ownership`](references/push-ownership.md#escalation): the final message
+starts with `BLOCKED — PR #<n> still red after <k> fix rounds`, then names the head,
+the jobs still pending or failing with log links, what each round changed, unanswered
+bot threads, and the one action a human should take. Send a push notification when the
+harness offers one. Never end with "run Taste later", and never end quietly on a red
+PR. The final chat message gives the terminal verdict and PR deployment URLs.
 
 ## Supporting skills
 
@@ -173,7 +228,7 @@ For the **current head**:
 - GitHub checks alone never satisfy `PASS` when another in-scope host still has
   incomplete or failing jobs
 - no merge conflict exists
-- no actionable review finding remains
+- no actionable review finding remains, and every bot thread is resolved or answered
 - PR is mergeable or only awaiting policy-required human approval
 
 Emit `PASS` with `next: null`.
@@ -197,6 +252,7 @@ required.
 ## Recommended next stage
 
 - `PASS` → merge-ready; outer loop stops
-- `PENDING` → outer loop waits for the requested interval, then invokes fresh Taste
+- `PENDING` → outer loop waits for the requested interval, then invokes fresh Taste.
+  Under standalone entry Taste never emits a terminal `PENDING`; see Standalone entry.
 - `FAIL` → outer loop invokes fresh Taste only with a new evidence-based approach
 - `BLOCKED` → outer loop routes the named human/external gate

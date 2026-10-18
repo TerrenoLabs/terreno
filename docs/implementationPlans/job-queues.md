@@ -5,7 +5,7 @@
 **Owner:** —  
 **Created:** 2026-09-10  
 **Approved:** 2026-09-10  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1188 (this feature **closes** that issue; implementation PRs use `Fixes #1188`)  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1188 (this feature **closes** that issue; implementation PRs use `Fixes #1188`)  
 **Task list:** [job-queues.md](../tasks/job-queues.md)  
 **Depends on:** —  
 **RTK deprecation flag:** Partial — admin screens use generated SDK / `useAdminApi`  

@@ -29,6 +29,7 @@ export {
   createSyncDb,
   DEFAULT_RECONCILE_INTERVAL_MS,
   DEFAULT_SEQ_JUMP_RECONCILE_MIN_INTERVAL_MS,
+  DEFAULT_SNAPSHOT_CONCURRENCY,
   DEFAULT_START_AUTH_RETRY_ATTEMPTS,
   DEFAULT_START_AUTH_RETRY_DELAY_MS,
   DEFAULT_TOMBSTONE_RETENTION_MS,
@@ -64,6 +65,21 @@ export type {
   SyncStreamInfo,
   SyncSubscribed,
 } from "./types";
+
+// --- Queries and server windows ------------------------------------------
+// `where`/`sort` share one syntax across local `useQuery`, server windows
+// (`client.queryWindows` / `useWindowQuery`), and `modelRouter` list params.
+
+export type {QuerySort} from "./query/localQuery";
+export {
+  DEFAULT_WINDOW_PAGE_SIZE,
+  type QueryWindowState,
+  type QueryWindows,
+  type WindowFetchStatus,
+  type WindowQuery,
+} from "./query/queryWindows";
+export type {SortDirection, SortSpec} from "./query/sort";
+export {compileWhere, type WhereFilter, type WhereOperators} from "./query/where";
 
 // --- Local store and outbox (read surface) -------------------------------
 // `client.store` is typed as SyncStore and `client.outbox` as Outbox;
@@ -135,6 +151,8 @@ export {
   type FetchSnapshotPageArgs,
   type HttpChannel,
   type HttpChannelConfig,
+  ListRequestError,
+  QueryFieldNotAllowedError,
 } from "./sync/httpChannel";
 export {createSocketTransport, type SocketTransportConfig} from "./sync/socketTransport";
 export {
@@ -145,6 +163,7 @@ export {
   type SyncTransport,
   type TransportStatus,
 } from "./sync/transport";
+export type {ListResponse} from "./types";
 
 // --- Debug log ------------------------------------------------------------
 // Enabled with `SyncDbConfig.debug`, read through `client.debug` or the React

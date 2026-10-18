@@ -1,29 +1,29 @@
 # GitHub Actions CI (Terreno)
 
-GitHub Actions is the CI of record. Operator map for the expensive jobs:
-[GitHub Actions CI](github-actions-ci.md). CircleCI twins are parked; see
-[CircleCI](circleci.md).
+CircleCI is the CI/CD of record; see [CircleCI](circleci.md). The GitHub
+Actions CI and deploy workflows below are disabled
+(`push.branches-ignore: ["**"]`) and kept only for rollback. This page
+describes how they behaved if one is ever re-enabled.
 
 ## Docs site (`docs-deploy.yml`)
 
-`Build docs site` is often the longest PR job because Docusaurus compiles every
-versioned tree under `website/versioned_docs/` and TypeDoc regenerates API
-pages.
+`Build docs site` is often the longest PR job because TypeDoc regenerates API
+pages. The site builds only the current docs tree; `website/versioned_docs/` is
+markdown for the MCP server.
 
 PR builds set `DOCS_PREVIEW=true` and pass `--no-minify`. Both PR and
 `master` use Docusaurus Faster (Rspack/SWC via `@docusaurus/faster`).
 
 | Behavior | PR preview | `master` production |
 | --- | --- | --- |
-| Versioned docs (`57.1.0`, `0.30.0`, …) | Omitted (`disableVersioning`) | Built |
+| Versioned docs (`57.1.0`, `0.30.0`, …) | Omitted | Prebuilt archives unpacked under `/<version>/` |
 | JS minify | Off | On |
 | Local search index | Skipped | Built |
 | Generated API + component MDX | Restored from cache when `api`/`rtk`/`ui` hashes match | Same cache, then full generate on miss |
 | TypeDoc workspace `tsc` | Once per generate (api+rtk deps share a process) | Same |
 | Rspack cache (`node_modules/.cache/rspack`) | Restored per `pull_request` vs `push` | Separate production key |
 
-Production still builds every version. Do not rely on `/57.1.0/…` URLs in a
-PR deploy preview.
+Do not rely on `/57.1.0/…` URLs in a PR deploy preview.
 
 ## Other high-cost jobs
 

@@ -1,7 +1,7 @@
 # Implementation Plan: Comms adapter — Expo push notifications
 
 **Status:** Draft
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1019
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1019
 **Priority:** High
 **Effort:** Small batch
 **Owner:** unassigned

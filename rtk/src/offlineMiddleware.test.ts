@@ -1,6 +1,7 @@
 import {describe, expect, it, mock} from "bun:test";
 import {configureStore, type UnknownAction} from "@reduxjs/toolkit";
 import type {Api} from "@reduxjs/toolkit/query/react";
+import {assert} from "chai";
 
 import {
   buildOptimisticCreateItem,
@@ -8,13 +9,19 @@ import {
   isNetworkFetchError,
   shouldReplayQueuedMutation,
 } from "./offlineMiddleware";
-import {type OfflineState, type QueuedMutation, selectOfflineQueue} from "./offlineSlice";
+import {
+  type OfflineState,
+  type QueuedMutation,
+  selectIsSyncing,
+  selectOfflineQueue,
+  setSyncing,
+} from "./offlineSlice";
 
 // Force IsWeb=true regardless of load order with the native test files.
 mock.module("./platform", () => ({IsWeb: true}));
 
 interface QueryEntry {
-  data?: {data: Record<string, unknown>[]};
+  data?: {data: Record<string, unknown>[] | Record<string, unknown>};
   originalArgs: unknown;
 }
 
@@ -30,6 +37,7 @@ interface TestState {
 
 const LIST_QUERY_ARGS = {};
 const LIST_UPDATED_AT = "2026-05-23T21:00:00.123Z";
+const BY_ID_UPDATED_AT = "2026-05-24T09:30:00.456Z";
 
 const initialTestApiState: TestApiState = {
   queries: {
@@ -44,6 +52,10 @@ const initialTestApiState: TestApiState = {
         ],
       },
       originalArgs: LIST_QUERY_ARGS,
+    },
+    'getTodosById({"id":"todo-2"})': {
+      data: {data: {_id: "todo-2", title: "Detail only", updated: BY_ID_UPDATED_AT}},
+      originalArgs: {id: "todo-2"},
     },
   },
 };
@@ -188,5 +200,95 @@ describe("offlineMiddleware", () => {
     expect(queue[0].baseUpdatedAt).toBe(LIST_UPDATED_AT);
     expect(queue[0].timestamp).toBe(LIST_UPDATED_AT);
     expect(queue[0].userId).toBe("user-a");
+  });
+
+  it("falls back to the get-by-id cache updated timestamp for conflict headers", async () => {
+    const api = createTestApi();
+    const offline = createOfflineMiddleware({
+      api,
+      endpoints: ["patchTodosById"],
+    });
+    const store = configureStore({
+      middleware: (getDefaultMiddleware) =>
+        getDefaultMiddleware({serializableCheck: false}).concat(offline.middleware),
+      reducer: {
+        auth: (state = {userId: "user-a"}) => state,
+        offline: offline.offlineReducer,
+        testApi: testApiReducer,
+      },
+    });
+
+    const rejectedMutation: UnknownAction = {
+      error: {message: "Network unavailable"},
+      meta: {
+        arg: {
+          endpointName: "patchTodosById",
+          originalArgs: {
+            body: {title: "Queued detail title"},
+            id: "todo-2",
+          },
+        },
+      },
+      type: "testApi/executeMutation/rejected",
+    };
+
+    store.dispatch(rejectedMutation);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const queue = selectOfflineQueue(store.getState());
+    assert.lengthOf(queue, 1);
+    assert.equal(queue[0].baseUpdatedAt, BY_ID_UPDATED_AT);
+  });
+
+  it("ignores rejected mutations without a string endpoint name", async () => {
+    const api = createTestApi();
+    const offline = createOfflineMiddleware({
+      api,
+      endpoints: ["patchTodosById"],
+    });
+    const store = configureStore({
+      middleware: (getDefaultMiddleware) =>
+        getDefaultMiddleware({serializableCheck: false}).concat(offline.middleware),
+      reducer: {
+        auth: (state = {userId: "user-a"}) => state,
+        offline: offline.offlineReducer,
+        testApi: testApiReducer,
+      },
+    });
+
+    const rejectedMutation: UnknownAction = {
+      error: {message: "Network unavailable"},
+      meta: {arg: {originalArgs: {id: "todo-1"}}},
+      type: "testApi/executeMutation/rejected",
+    };
+
+    store.dispatch(rejectedMutation);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    assert.lengthOf(selectOfflineQueue(store.getState()), 0);
+  });
+
+  it("resets a stuck isSyncing flag on rehydrate", () => {
+    const api = createTestApi();
+    const offline = createOfflineMiddleware({
+      api,
+      endpoints: ["patchTodosById"],
+    });
+    const store = configureStore({
+      middleware: (getDefaultMiddleware) =>
+        getDefaultMiddleware({serializableCheck: false}).concat(offline.middleware),
+      reducer: {
+        auth: (state = {userId: "user-a"}) => state,
+        offline: offline.offlineReducer,
+        testApi: testApiReducer,
+      },
+    });
+
+    store.dispatch(setSyncing(true));
+    assert.isTrue(selectIsSyncing(store.getState()));
+
+    store.dispatch({type: "persist/REHYDRATE"});
+
+    assert.isFalse(selectIsSyncing(store.getState()));
   });
 });

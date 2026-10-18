@@ -29,8 +29,9 @@ const INSTALLABLE_PLUGIN_DIRECTORIES = ["plugins/terreno-planning", "plugins/ter
 export const SKILL_GROUPS: SkillGroup[] = [
   {
     description:
-      "Bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
+      "PRD seed, then bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
     skills: [
+      "terreno-prd",
       "terreno-1-grow",
       "terreno-2-pick",
       "terreno-3-roast",
@@ -79,10 +80,12 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "implement-ready-for-dev",
       "respond-to-review",
       "verify-ui-changes",
+      "accessibility-testing",
       "review-chart-visuals",
       "work-github-issues",
       "fix-conflicts",
       "release",
+      "generate-release-announcements",
       "update-dependencies",
       "upgrading-terreno",
       "deploy-gcp",
@@ -122,6 +125,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "expo-cicd-workflows",
       "expo-deployment",
       "expo-dev-client",
+      "store-assets",
       "track-upstream-expo",
       "upgrading-expo",
       "use-dom",
@@ -135,8 +139,8 @@ const INSTALLABLE_README = `# Installable Terreno skills
 Install from GitHub with the skills CLI:
 
 \`\`\`bash
-npx skills add FlourishHealth/terreno
-npx skills add FlourishHealth/terreno --skill terreno-1-grow
+npx skills add TerrenoLabs/terreno
+npx skills add TerrenoLabs/terreno --skill terreno-1-grow
 \`\`\`
 
 This directory is generated. Canonical sources:
@@ -225,6 +229,50 @@ export const collectLinkedPluginReferences = ({
   }
 
   return [...names].sort();
+};
+
+const LIFECYCLE_PLUGIN_REFERENCES = "plugins/terreno-planning/references";
+const BUNDLED_REFERENCE_HREF = /\]\(references\/([A-Za-z0-9._-]+\.(?:md|json))(?:#[^)]*)?\)/g;
+
+/**
+ * Repository skills under `.rulesync/skills/` install on their own, so a lifecycle reference
+ * they link as `references/<name>` ships as a copy beside them. Keep each copy identical to
+ * the plugin source; returns drift errors in check mode, otherwise rewrites the copies.
+ */
+export const syncRulesyncPluginReferences = ({
+  check = false,
+  rootDirectory,
+}: SyncInstallableSkillsOptions): string[] => {
+  const pluginReferences = join(rootDirectory, LIFECYCLE_PLUGIN_REFERENCES);
+  const rulesyncSkills = join(rootDirectory, ".rulesync/skills");
+  const errors: string[] = [];
+  for (const skillName of listSkillDirectories(rulesyncSkills)) {
+    const skillSource = join(rulesyncSkills, skillName);
+    const names = new Set<string>();
+    for (const filePath of collectMarkdownAndJsonFiles(skillSource)) {
+      for (const match of readFileSync(filePath, "utf8").matchAll(BUNDLED_REFERENCE_HREF)) {
+        if (existsSync(join(pluginReferences, match[1]))) {
+          names.add(match[1]);
+        }
+      }
+    }
+    for (const name of [...names].sort()) {
+      const expected = readFileSync(join(pluginReferences, name), "utf8");
+      const target = join(skillSource, "references", name);
+      if (existsSync(target) && readFileSync(target, "utf8") === expected) {
+        continue;
+      }
+      if (check) {
+        errors.push(
+          `.rulesync/skills/${skillName}/references/${name} drifts from ${LIFECYCLE_PLUGIN_REFERENCES}/${name}`
+        );
+        continue;
+      }
+      mkdirSync(join(skillSource, "references"), {recursive: true});
+      writeFileSync(target, expected);
+    }
+  }
+  return errors;
 };
 
 const copyLinkedPluginReferences = ({
@@ -393,6 +441,7 @@ export const syncInstallableSkills = ({
   check = false,
   rootDirectory,
 }: SyncInstallableSkillsOptions): string[] => {
+  const referenceErrors = syncRulesyncPluginReferences({check, rootDirectory});
   const destination = join(rootDirectory, "skills");
   const staged = join(rootDirectory, ".terreno-skills-sync");
   buildInstallableSkillsTree({destination: staged, rootDirectory});
@@ -403,7 +452,7 @@ export const syncInstallableSkills = ({
   const configPath = join(rootDirectory, "skills.sh.json");
   const expected = snapshotTree(staged);
   const actual = snapshotTree(destination);
-  const errors = [...groupingErrors];
+  const errors = [...referenceErrors, ...groupingErrors];
 
   for (const [relativePath, contents] of expected) {
     if (!actual.has(relativePath)) {

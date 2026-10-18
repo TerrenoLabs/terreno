@@ -8,6 +8,9 @@ Technical reference for Terreno packages and APIs. Information-oriented, precise
 - [@terreno/ui](ui.md) — Components, theming, layout
 - [@terreno/syncdb](syncdb.md) — Local-first data layer (reads, writes, offline sync)
 - [@terreno/ai](ai.md) — AI service, GPT routes, Langfuse integration
+- [@terreno/ai/harness](ai-harness.md) — Durable multi-phase tasks with transactional checkpoints and audit spans
+- [Agent UI Asks](agent-ui-asks.md) — `@terreno/blocks` ask schemas, simple cards, the compact surface, limits, error codes, SSE events, the headless `pendingAsks` and `turn` endpoints, and JSON Schemas for native clients
+- [UI blocks](blocks.md) — whole-reply YAML for leaf, layout, and interactive blocks (stepper, checklist, gallery, list, copy): grammar, limits, and error codes
 - [@terreno/admin-backend](admin-backend.md) — Auto-generated admin CRUD endpoints
 - [@terreno/admin-frontend](admin-frontend.md) — Admin panel UI components
 - [@terreno/admin-spa](admin-spa.md) — Standalone admin SPA + Express serve plugin
@@ -37,5 +40,5 @@ Technical reference for Terreno packages and APIs. Information-oriented, precise
 - [Scan plugin](scan-plugin.md) — Aim/Sweep/Sift/Plot/Track goal campaigns that feed the lifecycle
 - [Install agent skills](../how-to/install-agent-skills.md) — Published `skills/` tree for `npx skills`
 - [GitHub issue lifecycle](../how-to/github-issue-lifecycle.md) — Pick-ready issues and Pick plan comments
-- Root [package.json](https://github.com/flourishhealth/terreno/blob/master/package.json) — Workspace scripts and catalog
+- Root [package.json](https://github.com/TerrenoLabs/terreno/blob/master/package.json) — Workspace scripts and catalog
 - Per-package `package.json` in each package directory — Commands and dependencies

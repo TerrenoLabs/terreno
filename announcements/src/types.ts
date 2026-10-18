@@ -12,8 +12,16 @@ export interface AnnouncementPrimaryAction {
   url: string;
 }
 
+export interface AnnouncementRelease {
+  buildNumber?: number;
+  channel: string;
+  product: string;
+  version: string;
+}
+
 export interface AnnouncementDocument {
   _id: Types.ObjectId;
+  deleted: boolean;
   title: string;
   body: string;
   status: AnnouncementStatus;
@@ -28,6 +36,8 @@ export interface AnnouncementDocument {
   expiresAt?: Date;
   platforms: AnnouncementPlatform[];
   primaryAction?: AnnouncementPrimaryAction;
+  release?: AnnouncementRelease;
+  releaseSlug?: string;
   publishedAt?: Date;
   archivedAt?: Date;
   created: Date;
@@ -108,6 +118,8 @@ export interface AnnouncementsOptions {
   /** When omitted, staff targeting uses `user.admin === true`. */
   isStaff?: (user: unknown) => boolean;
   matchAudience?: MatchAudienceFunction;
+  /** Dedicated bearer token accepted by POST /announcements/import-release. */
+  uploadToken?: string;
   permissions?: Partial<{
     create: PermissionMethod<AnnouncementDocument>[];
     delete: PermissionMethod<AnnouncementDocument>[];

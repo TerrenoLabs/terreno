@@ -1,7 +1,7 @@
 # Tasks: MongoDB migrations tooling
 
 IP: [mongodb-migrations-tooling.md](../implementationPlans/mongodb-migrations-tooling.md)  
-**Closes:** https://github.com/FlourishHealth/terreno/issues/1189
+**Closes:** https://github.com/TerrenoLabs/terreno/issues/1189
 
 **Feature profile:** false (full IP)
 

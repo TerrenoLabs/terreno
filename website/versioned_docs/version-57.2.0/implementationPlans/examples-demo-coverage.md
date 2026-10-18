@@ -1,7 +1,7 @@
 # Implementation Plan: Examples, Demo, and Test Coverage
 
 **Status:** Draft — key decisions recorded (2026-07-29)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1016
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1016
 **Priority:** Medium
 **Effort:** Big batch
 **Owner:** unassigned

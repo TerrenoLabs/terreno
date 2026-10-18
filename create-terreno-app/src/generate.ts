@@ -94,7 +94,7 @@ Use the MCP tools and prompts for:
 };
 
 const generateMcpSettings = (args: BootstrapArgs): string => {
-  const mcpUrl = args.mcpServerUrl || "https://mcp.terreno.flourish.health";
+  const mcpUrl = args.mcpServerUrl || "https://mcp.terreno.app";
   return JSON.stringify(
     {
       mcpServers: {
@@ -144,11 +144,11 @@ const generateRootGitignore = (): string => {
 };
 
 const DEPLOYMENT_BASELINE_DOC =
-  "https://github.com/FlourishHealth/terreno/blob/master/docs/explanation/deployment-baseline.md";
+  "https://github.com/TerrenoLabs/terreno/blob/master/docs/explanation/deployment-baseline.md";
 const DEPLOY_BACKEND_CLOUD_RUN_DOC =
-  "https://github.com/FlourishHealth/terreno/blob/master/docs/how-to/deploy-backend-to-cloud-run.md";
+  "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/deploy-backend-to-cloud-run.md";
 const BUILD_FOR_WEB_DOC =
-  "https://github.com/FlourishHealth/terreno/blob/master/docs/how-to/build-for-web.md";
+  "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/build-for-web.md";
 
 const generateRootReadme = (args: BootstrapArgs): string => {
   const {appDisplayName, appName} = args;
@@ -2405,7 +2405,7 @@ export const primitives = {
   neutral200: "#D9D9D9",
   neutral300: "#CDCDCD",
   neutral400: "#B3B3B3",
-  neutral500: "#9A9A9A",
+  neutral500: "#949494",
   neutral600: "#686868",
   neutral700: "#4E4E4E",
   neutral800: "#353535",

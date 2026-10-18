@@ -2,7 +2,7 @@
 
 See: [`docs/implementationPlans/rtk-to-syncdb-migration-docs.md`](../implementationPlans/rtk-to-syncdb-migration-docs.md)
 
-**RTK deprecation flag:** **Blocked.** Do not start any task in this file until PR [#869](https://github.com/flourishhealth/terreno/pull/869) is merged into `master`. Verify with `git log --oneline master | rg -i syncdb` before beginning.
+**RTK deprecation flag:** **Blocked.** Do not start any task in this file until PR [#869](https://github.com/TerrenoLabs/terreno/pull/869) is merged into `master`. Verify with `git log --oneline master | rg -i syncdb` before beginning.
 
 ## Instructions for the implementing agent
 

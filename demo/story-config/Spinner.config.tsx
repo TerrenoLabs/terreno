@@ -3,9 +3,10 @@ import {SpinnerDemo, SpinnerVariations} from "@stories/Spinner.stories";
 import {Spinner} from "@terreno/ui";
 
 export const SpinnerConfiguration: DemoConfiguration = {
+  usageExample: "import {Spinner} from \"@terreno/ui\";\n\n<Spinner />",
   name: "Spinner",
   component: Spinner,
-  related: ["Activity Indicator", "Loading"],
+  related: ["Page"],
   description:
     "This is a microcomponent that’s used to indicate that the system is loading information. It can be used on a loading surface or on a button.",
   a11yNotes: [],
@@ -14,7 +15,7 @@ export const SpinnerConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23466&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23982",
     ios: "ready",
     android: "ready",
     web: "ready",

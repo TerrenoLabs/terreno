@@ -1,7 +1,7 @@
 # Tasks: Framework-level audit log
 
 IP: [framework-audit-log.md](../implementationPlans/framework-audit-log.md)  
-**Closes:** https://github.com/FlourishHealth/terreno/issues/1186
+**Closes:** https://github.com/TerrenoLabs/terreno/issues/1186
 
 **Feature profile:** false (full IP)
 

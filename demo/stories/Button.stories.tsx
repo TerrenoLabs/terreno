@@ -72,7 +72,12 @@ export const ButtonVariants: React.FC<Partial<ButtonProps>> = (props = {}) => {
     <>
       <Box direction="row" wrap>
         <Box padding={1}>
-          <Button onClick={handleDemoClick} text="Default/Primary" {...props} />
+          <Button
+            onClick={handleDemoClick}
+            testID="button-variant-primary"
+            text="Default/Primary"
+            {...props}
+          />
         </Box>
         <Box padding={1}>
           <Button onClick={handleDemoClick} text="Secondary" variant="secondary" {...props} />
@@ -350,5 +355,25 @@ export const MultilineButtons: React.FC = () => (
         text={"Here is some text and \nA second line with an icon"}
       />
     </Box>
+  </Box>
+);
+
+export const WrapTextButtons: React.FC = () => (
+  <Box gap={4}>
+    {(["default", "sm"] as const).map((size) => (
+      <Box gap={2} key={size}>
+        <Heading>{size === "sm" ? "Small (sm)" : "Default size"}</Heading>
+        <Box direction="row" gap={6}>
+          <Box gap={1} testID={`wrap-text-${size}-off`} width={150}>
+            <Text>One line (default)</Text>
+            <Button onClick={handleDemoClick} size={size} text="Save all changes now" />
+          </Box>
+          <Box gap={1} testID={`wrap-text-${size}-on`} width={150}>
+            <Text>wrapText</Text>
+            <Button onClick={handleDemoClick} size={size} text="Save all changes now" wrapText />
+          </Box>
+        </Box>
+      </Box>
+    ))}
   </Box>
 );

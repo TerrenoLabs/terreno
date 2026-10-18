@@ -1,0 +1,25 @@
+{
+  "kind": "markdown",
+  "input": {
+    "prompt": "Write a short bio for your profile page.",
+    "placeholder": "A sentence or two about you",
+    "minLength": 20,
+    "maxLength": 400
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "markdown",
+    "text": "Write a short bio for your profile page.",
+    "toolCallId": "call_fixture"
+  }
+}

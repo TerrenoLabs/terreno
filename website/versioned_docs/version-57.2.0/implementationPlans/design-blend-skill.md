@@ -1,6 +1,6 @@
 # Implementation Plan: design-blend Skill
 
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1083
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1083
 ## Goal
 
 Create a new `design-blend` skill that converts a Claude design file into a Terreno implementation blueprint and execution steps, with these hard constraints:

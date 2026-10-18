@@ -44,6 +44,12 @@ export * from "./consentApp";
 export * from "./envConfigurationPlugin";
 export * from "./errors";
 export * from "./expressServer";
+export {
+  FRAMEWORK_MODEL_PUBLIC_NAMES,
+  type FrameworkModelCompiledName,
+  type FrameworkModelPublicName,
+  publicFrameworkModelName,
+} from "./frameworkModelNames";
 export * from "./githubAuth";
 export * from "./httpClient";
 export * from "./logger";
@@ -112,6 +118,7 @@ export {
 } from "./notifications/notificationsBeforeSend";
 export * from "./notifiers/googleChatNotifier";
 export * from "./notifiers/slackNotifier";
+export * from "./notifiers/slackWebApi";
 export * from "./notifiers/zoomNotifier";
 export * from "./openApiBuilder";
 export * from "./openApiCompat";
@@ -126,6 +133,10 @@ export * from "./orgs/orgsApp";
 export * from "./permissions";
 export * from "./plugins";
 export * from "./populate";
+export {
+  createRouteRateLimitMiddleware,
+  type RouteRateLimitOptions,
+} from "./rateLimit/routeRateLimit";
 export type {
   RateLimitLimits,
   RateLimitOptions,

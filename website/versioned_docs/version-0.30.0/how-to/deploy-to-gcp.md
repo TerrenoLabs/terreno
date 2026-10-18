@@ -20,7 +20,7 @@ Run the setup script once to provision all GCP resources:
 
 ``````bash
 # Clone the repository
-git clone https://github.com/FlourishHealth/terreno.git
+git clone https://github.com/TerrenoLabs/terreno.git
 cd terreno
 
 # Run the setup script

@@ -27,6 +27,7 @@ import {
   type PermissionMethod,
   Permissions,
   type PopulatePath,
+  publicFrameworkModelName,
   registerAdminBroadcastScope,
   registerAdminWindowMutationScope,
   type ScriptArgDef,
@@ -74,6 +75,8 @@ import {aggregateFromTerrenoApp} from "./aggregateAdmin";
 import {parseAdminListFilters} from "./filterParser";
 import type {ResolvedAdminModel} from "./resolvedAdminModel";
 import {RESERVED_SCRIPT_FLAGS} from "./scriptCli";
+
+const AUDIT_EVENT_MODEL_NAMES = new Set(["AuditEvent", "TerrenoAuditEvent"]);
 
 /**
  * Configuration for a single model in the admin panel.
@@ -261,6 +264,21 @@ interface AdminFieldMeta {
   /** For array fields of ObjectId refs: the referenced model name */
   itemRef?: string;
 }
+
+const publicFrameworkFieldMeta = (field: AdminFieldMeta): AdminFieldMeta => {
+  return {
+    ...field,
+    ...(field.ref ? {ref: publicFrameworkModelName(field.ref)} : {}),
+    ...(field.itemRef ? {itemRef: publicFrameworkModelName(field.itemRef)} : {}),
+    ...(field.items
+      ? {
+          items: Object.fromEntries(
+            Object.entries(field.items).map(([key, item]) => [key, publicFrameworkFieldMeta(item)])
+          ),
+        }
+      : {}),
+  };
+};
 
 interface AdminModelMeta {
   actions: AdminActionInput[];
@@ -554,7 +572,11 @@ const extractFieldMetaFromDescription = (
   const hiddenFieldSet = new Set(hiddenFields);
   const description = describeModel(model);
   const fields = modelDescriptionToAdminFields(description);
-  return Object.fromEntries(Object.entries(fields).filter(([key]) => !hiddenFieldSet.has(key)));
+  return Object.fromEntries(
+    Object.entries(fields)
+      .filter(([key]) => !hiddenFieldSet.has(key))
+      .map(([key, field]) => [key, publicFrameworkFieldMeta(field)])
+  );
 };
 
 const asMiddlewareList = (
@@ -629,7 +651,7 @@ export class AdminApp {
     }
     // Platform audit rows may omit organizationId. Requiring a selected org hides
     // those events and skips Recent Activity / the AuditEvent changelist.
-    if (config.model.modelName === "AuditEvent") {
+    if (AUDIT_EVENT_MODEL_NAMES.has(config.model.modelName)) {
       return false;
     }
     return Boolean(config.model.schema.path("organizationId"));
@@ -706,11 +728,12 @@ export class AdminApp {
     if (explicit) {
       return explicit;
     }
-    const standard = `admin${config.model.modelName}`;
+    const publicName = publicFrameworkModelName(config.model.modelName);
+    const standard = `admin${publicName}`;
     if (accessControl?.statements[standard]) {
       return standard;
     }
-    return `${config.model.modelName.charAt(0).toLowerCase()}${config.model.modelName.slice(1)}`;
+    return `${publicName.charAt(0).toLowerCase()}${publicName.slice(1)}`;
   }
 
   private async isAdminModelOwned(
@@ -835,7 +858,7 @@ export class AdminApp {
       request: express.Request;
       verb: AdminAuditEvent["verb"];
     }): Promise<void> => {
-      if (modelName === "AuditEvent") {
+      if (AUDIT_EVENT_MODEL_NAMES.has(modelName)) {
         return;
       }
       void maybeRecordAdminAudit({
@@ -852,7 +875,7 @@ export class AdminApp {
     // Build config response with field metadata from Mongoose schemas
     const configNames = assignUniqueAdminConfigNames(
       modelConfigs.map((config) => ({
-        modelName: config.model.modelName,
+        modelName: publicFrameworkModelName(config.model.modelName),
         routePath: config.routePath,
         source: config.source,
       }))
@@ -907,7 +930,7 @@ export class AdminApp {
         listDisplay,
         listDisplayLinks: config.listDisplayLinks ?? [],
         listFields,
-        name: configNames[configIndex] ?? config.model.modelName,
+        name: configNames[configIndex] ?? publicFrameworkModelName(config.model.modelName),
         organizationScoped: isOrgScopedModel,
         pageSize: config.pageSize,
         permissions: {
@@ -1545,7 +1568,7 @@ export class AdminApp {
       const bulkPatchOpenApi = openApiMw
         ? createOpenApiBuilder({openApi: openApiMw})
             .withTags(["admin"])
-            .withSummary(`Bulk patch ${config.model.modelName} documents`)
+            .withSummary(`Bulk patch ${publicFrameworkModelName(config.model.modelName)} documents`)
             .withRequestBody<{ids: string[]; patch: Record<string, unknown>}>({
               ids: {
                 description: "Document ids to update",

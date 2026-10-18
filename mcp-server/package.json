@@ -4,7 +4,7 @@
     "terreno-mcp-local": "./dist/local/index.js"
   },
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.0",
@@ -12,10 +12,11 @@
     "@modelcontextprotocol/server": "catalog:",
     "@sentry/bun": "catalog:",
     "@terreno/api": "workspace:*",
+    "@terreno/blocks": "workspace:*",
     "express": "catalog:",
     "luxon": "catalog:",
     "minisearch": "^7.2.0",
-    "mongoose": "9.7.4"
+    "mongoose": "catalog:"
   },
   "description": "MCP server that gives coding agents Terreno docs, codegen tools, and prompts — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
@@ -67,7 +68,7 @@
     "dist",
     "src/docs"
   ],
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "mcp",
     "terreno",
@@ -83,7 +84,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
     "build": "bun run sync-ui-docs && bun run sync-versioned-docs && bun run sync-package-guidelines && NODE_OPTIONS=--max-old-space-size=8192 tsc && cp -r src/docs dist/",
@@ -104,5 +105,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "type": "module",
-  "version": "57.4.0"
+  "version": "57.16.2"
 }

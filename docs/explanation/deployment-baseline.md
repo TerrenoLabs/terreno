@@ -46,7 +46,7 @@ Expo Router supports three web output modes. The choice determines hosting optio
 |------|--------|-----------|-----|---------|----------------|
 | `single` | One `index.html` SPA | No | No | Any static host | **Current default** |
 | `static` | Per-route HTML files | No | No | Any static host | Available; better SEO |
-| `server` | `dist/client` + `dist/server` | Yes | Yes (alpha, SDK ≥ 55) | Node/Bun/edge runtime | Not yet — repo catalog is Expo `~54.0.29`; see [Web SSR and admin SPA](https://github.com/FlourishHealth/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md) |
+| `server` | `dist/client` + `dist/server` | Yes | Yes (alpha, SDK ≥ 55) | Node/Bun/edge runtime | Not yet — repo catalog is Expo `~54.0.29`; see [Web SSR and admin SPA](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md) |
 
 ## Multi-environment checklist
 
@@ -63,7 +63,7 @@ Staging and production differ in these values (each environment needs its **own 
 
 ## Containerizing the backend
 
-The canonical Dockerfile is [`example-backend/Dockerfile`](https://github.com/FlourishHealth/terreno/blob/master/example-backend/Dockerfile). It:
+The canonical Dockerfile is [`example-backend/Dockerfile`](https://github.com/TerrenoLabs/terreno/blob/master/example-backend/Dockerfile). It:
 
 1. Installs workspace dependencies and compiles packages in dependency order.
 2. Builds a Bun-compiled binary for production.

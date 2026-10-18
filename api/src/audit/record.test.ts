@@ -24,8 +24,8 @@ import {
 const typedUserModel = UserModel as unknown as AuthUserModel;
 
 const deleteAuditEventModel = (): void => {
-  if (mongoose.connection.models.AuditEvent) {
-    mongoose.connection.deleteModel("AuditEvent");
+  if (mongoose.connection.models.TerrenoAuditEvent) {
+    mongoose.connection.deleteModel("TerrenoAuditEvent");
   }
 };
 

@@ -134,7 +134,7 @@ See: [`docs/implementationPlans/support-agent.md`](../implementationPlans/suppor
 - [ ] **Task 4.2**: `announcementsSource`
   - Delivers: adapter over the `Announcement` model: `published` for everyone, `archived` with `includeArchived`, drafts never; `post("save")` hook triggers `reindex({sourceId})` for that document; `isVisible` delegates to an optional `matchAudience` passed in
   - Files: `support/src/knowledge/sources/announcementsSource.ts`, `support/src/tests/announcementsSource.test.ts` (dev-dependency on `@terreno/announcements` for the test model only), `example-backend/src/api/support.ts`
-  - Blocked by: Task 1.5, **merge of [PR #1284](https://github.com/FlourishHealth/terreno/pull/1284)**
+  - Blocked by: Task 1.5, **merge of [PR #1284](https://github.com/TerrenoLabs/terreno/pull/1284)**
   - Docs: `docs/how-to/add-support-knowledge.md` (Announcements section); `docs/reference/announcements.md` (link to support integration)
   - Skills: `terreno-backend-api`, `update-docs`
   - Acceptance: **AC8** — status matrix test; publishing an announcement results in a new `SupportDocument` after the save hook resolves, without a manual `reindex()`

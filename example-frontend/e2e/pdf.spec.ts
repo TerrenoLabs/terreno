@@ -4,7 +4,7 @@ import {loginAs} from "./helpers/login";
 test.describe("PDF Generation", () => {
   test.beforeEach(async ({page}) => {
     await loginAs(page);
-    await page.goto("/pdf");
+    await page.goto("/documents?section=pdf");
     await page.waitForLoadState("networkidle");
     await page.getByTestId("pdf-screen").first().waitFor({state: "visible"});
   });

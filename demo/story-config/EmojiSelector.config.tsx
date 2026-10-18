@@ -4,15 +4,16 @@ import {EmojiSelector} from "@terreno/ui";
 import {EmojiSelectorDemo} from "../stories/EmojiSelector.stories";
 
 export const EmojiSelectorConfiguration: DemoConfiguration = {
+  usageExample: "import {EmojiSelector} from \"@terreno/ui\";\n\n<EmojiSelector />",
   name: "Emoji selector",
   component: EmojiSelector,
-  related: ["Text field", "Chat", "Reactions"],
+  related: ["Text field"],
   description: "A grid-based emoji picker with categories, search, and recent history.",
   a11yNotes: [
     "Ensure emoji choices are keyboard and screen-reader accessible.",
     "Provide clear focus states when navigating between emoji and category tabs.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "inProgress",
     figma: "planned",

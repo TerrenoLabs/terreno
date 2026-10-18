@@ -6,7 +6,7 @@
 **Owner:** unassigned
 **Created:** 2026-07-27
 **Program:** [OSS launch](oss-launch-program.md) (Wave 2)
-**Depends on:** Expo SDK ≥ 55 (PR [#779](https://github.com/flourishhealth/terreno/pull/779) upgrades to SDK 56), [`deployment-foundation`](deployment-foundation.md)
+**Depends on:** Expo SDK ≥ 55 (PR [#779](https://github.com/TerrenoLabs/terreno/pull/779) upgrades to SDK 56), [`deployment-foundation`](deployment-foundation.md)
 **RTK deprecation flag:** **Partial** — SSR interacts directly with the data layer. Server-rendered HTML needs data at render time, which is a fundamentally different question for a local-first client than for a request/response client. The data-loading design tasks are `[RTK]` marked and blocked on #869.
 
 ## Goal

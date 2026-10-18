@@ -1,7 +1,11 @@
 name: UI CI
 
 # Disabled after migration to CircleCI; retained for rollback.
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 jobs:
   ui-lint-and-test:
@@ -26,6 +30,10 @@ jobs:
       - name: Install UI dependencies
         run: bun install --frozen-lockfile
         working-directory: ui
+
+      - name: Build blocks dependency
+        working-directory: blocks
+        run: bun run compile
 
       - name: Lint UI
         run: bun run lint
@@ -77,6 +85,10 @@ jobs:
 
       - name: Install root dependencies (workspace)
         run: bun install --frozen-lockfile
+
+      - name: Build blocks dependency
+        working-directory: blocks
+        run: bun run compile
 
       - name: Build UI (required for demo)
         run: bun run compile

@@ -20,7 +20,7 @@ Read the [deployment baseline](../explanation/deployment-baseline.md) — seven 
 
 ## Scripts
 
-- [`scripts/setup-gcs-hosting.sh`](https://github.com/FlourishHealth/terreno/blob/master/scripts/setup-gcs-hosting.sh) — parameterized GCS + CDN provisioning for one site
+- [`scripts/setup-gcs-hosting.sh`](https://github.com/TerrenoLabs/terreno/blob/master/scripts/setup-gcs-hosting.sh) — parameterized GCS + CDN provisioning for one site
 
 ## Environment variables
 

@@ -1,7 +1,7 @@
 # Implementation Plan: Upgrade Guides and the `upgrading-terreno` Skill
 
-**Status:** Approved
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1013
+**Status:** Complete
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1013
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned

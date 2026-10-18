@@ -710,7 +710,37 @@ mock.module("expo-router/build/views/Screen", () => ({
 }));
 
 // Mock expo-router
+const mockNavigationFonts = {
+  bold: {fontFamily: "System", fontWeight: "600"},
+  heavy: {fontFamily: "System", fontWeight: "700"},
+  medium: {fontFamily: "System", fontWeight: "500"},
+  regular: {fontFamily: "System", fontWeight: "400"},
+};
 mock.module("expo-router", () => ({
+  DarkTheme: {
+    colors: {
+      background: "rgb(1, 1, 1)",
+      border: "rgb(39, 39, 41)",
+      card: "rgb(18, 18, 18)",
+      notification: "rgb(255, 69, 58)",
+      primary: "rgb(10, 132, 255)",
+      text: "rgb(229, 229, 231)",
+    },
+    dark: true,
+    fonts: mockNavigationFonts,
+  },
+  DefaultTheme: {
+    colors: {
+      background: "rgb(242, 242, 242)",
+      border: "rgb(216, 216, 216)",
+      card: "rgb(255, 255, 255)",
+      notification: "rgb(255, 59, 48)",
+      primary: "rgb(0, 122, 255)",
+      text: "rgb(28, 28, 30)",
+    },
+    dark: false,
+    fonts: mockNavigationFonts,
+  },
   Link: ({children, ...props}: MockComponentProps) => React.createElement("Link", props, children),
   Navigator: ({children, ...props}: MockComponentProps) =>
     React.createElement("Navigator", props, children),
@@ -720,12 +750,15 @@ mock.module("expo-router", () => ({
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
+    setParams: mock(() => {}),
   },
   Slot: ({children, ...props}: MockComponentProps) => React.createElement("Slot", props, children),
   Stack: ({children, ...props}: MockComponentProps) =>
     React.createElement("Stack", props, children),
   Tabs: ({children, ...props}: MockComponentProps) => React.createElement("Tabs", props, children),
+  ThemeProvider: ({children}: MockComponentProps) => children,
   useFocusEffect: mock(() => undefined),
+  useGlobalSearchParams: mock(() => ({})),
   useLocalSearchParams: mock(() => ({})),
   useNavigation: mock(() => ({
     addListener: mock(() => () => undefined),
@@ -740,6 +773,7 @@ mock.module("expo-router", () => ({
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
+    setParams: mock(() => {}),
   })),
   useSearchParams: mock(() => ({})),
   useSegments: mock(() => []),
@@ -769,6 +803,8 @@ mock.module("@react-native-async-storage/async-storage", () => ({
   setItem: mock(() => Promise.resolve()),
 }));
 
+const mockPortalContext = React.createContext<unknown>(null);
+
 // Mock the portal host. The real `Host` wraps children in an extra View
 // whose presence makes snapshots brittle, and individual tests already mock
 // this to render inline; hoisting the mock to setup keeps test ordering from
@@ -779,6 +815,10 @@ mock.module("./PortalHost", () => ({
     React.createElement("View", {testID: "portal-host"}, children),
   Portal: ({children}: MockComponentProps) =>
     React.createElement("View", {testID: "portal"}, children),
+  // Components that only portal when a host is mounted read this context. It defaults to
+  // null (no host) so they keep rendering inline; tests that want the portal path wrap the
+  // tree in `PortalContext.Provider`.
+  PortalContext: mockPortalContext,
 }));
 
 // Mock IconButton component
@@ -886,8 +926,9 @@ mock.module("react-native-actions-sheet", () => ({
 
 // Mock MediaQuery
 mock.module("./MediaQuery", () => ({
-  isMobileDevice: mock(() => false),
+  isNarrowViewport: mock(() => false),
   mediaQueryLargerThan: mock(() => false),
+  mediaQuerySmallerThan: mock(() => false),
 }));
 
 // Mock expo-image-manipulator
@@ -931,6 +972,7 @@ mock.module("expo-haptics", () => ({
 mock.module("expo-clipboard", () => ({
   getStringAsync: mock(() => Promise.resolve("")),
   hasStringAsync: mock(() => Promise.resolve(false)),
+  setImageAsync: mock(() => Promise.resolve(undefined)),
   setStringAsync: mock(() => Promise.resolve(undefined)),
 }));
 
@@ -961,12 +1003,6 @@ mock.module("expo-localization", () => ({
   locale: "en-US",
   locales: ["en-US"],
   timezone: "America/New_York",
-}));
-
-// Mock @expo/vector-icons
-mock.module("@expo/vector-icons", () => ({
-  default: mock(() => null),
-  FontAwesome6: mock(() => null),
 }));
 
 // Mock @expo/vector-icons/FontAwesome6

@@ -32,6 +32,26 @@ export const AREA_ORDER = [
 const DECLINED_STATUS = "Declined";
 
 /**
+ * The generated stamp sits on its own blockquote line. Content comparisons
+ * ignore it so a daily refresh does not open a pull request.
+ */
+const GENERATED_TIMESTAMP_LINE = /^> dates are promised\. Last updated: .+\.$/m;
+
+const withoutGeneratedTimestamp = (markdown: string): string => {
+  return markdown.replace(GENERATED_TIMESTAMP_LINE, "> dates are promised. Last updated: STAMP.");
+};
+
+export const roadmapContentIsUnchanged = ({
+  existing,
+  next,
+}: {
+  existing: string;
+  next: string;
+}): boolean => {
+  return withoutGeneratedTimestamp(existing) === withoutGeneratedTimestamp(next);
+};
+
+/**
  * Roadmap issues are marked with the `roadmap` label, not a title prefix. Older
  * issues were titled `[Roadmap] <thing>`, so that legacy prefix is stripped
  * here — both for rendering and for matching a board issue to a seed entry.
@@ -88,10 +108,13 @@ export const renderRoadmapMarkdown = ({
   generatedAtIso,
   items,
   projectUrl,
+  taskSlugs = new Set<string>(),
 }: {
   generatedAtIso: string;
   items: RoadmapItem[];
   projectUrl: string;
+  /** IP slugs that have a `docs/tasks/<slug>.md` list, so the entry can link it. */
+  taskSlugs?: Set<string>;
 }): string => {
   const lines: string[] = [
     "# Terreno roadmap",
@@ -100,7 +123,7 @@ export const renderRoadmapMarkdown = ({
     "> truth; this file is refreshed by CI. **Target** versions are directional — no calendar",
     `> dates are promised. Last updated: ${generatedAtIso}.`,
     "",
-    "Discuss priorities in [GitHub Discussions](https://github.com/FlourishHealth/terreno/discussions).",
+    "Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).",
     "See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.",
     "",
   ];
@@ -143,8 +166,12 @@ export const renderRoadmapMarkdown = ({
           item.ipSlug === null || item.ipSlug === ""
             ? ""
             : ` — IP: [${item.ipSlug}](docs/implementationPlans/${item.ipSlug}.md)`;
+        const tasksLink =
+          item.ipSlug !== null && taskSlugs.has(item.ipSlug)
+            ? ` · Tasks: [${item.ipSlug}](docs/tasks/${item.ipSlug}.md)`
+            : "";
         lines.push(
-          `- [${displayTitle(item.title)}](${item.url}) (${item.impact}, ${item.status})${ipLink}`
+          `- [${displayTitle(item.title)}](${item.url}) (${item.impact}, ${item.status})${ipLink}${tasksLink}`
         );
       }
       lines.push("");

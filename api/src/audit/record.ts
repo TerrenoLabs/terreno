@@ -34,6 +34,7 @@ export interface AuditEventWrite {
 
 const MISSING_PLUGIN_MESSAGE =
   "modelRouter audit: true requires AuditApp to be registered; skipping AuditEvent write";
+const AUDIT_EVENT_MODEL_NAMES = new Set(["AuditEvent", "TerrenoAuditEvent"]);
 
 let auditEventModel: AuditEventModel | undefined;
 let auditEnqueue: AuditEnqueue | undefined;
@@ -92,7 +93,7 @@ export const maybeRecordAdminAudit = async ({
     if (!auditEventModel) {
       return;
     }
-    if (modelName === "AuditEvent") {
+    if (AUDIT_EVENT_MODEL_NAMES.has(modelName)) {
       return;
     }
     const beforePlain = toAuditPlain(before);
@@ -233,7 +234,7 @@ export const snapshotAuditBefore = ({
 };
 
 const persistAuditEvent = async (write: AuditEventWrite): Promise<void> => {
-  if (write.modelName === "AuditEvent") {
+  if (AUDIT_EVENT_MODEL_NAMES.has(write.modelName)) {
     return;
   }
   if (!auditEventModel) {

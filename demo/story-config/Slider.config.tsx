@@ -11,6 +11,7 @@ import {
 import {Slider} from "@terreno/ui";
 
 export const SliderConfiguration: DemoConfiguration = {
+  usageExample: "import {Slider} from \"@terreno/ui\";\n\n<Slider />",
   name: "Slider",
   component: Slider,
   related: ["Number field"],
@@ -20,10 +21,11 @@ export const SliderConfiguration: DemoConfiguration = {
     "Touch zone is very important here, and must be at least 48 by 48 px. The “handle” as its currently designed fulfills this.",
     "Contrast is also important. It should be obvious when the active track is present, and when it’s not.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
-    figma: "planned",
+    figma: "ready",
+    figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23983",
     ios: "ready",
     android: "ready",
     web: "ready",

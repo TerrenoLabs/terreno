@@ -17,6 +17,7 @@
  *   bun run roadmap:sync --check      # exit 1 if the board has drifted (CI)
  *   bun run roadmap:sync              # apply
  *   bun run roadmap:sync --create-missing-issues   # also open absent tracking issues
+ *   bun run roadmap:sync --create-missing-ip-issues   # open them only for entries with an IP (CI)
  *
  * Requires a token with `project` scope: `gh auth refresh -s project`.
  */
@@ -26,20 +27,29 @@ import {displayTitle} from "../generate-roadmap/lib.ts";
 import {
   FIELDS_PATH,
   LABELS_PATH,
-  type RoadmapFieldOptions,
   parseFieldOptions,
   parseLabelNames,
+  type RoadmapFieldOptions,
   validateRoadmapItem,
 } from "./checkRoadmapItem.ts";
 import {DECLINED, STATUS_RANK} from "./reconcileIps.ts";
-import {SEED_ISSUES_PATH, type SeedIssue, readSeedIssues} from "./seedIssues.ts";
+import {readSeedIssues, SEED_ISSUES_PATH, type SeedIssue} from "./seedIssues.ts";
 
 export const PROJECT_TITLE = "Terreno Roadmap";
 export const IP_FIELD_NAME = "IP";
 export const COMMUNITY_FIELD_NAME = "Community interest";
 
 /** GitHub requires a color and description on every single-select option. */
-const OPTION_COLORS = ["BLUE", "GREEN", "YELLOW", "ORANGE", "RED", "PURPLE", "PINK", "GRAY"] as const;
+const OPTION_COLORS = [
+  "BLUE",
+  "GREEN",
+  "YELLOW",
+  "ORANGE",
+  "RED",
+  "PURPLE",
+  "PINK",
+  "GRAY",
+] as const;
 
 export interface DesiredField {
   dataType: "SINGLE_SELECT" | "TEXT" | "NUMBER";
@@ -212,7 +222,8 @@ export const resolveSeedItems = ({
     }
 
     const title = primary.title !== "" ? primary.title : (tableRow?.title ?? "");
-    const issueNumber = tableRow?.issueNumber ?? issueNumbersByTitle.get(displayTitle(title)) ?? null;
+    const issueNumber =
+      tableRow?.issueNumber ?? issueNumbersByTitle.get(displayTitle(title)) ?? null;
 
     if (issueNumber === null && primary.ip === "" && !includeWithoutIp) {
       // The repo's own process opens a tracking issue only once an IP is
@@ -276,6 +287,68 @@ export interface BoardItemSnapshot {
   issueNumber: number | null;
 }
 
+/**
+ * Finds the issue for seed entries whose title no longer matches one: the
+ * board's IP field still names the plan. Without this, renaming a tracking issue
+ * on GitHub would make `--create-missing-ip-issues` open a duplicate. Issue
+ * numbers flow roadmap → issue only; nothing is written back into IP headers.
+ */
+export const attachIssuesByIp = <T extends Pick<ResolvedItem, "ip" | "issueNumber">>({
+  boardItems,
+  items,
+}: {
+  boardItems: BoardItemSnapshot[];
+  items: T[];
+}): T[] => {
+  const issueByIp = new Map<string, number>();
+  for (const boardItem of boardItems) {
+    const ip = boardItem.fields[IP_FIELD_NAME] ?? "";
+    if (ip !== "" && boardItem.issueNumber !== null) {
+      issueByIp.set(ip, boardItem.issueNumber);
+    }
+  }
+  const attached: T[] = [];
+  for (const item of items) {
+    if (item.issueNumber === null && item.ip !== "") {
+      item.issueNumber = issueByIp.get(item.ip) ?? null;
+      if (item.issueNumber !== null) {
+        attached.push(item);
+      }
+    }
+  }
+  return attached;
+};
+
+export interface LabelWork {
+  labels: string[];
+  number: number;
+}
+
+/** Seed labels each already-open issue is missing. */
+export const planLabelWork = ({
+  issueLabelsByNumber,
+  items,
+}: {
+  issueLabelsByNumber: Map<number, string[]>;
+  items: Pick<ResolvedItem, "issueNumber" | "labels">[];
+}): LabelWork[] => {
+  const work: LabelWork[] = [];
+  for (const item of items) {
+    if (item.issueNumber === null) {
+      continue;
+    }
+    const existing = issueLabelsByNumber.get(item.issueNumber);
+    if (existing === undefined) {
+      continue;
+    }
+    const toAdd = item.labels.filter((label) => !existing.includes(label));
+    if (toAdd.length > 0) {
+      work.push({labels: toAdd, number: item.issueNumber});
+    }
+  }
+  return work;
+};
+
 export interface ItemFieldWrite {
   field: string;
   itemIssue: number;
@@ -332,7 +405,9 @@ export const planItemSync = ({
 }): ItemSyncPlan => {
   const plan: ItemSyncPlan = {actions: [], fieldValuePlan: [], reports: []};
   const boardByIssue = new Map(
-    boardItems.filter((item) => item.issueNumber !== null).map((item) => [item.issueNumber as number, item])
+    boardItems
+      .filter((item) => item.issueNumber !== null)
+      .map((item) => [item.issueNumber as number, item])
   );
   const seedIssues = new Set(
     items.flatMap((item) => (item.issueNumber === null ? [] : [item.issueNumber]))
@@ -383,11 +458,15 @@ export const planItemSync = ({
 
   for (const boardItem of boardItems) {
     if (boardItem.issueNumber === null) {
-      plan.reports.push(`EXTRA board item ${boardItem.id} has no linked issue and is not in ${SEED_ISSUES_PATH}`);
+      plan.reports.push(
+        `EXTRA board item ${boardItem.id} has no linked issue and is not in ${SEED_ISSUES_PATH}`
+      );
       continue;
     }
     if (!seedIssues.has(boardItem.issueNumber)) {
-      plan.reports.push(`EXTRA #${boardItem.issueNumber} is on the board but not in ${SEED_ISSUES_PATH}`);
+      plan.reports.push(
+        `EXTRA #${boardItem.issueNumber} is on the board but not in ${SEED_ISSUES_PATH}`
+      );
     }
   }
 
@@ -516,7 +595,13 @@ const optionInputs = (names: string[]): {color: string; description: string; nam
 };
 
 /** Public org metadata, so this needs no `read:org` scope. */
-const fetchOrganizationId = async ({owner, token}: {owner: string; token: string}): Promise<string> => {
+const fetchOrganizationId = async ({
+  owner,
+  token,
+}: {
+  owner: string;
+  token: string;
+}): Promise<string> => {
   const response = await fetch(`https://api.github.com/orgs/${owner}`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -631,7 +716,16 @@ const fetchFields = async ({
   token: string;
 }): Promise<ExistingField[]> => {
   const data = await graphql<{
-    node: {fields: {nodes: {dataType: string; id: string; name: string; options?: {id: string; name: string}[]}[]}};
+    node: {
+      fields: {
+        nodes: {
+          dataType: string;
+          id: string;
+          name: string;
+          options?: {id: string; name: string}[];
+        }[];
+      };
+    };
   }>({query: FIELDS_QUERY, token, variables: {projectId}});
 
   return data.node.fields.nodes.map((field) => ({
@@ -646,9 +740,10 @@ export const main = async (): Promise<void> => {
   const {values} = parseArgs({
     options: {
       check: {default: false, type: "boolean"},
+      "create-missing-ip-issues": {default: false, type: "boolean"},
       "create-missing-issues": {default: false, type: "boolean"},
       "dry-run": {default: false, type: "boolean"},
-      owner: {default: "FlourishHealth", type: "string"},
+      owner: {default: "TerrenoLabs", type: "string"},
       repo: {default: "terreno", type: "string"},
     },
     strict: true,
@@ -656,12 +751,17 @@ export const main = async (): Promise<void> => {
 
   const token = process.env.GITHUB_TOKEN?.trim() ?? "";
   if (token === "") {
-    console.error("roadmap:sync requires GITHUB_TOKEN. Try: GITHUB_TOKEN=$(gh auth token) bun run roadmap:sync");
+    console.error(
+      "roadmap:sync requires GITHUB_TOKEN. Try: GITHUB_TOKEN=$(gh auth token) bun run roadmap:sync"
+    );
     console.error("The token needs the `project` scope: gh auth refresh -s project");
     process.exit(1);
   }
 
   const readOnly = values.check || values["dry-run"];
+  // The IP-only mode is what post-merge CI uses: a merged plan earns a public
+  // tracking issue, while seed entries with no plan behind them stay skipped.
+  const createIssues = values["create-missing-issues"] || values["create-missing-ip-issues"];
   const knownLabels = parseLabelNames(await Bun.file(LABELS_PATH).text());
   const options = parseFieldOptions({
     fieldsContents: await Bun.file(FIELDS_PATH).text(),
@@ -672,7 +772,9 @@ export const main = async (): Promise<void> => {
   const {issues, repositoryId} = await fetchIssues({owner: values.owner, repo: values.repo, token});
   // Titles are matched with the legacy `[Roadmap] ` prefix stripped from both
   // sides, so an entry written without it still finds an issue opened with it.
-  const issueNumbersByTitle = new Map(issues.map((issue) => [displayTitle(issue.title), issue.number]));
+  const issueNumbersByTitle = new Map(
+    issues.map((issue) => [displayTitle(issue.title), issue.number])
+  );
   const {items, skipped} = resolveSeedItems({
     includeWithoutIp: values["create-missing-issues"],
     issueNumbersByTitle,
@@ -700,20 +802,12 @@ export const main = async (): Promise<void> => {
     process.exit(1);
   }
 
-  const labelWork: {labels: string[]; number: number}[] = [];
-  for (const item of items) {
-    if (item.issueNumber === null) {
-      continue;
-    }
-    const issue = issuesById.get(item.issueNumber);
-    if (issue === undefined) {
-      continue;
-    }
-    const toAdd = item.labels.filter((label) => !issue.labels.includes(label));
-    if (toAdd.length > 0) {
-      labelWork.push({labels: toAdd, number: item.issueNumber});
-      actions.push(`label #${item.issueNumber} += ${toAdd.join(", ")}`);
-    }
+  const issueLabelsByNumber = new Map(
+    [...issuesById.entries()].map(([number, issue]) => [number, issue.labels])
+  );
+  const labelWork = planLabelWork({issueLabelsByNumber, items});
+  for (const work of labelWork) {
+    actions.push(`label #${work.number} += ${work.labels.join(", ")}`);
   }
 
   // Reported before the project queries so a dry run is still useful when the
@@ -758,12 +852,16 @@ export const main = async (): Promise<void> => {
       for (const action of actions) {
         console.info(`  - ${action}`);
       }
-      console.info("\nThe project does not exist yet, so field and item planning cannot be resolved.");
+      console.info(
+        "\nThe project does not exist yet, so field and item planning cannot be resolved."
+      );
       console.info("Re-run without --dry-run/--check to create it, then plan again.");
       process.exit(values.check ? 1 : 0);
     }
 
-    const created = await graphql<{createProjectV2: {projectV2: {id: string; number: number; url: string}}}>({
+    const created = await graphql<{
+      createProjectV2: {projectV2: {id: string; number: number; url: string}};
+    }>({
       query: `mutation($ownerId: ID!, $repositoryId: ID!, $title: String!) {
         createProjectV2(input: {ownerId: $ownerId, repositoryId: $repositoryId, title: $title}) {
           projectV2 { id number url }
@@ -788,7 +886,8 @@ export const main = async (): Promise<void> => {
       }`,
       token,
       variables: {
-        description: "Public roadmap for Terreno. Board is the source of truth; ROADMAP.md is generated from it.",
+        description:
+          "Public roadmap for Terreno. Board is the source of truth; ROADMAP.md is generated from it.",
         projectId: project.id,
       },
     });
@@ -815,13 +914,22 @@ export const main = async (): Promise<void> => {
 
   // --- items ----------------------------------------------------------------
   const boardItems = await fetchBoardItems({projectId: project.id, token});
+  // Issues found only through the board's IP field (renamed on GitHub) missed
+  // the label pass above, so plan their labels now.
+  const attachedByIp = attachIssuesByIp({boardItems, items});
+  for (const work of planLabelWork({issueLabelsByNumber, items: attachedByIp})) {
+    labelWork.push(work);
+    actions.push(`label #${work.number} += ${work.labels.join(", ")}`);
+  }
   const boardByIssue = new Map(
-    boardItems.filter((item) => item.issueNumber !== null).map((item) => [item.issueNumber as number, item])
+    boardItems
+      .filter((item) => item.issueNumber !== null)
+      .map((item) => [item.issueNumber as number, item])
   );
 
   const itemPlan = planItemSync({
     boardItems,
-    createMissingIssues: values["create-missing-issues"],
+    createMissingIssues: createIssues,
     items,
   });
   actions.push(...itemPlan.actions);
@@ -860,7 +968,9 @@ export const main = async (): Promise<void> => {
     return;
   }
   if (actions.length === 0) {
-    console.info("\nNo apply actions. Extra board items and board-ahead Status stay until a human updates the seed.");
+    console.info(
+      "\nNo apply actions. Extra board items and board-ahead Status stay until a human updates the seed."
+    );
     return;
   }
 
@@ -920,7 +1030,7 @@ export const main = async (): Promise<void> => {
     [...boardByIssue.entries()].map(([number, item]) => [number, item.id])
   );
 
-  if (values["create-missing-issues"]) {
+  if (createIssues) {
     for (const item of items) {
       if (item.issueNumber !== null || item.body === null) {
         continue;
@@ -954,7 +1064,12 @@ export const main = async (): Promise<void> => {
         token,
         variables: {number, owner: values.owner, repo: values.repo},
       });
-      issuesById.set(number, {id: node.repository.issue.id, labels: item.labels, number, title: item.title});
+      issuesById.set(number, {
+        id: node.repository.issue.id,
+        labels: item.labels,
+        number,
+        title: item.title,
+      });
       for (const [field, value] of Object.entries({
         Area: item.area,
         Impact: item.impact,
@@ -974,7 +1089,9 @@ export const main = async (): Promise<void> => {
     }
     const issue = issuesById.get(item.issueNumber);
     if (issue === undefined) {
-      console.warn(`Issue #${item.issueNumber} not found in ${values.owner}/${values.repo}; skipping`);
+      console.warn(
+        `Issue #${item.issueNumber} not found in ${values.owner}/${values.repo}; skipping`
+      );
       continue;
     }
     const added = await graphql<{addProjectV2ItemById: {item: {id: string}}}>({
@@ -999,7 +1116,9 @@ export const main = async (): Promise<void> => {
     if (field.dataType === "SINGLE_SELECT") {
       const option = field.options.find((candidate) => candidate.name === entry.value);
       if (option === undefined) {
-        console.warn(`Option "${entry.value}" missing on field ${field.name}; skipping #${entry.itemIssue}`);
+        console.warn(
+          `Option "${entry.value}" missing on field ${field.name}; skipping #${entry.itemIssue}`
+        );
         continue;
       }
       value = {singleSelectOptionId: option.id};

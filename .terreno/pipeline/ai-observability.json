@@ -1,0 +1,57 @@
+{
+  "v": 2,
+  "ip": "ai-observability",
+  "stage": "roast",
+  "attempt": 1,
+  "branch": "cursor/ai-observability-ip-64ca",
+  "task": "1.7",
+  "sha": "e7bba47774c334c7a2f5631cdaf3a23ba1246d3d",
+  "pr": "https://github.com/FlourishHealth/terreno/pull/1196",
+  "skills": [
+    "terreno-3-roast",
+    "update-docs"
+  ],
+  "last": {
+    "v": 2,
+    "stage": "roast",
+    "status": "PASS",
+    "ip": "ai-observability",
+    "task": "1.7",
+    "attempt": 1,
+    "checks": [
+      {
+        "name": "HEAD matches e7bba477",
+        "status": "PASS",
+        "ev": "git rev-parse HEAD → e7bba47774c334c7a2f5631cdaf3a23ba1246d3d"
+      },
+      {
+        "name": "evaluatorStore + evaluators route tests",
+        "status": "PASS",
+        "ev": "cd ai && bun test --preload ./src/tests/bunSetup.ts src/observability/local/evaluatorStore.test.ts src/observability/routes/evaluators.test.ts — 4 pass"
+      },
+      {
+        "name": "observability regression",
+        "status": "PASS",
+        "ev": "cd ai && bun test --preload ./src/tests/bunSetup.ts src/observability/ — 25 pass"
+      },
+      {
+        "name": "biome",
+        "status": "PASS",
+        "ev": "cd ai && bun run lint — exit 0 (3 pre-existing warnings in unrelated test files)"
+      },
+      {
+        "name": "docs match shipped behavior",
+        "status": "PASS",
+        "ev": "docs/how-to/ai-feature-development.md step 4 + docs/reference/ai.md evaluator route table align with evaluatorTemplates.ts, evaluatorStore.ts, evaluators.ts"
+      }
+    ],
+    "next": "pick",
+    "action": "Task 1.7 proven. Pick continues to task 1.8 (Local review queue API)."
+  },
+  "tried": [],
+  "next": {
+    "stage": "pick",
+    "why": "Task 1.7 Roast PASS; next unblocked phase-1 task is 1.8 (blocked only on 1.6+1.7, both now PASS).",
+    "human": false
+  }
+}

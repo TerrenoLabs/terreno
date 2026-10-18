@@ -1,6 +1,6 @@
-import {describe, expect, it, spyOn} from "bun:test";
+import {describe, expect, it} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
-import {Linking} from "react-native";
+import {assert} from "chai";
 
 import {DonutChart} from "./DonutChart";
 import {renderWithTheme} from "./test-utils";
@@ -11,6 +11,78 @@ const POINTS = [
 ];
 
 describe("DonutChart", () => {
+  it("renders center copy and default percent shares in the legend", () => {
+    const {getAllByText, getByTestId, getByText} = renderWithTheme(
+      <DonutChart centerTitle="Cost" centerValue="$1.15K" data={POINTS} testID="chart" />
+    );
+
+    assert.exists(getByText("$1.15K"));
+    assert.exists(getByText("Cost"));
+    assert.exists(getByTestId("chart.center"));
+    assert.exists(getByTestId("chart.center.value"));
+    assert.exists(getByTestId("chart.center.title"));
+    assert.equal(getByTestId("chart.share.0").props.children, "50%");
+    assert.lengthOf(getAllByText("50%"), 2);
+  });
+
+  it("supports custom share formatting and a single 100% slice", () => {
+    const {getByTestId, getByText} = renderWithTheme(
+      <DonutChart
+        centerTitle="Conversions"
+        centerValue="7.00"
+        data={[{label: "Mobile phones", value: 7}]}
+        formatShare={(value, total): string => `${value} of ${total}`}
+        testID="chart"
+      />
+    );
+
+    assert.isNotEmpty(getByTestId("chart.slice.0").props.d);
+    assert.exists(getByText("7 of 7"));
+    assert.exists(getByText("7.00"));
+  });
+
+  it("formats one full slice as 100% and zero totals as 0%", () => {
+    const full = renderWithTheme(
+      <DonutChart data={[{label: "Mobile phones", value: 7}]} testID="full-chart" />
+    );
+    assert.equal(full.getByTestId("full-chart.share.0").props.children, "100%");
+
+    const emptyTotal = renderWithTheme(
+      <DonutChart
+        data={[
+          {label: "A", value: 0},
+          {label: "B", value: -1},
+        ]}
+        testID="zero-chart"
+      />
+    );
+    assert.equal(emptyTotal.getByTestId("zero-chart.share.0").props.children, "0%");
+    assert.equal(emptyTotal.getByTestId("zero-chart.share.1").props.children, "0%");
+  });
+
+  it("renders chart-card header shortcuts and omits them without title", async (): Promise<void> => {
+    let pressCount = 0;
+    const titled = renderWithTheme(
+      <DonutChart
+        data={POINTS}
+        onPeriodPress={(): void => {
+          pressCount += 1;
+        }}
+        periodLabel="Last 30 days"
+        testID="chart"
+        title="Cost by Device"
+      />
+    );
+    assert.exists(titled.getByText("Cost by Device"));
+    assert.exists(titled.getByText("Last 30 days"));
+    fireEvent.press(titled.getByTestId("chart.card.period-clickable"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(pressCount, 1);
+
+    const plain = renderWithTheme(<DonutChart data={POINTS} testID="plain-chart" />);
+    assert.notExists(plain.queryByTestId("plain-chart.card"));
+  });
+
   it("renders one mark testID per slice", () => {
     const {getByTestId, queryByTestId} = renderWithTheme(
       <DonutChart data={POINTS} testID="chart" />
@@ -105,17 +177,13 @@ describe("DonutChart", () => {
     expect(queryByTestId("chart.tooltip")).toBeNull();
   });
 
-  it("does not open URLs from slice legend labels", async () => {
-    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve(true));
+  it("does not open URLs from slice legend labels", () => {
     const {getByText} = renderWithTheme(
       <DonutChart data={[{label: "https://evil.example", value: 10}]} />
     );
 
-    await act(async () => {
-      fireEvent.press(getByText("https://evil.example"));
-    });
-
-    expect(openURLSpy).not.toHaveBeenCalled();
-    openURLSpy.mockRestore();
+    // The suite shares one Linking mock, so a spy on openURL also records calls
+    // from other files. A label is inert when it has no press handler.
+    expect(getByText("https://evil.example").props.onPress).toBeUndefined();
   });
 });

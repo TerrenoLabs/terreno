@@ -19,7 +19,11 @@ name: EAS PR
 # dispatch — not from every PR.
 
 # Disabled during the CircleCI cutover; manual EAS dispatch remains available.
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 permissions:
   contents: read

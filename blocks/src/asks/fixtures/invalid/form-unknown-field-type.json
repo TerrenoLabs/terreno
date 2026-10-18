@@ -1,0 +1,27 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "secret",
+        "type": "password",
+        "label": "Password"
+      },
+      {
+        "id": "name",
+        "label": "Name"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].type",
+      "code": "INVALID_ENUM"
+    },
+    {
+      "path": "fields[1].type",
+      "code": "MISSING_REQUIRED"
+    }
+  ]
+}

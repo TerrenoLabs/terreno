@@ -8,6 +8,7 @@ import {
 import {SocialLoginButton} from "@terreno/ui";
 
 export const SocialLoginButtonConfiguration: DemoConfiguration = {
+  usageExample: "import {SocialLoginButton} from \"@terreno/ui\";\n\n<SocialLoginButton />",
   name: "SocialLoginButton",
   component: SocialLoginButton,
   related: ["LoginScreen", "Button"],

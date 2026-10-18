@@ -9,7 +9,7 @@
   },
   "description": "Terreno lifecycle and app workflows: Grow, Pick/Roast, Brew, Taste, continuous outer loops, backend/API, UI, data, schema, admin, docs, upgrades, deployment, and verification agents.",
   "displayName": "Terreno",
-  "homepage": "https://github.com/FlourishHealth/terreno/blob/master/plugins/README.md",
+  "homepage": "https://github.com/TerrenoLabs/terreno/blob/master/plugins/README.md",
   "keywords": [
     "terreno",
     "planning",
@@ -26,7 +26,7 @@
     }
   },
   "name": "terreno",
-  "repository": "https://github.com/FlourishHealth/terreno",
+  "repository": "https://github.com/TerrenoLabs/terreno",
   "skills": "./skills/",
   "version": "2.12.0"
 }

@@ -1,0 +1,38 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Ship the release to production?",
+    "confirmLabel": "Ship it 🚀",
+    "denyLabel": "Wait ⏳"
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "confirm",
+    "text": "Ship the release to production?",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "approve",
+        "label": "Ship it 🚀",
+        "style": "primary",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": true
+          }
+        }
+      },
+      {
+        "id": "deny",
+        "label": "Wait ⏳",
+        "style": "cancel",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": false
+          }
+        }
+      }
+    ]
+  }
+}

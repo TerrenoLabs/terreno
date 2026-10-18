@@ -1,7 +1,7 @@
 # Repository settings (maintainers)
 
 Some GitHub settings cannot be committed to the repo. Enable these manually in
-the [Terreno repository settings](https://github.com/FlourishHealth/terreno/settings).
+the [Terreno repository settings](https://github.com/TerrenoLabs/terreno/settings).
 
 ## Discussions
 

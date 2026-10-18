@@ -1,4 +1,5 @@
 import {beforeEach, describe, expect, it} from "bun:test";
+import {assert} from "chai";
 import type express from "express";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
@@ -422,6 +423,49 @@ describe("array operation errors", () => {
     addAuthRoutes(app, UserModel as unknown as AuthUserModel);
   });
 
+  it("rejects array operations on non-array fields with a structured error", async () => {
+    app.use(
+      "/food",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [Permissions.IsAdmin],
+          delete: [Permissions.IsAdmin],
+          list: [Permissions.IsAdmin],
+          read: [Permissions.IsAdmin],
+          update: [Permissions.IsAdmin],
+        },
+      })
+    );
+    agent = await authAsUser(app, "admin");
+
+    const res = await agent.post(`/food/${apple._id}/name`).send({name: "Pear"}).expect(400);
+    assert.equal(res.body.code, "array-operation-field-not-array");
+    assert.equal(res.body.title, "Array operation field is not an array");
+  });
+
+  it("runs preUpdate before rejecting a non-array field", async () => {
+    app.use(
+      "/food",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [Permissions.IsAdmin],
+          delete: [Permissions.IsAdmin],
+          list: [Permissions.IsAdmin],
+          read: [Permissions.IsAdmin],
+          update: [Permissions.IsAdmin],
+        },
+        preUpdate: () => null,
+      })
+    );
+    agent = await authAsUser(app, "admin");
+
+    const res = await agent.post(`/food/${apple._id}/name`).send({name: "Pear"}).expect(403);
+    assert.equal(res.body.code, "update-not-allowed");
+    assert.equal(res.body.title, "Update not allowed");
+  });
+
   it("array operation preUpdate returning undefined throws error", async () => {
     app.use(
       "/food",
@@ -535,6 +579,44 @@ describe("array operation errors", () => {
     const res = await agent.post(`/food/${apple._id}/tags`).send({tags: "organic"}).expect(405);
     expect(res.body.title).toBe("Access denied");
     expect(res.body.detail).toContain("Access to PATCH");
+  });
+
+  it("lets a later route handle non-ObjectId paths under the same prefix", async () => {
+    app.use(
+      "/ai",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [],
+          delete: [],
+          list: [],
+          read: [],
+          update: [],
+        },
+      })
+    );
+    app.post("/ai/observability/evaluators", (_req, res) => {
+      res.status(201).json({data: {created: true}});
+    });
+    app.post("/ai/observability/experiments", (_req, res) => {
+      res.status(201).json({data: {started: true}});
+    });
+    _server = supertest(app);
+
+    const created = await _server
+      .post("/ai/observability/evaluators")
+      .send({name: "toxicity", target: "full trace"})
+      .expect(201);
+    expect(created.body.data.created).toBe(true);
+
+    const started = await _server
+      .post("/ai/observability/experiments")
+      .send({name: "Example Experiment"})
+      .expect(201);
+    expect(started.body.data.started).toBe(true);
+
+    const denied = await _server.post(`/ai/${apple._id}/tags`).send({tags: "organic"}).expect(405);
+    expect(denied.body.code).toBe("array-update-not-allowed");
   });
 
   it("array operation on non-existent document returns 404", async () => {

@@ -19,6 +19,8 @@ export const appStatements = {
   adminScreen: ["showcase", "syncLab"],
   adminTodo: ADMIN_MODEL_ACCESS,
   adminUser: ADMIN_MODEL_ACCESS,
+  // Sign off clinic.intakeSummary approvals (granted by the clinician role).
+  clinicalIntake: ["signoff"],
   todo: ["create", "read", "update", "delete", "list"],
 } as const;
 

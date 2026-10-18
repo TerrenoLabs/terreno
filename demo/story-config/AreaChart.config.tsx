@@ -3,6 +3,7 @@ import {AreaChartDefaultStory, AreaChartDemo, AreaChartEmptyStory} from "@storie
 import {AreaChart} from "@terreno/ui";
 
 export const AreaChartConfiguration: DemoConfiguration = {
+  usageExample: "import {AreaChart} from \"@terreno/ui\";\n\n<AreaChart />",
   name: "AreaChart",
   component: AreaChart,
   related: ["LineChart", "BarChart", "DashboardGrid"],

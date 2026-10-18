@@ -11,7 +11,7 @@ import {MobileIcon} from "./icons/MobileIcon";
 import {OfflineIcon} from "./icons/OfflineIcon";
 import {OnlineIcon} from "./icons/OnlineIcon";
 import {OutOfOfficeIcon} from "./icons/OutOfficeIcon";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {useTheme} from "./Theme";
 import {Tooltip} from "./Tooltip";
 
@@ -289,7 +289,7 @@ export const Avatar: FC<AvatarProps> = ({
           width: widthPlusPadding,
         }}
       >
-        <Tooltip idealPosition="top" text={isMobileDevice() ? undefined : status}>
+        <Tooltip idealPosition="top" text={isNarrowViewport() ? undefined : status}>
           {avatar}
         </Tooltip>
         {renderStatusIcon()}

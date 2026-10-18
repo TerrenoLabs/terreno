@@ -13,6 +13,7 @@ const DEPENDENCY_INPUTS = [
   "announcements/src",
   "api/src",
   "api-health/src",
+  "blocks/src",
   "comms/src",
   "create-terreno-app/src",
   "demo",

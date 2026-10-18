@@ -39,10 +39,10 @@ Pass `liveUpdates: {socketIoServer: io}` to broadcast flag-key changes over Sock
 
 ## Documentation
 
-Full API reference: [docs/reference/feature-flags.md](https://github.com/flourishhealth/terreno/blob/master/docs/reference/feature-flags.md)
+Full API reference: [docs/reference/feature-flags.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/feature-flags.md)
 
-How-to: [Add feature flags](https://github.com/flourishhealth/terreno/blob/master/docs/how-to/add-feature-flags.md)
+How-to: [Add feature flags](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/add-feature-flags.md)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/flourishhealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/flourishhealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.

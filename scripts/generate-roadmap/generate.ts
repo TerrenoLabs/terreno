@@ -1,8 +1,8 @@
-import {writeFileSync} from "node:fs";
+import {existsSync, readdirSync, readFileSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 import {DateTime} from "luxon";
 
-import {type RoadmapItem, renderRoadmapMarkdown} from "./lib";
+import {type RoadmapItem, renderRoadmapMarkdown, roadmapContentIsUnchanged} from "./lib";
 
 const PROJECT_ITEMS_QUERY = `
 query($owner: String!, $projectNumber: Int!, $cursor: String) {
@@ -184,7 +184,7 @@ export const main = async (): Promise<void> => {
   const missing: string[] = [];
   const token = getRequiredEnvironmentVariable("GITHUB_TOKEN");
   const projectNumberRaw = getRequiredEnvironmentVariable("TERRENO_PROJECT_NUMBER");
-  const owner = getRequiredEnvironmentVariable("GITHUB_REPOSITORY_OWNER") || "FlourishHealth";
+  const owner = getRequiredEnvironmentVariable("GITHUB_REPOSITORY_OWNER") || "TerrenoLabs";
 
   if (token === "") {
     missing.push("GITHUB_TOKEN");
@@ -194,13 +194,17 @@ export const main = async (): Promise<void> => {
   }
 
   if (missing.length > 0) {
-    console.error(`generate-roadmap: missing required environment variables: ${missing.join(", ")}`);
+    console.error(
+      `generate-roadmap: missing required environment variables: ${missing.join(", ")}`
+    );
     process.exit(1);
   }
 
   const projectNumber = Number.parseInt(projectNumberRaw, 10);
   if (Number.isNaN(projectNumber)) {
-    console.error(`generate-roadmap: TERRENO_PROJECT_NUMBER must be an integer, got "${projectNumberRaw}"`);
+    console.error(
+      `generate-roadmap: TERRENO_PROJECT_NUMBER must be an integer, got "${projectNumberRaw}"`
+    );
     process.exit(1);
   }
 
@@ -217,13 +221,33 @@ export const main = async (): Promise<void> => {
     process.exit(1);
   }
 
+  const tasksDirectory = join(process.cwd(), "docs/tasks");
+  const taskSlugs = new Set(
+    existsSync(tasksDirectory)
+      ? readdirSync(tasksDirectory)
+          .filter((file) => file.endsWith(".md") && file !== "README.md")
+          .map((file) => file.slice(0, -".md".length))
+      : []
+  );
+
   const markdown = renderRoadmapMarkdown({
     generatedAtIso: DateTime.utc().toISO() ?? DateTime.utc().toISODate(),
     items,
     projectUrl,
+    taskSlugs,
   });
 
   const outputPath = join(process.cwd(), "ROADMAP.md");
+  if (existsSync(outputPath)) {
+    const existing = readFileSync(outputPath, "utf8");
+    if (roadmapContentIsUnchanged({existing, next: markdown})) {
+      console.info(
+        "ROADMAP.md content is unchanged. Keeping the existing timestamp so CI does not open a pull request."
+      );
+      return;
+    }
+  }
+
   writeFileSync(outputPath, markdown, "utf8");
   console.info(`Wrote ${outputPath} (${items.length} project items)`);
 };

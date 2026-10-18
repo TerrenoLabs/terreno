@@ -45,7 +45,11 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
    invocation: repository-prescribed tests, integration/system behavior, lint/type/build
    checks, runtime/API/database probes, regression reproductions, or real UI interaction.
    Do not spawn two unconstrained reviewers. Prefer named commands here over a second
-   general-purpose child that rediscovers the repo.
+   general-purpose child that rediscovers the repo. Run the gate CI will run on these
+   files, not only this task's test file. Use the root `prepush` package script when
+   present, since it scopes itself to changed files. Otherwise run each touched
+   package's lint, typecheck, and the same test command CI runs, including coverage
+   thresholds. A test that passes alone but fails in the package suite is `FAIL`.
 5. **Exercise changed behavior.** For UI-facing work in **this task's file list**, spawn
    at most one specialized UI/runtime verifier with the same briefing. Interact with the
    actual changed workflow and capture required screenshots/video/logs. App launch alone

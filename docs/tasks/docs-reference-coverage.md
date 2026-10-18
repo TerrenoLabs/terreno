@@ -8,7 +8,7 @@ See: [`docs/implementationPlans/docs-reference-coverage.md`](../implementationPl
 
 - **Do not write documentation from scratch.** The content already exists in `.cursor/rules/*/00-*.mdc` files. Your job is to convert prescriptive agent rules into descriptive public reference prose, verify every claim against source, and remove anything internal.
 - Verify every exported symbol you document by grepping the package's `src/index.ts`. If a rule file documents something that no longer exists, drop it and note the drift in the PR body.
-- READMEs are rendered on npmjs.com where relative links break. Use absolute `https://github.com/flourishhealth/terreno/...` or docs-site URLs in every README.
+- READMEs are rendered on npmjs.com where relative links break. Use absolute `https://github.com/TerrenoLabs/terreno/...` or docs-site URLs in every README.
 - Match the section ordering of `docs/reference/api.md` for new reference pages. Read it first.
 - Run `bun run website:build` before each commit that adds or moves a docs page.
 

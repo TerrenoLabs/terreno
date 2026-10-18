@@ -1,0 +1,32 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "title",
+        "type": "text",
+        "label": "Title",
+        "minLength": 20,
+        "maxLength": 10
+      },
+      {
+        "id": "seats",
+        "type": "number",
+        "label": "Seats",
+        "min": 10,
+        "max": 1
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].minLength",
+      "code": "RANGE_INVALID"
+    },
+    {
+      "path": "fields[1].min",
+      "code": "RANGE_INVALID"
+    }
+  ]
+}

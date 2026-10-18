@@ -3,6 +3,7 @@ import {canOpenAdminPage, selectBetterAuthUserId, useFeatureFlags} from "@terren
 import {
   Badge,
   Banner,
+  BooleanField,
   Box,
   Button,
   Card,
@@ -13,12 +14,12 @@ import {
   Text,
   TextField,
   useStoredState,
-  useTheme,
 } from "@terreno/ui";
 import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {useSelector} from "react-redux";
+import {useThemePreference} from "@/contexts/ThemePreferenceContext";
 import {logout, useAppDispatch} from "@/store/index";
 import {
   terrenoApi,
@@ -37,16 +38,18 @@ const ProfileScreen: React.FC = () => {
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
   const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
-  const {setPrimitives, resetTheme} = useTheme();
+  const {
+    colorSchemeSetting,
+    isLoading: isThemePreferenceLoading,
+    setColorScheme,
+  } = useThemePreference();
 
   const {
     flags,
-    getFlag,
     isLoading: isFeatureFlagsLoading,
     error: featureFlagsError,
   } = useFeatureFlags(terrenoApi, {skip: !userId, userId});
   const darkModeFlagDetails = useBooleanFlagDetails("dark-mode-toggle", false);
-  const showDarkModeToggle = getFlag("dark-mode-toggle");
   const featureFlagEntries = useMemo(
     (): Array<{key: string; value: boolean | string | null}> =>
       Object.keys(flags)
@@ -354,8 +357,8 @@ const ProfileScreen: React.FC = () => {
           <Box gap={4}>
             <Heading size="lg">Gemini API Key</Heading>
             <Text color="secondaryLight" size="sm">
-              Paste your Gemini API key to enable AI features. The key is stored locally on your
-              device.
+              Paste your Gemini API key to enable AI chat and the admin prompt playground. The key
+              is stored locally on your device.
             </Text>
             <TextField
               onChange={setApiKeyInput}
@@ -390,36 +393,20 @@ const ProfileScreen: React.FC = () => {
           </Box>
         </Card>
 
-        {/* Dark mode toggle — gated by "dark-mode-toggle" feature flag */}
-        {showDarkModeToggle && (
-          <Card marginBottom={6} testID="profile-dark-mode-card">
-            <Box gap={4}>
-              <Heading size="lg">Appearance</Heading>
-              <Box direction="row" gap={3}>
-                <Button
-                  iconName="sun"
-                  onClick={() => resetTheme()}
-                  text="Light"
-                  variant="outline"
-                />
-                <Button
-                  iconName="moon"
-                  onClick={() =>
-                    setPrimitives({
-                      neutral000: "#1a1a2e",
-                      neutral100: "#16213e",
-                      neutral200: "#0f3460",
-                      neutral800: "#e0e0e0",
-                      neutral900: "#ffffff",
-                    })
-                  }
-                  text="Dark"
-                  variant="outline"
-                />
-              </Box>
-            </Box>
-          </Card>
-        )}
+        <Card marginBottom={6} testID="profile-dark-mode-card">
+          <Box gap={4}>
+            <Heading size="lg">Appearance</Heading>
+            <BooleanField
+              disabled={isThemePreferenceLoading}
+              onChange={(isDark): void => {
+                void setColorScheme(isDark ? "dark" : "light");
+              }}
+              testID="profile-dark-mode-toggle"
+              title="Dark mode"
+              value={colorSchemeSetting === "dark"}
+            />
+          </Box>
+        </Card>
 
         <Card marginBottom={6} testID="profile-feature-flags-card">
           <Box gap={3}>

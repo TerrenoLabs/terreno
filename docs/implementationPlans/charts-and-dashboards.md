@@ -4,7 +4,7 @@
 **Branch:** `cursor/charts-and-dashboards-2bc3`  
 **Owner:** —  
 **Created:** 2026-09-10  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1175 (this feature **closes** that issue; implementation PRs use `Fixes #1175`)  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1175 (this feature **closes** that issue; implementation PRs use `Fixes #1175`)  
 **Task list:** [charts-and-dashboards.md](../tasks/charts-and-dashboards.md)  
 **Depends on:** —  
 **RTK deprecation flag:** None  
@@ -194,8 +194,9 @@ None.
 
 ## Not Included / Future Work
 
-- Composition grammar (Phase 6) — recorded Grow decisions; implement on a follow-up Pick.
-- Multi-series cartesian beyond `dataKey` / `stackId` once the grammar ships.
+- Ops-dashboard parity (scorecards, comparison sparklines, additive multi-series, donut centers, spanning grid, table chrome) — [`dashboard-chart-parity.md`](dashboard-chart-parity.md).
+- Composition grammar (Phase 6) — recorded Grow decisions; implement on a follow-up Pick. Not required for the How’s it going dashboard.
+- Multi-series cartesian via additive `series` lands in `dashboard-chart-parity`; grammar `dataKey` / `stackId` remains later.
 - Wiring `CommsDashboardScreen` charts to the stats endpoint.
 - Example-frontend dashboard.
 - Zoom/pan.

@@ -1,6 +1,6 @@
 # SyncDB Phase C Design (syncdb-2)
 
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1081
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1081
 Design authority doc for Phase C (server protocol correctness). Hand this verbatim to a
 Sonnet implementer. Read alongside `terreno-syncdb-2.md` (INV-1..4, C1-C8). C5 (mutation
 ledger lease) is owned/implemented elsewhere — this doc designs *around* it and never

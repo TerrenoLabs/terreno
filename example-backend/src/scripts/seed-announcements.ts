@@ -13,9 +13,9 @@ export const PATIENT_BANNER_ANNOUNCEMENT_TITLE = "Example patient care tip";
 
 const ANNOUNCEMENTS_DOCS_URL = "https://terreno-docs.netlify.app/docs/reference/announcements";
 const ANNOUNCEMENTS_OVERVIEW_IMAGE_URL =
-  "https://raw.githubusercontent.com/FlourishHealth/terreno/939dd503/website/static/img/announcements/admin-overview.png";
+  "https://raw.githubusercontent.com/TerrenoLabs/terreno/939dd503/website/static/img/announcements/admin-overview.png";
 const ANNOUNCEMENTS_PLATFORMS_IMAGE_URL =
-  "https://raw.githubusercontent.com/FlourishHealth/terreno/939dd503/website/static/img/announcements/admin-editor-platforms.png";
+  "https://raw.githubusercontent.com/TerrenoLabs/terreno/939dd503/website/static/img/announcements/admin-editor-platforms.png";
 const ANNOUNCEMENTS_VIDEO_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 const STAFF_MODAL_BODY = `## Announcements are ready
 

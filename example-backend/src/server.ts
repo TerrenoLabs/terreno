@@ -1,7 +1,14 @@
 import * as Sentry from "@sentry/bun";
 import {AdminApp, DocumentStorageApp} from "@terreno/admin-backend";
 import {AdminSpaServeApp} from "@terreno/admin-spa";
-import {AIAdminApp, LangfuseApp} from "@terreno/ai";
+import {
+  AIAdminApp,
+  AIService,
+  createLocalObservabilityPlugin,
+  LangfuseApp,
+  ObservabilityApp,
+} from "@terreno/ai";
+import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
   AuditApp,
@@ -46,10 +53,18 @@ import mongoose from "mongoose";
 import twilio from "twilio";
 import {access} from "./access";
 import {adminScripts} from "./adminScripts";
-import {addAiRoutes, aiModelsRouter} from "./api/ai";
+import {
+  addAiRoutes,
+  aiModelsRouter,
+  createModelFromKey,
+  createServerModel,
+  getAiService,
+} from "./api/ai";
 import {commsDevRouter} from "./api/commsDev";
+import {fileUploadsEnabledForRequest} from "./api/fileUploads";
 import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
 import {addDevNotificationRoutes} from "./api/notificationsDev";
+import {photoLibraryRouter} from "./api/photoLibrary";
 import {projectOrgContextPlugin, projectRouter} from "./api/projects";
 import {settingsRouter} from "./api/settings";
 import {todoRouter} from "./api/todos";
@@ -59,6 +74,8 @@ import {bindPortEarly, closeEarlyListenHolder} from "./bindPortEarly";
 import {isDeployed, isWebsocketService, WEBSOCKETS_DEBUG} from "./conf";
 import {consentDefinitions} from "./consentDefinitions";
 import {exampleAdminHome} from "./exampleAdminConfig";
+import {exampleFeatureFlagSegments} from "./featureFlagSegments";
+import {openExampleHarness, startExampleHarness} from "./harness/exampleHarness";
 import {createExampleJobsApp} from "./jobs/createExampleJobsApp";
 import {shouldStartJobsWorkerInApiProcess} from "./jobs/jobsStartWorker";
 import {registerJobsWorkerShutdown} from "./jobs/shutdownJobsWorker";
@@ -74,6 +91,7 @@ import {resolveTwilioVerifyEnvConfig} from "./twilioVerifyEnv";
 import type {UserDocument} from "./types/models/userTypes";
 import {buildBetterAuthConfig, getAuthProvider, getWebOrigins} from "./utils/betterAuthConfig";
 import {connectToMongoDB} from "./utils/database";
+import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
 import {createExampleInboundWebhooks} from "./webhooksExample";
 import {io} from "./websockets";
 
@@ -230,6 +248,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       .register(settingsRouter)
       .register(createOpenApiAwareRouteRegistration(addDevNotificationRoutes))
       .register(todoRouter)
+      .register(photoLibraryRouter)
       .register(projectOrgContextPlugin)
       .register(projectRouter)
       .register(usersRouter);
@@ -401,18 +420,29 @@ export const start = async (skipListen = false): Promise<express.Application> =>
           liveUpdates: {
             socketIoServer: () => io,
           },
-          segments: {
-            "admin-users": (user: unknown) => (user as {admin?: boolean}).admin === true,
-            "has-name": (user: unknown) => Boolean((user as {name?: string}).name),
-            "oauth-users": (user: unknown) =>
-              Boolean((user as {oauthProvider?: string}).oauthProvider),
-          },
+          segments: exampleFeatureFlagSegments,
         })
       )
+      // Cloud Run sits behind one Google Front End hop. Trusting it makes req.ip the real
+      // client address so the per-IP upload limit below cannot be bypassed or shared.
+      .register({
+        register: (app: express.Application): void => {
+          if (isDeployed) {
+            app.set("trust proxy", 1);
+          }
+        },
+      })
       .register(
         new DocumentStorageApp({
+          // Public demo: any signed-in user gets a private `users/<id>/` folder.
+          access: "authenticated",
           basePath: "/documents",
           bucketName: process.env.GCS_BUCKET ?? "",
+          fileUploadsEnabled: fileUploadsEnabledForRequest,
+          // PR previews share the bucket; a per-PR prefix keeps their files apart.
+          folderPrefix: process.env.GCS_FOLDER_PREFIX,
+          // One upload per IP per minute. Mongo store so the limit holds across instances.
+          uploadRateLimit: {max: 1, store: "mongo", windowMs: 60_000},
         })
       )
       .register(new AuditApp())
@@ -421,8 +451,35 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     const exampleJobsApp = createExampleJobsApp({accessControl: access});
     terraApp.register(exampleJobsApp);
 
-    terraApp
+    // Before AdminApp, so HarnessApp's approvals inbox joins the admin sidebar. Skipped
+    // (with a warning) when Mongo is not a replica set, as in the unit tests.
+    const exampleHarness = await openExampleHarness();
+    if (exampleHarness) {
+      terraApp.register(new HarnessApp({harness: exampleHarness}));
+    }
 
+    terraApp
+      .register(
+        new ObservabilityApp({
+          accessControl: access,
+          aiService: getAiService(),
+          aiServiceFactory: (modelId) => {
+            const model = createServerModel(modelId);
+            if (!model) {
+              return undefined;
+            }
+            return new AIService({model});
+          },
+          plugins: [createLocalObservabilityPlugin()],
+          priceMap: parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON),
+          requestAiServiceFactory: ({apiKey, modelId}) => {
+            if (!apiKey) {
+              return undefined;
+            }
+            return new AIService({model: createModelFromKey(apiKey, modelId)});
+          },
+        })
+      )
       .register(
         new AdminApp({
           accessControl: access,
@@ -467,6 +524,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
               userOrganizationIds.includes(organizationId)
             );
           },
+          uploadToken: process.env.ANNOUNCEMENTS_UPLOAD_TOKEN,
         })
       );
 
@@ -535,6 +593,10 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       logger.info(
         "[jobs] API-process worker disabled (JOBS_START_WORKER=false); use bun run jobs:worker if needed"
       );
+    }
+
+    if (!skipListen) {
+      await startExampleHarness();
     }
 
     // Log total boot time

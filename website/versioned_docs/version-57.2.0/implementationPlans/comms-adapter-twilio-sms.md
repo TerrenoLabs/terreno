@@ -1,7 +1,7 @@
 # Implementation Plan: Comms adapter — Twilio SMS
 
 **Status:** Draft
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1020
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1020
 **Priority:** Medium
 **Effort:** Small batch
 **Owner:** unassigned

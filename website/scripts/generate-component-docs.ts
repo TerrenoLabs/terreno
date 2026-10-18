@@ -156,7 +156,7 @@ ${escapeMdx(entry.description.replace(/\s+/g, " ").trim())}
 **Package:** \`@terreno/ui\`  
 **Categories:** ${entry.category.join(", ")}  
 **Props interface:** \`${entry.interfaceName}\`  
-**Story source:** [\`${storyPath}\`](https://github.com/flourishhealth/terreno/blob/master/${storyPath})
+**Story source:** [\`${storyPath}\`](https://github.com/TerrenoLabs/terreno/blob/master/${storyPath})
 
 ## Live demo
 

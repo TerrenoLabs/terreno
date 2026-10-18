@@ -51,8 +51,8 @@ Send from routes or jobs with `getCommsService()`. Console providers log counts 
 
 ## Documentation
 
-Full API reference: [docs/reference/comms.md](https://github.com/flourishhealth/terreno/blob/master/docs/reference/comms.md)
+Full API reference: [docs/reference/comms.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/comms.md)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/flourishhealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/flourishhealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.

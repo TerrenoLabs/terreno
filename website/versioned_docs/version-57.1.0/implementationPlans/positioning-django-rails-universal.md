@@ -1,7 +1,7 @@
 # Implementation Plan: Positioning — "Django/Rails for TypeScript, with Universal Apps"
 
 **Status:** Draft — blocking questions open
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1008
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1008
 **Priority:** High
 **Effort:** Small batch
 **Owner:** unassigned

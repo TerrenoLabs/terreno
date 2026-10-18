@@ -143,6 +143,49 @@ describe("password reset routes", () => {
       .expect(200);
   });
 
+  it("can disable only the legacy POST /resetPassword alias", async () => {
+    const noLegacyAliasApp = new TerrenoApp({
+      authOptions: {
+        legacyResetPasswordRoute: false,
+        publicAppUrl: "https://app.example.com",
+      },
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+
+    await supertest(noLegacyAliasApp).post("/resetPassword").send({}).expect(404);
+    await supertest(noLegacyAliasApp).post("/auth/resetPassword").send({}).expect(400);
+  });
+
+  it("can disable all password reset routes", async () => {
+    const noPasswordResetApp = new TerrenoApp({
+      authOptions: {
+        passwordReset: false,
+        publicAppUrl: "https://app.example.com",
+      },
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+
+    await supertest(noPasswordResetApp).post("/auth/forgotPassword").send({}).expect(404);
+    await supertest(noPasswordResetApp).post("/auth/resetPassword").send({}).expect(404);
+    await supertest(noPasswordResetApp).post("/resetPassword").send({}).expect(404);
+  });
+
+  it("can disable all email verification routes", async () => {
+    const noEmailVerificationApp = new TerrenoApp({
+      authOptions: {
+        emailVerification: false,
+        publicAppUrl: "https://app.example.com",
+      },
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+
+    await supertest(noEmailVerificationApp).post("/auth/sendVerification").send({}).expect(404);
+    await supertest(noEmailVerificationApp).post("/auth/verifyEmail").send({}).expect(404);
+  });
+
   it("syncs a successful JWT reset to Better Auth when a bridge is configured", async () => {
     const synced: Array<{email?: string; password: string}> = [];
     const bridgedApp = new TerrenoApp({

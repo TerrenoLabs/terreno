@@ -147,4 +147,4 @@ Recorded in the planning thread; the IP will not be written until these are answ
 - `admin-backend/src/adminApp.ts`, `mcp-server/src/tools.ts`, `test/src/mongo/mongoServer.ts`
 - [syncdb-codegen.md](syncdb-codegen.md), [comms-abstraction.md](comms-abstraction.md), [positioning-django-rails-universal.md](positioning-django-rails-universal.md), [deploy-to-gcp.md](deploy-to-gcp.md) (GC2 future-Postgres note)
 - Better Auth SQLite adapters: https://better-auth.com/docs/adapters/sqlite ; Drizzle adapter: https://better-auth.com/docs/adapters/drizzle
-- Prior art: [PR #145](https://github.com/FlourishHealth/terreno/pull/145) (closed) — an earlier SQL-adapter plan proposing Bun.SQL multi-dialect support and JOIN-based population; superseded by this IP's adapter seam + batched population design
+- Prior art: [PR #145](https://github.com/TerrenoLabs/terreno/pull/145) (closed) — an earlier SQL-adapter plan proposing Bun.SQL multi-dialect support and JOIN-based population; superseded by this IP's adapter seam + batched population design

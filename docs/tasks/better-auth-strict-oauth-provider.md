@@ -2,7 +2,7 @@
 
 **Feature profile:** true  
 **IP:** [better-auth-strict-oauth-provider.md](../implementationPlans/better-auth-strict-oauth-provider.md)  
-**Issue:** https://github.com/FlourishHealth/terreno/issues/1218
+**Issue:** https://github.com/TerrenoLabs/terreno/issues/1218
 
 ## Durable contract
 

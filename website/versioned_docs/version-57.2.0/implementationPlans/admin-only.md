@@ -2,7 +2,7 @@
 
 **Status:** Complete
 **Closed:** 2026-08-20 — Shipped as `@terreno/admin-spa` (`AdminSpaServeApp`, pre-built Expo web export, Better Auth same-origin). See `admin-spa/` and `admin-only-research.md`.
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1075
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1075
 **Branch:** `admin-only`
 **Owner:** Josh Gachnang
 **Created:** 2026-05-11

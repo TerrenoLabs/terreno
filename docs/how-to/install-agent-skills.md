@@ -3,8 +3,8 @@
 Install Terreno's agent skills into another repo or agent with the skills CLI.
 
 ```bash
-npx skills add FlourishHealth/terreno
-npx skills add FlourishHealth/terreno --skill terreno-1-grow
+npx skills add TerrenoLabs/terreno
+npx skills add TerrenoLabs/terreno --skill terreno-1-grow
 ```
 
 That copies the committed `skills/` tree: lifecycle stages (Grow, Pick, Roast, Brew,
@@ -30,36 +30,36 @@ goal running and heartbeats over the PRs it opens. See the
 
 ### Cursor
 
-Install `terreno-planning` from [`.cursor-plugin/marketplace.json`](https://github.com/FlourishHealth/terreno/blob/master/.cursor-plugin/marketplace.json), then invoke `/terreno-1-grow`.
+Install `terreno-planning` from [`.cursor-plugin/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.cursor-plugin/marketplace.json), then invoke `/terreno-1-grow`.
 
 ### Codex
 
 ```text
-codex plugin marketplace add FlourishHealth/terreno
+codex plugin marketplace add TerrenoLabs/terreno
 codex plugin install terreno-planning --source terreno-plugins
 codex plugin install terreno-scan --source terreno-plugins
 $terreno-1-grow
 ```
 
-Marketplace: [`.agents/plugins/marketplace.json`](https://github.com/FlourishHealth/terreno/blob/master/.agents/plugins/marketplace.json).
+Marketplace: [`.agents/plugins/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.agents/plugins/marketplace.json).
 Codex installs the canonical plugin at
-[`plugins/terreno-planning/`](https://github.com/FlourishHealth/terreno/tree/master/plugins/terreno-planning)
+[`plugins/terreno-planning/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-planning)
 (`.codex-plugin/plugin.json`). A clone of this repo already exposes that marketplace.
 
 ### Claude Code
 
 ```text
-/plugin marketplace add FlourishHealth/terreno
+/plugin marketplace add TerrenoLabs/terreno
 /plugin install terreno@terreno-plugins
 /plugin install terreno-scan@terreno-plugins
 /terreno:1-grow
 ```
 
-Marketplace: [`.claude-plugin/marketplace.json`](https://github.com/FlourishHealth/terreno/blob/master/.claude-plugin/marketplace.json).
+Marketplace: [`.claude-plugin/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.claude-plugin/marketplace.json).
 Claude Code stages, app skills, and agents come from the generated copy at
-[`plugins/terreno-claude/`](https://github.com/FlourishHealth/terreno/tree/master/plugins/terreno-claude);
+[`plugins/terreno-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-claude);
 scan stages come from
-[`plugins/terreno-scan-claude/`](https://github.com/FlourishHealth/terreno/tree/master/plugins/terreno-scan-claude).
+[`plugins/terreno-scan-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-scan-claude).
 
 ## What you get
 
@@ -70,7 +70,7 @@ scan stages come from
 | Docs | `update-docs`, `update-agent-docs`, architecture skills |
 | GitHub | issues, review, UI verification, release, dependency updates |
 | Code scans | `terreno-scan-1-aim` … `terreno-scan-5-track`, `terreno-scan-campaign`, `terreno-scan-loop` |
-| Expo and native | `track-upstream-expo`, `upgrading-expo`, deployment / EAS skills |
+| Expo and native | `track-upstream-expo`, `upgrading-expo`, `store-assets`, deployment / EAS skills |
 | Plugin agents | `pre-commit`, `ui-verifier` |
 
 `skills.sh.json` at the repo root groups those names on [skills.sh](https://skills.sh).
@@ -101,6 +101,13 @@ bun run check:lifecycle-skills
 
 Do not hand-edit `skills/`.
 
+A `.rulesync/skills/` skill that links a lifecycle reference as
+`references/<name>.md` (for example `references/push-ownership.md`) gets its own copy of
+`plugins/terreno-planning/references/<name>.md`, so the link still resolves once the skill
+is installed elsewhere. `skills:sync` rewrites those copies and `skills:check` fails when
+one drifts. Edit the plugin reference, never the copy, then run `bun run skills:sync` and
+`bun run rules`.
+
 ## Keep native hooks in sync
 
 Repository-level hooks are canonical in `.rulesync/hooks.json`; shared commands live in
@@ -114,4 +121,4 @@ an agent finishes.
 Skills read architecture docs before changing code. After a user-visible or architectural
 change, update `docs/` in the same slice using `update-docs`. See
 [lifecycle plugin](../reference/lifecycle-plugin.md) and the
-[documentation contract](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md).
+[documentation contract](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md).

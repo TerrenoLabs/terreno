@@ -15,13 +15,13 @@ required until CircleCI twins are trusted.
 
 ## Project setup (maintainers)
 
-1. Link `FlourishHealth/terreno` in CircleCI (GitHub App).
+1. Link `TerrenoLabs/terreno` in CircleCI (GitHub App).
 2. Default branch: `master`.
 3. Enable **dynamic config** / setup workflows for the project (required for
    `.circleci/config.yml` `setup: true`).
 4. Build forked PRs if you want DCO + rulesync on forks.
 
-Org/project slug: _(record after Phase 0.1 — e.g. `flourishhealth/terreno`)_.
+Org/project slug: _(record after Phase 0.1 — e.g. `TerrenoLabs/terreno`)_.
 
 ## Config layout
 

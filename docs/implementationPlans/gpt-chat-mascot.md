@@ -1,6 +1,7 @@
 # GPTChat optional mascot
 
 **Status:** Complete  
+**Roadmap:** Area=`ui`, Target=`Released`, Impact=`Feature`  
 **Branch:** `cursor/gpt-chat-mascot-d39f`  
 **Owner:** cloud agent  
 **Created:** 2026-09-15

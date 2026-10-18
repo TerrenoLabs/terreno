@@ -37,10 +37,10 @@ Optional flags:
 | `appName` (positional) | yes | — kebab-case directory and package name (`^[a-z][a-z0-9-]*$`) |
 | `--display-name` | unless `--yes` | derived from `appName` when `--yes` |
 | `--description` | no | empty |
-| `--mcp-server-url` | no | `https://mcp.terreno.flourish.health` |
+| `--mcp-server-url` | no | `https://mcp.terreno.app` |
 | `--yes` | no | off |
 
-The CLI creates `<cwd>/<appName>/`. Package source: [`create-terreno-app/`](https://github.com/FlourishHealth/terreno/tree/master/create-terreno-app) in the Terreno monorepo.
+The CLI creates `<cwd>/<appName>/`. Package source: [`create-terreno-app/`](https://github.com/TerrenoLabs/terreno/tree/master/create-terreno-app) in the Terreno monorepo.
 
 ## Non-empty targets
 
@@ -151,4 +151,4 @@ Cloud Run concepts and commands: [Deploy backend to Cloud Run](deploy-backend-to
 
 ## Monorepo examples (secondary)
 
-To explore Terreno itself without scaffolding a new app, clone the [Terreno monorepo](https://github.com/FlourishHealth/terreno) and use `example-backend` / `example-frontend`. See [Getting started](../tutorials/getting-started.md#explore-the-terreno-monorepo-examples).
+To explore Terreno itself without scaffolding a new app, clone the [Terreno monorepo](https://github.com/TerrenoLabs/terreno) and use `example-backend` / `example-frontend`. See [Getting started](../tutorials/getting-started.md#explore-the-terreno-monorepo-examples).

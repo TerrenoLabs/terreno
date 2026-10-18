@@ -1,7 +1,7 @@
 # RBAC Permissions for Terreno — API Design
 
 **Status:** Complete — phases 1–6 shipped in PR #932 (2026-08-22)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1089
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1089
 **Target package:** `@terreno/api` (new `src/rbac/` module), with surfaces in `admin-backend`, `admin-frontend`, `admin-spa`, `rtk`, and the modelRouter MCP work
 **Depends on:** `better-auth/plugins/access` (already a dependency via the Better Auth provider)
 

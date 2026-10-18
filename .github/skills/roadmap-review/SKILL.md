@@ -12,7 +12,7 @@ Audit the **Terreno Roadmap** board against reality and propose corrections. Rea
 
 A public roadmap loses its value the moment it stops being true, and the usual failure is drift: work ships but the card never moves. This skill finds that drift; **a human decides what the board should say.**
 
-Process background: [`docs/explanation/roadmap-process.md`](https://github.com/FlourishHealth/terreno/blob/master/docs/explanation/roadmap-process.md).
+Process background: [`docs/explanation/roadmap-process.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/explanation/roadmap-process.md).
 
 ## When to use
 
@@ -48,12 +48,13 @@ It reports status drift between IP headers and the roadmap, plans that shipped w
 entry moving, entries whose IP file was deleted, task lists that disagree with the declared
 status, and plans with no roadmap entry at all. Treat its `Needs a human` section as the
 review's agenda; it deliberately refuses to guess on exactly the calls this skill exists to
-make. `--fix` applies only forward status moves and supersessions, never a revival or a
-backwards move.
+make. `--fix` applies forward status moves and supersessions, and scaffolds an entry for each
+plan that has none (fields from the IP's `**Roadmap:**` header, else inferred, so check the
+scaffolded Area / Target / Impact). It never applies a revival or a backwards move.
 
 ```bash
 # Board contents
-gh project item-list "$PROJECT_NUMBER" --owner FlourishHealth --format json --limit 200
+gh project item-list "$PROJECT_NUMBER" --owner TerrenoLabs --format json --limit 200
 
 # Untriaged and stale issues
 gh issue list --label status:needs-triage --state open --json number,title,createdAt,labels
@@ -67,7 +68,7 @@ gh api graphql -f query='
         nodes{number title url upvoteCount category{name} updatedAt}
       }
     }
-  }' -F owner=FlourishHealth -F repo=terreno
+  }' -F owner=TerrenoLabs -F repo=terreno
 ```
 
 ### 2. Check each dimension
@@ -122,10 +123,10 @@ The generator refuses to run when the project cannot be read, so an empty result
 
 ### 6. Label taxonomy drift
 
-If the review surfaced labels that exist on issues but not in [`.github/labels.yml`](https://github.com/FlourishHealth/terreno/blob/master/.github/labels.yml), fix the file and sync it rather than hand-creating labels:
+If the review surfaced labels that exist on issues but not in [`.github/labels.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/labels.yml), fix the file and sync it rather than hand-creating labels:
 
 ```bash
-bun run labels:sync --repo FlourishHealth/terreno --dry-run
+bun run labels:sync --repo TerrenoLabs/terreno --dry-run
 ```
 
 ## Notes

@@ -1,0 +1,30 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Which site should I audit?",
+    "fields": [
+      {
+        "id": "site",
+        "type": "url",
+        "label": "Website",
+        "required": true
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "Which site should I audit?",
+    "toolCallId": "call_fixture"
+  }
+}

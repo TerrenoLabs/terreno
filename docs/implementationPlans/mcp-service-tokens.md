@@ -1,6 +1,7 @@
 # Implementation Plan: MCP service tokens
 
-**Status:** Approved  
+**Status:** Complete — shipped in #1263  
+**Roadmap:** Area=`mcp`, Target=`Released`, Impact=`Feature`  
 **Branch:** TBD  
 **Owner:** unassigned  
 **Created:** 2026-09-03  

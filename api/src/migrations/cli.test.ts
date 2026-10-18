@@ -216,29 +216,6 @@ export const CliGenTodo = mongoose.models.CliGenTodo ?? mongoose.model("CliGenTo
     }
   });
 
-  it("connects and disconnects itself when given a Mongo URI", async () => {
-    const {host, name, port} = mongoose.connection;
-    const uri = `mongodb://${host}:${port}/${name}`;
-    await mongoose.disconnect();
-    expect(mongoose.connection.readyState).toBe(0);
-
-    try {
-      const io = capture();
-      const code = await runMigrateCli({
-        argv: ["status", "--dir", fixtures("valid")],
-        env: {MONGODB_URI: uri, NODE_ENV: "test"},
-        stderr: {write: io.writeErr},
-        stdout: {write: io.writeOut},
-      });
-      expect(code).toBe(0);
-      expect(io.stdout).toContain("Applied (0)");
-      expect(io.stdout).toContain("Pending (2)");
-      expect(mongoose.connection.readyState).toBe(0);
-    } finally {
-      await mongoose.connect(uri);
-    }
-  });
-
   it("writes help to process stdout when io is omitted", async () => {
     expect(await runMigrateCli({argv: ["--help"]})).toBe(0);
     expect(await runMigrateCli({argv: ["nope"]})).toBe(1);

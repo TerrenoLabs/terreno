@@ -1,7 +1,7 @@
 # Tasks: Charts and dashboard primitives
 
 IP: [charts-and-dashboards.md](../implementationPlans/charts-and-dashboards.md)  
-**Closes:** https://github.com/FlourishHealth/terreno/issues/1175
+**Closes:** https://github.com/TerrenoLabs/terreno/issues/1175
 
 **Feature profile:** false (full IP)
 

@@ -1,0 +1,68 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "A few details for the invoice.",
+    "title": "Invoice details",
+    "fields": [
+      {
+        "id": "company",
+        "type": "text",
+        "label": "Company name",
+        "required": true,
+        "maxLength": 120
+      },
+      {
+        "id": "seats",
+        "type": "number",
+        "label": "Seats",
+        "min": 1,
+        "max": 500,
+        "integer": true
+      },
+      {
+        "id": "start",
+        "type": "date",
+        "label": "Start date"
+      },
+      {
+        "id": "region",
+        "type": "select",
+        "label": "Region",
+        "options": [
+          {
+            "id": "us",
+            "label": "US"
+          },
+          {
+            "id": "eu",
+            "label": "EU"
+          }
+        ]
+      },
+      {
+        "id": "notify",
+        "type": "boolean",
+        "label": "Email me the invoice",
+        "default": true
+      }
+    ],
+    "submitLabel": "Send details"
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "A few details for the invoice.",
+    "title": "Invoice details",
+    "toolCallId": "call_fixture"
+  }
+}

@@ -4,7 +4,7 @@ See: [`docs/implementationPlans/web-ssr-and-admin-spa.md`](../implementationPlan
 
 **RTK deprecation flag:** **Partial.** Phase 0 must run after PR #869 merges, because whether the local-first client can be kept out of the server render path is the main feasibility question. Tasks marked `[RTK]` touch the data layer directly.
 
-**Prerequisite:** Expo SDK ≥ 55. The repo catalog is on `~54.0.29`; PR [#779](https://github.com/flourishhealth/terreno/pull/779) upgrades to SDK 56. Verify the merged Expo version before starting and stop if it is below 55.
+**Prerequisite:** Expo SDK ≥ 55. The repo catalog is on `~54.0.29`; PR [#779](https://github.com/TerrenoLabs/terreno/pull/779) upgrades to SDK 56. Verify the merged Expo version before starting and stop if it is below 55.
 
 ## Instructions for the implementing agent
 

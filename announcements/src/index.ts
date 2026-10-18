@@ -27,6 +27,16 @@ export {
   sortAnnouncementsForQueue,
 } from "./pending";
 export type {
+  AnnouncementReleaseImportInput,
+  AnnouncementReleaseImportResult,
+  AnnouncementReleaseItemInput,
+} from "./releaseImport";
+export {
+  announcementReleaseImportSchema,
+  importAnnouncementRelease,
+  requireAnnouncementUploadAccess,
+} from "./releaseImport";
+export type {
   AcknowledgementPolicy,
   AnnouncementAudienceType,
   AnnouncementClickAction,
@@ -39,6 +49,7 @@ export type {
   AnnouncementPlatform,
   AnnouncementPrimaryAction,
   AnnouncementPublic,
+  AnnouncementRelease,
   AnnouncementsHelpOptions,
   AnnouncementsOptions,
   MatchAudienceFunction,

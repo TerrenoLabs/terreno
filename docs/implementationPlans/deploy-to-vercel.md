@@ -1,7 +1,7 @@
 # Implementation Plan: Deploy to Vercel + `deploy-vercel` Skill
 
 **Status:** Approved — open Vercel spike TODOs; other decisions recorded (2026-07-29)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1012
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1012
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned

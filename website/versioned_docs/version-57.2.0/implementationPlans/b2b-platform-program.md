@@ -1,7 +1,7 @@
 # Program: B2B platform
 
 **Status:** Draft — roadmap items drafted; decisions D1–D7 resolved 2026-08-09; first ten IPs open
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1095
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1095
 **Owner:** unassigned
 **Created:** 2026-08-09
 

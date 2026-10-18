@@ -265,15 +265,21 @@ export const addAuthRecoveryRoutes = (
     .build();
 
   const router = express.Router();
-  router.post("/forgotPassword", forgotOpenApi, forgotPassword);
-  router.post("/resetPassword", resetOpenApi, resetPassword);
-  router.post(
-    "/sendVerification",
-    authenticateMiddleware(),
-    sendVerificationOpenApi,
-    sendVerification
-  );
-  router.post("/verifyEmail", verifyEmailOpenApi, verifyEmail);
+  if (authOptions?.passwordReset !== false) {
+    router.post("/forgotPassword", forgotOpenApi, forgotPassword);
+    router.post("/resetPassword", resetOpenApi, resetPassword);
+  }
+  if (authOptions?.emailVerification !== false) {
+    router.post(
+      "/sendVerification",
+      authenticateMiddleware(),
+      sendVerificationOpenApi,
+      sendVerification
+    );
+    router.post("/verifyEmail", verifyEmailOpenApi, verifyEmail);
+  }
   app.use("/auth", router);
-  app.post("/resetPassword", resetOpenApi, resetPassword);
+  if (authOptions?.passwordReset !== false && authOptions?.legacyResetPasswordRoute !== false) {
+    app.post("/resetPassword", resetOpenApi, resetPassword);
+  }
 };

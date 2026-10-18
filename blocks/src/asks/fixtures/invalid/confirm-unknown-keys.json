@@ -1,0 +1,23 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Send the report?",
+    "submitLabel": "Send",
+    "options": [
+      {
+        "id": "yes",
+        "label": "Yes"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "options",
+      "code": "UNKNOWN_KEY"
+    },
+    {
+      "path": "submitLabel",
+      "code": "UNKNOWN_KEY"
+    }
+  ]
+}

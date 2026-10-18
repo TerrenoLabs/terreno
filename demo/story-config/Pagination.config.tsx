@@ -4,9 +4,10 @@ import {Pagination} from "@terreno/ui";
 import {PaginationDemo, PaginationMoreStory, PaginationStory} from "../stories/Pagination.stories";
 
 export const PaginationConfiguration: DemoConfiguration = {
+  usageExample: "import {Pagination} from \"@terreno/ui\";\n\n<Pagination />",
   name: "Pagination",
   component: Pagination,
-  related: ["Top navigation", "Bottom navigation"],
+  related: ["DataTable"],
   description:
     "Break large sets of content into smaller, manageable pages. Used primarily in the staff portal to parse large tables.",
   a11yNotes: ["The tappable area of each pagination item should fit within a 44pt square."],
@@ -15,7 +16,7 @@ export const PaginationConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=659%3A19120&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-24018",
     ios: "ready",
     android: "ready",
     web: "ready",

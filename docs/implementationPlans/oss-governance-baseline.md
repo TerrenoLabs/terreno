@@ -1,7 +1,7 @@
 # Implementation Plan: OSS Governance Baseline
 
 **Status:** Complete
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1003
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1003
 **Priority:** High
 **Effort:** Small batch
 **Owner:** unassigned

@@ -3,6 +3,7 @@ import {ImageContain, ImageDemo} from "@stories/Image.stories";
 import {Image} from "@terreno/ui";
 
 export const ImageConfiguration: DemoConfiguration = {
+  usageExample: "import {Image} from \"@terreno/ui\";\n\n<Image />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

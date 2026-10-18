@@ -1,7 +1,7 @@
 # Implementation Plan: Native module baseline for the next major release
 
 **Status:** Draft
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1026
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1026
 **Priority:** High
 **Effort:** Small batch (code) — coordination cost is the release itself
 **Owner:** unassigned

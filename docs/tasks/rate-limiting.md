@@ -1,7 +1,7 @@
 # Tasks: API rate limiting
 
 IP: [rate-limiting.md](../implementationPlans/rate-limiting.md)  
-**Closes:** https://github.com/FlourishHealth/terreno/issues/1187
+**Closes:** https://github.com/TerrenoLabs/terreno/issues/1187
 
 **Feature profile:** false (full IP)
 

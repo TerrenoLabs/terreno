@@ -53,17 +53,17 @@ describe("vertex helpers", () => {
 
   describe("normalizeVertexModelId", () => {
     it("strips publisher resource prefixes", () => {
-      expect(normalizeVertexModelId("publishers/google/models/gemini-2.5-flash")).toBe(
-        "gemini-2.5-flash"
+      expect(normalizeVertexModelId("publishers/google/models/gemini-3.8-flash")).toBe(
+        "gemini-3.8-flash"
       );
     });
 
     it("strips version suffixes", () => {
-      expect(normalizeVertexModelId("gemini-2.5-pro@001")).toBe("gemini-2.5-pro");
+      expect(normalizeVertexModelId("gemini-3.1-pro-preview@001")).toBe("gemini-3.1-pro-preview");
     });
 
     it("returns bare ids unchanged", () => {
-      expect(normalizeVertexModelId("gemini-2.5-flash")).toBe("gemini-2.5-flash");
+      expect(normalizeVertexModelId("gemini-3.8-flash")).toBe("gemini-3.8-flash");
     });
   });
 
@@ -74,16 +74,16 @@ describe("vertex helpers", () => {
     });
 
     it("restricts to listed models when an allow-list is provided", () => {
-      expect(isVertexModelAllowed("gemini-2.5-flash", ["gemini-2.5-flash"])).toBe(true);
-      expect(isVertexModelAllowed("gemini-2.5-pro", ["gemini-2.5-flash"])).toBe(false);
+      expect(isVertexModelAllowed("gemini-3.8-flash", ["gemini-3.8-flash"])).toBe(true);
+      expect(isVertexModelAllowed("gemini-3.1-pro-preview", ["gemini-3.8-flash"])).toBe(false);
     });
 
     it("normalizes both the model id and allow-list entries before comparing", () => {
-      expect(isVertexModelAllowed("gemini-2.5-flash", ["gemini-2.5-flash@001"])).toBe(true);
+      expect(isVertexModelAllowed("gemini-3.8-flash", ["gemini-3.8-flash@001"])).toBe(true);
       expect(
-        isVertexModelAllowed("publishers/google/models/gemini-2.5-flash", ["gemini-2.5-flash"])
+        isVertexModelAllowed("publishers/google/models/gemini-3.8-flash", ["gemini-3.8-flash"])
       ).toBe(true);
-      expect(isVertexModelAllowed("gemini-2.5-flash@001", ["gemini-2.5-pro"])).toBe(false);
+      expect(isVertexModelAllowed("gemini-3.8-flash@001", ["gemini-3.1-pro-preview"])).toBe(false);
     });
   });
 
@@ -104,65 +104,65 @@ describe("vertex helpers", () => {
       expect(provider?.languageModel("gemini-anything")).toBeDefined();
     });
 
-    it("defaults location from env then us-central1", () => {
+    it("defaults location to global", () => {
       const withDefault = createVertexProvider({
         project: "demo-project",
         vertexFactory: makeVertexFactory(),
       });
-      expect(withDefault?.location).toBe("us-central1");
+      expect(withDefault?.location).toBe("global");
 
       const withExplicit = createVertexProvider({
         location: "europe-west1",
         project: "demo-project",
         vertexFactory: makeVertexFactory(),
       });
-      expect(withExplicit?.location).toBe("europe-west1");
+      expect(withExplicit?.location).toBe("global");
     });
 
     it("enforces the allow-list when provided", () => {
       const provider = createVertexProvider({
-        allowedModels: ["gemini-2.5-flash"],
+        allowedModels: ["gemini-3.8-flash"],
         project: "demo-project",
         vertexFactory: makeVertexFactory(),
       });
-      expect(provider?.isModelAllowed("gemini-2.5-flash")).toBe(true);
-      expect(provider?.isModelAllowed("gemini-2.5-pro")).toBe(false);
-      expect(provider?.languageModel("gemini-2.5-flash")).toBeDefined();
-      expect(() => provider?.languageModel("gemini-2.5-pro")).toThrow();
+      expect(provider?.isModelAllowed("gemini-3.8-flash")).toBe(true);
+      expect(provider?.isModelAllowed("gemini-3.1-pro-preview")).toBe(false);
+      expect(provider?.languageModel("gemini-3.8-flash")).toBeDefined();
+      expect(() => provider?.languageModel("gemini-3.1-pro-preview")).toThrow();
       expect(() => provider?.imageModel("imagen-4.0-fast-generate-001")).toThrow();
     });
 
     it("resolves versioned/path model ids against the allow-list", () => {
       const provider = createVertexProvider({
-        allowedModels: ["gemini-2.5-flash@001"],
+        allowedModels: ["gemini-3.8-flash@001"],
         project: "demo-project",
         vertexFactory: makeVertexFactory(),
       });
-      expect(provider?.isModelAllowed("gemini-2.5-flash")).toBe(true);
-      expect(provider?.languageModel("gemini-2.5-flash")).toBeDefined();
+      expect(provider?.isModelAllowed("gemini-3.8-flash")).toBe(true);
+      expect(provider?.languageModel("gemini-3.8-flash")).toBeDefined();
     });
   });
 
   describe("verifyVertexModelsEnabled", () => {
     it("marks models available/unavailable based on the listing", async () => {
       const result = await verifyVertexModelsEnabled({
-        listModelsFn: mock(async () => ["gemini-2.5-flash", "gemini-2.0-flash-lite"]),
-        models: ["gemini-2.5-flash", "gemini-2.5-pro"],
+        listModelsFn: mock(async () => ["gemini-3.8-flash", "gemini-3.5-flash-lite"]),
+        models: ["gemini-3.8-flash", "gemini-3.1-pro-preview"],
         project: "demo-project",
       });
       expect(result.checked).toBe(true);
-      expect(result.available).toEqual(["gemini-2.5-flash"]);
-      expect(result.unavailable).toEqual(["gemini-2.5-pro"]);
+      expect(result.available).toEqual(["gemini-3.8-flash"]);
+      expect(result.unavailable).toEqual(["gemini-3.1-pro-preview"]);
     });
 
     it("returns checked=false when the listing is unavailable", async () => {
       const result = await verifyVertexModelsEnabled({
         listModelsFn: mock(async () => undefined),
-        models: ["gemini-2.5-flash"],
+        models: ["gemini-3.8-flash"],
         project: "demo-project",
       });
       expect(result.checked).toBe(false);
-      expect(result.available).toEqual(["gemini-2.5-flash"]);
+      expect(result.available).toEqual(["gemini-3.8-flash"]);
       expect(result.unavailable).toEqual([]);
     });
   });
@@ -171,8 +171,8 @@ describe("vertex helpers", () => {
     it("throws when a requested model is not enabled", async () => {
       await expect(
         assertVertexModelsEnabled({
-          listModelsFn: mock(async () => ["gemini-2.5-flash"]),
-          models: ["gemini-2.5-pro"],
+          listModelsFn: mock(async () => ["gemini-3.8-flash"]),
+          models: ["gemini-3.1-pro-preview"],
           project: "demo-project",
         })
       ).rejects.toThrow();
@@ -181,7 +181,7 @@ describe("vertex helpers", () => {
     it("does not throw when verification is inconclusive", async () => {
       const result = await assertVertexModelsEnabled({
         listModelsFn: mock(async () => undefined),
-        models: ["gemini-2.5-pro"],
+        models: ["gemini-3.1-pro-preview"],
         project: "demo-project",
       });
       expect(result.checked).toBe(false);
@@ -203,10 +203,10 @@ describe("vertex helpers", () => {
         const url = new URL(input.toString());
         const isSecondPage = url.searchParams.get("pageToken") === "page-2";
         const body = isSecondPage
-          ? {publisherModels: [{name: "publishers/google/models/gemini-2.5-pro"}]}
+          ? {publisherModels: [{name: "publishers/google/models/gemini-3.1-pro-preview"}]}
           : {
               nextPageToken: "page-2",
-              publisherModels: [{name: "publishers/google/models/gemini-2.5-flash"}],
+              publisherModels: [{name: "publishers/google/models/gemini-3.8-flash"}],
             };
         return {
           json: async () => body,
@@ -218,10 +218,10 @@ describe("vertex helpers", () => {
       const models = await listEnabledVertexModels({
         fetchImpl: fetchImpl as unknown as typeof fetch,
         getAccessToken: async () => "fake-token",
-        location: "us-central1",
+        location: "global",
         project: "demo-project",
       });
-      expect(models).toEqual(["gemini-2.5-flash", "gemini-2.5-pro"]);
+      expect(models).toEqual(["gemini-3.8-flash", "gemini-3.1-pro-preview"]);
       expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
 
@@ -239,7 +239,7 @@ describe("vertex helpers", () => {
         return {
           json: async () => ({
             nextPageToken: "always-more",
-            publisherModels: [{name: "publishers/google/models/gemini-2.5-flash"}],
+            publisherModels: [{name: "publishers/google/models/gemini-3.8-flash"}],
           }),
           ok: true,
           status: 200,
@@ -329,10 +329,10 @@ describe("vertex helpers", () => {
       const fetchImpl = mock(async () => ({
         json: async () => ({
           publisherModels: [
-            {name: "publishers/google/models/gemini-2.5-flash"},
+            {name: "publishers/google/models/gemini-3.8-flash"},
             {},
             {name: undefined},
-            {name: "publishers/google/models/gemini-2.5-pro"},
+            {name: "publishers/google/models/gemini-3.1-pro-preview"},
           ],
         }),
         ok: true,
@@ -343,17 +343,17 @@ describe("vertex helpers", () => {
         getAccessToken: async () => "fake-token",
         project: "demo-project",
       });
-      expect(models).toEqual(["gemini-2.5-flash", "gemini-2.5-pro"]);
+      expect(models).toEqual(["gemini-3.8-flash", "gemini-3.1-pro-preview"]);
     });
 
-    it("uses global location when GOOGLE_VERTEX_LOCATION env is set", async () => {
+    it("uses global location for Gemini 3 support", async () => {
       process.env.GOOGLE_VERTEX_LOCATION = "europe-west4";
       const fetchImpl = mock(async (input: string | URL) => {
         const url = input.toString();
-        expect(url).toContain("europe-west4-aiplatform.googleapis.com");
+        expect(url).toContain("aiplatform.googleapis.com");
         return {
           json: async () => ({
-            publisherModels: [{name: "publishers/google/models/gemini-2.5-flash"}],
+            publisherModels: [{name: "publishers/google/models/gemini-3.8-flash"}],
           }),
           ok: true,
           status: 200,
@@ -364,7 +364,7 @@ describe("vertex helpers", () => {
         getAccessToken: async () => "fake-token",
         project: "demo-project",
       });
-      expect(models).toEqual(["gemini-2.5-flash"]);
+      expect(models).toEqual(["gemini-3.8-flash"]);
     });
   });
 
@@ -378,13 +378,13 @@ describe("vertex helpers", () => {
       expect(provider).toBeUndefined();
     });
 
-    it("uses GOOGLE_VERTEX_LOCATION env for location resolution", () => {
+    it("forces global location for Gemini 3 support", () => {
       process.env.GOOGLE_VERTEX_LOCATION = "asia-east1";
       const provider = createVertexProvider({
         project: "demo-project",
         vertexFactory: makeVertexFactory(),
       });
-      expect(provider?.location).toBe("asia-east1");
+      expect(provider?.location).toBe("global");
     });
 
     it("uses GOOGLE_VERTEX_PROJECT env when project option is omitted", () => {
@@ -417,12 +417,12 @@ describe("vertex helpers", () => {
   describe("verifyVertexModelsEnabled", () => {
     it("deduplicates requested models before checking", async () => {
       const result = await verifyVertexModelsEnabled({
-        listModelsFn: mock(async () => ["gemini-2.5-flash"]),
-        models: ["gemini-2.5-flash", "gemini-2.5-flash@001"],
+        listModelsFn: mock(async () => ["gemini-3.8-flash"]),
+        models: ["gemini-3.8-flash", "gemini-3.8-flash@001"],
         project: "demo-project",
       });
       expect(result.checked).toBe(true);
-      expect(result.available).toEqual(["gemini-2.5-flash"]);
+      expect(result.available).toEqual(["gemini-3.8-flash"]);
       expect(result.unavailable).toEqual([]);
     });
   });
@@ -430,12 +430,12 @@ describe("vertex helpers", () => {
   describe("assertVertexModelsEnabled", () => {
     it("returns the result when all models are available", async () => {
       const result = await assertVertexModelsEnabled({
-        listModelsFn: mock(async () => ["gemini-2.5-flash", "gemini-2.5-pro"]),
-        models: ["gemini-2.5-flash"],
+        listModelsFn: mock(async () => ["gemini-3.8-flash", "gemini-3.1-pro-preview"]),
+        models: ["gemini-3.8-flash"],
         project: "demo-project",
       });
       expect(result.checked).toBe(true);
-      expect(result.available).toEqual(["gemini-2.5-flash"]);
+      expect(result.available).toEqual(["gemini-3.8-flash"]);
       expect(result.unavailable).toEqual([]);
     });
   });

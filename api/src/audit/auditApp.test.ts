@@ -15,8 +15,8 @@ import {resetAuditRecorderForTests} from "./record";
 const typedUserModel = UserModel as unknown as AuthUserModel;
 
 const deleteAuditEventModel = (): void => {
-  if (mongoose.connection.models.AuditEvent) {
-    mongoose.connection.deleteModel("AuditEvent");
+  if (mongoose.connection.models.TerrenoAuditEvent) {
+    mongoose.connection.deleteModel("TerrenoAuditEvent");
   }
 };
 
@@ -49,7 +49,7 @@ describe("AuditApp", () => {
   it("does not register AuditEvent on the default connection when @terreno/api is imported", async () => {
     deleteAuditEventModel();
     await import("../index");
-    assert.isUndefined(mongoose.connection.models.AuditEvent);
+    assert.isUndefined(mongoose.connection.models.TerrenoAuditEvent);
   });
 
   it("lets an admin list an empty audit log", async () => {
@@ -123,14 +123,14 @@ describe("AuditApp", () => {
   it("does not add a TTL index by default", () => {
     deleteAuditEventModel();
     createAuditEventModel(mongoose.connection);
-    const indexes = mongoose.connection.models.AuditEvent.schema.indexes();
+    const indexes = mongoose.connection.models.TerrenoAuditEvent.schema.indexes();
     assert.isFalse(indexes.some(([, options]) => options && "expireAfterSeconds" in options));
   });
 
   it("adds a TTL index on created when retentionDays is greater than 0", () => {
     deleteAuditEventModel();
     createAuditEventModel(mongoose.connection, {retentionDays: 1});
-    const indexes = mongoose.connection.models.AuditEvent.schema.indexes();
+    const indexes = mongoose.connection.models.TerrenoAuditEvent.schema.indexes();
     const createdAsc = indexes.filter(
       ([fields]) => (fields as {created?: number}).created === 1 && Object.keys(fields).length === 1
     );

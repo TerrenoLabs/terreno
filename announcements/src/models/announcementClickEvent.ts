@@ -1,10 +1,6 @@
 import {createdUpdatedPlugin, findExactlyOne, findOneOrNone, isDeletedPlugin} from "@terreno/api";
 import mongoose from "mongoose";
-import type {
-  AnnouncementClickAction,
-  AnnouncementClickEventDocument,
-  AnnouncementClickEventModel,
-} from "../types";
+import type {AnnouncementClickEventDocument, AnnouncementClickEventModel} from "../types";
 
 const announcementClickEventSchema = new mongoose.Schema<
   AnnouncementClickEventDocument,
@@ -20,7 +16,7 @@ const announcementClickEventSchema = new mongoose.Schema<
     announcementId: {
       description: "Announcement whose primary action was clicked",
       index: true,
-      ref: "Announcement",
+      ref: "TerrenoAnnouncement",
       required: true,
       type: mongoose.Schema.Types.ObjectId,
     },
@@ -58,11 +54,9 @@ announcementClickEventSchema.plugin(findOneOrNone);
 announcementClickEventSchema.index({announcementId: 1, clickedAt: -1});
 
 export const AnnouncementClickEvent =
-  (mongoose.models.AnnouncementClickEvent as AnnouncementClickEventModel) ??
+  (mongoose.models.TerrenoAnnouncementClickEvent as AnnouncementClickEventModel) ??
   mongoose.model<AnnouncementClickEventDocument, AnnouncementClickEventModel>(
-    "AnnouncementClickEvent",
-    announcementClickEventSchema
+    "TerrenoAnnouncementClickEvent",
+    announcementClickEventSchema,
+    "announcementclickevents"
   );
-
-export const isValidClickAction = (value: unknown): value is AnnouncementClickAction =>
-  value === "primaryAction";

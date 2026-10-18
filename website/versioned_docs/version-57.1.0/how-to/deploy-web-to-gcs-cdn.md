@@ -174,7 +174,7 @@ gcloud compute url-maps invalidate-cdn-cache "${SITE_NAME}-url-map" \
 
 ## Static-only path
 
-This guide hosts the `expo export -p web` output as static files. Server-rendered web (SSR, API routes) requires Expo SDK ≥ 55 — see [Web SSR and admin SPA](https://github.com/FlourishHealth/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md).
+This guide hosts the `expo export -p web` output as static files. Server-rendered web (SSR, API routes) requires Expo SDK ≥ 55 — see [Web SSR and admin SPA](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md).
 
 ## Related
 

@@ -144,13 +144,17 @@ export const createAuditEventModel = (
   connection: mongoose.Connection,
   options: {retentionDays?: number} = {}
 ): AuditEventModel => {
-  if (connection.models.AuditEvent) {
-    return connection.models.AuditEvent as AuditEventModel;
+  if (connection.models.TerrenoAuditEvent) {
+    return connection.models.TerrenoAuditEvent as AuditEventModel;
   }
   const schema = auditEventSchema.clone();
   const expireAfterSeconds = ttlExpireAfterSeconds(options.retentionDays);
   if (expireAfterSeconds !== undefined) {
     replaceCreatedIndexWithTtl(schema as unknown as mongoose.Schema, expireAfterSeconds);
   }
-  return connection.model<AuditEventDocument, AuditEventModel>("AuditEvent", schema);
+  return connection.model<AuditEventDocument, AuditEventModel>(
+    "TerrenoAuditEvent",
+    schema,
+    "auditevents"
+  );
 };

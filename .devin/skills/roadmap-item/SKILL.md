@@ -13,7 +13,7 @@ Create or update the public tracking issue for a piece of planned work, usually 
 
 **What lands on the public roadmap is a human decision.** Draft it, validate it, then stop for approval.
 
-Process background, including the full IP ↔ roadmap lifecycle and the promote-vs-item ownership table: [`docs/explanation/roadmap-process.md`](https://github.com/FlourishHealth/terreno/blob/master/docs/explanation/roadmap-process.md).
+Process background, including the full IP ↔ roadmap lifecycle and the promote-vs-item ownership table: [`docs/explanation/roadmap-process.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/explanation/roadmap-process.md).
 
 ## Where this sits in the lifecycle
 
@@ -36,7 +36,7 @@ It is the only skill that sets the Project `IP` field and moves an item to `Stat
 
 - An IP has reached **Approved** and needs its public tracking issue
 - An existing roadmap item's status, target, or scope has changed
-- Backfilling tracking issues from [`docs/explanation/roadmap-seed-issues.md`](https://github.com/FlourishHealth/terreno/blob/master/docs/explanation/roadmap-seed-issues.md)
+- Backfilling tracking issues from [`docs/explanation/roadmap-seed-issues.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/explanation/roadmap-seed-issues.md)
 - Adding one approved delivery slice to an existing `roadmap-wayfinder` map
 
 ## When not to use
@@ -129,7 +129,7 @@ Print, then **stop and wait**:
 ### 6. Apply, after approval
 
 **Do not touch the board directly.** Write the entry into
-[`docs/explanation/roadmap-seed-issues.md`](https://github.com/FlourishHealth/terreno/blob/master/docs/explanation/roadmap-seed-issues.md)
+[`docs/explanation/roadmap-seed-issues.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/explanation/roadmap-seed-issues.md)
 and let the sync tool do the rest — that document is the repo's declaration of what belongs
 on the board, and hand-added items fail `roadmap:sync --check`. Apply does not delete those
 cards; add a seed entry or remove the card by hand.

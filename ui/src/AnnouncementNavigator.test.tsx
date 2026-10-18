@@ -960,4 +960,245 @@ describe("AnnouncementNavigator", () => {
 
     assert.strictEqual(clickMutation.mock.calls.length, 0);
   });
+
+  it("renders children without calling onError when pending fails with 401", () => {
+    const refetch = mock(() => Promise.resolve());
+    const innerApi = {
+      injectEndpoints: mock(() => ({
+        useAcknowledgeAnnouncementMutation: mock(() => [
+          mock(),
+          {error: undefined, isLoading: false},
+        ]),
+        useGetAnnouncementFeedQuery: mock(() => ({
+          data: {data: []},
+          error: undefined,
+          isLoading: false,
+          refetch,
+        })),
+        useGetPendingAnnouncementsQuery: mock(() => ({
+          data: undefined,
+          error: {status: 401},
+          isLoading: false,
+          refetch,
+        })),
+        useRecordAnnouncementClickMutation: mock(() => [
+          mock(),
+          {error: undefined, isLoading: false},
+        ]),
+        useRecordAnnouncementImpressionMutation: mock(() => [
+          mock(),
+          {error: undefined, isLoading: false},
+        ]),
+      })),
+    };
+    const onError = mock(() => undefined);
+    const result = renderWithTheme(
+      <AnnouncementNavigator api={{enhanceEndpoints: mock(() => innerApi)}} onError={onError}>
+        <Box testID="app-content">
+          <Text>App</Text>
+        </Box>
+      </AnnouncementNavigator>
+    );
+    expect(result.getByTestId("app-content")).toBeTruthy();
+    expect(result.queryByTestId("announcement-navigator-error")).toBeNull();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("reports acknowledge failures through onError", async () => {
+    const refetch = mock(() => Promise.reject(new Error("refetch failed")));
+    const {api} = createMockApi({current: makeAnnouncement(), remainingCount: 0}, refetch);
+    const onError = mock(() => undefined);
+    const result = renderWithTheme(
+      <AnnouncementNavigator api={api} onError={onError}>
+        <Box testID="app-content">
+          <Text>App</Text>
+        </Box>
+      </AnnouncementNavigator>
+    );
+
+    await waitForFrequencyCheck();
+    await act(async () => {
+      fireEvent.press(result.getByText("Got it"));
+      await Promise.resolve();
+    });
+
+    assert.strictEqual(onError.mock.calls.length, 1);
+    assert.instanceOf(onError.mock.calls[0][0], Error);
+    assert.strictEqual((onError.mock.calls[0][0] as Error).message, "refetch failed");
+  });
+
+  it("warns but keeps showing the announcement when recording an impression fails", async () => {
+    const warnSpy = mock(() => undefined);
+    const originalWarn = console.warn;
+    console.warn = warnSpy;
+
+    const {api, impressionMutation} = createMockApi(
+      {current: makeAnnouncement(), remainingCount: 0},
+      undefined,
+      [],
+      undefined,
+      {
+        impressionUnwrap: async () => {
+          throw new Error("impression failed");
+        },
+      }
+    );
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator api={api}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+      await waitForFrequencyCheck();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.getByTestId("announcement-screen")).toBeTruthy();
+      expect(impressionMutation).toHaveBeenCalledTimes(1);
+      const impressionWarnings = warnSpy.mock.calls.filter(
+        (call) => call[0] === "[AnnouncementNavigator] Failed to record impression"
+      );
+      assert.strictEqual(impressionWarnings.length, 1);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("warns when opening the primary action URL fails", async () => {
+    const warnSpy = mock(() => undefined);
+    const originalWarn = console.warn;
+    console.warn = warnSpy;
+    const originalCanOpenURL = Linking.canOpenURL;
+    Linking.canOpenURL = mock(() => Promise.reject(new Error("cannot open")));
+
+    const {api, clickMutation} = createMockApi({
+      current: makeAnnouncement({
+        primaryAction: {label: "Read docs", url: "https://example.com/docs"},
+      }),
+      remainingCount: 0,
+    });
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator api={api}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+
+      await waitForFrequencyCheck();
+      await act(async () => {
+        fireEvent.press(result.getByText("Read docs"));
+        await Promise.resolve();
+      });
+
+      assert.strictEqual(clickMutation.mock.calls.length, 1);
+      const linkWarnings = warnSpy.mock.calls.filter(
+        (call) => call[0] === "[AnnouncementNavigator] Failed to open primary-action URL"
+      );
+      assert.strictEqual(linkWarnings.length, 1);
+    } finally {
+      console.warn = originalWarn;
+      Linking.canOpenURL = originalCanOpenURL;
+    }
+  });
+
+  it("fails open when the frequency check itself throws", async () => {
+    const originalWarn = console.warn;
+    const warnCalls: unknown[][] = [];
+    let hasThrownFrequencyWarning = false;
+    console.warn = (...args: unknown[]): void => {
+      warnCalls.push(args);
+      if (
+        !hasThrownFrequencyWarning &&
+        args[0] === "[announcementFrequency] Failed to read hasLaunched; allowing interrupt"
+      ) {
+        hasThrownFrequencyWarning = true;
+        throw new Error("warn exploded");
+      }
+    };
+    Unifier.storage.getItem = mock(async () => {
+      throw new Error("storage read failed");
+    });
+
+    const {api, impressionMutation} = createMockApi({
+      current: makeAnnouncement({title: "Still visible"}),
+      remainingCount: 0,
+    });
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator api={api} frequency={{skipFirstLaunch: true}}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.getByTestId("announcement-screen")).toBeTruthy();
+      expect(impressionMutation).toHaveBeenCalledTimes(1);
+      const navigatorWarnings = warnCalls.filter(
+        (call) => call[0] === "[AnnouncementNavigator] Frequency check failed; allowing interrupt"
+      );
+      assert.strictEqual(navigatorWarnings.length, 1);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("warns when recording the interrupt for frequency throws", async () => {
+    const originalWarn = console.warn;
+    const warnCalls: unknown[][] = [];
+    let hasThrownPersistWarning = false;
+    console.warn = (...args: unknown[]): void => {
+      warnCalls.push(args);
+      if (
+        !hasThrownPersistWarning &&
+        args[0] === "[announcementFrequency] Failed to persist lastInterruptAt"
+      ) {
+        hasThrownPersistWarning = true;
+        throw new Error("warn exploded");
+      }
+    };
+    Unifier.storage.setItem = mock(async () => {
+      throw new Error("storage write failed");
+    });
+
+    const {api} = createMockApi({
+      current: makeAnnouncement({title: "Still visible"}),
+      remainingCount: 0,
+    });
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator api={api}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+
+      await waitForFrequencyCheck();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.getByTestId("announcement-screen")).toBeTruthy();
+      const navigatorWarnings = warnCalls.filter(
+        (call) => call[0] === "[AnnouncementNavigator] Failed to record interrupt for frequency"
+      );
+      assert.strictEqual(navigatorWarnings.length, 1);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
 });

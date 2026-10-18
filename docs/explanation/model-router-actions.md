@@ -101,7 +101,7 @@ HTTP method and scope map to a CRUD permission check:
 **403** — denied after the instance document is loaded (e.g. `IsOwner` with a document that fails the check).  
 **401** — unauthenticated when a permission requires auth (from existing auth middleware).
 
-`authenticateMiddleware` honors the router’s `allowAnonymous` option, same as CRUD.
+`authenticateMiddleware` honors the router’s `allowAnonymous` option, same as CRUD. An action may set `allowAnonymous: true` to accept unauthenticated requests without making the router's CRUD routes or other actions anonymous. Keep a non-empty permission such as `Permissions.IsAny` and authenticate any service token in the handler.
 
 ## Validation
 

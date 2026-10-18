@@ -13,17 +13,17 @@ Two implementation paths:
 ## Create the issue
 
 1. Invoke `/create-github-issue` (or open
-   [Lifecycle work item](https://github.com/FlourishHealth/terreno/issues/new?template=work_item.yml)).
+   [Lifecycle work item](https://github.com/TerrenoLabs/terreno/issues/new?template=work_item.yml)).
 2. Fill **Affected package**, **Kind**, **Problem**, **Outcome**, **Current behavior**,
    **Non-scope**, **Acceptance**, and **Context**.
 3. Stop until the drafted title, body, and labels are approved. Then create.
 
-Existing [bug](https://github.com/FlourishHealth/terreno/issues/new?template=bug_report.yml),
-[feature](https://github.com/FlourishHealth/terreno/issues/new?template=feature_request.yml),
-and [docs](https://github.com/FlourishHealth/terreno/issues/new?template=docs_issue.yml)
+Existing [bug](https://github.com/TerrenoLabs/terreno/issues/new?template=bug_report.yml),
+[feature](https://github.com/TerrenoLabs/terreno/issues/new?template=feature_request.yml),
+and [docs](https://github.com/TerrenoLabs/terreno/issues/new?template=docs_issue.yml)
 forms still work. Prefer the lifecycle form when you want Roast-ready acceptance in
 the body. The canonical heading list is in the
-[`create-github-issue` skill](https://github.com/FlourishHealth/terreno/blob/master/.rulesync/skills/create-github-issue/references/issue-format.md).
+[`create-github-issue` skill](https://github.com/TerrenoLabs/terreno/blob/master/.rulesync/skills/create-github-issue/references/issue-format.md).
 
 `Affected package` must match a known value so issue triage can apply `area:*`.
 `Kind` on the lifecycle form is applied as `type:*` by the same triage job.
@@ -71,7 +71,7 @@ data-ownership decision. Those stay `status:needs-info` or go through `/work-git
 The unattended skill will assume implementation defaults; it will not invent those
 decisions.
 
-Labels live in [`.github/labels.yml`](https://github.com/FlourishHealth/terreno/blob/master/.github/labels.yml).
+Labels live in [`.github/labels.yml`](https://github.com/TerrenoLabs/terreno/blob/master/.github/labels.yml).
 Sync them with the existing roadmap labels workflow before expecting pickup.
 
 ## Related

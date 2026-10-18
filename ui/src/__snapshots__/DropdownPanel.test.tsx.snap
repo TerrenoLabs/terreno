@@ -1,0 +1,165 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`DropdownPanel renders correctly with default props 1`] = `
+{
+  "$$typeof": Symbol(react.test.json),
+  "children": [
+    {
+      "$$typeof": Symbol(react.test.json),
+      "children": [
+        {
+          "$$typeof": Symbol(react.test.json),
+          "children": [
+            {
+              "$$typeof": Symbol(react.test.json),
+              "children": [
+                {
+                  "$$typeof": Symbol(react.test.json),
+                  "children": [
+                    {
+                      "$$typeof": Symbol(react.test.json),
+                      "children": [
+                        {
+                          "$$typeof": Symbol(react.test.json),
+                          "children": [
+                            {
+                              "$$typeof": Symbol(react.test.json),
+                              "children": null,
+                              "props": {
+                                "height": 56,
+                                "rx": 28,
+                                "width": 512,
+                                "x": 0,
+                                "y": 120,
+                              },
+                              "type": "Rect",
+                            },
+                            {
+                              "$$typeof": Symbol(react.test.json),
+                              "children": null,
+                              "props": {
+                                "height": 56,
+                                "rx": 28,
+                                "width": 320,
+                                "x": 96,
+                                "y": 228,
+                              },
+                              "type": "Rect",
+                            },
+                            {
+                              "$$typeof": Symbol(react.test.json),
+                              "children": null,
+                              "props": {
+                                "height": 56,
+                                "rx": 28,
+                                "width": 160,
+                                "x": 176,
+                                "y": 336,
+                              },
+                              "type": "Rect",
+                            },
+                          ],
+                          "props": {
+                            "fill": "#FFFFFF",
+                            "height": 16,
+                            "testID": undefined,
+                            "viewBox": "0 0 512 512",
+                            "width": 16,
+                          },
+                          "type": "Svg",
+                        },
+                      ],
+                      "props": {
+                        "style": {
+                          "alignSelf": "center",
+                          "marginLeft": 0,
+                          "marginRight": 8,
+                        },
+                        "testID": undefined,
+                      },
+                      "type": "View",
+                    },
+                    {
+                      "$$typeof": Symbol(react.test.json),
+                      "children": [
+                        "Filter",
+                      ],
+                      "props": {
+                        "style": {
+                          "color": "#FFFFFF",
+                          "fontSize": 16,
+                          "fontWeight": "700",
+                        },
+                      },
+                      "type": "Text",
+                    },
+                  ],
+                  "props": {
+                    "style": {
+                      "flexDirection": "row",
+                    },
+                    "testID": undefined,
+                  },
+                  "type": "View",
+                },
+              ],
+              "props": {
+                "style": {
+                  "flexDirection": "row",
+                },
+                "testID": undefined,
+              },
+              "type": "View",
+            },
+          ],
+          "props": {
+            "accessibilityHint": "Press to perform action",
+            "accessibilityLabel": "Filter",
+            "accessibilityRole": "button",
+            "accessibilityState": {
+              "disabled": false,
+            },
+            "disabled": false,
+            "onPress": [Function: debounced],
+            "style": {
+              "alignItems": "center",
+              "alignSelf": "flex-start",
+              "backgroundColor": "#0E9DCD",
+              "borderColor": undefined,
+              "borderRadius": 360,
+              "borderWidth": undefined,
+              "flexDirection": "column",
+              "height": undefined,
+              "justifyContent": "center",
+              "paddingHorizontal": 20,
+              "paddingVertical": 8,
+              "width": "auto",
+            },
+            "testID": undefined,
+          },
+          "type": "PressableScale",
+        },
+      ],
+      "props": {
+        "collapsable": false,
+        "ref": {
+          "current": null,
+        },
+        "style": {
+          "alignSelf": "flex-start",
+        },
+        "testID": undefined,
+      },
+      "type": "View",
+    },
+  ],
+  "props": {
+    "style": {
+      "position": "relative",
+      "width": undefined,
+    },
+    "testID": undefined,
+  },
+  "type": "View",
+}
+`;

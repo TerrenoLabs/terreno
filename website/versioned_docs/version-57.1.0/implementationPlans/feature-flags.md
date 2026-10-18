@@ -2,7 +2,7 @@
 
 **Status:** Deferred
 **Closed:** 2026-08-20 — Superseded by [feature-flags-openfeature.md](./feature-flags-openfeature.md) (OpenFeature provider, live updates). This document is retained for historical context only.
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1098
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1098
 
 > **OpenFeature migration:** For the OpenFeature-based provider, `/flagConfiguration`, live updates, and RTK hook details, see [feature-flags-openfeature.md](./feature-flags-openfeature.md) and the task list [feature-flags-openfeature.md](../tasks/feature-flags-openfeature.md).
 

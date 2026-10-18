@@ -1,6 +1,6 @@
 # Modular API Implementation Plan
 
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1084  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1084  
 **Status:** Complete
 
 ## Overview

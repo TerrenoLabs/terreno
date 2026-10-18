@@ -1,0 +1,16 @@
+schema: terreno.announcement-pack/v1
+release:
+  product: example
+  version: "1.14.0"
+  buildNumber: 1842
+  channel: production
+defaults:
+  platforms: [ios, android, web]
+  audienceType: all
+  displayMode: feed
+  acknowledgementPolicy: dismiss-only
+  priority: 0
+announcements:
+  - staff-required.md
+  - patient-banner.md
+  - changelog.md

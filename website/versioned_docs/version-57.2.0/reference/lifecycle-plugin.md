@@ -24,9 +24,9 @@ Every stage includes:
 - Recommended next stage
 
 Results use `PASS`, `FAIL`, `BLOCKED`, or `PENDING` and the compact `v: 2` schema
-[`stage-result.schema.json`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/stage-result.schema.json)
+[`stage-result.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/stage-result.schema.json)
 (`v`, `stage`, `status`, `next`, `action`; omit empty keys). Loop state follows
-[`execution-state.schema.json`](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/execution-state.schema.json).
+[`execution-state.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/execution-state.schema.json).
 Chat and PRs show `status` / `next` / `action`; the YAML lives in a Details toggle.
 
 The outer loop owns state persistence, waiting, stage invocation, retries, and escalation.
@@ -37,14 +37,14 @@ GitHub communication follows a fixed attention budget: `Why`, `What changed`, an
 are reserved for blocked decisions or non-obvious review resolutions.
 
 Every stage follows the
-[documentation contract](https://github.com/FlourishHealth/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md):
+[documentation contract](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md):
 read architecture docs before acting, update them in the same slice, and fail the slice
 when user-visible or architectural behavior ships without matching docs.
 
 Install the published skill set (lifecycle stages plus repo and package skills):
 
 ```bash
-npx skills add FlourishHealth/terreno
+npx skills add TerrenoLabs/terreno
 ```
 
 Regenerate the committed `skills/` tree with `bun run skills:sync`. Package skills under

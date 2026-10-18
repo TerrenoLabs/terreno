@@ -2,7 +2,7 @@
 
 A TerrenoApp plugin that integrates [Langfuse](https://langfuse.com) into Terreno backends and frontends. Provides prompt management with MongoDB caching, OpenTelemetry tracing, Vercel AI SDK helpers, React hooks, and an admin UI — all wired up via `.install()`.
 
-> **Prerequisite:** This package relies on the new TerrenoApp plugin system (see [PR #149](https://github.com/FlourishHealth/terreno/pull/149)). TerrenoApp must support `.install()` before this package can be used.
+> **Prerequisite:** This package relies on the new TerrenoApp plugin system (see [PR #149](https://github.com/TerrenoLabs/terreno/pull/149)). TerrenoApp must support `.install()` before this package can be used.
 
 ## Why
 
@@ -142,4 +142,4 @@ const { prompt, compile, isLoading } = usePrompt('chat-assistant');
 - [Langfuse Prompt Management](https://langfuse.com/docs/prompt-management/get-started)
 - [Vercel AI SDK Integration](https://langfuse.com/integrations/frameworks/vercel-ai-sdk)
 - [TypeScript SDK v4](https://langfuse.com/changelog/2025-08-28-typescript-sdk-v4-ga)
-- [TerrenoApp PR #149](https://github.com/FlourishHealth/terreno/pull/149)
+- [TerrenoApp PR #149](https://github.com/TerrenoLabs/terreno/pull/149)

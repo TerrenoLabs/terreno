@@ -293,4 +293,4 @@ the insert when possible (`JobDispatchError`).
 - [Jobs reference](../reference/jobs.md)
 - [Environment variables — jobs](../reference/environment-variables.md#background-jobs)
 - [Import pre-built admins](admin-import-prebuilt.md)
-- Implementation plan: [job-queues.md](https://github.com/FlourishHealth/terreno/blob/master/docs/implementationPlans/job-queues.md)
+- Implementation plan: [job-queues.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/job-queues.md)

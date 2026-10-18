@@ -131,7 +131,7 @@ exports[`SignUpScreen renders correctly with all props 1`] = `
                               ],
                               "props": {
                                 "style": {
-                                  "backgroundColor": "#D9D9D9",
+                                  "backgroundColor": "#CDCDCD",
                                   "borderColor": "#4E4E4E",
                                   "borderRadius": 4,
                                   "borderWidth": 1,
@@ -237,7 +237,7 @@ exports[`SignUpScreen renders correctly with all props 1`] = `
                               ],
                               "props": {
                                 "style": {
-                                  "backgroundColor": "#D9D9D9",
+                                  "backgroundColor": "#CDCDCD",
                                   "borderColor": "#4E4E4E",
                                   "borderRadius": 4,
                                   "borderWidth": 1,
@@ -365,7 +365,7 @@ exports[`SignUpScreen renders correctly with all props 1`] = `
                               ],
                               "props": {
                                 "style": {
-                                  "backgroundColor": "#D9D9D9",
+                                  "backgroundColor": "#CDCDCD",
                                   "borderColor": "#4E4E4E",
                                   "borderRadius": 4,
                                   "borderWidth": 1,
@@ -721,7 +721,7 @@ exports[`SignUpScreen renders correctly with all props 1`] = `
                                 "style": {
                                   "alignItems": "center",
                                   "alignSelf": "stretch",
-                                  "backgroundColor": "#9A9A9A",
+                                  "backgroundColor": "#949494",
                                   "borderColor": undefined,
                                   "borderRadius": 360,
                                   "borderWidth": undefined,
@@ -804,7 +804,7 @@ exports[`SignUpScreen renders correctly with all props 1`] = `
                                 "style": {
                                   "alignItems": "center",
                                   "alignSelf": "stretch",
-                                  "backgroundColor": "#9A9A9A",
+                                  "backgroundColor": "#949494",
                                   "borderColor": undefined,
                                   "borderRadius": 360,
                                   "borderWidth": undefined,

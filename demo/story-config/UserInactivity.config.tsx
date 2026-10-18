@@ -3,9 +3,10 @@ import {UserInactivityDemo} from "@stories/UserInactivity.stories";
 import {UserInactivity} from "@terreno/ui";
 
 export const UserInactivityConfiguration: DemoConfiguration = {
+  usageExample: "import {UserInactivity} from \"@terreno/ui\";\n\n<UserInactivity />",
   name: "UserInactivity",
   component: UserInactivity,
-  related: ["Session Management", "Timeout"],
+  related: ["Modal"],
   description:
     "A component that detects user inactivity by monitoring touch events and keyboard interactions. When the user hasn't interacted with the app for a specified duration, it triggers a callback. This is useful for implementing session timeouts, auto-logout features, or any functionality that depends on user activity state. No demo is available as this component requires app-level integration.",
   a11yNotes: [],

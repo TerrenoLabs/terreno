@@ -1,7 +1,7 @@
 # Implementation Plan: Pluggable communications layer (@terreno/comms)
 
 **Status:** Complete — `@terreno/comms` shipped; adapters track as their own IPs
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1018
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1018
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned

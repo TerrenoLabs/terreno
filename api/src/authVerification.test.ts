@@ -99,6 +99,28 @@ describe("email verification gating", () => {
       .expect(200);
   });
 
+  it("does not issue an unusable verification token on signup when routes are disabled", async () => {
+    const noVerificationRoutesApp = new TerrenoApp({
+      authOptions: {
+        emailVerification: false,
+        publicAppUrl: "https://app.example.com",
+        sendMail: async (message) => {
+          openMail.push(message);
+        },
+      },
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+
+    await supertest(noVerificationRoutesApp)
+      .post("/auth/signup")
+      .send({email: "custom-verification@example.com", password: "password"})
+      .expect(200);
+
+    assert.equal(openMail.length, 0);
+    assert.equal(await AuthToken.countDocuments({type: "emailVerification"}), 0);
+  });
+
   it("resends verification mail for an authenticated unverified user", async () => {
     const login = await supertest(openApp)
       .post("/auth/login")

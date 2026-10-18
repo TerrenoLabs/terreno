@@ -1,0 +1,19 @@
+v: 1
+blocks:
+  - type: stepper
+    id: guests
+    label: Number of people
+    value: 5
+    min: 1
+    max: 20
+    callback:
+      name: scaleStepper
+  - type: actions
+    id: more
+    elements:
+      - type: button
+        id: guests_increase
+        text: More
+        action:
+          kind: reply
+          text: More people

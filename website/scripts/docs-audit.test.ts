@@ -45,7 +45,7 @@ publish-feature-flags:
   it("detects internal leakage strings", () => {
     expect(findInternalLeakageHits("see .cursor/rules/api")).toEqual([".cursor/rules"]);
     expect(findInternalLeakageHits("project flourish-terreno")).toEqual(["flourish-terreno"]);
-    expect(findInternalLeakageHits("https://github.com/FlourishHealth/terreno")).toEqual([]);
+    expect(findInternalLeakageHits("https://github.com/TerrenoLabs/terreno")).toEqual([]);
     expect(findInternalLeakageHits("Slack webhook")).toEqual([]);
   });
 

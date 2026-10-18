@@ -26,6 +26,7 @@ export interface ActionContext<TDoc, TBody, TQuery> {
 
 interface BaseActionConfig<TBody, TQuery, TResponse> {
   method: "GET" | "POST";
+  allowAnonymous?: boolean;
   permissions?: PermissionMethod<unknown>[];
   access?: {resource: string; action: string};
   body?: ZodSchema<TBody>;
@@ -468,7 +469,7 @@ const buildActionMiddleware = <T>(
   });
 
   const chain: express.RequestHandler[] = [
-    authenticateMiddleware(options.allowAnonymous),
+    authenticateMiddleware(action.allowAnonymous ?? options.allowAnonymous),
     createActionOpenApiMiddleware({action, actionName, model, options, scope}),
     preDocPermissions,
   ];

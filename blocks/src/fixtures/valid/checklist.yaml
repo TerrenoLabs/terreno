@@ -1,0 +1,29 @@
+v: 1
+blocks:
+  - type: checklist
+    id: cooking
+    title: Cooking checklist
+    callback:
+      name: toggleChecklist
+      payload:
+        recipe: roast
+    items:
+      - id: oven
+        text: Preheat the oven
+        meta: "1:00 pm"
+        detail: 220 C, fan off.
+        checked: true
+      - id: lamb_in
+        text: Put the lamb in
+        meta: "1:30 pm"
+      - id: rest
+        text: Rest the lamb
+        checked: false
+  - type: card
+    title: Before guests arrive
+    children:
+      - type: checklist
+        id: prep
+        items:
+          - id: table
+            text: Set the table

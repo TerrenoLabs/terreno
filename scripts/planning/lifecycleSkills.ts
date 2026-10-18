@@ -68,6 +68,9 @@ const OUTER_LOOP_DIRECTORIES = [
   "terreno-taste-sweep",
 ] as const;
 
+/** Skills that run before Grow and feed it input; not stages. */
+const PRE_GROW_SKILL_DIRECTORIES = ["terreno-prd"] as const;
+
 const PLUGIN_APP_SKILL_DIRECTORIES = [
   "ai-prompt-governance",
   "backend-test-env",
@@ -75,8 +78,10 @@ const PLUGIN_APP_SKILL_DIRECTORIES = [
   "building-terreno-apps",
   "debug-syncdb-with-mcp",
   "deploy-gcp",
+  "generate-release-announcements",
   "generate-sdk",
   "mongoose-schema-safety",
+  "store-assets",
   "terreno-backend-api",
   "terreno-data-fetching",
   "terreno-ui",
@@ -253,9 +258,24 @@ export const validateStageContent = ({
     if (!content.includes("task-scoped briefing")) {
       errors.push(`${prefix}: must pass a task-scoped briefing to Roast and reviewers`);
     }
+    if (!content.includes("**Commit once.**")) {
+      errors.push(`${prefix}: Pick must make one commit per task after Roast PASS`);
+    }
+    if (!content.includes("List its edge cases before writing code")) {
+      errors.push(`${prefix}: Pick must enumerate edge cases before implementing`);
+    }
+    if (!content.includes("Do not start or continue another slice on a red head")) {
+      errors.push(`${prefix}: Pick must fix branch-caused CI failures before the next slice`);
+    }
+    if (!content.includes("Never wait on pending CI")) {
+      errors.push(`${prefix}: Pick must not wait on pending CI`);
+    }
   }
 
   if (definition.stage === "roast") {
+    if (!content.includes("passes alone but fails in the package suite")) {
+      errors.push(`${prefix}: Roast must run the CI-equivalent package gate`);
+    }
     if (!content.includes("Exactly one driver continues")) {
       errors.push(`${prefix}: must name a single inner-loop driver`);
     }
@@ -313,6 +333,9 @@ export const validateStageContent = ({
     if (!content.includes("Brew itself never executes Taste")) {
       errors.push(`${prefix}: must explicitly terminate without executing Taste`);
     }
+    if (!content.includes("start the Taste skill as the next stage")) {
+      errors.push(`${prefix}: Brew must hand a direct human invocation on to Taste`);
+    }
     if (/execute(?:s| the)? \*\*?Taste|execute(?:s| the)? Taste procedure/i.test(content)) {
       errors.push(`${prefix}: Brew must not execute Taste in the same invocation`);
     }
@@ -345,11 +368,29 @@ export const validateStageContent = ({
     if (!content.includes("one reactive iteration only")) {
       errors.push(`${prefix}: must be bounded to one reactive iteration`);
     }
+    if (!content.includes("## Standalone entry")) {
+      errors.push(`${prefix}: Taste must define standalone entry for direct human invocation`);
+    }
+    if (!content.includes("Never hand a wait back to the human")) {
+      errors.push(`${prefix}: Taste must not return PENDING to a human`);
+    }
+    if (!content.includes("at most 3 fix rounds") || !content.includes("at most 3 hours")) {
+      errors.push(`${prefix}: Taste standalone entry must be bounded by fix rounds and wait time`);
+    }
+    if (!content.includes("push-ownership.md") || !content.includes("still red after")) {
+      errors.push(`${prefix}: Taste must escalate a PR that stays red after its fix rounds`);
+    }
+    if (!content.includes("unanswered bot thread")) {
+      errors.push(`${prefix}: Taste must not PASS with an unanswered review-bot thread`);
+    }
     if (!content.includes("If step 10 did not push")) {
       errors.push(`${prefix}: Taste must preserve an emit path when no fix was pushed`);
     }
     if (!content.includes("latest `master`")) {
-      errors.push(`${prefix}: Taste must pull latest master before the local gate and push`);
+      errors.push(`${prefix}: Taste must fetch latest master before the local gate and push`);
+    }
+    if (!content.includes("Otherwise skip the merge")) {
+      errors.push(`${prefix}: Taste must merge the base only when needed`);
     }
     if (!content.includes("Before any push, in this order")) {
       errors.push(
@@ -704,6 +745,7 @@ export const validateClaudePluginHost = ({
   const expectedClaudeStages = [
     ...STAGE_DEFINITIONS.map(({directory}) => directory.replace(/^terreno-/, "")),
     ...OUTER_LOOP_DIRECTORIES.map((directory) => directory.replace(/^terreno-/, "")),
+    ...PRE_GROW_SKILL_DIRECTORIES.map((directory) => directory.replace(/^terreno-/, "")),
     ...PLUGIN_APP_SKILL_DIRECTORIES,
   ].sort();
   if (JSON.stringify(claudeStages) !== JSON.stringify(expectedClaudeStages)) {
@@ -858,6 +900,11 @@ export const validateLifecyclePlugin = ({
       errors.push(`plugin Terreno app skill is missing: ${directory}`);
     }
   }
+  for (const directory of PRE_GROW_SKILL_DIRECTORIES) {
+    if (!existsSync(join(skillsDirectory, directory, "SKILL.md"))) {
+      errors.push(`plugin pre-Grow skill is missing: ${directory}`);
+    }
+  }
   for (const directory of REMOVED_SKILL_DIRECTORIES) {
     if (
       existsSync(join(rootDirectory, ".rulesync/skills", directory)) ||
@@ -969,7 +1016,7 @@ export const validateLifecyclePlugin = ({
   if (!pluginReadme.includes("documentation-contract.md")) {
     errors.push("plugins/README.md must document the documentation contract");
   }
-  if (!pluginReadme.includes("npx skills add FlourishHealth/terreno")) {
+  if (!pluginReadme.includes("npx skills add TerrenoLabs/terreno")) {
     errors.push("plugins/README.md must document npx skills installation");
   }
   if (!pluginReadme.includes("product-ci.md")) {
@@ -984,7 +1031,7 @@ export const validateLifecyclePlugin = ({
   if (!pluginReadme.includes(".claude-plugin/marketplace.json")) {
     errors.push("plugins/README.md must document the Claude Code marketplace");
   }
-  if (!pluginReadme.includes("/plugin marketplace add FlourishHealth/terreno")) {
+  if (!pluginReadme.includes("/plugin marketplace add TerrenoLabs/terreno")) {
     errors.push("plugins/README.md must document Claude Code marketplace install");
   }
   if (!pluginReadme.includes("/plugin install terreno@terreno-plugins")) {
@@ -993,7 +1040,7 @@ export const validateLifecyclePlugin = ({
   if (!pluginReadme.includes(".agents/plugins/marketplace.json")) {
     errors.push("plugins/README.md must document the Codex marketplace");
   }
-  if (!pluginReadme.includes("codex plugin marketplace add FlourishHealth/terreno")) {
+  if (!pluginReadme.includes("codex plugin marketplace add TerrenoLabs/terreno")) {
     errors.push("plugins/README.md must document Codex marketplace install");
   }
   if (!pluginReadme.includes("codex plugin install terreno-planning --source terreno-plugins")) {
@@ -1118,6 +1165,12 @@ export const validateLifecyclePlugin = ({
   }
   if (!pickRoastLoop.includes("subagent-briefing.md")) {
     errors.push("pick-roast loop must load the subagent briefing contract");
+  }
+  if (!pickRoastLoop.includes("## Commits and pushes")) {
+    errors.push("pick-roast loop must define commit and push rules");
+  }
+  if (!pickRoastLoop.includes("Pick and Roast do not push")) {
+    errors.push("pick-roast loop must keep pushes out of the inner loop");
   }
   if (!pickRoastLoop.includes("Do not ask Roast or its children to rediscover")) {
     errors.push("pick-roast loop must forbid Roast children from rediscovering the repo");

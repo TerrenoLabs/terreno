@@ -1,7 +1,7 @@
 # Implementation Plan: Organizations, teams, and multi-tenant scoping
 
 **Status:** Draft
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1024
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1024
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned

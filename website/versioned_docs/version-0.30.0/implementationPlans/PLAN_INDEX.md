@@ -16,8 +16,8 @@ Umbrella plans that coordinate several IPs.
 |------|--------|---------|-------|
 | [Admin UI v2 — Django-parity admin](admin-ui-v2-django-parity.md) | Approved | 2026-06-15 | [tasks](../tasks/admin-ui-v2-django-parity.md) |
 | [RBAC Permissions](rbac-permissions.md) | Draft (API design) | 2026-07-08 | TBD |
-| [SyncDB Local-First Data Layer](syncdb-local-first.md) | In progress ([PR #869](https://github.com/flourishhealth/terreno/pull/869)) | 2026-07-13 | [tasks](../tasks/syncdb-local-first.md) |
-| [MCP Boost parity](mcp-boost-parity.md) | In progress ([PR #802](https://github.com/flourishhealth/terreno/pull/802)) | 2026-06-21 | TBD |
+| [SyncDB Local-First Data Layer](syncdb-local-first.md) | In progress ([PR #869](https://github.com/TerrenoLabs/terreno/pull/869)) | 2026-07-13 | [tasks](../tasks/syncdb-local-first.md) |
+| [MCP Boost parity](mcp-boost-parity.md) | In progress ([PR #802](https://github.com/TerrenoLabs/terreno/pull/802)) | 2026-06-21 | TBD |
 
 ## Open source launch IPs
 

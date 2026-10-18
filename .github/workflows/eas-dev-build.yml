@@ -8,7 +8,11 @@ name: Trigger EAS Workflow
 # build off-PR (e.g., to seed a dev build on master).
 
 # Disabled after migration to CircleCI `eas-dev-target`; retained for rollback.
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 jobs:
   dispatch:
@@ -19,7 +23,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.3
         with:
-          ref: ${{ inputs.git_ref || github.ref }}
+          ref: ${{ github.event.inputs.git_ref || github.ref }}
 
       - name: Validate required secrets
         env:
@@ -47,7 +51,7 @@ jobs:
 
       - name: Dispatch to EAS Cloud
         env:
-          TARGET: ${{ inputs.target }}
+          TARGET: ${{ github.event.inputs.target }}
         run: |
           set -euo pipefail
 

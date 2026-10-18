@@ -1,12 +1,14 @@
 ---
 name: update-dependencies
-description: 'Daily Dependabot-style updates on one rolling PR: bump proven packages, exercise each with a test that imports it, refuse Expo fingerprint changes, and reuse the existing PR (ledger of what worked and failed). Trigger with /update-dependencies or phrases like "dependabot", "daily dependency updates", "bump packages", "outdated dependencies".'
+description: 'Upgrade dependencies and prove them: bump JavaScript and GitHub Actions versions on one rolling PR, exercise each bump with a test that imports it, verify the batch locally before a single push, refuse Expo fingerprint changes, and keep a ledger of what landed and failed. This is the only path for routine version upgrades — Dependabot opens security PRs only. Trigger with /update-dependencies or "update/upgrade/bump dependencies", "outdated packages", "daily dependency updates", or a Dependabot security PR that needs code changes.'
 ---
 # Update dependencies
 
-Daily JavaScript and GitHub Actions updates. Prove each bump with a test that
-imports the package. Native Expo fingerprint changes are **release-only**.
-Keep **one** open PR and rewrite it every day — never open a second.
+Routine JavaScript and GitHub Actions upgrades. Dependabot opens **security
+PRs only**; every other version bump goes through this skill on **one**
+rolling PR. Prove each bump with a test that imports the package, verify the
+whole batch locally, then push **once**. Native Expo fingerprint changes are
+**release-only**.
 
 Architecture: [`docs/explanation/dependency-management.md`](../../docs/explanation/dependency-management.md).
 Operator steps: [`docs/how-to/update-dependencies.md`](../../docs/how-to/update-dependencies.md).
@@ -16,21 +18,24 @@ Native SDK upgrades: `upgrading-expo` and `release`, never this skill.
 
 ## Hard rules
 
-1. **Fingerprint freeze.** Do not bump a package when `isFingerprintSkip(name)` is true. Do not edit `eas.json`, Expo config plugins, `app.json` native fields, or native project files. After every allowed bump, recompute fingerprints for `example-frontend` and `demo`; if either hash changes, revert **that bump** (keep earlier proven bumps) and log it as failed.
-2. **Exercise test.** Do not keep an update unless a test that imports the bumped package ran and passed **after** the bump. Workspace `test:ci` is not enough by itself. If no such test exists, write a tracer-bullet test first, then bump.
-3. **One trusted rolling PR.** Reuse only a same-repository PR whose head is exactly `chore/update-dependencies`, base is `master`, and `isTrustedRollingPr` passes. Marker/title matches never establish trust. Ignore fork candidates; never checkout, copy, edit, close, or comment on them. Do not create a second trusted dependency PR.
-4. **Ledger.** Every run appends what landed, failed, skipped, and deferred. Prior failure rows stay until that package lands or a human drops them. Details: [`references/rolling-pr.md`](references/rolling-pr.md).
-5. **7-day cooldown** for non-security npm publishes. Security advisories skip the wait; they still need an exercise test and a fingerprint freeze.
-6. **Catalog once.** Shared versions change only in the root `package.json` `catalog`. Workspace manifests keep `"catalog:"`. See `.rulesync/rules/01-dependency-catalog.md`.
+1. **Fingerprint freeze.** Do not bump a package when `isFingerprintSkip(name)` is true. Do not edit `eas.json`, Expo config plugins, `app.json` native fields, or native project files. After every allowed bump, recompute fingerprints for `example-frontend` and `demo`; if either hash changes, revert **that bump** and log it as failed.
+2. **Exercise test.** Keep a bump only when a test that imports the bumped package ran and passed **after** the bump. Workspace `test:ci` alone is not proof. No such test → write a tracer-bullet test first.
+3. **Local green before push.** Run the batch gate in step 5 and fix or revert until it is green. CI confirms local results; it is not the test runner.
+4. **One batch push per run.** Batch all commits, push once. After that, push only to fix red CI on that head (rule 6). Never push a speculative CI fix to see whether it works.
+5. **Hands off CI config.** Never edit `.circleci/`, `.github/workflows/`, executors, resource classes, or heap flags to make a bump pass. A CI-config problem means stop and escalate (rule 6).
+6. **Never leave the rolling PR red.** Follow [push ownership](references/push-ownership.md): fix red CI and answer every review-bot comment, for at most three fix rounds. Still red after the third → stop pushing and escalate: the final message starts with `BLOCKED — PR #<n> still red after 3 fix rounds`, and the PR body's Last run names the failing jobs.
+7. **One trusted rolling PR.** Push only to the same-repository `chore/update-dependencies` head; `isTrustedRollingPr` must pass. Never push to `dependabot/*` branches or to a fork. Ledger and trust rules: [`references/rolling-pr.md`](references/rolling-pr.md).
+8. **7-day cooldown** for non-security npm publishes. Security advisories skip the wait; they still need an exercise test and a fingerprint freeze.
+9. **Catalog once.** Shared versions change only in the root `package.json` `catalog`. Workspace manifests keep `"catalog:"`. See `.rulesync/rules/01-dependency-catalog.md`.
 
 ## When to use
 
-- The daily maintenance cron / scheduled agent
-- A human asks to bump, update, or refresh packages
-- Dependabot opened extra PRs — fold proven JS bumps into the rolling PR; do not merge fingerprint-risk Dependabot PRs
+- The scheduled maintenance agent or a human asks to bump, update, or refresh packages
+- A Dependabot **security** PR fails CI because the fix needs code changes — fold that bump into the rolling PR and leave the Dependabot PR alone (close it only when a human says so)
 
 ## When not to use
 
+- A Dependabot security PR that is green — it merges on its own; do not push to it
 - Expo SDK, React Native, or native-module upgrades — `upgrading-expo` during a `release`
 - Adding a new dependency for a feature — that feature's Pick slice owns it
 - `@terreno/*` lockstep upgrades — `upgrading-terreno`
@@ -39,64 +44,70 @@ Native SDK upgrades: `upgrading-expo` and `release`, never this skill.
 
 ### 1. Attach the rolling PR
 
-Follow [`references/rolling-pr.md`](references/rolling-pr.md): find the trusted same-repository PR, merge `origin/master` into `chore/update-dependencies` without rewriting history, and restore the ledger from the trusted PR body.
+Follow [`references/rolling-pr.md`](references/rolling-pr.md): find the trusted PR, merge `origin/master` into `chore/update-dependencies` without rewriting history, and restore the ledger from its body. Count the CI rounds already logged for this run.
 
-Completion: at most one trusted open PR identified (or none, to create after the first write); forks/spoofs are ignored; branch contains current master; yesterday's Landed/Failed/Skipped tables are in hand.
+Completion: at most one trusted open PR identified (or none yet); forks and spoofs ignored; branch contains current master; the previous Landed/Failed/Skipped tables are in hand.
 
 ### 2. Inventory
 
-From that branch (after rebase), record a fingerprint **baseline** before any new install:
+Record a fingerprint **baseline** before any new install (commands in [`references/fingerprint-risk.md`](references/fingerprint-risk.md)), then:
 
 ```bash
 bun outdated
 ```
 
-Fingerprint hashes (both apps, iOS and Android). Prefer `eas fingerprint:generate --platform <ios|android> --non-interactive --json` when `EXPO_TOKEN` is set; otherwise `bunx @expo/fingerprint <app-dir>`. Save the four hashes. Completion: baseline contains iOS+Android hashes for `example-frontend` and `demo`.
+Cooldown: `npm view <name> time --json` → `time[<version>]` must be at least 7 days old unless the bump fixes a published advisory. Move every `isFingerprintSkip(name)` match to **Deferred to release** without installing it. Retry **Failed** ledger rows before new names.
 
-Cooldown: `npm view <name> time --json` → `time[<version>]` must be at least 7 days old unless the bump is a published security advisory.
-
-Drop every name where `isFingerprintSkip(name)` is true into **Deferred to release**. Do not install them. Categories: [`references/fingerprint-risk.md`](references/fingerprint-risk.md).
-
-Retry **Failed** rows from the ledger before new `bun outdated` names.
-
-Completion: a candidate list with name, current version, target version, catalog vs workspace, security vs cooldown, skip/candidate, and whether it is a ledger retry.
+Completion: baseline holds iOS + Android hashes for `example-frontend` and `demo`; every candidate has name, current → target version, catalog vs workspace, security vs cooldown, and retry flag.
 
 ### 3. Exercise coverage
 
-How to find or write the test: [`references/exercise.md`](references/exercise.md).
+For each candidate, name a test file that imports the package, or write a tracer-bullet test and run it on the current version. How: [`references/exercise.md`](references/exercise.md).
 
-For **each** candidate, search the repo for imports of that package. Find a `*.test.ts` / `*.test.tsx` / `*.spec.ts` that imports it.
+Completion: every candidate attempted this run has a named exercise test that imports it.
 
-- If one exists, name that file. That is the exercise test.
-- If none exists, write a tracer-bullet test in the package that depends on it: import the real module (no mock of the dependency) and assert one behavior this repo relies on. Run it **before** the bump so the test is red-or-green against the current version.
+### 4. Bump one package at a time
 
-Completion: every candidate attempted this run has a named exercise test file that imports the package.
+On `chore/update-dependencies`, for each candidate:
 
-### 4. Apply bumps on the rolling branch
-
-For each candidate, one at a time on `chore/update-dependencies`:
-
-1. If the package is in the root `catalog`, change only that catalog pin. If it is single-use, change only that workspace `package.json`.
+1. Change only the catalog pin (shared) or the one workspace `package.json` (single-use).
 2. `bun install` from the repo root.
-3. Run the named exercise test. Then lint/compile the consuming package(s).
-4. Recompute all four fingerprint hashes against this run's baseline.
+3. Run the exercise test, then compile and lint the consuming package(s).
+4. Recompute all four fingerprint hashes against the baseline.
 
-If the exercise test fails: revert that bump and lockfile, add/update a **Failed** row, continue to the next candidate. Do not expand the bump with `expo install --fix`.
+Red exercise test, failed install, or changed hash → revert that bump and its lockfile change, add a **Failed** row with the cause, continue. Do not widen a bump with `expo install --fix`. Green → commit `Bump <name> from <old> to <new>` and refresh the baseline to the new hashes.
 
-If any fingerprint hash differs from baseline: revert that bump and lockfile, log **Failed** (fingerprint), even if `isFingerprintSkip` was false. Baseline stays the hashes from the start of this run (proven bumps already on the branch are included). After a successful bump, **refresh the baseline** to the new hashes so the next bump is compared to the stacked tree.
+Completion: every candidate is in Landed, Failed, Skipped, or Deferred; branch fingerprints equal the last baseline.
 
-Commit each successful bump on the rolling branch (`chore(deps): bump <name> from <old> to <new>`).
+### 5. Batch gate (local, before push)
 
-Completion: every candidate this run is in Landed, Failed, Skipped, or Deferred; fingerprints of the branch match the last successful baseline; no second PR exists.
+Run the full gate on the stacked branch. Command list and the CI job → local command map: [`references/verify-locally.md`](references/verify-locally.md).
 
-### 5. Push and update the same PR
+A failure you can attribute to one bump → revert that bump, log it Failed, rerun the gate. A failure you cannot attribute, or one in CI config → stop and report; do not push.
 
-Push `chore/update-dependencies`. If a trusted open PR exists, update its body ledger (do not open another). If none exists, create one from the canonical branch in the base repository with the marker and skeleton in [`references/rolling-pr.md`](references/rolling-pr.md).
+Completion: `bun run compile`, `bun run lint`, affected package tests, and `bun run prepush` are green on the final head; any frontend-affecting bump has `verify-ui-changes` evidence; each infra job `prepush` lists (Playwright, Maestro, admin-spa integration) whose package changed was run by hand or logged as not run.
 
-Majors that landed stay on the rolling PR; say so in Last run. Do not enable auto-merge for a run that includes a major.
+### 6. Push once and update the same PR
 
-Completion: the single open PR body lists this UTC date, every landed bump with its exercise command, every failure with cause, and deferred fingerprint names.
+Push `chore/update-dependencies` one time. Update the trusted PR body ledger (do not open another), or create the PR from [`references/rolling-pr.md`](references/rolling-pr.md) when none exists. A run that landed a major says so in Last run and never enables auto-merge.
+
+Completion: one push this run; the PR body lists this UTC date, every landed bump with its exercise command, every failure with its cause, deferred fingerprint names, and the local gate result.
+
+### 7. Read CI, then react or stop
+
+Wait for product CI on the pushed head. Read each failure the way [`references/read-ci.md`](references/read-ci.md) says — job `messages` first, step logs second.
+
+- Reproduce the failure locally with the matching command, revert the bump that caused it, rerun the step 5 gate, and push again. Each push is one fix round; at most three.
+- A flaky job the bumps did not cause: rerun only the failed job. That counts as a round.
+- Answer every review-bot thread: fix and resolve, or reply with one sentence and resolve.
+- Config, plan, infra, or secret errors (for example `resource-class-not-in-plan`) are not dependency failures. Log them in the PR body and escalate per rule 6.
+
+Completion: CI green on the pushed head with no unanswered bot thread, or the run escalated per rule 6 with the failing job, its `messages`/log cause, and the fix-round count (at most three).
+
+## Identity
+
+An automation commits and pushes as whoever's git identity and GitHub token it holds. CircleCI attributes the pipeline to that GitHub user and emails them on every failed workflow. Use the bot identity when one is configured. When running as a person, batch into one push and fix CI within three rounds, so they get few emails and never a PR left red.
 
 ## Deferred native bumps
 
-Keep them on the **Deferred to release** table. Hand that list to `release` / `upgrading-expo`. Do not put fingerprint-changing bumps on this branch.
+Keep them on the **Deferred to release** table and hand the list to `release` / `upgrading-expo`. Never put fingerprint-changing bumps on this branch.

@@ -402,7 +402,7 @@ declare module "@terreno/ui" {
 }
 ``````
 
-See [`demo/components/customIcons.tsx`](https://github.com/flourishhealth/terreno/blob/master/demo/components/customIcons.tsx) for a full working example.
+See [`demo/components/customIcons.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/components/customIcons.tsx) for a full working example.
 
 ### Built-in Status Icons
 

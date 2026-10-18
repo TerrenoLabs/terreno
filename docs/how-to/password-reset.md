@@ -20,6 +20,8 @@ Set `publicAppUrl` and `sendMail`. Forgot-password always returns 202.
 ```typescript
 authOptions: {
   publicAppUrl: process.env.FRONTEND_URL || "http://localhost:8082",
+  // Set false if the host already owns POST /resetPassword.
+  legacyResetPasswordRoute: false,
   sendMail: async (message) => {
     await getCommsService().sendMail(message);
   },
@@ -33,6 +35,11 @@ authOptions: {
 | Reset | `POST /auth/resetPassword` or `POST /resetPassword` | `{token, password}` or `{token, newPassword}` |
 | Send verify | `POST /auth/sendVerification` | authenticated → 202 after delivery; 501 if `publicAppUrl` is missing |
 | Verify | `POST /auth/verifyEmail` | `{token}` |
+
+Recovery routes default on for compatibility. Set `authOptions.passwordReset: false` to omit
+both password-reset routes and forgot-password. Set `authOptions.emailVerification: false` to
+omit both verification routes. Set `authOptions.legacyResetPasswordRoute: false` when the host
+owns `POST /resetPassword`; `POST /auth/resetPassword` remains registered.
 
 Reset links: `${publicAppUrl}/resetPassword?token=...`. Verify links: `${publicAppUrl}/verifyEmail?token=...`.
 

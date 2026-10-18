@@ -695,7 +695,7 @@ export const addAuthRoutes = (
         )(req, res, next);
       },
       async (req: express.Request, res: express.Response) => {
-        if (req.user) {
+        if (req.user && authOptions?.emailVerification !== false) {
           try {
             await sendVerificationEmail(req.user, authOptions);
           } catch (error: unknown) {

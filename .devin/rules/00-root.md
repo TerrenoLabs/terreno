@@ -29,6 +29,7 @@ deploy.
 - **admin-backend/** - Admin panel backend plugin for @terreno/api (`@terreno/admin-backend`)
 - **admin-frontend/** - Admin panel frontend screens for @terreno/api backends (`@terreno/admin-frontend`)
 - **admin-spa/** - Standalone admin SPA (Expo Router web app) + Express plugin to serve it from a backend (`@terreno/admin-spa`)
+- **blocks/** - Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards, and JSON Schemas for native clients (`@terreno/blocks`)
 - **comms/** - Pluggable transactional communications (`@terreno/comms`)
 - **cli/** - Operator CLI (`@terreno/cli`, bin `terreno`) for docs, codegen, bootstrap, and OpenAPI REST
 - **jobs/** - Durable background jobs plugin for `@terreno/api` (`@terreno/jobs`)
@@ -41,10 +42,11 @@ deploy.
 
 The reusable planning plugin uses five bounded transitions:
 **Grow** (shape) → **Pick** (build) ⇄ **Roast** (prove) until tasks are done →
-**Brew** (submit) → **Taste** (react once). Pick owns the inner loop: one task, roast
+**Brew** (submit) → **Taste** (react once; invoked directly, it repeats bounded
+reactions until a terminal verdict and never tells you to run it later). Pick owns the inner loop: one task, roast
 it, next task. Roast never invokes Pick. The outer loop owns state persistence,
 retry, stop, and escalation. Taste waits in-process for review bots and for product
-CI (`gh` / `circleci` watch loop). Before any push it always pulls latest `master`,
+CI (`gh` / `circleci` watch loop). Before any push it fetches latest `master` (merging it only when needed),
 records last-run failed tests and re-verifies them locally, then
 spawns a no-context subagent to run the root `prepush` package script when present
 (otherwise lint, typecheck, and locally affected tests in affected packages), then
@@ -64,12 +66,12 @@ Human-facing docs are the architecture source. Before changing code, read the
 explanation and reference pages for the affected area. Update those pages in the
 same slice using the `update-docs` skill. Missing docs for a user-visible or
 architectural change fails the slice. Install the published skill set with
-`npx skills add FlourishHealth/terreno`; regenerate `skills/` with
+`npx skills add TerrenoLabs/terreno`; regenerate `skills/` with
 `bun run skills:sync`. The combined lifecycle and Terreno app skill set installs as the Cursor plugin
 `terreno-planning` from `.cursor-plugin/marketplace.json` (invoke `/terreno-1-grow`),
 as the Codex plugin `terreno-planning` from `.agents/plugins/marketplace.json`
 (invoke `$terreno-1-grow`), or as the Claude Code plugin `terreno` via
-`/plugin marketplace add FlourishHealth/terreno` then
+`/plugin marketplace add TerrenoLabs/terreno` then
 `/plugin install terreno@terreno-plugins` (invoke `/terreno:1-grow`). The Claude copy under
 `plugins/terreno-claude/` is generated; never hand-edit it.
 
@@ -508,7 +510,7 @@ Installs workspace dependencies and compiles all packages (`bun install && bun r
 
 ### Cloud VM toolchain
 
-Shared install script (in **flourish** repo): `bash /agent/repos/flourish/scripts/install-cloud-dev-tools.sh` then `source ~/.cloud-dev-tools.env`. Provides **terraform**, **gcloud**, **gh**, **Playwright** (after `bun bootstrap` in packages with `@playwright/test`), **Appium**, and **Android emulator** helpers. Terreno/terraform details: `terraform/README.md`.
+Shared install script (in **flourish** repo): `bash /agent/repos/flourish/scripts/install-cloud-dev-tools.sh` then `source ~/.cloud-dev-tools.env`. Provides **terraform**, **gcloud**, **gh**, **Playwright** (after `bun bootstrap` in packages with `@playwright/test`), **Appium**, and **Android emulator** helpers. Terreno GCP infrastructure details: `infra/flourish/README.md`; reusable modules: `terraform/README.md`.
 
 ### Example full stack
 
@@ -549,7 +551,7 @@ bun run test:agent        # same suites; passing cases suppressed
 bun run frontend:test     # example-frontend unit tests
 bun run frontend:e2e      # Playwright (needs replica-set mongod; starts backend+web)
 bun run maestro:test      # Maestro web flows
-bun run prepush           # lint + compile + analyze:full
+bun run prepush           # local mirror of every CI job this branch triggers
 ```
 
 Install Playwright browsers once: `cd example-frontend && bunx playwright install --with-deps chromium`.
@@ -573,7 +575,7 @@ When present, `SENTRY_CLIENT_SECRET` is injected as an environment variable hold
 
 When present, `CIRCLECI_TOKEN` is a CircleCI personal API token (`CIRCLE_TOKEN` is the
 CLI name). Use it to list jobs and fetch logs for Taste. Project slug:
-`circleci/6UHiK7pThPXbhnNi3umQNe/W3HZeMJujyMB2sYiUXaQbs` (not `gh/FlourishHealth/terreno`).
+`circleci/6UHiK7pThPXbhnNi3umQNe/LdjghuhydHjFMyFjcEXMA2` (not `gh/TerrenoLabs/terreno`).
 See [`docs/how-to/circleci.md`](../../docs/how-to/circleci.md).
 
 ### Gotchas

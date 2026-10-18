@@ -1,0 +1,13 @@
+{
+  "kind": "files",
+  "input": {
+    "prompt": "Upload the clip.",
+    "accept": ["image", "video"]
+  },
+  "errors": [
+    {
+      "path": "accept[1]",
+      "code": "INVALID_ENUM"
+    }
+  ]
+}

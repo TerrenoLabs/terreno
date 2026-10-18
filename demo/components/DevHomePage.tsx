@@ -1,8 +1,11 @@
 import type {DemoConfiguration} from "@config";
 import {Box, Heading, Text} from "@terreno/ui";
 import {useNavigation} from "expo-router";
-import React, {useEffect} from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import {Pressable, ScrollView, View} from "react-native";
+
+import {matchesDemoSearch} from "../catalogContract";
+import {DemoCatalogFilters} from "./DemoCatalogFilters";
 
 interface DevHomePageProps {
   demoConfig: DemoConfiguration[];
@@ -11,6 +14,12 @@ interface DevHomePageProps {
 
 export const DevHomePage = ({demoConfig, onPress}: DevHomePageProps): React.ReactElement => {
   const navigation = useNavigation();
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("All");
+  const visibleConfigs = useMemo(
+    () => demoConfig.filter((config) => matchesDemoSearch(config, query, category)),
+    [category, demoConfig, query]
+  );
   // Set the title
   useEffect(() => {
     navigation.setOptions({title: "Terreno UI Dev"});
@@ -29,7 +38,13 @@ export const DevHomePage = ({demoConfig, onPress}: DevHomePageProps): React.Reac
           paddingTop: 16,
         }}
       >
-        {demoConfig.map((config) => (
+        <DemoCatalogFilters
+          category={category}
+          onCategoryChange={setCategory}
+          onQueryChange={setQuery}
+          query={query}
+        />
+        {visibleConfigs.map((config) => (
           <React.Fragment key={config.name}>
             <Box marginBottom={3}>
               <Heading size="md">{config.name}</Heading>

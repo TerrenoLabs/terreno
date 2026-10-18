@@ -18,7 +18,7 @@ model instances.
 - **Permissions** — Fine-grained access control (IsAuthenticated, IsOwner, IsAdmin, etc.)
 - **OpenAPI** — Automatic spec generation from models and routes
 - **Logging** — Winston-based logging with scoped & feature-flagged loggers, automatic request correlation, and Google Cloud / Sentry support
-- **HTTP client** — Authenticated axios factory for third-party APIs with token caching, safe retries, and normalized error handling (see [Call external APIs](https://github.com/flourishhealth/terreno/blob/master/docs/how-to/call-external-apis.md))
+- **HTTP client** — Authenticated axios factory for third-party APIs with token caching, safe retries, and normalized error handling (see [Call external APIs](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/call-external-apis.md))
 
 ## Install
 
@@ -167,7 +167,7 @@ setupServer({
 });
 ```
 
-**Learn more:** See the [GitHub OAuth how-to guide](https://github.com/flourishhealth/terreno/blob/master/docs/how-to/add-github-oauth.md) for complete setup instructions.
+**Learn more:** See the [GitHub OAuth how-to guide](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/add-github-oauth.md) for complete setup instructions.
 
 ## Logging
 
@@ -219,7 +219,7 @@ In production, pass a structured transport (e.g. `@google-cloud/logging-winston`
 `loggingOptions`/`setupLogging` so the correlation fields and labels reach Log Explorer as
 `jsonPayload`.
 
-**Learn more:** See the [Logging & Tracing reference](https://github.com/flourishhealth/terreno/blob/master/docs/reference/api.md#logging--tracing) for
+**Learn more:** See the [Logging & Tracing reference](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/api.md#logging--tracing) for
 the full API, label conventions, and Google Cloud Logging / Sentry details.
 
 ## Sentry
@@ -299,8 +299,8 @@ A lot of dev may require using bun link. You'll want to keep the `bun run dev` w
 
 ## Documentation
 
-Full API reference: [docs/reference/api.md](https://github.com/flourishhealth/terreno/blob/master/docs/reference/api.md)
+Full API reference: [docs/reference/api.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/api.md)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/flourishhealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/flourishhealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.

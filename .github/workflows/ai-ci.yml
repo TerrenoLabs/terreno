@@ -1,7 +1,11 @@
 name: AI CI
 
 # Disabled after migration to CircleCI; retained for rollback.
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 defaults:
   run:
@@ -33,6 +37,10 @@ jobs:
 
       - name: Build API dependency
         working-directory: api
+        run: bun run compile
+
+      - name: Build blocks dependency
+        working-directory: blocks
         run: bun run compile
 
       - name: Lint

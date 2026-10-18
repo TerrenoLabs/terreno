@@ -1,36 +1,12 @@
 name: CD
 
-# Dual-run with CircleCI until `terreno-gcp` has WIF/OIDC values.
-# Do not leave both applying terraform once CircleCI GCP deploys succeed.
+# Disabled after CD moved to CircleCI (deploy-*, gcp-cd-*); retained for rollback.
+# Never re-enable alongside CircleCI: both would deploy and apply terraform.
 on:
+  # Retained for rollback without registering failed zero-job runs.
   push:
-    branches:
-      - master
-  pull_request:
-    paths:
-      - "terraform/**"
-      - "example-backend/**"
-      - "example-frontend/**"
-      - "api/**"
-      - "api-health/**"
-      - "admin-backend/**"
-      - "admin-frontend/**"
-      - "ai/**"
-      - "comms/**"
-      - "jobs/**"
-      - "mcp-server/**"
-      - "rtk/**"
-      - "ui/**"
-      - "bun.lock"
-      - ".github/workflows/cd.yml"
-      - ".github/workflows/frontend-example-deploy.yml"
-  workflow_dispatch:
-    inputs:
-      run_terraform:
-        description: "Force-run terraform jobs even if terraform/ unchanged"
-        required: false
-        type: boolean
-        default: false
+    branches-ignore:
+      - "**"
 
 # Fork PRs still receive repository variables and can request an OIDC token.
 # Do not grant id-token at the workflow; only jobs that mint GCP identity
@@ -54,6 +30,8 @@ env:
   GCP_TASKS_QUEUE: terreno-example-jobs-v2
   GCP_TASKS_INVOKER_SA: terreno-jobs-invoker@flourish-terreno.iam.gserviceaccount.com
   GCP_BACKEND_RUNTIME_SA: terreno-backend-runtime@flourish-terreno.iam.gserviceaccount.com
+  # Terraform-managed (infra/flourish/main.tf google_storage_bucket.example_documents).
+  GCP_DOCUMENTS_BUCKET: flourish-terreno-example-documents
   GCP_MCP_REGION: us-east1
   GCP_MCP_SERVICE: terreno-mcp
   TF_DEPLOYMENT: terreno-prod
@@ -77,6 +55,7 @@ jobs:
           filters: |
             terraform:
               - 'terraform/**'
+              - 'infra/**'
               - '.github/workflows/cd.yml'
             backend:
               - 'example-backend/**'
@@ -86,6 +65,7 @@ jobs:
               - 'admin-backend/**'
               - 'admin-frontend/**'
               - 'ai/**'
+              - 'blocks/**'
               - 'comms/**'
               - 'jobs/**'
               - 'rtk/**'
@@ -99,6 +79,7 @@ jobs:
               - 'api-health/**'
               - 'admin-backend/**'
               - 'ai/**'
+              - 'blocks/**'
               - 'comms/**'
               - 'jobs/**'
               - '.github/workflows/cd.yml'
@@ -120,12 +101,14 @@ jobs:
         with:
           terraform_version: 1.9.8
       - name: terraform fmt -check
-        run: terraform -chdir=terraform fmt -check -recursive
+        run: |
+          terraform -chdir=terraform fmt -check -recursive
+          terraform -chdir=infra/flourish fmt -check
 
   terraform-preview:
     name: Terraform preview
     needs: [detect, terraform-format]
-    # Same-repo PRs only. Fork PRs keep repository = FlourishHealth/terreno on
+    # Same-repo PRs only. Fork PRs keep repository = TerrenoLabs/terreno on
     # the OIDC token, so WIF would otherwise accept them.
     if: |
       always() &&
@@ -155,12 +138,15 @@ jobs:
           PREVIEW_ID="${TF_DEPLOYMENT}-pr${{ github.event.pull_request.number }}-${GITHUB_RUN_ID}"
           echo "preview_id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
           echo "location=$LOCATION" >> "$GITHUB_OUTPUT"
+          TF_SOURCE="$(mktemp -d)"
+          # infra/flourish/modules is a symlink; Infra Manager needs a self-contained source.
+          tar -C infra/flourish -chf - --exclude=.terraform --exclude=.terraform.lock.hcl . | tar -C "$TF_SOURCE" -xf -
           gcloud infra-manager previews create "$PREVIEW_ID" \
             --project="${{ env.GCP_PROJECT_ID }}" \
             --location="$LOCATION" \
             --deployment="projects/${{ env.GCP_PROJECT_ID }}/locations/${LOCATION}/deployments/${TF_DEPLOYMENT}" \
             --service-account="projects/${{ env.GCP_PROJECT_ID }}/serviceAccounts/${{ vars.GCP_TF_ADMIN_SA_PROD }}" \
-            --local-source="terraform" \
+            --local-source="$TF_SOURCE" \
             --quiet
       - name: Describe preview
         if: always() && steps.preview.outputs.preview_id != ''
@@ -216,11 +202,14 @@ jobs:
         run: |
           set -euo pipefail
           LOCATION="${{ vars.GCP_INFRA_MANAGER_LOCATION || 'us-central1' }}"
+          TF_SOURCE="$(mktemp -d)"
+          # infra/flourish/modules is a symlink; Infra Manager needs a self-contained source.
+          tar -C infra/flourish -chf - --exclude=.terraform --exclude=.terraform.lock.hcl . | tar -C "$TF_SOURCE" -xf -
           gcloud infra-manager deployments apply "${TF_DEPLOYMENT}" \
             --project="${{ env.GCP_PROJECT_ID }}" \
             --location="$LOCATION" \
             --service-account="projects/${{ env.GCP_PROJECT_ID }}/serviceAccounts/${{ vars.GCP_TF_ADMIN_SA_PROD }}" \
-            --local-source="terraform" \
+            --local-source="$TF_SOURCE" \
             --quiet
       - name: Show deployment status
         run: |
@@ -236,7 +225,7 @@ jobs:
     name: Backend deploy (prod)
     needs: [detect, terraform-apply]
     # Always run terraform-apply first if it's queued; only deploy if terraform
-    # succeeded or was skipped (no terraform/ changes in this push).
+    # succeeded or was skipped (no terraform/ or infra/ changes in this push).
     if: |
       always() &&
       needs.detect.outputs.backend == 'true' &&
@@ -351,6 +340,24 @@ jobs:
           else
             echo "flag=" >> "$GITHUB_OUTPUT"
           fi
+      - name: Resolve announcement upload token
+        id: announcements
+        run: |
+          set -euo pipefail
+          SECRET_NAME="${{ env.GCP_BACKEND_SERVICE }}-announcements-upload-token"
+          if gcloud secrets versions access latest --secret="$SECRET_NAME" --project="${{ env.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Announcement upload secret found; mounting it on this revision."
+            echo "secrets=ANNOUNCEMENTS_UPLOAD_TOKEN=$SECRET_NAME:latest" >> "$GITHUB_OUTPUT"
+            echo "env_vars=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Announcement upload secret '$SECRET_NAME' is not accessible yet; using the documented example default."
+            echo "secrets=" >> "$GITHUB_OUTPUT"
+            {
+              echo "env_vars<<ANNOUNCEMENTS_EOF"
+              echo "ANNOUNCEMENTS_UPLOAD_TOKEN=terreno-example-announcement-upload"
+              echo "ANNOUNCEMENTS_EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
       - name: Deploy to Cloud Run
         id: deploy
         uses: ./.github/actions/deploy-cloudrun-wif-retry
@@ -365,14 +372,17 @@ jobs:
             ADMIN_SPA_ENABLED=true
             CORS_ORIGINS=https://terreno-frontend.netlify.app
             CROSS_DOMAIN_AUTH_COOKIES=true
+            GCS_BUCKET=${{ env.GCP_DOCUMENTS_BUCKET }}
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
+            ${{ steps.announcements.outputs.env_vars }}
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
             LANGFUSE_SECRET_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-secret-key:latest
             LANGFUSE_PUBLIC_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-public-key:latest
             ${{ steps.better-auth.outputs.secrets }}
+            ${{ steps.announcements.outputs.secrets }}
           flags: |
             --port=3000
             --memory=512Mi
@@ -551,6 +561,24 @@ jobs:
           else
             echo "flag=" >> "$GITHUB_OUTPUT"
           fi
+      - name: Resolve announcement upload token
+        id: announcements
+        run: |
+          set -euo pipefail
+          SECRET_NAME="${{ env.GCP_BACKEND_SERVICE }}-announcements-upload-token"
+          if gcloud secrets versions access latest --secret="$SECRET_NAME" --project="${{ env.GCP_PROJECT_ID }}" >/dev/null 2>&1; then
+            echo "Announcement upload secret found; mounting it on this revision."
+            echo "secrets=ANNOUNCEMENTS_UPLOAD_TOKEN=$SECRET_NAME:latest" >> "$GITHUB_OUTPUT"
+            echo "env_vars=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Announcement upload secret '$SECRET_NAME' is not accessible yet; using the documented example default."
+            echo "secrets=" >> "$GITHUB_OUTPUT"
+            {
+              echo "env_vars<<ANNOUNCEMENTS_EOF"
+              echo "ANNOUNCEMENTS_UPLOAD_TOKEN=terreno-example-announcement-upload"
+              echo "ANNOUNCEMENTS_EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
       - name: Rebuild traffic without not-ready preview tags
         run: |
           chmod +x .github/workflows/scripts/rebuild-cloud-run-ready-traffic.sh
@@ -572,14 +600,18 @@ jobs:
             CORS_ORIGINS=https://pr-${{ github.event.pull_request.number }}--terreno-frontend.netlify.app
             CROSS_DOMAIN_AUTH_COOKIES=true
             MONGO_DB_NAME=terreno-example-pr-${{ github.event.pull_request.number }}
+            GCS_BUCKET=${{ env.GCP_DOCUMENTS_BUCKET }}
+            GCS_FOLDER_PREFIX=pr-${{ github.event.pull_request.number }}/
             SEED_DEFAULTS=true
             JOBS_START_WORKER=true
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
+            ${{ steps.announcements.outputs.env_vars }}
           secrets_update_strategy: overwrite
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
             ${{ steps.better-auth.outputs.secrets }}
+            ${{ steps.announcements.outputs.secrets }}
           flags: |
             --port=3000
             --memory=1Gi

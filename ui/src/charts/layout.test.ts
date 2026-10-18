@@ -1,4 +1,5 @@
 import {describe, expect, it} from "bun:test";
+import {assert} from "chai";
 
 import {
   CHART_Y_AXIS_MAX_WIDTH,
@@ -8,6 +9,7 @@ import {
   getPlotHeight,
   getXTickStyle,
   getYTickStyle,
+  shouldRotateChartXTicks,
 } from "./layout";
 
 describe("chart layout", () => {
@@ -19,8 +21,16 @@ describe("chart layout", () => {
     expect(getPlotHeight({hasLegend: true, height: 200})).toBe(146);
   });
 
+  it("reserves a custom x-axis height for rotated labels", () => {
+    assert.equal(getPlotHeight({hasLegend: false, height: 200, xAxisHeight: 72}), 110);
+  });
+
   it("keeps a drawable plot when the requested height is smaller than the rows", () => {
-    expect(getPlotHeight({hasLegend: true, height: 20})).toBe(40);
+    expect(getPlotHeight({hasLegend: true, height: 20})).toBe(1);
+  });
+
+  it("keeps rotated charts inside the requested height", () => {
+    assert.equal(getPlotHeight({hasLegend: true, height: 140, xAxisHeight: 72}), 32);
   });
 
   it("fits a donut inside the height left by tooltip and padded, gapped legend rows", () => {
@@ -67,6 +77,17 @@ describe("chart layout", () => {
 
   it("keeps an x tick slot positive when there are no bands", () => {
     expect(getXTickStyle({bandwidth: 0, xCenter: 10}).width).toBe(1);
+  });
+
+  it("rotates dense auto ticks but respects explicit policies", () => {
+    assert.isFalse(shouldRotateChartXTicks({labelCount: 7, policy: "auto"}));
+    assert.isTrue(shouldRotateChartXTicks({labelCount: 8, policy: "auto"}));
+    assert.isTrue(shouldRotateChartXTicks({labelCount: 2, policy: "rotate"}));
+    assert.isFalse(shouldRotateChartXTicks({labelCount: 20, policy: "truncate"}));
+    assert.deepInclude(getXTickStyle({bandwidth: 10, isRotated: true, xCenter: 20}), {
+      transform: [{rotate: "45deg"}],
+      transformOrigin: "left top",
+    });
   });
 
   it("centers a y tick label on its value and spans the axis gutter", () => {

@@ -3,6 +3,7 @@ import {TableIconButtonDemo, TableIconButtonStates} from "@stories/TableIconButt
 import {TableIconButton} from "@terreno/ui";
 
 export const TableIconButtonConfiguration: DemoConfiguration = {
+  usageExample: "import {TableIconButton} from \"@terreno/ui\";\n\n<TableIconButton />",
   name: "Table icon button",
   component: TableIconButton, // Replace with actual component reference
   related: ["Table"],
@@ -14,7 +15,7 @@ export const TableIconButtonConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A24189&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-24007",
     ios: "ready",
     android: "ready",
     web: "ready",

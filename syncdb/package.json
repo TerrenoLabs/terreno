@@ -3,27 +3,27 @@
     "terreno-syncdb-codegen": "./src/codegen/cli.ts"
   },
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "luxon": "^3.7.2",
-    "socket.io-client": "^4.8.1",
+    "luxon": "catalog:",
+    "socket.io-client": "catalog:",
     "tinybase": "^9.5.1"
   },
   "description": "Local-first data layer with TinyBase, durable outbox, and delta sync — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
-    "@biomejs/biome": "^2.3.6",
-    "@testing-library/react-native": "^13.2.0",
-    "@types/bun": "^1.4.0",
-    "@types/luxon": "^3.7.1",
-    "@types/node": "^25.3.0",
-    "@types/react": "~19.2.14",
-    "expo-sqlite": "~57.0.1",
+    "@biomejs/biome": "catalog:",
+    "@testing-library/react-native": "catalog:",
+    "@types/bun": "catalog:",
+    "@types/luxon": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "expo-sqlite": "catalog:",
     "fake-indexeddb": "^6.0.0",
-    "react": "19.2.3",
-    "react-test-renderer": "19.2.3",
-    "socket.io": "^4.8.1",
-    "typescript": "~6.0.3"
+    "react": "catalog:",
+    "react-test-renderer": "catalog:",
+    "socket.io": "catalog:",
+    "typescript": "catalog:"
   },
   "exports": {
     ".": {
@@ -48,7 +48,7 @@
     "dist/**/*",
     "src/**/*"
   ],
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "local-first",
     "tinybase",
@@ -61,7 +61,7 @@
   "name": "@terreno/syncdb",
   "peerDependencies": {
     "expo-sqlite": "*",
-    "react": "19.2.3"
+    "react": "catalog:"
   },
   "peerDependenciesMeta": {
     "expo-sqlite": {
@@ -76,7 +76,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
     "build:binary": "bun build --compile src/codegen/cli.ts --outfile dist/terreno-syncdb-codegen",
@@ -92,5 +92,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.4.0"
+  "version": "57.16.2"
 }

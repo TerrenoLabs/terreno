@@ -37,7 +37,7 @@ Language rules for all docs:
 
 ## RTK deprecation gate
 
-**`@terreno/rtk` is being replaced.** PR [#869](https://github.com/flourishhealth/terreno/pull/869) (`@terreno/syncdb` local-first data layer) makes **Better Auth + `@terreno/syncdb`** the supported frontend platform. RTK Query becomes legacy.
+**`@terreno/rtk` is being replaced.** PR [#869](https://github.com/TerrenoLabs/terreno/pull/869) (`@terreno/syncdb` local-first data layer) makes **Better Auth + `@terreno/syncdb`** the supported frontend platform. RTK Query becomes legacy.
 
 **Program-wide rule: IPs flagged `Blocked` may not be implemented until #869 merges.** Writing docs against RTK now guarantees a rewrite. Planning (this program) proceeds; implementation of `None`-flagged IPs may start before #869; `Partial` IPs proceed except for `[RTK]`-marked tasks.
 
@@ -66,7 +66,7 @@ Every `[RTK]`-marked task in every task file must be reviewed against the merged
 
 ## Boost dependency (AI story)
 
-PR [#802](https://github.com/flourishhealth/terreno/pull/802) (MCP Boost parity, Phases 4–6) is **assumed merged** by the AI-facing IPs. It delivers the runtime half of the AI story:
+PR [#802](https://github.com/TerrenoLabs/terreno/pull/802) (MCP Boost parity, Phases 4–6) is **assumed merged** by the AI-facing IPs. It delivers the runtime half of the AI story:
 
 - `read_logs` merging backend / app (CDP) / Metro / browser sources
 - `last_error` across sources

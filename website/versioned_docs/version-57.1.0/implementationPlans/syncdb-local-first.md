@@ -3,7 +3,7 @@
 *When an engineer is assigned to a project but before you begin coding, you should fill in the implementation plan and get feedback from the engineering team. Once you have finished or you make any changes, tag Josh with the @ symbol so he can review. Also tag anyone else that needs to be notified, has conflicting work, etc.*
 
 **Status:** Shaped, ready for review
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1081
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1081
 **Priority:** High
 **Effort:** Large
 **Supersedes:** the prior v1 plan (PR #739, previous content of this file) and the foundation implementation in PR #835 (to be closed with a comment linking here). Proven pieces of #835 — the outbox state machine, AES-GCM codec, delta applier, and type contracts — are harvested and adapted, not reused wholesale.

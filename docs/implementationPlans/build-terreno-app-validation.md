@@ -1,7 +1,7 @@
 # Implementation Plan: Dogfooding Run and Launch Blog Post
 
 **Status:** Approved — key decisions recorded (2026-07-29)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1015
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1015
 **Priority:** High (this is the program's acceptance test)
 **Effort:** Big batch
 **Owner:** unassigned

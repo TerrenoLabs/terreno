@@ -6,7 +6,7 @@
 **Owner:** unassigned
 **Created:** 2026-07-27
 **Program:** [OSS launch](oss-launch-program.md)
-**Depends on:** PR [#869](https://github.com/flourishhealth/terreno/pull/869) merging
+**Depends on:** PR [#869](https://github.com/TerrenoLabs/terreno/pull/869) merging
 **RTK deprecation flag:** **Blocked** — this IP *is* the RTK deprecation. Nothing here can be written until #869 lands, because the public surface of `@terreno/syncdb` is not final until then.
 
 ## Goal

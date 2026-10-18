@@ -220,7 +220,7 @@ Migration will be supported with:
 ## Learn More
 
 - 📖 [Implementation plan](../implementationPlans/ModularAPI.md) — Full technical specification
-- 💬 [GitHub PR #149](https://github.com/FlourishHealth/terreno/pull/149) — Discussion and feedback
+- 💬 [GitHub PR #149](https://github.com/TerrenoLabs/terreno/pull/149) — Discussion and feedback
 
 ## Related
 

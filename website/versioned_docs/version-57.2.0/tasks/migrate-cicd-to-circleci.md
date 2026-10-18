@@ -15,7 +15,7 @@ Research: [`docs/implementationPlans/migrate-cicd-to-circleci-research.md`](../i
 ## Phase 0: Prerequisites
 
 - [ ] **Task 0.1**: Confirm CircleCI org/plan and project link
-  - Description: Verify the requester-created CircleCI organization, plan, and that `FlourishHealth/terreno` is connected with permission to report GitHub checks. Enable **dynamic config** / setup workflows for the project. Record org slug + project slug in the IP header or how-to doc.
+  - Description: Verify the requester-created CircleCI organization, plan, and that `TerrenoLabs/terreno` is connected with permission to report GitHub checks. Enable **dynamic config** / setup workflows for the project. Record org slug + project slug in the IP header or how-to doc.
   - Files: `docs/how-to/circleci.md` (stub OK)
   - Depends on: none (human prerequisite)
   - Acceptance: a manual “hello” pipeline can be triggered from the project; dynamic config is enabled.

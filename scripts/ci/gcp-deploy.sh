@@ -10,11 +10,7 @@ action="$1"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
-if [ -z "${GCP_WIF_PROVIDER_PROD:-}" ] || [ -z "${GCP_TF_ADMIN_SA_PROD:-}${GCP_CD_DEPLOYER_SA_PROD:-}" ]; then
-  echo "Skipping GCP ${action}: terreno-gcp is missing GCP_WIF_PROVIDER_PROD or deployer SA emails."
-  echo "GitHub Actions still owns live CD until that CircleCI context is populated."
-  exit 0
-fi
+scripts/ci/validate-env.sh GCP_WIF_PROVIDER_PROD GCP_TF_ADMIN_SA_PROD GCP_CD_DEPLOYER_SA_PROD
 
 export GCP_PROJECT_ID="${GCP_PROJECT_ID:-flourish-terreno}"
 export GCP_BACKEND_REGION="${GCP_BACKEND_REGION:-us-central1}"
@@ -26,9 +22,29 @@ export GCP_BACKEND_RUNTIME_SA="${GCP_BACKEND_RUNTIME_SA:-terreno-backend-runtime
 export GCP_MCP_REGION="${GCP_MCP_REGION:-us-east1}"
 export GCP_MCP_SERVICE="${GCP_MCP_SERVICE:-terreno-mcp}"
 export TF_DEPLOYMENT="${TF_DEPLOYMENT:-terreno-prod}"
+# Same bucket terraform creates as ${project_id}-example-documents.
+export GCP_DOCUMENTS_BUCKET="${GCP_DOCUMENTS_BUCKET:-flourish-terreno-example-documents}"
+
+# shellcheck source=scripts/ci/github-deployment-lib.sh
+source scripts/ci/github-deployment-lib.sh
+
+backend_prod_url="https://terreno-backend-example-7knxlrnpqq-uc.a.run.app"
 
 gcp_auth() {
   scripts/ci/gcp-auth.sh
+}
+
+# Infra Manager uploads only the --local-source directory. The root module in
+# infra/flourish/ reaches the shared modules through its modules -> ../../terraform/modules
+# symlink, so copy it with symlinks dereferenced (tar -h) into a self-contained
+# source, leaving out local .terraform caches.
+stage_terraform_source() {
+  local staged
+  staged="$(mktemp -d)"
+  # $(...) does not inherit set -e, so fail explicitly on a partial copy.
+  tar -C infra/flourish -chf - --exclude=.terraform --exclude=.terraform.lock.hcl . | tar -C "$staged" -xf - || return 1
+  [ -f "$staged/main.tf" ] && [ -d "$staged/modules" ] && [ ! -L "$staged/modules" ] || return 1
+  echo "$staged"
 }
 
 configure_registry() {
@@ -84,15 +100,13 @@ deploy_backend() {
   docker push "$image"
 
   secrets="MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest,LANGFUSE_SECRET_KEY=${GCP_BACKEND_SERVICE}-langfuse-secret-key:latest,LANGFUSE_PUBLIC_KEY=${GCP_BACKEND_SERVICE}-langfuse-public-key:latest"
-  env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,JOBS_START_WORKER=true,$(jobs_env_vars "$tag")"
+  env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,JOBS_START_WORKER=true,GCS_BUCKET=${GCP_DOCUMENTS_BUCKET},$(jobs_env_vars "$tag")"
   args=(
     run deploy "$GCP_BACKEND_SERVICE"
     "--project=$GCP_PROJECT_ID"
     "--region=$GCP_BACKEND_REGION"
     "--image=$image"
-    "--tag=$tag"
     "--port=3000"
-    "--memory=512Mi"
     "--min-instances=0"
     "--max-instances=10"
     "--concurrency=80"
@@ -102,6 +116,14 @@ deploy_backend() {
   runtime_sa_flag="$(backend_runtime_sa_flag)"
   if [ -n "$runtime_sa_flag" ]; then
     args+=("$runtime_sa_flag")
+  fi
+
+  # Keep the fallback in sync with terraform variable announcements_upload_token.
+  announcements_upload_secret="${GCP_BACKEND_SERVICE}-announcements-upload-token"
+  if gcloud secrets versions access latest --secret="$announcements_upload_secret" >/dev/null 2>&1; then
+    secrets+=",ANNOUNCEMENTS_UPLOAD_TOKEN=${announcements_upload_secret}:latest"
+  else
+    env_vars+=",ANNOUNCEMENTS_UPLOAD_TOKEN=terreno-example-announcement-upload"
   fi
 
   better_auth_secret="${GCP_BACKEND_SERVICE}-better-auth-secret"
@@ -115,15 +137,26 @@ deploy_backend() {
     env_vars+=",AUTH_PROVIDER=better-auth,BETTER_AUTH_URL=${better_auth_url}"
   fi
 
+  local revision_suffix=""
   if [ "$tag" = "prod" ]; then
+    args+=("--tag=$tag" "--memory=512Mi")
     env_vars+=",CORS_ORIGINS=https://terreno-frontend.netlify.app"
   else
-    args+=(--no-traffic --no-cpu-throttling)
-    env_vars+=",CORS_ORIGINS=https://pr-${PR_NUMBER}--terreno-frontend.netlify.app,MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},SEED_DEFAULTS=true"
+    # Deploy untagged, then tag the new revision: tagging during deploy fails
+    # when an older pr-* tag points at a revision that never became Ready.
+    revision_suffix="pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-$(date +%s)}"
+    args+=(--no-traffic --no-cpu-throttling --cpu-boost "--memory=1Gi" "--revision-suffix=$revision_suffix")
+    env_vars+=",CORS_ORIGINS=https://pr-${PR_NUMBER}--terreno-frontend.netlify.app,MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},SEED_DEFAULTS=true,GCS_FOLDER_PREFIX=pr-${PR_NUMBER}/"
+    .github/workflows/scripts/rebuild-cloud-run-ready-traffic.sh "$GCP_BACKEND_SERVICE" "$GCP_BACKEND_REGION"
   fi
   args+=("--set-secrets=$secrets" "--set-env-vars=$env_vars")
   gcloud "${args[@]}"
   if [[ "$tag" == pr-* ]]; then
+    gcloud run services update-traffic "$GCP_BACKEND_SERVICE" \
+      "--project=$GCP_PROJECT_ID" \
+      "--region=$GCP_BACKEND_REGION" \
+      "--update-tags=${tag}=${GCP_BACKEND_SERVICE}-${revision_suffix}" \
+      --quiet
     scripts/ci/wait-cloud-run-health.sh "$(tagged_service_url "$GCP_BACKEND_SERVICE" "$tag")"
   fi
 }
@@ -169,13 +202,14 @@ case "$action" in
     location="${GCP_INFRA_MANAGER_LOCATION:-us-central1}"
     preview_id="${TF_DEPLOYMENT}-pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-manual}"
     trap 'gcloud infra-manager previews delete "$preview_id" --location="$location" --project="$GCP_PROJECT_ID" --quiet || true' EXIT
+    tf_source="$(stage_terraform_source)"
     preview_create_status=0
     gcloud infra-manager previews create "$preview_id" \
       "--project=$GCP_PROJECT_ID" \
       "--location=$location" \
       "--deployment=projects/${GCP_PROJECT_ID}/locations/${location}/deployments/${TF_DEPLOYMENT}" \
       "--service-account=projects/${GCP_PROJECT_ID}/serviceAccounts/${GCP_TF_ADMIN_SA_PROD}" \
-      --local-source=terraform \
+      "--local-source=$tf_source" \
       --quiet || preview_create_status=$?
     # Dump errorCode/errorLogs even when create fails. gcloud often prints an
     # empty "failed while running step:" line and nothing else.
@@ -191,24 +225,31 @@ case "$action" in
     export GCP_SERVICE_ACCOUNT="${GCP_TF_ADMIN_SA_PROD:-}"
     gcp_auth
     location="${GCP_INFRA_MANAGER_LOCATION:-us-central1}"
+    tf_source="$(stage_terraform_source)"
     gcloud infra-manager deployments apply "$TF_DEPLOYMENT" \
       "--project=$GCP_PROJECT_ID" \
       "--location=$location" \
       "--service-account=projects/${GCP_PROJECT_ID}/serviceAccounts/${GCP_TF_ADMIN_SA_PROD}" \
-      --local-source=terraform \
+      "--local-source=$tf_source" \
       --quiet
     ;;
   backend-prod)
     export GCP_SERVICE_ACCOUNT="${GCP_CD_DEPLOYER_SA_PROD:-}"
     gcp_auth
-    deploy_backend prod
+    with_github_deployment example-backend-production "Backend production deploy" "$backend_prod_url" \
+      deploy_backend prod
     ;;
   backend-preview)
     scripts/ci/validate-env.sh PR_NUMBER
     export GCP_SERVICE_ACCOUNT="${GCP_CD_DEPLOYER_SA_PROD:-}"
     gcp_auth
-    deploy_tasks "pr-${PR_NUMBER}"
-    deploy_backend "pr-${PR_NUMBER}"
+    deploy_backend_preview() {
+      deploy_tasks "pr-${PR_NUMBER}"
+      deploy_backend "pr-${PR_NUMBER}"
+    }
+    with_github_deployment "example-backend-preview-pr-${PR_NUMBER}" "Backend preview pr-${PR_NUMBER}" \
+      "https://pr-${PR_NUMBER}---${backend_prod_url#https://}" \
+      deploy_backend_preview
     ;;
   tasks-prod)
     export GCP_SERVICE_ACCOUNT="${GCP_CD_DEPLOYER_SA_PROD:-}"
@@ -218,23 +259,30 @@ case "$action" in
   mcp-prod)
     export GCP_SERVICE_ACCOUNT="${GCP_CD_DEPLOYER_SA_PROD:-}"
     gcp_auth
-    configure_registry "$GCP_MCP_REGION"
-    scripts/ci/validate-env.sh MCP_SENTRY_DSN
-    image="${GCP_MCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_MCP_SERVICE}/${GCP_MCP_SERVICE}:${CIRCLE_SHA1}"
-    docker build --file mcp-server/Dockerfile --tag "$image" .
-    docker push "$image"
-    gcloud run deploy "$GCP_MCP_SERVICE" \
+    deploy_mcp() {
+      configure_registry "$GCP_MCP_REGION"
+      scripts/ci/validate-env.sh MCP_SENTRY_DSN
+      image="${GCP_MCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_MCP_SERVICE}/${GCP_MCP_SERVICE}:${CIRCLE_SHA1}"
+      docker build --file mcp-server/Dockerfile --tag "$image" .
+      docker push "$image"
+      gcloud run deploy "$GCP_MCP_SERVICE" \
+        "--project=$GCP_PROJECT_ID" \
+        "--region=$GCP_MCP_REGION" \
+        "--image=$image" \
+        --cpu=1 \
+        --memory=512Mi \
+        --min-instances=0 \
+        --max-instances=10 \
+        --concurrency=80 \
+        --timeout=300 \
+        --allow-unauthenticated \
+        "--set-env-vars=SENTRY_DSN=${MCP_SENTRY_DSN}"
+    }
+    mcp_url="$(gcloud run services describe "$GCP_MCP_SERVICE" \
       "--project=$GCP_PROJECT_ID" \
       "--region=$GCP_MCP_REGION" \
-      "--image=$image" \
-      --cpu=1 \
-      --memory=512Mi \
-      --min-instances=0 \
-      --max-instances=10 \
-      --concurrency=80 \
-      --timeout=300 \
-      --allow-unauthenticated \
-      "--set-env-vars=SENTRY_DSN=${MCP_SENTRY_DSN}"
+      --format='value(status.url)' 2>/dev/null || true)"
+    with_github_deployment mcp-production "MCP production deploy" "$mcp_url" deploy_mcp
     ;;
   cleanup-preview)
     scripts/ci/validate-env.sh PR_NUMBER

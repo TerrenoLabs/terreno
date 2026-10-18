@@ -14,6 +14,6 @@
     "target": "es2023",
     "types": ["bun", "node"]
   },
-  "exclude": ["node_modules", "**/*.test.ts", "src/tests", "src/migrations/cli.ts"],
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.isolated.ts", "src/isolated", "src/tests", "src/migrations/cli.ts"],
   "include": ["src"]
 }

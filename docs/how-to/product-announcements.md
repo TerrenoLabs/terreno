@@ -11,6 +11,7 @@ import {AnnouncementsApp} from "@terreno/announcements";
 
 new AnnouncementsApp({
   defaultAcknowledgementPolicy: "dismiss-only",
+  uploadToken: process.env.ANNOUNCEMENTS_UPLOAD_TOKEN,
   // audienceType staff/patient/all is applied inside the plugin via matchAudienceByType.
   isStaff: (user) => (user as {admin?: boolean}).admin === true,
   matchAudience: (user, announcement) => {
@@ -45,6 +46,8 @@ For Flourish-style surfaces on one collection:
 | `all` | any | per announcement or `defaultAcknowledgementPolicy` |
 
 2. Create announcements in admin (draft → publish). Use `AnnouncementOverview`, `AnnouncementEditor`, and (optionally) `AnnouncementList` from `@terreno/admin-frontend` with dedicated Expo routes (see `example-frontend/app/admin/announcements/`). The built-in admin screen widget key `announcements` renders the overview when your host uses `AdminScreenRouter` for custom screens. Published `title`/`body` edits auto-increment `version`, which re-shows the surface to users who only acknowledged the previous version.
+
+For release-driven batches, use an [announcement release pack](../reference/announcement-release-packs.md). It keeps one `pack.yaml` manifest plus multiple Markdown announcements in source control, validates release and build versioning, and can import idempotent drafts or explicitly publish the whole pack through a dedicated bearer token. The example Cloud Run service accepts `Authorization: Bearer terreno-example-announcement-upload` (Terraform variable `announcements_upload_token`).
 
 ### Admin editor fields
 

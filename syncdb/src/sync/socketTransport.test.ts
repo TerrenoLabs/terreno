@@ -349,6 +349,41 @@ describe("createSocketTransport", () => {
     expect(seen).toHaveLength(1);
   });
 
+  it("coalesces deltas delivered across tasks until the next animation frame", async () => {
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    let flushFrame: FrameRequestCallback | undefined;
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+      flushFrame = callback;
+      return 1;
+    };
+    try {
+      const receiver = makeTransport();
+      const batches: SyncDelta[][] = [];
+      receiver.onDeltaBatch?.((deltas) => batches.push(deltas));
+      await receiver.connect();
+
+      const first: SyncDelta = {
+        collection: "todos",
+        data: {title: "first"},
+        id: "t1",
+        method: "create",
+        seq: 1,
+        stream: "todos|owner:u1",
+      };
+      const second: SyncDelta = {...first, data: {title: "second"}, id: "t2", seq: 2};
+      server.sockets[0]?.emit("sync:delta", first);
+      await waitUntil(() => flushFrame !== undefined);
+      server.sockets[0]?.emit("sync:delta", second);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(batches).toEqual([]);
+      flushFrame?.(0);
+      expect(batches).toEqual([[first, second]]);
+    } finally {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    }
+  });
+
   it("sendMutationBatch resolves results from the Socket.io ack callback (FIX 5)", async () => {
     server.mutateBatchHandler = (request, socket, ack) => {
       socket.emit("sync:batchReceived", {batchId: request.batchId});

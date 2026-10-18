@@ -24,8 +24,10 @@ const E2E_SHARDS: Record<string, string[]> = {
     "admin-table-bulk-actions",
     "admin-custom-screens",
     "admin-comms-back",
+    "harness-approvals",
+    "harness-intake",
   ],
-  app: ["todos", "profile", "realtime", "ai-chat", "pdf", "notifications"],
+  app: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
   auth: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],
   syncdb: [
     "syncdb-load-delta",
@@ -225,5 +227,44 @@ describe("CircleCI concurrency", () => {
         new RegExp(`add_skip "<< pipeline.parameters.${pipelineParameter} >>" ${packageName}`)
       );
     }
+  });
+});
+
+describe("CircleCI config parameter syntax", () => {
+  it("has no unescaped << outside pipeline/parameters references", () => {
+    // CircleCI 2.1 treats every `<<` as a parameter tag; a shell here-string fails compile
+    // for every continuation pipeline, not just the job that uses it.
+    for (const [name, config] of [
+      ["config.yml", setupConfig],
+      ["continue-config.yml", continueConfig],
+    ]) {
+      const stray = config
+        .split("\n")
+        .map((line, index) => ({line, number: index + 1}))
+        .filter(({line}) =>
+          /(^|[^\\])<</.test(line.replace(/<< *(pipeline|parameters)\.[^>]*>>/g, ""))
+        );
+      assert.deepEqual(stray, [], `${name} has unescaped <<`);
+    }
+  });
+});
+
+/** Names under the top-level `parameters:` block of a CircleCI config. */
+const topLevelParameterNames = (config: string): string[] => {
+  const block = config.split(/^parameters:\s*$/m)[1]?.split(/^\S/m)[0] ?? "";
+  return [...block.matchAll(/^ {2}([a-z0-9-]+):\s*$/gm)].map((match) => match[1] ?? "");
+};
+
+describe("setup → continuation parameters", (): void => {
+  it("declares every setup pipeline parameter in the continued config", (): void => {
+    // CircleCI forwards trigger parameters into the continuation; an undeclared
+    // one errors the pipeline with "Unexpected argument(s)".
+    const setupParameters = topLevelParameterNames(setupConfig);
+    const continueParameters = new Set(topLevelParameterNames(continueConfig));
+    assert.ok(setupParameters.includes("run-preview-cleanup"));
+    assert.deepEqual(
+      setupParameters.filter((name) => !continueParameters.has(name)),
+      []
+    );
   });
 });

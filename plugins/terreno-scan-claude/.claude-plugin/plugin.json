@@ -5,7 +5,7 @@
   },
   "description": "Goal-driven code scans for Terreno: charter a measurable long-term goal, map-reduce the repository into verified findings, slice them into IPs and tasks, and drive each slice through the Terreno lifecycle until the metric hits target.",
   "displayName": "Terreno Scan",
-  "homepage": "https://github.com/FlourishHealth/terreno/blob/master/plugins/README.md",
+  "homepage": "https://github.com/TerrenoLabs/terreno/blob/master/plugins/README.md",
   "keywords": [
     "terreno",
     "scan",
@@ -22,7 +22,7 @@
     }
   },
   "name": "terreno-scan",
-  "repository": "https://github.com/FlourishHealth/terreno",
+  "repository": "https://github.com/TerrenoLabs/terreno",
   "skills": "./skills/",
   "version": "2.11.0"
 }

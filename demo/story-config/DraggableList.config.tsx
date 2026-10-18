@@ -3,6 +3,7 @@ import {DraggableListDemo, DraggableListTwoItems} from "@stories/DraggableList.s
 import {DraggableList} from "@terreno/ui";
 
 export const DraggableListConfiguration: DemoConfiguration = {
+  usageExample: "import {DraggableList} from \"@terreno/ui\";\n\n<DraggableList />",
   a11yNotes: ["Reorder via the grip; keep item labels readable while dragging."],
   additionalDocumentation: [],
   category: "Component",

@@ -1721,9 +1721,7 @@ jobs:
           working_directory: ~/project/admin-spa
           environment:
             CI: "true"
-          # Metro sizes its worker pool from the host's CPUs, not the container's, and the
-          # extra workers run the large executor out of memory.
-          command: bun run build:web --max-workers 4
+          command: bun run build:web
       - resolve_e2e_secrets
       - run:
           name: Start example-backend (admin spa + better-auth)

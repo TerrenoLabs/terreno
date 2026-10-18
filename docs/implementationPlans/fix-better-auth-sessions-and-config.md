@@ -26,7 +26,7 @@ Selected: "the better-auth issues from the last day", resolved 2026-10-18T10:52:
   - Fix: add an exported `resolveBetterAuthAppUser({userModel, betterAuthUser})` that finds the user by `betterAuthId`, falls back to `syncBetterAuthUser`, and reports disabled users. The middleware leaves `req.user` unset for a disabled user, as MCP's `rejectIfDisabled` does, so protected routes answer 401 and Better Auth's own routes (sign-out) stay reachable.
   - Proof: `api/src/betterAuthSetup.test.ts` tests for a disabled user and a user disabled while the session is live fail on the base (`req.user` is set) and pass on the branch.
   - Closes: #1577
-- [ ] **T2** — Sync and check disabled users at the Better Auth socket handshake (#1576)
+- [x] **T2** — Sync and check disabled users at the Better Auth socket handshake (#1576)
   - Depends on: T1
   - Files: api/src/realtime/socketAuth.ts, api/src/realtime/socketAuth.test.ts
   - Root cause: the Better Auth socket check looks up the app user by `betterAuthId` and throws when none exists; it never checks `disabled`.

@@ -871,9 +871,10 @@ Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1186
 **Labels:** `area:api`, `type:feature`
 **Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`rate-limiting`, Status=`Shipped`
 
-Adds opt-in HTTP rate limiting to `@terreno/api`: per-user or per-IP keys, stricter
+Adds HTTP rate limiting to `@terreno/api`: per-user or per-IP keys, stricter
 auth/OTP buckets (including login), memory Redis or Mongo stores, and 429 rate-limit
-headers. Default is off until Terreno 58. Sync mutation nacks stay a separate limiter.
+headers. Opt-in in 57.x; on by default from Terreno 58 (`rateLimit: false` turns it off).
+Sync mutation nacks stay a separate limiter.
 
 Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1187.
 

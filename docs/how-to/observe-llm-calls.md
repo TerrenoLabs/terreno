@@ -238,7 +238,8 @@ the same list of questions for. Then run LLM judges over the same traces and com
 3. Reviewers press **Answer N remaining**. Each item shows the input and output side by side and
    every question with Yes / No. On web, `Y` / `N` answer the highlighted question, `Enter`
    submits and opens the next item in the batch, and `S` skips. **Rest Yes** answers every open
-   yes/no question with Yes.
+   yes/no question with Yes. Items someone assigned to themselves (in progress) stay in the
+   batch's next/previous walk until they are submitted or skipped.
 4. Create an `llm-judge` evaluator whose dimension keys match the question keys and whose judge
    prompt returns those keys. On the batch, choose the judge and press **Run on N items**
    (`POST /ai/observability/review/batches/:id/judgeRuns` with `{evaluatorId}`). The judge runs

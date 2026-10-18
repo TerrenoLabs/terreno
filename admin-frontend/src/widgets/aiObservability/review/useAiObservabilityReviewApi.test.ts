@@ -98,6 +98,11 @@ describe("useAiObservabilityReviewApi", () => {
       params: {batchId: "b1", status: "pending"},
       url: "/ai/observability/review",
     });
+    expect(endpoints.aiObservabilityReviewBatchQueue.query({batchId: "b1"} as never)).toEqual({
+      method: "GET",
+      params: {batchId: "b1"},
+      url: "/ai/observability/review",
+    });
     expect(
       endpoints.createAiObservabilityReviewBatch.query({evaluatorId: "e1", limit: 10} as never)
     ).toEqual({

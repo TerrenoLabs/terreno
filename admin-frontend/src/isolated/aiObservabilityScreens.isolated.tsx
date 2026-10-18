@@ -4295,6 +4295,86 @@ describe("AiReviewItemScreen", () => {
       });
       assert.isAtLeast(actionImpl.mock.calls.length, 1);
     });
+
+    it("walks pending and in-progress items of the item's batch", async () => {
+      const batchItem = (id: string, status: ReviewListItem["status"]): ReviewListItem => ({
+        batchId: "b1",
+        enqueuedAt: "2026-01-01T00:00:00.000Z",
+        evaluatorId: "eval-1",
+        id,
+        reason: "manual",
+        status,
+        traceId: `trace-${id}`,
+        traceName: "summarize",
+      });
+      const batchQueueArgs: unknown[] = [];
+      const batchApi = {
+        enhanceEndpoints: () => batchApi,
+        injectEndpoints: () => ({
+          useAiObservabilityCurrentUserQuery: () => ({data: {id: "user-1"}, isLoading: false}),
+          useAiObservabilityReviewBatchQueueQuery: (args: unknown) => {
+            batchQueueArgs.push(args);
+            return {
+              data: {
+                data: [
+                  batchItem("rev-1", "pending"),
+                  batchItem("rev-2", "in_progress"),
+                  batchItem("rev-3", "done"),
+                ],
+              },
+              isError: false,
+              isLoading: false,
+              refetch: mock(() => {}),
+            };
+          },
+          useAiObservabilityReviewItemQuery: () => ({
+            data: {...detail, batchId: "b1"},
+            isError: false,
+            isLoading: false,
+            refetch: mock(() => {}),
+          }),
+          useAiObservabilityReviewQuery: () => ({
+            data: {data: []},
+            isError: false,
+            isLoading: false,
+            refetch: mock(() => {}),
+          }),
+          useAiObservabilityStatusQuery: () => ({
+            data: statusData,
+            isError: false,
+            isLoading: false,
+          }),
+          useUpdateAiObservabilityReviewItemMutation: () => [
+            () => ({unwrap: actionImpl}),
+            {isError: false, isLoading: false},
+          ],
+        }),
+      } as unknown as AdminApi;
+
+      routerPush.mockClear();
+      actionImpl.mockClear();
+      const view = renderWithTheme(
+        <AiReviewItemScreenWidget
+          api={batchApi}
+          config={emptyConfig}
+          routeBase="/admin"
+          screenName="ai-review-item"
+        />
+      );
+      expect(batchQueueArgs.at(-1)).toEqual({batchId: "b1"});
+      expect(view.getByText("Item 1 of 2 pending")).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-review-question-correct-yes"));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-review-submit-next"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      assert.equal(actionImpl.mock.calls.length, 1);
+      assert.equal(String(routerPush.mock.calls.at(-1)?.[0]), "/admin/ai-review-item?id=rev-2");
+    });
   });
 });
 

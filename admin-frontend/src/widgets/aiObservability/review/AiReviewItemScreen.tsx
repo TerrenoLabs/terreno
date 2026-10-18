@@ -8,11 +8,14 @@ import {AiReviewItemView} from "./AiReviewItemView";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
 import {
   firstUnanswered,
+  type ReviewStatus,
   unwrapCurrentUserId,
   unwrapReviewDetail,
   unwrapReviewList,
 } from "./reviewTypes";
 import {type ReviewActionBody, useAiObservabilityReviewApi} from "./useAiObservabilityReviewApi";
+
+const OPEN_BATCH_STATUSES: ReviewStatus[] = ["pending", "in_progress"];
 
 export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {api, routeBase} = props;
@@ -32,11 +35,8 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   const batchId = detail?.batchId;
   // Batch items walk their own batch; everything else walks the whole pending queue.
   const globalPendingQuery = useListQuery("pending");
-  const batchPendingQuery = useBatchQueueQuery(
-    {batchId: batchId ?? "", status: "pending"},
-    {skip: !batchId}
-  );
-  const pendingQuery = batchId ? batchPendingQuery : globalPendingQuery;
+  const batchQueueQuery = useBatchQueueQuery({batchId: batchId ?? ""}, {skip: !batchId});
+  const pendingQuery = batchId ? batchQueueQuery : globalPendingQuery;
   const currentUserQuery = useCurrentUserQuery();
   const statusQuery = useStatusQuery();
   const [runAction, actionState] = useActionMutation();
@@ -45,7 +45,11 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   const [submitError, setSubmitError] = useState("");
   const toast = useToast();
 
-  const pending = useMemo(() => unwrapReviewList(pendingQuery.data), [pendingQuery.data]);
+  // A batch counts assigned (in progress) items as open work, like the batch screen does.
+  const pending = useMemo(() => {
+    const items = unwrapReviewList(pendingQuery.data);
+    return batchId ? items.filter((item) => OPEN_BATCH_STATUSES.includes(item.status)) : items;
+  }, [batchId, pendingQuery.data]);
   const currentUserId = useMemo(
     () => unwrapCurrentUserId(currentUserQuery.data),
     [currentUserQuery.data]

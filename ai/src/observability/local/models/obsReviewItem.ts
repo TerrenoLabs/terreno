@@ -72,6 +72,8 @@ const reviewIndexSpec: Array<[string, 1]> = [
   ["enqueuedAt", 1],
 ];
 obsReviewItemSchema.index(Object.fromEntries(reviewIndexSpec));
+// Batch list, detail, and queue reads all scope by batchId, then by status.
+obsReviewItemSchema.index({batchId: 1, status: 1});
 
 export const registerObsReviewItem = (): ObsReviewItemModel => {
   if (mongoose.models.ObsReviewItem) {

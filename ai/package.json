@@ -4,7 +4,7 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@ai-sdk/mcp": "^1.0.21",
+    "@ai-sdk/mcp": "^2.0.57",
     "@google-cloud/storage": "catalog:",
     "@langfuse/client": "^5.0.1",
     "@langfuse/otel": "^5.0.1",
@@ -14,7 +14,7 @@
     "ai": "catalog:",
     "ajv": "catalog:",
     "csv-parse": "catalog:",
-    "google-auth-library": "^10.5.0",
+    "google-auth-library": "^11.1.0",
     "luxon": "catalog:",
     "multer": "catalog:",
     "sanitize-html": "catalog:"

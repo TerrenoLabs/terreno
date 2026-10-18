@@ -20,7 +20,7 @@
     "expo-splash-screen": "catalog:",
     "expo-status-bar": "catalog:",
     "express": "catalog:",
-    "http-proxy-middleware": "^3.0.3",
+    "http-proxy-middleware": "^4.2.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-native": "catalog:",

@@ -7,7 +7,7 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@modelcontextprotocol/express": "^2.0.0",
+    "@modelcontextprotocol/express": "^2.0.1",
     "@modelcontextprotocol/node": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@sentry/bun": "catalog:",

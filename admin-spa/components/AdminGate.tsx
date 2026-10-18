@@ -5,6 +5,7 @@ import {usePathname, useRouter} from "expo-router";
 import React, {useEffect} from "react";
 import {useDispatch, useSelector} from "react-redux";
 import {useAppConfig} from "./AppConfigGate";
+import {AdminGateConfigProvider} from "./adminGateConfig";
 import {isForbiddenAdminConfigError} from "./adminGateUtils";
 import {useAuth} from "./StoreProvider";
 
@@ -94,13 +95,21 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
     return <LoadingScreen />;
   }
   if (!isAuthenticated || status === 401) {
-    return pathname === "/login" ? children : <LoadingScreen />;
+    return pathname === "/login" ? (
+      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
+    ) : (
+      <LoadingScreen />
+    );
   }
   if (isForbidden) {
-    return pathname === "/forbidden" ? children : <LoadingScreen />;
+    return pathname === "/forbidden" ? (
+      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
+    ) : (
+      <LoadingScreen />
+    );
   }
   if (isConfigLoading) {
     return <LoadingScreen />;
   }
-  return children;
+  return <AdminGateConfigProvider config={config ?? null}>{children}</AdminGateConfigProvider>;
 };

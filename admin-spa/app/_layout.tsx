@@ -3,7 +3,6 @@ import {
   type OrganizationSummary,
   OrgContextProvider,
   organizationFromPath,
-  useAdminConfig,
   useOptionalOrgContext,
 } from "@terreno/admin-frontend";
 import {createSyncDb, type SyncDb} from "@terreno/syncdb";
@@ -13,6 +12,7 @@ import {Stack, usePathname} from "expo-router";
 import React, {useEffect, useMemo, useState} from "react";
 import {AdminGate} from "../components/AdminGate";
 import {AppConfigGate, useAppConfig} from "../components/AppConfigGate";
+import {useAdminGateConfig} from "../components/adminGateConfig";
 import {StoreProvider, useAuth} from "../components/StoreProvider";
 import {
   createAdminSpaSyncDbConfig,
@@ -100,7 +100,10 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
   const pathname = usePathname();
   const routeOrganization = useMemo(() => organizationFromPath(pathname), [pathname]);
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
-  const {config} = useAdminConfig(apiBase);
+  // Use the config AdminGate already loaded. Fetching it again here would render the
+  // Stack once without syncDb, then swap providers when the response lands, remounting
+  // the Stack and resetting deep links like `/Todo` to `/`.
+  const config = useAdminGateConfig();
   const syncCollections = useMemo(
     (): string[] => resolveAdminSyncCollections(config?.models ?? []),
     [config?.models]
@@ -152,7 +155,9 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
  * - TerrenoProvider: theme/toast context (inside Provider so theme hooks work).
  * - AdminProvider (cookie-bound): the same-origin fetch client AdminGate uses for
  *   `/admin/config`. AdminProviderBridge nests a second AdminProvider with syncDb.
- * - AdminGate (innermost): session + admin authorization, gating the route Stack.
+ * - AdminGate (innermost): session + admin authorization, gating the route Stack. It
+ *   shares the loaded config with AdminProviderBridge, which picks the syncDb provider
+ *   from it on first render so the Stack mounts once.
  */
 const RootLayout: React.FC = () => {
   return (

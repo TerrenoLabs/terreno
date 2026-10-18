@@ -217,8 +217,10 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       organizations: {
         settingsSchema: organizationSettingsSchema,
       },
-      // App-owned env: @terreno/api does not read RATE_LIMIT_ENABLED. Unset = limiter off.
-      rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined,
+      // The limiter is on by default. Deployed: Cloud Run is one Google Front End hop, so
+      // trust it to key unauthenticated traffic by client IP. Local dev, Playwright, and
+      // Maestro log in many times from one IP, so the limiter is off there.
+      rateLimit: isDeployed ? {trustProxy: 1} : false,
       skipListen,
       userModel: User as unknown as TerrenoAuthUserModel,
     }).configure(AppConfiguration);

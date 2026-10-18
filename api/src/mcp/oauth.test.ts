@@ -16,7 +16,7 @@ import {Permissions} from "../permissions";
 import {getCurrentRequestContext} from "../requestContext";
 import {TerrenoApp} from "../terrenoApp";
 import {authAsUser, setupDb, UserModel} from "../tests";
-import {type McpOAuthOptions, resolveMcpOAuthOption} from "./oauth";
+import {type McpOAuthOptions, resolveMcpOAuthOption} from "./oauthMetadata";
 import {clearMCPRegistry} from "./registry";
 
 const typedUserModel = UserModel as unknown as UserModelType;

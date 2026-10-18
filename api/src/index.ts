@@ -59,17 +59,16 @@ export {
   type MCPAuthContext,
   type MCPAuthResult,
 } from "./mcp/auth";
+export {addMcpOAuthRoutes, type McpOAuthRoutesOptions} from "./mcp/oauth";
 export {
-  addMcpOAuthRoutes,
   buildAuthorizationServerMetadata,
   buildProtectedResourceMetadata,
   type McpOAuthAppOption,
   type McpOAuthOptions,
-  type McpOAuthRoutesOptions,
   type ResolvedMcpOAuthOptions,
   resolveMcpOAuthOption,
   sendMcpOAuthChallenge,
-} from "./mcp/oauth";
+} from "./mcp/oauthMetadata";
 export type {MCPCustomTool} from "./mcp/registry";
 export {
   clearMCPRegistry,

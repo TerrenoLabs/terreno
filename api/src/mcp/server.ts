@@ -8,7 +8,7 @@ import type {BetterAuthInstance} from "../betterAuthSetup";
 import {logger} from "../logger";
 import {setRequestContext} from "../requestContext";
 import {extractAuthFromHeaders, type MCPAuthContext, type MCPAuthResult} from "./auth";
-import {type ResolvedMcpOAuthOptions, sendMcpOAuthChallenge} from "./oauth";
+import {type ResolvedMcpOAuthOptions, sendMcpOAuthChallenge} from "./oauthMetadata";
 import {getAllMCPTools, type MCPToolDefinition} from "./toolGenerator";
 
 export interface MCPServerOptions {

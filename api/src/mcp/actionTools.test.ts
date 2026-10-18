@@ -65,6 +65,13 @@ const widgetRouter = (extra: Record<string, unknown> = {}) =>
         method: "GET",
         permissions: [Permissions.IsAuthenticated],
       },
+      echoId: {
+        body: z.object({id: z.string()}).strict(),
+        handler: async ({body}) => ({id: body.id}),
+        mcp: {name: "widgets_echo_id"},
+        method: "POST",
+        permissions: [Permissions.IsAuthenticated],
+      },
       writesRes: {
         handler: async ({res}) => {
           res.status(201).json({raw: true});
@@ -265,6 +272,12 @@ describe("modelRouter actions as MCP tools", () => {
     const result = await callTool(ownerAgent, "widgets_count_mine", {});
 
     expect(toolJson(result)).toMatchObject({count: 2, isMCPRequest: true});
+  });
+
+  it("passes an id argument through to a collection action's body", async () => {
+    const result = await callTool(ownerAgent, "widgets_echo_id", {id: "external-42"});
+
+    expect(toolJson(result)).toEqual({id: "external-42"});
   });
 
   it("passes GET action arguments as the query", async () => {

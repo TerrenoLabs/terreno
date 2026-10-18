@@ -102,7 +102,9 @@ const runActionTool = async (
   if (isAuthenticationRequired(entry, user)) {
     return errorResult("Permission denied: authentication required");
   }
-  const {id, ...input} = args;
+  // Only instance tools add `id`; a collection action's own schema may define one for its body.
+  const {id, ...instanceInput} = args;
+  const input = scope === "instance" ? instanceInput : args;
   const isGet = config.method === "GET";
   const req = createMCPRequest({
     body: isGet ? {} : input,

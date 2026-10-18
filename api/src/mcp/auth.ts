@@ -5,7 +5,7 @@ import type {User, UserModel} from "../auth";
 import type {BetterAuthInstance} from "../betterAuthSetup";
 import {logger} from "../logger";
 import {MCP_OAUTH_ACCESS_TOKEN_PREFIX, McpOAuthToken} from "../models/mcpOAuthToken";
-import {McpServiceToken} from "../models/mcpServiceToken";
+import {MCP_SERVICE_TOKEN_PREFIX, McpServiceToken} from "../models/mcpServiceToken";
 import {findOneOrNoneFor} from "../plugins";
 import type {RequestCredential} from "../requestContext";
 
@@ -39,7 +39,7 @@ const rejectIfDisabled = (user: User | undefined, source: string): User | undefi
   return user;
 };
 
-const bearerFromHeaders = (
+export const bearerFromHeaders = (
   headers: Record<string, string | string[] | undefined>
 ): {authorization?: string; token?: string} => {
   const authorization =
@@ -103,7 +103,7 @@ export const extractAuthFromHeaders = async (
   const {userModel, betterAuth, mcpServiceTokens, mcpOAuth} = context;
   const {authorization, token} = bearerFromHeaders(headers);
 
-  if (mcpServiceTokens && token?.startsWith("mcp_")) {
+  if (mcpServiceTokens && token?.startsWith(MCP_SERVICE_TOKEN_PREFIX)) {
     return authenticateServiceToken(token, userModel);
   }
 

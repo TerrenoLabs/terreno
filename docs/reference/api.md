@@ -241,7 +241,7 @@ Action config supports `allowAnonymous: true` as a per-action override; it does 
 | `mcp` | `{name, description?}` — also expose the action as an MCP tool named `name` |
 | `unwrapResponse` | REST only. Send the return value as the body instead of `{data: …}`; `undefined` sends an empty body |
 
-An action with `mcp` runs the same permission chain (including RBAC `access`) over `/mcp`. Its input is `{id, ...body}` for an instance POST, `{id, ...query}` for an instance GET, and the body or query alone for a collection action, so `body` / `query` must be a `z.object()` without an `id` key. The handler receives `req.isMCPRequest === true` and a `res` that throws if touched. See [modelRouter actions → MCP tools](../explanation/model-router-actions.md#mcp-tools).
+An action with `mcp` runs the same permission chain (including RBAC `access`) over `/mcp`. Its input is `{id, ...body}` for an instance POST, `{id, ...query}` for an instance GET, and the body or query alone for a collection action, so `body` / `query` must be a `z.object()`, and an instance action's schema cannot define `id`. A collection action's `id` field passes through to its body or query. The handler receives `req.isMCPRequest === true` and a `res` that throws if touched. See [modelRouter actions → MCP tools](../explanation/model-router-actions.md#mcp-tools).
 
 ## modelRouter list queries
 

@@ -28,7 +28,8 @@ import {
 import {type AddRoutes, type AuthOptions, logRequests} from "./expressServer";
 import {addGitHubAuthRoutes, type GitHubAuthOptions, setupGitHubAuth} from "./githubAuth";
 import {type LoggingOptions, logger, setupLogging} from "./logger";
-import {addMcpOAuthRoutes, type McpOAuthAppOption, resolveMcpOAuthOption} from "./mcp/oauth";
+import {addMcpOAuthRoutes} from "./mcp/oauth";
+import {type McpOAuthAppOption, resolveMcpOAuthOption} from "./mcp/oauthMetadata";
 import {mountMCPServer} from "./mcp/server";
 import {
   addMcpServiceTokenRoutes,

@@ -148,7 +148,7 @@ instanceActions: {
 
 The tool behaves like the REST route:
 
-- **Input.** An instance action takes `{id, ...body}` (POST) or `{id, ...query}` (GET). A collection action takes the body or query alone. `body` / `query` must be a `z.object()`, and an instance action's schema cannot define `id`. With no schema, the tool accepts any arguments, as REST forwards the raw body.
+- **Input.** An instance action takes `{id, ...body}` (POST) or `{id, ...query}` (GET). A collection action takes the body or query alone. `body` / `query` must be a `z.object()`, and an instance action's schema cannot define `id` (a collection action's can, and gets it). With no schema, the tool accepts any arguments, as REST forwards the raw body.
 - **Validation.** The MCP server validates arguments against that schema before the handler runs, so the handler gets the same parsed `ctx.body` / `ctx.query` as REST.
 - **Permissions.** The same `runActionPermissions` chain runs before and after the document loads, including RBAC `access`. It never falls back to the router's CRUD permissions. A refused call returns an `isError` result with the error title (`Access denied`), where REST returns 403 or 405.
 - **Authentication.** A call without a user is refused unless the action or router sets `allowAnonymous`.

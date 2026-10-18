@@ -1,33 +1,31 @@
 // noExplicitAny: test mocks use loosely typed hook doubles
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, type Mock, spyOn} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
+import {router} from "expo-router";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "../testing/useAdminModelApiDouble";
 import type {AdminModelConfig} from "../types";
 import {ModelsGridWidget} from "./ModelsGridWidget";
 
-const routerPush = mock(() => {});
-mock.module("expo-router", () => ({
-  router: {push: routerPush},
-}));
+let routerPush: Mock<(...args: unknown[]) => void>;
 
 let listState: {data?: {total?: number}; isLoading: boolean} = {
   data: {total: 12},
   isLoading: false,
 };
 
-mock.module("../useAdminModelApi", () => ({
-  useAdminModelApi: () => ({
-    useListQuery: (_args?: unknown, opts?: {skip?: boolean}) => {
-      if (opts?.skip) {
-        return {data: undefined, isLoading: false};
-      }
-      return listState;
-    },
-  }),
-}));
+const useListQuery = (_args?: unknown, opts?: {skip?: boolean}): typeof listState => {
+  if (opts?.skip) {
+    return {data: undefined, isLoading: false};
+  }
+  return listState;
+};
 
 const model: AdminModelConfig = {
   defaultSort: "-created",
@@ -41,8 +39,16 @@ const model: AdminModelConfig = {
 
 describe("ModelsGridWidget", () => {
   beforeEach(() => {
-    routerPush.mockClear();
+    routerPush = spyOn(router, "push").mockImplementation(() => {}) as unknown as Mock<
+      (...args: unknown[]) => void
+    >;
     listState = {data: {total: 12}, isLoading: false};
+    configureAdminModelApiDouble({useListQuery: useListQuery as (...args: unknown[]) => unknown});
+  });
+
+  afterEach(() => {
+    routerPush.mockRestore();
+    resetAdminModelApiDouble();
   });
 
   it("renders model cards with field and row counts", () => {

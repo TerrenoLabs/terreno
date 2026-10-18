@@ -1,13 +1,9 @@
-import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, type Mock, spyOn} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
+import {router} from "expo-router";
 import React from "react";
 import {Text} from "react-native";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-
-const routerPush = mock(() => {});
-
-mock.module("expo-router", () => ({router: {push: routerPush}}));
-
 import {AdminProvider} from "../AdminProvider";
 import {OrgSettingsScreen} from "./OrgSettingsScreen";
 import {OrgSwitcher} from "./OrgSwitcher";
@@ -31,6 +27,7 @@ const pendingResolvers: Array<() => void> = [];
 /** Responses keyed by `"METHOD url"`; unmatched requests answer `{data: {}}`. */
 const routes = new Map<string, StubResponse>();
 const originalFetch = globalThis.fetch;
+let routerPush: Mock<(...args: unknown[]) => void>;
 
 /** Routes the real `useOrganizationsApi` fetch client through `routes`. */
 const installFetch = (): void => {
@@ -90,7 +87,9 @@ describe("org switcher oscillation", () => {
     routes.set("GET /orgs/mine", {body: {data: [ALPHA, BETA]}});
     routes.set("GET /orgs/org-alpha", {body: {data: ALPHA}});
     routes.set("GET /orgs/org-beta", {body: {data: ALPHA}});
-    routerPush.mockClear();
+    routerPush = spyOn(router, "push").mockImplementation(() => {}) as unknown as Mock<
+      (...args: unknown[]) => void
+    >;
     installFetch();
   });
 
@@ -99,6 +98,7 @@ describe("org switcher oscillation", () => {
       resolve();
     }
     globalThis.fetch = originalFetch;
+    routerPush.mockRestore();
   });
 
   it("keeps switcher selection when OrgSettingsScreen still serves the previous route org", async () => {

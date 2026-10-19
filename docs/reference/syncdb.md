@@ -198,7 +198,7 @@ be passed to `betterAuthAdapter` directly.
 | Method | Description |
 |--------|-------------|
 | `start()` | Resolve user, run wipe-on-user-change check, start persistence, connect transport, subscribe collections, start reconcile timer. Resolves even when offline. Idempotent while already started. |
-| `stop()` | Disconnect, stop persistence, clear timers and listeners. |
+| `stop()` | Disconnect, flush and stop persistence, clear timers and listeners. Cancels a `start()` that is still running or queued ahead of it, so the transport never connects after logout. |
 | `goOffline()` | Simulated outage: disconnect transport, pause replay/reconcile/timer; local mutations keep queueing. |
 | `goOnline()` | End simulated outage; reconnect triggers reconcile + outbox replay. |
 | `mutate({collection, operation, id?, data?})` | Optimistic local write + durable outbox enqueue + fire-and-forget replay. Returns `{mutationId, id}`. |
@@ -209,7 +209,7 @@ be passed to `betterAuthAdapter` directly.
 | `replayOutbox()` | Drain queued mutations for the current user now. |
 | `resolveConflict({mutationId, strategy})` | Apply `"useServer"` or `"keepMine"` to a recorded conflict. |
 | `retryFailed({entityId})` | Re-enable an entity's queued successors after a terminal validation failure. |
-| `signOut()` | Explicit teardown like `stop()`; wipes local data only when `wipeOnSignOut: true`. |
+| `signOut()` | Explicit teardown like `stop()` (including cancelling an in-flight `start()`); wipes local data only when `wipeOnSignOut: true`. |
 | `getSyncStatus()` | Snapshot of aggregate sync state (see [Sync status API](#sync-status-api)). |
 | `onStatusChange(callback)` | Subscribe to connectivity/syncing changes; returns unsubscribe. |
 | `store` | Read surface over the local MergeableStore (`SyncStore`). |
@@ -660,6 +660,12 @@ const syncDb = createSyncDb({
   keyProvider: createLocalKeyProvider(),
 });
 ```
+
+`start()` resolves the key before it loads the store, while the session is still valid.
+The derived key is cached in IndexedDB, so the flush in `stop()` never fetches
+`/sync/key`. Logging out while `start()` is still running keeps pending outbox writes.
+If the key fetch fails (an offline cold start), `start()` still resolves and the next
+save retries the fetch.
 
 Saves are debounced (500 ms). The store is serialized once per write, not once per
 transaction: autosave compares TinyBase's content hashes (O(1)) to skip saves the last

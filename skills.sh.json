@@ -53,6 +53,7 @@
         "implement-ready-for-dev",
         "respond-to-review",
         "verify-ui-changes",
+        "attach-pr-media",
         "accessibility-testing",
         "review-chart-visuals",
         "work-github-issues",

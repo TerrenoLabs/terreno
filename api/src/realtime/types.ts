@@ -52,9 +52,10 @@ export interface RealtimeAppOptions {
   tokenIssuer?: string;
   /**
    * Enables the Better Auth session validator for socket authentication. It is tried after
-   * the legacy JWT validator when a token secret exists, or used alone otherwise. Pass the
-   * instance returned by `createBetterAuth` (and optionally the app user model so
-   * `decodedToken.id`/`admin` match the REST identity).
+   * the legacy JWT validator when a token secret exists, or used alone otherwise. Usually
+   * omitted: when a BetterAuthApp is registered on the same TerrenoApp, its instance and the
+   * RealtimeApp's `userModel` (else the TerrenoApp's) are used automatically. Pass the instance returned by
+   * `createBetterAuth` only for a RealtimeApp mounted without TerrenoApp, or to override it.
    */
   betterAuth?: BetterAuthSocketOptions;
   /**
@@ -69,8 +70,10 @@ export interface RealtimeAppOptions {
    * (D1). Authorization for realtime/sync subscriptions and mutations uses this full
    * document instead of the synthetic `{_id, admin, id}` shape derived from the token
    * alone — required for any permission check or `getUserScopes` resolver that reads
-   * fields beyond `admin` (e.g. `organizationIds` for tenant-scoped sync). Without it,
-   * socket-side authorization falls back to the synthetic shape (pre-D2 behavior).
+   * fields beyond `admin` (e.g. `organizationIds` for tenant-scoped sync). The sweep also
+   * disconnects sockets whose user was disabled or deleted. When omitted, the user model of
+   * the TerrenoApp this RealtimeApp is registered on is used; without either, socket-side
+   * authorization falls back to the synthetic shape (pre-D2 behavior).
    */
   userModel?: UserModel;
   /**

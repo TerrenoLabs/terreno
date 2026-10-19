@@ -5,6 +5,22 @@
  * JWT/Passport authentication system.
  */
 
+import type {BetterAuthOptions, BetterAuthPlugin} from "better-auth";
+
+/**
+ * Makes nested option objects optional too, so `options` can set one nested field (such as
+ * `emailAndPassword.requireEmailVerification`) without restating the fields Terreno sets.
+ * Functions, arrays, and strings are kept as they are.
+ */
+export type BetterAuthOptionsOverride<T = Omit<BetterAuthOptions, "basePath" | "plugins">> =
+  T extends (...args: never[]) => unknown
+    ? T
+    : T extends readonly unknown[] | string
+      ? T
+      : T extends object
+        ? {[K in keyof T]?: BetterAuthOptionsOverride<T[K]>}
+        : T;
+
 /**
  * OAuth provider configuration for Better Auth.
  */
@@ -97,6 +113,22 @@ export interface BetterAuthConfig {
    * `NODE_ENV=production`).
    */
   disableRateLimit?: boolean;
+
+  /**
+   * Any other Better Auth option, deep-merged over the options Terreno builds from this
+   * config (for example `emailAndPassword.requireEmailVerification`,
+   * `emailAndPassword.password.{hash, verify}`, or `databaseHooks`). Arrays replace Terreno's
+   * rather than merging by index. An explicit value wins (an `undefined` value is ignored),
+   * including over Terreno's security defaults: the `database` adapter, `emailAndPassword.revokeSessionsOnPasswordReset`, and
+   * `session.cookieCache`. Set the base path with `basePath` and plugins with `plugins`.
+   */
+  options?: BetterAuthOptionsOverride;
+
+  /**
+   * Better Auth plugins, appended after Terreno's `bearer()` plugin. Their endpoints mount
+   * under `basePath`. They are not added to the `auth.api` type.
+   */
+  plugins?: BetterAuthPlugin[];
 }
 
 /**

@@ -86,6 +86,8 @@ Handlers receive a single context object:
 
 Return a plain value from the handler; the framework responds with `{data: <value>}` and status `200` (or `action.status` if set). If the handler writes the response itself (`res.json`, streaming), return without relying on auto-wrap — the framework skips wrapping when `res.headersSent` is true.
 
+Set `unwrapResponse: true` to send the return value itself as the body, with `action.status`, instead of `{data: <value>}`. An `undefined` return sends an empty body (useful with `status: 204`). Use it when converting an existing `router.post` route whose clients expect the bare shape. OpenAPI documents the `response` schema without the `data` wrapper for these actions. `unwrapResponse` affects REST only; MCP always returns the value as the tool's JSON text.
+
 ## Permissions
 
 Each action requires a non-empty `permissions` array (same `PermissionMethod` types as CRUD). An empty array disables the action and returns **405**, matching CRUD.
@@ -127,6 +129,33 @@ When `openApi` is configured on the router (automatic with `TerrenoApp` and `set
 - **operationId** — `{tag}_{actionName}` (e.g. `todos_markComplete`) for stable RTK Query hook names after SDK regeneration.
 
 Request/response schemas are derived from Zod when `body`, `query`, or `response` are set. Successful responses are documented as `{data: ...}` to match the wire format.
+
+## MCP tools
+
+Set `mcp: {name, description?}` on an action to also expose it as an MCP tool on `/mcp`, so a frontend calling the action over REST and an agent calling it over MCP share one implementation:
+
+```typescript
+instanceActions: {
+  promote: {
+    body: z.object({note: z.string().optional()}).strict(),
+    handler: async ({body, doc}) => promoteDraft(doc, body.note),
+    mcp: {description: "Promote a draft to published", name: "drafts_promote"},
+    method: "POST",
+    permissions: [Permissions.IsOwner],
+  },
+},
+```
+
+The tool behaves like the REST route:
+
+- **Input.** An instance action takes `{id, ...body}` (POST) or `{id, ...query}` (GET). A collection action takes the body or query alone. `body` / `query` must be a `z.object()`, and an instance action's schema cannot define `id` (a collection action's can, and gets it). With no schema, the tool accepts any arguments, as REST forwards the raw body.
+- **Validation.** The MCP server validates arguments against that schema before the handler runs, so the handler gets the same parsed `ctx.body` / `ctx.query` as REST.
+- **Permissions.** The same `runActionPermissions` chain runs before and after the document loads, including RBAC `access`. It never falls back to the router's CRUD permissions. A refused call returns an `isError` result with the error title (`Access denied`), where REST returns 403 or 405.
+- **Authentication.** A call without a user is refused unless the action or router sets `allowAnonymous`.
+- **Handler.** `req` comes from `createMCPRequest` (`req.isMCPRequest === true`, `req.params.id` set for instance actions). `res` throws `Action used res during an MCP call` when touched, so an action that writes to `res` directly cannot opt in.
+- **Result.** The return value becomes the tool's JSON text. A thrown `APIError` becomes an `isError` result with its title; validation errors add their field messages.
+
+Action tools are collected from every registered router when `/mcp` mounts, alongside CRUD and `registerMCPTool` tools. A disabled action (`permissions: []`) is not exposed. Tool names must be unique across all tools; a collision fails at boot.
 
 ## Collision detection
 

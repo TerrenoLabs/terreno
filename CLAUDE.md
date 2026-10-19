@@ -150,7 +150,7 @@ The three core packages form a complete full-stack framework:
   - TerrenoProvider for theming
 ```
 
-> **Legacy:** `@terreno/rtk` RTK Query hooks for **collection CRUD** are deprecated — use syncdb. See [migrate-rtk-to-syncdb.md](../../docs/how-to/migrate-rtk-to-syncdb.md). `modelRouter` `realtime` and RTK `realtimeList` / `realtimeDocument` are removed in Terreno 58; `RealtimeApp` stays for sync sockets.
+> **Legacy:** `@terreno/rtk` RTK Query hooks for **collection CRUD** are deprecated — use syncdb. See [migrate-rtk-to-syncdb.md](docs/how-to/migrate-rtk-to-syncdb.md). `modelRouter` `realtime` and RTK `realtimeList` / `realtimeDocument` are removed in Terreno 58; `RealtimeApp` stays for sync sockets.
 
 ### Integration Flow
 
@@ -188,7 +188,7 @@ bun run frontend:web
 - Use camelCase directories (e.g., `components/authWizard`)
 - Favor named exports
 - Use the RORO pattern (Receive an Object, Return an Object)
-- **No barrel imports** — import concrete module files, not directory `index` re-export barrels. See [no-barrel-imports.md](../docs/explanation/no-barrel-imports.md). Cross-package `@terreno/*` package roots are allowed; internal barrel `index.ts` files are banned (Biome `noBarrelFile` override) and paths like `../models`, `@/store`, or `@components` without a file are not allowed. Enforced by Biome lint and `bun run check:no-barrel-imports` in CI.
+- **No barrel imports** — import concrete module files, not directory `index` re-export barrels. See [no-barrel-imports.md](docs/explanation/no-barrel-imports.md). Cross-package `@terreno/*` package roots are allowed; internal barrel `index.ts` files are banned (Biome `noBarrelFile` override) and paths like `../models`, `@/store`, or `@components` without a file are not allowed. Enforced by Biome lint and `bun run check:no-barrel-imports` in CI.
 
 ### Dates and Time
 - Always use Luxon instead of Date or dayjs
@@ -401,6 +401,17 @@ import {createSyncDb, betterAuthAdapter} from "@terreno/syncdb";
 import {SyncDbProvider, useQuery, useMutate} from "@terreno/syncdb/react";
 ```
 
+Use syncdb hooks for synced collections — never RTK Query `useGetXQuery` / `usePostXMutation` for new work:
+
+```typescript
+// Correct — synced collection
+const todos = useQuery<Todo>("todos", {filter: (t) => !t.completed});
+const {create, update, remove} = useMutate("todos");
+
+// Wrong for synced data — legacy RTK path
+// const {data} = useGetTodosQuery();
+```
+
 For running-app SyncDB bugs, invoke the `debug-syncdb-with-mcp` skill and use
 `get_syncdb_state`, `syncdb_snapshot`, and `syncdb_action` from
 `terreno-mcp-local`. Enable the client with `debug: true`; set
@@ -412,10 +423,25 @@ For running-app SyncDB bugs, invoke the `debug-syncdb-with-mcp` skill and use
 Redux Toolkit Query integration for **non-synced** routes and session state:
 
 - **generateBetterAuthSlice**: Better Auth session Redux (default for new apps)
+- **generateAuthSlice**: Legacy JWT auth
 - **emptyApi**: Base RTK Query API for OpenAPI codegen
 - **useTerrenoFeatureFlags**, **useSocketConnection**: Feature flags and realtime
 
-Use generated SDK hooks for non-synced routes only — never use `axios` or `request` directly.
+Key imports:
+```typescript
+import {generateBetterAuthSlice} from "@terreno/rtk";
+```
+
+Use generated SDK hooks for non-synced routes only — never use `axios` or `request` directly:
+
+```typescript
+// Correct — non-synced route (e.g. profile, admin)
+import {useGetMeQuery} from "@/store/openApiSdk";
+const {data, isLoading, error} = useGetMeQuery();
+
+// Wrong — don't use axios directly
+// const result = await axios.get("/api/auth/me");
+```
 
 ## React Best Practices (Frontend Packages)
 
@@ -540,7 +566,7 @@ Seed login users with `bun run backend:seed` (same env vars): creates `test@exam
 ### Tests and lint
 
 Every CircleCI test job has a local command. Map and run them with
-[`docs/how-to/run-tests-locally.md`](../../docs/how-to/run-tests-locally.md).
+[`docs/how-to/run-tests-locally.md`](docs/how-to/run-tests-locally.md).
 
 ```bash
 bun run test              # every workspace test:ci (including example-frontend)
@@ -573,7 +599,7 @@ When present, `SENTRY_CLIENT_SECRET` is injected as an environment variable hold
 When present, `CIRCLECI_TOKEN` is a CircleCI personal API token (`CIRCLE_TOKEN` is the
 CLI name). Use it to list jobs and fetch logs for Taste. Project slug:
 `circleci/6UHiK7pThPXbhnNi3umQNe/LdjghuhydHjFMyFjcEXMA2` (not `gh/TerrenoLabs/terreno`).
-See [`docs/how-to/circleci.md`](../../docs/how-to/circleci.md).
+See [`docs/how-to/circleci.md`](docs/how-to/circleci.md).
 
 ### Gotchas
 

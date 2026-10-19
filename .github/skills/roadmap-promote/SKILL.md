@@ -6,6 +6,7 @@ description: >-
   Project fields after maintainer approval. Trigger with /roadmap-promote or
   phrases like "promote this idea", "turn this discussion into a roadmap item",
   "this RFC was accepted".
+disable-model-invocation: true
 ---
 # Roadmap promote
 

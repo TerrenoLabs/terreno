@@ -5,6 +5,7 @@ description: >-
   addressed items without owning submission or CI waiting. Every review-bot
   thread ends fixed, declined with a reply, or raised as a decision. Lifecycle
   composition: Taste.
+disable-model-invocation: true
 ---
 # PR Review Response Workflow
 

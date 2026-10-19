@@ -192,7 +192,9 @@ Ensures preview environments don't accumulate and waste resources.
 ### Single Source of Truth
 - **Documentation:** Code is truth, docs must reflect it
 - **Agent configuration:** `.rulesync/rules/`, `.rulesync/skills/`, and
-  `.rulesync/hooks.json` are truth; generated files derive from them
+  `.rulesync/hooks.json` are truth; generated files derive from them. Root `AGENTS.md`
+  and `CLAUDE.md` are generated from `.rulesync/rules/00-root.md` by `bun run rules`
+  (rulesync 17), so edit the rule, not the output
 - **Tests:** Implementation is truth, tests verify it
 
 ### Fail Fast

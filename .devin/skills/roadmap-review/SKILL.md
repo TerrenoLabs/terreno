@@ -5,6 +5,8 @@ description: >-
   missing labels, and untriaged inbox entries, then report a prioritized set of
   proposed changes for a maintainer to approve. Trigger with /roadmap-review or
   phrases like "review the roadmap", "is the board accurate", "roadmap hygiene".
+triggers:
+  - user
 ---
 # Roadmap review
 

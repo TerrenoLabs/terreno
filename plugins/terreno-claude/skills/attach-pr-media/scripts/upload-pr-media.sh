@@ -112,9 +112,11 @@ done
 
 git -C "$work/gist" add --all
 if ! git -C "$work/gist" diff --cached --quiet; then
+  # Agent environments often inherit global signing config without a usable key, and the
+  # gist history is throwaway, so never sign it.
   git -C "$work/gist" -c user.name="$owner" -c user.email="$owner@users.noreply.github.com" \
-    commit --quiet -m "Add media for $repo#$pr"
-  git -C "$work/gist" "${git_auth[@]}" push --quiet origin HEAD
+    -c commit.gpgsign=false commit --quiet -m "Add media for $repo#$pr"
+  git -C "$work/gist" "${git_auth[@]}" -c push.gpgSign=false push --quiet origin HEAD
 fi
 sha=$(git -C "$work/gist" rev-parse HEAD)
 

@@ -8,11 +8,28 @@ import type {
   McpOAuthTokenIssueOptions,
   McpOAuthTokenModel,
 } from "../types/mcpOAuth";
+import {McpOAuthRevokedFamily} from "./mcpOAuthRevokedFamily";
 
 /** Access tokens carry a prefix distinct from `mcp_` service tokens so `/mcp` can route them. */
 export const MCP_OAUTH_ACCESS_TOKEN_PREFIX = "mcpat_";
 const MCP_OAUTH_REFRESH_TOKEN_PREFIX = "mcprt_";
 const MCP_OAUTH_TOKEN_RANDOM_BYTES = 32;
+// A tombstone outlives in-flight requests even when the family has no unexpired refresh token.
+const MIN_REVOKED_FAMILY_RETENTION_SECONDS = 60 * 60;
+
+/** Thrown by `McpOAuthToken.issue` for a family that was revoked. Answer it as `invalid_grant`. */
+export class McpOAuthFamilyRevokedError extends Error {
+  readonly familyId: string;
+
+  constructor(familyId: string) {
+    super("The token family was revoked");
+    this.familyId = familyId;
+    this.name = "McpOAuthFamilyRevokedError";
+  }
+}
+
+const isFamilyRevoked = async (familyId: string): Promise<boolean> =>
+  Boolean(await McpOAuthRevokedFamily.exists({familyId}));
 
 /** Codes, tokens, and request ids are stored only as SHA-256 hashes. */
 export const hashMcpOAuthSecret = (secret: string): string =>
@@ -60,10 +77,6 @@ const mcpOAuthTokenSchema = new mongoose.Schema<McpOAuthTokenDocument, McpOAuthT
       description: "RFC 8707 resource the tokens are bound to",
       type: String,
     },
-    reuseDetectedAt: {
-      description: "When this refresh token was presented again after rotation",
-      type: Date,
-    },
     revokedAt: {
       description: "When the pair was revoked; unset while it remains active",
       type: Date,
@@ -99,6 +112,10 @@ mcpOAuthTokenSchema.statics = {
     this: McpOAuthTokenModel,
     options: McpOAuthTokenIssueOptions
   ): Promise<{accessToken: string; mcpOAuthToken: McpOAuthTokenDocument; refreshToken: string}> {
+    const familyId = options.familyId ?? randomUUID();
+    if (await isFamilyRevoked(familyId)) {
+      throw new McpOAuthFamilyRevokedError(familyId);
+    }
     const accessToken = generateMcpOAuthSecret(MCP_OAUTH_ACCESS_TOKEN_PREFIX);
     const refreshToken = generateMcpOAuthSecret(MCP_OAUTH_REFRESH_TOKEN_PREFIX);
     const now = DateTime.now();
@@ -106,16 +123,43 @@ mcpOAuthTokenSchema.statics = {
       accessExpiresAt: now.plus({seconds: options.accessTokenTtlSeconds}).toJSDate(),
       accessTokenHash: hashMcpOAuthSecret(accessToken),
       clientId: options.clientId,
-      familyId: options.familyId ?? randomUUID(),
+      familyId,
       refreshExpiresAt: now.plus({seconds: options.refreshTokenTtlSeconds}).toJSDate(),
       refreshTokenHash: hashMcpOAuthSecret(refreshToken),
       resource: options.resource,
       scope: options.scope,
       userId: options.userId,
     });
+    // revokeFamily writes the tombstone before it revokes pairs, so a revoke that raced this
+    // create has either revoked the new pair already or is visible here.
+    if (await isFamilyRevoked(familyId)) {
+      await this.updateOne(
+        {_id: mcpOAuthToken._id, revokedAt: {$exists: false}},
+        {$set: {revokedAt: DateTime.now().toJSDate()}}
+      );
+      throw new McpOAuthFamilyRevokedError(familyId);
+    }
     return {accessToken, mcpOAuthToken, refreshToken};
   },
   async revokeFamily(this: McpOAuthTokenModel, familyId: string): Promise<void> {
+    const now = DateTime.now();
+    const [latest] = await this.find({familyId})
+      .sort({refreshExpiresAt: -1})
+      .limit(1)
+      .select({refreshExpiresAt: 1});
+    const minimumRetention = now.plus({seconds: MIN_REVOKED_FAMILY_RETENTION_SECONDS});
+    const retainUntil = latest
+      ? DateTime.max(minimumRetention, DateTime.fromJSDate(latest.refreshExpiresAt))
+      : minimumRetention;
+    // The tombstone goes first: issue checks it again after creating a pair.
+    await McpOAuthRevokedFamily.updateOne(
+      {familyId},
+      {
+        $max: {expiresAt: retainUntil.toJSDate()},
+        $setOnInsert: {revokedAt: now.toJSDate()},
+      },
+      {upsert: true}
+    );
     await this.updateMany(
       {familyId, revokedAt: {$exists: false}},
       {$set: {revokedAt: DateTime.now().toJSDate()}}

@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it} from "bun:test";
+import {beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {createHash, randomBytes} from "node:crypto";
 import type express from "express";
 import {DateTime} from "luxon";
@@ -29,6 +29,7 @@ const RESOURCE_METADATA_URL = `${ISSUER}/.well-known/oauth-protected-resource/mc
 const oauthOptions: McpOAuthOptions = {
   allowedRedirectHosts: ["claude.ai", "*.chatgpt.com", "localhost"],
   consentUrl: CONSENT_URL,
+  dynamicClientRegistration: true,
   enabled: true,
   issuer: ISSUER,
 };
@@ -60,9 +61,11 @@ const noteRouter = () =>
     },
   });
 
-const buildApp = (): express.Application =>
+const buildApp = (
+  {mcpOAuth}: {mcpOAuth?: McpOAuthOptions} = {mcpOAuth: oauthOptions}
+): express.Application =>
   new TerrenoApp({
-    mcpOAuth: oauthOptions,
+    mcpOAuth,
     mcpServiceTokens: true,
     skipListen: true,
     userModel: typedUserModel,
@@ -391,14 +394,47 @@ describe("MCP OAuth authorization server", () => {
       expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     });
 
-    it("revokes tokens issued after a replay landed mid-exchange", async () => {
+    it("revokes the tokens when a code is replayed after issue but before the exchange returns", async () => {
       const flow = await approvedCode(app, agent);
-      // Stands in for a replay that arrived after the code was consumed but before issue.
-      await McpOAuthAuthorization.updateMany({}, {$set: {replayedAt: DateTime.now().toJSDate()}});
+      const realIssue = McpOAuthToken.issue.bind(McpOAuthToken);
+      let replay: supertest.Response | undefined;
+      const issueSpy = spyOn(McpOAuthToken, "issue").mockImplementation(async (options) => {
+        const issued = await realIssue(options);
+        replay = await exchangeCode(app, flow);
+        return issued;
+      });
+      let first: supertest.Response;
+      try {
+        first = await exchangeCode(app, flow);
+      } finally {
+        issueSpy.mockRestore();
+      }
 
-      const res = await exchangeCode(app, flow);
+      expect(replay?.body.error).toBe("invalid_grant");
+      expect((await callMcp(app, first.body.access_token)).status).toBe(401);
+      expect((await refresh(app, flow.clientId, first.body.refresh_token)).body.error).toBe(
+        "invalid_grant"
+      );
+    });
 
-      expect(res.body.error).toBe("invalid_grant");
+    it("refuses to issue tokens when the code is replayed before they are issued", async () => {
+      const flow = await approvedCode(app, agent);
+      const realIssue = McpOAuthToken.issue.bind(McpOAuthToken);
+      let replay: supertest.Response | undefined;
+      const issueSpy = spyOn(McpOAuthToken, "issue").mockImplementation(async (options) => {
+        replay = await exchangeCode(app, flow);
+        return realIssue(options);
+      });
+      let first: supertest.Response;
+      try {
+        first = await exchangeCode(app, flow);
+      } finally {
+        issueSpy.mockRestore();
+      }
+
+      expect(replay?.body.error).toBe("invalid_grant");
+      expect(first.status).toBe(400);
+      expect(first.body.error).toBe("invalid_grant");
       expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     });
 
@@ -514,15 +550,73 @@ describe("MCP OAuth authorization server", () => {
       expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     });
 
-    it("revokes a pair issued after reuse was detected mid-rotation", async () => {
+    it("revokes the chain when two exchanges of one refresh token read it at the same time", async () => {
       const flow = await approvedCode(app, agent);
       const first = (await exchangeCode(app, flow)).body;
-      // Stands in for a concurrent reuse detected after rotation but before the new pair existed.
-      await McpOAuthToken.updateMany({}, {$set: {reuseDetectedAt: DateTime.now().toJSDate()}});
+      // Hold each lookup until both requests have read the token, so both start from the same state.
+      const realLookup = McpOAuthToken.findOneOrNone.bind(McpOAuthToken);
+      let lookups = 0;
+      let releaseLookups = (): void => {};
+      const bothLookedUp = new Promise<void>((resolve) => {
+        releaseLookups = resolve;
+      });
+      const lookupSpy = spyOn(McpOAuthToken, "findOneOrNone").mockImplementation((async (
+        ...args: Parameters<typeof realLookup>
+      ) => {
+        const found = await realLookup(...args);
+        lookups += 1;
+        if (lookups === 2) {
+          releaseLookups();
+        }
+        await bothLookedUp;
+        return found;
+      }) as typeof McpOAuthToken.findOneOrNone);
+      let responses: supertest.Response[];
+      try {
+        responses = await Promise.all([
+          refresh(app, flow.clientId, first.refresh_token),
+          refresh(app, flow.clientId, first.refresh_token),
+        ]);
+      } finally {
+        lookupSpy.mockRestore();
+      }
 
-      const res = await refresh(app, flow.clientId, first.refresh_token);
+      expect(responses.some((res) => res.body.error === "invalid_grant")).toBe(true);
+      for (const res of responses.filter((candidate) => candidate.status === 200)) {
+        expect((await callMcp(app, res.body.access_token)).status).toBe(401);
+        expect((await refresh(app, flow.clientId, res.body.refresh_token)).body.error).toBe(
+          "invalid_grant"
+        );
+      }
+    });
 
-      expect(res.body.error).toBe("invalid_grant");
+    it("keeps the chain revoked when the winning exchange issues after the loser revoked it", async () => {
+      const flow = await approvedCode(app, agent);
+      const first = (await exchangeCode(app, flow)).body;
+      // The exchange that wins the rotation waits in issue until the losing exchange has answered.
+      const realIssue = McpOAuthToken.issue.bind(McpOAuthToken);
+      let markLoserDone = (): void => {};
+      const loserDone = new Promise<void>((resolve) => {
+        markLoserDone = resolve;
+      });
+      const issueSpy = spyOn(McpOAuthToken, "issue").mockImplementation(async (options) => {
+        await loserDone;
+        return realIssue(options);
+      });
+      let responses: supertest.Response[];
+      try {
+        responses = await Promise.all(
+          [0, 1].map(async () => {
+            const res = await refresh(app, flow.clientId, first.refresh_token);
+            markLoserDone();
+            return res;
+          })
+        );
+      } finally {
+        issueSpy.mockRestore();
+      }
+
+      expect(responses.map((res) => res.body.error)).toEqual(["invalid_grant", "invalid_grant"]);
       expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     });
   });
@@ -643,9 +737,105 @@ describe("resolveMcpOAuthOption", () => {
     ).toThrow("MCP OAuth is misconfigured");
   });
 
-  it("throws at boot without allowed redirect hosts", () => {
+  it("throws at boot when registration is on without allowed redirect hosts", () => {
     expect(() => resolveMcpOAuthOption({...oauthOptions, allowedRedirectHosts: []})).toThrow(
       "MCP OAuth is misconfigured"
     );
+  });
+
+  it("leaves dynamic client registration off unless asked for", () => {
+    const {allowedRedirectHosts: _hosts, dynamicClientRegistration: _dcr, ...rest} = oauthOptions;
+
+    expect(resolveMcpOAuthOption(rest)).toMatchObject({
+      allowedRedirectHosts: [],
+      dynamicClientRegistration: false,
+    });
+  });
+});
+
+describe("MCP OAuth opt-in", () => {
+  const oauthPaths: [string, string][] = [
+    ["get", "/.well-known/oauth-protected-resource"],
+    ["get", "/.well-known/oauth-protected-resource/mcp"],
+    ["get", "/.well-known/oauth-authorization-server"],
+    ["post", "/oauth/register"],
+    ["get", "/oauth/authorize"],
+    ["post", "/oauth/token"],
+    ["post", "/oauth/revoke"],
+  ];
+
+  beforeEach(async () => {
+    await setupDb();
+    await Promise.all([
+      McpOAuthAuthorization.deleteMany({}),
+      McpOAuthClient.deleteMany({}),
+      McpOAuthToken.deleteMany({}),
+    ]);
+    clearMCPRegistry();
+  });
+
+  it("mounts no OAuth routes, metadata, or /mcp challenge without mcpOAuth", async () => {
+    for (const mcpOAuth of [undefined, {...oauthOptions, enabled: false}]) {
+      const app = buildApp({mcpOAuth});
+
+      for (const [method, path] of oauthPaths) {
+        const res = await (method === "get" ? supertest(app).get(path) : supertest(app).post(path));
+        expect(`${method} ${path} ${res.status}`).toBe(`${method} ${path} 404`);
+      }
+      const mcp = await callMcp(app);
+      expect(mcp.status).not.toBe(401);
+      expect(mcp.headers["www-authenticate"]).toBeUndefined();
+    }
+  });
+
+  describe("with dynamic client registration off", () => {
+    let app: express.Application;
+    let agent: TestAgent;
+
+    beforeEach(async () => {
+      const {allowedRedirectHosts: _hosts, dynamicClientRegistration: _dcr, ...rest} = oauthOptions;
+      app = buildApp({mcpOAuth: rest});
+      agent = await authAsUser(app, "notAdmin");
+    });
+
+    it("answers /oauth/register with 404 and leaves it out of the metadata", async () => {
+      const register = await supertest(app)
+        .post("/oauth/register")
+        .send({client_name: "Anyone", redirect_uris: [REDIRECT_URI]});
+      const metadata = await supertest(app).get("/.well-known/oauth-authorization-server");
+
+      expect(register.status).toBe(404);
+      expect(await McpOAuthClient.countDocuments({})).toBe(0);
+      expect(metadata.status).toBe(200);
+      expect(metadata.body.registration_endpoint).toBeUndefined();
+      expect(metadata.body.token_endpoint).toBe(`${ISSUER}/oauth/token`);
+    });
+
+    it("still runs the flow for a client the app created", async () => {
+      const client = await McpOAuthClient.create({
+        clientId: "preconfigured-claude",
+        clientName: "Claude",
+        grantTypes: ["authorization_code", "refresh_token"],
+        redirectUris: [REDIRECT_URI],
+        responseTypes: ["code"],
+      });
+      const {challenge, verifier} = createPkce();
+      const authorize = await startAuthorization(app, {
+        client_id: client.clientId,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        redirect_uri: REDIRECT_URI,
+        response_type: "code",
+      });
+      const approve = await agent.post(
+        `/oauth/authorize/${requestIdFrom(authorize.headers.location)}/approve`
+      );
+      const code = new URL(approve.body.data.redirectUrl).searchParams.get("code") as string;
+
+      const tokens = await exchangeCode(app, {clientId: client.clientId, code, verifier});
+
+      expect(tokens.status).toBe(200);
+      expect((await callMcp(app, tokens.body.access_token)).status).toBe(200);
+    });
   });
 });

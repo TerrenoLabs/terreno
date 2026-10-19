@@ -139,9 +139,10 @@ export interface TerrenoAppOptions {
   mcpServiceTokens?: McpServiceTokensAppOption;
   /**
    * Opt-in OAuth 2.1 authorization server for `/mcp`, so remote MCP clients (Claude.ai
-   * connectors, ChatGPT apps) can connect to a JWT-auth app. Mounts RFC 9728 / RFC 8414
-   * discovery, dynamic client registration, authorize + consent, token, and revocation
-   * endpoints, and makes `/mcp` answer credential-less requests with a 401 challenge. See
+   * connectors, ChatGPT apps) can connect to a JWT-auth app. Off unless `enabled: true`. Mounts
+   * RFC 9728 / RFC 8414 discovery, authorize + consent, token, and revocation endpoints, and makes
+   * `/mcp` answer credential-less requests with a 401 challenge. Dynamic client registration is a
+   * second opt-in (`dynamicClientRegistration: true`). See
    * [Enable MCP OAuth](../how-to/enable-mcp-oauth.md).
    */
   mcpOAuth?: McpOAuthAppOption;

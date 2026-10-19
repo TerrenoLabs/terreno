@@ -106,7 +106,11 @@ This is not OAuth 2.1; interactive clients use MCP OAuth below. It is also not t
 
 ### MCP OAuth (opt-in, `/mcp` only)
 
-Claude.ai connectors and ChatGPT apps cannot paste a static key; they run OAuth 2.1 discovery, dynamic client registration, and the authorization-code flow with PKCE. With `mcpOAuth` on `TerrenoApp`, Terreno is that authorization server for a JWT app. Terreno is backend-only, so the app hosts the consent screen and approves or denies with the signed-in user's JWT. The client then gets opaque, short-lived `mcpat_` access tokens and rotating `mcprt_` refresh tokens, stored as hashes. On `/mcp`, `extractAuthFromHeaders` resolves `mcpat_` alongside the other credentials, and a request with none gets a `401` RFC 9728 challenge that starts discovery. OAuth access tokens are ignored on REST, like service tokens.
+Claude.ai connectors and ChatGPT apps cannot paste a static key; they run OAuth 2.1 discovery, get a client id (pre-created by the app, or through dynamic client registration), and run the authorization-code flow with PKCE. With `mcpOAuth` on `TerrenoApp`, Terreno is that authorization server for a JWT app. Terreno is backend-only, so the app hosts the consent screen and approves or denies with the signed-in user's JWT. The client then gets opaque, short-lived `mcpat_` access tokens and rotating `mcprt_` refresh tokens, stored as hashes. On `/mcp`, `extractAuthFromHeaders` resolves `mcpat_` alongside the other credentials, and a request with none gets a `401` RFC 9728 challenge that starts discovery. OAuth access tokens are ignored on REST, like service tokens.
+
+Every part of it is opt-in. Without `mcpOAuth.enabled` there are no OAuth routes, discovery documents, or challenge. Dynamic client registration is a second flag (`dynamicClientRegistration`) because an open registration endpoint lets anyone create a client, which leaves the consent screen as the only defense against a phishing client. With it off, the app creates its clients as `McpOAuthClient` documents.
+
+Revocation works on token families: every pair rotated from one approval shares a `familyId`. Revoking a family writes a tombstone before revoking its pairs, and issuing into a tombstoned family fails, checked again after the new pair is written. That closes the races where a refresh or code exchange that already passed its single-use check would otherwise issue a live pair after a concurrent reuse revoked the family.
 
 **Learn more:** [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md)
 

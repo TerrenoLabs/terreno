@@ -161,7 +161,7 @@ Remote MCP clients (Claude connectors, ChatGPT, Cursor HTTP) expect **OAuth 2.1*
 5. Extend `extractUserFromHeaders` to accept an OAuth access token on `Authorization: Bearer`, resolve it through Better Auth, then load the app `User` by `betterAuthId` — same mapping as session cookies today.
 6. Keep JWT verification as a fallback so Inspector, tests, and `useMCPTools` keep working with session/JWT bearer.
 
-**When Better Auth is off (JWT-only):** set the `mcpOAuth` TerrenoApp option to mount the Terreno-native OAuth 2.1 authorization server ([Enable MCP OAuth](../how-to/enable-mcp-oauth.md)). It serves the RFC 9728 and RFC 8414 documents, dynamic client registration, authorize/consent, token, and revoke, and `/mcp` answers unauthenticated requests with the 401 challenge. The app hosts the consent screen. Bearer JWT keeps working. With `mcpOAuth` off, no OAuth metadata mounts and bearer behavior is unchanged.
+**When Better Auth is off (JWT-only):** set `mcpOAuth: {enabled: true, …}` to mount the Terreno-native OAuth 2.1 authorization server ([Enable MCP OAuth](../how-to/enable-mcp-oauth.md)). It serves the RFC 9728 and RFC 8414 documents, authorize/consent, token, and revoke, and `/mcp` answers unauthenticated requests with the 401 challenge. Dynamic client registration is a second opt-in (`dynamicClientRegistration: true`), off by default because the endpoint is unauthenticated and lets anyone create a client; without it the app creates `McpOAuthClient` documents itself. Revoking a token family writes a tombstone that `McpOAuthToken.issue` honors, so in-flight exchanges cannot revive it. The app hosts the consent screen. Bearer JWT keeps working. With `mcpOAuth` off, no OAuth metadata mounts and bearer behavior is unchanged.
 
 **Not in this IP:** social login providers (already documented); infra-mcp’s RBAC/elicitation; replacing Passport JWT for REST.
 
@@ -313,6 +313,8 @@ None. Additive APIs. `registerMCPTool` signature may gain optional fields only. 
 - [ ] Better Auth on: unauthenticated `/mcp` returns 401 with resource metadata; a valid OAuth access token runs tools as that user
 - [ ] JWT-only with `mcpOAuth` off: existing bearer behavior unchanged; no OAuth well-known mounted
 - [ ] JWT-only with `mcpOAuth` on: RFC 9728/8414 documents mount, unauthenticated `/mcp` returns the 401 challenge, and bearer JWT still works
+- [ ] `mcpOAuth` on without `dynamicClientRegistration`: `/oauth/register` is 404, metadata has no `registration_endpoint`, and an app-created client completes the flow
+- [ ] A revoked token family stays revoked when a concurrent refresh or code exchange issues after the revoke
 - [ ] Hosted `terreno_generate_mcp_tool|prompt|resource` return TypeScript matching the factories
 - [ ] Docs: two MCP layers; prompts/resources; Inspector; OAuth vs bearer; generator tools
 - [ ] `registerMCPTool` without new fields still typechecks and runs

@@ -6,6 +6,8 @@ description: >-
   changelog pull request, merge it as soon as CI is green, create the GitHub
   release, and monitor the CircleCI publish until every package is on npm.
   Trigger with /release.
+triggers:
+  - user
 ---
 # Release Terreno
 

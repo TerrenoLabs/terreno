@@ -6,6 +6,7 @@ description: >-
   log of tries and release notes, upgrade Expo, and land native fingerprint
   deps. Trigger with /track-upstream-expo, "track upstream expo", "check expo
   beta", or "morning expo probe".
+disable-model-invocation: true
 ---
 # Track upstream Expo
 

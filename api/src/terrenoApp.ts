@@ -8,9 +8,9 @@ import qs from "qs";
 import type {AdminChangeEvent, TerrenoAppAdminEvent} from "./adminTypes";
 import type {ModelRouterRegistration} from "./api";
 import {addAuthRoutes, addMeRoutes, setupAuth, type UserModel as UserMongooseModel} from "./auth";
+import {findBetterAuthProvider, getProvidedBetterAuth} from "./betterAuthApp";
 import {
   applyJwtPasswordResetToBetterAuth,
-  type BetterAuthInstance,
   createBetterAuthSessionMiddleware,
 } from "./betterAuthSetup";
 import {addTerrenoDevBrowserLogsRoute} from "./browserLogsRoute";
@@ -56,14 +56,6 @@ import {ensureSyncIndexes} from "./sync/registry";
 import type {TerrenoPlugin} from "./terrenoPlugin";
 import openapi from "./vendor/wesleytodd-openapi/index";
 import {jsonBodyParserOptions, urlencodedBodyParserOptions} from "./webhooks/rawBody";
-
-/** A registered plugin that exposes a Better Auth instance, e.g. BetterAuthApp. */
-interface BetterAuthProvider {
-  getAuth: () => BetterAuthInstance | undefined;
-  ensureAuth?: () => BetterAuthInstance;
-  markSessionMiddlewareMounted?: () => void;
-  getBetterAuthBasePath?: () => string;
-}
 
 type CorsOrigin =
   | string
@@ -274,6 +266,13 @@ export class TerrenoApp {
   }
 
   /**
+   * The application user model this app authenticates against.
+   */
+  getUserModel(): TerrenoAppOptions["userModel"] {
+    return this.options.userModel;
+  }
+
+  /**
    * Returns only TerrenoPlugin registrations (excludes model routers).
    */
   getPlugins(): TerrenoPlugin[] {
@@ -415,11 +414,7 @@ export class TerrenoApp {
       next();
     });
 
-    const betterAuthForLimiter = this.registrations.find(
-      (registration) =>
-        "getAuth" in registration &&
-        typeof (registration as Partial<BetterAuthProvider>).getAuth === "function"
-    ) as BetterAuthProvider | undefined;
+    const betterAuthForLimiter = findBetterAuthProvider(this.registrations);
     if (betterAuthForLimiter?.ensureAuth) {
       const auth = betterAuthForLimiter.ensureAuth();
       app.use(createBetterAuthSessionMiddleware(auth, options.userModel));
@@ -521,12 +516,7 @@ export class TerrenoApp {
     }
 
     // Mount MCP at POST /mcp when any model opted in or a custom tool was registered.
-    const betterAuthPlugin = this.registrations.find(
-      (registration) =>
-        "getAuth" in registration &&
-        typeof (registration as Partial<BetterAuthProvider>).getAuth === "function"
-    ) as BetterAuthProvider | undefined;
-    const betterAuth = betterAuthPlugin?.ensureAuth?.() ?? betterAuthPlugin?.getAuth();
+    const betterAuth = getProvidedBetterAuth(findBetterAuthProvider(this.registrations));
     if (betterAuth) {
       authOptions.syncPasswordResetToBetterAuth = async (user, password): Promise<void> => {
         await applyJwtPasswordResetToBetterAuth(betterAuth, user, password);

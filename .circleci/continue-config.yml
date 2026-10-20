@@ -1447,7 +1447,7 @@ jobs:
     environment:
       # A commit of joshgachnang/brewery. This job holds the App key, so the code it runs
       # is pinned; bump the sha deliberately (brewery has no release tag yet).
-      BREWERY_REF: e19ca866948a8d6ef3c4e7fc81e43002097732fa
+      BREWERY_REF: 44f4731c24d08e5f27e0713875cb9d76d6dd50ab
     steps:
       - skip_if_fork_pull_request
       - run:
@@ -1480,7 +1480,8 @@ jobs:
               echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
               sudo apt-get update -qq && sudo apt-get install -y -qq gh
             fi
-            sudo npm install -g @anthropic-ai/claude-code
+            # Pinned: this job holds the App key. Bump the version deliberately.
+            sudo npm install -g @anthropic-ai/claude-code@2.1.304
             # fetch by sha (clone --branch takes only branches and tags)
             git init -q "$HOME/brewery"
             git -C "$HOME/brewery" fetch -q --depth 1 https://github.com/joshgachnang/brewery.git "$BREWERY_REF"

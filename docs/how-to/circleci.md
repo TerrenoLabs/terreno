@@ -348,7 +348,8 @@ CD replacement map:
 [joshgachnang/brewery](https://github.com/joshgachnang/brewery) on every same-repo PR
 pipeline and posts one review as the **terreno-approval-agent** GitHub App plus a
 `terreno/approve` check run. Policy lives in `.brewery.json` (`approve` block: levels
-the App may approve, path rules that floor, cap, or forbid approval) and
+the App may approve, path rules that floor, cap, or forbid approval; when a file matches
+both a floor and a lower ceiling, the floor wins) and
 `docs/approval-rubric.md` (what the model scores). Both are read from `origin/master`,
 so a PR cannot change the rules it is judged by, and a PR that edits either file is
 never approved. The job resets its working tree to `origin/master` right after

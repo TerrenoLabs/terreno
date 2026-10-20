@@ -145,6 +145,8 @@ describe("HTTP rate limiting", () => {
       "/api/auth/send-verification-email",
       "/api/auth/verify-email?token=secret",
       "/api/auth/callback/github",
+      "/api/auth/oauth-handoff/start?provider=google",
+      "/api/auth/one-time-token/verify",
       "/oauth/register",
       "/oauth/authorize?client_id=abc",
       "/oauth/token",

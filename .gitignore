@@ -83,3 +83,4 @@ website/node_modules/
 .terreno/scan/
 .roast-probe/
 demo/chart-visual-output/
+.terreno/brewery/

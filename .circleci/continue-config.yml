@@ -1434,6 +1434,65 @@ jobs:
               exit 0
             }
 
+  # Risk-scored PR review by the terreno-approval-agent GitHub App (brewery approve).
+  # Policy (.brewery.json, docs/approval-rubric.md) is read from origin/master, so a PR
+  # cannot relax the rules it is judged by. The job clones brewery and runs its CLI; it
+  # never installs or executes code from the PR checkout. Comment-only while
+  # approveLevels is empty. A not-approved verdict is not a pipeline failure.
+  approve:
+    executor: node22
+    resource_class: small
+    environment:
+      # Pin a tag or commit of joshgachnang/brewery once one is cut; master until then.
+      BREWERY_REF: master
+    steps:
+      - skip_if_fork_pull_request
+      - run:
+          name: Skip when approve secrets are missing
+          command: |
+            set -euo pipefail
+            if [ -z "${TERRENO_APP_ID:-}" ] || [ -z "${TERRENO_APP_PRIVATE_KEY:-}" ] || [ -z "${ANTHROPIC_API_KEY:-}" ] || [ -z "${GITHUB_TOKEN:-}" ]; then
+              echo "TERRENO_APP_ID, TERRENO_APP_PRIVATE_KEY, ANTHROPIC_API_KEY, or GITHUB_TOKEN missing. Attach terreno-approve and terreno-github-api to this job. Skipping."
+              circleci step halt
+            fi
+      - checkout
+      - run:
+          name: Fetch the base branch (policy source)
+          command: |
+            set -euo pipefail
+            git fetch origin master
+      # GitHub App pipelines leave CIRCLE_PULL_REQUEST unset; resolve the PR by branch.
+      - resolve_preview_pr_number
+      - node/install-bun
+      - run:
+          name: Install gh, Claude Code, and brewery
+          command: |
+            set -euo pipefail
+            if ! command -v gh >/dev/null; then
+              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+              sudo apt-get update -qq && sudo apt-get install -y -qq gh
+            fi
+            sudo npm install -g @anthropic-ai/claude-code
+            git clone --depth 1 --branch "$BREWERY_REF" https://github.com/joshgachnang/brewery.git "$HOME/brewery"
+            cd "$HOME/brewery/cli" && bun install --frozen-lockfile
+      - run:
+          name: brewery approve
+          no_output_timeout: 20m
+          command: |
+            set -euo pipefail
+            # gh reads GH_TOKEN; the read side (pr view, pr diff) uses the API PAT. The App
+            # token is minted inside brewery for the review and check run only. Neither
+            # reaches the model: brewery runs agents with an allowlisted environment.
+            export GH_TOKEN="$GITHUB_TOKEN"
+            bun "$HOME/brewery/cli/src/cli.ts" approve "$PR_NUMBER" --repo "$PWD" --base master || {
+              echo "brewery approve could not produce a verdict (non-blocking; see above)"
+              exit 0
+            }
+      - store_artifacts:
+          path: .terreno/brewery
+          destination: brewery-approve
+
   maestro-e2e:
     executor: node22_browsers_mongo_rs_heavy
     parameters:
@@ -2247,14 +2306,16 @@ jobs:
             GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/github-release.sh publish "$CIRCLE_TAG"
 
 workflows:
-  # Never put GITHUB_TOKEN or CURSOR_API_KEY in project env vars (injected into
-  # every job); scope them to these two jobs through contexts.
+  # Never put GITHUB_TOKEN, CURSOR_API_KEY, or the approval App key in project env
+  # vars (injected into every job); scope them to these three jobs through contexts.
   always:
     jobs:
       - dco:
           context: [terreno-github-api]
       - architectural-pr-review:
           context: [terreno-github-api, terreno-agentic]
+      - approve:
+          context: [terreno-github-api, terreno-approve]
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>

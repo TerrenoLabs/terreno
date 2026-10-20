@@ -1,0 +1,97 @@
+{
+  "approve": {
+    "approveLevels": [],
+    "rubric": "docs/approval-rubric.md",
+    "planDirs": ["docs/implementationPlans", "docs/tasks"],
+    "skipAuthors": ["dependabot[bot]"],
+    "skipLabels": ["do-not-merge", "hold"],
+    "maxLines": 800,
+    "maxFiles": 40,
+    "budgetUsd": 5,
+    "pathRules": [
+      {
+        "match": ["docs/**", "**/*.md", "changelog/**", "website/docs/**", "website/blog/**"],
+        "category": "docs",
+        "ceiling": "low"
+      },
+      {
+        "match": [
+          "**/*.test.ts",
+          "**/*.test.tsx",
+          "**/*.spec.ts",
+          "**/__tests__/**",
+          "**/__snapshots__/**",
+          "**/fixtures/**",
+          "**/e2e/**",
+          ".maestro/**",
+          "**/*.stories.tsx"
+        ],
+        "category": "tests",
+        "ceiling": "low"
+      },
+      {
+        "match": [
+          "**/auth/**",
+          "**/permissions/**",
+          "**/session*",
+          "**/permissions.ts",
+          "**/*Permissions.ts",
+          "api/src/{auth,authRecovery,authTokens,betterAuth,betterAuthApp,betterAuthSetup,githubAuth,consentApp,syncConsents,secretProviders,middleware}.ts",
+          "api/src/mcp/{auth,oauth,oauthMetadata}.ts",
+          "api/src/rbac/**",
+          "api/src/realtime/{socketAuth,sessionRevalidation}.ts",
+          "example-backend/src/utils/betterAuth*.ts",
+          "rtk/src/*[aA]uth*"
+        ],
+        "category": "auth",
+        "floor": "high"
+      },
+      {
+        "match": ["**/migrations/**", "**/models/**", "api/src/types/**"],
+        "category": "migrations",
+        "floor": "high"
+      },
+      {
+        "match": ["terraform/**", "infra/**", "**/Dockerfile*", "**/*.env*", "netlify.toml", "**/eas.json", "**/app.json"],
+        "category": "infra",
+        "floor": "high"
+      },
+      {
+        "match": [".circleci/**", ".github/**", "scripts/ci/**", "scripts/release/**"],
+        "category": "ci",
+        "never": true
+      },
+      {
+        "match": [".brewery.json", "docs/approval-rubric.md"],
+        "category": "policy",
+        "never": true
+      },
+      {
+        "match": [
+          ".rulesync/**",
+          ".cursor/**",
+          ".claude/**",
+          ".codex/**",
+          ".agents/**",
+          ".devin/**",
+          "plugins/**",
+          "skills/**",
+          "AGENTS.md",
+          "CLAUDE*.md",
+          "rulesync.jsonc"
+        ],
+        "category": "agent-rules",
+        "floor": "medium"
+      },
+      {
+        "match": ["**/bun.lock", "**/package.json", "patches/**", "bunfig.toml"],
+        "category": "deps",
+        "floor": "medium"
+      },
+      {
+        "match": ["**/openApiSdk.ts", "plugins/terreno-claude/**", "skills/**", "skills-lock.json", "skills.sh.json"],
+        "category": "generated"
+      }
+    ]
+  }
+}

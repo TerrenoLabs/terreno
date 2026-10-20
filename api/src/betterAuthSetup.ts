@@ -5,11 +5,12 @@
  * create session middleware, and sync users with the application User model.
  */
 
-import {betterAuth} from "better-auth";
+import {type BetterAuthOptions, betterAuth} from "better-auth";
 import {mongodbAdapter} from "better-auth/adapters/mongodb";
 import {toNodeHandler} from "better-auth/node";
 import {bearer} from "better-auth/plugins";
 import type {Application, NextFunction, Request, Response} from "express";
+import mergeWith from "lodash/mergeWith";
 import type {Db} from "mongodb";
 import mongoose from "mongoose";
 import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
@@ -186,7 +187,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
   const emailHooks = createBetterAuthEmailHooks(config);
   const userModel = options.userModel;
 
-  const auth = betterAuth({
+  const defaults: BetterAuthOptions = {
     advanced: config.crossDomainCookies
       ? {
           defaultCookieAttributes: {
@@ -222,12 +223,6 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
           },
         }
       : {}),
-    // The bearer plugin lets clients authenticate with `Authorization: Bearer <sessionToken>`
-    // instead of the signed session cookie. Required for cross-origin/native clients and for
-    // websocket handshakes (RealtimeApp's Better Auth socket validator forwards the handshake
-    // token as a bearer header) — without it, a raw session token cannot be validated and
-    // socket auth silently fails (the sync client shows perpetually "offline").
-    plugins: [bearer()],
     rateLimit: config.disableRateLimit ? {enabled: false} : undefined,
     secret,
     session: {
@@ -238,6 +233,21 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     },
     socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
     trustedOrigins: config.trustedOrigins ?? [],
+  };
+
+  // Arrays from `options` replace Terreno's; lodash would otherwise merge them by index.
+  const replaceArrays = (_target: unknown, source: unknown): unknown =>
+    Array.isArray(source) ? source : undefined;
+  const merged: BetterAuthOptions = mergeWith({}, defaults, config.options, replaceArrays);
+
+  const auth = betterAuth({
+    ...merged,
+    // The bearer plugin lets clients authenticate with `Authorization: Bearer <sessionToken>`
+    // instead of the signed session cookie. Required for cross-origin/native clients and for
+    // websocket handshakes (RealtimeApp's Better Auth socket validator forwards the handshake
+    // token as a bearer header) — without it, a raw session token cannot be validated and
+    // socket auth silently fails (the sync client shows perpetually "offline").
+    plugins: [bearer(), ...(config.plugins ?? [])],
   });
 
   // Cast through unknown: enabling the bearer plugin narrows betterAuth()'s inferred
@@ -403,18 +413,15 @@ export const createBetterAuthSessionMiddleware = (
           betterAuthSession?: BetterAuthSessionData;
         };
         if (userModel) {
-          // Look up the application user by betterAuthId
-          const appUser = await findOneOrNoneFor(userModel, {
-            betterAuthId: betterAuthUser.id,
-          });
-          if (appUser) {
-            reqWithSession.user = appUser as unknown as Request["user"];
-            reqWithSession.betterAuthSession = session as unknown as BetterAuthSessionData;
-            updateRequestContextFromRequest(req);
+          const {isDisabled, user} = await resolveBetterAuthAppUser({betterAuthUser, userModel});
+          if (isDisabled) {
+            // A disabled account's live sessions stop authenticating. Falling through as
+            // anonymous, rather than answering 401 here, keeps Better Auth's own routes
+            // (sign-out, signing in as someone else) reachable, since TerrenoApp mounts this
+            // middleware before them.
+            logger.debug(`[better-auth] User ${user.id} is disabled, ignoring their session`);
           } else {
-            // User exists in Better Auth but not synced yet - create them
-            const newUser = await syncBetterAuthUser(userModel, betterAuthUser);
-            reqWithSession.user = newUser as unknown as Request["user"];
+            reqWithSession.user = user as unknown as Request["user"];
             reqWithSession.betterAuthSession = session as unknown as BetterAuthSessionData;
             updateRequestContextFromRequest(req);
           }
@@ -508,9 +515,60 @@ export const syncBetterAuthUser = async (
     logger.info(`Created new user from Better Auth: ${newUser.id}`);
     return newUser;
   } catch (error) {
-    logger.error(`Error syncing Better Auth user: ${error}`);
+    // A duplicate key means a concurrent request created the user first; callers such as
+    // resolveBetterAuthAppUser recover from it, so it is not an error worth alerting on.
+    if ((error as {code?: number}).code === 11000) {
+      logger.debug(`Better Auth user was created concurrently: ${error}`);
+    } else {
+      logger.error(`Error syncing Better Auth user: ${error}`);
+    }
     throw error;
   }
+};
+
+export interface ResolveBetterAuthAppUserOptions {
+  userModel: UserModel;
+  betterAuthUser: BetterAuthUser;
+}
+
+export interface ResolvedBetterAuthAppUser {
+  user: MutableUserDoc & {disabled?: boolean};
+  isDisabled: boolean;
+}
+
+/**
+ * Finds the application user for a Better Auth session user, creating it on first contact,
+ * and reports whether the account is disabled. Every Better Auth entry point (REST session
+ * middleware, socket handshake) goes through this so they accept and refuse the same users.
+ */
+export const resolveBetterAuthAppUser = async ({
+  userModel,
+  betterAuthUser,
+}: ResolveBetterAuthAppUserOptions): Promise<ResolvedBetterAuthAppUser> => {
+  const findByBetterAuthId = async (): Promise<ResolvedBetterAuthAppUser["user"] | null> =>
+    (await findOneOrNoneFor(userModel, {
+      betterAuthId: betterAuthUser.id,
+    })) as unknown as ResolvedBetterAuthAppUser["user"] | null;
+
+  let user = await findByBetterAuthId();
+  if (!user) {
+    try {
+      user = (await syncBetterAuthUser(
+        userModel,
+        betterAuthUser
+      )) as ResolvedBetterAuthAppUser["user"];
+    } catch (error) {
+      // Right after sign-up the socket handshake and the first REST calls race to create the
+      // same user; the loser's insert hits the unique `_id` (or `betterAuthId`) index.
+      const isDuplicateKey = (error as {code?: number}).code === 11000;
+      const createdConcurrently = isDuplicateKey ? await findByBetterAuthId() : null;
+      if (!createdConcurrently) {
+        throw error;
+      }
+      user = createdConcurrently;
+    }
+  }
+  return {isDisabled: Boolean(user.disabled), user};
 };
 
 /**

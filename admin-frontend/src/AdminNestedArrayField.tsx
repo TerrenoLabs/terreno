@@ -1,4 +1,4 @@
-import {Box, Button, Card, DraggableList, Heading, IconButton, Text} from "@terreno/ui";
+import {Box, Button, Card, DraggableList, Heading, IconButton, Text, useTheme} from "@terreno/ui";
 import startCase from "lodash/startCase";
 import React, {useCallback, useMemo, useRef} from "react";
 import {AdminFieldRendererCore} from "./AdminFieldRendererCore";
@@ -147,6 +147,7 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
   refRenderers,
   readOnly,
 }) => {
+  const {theme} = useTheme();
   const isReadOnly = Boolean(readOnly);
   const arrayValue = useMemo((): Record<string, AdminFieldValue>[] => {
     return Array.isArray(value) ? value : [];
@@ -358,7 +359,7 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
         </Box>
       ) : (
         <DraggableList
-          backgroundOnHold="#f0f0f0"
+          backgroundOnHold={theme.surface.neutralLight}
           callbackNewDataIds={handleReorder}
           dataIDs={dataIDs}
           itemHeight={itemHeight}

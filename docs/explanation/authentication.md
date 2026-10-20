@@ -12,7 +12,7 @@ Set `AUTH_PROVIDER=better-auth` and register `BetterAuthApp` on the server. On t
 
 Both systems can run in parallel during migration (`AUTH_PROVIDER` selects the primary path; legacy JWT routes stay available).
 
-**MCP service tokens** are a third, opt-in credential. They authenticate the consumer app's `POST /mcp` only. They are not Better Auth sessions, not JWTs, and not a REST personal-access-token. Enable them with `mcpServiceTokens` on `TerrenoApp`. Operator steps: [Connect an MCP client with a service token](../how-to/connect-mcp-service-token.md).
+**MCP service tokens** are a third, opt-in credential. They authenticate the consumer app's `POST /mcp` only. They are not Better Auth sessions, not JWTs, and not a REST personal-access-token. Enable them with `mcpServiceTokens` on `TerrenoApp`. Operator steps: [Connect an MCP client with a service token](../how-to/connect-mcp-service-token.md). **MCP OAuth access tokens** are the fourth, for remote clients that need an OAuth flow; enable them with `mcpOAuth` ([Enable MCP OAuth](../how-to/enable-mcp-oauth.md)).
 
 ## When to choose which
 
@@ -37,8 +37,8 @@ Modern session-based authentication with built-in social OAuth support.
 3. Backend redirects to OAuth provider or validates credentials
 4. Better Auth creates session in MongoDB
 5. Frontend receives session cookie (web) or bearer session token (native)
-6. On the first authenticated request, session middleware looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`)
-7. `req.user` is that app document for subsequent `modelRouter` permissions
+6. On the first authenticated request or socket handshake, Terreno looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`). `RealtimeApp` uses the registered `BetterAuthApp` instance for socket sessions without extra wiring
+7. `req.user` is that app document for subsequent `modelRouter` permissions. A session whose app `User` has `disabled: true` no longer authenticates: `req.user` stays unset, so protected routes answer 401 and disabling an account ends its live sessions. Better Auth's own routes, such as sign-out, still work
 
 Email/password create omits `oauthProvider`. Apps that never use social login can keep `strict: "throw"` without declaring that field. OAuth create sets `oauthProvider` and the User schema must declare it.
 
@@ -100,9 +100,23 @@ Personal `mcp_` keys for remote MCP clients (Perplexity, Cursor JSON config) tha
 
 `extractUserFromHeaders` on `/mcp` tries a `mcp_` Bearer first, then Better Auth, then JWT. A match loads the owning `User` and updates `lastUsedAt`. Revoked, expired, or disabled-user keys resolve to no user. The same Bearer is ignored on REST, sync, admin, and on the mint/list/revoke routes (a key cannot mint another key).
 
-This is not OAuth 2.1. Interactive MCP clients that cannot send a static key wait for the app MCP OAuth work ([app MCP server](../implementationPlans/app-mcp-server.md)). It is also not the hosted `@terreno/mcp` codegen server ([MCP server reference](../reference/mcp-server.md)).
+This is not OAuth 2.1; interactive clients use MCP OAuth below. It is also not the hosted `@terreno/mcp` codegen server ([MCP server reference](../reference/mcp-server.md)).
 
 **Learn more:** [Connect an MCP client with a service token](../how-to/connect-mcp-service-token.md)
+
+### MCP OAuth (opt-in, `/mcp` only)
+
+Claude.ai connectors and ChatGPT apps cannot paste a static key; they run OAuth 2.1 discovery, get a client id (pre-created by the app, or through dynamic client registration), and run the authorization-code flow with PKCE. With `mcpOAuth` on `TerrenoApp`, Terreno is that authorization server for a JWT app. Terreno is backend-only, so the app hosts the consent screen and approves or denies with the signed-in user's JWT. The client then gets opaque, short-lived `mcpat_` access tokens and rotating `mcprt_` refresh tokens, stored as hashes. On `/mcp`, `extractAuthFromHeaders` resolves `mcpat_` alongside the other credentials, and a request with none gets a `401` RFC 9728 challenge that starts discovery. OAuth access tokens are ignored on REST, like service tokens.
+
+Every part of it is opt-in. Without `mcpOAuth.enabled` there are no OAuth routes, discovery documents, or challenge. Dynamic client registration is a second flag (`dynamicClientRegistration`) because an open registration endpoint lets anyone create a client, which leaves the consent screen as the only defense against a phishing client. With it off, the app creates its clients as `McpOAuthClient` documents.
+
+Revocation works on token families: every pair rotated from one approval shares a `familyId`. Revoking a family writes a tombstone before revoking its pairs, and issuing into a tombstoned family fails, checked again after the new pair is written. That closes the races where a refresh or code exchange that already passed its single-use check would otherwise issue a live pair after a concurrent reuse revoked the family.
+
+**Learn more:** [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md)
+
+### Which credential authenticated the request
+
+`getCurrentRequestContext()?.credential` is `"jwt"`, `"better-auth-session"`, `"mcp-service-token"`, or `"oauth"`. Service tokens and OAuth tokens are delegated: an agent holds them on the user's behalf. Permission code that grants broad access (an admin bypass, cross-tenant reads) should check the credential and keep that access to the user's own session. See [Request credential](../reference/api.md#request-credential).
 
 ### Anonymous Strategy (JWT — legacy)
 

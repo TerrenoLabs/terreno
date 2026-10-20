@@ -24,7 +24,18 @@ export interface ActionContext<TDoc, TBody, TQuery> {
   doc: TDoc;
 }
 
-interface BaseActionConfig<TBody, TQuery, TResponse> {
+/** Exposes an action as an MCP tool on `/mcp`. */
+export interface ActionMCPConfig {
+  /** MCP tool name, unique across every tool the app exposes (e.g. `todos_bulk_complete`). */
+  name: string;
+  /** Tool description shown to the model. Defaults to the action's description or summary. */
+  description?: string;
+}
+
+// MCP tool names: letters, digits, underscore, dot, and hyphen, up to 64 characters.
+const MCP_TOOL_NAME_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
+
+export interface BaseActionConfig<TBody, TQuery, TResponse> {
   method: "GET" | "POST";
   allowAnonymous?: boolean;
   permissions?: PermissionMethod<unknown>[];
@@ -36,6 +47,21 @@ interface BaseActionConfig<TBody, TQuery, TResponse> {
   description?: string;
   tag?: string;
   status?: number;
+  /**
+   * Also register the action as an MCP tool. The tool runs the same permission chain
+   * (including RBAC `access`) and the same zod validation as REST. Its input is `{id, ...body}`
+   * for an instance POST action, `{id, ...query}` for an instance GET action, and the body or
+   * query alone for a collection action. The handler gets an MCP request
+   * (`req.isMCPRequest === true`) and a `res` that throws if touched, so actions that write to
+   * `res` directly cannot opt in.
+   */
+  mcp?: ActionMCPConfig;
+  /**
+   * REST only. Send the handler's return value as the response body (with `status`) instead
+   * of wrapping it as `{data: …}`. Use it to keep an existing route's response contract when
+   * converting it to an action. An `undefined` return sends an empty body.
+   */
+  unwrapResponse?: boolean;
 }
 
 export interface InstanceActionConfig<TDoc, TBody, TQuery, TResponse>
@@ -62,7 +88,7 @@ export const defineCollectionAction = <TBody = unknown, TQuery = unknown, TRespo
   return config;
 };
 
-type ActionScope = "instance" | "collection";
+export type ActionScope = "instance" | "collection";
 
 type RegisteredAction<T> =
   | {scope: "instance"; name: string; config: InstanceActionConfig<T, unknown, unknown, unknown>}
@@ -208,7 +234,16 @@ export const wrapActionResponse = (
   if (res.headersSent) {
     return;
   }
-  res.status(action.status ?? 200).json({data: handlerResult ?? null});
+  const status = action.status ?? 200;
+  if (!action.unwrapResponse) {
+    res.status(status).json({data: handlerResult ?? null});
+    return;
+  }
+  if (handlerResult === undefined) {
+    res.status(status).end();
+    return;
+  }
+  res.status(status).json(handlerResult);
 };
 
 let inlineOpenApiSchemaCounter = 0;
@@ -282,20 +317,24 @@ export const createActionOpenApiMiddleware = <T>({
       [statusCode]: {
         content: {
           "application/json": {
-            schema: action.response
-              ? {
-                  properties: {
-                    data: zodToJsonSchema(action.response),
+            schema: action.unwrapResponse
+              ? action.response
+                ? zodToJsonSchema(action.response)
+                : {type: "object"}
+              : action.response
+                ? {
+                    properties: {
+                      data: zodToJsonSchema(action.response),
+                    },
+                    required: ["data"],
+                    type: "object",
+                  }
+                : {
+                    properties: {
+                      data: {type: "object"},
+                    },
+                    type: "object",
                   },
-                  required: ["data"],
-                  type: "object",
-                }
-              : {
-                  properties: {
-                    data: {type: "object"},
-                  },
-                  type: "object",
-                },
           },
         },
         description: "Successful response",
@@ -356,6 +395,47 @@ const validateActionConfig = (
     throw new APIError({
       status: 500,
       title: `Action "${name}" (${scope}) only supports GET and POST methods`,
+    });
+  }
+  if (config.mcp) {
+    validateActionMCPConfig(scope, name, config);
+  }
+};
+
+const zodObjectShape = (schema: ZodType): Record<string, unknown> | undefined => {
+  const def = (schema as {def?: {type?: string; shape?: Record<string, unknown>}}).def;
+  return def?.type === "object" ? def.shape : undefined;
+};
+
+/** The MCP tool's arguments are one object, so the action's input schema must be an object. */
+const validateActionMCPConfig = (
+  scope: ActionScope,
+  name: string,
+  config: BaseActionConfig<unknown, unknown, unknown>
+): void => {
+  const mcpName = config.mcp?.name;
+  if (!mcpName || !MCP_TOOL_NAME_PATTERN.test(mcpName)) {
+    throw new APIError({
+      status: 500,
+      title: `Action "${name}" (${scope}) has an invalid mcp.name "${mcpName ?? ""}". MCP tool names must match ${MCP_TOOL_NAME_PATTERN.toString()}`,
+    });
+  }
+  const inputField = config.method === "GET" ? "query" : "body";
+  const inputSchema = config.method === "GET" ? config.query : config.body;
+  if (!inputSchema) {
+    return;
+  }
+  const shape = zodObjectShape(inputSchema);
+  if (!shape) {
+    throw new APIError({
+      status: 500,
+      title: `Action "${name}" (${scope}) sets mcp, so its ${inputField} schema must be a z.object()`,
+    });
+  }
+  if (scope === "instance" && "id" in shape) {
+    throw new APIError({
+      status: 500,
+      title: `Action "${name}" (instance) sets mcp, so its ${inputField} schema cannot define "id"; the MCP tool uses id for the document`,
     });
   }
 };
@@ -478,6 +558,16 @@ const buildActionMiddleware = <T>(
   }
   chain.push(validateAndRun);
   return chain;
+};
+
+/** True when any instance or collection action opts into MCP with `mcp`. */
+export const hasMCPActions = <T>(
+  options: Pick<ModelRouterOptions<T>, "instanceActions" | "collectionActions">
+): boolean => {
+  return [
+    ...Object.values(options.instanceActions ?? {}),
+    ...Object.values(options.collectionActions ?? {}),
+  ].some((config) => Boolean(config.mcp));
 };
 
 export const registerActionRoutes = <T>(

@@ -1,5 +1,6 @@
 import {TerrenoProvider, type ThemeColorScheme, useStoredState} from "@terreno/ui";
 import {createContext, type FC, type ReactNode, useCallback, useContext, useMemo} from "react";
+import {DEFAULT_COLOR_SCHEME, resolveStoredColorScheme} from "@/utils/storedColorScheme";
 
 const STORAGE_KEY = "themeColorScheme";
 
@@ -10,7 +11,7 @@ interface ThemePreferenceContextValue {
 }
 
 const ThemePreferenceContext = createContext<ThemePreferenceContextValue>({
-  colorSchemeSetting: "system",
+  colorSchemeSetting: DEFAULT_COLOR_SCHEME,
   isLoading: false,
   setColorScheme: async () => {},
 });
@@ -21,9 +22,9 @@ export const AppThemeProvider: FC<{
 }> = ({children, openAPISpecUrl}) => {
   const [storedColorScheme, setStoredColorScheme, isLoading] = useStoredState<ThemeColorScheme>(
     STORAGE_KEY,
-    "system"
+    DEFAULT_COLOR_SCHEME
   );
-  const colorSchemeSetting = storedColorScheme ?? "system";
+  const colorSchemeSetting = resolveStoredColorScheme(storedColorScheme);
 
   const setColorScheme = useCallback(
     async (colorScheme: ThemeColorScheme): Promise<void> => {
@@ -37,8 +38,7 @@ export const AppThemeProvider: FC<{
     [colorSchemeSetting, isLoading, setColorScheme]
   );
 
-  // Hold the themed tree until storage resolves. The hook's initial value is "system",
-  // so painting during isLoading flashes the OS theme before a saved Light or Dark choice.
+  // Hold the themed tree until storage resolves so a saved Dark choice never flashes Light first.
   if (isLoading) {
     return <ThemePreferenceContext.Provider value={contextValue} />;
   }

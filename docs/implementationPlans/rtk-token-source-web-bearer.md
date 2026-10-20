@@ -115,7 +115,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
   - Behavior: the transport `headers` callback reads the token source (`tokenSource` option, else the registered one) per request, and omits `Authorization` when there is no token.
   - Acceptance: with a registered fake source, the headers callback returns `Authorization: Bearer <token>`; with a null token it returns none. Verification: `cd rtk && bun test ./src/isolated/useTerrenoChat.isolated.ts`.
   - Docs: JSDoc on the new option; prose in T9.
-- [ ] **T7** — Read the token source in useMCPTools
+- [x] **T7** — Read the token source in useMCPTools
   - Depends on: T1
   - Files: rtk/src/useMCPTools.ts, rtk/src/isolated/useMCPTools.isolated.ts, changelog/unreleased/rtk-mcp-token-source.md
   - Behavior: the MCP transport's `authProvider.token` reads the token source (`tokenSource` option, else the registered one) on each call instead of capturing one token per fetch.

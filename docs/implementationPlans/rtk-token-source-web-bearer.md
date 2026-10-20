@@ -121,7 +121,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
   - Behavior: the MCP transport's `authProvider.token` reads the token source (`tokenSource` option, else the registered one) on each call instead of capturing one token per fetch.
   - Acceptance: with a registered fake source, `authProvider.token()` resolves to the source's current token, including after it changes. Verification: `cd rtk && bun test ./src/isolated/useMCPTools.isolated.ts`.
   - Docs: JSDoc on the new option; prose in T9.
-- [ ] **T8** — Read the token source in the offline queue and replay
+- [x] **T8** — Read the token source in the offline queue and replay
   - Depends on: T1
   - Files: rtk/src/offlineMiddleware.ts, rtk/src/isolated/offlineMiddleware.isolated.ts, changelog/unreleased/rtk-offline-token-source.md
   - Behavior: with a non-JWT source (`OfflineMiddlewareConfig.tokenSource`, else the registered one), the middleware tags and filters queued mutations by the source's `getUserId()` instead of `state.auth.userId` (`offlineMiddleware.ts:142-152, 541, 641`), and `replayMutation` sends the source's token, omitting `authorization` when there is none. On the JWT path it behaves as today.
@@ -194,7 +194,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
 ## Assumptions
 
 - `@terreno/syncdb` has no `@terreno/*` dependencies, so `rtk → syncdb` adds no cycle. Both are lockstep-versioned.
-- No Redux shape changes: the JWT `onAuthChange` comes from the `authEvents.ts` emitter, not from state.
+- No Redux shape changes for auth: the JWT `onAuthChange` comes from the `authEvents.ts` emitter, not from state. T8 adds optional fields to the offline slice (`lastUserId`, and `userIdConfirmed` on queued mutations) so mutations made after an offline launch keep their user; they are additive.
 - The registered source is module-global, like rtk's existing `baseUrl`. One app, one source.
 - All changelog fragments are `Added` or `Fixed`, so no upgrade note is needed (`bun run check:upgrade-docs`).
 - The bearer plugin exposes `set-auth-token` itself on responses that set a session (`node_modules/better-auth/dist/plugins/bearer/index.mjs:62-65`); T3 proves it from another origin.
@@ -218,6 +218,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
 | X3 | `useTerrenoChat`'s default `/api/chat` route does not exist on any backend | Found while tracing chat auth; T6 proves the header, not a live chat | S | T6 |
 | X4 | `createSessionApi` uses `credentials: "same-origin"`, so it cannot work cross-site | Found while tracing cookies | S | none |
 | X5 | Move the deployed example-frontend and API onto same-site custom domains (first-party `SameSite=Lax` cookies) | Q4 trade-offs: neither cross-site cookies nor bearer is the production best practice | S (about half a day, DNS plus deploy config) | none |
+| X6 | syncdb's `betterAuthAdapter` marks its first-load emission so rtk's offline queue can tell it from a sign-in | T8 drops unconfirmed offline-launch writes on any `onAuthChange`, including the adapter's first successful load | S | T8 |
 
 ## Decisions
 

@@ -351,4 +351,24 @@ describe("AiApp", () => {
     const servers = await agent.get("/mcp/servers");
     expect(servers.status).not.toBe(404);
   });
+  it("documents its routes with the OpenAPI instance TerrenoApp passes to register", async () => {
+    const {AIService} = await import("./service/aiService");
+    const aiService = new AIService({model: createMockModel() as unknown as LanguageModel});
+    const fileStorageService = {
+      delete: mock(async () => {}),
+      getSignedUrl: mock(async () => "https://example.com/signed"),
+      upload: mock(async () => {
+        throw new Error("not called");
+      }),
+    } as unknown as FileStorageService;
+    const app = new TerrenoApp({skipListen: true, userModel: UserModel})
+      .register(new AiApp({aiService, fileStorageService, gcsBucket: "bucket"}))
+      .build();
+
+    const res = await supertest(app).get("/openapi.json").expect(200);
+    expect(res.body.paths["/files/upload"]?.post?.requestBody?.content).toHaveProperty(
+      "multipart/form-data"
+    );
+    expect(res.body.paths["/gpt/prompt"]?.post).toBeDefined();
+  });
 });

@@ -15,3 +15,8 @@ mock.module("react-native", () => ({
   Platform: {OS: "web"},
   StyleSheet: {create: (styles: unknown) => styles},
 }));
+
+// @terreno/syncdb/config reads the app's Expo config at import time.
+mock.module("expo-constants", () => ({
+  default: {expoConfig: {extra: {}, version: "1.0.0"}},
+}));

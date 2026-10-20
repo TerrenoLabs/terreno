@@ -32,6 +32,8 @@
     "package.json": ["catalog"],
     "**/generated/**": ["exports", "types"],
     "**/openApiSdk.ts": ["exports", "types"],
+    // Generated syncdb API SDK covers every non-synced route; screens adopt hooks over time.
+    "**/apiSdk.ts": ["exports", "types"],
     "api/src/migrations/fixtures/**": ["files", "exports", "types"],
     "example-backend/migrations/**": ["files", "exports", "types"],
     "example-backend/src/migrationsDir.ts": ["files", "exports", "types"],

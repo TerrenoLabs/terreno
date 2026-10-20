@@ -4,6 +4,7 @@ import {
   APIError,
   asyncHandler,
   authenticateMiddleware,
+  createOpenApiBuilder,
   logger,
   type ModelRouterOptions,
   modelRouter,
@@ -116,6 +117,40 @@ export class FeatureFlagsApp implements TerrenoPlugin {
     app.get(
       `${basePath}/flagConfiguration`,
       authenticateMiddleware(),
+      // Documentation only: request validation stays off so the handler behaves as before.
+      createOpenApiBuilder(openApi ? {openApi: openApi as OpenApiMiddleware} : {})
+        .withTags(["feature-flags"])
+        .withSummary("Get every flag's configuration resolved for the current user")
+        .withDescription(
+          "Keyed by flag key. Disabled boolean flags are included with disabled: true; disabled variant flags are omitted."
+        )
+        .withResponse(
+          200,
+          {
+            data: {
+              additionalProperties: {
+                properties: {
+                  defaultVariant: {
+                    description: "The variant to use for the current user",
+                    type: "string",
+                  },
+                  disabled: {type: "boolean"},
+                  variants: {
+                    additionalProperties: {oneOf: [{type: "boolean"}, {type: "string"}]},
+                    description: "Variant name to its value",
+                    type: "object",
+                  },
+                },
+                required: ["defaultVariant", "disabled", "variants"],
+                type: "object",
+              },
+              type: "object",
+            },
+          },
+          {required: ["data"]}
+        )
+        .withValidation({enabled: false})
+        .build(),
       asyncHandler(async (req: express.Request, res: express.Response) => {
         const user = req.user as {_id?: unknown; id?: string} | undefined;
         if (!user) {

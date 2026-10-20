@@ -431,6 +431,9 @@ Bodies, results, and errors: [Headless endpoints](agent-ui-asks.md#headless-endp
 ### addFileRoutes(router, options)
 
 Requires `fileStorageService` and `gcsBucket` (registered by `AiApp` when both are set).
+`fileStorageService` may also be a function that returns the current service or `undefined`.
+Use it when storage is configured at runtime: the routes stay mounted and documented in
+`/openapi.json`, and answer `503 File storage is not configured` while it returns `undefined`.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
@@ -492,7 +495,7 @@ new AiApp({
 | `toolChoice` | `"auto"` \| `"none"` \| `"required"` (default `"auto"` when tools present) |
 | `maxSteps` | Max tool-calling steps (default 5) |
 | `titleModelId` | Cheaper model for conversation title generation |
-| `openApiOptions` | Passed to route OpenAPI builders |
+| `openApiOptions` | Passed to route OpenAPI builders. Defaults to the OpenAPI instance `TerrenoApp` passes to `register` |
 | `projects` | Default `true`. `false` skips the `/gpt/projects` routes, so `AiApp` never registers the `Project` model |
 
 ## LangfuseApp plugin

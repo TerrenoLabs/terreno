@@ -77,11 +77,6 @@ export interface AiModelsResponse {
 }
 
 // Profile update request type
-export interface UpdateProfileRequest {
-  name?: string;
-  email?: string;
-  password?: string;
-}
 
 export interface SetAdminUserPasswordRequest {
   id: string;
@@ -184,15 +179,6 @@ export const terrenoApi = openapi
           body,
           method: "PATCH",
           url: `/gpt/histories/${id}`,
-        }),
-      }),
-      // Update current user profile
-      patchMe: builder.mutation<ProfileResponse, UpdateProfileRequest>({
-        invalidatesTags: ["profile"],
-        query: (body) => ({
-          body,
-          method: "PATCH",
-          url: "/auth/me",
         }),
       }),
       postAuthForgotPassword: builder.mutation<{ok: boolean}, {email: string}>({
@@ -315,7 +301,6 @@ export const {
   useResetPasswordMutation,
   useGetMeQuery,
   usePatchGptHistoriesByIdMutation,
-  usePatchMeMutation,
   usePostAuthForgotPasswordMutation,
   usePostAuthSendVerificationMutation,
   usePostAuthVerifyEmailMutation,

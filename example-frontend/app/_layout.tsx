@@ -17,7 +17,7 @@ import {
   useTerrenoFeatureFlags,
   useUpgradeCheck,
 } from "@terreno/rtk";
-import {SyncDbProvider} from "@terreno/syncdb/react";
+import {ApiClientProvider, SyncDbProvider} from "@terreno/syncdb/react";
 import {
   AnnouncementNavigator,
   Banner,
@@ -37,6 +37,7 @@ import {SyncHealthToast} from "@/components/SyncHealthToast";
 import {SyncLabRuntime} from "@/components/SyncLabRuntime";
 import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
 import {getSessionToken} from "@/lib/betterAuth";
+import {apiClient} from "@/store/apiClient";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
@@ -130,9 +131,11 @@ const RootLayout = (): React.ReactElement | null => {
     <GestureHandlerRootView style={{flex: 1}}>
       <Provider store={store}>
         <PersistGate loading={null} persistor={persistor}>
-          <AppThemeProvider openAPISpecUrl={`${baseUrl}/openapi.json`}>
-            <RootLayoutNav />
-          </AppThemeProvider>
+          <ApiClientProvider client={apiClient}>
+            <AppThemeProvider openAPISpecUrl={`${baseUrl}/openapi.json`}>
+              <RootLayoutNav />
+            </AppThemeProvider>
+          </ApiClientProvider>
         </PersistGate>
       </Provider>
     </GestureHandlerRootView>
@@ -210,6 +213,12 @@ const RootLayoutNav = (): React.ReactElement => {
   useEffect(() => {
     void syncBetterAuthSession(store.dispatch);
   }, []);
+
+  // Drop cached API responses whenever the signed-in user changes so one account
+  // never sees another's profile or action results.
+  useEffect(() => {
+    apiClient.reset();
+  }, [userId]);
 
   // Start the local-first syncdb client after login; stop on logout/unmount.
   // setSyncDbReady only flips true once start() resolves a user, so screens gated on

@@ -1,5 +1,6 @@
 import {useBooleanFlagDetails} from "@openfeature/react-sdk";
 import {canOpenAdminPage, selectBetterAuthUserId, useFeatureFlags} from "@terreno/rtk";
+import {useApiClient} from "@terreno/syncdb/react";
 import {
   Badge,
   Banner,
@@ -20,11 +21,10 @@ import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {useSelector} from "react-redux";
 import {useThemePreference} from "@/contexts/ThemePreferenceContext";
+import {type PatchAuthMeArgs, useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
 import {logout, useAppDispatch} from "@/store/index";
 import {
   terrenoApi,
-  useGetMeQuery,
-  usePatchMeMutation,
   usePostAuthSendVerificationMutation,
   usePostCommsDevTestPushMutation,
 } from "@/store/sdk";
@@ -33,8 +33,28 @@ const ProfileScreen: React.FC = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const userId = useSelector(selectBetterAuthUserId);
-  const {data: profileResponse, isLoading, refetch} = useGetMeQuery(undefined, {skip: !userId});
-  const [updateProfile, {isLoading: isUpdating}] = usePatchMeMutation();
+  const {
+    data: profileResponse,
+    isLoading,
+    refetch,
+  } = useGetAuthMeQuery(undefined, {
+    skip: !userId,
+  });
+  const apiClient = useApiClient();
+  const [patchMe, {isLoading: isUpdating}] = usePatchAuthMeMutation();
+  // Layouts still read the profile through RTK until they migrate; keep both caches fresh.
+  const updateProfile = useCallback(
+    (body: PatchAuthMeArgs): ReturnType<typeof patchMe> => {
+      const result = patchMe(body);
+      result.then((outcome) => {
+        if (!outcome.error) {
+          dispatch(terrenoApi.util.invalidateTags(["profile"]));
+        }
+      });
+      return result;
+    },
+    [dispatch, patchMe]
+  );
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
   const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
@@ -148,7 +168,9 @@ const ProfileScreen: React.FC = () => {
       setSaveError(null);
       setSaveSuccess(false);
       try {
-        await updateProfile({password: value}).unwrap();
+        // PATCH /auth/me documents no `password` field; the request is unchanged from the
+        // RTK version so this slice does not alter profile password behavior.
+        await updateProfile({password: value} as PatchAuthMeArgs).unwrap();
         setPassword("");
         showSaveSuccess();
       } catch (err) {
@@ -170,12 +192,13 @@ const ProfileScreen: React.FC = () => {
     setVerificationMessage(null);
     try {
       await sendVerification().unwrap();
+      apiClient.invalidateTags(["auth"]);
       setVerificationMessage("Verification email sent. Check your inbox or the server console.");
     } catch (error: unknown) {
       console.error("Failed to send verification email", error);
       setVerificationError("Could not send a verification email.");
     }
-  }, [sendVerification]);
+  }, [apiClient, sendVerification]);
 
   const handleSaveApiKey = useCallback((): void => {
     setGeminiApiKey(apiKeyInput.trim());

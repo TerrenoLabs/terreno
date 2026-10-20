@@ -1,3 +1,4 @@
+import {useApiClient} from "@terreno/syncdb/react";
 import {Box, Button, Heading, Page, Text} from "@terreno/ui";
 import {useLocalSearchParams, useRouter} from "expo-router";
 import type React from "react";
@@ -18,6 +19,7 @@ const VerifyEmailScreen: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [verifyEmail] = usePostAuthVerifyEmailMutation();
+  const apiClient = useApiClient();
 
   const handleVerify = useCallback(async (): Promise<void> => {
     setIsSubmitting(true);
@@ -35,10 +37,11 @@ const VerifyEmailScreen: React.FC = () => {
       }
       setErrorMessage(undefined);
       setIsComplete(true);
+      apiClient.invalidateTags(["auth"]);
     } finally {
       setIsSubmitting(false);
     }
-  }, [token, verifyEmail]);
+  }, [apiClient, token, verifyEmail]);
 
   const handleBackToLogin = useCallback((): void => {
     router.replace("/login");

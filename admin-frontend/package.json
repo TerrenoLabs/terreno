@@ -3,6 +3,7 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
+    "@terreno/syncdb": "workspace:*",
     "@terreno/ui": "workspace:*",
     "expo-router": "catalog:",
     "jspdf": "catalog:",

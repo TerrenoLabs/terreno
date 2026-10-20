@@ -3,6 +3,7 @@ import {assert} from "chai";
 import supertest from "supertest";
 import type {UserModel as UserModelType} from "../auth";
 import {VersionConfig} from "../models/versionConfig";
+import {configureOpenApiValidator, resetOpenApiValidatorConfig} from "../openApiValidator";
 import {TerrenoApp} from "../terrenoApp";
 import {setupDb, UserModel} from "../tests";
 import {VersionCheckPlugin} from "../versionCheckPlugin";
@@ -351,5 +352,53 @@ describe("VersionCheckPlugin direct usage", () => {
     const res = await testApp.get("/version-check?version=50&platform=web");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("required");
+  });
+});
+
+describe("VersionCheckPlugin OpenAPI", () => {
+  const buildApp = (): ReturnType<TerrenoApp["build"]> =>
+    new TerrenoApp({skipListen: true, userModel: typedUserModel})
+      .register(new VersionCheckPlugin())
+      .build();
+
+  beforeEach(async () => {
+    await setupDb();
+    await VersionConfig.deleteMany({});
+  });
+
+  it("documents GET /version-check in /openapi.json", async () => {
+    const res = await supertest(buildApp()).get("/openapi.json").expect(200);
+    const operation = res.body.paths["/version-check"]?.get;
+    expect(operation).toBeDefined();
+    const parameters = operation.parameters as {in: string; name: string; schema: unknown}[];
+    expect(parameters.map((parameter) => `${parameter.in}:${parameter.name}`)).toEqual([
+      "query:platform",
+      "query:version",
+    ]);
+    expect(parameters[0]?.schema).toEqual({enum: ["web", "mobile"], type: "string"});
+    const schema = operation.responses["200"].content["application/json"].schema;
+    expect(schema.required).toEqual(["status"]);
+    expect(schema.properties.status.enum).toEqual(["ok", "warning", "required"]);
+    expect(Object.keys(schema.properties).sort()).toEqual([
+      "message",
+      "pollingIntervalMs",
+      "requiredVersion",
+      "status",
+      "updateUrl",
+      "warningVersion",
+    ]);
+  });
+
+  it("does not validate documented query params: a non-numeric version is still ok", async () => {
+    configureOpenApiValidator({logValidationErrors: false});
+    try {
+      const res = await supertest(buildApp())
+        .get("/version-check")
+        .query({platform: "tv", version: "abc"});
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("ok");
+    } finally {
+      resetOpenApiValidatorConfig();
+    }
   });
 });

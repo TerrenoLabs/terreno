@@ -11,6 +11,8 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - [SyncDb client methods](#syncdb-client-methods)
 - [React hooks](#react-hooks)
 - [Query windows](#query-windows)
+- [API client](#api-client)
+- [Config](#config)
 - [Codegen](#codegen)
 - [Conflict API](#conflict-api)
 - [Sync status API](#sync-status-api)
@@ -27,7 +29,9 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - `betterAuthAdapter`, `bridgeBetterAuthReactClient`, `AuthProvider`
 - `listConflicts`, `wipeLocalData`, `generateMutationId`
 - Queries: `QueryFieldNotAllowedError`, `ListRequestError`, `WhereFilter`, `SortSpec`, `WindowQuery`, `QueryWindowState`, `QueryWindows`, `compileWhere`, `DEFAULT_WINDOW_PAGE_SIZE`
-- React (`@terreno/syncdb/react`): `SyncDbProvider`, `useEntity`, `useQuery`, `useEntityIds`, `useWindowQuery`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSyncDebugLog`, `createCollectionHooks`
+- React (`@terreno/syncdb/react`): `SyncDbProvider`, `useEntity`, `useQuery`, `useEntityIds`, `useWindowQuery`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSyncDebugLog`, `createCollectionHooks`, `ApiClientProvider`, `useApiClient`, `useApiQuery`, `useLazyApiQuery`, `useApiMutation`
+- API client (`@terreno/syncdb/api`): `createApiClient`, `ApiClient`, `ApiError`, `isApiError`, `apiFetch`, `unwrapEnvelope`, `serializeParams`
+- Config (`@terreno/syncdb/config`): `baseUrl`, `baseWebsocketsUrl`, `baseTasksUrl`, `appHeaders`, `isWeb`, `resolveBaseUrls`, `resolveDevApiPort`, `SAME_ORIGIN_SENTINEL`
 - CLI: `terreno-syncdb-codegen` (generates `SYNC_COLLECTIONS` + friendly hooks from OpenAPI)
 - Testing (`@terreno/syncdb/testing`): `createFakeTransport`
 
@@ -390,6 +394,92 @@ export const {useListQuery: useNotes, useCreateMutation: useCreateNote} =
   });
 ```
 
+## API client
+
+Synced collections read and write through the local store. Every other route —
+`/auth/me`, modelRouter actions, AI, consents, announcements, version check — goes
+through the request client in `@terreno/syncdb/api`. It uses the same `AuthProvider` as
+`createSyncDb`, so both send the same token and refresh it the same way.
+
+```typescript
+import {createApiClient} from "@terreno/syncdb/api";
+import {appHeaders, baseUrl} from "@terreno/syncdb/config";
+
+export const apiClient = createApiClient({
+  authProvider,            // the provider passed to createSyncDb
+  baseUrl,
+  credentials: "include",  // "same-origin" for cookie SPAs
+  headers: appHeaders,     // App-Version + App-Platform
+});
+```
+
+Wrap the app in `<ApiClientProvider client={apiClient}>`, then:
+
+```typescript
+import {useApiMutation, useApiQuery} from "@terreno/syncdb/react";
+
+const {data: me, isLoading, refetch} = useApiQuery<Profile>(
+  {url: "/auth/me"},
+  {providesTags: ["profile"], skip: !userId}
+);
+const [updateMe, {isLoading: isSaving}] = useApiMutation<UpdateProfile, Profile>(
+  (body) => ({body, method: "PATCH", url: "/auth/me"}),
+  {invalidatesTags: ["profile"]}
+);
+await updateMe({name: "Ada"}).unwrap();
+```
+
+| `createApiClient` option | Description |
+|--------------------------|-------------|
+| `baseUrl` | API origin; relative request URLs are prefixed with it |
+| `authProvider` | `getToken` adds `Authorization: Bearer`; on a 401, `refresh` runs once and the request retries |
+| `credentials` | Fetch credentials mode for cookie sessions |
+| `headers` | Object or (async) function merged into every request |
+| `timeoutMs` | Per-request timeout (default 30 000) |
+| `onError` | Called with every `ApiError` after any retry (report to Sentry here) |
+| `keepUnusedDataMs` | How long an unsubscribed cache entry survives (default 60 000) |
+
+| Request arg | Description |
+|-------------|-------------|
+| `url`, `method` | Path (or absolute URL) and HTTP method (default `GET`) |
+| `params` | Query params; arrays become repeated keys, nested objects bracket keys (`updated[$gte]`) |
+| `body` | Plain objects are JSON-encoded; `FormData`, `Blob`, and strings pass through |
+| `headers` | Per-request headers (part of the cache key) |
+| `unwrap` | Unwrap `{data}` single-document envelopes (default `true`); list envelopes with `more` stay whole |
+| `parseAs`, `timeoutMs`, `signal` | Response parsing, timeout, and cancellation |
+
+| Client method | Description |
+|---------------|-------------|
+| `request(args)` | One uncached request |
+| `fetchQuery(args, {providesTags, force})` | Cached request; identical in-flight calls share one fetch |
+| `getQueryState(args)` / `subscribeQuery(args, listener)` | Read and watch one cache entry |
+| `invalidateTags(tags)` | Refetch mounted queries with those tags; drop unmounted ones |
+| `reset()` | Clear the cache; call when the signed-in user changes |
+
+| Hook | Returns |
+|------|---------|
+| `useApiQuery(args \| null, {skip, providesTags, pollingInterval, transformResponse, client})` | `{data, error, isLoading, isFetching, isSuccess, isError, isUninitialized, refetch}` |
+| `useLazyApiQuery({providesTags, client})` | `[trigger(args), state]`; each trigger fetches fresh data |
+| `useApiMutation(toRequest, {invalidatesTags, client})` | `[trigger(arg), {data, error, isLoading, isSuccess, isError, reset}]` |
+
+Triggers resolve `{data}` or `{error}`; `.unwrap()` resolves the data or throws.
+Failures are `ApiError` (`status`, `data.title`, `data.detail`, `data.fields`); timeouts
+and network failures have `status: 0`.
+
+## Config
+
+`@terreno/syncdb/config` resolves the app's API origin once at import (needs
+`expo-constants`):
+
+1. `extra.BASE_URL` in `app.json` (production/staging). `__SAME_ORIGIN__` resolves to the page origin.
+2. `EXPO_PUBLIC_API_URL` (dev web).
+3. Expo `hostUri` plus the dev API port (simulator/device).
+4. `http://localhost:<dev API port>`.
+
+The dev API port is `4000` unless `EXPO_PUBLIC_DEV_API_PORT` or `extra.DEV_API_PORT` sets
+it. `appHeaders()` returns `App-Version` (Expo config version) and `App-Platform`
+(`web` or `mobile`).
+
 ## Query windows
 
 Use query windows when a collection is too large to sync whole (messages, events, audit
@@ -503,6 +593,46 @@ terreno-syncdb-codegen \
 ```
 
 Do not edit the generated file. `--collections` filters when extensions exist. When they do not, it reads list/create/patch schemas from `GET /{name}` (or `/{name}/`). A missing path, a list response without `data.items`, a spec with no extensions and no `--collections` all exit non-zero.
+
+### API SDK (`--api-out`)
+
+`--api-out <file>` writes typed request hooks for every operation that is **not** synced
+collection CRUD: auth (`/auth/me`), modelRouter actions, AI, consents, announcements,
+version check, and plain REST routes. It replaces `@rtk-query/codegen-openapi`. Pass
+`--out`, `--api-out`, or both in one run.
+
+```bash
+terreno-syncdb-codegen \
+  --schema http://localhost:4000/openapi.json \
+  --out ./store/syncDbSdk.ts \
+  --api-out ./store/apiSdk.ts \
+  --config ./syncdb-codegen.json
+```
+
+| Generated per operation | Example (`GET /gpt/datasets/{id}?historyId=`) |
+|-------------------------|-----------------------------------------------|
+| `<Name>Args` | `{id: string; historyId: string}` |
+| `<Name>Res` | Response after envelope unwrapping (`{data: X}` → `X`; lists keep `more`) |
+| `<name>Request(arg)` | `ApiRequestArgs` for `apiClient.request(...)` |
+| `use<Name>Query` / `useLazy<Name>Query` | GET operations; `providesTags` from the operation's OpenAPI tags |
+| `use<Name>Mutation` | Other methods; `invalidatesTags` from the operation's OpenAPI tags |
+
+Names follow the RTK codegen rule, so migrated screens keep their hook names: the
+camelCased `operationId`, otherwise method + path with `{param}` read as `By<Param>`
+(`PATCH /gpt/histories/{id}` → `usePatchGptHistoriesByIdMutation`). Arguments flatten
+the same way: one path param, query param, or body is the argument itself; otherwise an
+object of path params, query params, and `body`. A `multipart/form-data` body is
+`FormData`. Two operations that would share a name exit non-zero; give one an
+`operationId`. `excludePaths` in the config file (path prefixes, or regexes starting
+with `^`) leaves routes out.
+
+```typescript
+import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
+
+const {data: me} = useGetAuthMeQuery(undefined, {skip: !userId});
+const [updateMe] = usePatchAuthMeMutation();
+await updateMe({name: "Ada"}).unwrap();
+```
 
 ## Conflict API
 
@@ -693,11 +823,12 @@ transport.deliverDelta({...});
 
 ## Environment variables
 
-Syncdb reads no environment variables directly. Host apps typically set:
+`@terreno/syncdb/config` reads these at import; the core client reads none. Host apps typically set:
 
 | Variable | Used by | Description |
 |----------|---------|-------------|
-| `EXPO_PUBLIC_API_URL` | `@terreno/rtk` `baseUrl` | Backend origin passed to `createSyncDb({baseUrl})` |
+| `EXPO_PUBLIC_API_URL` | `@terreno/syncdb/config` `baseUrl` | Backend origin passed to `createSyncDb({baseUrl})` and `createApiClient({baseUrl})` |
+| `EXPO_PUBLIC_DEV_API_PORT` | `@terreno/syncdb/config` | Local dev API port (default `4000`) |
 
 Backend sync requires a MongoDB replica set (`MONGO_URI` with `replicaSet=`) for `RealtimeApp` change streams.
 

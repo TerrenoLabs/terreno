@@ -219,4 +219,90 @@ describe("File Routes", () => {
       expect(fileStorageService.delete as ReturnType<typeof mock>).not.toHaveBeenCalled();
     });
   });
+  describe("OpenAPI", () => {
+    it("documents POST /files/upload as multipart/form-data with the data envelope", async () => {
+      const res = await supertest(app).get("/openapi.json").expect(200);
+      const operation = res.body.paths["/files/upload"]?.post;
+      expect(operation?.tags).toEqual(["files"]);
+      expect(Object.keys(operation.requestBody.content)).toEqual(["multipart/form-data"]);
+      const requestSchema = operation.requestBody.content["multipart/form-data"].schema;
+      expect(requestSchema.required).toEqual(["file"]);
+      expect(requestSchema.properties.file.format).toBe("binary");
+      expect(requestSchema.properties.file.type).toBe("string");
+      const responseSchema = operation.responses["200"].content["application/json"].schema;
+      expect(responseSchema.required).toEqual(["data"]);
+      expect(responseSchema.properties.data.required).toEqual([
+        "filename",
+        "gcsKey",
+        "id",
+        "mimeType",
+        "size",
+        "url",
+      ]);
+
+      // The generator keeps Express 5's `*gcsKey` wildcard as written, so find the key route.
+      const keyPath = Object.keys(res.body.paths).find(
+        (path) => path.startsWith("/files/") && path !== "/files/upload"
+      );
+      const keyRoute = res.body.paths[keyPath ?? ""];
+      interface SchemaNode {
+        properties: Record<string, SchemaNode & {type?: string}>;
+      }
+      const dataOf = (operation: {
+        responses: Record<string, {content: Record<string, {schema: SchemaNode}>}>;
+      }): SchemaNode =>
+        operation.responses["200"].content["application/json"].schema.properties.data;
+      expect(dataOf(keyRoute.get).properties.url.type).toBe("string");
+      expect(dataOf(keyRoute.delete).properties.success.type).toBe("boolean");
+    });
+
+    it("documents every field the upload returns", async () => {
+      const docs = await supertest(app).get("/openapi.json").expect(200);
+      const documented = Object.keys(
+        docs.body.paths["/files/upload"].post.responses["200"].content["application/json"].schema
+          .properties.data.properties
+      );
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .post("/files/upload")
+        .attach("file", Buffer.from("hello"), {contentType: "text/plain", filename: "hi.txt"})
+        .expect(200);
+      expect(documented).toEqual(expect.arrayContaining(Object.keys(res.body.data)));
+    });
+  });
+
+  describe("runtime-resolved storage", () => {
+    it("answers 503 while storage is unconfigured and uploads once it resolves", async () => {
+      let current: FileStorageService | undefined;
+      const runtimeApp = new TerrenoApp({
+        configureApp: (router, options) => {
+          addFileRoutes(router, {
+            fileStorageService: () => current,
+            gcsBucket: "",
+            openApiOptions: options,
+          });
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+      const agent = await authAsUser(runtimeApp, "notAdmin");
+
+      const docs = await supertest(runtimeApp).get("/openapi.json").expect(200);
+      expect(docs.body.paths["/files/upload"]?.post).toBeDefined();
+
+      const unconfigured = await agent
+        .post("/files/upload")
+        .attach("file", Buffer.from("hello"), {contentType: "text/plain", filename: "hi.txt"});
+      expect(unconfigured.status).toBe(503);
+      expect(unconfigured.body.title).toBe("File storage is not configured");
+      expect(fileStorageService.upload as ReturnType<typeof mock>).not.toHaveBeenCalled();
+
+      current = fileStorageService as FileStorageService;
+      const configured = await agent
+        .post("/files/upload")
+        .attach("file", Buffer.from("hello"), {contentType: "text/plain", filename: "hi.txt"});
+      expect(configured.status).toBe(200);
+      expect(fileStorageService.upload as ReturnType<typeof mock>).toHaveBeenCalledTimes(1);
+    });
+  });
 });

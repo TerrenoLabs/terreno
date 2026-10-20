@@ -98,7 +98,7 @@ export {
   validateObservabilityConfig,
 } from "./observability/types";
 export {addAiRequestsExplorerRoutes} from "./routes/aiRequestsExplorer";
-export {addFileRoutes} from "./routes/files";
+export {addFileRoutes, type FileStorageServiceSource} from "./routes/files";
 export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";

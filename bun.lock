@@ -54,6 +54,7 @@
       "name": "@terreno/admin-frontend",
       "version": "57.16.2",
       "dependencies": {
+        "@terreno/syncdb": "workspace:*",
         "@terreno/ui": "workspace:*",
         "expo-router": "catalog:",
         "jspdf": "catalog:",
@@ -724,6 +725,7 @@
         "@types/luxon": "catalog:",
         "@types/node": "catalog:",
         "@types/react": "catalog:",
+        "expo-constants": "catalog:",
         "expo-sqlite": "catalog:",
         "fake-indexeddb": "^6.0.0",
         "react": "catalog:",
@@ -732,10 +734,12 @@
         "typescript": "catalog:",
       },
       "peerDependencies": {
+        "expo-constants": "*",
         "expo-sqlite": "*",
         "react": "catalog:",
       },
       "optionalPeers": [
+        "expo-constants",
         "expo-sqlite",
         "react",
       ],

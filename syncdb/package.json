@@ -18,6 +18,7 @@
     "@types/luxon": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "expo-constants": "catalog:",
     "expo-sqlite": "catalog:",
     "fake-indexeddb": "^6.0.0",
     "react": "catalog:",
@@ -30,10 +31,18 @@
       "default": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./api": {
+      "default": "./dist/api/client.js",
+      "types": "./dist/api/client.d.ts"
+    },
     "./codegen": {
       "bun": "./src/codegen/generate.ts",
       "default": "./dist/codegen/generate.js",
       "types": "./dist/codegen/generate.d.ts"
+    },
+    "./config": {
+      "default": "./dist/config/baseUrl.js",
+      "types": "./dist/config/baseUrl.d.ts"
     },
     "./react": {
       "default": "./dist/react/index.js",
@@ -60,10 +69,14 @@
   "main": "dist/index.js",
   "name": "@terreno/syncdb",
   "peerDependencies": {
+    "expo-constants": "*",
     "expo-sqlite": "*",
     "react": "catalog:"
   },
   "peerDependenciesMeta": {
+    "expo-constants": {
+      "optional": true
+    },
     "expo-sqlite": {
       "optional": true
     },

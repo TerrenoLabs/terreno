@@ -3,13 +3,13 @@
  *
  * Authenticates with the Better Auth session from @terreno/rtk's Expo client.
  */
-import {baseUrl} from "@terreno/rtk";
 import {
   betterAuthAdapter,
   bridgeBetterAuthReactClient,
   createSyncDb,
   type SyncDb,
 } from "@terreno/syncdb";
+import {baseUrl} from "@terreno/syncdb/config";
 import {betterAuthClient} from "@/lib/betterAuth";
 import {SYNC_COLLECTIONS} from "@/store/syncDbSdk";
 
@@ -17,9 +17,11 @@ export const SYNC_DB_NAME = "terreno-example";
 /** Admin window rows live in their own store so they never leak into the product UI. */
 const ADMIN_SYNC_DB_NAME = `${SYNC_DB_NAME}-admin`;
 
+// Shared by the sync client and the API client (store/apiClient.ts) so both send the
+// same Better Auth session token.
 // pollIntervalMs is only used as a fallback if the session atom bridge is unavailable
 // (e.g. a future Better Auth client shape change); keep it slow.
-const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient), {
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient), {
   pollIntervalMs: 60_000,
 });
 

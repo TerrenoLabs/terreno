@@ -72,6 +72,68 @@ violation is an Architecture finding; cite the rule only when the diff breaks it
   screenshots or video saved to `/opt/cursor/artifacts/` and attached to the PR per
   `.rulesync/rules/02-frontend-verification.md`.
 
+## Security
+
+A finding here is blocking when it is certain and should-fix when it is likely.
+
+- Input that reaches a Mongo query, a shell, a file path, a redirect, or a template is
+  validated or escaped at the boundary; `queryFields` and `$and`/`$or` filters are the only
+  way client input reaches a query, and user-supplied regular expressions never do.
+- A new route that mutates state carries a permission (`IsAuthenticated`, `IsOwner`,
+  `IsAdmin`, or an explicit `permissions` entry on the `modelRouter`), and a rate limit when
+  it is reachable without a session (signup, login, password reset, OAuth callbacks,
+  webhooks, MCP OAuth endpoints).
+- Secrets stay out of the diff: no keys, tokens, or private URLs in code, tests, fixtures,
+  or `.env.example` values; a new `*_SECRET`, `*_TOKEN`, or provider key is listed in the
+  package's environment reference under `docs/reference/`.
+- `logger` calls and `APIError` messages carry no credentials, tokens, session ids, or
+  personal data; consent and PHI-shaped fields are described, never printed.
+- Auth code uses Better Auth or the existing Passport strategies; a hand-rolled hash,
+  token, or comparison is a finding, as is a change to `sessionRevalidation` or
+  `socketAuth` without a test that proves the revoked path still closes.
+- A dependency added for auth, crypto, or parsing untrusted input names why the existing
+  one would not do.
+
+## Dependencies
+
+- A new runtime dependency is named in the PR body with the reason and is on the catalog
+  in `.rulesync/rules/01-dependency-catalog.md` or justified against it; a missing reason
+  lowers Architecture. Dev-only additions need no reason.
+- Patch bumps of catalog packages with green CI stay low. Minor bumps are medium. Major
+  bumps, Expo SDK and React Native upgrades, Better Auth and Mongoose majors, and
+  lockfile-only changes without a `package.json` change are high.
+- A bump that changes generated output (`bun.lock`, snapshots, `openApiSdk.ts`,
+  `plugins/terreno-claude/`) ships the regenerated output in the same PR.
+- A new dependency's license passes `bun run check:licenses`.
+- A `patches/` change is high: it edits a third party and needs the upstream issue linked.
+- Removing a dependency the code still imports is a correctness finding; `knip` must stay
+  at zero findings.
+
+## Changelog and versioning
+
+- A change to a published package's behavior (`api`, `ui`, `rtk`, `syncdb`, `admin-*`,
+  `blocks`, `comms`, `jobs`, `mcp-server`, `cli`, `feature-flags`) carries a fragment under
+  `changelog/unreleased/`; its absence lowers Evidence, not only Architecture.
+- A `version` change in any `package.json` is release work: never low, and never bundled
+  with feature code. Lockstep `@terreno/*` versions move together.
+- A breaking change says so in the fragment and the PR body, names the migration path, and
+  updates the upgrade guide under `docs/how-to/`.
+
+## Plan expectations
+
+- A PR that implements a plan names the file under `docs/implementationPlans/` or
+  `docs/tasks/` and the task ids it delivers; the plan judge scores against those, so an
+  unnamed plan is a Plan match of at most 1.
+- A PR that closes an issue references it (`[#1234]` in the title or `Closes #1234` in the
+  body). The issue's acceptance criteria count as the plan when there is no plan file.
+- Work beyond the named tasks is drift even when it is good; it lowers Plan match and is
+  listed under Unrequested so a human can split it out.
+- A plan edited in the same PR is reviewed as a plan change first: the edit must be
+  explained in the PR body, and the level is at least medium.
+- The PR body keeps the repo's shape: `Why`, `What changed`, and a `Verification` table
+  with outcomes, plus the collapsed stage result when brewery or the lifecycle plugin
+  produced it.
+
 ## Signals that move the level
 
 - Raise one level: more than ~400 changed lines or ~20 files; more than two packages

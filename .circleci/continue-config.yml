@@ -1437,7 +1437,8 @@ jobs:
   # Risk-scored PR review by the terreno-approval-agent GitHub App (brewery approve).
   # Policy (.brewery.json, docs/approval-rubric.md) is read from origin/master, so a PR
   # cannot relax the rules it is judged by. The job clones brewery and runs its CLI; it
-  # never installs or executes code from the PR checkout. Comment-only while
+  # never installs or executes code from the PR checkout. It waits for every other
+  # check on the head before judging, so it runs once, last. Comment-only while
   # approveLevels is empty. A not-approved verdict is not a pipeline failure.
   approve:
     executor: node22
@@ -1478,14 +1479,16 @@ jobs:
             cd "$HOME/brewery/cli" && bun install --frozen-lockfile
       - run:
           name: brewery approve
-          no_output_timeout: 20m
+          no_output_timeout: 60m
           command: |
             set -euo pipefail
             # gh reads GH_TOKEN; the read side (pr view, pr diff) uses the API PAT. The App
             # token is minted inside brewery for the review and check run only. Neither
             # reaches the model: brewery runs agents with an allowlisted environment.
             export GH_TOKEN="$GITHUB_TOKEN"
-            bun "$HOME/brewery/cli/src/cli.ts" approve "$PR_NUMBER" --repo "$PWD" --base master || {
+            # --wait-checks: wait (limits.ciWaitMin, 45 min) for every other check on this
+            # head, then judge it; a red or still-pending head is skipped, model unspent.
+            bun "$HOME/brewery/cli/src/cli.ts" approve "$PR_NUMBER" --repo "$PWD" --base master --wait-checks || {
               echo "brewery approve could not produce a verdict (non-blocking; see above)"
               exit 0
             }
@@ -2316,6 +2319,7 @@ workflows:
           context: [terreno-github-api, terreno-agentic]
       - approve:
           context: [terreno-github-api, terreno-approve]
+          requires: [dco, architectural-pr-review]
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>

@@ -353,7 +353,14 @@ the App may approve, path rules that floor, cap, or forbid approval) and
 so a PR cannot change the rules it is judged by, and a PR that edits either file is
 never approved. The job clones brewery into `$HOME` and never installs or runs code
 from the PR checkout; the model runs read-only with an allowlisted environment that
-holds no GitHub or App credential.
+holds no GitHub or App credential. The job waits (`--wait-checks`, up to 45 minutes) for
+every other check on the head before judging, and skips a red or still-pending head
+without spending a model, so it runs once per push, last.
+
+To teach the agent from what reviewers actually say, run
+`brewery calibrate TerrenoLabs/terreno` (optionally `--reviewer <login>` or `--notes
+<file>` of pasted comments): it opens one PR editing `docs/approval-rubric.md` and the
+path rules from the review comments since the last pass.
 
 Rollout: `approveLevels` is `[]`, so every PR gets a `COMMENT` review that says the
 risk level and why, and nothing approves. After a dozen PRs, compare the levels with

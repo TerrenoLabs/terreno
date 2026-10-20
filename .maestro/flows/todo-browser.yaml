@@ -1,0 +1,33 @@
+url: http://localhost:8082/
+---
+# Open a todo from the ListDetailLayout todo browser (same Maestro session — user is already
+# signed in and create-todo.yaml added "Buy groceries").
+# Do not launchApp — reload resets syncdb and the authenticated session timing.
+
+- extendedWaitUntil:
+    visible:
+      id: "todos-browse-button"
+    timeout: 30000
+
+- tapOn:
+    id: "todos-browse-button"
+
+- extendedWaitUntil:
+    visible:
+      id: "todo-browser-list"
+    timeout: 30000
+
+- tapOn: "Buy groceries"
+
+- extendedWaitUntil:
+    visible:
+      id: "todo-browser-detail-toggle"
+    timeout: 30000
+
+# The list is still on screen beside the detail (wide viewport) or one back away (phone).
+- back
+
+- extendedWaitUntil:
+    visible:
+      id: "todo-browser-list"
+    timeout: 30000

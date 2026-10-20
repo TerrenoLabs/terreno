@@ -187,7 +187,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - `bun run check:knip` passes
     - Behaviour against a real router and data is proven in T5; this script is the visual evidence.
 
-- [ ] **T5** — Browse todos in a list/detail layout in example-frontend
+- [x] **T5** — Browse todos in a list/detail layout in example-frontend
   - Depends on: T3
   - Files: example-frontend/app/todo-browser/_layout.tsx, example-frontend/app/todo-browser/index.tsx, example-frontend/app/todo-browser/[id].tsx, example-frontend/components/TodoBrowserList.tsx, example-frontend/components/SyncTodosScreen.tsx, example-frontend/app/_layout.tsx, example-frontend/e2e/todo-browser.spec.ts, .maestro/flows/todo-browser.yaml, .maestro/flows/config.yaml
   - Delivers:
@@ -213,6 +213,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - `cd example-frontend && bunx playwright test e2e/todo-browser.spec.ts`
     - `bun run maestro:test`
     - A terreno:verify-ui-changes run saves screenshots to `/opt/cursor/artifacts/`. Native devices are T7.
+  - Added in Pick: docs/explanation/example-coverage.md gets a List/detail row. The Maestro web flow could not run in this sandbox (the existing `login.yaml` flow also fails here: headless Chromium under gVisor); CI's `run-maestro` job runs it.
 
 - [ ] **T7** — Prove the layout on native phones and tablets
   - Depends on: T4

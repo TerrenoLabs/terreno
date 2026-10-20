@@ -342,6 +342,7 @@ const RootLayoutNav = (): React.ReactElement => {
         <Stack.Screen name="settings" />
         <Stack.Screen name="notifications" />
         <Stack.Screen name="todo-windows/index" />
+        <Stack.Screen name="todo-browser" />
       </Stack>
     </ThemeProvider>
   );

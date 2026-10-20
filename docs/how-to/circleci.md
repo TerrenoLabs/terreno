@@ -351,11 +351,16 @@ pipeline and posts one review as the **terreno-approval-agent** GitHub App plus 
 the App may approve, path rules that floor, cap, or forbid approval) and
 `docs/approval-rubric.md` (what the model scores). Both are read from `origin/master`,
 so a PR cannot change the rules it is judged by, and a PR that edits either file is
-never approved. The job clones brewery into `$HOME` and never installs or runs code
-from the PR checkout; the model runs read-only with an allowlisted environment that
-holds no GitHub or App credential. The job waits (`--wait-checks`, up to 45 minutes) for
-every other check on the head before judging, and skips a red or still-pending head
-without spending a model, so it runs once per push, last.
+never approved. The job resets its working tree to `origin/master` right after
+checkout, so the PR-number script, `bunfig.toml`, and the agent's working directory all
+come from master and nothing from the PR tree runs while the App key is in the
+environment; brewery reads the head through `git show <sha>:`. Brewery itself is
+pinned to a commit (`BREWERY_REF`) and cloned into `$HOME`; the model runs read-only
+with an allowlisted environment that holds no GitHub or App credential. The job waits
+(`--wait-checks`, up to 45 minutes) for every other check on the head before judging,
+ignoring its own `ci/circleci: approve` check (`selfChecks` in `.brewery.json`), and
+skips a red or still-pending head without spending a model, so it runs once per push,
+last.
 
 To teach the agent from what reviewers actually say, run
 `brewery calibrate TerrenoLabs/terreno` (optionally `--reviewer <login>` or `--notes

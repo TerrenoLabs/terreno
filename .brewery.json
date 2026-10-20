@@ -1,6 +1,7 @@
 {
   "approve": {
     "approveLevels": [],
+    "selfChecks": ["terreno/approve", "ci/circleci: approve", "approve"],
     "rubric": "docs/approval-rubric.md",
     "planDirs": ["docs/implementationPlans", "docs/tasks"],
     "skipAuthors": ["dependabot[bot]"],

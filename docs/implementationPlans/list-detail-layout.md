@@ -232,7 +232,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - The Android emulator comes from the cloud toolchain (`install-cloud-dev-tools.sh`).
     - Best effort (D4): run on every device that is available. The stage result lists each device as passed, failed, or skipped (no device). A skipped device does not block the PR, and the PR body names it. A device that ran and failed does block.
 
-- [ ] **T6** — Point framework guidance at ListDetailLayout
+- [x] **T6** — Point framework guidance at ListDetailLayout
   - Depends on: T2
   - Files: plugins/terreno-planning/skills/terreno-ui/SKILL.md, plugins/terreno-planning/skills/terreno-ui/references/layout.md, plugins/terreno-planning/skills/building-terreno-apps/references/route-structure.md, .rulesync/rules/00-root.md, .rulesync/rules/01-claudecode-root.md, .rulesync/rules/ui/00-ui.md, ui/.ai/guidelines/core.md, mcp-server/src/docs/resources/ui.md, changelog/unreleased/list-detail-layout.md. Regenerated, not hand-edited: skills/, plugins/terreno-claude/, the rulesync outputs (AGENTS.md, CLAUDE*.md, .claude/, .cursor/, .devin/, .github/), mcp-server/src/docs/guidelines/.
   - Criteria:
@@ -240,6 +240,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - `route-structure.md` shows the `_layout`/`index`/`[id]` group.
     - `- **Layout**: Box, Page, SplitPage, Card` (`.rulesync/rules/00-root.md:325`, `01-claudecode-root.md:222`, and the same line in `ui/.ai/guidelines/core.md:5`) gains `ListDetailLayout`. So does the `### Layout` list at `.rulesync/rules/ui/00-ui.md:81`.
     - The changelog entry is `category: Added`.
+    - Added in Pick: root `AGENTS.md` and the per-package `AGENTS.md` / `.claude/CLAUDE.local.md` / `.cursor` / `.github` copies are hand-maintained (no generator writes them), so the same Layout line was updated in each.
   - Verification:
     - Run `bun run skills:sync`, `bun run rules`, and `cd mcp-server && bun run sync-package-guidelines`. Then `bun run skills:check` and `bun run rules:check` pass.
     - `bun run check:changelog` passes.

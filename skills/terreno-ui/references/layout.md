@@ -61,9 +61,37 @@ Box wrapper with default rounding and shadow.
 </Card>
 ```
 
+## ListDetailLayout
+
+Prefer this for list/detail screens. Use it as a route group's `_layout.tsx`: on a phone the
+list pushes the `[id]` route; on a tablet or wide browser (layout width ≥ 768) the list stays in
+a left pane and the detail opens beside it. The open item is the URL, so deep links and back work,
+and it stays open across rotation and resize.
+
+```tsx
+// app/mail/_layout.tsx
+export const unstable_settings = {initialRouteName: "index"};
+const MailLayout: React.FC = () => (
+  <ListDetailLayout
+    detailHref={(id) => `/mail/${id}`}
+    emptyDetail={<Text>Select a message</Text>}
+    indexHref="/mail"
+    list={<MailList />}
+  />
+);
+// app/mail/index.tsx
+const MailIndex: React.FC = () => <ListDetailIndex />;
+// In MailList rows: const {selectedId, select} = useListDetail();
+// <Box accessibilityState={{selected: id === selectedId}} onClick={() => select(id)} ... />
+```
+
+Keep list filters and search text in the route or a store: the list remounts at the breakpoint.
+See `docs/how-to/build-list-detail-screens.md`.
+
 ## SplitPage
 
-Master-detail layout. On large screens the list and detail sit side by side. On small
+Use only for list/detail views without their own routes (for example inside a modal); prefer
+`ListDetailLayout` otherwise. Master-detail layout. On large screens the list and detail sit side by side. On small
 screens, selecting a list item replaces the list with the detail pane.
 
 ```tsx

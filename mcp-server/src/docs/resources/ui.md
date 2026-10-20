@@ -202,7 +202,7 @@ import {
 ### Page & Layout
 
 ```typescript
-import { Page, SplitPage, ScrollView } from "@terreno/ui";
+import { Page, ScrollView } from "@terreno/ui";
 
 <Page
   navigation={navigation}
@@ -214,6 +214,32 @@ import { Page, SplitPage, ScrollView } from "@terreno/ui";
   </ScrollView>
 </Page>
 ```
+
+List/detail screens (mail, inbox, records) use `ListDetailLayout` as a route group's
+`_layout.tsx`. Phones push the detail route; tablets and wide browsers show the list in a left
+pane beside it. The open item lives in the URL.
+
+```typescript
+import { ListDetailIndex, ListDetailLayout, useListDetail } from "@terreno/ui";
+
+// app/mail/_layout.tsx
+export const unstable_settings = { initialRouteName: "index" };
+export default () => (
+  <ListDetailLayout
+    detailHref={(id) => `/mail/${id}`}
+    indexHref="/mail"
+    list={<MailList />}
+  />
+);
+
+// app/mail/index.tsx
+export default () => <ListDetailIndex />;
+
+// MailList rows read and change the open item
+const { selectedId, select } = useListDetail();
+```
+
+Use `SplitPage` only for list/detail views without their own routes.
 
 ## Theme System
 

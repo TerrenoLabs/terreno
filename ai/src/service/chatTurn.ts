@@ -24,7 +24,6 @@ import type express from "express";
 import {DateTime} from "luxon";
 import type mongoose from "mongoose";
 
-import {createTelemetryConfig, preparePromptForAI} from "../langfuseVercelAi";
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
 import {getProjectModel} from "../models/project";
@@ -1126,20 +1125,15 @@ const loadRegistrySystemPrompt = async (
   }
 };
 
-/**
- * The request's system prompt with project context, the Langfuse prompt, and the registry
- * prompt prepended.
- */
+/** The request's system prompt with project context and the registry prompt prepended. */
 const buildSystemPrompt = async ({
   history,
-  options,
   projectId,
   registryPrompt,
   systemPrompt,
   userId,
 }: {
   history: GptHistoryDocument;
-  options: GptRouteOptions;
   projectId: unknown;
   registryPrompt?: string;
   systemPrompt: unknown;
@@ -1172,23 +1166,6 @@ const buildSystemPrompt = async ({
     }
   }
 
-  if (options.langfuseSystemPromptName) {
-    try {
-      const langfuseResult = await preparePromptForAI({
-        promptName: options.langfuseSystemPromptName,
-        userId: userId?.toString(),
-      });
-      const langfusePrompt =
-        typeof langfuseResult.prompt === "string" ? langfuseResult.prompt : undefined;
-      if (langfusePrompt) {
-        effectiveSystemPrompt = effectiveSystemPrompt
-          ? `${langfusePrompt}\n\n${effectiveSystemPrompt}`
-          : langfusePrompt;
-      }
-    } catch (err) {
-      logger.debug(`Langfuse system prompt skipped: ${(err as Error).message}`);
-    }
-  }
   if (registryPrompt) {
     effectiveSystemPrompt = effectiveSystemPrompt
       ? `${registryPrompt}\n\n${effectiveSystemPrompt}`
@@ -1770,7 +1747,6 @@ export const runChatTurn = async ({
   const registryPrompt = promptName ? undefined : await loadRegistrySystemPrompt(options);
   let effectiveSystemPrompt = await buildSystemPrompt({
     history,
-    options,
     projectId,
     registryPrompt: registryPrompt?.body,
     systemPrompt,
@@ -2035,17 +2011,7 @@ export const runChatTurn = async ({
       sink.emit({askResolved: {action: resolvedAsk.action, toolCallId: resolvedAsk.toolCallId}});
     }
     logger.debug("Starting streamText", {model: modelId, supportsTools});
-    const telemetry = createTelemetryConfig({
-      functionId: "gpt-prompt",
-      metadata: {
-        ...(options.langfuseSystemPromptName
-          ? {langfusePromptName: options.langfuseSystemPromptName}
-          : {}),
-      },
-      userId: userId?.toString(),
-    });
     const result = streamText({
-      experimental_telemetry: telemetry,
       messages,
       model: aiService.model,
       providerOptions: !supportsTools

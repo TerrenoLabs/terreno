@@ -12,7 +12,7 @@ const priceMap = parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON);
 server.register(new ObservabilityApp({
   accessControl: access,
   aiService,
-  plugins: [localPlugin, langfuseAdapter, otelSink].filter(Boolean),
+  plugins: [localPlugin, otelSink].filter(Boolean),
   control: {
     datasets: process.env.AI_OBS_DATASETS_PRIMARY ?? "local",
     experiments: process.env.AI_OBS_EXPERIMENTS_PRIMARY ?? "local",
@@ -36,9 +36,7 @@ Validate the parsed object before registration: each model needs non-negative nu
 `example-backend/src/utils/observabilityConfig.ts`; malformed values fail startup with the
 variable name.
 
-Keep existing `LangfuseApp` if you already use Langfuse keys. The Langfuse **adapter** must reuse `getLangfuseClient()` and must not start a second OpenTelemetry SDK.
-
-Boot **fails** if `experiments.primary !== datasets.primary`, if `reviewQueue` is `langfuse`, or if a primary’s plugin is missing.
+`local` is the only control primary. Boot **fails** if `experiments.primary !== datasets.primary`, if `reviewQueue` is not `local`, or if a primary’s plugin is missing.
 
 Pass the same `access` object you use for `TerrenoApp` and `AdminApp` so
 `GET /ai/observability/status` permissions match `/admin/config` screen filtering and every
@@ -63,12 +61,11 @@ Terreno does not ship domain-specific folder names or an in-app approval workflo
 
 | Variable | Role |
 | --- | --- |
-| `AI_OBS_PROMPTS_PRIMARY` | `local` or `langfuse` (default `local`) |
+| `AI_OBS_PROMPTS_PRIMARY` | default `local` (the only primary) |
 | `AI_OBS_DATASETS_PRIMARY` | default `local` |
 | `AI_OBS_EXPERIMENTS_PRIMARY` | must equal datasets |
 | `AI_OBS_SAMPLE_RATE` | `0`–`1`, default `0` (live evals off) |
 | `AI_OBS_PRICE_MAP_JSON` | `{ "gemini-2.5-flash": { "inputPerMTok": 0.1, "outputPerMTok": 0.4 } }` |
-| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | existing Langfuse plugin |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | optional OTLP trace sink |
 
 ## App generate calls
@@ -90,8 +87,7 @@ Opt out of tracing with `skipTrace: true`. Sink failures are logged and never fa
 ## Admin
 
 Phase 1 admin ships **Prompts**, **Traces**, and **Review**. Datasets, Evaluators, and
-Experiments screens arrive in phase 2. **Open in Langfuse** appears in phase 3 when the
-Langfuse plugin is registered. Review is hidden when the local plugin is off.
+Experiments screens arrive in phase 2. Review is hidden when the local plugin is off.
 
 On **Traces**, **Run multi-stage trace test** (local sink only) runs two schema-backed
 `generateJsonObject` calls, a deterministic tool stage, and a final schema-backed combine
@@ -171,7 +167,7 @@ saved in **Profile** as `x-ai-api-key`; otherwise the route answers **503**.
 The route sends `text` as the user prompt. The labelled registry version supplies the
 system prompt and the route uses `TemperaturePresets.LOW`.
 
-The example registers the local plugin even when no Langfuse keys exist. Set
+The example always registers the local plugin. Set
 `AI_OBS_PRICE_MAP_JSON` to calculate USD cost; unlisted models show tokens with no cost,
 never `$0`.
 
@@ -210,6 +206,63 @@ The example backend registers `requestAiServiceFactory` but no server `aiService
 API key on **Profile** first; the admin UI blocks **Run once** with that hint until the key loads
 from storage and is sent as `x-ai-api-key`. **Traces → Run multi-stage trace test** uses the same
 saved key and is blocked the same way.
+
+## Share instructions across prompts
+
+Put the instructions that a set of prompts repeats in one prompt, then reference it from each
+prompt with `{{> name}}`.
+
+1. Create the shared prompt and pin `production`:
+
+   ```bash
+   curl -X POST "$API/ai/observability/prompts" \
+     -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+     -d '{"folder":"shared","name":"base-rules","template":"Answer in plain language for {{audience}}.","type":"text"}'
+   curl -X POST "$API/ai/observability/prompts/base-rules/labels" \
+     -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+     -d '{"label":"production","version":1}'
+   ```
+
+2. Reference it from each prompt's `system` or `template`:
+
+   ```text
+   {{> base-rules}}
+   Triage the intake form.
+   ```
+
+   - `{{> base-rules}}` follows the `production` label.
+   - `{{> base-rules label=staging}}` follows another label.
+   - `{{> base-rules version=3}}` pins one version. Use `label=` or `version=`, not both.
+   - A shared prompt can reference another one, up to 5 levels deep.
+
+3. Promote a new `base-rules` version. Every prompt that references it by label uses the new text
+   at once, with no new version of its own.
+
+Every reference must resolve when you save, so a saved prompt never fails at call time. Creating a
+prompt, saving a version, and moving a label return 400:
+
+- `Invalid prompt reference` when a tag is malformed, names an unknown prompt or version, or names
+  a label the shared prompt does not have yet. Promote the shared prompt before you reference it.
+- `Prompt reference cycle` when the save or label move would make prompts include each other. A
+  new version counts as `latest` for this check.
+- `Prompt references nested too deeply` when the change would nest references more than 5 levels,
+  in the saved prompt or in any prompt that includes it.
+
+The prompt editor keeps the tag; `PromptRegistry.get`, the playground, experiments, and judges use
+the resolved text. `{{variables}}` in a shared prompt are filled like the prompt's own.
+
+The trace stays named after the prompt you called. Its `prompts` list holds that prompt first,
+then one entry per shared prompt with `includedBy` set to the prompt whose tag pulled it in:
+
+```json
+[
+  {"label": "production", "name": "triage-intake", "version": 3},
+  {"includedBy": "triage-intake", "label": "production", "name": "base-rules", "version": 1}
+]
+```
+
+So `?prompt=base-rules` on the trace list finds every call that used the shared text, and
+`?prompt=triage-intake` still finds only that prompt's calls.
 
 ## Review a trace
 

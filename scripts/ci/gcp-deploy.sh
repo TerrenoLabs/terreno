@@ -99,7 +99,7 @@ deploy_backend() {
   fi
   docker push "$image"
 
-  secrets="MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest,LANGFUSE_SECRET_KEY=${GCP_BACKEND_SERVICE}-langfuse-secret-key:latest,LANGFUSE_PUBLIC_KEY=${GCP_BACKEND_SERVICE}-langfuse-public-key:latest"
+  secrets="MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
   env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,JOBS_START_WORKER=true,GCS_BUCKET=${GCP_DOCUMENTS_BUCKET},$(jobs_env_vars "$tag")"
   args=(
     run deploy "$GCP_BACKEND_SERVICE"
@@ -189,7 +189,7 @@ deploy_tasks() {
   fi
   args+=(
     "--set-env-vars=$env_vars"
-    "--set-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest,LANGFUSE_SECRET_KEY=${GCP_BACKEND_SERVICE}-langfuse-secret-key:latest,LANGFUSE_PUBLIC_KEY=${GCP_BACKEND_SERVICE}-langfuse-public-key:latest"
+    "--set-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
   )
   gcloud "${args[@]}"
 }

@@ -2771,11 +2771,11 @@ describe("AiObservabilityChrome", () => {
 
   const localOffStatus: ObservabilityStatusPayload = {
     localOn: false,
-    plugins: [{capabilities: ["prompts", "traces"], id: "langfuse"}],
+    plugins: [{capabilities: ["prompts", "traces"], id: "remote"}],
     primaries: {
-      datasets: "langfuse",
-      experiments: "langfuse",
-      prompts: "langfuse",
+      datasets: "remote",
+      experiments: "remote",
+      prompts: "remote",
       reviewQueue: "local",
     },
   };
@@ -2789,7 +2789,7 @@ describe("AiObservabilityChrome", () => {
         "Local on · prompts:local · datasets:local · experiments:local"
       );
       expect(formatObservabilityStatusChip(localOffStatus)).toBe(
-        "Local off · prompts:langfuse · datasets:langfuse · experiments:langfuse"
+        "Local off · prompts:remote · datasets:remote · experiments:remote"
       );
     });
 
@@ -2825,7 +2825,7 @@ describe("AiObservabilityChrome", () => {
 
       const off = renderWithTheme(<AiObservabilityStatusChip status={localOffStatus} />);
       expect(
-        off.getByText("Local off · prompts:langfuse · datasets:langfuse · experiments:langfuse")
+        off.getByText("Local off · prompts:remote · datasets:remote · experiments:remote")
       ).toBeTruthy();
     });
 

@@ -397,7 +397,10 @@ export class AIService {
       name: spanName,
       output: params.response,
       prompts: promptRef
-        ? [{label: promptRef.label, name: promptRef.name, version: promptRef.version}]
+        ? [
+            {label: promptRef.label, name: promptRef.name, version: promptRef.version},
+            ...(promptRef.includes ?? []),
+          ]
         : [],
       sensitive: params.observability.sensitive,
       sessionId: params.observability.sessionId,

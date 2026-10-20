@@ -22,15 +22,6 @@ import {addGptHistoryRoutes} from "./gptHistories";
 
 type SseResponse = supertest.Response & {body: string};
 
-// Mock langfuseVercelAi to avoid transitive langfuse SDK import in tests.
-// Spread the real module so later-loaded test files still see the real exports.
-const realLangfuseVercelAi = await import("../langfuseVercelAi");
-mock.module("../langfuseVercelAi", () => ({
-  ...realLangfuseVercelAi,
-  createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-  preparePromptForAI: async () => ({config: {}, prompt: "test", telemetry: {isEnabled: false}}),
-}));
-
 const realAi = await import("ai");
 type StreamTextOptions = Parameters<typeof realAi.streamText>[0];
 type StreamTextResult = ReturnType<typeof realAi.streamText>;
@@ -890,27 +881,6 @@ describe("AI Routes", () => {
       const res = await agent
         .post("/gpt/prompt")
         .send({prompt: "Draw a cat"})
-        .buffer(true)
-        .parse(sseCollect);
-      expect(res.status).toBe(200);
-    });
-
-    it("uses the langfuse system prompt when configured", async () => {
-      const customApp = new TerrenoApp({
-        configureApp: (router, options) => {
-          addGptRoutes(router, {
-            aiService,
-            langfuseSystemPromptName: "missing-prompt-name",
-            openApiOptions: options,
-          });
-        },
-        skipListen: true,
-        userModel: UserModel,
-      }).build();
-      const agent = await authAsUser(customApp, "notAdmin");
-      const res = await agent
-        .post("/gpt/prompt")
-        .send({prompt: "Hi"})
         .buffer(true)
         .parse(sseCollect);
       expect(res.status).toBe(200);
@@ -2125,52 +2095,6 @@ describe("AI Routes", () => {
         expect(body).toContain("done");
       } finally {
         AIRequest.logRequest = originalLogRequest;
-      }
-    });
-
-    it("swallows preparePromptForAI failure when langfuse prompt loading throws", async () => {
-      // Re-mock preparePromptForAI to throw, exercising the catch branch that
-      // logs `Langfuse system prompt skipped: ...` and continues without it.
-      mock.module("../langfuseVercelAi", () => ({
-        ...realLangfuseVercelAi,
-        createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-        preparePromptForAI: async () => {
-          throw new Error("langfuse offline");
-        },
-      }));
-      try {
-        const customApp = new TerrenoApp({
-          configureApp: (router, options) => {
-            addGptRoutes(router, {
-              aiService,
-              langfuseSystemPromptName: "broken-prompt",
-              openApiOptions: options,
-            });
-          },
-          skipListen: true,
-          userModel: UserModel,
-        }).build();
-        const agent = await authAsUser(customApp, "notAdmin");
-        const res = await agent
-          .post("/gpt/prompt")
-          .send({prompt: "Hi"})
-          .buffer(true)
-          .parse(sseCollect);
-        // Failure is silently caught; request still completes successfully.
-        expect(res.status).toBe(200);
-        const body = (res as SseResponse).body;
-        expect(body).toContain("done");
-      } finally {
-        // Restore the original happy-path mock for subsequent tests.
-        mock.module("../langfuseVercelAi", () => ({
-          ...realLangfuseVercelAi,
-          createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-          preparePromptForAI: async () => ({
-            config: {},
-            prompt: "test",
-            telemetry: {isEnabled: false},
-          }),
-        }));
       }
     });
 

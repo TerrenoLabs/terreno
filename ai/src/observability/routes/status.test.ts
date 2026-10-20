@@ -9,12 +9,12 @@ import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {ObservabilityApp, resetObservabilityApp} from "../observabilityApp";
 import type {ObservabilityPlugin} from "../types";
 
-const createLangfusePlugin = (): ObservabilityPlugin => {
+const createRemotePlugin = (): ObservabilityPlugin => {
   return {
     capabilities: new Set(["datasets", "experiments", "prompts", "scores", "traces"]),
     datasetStore: {},
     experimentRunner: {},
-    id: "langfuse",
+    id: "remote",
     promptRegistry: {get: async () => undefined},
     scoreSink: {export: async () => {}},
     traceSink: {export: async () => {}},
@@ -36,7 +36,7 @@ describe("observability status routes", () => {
     app = new TerrenoApp({skipListen: true, userModel: UserModel})
       .register(
         new ObservabilityApp({
-          plugins: [createLocalObservabilityPlugin(), createLangfusePlugin()],
+          plugins: [createLocalObservabilityPlugin(), createRemotePlugin()],
         })
       )
       .build();
@@ -55,7 +55,7 @@ describe("observability status routes", () => {
     });
     expect(response.body.data.plugins.map((plugin: {id: string}) => plugin.id)).toEqual([
       "local",
-      "langfuse",
+      "remote",
     ]);
     expect(response.body.data.plugins[0].capabilities).toContain("reviewQueue");
   });

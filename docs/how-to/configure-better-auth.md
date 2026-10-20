@@ -465,5 +465,5 @@ Better Auth runs **in parallel** with JWT auth. You don't need to migrate existi
 
 - [Authentication Architecture](../explanation/authentication.md)
 - [@terreno/api Reference](../reference/api.md#better-auth)
-- [@terreno/rtk Reference (legacy)](../reference/legacy/rtk.md#better-auth)
+- [@terreno/rtk Reference (legacy)](../reference/legacy/rtk.md#better-auth-integration)
 - [Better Auth Documentation](https://better-auth.com/)

@@ -127,7 +127,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
   - Behavior: with a non-JWT source (`OfflineMiddlewareConfig.tokenSource`, else the registered one), the middleware tags and filters queued mutations by the source's `getUserId()` instead of `state.auth.userId` (`offlineMiddleware.ts:142-152, 541, 641`), and `replayMutation` sends the source's token, omitting `authorization` when there is none. On the JWT path it behaves as today.
   - Acceptance: with a registered fake Better Auth source and no `state.auth` slice, a mutation made offline is queued under the source's user id and, on reconnect, replayed with `authorization: Bearer <token>`. Verification: `cd rtk && bun test ./src/isolated/offlineMiddleware.isolated.ts`; existing offline tests pass.
   - Docs: JSDoc on the new option; prose in T9.
-- [ ] **T9** — Document the token-source options on rtk's consumers
+- [x] **T9** — Document the token-source options on rtk's consumers
   - Depends on: T5, T6, T7, T8
   - Files: docs/reference/legacy/rtk.md, docs/how-to/websocket-integration.md
   - Behavior: `legacy/rtk.md` stops calling `getAuthToken` required and JWT-only (`:165`), and documents `tokenSource` on the socket, chat, MCP and offline APIs. `websocket-integration.md:146-165` describes the registered source. The generated rtk reference is built from JSDoc at docs-site build time, so it needs no edit.

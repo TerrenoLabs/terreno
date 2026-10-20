@@ -100,7 +100,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
   - Behavior: `BetterAuthAdapterOptions` gains `getBearerToken?: () => string | null`. When it is passed and returns a token, `getToken` returns that token without calling `getSession()`. Otherwise `getToken` behaves as today. `getUserId`, `onAuthChange` and `refresh` are unchanged. The option is explicit, never detected on the client, so the bridged client from `bridgeBetterAuthReactClient` needs no change.
   - Acceptance: with `getBearerToken` returning `t1`, `getToken()` resolves `t1` and the fake client's `getSession` is not called; without the option, or with it returning null, `getSession` is read as today. Verification: `cd syncdb && bun test src/auth/betterAuthAdapter.test.ts`.
   - Docs: `docs/reference/syncdb.md` adapter section.
-- [ ] **T5** — Read the token source in useSocketConnection
+- [x] **T5** — Read the token source in useSocketConnection
   - Depends on: T1
   - Files: rtk/src/socket.ts, rtk/src/isolated/socket.web.isolated.ts, changelog/unreleased/rtk-socket-token-source.md
   - Behavior: `getAuthToken` becomes optional. Without it, the hook reads the token source (the `tokenSource` option, else the registered one). The socket's `auth` is a callback that reads the token on every connect and reconnect. On an auth `connect_error` it calls `refresh()` once per failure episode and reconnects; a second auth failure before a successful connect stops reconnecting and calls `onConnectError`. A successful connect resets the episode. It reconnects when `onAuthChange` fires. The JWT expiry check stays as it is while the JWT source is registered.

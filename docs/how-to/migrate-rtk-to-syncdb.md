@@ -335,8 +335,9 @@ export const syncDb = createSyncDb({authProvider, baseUrl, collections: ["todos"
 
 Better Auth session tokens live in the Better Auth client (`@terreno/rtk` `createBetterAuthClient`):
 
-- **Native:** `expo-secure-store`
-- **Web:** `@react-native-async-storage/async-storage`
+- **Native:** the Expo plugin's cookie jar in `expo-secure-store`
+- **Web (default):** Better Auth's HttpOnly session cookie, managed by the browser. No token is in app storage
+- **Web with `webAuth: "bearer"`:** the `set-auth-token` bearer in `localStorage` (or the `bearerStorage` you pass), readable with `getBetterAuthBearerToken()`. See [Frontend and API on different sites](configure-better-auth.md#frontend-and-api-on-different-sites)
 
 Syncdb does not store tokens itself — it calls `authProvider` on every transport/HTTP request.
 

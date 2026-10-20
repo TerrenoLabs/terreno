@@ -108,12 +108,13 @@ export const store = configureStore({
   middleware: (getDefault) => getDefault().concat(...betterAuth.middleware),
 });
 
-// Call after sign-in, sign-out, and at startup to copy the session into Redux
-await betterAuth.syncSession(store.dispatch);
+// Call after sign-in, sign-out, and at app startup to copy the session into Redux
+void betterAuth.syncSession(store.dispatch);
 ``````
 
 **Key exports:**
-- `createBetterAuthClient({baseURL, scheme, storagePrefix?})` — Factory for Better Auth client with Expo support
+- `createBetterAuthClient({baseURL, scheme, storagePrefix?, webAuth?, bearerStorage?})` — Factory for Better Auth client with Expo support. `webAuth: "bearer"` authenticates the web client with a stored bearer token and no cookies, for a frontend and API on different sites ([how-to](../../how-to/configure-better-auth.md#frontend-and-api-on-different-sites))
+- `getBetterAuthBearerToken({storagePrefix?, bearerStorage?})` — Reads the token bearer mode stored, or `null`
 - `generateBetterAuthSlice({authClient, syncInterval?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`
 - `selectBetterAuthIsAuthenticated`, `selectBetterAuthUserId`, `selectBetterAuthUser` — Selectors over `state.betterAuth`
 - `BetterAuthUser`, `BetterAuthState` — TypeScript types for session/user data

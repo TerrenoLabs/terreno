@@ -36,7 +36,7 @@ Modern session-based authentication with built-in social OAuth support.
 2. User chooses social provider (Google, GitHub, Apple) or email/password
 3. Backend redirects to OAuth provider or validates credentials
 4. Better Auth creates session in MongoDB
-5. Frontend receives session cookie (web) or bearer session token (native)
+5. Frontend receives a session cookie (web, default), a bearer session token (native), or, on web with `webAuth: "bearer"`, a bearer token from the `set-auth-token` header. Bearer on web is the option when the web app and the API are on different sites, where browsers block the third-party session cookie. See [Frontend and API on different sites](../how-to/configure-better-auth.md#frontend-and-api-on-different-sites)
 6. On the first authenticated request or socket handshake, Terreno looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`). `RealtimeApp` uses the registered `BetterAuthApp` instance for socket sessions without extra wiring
 7. `req.user` is that app document for subsequent `modelRouter` permissions. A session whose app `User` has `disabled: true` no longer authenticates: `req.user` stays unset, so protected routes answer 401 and disabling an account ends its live sessions. Better Auth's own routes, such as sign-out, still work
 
@@ -308,7 +308,7 @@ modelRouter(Model, {
 - Validate tokens before making authenticated requests
 
 ❌ **Don't:**
-- Store tokens in localStorage on web (use httpOnly cookies in production)
+- Store tokens in localStorage on web when frontend and API share a site (use httpOnly cookies). When they are on different sites, Better Auth's `webAuth: "bearer"` mode is the supported way to keep a web token: it accepts the XSS and shared-device risk of web storage, and `bearerStorage: window.sessionStorage` narrows the second. See [Frontend and API on different sites](../how-to/configure-better-auth.md#frontend-and-api-on-different-sites)
 - Log tokens to console
 - Send tokens in URL query parameters (MCP service tokens included)
 - Ignore token refresh failures

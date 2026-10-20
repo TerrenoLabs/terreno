@@ -217,10 +217,15 @@ const userSchema = new mongoose.Schema(
 ``````typescript
 import {createBetterAuthClient} from "@terreno/rtk";
 
+// `scheme` is the app's deep-link scheme (required).
 export const authClient = createBetterAuthClient({
   baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  scheme: "yourapp",
 });
 ``````
+
+On web the client authenticates with Better Auth's session cookie. When the web frontend and
+the API are on different sites, use [bearer mode](#frontend-and-api-on-different-sites).
 
 ### 2. Add Session Redux Slice
 
@@ -229,15 +234,18 @@ import {generateBetterAuthSlice} from "@terreno/rtk";
 import {configureStore} from "@reduxjs/toolkit";
 import {authClient} from "./authClient";
 
-const {sessionReducer, sessionMiddleware} = generateBetterAuthSlice(authClient);
+const betterAuth = generateBetterAuthSlice({authClient});
 
 export const store = configureStore({
   reducer: {
-    session: sessionReducer,
+    betterAuth: betterAuth.reducer, // selectors read `state.betterAuth`
     // ... other reducers
   },
-  middleware: (getDefault) => getDefault().concat(sessionMiddleware),
+  middleware: (getDefault) => getDefault().concat(...betterAuth.middleware),
 });
+
+// Call after sign-in, sign-out, and at app startup to copy the session into Redux
+void betterAuth.syncSession(store.dispatch);
 ``````
 
 ### 3. Add Social Login UI
@@ -284,6 +292,93 @@ const LoginScreen = () => {
   );
 };
 ``````
+
+## Frontend and API on different sites
+
+By default the web client relies on Better Auth's HttpOnly session cookie. When the web app
+and the API are on different sites (for example `app.example.com` and `api.example.net`, or
+two hosting providers' domains), that cookie is a third-party cookie, and browsers such as
+Safari block it. The user signs in and is signed out on the next request.
+
+Use bearer mode in that case. Keep cookie mode when the frontend and API share a site.
+
+``````typescript
+import {createBetterAuthClient} from "@terreno/rtk";
+
+export const authClient = createBetterAuthClient({
+  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  scheme: "yourapp",
+  webAuth: "bearer",
+});
+``````
+
+With `webAuth: "bearer"`, on web only:
+
+- The client stores the `set-auth-token` response header from sign-in under
+  `${storagePrefix}_bearer_token` (default `terreno_bearer_token`) in `localStorage`.
+- Every Better Auth client call, `getSession` included, sends `Authorization: Bearer <token>`
+  and no cookies (`credentials: "omit"`).
+- `signOut()` forgets the token before its request is sent, so a failed sign-out never leaves
+  a usable token on the device.
+- A successful `getSession` that returns no session clears the token, unless a newer token was
+  stored while that request was in flight. A failed or 5xx `getSession` keeps it.
+
+Native apps ignore `webAuth`: the Expo plugin already keeps the session without browser cookies.
+
+Bearer mode covers email and password sign-in. Social sign-in is a redirect, so the page never
+sees `set-auth-token`; it needs a one-time-token handoff on the OAuth callback, which is not
+available yet. Until it ships, a social sign-in in bearer mode lands signed out.
+
+Read the stored token outside the client, without a network call, with
+`getBetterAuthBearerToken({storagePrefix?, bearerStorage?})`. Pass the same options the client
+was created with.
+
+### Server requirements
+
+- The web app's origin must be in `trustedOrigins`. A cookie-less sign-in sends an `Origin`
+  header, and Better Auth rejects an unlisted origin with 403 `INVALID_ORIGIN`:
+
+  ``````typescript
+  const config: BetterAuthConfig = {
+    enabled: true,
+    trustedOrigins: ["https://app.example.com", "yourapp://", "exp://"],
+  };
+  ``````
+
+  Better Auth skips this check when `NODE_ENV=test`, so test it against a non-test build.
+- No CORS change is needed. Bearer mode sends no cookies, so the default `corsOrigin` (`"*"`)
+  works, and so does an explicit list that includes the web origin.
+- No header change is needed. Better Auth's bearer plugin, which `BetterAuthApp` enables, lists
+  `set-auth-token` in `Access-Control-Expose-Headers` itself, so the page can read it.
+
+### Trade-offs
+
+A bearer token in web storage is readable by any script on the frontend's origin, so an XSS
+can steal it. An HttpOnly cookie cannot be read that way, which is why cookie mode stays the
+default. `localStorage` also outlives browser restarts, so on a shared device, such as a family
+computer, the next person to open the app is still signed in.
+
+On shared devices, keep the token in `sessionStorage` so it ends when the browser session does.
+Reading `window.sessionStorage` throws when the browser blocks site storage, so guard it:
+
+``````typescript
+const sessionStorageOrDefault = (): Storage | undefined => {
+  try {
+    return typeof window === "undefined" ? undefined : window.sessionStorage;
+  } catch {
+    return undefined; // falls back to localStorage, or to no storage when that is blocked too
+  }
+};
+
+export const authClient = createBetterAuthClient({
+  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  bearerStorage: sessionStorageOrDefault(),
+  scheme: "yourapp",
+  webAuth: "bearer",
+});
+``````
+
+`bearerStorage` takes any synchronous `{getItem, setItem, removeItem}` store.
 
 ## OAuth Provider Setup
 

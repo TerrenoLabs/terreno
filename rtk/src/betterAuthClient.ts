@@ -10,11 +10,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type {BetterAuthClientPlugin} from "better-auth/client";
 import {createAuthClient} from "better-auth/react";
 import * as SecureStore from "expo-secure-store";
-import type {BetterAuthClientConfig} from "./betterAuthTypes";
+import type {BetterAuthBearerStorage, BetterAuthClientConfig} from "./betterAuthTypes";
 import {IsWeb} from "./platform";
 
 // Re-export types for convenience
 export type {
+  BetterAuthBearerStorage,
   BetterAuthClientConfig,
   BetterAuthOAuthProvider,
   BetterAuthSession,
@@ -151,8 +152,139 @@ export const withCookieJarRepair = ({
   },
 });
 
+type BetterAuthFetchOptions = NonNullable<
+  NonNullable<Parameters<typeof createAuthClient>[0]>["fetchOptions"]
+>;
+type BetterAuthRequestHook = NonNullable<BetterAuthFetchOptions["onRequest"]>;
+type BetterAuthSuccessHook = NonNullable<BetterAuthFetchOptions["onSuccess"]>;
+
+// Signed-out fallback for environments with no usable localStorage (SSR, blocked storage).
+const NO_BEARER_STORAGE: BetterAuthBearerStorage = {
+  getItem: () => null,
+  removeItem: () => {},
+  setItem: () => {},
+};
+
+const resolveBearerStorage = (bearerStorage?: BetterAuthBearerStorage): BetterAuthBearerStorage => {
+  if (bearerStorage) {
+    return bearerStorage;
+  }
+  if (typeof window === "undefined") {
+    return NO_BEARER_STORAGE;
+  }
+  try {
+    // Reading `window.localStorage` throws when the browser blocks site storage.
+    return window.localStorage ?? NO_BEARER_STORAGE;
+  } catch {
+    return NO_BEARER_STORAGE;
+  }
+};
+
+const bearerTokenKey = (storagePrefix?: string): string => {
+  return `${storagePrefix ?? DEFAULT_STORAGE_PREFIX}_bearer_token`;
+};
+
+/**
+ * Reads the bearer token that `createBetterAuthClient({webAuth: "bearer"})` stored, without a
+ * network call. Pass the same `storagePrefix` and `bearerStorage` the client was created with.
+ * Returns `null` when signed out or when no storage is available.
+ *
+ * @example
+ * ```typescript
+ * const token = getBetterAuthBearerToken({storagePrefix: "myapp"});
+ * ```
+ */
+export const getBetterAuthBearerToken = ({
+  bearerStorage,
+  storagePrefix,
+}: {
+  bearerStorage?: BetterAuthBearerStorage;
+  storagePrefix?: string;
+} = {}): string | null => {
+  return resolveBearerStorage(bearerStorage).getItem(bearerTokenKey(storagePrefix));
+};
+
+const isAuthEndpoint = (url: string | URL, endpoint: string): boolean => {
+  return new URL(url.toString(), "http://localhost").pathname.endsWith(endpoint);
+};
+
+const sentBearerToken = (headers: Headers): string | null => {
+  const authorization = headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) {
+    return null;
+  }
+  return authorization.slice("Bearer ".length);
+};
+
+/**
+ * better-fetch options that authenticate every Better Auth call with a stored bearer token and
+ * no cookies. They are client-wide defaults: per-call hooks still run alongside them, but a
+ * per-call `auth` or `credentials` overrides them.
+ */
+const createWebBearerFetchOptions = ({
+  bearerStorage,
+  storagePrefix,
+}: {
+  bearerStorage?: BetterAuthBearerStorage;
+  storagePrefix?: string;
+}): BetterAuthFetchOptions => {
+  // Resolved per access so a client created before `window` exists (SSR) still finds storage.
+  const storage = (): BetterAuthBearerStorage => resolveBearerStorage(bearerStorage);
+  const tokenKey = bearerTokenKey(storagePrefix);
+  const readToken = (): string | null => storage().getItem(tokenKey);
+
+  // Counts sign-outs, so a token issued by a request that was in flight across one is dropped.
+  let signOutCount = 0;
+  const signOutCountAtRequest = new WeakMap<object, number>();
+
+  // Runs after the request headers are built and before fetch, so the sign-out request still
+  // carries the token for the server to revoke while the device forgets it whatever happens next.
+  const onRequest: BetterAuthRequestHook = (context) => {
+    if (isAuthEndpoint(context.url, "/sign-out")) {
+      signOutCount += 1;
+      storage().removeItem(tokenKey);
+    }
+    signOutCountAtRequest.set(context, signOutCount);
+  };
+
+  // Only 2xx responses reach onSuccess, so a failed or 5xx get-session never clears the token.
+  const onSuccess: BetterAuthSuccessHook = (context) => {
+    const issuedToken = context.response.headers.get("set-auth-token");
+    if (issuedToken) {
+      // better-fetch hands onSuccess the same context object that onRequest saw.
+      const countAtRequest = signOutCountAtRequest.get(context.request) ?? signOutCount;
+      if (countAtRequest === signOutCount) {
+        storage().setItem(tokenKey, issuedToken);
+      }
+      return;
+    }
+    if (!isAuthEndpoint(context.request.url, "/get-session")) {
+      return;
+    }
+    if ((context.data as {session?: unknown} | null)?.session) {
+      return;
+    }
+    // The server rejected the token this request sent. A token stored while it was in flight
+    // (a sign-in that finished first) is newer and must survive.
+    if (sentBearerToken(context.request.headers) === readToken()) {
+      storage().removeItem(tokenKey);
+    }
+  };
+
+  return {
+    auth: {token: (): string | undefined => readToken() ?? undefined, type: "Bearer"},
+    credentials: "omit",
+    onRequest,
+    onSuccess,
+  };
+};
+
 /**
  * Creates a Better Auth client configured for Expo/React Native.
+ *
+ * Pass `webAuth: "bearer"` when the web frontend and the API are on different sites: the web
+ * client then authenticates with a stored bearer token instead of cookies. Read that token
+ * elsewhere with `getBetterAuthBearerToken`.
  *
  * @example
  * ```typescript
@@ -190,9 +322,20 @@ export const createBetterAuthClient = (config: BetterAuthClientConfig) => {
     storagePrefix,
   }) as unknown as BetterAuthClientPlugin;
 
+  // Native and cookie mode pass exactly the options they always have.
+  const isWebBearer = IsWeb && config.webAuth === "bearer";
+
   return createAuthClient({
     baseURL: config.baseURL,
     plugins: [expoAuthPlugin],
+    ...(isWebBearer
+      ? {
+          fetchOptions: createWebBearerFetchOptions({
+            bearerStorage: config.bearerStorage,
+            storagePrefix,
+          }),
+        }
+      : {}),
   });
 };
 

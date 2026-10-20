@@ -82,8 +82,16 @@ const mockSecureStore = (): void => {
 mockSecureStore();
 
 const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
-const {createBetterAuthClient, createStorageAdapter, repairCookieJar, withCookieJarRepair} =
-  await import("./betterAuthClient");
+const {
+  createBetterAuthClient,
+  createStorageAdapter,
+  getBetterAuthBearerToken,
+  repairCookieJar,
+  withCookieJarRepair,
+} = await import("./betterAuthClient");
+// The real, unmocked vanilla client: it runs captured options through Better Auth's own
+// route proxy and better-fetch hook pipeline, so hook ordering is proven rather than assumed.
+const {createAuthClient: createRealAuthClient} = await import("better-auth/client");
 
 // Mirrors how @better-auth/expo reads its jar, so these tests fail if the plugin's
 // throw-on-malformed-entry behaviour is ever reintroduced.
@@ -259,6 +267,394 @@ describe("withCookieJarRepair", () => {
     expect(JSON.parse((repaired as string) ?? "{}")).toEqual({
       "better-auth.session_data": {expires: null, value: "cached"},
     });
+  });
+});
+
+interface BearerFetchOptions {
+  auth: {token: () => string | null; type: string};
+  credentials: string;
+  onRequest: (context: {headers: Headers; url: string | URL}) => unknown;
+  onSuccess: (context: {
+    data: unknown;
+    request: {headers: Headers; url: string | URL};
+    response: Response;
+  }) => Promise<void> | void;
+}
+
+interface MemoryStorage {
+  getItem: (key: string) => string | null;
+  removeItem: (key: string) => void;
+  setItem: (key: string, value: string) => void;
+  values: Map<string, string>;
+}
+
+const createMemoryStorage = (initial: Record<string, string> = {}): MemoryStorage => {
+  const values = new Map(Object.entries(initial));
+  return {
+    getItem: (key: string): string | null => values.get(key) ?? null,
+    removeItem: (key: string): void => {
+      values.delete(key);
+    },
+    setItem: (key: string, value: string): void => {
+      values.set(key, value);
+    },
+    values,
+  };
+};
+
+interface SentRequest {
+  authorization: string | null;
+  credentials: RequestCredentials | undefined;
+  pathname: string;
+}
+
+type FakeServer = (pathname: string) => Response | Promise<Response>;
+
+const jsonResponse = (body: unknown, init: ResponseInit = {}): Response => {
+  return new Response(JSON.stringify(body), {
+    ...init,
+    headers: {"content-type": "application/json", ...(init.headers ?? {})},
+  });
+};
+
+// Builds the real Better Auth client from the options createBetterAuthClient handed to
+// createAuthClient, with fetch replaced by a fake server, and records what each call sent.
+const driveCapturedClient = (
+  server: FakeServer
+): {client: ReturnType<typeof createRealAuthClient>; sent: SentRequest[]} => {
+  const sent: SentRequest[] = [];
+  const options = captured.auth as {baseURL: string; fetchOptions: Record<string, unknown>};
+  const customFetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+    const {pathname} = new URL(input.toString());
+    sent.push({
+      authorization: new Headers(init?.headers).get("authorization"),
+      credentials: init?.credentials,
+      pathname,
+    });
+    return server(pathname);
+  };
+  const client = createRealAuthClient({
+    baseURL: options.baseURL,
+    fetchOptions: {...options.fetchOptions, customFetchImpl},
+  });
+  return {client, sent};
+};
+
+const bearerOptions = (): BearerFetchOptions => {
+  return (captured.auth as {fetchOptions: BearerFetchOptions}).fetchOptions;
+};
+
+describe("createBetterAuthClient with webAuth bearer on web", () => {
+  const globalWithWindow = globalThis as {window?: unknown};
+  const hadWindow = "window" in globalWithWindow;
+  const originalWindow = globalWithWindow.window;
+
+  beforeEach(() => {
+    captured.auth = null;
+  });
+
+  afterEach(() => {
+    if (hadWindow) {
+      globalWithWindow.window = originalWindow;
+    } else {
+      delete globalWithWindow.window;
+    }
+  });
+
+  it("stores set-auth-token in localStorage, sends it as the bearer, and omits cookies", async () => {
+    const localStorage = createMemoryStorage();
+    globalWithWindow.window = {localStorage};
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const options = bearerOptions();
+
+    await options.onSuccess({
+      data: {token: "t1"},
+      request: {headers: new Headers(), url: "http://localhost:3000/api/auth/sign-in/email"},
+      response: new Response(null, {headers: {"set-auth-token": "t1"}}),
+    });
+
+    expect(localStorage.values.get("terreno_bearer_token")).toBe("t1");
+    expect(options.auth.type).toBe("Bearer");
+    expect(options.auth.token()).toBe("t1");
+    expect(getBetterAuthBearerToken()).toBe("t1");
+    expect(options.credentials).toBe("omit");
+  });
+
+  it("sends the stored token on getSession through the real client, with no cookies", async () => {
+    const bearerStorage = createMemoryStorage();
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client, sent} = driveCapturedClient((pathname) => {
+      if (pathname.endsWith("/sign-in/email")) {
+        return jsonResponse({token: "t1"}, {headers: {"set-auth-token": "t1"}});
+      }
+      return jsonResponse({session: {id: "s1"}, user: {id: "u1"}});
+    });
+
+    await client.signIn.email({email: "a@example.com", password: "password123"});
+    await client.getSession();
+
+    expect(sent.map((request) => request.credentials)).toEqual(["omit", "omit"]);
+    expect(sent[0].authorization).toBeNull();
+    expect(sent[1]).toEqual({
+      authorization: "Bearer t1",
+      credentials: "omit",
+      pathname: "/api/auth/get-session",
+    });
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("clears the token on sign-out even when the request returns 5xx", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    let storedWhenSent: string | null | undefined;
+    const {client, sent} = driveCapturedClient(() => {
+      storedWhenSent = bearerStorage.getItem("terreno_bearer_token");
+      return jsonResponse({message: "down"}, {status: 503});
+    });
+
+    const result = await client.signOut();
+
+    expect(result.error?.status).toBe(503);
+    // The request still carries the token so the server can revoke the session, but the
+    // device has already forgotten it.
+    expect(sent[0].authorization).toBe("Bearer t1");
+    expect(storedWhenSent).toBeNull();
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("clears the token on sign-out even when the request never reaches the server", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client} = driveCapturedClient(() => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    await expect(client.signOut()).rejects.toThrow("Failed to fetch");
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("drops a token issued by a request that was in flight across a sign-out", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    let releaseSession: (response: Response) => void = () => {};
+    const {client} = driveCapturedClient((pathname) => {
+      if (pathname.endsWith("/get-session")) {
+        return new Promise<Response>((resolve) => {
+          releaseSession = resolve;
+        });
+      }
+      throw new TypeError("Failed to fetch");
+    });
+
+    const pendingSession = client.getSession();
+    await expect(client.signOut()).rejects.toThrow("Failed to fetch");
+    // The session refresh lands after the failed sign-out and re-issues the token.
+    releaseSession(
+      jsonResponse({session: {id: "s1"}, user: {id: "u1"}}, {headers: {"set-auth-token": "t1"}})
+    );
+    await pendingSession;
+
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("clears the token after a successful getSession with no session", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client, sent} = driveCapturedClient(() => jsonResponse(null));
+
+    await client.getSession();
+
+    expect(sent[0].authorization).toBe("Bearer t1");
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("keeps a newer token stored while a getSession with no session was in flight", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client} = driveCapturedClient(() => {
+      // A sign-in that finished while this read was in flight.
+      bearerStorage.setItem("terreno_bearer_token", "t2");
+      return jsonResponse(null);
+    });
+
+    await client.getSession();
+
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t2");
+  });
+
+  it("keeps a sign-in's token when a signed-out getSession started before it", async () => {
+    const bearerStorage = createMemoryStorage();
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client, sent} = driveCapturedClient(() => {
+      bearerStorage.setItem("terreno_bearer_token", "t1");
+      return jsonResponse(null);
+    });
+
+    await client.getSession();
+
+    expect(sent[0].authorization).toBeNull();
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("leaves the token alone on other successful calls that issue none", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client, sent} = driveCapturedClient(() => jsonResponse({status: true}));
+
+    await client.updateUser({name: "New Name"});
+
+    expect(sent[0]).toEqual({
+      authorization: "Bearer t1",
+      credentials: "omit",
+      pathname: "/api/auth/update-user",
+    });
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("keeps the token when getSession errors, returns 5xx, or returns a session", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const responses: Array<() => Response> = [
+      (): Response => jsonResponse({message: "down"}, {status: 500}),
+      (): Response => {
+        throw new TypeError("Failed to fetch");
+      },
+      (): Response => jsonResponse({session: {id: "s1"}, user: {id: "u1"}}),
+    ];
+    const {client} = driveCapturedClient(() => {
+      const next = responses.shift();
+      if (!next) {
+        throw new Error("unexpected request");
+      }
+      return next();
+    });
+
+    const failed = await client.getSession();
+    await expect(client.getSession()).rejects.toThrow("Failed to fetch");
+    await client.getSession();
+
+    expect(failed.error?.status).toBe(500);
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("uses a custom bearerStorage instead of localStorage", async () => {
+    const localStorage = createMemoryStorage();
+    globalWithWindow.window = {localStorage};
+    const bearerStorage = createMemoryStorage();
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      storagePrefix: "custom",
+      webAuth: "bearer",
+    });
+
+    await bearerOptions().onSuccess({
+      data: {token: "t1"},
+      request: {headers: new Headers(), url: "http://localhost:3000/api/auth/sign-in/email"},
+      response: new Response(null, {headers: {"set-auth-token": "t1"}}),
+    });
+
+    expect(bearerStorage.values.get("custom_bearer_token")).toBe("t1");
+    expect(localStorage.values.size).toBe(0);
+    expect(getBetterAuthBearerToken({bearerStorage, storagePrefix: "custom"})).toBe("t1");
+    expect(getBetterAuthBearerToken({storagePrefix: "custom"})).toBeNull();
+  });
+
+  it("finds localStorage when the client was created before window existed", async () => {
+    delete globalWithWindow.window;
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const localStorage = createMemoryStorage();
+    globalWithWindow.window = {localStorage};
+
+    await bearerOptions().onSuccess({
+      data: {token: "t1"},
+      request: {headers: new Headers(), url: "http://localhost:3000/api/auth/sign-in/email"},
+      response: new Response(null, {headers: {"set-auth-token": "t1"}}),
+    });
+
+    expect(localStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("reads no token when there is no window or localStorage", () => {
+    delete globalWithWindow.window;
+    expect(getBetterAuthBearerToken()).toBeNull();
+    globalWithWindow.window = {
+      get localStorage(): never {
+        throw new Error("SecurityError: storage is blocked");
+      },
+    };
+    expect(getBetterAuthBearerToken()).toBeNull();
+  });
+});
+
+describe("createBetterAuthClient options outside web bearer mode", () => {
+  beforeEach(() => {
+    captured.auth = null;
+  });
+
+  it("passes only baseURL and plugins on web without webAuth or with cookie", () => {
+    createBetterAuthClient({baseURL: "http://localhost:3000", scheme: "terreno"});
+    expect(Object.keys(captured.auth ?? {}).sort()).toEqual(["baseURL", "plugins"]);
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      scheme: "terreno",
+      webAuth: "cookie",
+    });
+    expect(Object.keys(captured.auth ?? {}).sort()).toEqual(["baseURL", "plugins"]);
   });
 });
 

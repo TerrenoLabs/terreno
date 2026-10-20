@@ -7,6 +7,7 @@ import * as SecureStore from "expo-secure-store";
 import {DateTime} from "luxon";
 import {useSelector} from "react-redux";
 
+import {emitAuthChange} from "./authEvents";
 import {LOGOUT_ACTION_TYPE, type RootState} from "./constants";
 import {IsWeb} from "./platform";
 
@@ -240,6 +241,7 @@ export const generateAuthSlice = (api: Api<any, any, any, any, any>) => {
           }
         }
         listenerApi.dispatch(authSlice.actions.setUserId({userId: action.payload.userId ?? ""}));
+        emitAuthChange();
       }
     },
     type: "terreno-rtk/executeMutation/fulfilled",
@@ -275,6 +277,7 @@ export const generateAuthSlice = (api: Api<any, any, any, any, any>) => {
         }
       }
       console.debug("Cleared auth token from secure storage as part of logout.");
+      emitAuthChange();
     },
     type: LOGOUT_ACTION_TYPE,
   });

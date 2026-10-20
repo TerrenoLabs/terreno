@@ -88,41 +88,85 @@ const userId = selectCurrentUserId(state);
 For apps using Better Auth instead of JWT:
 
 ``````typescript
-import {createBetterAuthClient, generateBetterAuthSlice} from "@terreno/rtk";
 import {configureStore} from "@reduxjs/toolkit";
+import {createBetterAuthClient, generateBetterAuthSlice} from "@terreno/rtk";
 
-// Create Better Auth client
+// Create Better Auth client. `scheme` is the app's deep-link scheme (required).
 export const authClient = createBetterAuthClient({
   baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  scheme: "myapp",
 });
 
-// Generate session Redux slice
-const {sessionReducer, sessionMiddleware} = generateBetterAuthSlice(authClient);
+// Generate the session Redux slice
+const betterAuth = generateBetterAuthSlice({authClient});
 
 export const store = configureStore({
   reducer: {
-    session: sessionReducer,
+    betterAuth: betterAuth.reducer, // selectors read `state.betterAuth`
     // ... other reducers
   },
-  middleware: (getDefault) => getDefault().concat(sessionMiddleware),
+  middleware: (getDefault) => getDefault().concat(...betterAuth.middleware),
 });
+
+// Call after sign-in, sign-out, and at startup to copy the session into Redux
+await betterAuth.syncSession(store.dispatch);
 ``````
 
 **Key exports:**
-- `createBetterAuthClient` — Factory for Better Auth client with Expo support
-- `generateBetterAuthSlice` — Redux slice for session state management
-- `BetterAuthSessionData` — TypeScript types for session/user data
+- `createBetterAuthClient({baseURL, scheme, storagePrefix?})` — Factory for Better Auth client with Expo support
+- `generateBetterAuthSlice({authClient, syncInterval?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`
+- `selectBetterAuthIsAuthenticated`, `selectBetterAuthUserId`, `selectBetterAuthUser` — Selectors over `state.betterAuth`
+- `BetterAuthUser`, `BetterAuthState` — TypeScript types for session/user data
 
-**Session State:**
+**Session State (`state.betterAuth`):**
 ``````typescript
 {
-  session: BetterAuthSession | null;
+  isAuthenticated: boolean;
+  userId: string | null;
   user: BetterAuthUser | null;
   isLoading: boolean;
+  error: string | null;
+  lastSyncTimestamp: number | null;
 }
 ``````
 
 **Learn more:** [Configure Better Auth](../../how-to/configure-better-auth.md)
+
+### Token source
+
+rtk reads the request token from one registered **token source**, typed as syncdb's
+`AuthProvider` (`getToken`, `getUserId`, `onAuthChange`, optional `refresh`). A Better Auth
+app registers the same adapter it builds for syncdb, once at startup:
+
+``````typescript
+import {setTokenSource} from "@terreno/rtk";
+import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb";
+import {authClient} from "./betterAuth";
+
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient));
+setTokenSource(authProvider); // before the first RTK Query request
+``````
+
+**Exports:**
+- `setTokenSource(source | undefined)` — Registers the source. `undefined` restores the default.
+- `getTokenSource()` — The registered source, or `undefined` when none is registered.
+- `jwtTokenSource` — The legacy JWT source: `getToken` is `getAuthToken`, `refresh` runs
+  `refreshAuthToken` and resolves `true` on success, `getUserId` reads the stored JWT's `id`
+  (or `sub`) claim, and `onAuthChange` fires on JWT login, logout, and token refresh.
+- `isJwtTokenSource(source)` — `true` for `undefined` or `jwtTokenSource`.
+
+**Base query behavior (`emptySplitApi` / `staggeredBaseQuery`):**
+- **No source registered, or `jwtTokenSource`:** the JWT path below, unchanged. JWT apps need
+  no code change.
+- **Any other source:** sends `authorization: Bearer <token>` from `getToken()` on every
+  request, or no `authorization` header when the token is null. It never logs out because a
+  token is missing. On a 401 it calls `refresh()` once (shared by concurrent requests), re-reads
+  the token, and retries once; only a second 401 dispatches `auth/logout`. Login, signup, and
+  version-check endpoints skip the refresh and retry.
+
+The registry is module-global, like `baseUrl`: one app, one source. Apps that forked the base
+query to read the Better Auth session can point their SDK back at `emptySplitApi` once they
+register the source.
 
 ## WebSocket Integration
 
@@ -335,7 +379,7 @@ Base RTK Query API with authentication, retry logic, and automatic token refresh
 - **Query serialization:** Uses `qs.stringify()` for complex queries (`$in`, `$lt`, `$gte`)
 
 **Automatic Headers:**
-- `authorization: Bearer <token>`
+- `authorization: Bearer <token>` (from the registered [token source](#token-source); the JWT in storage by default)
 - `App-Version` (from Expo config)
 - `App-Platform` ("web" or "mobile")
 

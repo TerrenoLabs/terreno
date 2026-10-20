@@ -66,6 +66,76 @@ describe("betterAuthAdapter", () => {
     });
   });
 
+  describe("getBearerToken option", () => {
+    const makeCountingClient = (): {client: BetterAuthClientLike; calls: () => number} => {
+      let count = 0;
+      return {
+        calls: (): number => count,
+        client: makeClient(async () => {
+          count += 1;
+          return {data: {session: {token: "session-tok"}, user: {id: "u1"}}};
+        }),
+      };
+    };
+
+    it("returns the bearer token without calling getSession", async () => {
+      const {client, calls} = makeCountingClient();
+      const adapter = betterAuthAdapter(client, {getBearerToken: () => "t1"});
+      expect(await adapter.getToken()).toBe("t1");
+      expect(calls()).toBe(0);
+    });
+
+    it("reads the getter on every call, so a rotated token is picked up", async () => {
+      const {client, calls} = makeCountingClient();
+      let bearer = "t1";
+      const adapter = betterAuthAdapter(client, {getBearerToken: () => bearer});
+      expect(await adapter.getToken()).toBe("t1");
+      bearer = "t2";
+      expect(await adapter.getToken()).toBe("t2");
+      expect(calls()).toBe(0);
+    });
+
+    it("reads getSession when the getter returns null", async () => {
+      const {client, calls} = makeCountingClient();
+      const adapter = betterAuthAdapter(client, {getBearerToken: () => null});
+      expect(await adapter.getToken()).toBe("session-tok");
+      expect(calls()).toBe(1);
+    });
+
+    it("reads getSession when the getter returns an empty string", async () => {
+      const {client, calls} = makeCountingClient();
+      const adapter = betterAuthAdapter(client, {getBearerToken: () => ""});
+      expect(await adapter.getToken()).toBe("session-tok");
+      expect(calls()).toBe(1);
+    });
+
+    it("reads getSession when the getter throws", async () => {
+      const {client, calls} = makeCountingClient();
+      const adapter = betterAuthAdapter(client, {
+        getBearerToken: () => {
+          throw new Error("storage blocked");
+        },
+      });
+      expect(await adapter.getToken()).toBe("session-tok");
+      expect(calls()).toBe(1);
+    });
+
+    it("reads getSession without the option", async () => {
+      const {client, calls} = makeCountingClient();
+      const adapter = betterAuthAdapter(client);
+      expect(await adapter.getToken()).toBe("session-tok");
+      expect(calls()).toBe(1);
+    });
+
+    it("leaves getUserId and refresh reading getSession", async () => {
+      const {client, calls} = makeCountingClient();
+      const adapter = betterAuthAdapter(client, {getBearerToken: () => "t1"});
+      expect(await adapter.getUserId()).toBe("u1");
+      expect(await adapter.refresh?.()).toBe(true);
+      expect(calls()).toBe(2);
+    });
+  });
+
   describe("refresh (A4)", () => {
     it("returns true when a re-fetched session carries a token", async () => {
       const adapter = betterAuthAdapter(

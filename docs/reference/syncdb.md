@@ -168,6 +168,32 @@ bridge exposes the client's `$store.atoms.session` atom and degrades to the poll
 that atom is absent. Clients that already expose `getSession` plus a subscribable `useSession` can
 be passed to `betterAuthAdapter` directly.
 
+`betterAuthAdapter(client, options)` options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `getBearerToken` | `() => string \| null` | — | Reads a locally stored session token. When it returns a token, `getToken` uses it and skips `getSession()`. A null or empty result, or a throw, falls back to `getSession()`. `getUserId`, `onAuthChange` and `refresh` always read the session. |
+| `pollIntervalMs` | `number` | `5000` | Polling cadence when the client has no subscribable session |
+| `setIntervalFn` / `clearIntervalFn` | test hooks | global timers | Inject timers for deterministic tests |
+
+For a web app in Better Auth bearer mode (`createBetterAuthClient({webAuth: "bearer"})`), pass
+rtk's `getBetterAuthBearerToken` so every sync request reads the stored token without a
+`get-session` round trip. syncdb does not import rtk; the app wires the two together:
+
+```typescript
+import {getBetterAuthBearerToken} from "@terreno/rtk";
+import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb";
+
+const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient), {
+  getBearerToken: () => getBetterAuthBearerToken({storagePrefix: "myapp"}),
+});
+```
+
+Pass the same `storagePrefix` and `bearerStorage` you gave `createBetterAuthClient`. The option
+is explicit: the adapter never detects bearer mode from the client.
+
+`createSyncDb(options)` options:
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `name` | `string` | — (required) | Persisted database name |

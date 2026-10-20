@@ -11,6 +11,14 @@ export interface BetterAuthAdapterOptions {
   setIntervalFn?: (handler: () => void, ms: number) => unknown;
   /** Interval canceller matching `setIntervalFn` (default global clearInterval). */
   clearIntervalFn?: (handle: unknown) => void;
+  /**
+   * Synchronous bearer-token reader, for clients that keep the session token locally
+   * (for example rtk's `getBetterAuthBearerToken` in web bearer mode). When it returns a
+   * token, `getToken` uses it without calling `getSession()`. A null or empty result, or a
+   * throw, falls back to reading `getSession()`. `getUserId`, `onAuthChange` and `refresh`
+   * always read the session.
+   */
+  getBearerToken?: () => string | null;
 }
 
 /**
@@ -30,7 +38,8 @@ const unwrapSession = (result: unknown): BetterAuthSessionDataLike | null => {
 
 /**
  * Adapt a Better Auth client to syncdb's {@link AuthProvider} contract.
- * Tokens/user ids are read per call via `getSession()` (never cached, so
+ * Tokens/user ids are read per call via `getSession()` (unless
+ * `options.getBearerToken` supplies the token; never cached, so
  * Better Auth session refresh is picked up transparently); auth changes are
  * delivered through the client's nanostore session atom when available, with
  * an injectable polling fallback otherwise. All read errors degrade to null —
@@ -80,7 +89,26 @@ export const betterAuthAdapter = (
     return Boolean(session?.session?.token);
   };
 
+  /**
+   * Read the caller's bearer token, treating a throw (for example blocked storage) like a
+   * missing token so the session read still gets a chance.
+   */
+  const readBearerToken = (): string | null => {
+    if (!options.getBearerToken) {
+      return null;
+    }
+    try {
+      return options.getBearerToken() || null;
+    } catch {
+      return null;
+    }
+  };
+
   const getToken = async (): Promise<string | null> => {
+    const bearerToken = readBearerToken();
+    if (bearerToken) {
+      return bearerToken;
+    }
     const session = await readSession();
     return session?.session?.token ?? null;
   };

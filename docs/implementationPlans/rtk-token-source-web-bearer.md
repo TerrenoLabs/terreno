@@ -94,7 +94,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
   - Behavior: with `TerrenoApp` and `BetterAuthApp`, both with the default `corsOrigin` (`"*"`) and with an explicit one, a cross-origin `POST /api/auth/sign-in/email` sent without credentials returns `set-auth-token` and lists it in `access-control-expose-headers`. A later request carrying only `Authorization: Bearer <that token>` and no cookie reaches `GET /auth/me` as the user, an authenticated `modelRouter` list route returns 200, and `POST /mcp` `initialize` succeeds. If any of these fails, the task fixes the server (for example `exposedHeaders` in `api/src/terrenoApp.ts`) and adds that file.
   - Acceptance: the cases pass. Verification: `cd api && bun test src/betterAuthApp.test.ts`.
   - Skills: terreno-backend-api.
-- [ ] **T4** — Take a getBearerToken option in betterAuthAdapter
+- [x] **T4** — Take a getBearerToken option in betterAuthAdapter
   - Depends on: none
   - Files: syncdb/src/auth/betterAuthAdapter.ts, syncdb/src/auth/betterAuthAdapter.test.ts, docs/reference/syncdb.md, changelog/unreleased/syncdb-adapter-bearer-token.md
   - Behavior: `BetterAuthAdapterOptions` gains `getBearerToken?: () => string | null`. When it is passed and returns a token, `getToken` returns that token without calling `getSession()`. Otherwise `getToken` behaves as today. `getUserId`, `onAuthChange` and `refresh` are unchanged. The option is explicit, never detected on the client, so the bridged client from `bridgeBetterAuthReactClient` needs no change.

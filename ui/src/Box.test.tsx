@@ -626,6 +626,53 @@ describe("Box", () => {
       expect(onClick).not.toHaveBeenCalled();
     });
 
+    it("marks a selected clickable row with aria-current", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Opens the message"
+          accessibilityLabel="Quarterly report"
+          accessibilityState={{selected: true}}
+          onClick={() => {}}
+          testID="row"
+        />
+      );
+      const pressable = getByTestId("row-clickable");
+      expect(pressable.props.accessibilityState).toEqual({selected: true});
+      expect(pressable.props["aria-current"]).toBe("true");
+      expect(pressable.props["aria-selected"]).toBeUndefined();
+    });
+
+    it("drops aria-current from an unselected row", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Opens the message"
+          accessibilityLabel="Quarterly report"
+          accessibilityState={{selected: false}}
+          onClick={() => {}}
+          testID="row"
+        />
+      );
+      const pressable = getByTestId("row-clickable");
+      expect(pressable.props.accessibilityState).toEqual({selected: false});
+      expect(pressable.props["aria-current"]).toBeUndefined();
+    });
+
+    it("sends aria-selected for a selectable role", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Shows the inbox"
+          accessibilityLabel="Inbox"
+          accessibilityRole="tab"
+          accessibilityState={{selected: false}}
+          onClick={() => {}}
+          testID="tab"
+        />
+      );
+      const pressable = getByTestId("tab-clickable");
+      expect(pressable.props["aria-selected"]).toBe(false);
+      expect(pressable.props["aria-current"]).toBeUndefined();
+    });
+
     it("forwards checked to a Box without onClick", () => {
       const {getByTestId} = renderWithTheme(
         <Box accessibilityState={{checked: false}} testID="plain" />

@@ -126,9 +126,10 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - SplitPage keeps working and is not marked `@deprecated`.
   - Verification: `cd ui && bun test --only-failures src/ListDetailLayout.test.tsx` passes, using the mocked `useWindowDimensions` and `expo-router` from `ui/src/bunSetup.ts` and firing `layout` events. `bun run compile` and `bun run lint` pass.
 
-- [ ] **T2** — Keep the selected item in the route with useListDetail
+- [x] **T2** — Keep the selected item in the route with useListDetail
   - Depends on: T1
-  - Files: ui/src/ListDetailLayout.tsx, ui/src/ListDetailLayout.test.tsx, ui/src/Common.ts, docs/reference/ui.md, docs/how-to/build-list-detail-screens.md, docs/how-to/README.md
+  - Files: ui/src/ListDetailLayout.tsx, ui/src/ListDetailLayout.test.tsx, ui/src/Common.ts, ui/src/Box.tsx, ui/src/Box.test.tsx, docs/reference/ui.md, docs/how-to/build-list-detail-screens.md, docs/how-to/README.md
+  - Added in Pick: `Box` `accessibilityState.selected`, sent as `aria-current="true"` on a clickable row (ARIA forbids `aria-selected` on a button) and as `aria-selected` on selectable roles (`tab`, `option`, `row`, ...), so list rows can report selection; T4/T5 rows rely on it.
   - Criteria:
     - With `useSegments` mocked to end in `[id]` and `useGlobalSearchParams` returning `{id: "3"}`, `selectedId` is `"3"`.
     - With segments ending in `index`, `selectedId` is `undefined` even if the params contain `id`.
@@ -137,7 +138,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - When split with nothing open, `select(id)` pushes.
     - When split with a detail open, `select(id)` calls `router.replace(detailHref(id))`, so the stack is never deeper than index + one detail (D6).
     - When split, `select(selectedId)` is a no-op.
-    - `clear()` calls `router.back()` when `router.canGoBack()`, otherwise `router.replace(indexHref)`.
+    - `clear()` calls `router.dismissTo(indexHref)` when an item is open, so it never leaves the group, and does nothing when none is open. (Changed in Pick: `router.back()` asks the root navigator and can leave the group.)
     - When split, Stack screens get `headerBackVisible: false` and `animation: "none"`. The caller's `screenOptions` win where they set the same key.
   - Docs:
     - The `ui.md` section documents `useListDetail` and the history rule.
@@ -191,15 +192,15 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - `/todo-browser` lists the user's todos with syncdb `useEntityIds`, and shows one todo's title, status and created date with `useTodo`.
     - The detail has a complete toggle.
     - It is linked from the todos screen (`todos-browse-button`) and registered in the root Stack as `todo-browser`. The root Stack already sets `headerShown: false`, and the group's own Stack supplies the header.
-    - testIDs: `todo-browser-item-{id}` (with `aria-selected` when selected), `todo-browser-detail-{id}`, `todo-browser-detail-toggle`.
+    - testIDs: `todo-browser-item-{id}` (with `aria-current="true"` when selected), `todo-browser-detail-{id}`, `todo-browser-detail-toggle`.
   - Criteria (Playwright, `loginAs` in `beforeEach`, seeded todos):
     - Phone (390×844): tapping an item shows `todo-browser-detail-{id}` with no `list-detail-list-pane`. Browser back returns to the list.
     - Tablet (1024×768):
       - `list-detail-list-pane` and `list-detail-empty` are visible.
-      - Tapping item A shows its detail, the list stays visible, the URL is `/todo-browser/{A}`, and item A has `aria-selected="true"`.
-      - Tapping item B replaces the detail and moves `aria-selected` to B.
+      - Tapping item A shows its detail, the list stays visible, the URL is `/todo-browser/{A}`, and item A has `aria-current="true"`.
+      - Tapping item B replaces the detail and moves `aria-current` to B.
       - Browser back then returns to `/todo-browser`.
-    - Deep link: `/todo-browser/{id}` at 1024×768 shows the list with that row `aria-selected="true"`, plus the detail.
+    - Deep link: `/todo-browser/{id}` at 1024×768 shows the list with that row `aria-current="true"`, plus the detail.
     - Resize: with a detail open at 1024×768, `setViewportSize(390×844)` keeps `todo-browser-detail-{id}` visible.
     - Keyboard: at 1024×768, Tab from the last list row moves focus into `list-detail-detail-pane`.
     - The Maestro web flow `.maestro/flows/todo-browser.yaml` passes under `bun run maestro:test`:

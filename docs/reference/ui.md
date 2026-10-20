@@ -918,8 +918,25 @@ has no `Stack` header, so it applies safe-area insets on its top, left, and bott
 | `children` | `Stack.Screen` elements | none | Passed through to the `Stack` |
 
 `ListDetailIndex` is the group's `index.tsx` screen. It renders `list` when stacked, and
-`emptyDetail` when the list already sits in the left pane. `useListDetail()` returns `isSplit` and
-throws outside a `ListDetailLayout`.
+`emptyDetail` when the list already sits in the left pane.
+
+`useListDetail()` returns `{isSplit, selectedId, select, clear}` and throws outside a
+`ListDetailLayout`.
+
+- `selectedId` is the `paramName` param of the route directly below `indexHref` whose segment is
+  `detailRoute`. It is `undefined` on the index route, and an `id` from a parent dynamic segment
+  never counts.
+- `select(id)` pushes `detailHref(id)`. When split with another item open, it replaces the open
+  detail instead, so the stack is never deeper than the list plus one detail and back always
+  returns to the list. When split, selecting the open item again does nothing.
+- `clear()` calls `router.dismissTo(indexHref)` when an item is open, so it pops back to the
+  index inside this `Stack` and never leaves the group. It does nothing when no item is open.
+
+When split, the `Stack` screens get `headerBackVisible: false` and `animation: "none"`. Your
+`screenOptions` win where they set the same key. Mark the open row with
+`accessibilityState={{selected: true}}` so screen readers announce it (a clickable `Box` row sends
+it as `aria-current="true"` on web). See
+[Build a list/detail screen](../how-to/build-list-detail-screens.md).
 
 | Element | testID |
 | --- | --- |
@@ -1365,11 +1382,16 @@ Responsive `Box` direction props update automatically when the window resizes or
 All responsive Boxes share one dimension listener; non-responsive Boxes do not subscribe.
 When multiple direction props match, the largest active breakpoint wins (`xl` over `lg` over `md` over `sm`).
 
-`Box` takes an optional `accessibilityState` of `{checked?, disabled?}`. It is sent to screen
-readers as `accessibilityState` and as `aria-checked` / `aria-disabled`, on both a plain and a
-clickable Box. On a clickable Box, `disabled: true` also stops presses while the role and
+`Box` takes an optional `accessibilityState` of `{checked?, disabled?, selected?}`. It is sent to
+screen readers as `accessibilityState` and as `aria-checked` / `aria-disabled`, on both a plain and
+a clickable Box. On a clickable Box, `disabled: true` also stops presses while the role and
 label stay. A clickable Box with `accessibilityRole` `checkbox` or `switch` also toggles on
 Space on web, as ARIA expects.
+
+`selected` is sent as `aria-selected` when `accessibilityRole` is a selectable role (`tab`,
+`option`, `row`, `gridcell`, `treeitem`, `columnheader`, `rowheader`). On any other Box, such as a
+clickable list row, ARIA does not allow `aria-selected`, so `selected: true` is sent as
+`aria-current="true"` instead. iOS and Android read `accessibilityState.selected` either way.
 
 ```tsx
 <Box

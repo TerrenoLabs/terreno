@@ -684,16 +684,19 @@ export interface AccessibilityProps {
   accessibilityRole?: string;
 }
 
-/** Checked and disabled state a `Box` reports to screen readers. */
+/** Checked, disabled, and selected state a `Box` reports to screen readers. */
 export interface BoxAccessibilityState {
   checked?: boolean;
   disabled?: boolean;
+  selected?: boolean;
 }
 
 export interface BoxPropsBase extends WithTestID {
   /**
-   * Checked and disabled state for screen readers, sent as `accessibilityState` and as
-   * `aria-checked` / `aria-disabled`. On a clickable Box, `disabled: true` also stops presses.
+   * Checked, disabled, and selected state for screen readers, sent as `accessibilityState` and as
+   * `aria-checked` / `aria-disabled`. `selected` is sent as `aria-selected` on a selectable
+   * `accessibilityRole` (`tab`, `option`, `row`, ...) and as `aria-current="true"` on any other Box,
+   * such as a clickable list row. On a clickable Box, `disabled: true` also stops presses.
    */
   accessibilityState?: BoxAccessibilityState;
   /**
@@ -1375,6 +1378,19 @@ export interface ListDetailState {
    * True when the list and detail panes are shown side by side.
    */
   isSplit: boolean;
+  /**
+   * The id of the open item, read from the detail route. Undefined on the index route.
+   */
+  selectedId?: string;
+  /**
+   * Open an item. Pushes the detail route, or replaces the open detail when split, so back
+   * always returns to the list.
+   */
+  select: (id: string) => void;
+  /**
+   * Close the open item and return to the group's index route.
+   */
+  clear: () => void;
 }
 
 export type PermissionKind =

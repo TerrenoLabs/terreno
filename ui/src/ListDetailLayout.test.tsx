@@ -1,10 +1,32 @@
-import {afterAll, afterEach, beforeEach, describe, expect, it, type Mock} from "bun:test";
+import {afterAll, afterEach, beforeEach, describe, expect, it, type Mock, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
+import * as expoRouterModule from "expo-router";
 import {useEffect} from "react";
 import {Text, useWindowDimensions} from "react-native";
 
-import {ListDetailIndex, ListDetailLayout, useListDetail} from "./ListDetailLayout";
+import type {ListDetailState} from "./Common";
 import {renderWithTheme} from "./test-utils";
+
+// Other test files replace the global expo-router mock without every hook this layout reads,
+// so this file installs its own route and router doubles and restores the original afterwards.
+const originalExpoRouter = {...expoRouterModule};
+const mockedPathname = mock((): string => "/");
+const mockedSegments = mock((): string[] => []);
+const mockedSearchParams = mock((): Record<string, string | string[] | undefined> => ({}));
+const mockedRouter = {
+  dismissTo: mock((_href: string): void => {}),
+  push: mock((_href: string): void => {}),
+  replace: mock((_href: string): void => {}),
+};
+mock.module("expo-router", () => ({
+  ...originalExpoRouter,
+  router: {...originalExpoRouter.router, ...mockedRouter},
+  useGlobalSearchParams: mockedSearchParams,
+  usePathname: mockedPathname,
+  useSegments: mockedSegments,
+}));
+
+import {ListDetailIndex, ListDetailLayout, useListDetail} from "./ListDetailLayout";
 
 const mockedWindowDimensions = useWindowDimensions as unknown as Mock<typeof useWindowDimensions>;
 
@@ -21,6 +43,7 @@ afterEach(() => {
 
 afterAll(() => {
   mockedWindowDimensions.mockImplementation(() => DEFAULT_WINDOW);
+  mock.module("expo-router", () => originalExpoRouter);
 });
 
 const fireLayout = (element: Parameters<typeof fireEvent>[0], width: number): void => {
@@ -29,9 +52,19 @@ const fireLayout = (element: Parameters<typeof fireEvent>[0], width: number): vo
   });
 };
 
+let latestState: ListDetailState | undefined;
+
 const SplitProbe = (): React.ReactElement => {
-  const {isSplit} = useListDetail();
-  return <Text testID="split-probe">{isSplit ? "split" : "stacked"}</Text>;
+  const state = useListDetail();
+  latestState = state;
+  return <Text testID="split-probe">{state.isSplit ? "split" : "stacked"}</Text>;
+};
+
+const currentState = (): ListDetailState => {
+  if (!latestState) {
+    throw new Error("SplitProbe has not rendered");
+  }
+  return latestState;
 };
 
 let stackChildMounts = 0;
@@ -220,5 +253,258 @@ describe("useListDetail", () => {
     } finally {
       console.error = originalError;
     }
+  });
+});
+
+// Puts the router on a route: a pathname, its segments, and its params.
+const setRoute = (
+  pathname: string,
+  segments: string[],
+  params: Record<string, string | string[] | undefined> = {}
+): void => {
+  mockedPathname.mockImplementation(() => pathname);
+  mockedSegments.mockImplementation(() => segments);
+  mockedSearchParams.mockImplementation(() => params);
+};
+
+describe("useListDetail selection", () => {
+  beforeEach(() => {
+    latestState = undefined;
+    setWindowWidth(375);
+    setRoute("/mail", ["mail"]);
+    mockedRouter.dismissTo.mockClear();
+    mockedRouter.push.mockClear();
+    mockedRouter.replace.mockClear();
+  });
+
+  afterAll(() => {
+    // Restore the bunSetup.ts defaults for later test files.
+    setRoute("/", []);
+  });
+
+  it("reads the selected id from the open detail route", () => {
+    setRoute("/mail/3", ["mail", "[id]"], {id: "3"});
+    renderLayout();
+
+    expect(currentState().selectedId).toBe("3");
+  });
+
+  it("has no selection on the index route even when an id param exists", () => {
+    setRoute("/mail", ["mail"], {id: "3"});
+    renderLayout();
+
+    expect(currentState().selectedId).toBeUndefined();
+  });
+
+  it("has no selection on a static sibling route at the detail's depth", () => {
+    setRoute("/mail/compose", ["mail", "compose"], {id: "3"});
+    renderLayout();
+
+    expect(currentState().selectedId).toBeUndefined();
+  });
+
+  it("has no selection on a static sibling whose name matches its id param", () => {
+    setRoute("/mail/compose", ["mail", "compose"], {id: "compose"});
+    renderLayout();
+
+    expect(currentState().selectedId).toBeUndefined();
+  });
+
+  it("has no selection when the id param is empty", () => {
+    setRoute("/mail/", ["mail", "[id]"], {id: ""});
+    renderLayout();
+
+    expect(currentState().selectedId).toBeUndefined();
+  });
+
+  it("ignores an id from a parent dynamic segment", () => {
+    setRoute("/orgs/9/mail", ["orgs", "[id]", "mail"], {id: "9"});
+    renderLayout({indexHref: "/orgs/9/mail"});
+
+    expect(currentState().selectedId).toBeUndefined();
+  });
+
+  it("ignores a detail route outside the group", () => {
+    setRoute("/news/3", ["news", "[id]"], {id: "3"});
+    renderLayout();
+
+    expect(currentState().selectedId).toBeUndefined();
+  });
+
+  it("reads the selection inside a route group", () => {
+    setRoute("/mail/3", ["(tabs)", "mail", "[id]"], {id: "3"});
+    renderLayout();
+
+    expect(currentState().selectedId).toBe("3");
+  });
+
+  it("keeps an id that contains a slash", () => {
+    setRoute("/mail/a/b", ["mail", "[id]"], {id: "a/b"});
+    renderLayout();
+
+    expect(currentState().selectedId).toBe("a/b");
+  });
+
+  it("matches an id that the pathname encodes", () => {
+    setRoute("/mail/a%20b", ["mail", "[id]"], {id: "a b"});
+    renderLayout();
+
+    expect(currentState().selectedId).toBe("a b");
+  });
+
+  it("ignores routes deeper than one segment below the index", () => {
+    setRoute("/mail/3/attachments", ["mail", "[id]"], {id: "3"});
+    renderLayout();
+
+    expect(currentState().selectedId).toBeUndefined();
+  });
+
+  it("uses a custom detailRoute and paramName", () => {
+    setRoute("/mail/7", ["mail", "[messageId]"], {id: "1", messageId: "7"});
+    renderLayout({detailRoute: "[messageId]", paramName: "messageId"});
+
+    expect(currentState().selectedId).toBe("7");
+  });
+
+  it("takes the first value of an array param", () => {
+    setRoute("/mail/5", ["mail", "[id]"], {id: ["5", "6"]});
+    renderLayout();
+
+    expect(currentState().selectedId).toBe("5");
+  });
+
+  it("tolerates a trailing slash on indexHref", () => {
+    setRoute("/mail/3", ["mail", "[id]"], {id: "3"});
+    renderLayout({indexHref: "/mail/"});
+
+    expect(currentState().selectedId).toBe("3");
+  });
+
+  it("pushes the detail route when stacked", () => {
+    renderLayout();
+
+    act(() => {
+      currentState().select("4");
+    });
+
+    expect(mockedRouter.push).toHaveBeenCalledTimes(1);
+    expect(mockedRouter.push).toHaveBeenCalledWith("/mail/4");
+    expect(mockedRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it("pushes the next detail when stacked with an item open", () => {
+    setRoute("/mail/3", ["mail", "[id]"], {id: "3"});
+    renderLayout();
+
+    act(() => {
+      currentState().select("4");
+    });
+
+    expect(mockedRouter.push).toHaveBeenCalledTimes(1);
+    expect(mockedRouter.push).toHaveBeenCalledWith("/mail/4");
+    expect(mockedRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it("pushes the detail route when split with nothing open", () => {
+    setWindowWidth(1024);
+    renderLayout();
+
+    act(() => {
+      currentState().select("4");
+    });
+
+    expect(mockedRouter.push).toHaveBeenCalledWith("/mail/4");
+    expect(mockedRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it("replaces the open detail when split, keeping one detail on the stack", () => {
+    setWindowWidth(1024);
+    setRoute("/mail/3", ["mail", "[id]"], {id: "3"});
+    renderLayout();
+
+    act(() => {
+      currentState().select("4");
+    });
+
+    expect(mockedRouter.replace).toHaveBeenCalledTimes(1);
+    expect(mockedRouter.replace).toHaveBeenCalledWith("/mail/4");
+    expect(mockedRouter.push).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when split and the open item is selected again", () => {
+    setWindowWidth(1024);
+    setRoute("/mail/3", ["mail", "[id]"], {id: "3"});
+    renderLayout();
+
+    act(() => {
+      currentState().select("3");
+    });
+
+    expect(mockedRouter.replace).not.toHaveBeenCalled();
+    expect(mockedRouter.push).not.toHaveBeenCalled();
+  });
+
+  it("dismisses to the index to clear the open item", () => {
+    setRoute("/mail/3", ["mail", "[id]"], {id: "3"});
+    renderLayout();
+
+    act(() => {
+      currentState().clear();
+    });
+
+    expect(mockedRouter.dismissTo).toHaveBeenCalledTimes(1);
+    expect(mockedRouter.dismissTo).toHaveBeenCalledWith("/mail");
+  });
+
+  it("does nothing on clear when no item is open", () => {
+    renderLayout();
+
+    act(() => {
+      currentState().clear();
+    });
+
+    expect(mockedRouter.dismissTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("ListDetailLayout split screen options", () => {
+  const stackOptions = (rendered: ReturnType<typeof renderLayout>): unknown => {
+    return rendered.UNSAFE_getByType("Stack" as unknown as React.ComponentType).props.screenOptions;
+  };
+
+  beforeEach(() => {
+    setWindowWidth(375);
+  });
+
+  it("hides the back button and the push animation when split", () => {
+    setWindowWidth(1024);
+
+    expect(stackOptions(renderLayout())).toEqual({animation: "none", headerBackVisible: false});
+  });
+
+  it("leaves screen options untouched when stacked", () => {
+    expect(stackOptions(renderLayout())).toBeUndefined();
+    expect(stackOptions(renderLayout({screenOptions: {title: "Inbox"}}))).toEqual({
+      title: "Inbox",
+    });
+  });
+
+  it("lets the caller's screen options win when split", () => {
+    setWindowWidth(1024);
+    const rendered = renderLayout({screenOptions: {animation: "fade", title: "Inbox"}});
+
+    expect(stackOptions(rendered)).toEqual({
+      animation: "fade",
+      headerBackVisible: false,
+      title: "Inbox",
+    });
+  });
+
+  it("merges into function screen options when split", () => {
+    setWindowWidth(1024);
+    const rendered = renderLayout({screenOptions: () => ({animation: "fade", title: "Inbox"})});
+    const options = stackOptions(rendered) as (props: unknown) => Record<string, unknown>;
+
+    expect(options({})).toEqual({animation: "fade", headerBackVisible: false, title: "Inbox"});
   });
 });

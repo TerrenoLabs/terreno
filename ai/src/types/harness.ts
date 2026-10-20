@@ -8,9 +8,12 @@ import type {ObsPromptRef} from "./observability";
 
 /**
  * A prompt version a task used, recorded on its `ObsTrace.prompts`. A `PromptVersionRef`
- * from `promptRegistry.get` fits as-is; its `body` is ignored.
+ * from `promptRegistry.get` fits as-is; its `body` is ignored and its `includes` (shared
+ * prompts it referenced) are recorded right after it.
  */
-export type HarnessPromptRef = ObsPromptRef;
+export interface HarnessPromptRef extends ObsPromptRef {
+  includes?: ObsPromptRef[];
+}
 
 /** A registry prompt passed as instructions: its `body` is used and its version recorded. */
 export interface HarnessPromptInstructions extends HarnessPromptRef {

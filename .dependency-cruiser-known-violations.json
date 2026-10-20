@@ -521,15 +521,6 @@
   },
   {
     "type": "module",
-    "from": "ai/src/langfuseTypes.ts",
-    "to": "ai/src/langfuseTypes.ts",
-    "rule": {
-      "severity": "warn",
-      "name": "no-orphans"
-    }
-  },
-  {
-    "type": "module",
     "from": "ai/src/service/webSearchTool.ts",
     "to": "ai/src/service/webSearchTool.ts",
     "rule": {

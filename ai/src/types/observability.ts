@@ -16,6 +16,8 @@ export interface ObsPromptUsage {
 }
 
 export interface ObsPromptRef {
+  /** Set when this version was pulled in by another prompt's reference, to that prompt's name. */
+  includedBy?: string;
   label?: string;
   name: string;
   version: number;

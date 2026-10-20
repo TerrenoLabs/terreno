@@ -25,6 +25,11 @@ const obsTraceSchema = new mongoose.Schema<ObsTraceDocument, ObsTraceModel>(
         // No subdocument _id, so `$addToSet` dedupes repeated refs from replayed phases.
         new mongoose.Schema(
           {
+            includedBy: {
+              description:
+                "Prompt whose reference pulled this version in; unset for a top-level prompt",
+              type: String,
+            },
             label: {description: "Label resolved at call time", type: String},
             name: {description: "Prompt name", required: true, type: String},
             version: {description: "Prompt version number", required: true, type: Number},

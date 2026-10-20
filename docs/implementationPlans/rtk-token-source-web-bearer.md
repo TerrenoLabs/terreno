@@ -109,7 +109,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
     - When `refresh` resolves true but the server keeps rejecting the token, the hook refreshes once and stops. Verification: same file.
     - Passing `getAuthToken` keeps today's behavior, and existing socket tests pass. Verification: `cd rtk && bun test ./src/isolated/socket.isolated.ts && bun test ./src/isolated/socket.web.isolated.ts && bun test src/socket.test.ts`.
   - Docs: JSDoc on the new options (feeds the generated reference); prose in T9.
-- [ ] **T6** — Read the token source in useTerrenoChat
+- [x] **T6** — Read the token source in useTerrenoChat
   - Depends on: T1
   - Files: rtk/src/useTerrenoChat.ts, rtk/src/isolated/useTerrenoChat.isolated.ts, changelog/unreleased/rtk-chat-token-source.md
   - Behavior: the transport `headers` callback reads the token source (`tokenSource` option, else the registered one) per request, and omits `Authorization` when there is no token.

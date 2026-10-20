@@ -88,7 +88,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
     - On native, or without `webAuth`, the captured options equal today's. Verification: existing `createBetterAuthClient` tests pass unchanged.
   - Docs: `configure-better-auth.md` gets "Frontend and API on different sites": when to use bearer, that it sends no cookies so the server's `corsOrigin` default works and the bearer plugin exposes `set-auth-token` itself (both proved by T3), the XSS and shared-device trade-off, and `sessionStorage` for shared devices. Its slice snippet and the missing required `scheme` contradict the code; fix them in this section's neighbourhood. `authentication.md:39` and `:311` describe bearer on web as the cross-site option. `migrate-rtk-to-syncdb.md:336` stops saying web tokens live in AsyncStorage.
   - Skills: update-docs.
-- [ ] **T3** — Accept a cookie-less bearer from another origin on the server
+- [x] **T3** — Accept a cookie-less bearer from another origin on the server
   - Depends on: none
   - Files: api/src/betterAuthApp.test.ts
   - Behavior: with `TerrenoApp` and `BetterAuthApp`, both with the default `corsOrigin` (`"*"`) and with an explicit one, a cross-origin `POST /api/auth/sign-in/email` sent without credentials returns `set-auth-token` and lists it in `access-control-expose-headers`. A later request carrying only `Authorization: Bearer <that token>` and no cookie reaches `GET /auth/me` as the user, an authenticated `modelRouter` list route returns 200, and `POST /mcp` `initialize` succeeds. If any of these fails, the task fixes the server (for example `exposedHeaders` in `api/src/terrenoApp.ts`) and adds that file.

@@ -104,7 +104,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
 
 ## Tasks
 
-- [ ] **T1** — Render the list pane beside a never-remounted Stack on wide layouts
+- [x] **T1** — Render the list pane beside a never-remounted Stack on wide layouts
   - Depends on: none
   - Files: ui/src/ListDetailLayout.tsx, ui/src/ListDetailLayout.test.tsx, ui/src/Common.ts, ui/src/index.tsx, ui/src/SplitPage.tsx, ui/src/SplitPage.native.tsx, scripts/check-demo-coverage.ts, docs/reference/ui.md
   - Delivers: `ListDetailLayout`, `ListDetailIndex`, `useListDetail().isSplit`, and the props in the Contract table except selection. `ListDetailLayout` and `ListDetailIndex` get temporary `DEMO_COVERAGE_ALLOWLIST` entries ("story lands in T4") so `check:demo-coverage` stays green.

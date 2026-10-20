@@ -1,7 +1,8 @@
 import type {Block, BlockAction, BlocksDocument, InlineDataset} from "@terreno/blocks";
+import type {Href, Stack} from "expo-router";
 import type {CountryCode} from "libphonenumber-js";
 import type React from "react";
-import type {FC, ReactElement, ReactNode} from "react";
+import type {ComponentProps, FC, ReactElement, ReactNode} from "react";
 import type {
   ImageStyle,
   ListRenderItemInfo,
@@ -1314,6 +1315,66 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
    * still scrolls. Uses the same rounding scale as `Box` (`md` is 4px). Defaults to `md`.
    */
   childColumnRounding?: Rounding;
+}
+
+/**
+ * Props for ListDetailLayout, the route-driven list/detail layout used as a route group's
+ * `_layout.tsx`. The group's `index.tsx` renders `ListDetailIndex`, and a dynamic child route
+ * (default `[id].tsx`) renders the detail.
+ */
+export interface ListDetailLayoutProps {
+  /**
+   * The list. Rendered in the left pane when split, and by `ListDetailIndex` when not split.
+   */
+  list: ReactElement;
+  /**
+   * Where selecting an item navigates, e.g. `(id) => \`/mail/${id}\``.
+   */
+  detailHref: (id: string) => Href;
+  /**
+   * The group's own path, e.g. `/mail`. `clear()` returns here, and `selectedId` is only read
+   * from routes directly below it.
+   */
+  indexHref: string;
+  /**
+   * Shown in the detail pane when split and no item is open.
+   */
+  emptyDetail?: ReactElement;
+  /**
+   * Split into list and detail panes when the layout's measured width is at least this many
+   * pixels. Defaults to 768.
+   */
+  splitAtWidth?: number;
+  /**
+   * Width in pixels of the list pane when split. Defaults to 360.
+   */
+  listWidth?: number;
+  /**
+   * The child route name that holds the detail. Defaults to `"[id]"`.
+   */
+  detailRoute?: string;
+  /**
+   * The route param that holds the item id. Defaults to `"id"`.
+   */
+  paramName?: string;
+  /**
+   * Screen options passed through to the underlying expo-router Stack.
+   */
+  screenOptions?: ComponentProps<typeof Stack>["screenOptions"];
+  /**
+   * Optional `Stack.Screen` definitions passed through to the underlying expo-router Stack.
+   */
+  children?: React.ReactNode;
+}
+
+/**
+ * The value returned by `useListDetail()` inside a ListDetailLayout.
+ */
+export interface ListDetailState {
+  /**
+   * True when the list and detail panes are shown side by side.
+   */
+  isSplit: boolean;
 }
 
 export type PermissionKind =

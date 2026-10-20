@@ -142,7 +142,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
     - The `useMCPTools error` console allowance is removed and the existing Better Auth suites pass: login, signup, profile, realtime, ai-chat. Verification: `bun run check:e2e-affected` then the affected shards.
     - Screenshots of the signed-in profile and AI tab after the reload are saved to `/opt/cursor/artifacts/` and attached to the PR. Verification: verify-ui-changes skill.
   - Skills: generate-sdk, verify-ui-changes, terreno-data-fetching.
-- [ ] **T11** — Generate apps that register the token source
+- [x] **T11** — Generate apps that register the token source
   - Depends on: T1
   - Files: create-terreno-app/src/generate.ts, create-terreno-app/src/__tests__/generate.test.ts, changelog/unreleased/cta-token-source.md
   - Behavior: the generated store registers its existing bridged `authProvider` (`generate.ts:2544-2564`) with `setTokenSource`, the generated codegen config points at rtk's `emptySplitApi`, and `store/betterAuthApi.ts` (with its `readSessionToken` fork) is no longer generated. The generated client keeps cookie mode.
@@ -219,6 +219,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
 | X4 | `createSessionApi` uses `credentials: "same-origin"`, so it cannot work cross-site | Found while tracing cookies | S | none |
 | X5 | Move the deployed example-frontend and API onto same-site custom domains (first-party `SameSite=Lax` cookies) | Q4 trade-offs: neither cross-site cookies nor bearer is the production best practice | S (about half a day, DNS plus deploy config) | none |
 | X6 | syncdb's `betterAuthAdapter` marks its first-load emission so rtk's offline queue can tell it from a sign-in | T8 drops unconfirmed offline-launch writes on any `onAuthChange`, including the adapter's first successful load | S | T8 |
+| X7 | rtk's base-query response handler null-checks a JSON `null` body before reading `more` | The removed example-frontend and generated forks did; no endpoint returns `null` today | S | T10, T11 |
 
 ## Decisions
 

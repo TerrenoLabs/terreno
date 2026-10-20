@@ -19,8 +19,13 @@ const DEFAULT_LIST_WIDTH = 360;
 const DEFAULT_DETAIL_ROUTE = "[id]";
 const DEFAULT_PARAM_NAME = "id";
 
-// With the list already on screen, the detail needs no back button or push animation.
-const SPLIT_SCREEN_OPTIONS = {animation: "none", headerBackVisible: false} as const;
+// With the list already on screen, the detail needs no back button or push animation. The web
+// header ignores headerBackVisible and draws a back button unless headerLeft is set.
+const SPLIT_SCREEN_OPTIONS = {
+  animation: "none",
+  headerBackVisible: false,
+  headerLeft: () => null,
+} as const;
 
 type StackScreenOptions = ComponentProps<typeof Stack>["screenOptions"];
 

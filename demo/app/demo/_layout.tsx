@@ -26,6 +26,7 @@ const Layout = (): ReactElement => {
           headerTintColor: theme.text.primary,
         }}
       >
+        <Stack.Screen name="list-detail" options={{headerShown: false}} />
         <Stack.Screen name="sidebar-navigation" options={{headerShown: false}} />
       </Stack>
     </EmbedModeProvider>

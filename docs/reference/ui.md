@@ -933,7 +933,8 @@ has no `Stack` header, so it applies safe-area insets on its top, left, and bott
 - `clear()` calls `router.dismissTo(indexHref)` when an item is open, so it pops back to the
   index inside this `Stack` and never leaves the group. It does nothing when no item is open.
 
-When split, the `Stack` screens get `headerBackVisible: false` and `animation: "none"`. Your
+When split, the `Stack` screens get `headerBackVisible: false`, `headerLeft: () => null` (the web
+header ignores `headerBackVisible`), and `animation: "none"`. Your
 `screenOptions` win where they set the same key. Mark the open row with
 `accessibilityState={{selected: true}}` so screen readers announce it (a clickable `Box` row sends
 it as `aria-current="true"` on web). See

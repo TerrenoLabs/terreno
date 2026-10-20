@@ -313,6 +313,7 @@
     "ui:dev": "bun run --filter '@terreno/ui' dev",
     "ui:lint": "bun run --filter '@terreno/ui' lint",
     "ui:charts:compare": "bun scripts/charts/compareRenderedSnapshots.ts",
+    "ui:list-detail:capture": "bun scripts/captureListDetail.ts",
     "ui:charts:update-snapshots": "bun scripts/charts/compareRenderedSnapshots.ts --update",
     "ui:test": "bun run --filter '@terreno/ui' test:ci",
     "ui:web": "bun run --filter '@terreno/ui' web",

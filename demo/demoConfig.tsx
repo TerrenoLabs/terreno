@@ -51,6 +51,7 @@ import {InfoModalIconConfiguration} from "@story-config/InfoModalIcon.config";
 import {InfoTooltipButtonConfiguration} from "@story-config/InfoTooltipButton.config";
 import {LineChartConfiguration} from "@story-config/LineChart.config";
 import {LinkConfiguration} from "@story-config/Link.config";
+import {ListDetailLayoutConfiguration} from "@story-config/ListDetailLayout.config";
 import {LoginScreenConfiguration} from "@story-config/LoginScreen.config";
 import {MarkdownEditorConfiguration} from "@story-config/MarkdownEditor.config";
 import {MarkdownEditorFieldConfiguration} from "@story-config/MarkdownEditorField.config";
@@ -337,6 +338,7 @@ const Config: DemoConfigurationBase[] = [
   InfoTooltipButtonConfiguration,
   LineChartConfiguration,
   LinkConfiguration,
+  ListDetailLayoutConfiguration,
   LoginScreenConfiguration,
   MarkdownEditorConfiguration,
   MarkdownEditorFieldConfiguration,

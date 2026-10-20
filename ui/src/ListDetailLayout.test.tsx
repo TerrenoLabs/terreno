@@ -478,8 +478,12 @@ describe("ListDetailLayout split screen options", () => {
 
   it("hides the back button and the push animation when split", () => {
     setWindowWidth(1024);
+    const options = stackOptions(renderLayout()) as Record<string, unknown>;
 
-    expect(stackOptions(renderLayout())).toEqual({animation: "none", headerBackVisible: false});
+    expect(options.animation).toBe("none");
+    expect(options.headerBackVisible).toBe(false);
+    // The web header ignores headerBackVisible, so an empty headerLeft hides its back button.
+    expect((options.headerLeft as () => unknown)()).toBeNull();
   });
 
   it("leaves screen options untouched when stacked", () => {
@@ -493,7 +497,7 @@ describe("ListDetailLayout split screen options", () => {
     setWindowWidth(1024);
     const rendered = renderLayout({screenOptions: {animation: "fade", title: "Inbox"}});
 
-    expect(stackOptions(rendered)).toEqual({
+    expect(stackOptions(rendered)).toMatchObject({
       animation: "fade",
       headerBackVisible: false,
       title: "Inbox",
@@ -505,7 +509,22 @@ describe("ListDetailLayout split screen options", () => {
     const rendered = renderLayout({screenOptions: () => ({animation: "fade", title: "Inbox"})});
     const options = stackOptions(rendered) as (props: unknown) => Record<string, unknown>;
 
-    expect(options({})).toEqual({animation: "fade", headerBackVisible: false, title: "Inbox"});
+    expect(options({})).toMatchObject({
+      animation: "fade",
+      headerBackVisible: false,
+      title: "Inbox",
+    });
+  });
+
+  it("keeps the caller's headerLeft when split", () => {
+    setWindowWidth(1024);
+    const headerLeft = (): string => "menu";
+    const options = stackOptions(renderLayout({screenOptions: {headerLeft}})) as Record<
+      string,
+      unknown
+    >;
+
+    expect(options.headerLeft).toBe(headerLeft);
   });
 });
 

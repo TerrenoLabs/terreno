@@ -139,7 +139,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - When split with a detail open, `select(id)` calls `router.replace(detailHref(id))`, so the stack is never deeper than index + one detail (D6).
     - When split, `select(selectedId)` is a no-op.
     - `clear()` calls `router.dismissTo(indexHref)` when an item is open, so it never leaves the group, and does nothing when none is open. (Changed in Pick: `router.back()` asks the root navigator and can leave the group.)
-    - When split, Stack screens get `headerBackVisible: false` and `animation: "none"`. The caller's `screenOptions` win where they set the same key.
+    - When split, Stack screens get `headerBackVisible: false` and `animation: "none"`. (Added in T4: also `headerLeft: () => null`, because expo-router's web header ignores `headerBackVisible`.) The caller's `screenOptions` win where they set the same key.
   - Docs:
     - The `ui.md` section documents `useListDetail` and the history rule.
     - New `docs/how-to/build-list-detail-screens.md`, linked from `docs/how-to/README.md`, covers:
@@ -161,9 +161,10 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
   - Docs: the `ui.md` section notes that rotation and resize keep the open item, and that the list pane remounts (its scroll position resets; X5).
   - Verification: `bun test --only-failures src/ListDetailLayout.test.tsx`.
 
-- [ ] **T4** — Add the demo mail example, standalone and inside SidebarNavigation
+- [x] **T4** — Add the demo mail example, standalone and inside SidebarNavigation
   - Depends on: T2
   - Files: demo/app/demo/_layout.tsx, demo/app/demo/list-detail/_layout.tsx, demo/app/demo/list-detail/index.tsx, demo/app/demo/list-detail/[id].tsx, demo/components/MailList.tsx, demo/components/MailMessage.tsx, demo/components/mailFixtures.ts, demo/app/demo/sidebar-navigation/_layout.tsx, demo/app/demo/sidebar-navigation/mail/_layout.tsx, demo/app/demo/sidebar-navigation/mail/index.tsx, demo/app/demo/sidebar-navigation/mail/[id].tsx, demo/story-config/ListDetailLayout.config.tsx, demo/demoConfig.tsx, demo/p0Stories.registration.test.ts, scripts/check-demo-coverage.ts, scripts/captureListDetail.ts
+  - Added in Pick: demo/stories/ListDetailLayout.stories.tsx (route launcher), demo/components/MailLayout.tsx (shared by both mounts), package.json `ui:list-detail:capture` + knip.jsonc entry, and ui/src/ListDetailLayout.tsx `headerLeft: () => null` in split mode (the web header ignored `headerBackVisible` and still drew a back arrow).
   - Delivers:
     - An inbox of about 30 static messages (sender, subject, preview, a date via Luxon) in shared `MailList` / `MailMessage` components.
     - Rows highlight the selected message and set `accessibilityState={{selected: true}}`.
@@ -182,7 +183,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
   - Verification:
     - `cd demo && bun test --only-failures p0Stories.registration.test.ts`
     - `bun run scripts/check-demo-coverage.ts` from the repo root
-    - `cd demo && bun run web`, then `bun run scripts/captureListDetail.ts` from the repo root
+    - `cd demo && bun run web`, then `bun run ui:list-detail:capture` from the repo root
     - `bun run check:knip` passes
     - Behaviour against a real router and data is proven in T5; this script is the visual evidence.
 

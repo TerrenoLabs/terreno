@@ -3,6 +3,22 @@ import {defineConfig, devices, type Project} from "@playwright/test";
 const chromium = {...devices["Desktop Chrome"]};
 
 /**
+ * Cross-site bearer run (e2e/crossSiteBearer.spec.ts). The web app at localhost:8082 talks to
+ * the API at 127.0.0.1:4000, a different site, with `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`.
+ * Those values are baked into the web bundle when Metro starts, so this run gets its own web
+ * server and runs only that spec (other specs named beside it do not run). Naming the spec file
+ * on the command line turns it on, as does `E2E_CROSS_SITE_BEARER=true`; the env var also
+ * carries the choice to the worker processes, which load this config without the runner's
+ * arguments.
+ */
+const CROSS_SITE_BEARER_SPEC = /crossSiteBearer\.spec\.ts/;
+if (process.argv.some((arg) => CROSS_SITE_BEARER_SPEC.test(arg))) {
+  process.env.E2E_CROSS_SITE_BEARER = "true";
+}
+const isCrossSiteBearerRun = process.env.E2E_CROSS_SITE_BEARER === "true";
+const CROSS_SITE_API_URL = "http://127.0.0.1:4000";
+
+/**
  * In CI every spec file runs in its own job against a dedicated backend and database
  * (see .github/workflows/e2e-ci.yml), so a flat setup → chromium topology is enough
  * and cross-file interference is impossible.
@@ -30,6 +46,7 @@ const chromium = {...devices["Desktop Chrome"]};
  * other's todos. To run a single consents/syncdb file without its dependency phases,
  * pass --no-deps (each file's beforeAll ensures the flag state it needs).
  */
+
 const syncdbFiles = [
   "syncdb-load-delta",
   "syncdb-offline",
@@ -44,7 +61,7 @@ const localProjects: Project[] = [
   {
     dependencies: ["setup"],
     name: "app",
-    testIgnore: [/consents\.spec\.ts/, /syncdb-.*\.spec\.ts/],
+    testIgnore: [/consents\.spec\.ts/, /syncdb-.*\.spec\.ts/, CROSS_SITE_BEARER_SPEC],
     use: chromium,
   },
   {
@@ -66,14 +83,32 @@ const ciProjects: Project[] = [
   {
     dependencies: ["setup"],
     name: "chromium",
+    testIgnore: CROSS_SITE_BEARER_SPEC,
     use: chromium,
   },
 ];
 
+const crossSiteBearerProjects: Project[] = [
+  {name: "setup", testMatch: /auth\.setup\.ts/},
+  {
+    dependencies: ["setup"],
+    name: "cross-site-bearer",
+    testMatch: CROSS_SITE_BEARER_SPEC,
+    use: chromium,
+  },
+];
+
+const selectProjects = (): Project[] => {
+  if (isCrossSiteBearerRun) {
+    return crossSiteBearerProjects;
+  }
+  return process.env.CI ? ciProjects : localProjects;
+};
+
 export default defineConfig({
   forbidOnly: !!process.env.CI,
   fullyParallel: false,
-  projects: process.env.CI ? ciProjects : localProjects,
+  projects: selectProjects(),
   reporter: process.env.CI ? [["github"], ["html", {open: "never"}]] : "html",
   retries: process.env.CI ? 2 : 0,
   testDir: "./e2e",
@@ -114,8 +149,14 @@ export default defineConfig({
     },
     {
       command: process.env.CI ? "bun expo start --web --port 8082" : "bun run web",
-      reuseExistingServer: !process.env.CI,
-      timeout: 120 * 1000,
+      env: isCrossSiteBearerRun
+        ? {EXPO_PUBLIC_API_URL: CROSS_SITE_API_URL, EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER: "true"}
+        : {},
+      // A web server already on 8082 was built for the same-site cookie run, so the cross-site
+      // run never reuses one.
+      reuseExistingServer: !process.env.CI && !isCrossSiteBearerRun,
+      // The cross-site run always cold-starts Metro, which can take longer than two minutes.
+      timeout: (isCrossSiteBearerRun ? 300 : 120) * 1000,
       url: "http://localhost:8082",
     },
   ],

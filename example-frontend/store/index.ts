@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {combineReducers, configureStore} from "@reduxjs/toolkit";
-import {generateBetterAuthSlice, registerTerrenoDevStore} from "@terreno/rtk";
+import {generateBetterAuthSlice, registerTerrenoDevStore, setTokenSource} from "@terreno/rtk";
 import {DateTime} from "luxon";
 import {useDispatch} from "react-redux";
 import type {Storage as PersistStorage} from "redux-persist";
@@ -10,6 +10,11 @@ import {createSentryReduxEnhancer} from "@/utils/sentry";
 import appState from "./appState";
 import {rtkQueryErrorMiddleware} from "./errors";
 import {terrenoApi} from "./sdk";
+import {authProvider} from "./syncdb";
+
+// Registered before the store exists, so the first RTK request, socket handshake, and MCP call
+// already read the Better Auth token instead of rtk's default JWT source.
+setTokenSource(authProvider);
 
 const betterAuth = generateBetterAuthSlice({authClient: betterAuthClient});
 

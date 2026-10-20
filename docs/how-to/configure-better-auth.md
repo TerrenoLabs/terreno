@@ -333,6 +333,13 @@ Read the stored token outside the client, without a network call, with
 `getBetterAuthBearerToken({storagePrefix?, bearerStorage?})`. Pass the same options the client
 was created with.
 
+example-frontend shows the whole setup. `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` turns on
+bearer mode in `lib/betterAuth.ts`. `store/syncdb.ts` passes the stored token to
+`betterAuthAdapter` as `getBearerToken`, and `store/index.ts` registers that adapter with
+`setTokenSource` before it creates the store, so RTK Query, the socket and MCP tools send the
+same token. `e2e/crossSiteBearer.spec.ts` signs in from `localhost:8082` to an API on
+`127.0.0.1:4000` with every `set-cookie` header stripped, then reloads.
+
 ### Server requirements
 
 - The web app's origin must be in `trustedOrigins`. A cookie-less sign-in sends an `Origin`

@@ -89,6 +89,12 @@ Full local suite: `bun run frontend:e2e`. Nightly load (`e2e-load` / `syncdb-loa
 not PR-blocking; run `bunx playwright test e2e/syncdb-loadlab.spec.ts` only when that job
 failed.
 
+`e2e/crossSiteBearer.spec.ts` has no CircleCI job: it needs a web server built with
+`EXPO_PUBLIC_API_URL=http://127.0.0.1:4000` and `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`.
+Naming the spec file (or setting `E2E_CROSS_SITE_BEARER=true`) makes `playwright.config.ts`
+start that server on 8082 and run only that spec, so stop any other web server on 8082 first:
+`cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts`.
+
 CircleCI skips a shard no changed file can reach. Ask for the same verdict before
 pushing with `bun run check:e2e-affected` (see
 [the affected gate](circleci.md#e2e-affected-gate)).

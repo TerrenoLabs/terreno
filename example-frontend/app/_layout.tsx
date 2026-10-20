@@ -37,7 +37,6 @@ import {SyncConflictsProvider} from "@/components/SyncConflictsController";
 import {SyncHealthToast} from "@/components/SyncHealthToast";
 import {SyncLabRuntime} from "@/components/SyncLabRuntime";
 import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
-import {getSessionToken} from "@/lib/betterAuth";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
@@ -190,18 +189,14 @@ const RootLayoutNav = (): React.ReactElement => {
     warningMessage,
   } = useUpgradeCheck({pollingIntervalMs: 300_000, recheckOnForeground: true});
 
-  const getAuthToken = useCallback(async (): Promise<string | null> => {
-    return getSessionToken();
-  }, []);
-
   const handleRetrySyncDbStart = useCallback((): void => {
     setSyncDbStartError(null);
     setSyncDbStartAttempt((attempt) => attempt + 1);
   }, []);
 
+  // Reads the token source registered in store/index.ts.
   const {socket} = useSocketConnection({
     baseUrl,
-    getAuthToken,
     shouldConnect: Boolean(userId),
   });
 

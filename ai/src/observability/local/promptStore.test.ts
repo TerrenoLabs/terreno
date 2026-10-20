@@ -526,6 +526,17 @@ describe("LocalPromptStore", () => {
         expect((await store.get({name: "top"}))?.body).toBe("Leaf");
       });
 
+      it("rejects a new version that would push an unlabelled including version past the limit", async () => {
+        // top v1 keeps the five-level chain but no longer holds a label.
+        await store.createVersion("top", {system: "Plain", type: "text"});
+        await store.moveLabel("top", {label: "production", version: 2});
+
+        await expect(store.createVersion("p5", {template: baseTag, type: "text"})).rejects.toThrow(
+          "Prompt references nested too deeply"
+        );
+        expect((await store.getVersionByNumber("top", 1))?.system).toBe("Leaf");
+      });
+
       it("rejects a label move that would push an including prompt past the limit", async () => {
         // p4 now includes p5 production, so a referencing p5 version can land as `latest`.
         await store.createVersion("p4", {template: "{{> p5}}", type: "text"});

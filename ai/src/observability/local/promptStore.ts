@@ -752,14 +752,13 @@ export class LocalPromptStore implements PromptRegistry {
   }
 
   /**
-   * Re-resolves every labelled version of each prompt that includes `name`, directly or through
-   * another prompt, as it will read once `pending` lands. A new body for a shared prompt can push
-   * a prompt that includes it past the nesting limit.
+   * Re-resolves every version of each prompt that includes `name`, directly or through another
+   * prompt, as it will read once `pending` lands. A new body for a shared prompt can push a prompt
+   * that includes it past the nesting limit, and experiments still run unlabelled versions.
    */
   private async validateDependents(name: string, pending: PendingLabel): Promise<void> {
     const lookup = this.referenceLookup({...pending, name});
     const ObsPrompt = registerObsPrompt();
-    const ObsPromptLabel = registerObsPromptLabel();
     const ObsPromptVersion = registerObsPromptVersion();
     const seen = new Set([name]);
     const queue = [name];
@@ -776,12 +775,9 @@ export class LocalPromptStore implements PromptRegistry {
         }
         seen.add(dependent.name);
         queue.push(dependent.name);
-        const labels = await ObsPromptLabel.find({promptId: dependent._id});
-        for (const labelDoc of labels) {
-          const version = await ObsPromptVersion.findOneOrNone({_id: labelDoc.versionId});
-          if (version) {
-            await this.validateReferences(dependent.name, version, lookup);
-          }
+        const versions = await ObsPromptVersion.find({promptId: dependent._id});
+        for (const version of versions) {
+          await this.validateReferences(dependent.name, version, lookup);
         }
       }
     }

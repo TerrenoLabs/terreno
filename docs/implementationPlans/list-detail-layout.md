@@ -150,12 +150,13 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
       - when to use SplitPage instead (non-route list/detail)
   - Verification: `bun test --only-failures src/ListDetailLayout.test.tsx` asserts the router mock calls and screen options at 375 and 1024 px.
 
-- [ ] **T3** — Keep the open item when crossing the breakpoint
+- [x] **T3** — Keep the open item when crossing the breakpoint
   - Depends on: T2
   - Files: ui/src/ListDetailLayout.tsx, ui/src/ListDetailLayout.test.tsx, docs/reference/ui.md
   - Criteria:
     - With a detail open (segments `[id]`, `id: "3"`), layout events 1024 → 375 → 1024 leave `selectedId` `"3"` throughout.
-    - At 375 with segments ending in `[id]`, there is no list pane and `ListDetailIndex` does not render `list`. The mocked Stack renders no routes; T5's Playwright resize check proves the rendered detail.
+    - At 375 with segments ending in `[id]`, there is no list pane and the detail route stays mounted. The mocked Stack renders no routes; T5's Playwright resize check proves the rendered detail.
+    - Changed in Pick: `ListDetailIndex` keeps rendering `list` at 375 while the detail is open, because it is the index screen under the detail and swipe-back must reveal the list.
     - No router call is made during a resize.
   - Docs: the `ui.md` section notes that rotation and resize keep the open item, and that the list pane remounts (its scroll position resets; X5).
   - Verification: `bun test --only-failures src/ListDetailLayout.test.tsx`.

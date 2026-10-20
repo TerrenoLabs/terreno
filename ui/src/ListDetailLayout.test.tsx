@@ -508,3 +508,80 @@ describe("ListDetailLayout split screen options", () => {
     expect(options({})).toEqual({animation: "fade", headerBackVisible: false, title: "Inbox"});
   });
 });
+
+describe("ListDetailLayout across the breakpoint", () => {
+  beforeEach(() => {
+    latestState = undefined;
+    stackChildMounts = 0;
+    setWindowWidth(1024);
+    setRoute("/mail/3", ["mail", "[id]"], {id: "3"});
+    mockedRouter.dismissTo.mockClear();
+    mockedRouter.push.mockClear();
+    mockedRouter.replace.mockClear();
+  });
+
+  afterAll(() => {
+    setRoute("/", []);
+  });
+
+  it("keeps the open item through a resize to phone width and back", () => {
+    const {getByTestId, queryByTestId} = renderLayout();
+    const root = getByTestId("list-detail-layout");
+    expect(currentState().selectedId).toBe("3");
+    expect(currentState().isSplit).toBe(true);
+
+    fireLayout(root, 375);
+    expect(currentState().selectedId).toBe("3");
+    expect(currentState().isSplit).toBe(false);
+    expect(queryByTestId("list-detail-list-pane")).toBeNull();
+
+    fireLayout(root, 1024);
+    expect(currentState().selectedId).toBe("3");
+    expect(currentState().isSplit).toBe(true);
+    expect(getByTestId("list-detail-list-pane")).toBeTruthy();
+  });
+
+  it("keeps the detail route mounted at phone width with no list pane", () => {
+    const {getByTestId, queryByTestId} = renderLayout();
+
+    fireLayout(getByTestId("list-detail-layout"), 375);
+
+    expect(queryByTestId("list-detail-list-pane")).toBeNull();
+    expect(stackChildMounts).toBe(1);
+    // The index screen under the detail now holds the list, so swipe-back reveals it.
+    expect(getByTestId("mail-list")).toBeTruthy();
+    expect(queryByTestId("list-detail-empty")).toBeNull();
+  });
+
+  it("makes no router call while resizing", () => {
+    const {getByTestId} = renderLayout();
+    const root = getByTestId("list-detail-layout");
+
+    fireLayout(root, 375);
+    fireLayout(root, 1024);
+    fireLayout(root, 600);
+
+    expect(mockedRouter.push).not.toHaveBeenCalled();
+    expect(mockedRouter.replace).not.toHaveBeenCalled();
+    expect(mockedRouter.dismissTo).not.toHaveBeenCalled();
+  });
+
+  it("follows a window resize before the first layout event", () => {
+    const {queryByTestId, rerender} = renderLayout();
+    expect(queryByTestId("list-detail-list-pane")).toBeTruthy();
+
+    setWindowWidth(375);
+    rerender(
+      <ListDetailLayout
+        detailHref={(id) => `/mail/${id}`}
+        indexHref="/mail"
+        list={<Text testID="mail-list">Inbox</Text>}
+      >
+        <SplitProbe />
+      </ListDetailLayout>
+    );
+
+    expect(queryByTestId("list-detail-list-pane")).toBeNull();
+    expect(currentState().selectedId).toBe("3");
+  });
+});

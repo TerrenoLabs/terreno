@@ -899,9 +899,10 @@ item pushes the detail route with the native animation and swipe-back. When the 
 
 The width is the layout's own measured width, so it decides correctly inside a sidebar or an admin
 rail. Before the first layout event, it uses the window width. The `Stack` stays in the same place
-in the tree at every width, so it never remounts when a tablet rotates or a browser resizes. The
+in the tree at every width, so it never remounts when a tablet rotates or a browser resizes, and
+the open item stays open: crossing the breakpoint makes no router call. The
 `list` element does move between the index screen and the left pane, so it remounts at the
-breakpoint; keep list state such as filters or search text in the route or a store. The list pane
+breakpoint and its scroll position resets; keep list state such as filters or search text in the route or a store. The list pane
 has no `Stack` header, so it applies safe-area insets on its top, left, and bottom edges.
 
 | Prop | Type | Default | Description |

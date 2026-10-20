@@ -115,6 +115,8 @@ void betterAuth.syncSession(store.dispatch);
 **Key exports:**
 - `createBetterAuthClient({baseURL, scheme, storagePrefix?, webAuth?, bearerStorage?})` — Factory for Better Auth client with Expo support. `webAuth: "bearer"` authenticates the web client with a stored bearer token and no cookies, for a frontend and API on different sites ([how-to](../../how-to/configure-better-auth.md#frontend-and-api-on-different-sites))
 - `getBetterAuthBearerToken({storagePrefix?, bearerStorage?})` — Reads the token bearer mode stored, or `null`
+- `signInSocialWithHandoff({client, provider, callbackURL?, errorCallbackURL?})` — Starts a social or generic OAuth sign-in for a web bearer client: stores a random nonce in `sessionStorage` and navigates the page to the server's `{basePath}/oauth-handoff/start` with `handoff=<nonce>` on the callback URLs. Throws on native and in cookie mode ([how-to](../../how-to/configure-better-auth.md#social-sign-in-in-bearer-mode))
+- `completeBetterAuthOAuthHandoff({client}): Promise<boolean>` — On the return page, removes `#ott` and `handoff` from the URL first, then exchanges the token at `{basePath}/one-time-token/verify` only when `handoff` matches the stored nonce. Resolves `true` only when a bearer token was stored; never rejects. Await it at startup before session reads and Sentry
 - `generateBetterAuthSlice({authClient, syncInterval?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`
 - `selectBetterAuthIsAuthenticated`, `selectBetterAuthUserId`, `selectBetterAuthUser` — Selectors over `state.betterAuth`
 - `BetterAuthUser`, `BetterAuthState` — TypeScript types for session/user data
@@ -165,8 +167,9 @@ without a `get-session` call ([syncdb adapter](../syncdb.md#createsyncdb-configu
 - **Any other source:** sends `authorization: Bearer <token>` from `getToken()` on every
   request, or no `authorization` header when the token is null. It never logs out because a
   token is missing. On a 401 it calls `refresh()` once (shared by concurrent requests), re-reads
-  the token, and retries once; only a second 401 dispatches `auth/logout`. Login, signup, and
-  version-check endpoints skip the refresh and retry.
+  the token, and retries once; only a second 401 dispatches `auth/logout`. The public endpoints
+  `emailLogin`, `emailSignUp`, `getVersionCheck`, `getZoomSignature`, and `googleLogin` skip
+  the refresh and retry.
 
 The registry is module-global, like `baseUrl`: one app, one source. Apps that forked the base
 query to read the Better Auth session can point their SDK back at `emptySplitApi` once they
@@ -216,6 +219,15 @@ offline and replays them on reconnect.
   the rest of the queue stays for a later reconnect.
 - **Different user on reconnect:** a replay drops each mutation queued by a user other than the
   one signed in.
+
+Offline-slice exports the middleware uses for the user tag (exported from the package root):
+
+- `setLastUserId(userId | undefined)` — Action that sets `state.offline.lastUserId`.
+- `resolveUnconfirmedMutations(userId)` — Action that keeps unconfirmed mutations tagged with
+  `userId`, marks them confirmed, and drops the other unconfirmed ones.
+- `dropUnconfirmedMutations()` — Action that drops every mutation whose user id is unconfirmed.
+- `selectLastUserId(state)` — The last user id the source confirmed, or `undefined` when unknown
+  or signed out.
 
 ## WebSocket Integration
 

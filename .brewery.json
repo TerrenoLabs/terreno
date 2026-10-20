@@ -6,8 +6,8 @@
     "planDirs": ["docs/implementationPlans", "docs/tasks"],
     "skipAuthors": ["dependabot[bot]"],
     "skipLabels": ["do-not-merge", "hold"],
-    "maxLines": 800,
-    "maxFiles": 40,
+    "maxLines": 0,
+    "maxFiles": 0,
     "budgetUsd": 5,
     "pathRules": [
       {

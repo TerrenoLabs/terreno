@@ -1,6 +1,6 @@
 # @terreno/ai
 
-AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI SDK, request logging, GPT history, projects, file uploads, MCP tools, and optional Langfuse integration.
+AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI SDK, request logging, GPT history, projects, file uploads, MCP tools, and built-in observability (prompt registry, traces, evaluators).
 
 ## Table of Contents
 
@@ -14,10 +14,8 @@ AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI 
 - [Models](#models)
 - [Route registrars](#route-registrars)
 - [AiApp plugin](#aiapp-plugin)
-- [LangfuseApp plugin](#langfuseapp-plugin)
 - [Observability](#observability)
 - [Durable agent harness](#durable-agent-harness)
-- [Langfuse integration](#langfuse-integration)
 - [FileStorageService](#filestorageservice)
 - [MCPService](#mcpservice)
 - [Gemini and Vertex helpers](#gemini-and-vertex-helpers)
@@ -53,12 +51,6 @@ bun run lint:fix   # Fix lint issues
 src/
   index.ts                 # Public exports
   aiApp.ts                 # AiApp TerrenoPlugin
-  langfuseApp.ts           # LangfuseApp TerrenoPlugin
-  langfuseClient.ts        # Langfuse SDK client lifecycle
-  langfuseCache.ts         # Prompt/trace caching
-  langfusePrompts.ts       # Prompt compile/fetch helpers
-  langfuseTracing.ts       # OpenTelemetry tracing setup
-  langfuseVercelAi.ts      # Bridge Langfuse prompts to Vercel AI SDK
   models/
     aiRequest.ts           # AI request logging model
     gptHistory.ts          # Conversation history model
@@ -88,7 +80,7 @@ src/
 
 ## Key exports
 
-- **Plugins:** `AiApp`, `LangfuseApp`
+- **Plugins:** `AiApp`, `ObservabilityApp`
 - **Service:** `AIService`, `TemperaturePresets`, `FileStorageService`, `MCPService`,
   `getMCPTools`, `runBufferedChatTurn` (one chat turn to completion without HTTP: the same system
   prompt, tools, and block checks as `/gpt/histories/:id/turn`; takes `{body: {historyId, prompt},
@@ -96,7 +88,6 @@ src/
 - **Models:** `AIRequest`, `GptHistory`, `FileAttachment`, `Project` (lazy; prefer `getProjectModel()`)
 - **Routes:** `addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`, `addFileRoutes`, `addProjectRoutes`, `addMcpRoutes`
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
-- **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
 - **Prompts:** `COMPACT_SURFACE_SYSTEM_PROMPT`, `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TERRENO_ASKS_SYSTEM_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
 - **Block host actions:** `scaleStepperHostAction`, `toggleChecklistHostAction`, `findAgentBlock`, types `HostAction`, `HostActionContext`, `HostActionResult` ([Host actions](#host-actions))
@@ -347,7 +338,7 @@ With `asks` on, pass the same options to `addGptHistoryRoutes` as `chat` to add 
 | `historyId` | string? | Continue this conversation; omit to start one. Required with `askResponse`. |
 | `askResponse` | object? | The answer to the pending ask: `{toolCallId, action, content?, reason?}`. Read only when `asks` is on. Send it instead of `prompt`, without `attachments`. See [Answer an ask](agent-ui-asks.md#answer-an-ask). |
 | `surface` | `"full"` \| `"compact"`? | Where the user reads and answers. Default `"full"`. `"compact"` is a watch or another small screen: the model gets only button-sized asks and is asked for replies of at most two short sentences. Any other value returns 400. See [Compact surface](agent-ui-asks.md#compact-surface). |
-| `systemPrompt` | string? | System prompt for this turn; project context and the Langfuse prompt are prepended |
+| `systemPrompt` | string? | System prompt for this turn; project context and the registry `systemPromptName` prompt are prepended |
 | `attachments` | array? | `{type: "image" \| "file", url, mimeType, filename?}` items added to the user message |
 | `model` | string? | Model id passed to `createModelFn` or `createServerModelFn` |
 | `projectId` | string? | Project whose context and memories are prepended to the system prompt; saved on a history that has none |
@@ -497,40 +488,6 @@ new AiApp({
 | `openApiOptions` | Passed to route OpenAPI builders |
 | `projects` | Default `true`. `false` skips the `/gpt/projects` routes, so `AiApp` never registers the `Project` model |
 
-## LangfuseApp plugin
-
-Optional Langfuse admin UI and tracing:
-
-```typescript
-import {LangfuseApp} from "@terreno/ai";
-
-new LangfuseApp({
-  publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
-  secretKey: process.env.LANGFUSE_SECRET_KEY!,
-  baseUrl: process.env.LANGFUSE_BASE_URL,
-  adminPath: "/admin/langfuse",
-  enableTracing: true,
-  enableAdminUI: true,
-  evaluation: {enabled: true, scoringFunctions: [...]},
-}).register(app);
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `publicKey`, `secretKey` | — | Langfuse API keys (required) |
-| `baseUrl` | — | Langfuse host |
-| `adminPath` | `"/admin/langfuse"` | Admin route prefix |
-| `organization` | maintainer default | Langfuse organization slug — set your own |
-| `project` | `"terreno"` | Langfuse project slug — set your own |
-| `enableTracing` | `true` | OpenTelemetry via `@langfuse/otel` |
-| `enableAdminUI` | `true` | Prompt, trace, playground, evaluation routes |
-| `evaluation.enabled` | — | Register evaluation scoring routes |
-| `cache` | — | Prompt/trace TTL overrides |
-
-Client construction failures log a warning and skip the plugin so the API process still listens. Tracing init failures log and leave admin routes mounted. example-backend does not register `LangfuseApp` when `MONGO_DB_NAME` is a PR preview database (`terreno-example-pr-*`). GitHub Actions preview deploys omit Langfuse secrets and use `secrets_update_strategy: overwrite` so a previous revision cannot merge those keys into the preview.
-
-Calls `shutdownLangfuseClient()` and `shutdownTracing()` on `SIGTERM`.
-
 ## Observability
 
 In-app prompt versions, nested traces, evaluators, datasets, experiments, review queue, and in-app feedback. Operator loop: [Develop an AI feature](../how-to/ai-feature-development.md). Register plugins: [Observe LLM calls](../how-to/observe-llm-calls.md). Why two planes: [AI observability](../explanation/ai-observability.md). Locked design: [implementation plan](../implementationPlans/ai-observability.md).
@@ -618,6 +575,8 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 
 `PromptRegistry.get({name, label})` (default label `production`) reads the labelled local version. `createLocalObservabilityPlugin()` wires `LocalPromptStore` as that registry and local `TraceSink` / `ScoreSink`.
 
+Prompt references: a `system` or `template` may contain `{{> <name>}}`, with an optional `label=<label>` (default `production`) or `version=<n>`, not both: `{{> base-rules}}`, `{{> base-rules label=staging}}`, `{{> base-rules version=3}}`. `PromptRegistry.get` returns `body` with every reference resolved (nested up to 5 levels) and `includes`: one `{includedBy, label?, name, version}` per referenced version. The trace records `prompts: [<called prompt>, ...includes]`; harness prompt refs record `includes` the same way. Every reference must resolve when it is saved: create, version, and label routes return 400 `Invalid prompt reference` for a malformed tag, an unknown prompt or version, or a label the referenced prompt does not have yet, 400 `Prompt reference cycle` when the save or label move would close a cycle (a new version counts as `latest`), and 400 `Prompt references nested too deeply` when it would nest any prompt that includes it past 5 levels. Prompt detail returns the stored, unresolved text. See [Share instructions across prompts](../how-to/observe-llm-calls.md#share-instructions-across-prompts).
+
 | Method | Path | Behavior |
 | --- | --- | --- |
 | GET | `/ai/observability/traces` | Admin list. Query `from`, `to`, `prompt`, `status`, `userId`, `sessionId`, `scope`, `hasScore`, `sensitive`, `flaggedForDataset`, `page`, `limit`. Body is `{data, page, limit, more, total}` so pagination survives RTK `{data}` unwrap. Each row includes `spanCount` and `scoreCount`. `prompts.length` is the `N prompts` count |
@@ -696,17 +655,6 @@ API: [AI harness reference](ai-harness.md).
 Why: [Durable agent harness](../explanation/durable-agent-harness.md).
 How-to: [Build a durable workflow](../how-to/build-a-durable-workflow.md),
 [Ship a new task version](../how-to/ship-a-new-task-version.md).
-
-## Langfuse integration
-
-Low-level exports (also used by `addGptRoutes` when `langfuseSystemPromptName` is set):
-
-- **Client:** `initLangfuseClient`, `getLangfuseClient`, `isLangfuseInitialized`, `shutdownLangfuseClient`
-- **Prompts:** `getPrompt`, `createPrompt`, `compilePrompt`, `invalidatePromptCache`, `preparePromptForAI`
-- **Tracing:** `initTracing`, `shutdownTracing`, `createTelemetryConfig`
-- **Cache:** `LangfuseCache`, `getCached`, `setCached`, `invalidateCache`
-
-Subpath imports for tree-shaking: `@terreno/ai/langfuseClient`, `@terreno/ai/langfuseApp`.
 
 ## Subpath exports
 
@@ -812,19 +760,13 @@ Env fallbacks: `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` (default `globa
 
 ```typescript
 import {TerrenoApp} from "@terreno/api";
-import {AiApp, AIService, LangfuseApp} from "@terreno/ai";
+import {AiApp, AIService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
 const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 new TerrenoApp({userModel: User})
   .register(new AiApp({aiService, openApiOptions: {}}))
-  .register(
-    new LangfuseApp({
-      publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
-      secretKey: process.env.LANGFUSE_SECRET_KEY!,
-    })
-  )
   .start();
 ```
 
@@ -836,9 +778,7 @@ Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. i
 |----------|---------|-------------|
 | `GOOGLE_VERTEX_PROJECT` | `createVertexProvider` | GCP project for Vertex models |
 | `GOOGLE_VERTEX_LOCATION` | `createVertexProvider` | Vertex region (default `global`) |
-| `AI_OBS_PRICE_MAP_JSON` | `ObservabilityApp` | JSON model map with non-negative `inputPerMTok` / `outputPerMTok`; omitted models have tokens but no USD cost || `LANGFUSE_PUBLIC_KEY` | `LangfuseApp` | Langfuse public key |
-| `LANGFUSE_SECRET_KEY` | `LangfuseApp` | Langfuse secret key |
-| `LANGFUSE_BASE_URL` | Langfuse client | Langfuse host URL |
+| `AI_OBS_PRICE_MAP_JSON` | `ObservabilityApp` | JSON model map with non-negative `inputPerMTok` / `outputPerMTok`; omitted models have tokens but no USD cost |
 
 GCS credentials use standard Google Cloud Application Default Credentials for `FileStorageService`.
 

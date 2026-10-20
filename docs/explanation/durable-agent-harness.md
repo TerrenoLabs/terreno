@@ -69,7 +69,7 @@ transaction:
 
 Either all three land or none do. This is why `Harness.open` refuses to start without a
 replica set (transactions need one) or without the local observability models. Planned
-Langfuse and OTel exports will stay best-effort, after the transaction.
+exports to other trace sinks will stay best-effort, after the transaction.
 
 ```
 createTask ──tx──> HarnessTask(pending) + ObsTrace + root CHAIN span

@@ -1,26 +1,26 @@
 # AI observability
 
-Terreno ships Langfuse-like prompt versioning, nested traces, evaluators, datasets, experiments, and a local human review queue **inside `@terreno/ai`**, with operator UI in **`admin-frontend` only**.
+Terreno ships prompt versioning, nested traces, evaluators, datasets, experiments, and a local human review queue **inside `@terreno/ai`**, with operator UI in **`admin-frontend` only**.
 
-## Why not Langfuse-only
+## Why built in
 
-Apps must iterate prompts without a required vendor account. `LangfuseApp` stays a second plugin. Traces and scores **fan out** to every registered sink (local Mongo, Langfuse, OTLP/OpenInference). Prompts, datasets, experiments, and the review queue have **one writer** each (a primary). The review queue is **local-only**.
+Apps must iterate prompts without a required vendor account, so the prompt registry, traces, and review queue live in the app's own Mongo. Traces and scores **fan out** to every registered sink (local Mongo plus any extra `TraceSink` / `ScoreSink` plugin an app registers). Prompts, datasets, experiments, and the review queue have **one writer** each (a primary). The review queue is **local-only**.
 
 That split is the two planes:
 
 | Plane | Write | Admin read |
 | --- | --- | --- |
-| Telemetry (traces, scores) | All sinks, best-effort | Local if the local plugin is on, else Langfuse |
+| Telemetry (traces, scores) | All sinks, best-effort | Local |
 | Control (prompts, datasets, experiments, queue) | One primary per capability | That primary |
 
-`experiments.primary` must equal `datasets.primary`. Defaults are all `local`.
+`local` is the only control primary, and the default for all four. `experiments.primary` must equal `datasets.primary`.
 
 `ObservabilityApp` fails boot (constructor throws) when:
 
 | Error | Cause |
 | --- | --- |
 | `experiments.primary must equal datasets.primary` | Mixed dataset/experiment writers |
-| `reviewQueue.primary must be local` | `reviewQueue` set to `langfuse` |
+| `reviewQueue.primary must be local` | `reviewQueue` set to anything but `local` |
 | `<capability> primary "<id>" has no plugin` | No registered plugin with that `id`, capability, and store |
 
 Telemetry sinks still fan out even when a control primary is local-only.
@@ -67,7 +67,7 @@ The example backend always registers the local plugin. Its idempotent seed creat
 `correctness-human` evaluator, the automatic `schema-assert` evaluator, and a two-item
 `example-gold` dataset. It also creates `chat-safety-synthetic`, a proofread set of
 two-person chats for routing, toxicity, privacy, and dismissive-reply experiments.
-This makes the review and experiment loops walkable without Langfuse:
+This makes the review and experiment loops walkable with no external service:
 resolve the production prompt → emit a trace → inspect spans and sensitive I/O → send the
 trace to Review → record a human score.
 

@@ -8,6 +8,7 @@ import supertest from "supertest";
 import {User} from "../models/user";
 import {
   buildBetterAuthConfig,
+  getOAuthHandoffWebOrigins,
   getWebOrigins,
   MOCK_OIDC_PROVIDER_ID,
   OAUTH_HANDOFF_CALLBACK_PATHS,
@@ -85,6 +86,40 @@ describe("buildBetterAuthConfig", () => {
     });
     expect(config?.oauthHandoff?.webOrigins).toContain("https://app.example.com");
     expect(OAUTH_HANDOFF_CALLBACK_PATHS).toEqual(["/login"]);
+  });
+
+  it("keeps loopback handoff origins outside production for the local e2e", () => {
+    process.env.BETTER_AUTH_OAUTH_HANDOFF = "true";
+    process.env.NODE_ENV = "test";
+    const config = buildBetterAuthConfig();
+    expect(config?.oauthHandoff?.webOrigins).toContain("http://localhost:8082");
+    expect(config?.oauthHandoff?.webOrigins).toContain("http://127.0.0.1:8082");
+  });
+
+  it("hands off only to non-loopback origins in production", () => {
+    process.env.BETTER_AUTH_OAUTH_HANDOFF = "true";
+    process.env.NODE_ENV = "production";
+    process.env.CORS_ORIGINS =
+      "https://app.example.com, http://localhost:3000, http://[::1]:8082, http://127.0.0.1:9000";
+    const config = buildBetterAuthConfig();
+    expect(config?.oauthHandoff?.webOrigins).toEqual(["https://app.example.com"]);
+    // CORS and trustedOrigins still list the loopback origins.
+    expect(getWebOrigins()).toContain("http://localhost:8082");
+    expect(config?.trustedOrigins).toContain("http://localhost:3000");
+  });
+
+  it("refuses to start the handoff in production with no deployed web origin", () => {
+    process.env.BETTER_AUTH_OAUTH_HANDOFF = "true";
+    process.env.NODE_ENV = "production";
+    expect(() => buildBetterAuthConfig()).toThrow(
+      /needs a non-loopback web origin in CORS_ORIGINS/
+    );
+    expect(() => getOAuthHandoffWebOrigins()).toThrow();
+  });
+
+  it("does not check handoff origins in production when the handoff is off", () => {
+    process.env.NODE_ENV = "production";
+    expect(buildBetterAuthConfig()?.oauthHandoff).toBeUndefined();
   });
 
   it("registers no extra plugin without MOCK_OIDC_ISSUER", () => {

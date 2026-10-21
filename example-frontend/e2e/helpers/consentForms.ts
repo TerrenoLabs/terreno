@@ -51,12 +51,16 @@ export const deleteConsentForm = async (
   });
 };
 
-/** Agrees to every consent form pending for the user the bearer `token` belongs to. */
+/**
+ * Agrees to every consent form pending for the user the bearer `token` belongs to, on the API at
+ * `apiUrl` (default `BACKEND_URL`, or the local backend).
+ */
 export const acceptPendingConsentForms = async (
   request: APIRequestContext,
-  token: string
+  token: string,
+  {apiUrl = API_URL}: {apiUrl?: string} = {}
 ): Promise<void> => {
-  const pendingRes = await request.get(`${API_URL}/consents/pending`, {
+  const pendingRes = await request.get(`${apiUrl}/consents/pending`, {
     headers: {authorization: `Bearer ${token}`},
   });
   if (!pendingRes.ok()) {
@@ -66,7 +70,7 @@ export const acceptPendingConsentForms = async (
   const forms: Array<{_id: string; captureSignature?: boolean}> = pendingData?.data ?? [];
 
   for (const form of forms) {
-    await request.post(`${API_URL}/consents/respond`, {
+    await request.post(`${apiUrl}/consents/respond`, {
       data: {
         agreed: true,
         consentFormId: form._id,

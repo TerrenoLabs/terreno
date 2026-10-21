@@ -439,8 +439,10 @@ run. A browser carries the fragment through a redirect that has none of its own,
 would hand the token to the next page. For the same reason, keep `callbackPaths` to that page.
 
 example-frontend uses `/login` as the return page. With `BETTER_AUTH_OAUTH_HANDOFF=true`,
-example-backend sets `oauthHandoff` to its web origins (`getWebOrigins()`) and
-`callbackPaths: ["/login"]`. In bearer mode `lib/betterAuth.ts` starts the social buttons with
+example-backend sets `oauthHandoff` to its web origins and `callbackPaths: ["/login"]`. With
+`NODE_ENV=production` it drops loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any port) from
+the handoff only, so a token never goes to a page on the visitor's own machine, and it refuses to
+start when no other origin is left in `CORS_ORIGINS`. CORS and `trustedOrigins` keep them. In bearer mode `lib/betterAuth.ts` starts the social buttons with
 `signInSocialWithHandoff`. `app/_layout.tsx` syncs the session only after the exchange resolves.
 
 In an Expo Router app, run the exchange from the entry file, not from a layout. Expo Router

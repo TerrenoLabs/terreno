@@ -1893,7 +1893,8 @@ jobs:
           command: scripts/ci/netlify-deploy.sh demo preview "pr-${PR_NUMBER}"
 
   deploy-frontend-preview:
-    executor: node22
+    # The browsers image carries Chromium's system libraries for the deployed smoke.
+    executor: node22_browsers
     resource_class: large
     steps:
       - skip_if_fork_deploy
@@ -1912,6 +1913,37 @@ jobs:
             export EXPO_PUBLIC_API_URL="https://pr-${PR_NUMBER}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
             export NETLIFY_WAIT_FOR_HEALTH_URL="$EXPO_PUBLIC_API_URL"
             scripts/ci/netlify-deploy.sh frontend preview "pr-${PR_NUMBER}"
+      - run:
+          name: Install Playwright Chromium
+          working_directory: ~/project/example-frontend
+          command: bunx playwright install --with-deps chromium
+      - run:
+          # Signs up a fresh user on this PR's isolated backend, so it never runs on production.
+          # The deploy waits only for a healthy backend tag, so on a re-push it can still be the
+          # previous revision while gcp-cd-preview rolls out; rerun the job if that races.
+          name: Smoke the deployed preview in web bearer mode
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 15m
+          environment:
+            CI: "true"
+          command: |
+            set -euo pipefail
+            missing=()
+            if [ -z "${PR_NUMBER:-}" ]; then missing+=("PR_NUMBER"); fi
+            if [ ${#missing[@]} -ne 0 ]; then
+              echo "Missing required environment variables: ${missing[*]}" >&2
+              exit 1
+            fi
+            export SMOKE_BASE_URL="https://pr-${PR_NUMBER}--terreno-frontend.netlify.app"
+            export SMOKE_API_URL="https://pr-${PR_NUMBER}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
+            export SMOKE_RUN_ID="pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-local}"
+            bun run smoke:deployed
+      - store_artifacts:
+          path: example-frontend/playwright-report
+          destination: deployed-bearer-smoke-playwright-report
+      - store_artifacts:
+          path: example-frontend/test-results
+          destination: deployed-bearer-smoke-test-results
 
   deploy-docs-preview:
     executor: node22

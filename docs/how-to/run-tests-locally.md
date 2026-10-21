@@ -98,6 +98,47 @@ setting `E2E_CROSS_SITE_BEARER=true`) makes `playwright.config.ts` start all thr
 the cross-site specs, so stop any other backend on 4000 and web server on 8082 first:
 `cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts e2e/crossSiteOAuth.spec.ts`.
 
+### Deployed bearer smoke (`deploy-frontend-preview`)
+
+`netlify-deploy.sh frontend` builds the web app with `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`
+for production and previews. After the preview deploy, the `deploy-frontend-preview` job's
+"Smoke the deployed preview in web bearer mode" step runs `bun run smoke:deployed`
+(`playwright.smoke.config.ts`, `e2e/deployedBearer.smoke.ts`) against
+`https://pr-<n>--terreno-frontend.netlify.app`. It signs up a new `smoke-*@example.com` user on
+the PR's own backend, agrees to the consent forms, reloads, opens the profile, and fails if the
+API's origin holds a Better Auth session cookie. It also checks that the Google button's OAuth
+handoff start link redirects (to the provider, or back to `/login?error=provider_not_found`)
+instead of returning 404; `gcp-deploy.sh` sets `BETTER_AUTH_OAUTH_HANDOFF=true` on both backends.
+Production deploys never run it. To re-run it:
+
+1. Against the PR preview, which takes about 1 minute:
+
+   ```bash
+   cd example-frontend
+   SMOKE_BASE_URL=https://pr-<n>--terreno-frontend.netlify.app \
+     SMOKE_API_URL=https://pr-<n>---terreno-backend-example-7knxlrnpqq-uc.a.run.app \
+     bun run smoke:deployed
+   ```
+
+2. Against a local cross-site stack, which takes about 5 minutes because of the web export.
+   Start the backend with Better Auth on `127.0.0.1:4000`, then build and serve the web app
+   with the flag on `localhost:8082` (a different site):
+
+   ```bash
+   # Terminal 1, from example-backend/ (the replica-set mongod from step 2 above)
+   AUTH_PROVIDER=better-auth BETTER_AUTH_URL=http://127.0.0.1:4000 PORT=4000 \
+     BETTER_AUTH_OAUTH_HANDOFF=true \
+     MONGO_URI="mongodb://127.0.0.1:27017/terreno-smoke?replicaSet=rs0" \
+     TOKEN_SECRET=dev TOKEN_ISSUER=dev REFRESH_TOKEN_SECRET=dev SESSION_SECRET=dev \
+     bun run src/index.ts
+   # Terminal 2, from example-frontend/. --clear: Metro's cache can keep an earlier
+   # build's EXPO_PUBLIC_* values.
+   EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true \
+     bun run export --clear && bunx serve dist -s -l 8082
+   # Terminal 3, from example-frontend/
+   SMOKE_BASE_URL=http://localhost:8082 bun run smoke:deployed
+   ```
+
 CircleCI skips a shard no changed file can reach. Ask for the same verdict before
 pushing with `bun run check:e2e-affected` (see
 [the affected gate](circleci.md#e2e-affected-gate)).

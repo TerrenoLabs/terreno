@@ -76,9 +76,12 @@ export const betterAuthCookies = async (context: BrowserContext): Promise<string
     .map((cookie) => `${cookie.domain} ${cookie.name}`);
 };
 
-/** Better Auth's session cookies on any domain, as `domain name`. */
-export const betterAuthSessionCookies = async (context: BrowserContext): Promise<string[]> => {
-  const cookies = await context.cookies();
+/** Better Auth's session cookies, on any domain or only those sent to `urls`, as `domain name`. */
+export const betterAuthSessionCookies = async (
+  context: BrowserContext,
+  urls?: string[]
+): Promise<string[]> => {
+  const cookies = await context.cookies(urls);
   return cookies
     .filter(
       (cookie) => cookie.name.includes("better-auth") && SESSION_COOKIE_NAMES.test(cookie.name)

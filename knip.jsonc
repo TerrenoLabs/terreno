@@ -318,6 +318,7 @@
         "jspdf-native-stub.js",
         "fingerprint.config.js",
         "playwright.circleci.config.ts",
+        "playwright.smoke.config.ts",
         "tests/bunSetup.ts",
         "tests/testPreload.ts"
       ],

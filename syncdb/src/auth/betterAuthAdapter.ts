@@ -1,5 +1,9 @@
 import type {AuthProvider} from "../types";
-import type {BetterAuthClientLike, BetterAuthSessionDataLike} from "./types";
+import type {
+  BetterAuthClientLike,
+  BetterAuthGetSessionResult,
+  BetterAuthSessionDataLike,
+} from "./types";
 
 /** Default polling cadence when the client exposes no session subscription. */
 export const DEFAULT_AUTH_POLL_INTERVAL_MS = 5_000;
@@ -37,13 +41,31 @@ const unwrapSession = (result: unknown): BetterAuthSessionDataLike | null => {
 };
 
 /**
+ * True for a `{error}` envelope from a fetch that failed: Better Auth's client returns one
+ * instead of rejecting for many failures. A 401 is the server saying "signed out", so it
+ * stays a successful (signed-out) read.
+ */
+const isFailedReadEnvelope = (result: unknown): boolean => {
+  if (!result || typeof result !== "object" || !("error" in result)) {
+    return false;
+  }
+  const error = (result as {error?: unknown}).error;
+  if (!error) {
+    return false;
+  }
+  return (error as {status?: unknown}).status !== 401;
+};
+
+/**
  * Adapt a Better Auth client to syncdb's {@link AuthProvider} contract.
- * Tokens/user ids are read per call via `getSession()` (unless
- * `options.getBearerToken` supplies the token; never cached, so
- * Better Auth session refresh is picked up transparently); auth changes are
+ * Tokens and user ids are read per call via `getSession()`, unless
+ * `options.getBearerToken` supplies the token. Tokens are never cached, so
+ * Better Auth session refresh is picked up transparently. Auth changes are
  * delivered through the client's nanostore session atom when available, with
- * an injectable polling fallback otherwise. All read errors degrade to null —
- * a broken auth client behaves like "signed out", never a crash.
+ * an injectable polling fallback otherwise. Read errors never throw: a failed
+ * token read returns null, and a failed user-id read returns the user id the
+ * server last confirmed (null before the first confirmation), so a request that
+ * fails while offline is never reported as a sign-out.
  */
 export const betterAuthAdapter = (
   authClient: BetterAuthClientLike,
@@ -58,19 +80,34 @@ export const betterAuthAdapter = (
     ((handle: unknown): void => clearInterval(handle as ReturnType<typeof setInterval>));
 
   /**
+   * The user id the server last confirmed: set by every successful session read and every
+   * parseable session-atom emission, cleared when either reports signed out. `undefined`
+   * until the first confirmation. {@link getUserId} answers with it when a read fails.
+   */
+  let confirmedUserId: string | null | undefined;
+
+  /**
    * Read the session, distinguishing "read failed" from "signed out". Both surface as
    * a null session, but only the latter is an identity change — see
-   * {@link classifyEmission}.
+   * {@link classifyEmission}. Better Auth reports a failed fetch either by rejecting or
+   * as a `{data: null, error}` envelope; a 401 error means signed out.
    */
   const readSessionResult = async (): Promise<{
     ok: boolean;
     session: BetterAuthSessionDataLike | null;
   }> => {
+    let result: BetterAuthGetSessionResult;
     try {
-      return {ok: true, session: unwrapSession(await authClient.getSession())};
+      result = await authClient.getSession();
     } catch {
       return {ok: false, session: null};
     }
+    if (isFailedReadEnvelope(result)) {
+      return {ok: false, session: null};
+    }
+    const session = unwrapSession(result);
+    confirmedUserId = session?.user?.id ?? null;
+    return {ok: true, session};
   };
 
   const readSession = async (): Promise<BetterAuthSessionDataLike | null> => {
@@ -113,8 +150,17 @@ export const betterAuthAdapter = (
     return session?.session?.token ?? null;
   };
 
+  /**
+   * A failed read answers with the last confirmed user id instead of null: callers such as
+   * the syncdb client treat null as a sign-out, and a request that fails while the device is
+   * offline proves nothing about the session (INV-2). Before any read has succeeded, a failed
+   * read still answers null.
+   */
   const getUserId = async (): Promise<string | null> => {
-    const session = await readSession();
+    const {ok, session} = await readSessionResult();
+    if (!ok) {
+      return confirmedUserId ?? null;
+    }
     return session?.user?.id ?? null;
   };
 
@@ -146,7 +192,9 @@ export const betterAuthAdapter = (
    * recoverable state, not a sign-out (INV-2), so the identity is left unchanged and the
    * next successful emission decides.
    */
-  const classifyEmission = (value: unknown): {key: string} | "pending" | null => {
+  const classifyEmission = (
+    value: unknown
+  ): {key: string; userId: string | null} | "pending" | null => {
     if (!value || typeof value !== "object") {
       return null;
     }
@@ -173,7 +221,10 @@ export const betterAuthAdapter = (
     } else {
       return null;
     }
-    return {key: `${payload?.user?.id ?? ""}|${payload?.session?.token ?? ""}`};
+    return {
+      key: `${payload?.user?.id ?? ""}|${payload?.session?.token ?? ""}`,
+      userId: payload?.user?.id ?? null,
+    };
   };
 
   const onAuthChange = (callback: () => void): (() => void) => {
@@ -196,6 +247,7 @@ export const betterAuthAdapter = (
           callback();
           return;
         }
+        confirmedUserId = parsed.userId;
         if (parsed.key === lastKey) {
           return;
         }

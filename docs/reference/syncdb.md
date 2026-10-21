@@ -192,6 +192,13 @@ const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient), 
 Pass the same `storagePrefix` and `bearerStorage` you gave `createBetterAuthClient`. The option
 is explicit: the adapter never detects bearer mode from the client.
 
+The adapter never throws on a failed session read (a rejected `getSession()`, or a `{error}`
+envelope other than a 401). `getToken` and `refresh` answer null and false. `getUserId` answers
+with the user id the server last confirmed, through a successful read or a session-atom
+emission, and null before the first confirmation. A read that fails while the device is offline
+is therefore never reported as a sign-out, which would clear the client's current user and make
+`mutate()` throw. A successful read with no session, or a 401, is a sign-out.
+
 `createSyncDb(options)` options:
 
 | Option | Type | Default | Description |

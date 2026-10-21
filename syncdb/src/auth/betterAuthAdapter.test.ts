@@ -58,6 +58,56 @@ describe("betterAuthAdapter", () => {
       expect(await adapter.getUserId()).toBeNull();
     });
 
+    it("keeps the confirmed user id when a later read fails, so offline is not a sign-out", async () => {
+      let next: () => Promise<BetterAuthGetSessionResult> = async () => ({
+        data: {session: {token: "tok"}, user: {id: "u1"}},
+      });
+      const adapter = betterAuthAdapter(makeClient(() => next()));
+      expect(await adapter.getUserId()).toBe("u1");
+
+      next = async () => {
+        throw new TypeError("Failed to fetch");
+      };
+      expect(await adapter.getUserId()).toBe("u1");
+      expect(await adapter.getToken()).toBeNull();
+
+      next = async () =>
+        ({
+          data: null,
+          error: {status: 0, statusText: "Failed to fetch"},
+        }) as BetterAuthGetSessionResult;
+      expect(await adapter.getUserId()).toBe("u1");
+    });
+
+    it("returns null after the server confirms sign-out, even if a later read fails", async () => {
+      let next: () => Promise<BetterAuthGetSessionResult> = async () => ({
+        data: {session: {token: "tok"}, user: {id: "u1"}},
+      });
+      const adapter = betterAuthAdapter(makeClient(() => next()));
+      expect(await adapter.getUserId()).toBe("u1");
+
+      next = async () => ({data: null});
+      expect(await adapter.getUserId()).toBeNull();
+      next = async () => {
+        throw new TypeError("Failed to fetch");
+      };
+      expect(await adapter.getUserId()).toBeNull();
+    });
+
+    it("treats a 401 error envelope as signed out", async () => {
+      let next: () => Promise<BetterAuthGetSessionResult> = async () => ({
+        data: {session: {token: "tok"}, user: {id: "u1"}},
+      });
+      const adapter = betterAuthAdapter(makeClient(() => next()));
+      expect(await adapter.getUserId()).toBe("u1");
+      next = async () =>
+        ({
+          data: null,
+          error: {status: 401, statusText: "Unauthorized"},
+        }) as BetterAuthGetSessionResult;
+      expect(await adapter.getUserId()).toBeNull();
+    });
+
     it("returns null when getSession resolves to a non-object", async () => {
       const adapter = betterAuthAdapter(
         makeClient(async () => "nonsense" as unknown as BetterAuthGetSessionResult)
@@ -296,6 +346,38 @@ describe("betterAuthAdapter", () => {
       // A genuine sign-out (successful read, no session) still fires.
       atom.emit({data: null});
       expect(count).toBe(2);
+    });
+
+    it("answers an auth-change callback's getUserId from the emission when the read fails", async () => {
+      // The syncdb client re-reads getUserId inside its auth-change handler. When the
+      // device goes offline between the emission and that read, a null answer would be
+      // taken as a sign-out.
+      const atom = makeAtom();
+      const adapter = betterAuthAdapter(
+        makeClient(
+          async () => {
+            throw new TypeError("Failed to fetch");
+          },
+          {
+            subscribe: (listener) => {
+              atom.listeners.add(listener);
+              return () => atom.listeners.delete(listener);
+            },
+          }
+        )
+      );
+      const seen: (string | null)[] = [];
+      adapter.onAuthChange(() => {
+        void adapter.getUserId().then((userId) => seen.push(userId));
+      });
+
+      atom.emit({data: {session: {token: "tok"}, user: {id: "u1"}}});
+      await flush();
+      expect(seen).toEqual(["u1"]);
+
+      atom.emit({data: null});
+      await flush();
+      expect(seen).toEqual(["u1", null]);
     });
 
     it("forwards opaque emissions it cannot parse (back-compat)", () => {

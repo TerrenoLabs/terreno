@@ -225,6 +225,7 @@ Open risks: the one-time token travels in a URL fragment, which servers, access 
 | X6 | syncdb's `betterAuthAdapter` marks its first-load emission so rtk's offline queue can tell it from a sign-in | T8 drops unconfirmed offline-launch writes on any `onAuthChange`, including the adapter's first successful load | S | T8 |
 | X7 | rtk's base-query response handler null-checks a JSON `null` body before reading `more` | The removed example-frontend and generated forks did; no endpoint returns `null` today | S | T10, T11 |
 | X8 | A CircleCI job (nightly or path-gated) that runs the cross-site specs with a bearer-mode export | The handoff browser flow (hide before Expo Router, nonce, strip, verify) only runs locally | S | T10, T14 |
+| X9 | When create-terreno-app gains a bearer option, emit the pre–Expo Router `ott` guard (as example-frontend `index.js` does) or ship one rtk startup helper | Expo Router copies the URL fragment on import, so bearer social sign-in needs an entry-file step today | S | T11, T14 |
 
 ## Decisions
 

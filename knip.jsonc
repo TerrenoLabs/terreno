@@ -358,6 +358,7 @@
         "@terreno/jobs!",
         "@thream/socketio-jwt!",
         "ai!",
+        "better-auth!",
         "expo-server-sdk!",
         "express!",
         "google-auth-library!",

@@ -486,6 +486,7 @@
         "@terreno/jobs": "workspace:*",
         "@thream/socketio-jwt": "catalog:",
         "ai": "catalog:",
+        "better-auth": "catalog:",
         "expo-server-sdk": "^6.0.0",
         "express": "catalog:",
         "google-auth-library": "catalog:",

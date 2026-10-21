@@ -438,6 +438,25 @@ The return page must not redirect, on the server or in the browser, before the f
 run. A browser carries the fragment through a redirect that has none of its own, so a redirect
 would hand the token to the next page. For the same reason, keep `callbackPaths` to that page.
 
+example-frontend uses `/login` as the return page. With `BETTER_AUTH_OAUTH_HANDOFF=true`,
+example-backend sets `oauthHandoff` to its web origins (`getWebOrigins()`) and
+`callbackPaths: ["/login"]`. In bearer mode `lib/betterAuth.ts` starts the social buttons with
+`signInSocialWithHandoff`. `app/_layout.tsx` syncs the session only after the exchange resolves.
+
+In an Expo Router app, run the exchange from the entry file, not from a layout. Expo Router
+copies the URL, fragment included, as soon as it is imported, and writes that copy back into
+the address bar when it routes, which would put `ott` and `handoff` back. Importing
+`@terreno/rtk` imports Expo Router too (through `@terreno/ui`). example-frontend's `index.js`
+first imports `lib/oauthHandoffUrl.ts`, which has no imports and hides `handoff` and `ott` from
+the URL, then `lib/oauthHandoff.ts`, which puts the URL back and calls
+`completeBetterAuthOAuthHandoff` in the same synchronous step, then `expo-router/entry`.
+
+The login screen shows `?error=` in `login-screen-error`. `e2e/crossSiteOAuth.spec.ts` signs in
+cross-site through a local mock OIDC provider (`e2e/helpers/mockOidcProvider.ts`), which
+example-backend registers as the `mock-oidc` generic OAuth provider only when `MOCK_OIDC_ISSUER`
+is set. example-backend refuses to start when `MOCK_OIDC_ISSUER` is set with
+`NODE_ENV=production` or names a host other than `127.0.0.1`, `localhost` or `[::1]`.
+
 ### Trade-offs
 
 A bearer token in web storage is readable by any script on the frontend's origin, so an XSS

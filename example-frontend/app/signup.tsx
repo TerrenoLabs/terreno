@@ -40,12 +40,18 @@ const SignUp: React.FC = () => {
       setSocialLoading(provider);
       setErrorMessage(undefined);
       try {
-        await signInWithSocial(provider);
+        const isRedirecting = await signInWithSocial(provider);
+        if (isRedirecting) {
+          // The page is leaving for the provider; the session is read when it comes back.
+          return;
+        }
         await syncBetterAuthSession(dispatch);
         router.replace("/(tabs)");
       } catch {
         setErrorMessage("Sign up failed. Please try again.");
       } finally {
+        // Also clears it when the page is leaving, so a Back from the provider that restores
+        // this page from the browser's cache shows usable buttons.
         setSocialLoading(null);
       }
     },

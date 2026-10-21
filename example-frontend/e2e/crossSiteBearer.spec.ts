@@ -9,20 +9,19 @@
  * With a route set, Playwright's Chromium answers CORS preflights itself, so this spec does not
  * cover the server's real preflight; the deployed bearer smoke does.
  */
-import {type BrowserContext, type Page, type Route, request} from "@playwright/test";
+import type {Page} from "@playwright/test";
 import {expect, test} from "./fixtures/test";
 import {TEST_USER} from "./fixtures/testUsers";
+import {
+  BEARER_TOKEN_KEY,
+  betterAuthCookies,
+  CROSS_SITE_API_URL,
+  stripApiCookies,
+} from "./helpers/crossSiteApi";
 import {loginAs} from "./helpers/login";
 
-const CROSS_SITE_API_URL = "http://127.0.0.1:4000";
 const CROSS_SITE_SOCKET_URL = `${CROSS_SITE_API_URL.replace(/^http/, "ws")}/socket.io/`;
-// Mirrors lib/betterAuth.ts's storage prefix and rtk's `${storagePrefix}_bearer_token` key.
-const BEARER_TOKEN_KEY = "terreno-example_bearer_token";
 const SOCKET_TIMEOUT = 20_000;
-
-// Response headers the proxy drops: the cookie under test, and the encoding headers that no
-// longer match the decoded body Playwright hands back.
-const DROPPED_RESPONSE_HEADERS = ["content-encoding", "content-length", "set-cookie"];
 
 /**
  * Socket.IO namespace outcomes per Engine.IO session: `40{"sid"` is a successful CONNECT and
@@ -37,45 +36,6 @@ interface SocketHandshakes {
 }
 
 const SYNC_SUBSCRIBE_PACKET = '42["sync:subscribe"';
-
-/**
- * Proxies one API request through a fresh API context, so no cookie jar carries a session
- * between requests, and fulfills it without `set-cookie`.
- */
-const fulfillWithoutCookies = async (route: Route): Promise<void> => {
-  const api = await request.newContext();
-  try {
-    const response = await api.fetch(route.request(), {maxRedirects: 0});
-    const headers = Object.fromEntries(
-      Object.entries(response.headers()).filter(
-        ([name]) => !DROPPED_RESPONSE_HEADERS.includes(name.toLowerCase())
-      )
-    );
-    await route.fulfill({body: await response.body(), headers, status: response.status()});
-  } catch (error) {
-    // Usually the page cancelled the request (a long-lived stream on navigation); logged so a
-    // backend that is down does not surface only as a later UI timeout.
-    console.warn(`[crossSiteBearer] proxy failed for ${route.request().url()}`, error);
-    await route.abort().catch(() => undefined);
-  } finally {
-    await api.dispose();
-  }
-};
-
-/** Strips `set-cookie` from every API response; returns how many requests it proxied. */
-const stripApiCookies = async (context: BrowserContext): Promise<() => number> => {
-  let proxiedRequests = 0;
-  await context.route(`${CROSS_SITE_API_URL}/**`, async (route) => {
-    // Socket.IO long-polling holds requests open and sets no cookies; let it through untouched.
-    if (route.request().url().includes("/socket.io/")) {
-      await route.continue();
-      return;
-    }
-    proxiedRequests += 1;
-    await fulfillWithoutCookies(route);
-  });
-  return (): number => proxiedRequests;
-};
 
 const engineSessionId = (url: string): string | null => new URL(url).searchParams.get("sid");
 
@@ -147,14 +107,6 @@ const watchSocketHandshakes = (page: Page): SocketHandshakes => {
     });
   });
   return handshakes;
-};
-
-/** Better Auth's session cookies (`better-auth.session_token` and friends) on any domain. */
-const betterAuthCookies = async (context: BrowserContext): Promise<string[]> => {
-  const cookies = await context.cookies();
-  return cookies
-    .filter((cookie) => cookie.name.includes("better-auth"))
-    .map((cookie) => `${cookie.domain} ${cookie.name}`);
 };
 
 test.describe("Cross-site bearer sign-in", () => {

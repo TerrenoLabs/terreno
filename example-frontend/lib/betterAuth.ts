@@ -2,7 +2,14 @@
  * Better Auth client configuration for the example frontend.
  */
 
-import {baseUrl, createBetterAuthClient, getBetterAuthBearerToken, IsWeb} from "@terreno/rtk";
+import {
+  baseUrl,
+  completeBetterAuthOAuthHandoff,
+  createBetterAuthClient,
+  getBetterAuthBearerToken,
+  IsWeb,
+  signInSocialWithHandoff,
+} from "@terreno/rtk";
 import Constants from "expo-constants";
 
 const getAppScheme = (): string => {
@@ -41,9 +48,47 @@ export const getStoredBearerToken = (): string | null => {
   return getBetterAuthBearerToken({storagePrefix: BETTER_AUTH_STORAGE_PREFIX});
 };
 
-export const signInWithSocial = async (provider: "google" | "github" | "apple"): Promise<void> => {
+/**
+ * The page a bearer-mode social sign-in returns to. It must be one of example-backend's
+ * `oauthHandoff.callbackPaths`; lib/oauthHandoff.ts takes the one-time token from it at startup.
+ */
+const OAUTH_RETURN_PATH = "/login";
+
+/**
+ * Generic OAuth provider of the local mock OIDC server (e2e/helpers/mockOidcProvider.ts). Its
+ * button shows only in web bearer builds with `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN=true`; example-backend
+ * registers the provider only when `MOCK_OIDC_ISSUER` is set, and never in production.
+ */
+export const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
+
+export const isMockOidcSignInEnabled =
+  isWebBearerAuth && process.env.EXPO_PUBLIC_MOCK_OIDC_SIGN_IN === "true";
+
+/**
+ * Starts a social sign-in. In web bearer mode the page navigates to the API and comes back to
+ * the login page with a one-time token, so this resolves `true` while the page is leaving and
+ * the caller should wait instead of reading the session. Otherwise it resolves `false` once
+ * Better Auth's own flow returns.
+ */
+export const signInWithSocial = async (provider: string): Promise<boolean> => {
+  if (isWebBearerAuth) {
+    signInSocialWithHandoff({
+      callbackURL: OAUTH_RETURN_PATH,
+      client: betterAuthClient,
+      provider,
+    });
+    return true;
+  }
   await betterAuthClient.signIn.social({provider});
+  return false;
 };
+
+/**
+ * Exchanges the one-time token a bearer-mode social sign-in brought back for the bearer, after
+ * removing it from the URL. Resolves `true` when a bearer was stored; never rejects.
+ */
+export const completeOAuthHandoff = (): Promise<boolean> =>
+  completeBetterAuthOAuthHandoff({client: betterAuthClient});
 
 interface BetterAuthActionResult {
   error?: {message?: string} | null;

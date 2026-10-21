@@ -1,5 +1,7 @@
 import type {AuthProvider, BetterAuthConfig} from "@terreno/api";
 import {getCommsService, renderAuthMail} from "@terreno/comms";
+import type {BetterAuthPlugin} from "better-auth";
+import {genericOAuth} from "better-auth/plugins";
 
 const DEFAULT_BETTER_AUTH_SECRET = "terreno-example-better-auth-secret-dev-only-32";
 const DEFAULT_BETTER_AUTH_URL = "http://localhost:4000";
@@ -9,6 +11,61 @@ const DEFAULT_WEB_ORIGINS = ["http://localhost:8082", "http://127.0.0.1:8082"];
 
 /** Deep-link schemes used by the native app for Better Auth redirect validation. */
 const APP_SCHEMES = ["frontend://", "terreno://", "exp://"];
+
+/**
+ * The example frontend's page that receives the OAuth one-time token: social sign-in starts and
+ * ends on the login screen, which strips the fragment at startup and never redirects first.
+ */
+export const OAUTH_HANDOFF_CALLBACK_PATHS = ["/login"];
+
+/** Generic OAuth provider id of the local mock OIDC provider that e2e runs sign in with. */
+export const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
+
+// Matches example-frontend/e2e/helpers/mockOidcProvider.ts, which accepts only this client.
+const MOCK_OIDC_CLIENT_ID = "terreno-example-e2e";
+const MOCK_OIDC_CLIENT_SECRET = "terreno-example-e2e-secret";
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/**
+ * The generic OAuth plugin for the mock OIDC provider at `MOCK_OIDC_ISSUER`, or undefined when
+ * it is unset. Anyone who can run that issuer can sign in as anyone it names, so production
+ * refuses to start with it set.
+ */
+const buildMockOidcPlugin = (): BetterAuthPlugin | undefined => {
+  const issuer = process.env.MOCK_OIDC_ISSUER;
+  if (!issuer) {
+    return undefined;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("MOCK_OIDC_ISSUER must not be set in production");
+  }
+  let issuerURL: URL;
+  try {
+    issuerURL = new URL(issuer);
+  } catch {
+    throw new Error("MOCK_OIDC_ISSUER must be an http(s) origin");
+  }
+  if (issuerURL.protocol !== "http:" && issuerURL.protocol !== "https:") {
+    throw new Error("MOCK_OIDC_ISSUER must be an http(s) origin");
+  }
+  // The mock only ever runs beside the backend, so a deploy that forgot NODE_ENV still cannot
+  // trust a remote issuer's identities.
+  if (!LOOPBACK_HOSTS.has(issuerURL.hostname)) {
+    throw new Error("MOCK_OIDC_ISSUER must be on 127.0.0.1, localhost, or [::1]");
+  }
+  return genericOAuth({
+    config: [
+      {
+        clientId: MOCK_OIDC_CLIENT_ID,
+        clientSecret: MOCK_OIDC_CLIENT_SECRET,
+        discoveryUrl: `${issuerURL.origin}/.well-known/openid-configuration`,
+        pkce: true,
+        providerId: MOCK_OIDC_PROVIDER_ID,
+      },
+    ],
+  });
+};
 
 export const getAuthProvider = (): AuthProvider => {
   const provider = process.env.AUTH_PROVIDER as AuthProvider | undefined;
@@ -73,6 +130,20 @@ export const buildBetterAuthConfig = (): BetterAuthConfig | undefined => {
       clientId: process.env.APPLE_CLIENT_ID,
       clientSecret: process.env.APPLE_CLIENT_SECRET,
     };
+  }
+
+  // Cross-site web apps in bearer mode get the session from a one-time token on the
+  // login page instead of the callback's cookie.
+  if (process.env.BETTER_AUTH_OAUTH_HANDOFF === "true") {
+    config.oauthHandoff = {
+      callbackPaths: OAUTH_HANDOFF_CALLBACK_PATHS,
+      webOrigins: getWebOrigins(),
+    };
+  }
+
+  const mockOidcPlugin = buildMockOidcPlugin();
+  if (mockOidcPlugin) {
+    config.plugins = [mockOidcPlugin];
   }
 
   return config;

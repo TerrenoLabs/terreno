@@ -99,13 +99,14 @@ export const E2E_SHARDS: ShardDefinition[] = [
     ],
   },
   {
-    // Needs its own web build (cross-site API URL, bearer flag), so CircleCI's shared
-    // cookie-mode export cannot run it. Run it locally:
-    // `cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts`.
+    // Needs its own web build (cross-site API URL, bearer flag), backend (OAuth handoff, mock
+    // OIDC provider) and mock provider server, so CircleCI's shared cookie-mode export cannot
+    // run it. Run it locally:
+    // `cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts e2e/crossSiteOAuth.spec.ts`.
     blocksPullRequest: false,
     name: "cross-site-bearer",
     routes: [`${APP}/login.tsx`, `${APP}/(tabs)/profile.tsx`, `${APP}/(tabs)/ai.tsx`],
-    specs: ["crossSiteBearer"],
+    specs: ["crossSiteBearer", "crossSiteOAuth"],
   },
   {
     blocksPullRequest: false,

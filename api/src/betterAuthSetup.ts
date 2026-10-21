@@ -140,7 +140,7 @@ export const createBetterAuthEmailHooks = (config: BetterAuthConfig) => {
 
 // The API's own origin, which the OAuth handoff never sends a token to.
 const apiOriginOf = (url: string): string => {
-  let origin = "null";
+  let origin: string;
   try {
     origin = new URL(url).origin;
   } catch {

@@ -197,7 +197,17 @@ envelope other than a 401). `getToken` and `refresh` answer null and false. `get
 with the user id the server last confirmed, through a successful read or a session-atom
 emission, and null before the first confirmation. A read that fails while the device is offline
 is therefore never reported as a sign-out, which would clear the client's current user and make
-`mutate()` throw. A successful read with no session, or a 401, is a sign-out.
+`mutate()` throw. A successful read with no session, or a 401 (from `getSession()` or the session
+atom), is a sign-out; a 401 emission also fires `onAuthChange`, deduped like any other
+signed-out emission.
+
+The last confirmed user id follows the newest answer, not the last one to arrive. A read counts
+from when it started; an emission that changes or clears the identity counts from when it
+arrived. A read that started before a sign-out or user switch and resolves after it still
+answers its own caller, but does not update the confirmed user id. Emissions that repeat the
+atom's cached session are not new answers: a refetch-start emission (`isRefetching: true`) is
+ignored, and the value a new subscriber receives on subscribing only fills the confirmed user id
+before anything else has confirmed one.
 
 `createSyncDb(options)` options:
 

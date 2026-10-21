@@ -40,6 +40,13 @@ const unwrapSession = (result: unknown): BetterAuthSessionDataLike | null => {
   return result as BetterAuthSessionDataLike;
 };
 
+/** True for an error whose status says the server has no session for this client. */
+const isUnauthorizedError = (error: unknown): boolean => {
+  return (
+    Boolean(error) && typeof error === "object" && (error as {status?: unknown}).status === 401
+  );
+};
+
 /**
  * True for a `{error}` envelope from a fetch that failed: Better Auth's client returns one
  * instead of rejecting for many failures. A 401 is the server saying "signed out", so it
@@ -53,7 +60,7 @@ const isFailedReadEnvelope = (result: unknown): boolean => {
   if (!error) {
     return false;
   }
-  return (error as {status?: unknown}).status !== 401;
+  return !isUnauthorizedError(error);
 };
 
 /**
@@ -80,11 +87,52 @@ export const betterAuthAdapter = (
     ((handle: unknown): void => clearInterval(handle as ReturnType<typeof setInterval>));
 
   /**
-   * The user id the server last confirmed: set by every successful session read and every
-   * parseable session-atom emission, cleared when either reports signed out. `undefined`
-   * until the first confirmation. {@link getUserId} answers with it when a read fails.
+   * The user id the server last confirmed: set by successful session reads and by
+   * session-atom emissions, cleared when either reports signed out. `undefined` until the
+   * first confirmation. {@link getUserId} answers with it when a read fails.
    */
   let confirmedUserId: string | null | undefined;
+  /**
+   * Ordering for {@link confirmedUserId}. Every session read takes a ticket when it starts,
+   * and every emission that changes or clears the identity takes one when it arrives. The
+   * cache keeps the answer with the highest ticket, so a read that started before a sign-out
+   * or user switch and resolves after it cannot restore the previous user.
+   */
+  let lastTicket = 0;
+  let confirmedTicket = 0;
+
+  const takeTicket = (): number => {
+    lastTicket += 1;
+    return lastTicket;
+  };
+
+  const confirmUserId = (userId: string | null, ticket: number): void => {
+    if (ticket < confirmedTicket) {
+      return;
+    }
+    confirmedTicket = ticket;
+    confirmedUserId = userId;
+  };
+
+  /**
+   * Record an emission's identity. An emission that only re-confirms the cached user takes no
+   * ticket, so it does not discard an in-flight read that may carry a newer sign-out. A
+   * signed-out emission always takes one, so it discards every read that started before it.
+   *
+   * A replay (the atom's current value, delivered synchronously to a new subscriber) is not a
+   * new server answer: it may be older than a read that already confirmed a sign-out. It
+   * counts as the oldest answer, so it only fills the cache before anything is confirmed.
+   */
+  const confirmUserIdFromEmission = (userId: string | null, isReplay: boolean): void => {
+    if (isReplay) {
+      confirmUserId(userId, 0);
+      return;
+    }
+    if (userId !== null && userId === confirmedUserId) {
+      return;
+    }
+    confirmUserId(userId, takeTicket());
+  };
 
   /**
    * Read the session, distinguishing "read failed" from "signed out". Both surface as
@@ -96,6 +144,7 @@ export const betterAuthAdapter = (
     ok: boolean;
     session: BetterAuthSessionDataLike | null;
   }> => {
+    const ticket = takeTicket();
     let result: BetterAuthGetSessionResult;
     try {
       result = await authClient.getSession();
@@ -106,7 +155,7 @@ export const betterAuthAdapter = (
       return {ok: false, session: null};
     }
     const session = unwrapSession(result);
-    confirmedUserId = session?.user?.id ?? null;
+    confirmUserId(session?.user?.id ?? null, ticket);
     return {ok: true, session};
   };
 
@@ -179,9 +228,12 @@ export const betterAuthAdapter = (
 
   /**
    * Classify a session-atom emission for the subscribe path:
-   * - "pending": an in-flight fetch state (`isPending: true`) or a FAILED read
-   *   (`error` set) — never a change;
-   * - `{key}`: a parseable session envelope reduced to its identity (userId|token);
+   * - "pending": an in-flight fetch state (`isPending: true`), a refetch start
+   *   (`isRefetching: true`, which re-emits the previous data rather than a server answer),
+   *   or a FAILED read (`error` set, other than a 401) — never a change;
+   * - `{key}`: a parseable session envelope reduced to its identity (userId|token). A 401
+   *   error is the server saying "signed out", so it reduces to the signed-out identity,
+   *   matching how a 401 from `getSession()` is read;
    * - null: an opaque value the adapter cannot interpret.
    *
    * A failed read is deliberately indistinguishable from "pending" here. Better Auth
@@ -200,12 +252,16 @@ export const betterAuthAdapter = (
     }
     const emission = value as {
       isPending?: unknown;
+      isRefetching?: unknown;
       data?: unknown;
       user?: unknown;
       error?: unknown;
     };
-    if (emission.isPending === true) {
+    if (emission.isPending === true || emission.isRefetching === true) {
       return "pending";
+    }
+    if (isUnauthorizedError(emission.error)) {
+      return {key: "|", userId: null};
     }
     if (emission.error) {
       return "pending";
@@ -238,6 +294,7 @@ export const betterAuthAdapter = (
       // token rotation) may fire the callback. In-flight (`isPending`) states are
       // skipped; opaque values the adapter cannot parse are forwarded as before.
       let lastKey: string | undefined;
+      let isSubscribing = true;
       const unsubscribe = subscribe((value) => {
         const parsed = classifyEmission(value);
         if (parsed === "pending") {
@@ -247,13 +304,17 @@ export const betterAuthAdapter = (
           callback();
           return;
         }
-        confirmedUserId = parsed.userId;
+        // An emission repeating the atom's own last value is not a new server answer (a
+        // fetch that started before a newer read can settle late), so it must not
+        // overwrite what that read confirmed.
         if (parsed.key === lastKey) {
           return;
         }
+        confirmUserIdFromEmission(parsed.userId, isSubscribing);
         lastKey = parsed.key;
         callback();
       });
+      isSubscribing = false;
       return typeof unsubscribe === "function" ? unsubscribe : (): void => {};
     }
 

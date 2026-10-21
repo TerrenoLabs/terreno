@@ -604,4 +604,236 @@ describe("betterAuthAdapter", () => {
       expect(calls).toBeGreaterThanOrEqual(1);
     });
   });
+
+  describe("confirmed user id ordering", () => {
+    interface ScriptedClient {
+      client: BetterAuthClientLike;
+      /** Answer every getSession() call that is not held with this result (or a rejection). */
+      answerWith: (result: () => Promise<BetterAuthGetSessionResult>) => void;
+      /** Hold the next getSession() call until the returned release function runs. */
+      holdNext: () => (result: BetterAuthGetSessionResult) => void;
+      emit: (value: unknown) => void;
+    }
+
+    const makeScriptedClient = (): ScriptedClient => {
+      const listeners = new Set<(value: unknown) => void>();
+      const queue: (() => Promise<BetterAuthGetSessionResult>)[] = [];
+      let fallback: () => Promise<BetterAuthGetSessionResult> = async () => null;
+      return {
+        answerWith: (result): void => {
+          fallback = result;
+        },
+        client: {
+          getSession: () => (queue.shift() ?? fallback)(),
+          useSession: {
+            subscribe: (listener): (() => void) => {
+              listeners.add(listener);
+              return () => listeners.delete(listener);
+            },
+          },
+        },
+        emit: (value: unknown): void => {
+          for (const listener of listeners) {
+            listener(value);
+          }
+        },
+        holdNext: (): ((result: BetterAuthGetSessionResult) => void) => {
+          let release: (result: BetterAuthGetSessionResult) => void = () => {};
+          const held = new Promise<BetterAuthGetSessionResult>((resolve) => {
+            release = resolve;
+          });
+          queue.push(() => held);
+          return (result) => release(result);
+        },
+      };
+    };
+
+    const offline = async (): Promise<BetterAuthGetSessionResult> => {
+      throw new TypeError("Failed to fetch");
+    };
+
+    const u1Session = {data: {session: {token: "tok-1"}, user: {id: "u1"}}};
+
+    it("drops a read that started before a sign-out emission and resolved after it", async () => {
+      const scripted = makeScriptedClient();
+      const adapter = betterAuthAdapter(scripted.client);
+      adapter.onAuthChange(() => {});
+      scripted.emit(u1Session);
+
+      const release = scripted.holdNext();
+      const staleRead = adapter.getUserId();
+      scripted.emit({data: null});
+      release(u1Session);
+      // The read still answers its own caller with what the server returned.
+      expect(await staleRead).toBe("u1");
+
+      scripted.answerWith(offline);
+      expect(await adapter.getUserId()).toBeNull();
+    });
+
+    it("drops a read that resolved after a newer read confirmed sign-out", async () => {
+      const scripted = makeScriptedClient();
+      const adapter = betterAuthAdapter(scripted.client);
+      scripted.answerWith(async () => u1Session);
+      expect(await adapter.getUserId()).toBe("u1");
+
+      const release = scripted.holdNext();
+      const staleRead = adapter.getUserId();
+      scripted.answerWith(async () => ({data: null}));
+      expect(await adapter.getUserId()).toBeNull();
+      release(u1Session);
+      expect(await staleRead).toBe("u1");
+
+      scripted.answerWith(offline);
+      expect(await adapter.getUserId()).toBeNull();
+    });
+
+    it("keeps the switched-to user when a read from before the switch resolves late", async () => {
+      const scripted = makeScriptedClient();
+      const adapter = betterAuthAdapter(scripted.client);
+      adapter.onAuthChange(() => {});
+      scripted.emit(u1Session);
+
+      const release = scripted.holdNext();
+      const staleRead = adapter.getUserId();
+      scripted.emit({data: {session: {token: "tok-2"}, user: {id: "u2"}}});
+      release(u1Session);
+      expect(await staleRead).toBe("u1");
+
+      scripted.answerWith(offline);
+      expect(await adapter.getUserId()).toBe("u2");
+    });
+
+    it("does not drop a newer read because an older read resolved first", async () => {
+      const scripted = makeScriptedClient();
+      const adapter = betterAuthAdapter(scripted.client);
+      const releaseOlder = scripted.holdNext();
+      const releaseNewer = scripted.holdNext();
+      const olderRead = adapter.getUserId();
+      const newerRead = adapter.getUserId();
+      releaseOlder({data: {session: {token: "tok-2"}, user: {id: "u2"}}});
+      expect(await olderRead).toBe("u2");
+      releaseNewer(u1Session);
+      expect(await newerRead).toBe("u1");
+
+      scripted.answerWith(offline);
+      expect(await adapter.getUserId()).toBe("u1");
+    });
+
+    it("lets an in-flight read confirm sign-out when an emission only re-confirmed the same user", async () => {
+      const scripted = makeScriptedClient();
+      const adapter = betterAuthAdapter(scripted.client);
+      adapter.onAuthChange(() => {});
+      scripted.emit(u1Session);
+
+      const release = scripted.holdNext();
+      const read = adapter.getUserId();
+      scripted.emit(u1Session);
+      release({data: null});
+      expect(await read).toBeNull();
+
+      scripted.answerWith(offline);
+      expect(await adapter.getUserId()).toBeNull();
+    });
+
+    it("keeps a read-confirmed user when a late atom fetch repeats the atom's own value", async () => {
+      const scripted = makeScriptedClient();
+      const adapter = betterAuthAdapter(scripted.client);
+      adapter.onAuthChange(() => {});
+      scripted.emit(u1Session);
+
+      scripted.answerWith(async () => ({data: {session: {token: "tok-2"}, user: {id: "u2"}}}));
+      expect(await adapter.getUserId()).toBe("u2");
+      // An atom fetch that started before that read settles late with the atom's old value.
+      scripted.emit(u1Session);
+
+      scripted.answerWith(offline);
+      expect(await adapter.getUserId()).toBe("u2");
+    });
+
+    it("treats a 401 session-atom emission as a sign-out", async () => {
+      const scripted = makeScriptedClient();
+      const adapter = betterAuthAdapter(scripted.client);
+      let calls = 0;
+      adapter.onAuthChange(() => {
+        calls += 1;
+      });
+      scripted.emit(u1Session);
+      expect(calls).toBe(1);
+
+      scripted.answerWith(offline);
+      scripted.emit({data: null, error: {status: 401, statusText: "Unauthorized"}});
+      expect(calls).toBe(2);
+      expect(await adapter.getUserId()).toBeNull();
+
+      // Repeated 401s, and a plain signed-out emission, share one identity and are deduped.
+      scripted.emit({data: null, error: {status: 401, statusText: "Unauthorized"}});
+      scripted.emit({data: null});
+      expect(calls).toBe(2);
+    });
+
+    it("ignores the stale data a refetch-start emission carries", async () => {
+      const scripted = makeScriptedClient();
+      const adapter = betterAuthAdapter(scripted.client);
+      adapter.onAuthChange(() => {});
+      scripted.emit(u1Session);
+
+      // A direct read sees the session revoked while the atom still holds u1.
+      scripted.answerWith(async () => ({data: null}));
+      expect(await adapter.getUserId()).toBeNull();
+      // Better Auth starts every refetch by re-emitting the previous data.
+      scripted.emit({...u1Session, error: null, isPending: false, isRefetching: true});
+
+      scripted.answerWith(offline);
+      expect(await adapter.getUserId()).toBeNull();
+    });
+
+    it("does not let a new subscriber's replay of the cached session restore a signed-out user", async () => {
+      // nanostores replays the atom's current value to each new listener synchronously.
+      const atomValue: unknown = u1Session;
+      const listeners = new Set<(value: unknown) => void>();
+      let next: () => Promise<BetterAuthGetSessionResult> = async () => u1Session;
+      const adapter = betterAuthAdapter({
+        getSession: () => next(),
+        useSession: {
+          subscribe: (listener): (() => void) => {
+            listeners.add(listener);
+            listener(atomValue);
+            return () => listeners.delete(listener);
+          },
+        },
+      });
+      let calls = 0;
+      adapter.onAuthChange(() => {
+        calls += 1;
+      });
+      expect(calls).toBe(1);
+      expect(await adapter.getUserId()).toBe("u1");
+
+      next = async () => ({data: null});
+      expect(await adapter.getUserId()).toBeNull();
+      // A second consumer subscribes while the atom still holds the old session.
+      adapter.onAuthChange(() => {
+        calls += 1;
+      });
+      expect(calls).toBe(2);
+
+      next = offline;
+      expect(await adapter.getUserId()).toBeNull();
+    });
+
+    it("uses a subscriber's replay as the first confirmation when nothing is confirmed yet", async () => {
+      const adapter = betterAuthAdapter({
+        getSession: offline,
+        useSession: {
+          subscribe: (listener): (() => void) => {
+            listener(u1Session);
+            return () => {};
+          },
+        },
+      });
+      adapter.onAuthChange(() => {});
+      expect(await adapter.getUserId()).toBe("u1");
+    });
+  });
 });

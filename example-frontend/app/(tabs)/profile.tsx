@@ -1,6 +1,7 @@
 import {useBooleanFlagDetails} from "@openfeature/react-sdk";
-import {canOpenAdminPage, selectBetterAuthUserId, useFeatureFlags} from "@terreno/rtk";
-import {useApiClient} from "@terreno/syncdb/react";
+import {canOpenAdminPage} from "@terreno/syncdb/app";
+import {useSession} from "@terreno/syncdb/auth";
+import {useFeatureFlags} from "@terreno/syncdb/flags";
 import {
   Badge,
   Banner,
@@ -19,20 +20,26 @@ import {
 import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
-import {useSelector} from "react-redux";
 import {useThemePreference} from "@/contexts/ThemePreferenceContext";
-import {type PatchAuthMeArgs, useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
-import {logout, useAppDispatch} from "@/store/index";
+import {logoutAndWipe} from "@/lib/logout";
 import {
-  terrenoApi,
+  type PatchAuthMeArgs,
+  useCommsTestPushMutation,
+  useGetAuthMeQuery,
+  usePatchAuthMeMutation,
   usePostAuthSendVerificationMutation,
-  usePostCommsDevTestPushMutation,
-} from "@/store/sdk";
+} from "@/store/apiSdk";
+import {adminSyncDb, syncDb} from "@/store/syncdb";
+
+/** What POST /comms/dev/testPush reports for the caller's registered devices. */
+interface TestPushResult {
+  accepted?: number;
+  tokenCount?: number;
+}
 
 const ProfileScreen: React.FC = () => {
   const router = useRouter();
-  const dispatch = useAppDispatch();
-  const userId = useSelector(selectBetterAuthUserId);
+  const {logout, userId} = useSession();
   const {
     data: profileResponse,
     isLoading,
@@ -40,24 +47,10 @@ const ProfileScreen: React.FC = () => {
   } = useGetAuthMeQuery(undefined, {
     skip: !userId,
   });
-  const apiClient = useApiClient();
-  const [patchMe, {isLoading: isUpdating}] = usePatchAuthMeMutation();
-  // Layouts still read the profile through RTK until they migrate; keep both caches fresh.
-  const updateProfile = useCallback(
-    (body: PatchAuthMeArgs): ReturnType<typeof patchMe> => {
-      const result = patchMe(body);
-      result.then((outcome) => {
-        if (!outcome.error) {
-          dispatch(terrenoApi.util.invalidateTags(["profile"]));
-        }
-      });
-      return result;
-    },
-    [dispatch, patchMe]
-  );
+  const [updateProfile, {isLoading: isUpdating}] = usePatchAuthMeMutation();
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
-  const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
+  const [sendTestPush, {isLoading: isSendingTestPush}] = useCommsTestPushMutation();
   const {
     colorSchemeSetting,
     isLoading: isThemePreferenceLoading,
@@ -68,7 +61,12 @@ const ProfileScreen: React.FC = () => {
     flags,
     isLoading: isFeatureFlagsLoading,
     error: featureFlagsError,
-  } = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  } = useFeatureFlags({
+    // The root OpenFeatureBridge refetches the shared flag query on socket pushes.
+    skip: !userId,
+    socket: null,
+    userId,
+  });
   const darkModeFlagDetails = useBooleanFlagDetails("dark-mode-toggle", false);
   const featureFlagEntries = useMemo(
     (): Array<{key: string; value: boolean | string | null}> =>
@@ -184,21 +182,20 @@ const ProfileScreen: React.FC = () => {
   );
 
   const handleLogout = useCallback((): void => {
-    dispatch(logout());
-  }, [dispatch]);
+    void logoutAndWipe({logout, syncDbs: [syncDb, adminSyncDb]});
+  }, [logout]);
 
   const handleResendVerification = useCallback(async (): Promise<void> => {
     setVerificationError(null);
     setVerificationMessage(null);
     try {
       await sendVerification().unwrap();
-      apiClient.invalidateTags(["auth"]);
       setVerificationMessage("Verification email sent. Check your inbox or the server console.");
     } catch (error: unknown) {
       console.error("Failed to send verification email", error);
       setVerificationError("Could not send a verification email.");
     }
-  }, [apiClient, sendVerification]);
+  }, [sendVerification]);
 
   const handleSaveApiKey = useCallback((): void => {
     setGeminiApiKey(apiKeyInput.trim());
@@ -230,10 +227,10 @@ const ProfileScreen: React.FC = () => {
     setTestPushError(null);
     setTestPushMessage(null);
     try {
-      const result = await sendTestPush({
+      const result = (await sendTestPush({
         body: "Sent from the example app profile screen.",
         title: "Terreno test push",
-      }).unwrap();
+      }).unwrap()) as TestPushResult;
       if (result.tokenCount === 0) {
         setTestPushMessage("No registered push tokens for this account.");
         return;
@@ -440,7 +437,7 @@ const ProfileScreen: React.FC = () => {
               {String(darkModeFlagDetails.reason ?? "")})
             </Text>
             {isFeatureFlagsLoading && <Text color="secondaryLight">Loading feature flags...</Text>}
-            {!isFeatureFlagsLoading && featureFlagsError && (
+            {!isFeatureFlagsLoading && Boolean(featureFlagsError) && (
               <Text color="error">Failed to load feature flags</Text>
             )}
             {!isFeatureFlagsLoading && !featureFlagsError && featureFlagEntries.length === 0 && (
@@ -455,9 +452,15 @@ const ProfileScreen: React.FC = () => {
                   justifyContent="between"
                   key={flagEntry.key}
                   paddingY={1}
+                  testID={`profile-feature-flag-${flagEntry.key}`}
                 >
                   <Text>{flagEntry.key}</Text>
-                  <Text color="secondaryLight">{String(flagEntry.value)}</Text>
+                  <Text
+                    color="secondaryLight"
+                    testID={`profile-feature-flag-${flagEntry.key}-value`}
+                  >
+                    {String(flagEntry.value)}
+                  </Text>
                 </Box>
               ))}
           </Box>

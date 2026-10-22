@@ -1,5 +1,7 @@
 import {afterEach, describe, it} from "bun:test";
-import {configureStore} from "@reduxjs/toolkit";
+import {createApiClient} from "@terreno/syncdb/api";
+import {SessionProvider} from "@terreno/syncdb/auth";
+import {ApiClientProvider} from "@terreno/syncdb/react";
 import {TerrenoProvider} from "@terreno/ui";
 import {act, fireEvent, type RenderResult, render} from "@testing-library/react-native";
 import {assert} from "chai";
@@ -7,9 +9,6 @@ import {router, useLocalSearchParams} from "expo-router";
 import type React from "react";
 import type {ReactNode} from "react";
 import {SafeAreaProvider} from "react-native-safe-area-context";
-import {Provider} from "react-redux";
-
-import {terrenoApi} from "@/store/sdk";
 
 import DocumentsScreen from "./documents";
 
@@ -28,20 +27,23 @@ const setParams = router.setParams as unknown as {
 };
 const push = router.push as unknown as {mockClear: () => void; mock: {calls: unknown[][]}};
 
-const store = configureStore({
-  middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(terrenoApi.middleware),
-  reducer: {
-    betterAuth: (state: {userId: string | null} = {userId: null}): {userId: string | null} => state,
-    [terrenoApi.reducerPath]: terrenoApi.reducer,
-  },
-});
+// A signed-out session source: no user, nothing to sign out of.
+const signedOutSession = {
+  getSession: async (): Promise<null> => null,
+  signOut: async (): Promise<void> => {},
+};
+
+// Signed out (userId null), so flag queries are skipped and this client sends nothing.
+const apiClient = createApiClient({baseUrl: "http://localhost:4000"});
 
 const Wrapper: React.FC<{children: ReactNode}> = ({children}) => (
-  <Provider store={store}>
-    <TerrenoProvider>
-      <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>{children}</SafeAreaProvider>
-    </TerrenoProvider>
-  </Provider>
+  <SessionProvider source={signedOutSession}>
+    <ApiClientProvider client={apiClient}>
+      <TerrenoProvider>
+        <SafeAreaProvider initialMetrics={SAFE_AREA_METRICS}>{children}</SafeAreaProvider>
+      </TerrenoProvider>
+    </ApiClientProvider>
+  </SessionProvider>
 );
 
 const renderDocuments = (): RenderResult => render(<DocumentsScreen />, {wrapper: Wrapper});

@@ -1,7 +1,7 @@
 import {mock} from "bun:test";
 
-// Screens import @terreno/rtk, whose barrel loads Better Auth's Expo client.
-// Those modules touch native Expo packages at import time. Register the mocks
+// Screens import lib/betterAuth.ts, which loads Better Auth's Expo client through
+// @terreno/syncdb/auth. Those modules touch native Expo packages at import time. Register the mocks
 // once here so every example-frontend test file sees the same modules.
 mock.module("expo-secure-store", () => ({
   deleteItemAsync: async (): Promise<void> => {},

@@ -1,13 +1,11 @@
 import {type AdminConfigResponse, useAdminRpc, useAdminRpcQuery} from "@terreno/admin-frontend";
-import {selectBetterAuthIsAuthenticated, selectBetterAuthIsLoading} from "@terreno/rtk";
+import {useSession} from "@terreno/syncdb/auth";
 import {Box, Spinner} from "@terreno/ui";
 import {usePathname, useRouter} from "expo-router";
 import React, {useEffect} from "react";
-import {useDispatch, useSelector} from "react-redux";
 import {useAppConfig} from "./AppConfigGate";
 import {AdminGateConfigProvider} from "./adminGateConfig";
 import {isForbiddenAdminConfigError} from "./adminGateUtils";
-import {useAuth} from "./StoreProvider";
 
 interface AdminRequestError {
   status?: number;
@@ -25,7 +23,8 @@ const LoadingScreen: React.FC = () => (
 );
 
 /**
- * Auth + authorization gate. Syncs the better-auth session on mount, then:
+ * Auth + authorization gate. Reads the Better Auth session from `SessionProvider` (which
+ * syncs it on mount and whenever Better Auth's session signal fires), then:
  * - unauthenticated → redirect to /login
  * - authenticated but NOT an admin (admin API returns 403) → redirect to /forbidden
  * - authenticated admin sitting on /login or /forbidden → redirect to /
@@ -35,14 +34,10 @@ const LoadingScreen: React.FC = () => (
  * Terreno `admin` flag.
  */
 export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => {
-  const dispatch = useDispatch();
   const router = useRouter();
   const pathname = usePathname();
   const {appConfig} = useAppConfig();
-  const {syncSession} = useAuth();
-
-  const isAuthLoading = useSelector(selectBetterAuthIsLoading);
-  const isAuthenticated = useSelector(selectBetterAuthIsAuthenticated);
+  const {isAuthenticated, isLoading: isAuthLoading} = useSession();
 
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
   const rpc = useAdminRpc();
@@ -63,11 +58,6 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
     status,
   });
   const isAdmin = isAuthenticated && !isConfigLoading && !error && Boolean(config);
-
-  // Sync the better-auth session into Redux once on mount.
-  useEffect(() => {
-    void syncSession(dispatch);
-  }, [dispatch, syncSession]);
 
   // Drive redirects from auth + authorization state.
   useEffect(() => {

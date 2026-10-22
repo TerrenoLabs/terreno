@@ -25,7 +25,7 @@ import {
   useCreateMcpServiceTokenMutation,
   useListMcpServiceTokensQuery,
   useRevokeMcpServiceTokenMutation,
-} from "@/store/sdk";
+} from "@/store/apiSdk";
 
 interface McpServiceTokenListItem {
   created?: string;

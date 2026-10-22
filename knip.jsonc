@@ -35,6 +35,8 @@
     // Generated syncdb API SDK covers every non-synced route; screens adopt hooks over time.
     "**/apiSdk.ts": ["exports", "types"],
     "api/src/migrations/fixtures/**": ["files", "exports", "types"],
+    // In-memory flag server shared by the syncdb flags hook tests.
+    "syncdb/src/flags/flagTestServer.ts": ["files"],
     "example-backend/migrations/**": ["files", "exports", "types"],
     "example-backend/src/migrationsDir.ts": ["files", "exports", "types"],
     // Runtime adapters expose these hooks only so deterministic tests can replace or
@@ -46,8 +48,6 @@
     "rtk/src/devConsoleLogger.ts": ["exports"],
     // Generated syncdb SDK surface may include hooks before an example screen adopts them.
     "example-frontend/store/syncDbSdk.ts": ["exports", "types"],
-    // Generated communications SDK may include hooks before an example screen adopts them.
-    "example-frontend/store/commsOpenApiSdk.ts": ["exports", "types"],
     // check-explicit-any/lib.ts loads BASELINE_PATH/loadBaseline through require() so it
     // can avoid a static lib ↔ baseline cycle; Knip cannot see the destructured names.
     "scripts/check-explicit-any/baseline.ts": ["exports"],
@@ -70,9 +70,6 @@
     ".github/scripts/prune-cloud-run-not-ready-traffic.js": ["exports"]
   },
   "ignoreFiles": [
-    // Generated communications SDK is retained as a codegen contract even before a
-    // product screen imports it; generated exports/types are handled by ignoreIssues.
-    "example-frontend/store/commsOpenApiSdk.ts",
     // Human upgrade docs link this source example; it is intentionally illustrative
     // rather than imported by the package runtime.
     "api/src/example.ts"
@@ -314,14 +311,14 @@
         "jspdf",
         // EXPO_UNSTABLE_MCP_SERVER in start/web/ios loads the Expo MCP package.
         "expo-mcp",
-        // RTK OpenAPI's CLI loads TypeScript configuration through ts-node.
-        "ts-node"
+        // No source imports it any more, but it still pulls in the native modules Better Auth
+        // needs (expo-secure-store, @better-auth/expo) until the app declares them itself
+        // when rtk/ is deleted (docs/tasks/remove-rtk.md Task 4.1).
+        "@terreno/rtk"
       ],
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "openapi-config.ts",
-        "comms-openapi-config.ts",
         "e2e/**/*.ts",
         "jspdf-native-stub.js",
         "fingerprint.config.js",

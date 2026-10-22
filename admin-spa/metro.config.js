@@ -15,7 +15,6 @@ const config = getDefaultConfig(projectRoot);
 const monorepoPackages = {
   "@terreno/ui": path.resolve(monorepoRoot, "ui"),
   "@terreno/admin-frontend": path.resolve(monorepoRoot, "admin-frontend"),
-  "@terreno/rtk": path.resolve(monorepoRoot, "rtk"),
 };
 
 // 1. Watch the local app folder, and only the shared packages (limiting the scope and speeding it

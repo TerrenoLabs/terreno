@@ -4,7 +4,7 @@ A full-stack application built with the Terreno framework.
 
 ## Project Structure
 
-- **{{appName}}-frontend/** - Expo/React Native frontend using @terreno/ui and @terreno/rtk
+- **{{appName}}-frontend/** - Expo/React Native frontend using @terreno/ui and @terreno/syncdb
 - **{{appName}}-backend/** - Express/Mongoose backend using @terreno/api
 
 ## Development
@@ -17,7 +17,7 @@ cd {{appName}}-backend && bun run dev    # Start backend on port 4000
 
 # Frontend
 cd {{appName}}-frontend && bun run web   # Start web frontend
-cd {{appName}}-frontend && bun run sdk   # Regenerate SDK after backend changes
+cd {{appName}}-frontend && bun run sdk   # Regenerate store/apiSdk.ts after backend changes
 ```
 
 ## Code Style
@@ -42,7 +42,7 @@ cd {{appName}}-frontend && bun run sdk   # Regenerate SDK after backend changes
 - Use functional components with `React.FC` type
 - Add explanatory comment above each `useEffect`
 - Wrap callbacks in `useCallback`
-- Use Redux Toolkit for state management
+- Use React context, local state, or `useStoredState` for app state (no Redux)
 
 ### Backend Conventions
 - Use `modelRouter` for CRUD endpoints
@@ -51,9 +51,11 @@ cd {{appName}}-frontend && bun run sdk   # Regenerate SDK after backend changes
 - Use `Model.findExactlyOne` or `Model.findOneOrNone` (not `Model.findOne`)
 
 ### Frontend Conventions
-- Use generated SDK hooks from `@/store/openApiSdk`
+- Use `@terreno/syncdb/react` hooks (`useQuery`, `useMutate`) for synced collection CRUD
+- Use generated hooks from `@/store/apiSdk` for non-synced routes only
+- Read the session with `useSession()` from `@terreno/syncdb/auth`
 - Use @terreno/ui components (Box, Page, Button, TextField, etc.)
-- Never modify `openApiSdk.ts` manually - regenerate with `bun run sdk`
+- Never modify `apiSdk.ts` manually - regenerate with `bun run sdk`
 
 ## AI Assistance
 

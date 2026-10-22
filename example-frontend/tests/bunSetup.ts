@@ -5,7 +5,6 @@ import React from "react";
 // Loaded after the UI test preload mocks react-native. Static imports would be
 // evaluated too early and parse react-native's Flow entry.
 const actualUi = await import("@terreno/ui");
-const actualSdk = await import("@/store/sdk");
 const actualSyncDbSdk = await import("@/store/syncDbSdk");
 
 (
@@ -93,16 +92,6 @@ const uiModuleMock = {
 mock.module("@terreno/ui", () => uiModuleMock);
 mock.module("../../ui/dist/index.js", () => uiModuleMock);
 mock.module("../../ui/src/index.tsx", () => uiModuleMock);
-
-const sdkModuleMock = {
-  ...actualSdk,
-  useSummarizeExampleTextMutation: () => [
-    () => ({unwrap: async (): Promise<{output: string}> => ({output: ""})}),
-    {isLoading: false},
-  ],
-};
-
-mock.module("@/store/sdk", () => sdkModuleMock);
 
 const syncDbSdkMocks = {
   ...actualSyncDbSdk,

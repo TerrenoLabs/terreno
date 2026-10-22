@@ -1,4 +1,4 @@
-import {baseUrl} from "@terreno/rtk";
+import {baseUrl} from "@terreno/syncdb/config";
 import {
   Box,
   Button,

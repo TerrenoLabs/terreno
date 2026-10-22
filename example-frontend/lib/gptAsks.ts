@@ -9,7 +9,7 @@ import {
   selectedFileMimeType,
 } from "@terreno/ui";
 
-import type {GptHistory} from "@/store/sdk";
+import type {GptHistory} from "@/types/gptHistory";
 
 type AskResponse = AskSubmission["response"];
 type AskFieldErrors = NonNullable<GPTChatProps["askErrors"]>[string];
@@ -277,9 +277,9 @@ export const readJson = async (response: Response): Promise<unknown> => {
 };
 
 /**
- * What an RTK Query upload mutation resolves to: the response's `data` (the base query unwraps
- * it), or the error, whose `status` is the HTTP status or, for a body that is not JSON, a string
- * such as `PARSING_ERROR` with the HTTP status in `originalStatus`.
+ * What an upload mutation trigger resolves to: the response's `data` (the request client unwraps
+ * it), or the error: an `ApiError` whose `status` is the HTTP status and whose `data` is the
+ * server's error body.
  */
 export type AskFileUploadResult = {data: unknown} | {error: unknown};
 

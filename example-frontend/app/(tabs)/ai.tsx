@@ -1,5 +1,9 @@
 import {type BlocksDocument, parseBlocks} from "@terreno/blocks";
-import {baseUrl, selectBetterAuthUserId, useFeatureFlags, useMCPTools} from "@terreno/rtk";
+import {useMCPTools} from "@terreno/syncdb/app";
+import {useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
+import {useFeatureFlags} from "@terreno/syncdb/flags";
+import {useApiClient} from "@terreno/syncdb/react";
 import {
   type AskSubmission,
   type BlockChatEvent,
@@ -18,11 +22,9 @@ import {
 } from "@terreno/ui";
 import type {Href} from "expo-router";
 import {router} from "expo-router";
-import {DateTime} from "luxon";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {type ImageSourcePropType, Linking, Platform, Image as RNImage} from "react-native";
-import {useSelector} from "react-redux";
 import {getSessionToken} from "@/lib/betterAuth";
 import {fileUploadsEnabledFromFlags} from "@/lib/fileUploads";
 import {
@@ -40,20 +42,29 @@ import {
 } from "@/lib/gptAsks";
 import {selectGptMascotIndex} from "@/lib/gptMascot";
 import {createPhotoImageResolver} from "@/lib/photoLibraryImages";
-import {useAppDispatch} from "@/store/index";
 import {
-  type GptHistory,
-  openapi,
-  terrenoApi,
+  getGptHistoriesByIdRequest,
+  useAiModelsQuery,
   useDeleteGptHistoriesByIdMutation,
-  useGetAiModelsQuery,
   useGetGptHistoriesQuery,
+  useLazyGetGptDatasetsByIdQuery,
+  useLazyPhotoLibraryUrlQuery,
   usePatchGptHistoriesByIdMutation,
   usePostFilesUploadMutation,
   usePostGptActionsMutation,
-} from "@/store/sdk";
+} from "@/store/apiSdk";
+import {authProvider} from "@/store/syncdb";
+import type {GptHistoriesListResponse, GptHistory} from "@/types/gptHistory";
 
 type AskErrors = NonNullable<GPTChatProps["askErrors"]>;
+
+/** Selectable AI chat models returned by GET /ai/models. */
+interface AiModelsResponse {
+  models?: Array<{label: string; value: string}>;
+}
+
+/** Cache tag the generated GptHistory hooks provide and invalidate. */
+const GPT_HISTORIES_TAG = "gpthistories";
 
 const componentCaption = (text: string): string | undefined => {
   const parsed = parseBlocks(text);
@@ -227,7 +238,7 @@ const FALLBACK_MODELS = [
 /** Default selection — a balanced model that matches the example backend's default. */
 const DEFAULT_MODEL_VALUE = "gemini-3.8-flash";
 
-/** RTK Query cache key for the default gpt histories list (must match useGetGptHistoriesQuery). */
+/** Args for the sidebar's gpt histories list query. */
 const gptHistoriesListQueryArgs = {};
 
 const STALE_ASK_DETAIL = "This question is no longer waiting for an answer.";
@@ -261,11 +272,11 @@ const AiScreen: React.FC = () => {
   const [mascotIndex] = useState<number>(() => selectGptMascotIndex(Math.random()));
   const [postFilesUpload] = usePostFilesUploadMutation();
   const [postGptActions] = usePostGptActionsMutation();
-  const [fetchDataset] = openapi.useLazyGetGptDatasetsByIdQuery();
-  const [fetchPhotoUrl] = openapi.useLazyPhotoLibraryUrlQuery();
+  const [fetchDataset] = useLazyGetGptDatasetsByIdQuery();
+  const [fetchPhotoUrl] = useLazyPhotoLibraryUrlQuery();
   // `file:<id>` image sources are photo library ids from the agent's `findPhotos` tool.
   const resolveImage = useMemo(
-    () => createPhotoImageResolver({fetchUrl: (id) => fetchPhotoUrl(id, true).unwrap()}),
+    () => createPhotoImageResolver({fetchUrl: (id) => fetchPhotoUrl(id).unwrap()}),
     [fetchPhotoUrl]
   );
   // Uploads each file picked for a `files` ask; without a GCS bucket the server has no file
@@ -298,9 +309,14 @@ const AiScreen: React.FC = () => {
     [mascotIndex]
   );
 
-  const dispatch = useAppDispatch();
-  const userId = useSelector(selectBetterAuthUserId);
-  const {flags, isLoading: isFlagsLoading} = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  const apiClient = useApiClient();
+  const {userId} = useSession();
+  const {flags, isLoading: isFlagsLoading} = useFeatureFlags({
+    // The root OpenFeatureBridge refetches the shared flag query on socket pushes.
+    skip: !userId,
+    socket: null,
+    userId,
+  });
   const fileUploadsEnabled = fileUploadsEnabledFromFlags({flags, isLoading: isFlagsLoading});
 
   // Drop staged files when an admin turns the file-uploads flag off.
@@ -310,17 +326,20 @@ const AiScreen: React.FC = () => {
     }
   }, [fileUploadsEnabled]);
 
-  const {data: modelsData} = useGetAiModelsQuery(undefined, {skip: !userId});
+  const modelsData = useAiModelsQuery(undefined, {skip: !userId}).data as
+    | AiModelsResponse
+    | undefined;
 
   // Prefer the live model list from the backend; fall back to the static list until it loads.
   const availableModels = useMemo(
     () => (modelsData?.models?.length ? modelsData.models : FALLBACK_MODELS),
     [modelsData]
   );
-  const {data: historiesData, isLoading} = useGetGptHistoriesQuery(gptHistoriesListQueryArgs, {
+  const {data: historiesResponse, isLoading} = useGetGptHistoriesQuery(gptHistoriesListQueryArgs, {
     skip: !userId,
   });
-  const {tools: mcpToolsRaw} = useMCPTools();
+  const historiesData = historiesResponse as GptHistoriesListResponse | undefined;
+  const {tools: mcpToolsRaw} = useMCPTools({authProvider});
   const mcpTools: MCPToolDetail[] = useMemo(
     () => mcpToolsRaw.map((t) => ({description: t.description, name: t.name})),
     [mcpToolsRaw]
@@ -330,39 +349,10 @@ const AiScreen: React.FC = () => {
 
   const histories: GPTChatHistory[] = (historiesData?.data ?? []).map(mapHistoryToChat);
 
-  const upsertSidebarHistory = useCallback(
-    (historyId: string, title?: string) => {
-      dispatch(
-        terrenoApi.util.updateQueryData(
-          "getGptHistories" as never,
-          gptHistoriesListQueryArgs as never,
-          (draft: {data?: GptHistory[]}) => {
-            const entry = draft.data?.find((h: GptHistory) => h.id === historyId);
-            if (entry) {
-              if (title) {
-                entry.title = title;
-              }
-              return;
-            }
-            if (!draft.data) {
-              draft.data = [];
-            }
-            // New conversation — add it to the sidebar immediately
-            draft.data.unshift({
-              _id: historyId,
-              created: DateTime.now().toISO() ?? "",
-              id: historyId,
-              prompts: [],
-              title: title ?? "New Chat",
-              updated: DateTime.now().toISO() ?? "",
-              userId: "",
-            });
-          }
-        )
-      );
-    },
-    [dispatch]
-  );
+  /** The sidebar list holds each conversation's title and rows; refetch it after a turn changes them. */
+  const refreshHistories = useCallback((): void => {
+    apiClient.invalidateTags([GPT_HISTORIES_TAG]);
+  }, [apiClient]);
 
   /** Build a handler that applies stream events to the open chat, starting from `initialText`. */
   const createStreamEventHandler = useCallback(
@@ -387,7 +377,7 @@ const AiScreen: React.FC = () => {
         if (data.started && data.historyId) {
           // The backend saved the turn before streaming; a reload can now resume it
           setCurrentHistoryId(data.historyId);
-          upsertSidebarHistory(data.historyId);
+          refreshHistories();
         } else if (data.replace && typeof data.text === "string") {
           setAssistantText(data.text);
         } else if (data.text) {
@@ -450,8 +440,8 @@ const AiScreen: React.FC = () => {
           );
           if (data.historyId) {
             setCurrentHistoryId(data.historyId);
-            // Update sidebar locally (backend already persisted it)
-            upsertSidebarHistory(data.historyId, data.title);
+            // The backend already persisted the title; refetch the sidebar to show it.
+            refreshHistories();
           }
         } else if (data.error) {
           console.error("SSE error:", data.error);
@@ -462,7 +452,7 @@ const AiScreen: React.FC = () => {
         }
       };
     },
-    [upsertSidebarHistory]
+    [refreshHistories]
   );
 
   const stopResume = useCallback(() => {
@@ -488,7 +478,7 @@ const AiScreen: React.FC = () => {
         }
         await readSseEvents(response, createStreamEventHandler(partialText));
         // Pick up the final stored reply for later visits to this chat
-        dispatch(terrenoApi.util.invalidateTags([{id: "LIST", type: "gptHistories"}]));
+        refreshHistories();
       } catch (err) {
         if (!controller.signal.aborted) {
           console.error("Error resuming reply:", err);
@@ -500,7 +490,7 @@ const AiScreen: React.FC = () => {
         }
       }
     },
-    [createStreamEventHandler, dispatch, stopResume]
+    [createStreamEventHandler, refreshHistories, stopResume]
   );
 
   const handleSelectHistory = useCallback(
@@ -555,7 +545,7 @@ const AiScreen: React.FC = () => {
   const handleDeleteHistory = useCallback(
     async (id: string) => {
       try {
-        await deleteHistory({id}).unwrap();
+        await deleteHistory(id).unwrap();
         if (currentHistoryId === id) {
           stopResume();
           setIsStreaming(false);
@@ -626,12 +616,7 @@ const AiScreen: React.FC = () => {
     async (historyId: string): Promise<void> => {
       const version = transcriptVersionRef.current;
       try {
-        const history = await dispatch(
-          terrenoApi.endpoints.getGptHistoriesById.initiate(
-            {id: historyId},
-            {forceRefetch: true, subscribe: false}
-          )
-        ).unwrap();
+        const history = await apiClient.request<GptHistory>(getGptHistoriesByIdRequest(historyId));
         if (transcriptVersionRef.current === version) {
           setCurrentMessages(mapHistoryToChat(history).prompts);
         }
@@ -639,18 +624,8 @@ const AiScreen: React.FC = () => {
         console.warn("Could not reload the conversation:", err);
       }
     },
-    [dispatch]
+    [apiClient]
   );
-
-  /** The sidebar cache holds each conversation's rows; refetch it after a turn changes them. */
-  const refreshHistories = useCallback((): void => {
-    dispatch(
-      terrenoApi.endpoints.getGptHistories.initiate(gptHistoriesListQueryArgs, {
-        forceRefetch: true,
-        subscribe: false,
-      })
-    );
-  }, [dispatch]);
 
   /**
    * Sends one turn to /gpt/prompt, either a new prompt or an answer to the pending ask, and applies
@@ -837,36 +812,9 @@ const AiScreen: React.FC = () => {
               if (data.historyId) {
                 setCurrentHistoryId(data.historyId);
               }
-              // Update sidebar locally (backend already persisted it)
+              // The backend already persisted the turn; refetch the sidebar to show it.
               if (data.historyId) {
-                dispatch(
-                  terrenoApi.util.updateQueryData(
-                    "getGptHistories" as never,
-                    gptHistoriesListQueryArgs as never,
-                    (draft: {data?: GptHistory[]}) => {
-                      const entry = draft.data?.find((h: GptHistory) => h.id === data.historyId);
-                      if (entry) {
-                        if (data.title) {
-                          entry.title = data.title;
-                        }
-                      } else {
-                        if (!draft.data) {
-                          draft.data = [];
-                        }
-                        // New conversation — add it to the sidebar immediately
-                        draft.data.unshift({
-                          _id: data.historyId,
-                          created: DateTime.now().toISO() ?? "",
-                          id: data.historyId,
-                          prompts: [],
-                          title: data.title ?? "New Chat",
-                          updated: DateTime.now().toISO() ?? "",
-                          userId: "",
-                        });
-                      }
-                    }
-                  )
-                );
+                refreshHistories();
               }
             } else if (data.error) {
               hasVisibleEvents = true;
@@ -899,7 +847,7 @@ const AiScreen: React.FC = () => {
       }
       return {kind: "streamed"};
     },
-    [dispatch, geminiApiKey, refreshHistories, syncConversation]
+    [geminiApiKey, refreshHistories, syncConversation]
   );
 
   const handleSubmit = useCallback(

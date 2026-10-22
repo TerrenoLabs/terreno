@@ -1,8 +1,11 @@
+import type {ApiRequestArgs} from "@terreno/syncdb/api";
+import {useApiMutation} from "@terreno/syncdb/react";
 import {Box, Button, Card, Heading, Text, useStoredState} from "@terreno/ui";
 import type React from "react";
 import {useCallback, useMemo, useState} from "react";
 import {buildTodoSummaryInput} from "@/components/todoSummaryInput";
-import {useSummarizeExampleTextMutation} from "@/store/sdk";
+import {getAiSessionId} from "@/lib/aiSession";
+import {postAiExampleSummarizeRequest} from "@/store/apiSdk";
 import type {Todo} from "@/store/syncDbSdk";
 import * as syncDbSdk from "@/store/syncDbSdk";
 
@@ -27,9 +30,33 @@ const useSavedGeminiApiKey = (): string | undefined => {
   return geminiApiKey;
 };
 
+interface SummarizeRequest {
+  apiKey?: string;
+  text: string;
+}
+
+interface SummarizeResponse {
+  output: string;
+}
+
+/**
+ * POST /ai/example-summarize with the AI session id and the user's own Gemini key. The generated
+ * hook cannot send per-call headers, so this wraps its request builder.
+ */
+const toSummarizeRequest = ({apiKey, text}: SummarizeRequest): ApiRequestArgs => ({
+  ...postAiExampleSummarizeRequest({text}),
+  headers: {
+    "x-ai-session-id": getAiSessionId(),
+    ...(apiKey ? {"x-ai-api-key": apiKey} : {}),
+  },
+});
+
+const useSummarizeExampleText = (): ReturnType<TodoSummaryDependencies["useSummarize"]> =>
+  useApiMutation<SummarizeRequest, SummarizeResponse>(toSummarizeRequest);
+
 const defaultDependencies: TodoSummaryDependencies = {
   useApiKey: useSavedGeminiApiKey,
-  useSummarize: useSummarizeExampleTextMutation,
+  useSummarize: useSummarizeExampleText,
   useTodoList: syncDbSdk.useTodos,
 };
 

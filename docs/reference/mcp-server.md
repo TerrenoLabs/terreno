@@ -311,8 +311,7 @@ Generate React Native screen component with Terreno UI components.
   type: "list" | "detail" | "form" | "empty";
   modelName?: string;        // Model name for CRUD screens
   fields?: string[];         // Fields to display/edit
-  hasSearch?: boolean;       // Add search bar (list screens)
-  hasPagination?: boolean;   // Add pagination (list screens)
+  collection?: string;       // Synced collection (default: kebab-case plural of modelName)
 }
 ``````
 
@@ -323,18 +322,16 @@ Generate React Native screen component with Terreno UI components.
   "name": "ProductList",
   "type": "list",
   "modelName": "Product",
-  "fields": ["title", "price", "active"],
-  "hasSearch": true,
-  "hasPagination": true
+  "fields": ["title", "price", "active"]
 }
 ``````
 
 **Returns:**
 
 - React Native functional component
-- @terreno/syncdb hooks (`useQuery` / `useMutate` for synced collections, generated `store/apiSdk.ts` hooks otherwise)
-- @terreno/ui components (Box, Text, Button, Card, etc.)
-- Loading/error/empty states
+- `@terreno/syncdb/react` hooks against the synced collection: `useQuery` + `useSyncStatus` (list), `useEntity` (detail), `useMutate().create` (form). For a model that is not synced, swap them for the generated `@/store/apiSdk` hooks
+- @terreno/ui components (Box, Text, Button, Page, etc.)
+- Empty and not-found states
 
 ### terreno_generate_form_fields
 
@@ -434,7 +431,10 @@ Generate admin panel integration for `@terreno/admin-backend` and `@terreno/admi
 
 **Parameters:** Model configurations with `modelName`, `routePath`, `displayName`, `listFields`, etc.
 
-**Returns:** Frontend screen files and backend/frontend setup snippets.
+**Returns:** Frontend screen files and backend/frontend setup snippets. The generated
+`admin/_layout.tsx` wraps the routes in `AdminProvider` with `apiOrigin={baseUrl}` (from
+`@terreno/syncdb/config`) and `getAuthHeaders` reading `authProvider.getToken()` from the
+scaffold's `frontend/store/syncdb.ts`. No `@terreno/rtk` import.
 
 ## Prompts
 

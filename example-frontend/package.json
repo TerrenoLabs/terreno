@@ -4,7 +4,6 @@
     "@openfeature/react-sdk": "catalog:",
     "@openfeature/web-sdk": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
-    "@reduxjs/toolkit": "catalog:",
     "@sentry/react": "catalog:",
     "@shopify/flash-list": "catalog:",
     "@stripe/stripe-react-native": "catalog:",
@@ -42,22 +41,17 @@
     "react-native-screens": "catalog:",
     "react-native-web": "catalog:",
     "react-native-webview": "catalog:",
-    "react-native-worklets": "catalog:",
-    "react-redux": "catalog:",
-    "redux-persist": "catalog:"
+    "react-native-worklets": "catalog:"
   },
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@playwright/test": "catalog:",
-    "@rtk-query/codegen-openapi": "^2.2.0",
     "@types/luxon": "catalog:",
     "@types/react": "catalog:",
     "babel-preset-expo": "catalog:",
     "expo-mcp": "^0.2.4",
     "mongodb": "catalog:",
     "react-test-renderer": "catalog:",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.23.15",
     "typescript": "catalog:"
   },
   "expo": {
@@ -82,7 +76,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:unsafefix": "biome check --write --unsafe .",
-    "sdk": "bun scripts/generate-sdk.ts && bun run api-sdk && bun biome check --write scripts/generate-sdk.ts",
+    "sdk": "bun run api-sdk",
     "start": "EXPO_UNSTABLE_MCP_SERVER=1 bun expo start --port 8082",
     "sync-sdk": "bun ../syncdb/src/codegen/cli.ts --schema ${OPENAPI_URL:-http://localhost:4000/openapi.json} --out ./store/syncDbSdk.ts --collections todos,notifications,notification-preferences --config ./syncdb-codegen.json",
     "test": "bun test ./**/*.test.ts ./**/*.test.tsx",

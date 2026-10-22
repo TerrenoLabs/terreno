@@ -53,9 +53,9 @@ const resolveBasePath = (): string => {
 };
 
 /**
- * Top-level gate (above the Redux store) that fetches `${basePath}/app-config.json`
- * once on boot and exposes it via context. Blocks render until loaded so the store and
- * auth client can be built from the config.
+ * Top-level gate (above `StoreProvider`) that fetches `${basePath}/app-config.json`
+ * once on boot and exposes it via context. Blocks render until loaded so the auth client
+ * can be built from the config.
  */
 export const AppConfigGate: React.FC<{children: React.ReactNode}> = ({children}) => {
   const [appConfig, setAppConfig] = useState<AdminSpaAppConfig | undefined>(undefined);

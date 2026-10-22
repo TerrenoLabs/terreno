@@ -3132,19 +3132,24 @@ export type GetAnnouncementsFeedArgs = {
 };
 
 export type GetAnnouncementsFeedRes = {
-  body: string;
-  displayMode: "modal" | "banner" | "feed";
-  id: string;
-  primaryAction?: {
-    label: string;
-    url: string;
-  };
-  priority: number;
-  publishedAt?: string;
-  requiresAcknowledgement: boolean;
-  title: string;
-  version: number;
-}[];
+  data: {
+    body: string;
+    displayMode: "modal" | "banner" | "feed";
+    id: string;
+    primaryAction?: {
+      label: string;
+      url: string;
+    };
+    priority: number;
+    publishedAt?: string;
+    requiresAcknowledgement: boolean;
+    title: string;
+    version: number;
+  }[];
+  more: boolean;
+  page: number;
+  total: number;
+};
 
 export const getAnnouncementsFeedRequest = (arg: GetAnnouncementsFeedArgs): ApiRequestArgs => ({
   method: "GET",

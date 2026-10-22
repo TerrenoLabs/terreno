@@ -109,7 +109,7 @@ describe("bootstrap", () => {
       const filtered = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
         appDisplayName: "No Admin BE",
         appName: "no-admin-be",
-        packages: ["api", "ui", "rtk"],
+        packages: ["api", "ui", "syncdb"],
       });
       const filteredText = filtered.content[0].text;
       expect(filteredText).not.toContain("## Admin panel backend");
@@ -126,7 +126,7 @@ describe("bootstrap", () => {
       const filtered = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
         appDisplayName: "No Admin FE",
         appName: "no-admin-fe",
-        packages: ["api", "ui", "rtk"],
+        packages: ["api", "ui", "syncdb"],
       });
       const filteredText = filtered.content[0].text;
       expect(filteredText).not.toContain("## Admin panel frontend");
@@ -137,6 +137,20 @@ describe("bootstrap", () => {
       });
       const fullText = full.content[0].text;
       expect(fullText).toContain("## Admin panel frontend");
+    });
+
+    test("frontend rules describe syncdb session, request client, and apiSdk without Redux", () => {
+      const result = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
+        appDisplayName: "No Redux",
+        appName: "no-redux",
+      });
+      const text = result.content[0].text;
+      expect(text).toContain("@/store/apiSdk");
+      expect(text).toContain("SessionProvider");
+      expect(text).toContain("@terreno/syncdb/api");
+      expect(text).not.toContain("@terreno/rtk");
+      expect(text).not.toContain("generateBetterAuthSlice");
+      expect(text).not.toContain("registerTerrenoDevStore");
     });
 
     test("includes SyncDB MCP debugging guidance when syncdb is selected", () => {

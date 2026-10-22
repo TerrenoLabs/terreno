@@ -1,4 +1,6 @@
 import {describe, it, mock} from "bun:test";
+import {createApiClient} from "@terreno/syncdb/api";
+import {ApiClientProvider} from "@terreno/syncdb/react";
 import {assert} from "chai";
 import React from "react";
 import TestRenderer, {act, type ReactTestInstance} from "react-test-renderer";
@@ -34,7 +36,11 @@ describe("TodoSummaryCard", () => {
   it("uses the app hooks by default", async () => {
     let renderer: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      renderer = TestRenderer.create(<TodoSummaryCard />);
+      renderer = TestRenderer.create(
+        <ApiClientProvider client={createApiClient({baseUrl: "http://localhost:4000"})}>
+          <TodoSummaryCard />
+        </ApiClientProvider>
+      );
     });
 
     assert.isDefined(renderer);

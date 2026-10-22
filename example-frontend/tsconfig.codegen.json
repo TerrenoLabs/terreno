@@ -1,9 +1,0 @@
-{
-  "compilerOptions": {
-    "module": "commonjs",
-    "moduleResolution": "bundler",
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "es2022"
-  }
-}

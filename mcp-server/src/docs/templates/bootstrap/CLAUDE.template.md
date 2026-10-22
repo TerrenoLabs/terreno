@@ -20,7 +20,7 @@ cd {{appName}}-backend && bun run dev
 # Start frontend (port 8082)
 cd {{appName}}-frontend && bun run web
 
-# Regenerate SDK after backend changes
+# Regenerate store/apiSdk.ts after backend changes (backend running)
 cd {{appName}}-frontend && bun run sdk
 ```
 
@@ -29,7 +29,7 @@ cd {{appName}}-frontend && bun run sdk
 1. Create model in `{{appName}}-backend/src/models/`
 2. Create route in `{{appName}}-backend/src/api/`
 3. Register route in `{{appName}}-backend/src/server.ts`
-4. Regenerate SDK: `cd {{appName}}-frontend && bun run sdk`
+4. Regenerate API hooks: `cd {{appName}}-frontend && bun run sdk` (writes `store/apiSdk.ts`)
 5. Create screens in `{{appName}}-frontend/app/`
 
 ## Code Style

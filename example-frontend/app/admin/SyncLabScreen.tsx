@@ -20,8 +20,8 @@
  */
 
 import {AdminScreenPage} from "@terreno/admin-frontend";
-import {baseUrl} from "@terreno/rtk";
 import type {SyncStatus} from "@terreno/syncdb";
+import {baseUrl} from "@terreno/syncdb/config";
 import {SyncDbProvider, useSyncDbClient} from "@terreno/syncdb/react";
 import {Badge, BooleanField, Box, Button, Card, Heading, NumberField, Text} from "@terreno/ui";
 import {DateTime} from "luxon";

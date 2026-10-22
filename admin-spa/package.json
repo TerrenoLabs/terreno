@@ -6,9 +6,7 @@
   "dependencies": {
     "@expo/vector-icons": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
-    "@reduxjs/toolkit": "catalog:",
     "@terreno/admin-frontend": "workspace:*",
-    "@terreno/rtk": "workspace:*",
     "@terreno/syncdb": "workspace:*",
     "@terreno/ui": "workspace:*",
     "better-auth": "catalog:",
@@ -29,9 +27,7 @@
     "react-native-safe-area-context": "catalog:",
     "react-native-screens": "catalog:",
     "react-native-web": "catalog:",
-    "react-native-worklets": "catalog:",
-    "react-redux": "catalog:",
-    "redux-persist": "catalog:"
+    "react-native-worklets": "catalog:"
   },
   "description": "Standalone admin SPA (Expo Router web) plus Express serve plugin — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {

@@ -1,7 +1,8 @@
 /**
  * @terreno/syncdb client for the example app.
  *
- * Authenticates with the Better Auth session from @terreno/rtk's Expo client.
+ * Authenticates with the Better Auth session from `lib/betterAuth.ts`. The same `authProvider`
+ * feeds the request client (store/apiClient.ts), so sync and request traffic share one session.
  */
 import {
   betterAuthAdapter,
@@ -10,6 +11,7 @@ import {
   type SyncDb,
 } from "@terreno/syncdb";
 import {baseUrl} from "@terreno/syncdb/config";
+import {bearerAuthHeaders} from "@/lib/authHeaders";
 import {betterAuthClient} from "@/lib/betterAuth";
 import {SYNC_COLLECTIONS} from "@/store/syncDbSdk";
 
@@ -24,6 +26,13 @@ const ADMIN_SYNC_DB_NAME = `${SYNC_DB_NAME}-admin`;
 export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient), {
   pollIntervalMs: 60_000,
 });
+
+/**
+ * `Authorization` header for code that calls the backend outside the request client
+ * (`AdminProvider`'s fetch client on the admin and documents screens).
+ */
+export const getAdminAuthHeaders = (): Promise<Record<string, string>> =>
+  bearerAuthHeaders(authProvider.getToken);
 
 /**
  * Singleton local-first client. Started/stopped by the root layout when the user is
@@ -54,6 +63,9 @@ export const syncDb: SyncDb = createSyncDb({
   // Todos stay fully synced; `fullSync` also enables server-filtered query windows
   // (`useWindowQuery`) over GET /todos — see app/todo-windows.tsx.
   queryCollections: [{collection: "todos", fullSync: true}],
+  // An explicit logout (lib/logout.ts) signs this client out; wipe the signed-out user's
+  // local rows and queued writes so they never reach the next account on this device.
+  wipeOnSignOut: true,
 });
 
 let adminOrganizationId: string | undefined;
@@ -74,6 +86,7 @@ export const adminSyncDb: SyncDb = createSyncDb({
   name: ADMIN_SYNC_DB_NAME,
   organizationIdProvider: () => adminOrganizationId,
   windowCollections: [...SYNC_COLLECTIONS],
+  wipeOnSignOut: true,
 });
 
 /**

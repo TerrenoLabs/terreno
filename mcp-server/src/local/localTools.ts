@@ -5,7 +5,7 @@ import {isBrowserAction, useBrowser} from "./tools/browser.js";
 import {databaseQuery} from "./tools/databaseQuery.js";
 import {databaseSchema} from "./tools/databaseSchema.js";
 import {lastError, readLogs} from "./tools/readLogs.js";
-import {evaluate, getRtkState, navigate} from "./tools/runtime.js";
+import {evaluate, navigate} from "./tools/runtime.js";
 import {getSyncDbState, syncDbAction, syncDbSnapshot} from "./tools/syncDb.js";
 
 export const localMcpTools: Tool[] = [
@@ -81,23 +81,6 @@ export const localMcpTools: Tool[] = [
       type: "object",
     },
     name: "last_error",
-  },
-  {
-    description:
-      "Inspect Redux store (auth + RTK Query cache summary) via `registerTerrenoDevStore` / `globalThis.__TERRENO_STORE__`, or via CDP when the MCP process cannot see the app heap.",
-    inputSchema: {
-      additionalProperties: false,
-      properties: {
-        query: {
-          description:
-            "When slice is rtk/terreno-rtk, filter cache rows whose endpoint name or serialized args contain this substring (case-insensitive).",
-          type: "string",
-        },
-        slice: {type: "string"},
-      },
-      type: "object",
-    },
-    name: "get_rtk_state",
   },
   {
     description:
@@ -313,13 +296,6 @@ export const createLocalToolCallHandler = (
           sources: Array.isArray(args.sources)
             ? args.sources.filter((s): s is string => typeof s === "string")
             : undefined,
-        });
-        return {content: [{text, type: "text"}]};
-      }
-      case "get_rtk_state": {
-        const text = await getRtkState({
-          query: typeof args.query === "string" ? args.query : undefined,
-          slice: typeof args.slice === "string" ? args.slice : undefined,
         });
         return {content: [{text, type: "text"}]};
       }

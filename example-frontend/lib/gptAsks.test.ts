@@ -1,7 +1,7 @@
 import {describe, expect, it} from "bun:test";
 import type {AskSubmission, GPTChatMessage, SelectedFile} from "@terreno/ui";
 
-import type {GptHistory} from "@/store/sdk";
+import type {GptHistory} from "@/types/gptHistory";
 
 import {
   answerHistoryId,

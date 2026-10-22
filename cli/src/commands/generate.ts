@@ -1,4 +1,3 @@
-import {existsSync} from "node:fs";
 import {readFile} from "node:fs/promises";
 import {isAbsolute, join} from "node:path";
 import {
@@ -9,7 +8,12 @@ import {
   generateScreen,
   validateModelSchema,
 } from "@terreno/mcp/tools";
-import {generateSyncDbSdk, loadConfigFile, parseCollectionsFlag} from "@terreno/syncdb/codegen";
+import {
+  generateApiSdk,
+  generateSyncDbSdk,
+  loadConfigFile,
+  parseCollectionsFlag,
+} from "@terreno/syncdb/codegen";
 
 import type {CliIo} from "../io";
 import {printJson} from "../io";
@@ -46,24 +50,33 @@ const parseAdminModel = (
   };
 };
 
-const generateSdk = async (parsed: ParsedArgs, io: CliIo): Promise<number> => {
-  const config = flagString(parsed.flags, "config");
-  if (!config) {
-    io.stderr("Usage: terreno generate sdk --config <openapi-config.ts>");
+const generateSdk = async (parsed: ParsedArgs, io: CliIo, json: boolean): Promise<number> => {
+  if (flagString(parsed.flags, "config") && !flagString(parsed.flags, "schema")) {
+    io.stderr(
+      "terreno generate sdk no longer runs an RTK openapi-config.ts (removed in Terreno 58). " +
+        "Use: terreno generate sdk --schema <url|path> --out store/apiSdk.ts [--config <json>]"
+    );
     return 1;
   }
-  const abs = resolveFromCwd(io.cwd, config);
-  if (!existsSync(abs)) {
-    io.stderr(`SDK config not found: ${abs}`);
+  const schema = flagString(parsed.flags, "schema");
+  const out = flagString(parsed.flags, "out");
+  if (!schema || !out) {
+    io.stderr("Usage: terreno generate sdk --schema <url|path> --out <file> [--config <json>]");
     return 1;
   }
-  const proc = Bun.spawn(["bunx", "@rtk-query/codegen-openapi", abs], {
-    cwd: io.cwd,
-    stderr: "inherit",
-    stdout: "inherit",
+  const configPath = flagString(parsed.flags, "config");
+  await generateApiSdk({
+    config: await loadConfigFile(configPath ? resolveFromCwd(io.cwd, configPath) : undefined),
+    format: !flagBoolean(parsed.flags, "no-format"),
+    out: resolveFromCwd(io.cwd, out),
+    schema: resolveFromCwd(io.cwd, schema),
   });
-  const code = await proc.exited;
-  return code === 0 ? 0 : 1;
+  if (json) {
+    printJson(io, {ok: true, path: out});
+  } else {
+    io.stdout(`Wrote ${out}`);
+  }
+  return 0;
 };
 
 const loadSpecLiteral = async (source: string, io: CliIo): Promise<string> => {
@@ -207,7 +220,7 @@ export const runGenerateCommand = async (
   }
 
   if (target === "sdk") {
-    return generateSdk(parsed, io);
+    return generateSdk(parsed, io, json);
   }
 
   if (target === "rest-cli") {

@@ -125,15 +125,12 @@ mock.module("@/hooks/useSyncDbReady", () => ({
   useSyncDbReady: (): boolean => isSyncDbReady,
 }));
 
-mock.module("@/store/sdk", () => ({
-  // Sibling suites import terrenoApi from this module under Bun's process-global
-  // mock.module; keep a stub so that named export stays resolvable.
-  terrenoApi: {reducerPath: "notification-center-test-api"},
+// Spread the real module: Bun's mock.module is process-global, and sibling suites import
+// other generated hooks from it.
+const actualApiSdk = await import("@/store/apiSdk");
+mock.module("@/store/apiSdk", () => ({
+  ...actualApiSdk,
   usePostNotificationsDevNotifyMutation: () => [sendTestNotification, {isLoading: false}],
-  useSummarizeExampleTextMutation: () => [
-    () => ({unwrap: async (): Promise<{output: string}> => ({output: ""})}),
-    {isLoading: false},
-  ],
 }));
 
 mock.module("@/store/syncdb", () => ({

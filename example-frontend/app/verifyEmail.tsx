@@ -6,7 +6,7 @@ import {useCallback, useMemo, useState} from "react";
 import {submitEmailVerification} from "@/lib/authRecoveryActions";
 import {parseAuthTokenFromRouteParam} from "@/lib/authRecoveryParams";
 import {verifyEmailWithToken} from "@/lib/betterAuth";
-import {usePostAuthVerifyEmailMutation} from "@/store/sdk";
+import {usePostAuthVerifyEmailMutation} from "@/store/apiSdk";
 
 const VerifyEmailScreen: React.FC = () => {
   const router = useRouter();
@@ -37,6 +37,7 @@ const VerifyEmailScreen: React.FC = () => {
       }
       setErrorMessage(undefined);
       setIsComplete(true);
+      // The Better Auth path never touches the request client, so refresh the cached profile.
       apiClient.invalidateTags(["auth"]);
     } finally {
       setIsSubmitting(false);

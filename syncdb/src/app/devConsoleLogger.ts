@@ -89,6 +89,7 @@ const push = (level: string, message: string, stack?: string): void => {
  * Test-only teardown: clears timers, restores patched globals, and allows
  * `installDevConsoleLogger` to run again. Not exported from `@terreno/syncdb/app`.
  */
+/** @internal */
 export const resetDevConsoleLoggerForTests = (): void => {
   if (flushTimer) {
     clearTimeout(flushTimer);

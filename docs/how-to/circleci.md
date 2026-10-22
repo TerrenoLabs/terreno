@@ -47,6 +47,13 @@ list pipelines on the slug above.
 | `.circleci/config.yml` | Setup workflow + `path-filtering` (this is the live config) |
 | `.circleci/continue-config.yml` | Real jobs/workflows gated by those params |
 
+## Bun version is pinned
+
+`install_bun_and_deps` pins Bun with `node/install-bun` `version`. Bun 1.4.4 reports
+lower line coverage than 1.4.2 for the same tests, which fails the 95% package
+coverage gates. Bump the pin together with the local toolchain and re-run
+`bun run test:coverage` in each package first.
+
 ## Bun install is uncached
 
 `install_bun_and_deps` runs `bun install --frozen-lockfile` with

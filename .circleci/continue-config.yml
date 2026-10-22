@@ -207,9 +207,12 @@ commands:
             sudo install /tmp/terraform/terraform /usr/local/bin/terraform
 
   install_bun_and_deps:
-    description: Install Bun (latest) and workspace deps with frozen lockfile (no package cache)
+    description: Install pinned Bun and workspace deps with frozen lockfile (no package cache)
     steps:
-      - node/install-bun
+      # Pinned: Bun 1.4.4 reports lower line coverage than 1.4.2 for the same
+      # tests, which fails the 95% package gates. Bump with the local toolchain.
+      - node/install-bun:
+          version: "1.4.2"
       - node/install-packages:
           pkg-manager: bun
           with-cache: false

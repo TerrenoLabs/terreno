@@ -21,9 +21,9 @@ Native SDK upgrades: `upgrading-expo` and `release`, never this skill.
 1. **Fingerprint freeze.** Do not bump a package when `isFingerprintSkip(name)` is true. Do not edit `eas.json`, Expo config plugins, `app.json` native fields, or native project files. After every allowed bump, recompute fingerprints for `example-frontend` and `demo`; if either hash changes, revert **that bump** and log it as failed.
 2. **Exercise test.** Keep a bump only when a test that imports the bumped package ran and passed **after** the bump. Workspace `test:ci` alone is not proof. No such test → write a tracer-bullet test first.
 3. **Local green before push.** Run the batch gate in step 5 and fix or revert until it is green. CI confirms local results; it is not the test runner.
-4. **One push per run.** Batch all commits, push once. Never push a speculative CI fix to see whether it works.
-5. **Hands off CI config.** Never edit `.circleci/`, `.github/workflows/`, executors, resource classes, or heap flags to make a bump pass. A CI-config problem means stop and report.
-6. **Stop after two red CI rounds.** If CI on the rolling PR fails twice on heads this skill pushed, stop and report instead of pushing a third time.
+4. **One batch push per run.** Batch all commits, push once. After that, push only to fix red CI on that head (rule 6). Never push a speculative CI fix to see whether it works.
+5. **Hands off CI config.** Never edit `.circleci/`, `.github/workflows/`, executors, resource classes, or heap flags to make a bump pass. A CI-config problem means stop and escalate (rule 6).
+6. **Never leave the rolling PR red.** Follow [push ownership](references/push-ownership.md): fix red CI and answer every review-bot comment, for at most three fix rounds. Still red after the third → stop pushing and escalate: the final message starts with `BLOCKED — PR #<n> still red after 3 fix rounds`, and the PR body's Last run names the failing jobs.
 7. **One trusted rolling PR.** Push only to the same-repository `chore/update-dependencies` head; `isTrustedRollingPr` must pass. Never push to `dependabot/*` branches or to a fork. Ledger and trust rules: [`references/rolling-pr.md`](references/rolling-pr.md).
 8. **7-day cooldown** for non-security npm publishes. Security advisories skip the wait; they still need an exercise test and a fingerprint freeze.
 9. **Catalog once.** Shared versions change only in the root `package.json` `catalog`. Workspace manifests keep `"catalog:"`. See `.rulesync/rules/01-dependency-catalog.md`.
@@ -97,14 +97,16 @@ Completion: one push this run; the PR body lists this UTC date, every landed bum
 
 Wait for product CI on the pushed head. Read each failure the way [`references/read-ci.md`](references/read-ci.md) says — job `messages` first, step logs second.
 
-- Reproduce the failure locally with the matching command, revert the bump that caused it, rerun the step 5 gate, and push again. That second push is the last one this run.
-- Config, plan, infra, or secret errors (for example `resource-class-not-in-plan`) are not dependency failures. Log them in the PR body and stop.
+- Reproduce the failure locally with the matching command, revert the bump that caused it, rerun the step 5 gate, and push again. Each push is one fix round; at most three.
+- A flaky job the bumps did not cause: rerun only the failed job. That counts as a round.
+- Answer every review-bot thread: fix and resolve, or reply with one sentence and resolve.
+- Config, plan, infra, or secret errors (for example `resource-class-not-in-plan`) are not dependency failures. Log them in the PR body and escalate per rule 6.
 
-Completion: CI green on the pushed head, or the run stopped with a report naming the failing job, its `messages`/log cause, and the CI round count (at most two).
+Completion: CI green on the pushed head with no unanswered bot thread, or the run escalated per rule 6 with the failing job, its `messages`/log cause, and the fix-round count (at most three).
 
 ## Identity
 
-An automation commits and pushes as whoever's git identity and GitHub token it holds. CircleCI attributes the pipeline to that GitHub user and emails them on every failed workflow. Use the bot identity when one is configured. When running as a person, keep to one push per run so they get at most one round of emails.
+An automation commits and pushes as whoever's git identity and GitHub token it holds. CircleCI attributes the pipeline to that GitHub user and emails them on every failed workflow. Use the bot identity when one is configured. When running as a person, batch into one push and fix CI within three rounds, so they get few emails and never a PR left red.
 
 ## Deferred native bumps
 

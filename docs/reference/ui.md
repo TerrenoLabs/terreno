@@ -97,7 +97,7 @@ const AppearanceSetting = () => {
 };
 ``````
 
-Dark `surface.warningLight` uses `warning200`. The lighter warning orange, `warning100`, is 2.52:1 against warning text and misses WCAG AA. Highlighted `DataTable` cells switch to `text.inverted` when `text.primary` is below 4.5:1 on that fill. Inverted `MarkdownView` code uses `surface.neutralDark` when `surface.neutralLight` is below 4.5:1 against that text, and blockquotes do the same with `surface.baseAlternate`. Primary `Button` labels use `text.secondaryDark` when that pair meets 4.5:1 on `surface.primary`, and `text.inverted` otherwise, so `setTheme(darkThemeConfig)` stays readable without changing `colorScheme`. The demo palette generator emits status `050` steps so custom palettes update those dark error, success, and warning surfaces.
+Dark `surface.warningLight` uses `warning200`. The lighter warning orange, `warning100`, is 2.52:1 against warning text and misses WCAG AA. Striped `DataTable` rows use `neutral900` in dark mode instead of `surface.neutralLight`, which is too light for ghost and link text. Highlighted `DataTable` cells switch to `text.inverted` when `text.primary` is below 4.5:1 on that fill. Inverted `MarkdownView` code uses `surface.neutralDark` when `surface.neutralLight` is below 4.5:1 against that text, and blockquotes do the same with `surface.baseAlternate`. Primary `Button` labels use `text.secondaryDark` when that pair meets 4.5:1 on `surface.primary`, and `text.inverted` otherwise, so `setTheme(darkThemeConfig)` stays readable without changing `colorScheme`. The demo palette generator emits status `050` steps so custom palettes update those dark error, success, and warning surfaces.
 
 `themeColorSchemeOptions` labels those values Light, Dark, and Follow system.
 `useTheme()` also returns the resolved `colorScheme` (`"light"` or `"dark"`)
@@ -280,6 +280,26 @@ and do not expose dismiss or read-state actions.
 | `preferences` | `{inapp, mail, push, sms}` | Current toggles |
 | `onChange` | `(channel, value) => void` | Per-channel updates |
 
+## WhatsNewBanner
+
+Non-blocking release notes banner. It shows `What's new in <version>` (plus a count of earlier
+unseen releases) until the viewer opens or dismisses it, and stays hidden until a newer release
+is listed. **See what's new** opens a `Modal` with each unseen release's Markdown notes.
+Steps: [Show release notes with WhatsNewBanner](../how-to/whats-new-banner.md).
+
+| Prop | Type | Description |
+|---|---|---|
+| `releases` | `WhatsNewRelease[]` | `{version, body, date?}` entries, newest first. `body` is Markdown |
+| `storageKey` | `string` | Device storage key for the last seen version. Default `@TerrenoUI:whatsNew:lastSeenVersion` |
+| `title` | `string` | Modal title. Default `What's new` |
+| `onOpen` | `() => void` | Called when the viewer opens the notes |
+| `testID` | `string` | Default `whats-new-banner`. Children: `-text`, `-open-button`, `-dismiss`, `-modal`, `-release-<version>` |
+
+`getUnseenWhatsNewReleases({releases, lastSeenVersion})` returns the releases newer than
+`lastSeenVersion`; an unknown or missing version counts as nothing seen.
+
+`BannerButton` also accepts an optional `testID`.
+
 ## Component Behaviors
 
 ### Button Layout Behavior
@@ -427,6 +447,8 @@ Streaming chat surface for `@terreno/ai`. Histories, messages, submit, and optio
 Pass `mascot` when the app owns a character. Terreno ships none. The node renders only while `currentMessages` is empty, centered in the chat panel above the suggested prompts. The empty hero uses the message viewport height as a minimum so short content stays centered, while taller mascots still scroll. Streaming feedback shares that centered hero instead of creating a second pane. Omit the prop for the default empty chat.
 
 The composer row (attachment picker, tools, input, Send) is vertically centered, so controls stay aligned with the input as it grows. The composer input grows with its text up to 200px, then scrolls. The attachment cell is omitted when `onAttachFiles` is not provided.
+
+The history sidebar (model selector, toolbar, New chat, and the history list) is a 250px-minimum column. Pass `showHistory={false}` to leave it out so the chat panel takes the full width, as on a phone. The host then owns history navigation and the sidebar's controls. `showHistory` defaults to `true`.
 
 Each history row keeps rename and delete in a three-dot overflow menu (`gpt-history-menu-{id}`), anchored with `DropdownPanel`. Rename uses an outlined pencil in the dark secondary text color. Titles truncate before the menu trigger, so the trigger stays aligned at any sidebar width.
 

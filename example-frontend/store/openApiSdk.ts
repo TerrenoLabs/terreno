@@ -1,5 +1,5 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: types are generated from backend OpenAPI schemas
-import {emptySplitApi as api} from "./betterAuthApi";
+import {emptySplitApi as api} from "@terreno/rtk";
 export const addTagTypes = [
   "ai",
   "observability",

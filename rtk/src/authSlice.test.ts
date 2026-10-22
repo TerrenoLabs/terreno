@@ -6,7 +6,7 @@ import {renderHook} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {Provider} from "react-redux";
-
+import {onAuthChange} from "./authEvents";
 import {
   type EmailLoginRequest,
   generateAuthSlice,
@@ -420,6 +420,30 @@ describe("generateProfileEndpoints", () => {
 });
 
 describe("listener middleware side effects", () => {
+  it("emits a JWT auth change after login and after logout", async () => {
+    const {logout, store} = createTestStore();
+    let calls = 0;
+    const unsubscribe = onAuthChange(() => {
+      calls += 1;
+    });
+
+    try {
+      store.dispatch({
+        meta: {arg: {endpointName: "emailLogin", type: "mutation"}, requestId: "listener-emit-1"},
+        payload: {refreshToken: "refresh-token", token: "auth-token", userId: "user-123"},
+        type: "terreno-rtk/executeMutation/fulfilled",
+      });
+      await flushAsyncListeners();
+      expect(calls).toBe(1);
+
+      store.dispatch(logout());
+      await flushAsyncListeners();
+      expect(calls).toBe(2);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it("stores tokens in AsyncStorage on web login when window exists", async () => {
     const {store} = createTestStore();
     const setItemCalls: Array<[string, string]> = [];

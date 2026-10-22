@@ -114,6 +114,7 @@ import {UnifiedAddressAutoCompleteFieldConfiguration} from "@story-config/Unifie
 import {UpgradeRequiredScreenConfiguration} from "@story-config/UpgradeRequiredScreen.config";
 import {UserInactivityConfiguration} from "@story-config/UserInactivity.config";
 import {WebAddressAutocompleteConfiguration} from "@story-config/WebAddressAutocomplete.config";
+import {WhatsNewBannerConfiguration} from "@story-config/WhatsNewBanner.config";
 import type {FieldProps} from "@terreno/ui";
 import type React from "react";
 import type {DemoInteractionStep} from "./catalogContract";
@@ -400,6 +401,7 @@ const Config: DemoConfigurationBase[] = [
   UpgradeRequiredScreenConfiguration,
   UserInactivityConfiguration,
   WebAddressAutocompleteConfiguration,
+  WhatsNewBannerConfiguration,
 ];
 
 // Ensure consistent alphabetical sorting

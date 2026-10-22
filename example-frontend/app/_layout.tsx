@@ -1,8 +1,8 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import {useFonts} from "expo-font";
-import {Stack, useRouter, useSegments} from "expo-router";
+import {Stack, ThemeProvider, useRouter, useSegments} from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, {type FC, type ReactNode, useCallback, useEffect, useState} from "react";
+import React, {type FC, type ReactNode, useCallback, useEffect, useMemo, useState} from "react";
 import {Platform, StatusBar} from "react-native";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 import "react-native-reanimated";
@@ -37,12 +37,13 @@ import {SyncConflictsProvider} from "@/components/SyncConflictsController";
 import {SyncHealthToast} from "@/components/SyncHealthToast";
 import {SyncLabRuntime} from "@/components/SyncLabRuntime";
 import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
-import {getSessionToken} from "@/lib/betterAuth";
+import {oauthHandoff} from "@/lib/oauthHandoff";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
+import {buildNavigationTheme} from "@/utils/navigationTheme";
 
 installTerrenoDevConsoleLogger();
 
@@ -150,7 +151,11 @@ const ThemedStatusBar: FC = () => {
 };
 
 const RootLayoutNav = (): React.ReactElement => {
-  const {theme} = useTheme();
+  const {colorScheme, theme} = useTheme();
+  const navigationTheme = useMemo(
+    () => buildNavigationTheme({colorScheme, theme}),
+    [colorScheme, theme]
+  );
 
   // AppThemeProvider withholds this tree until the stored theme resolves, so the
   // splash stays up through that wait instead of uncovering a blank, wrong-scheme frame.
@@ -185,18 +190,14 @@ const RootLayoutNav = (): React.ReactElement => {
     warningMessage,
   } = useUpgradeCheck({pollingIntervalMs: 300_000, recheckOnForeground: true});
 
-  const getAuthToken = useCallback(async (): Promise<string | null> => {
-    return getSessionToken();
-  }, []);
-
   const handleRetrySyncDbStart = useCallback((): void => {
     setSyncDbStartError(null);
     setSyncDbStartAttempt((attempt) => attempt + 1);
   }, []);
 
+  // Reads the token source registered in store/index.ts.
   const {socket} = useSocketConnection({
     baseUrl,
-    getAuthToken,
     shouldConnect: Boolean(userId),
   });
 
@@ -209,9 +210,10 @@ const RootLayoutNav = (): React.ReactElement => {
     };
   }, [socket]);
 
-  // Hydrate Better Auth session into Redux on startup.
+  // Hydrate Better Auth session into Redux on startup, once any OAuth handoff has stored its
+  // bearer; reading the session first would find none and show the login screen.
   useEffect(() => {
-    void syncBetterAuthSession(store.dispatch);
+    void oauthHandoff.then(() => syncBetterAuthSession(store.dispatch));
   }, []);
 
   // Start the local-first syncdb client after login; stop on logout/unmount.
@@ -319,24 +321,26 @@ const RootLayoutNav = (): React.ReactElement => {
   ) : null;
 
   const stack = (
-    <Stack
-      screenOptions={{
-        contentStyle: {backgroundColor: theme.surface.base},
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="admin" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="signup" />
-      <Stack.Screen name="forgotPassword" />
-      <Stack.Screen name="resetPassword" />
-      <Stack.Screen name="verifyEmail" />
-      <Stack.Screen name="syncdb-debug" options={{presentation: "modal"}} />
-      <Stack.Screen name="settings" />
-      <Stack.Screen name="notifications" />
-      <Stack.Screen name="todo-windows/index" />
-    </Stack>
+    <ThemeProvider value={navigationTheme}>
+      <Stack
+        screenOptions={{
+          contentStyle: {backgroundColor: theme.surface.base},
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="admin" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="signup" />
+        <Stack.Screen name="forgotPassword" />
+        <Stack.Screen name="resetPassword" />
+        <Stack.Screen name="verifyEmail" />
+        <Stack.Screen name="syncdb-debug" options={{presentation: "modal"}} />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="todo-windows/index" />
+      </Stack>
+    </ThemeProvider>
   );
 
   const syncDbStartErrorBanner =

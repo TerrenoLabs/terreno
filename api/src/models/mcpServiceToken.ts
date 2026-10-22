@@ -12,7 +12,7 @@ export type {
   McpServiceTokenStatics,
 } from "../types/mcpServiceToken";
 
-const MCP_SERVICE_TOKEN_PREFIX = "mcp_";
+export const MCP_SERVICE_TOKEN_PREFIX = "mcp_";
 const MCP_SERVICE_TOKEN_RANDOM_BYTES = 32;
 const MCP_SERVICE_TOKEN_DISPLAY_LENGTH = 8;
 

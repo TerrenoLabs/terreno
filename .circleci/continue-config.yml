@@ -730,7 +730,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui
+          packages: blocks syncdb ui
       - run:
           name: Lint / compile / test rtk
           working_directory: ~/project/rtk
@@ -850,7 +850,7 @@ jobs:
           name: Fetch coverage base
           command: git fetch origin master
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb rtk admin-frontend admin-spa announcements create-terreno-app mcp-server
       - run:
           name: Check new source file coverage
           command: |
@@ -1028,7 +1028,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui rtk admin-frontend syncdb
+          packages: blocks ui syncdb rtk admin-frontend
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1113,7 +1113,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb rtk admin-frontend admin-spa announcements example-backend
       - run:
           name: List admin scripts
           working_directory: ~/project/example-backend
@@ -1183,7 +1183,7 @@ jobs:
       - run:
           name: Compile admin-spa dependencies
           command: |
-            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
+            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
       - run:
           name: Lint / compile / types / unit / build / smoke
           working_directory: ~/project/admin-spa
@@ -1302,10 +1302,12 @@ jobs:
           name: CircleCI path-filter parity
           command: bun run check:circleci-parity
       - run:
-          name: Changelog fragments
+          name: Changelog fragments and what's new data
           command: |
             bun run check:changelog
             bun test scripts/changelog/
+            bun run check:whats-new
+            bun test scripts/whats-new/
       - run:
           name: Static analysis
           command: |
@@ -1431,6 +1433,81 @@ jobs:
               echo "Architectural review failed (non-blocking, matches GHA continue-on-error)"
               exit 0
             }
+
+  # Risk-scored PR review by the terreno-approval-agent GitHub App (brewery approve).
+  # Policy (.brewery.json, docs/approval-rubric.md) is read from origin/master, so a PR
+  # cannot relax the rules it is judged by. The job clones brewery and runs its CLI; it
+  # never installs or executes code from the PR checkout: the working tree is reset to
+  # origin/master before anything runs. It waits for every other
+  # check on the head before judging, so it runs once, last. Comment-only while
+  # approveLevels is empty. A not-approved verdict is not a pipeline failure.
+  approve:
+    executor: node22
+    resource_class: small
+    environment:
+      # A commit of joshgachnang/brewery. This job holds the App key, so the code it runs
+      # is pinned; bump the sha deliberately (brewery has no release tag yet).
+      BREWERY_REF: 3d59a77e52ccf732c81c50e08057a489d44bca92
+    steps:
+      - skip_if_fork_pull_request
+      - run:
+          name: Skip when approve secrets are missing
+          command: |
+            set -euo pipefail
+            if [ -z "${TERRENO_APP_ID:-}" ] || [ -z "${TERRENO_APP_PRIVATE_KEY:-}" ] || [ -z "${ANTHROPIC_API_KEY:-}" ] || [ -z "${GITHUB_TOKEN:-}" ]; then
+              echo "TERRENO_APP_ID, TERRENO_APP_PRIVATE_KEY, ANTHROPIC_API_KEY, or GITHUB_TOKEN missing. Attach terreno-approve and terreno-github-api to this job. Skipping."
+              circleci step halt
+            fi
+      - checkout
+      # Nothing from the PR tree runs in this job: the working tree is origin/master from
+      # here on (the PR-number script, bunfig.toml, and the agent's cwd all come from it).
+      # The PR head stays in the object store, and brewery reads it with `git show <sha>:`.
+      - run:
+          name: Reset to origin/master (trusted scripts, policy source)
+          command: |
+            set -euo pipefail
+            git fetch origin master
+            git checkout --force origin/master
+      # GitHub App pipelines leave CIRCLE_PULL_REQUEST unset; resolve the PR by branch.
+      - resolve_preview_pr_number
+      - node/install-bun
+      - run:
+          name: Install gh, Claude Code, and brewery
+          command: |
+            set -euo pipefail
+            if ! command -v gh >/dev/null; then
+              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+              sudo apt-get update -qq && sudo apt-get install -y -qq gh
+            fi
+            # Pinned: this job holds the App key. Bump the version deliberately.
+            sudo npm install -g @anthropic-ai/claude-code@2.1.304
+            # fetch by sha (clone --branch takes only branches and tags)
+            git init -q "$HOME/brewery"
+            git -C "$HOME/brewery" fetch -q --depth 1 https://github.com/joshgachnang/brewery.git "$BREWERY_REF"
+            git -C "$HOME/brewery" checkout -q FETCH_HEAD
+            cd "$HOME/brewery/cli" && bun install --frozen-lockfile
+      - run:
+          name: brewery approve
+          no_output_timeout: 60m
+          command: |
+            set -euo pipefail
+            # gh reads GH_TOKEN; the read side (pr view, pr diff) uses the API PAT. The App
+            # token is minted inside brewery for the review and check run only. Neither
+            # reaches the model: brewery runs agents with an allowlisted environment.
+            export GH_TOKEN="$GITHUB_TOKEN"
+            # store_artifacts fails on a missing path; brewery may exit before creating it.
+            mkdir -p .terreno/brewery
+            # --wait-checks: wait (limits.ciWaitMin, 45 min) for every other check on this
+            # head, then judge it; a red or still-pending head is skipped, model unspent.
+            # This job's own check (ci/circleci: approve) is excluded (selfChecks in .brewery.json).
+            bun "$HOME/brewery/cli/src/cli.ts" approve "$PR_NUMBER" --repo "$PWD" --base master --wait-checks || {
+              echo "brewery approve could not produce a verdict (non-blocking; see above)"
+              exit 0
+            }
+      - store_artifacts:
+          path: .terreno/brewery
+          destination: brewery-approve
 
   maestro-e2e:
     executor: node22_browsers_mongo_rs_heavy
@@ -1891,7 +1968,8 @@ jobs:
           command: scripts/ci/netlify-deploy.sh demo preview "pr-${PR_NUMBER}"
 
   deploy-frontend-preview:
-    executor: node22
+    # The browsers image carries Chromium's system libraries for the deployed smoke.
+    executor: node22_browsers
     resource_class: large
     steps:
       - skip_if_fork_deploy
@@ -1910,6 +1988,37 @@ jobs:
             export EXPO_PUBLIC_API_URL="https://pr-${PR_NUMBER}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
             export NETLIFY_WAIT_FOR_HEALTH_URL="$EXPO_PUBLIC_API_URL"
             scripts/ci/netlify-deploy.sh frontend preview "pr-${PR_NUMBER}"
+      - run:
+          name: Install Playwright Chromium
+          working_directory: ~/project/example-frontend
+          command: bunx playwright install --with-deps chromium
+      - run:
+          # Signs up a fresh user on this PR's isolated backend, so it never runs on production.
+          # The deploy waits only for a healthy backend tag, so on a re-push it can still be the
+          # previous revision while gcp-cd-preview rolls out; rerun the job if that races.
+          name: Smoke the deployed preview in web bearer mode
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 15m
+          environment:
+            CI: "true"
+          command: |
+            set -euo pipefail
+            missing=()
+            if [ -z "${PR_NUMBER:-}" ]; then missing+=("PR_NUMBER"); fi
+            if [ ${#missing[@]} -ne 0 ]; then
+              echo "Missing required environment variables: ${missing[*]}" >&2
+              exit 1
+            fi
+            export SMOKE_BASE_URL="https://pr-${PR_NUMBER}--terreno-frontend.netlify.app"
+            export SMOKE_API_URL="https://pr-${PR_NUMBER}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
+            export SMOKE_RUN_ID="pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-local}"
+            bun run smoke:deployed
+      - store_artifacts:
+          path: example-frontend/playwright-report
+          destination: deployed-bearer-smoke-playwright-report
+      - store_artifacts:
+          path: example-frontend/test-results
+          destination: deployed-bearer-smoke-test-results
 
   deploy-docs-preview:
     executor: node22
@@ -2245,14 +2354,17 @@ jobs:
             GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/github-release.sh publish "$CIRCLE_TAG"
 
 workflows:
-  # Never put GITHUB_TOKEN or CURSOR_API_KEY in project env vars (injected into
-  # every job); scope them to these two jobs through contexts.
+  # Never put GITHUB_TOKEN, CURSOR_API_KEY, or the approval App key in project env
+  # vars (injected into every job); scope them to these three jobs through contexts.
   always:
     jobs:
       - dco:
           context: [terreno-github-api]
       - architectural-pr-review:
           context: [terreno-github-api, terreno-agentic]
+      - approve:
+          context: [terreno-github-api, terreno-approve]
+          requires: [dco, architectural-pr-review]
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>

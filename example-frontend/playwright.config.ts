@@ -178,7 +178,6 @@ export default defineConfig({
         ? {
             EXPO_PUBLIC_API_URL: CROSS_SITE_API_URL,
             EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER: "true",
-            EXPO_PUBLIC_MOCK_OIDC_SIGN_IN: "true",
           }
         : {},
       // A web server already on 8082 was built for the same-site cookie run, so the cross-site

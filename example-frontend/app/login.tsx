@@ -1,4 +1,4 @@
-import {baseUrl} from "@terreno/rtk";
+import {baseUrl, useAuthMethods} from "@terreno/rtk";
 import type {LoginScreenProps} from "@terreno/ui";
 import {Box, Button, LoginScreen} from "@terreno/ui";
 import {useLocalSearchParams, useRouter} from "expo-router";
@@ -6,7 +6,7 @@ import type React from "react";
 import {useCallback, useMemo, useState} from "react";
 import {
   betterAuthClient,
-  isMockOidcSignInEnabled,
+  brandedOAuthProviders,
   MOCK_OIDC_PROVIDER_ID,
   signInWithSocial,
 } from "@/lib/betterAuth";
@@ -24,6 +24,11 @@ const Login: React.FC = () => {
     getOAuthErrorMessage(oauthError)
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Only the providers the server reports are shown; none while the methods load.
+  const {methods} = useAuthMethods(betterAuthClient);
+  const configuredProviders = methods?.providers;
+  // The sign-up link stays while the methods load and hides once the server says it is closed.
+  const isSignUpOpen = methods?.signUp !== false;
 
   const handleSubmit = useCallback(
     async (values: Record<string, string>): Promise<void> => {
@@ -80,13 +85,15 @@ const Login: React.FC = () => {
   }, [handleSocialLogin]);
 
   const oauthProviders = useMemo((): LoginScreenProps["oauthProviders"] => {
-    return (["google", "github", "apple"] as const).map((provider) => ({
+    return brandedOAuthProviders(configuredProviders).map((provider) => ({
       disabled: isSubmitting || Boolean(socialLoading),
       loading: socialLoading === provider,
       onPress: () => handleSocialLogin(provider),
       provider,
     }));
-  }, [isSubmitting, socialLoading, handleSocialLogin]);
+  }, [configuredProviders, isSubmitting, socialLoading, handleSocialLogin]);
+
+  const isMockOidcConfigured = Boolean(configuredProviders?.includes(MOCK_OIDC_PROVIDER_ID));
 
   const handleSignUpPress = useCallback((): void => {
     router.push("/signup");
@@ -98,45 +105,42 @@ const Login: React.FC = () => {
 
   const isLoading = isSubmitting || Boolean(socialLoading);
 
-  const loginScreen = (
-    <LoginScreen
-      error={errorMessage}
-      fields={[
-        {autoComplete: "off", label: "Email", name: "email", required: true, type: "email"},
-        {label: "Password", name: "password", required: true, type: "password"},
-      ]}
-      loading={isLoading}
-      oauthProviders={oauthProviders}
-      onForgotPassword={handleForgotPassword}
-      onSignUpPress={handleSignUpPress}
-      onSubmit={handleSubmit}
-      testID="login-screen"
-    />
-  );
-
-  if (!isMockOidcSignInEnabled) {
-    return loginScreen;
-  }
-
-  // Dev and e2e only: @terreno/ui's SocialLoginButton brands Google, GitHub and Apple, so the
-  // local mock OIDC provider gets a plain button below the form.
+  // One wrapper whether or not the mock provider is listed, so the methods response arriving
+  // never remounts LoginScreen and clears what the user already typed.
   return (
     <Box flex="grow">
-      {loginScreen}
-      <Box alignItems="center" paddingY={4}>
-        <Box maxWidth={400} paddingX={4} width="100%">
-          <Button
-            disabled={isLoading}
-            fullWidth
-            iconName="key"
-            loading={socialLoading === MOCK_OIDC_PROVIDER_ID}
-            onClick={handleMockOidcLogin}
-            testID="login-mock-oidc-button"
-            text="Continue with Mock OIDC"
-            variant="outline"
-          />
+      <LoginScreen
+        error={errorMessage}
+        fields={[
+          {autoComplete: "off", label: "Email", name: "email", required: true, type: "email"},
+          {label: "Password", name: "password", required: true, type: "password"},
+        ]}
+        loading={isLoading}
+        oauthProviders={oauthProviders}
+        onForgotPassword={handleForgotPassword}
+        onSignUpPress={isSignUpOpen ? handleSignUpPress : undefined}
+        onSubmit={handleSubmit}
+        testID="login-screen"
+      />
+      {/* Dev and e2e only (example-backend registers it only with MOCK_OIDC_ISSUER, never in
+          production): @terreno/ui's SocialLoginButton brands Google, GitHub and Apple, so the
+          local mock OIDC provider gets a plain button below the form. */}
+      {isMockOidcConfigured ? (
+        <Box alignItems="center" paddingY={4}>
+          <Box maxWidth={400} paddingX={4} width="100%">
+            <Button
+              disabled={isLoading}
+              fullWidth
+              iconName="key"
+              loading={socialLoading === MOCK_OIDC_PROVIDER_ID}
+              onClick={handleMockOidcLogin}
+              testID="login-mock-oidc-button"
+              text="Continue with Mock OIDC"
+              variant="outline"
+            />
+          </Box>
         </Box>
-      </Box>
+      ) : null}
     </Box>
   );
 };

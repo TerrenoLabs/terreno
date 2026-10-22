@@ -15,6 +15,7 @@ import type {Db} from "mongodb";
 import mongoose from "mongoose";
 import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
+import {createMethodsPlugin} from "./betterAuthMethods";
 import {createOAuthHandoffPlugins} from "./betterAuthOAuthHandoff";
 import {APIError} from "./errors";
 import type {AuthRecoveryMail} from "./expressServer";
@@ -276,8 +277,9 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     // websocket handshakes (RealtimeApp's Better Auth socket validator forwards the handshake
     // token as a bearer header) — without it, a raw session token cannot be validated and
     // socket auth silently fails (the sync client shows perpetually "offline").
+    // The methods plugin serves `GET {basePath}/terreno/methods` for login screens.
     // The handoff plugins come last so their callback hook sees the final redirect.
-    plugins: [bearer(), ...(config.plugins ?? []), ...handoffPlugins],
+    plugins: [bearer(), createMethodsPlugin(), ...(config.plugins ?? []), ...handoffPlugins],
   });
 
   // Cast through unknown: enabling the bearer plugin narrows betterAuth()'s inferred

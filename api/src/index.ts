@@ -35,6 +35,7 @@ export * from "./authRecovery";
 export * from "./authTokens";
 export * from "./betterAuth";
 export * from "./betterAuthApp";
+export * from "./betterAuthMethods";
 export * from "./betterAuthSetup";
 export * from "./browserLogsRoute";
 export * from "./config";

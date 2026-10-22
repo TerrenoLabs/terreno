@@ -1079,8 +1079,12 @@ describe("createBetterAuth options and plugins passthrough", () => {
     });
     const plain = createBetterAuth({config, mongoClient: getClient()});
 
-    expect(withPlugin.options.plugins?.map((p) => p.id)).toEqual(["bearer", "terreno-test"]);
-    expect(plain.options.plugins?.map((p) => p.id)).toEqual(["bearer"]);
+    expect(withPlugin.options.plugins?.map((p) => p.id)).toEqual([
+      "bearer",
+      "terreno-methods",
+      "terreno-test",
+    ]);
+    expect(plain.options.plugins?.map((p) => p.id)).toEqual(["bearer", "terreno-methods"]);
     expect(plain.options.trustedOrigins).toEqual([]);
   });
 });

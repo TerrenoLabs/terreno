@@ -90,10 +90,12 @@ not PR-blocking; run `bunx playwright test e2e/syncdb-loadlab.spec.ts` only when
 failed.
 
 `e2e/crossSiteBearer.spec.ts` and `e2e/crossSiteOAuth.spec.ts` have no CircleCI job: they need
-a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000`,
-`EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` and `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN=true`, a backend
-with `BETTER_AUTH_URL=http://127.0.0.1:4000`, `BETTER_AUTH_OAUTH_HANDOFF=true` and
-`MOCK_OIDC_ISSUER`, and the mock OIDC provider on `127.0.0.1:4555`. Naming either spec file (or
+a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000` and
+`EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`, a backend with
+`BETTER_AUTH_URL=http://127.0.0.1:4000`, `BETTER_AUTH_OAUTH_HANDOFF=true` and
+`MOCK_OIDC_ISSUER` (the login page shows the mock provider's button because
+`/api/auth/terreno/methods` then lists `mock-oidc`), and the mock OIDC provider on
+`127.0.0.1:4555`. Naming either spec file (or
 setting `E2E_CROSS_SITE_BEARER=true`) makes `playwright.config.ts` start all three and run only
 the cross-site specs, so stop any other backend on 4000 and web server on 8082 first:
 `cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts e2e/crossSiteOAuth.spec.ts`.

@@ -17,6 +17,7 @@ export * from "./socket";
 export * from "./sync";
 export * from "./tagGenerator";
 export * from "./tokenSource";
+export * from "./useAuthMethods";
 export * from "./useFeatureFlags";
 export * from "./useMCPTools";
 export * from "./useOfflineStatus";

@@ -579,7 +579,44 @@ Endpoints it adds, under `basePath` (default `/api/auth`):
 
 With the opt-in `rateLimit`, both paths are in the auth bucket.
 
+**Sign-in methods discovery (`GET {basePath}/terreno/methods`):**
+
+Every Better Auth server answers `GET {basePath}/terreno/methods` (default
+`/api/auth/terreno/methods`) with the sign-in methods it has enabled, so a login screen renders
+only those. It needs no session. Read it from a frontend with `useAuthMethods(authClient)` from
+`@terreno/rtk`.
+
+``````json
+{
+  "accountLinking": {"mode": "verified-email"},
+  "emailPassword": true,
+  "multiSession": false,
+  "passkey": false,
+  "providers": ["github", "google", "mock-oidc"],
+  "signUp": true,
+  "twoFactor": false
+}
+``````
+
+- `providers` — Sorted ids of every OAuth provider that can start a sign-in: the configured
+  `googleOAuth`, `githubOAuth`, and `appleOAuth` providers, plus every `genericOAuth` provider id
+  from `plugins`. The endpoint is public, so every configured provider id is published, including
+  generic providers meant only for integrations or internal staff. A generic provider whose
+  discovery failed at startup is left out.
+- `emailPassword` — Better Auth's `emailAndPassword.enabled` (on unless `options` turns it off).
+- `signUp` — `true` when email and password is on and `emailAndPassword.disableSignUp` is not set.
+- `accountLinking.mode` — From Better Auth's `account.accountLinking`: `"never"` when
+  `enabled: false`, `"explicit"` when `disableImplicitLinking: true`, otherwise
+  `"verified-email"` (Better Auth's default: a same-email sign-in links when the provider reports
+  a verified email).
+- `passkey`, `twoFactor`, `multiSession` — Always `false` for now; they report the matching
+  feature once `BetterAuthConfig` can turn it on.
+
+The values come from Better Auth's final context on each request, so `options` overrides and
+plugin-registered providers are reflected.
+
 **Endpoints (when enabled):**
+- `GET /api/auth/terreno/methods` — Enabled sign-in methods (public)
 - `POST /api/auth/signup/email` — Email/password signup
 - `POST /api/auth/signin/email` — Email/password signin
 - `GET /api/auth/signin/{provider}` — Initiate OAuth (google, github, apple)

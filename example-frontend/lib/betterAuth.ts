@@ -56,13 +56,26 @@ const OAUTH_RETURN_PATH = "/login";
 
 /**
  * Generic OAuth provider of the local mock OIDC server (e2e/helpers/mockOidcProvider.ts). Its
- * button shows only in web bearer builds with `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN=true`; example-backend
- * registers the provider only when `MOCK_OIDC_ISSUER` is set, and never in production.
+ * button shows when the server's `/terreno/methods` lists it: example-backend registers the
+ * provider only when `MOCK_OIDC_ISSUER` is set, and never in production.
  */
 export const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
 
-export const isMockOidcSignInEnabled =
-  isWebBearerAuth && process.env.EXPO_PUBLIC_MOCK_OIDC_SIGN_IN === "true";
+/** Providers @terreno/ui's SocialLoginButton brands, in the order the auth screens show them. */
+const BRANDED_OAUTH_PROVIDERS = ["google", "github", "apple"] as const;
+
+export type BrandedOAuthProvider = (typeof BRANDED_OAUTH_PROVIDERS)[number];
+
+/**
+ * The branded providers among those the server's `/terreno/methods` lists, in display order.
+ * Pass `undefined` while the methods load to get none.
+ */
+export const brandedOAuthProviders = (
+  configuredProviders: string[] | undefined
+): BrandedOAuthProvider[] => {
+  const enabled = configuredProviders ?? [];
+  return BRANDED_OAUTH_PROVIDERS.filter((provider) => enabled.includes(provider));
+};
 
 /**
  * Starts a social sign-in. In web bearer mode the page navigates to the API and comes back to

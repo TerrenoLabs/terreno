@@ -200,7 +200,7 @@ Open risks:
   - Skills: terreno-backend-api, mongoose-schema-safety (Better Auth adds the
     `twoFactor`/`passkey` collections and user fields), backend-test-env, security-audit
 
-- [ ] **T3** — Account linking modes and verified-email sync
+- [x] **T3** — Account linking modes and verified-email sync
   - Depends on: T2
   - Files: api/src/betterAuthSetup.ts, api/src/betterAuthLinking.test.ts, docs/explanation/account-linking.md, docs/how-to/configure-better-auth.md, changelog/unreleased/account-linking.md
   - Changelog: marked breaking. Unverified sign-ups no longer claim an existing app
@@ -229,7 +229,8 @@ Open risks:
         User;
       - a different password gives 409 and still one User;
       - a legacy User with no hash (a GitHub-JWT user) and no `sendMail` gives 409.
-        The T8 "verify email" admin action then lets them in.
+        Nothing is left behind (no Better Auth user, account row, or verification
+        mail). The T8 `issue-sign-in-link` admin action then lets them in (D8).
     - `explicit`: the same sign-in returns error code `account_not_linked` and creates
       no user. `linkSocial` from the signed-in session then links it.
     - An unverified provider email never links in either mode.
@@ -398,15 +399,19 @@ Open risks:
     - `POST .../send-password-reset`, which uses `sendMail` and returns 501 when
       `publicAppUrl` is unset, matching the existing hooks.
     - `POST .../disable` and `.../enable`, which set `User.disabled`.
-    - `POST .../verify-email` marks the Better Auth email verified. It is
-      platform-only, for users with no mail path (T3).
+    - `POST .../issue-sign-in-link` (platform-only, for legacy users with no password
+      hash and no mail path, T3) creates the Better Auth user for that app User,
+      linked by `betterAuthId`, and returns a single-use set-password link the admin
+      hands over. It never marks an attacker-chosen credential verified: T3 refuses
+      unverified same-email sign-ups before any Better Auth user exists (D8).
     - The example User gains `isDisabledPlugin`, applied in `user.ts` only.
   - Proof:
     - After revoke, the next REST request with the old bearer token gets 401.
     - After disable, REST gets 401 and the socket handshake is refused. After enable,
       sign-in works again.
     - The reset email is captured by the test mailer.
-    - After `verify-email`, the T3 409 case links on the next sign-in.
+    - After `issue-sign-in-link`, the link sets a password and the user signs in to
+      the same app User; the link is refused on reuse.
   - Skills: terreno-backend-api, mongoose-schema-safety, security-audit
 
 - [ ] **T9** — Org-admin scoped recovery routes
@@ -696,13 +701,17 @@ Open risks:
 
 - [ ] **T21** — Connected TerrenoAccountSecurityScreen
   - Depends on: T20
-  - Files: rtk/src/auth/useAccountSecurity.ts, rtk/src/auth/useAccountSecurity.test.ts, rtk/src/auth/TerrenoAccountSecurityScreen.tsx, rtk/src/index.ts, docs/how-to/configure-better-auth.md
+  - Files: rtk/src/auth/useAccountSecurity.ts, rtk/src/auth/useAccountSecurity.test.ts, rtk/src/auth/TerrenoAccountSecurityScreen.tsx, rtk/src/index.ts, docs/how-to/configure-better-auth.md, api/src/betterAuthSetPassword.ts, api/src/betterAuthSetPassword.test.ts, api/src/rateLimit/policies.ts
   - Build: the hook wraps:
     - `listAccounts`, `linkSocialWithHandoff` (T5), `unlinkAccount`;
     - the passkey list, add and delete;
     - the `twoFactor` enable, verify, disable and backup-code calls;
     - `listSessions`, `revokeSession`, `revokeOtherSessions`;
-    - `changePassword` and `setPassword`.
+    - `changePassword`, and "set a password" for OAuth-only users. Better Auth's
+      `setPassword` is server-only, so T21 adds a Terreno endpoint
+      `POST {basePath}/terreno/set-password` (session required; refused when a
+      credential account already exists; rate-limited in the `auth` bucket) in
+      `api/src/betterAuthSetPassword.ts` with its own api test.
 
     After each mutation it refetches the affected section. The connected screen renders
     ui's `AccountSecurityScreen`.
@@ -910,6 +919,7 @@ Open risks:
 | D4 (durable) | "Leave it to the consumer whether people can make multiple accounts": which knobs? | All three: linking policy (`verified-email` / `explicit` / `never`), account switching (`multiSession`), and open vs closed sign-up | T2 adds `signUp.mode`; T4 reads `AUTH_SIGN_UP`; T20 hides sign-up and maps `signup_disabled` |
 | D6 | Stable frontend and backend will move to subdomains of one domain. Does the plan still work? | Yes. Stable becomes same-site, so cookies work in Safari there; previews stay cross-site, so T27 stays | H1 callbacks go on `api.<domain>`; new H3; T4 adds `PASSKEY_RP_ID`; T11 reads `STABLE_*` URLs; X9 parks same-site previews |
 | D7 | Master merged #1604 after approval: web bearer mode, the OAuth one-time-token handoff, the mock OIDC provider, and a cross-site bearer Playwright project | Reuse them (engineering reconciliation, no product change) | T4 reuses `mock-oidc`; T5 becomes the link handoff; T27 narrows to the 2FA/passkey challenges; T11 extends the handoff to oauth-proxy returns; cross-site proofs use the bearer project, where cookies are never sent, instead of WebKit |
+| D8 | Review found that a refused unverified sign-up left a Better Auth user behind, which a later email verification could turn into a takeover of the legacy User | Refuse before the Better Auth user is created; T8's admin action issues a set-password link instead of marking an email verified | T3 adds a `user.create.before` guard; T8 `verify-email` becomes `issue-sign-in-link` |
 | D5 (durable) | Remember name, email and avatar on the login screen by default? | No: method only by default; identity is opt-in (`rememberIdentity`); the example opts in | T19, T20 and T26 as written |
 
 ## Sign-off

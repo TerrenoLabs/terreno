@@ -8,6 +8,7 @@ import {createPrivateKey, createSign, type KeyObject} from "node:crypto";
 import {expo} from "@better-auth/expo";
 import {passkey} from "@better-auth/passkey";
 import type {BetterAuthPlugin} from "better-auth";
+import {APIError as BetterAuthAPIError, createAuthMiddleware} from "better-auth/api";
 import {lastLoginMethod, multiSession, oAuthProxy, twoFactor} from "better-auth/plugins";
 import {DateTime} from "luxon";
 import type {
@@ -150,6 +151,31 @@ export const createSignUpClosedPlugin = (): BetterAuthPlugin => {
         provider.options = {...provider.options, disableSignUp: true};
       }
     },
+  } satisfies BetterAuthPlugin;
+};
+
+/**
+ * The plugin `createBetterAuth` adds when linking is off (`accountLinking: {mode: "never"}`, or
+ * `options.account.accountLinking.enabled: false`). Better Auth itself only refuses such a link
+ * when the provider calls back; this refuses `POST {basePath}/link-social` up front with 403
+ * `LINKING_DISABLED`, so a client never sends the user to the provider for nothing.
+ */
+export const createLinkingDisabledPlugin = (): BetterAuthPlugin => {
+  return {
+    hooks: {
+      before: [
+        {
+          handler: createAuthMiddleware(async (): Promise<never> => {
+            throw new BetterAuthAPIError("FORBIDDEN", {
+              code: "LINKING_DISABLED",
+              message: "Account linking is turned off",
+            });
+          }),
+          matcher: (context): boolean => context.path === "/link-social",
+        },
+      ],
+    },
+    id: "terreno-linking-disabled",
   } satisfies BetterAuthPlugin;
 };
 

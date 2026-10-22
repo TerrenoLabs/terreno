@@ -228,6 +228,11 @@ Notes:
 - **Rate limits.** With `TerrenoApp` `rateLimit` on, `{basePath}/two-factor/*`,
   `/passkey/*`, `/link-social`, `/unlink-account`, `/multi-session/*`,
   `/oauth-proxy-callback`, and `/expo-authorization-proxy` count against the `auth` bucket.
+- **Linking.** `never` (or `options.account.accountLinking.enabled: false`) adds a
+  `terreno-linking-disabled` plugin that refuses `POST {basePath}/link-social` with 403
+  `LINKING_DISABLED`. In every mode an unverified sign-up never claims an existing app `User`
+  with the same email (409 `VERIFY_EMAIL_TO_USE_ACCOUNT`). See
+  [Account linking](../explanation/account-linking.md).
 - `options` still wins: for example `options.account.accountLinking.enabled` overrides the
   mode `accountLinking` sets.
 
@@ -639,7 +644,15 @@ Better Auth runs **in parallel** with JWT auth. You don't need to migrate existi
 2. Keep existing JWT endpoints available (they still work)
 3. New users can sign up via Better Auth
 4. Existing users continue using JWT tokens
-5. Optionally add migration logic to link accounts
+5. Existing users who sign up through Better Auth with the same email are linked to their app
+   `User` when the password they sign up with matches their existing passport password, or when
+   they sign in with a provider that verified the email. Otherwise sign-up answers 409 "Verify
+   your email to use this account" and nothing is created. Users without a password (GitHub JWT
+   sign-in) use a verified provider sign-in or JWT forgot-password first, so keep the JWT routes
+   mounted during the move.
+
+See [Account linking](../explanation/account-linking.md) for the linking modes, why both emails
+must be verified, and the full migration path for JWT apps.
 
 ## Learn More
 

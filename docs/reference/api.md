@@ -548,6 +548,33 @@ answer 401 while Better Auth's own routes, such as sign-out, still work. `Realti
 registered `BetterAuthApp` instance for socket sessions. With a user model (its own or the
 `TerrenoApp`'s), the handshake creates the app `User` on first contact and refuses disabled users.
 
+With a user model, the `terreno-app-user-sync` plugin guards Better Auth user creation and syncs
+the app `User` as each Better Auth session is created
+(`syncBetterAuthUser(userModel, betterAuthUser, oauthProvider?, {password?})`):
+
+- An app `User` with the same email that no Better Auth user has claimed is claimed only when the
+  email is verified, or when the request's plaintext password (`/sign-up/email`,
+  `/sign-in/email`) verifies against that `User`'s passport-local-mongoose hash. The hash check
+  runs on a detached copy, so passport's `limitAttempts` counters never change.
+- Before a Better Auth user is created, the same rule runs on the provider-reported
+  `emailVerified` and the sign-up password. A refusal answers 409 with
+  `code: "VERIFY_EMAIL_TO_USE_ACCOUNT"` (an OAuth callback redirects with that `error`) and
+  creates nothing: no Better Auth user, account, or verification email.
+- At session creation the rule runs again; `syncBetterAuthUser` throws `APIError` 409
+  `VERIFY_EMAIL_TO_USE_ACCOUNT` ("Verify your email to use this account") and the sign-in answers
+  the same 409. No second `User` is inserted.
+- The provider id of a social or generic OAuth sign-in fills `oauthProvider` on create and link.
+- Emails match ignoring case (the address is matched literally, not as a pattern).
+- `BetterAuthApp` without its own `userModel` adopts `TerrenoApp`'s before it creates Better Auth
+  (`adoptUserModel`), so the plugin is installed whenever a user model is in play. Adopting after
+  the instance exists throws at boot. Callers of `createBetterAuth` must pass `userModel`
+  themselves.
+- A password-proven link that fails to save fails the sign-in with 500 `APP_USER_LINK_FAILED`.
+  Other sync failures are logged and the session proceeds; the session middleware retries.
+
+`accountLinking: {mode: "never"}` refuses `POST {basePath}/link-social` with 403
+`LINKING_DISABLED`. See [Account linking](../explanation/account-linking.md).
+
 **Social sign-in for a web app on another site (`oauthHandoff`):**
 
 `oauthHandoff: {webOrigins, callbackPaths?}` lets a bearer-mode web client on another site

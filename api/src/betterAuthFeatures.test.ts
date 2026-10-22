@@ -1,7 +1,7 @@
 import {afterAll, describe, expect, it} from "bun:test";
-import {createHmac, createVerify, generateKeyPairSync, randomUUID} from "node:crypto";
+import {createHmac, createVerify, generateKeyPairSync} from "node:crypto";
 import type {BetterAuthPlugin} from "better-auth";
-import {genericOAuth, twoFactor} from "better-auth/plugins";
+import {twoFactor} from "better-auth/plugins";
 import express from "express";
 import {DateTime} from "luxon";
 import mongoose, {Schema} from "mongoose";
@@ -17,11 +17,18 @@ import {
   mountBetterAuthRoutes,
 } from "./betterAuthSetup";
 import {type APIError, isAPIError} from "./errors";
-
-const API_ORIGIN = "http://localhost:3000";
-const SECRET = "test-secret-at-least-32-characters-long";
-const PASSWORD = "password-123456";
-const STUB_PROVIDER = "stub-oidc";
+import {
+  API_ORIGIN,
+  betterAuthUsers,
+  cookieHeaderFrom,
+  newStubIdentity,
+  PASSWORD,
+  SECRET,
+  setCookies,
+  signInWithStub,
+  stubOidcPlugin,
+  uniqueEmail,
+} from "./tests/betterAuthStubs";
 
 interface FeatureApp {
   app: express.Application;
@@ -43,57 +50,6 @@ const buildApp = (overrides: Partial<BetterAuthConfig> = {}): FeatureApp => {
 
 const pluginIds = (auth: BetterAuthInstance): string[] =>
   (auth.options.plugins ?? []).map((plugin) => plugin.id);
-
-const uniqueEmail = (label: string): string => `${label}-${randomUUID()}@example.com`;
-
-const newStubIdentity = (label: string): StubIdentity => ({
-  email: uniqueEmail(label),
-  id: randomUUID(),
-});
-
-// Better Auth's user collection on the default connection.
-const betterAuthUsers = (): ReturnType<mongoose.mongo.Db["collection"]> => {
-  const db = mongoose.connection.db;
-  if (!db) {
-    throw new Error("The test database is not connected");
-  }
-  return db.collection("user");
-};
-
-interface StubIdentity {
-  email: string;
-  id: string;
-}
-
-// A generic OAuth provider that answers the token exchange and userinfo in-process with
-// `identity`, so the full sign-in and callback flow runs without a network provider.
-const stubOidcPlugin = (identity: StubIdentity): BetterAuthPlugin =>
-  genericOAuth({
-    config: [
-      {
-        authorizationUrl: "https://stub.example.com/authorize",
-        clientId: "stub-client",
-        clientSecret: "stub-secret",
-        getToken: async () => ({accessToken: "stub-access-token", tokenType: "Bearer"}),
-        getUserInfo: async () => ({
-          email: identity.email,
-          emailVerified: true,
-          id: identity.id,
-          name: "Stub User",
-        }),
-        providerId: STUB_PROVIDER,
-        tokenUrl: "https://stub.example.com/token",
-      },
-    ],
-  }) as unknown as BetterAuthPlugin;
-
-const setCookies = (res: supertest.Response): string[] =>
-  (res.headers["set-cookie"] as unknown as string[] | undefined) ?? [];
-
-const cookieHeaderFrom = (res: supertest.Response): string =>
-  setCookies(res)
-    .map((cookie) => cookie.split(";")[0])
-    .join("; ");
 
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
@@ -150,24 +106,6 @@ const enrollTwoFactor = async (
     .send({code: totpCode(secret)});
   expect(confirm.status).toBe(200);
   return {enrollment, secret};
-};
-
-// Starts a sign-in with the stub provider and completes its callback, returning the redirect.
-const signInWithStub = async (
-  app: express.Application,
-  extra: {requestSignUp?: boolean} = {}
-): Promise<URL> => {
-  const start = await supertest(app)
-    .post("/api/auth/sign-in/social")
-    .set("content-type", "application/json")
-    .send({callbackURL: `${API_ORIGIN}/done`, provider: STUB_PROVIDER, ...extra});
-  expect(start.status).toBe(200);
-  const state = new URL(start.body.url).searchParams.get("state");
-  const callback = await supertest(app)
-    .get(`/api/auth/callback/${STUB_PROVIDER}?code=stub-code&state=${state}`)
-    .set("cookie", cookieHeaderFrom(start));
-  expect(callback.status).toBe(302);
-  return new URL(callback.headers.location, API_ORIGIN);
 };
 
 describe("buildFeaturePlugins", () => {

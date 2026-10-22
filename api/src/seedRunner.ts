@@ -171,7 +171,9 @@ export const seedBetterAuthUser = async ({
       title: "Better Auth seed returned no user",
     });
   }
-  return syncBetterAuthUser(userModel, authUser);
+  // The seed knows the plaintext password, so it can claim a legacy User whose passport hash
+  // matches, the same way a real sign-up does.
+  return syncBetterAuthUser(userModel, authUser, undefined, {password: user.password});
 };
 
 const selectSteps = (steps: SeedStep[], only?: string[]): SeedStep[] => {

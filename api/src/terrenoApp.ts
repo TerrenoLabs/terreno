@@ -375,6 +375,9 @@ export class TerrenoApp {
 
     const app = express();
     const options = this.options;
+    // A BetterAuthApp registered without its own userModel uses the app's, before its Better Auth
+    // instance exists, so the app User guard and sync are installed with it.
+    findBetterAuthProvider(this.registrations)?.adoptUserModel?.(options.userModel);
     // Resolve first so a misconfigured issuer or consent URL fails at boot.
     const mcpOAuth = resolveMcpOAuthOption(options.mcpOAuth);
 

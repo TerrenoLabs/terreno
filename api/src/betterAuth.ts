@@ -6,6 +6,7 @@
  */
 
 import type {BetterAuthOptions, BetterAuthPlugin} from "better-auth";
+import type {BetterAuthAccountLinkingMode} from "./betterAuthMethods";
 
 /**
  * Makes nested option objects optional too, so `options` can set one nested field (such as
@@ -30,6 +31,118 @@ export interface BetterAuthOAuthProvider {
 }
 
 /**
+ * Sign in with Apple configured with a pre-made client secret (a signed JWT you rotate yourself
+ * before it expires).
+ */
+export interface BetterAuthAppleSecretProvider extends BetterAuthOAuthProvider {
+  /** The iOS bundle id, used as the audience of native ID tokens. */
+  appBundleIdentifier?: string;
+}
+
+/**
+ * Sign in with Apple configured with the Sign in with Apple key itself. Terreno signs the
+ * ES256 client-secret JWT when Better Auth is created; it is valid for 180 days, so restart
+ * (redeploy) the server at least that often.
+ */
+export interface BetterAuthAppleKeyProvider {
+  /** The iOS bundle id, used as the audience of native ID tokens. */
+  appBundleIdentifier?: string;
+  /** The Services ID (web) the sign-in uses. */
+  clientId: string;
+  /** The key id of the Sign in with Apple key. */
+  keyId: string;
+  /**
+   * The `.p8` key contents in PEM (PKCS#8) form. Escaped `\n` sequences, as env vars often carry
+   * them, are turned back into newlines.
+   */
+  privateKey: string;
+  /** The Apple developer team id. */
+  teamId: string;
+}
+
+/**
+ * How a sign-in with a new method relates to an existing account with the same email.
+ * Better Auth's `requireLocalEmailVerified` stays `true` in every mode.
+ */
+export interface BetterAuthAccountLinkingConfig {
+  /**
+   * - `verified-email`: a sign-in whose verified email matches an account whose own email is
+   *   verified joins that account.
+   * - `explicit`: no linking at sign-in; a signed-in user links a method themselves.
+   * - `never`: no linking. A same-email sign-in with a new method is refused.
+   */
+  mode: BetterAuthAccountLinkingMode;
+  /**
+   * Providers Better Auth trusts to own the email they report: their sign-ins link even without
+   * a verified-email claim, and Better Auth also skips the verified-email check for them on an
+   * explicit `/link-social` and its callback. List only providers that prove email ownership
+   * (such as Google for Gmail addresses); a provider that lets users set any email turns this
+   * into an account-takeover path.
+   */
+  trustedProviders?: string[];
+}
+
+/**
+ * Time-based one-time-password two-factor authentication (Better Auth `twoFactor`).
+ */
+export interface BetterAuthTwoFactorConfig {
+  /** Issuer shown in authenticator apps, usually the app name. */
+  issuer: string;
+  /** How many backup codes enrollment makes (default 10) and how long each is (default 10). */
+  backupCodes?: {amount?: number; length?: number};
+  /** Days a "trust this device" choice skips the second factor. Defaults to 30. */
+  trustDeviceDays?: number;
+}
+
+/**
+ * WebAuthn passkeys (`@better-auth/passkey`).
+ */
+export interface BetterAuthPasskeyConfig {
+  /** Relying party id: the registrable domain passkeys are bound to, such as `example.com`. */
+  rpID: string;
+  /** Relying party name shown by the authenticator. */
+  rpName: string;
+  /** Exact web origins allowed to use passkeys, such as `https://app.example.com`. */
+  origin: string[];
+}
+
+/**
+ * Whether new users can create accounts.
+ */
+export interface BetterAuthSignUpConfig {
+  /**
+   * - `open` (default): anyone can sign up.
+   * - `closed`: email sign-up is refused, and a social or generic OAuth sign-in for an unknown
+   *   email fails with `signup_disabled`, even with `requestSignUp: true`.
+   *
+   * `closed` covers email and password, `socialProviders`, and every OAuth provider in Better
+   * Auth's provider list (including `genericOAuth` ones from `plugins`). Other sign-in plugins
+   * added through `plugins` (`magicLink`, `emailOTP`, `phoneNumber`, `anonymous`, ...) create
+   * users on their own terms and need their own `disableSignUp` (or equivalent) option. With
+   * `oauthProxy`, a preview's OAuth sign-in is finished by the production server, so it follows
+   * the production server's sign-up mode: give both the same `signUp.mode`.
+   */
+  mode: "open" | "closed";
+}
+
+/**
+ * Several signed-in accounts on one device (Better Auth `multiSession`).
+ */
+export interface BetterAuthMultiSessionConfig {
+  /** Most accounts signed in at once on a device. Defaults to 5. */
+  maximumSessions?: number;
+}
+
+/**
+ * Lets preview deploys sign in through the stable deploy's registered OAuth callbacks
+ * (Better Auth `oAuthProxy`).
+ */
+export interface BetterAuthOAuthProxyConfig {
+  /** The base URL of the deploy that owns the registered callback URLs. */
+  productionURL: string;
+}
+
+/**
  * Configuration options for Better Auth integration.
  */
 export interface BetterAuthConfig {
@@ -44,9 +157,10 @@ export interface BetterAuthConfig {
   googleOAuth?: BetterAuthOAuthProvider;
 
   /**
-   * Apple OAuth provider configuration.
+   * Apple OAuth provider configuration: either a pre-made client secret or the Sign in with
+   * Apple key, from which Terreno signs the client secret at startup.
    */
-  appleOAuth?: BetterAuthOAuthProvider;
+  appleOAuth?: BetterAuthAppleSecretProvider | BetterAuthAppleKeyProvider;
 
   /**
    * GitHub OAuth provider configuration.
@@ -125,7 +239,40 @@ export interface BetterAuthConfig {
   options?: BetterAuthOptionsOverride;
 
   /**
-   * Better Auth plugins, appended after Terreno's `bearer()` plugin. Their endpoints mount
+   * Account linking policy for same-email sign-ins. Maps to Better Auth's
+   * `account.accountLinking`. Unset keeps Better Auth's default (`verified-email`).
+   */
+  accountLinking?: BetterAuthAccountLinkingConfig;
+
+  /** Two-factor authentication. Unset by default. */
+  twoFactor?: BetterAuthTwoFactorConfig;
+
+  /** Passkey sign-in and registration. Unset by default. */
+  passkey?: BetterAuthPasskeyConfig;
+
+  /** Open or closed sign-up. Defaults to `{mode: "open"}`. */
+  signUp?: BetterAuthSignUpConfig;
+
+  /**
+   * Remember the method each user last signed in with, in a cookie and on the Better Auth user
+   * (`lastLoginMethod`). Off by default.
+   */
+  lastLoginMethod?: boolean;
+
+  /** Several signed-in accounts per device. Unset by default. */
+  multiSession?: BetterAuthMultiSessionConfig;
+
+  /** Proxy OAuth callbacks from the stable deploy to preview deploys. Unset by default. */
+  oauthProxy?: BetterAuthOAuthProxyConfig;
+
+  /**
+   * Register the `@better-auth/expo` server plugin so native apps can sign in with social
+   * providers through the system browser. Off by default.
+   */
+  nativeApps?: boolean;
+
+  /**
+   * Better Auth plugins, appended after Terreno's `bearer()`, methods and feature plugins. Their endpoints mount
    * under `basePath`. They are not added to the `auth.api` type.
    */
   plugins?: BetterAuthPlugin[];

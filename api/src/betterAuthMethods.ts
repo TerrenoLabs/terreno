@@ -27,9 +27,9 @@ export interface BetterAuthMethods {
   accountLinking: {mode: BetterAuthAccountLinkingMode};
   /** Email and password sign-in is enabled. */
   emailPassword: boolean;
-  /** Multiple signed-in accounts per device. Always `false` until the feature is configurable. */
+  /** Several signed-in accounts per device (Better Auth's `multiSession` plugin is on). */
   multiSession: boolean;
-  /** Passkey sign-in. Always `false` until the feature is configurable. */
+  /** Passkey sign-in (the `passkey` plugin is on). */
   passkey: boolean;
   /**
    * Ids of every OAuth provider that can start a sign-in, sorted: social providers (`google`,
@@ -37,9 +37,9 @@ export interface BetterAuthMethods {
    * whose discovery failed at startup is left out.
    */
   providers: string[];
-  /** New users can sign up with email and password. */
+  /** New users can sign up with email and password (`false` under `signUp: {mode: "closed"}`). */
   signUp: boolean;
-  /** Two-factor authentication. Always `false` until the feature is configurable. */
+  /** Two-factor authentication (Better Auth's `twoFactor` plugin is on). */
   twoFactor: boolean;
 }
 
@@ -48,6 +48,7 @@ interface MethodsContext {
   options: {
     account?: {accountLinking?: {disableImplicitLinking?: boolean; enabled?: boolean}};
     emailAndPassword?: {disableSignUp?: boolean; enabled?: boolean};
+    plugins?: {id: string}[];
   };
   socialProviders: {id: string}[];
 }
@@ -69,14 +70,16 @@ const accountLinkingMode = (options: MethodsContext["options"]): BetterAuthAccou
 export const readBetterAuthMethods = (context: MethodsContext): BetterAuthMethods => {
   const {options, socialProviders} = context;
   const emailPassword = options.emailAndPassword?.enabled === true;
+  // Read from the final plugin list, so a plugin added through `config.plugins` counts too.
+  const pluginIds = new Set((options.plugins ?? []).map((plugin) => plugin.id));
   return {
     accountLinking: {mode: accountLinkingMode(options)},
     emailPassword,
-    multiSession: false,
-    passkey: false,
+    multiSession: pluginIds.has("multi-session"),
+    passkey: pluginIds.has("passkey"),
     providers: [...new Set(socialProviders.map((provider) => provider.id))].sort(),
     signUp: emailPassword && options.emailAndPassword?.disableSignUp !== true,
-    twoFactor: false,
+    twoFactor: pluginIds.has("two-factor"),
   };
 };
 

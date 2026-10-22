@@ -126,8 +126,9 @@ Better Auth enables its limiter in production, which 429s the fourth seeded user
   optional. It is deep-merged over the options Terreno builds. Arrays (such as `trustedOrigins`)
   replace Terreno's instead of merging. An explicit value wins; an `undefined` value is ignored,
   so it cannot clear a default.
-- `plugins` are appended after Terreno's `bearer()` plugin. Their endpoints mount under
-  `basePath`, like the built-in ones.
+- `plugins` are appended after Terreno's `bearer()`, `terreno-methods`, and feature plugins
+  (see [Auth features](#auth-features)). Their endpoints mount under `basePath`, like the
+  built-in ones.
 
 ``````typescript
 const config: BetterAuthConfig = {
@@ -155,11 +156,80 @@ const config: BetterAuthConfig = {
 | `session.cookieCache` | `{enabled: true, maxAge: 300}` | The 5-minute session cookie cache |
 | `advanced.defaultCookieAttributes` | `crossDomainCookies` | `SameSite=None; Secure` cookies for cross-site frontends |
 | `rateLimit` | `disableRateLimit` | Turning Better Auth's limiter off |
-| `socialProviders` | `googleOAuth`, `githubOAuth`, `appleOAuth` | The configured social providers (`options` adds to them per provider) |
+| `socialProviders` | `googleOAuth`, `githubOAuth`, `appleOAuth`, `signUp` | The configured social providers (`options` adds to them per provider) |
+| `account.accountLinking` | `accountLinking` | The linking mode Terreno maps (`options` wins field by field) |
+| `emailAndPassword.disableSignUp` | `signUp` | Closed email sign-up |
 | `trustedOrigins` | `trustedOrigins` | The origins listed in the config |
 
 Endpoints added by `plugins` are not part of the `auth.api` type. Call them over HTTP, or cast
 `auth.api` where you call them on the server.
+
+#### Auth features
+
+Switch auth features on with these `BetterAuthConfig` fields instead of adding Better Auth
+plugins yourself. Every feature is off until you set its field. Terreno adds the plugins after
+`bearer()` and `terreno-methods` and before `config.plugins`, so your own plugins still run
+after them. `GET {basePath}/terreno/methods` reports `twoFactor`, `passkey`, `multiSession`,
+`signUp`, and `accountLinking.mode` from the final configuration.
+
+| Field | Maps to | Default |
+| --- | --- | --- |
+| `accountLinking: {mode, trustedProviders?}` | `account.accountLinking`: `verified-email` = linking on; `explicit` = `disableImplicitLinking: true`; `never` = `enabled: false`. `requireLocalEmailVerified` is `true` in every mode. `trustedProviders` skip the verified-email check, including on `/link-social`: list only providers that prove email ownership | Better Auth's default (`verified-email`) |
+| `twoFactor: {issuer, backupCodes?: {amount?, length?}, trustDeviceDays?}` | `twoFactor()` from `better-auth/plugins` (TOTP + backup codes; adds the `twoFactor` collection and `user.twoFactorEnabled`) | Off. When on: 10 backup codes of 10 characters, 30 trusted days |
+| `passkey: {rpID, rpName, origin: string[]}` | `passkey()` from `@better-auth/passkey` (adds the `passkey` collection; registering needs a session). Each origin must be a bare origin on `rpID` or a subdomain | Off |
+| `signUp: {mode: "open" \| "closed"}` | `closed`: `emailAndPassword.disableSignUp`, plus `disableSignUp` and `disableImplicitSignUp` on every social and `genericOAuth` provider (not on other sign-in plugins) | `open` |
+| `lastLoginMethod: true` | `lastLoginMethod({storeInDatabase: true})` (a cookie plus `user.lastLoginMethod`) | Off |
+| `multiSession: {maximumSessions?}` | `multiSession()` | Off. When on: 5 sessions |
+| `oauthProxy: {productionURL}` | `oAuthProxy()` | Off |
+| `nativeApps: true` | `expo()` from `@better-auth/expo` (`GET {basePath}/expo-authorization-proxy` for native social sign-in) | Off |
+| `appleOAuth: {clientId, teamId, keyId, privateKey, appBundleIdentifier?}` | `socialProviders.apple`, with the ES256 client secret signed from the key at startup | The `{clientId, clientSecret}` form still works |
+
+```typescript
+const config: BetterAuthConfig = {
+  enabled: true,
+  accountLinking: {mode: "explicit"},
+  lastLoginMethod: true,
+  multiSession: {maximumSessions: 3},
+  passkey: {origin: ["https://app.example.com"], rpID: "example.com", rpName: "Example"},
+  signUp: {mode: "closed"},
+  twoFactor: {issuer: "Example", trustDeviceDays: 14},
+};
+```
+
+Notes:
+
+- **Closed sign-up.** `POST {basePath}/sign-up/email` answers 400, and a social or generic
+  OAuth sign-in for an unknown email redirects to the error URL with `error=signup_disabled`
+  (an ID-token sign-in answers 401 `signup disabled`). A client's `requestSignUp: true` does not
+  reopen it. Terreno reaches providers registered through `config.plugins` (such as
+  `genericOAuth`) with a `terreno-sign-up-closed` plugin that runs after them. Closed mode also
+  refuses `auth.api.signUpEmail` on the same instance, so seed users with a separate instance
+  that leaves `signUp` unset.
+  - It covers email and password and OAuth providers only. Other sign-in plugins you add
+    through `plugins` (`magicLink`, `emailOTP`, `phoneNumber`, `anonymous`, ...) create users on
+    their own terms: set their own `disableSignUp` (or equivalent) option too.
+  - With `oauthProxy`, the production server finishes a preview's OAuth sign-in and decides
+    whether it may create a user, so the preview follows production's sign-up mode. Give both
+    the same `signUp.mode`.
+- **Trusted providers.** Better Auth skips the verified-email check for `trustedProviders` on
+  sign-in, on an explicit `/link-social`, and on its callback. List only providers that prove
+  the user owns the email they report. A provider that lets users set any email lets an
+  attacker link into someone else's account.
+- **Passkey origins.** `createBetterAuth` throws `passkey config is invalid` unless `origin`
+  lists at least one bare `http(s)` origin (no path or trailing slash) whose host is `rpID` or
+  a subdomain of it.
+- **Apple key.** `privateKey` is the `.p8` file's PEM contents; escaped `\n` sequences from an env
+  var are turned back into newlines. The signed secret is valid for 180 days, so redeploy at
+  least that often. Web sign-in needs `https://appleid.apple.com` in `trustedOrigins`, since
+  Apple posts the callback from there.
+- **Schema.** Better Auth stores `twoFactorEnabled` and `lastLoginMethod` on its own `user`
+  collection, not on your app `User` model, so a `strict: "throw"` User schema needs no new
+  fields.
+- **Rate limits.** With `TerrenoApp` `rateLimit` on, `{basePath}/two-factor/*`,
+  `/passkey/*`, `/link-social`, `/unlink-account`, `/multi-session/*`,
+  `/oauth-proxy-callback`, and `/expo-authorization-proxy` count against the `auth` bucket.
+- `options` still wins: for example `options.account.accountLinking.enabled` overrides the
+  mode `accountLinking` sets.
 
 ### 3. Register BetterAuthApp Plugin
 
@@ -517,8 +587,10 @@ export const authClient = createBetterAuthClient({
 2. Create a new Services ID
 3. Configure Sign in with Apple
 4. Add return URLs (similar to above)
-5. Generate private key and download
-6. Copy Service ID and Key to `.env`
+5. Generate a Sign in with Apple key and download the `.p8` file
+6. Pass the Services ID, team ID, key ID, and key contents as `appleOAuth: {clientId, teamId,
+   keyId, privateKey}`; Terreno signs the client secret at startup (see
+   [Auth features](#auth-features))
 
 ## Generated Endpoints
 

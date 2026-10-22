@@ -8,6 +8,8 @@
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^8.5.0",
+    "@better-auth/expo": "^1.6.25",
+    "@better-auth/passkey": "catalog:",
     "@modelcontextprotocol/node": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@sentry/bun": "catalog:",

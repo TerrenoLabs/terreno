@@ -48,6 +48,7 @@
     "babel-preset-expo": "catalog:",
     "expo-mcp": "^0.2.4",
     "mongodb": "catalog:",
+    "otpauth": "^9.5.2",
     "react-test-renderer": "catalog:",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.1",

@@ -15,6 +15,13 @@ import type {Db} from "mongodb";
 import mongoose from "mongoose";
 import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
+import {
+  buildFeatureOptions,
+  buildFeaturePlugins,
+  createSignUpClosedPlugin,
+  isSignUpClosed,
+  resolveAppleProvider,
+} from "./betterAuthFeatures";
 import {createMethodsPlugin} from "./betterAuthMethods";
 import {createOAuthHandoffPlugins} from "./betterAuthOAuthHandoff";
 import {APIError} from "./errors";
@@ -34,6 +41,15 @@ export type BetterAuthInstance = ReturnType<typeof betterAuth>;
 // Minimal shape we use from the MongoDB native client returned by mongoose connection
 export interface MongoClientLike {
   db: () => Db;
+}
+
+// One entry of Better Auth's `socialProviders` as Terreno builds it.
+interface SocialProviderConfig {
+  appBundleIdentifier?: string;
+  clientId: string;
+  clientSecret: string;
+  disableImplicitSignUp?: boolean;
+  disableSignUp?: boolean;
 }
 
 export interface CreateBetterAuthOptions {
@@ -181,27 +197,30 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
 
   const basePath = config.basePath ?? "/api/auth";
 
-  const socialProviders: Record<string, {clientId: string; clientSecret: string}> = {};
+  const isClosed = isSignUpClosed(config);
+  const socialProviders: Record<string, SocialProviderConfig> = {};
+  const addSocialProvider = (id: string, provider: SocialProviderConfig): void => {
+    socialProviders[id] = isClosed
+      ? {...provider, disableImplicitSignUp: true, disableSignUp: true}
+      : provider;
+  };
 
   if (config.googleOAuth) {
-    socialProviders.google = {
+    addSocialProvider("google", {
       clientId: config.googleOAuth.clientId,
       clientSecret: config.googleOAuth.clientSecret,
-    };
+    });
   }
 
   if (config.appleOAuth) {
-    socialProviders.apple = {
-      clientId: config.appleOAuth.clientId,
-      clientSecret: config.appleOAuth.clientSecret,
-    };
+    addSocialProvider("apple", resolveAppleProvider(config.appleOAuth));
   }
 
   if (config.githubOAuth) {
-    socialProviders.github = {
+    addSocialProvider("github", {
       clientId: config.githubOAuth.clientId,
       clientSecret: config.githubOAuth.clientSecret,
-    };
+    });
   }
 
   const emailHooks = createBetterAuthEmailHooks(config);
@@ -258,7 +277,15 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
   // Arrays from `options` replace Terreno's; lodash would otherwise merge them by index.
   const replaceArrays = (_target: unknown, source: unknown): unknown =>
     Array.isArray(source) ? source : undefined;
-  const merged: BetterAuthOptions = mergeWith({}, defaults, config.options, replaceArrays);
+  // Feature options (account linking, closed sign-up) sit between Terreno's defaults and
+  // `config.options`, so an explicit option still wins.
+  const merged: BetterAuthOptions = mergeWith(
+    {},
+    defaults,
+    buildFeatureOptions(config),
+    config.options,
+    replaceArrays
+  );
 
   // The handoff hook mints tokens through `auth.api`, which exists only once betterAuth() returns.
   let auth: BetterAuthInstance | undefined;
@@ -278,8 +305,18 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     // token as a bearer header) — without it, a raw session token cannot be validated and
     // socket auth silently fails (the sync client shows perpetually "offline").
     // The methods plugin serves `GET {basePath}/terreno/methods` for login screens.
+    // Feature plugins (two-factor, passkey, ...) come before `config.plugins`, so a consumer
+    // plugin can still hook around them. The closed sign-up plugin follows `config.plugins` so
+    // its init reaches the providers `genericOAuth` registers.
     // The handoff plugins come last so their callback hook sees the final redirect.
-    plugins: [bearer(), createMethodsPlugin(), ...(config.plugins ?? []), ...handoffPlugins],
+    plugins: [
+      bearer(),
+      createMethodsPlugin(),
+      ...buildFeaturePlugins(config),
+      ...(config.plugins ?? []),
+      ...(isClosed ? [createSignUpClosedPlugin()] : []),
+      ...handoffPlugins,
+    ],
   });
 
   // Cast through unknown: enabling the bearer plugin narrows betterAuth()'s inferred

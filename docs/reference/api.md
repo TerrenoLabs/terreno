@@ -604,13 +604,16 @@ only those. It needs no session. Read it from a frontend with `useAuthMethods(au
   generic providers meant only for integrations or internal staff. A generic provider whose
   discovery failed at startup is left out.
 - `emailPassword` — Better Auth's `emailAndPassword.enabled` (on unless `options` turns it off).
-- `signUp` — `true` when email and password is on and `emailAndPassword.disableSignUp` is not set.
+- `signUp` — `true` when email and password is on and `emailAndPassword.disableSignUp` is not set
+  (`signUp: {mode: "closed"}` sets it).
 - `accountLinking.mode` — From Better Auth's `account.accountLinking`: `"never"` when
   `enabled: false`, `"explicit"` when `disableImplicitLinking: true`, otherwise
   `"verified-email"` (Better Auth's default: a same-email sign-in links when the provider reports
   a verified email).
-- `passkey`, `twoFactor`, `multiSession` — Always `false` for now; they report the matching
-  feature once `BetterAuthConfig` can turn it on.
+- `passkey`, `twoFactor`, `multiSession` — `true` when the `passkey`, `two-factor`, or
+  `multi-session` plugin is in the final plugin list: set by the `passkey`, `twoFactor`, and
+  `multiSession` config fields, or added through `plugins`. See
+  [Auth features](../how-to/configure-better-auth.md#auth-features).
 
 The values come from Better Auth's final context on each request, so `options` overrides and
 plugin-registered providers are reflected.

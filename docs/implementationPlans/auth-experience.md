@@ -139,7 +139,7 @@ Open risks:
   - Docs: `docs/reference/api.md` Better Auth section (endpoint + response).
   - Skills: terreno-backend-api, terreno-data-fetching, verify-ui-changes
 
-- [ ] **T2** — Auth feature config contract and plugin wiring
+- [x] **T2** — Auth feature config contract and plugin wiring
   - Depends on: T1
   - Files: api/src/betterAuth.ts, api/src/betterAuthSetup.ts, api/src/betterAuthFeatures.ts, api/src/betterAuthFeatures.test.ts, api/src/betterAuthMethods.ts, api/src/rateLimit/policies.ts, api/src/rateLimit/policies.test.ts, api/package.json, rtk/package.json, ui/package.json, example-backend/package.json, example-frontend/package.json, package.json, bun.lock, docs/how-to/configure-better-auth.md, changelog/unreleased/auth-feature-config.md
   - Build:

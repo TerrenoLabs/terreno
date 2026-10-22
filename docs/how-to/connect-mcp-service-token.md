@@ -2,7 +2,7 @@
 
 Mint a personal `mcp_…` Bearer key, then paste the MCP URL and key into Perplexity, Cursor, VS Code, or Claude Code.
 
-This is the **static-key** path for the consumer app's `POST /mcp`. It is not the hosted `@terreno/mcp` codegen server. For exposing tools, see [Expose MCP tools](expose-mcp-tools.md). Interactive OAuth for remote clients is a separate plan ([app MCP server](../implementationPlans/app-mcp-server.md)); do not send these keys in a query string.
+This is the **static-key** path for the consumer app's `POST /mcp`. It is not the hosted `@terreno/mcp` codegen server. For exposing tools, see [Expose MCP tools](expose-mcp-tools.md). Interactive OAuth for remote clients such as Claude.ai and ChatGPT is [Enable MCP OAuth for a JWT app](enable-mcp-oauth.md); do not send these keys in a query string.
 
 ## 1. Enable the flag
 

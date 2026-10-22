@@ -336,6 +336,20 @@ describe("generateAllFiles", () => {
     assert.notInclude(server, "return app;");
   });
 
+  test("generated backend server lets RealtimeApp use the registered BetterAuthApp", () => {
+    const server =
+      generateAllFiles({
+        appDisplayName: "Realtime App",
+        appName: "realtime-app",
+      }).find((file) => file.path === "backend/src/server.ts")?.content ?? "";
+
+    assert.include(server, "new BetterAuthApp(");
+    assert.include(server, "new RealtimeApp(");
+    assert.notInclude(server, "createBetterAuth(", "no second Better Auth instance");
+    assert.notInclude(server, "getMongoClientFromMongoose");
+    assert.notInclude(server, "betterAuth:", "RealtimeApp finds the registered BetterAuthApp");
+  });
+
   test("generated users router casts User for modelRouter compatibility", () => {
     const users = generateAllFiles({
       appDisplayName: "Users App",

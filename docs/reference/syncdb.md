@@ -143,8 +143,14 @@ new TerrenoApp({userModel: User})
 - **`ensureSyncIndexes`** — `TerrenoApp.start()` binds the HTTP port first (or attaches to `httpServer` if the process already listened), then awaits index builds for snapshot queries and sync bookkeeping (`SyncMutation.mutationId` unique, `SyncCounter.stream` unique, etc.). Registration queues this work without contacting MongoDB, so models can load before the database connects. Hosts that build Express without `TerrenoApp.start()` should await `ensureSyncIndexes()` after connecting.
 
 Socket auth requires at least one configured authentication method. It enables legacy JWT
-validation when `tokenSecret` or `TOKEN_SECRET` is available. Better Auth can be used without
-a JWT secret:
+validation when `tokenSecret` or `TOKEN_SECRET` is available. When a `BetterAuthApp` is
+registered on the same `TerrenoApp`, `RealtimeApp` validates Better Auth sessions with its
+instance automatically, with or without a JWT secret. The handshake creates the app `User` on
+first contact and refuses disabled users. A `RealtimeApp` without its own `userModel` uses the
+`TerrenoApp`'s, for JWT and Better Auth sockets alike: socket authorization reads the user from
+the database instead of the token's claims, and the revalidation sweep disconnects users who
+were disabled or deleted. Pass `betterAuth` only for a `RealtimeApp` mounted without
+`TerrenoApp`:
 
 ```typescript
 new RealtimeApp({betterAuth: {auth, userModel: User}})
@@ -209,7 +215,7 @@ be passed to `betterAuthAdapter` directly.
 | Method | Description |
 |--------|-------------|
 | `start()` | Resolve user, run wipe-on-user-change check, start persistence, connect transport, subscribe collections, start reconcile timer. Resolves even when offline. Idempotent while already started. |
-| `stop()` | Disconnect, stop persistence, clear timers and listeners. |
+| `stop()` | Disconnect, flush and stop persistence, clear timers and listeners. Cancels a `start()` that is still running or queued ahead of it, so the transport never connects after logout. |
 | `goOffline()` | Simulated outage: disconnect transport, pause replay/reconcile/timer; local mutations keep queueing. |
 | `goOnline()` | End simulated outage; reconnect triggers reconcile + outbox replay. |
 | `mutate({collection, operation, id?, data?})` | Optimistic local write + durable outbox enqueue + fire-and-forget replay. Returns `{mutationId, id}`. |
@@ -220,7 +226,7 @@ be passed to `betterAuthAdapter` directly.
 | `replayOutbox()` | Drain queued mutations for the current user now. |
 | `resolveConflict({mutationId, strategy})` | Apply `"useServer"` or `"keepMine"` to a recorded conflict. |
 | `retryFailed({entityId})` | Re-enable an entity's queued successors after a terminal validation failure. |
-| `signOut()` | Explicit teardown like `stop()`; wipes local data only when `wipeOnSignOut: true`. |
+| `signOut()` | Explicit teardown like `stop()` (including cancelling an in-flight `start()`); wipes local data only when `wipeOnSignOut: true`. |
 | `getSyncStatus()` | Snapshot of aggregate sync state (see [Sync status API](#sync-status-api)). |
 | `onStatusChange(callback)` | Subscribe to connectivity/syncing changes; returns unsubscribe. |
 | `onSocketEvent(event, handler)` | Listen for an app-level server event (for example `featureFlagsChanged`) on the sync socket; returns unsubscribe. Listeners survive `stop()`/`start()` and reconnects. `sync:*` and Socket.io lifecycle names throw. A transport without `onEvent` returns a no-op. |
@@ -1025,6 +1031,12 @@ const syncDb = createSyncDb({
   keyProvider: createLocalKeyProvider(),
 });
 ```
+
+`start()` resolves the key before it loads the store, while the session is still valid.
+The derived key is cached in IndexedDB, so the flush in `stop()` never fetches
+`/sync/key`. Logging out while `start()` is still running keeps pending outbox writes.
+If the key fetch fails (an offline cold start), `start()` still resolves and the next
+save retries the fetch.
 
 Saves are debounced (500 ms). The store is serialized once per write, not once per
 transaction: autosave compares TinyBase's content hashes (O(1)) to skip saves the last

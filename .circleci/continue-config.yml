@@ -1280,10 +1280,12 @@ jobs:
           name: CircleCI path-filter parity
           command: bun run check:circleci-parity
       - run:
-          name: Changelog fragments
+          name: Changelog fragments and what's new data
           command: |
             bun run check:changelog
             bun test scripts/changelog/
+            bun run check:whats-new
+            bun test scripts/whats-new/
       - run:
           name: Static analysis
           command: |

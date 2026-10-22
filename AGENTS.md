@@ -1,7 +1,3 @@
----
-title: Terreno monorepo root guidelines
-trigger: always_on
----
 # Terreno
 
 Terreno is Django/Rails for TypeScript — with universal app support.
@@ -30,6 +26,9 @@ deploy.
 - **admin-frontend/** - Admin panel frontend screens for @terreno/api backends (`@terreno/admin-frontend`)
 - **admin-spa/** - Standalone admin SPA (Expo Router web app) + Express plugin to serve it from a backend (`@terreno/admin-spa`)
 - **blocks/** - Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards, and JSON Schemas for native clients (`@terreno/blocks`)
+- **comms/** - Pluggable transactional communications (`@terreno/comms`)
+- **cli/** - Operator CLI (`@terreno/cli`, bin `terreno`) for docs, codegen, bootstrap, and OpenAPI REST
+- **jobs/** - Durable background jobs plugin for `@terreno/api` (`@terreno/jobs`)
 - **mcp-server/** - MCP server for AI assistant integration (`@terreno/mcp`, bins `terreno-mcp` + `terreno-mcp-local`)
 - **demo/** - Demo app for showcasing and testing UI components
 - **example-frontend/** - Example Expo app demonstrating full stack usage
@@ -53,8 +52,9 @@ Taste observes product CI on every discovered host (GitHub Actions, CircleCI,
 Buildkite, and similar), not only GitHub checks. See `plugins/README.md` and
 `docs/reference/lifecycle-plugin.md`.
 
-Lifecycle stages discover and compose the repo-local skills under `.rulesync/skills/`;
-project commands and domain conventions belong there, not in the portable plugin.
+The installed planning plugin also ships the reusable Terreno app, docs, upgrade,
+deployment, and verification skills used by consumer projects. Repository-only roadmap,
+release, and maintenance workflows remain under `.rulesync/skills/`.
 
 ## Documentation
 
@@ -63,7 +63,7 @@ explanation and reference pages for the affected area. Update those pages in the
 same slice using the `update-docs` skill. Missing docs for a user-visible or
 architectural change fails the slice. Install the published skill set with
 `npx skills add TerrenoLabs/terreno`; regenerate `skills/` with
-`bun run skills:sync`. The same five stages install as the Cursor plugin
+`bun run skills:sync`. The combined lifecycle and Terreno app skill set installs as the Cursor plugin
 `terreno-planning` from `.cursor-plugin/marketplace.json` (invoke `/terreno-1-grow`),
 as the Codex plugin `terreno-planning` from `.agents/plugins/marketplace.json`
 (invoke `$terreno-1-grow`), or as the Claude Code plugin `terreno` via
@@ -103,7 +103,22 @@ bun run mcp:build        # Build MCP server
 bun run mcp:start        # Start MCP server
 bun run admin-backend:compile   # Compile admin backend
 bun run admin-frontend:compile  # Compile admin frontend
+bun run comms:compile           # Compile communications package
+bun run comms:test              # Test communications package
+bun run jobs:compile            # Compile jobs package
+bun run jobs:test               # Test jobs package
+bun run jobs:worker             # Example-backend standalone jobs worker
 ```
+
+### Static analysis
+
+Agent post-edit hooks run `bun run analyze:fast`; agent stop hooks run
+`bun run analyze:full`. `.rulesync/hooks.json` is the canonical hook configuration.
+Knip has no baseline: every finding must be fixed or documented as a narrow exception in
+`knip.jsonc`, and `bun run check:knip` enforces zero findings in CI. dependency-cruiser
+keeps a ratcheted baseline; run `bun run analyze:dependency-baseline` only after reviewing
+an intentional repository-wide dependency-graph change. See
+`docs/explanation/static-analysis.md`.
 
 ## How the Packages Work Together
 
@@ -199,7 +214,7 @@ bun run frontend:web
 - Focus on readability over performance
 - Write complete, functional code without TODOs when possible
 - Comments should describe purpose, not effect
-- **Frontend verification is mandatory** for any feature touching frontend packages: launch the app, log in when required, exercise the changed feature, save screenshots/videos to `/opt/cursor/artifacts/`, and attach them to the PR. See the `verify-ui-changes` skill and `02-frontend-verification` rules.
+- **Frontend verification is mandatory** for any feature touching frontend packages: launch the app, log in when required, exercise the changed feature, save screenshots/videos to `/opt/cursor/artifacts/`, and attach them to the PR. See `02-frontend-verification.md` and the `verify-ui-changes` skill.
 
 ## Package Reference
 
@@ -387,21 +402,12 @@ Key imports:
 import {createSyncDb, betterAuthAdapter} from "@terreno/syncdb";
 import {createApiClient} from "@terreno/syncdb/api";
 import {SessionProvider, useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 import {ApiClientProvider, SyncDbProvider, useMutate, useQuery} from "@terreno/syncdb/react";
 ```
 
-```typescript
-// Synced collection
-const todos = useQuery<Todo>("todos", {filter: (t) => !t.completed});
-const {create, update, remove} = useMutate("todos");
-
-// Non-synced route (profile, AI, actions) — generated hook
-import {useGetAuthMeQuery} from "@/store/apiSdk";
-const {data: me, isLoading, error} = useGetAuthMeQuery();
-
-// Wrong — no axios or raw fetch in screens
-// const result = await axios.get("/auth/me");
-```
+One `authProvider` feeds `createSyncDb` and `createApiClient`. Use generated SDK hooks
+for non-synced routes — never use `axios` or `fetch` directly in screens.
 
 For running-app SyncDB bugs, invoke the `debug-syncdb-with-mcp` skill and use
 `get_syncdb_state`, `syncdb_snapshot`, and `syncdb_action` from

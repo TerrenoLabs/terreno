@@ -129,8 +129,8 @@ export const createLocalKeyProvider = ({
 
 /**
  * AES-GCM codec whose key is resolved lazily from a {@link KeyProvider} on
- * first use. Lets persister factories stay synchronous while key
- * fetch/derivation happens on the first load/save.
+ * first use (or eagerly via `prepare()`). Lets persister factories stay
+ * synchronous while key fetch/derivation happens on the first load/save.
  */
 export const createKeyProviderCodec = ({
   keyProvider,
@@ -141,7 +141,15 @@ export const createKeyProviderCodec = ({
 }): PayloadCodec => {
   let codecPromise: Promise<PayloadCodec> | undefined;
   const resolveCodec = (): Promise<PayloadCodec> => {
-    codecPromise ??= keyProvider.getKey({userId}).then((key) => createAesGcmCodec({key}));
+    codecPromise ??= keyProvider
+      .getKey({userId})
+      .then((key) => createAesGcmCodec({key}))
+      .catch((error: unknown) => {
+        // A failed resolution (offline, signed out) must not fail every later
+        // load/save for the life of this codec; retry on the next use.
+        codecPromise = undefined;
+        throw error;
+      });
     return codecPromise;
   };
 
@@ -149,5 +157,8 @@ export const createKeyProviderCodec = ({
     decode: async (payload: Uint8Array): Promise<string> => (await resolveCodec()).decode(payload),
     encode: async (plaintext: string): Promise<Uint8Array> =>
       (await resolveCodec()).encode(plaintext),
+    prepare: async (): Promise<void> => {
+      await resolveCodec();
+    },
   };
 };

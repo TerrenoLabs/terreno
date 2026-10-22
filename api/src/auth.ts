@@ -22,6 +22,7 @@ import {createOpenApiBuilder, type OpenApiSchemaProperty} from "./openApiBuilder
 import {getOpenApiSpecForModel} from "./populate";
 import {isJwtCredentialExchangePath} from "./rateLimit/policies";
 import {
+  getCurrentRequestContext,
   getSessionIdFromJwtPayload,
   type JwtSessionPayload,
   setRequestContext,
@@ -101,6 +102,10 @@ export const authenticateMiddleware = (anonymous = false) => {
         // req.logIn used to populate authInfo; keep that passport-public API
         // intact for downstream consumers.
         req.authInfo = (info ?? {}) as Express.AuthInfo;
+        // Only the jwt strategy reaches this callback with a user (anonymous calls pass()).
+        if (!getCurrentRequestContext()?.credential) {
+          setRequestContext({credential: "jwt"});
+        }
         return next();
       }
     )(req, res, next);

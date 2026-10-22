@@ -4,6 +4,8 @@ description: >-
   Chart and execute a feature too large for one agent context as a roadmap map
   with a small unblocked frontier, explicit decision tickets, and tracer-bullet
   delivery loops.
+triggers:
+  - user
 ---
 # Roadmap frontier
 

@@ -1,7 +1,6 @@
 ---
 alwaysApply: true
 description: Terreno monorepo root guidelines
-globs: **/*
 ---
 
 # Terreno
@@ -156,7 +155,7 @@ The three core packages form a complete full-stack framework:
   - TerrenoProvider for theming
 ```
 
-> **Removed in Terreno 58:** `@terreno/rtk` and Redux. Never add `@terreno/rtk`, `@reduxjs/toolkit`, `react-redux`, `redux-persist`, or `@rtk-query/codegen-openapi`. Upgrade path: [migrate-rtk-to-syncdb.md](../../docs/how-to/migrate-rtk-to-syncdb.md). `RealtimeApp` stays as the sync socket host.
+> **Removed in Terreno 58:** `@terreno/rtk` and Redux. Never add `@terreno/rtk`, `@reduxjs/toolkit`, `react-redux`, `redux-persist`, or `@rtk-query/codegen-openapi`. Upgrade path: [migrate-rtk-to-syncdb.md](docs/how-to/migrate-rtk-to-syncdb.md). `RealtimeApp` stays as the sync socket host.
 
 ### Integration Flow
 
@@ -194,7 +193,7 @@ bun run frontend:web
 - Use camelCase directories (e.g., `components/authWizard`)
 - Favor named exports
 - Use the RORO pattern (Receive an Object, Return an Object)
-- **No barrel imports** — import concrete module files, not directory `index` re-export barrels. See [no-barrel-imports.md](../docs/explanation/no-barrel-imports.md). Cross-package `@terreno/*` package roots are allowed; internal barrel `index.ts` files are banned (Biome `noBarrelFile` override) and paths like `../models`, `@/store`, or `@components` without a file are not allowed. Enforced by Biome lint and `bun run check:no-barrel-imports` in CI.
+- **No barrel imports** — import concrete module files, not directory `index` re-export barrels. See [no-barrel-imports.md](docs/explanation/no-barrel-imports.md). Cross-package `@terreno/*` package roots are allowed; internal barrel `index.ts` files are banned (Biome `noBarrelFile` override) and paths like `../models`, `@/store`, or `@components` without a file are not allowed. Enforced by Biome lint and `bun run check:no-barrel-imports` in CI.
 
 ### Dates and Time
 - Always use Luxon instead of Date or dayjs
@@ -544,7 +543,7 @@ Seed login users with `bun run backend:seed` (same env vars): creates `test@exam
 ### Tests and lint
 
 Every CircleCI test job has a local command. Map and run them with
-[`docs/how-to/run-tests-locally.md`](../../docs/how-to/run-tests-locally.md).
+[`docs/how-to/run-tests-locally.md`](docs/how-to/run-tests-locally.md).
 
 ```bash
 bun run test              # every workspace test:ci (including example-frontend)
@@ -577,7 +576,7 @@ When present, `SENTRY_CLIENT_SECRET` is injected as an environment variable hold
 When present, `CIRCLECI_TOKEN` is a CircleCI personal API token (`CIRCLE_TOKEN` is the
 CLI name). Use it to list jobs and fetch logs for Taste. Project slug:
 `circleci/6UHiK7pThPXbhnNi3umQNe/LdjghuhydHjFMyFjcEXMA2` (not `gh/TerrenoLabs/terreno`).
-See [`docs/how-to/circleci.md`](../../docs/how-to/circleci.md).
+See [`docs/how-to/circleci.md`](docs/how-to/circleci.md).
 
 ### Gotchas
 

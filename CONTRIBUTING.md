@@ -185,11 +185,13 @@ Terreno's own GCP infrastructure lives in [infra/flourish/README.md](infra/flour
 
 ## AI rules management
 
-This project uses [rulesync](https://github.com/dyoshikawa/rulesync) to keep AI assistant rules consistent.
+This project uses [rulesync](https://github.com/dyoshikawa/rulesync) 17 (configured in `rulesync.jsonc`) to keep AI assistant rules consistent.
 
 1. Edit source files in `.rulesync/rules/`
 2. Run `bun run rules` to regenerate tool-specific files (`AGENTS.md`, `CLAUDE.md`, Cursor rules, Copilot instructions)
 3. Commit both the source and generated files
+
+The root rule `.rulesync/rules/00-root.md` generates `CLAUDE.md`, `AGENTS.md` (read by Devin and other AGENTS.md tools), `.cursor/rules/00-root.mdc`, and `.github/copilot-instructions.md`. `.rulesync/rules/01-claudecode-root.md` generates `CLAUDE.local.md`. Never edit these outputs by hand. Write links in the root rules relative to the repository root (`docs/how-to/...`), because rulesync copies the text without rewriting links.
 
 `bun run rules:check` verifies generated files are up to date (also run in CI).
 

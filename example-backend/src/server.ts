@@ -17,8 +17,6 @@ import {
   ConsentApp,
   checkModelsStrict,
   configureOpenApiValidator,
-  createBetterAuth,
-  getMongoClientFromMongoose,
   logger,
   Membership,
   type ModelRouterOptions,
@@ -171,18 +169,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
 
   try {
     const betterAuthConfig = buildBetterAuthConfig();
-    // Build the Better Auth instance eagerly (MongoDB is connected above). It is shared
-    // with the RealtimeApp socket auth validator. We cannot use BetterAuthApp.getAuth()
-    // for this: plugin.register() (which populates it) runs later inside terraApp.start(),
-    // so getAuth() is still undefined at construction time here — that left the socket with
-    // only the legacy JWT validator, rejecting Better Auth session tokens on (re)connect.
-    const betterAuthInstance = betterAuthConfig
-      ? createBetterAuth({
-          config: betterAuthConfig,
-          mongoClient: getMongoClientFromMongoose(),
-          userModel: User as unknown as TerrenoAuthUserModel,
-        })
-      : undefined;
 
     const adminWebsocketsDebug = await AppConfiguration.getConfig("debug.websocketsDebug");
     const websocketsDebug = WEBSOCKETS_DEBUG || adminWebsocketsDebug === true;
@@ -290,12 +276,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     let realtimeApp: RealtimeApp | undefined;
     if (isWebsocketService) {
       realtimeApp = new RealtimeApp({
-        betterAuth: betterAuthInstance
-          ? {
-              auth: betterAuthInstance,
-              userModel: User as unknown as TerrenoAuthUserModel,
-            }
-          : undefined,
         changeStream: {
           ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
         },

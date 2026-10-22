@@ -19,6 +19,34 @@ import {
 import {logger} from "./logger";
 import type {TerrenoPlugin} from "./terrenoPlugin";
 
+/**
+ * The capability a registered plugin offers when it owns the app's Better Auth instance, as
+ * BetterAuthApp does. TerrenoApp mounts its session middleware and RealtimeApp validates socket
+ * sessions with it, so both find the provider the same way: {@link findBetterAuthProvider}.
+ */
+export interface BetterAuthProvider {
+  getAuth: () => BetterAuthInstance | undefined;
+  ensureAuth?: () => BetterAuthInstance;
+  markSessionMiddlewareMounted?: () => void;
+  getBetterAuthBasePath?: () => string;
+}
+
+/** Whether a registered plugin provides the app's Better Auth instance. */
+export const isBetterAuthProvider = (plugin: unknown): plugin is BetterAuthProvider =>
+  typeof plugin === "object" &&
+  plugin !== null &&
+  typeof (plugin as Partial<BetterAuthProvider>).getAuth === "function";
+
+/** The first registered plugin that provides the app's Better Auth instance, if any. */
+export const findBetterAuthProvider = (
+  registrations: readonly unknown[]
+): BetterAuthProvider | undefined => registrations.find(isBetterAuthProvider);
+
+/** The provider's Better Auth instance, creating it when the provider supports that. */
+export const getProvidedBetterAuth = (
+  provider: BetterAuthProvider | undefined
+): BetterAuthInstance | undefined => provider?.ensureAuth?.() ?? provider?.getAuth();
+
 export interface BetterAuthAppOptions {
   config: BetterAuthConfig;
   userModel?: UserModel;

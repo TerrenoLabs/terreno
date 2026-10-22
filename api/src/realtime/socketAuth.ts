@@ -2,10 +2,10 @@ import {authorize, UnauthorizedError} from "@thream/socketio-jwt";
 import type {Socket} from "socket.io";
 
 import type {UserModel} from "../auth";
-import type {BetterAuthInstance} from "../betterAuthSetup";
+import type {BetterAuthUser} from "../betterAuth";
+import {type BetterAuthInstance, resolveBetterAuthAppUser} from "../betterAuthSetup";
 import {APIError} from "../errors";
 import {logger} from "../logger";
-import {findOneOrNoneFor} from "../plugins";
 import type {SocketWithDecodedToken} from "./socketUser";
 
 /**
@@ -45,8 +45,10 @@ export interface BetterAuthSocketOptions {
   auth: BetterAuthInstance;
   /**
    * Optional application user model. When provided, the Better Auth user is resolved to
-   * the app user (via `betterAuthId`) so `decodedToken.id`/`admin` match the identity the
-   * REST layer uses. Without it, the Better Auth user id is used and `admin` is false.
+   * the app user (via `betterAuthId`, created on first contact) so `decodedToken.id`/`admin`
+   * match the identity the REST layer uses, and disabled users are refused. Without it, the
+   * Better Auth user id is used and `admin` is false. `RealtimeApp` fills this in from its own
+   * `userModel`, else the TerrenoApp's, when it is omitted.
    */
   userModel?: UserModel;
 }
@@ -159,14 +161,29 @@ export const createBetterAuthValidator = (
     let id = String(betterAuthUserId);
     let admin = false;
     if (userModel) {
-      const appUser = (await findOneOrNoneFor(userModel, {
-        betterAuthId: betterAuthUserId,
-      })) as unknown as {_id?: unknown; admin?: boolean} | null;
-      if (!appUser?._id) {
+      // Same lookup as the REST session middleware: a user whose first contact after
+      // signing up is this handshake gets their app user created here.
+      let resolved: Awaited<ReturnType<typeof resolveBetterAuthAppUser>>;
+      try {
+        resolved = await resolveBetterAuthAppUser({
+          betterAuthUser: session.user as BetterAuthUser,
+          userModel,
+        });
+      } catch (error) {
+        // Keep database details (model, field, duplicate-key values) out of the client error.
+        logger.error(`[socket] Could not resolve the app user for a Better Auth session: ${error}`);
         throw new UnauthorizedError("invalid_token", {
-          message: "Unauthorized: Better Auth user has no application user",
+          message: "Unauthorized: could not resolve the application user",
         });
       }
+      const {isDisabled, user} = resolved;
+      if (isDisabled) {
+        logger.warn(`[socket] User ${user.id} is disabled, rejecting Better Auth session`);
+        throw new UnauthorizedError("invalid_token", {
+          message: "Unauthorized: user is disabled",
+        });
+      }
+      const appUser = user as unknown as {_id: unknown; admin?: boolean};
       id = String(appUser._id);
       admin = appUser.admin === true;
     }

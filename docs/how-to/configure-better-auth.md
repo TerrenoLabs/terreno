@@ -117,6 +117,50 @@ Throwaway in-process seed apps (CLI / container smoke tests that call Better Aut
 sign-up many times) should set `disableRateLimit: true` on that instance only.
 Better Auth enables its limiter in production, which 429s the fourth seeded user.
 
+#### Pass other Better Auth options and plugins
+
+`BetterAuthConfig` covers the settings Terreno manages. For anything else, use `options` and
+`plugins` instead of replacing `BetterAuthApp`:
+
+- `options` takes any Better Auth option except `basePath` and `plugins`, with nested fields
+  optional. It is deep-merged over the options Terreno builds. Arrays (such as `trustedOrigins`)
+  replace Terreno's instead of merging. An explicit value wins; an `undefined` value is ignored,
+  so it cannot clear a default.
+- `plugins` are appended after Terreno's `bearer()` plugin. Their endpoints mount under
+  `basePath`, like the built-in ones.
+
+``````typescript
+const config: BetterAuthConfig = {
+  enabled: true,
+  options: {
+    emailAndPassword: {
+      requireEmailVerification: true,
+      // Carry over legacy password hashes during a migration
+      password: {hash: hashPassword, verify: verifyPassword},
+    },
+    databaseHooks: {user: {create: {after: async (user) => onUserCreated(user)}}},
+  },
+  plugins: [myBetterAuthPlugin()],
+};
+``````
+
+| Terreno default | Set from | What overriding it drops |
+| --- | --- | --- |
+| `database` | MongoDB adapter on the app's connection | Users and sessions in the app's database |
+| `emailAndPassword.enabled` | `true` | Email/password sign-in |
+| `emailAndPassword.revokeSessionsOnPasswordReset` | `true` | Signing out other sessions after a password reset |
+| `emailAndPassword.sendResetPassword` | `sendMail` | Terreno's reset email |
+| `emailAndPassword.onPasswordReset` | `userModel` | Syncing the new password to JWT credentials |
+| `emailVerification.sendOnSignUp`, `emailVerification.sendVerificationEmail` | `sendMail` | Terreno's verification email on sign-up |
+| `session.cookieCache` | `{enabled: true, maxAge: 300}` | The 5-minute session cookie cache |
+| `advanced.defaultCookieAttributes` | `crossDomainCookies` | `SameSite=None; Secure` cookies for cross-site frontends |
+| `rateLimit` | `disableRateLimit` | Turning Better Auth's limiter off |
+| `socialProviders` | `googleOAuth`, `githubOAuth`, `appleOAuth` | The configured social providers (`options` adds to them per provider) |
+| `trustedOrigins` | `trustedOrigins` | The origins listed in the config |
+
+Endpoints added by `plugins` are not part of the `auth.api` type. Call them over HTTP, or cast
+`auth.api` where you call them on the server.
+
 ### 3. Register BetterAuthApp Plugin
 
 Use the TerrenoApp plugin system:
@@ -143,9 +187,13 @@ if (betterAuthConfig) {
 const server = app.start();
 ``````
 
+`RealtimeApp` (registered directly or through `TerrenoApp({realtime})`) uses this plugin's Better Auth instance for socket sessions. Do not build a second instance with `createBetterAuth` for sockets.
+
 ### 4. Update User Model
 
 `syncBetterAuthUser` creates the app `User` on the first authenticated request after Better Auth sign-up. Declare `betterAuthId` on that schema. Declare `oauthProvider` only if the app uses social OAuth.
+
+To lock an account out, set `disabled: true` on its app `User` (for example with `isDisabledPlugin`). That user's Better Auth sessions stop authenticating: `req.user` is not set, so protected routes answer 401. Sign-out still works.
 
 Email/password sync does **not** write `oauthProvider`. A `strict: "throw"` schema that omits the field stays valid. Social login still passes a provider string and requires the field.
 

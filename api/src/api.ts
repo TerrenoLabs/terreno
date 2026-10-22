@@ -12,6 +12,7 @@ import mongoose, {type Document, type Model} from "mongoose";
 import {
   assertNoActionCollisions,
   type CollectionActionConfig,
+  hasMCPActions,
   type InstanceActionConfig,
   registerActionRoutes,
 } from "./actions";
@@ -35,7 +36,7 @@ import {
   passthroughOrWrapWrite,
 } from "./errors";
 import {logger} from "./logger";
-import {registerMCPModel, updateMCPRegistryOptions} from "./mcp/registry";
+import {registerMCPActionModel, registerMCPModel, updateMCPRegistryOptions} from "./mcp/registry";
 import type {MCPConfig} from "./mcp/types";
 import {
   createOpenApiMiddleware,
@@ -682,6 +683,8 @@ export function modelRouter<T>(
   // owns the catalog entry and MCP shares that routePath key.
   if (options.mcp && path === undefined) {
     registerMCPModel(model, options.mcp, options);
+  } else if (path === undefined && hasMCPActions(options)) {
+    registerMCPActionModel(model, options);
   }
 
   const shouldDeferBuild = path !== undefined && Boolean(options.access) && !options.accessControl;
@@ -751,7 +754,8 @@ const _buildModelRouter = <T>(
   if (routePath) {
     replaceCollectionOptions(routePath, options as unknown as ModelRouterOptions<unknown>);
   }
-  if (options.mcp) {
+  // A routed router's catalog entry was replaced by routePath above; only pathless ones need this.
+  if (options.mcp || (!routePath && hasMCPActions(options))) {
     updateMCPRegistryOptions(model.modelName, options as unknown as ModelRouterOptions<unknown>);
   }
 

@@ -112,6 +112,11 @@ export const todoRouter = modelRouter("/todos", Todo, {
 
         return {matched: todos.length, modified};
       },
+      // Same implementation over REST (POST /todos/bulkComplete) and MCP (todos_bulk_complete).
+      mcp: {
+        description: "Mark several of the caller's todos complete",
+        name: "todos_bulk_complete",
+      },
       method: "POST",
       permissions: [Permissions.IsAuthenticated],
       response: z
@@ -135,6 +140,7 @@ export const todoRouter = modelRouter("/todos", Todo, {
         await todo.save();
         return todo;
       },
+      mcp: {name: "todos_mark_complete"},
       method: "POST",
       permissions: [Permissions.IsOwner],
       summary: "Mark a single todo as complete",

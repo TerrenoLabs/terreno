@@ -515,8 +515,6 @@ import {HealthApp} from "@terreno/api-health";
 import {
   BetterAuthApp,
   checkModelsStrict,
-  createBetterAuth,
-  getMongoClientFromMongoose,
   logger,
   Membership,
   RealtimeApp,
@@ -549,15 +547,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
   await access.roles.seedDefaults();
 
   const betterAuthConfig = buildBetterAuthConfig();
-  const betterAuthInstance = betterAuthConfig
-    ? createBetterAuth({
-        config: betterAuthConfig,
-        mongoClient: getMongoClientFromMongoose(),
-        // noExplicitAny: User model type mismatch
-        // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-        userModel: User as any,
-      })
-    : undefined;
 
   const terraApp = new TerrenoApp({
     accessControl: access,
@@ -626,14 +615,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     )
     .register(
       new RealtimeApp({
-        betterAuth: betterAuthInstance
-          ? {
-              auth: betterAuthInstance,
-              // noExplicitAny: User model type mismatch
-              // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-              userModel: User as any,
-            }
-          : undefined,
         // noExplicitAny: User model type mismatch
         // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
         userModel: User as any,

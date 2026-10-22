@@ -134,7 +134,7 @@ Interrupt frequency is enforced **client-side** in `AnnouncementNavigator` befor
 </AnnouncementNavigator>
 ```
 
-`maxInterruptionsPerSession` defaults to `1` when omitted. The example app sets `skipFirstLaunch: false` so seeded interrupts still appear on first launch.
+`maxInterruptionsPerSession` defaults to `1` when omitted. The example app sets `skipFirstLaunch: false` so an announcement an admin publishes appears on the next launch.
 
 | Prop | Default | Behavior |
 |------|---------|----------|
@@ -153,9 +153,11 @@ Paste YouTube or Loom URLs in the announcement `body` using markdown links or im
 
 ## Example app
 
-`example-backend` registers `AnnouncementsApp` with `isStaff: (user) => user.admin === true` and an optional `matchAudience` org filter. `bun run backend:seed` idempotently seeds:
+`example-backend` registers `AnnouncementsApp` with `isStaff: (user) => user.admin === true` and an optional `matchAudience` org filter. `bun run backend:seed` idempotently seeds two **drafts**:
 
 - **Staff modal (required)** — `audienceType: "staff"`, `displayMode: "modal"`, `acknowledgementPolicy: "required"` (`Example staff operations bulletin`)
 - **Patient banner (dismiss-only)** — `audienceType: "patient"`, `displayMode: "banner"`, `acknowledgementPolicy: "dismiss-only"` (`Example patient care tip`)
 
-The staff launch example is rich markdown with a YouTube embed, overview/editor screenshots, and a tracked docs CTA. Re-running the seed updates that example in place. An existing legacy welcome row (`Welcome to Terreno announcements`) is archived idempotently so it no longer blocks the patient banner. `example-frontend` wraps authenticated users with `AnnouncementNavigator` (`skipFirstLaunch: false`, `userId` from the profile); non-staff users therefore see only the patient banner interrupt under the default session cap of `1`.
+The seed keeps them as drafts so a fresh database (local dev or a PR preview) does not interrupt sign-in. Publish one from **Admin → Announcements** to see it. Re-running the seed updates both examples in place and sets them back to draft. The staff example is rich markdown with a YouTube embed, overview/editor screenshots, and a tracked docs CTA. An existing legacy welcome row (`Welcome to Terreno announcements`) is archived idempotently. `example-frontend` wraps authenticated users with `AnnouncementNavigator` (`skipFirstLaunch: false`, `userId` from the profile).
+
+Release notes in the example app use [`WhatsNewBanner`](./whats-new-banner.md) instead of announcements.

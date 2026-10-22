@@ -6,6 +6,8 @@ description: >-
   applied only after maintainer approval. Trigger with /roadmap-item or phrases
   like "create a roadmap item", "add this IP to the roadmap", "update the
   roadmap entry".
+triggers:
+  - user
 ---
 # Roadmap item
 

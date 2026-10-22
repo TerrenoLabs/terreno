@@ -98,6 +98,8 @@ const betterAuthAuthPrefixes = (basePath: string): string[] => {
     `${base}/send-verification-email`,
     `${base}/verify-email`,
     `${base}/callback`,
+    `${base}/oauth-handoff`,
+    `${base}/one-time-token`,
   ];
 };
 

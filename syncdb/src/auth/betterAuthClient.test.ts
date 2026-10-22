@@ -12,8 +12,15 @@ type ExpoOptions = {
   };
 };
 
-const captured: {expo: ExpoOptions | null; auth: Record<string, unknown> | null} = {
+const captured: {
+  auth: Record<string, unknown> | null;
+  // When set, createAuthClient returns this instead of a stub, so a test can hand
+  // createBetterAuthClient's caller a real client built from the options it passed.
+  build: ((config: Record<string, unknown>) => unknown) | null;
+  expo: ExpoOptions | null;
+} = {
   auth: null,
+  build: null,
   expo: null,
 };
 
@@ -27,7 +34,7 @@ mock.module("@better-auth/expo/client", () => ({
 mock.module("better-auth/react", () => ({
   createAuthClient: (config: Record<string, unknown>) => {
     captured.auth = config;
-    return {clientId: "mock-client", config};
+    return captured.build ? captured.build(config) : {clientId: "mock-client", config};
   },
 }));
 
@@ -82,8 +89,18 @@ mockSecureStore();
 
 const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
 const {bridgeBetterAuthReactClient} = await import("./betterAuthReactClient");
-const {createBetterAuthClient, createStorageAdapter, repairCookieJar, withCookieJarRepair} =
-  await import("./betterAuthClient");
+const {
+  completeBetterAuthOAuthHandoff,
+  createBetterAuthClient,
+  createStorageAdapter,
+  getBetterAuthBearerToken,
+  repairCookieJar,
+  signInSocialWithHandoff,
+  withCookieJarRepair,
+} = await import("./betterAuthClient");
+// The real, unmocked vanilla client: it runs captured options through Better Auth's own
+// route proxy and better-fetch hook pipeline, so hook ordering is proven rather than assumed.
+const {createAuthClient: createRealAuthClient} = await import("better-auth/client");
 
 // Mirrors how @better-auth/expo reads its jar, so these tests fail if the plugin's
 // throw-on-malformed-entry behaviour is ever reintroduced.
@@ -259,6 +276,996 @@ describe("withCookieJarRepair", () => {
     expect(JSON.parse((repaired as string) ?? "{}")).toEqual({
       "better-auth.session_data": {expires: null, value: "cached"},
     });
+  });
+});
+
+interface BearerFetchOptions {
+  auth: {token: () => string | null; type: string};
+  credentials: string;
+  onRequest: (context: {headers: Headers; url: string | URL}) => unknown;
+  onSuccess: (context: {
+    data: unknown;
+    request: {headers: Headers; url: string | URL};
+    response: Response;
+  }) => Promise<void> | void;
+}
+
+interface MemoryStorage {
+  getItem: (key: string) => string | null;
+  removeItem: (key: string) => void;
+  setItem: (key: string, value: string) => void;
+  values: Map<string, string>;
+}
+
+const createMemoryStorage = (initial: Record<string, string> = {}): MemoryStorage => {
+  const values = new Map(Object.entries(initial));
+  return {
+    getItem: (key: string): string | null => values.get(key) ?? null,
+    removeItem: (key: string): void => {
+      values.delete(key);
+    },
+    setItem: (key: string, value: string): void => {
+      values.set(key, value);
+    },
+    values,
+  };
+};
+
+interface SentRequest {
+  authorization: string | null;
+  credentials: RequestCredentials | undefined;
+  pathname: string;
+}
+
+type FakeServer = (pathname: string) => Response | Promise<Response>;
+
+const jsonResponse = (body: unknown, init: ResponseInit = {}): Response => {
+  return new Response(JSON.stringify(body), {
+    ...init,
+    headers: {"content-type": "application/json", ...(init.headers ?? {})},
+  });
+};
+
+// Builds the real Better Auth client from the options createBetterAuthClient handed to
+// createAuthClient, with fetch replaced by a fake server, and records what each call sent.
+const driveCapturedClient = (
+  server: FakeServer
+): {client: ReturnType<typeof createRealAuthClient>; sent: SentRequest[]} => {
+  const sent: SentRequest[] = [];
+  const options = captured.auth as {baseURL: string; fetchOptions: Record<string, unknown>};
+  const customFetchImpl = async (
+    input: string | URL | Request,
+    init?: RequestInit
+  ): Promise<Response> => {
+    const {pathname} = new URL(input instanceof Request ? input.url : input.toString());
+    sent.push({
+      authorization: new Headers(init?.headers).get("authorization"),
+      credentials: init?.credentials,
+      pathname,
+    });
+    return server(pathname);
+  };
+  const client = createRealAuthClient({
+    baseURL: options.baseURL,
+    fetchOptions: {...options.fetchOptions, customFetchImpl},
+  });
+  return {client, sent};
+};
+
+const bearerOptions = (): BearerFetchOptions => {
+  return (captured.auth as {fetchOptions: BearerFetchOptions}).fetchOptions;
+};
+
+describe("createBetterAuthClient with webAuth bearer on web", () => {
+  const globalWithWindow = globalThis as {window?: unknown};
+  const hadWindow = "window" in globalWithWindow;
+  const originalWindow = globalWithWindow.window;
+
+  beforeEach(() => {
+    captured.auth = null;
+  });
+
+  afterEach(() => {
+    if (hadWindow) {
+      globalWithWindow.window = originalWindow;
+    } else {
+      delete globalWithWindow.window;
+    }
+  });
+
+  it("stores set-auth-token in localStorage, sends it as the bearer, and omits cookies", async () => {
+    const localStorage = createMemoryStorage();
+    globalWithWindow.window = {localStorage};
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const options = bearerOptions();
+
+    await options.onSuccess({
+      data: {token: "t1"},
+      request: {headers: new Headers(), url: "http://localhost:3000/api/auth/sign-in/email"},
+      response: new Response(null, {headers: {"set-auth-token": "t1"}}),
+    });
+
+    expect(localStorage.values.get("terreno_bearer_token")).toBe("t1");
+    expect(options.auth.type).toBe("Bearer");
+    expect(options.auth.token()).toBe("t1");
+    expect(getBetterAuthBearerToken()).toBe("t1");
+    expect(options.credentials).toBe("omit");
+  });
+
+  it("sends the stored token on getSession through the real client, with no cookies", async () => {
+    const bearerStorage = createMemoryStorage();
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client, sent} = driveCapturedClient((pathname) => {
+      if (pathname.endsWith("/sign-in/email")) {
+        return jsonResponse({token: "t1"}, {headers: {"set-auth-token": "t1"}});
+      }
+      return jsonResponse({session: {id: "s1"}, user: {id: "u1"}});
+    });
+
+    await client.signIn.email({email: "a@example.com", password: "password123"});
+    await client.getSession();
+
+    expect(sent.map((request) => request.credentials)).toEqual(["omit", "omit"]);
+    expect(sent[0].authorization).toBeNull();
+    expect(sent[1]).toEqual({
+      authorization: "Bearer t1",
+      credentials: "omit",
+      pathname: "/api/auth/get-session",
+    });
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("clears the token on sign-out even when the request returns 5xx", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    let storedWhenSent: string | null | undefined;
+    const {client, sent} = driveCapturedClient(() => {
+      storedWhenSent = bearerStorage.getItem("terreno_bearer_token");
+      return jsonResponse({message: "down"}, {status: 503});
+    });
+
+    const result = await client.signOut();
+
+    expect(result.error?.status).toBe(503);
+    // The request still carries the token so the server can revoke the session, but the
+    // device has already forgotten it.
+    expect(sent[0].authorization).toBe("Bearer t1");
+    expect(storedWhenSent).toBeNull();
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("clears the token on sign-out even when the request never reaches the server", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client} = driveCapturedClient(() => {
+      throw new TypeError("Failed to fetch");
+    });
+
+    await expect(client.signOut()).rejects.toThrow("Failed to fetch");
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("drops a token issued by a request that was in flight across a sign-out", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    let releaseSession: (response: Response) => void = () => {};
+    const {client} = driveCapturedClient((pathname) => {
+      if (pathname.endsWith("/get-session")) {
+        return new Promise<Response>((resolve) => {
+          releaseSession = resolve;
+        });
+      }
+      throw new TypeError("Failed to fetch");
+    });
+
+    const pendingSession = client.getSession();
+    await expect(client.signOut()).rejects.toThrow("Failed to fetch");
+    // The session refresh lands after the failed sign-out and re-issues the token.
+    releaseSession(
+      jsonResponse({session: {id: "s1"}, user: {id: "u1"}}, {headers: {"set-auth-token": "t1"}})
+    );
+    await pendingSession;
+
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("clears the token after a successful getSession with no session", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client, sent} = driveCapturedClient(() => jsonResponse(null));
+
+    await client.getSession();
+
+    expect(sent[0].authorization).toBe("Bearer t1");
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("keeps a newer token stored while a getSession with no session was in flight", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client} = driveCapturedClient(() => {
+      // A sign-in that finished while this read was in flight.
+      bearerStorage.setItem("terreno_bearer_token", "t2");
+      return jsonResponse(null);
+    });
+
+    await client.getSession();
+
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t2");
+  });
+
+  it("keeps a sign-in's token when a signed-out getSession started before it", async () => {
+    const bearerStorage = createMemoryStorage();
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client, sent} = driveCapturedClient(() => {
+      bearerStorage.setItem("terreno_bearer_token", "t1");
+      return jsonResponse(null);
+    });
+
+    await client.getSession();
+
+    expect(sent[0].authorization).toBeNull();
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("leaves the token alone on other successful calls that issue none", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const {client, sent} = driveCapturedClient(() => jsonResponse({status: true}));
+
+    await client.updateUser({name: "New Name"});
+
+    expect(sent[0]).toEqual({
+      authorization: "Bearer t1",
+      credentials: "omit",
+      pathname: "/api/auth/update-user",
+    });
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("keeps the token when getSession errors, returns 5xx, or returns a session", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const responses: Array<() => Response> = [
+      (): Response => jsonResponse({message: "down"}, {status: 500}),
+      (): Response => {
+        throw new TypeError("Failed to fetch");
+      },
+      (): Response => jsonResponse({session: {id: "s1"}, user: {id: "u1"}}),
+    ];
+    const {client} = driveCapturedClient(() => {
+      const next = responses.shift();
+      if (!next) {
+        throw new Error("unexpected request");
+      }
+      return next();
+    });
+
+    const failed = await client.getSession();
+    await expect(client.getSession()).rejects.toThrow("Failed to fetch");
+    await client.getSession();
+
+    expect(failed.error?.status).toBe(500);
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("uses a custom bearerStorage instead of localStorage", async () => {
+    const localStorage = createMemoryStorage();
+    globalWithWindow.window = {localStorage};
+    const bearerStorage = createMemoryStorage();
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      storagePrefix: "custom",
+      webAuth: "bearer",
+    });
+
+    await bearerOptions().onSuccess({
+      data: {token: "t1"},
+      request: {headers: new Headers(), url: "http://localhost:3000/api/auth/sign-in/email"},
+      response: new Response(null, {headers: {"set-auth-token": "t1"}}),
+    });
+
+    expect(bearerStorage.values.get("custom_bearer_token")).toBe("t1");
+    expect(localStorage.values.size).toBe(0);
+    expect(getBetterAuthBearerToken({bearerStorage, storagePrefix: "custom"})).toBe("t1");
+    expect(getBetterAuthBearerToken({storagePrefix: "custom"})).toBeNull();
+  });
+
+  it("finds localStorage when the client was created before window existed", async () => {
+    delete globalWithWindow.window;
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    const localStorage = createMemoryStorage();
+    globalWithWindow.window = {localStorage};
+
+    await bearerOptions().onSuccess({
+      data: {token: "t1"},
+      request: {headers: new Headers(), url: "http://localhost:3000/api/auth/sign-in/email"},
+      response: new Response(null, {headers: {"set-auth-token": "t1"}}),
+    });
+
+    expect(localStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("reads no token when there is no window or localStorage", () => {
+    delete globalWithWindow.window;
+    expect(getBetterAuthBearerToken()).toBeNull();
+    globalWithWindow.window = {
+      get localStorage(): never {
+        throw new Error("SecurityError: storage is blocked");
+      },
+    };
+    expect(getBetterAuthBearerToken()).toBeNull();
+  });
+});
+
+interface HandoffRequest {
+  authorization: string | null;
+  body: unknown;
+  // The page URL when the request left, to prove the token was already stripped from it.
+  hrefAtRequest: string;
+  pathname: string;
+}
+
+interface FakeBrowser {
+  assigned: string[];
+  href: () => string;
+  localStorage: MemoryStorage;
+  replaced: string[];
+  sessionStorage: MemoryStorage;
+  setHref: (href: string) => void;
+}
+
+const NONCE_KEY = "terreno_oauth_handoff_nonce";
+
+const installBrowser = (
+  href: string,
+  {
+    replaceState,
+    sessionStorage = createMemoryStorage(),
+  }: {replaceState?: () => void; sessionStorage?: MemoryStorage} = {}
+): FakeBrowser => {
+  let current = new URL(href);
+  const assigned: string[] = [];
+  const replaced: string[] = [];
+  const localStorage = createMemoryStorage();
+  (globalThis as {window?: unknown}).window = {
+    history: {
+      replaceState:
+        replaceState ??
+        ((_state: unknown, _title: string, url: string): void => {
+          current = new URL(url, current);
+          replaced.push(current.href);
+        }),
+      state: null,
+    },
+    localStorage,
+    location: {
+      assign: (url: string): void => {
+        assigned.push(url);
+      },
+      get href(): string {
+        return current.href;
+      },
+    },
+    sessionStorage,
+  };
+  return {
+    assigned,
+    href: (): string => current.href,
+    localStorage,
+    replaced,
+    sessionStorage,
+    setHref: (next: string): void => {
+      current = new URL(next);
+    },
+  };
+};
+
+// Makes createBetterAuthClient return the real Better Auth client, built from the options it
+// passed, with fetch replaced by a fake server.
+const useRealClient = (
+  server: (pathname: string) => Response | Promise<Response>
+): {sent: HandoffRequest[]} => {
+  const sent: HandoffRequest[] = [];
+  captured.build = (config: Record<string, unknown>): unknown => {
+    const customFetchImpl = async (
+      input: string | URL | Request,
+      init?: RequestInit
+    ): Promise<Response> => {
+      const {pathname} = new URL(input instanceof Request ? input.url : input.toString());
+      sent.push({
+        authorization: new Headers(init?.headers).get("authorization"),
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+        hrefAtRequest: (globalThis as {window: {location: {href: string}}}).window.location.href,
+        pathname,
+      });
+      return server(pathname);
+    };
+    return createRealAuthClient({
+      baseURL: config.baseURL as string,
+      fetchOptions: {...(config.fetchOptions as Record<string, unknown>), customFetchImpl},
+    });
+  };
+  return {sent};
+};
+
+const verifiedSession = (token: string): Response =>
+  jsonResponse(
+    {session: {id: "s1", token}, user: {id: "u1"}},
+    {headers: {"set-auth-token": token}}
+  );
+
+describe("OAuth handoff for web bearer clients", () => {
+  const globalWithWindow = globalThis as {window?: unknown};
+  const hadWindow = "window" in globalWithWindow;
+  const originalWindow = globalWithWindow.window;
+
+  beforeEach(() => {
+    captured.auth = null;
+    captured.build = null;
+  });
+
+  afterEach(() => {
+    captured.build = null;
+    if (hadWindow) {
+      globalWithWindow.window = originalWindow;
+    } else {
+      delete globalWithWindow.window;
+    }
+  });
+
+  const createBearerClient = (bearerStorage: MemoryStorage = createMemoryStorage()) =>
+    createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+
+  // Starts a sign-in on the app's home page and returns the nonce it stored.
+  const startSignIn = (
+    client: ReturnType<typeof createBetterAuthClient>,
+    browser: FakeBrowser
+  ): string => {
+    signInSocialWithHandoff({client, provider: "google"});
+    const nonce = browser.sessionStorage.getItem(NONCE_KEY);
+    if (!nonce) {
+      throw new Error("no nonce stored");
+    }
+    return nonce;
+  };
+
+  it("navigates to the start endpoint with a callbackURL carrying a fresh nonce", () => {
+    const browser = installBrowser("http://localhost:8082/login");
+    const client = createBearerClient();
+
+    signInSocialWithHandoff({
+      callbackURL: "/auth/return?next=%2Ftodos",
+      client,
+      errorCallbackURL: "http://localhost:8082/login",
+      provider: "google",
+    });
+
+    const nonce = browser.sessionStorage.getItem(NONCE_KEY) ?? "";
+    expect(nonce).toMatch(/^[0-9a-f]{64}$/);
+    expect(browser.assigned).toHaveLength(1);
+    const start = new URL(browser.assigned[0]);
+    expect(`${start.origin}${start.pathname}`).toBe(
+      "http://localhost:4000/api/auth/oauth-handoff/start"
+    );
+    expect(start.searchParams.get("provider")).toBe("google");
+    expect(start.searchParams.get("callbackURL")).toBe(
+      `http://localhost:8082/auth/return?next=%2Ftodos&handoff=${nonce}`
+    );
+    expect(start.searchParams.get("errorCallbackURL")).toBe(
+      `http://localhost:8082/login?handoff=${nonce}`
+    );
+    // The callbackURL travels encoded, so its own query cannot leak into the start URL's.
+    expect(browser.assigned[0]).toContain(
+      encodeURIComponent(`http://localhost:8082/auth/return?next=%2Ftodos&handoff=${nonce}`)
+    );
+
+    signInSocialWithHandoff({client, provider: "google"});
+    const second = browser.sessionStorage.getItem(NONCE_KEY);
+    expect(second).not.toBe(nonce);
+    const secondStart = new URL(browser.assigned[1]);
+    expect(secondStart.searchParams.get("callbackURL")).toBe(
+      `http://localhost:8082/?handoff=${second}`
+    );
+    // Without one, Better Auth would send callback errors to its own page on the API.
+    expect(secondStart.searchParams.get("errorCallbackURL")).toBe(
+      `http://localhost:8082/?handoff=${second}`
+    );
+
+    // The app's own query reaches the return page as written, and a stale handoff is replaced.
+    signInSocialWithHandoff({
+      callbackURL: "/?q=a%20b&handoff=old#tab",
+      client,
+      provider: "google",
+    });
+    const third = browser.sessionStorage.getItem(NONCE_KEY);
+    expect(new URL(browser.assigned[2]).searchParams.get("callbackURL")).toBe(
+      `http://localhost:8082/?q=a%20b&handoff=${third}#tab`
+    );
+  });
+
+  it("uses a baseURL that already names the auth path, and a custom storagePrefix", () => {
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBetterAuthClient({
+      baseURL: "https://api.example.net/custom/auth/",
+      scheme: "terreno",
+      storagePrefix: "myapp",
+      webAuth: "bearer",
+    });
+
+    signInSocialWithHandoff({client, provider: "github"});
+
+    expect(browser.assigned[0]).toStartWith(
+      "https://api.example.net/custom/auth/oauth-handoff/start?"
+    );
+    expect(browser.sessionStorage.getItem("myapp_oauth_handoff_nonce")).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("refuses to start outside web bearer mode, without a window, or without storage", () => {
+    const cookieClient = createBetterAuthClient({baseURL: "http://localhost:4000", scheme: "t"});
+    const browser = installBrowser("http://localhost:8082/");
+    expect(() => signInSocialWithHandoff({client: cookieClient, provider: "google"})).toThrow(
+      'webAuth: "bearer"'
+    );
+    expect(browser.assigned).toEqual([]);
+
+    const client = createBearerClient();
+    delete globalWithWindow.window;
+    expect(() => signInSocialWithHandoff({client, provider: "google"})).toThrow(
+      'webAuth: "bearer"'
+    );
+
+    const blocked = installBrowser("http://localhost:8082/", {
+      sessionStorage: {
+        ...createMemoryStorage(),
+        setItem: (): void => {
+          throw new Error("QuotaExceededError");
+        },
+      },
+    });
+    expect(() => signInSocialWithHandoff({client, provider: "google"})).toThrow(
+      "QuotaExceededError"
+    );
+    expect(blocked.assigned).toEqual([]);
+  });
+
+  it("strips the token, then verifies it once and stores the bearer it returns", async () => {
+    const bearerStorage = createMemoryStorage();
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/login");
+    const client = createBearerClient(bearerStorage);
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?next=%2Ftodos&handoff=${nonce}#ott=abc&tab=1`);
+
+    const stored = await completeBetterAuthOAuthHandoff({client});
+
+    expect(stored).toBe(true);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].pathname).toBe("/api/auth/one-time-token/verify");
+    expect(sent[0].body).toEqual({token: "abc"});
+    // Other query and fragment parts survive; ott and handoff are gone before the request.
+    expect(sent[0].hrefAtRequest).toBe("http://localhost:8082/?next=%2Ftodos#tab=1");
+    expect(browser.href()).toBe("http://localhost:8082/?next=%2Ftodos#tab=1");
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t2");
+    expect(browser.sessionStorage.values.has(NONCE_KEY)).toBe(false);
+  });
+
+  it("removes the query and fragment entirely when nothing else is in them", async () => {
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient();
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}#ott=abc`);
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(true);
+
+    expect(sent[0].hrefAtRequest).toBe("http://localhost:8082/");
+  });
+
+  it("ignores an unsolicited token: no stored nonce or a different one", async () => {
+    const bearerStorage = createMemoryStorage();
+    const {sent} = useRealClient(() => verifiedSession("attacker"));
+    const browser = installBrowser("http://localhost:8082/?handoff=planted#ott=evil");
+    const client = createBearerClient(bearerStorage);
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+    expect(browser.href()).toBe("http://localhost:8082/");
+
+    browser.sessionStorage.setItem(NONCE_KEY, "a".repeat(64));
+    browser.setHref(`http://localhost:8082/?handoff=${"b".repeat(64)}#ott=evil`);
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    browser.setHref("http://localhost:8082/#ott=evil");
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    expect(sent).toEqual([]);
+    expect(bearerStorage.values.size).toBe(0);
+    expect(browser.href()).toBe("http://localhost:8082/");
+    // A mismatched return still uses up the nonce.
+    expect(browser.sessionStorage.values.has(NONCE_KEY)).toBe(false);
+  });
+
+  it("never sends a token from the query, and strips it from the URL", async () => {
+    const bearerStorage = createMemoryStorage();
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient(bearerStorage);
+    const nonce = startSignIn(client, browser);
+    // The server only ever puts the token in the fragment; a query `ott` was planted.
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}&ott=abc&next=%2Ftodos`);
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    expect(sent).toEqual([]);
+    expect(bearerStorage.values.size).toBe(0);
+    expect(browser.href()).toBe("http://localhost:8082/?next=%2Ftodos");
+
+    // A planted query token is stripped even when nothing else of the handoff is there.
+    browser.setHref("http://localhost:8082/?ott=abc#tab");
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+    expect(browser.href()).toBe("http://localhost:8082/#tab");
+    expect(sent).toEqual([]);
+  });
+
+  it("refuses a return that carries more than one token or nonce", async () => {
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient();
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}#ott=abc&ott=def`);
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    const again = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${again}&handoff=${again}#ott=abc`);
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    expect(sent).toEqual([]);
+    expect(browser.href()).toBe("http://localhost:8082/");
+  });
+
+  it("makes no request and changes nothing on a page load without a handoff", async () => {
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient();
+    const nonce = startSignIn(client, browser);
+    browser.setHref("http://localhost:8082/todos?next=%2Fprofile#section");
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    expect(sent).toEqual([]);
+    expect(browser.replaced).toEqual([]);
+    expect(browser.sessionStorage.getItem(NONCE_KEY)).toBe(nonce);
+  });
+
+  it("leaves a provider error for the app and uses up the nonce", async () => {
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient();
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}&error=sign_in_failed`);
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    expect(sent).toEqual([]);
+    expect(browser.href()).toBe("http://localhost:8082/?error=sign_in_failed");
+    expect(browser.sessionStorage.values.has(NONCE_KEY)).toBe(false);
+  });
+
+  it("strips the token but makes no request in cookie mode", async () => {
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBetterAuthClient({baseURL: "http://localhost:4000", scheme: "terreno"});
+    browser.sessionStorage.setItem(NONCE_KEY, "a".repeat(64));
+    browser.setHref(`http://localhost:8082/?handoff=${"a".repeat(64)}#ott=abc`);
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    expect(sent).toEqual([]);
+    expect(browser.href()).toBe("http://localhost:8082/");
+  });
+
+  it("resolves false with the URL stripped when verify fails or throws", async () => {
+    const bearerStorage = createMemoryStorage();
+    const responses: Array<() => Response> = [
+      (): Response => jsonResponse({message: "Invalid token"}, {status: 400}),
+      (): Response => {
+        throw new TypeError("Failed to fetch");
+      },
+      // A 2xx without a token stores nothing either.
+      (): Response => jsonResponse({session: {id: "s1"}, user: {id: "u1"}}),
+    ];
+    const {sent} = useRealClient(() => {
+      const next = responses.shift();
+      if (!next) {
+        throw new Error("unexpected request");
+      }
+      return next();
+    });
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient(bearerStorage);
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const nonce = startSignIn(client, browser);
+      browser.setHref(`http://localhost:8082/?handoff=${nonce}#ott=abc`);
+      await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+      expect(browser.href()).toBe("http://localhost:8082/");
+    }
+
+    expect(sent).toHaveLength(3);
+    expect(bearerStorage.values.size).toBe(0);
+  });
+
+  it("keeps the verified token when a signed-out getSession sent before it lands after it", async () => {
+    const bearerStorage = createMemoryStorage();
+    let releaseSession: (response: Response) => void = () => {};
+    let releaseVerify: (response: Response) => void = () => {};
+    const {sent} = useRealClient((pathname) => {
+      return new Promise<Response>((resolve) => {
+        if (pathname.endsWith("/get-session")) {
+          releaseSession = resolve;
+        } else {
+          releaseVerify = resolve;
+        }
+      });
+    });
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient(bearerStorage);
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}#ott=abc`);
+
+    const pendingSession = client.getSession();
+    const pendingHandoff = completeBetterAuthOAuthHandoff({client});
+    await Bun.sleep(0);
+    expect(sent.map((request) => request.pathname)).toEqual([
+      "/api/auth/get-session",
+      "/api/auth/one-time-token/verify",
+    ]);
+    releaseVerify(verifiedSession("t2"));
+    await expect(pendingHandoff).resolves.toBe(true);
+    releaseSession(jsonResponse(null));
+    await pendingSession;
+
+    expect(sent[0].authorization).toBeNull();
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t2");
+  });
+
+  it("resolves false when a sign-out during verify drops the token", async () => {
+    const bearerStorage = createMemoryStorage();
+    let releaseVerify: (response: Response) => void = () => {};
+    useRealClient((pathname) => {
+      if (pathname.endsWith("/sign-out")) {
+        return jsonResponse({success: true});
+      }
+      return new Promise<Response>((resolve) => {
+        releaseVerify = resolve;
+      });
+    });
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient(bearerStorage);
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}#ott=abc`);
+
+    const pendingHandoff = completeBetterAuthOAuthHandoff({client});
+    await Bun.sleep(0);
+    await client.signOut();
+    releaseVerify(verifiedSession("t2"));
+
+    await expect(pendingHandoff).resolves.toBe(false);
+    expect(bearerStorage.values.size).toBe(0);
+  });
+
+  it("resolves false, not a rejection, when the stored token cannot be read back", async () => {
+    let reads = 0;
+    const bearerStorage = {
+      ...createMemoryStorage(),
+      getItem: (): string | null => {
+        reads += 1;
+        // The first read is the request's own auth header; the read-back after verify throws.
+        if (reads > 1) {
+          throw new Error("SecurityError");
+        }
+        return null;
+      },
+    };
+    useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient(bearerStorage);
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}#ott=abc`);
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+  });
+
+  it("tells mounted session hooks to refetch after a stored token", async () => {
+    useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient();
+    const signal = client.$store.atoms.$sessionSignal;
+    const before = signal.get();
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}#ott=abc`);
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(true);
+    expect(signal.get()).toBe(!before);
+  });
+
+  it("verifies once when called twice, as React strict mode does", async () => {
+    const bearerStorage = createMemoryStorage();
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient(bearerStorage);
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}#ott=abc`);
+
+    const results = await Promise.all([
+      completeBetterAuthOAuthHandoff({client}),
+      completeBetterAuthOAuthHandoff({client}),
+    ]);
+
+    expect(results).toEqual([true, true]);
+    expect(sent).toHaveLength(1);
+    // A later call starts fresh and finds nothing to do.
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+    expect(sent).toHaveLength(1);
+  });
+
+  it("makes no request when the URL cannot be stripped", async () => {
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/", {
+      replaceState: (): void => {
+        throw new Error("SecurityError");
+      },
+    });
+    const client = createBearerClient();
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce}#ott=abc`);
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+    expect(sent).toEqual([]);
+  });
+
+  it("treats unreadable session storage as a missing nonce", async () => {
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/?handoff=n#ott=abc", {
+      sessionStorage: {
+        ...createMemoryStorage(),
+        getItem: (): never => {
+          throw new Error("SecurityError");
+        },
+      },
+    });
+    const client = createBearerClient();
+
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+    expect(sent).toEqual([]);
+    expect(browser.href()).toBe("http://localhost:8082/");
+  });
+
+  it("ignores a nonce of another length, a malformed part, and a missing location", async () => {
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const browser = installBrowser("http://localhost:8082/");
+    const client = createBearerClient();
+    const nonce = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${nonce.slice(1)}#ott=abc`);
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    const again = startSignIn(client, browser);
+    browser.setHref(`http://localhost:8082/?handoff=${again}#ott=%E0%A4%A&x=%E0%A4%A`);
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+    // An undecodable part that is not the token is kept as it was.
+    expect(browser.href()).toBe("http://localhost:8082/#x=%E0%A4%A");
+
+    globalWithWindow.window = {};
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+    expect(sent).toEqual([]);
+  });
+
+  it("treats missing or blocked session storage as a missing nonce", async () => {
+    const {sent} = useRealClient(() => verifiedSession("t2"));
+    const client = createBearerClient();
+    const browser = installBrowser("http://localhost:8082/?handoff=n#ott=abc");
+    (globalWithWindow.window as {sessionStorage?: unknown}).sessionStorage = undefined;
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+    expect(browser.href()).toBe("http://localhost:8082/");
+
+    browser.setHref("http://localhost:8082/?handoff=n#ott=abc");
+    Object.defineProperty(globalWithWindow.window, "sessionStorage", {
+      get: (): never => {
+        throw new Error("SecurityError");
+      },
+    });
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+    expect(browser.href()).toBe("http://localhost:8082/");
+    expect(sent).toEqual([]);
+  });
+
+  it("resolves false without a window or for a client it did not create", async () => {
+    const client = createBearerClient();
+    delete globalWithWindow.window;
+    await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
+
+    const browser = installBrowser("http://localhost:8082/?handoff=n#ott=abc");
+    const foreign = {} as ReturnType<typeof createBetterAuthClient>;
+    await expect(completeBetterAuthOAuthHandoff({client: foreign})).resolves.toBe(false);
+    expect(browser.href()).toBe("http://localhost:8082/");
+  });
+});
+
+describe("createBetterAuthClient options outside web bearer mode", () => {
+  beforeEach(() => {
+    captured.auth = null;
+  });
+
+  it("passes only baseURL and plugins on web without webAuth or with cookie", () => {
+    createBetterAuthClient({baseURL: "http://localhost:3000", scheme: "terreno"});
+    expect(Object.keys(captured.auth ?? {}).sort()).toEqual(["baseURL", "plugins"]);
+    createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      scheme: "terreno",
+      webAuth: "cookie",
+    });
+    expect(Object.keys(captured.auth ?? {}).sort()).toEqual(["baseURL", "plugins"]);
   });
 });
 

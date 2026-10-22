@@ -7,7 +7,7 @@
  * to a route that its shard does not declare.
  */
 export interface ShardDefinition {
-  /** False for shards that never gate a pull request (nightly load lab). */
+  /** False for shards that never gate a pull request (nightly load lab, local-only runs). */
   blocksPullRequest: boolean;
   name: string;
   /** Screens the shard exercises, relative to the repository root. */
@@ -108,6 +108,16 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "syncdb-storage",
       "syncdb-chaos",
     ],
+  },
+  {
+    // Needs its own web build (cross-site API URL, bearer flag), backend (OAuth handoff, mock
+    // OIDC provider) and mock provider server, so CircleCI's shared cookie-mode export cannot
+    // run it. Run it locally:
+    // `cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts e2e/crossSiteOAuth.spec.ts`.
+    blocksPullRequest: false,
+    name: "cross-site-bearer",
+    routes: [`${APP}/login.tsx`, `${APP}/(tabs)/profile.tsx`, `${APP}/(tabs)/ai.tsx`],
+    specs: ["crossSiteBearer", "crossSiteOAuth"],
   },
   {
     blocksPullRequest: false,

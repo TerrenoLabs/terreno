@@ -298,6 +298,15 @@ Better Auth automatically:
 - Syncs Better Auth users to your Mongoose User model (requires `betterAuthId` field)
 - Supports email/password signup and login
 
+`oauthHandoff: {webOrigins, callbackPaths?}` (opt-in) lets a bearer-mode web client on another
+site finish social sign-in without cookies. It adds `GET {basePath}/oauth-handoff/start` (a
+top-level navigation; 400 unless `callbackURL` is one of `callbackPaths` on one of `webOrigins`,
+the optional `errorCallbackURL` is on one of `webOrigins`, and `trustedOrigins` allows both; 400
+too when `Sec-Fetch-Dest` is set and is not `document`) and
+`POST {basePath}/one-time-token/verify` (`{token}` -> session + `set-auth-token`). Keep loopback
+origins out of production `webOrigins`. Full rules: `docs/reference/api.md` (Better Auth) and
+`docs/how-to/configure-better-auth.md#social-sign-in-in-bearer-mode`.
+
 ### In-app notifications (`NotificationsApp`)
 
 Register `NotificationsApp` for owner-scoped inbox + preference collections. Only

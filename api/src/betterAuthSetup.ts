@@ -15,6 +15,7 @@ import type {Db} from "mongodb";
 import mongoose from "mongoose";
 import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
+import {createOAuthHandoffPlugins} from "./betterAuthOAuthHandoff";
 import {APIError} from "./errors";
 import type {AuthRecoveryMail} from "./expressServer";
 import {logger} from "./logger";
@@ -137,6 +138,24 @@ export const createBetterAuthEmailHooks = (config: BetterAuthConfig) => {
   };
 };
 
+// The API's own origin, which the OAuth handoff never sends a token to.
+const apiOriginOf = (url: string): string => {
+  let origin: string;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    origin = "null";
+  }
+  if (origin === "null") {
+    throw new APIError({
+      detail: `"${url}" is not an absolute http(s) URL`,
+      status: 500,
+      title: "BETTER_AUTH_URL must be an absolute URL",
+    });
+  }
+  return origin;
+};
+
 /**
  * Creates a Better Auth instance with MongoDB adapter.
  */
@@ -240,20 +259,32 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     Array.isArray(source) ? source : undefined;
   const merged: BetterAuthOptions = mergeWith({}, defaults, config.options, replaceArrays);
 
-  const auth = betterAuth({
+  // The handoff hook mints tokens through `auth.api`, which exists only once betterAuth() returns.
+  let auth: BetterAuthInstance | undefined;
+  const handoffPlugins = config.oauthHandoff
+    ? createOAuthHandoffPlugins({
+        apiOrigin: apiOriginOf(typeof merged.baseURL === "string" ? merged.baseURL : baseURL),
+        config: config.oauthHandoff,
+        getAuth: () => auth,
+      })
+    : [];
+
+  const created = betterAuth({
     ...merged,
     // The bearer plugin lets clients authenticate with `Authorization: Bearer <sessionToken>`
     // instead of the signed session cookie. Required for cross-origin/native clients and for
     // websocket handshakes (RealtimeApp's Better Auth socket validator forwards the handshake
     // token as a bearer header) — without it, a raw session token cannot be validated and
     // socket auth silently fails (the sync client shows perpetually "offline").
-    plugins: [bearer(), ...(config.plugins ?? [])],
+    // The handoff plugins come last so their callback hook sees the final redirect.
+    plugins: [bearer(), ...(config.plugins ?? []), ...handoffPlugins],
   });
 
   // Cast through unknown: enabling the bearer plugin narrows betterAuth()'s inferred
   // return type to a plugin-specific tuple that no longer matches the plugin-agnostic
   // BetterAuthInstance alias, though the runtime instance is a valid better-auth instance.
-  return auth as unknown as BetterAuthInstance;
+  auth = created as unknown as BetterAuthInstance;
+  return auth;
 };
 
 interface BetterAuthCredentialAccount {

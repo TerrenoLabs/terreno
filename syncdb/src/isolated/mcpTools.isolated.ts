@@ -1,4 +1,5 @@
 import {beforeEach, describe, expect, it, mock} from "bun:test";
+import type {AuthProvider} from "../types";
 
 interface MockTool {
   description?: string;
@@ -7,7 +8,7 @@ interface MockTool {
 }
 
 interface MockTransport {
-  options: {authProvider?: {token: () => Promise<string>}};
+  options: {authProvider?: {token: () => Promise<string | undefined>}};
   url: URL;
 }
 
@@ -66,6 +67,16 @@ const authProvider = {
 const {act, renderHook, waitFor} = await import("@testing-library/react-native");
 const {useMCPTools} = await import("../app/mcpTools");
 const {baseUrl} = await import("../config/baseUrl");
+
+const makeTokenSource = (token: string | null): AuthProvider & {token: string | null} => {
+  const source = {
+    getToken: mock(async (): Promise<string | null> => source.token),
+    getUserId: async (): Promise<string | null> => "source-user",
+    onAuthChange: (): (() => void) => (): void => {},
+    token,
+  };
+  return source;
+};
 
 const flushPromises = async (): Promise<void> => {
   await act(async () => {
@@ -189,5 +200,60 @@ describe("useMCPTools", () => {
       await result.current.refetch();
     });
     await expect(transports[1]?.options.authProvider?.token()).resolves.toBe("session-token-2");
+  });
+
+  it("reads the token on each token call instead of capturing it once", async () => {
+    const source = makeTokenSource("source-token");
+    renderHook(() => useMCPTools({authProvider: source}));
+
+    await waitFor(() => {
+      expect(clients[0]?.close).toHaveBeenCalled();
+    });
+
+    await expect(transports[0]?.options.authProvider?.token()).resolves.toBe("source-token");
+    source.token = "rotated-token";
+    await expect(transports[0]?.options.authProvider?.token()).resolves.toBe("rotated-token");
+    // One read when the fetch starts, then a fresh read on every token() call.
+    expect(source.getToken).toHaveBeenCalledTimes(3);
+  });
+
+  it("loads tools without an authentication provider when there is no token", async () => {
+    const {result} = renderHook(() => useMCPTools({authProvider: makeTokenSource(null)}));
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(transports[0]?.options.authProvider).toBeUndefined();
+    expect(result.current.tools).toEqual(availableTools);
+  });
+
+  it("sends no token once the provider signs out after connecting", async () => {
+    const source = makeTokenSource("source-token");
+    renderHook(() => useMCPTools({authProvider: source}));
+
+    await waitFor(() => {
+      expect(clients[0]?.close).toHaveBeenCalled();
+    });
+
+    source.token = null;
+    await expect(transports[0]?.options.authProvider?.token()).resolves.toBeUndefined();
+  });
+
+  it("does not refetch when a new authProvider object is passed on rerender", async () => {
+    const {result, rerender} = renderHook(
+      ({provider}: {provider: AuthProvider}) => useMCPTools({authProvider: provider}),
+      {initialProps: {provider: makeTokenSource("first-token")}}
+    );
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    rerender({provider: makeTokenSource("second-token")});
+    await flushPromises();
+
+    expect(clients).toHaveLength(1);
+    await expect(transports[0]?.options.authProvider?.token()).resolves.toBe("second-token");
   });
 });

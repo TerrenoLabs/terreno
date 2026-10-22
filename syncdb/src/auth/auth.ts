@@ -22,20 +22,25 @@ export {
 } from "./betterAuthAdapter";
 export {
   type BetterAuthClient,
+  completeBetterAuthOAuthHandoff,
   createBetterAuthClient,
   createStorageAdapter,
+  getBetterAuthBearerToken,
   repairCookieJar,
   type StorageAdapter,
+  signInSocialWithHandoff,
   withCookieJarRepair,
 } from "./betterAuthClient";
 export {type BetterAuthReactClientLike, bridgeBetterAuthReactClient} from "./betterAuthReactClient";
 export type {
+  BetterAuthBearerStorage,
   BetterAuthClientConfig,
   BetterAuthOAuthProvider,
   BetterAuthSession,
   BetterAuthSessionClientLike,
   BetterAuthSessionData,
   BetterAuthUser,
+  BetterAuthWebAuth,
 } from "./betterAuthTypes";
 export {
   DEFAULT_JWT_AUTH_PATHS,

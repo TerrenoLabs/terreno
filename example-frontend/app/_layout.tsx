@@ -29,6 +29,7 @@ import {SyncHealthToast} from "@/components/SyncHealthToast";
 import {SyncLabRuntime} from "@/components/SyncLabRuntime";
 import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
 import {betterAuthClient} from "@/lib/betterAuth";
+import {oauthHandoff} from "@/lib/oauthHandoff";
 import {apiClient} from "@/store/apiClient";
 import {useGetAuthMeQuery, usePostCommsPushTokensMutation} from "@/store/apiSdk";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
@@ -184,6 +185,18 @@ const RootLayoutNav = (): React.ReactElement => {
   useEffect(() => {
     apiClient.reset();
   }, [userId]);
+
+  // SessionProvider reads the session on mount, before a bearer-mode social sign-in has
+  // exchanged its one-time token. Re-read it once the handoff stores the bearer, or the app
+  // would stay on the login screen.
+  const {refresh: refreshSession} = session;
+  useEffect(() => {
+    void oauthHandoff.then((stored) => {
+      if (stored) {
+        void refreshSession();
+      }
+    });
+  }, [refreshSession]);
 
   // Start the local-first syncdb client after login; stop on logout/unmount.
   // setSyncDbReady only flips true once start() resolves a user, so screens gated on

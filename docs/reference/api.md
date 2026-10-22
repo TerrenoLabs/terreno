@@ -121,7 +121,7 @@ new TerrenoApp({
 | Option | Default | Meaning |
 |--------|---------|---------|
 | `store` | `"memory"` | `"memory"` \| `"redis"` \| `"mongo"` |
-| `limits.authMax` | 20 / 15 min | login, signup, refresh, OTP, GitHub OAuth, Better Auth sign-in / sign-up / password reset / OAuth callback |
+| `limits.authMax` | 20 / 15 min | login, signup, refresh, OTP, GitHub OAuth, Better Auth sign-in / sign-up / password reset / OAuth callback / OAuth handoff |
 | `betterAuthBasePath` | `BetterAuthApp` `config.basePath` or `/api/auth` | Prefix used to classify Better Auth credential routes |
 | `limits.apiMax` | 600 / 15 min | modelRouter and other HTTP |
 | `trustProxy` | `false` | Express `trust proxy`. Use `1` on Cloud Run. Unauthenticated key is `req.ip` |
@@ -564,6 +564,37 @@ A session whose app `User` has `disabled: true` does not set `req.user`, so prot
 answer 401 while Better Auth's own routes, such as sign-out, still work. `RealtimeApp` uses the
 registered `BetterAuthApp` instance for socket sessions. With a user model (its own or the
 `TerrenoApp`'s), the handshake creates the app `User` on first contact and refuses disabled users.
+
+**Social sign-in for a web app on another site (`oauthHandoff`):**
+
+`oauthHandoff: {webOrigins, callbackPaths?}` lets a bearer-mode web client on another site
+finish a social or generic OAuth sign-in without cookies. Unset by default, which adds no
+routes. See [Social sign-in in bearer mode](../how-to/configure-better-auth.md#social-sign-in-in-bearer-mode).
+
+- `webOrigins` — Exact `http(s)` origins of the web apps that may receive the token. Patterns,
+  paths, other schemes, and an empty list are rejected when Better Auth is created. Each origin
+  must also be in `trustedOrigins`.
+- `callbackPaths` — Exact paths on those origins that may receive the token, in normal form.
+  Default `["/"]`. The query is free. List only the page that reads the token; it must never
+  redirect before it strips the fragment.
+- Production: the framework applies the same rules in every environment, so list only the
+  deployed origins. Leave loopback origins (`localhost`, `127.0.0.1`, `[::1]`) out of a
+  production `webOrigins`: a token sent there reaches whatever runs on the visitor's machine.
+  example-backend drops them when `NODE_ENV=production` and refuses to start when none is left.
+
+Endpoints it adds, under `basePath` (default `/api/auth`):
+- `GET {basePath}/oauth-handoff/start?provider=<id>&callbackURL=<url>&errorCallbackURL=<url>` —
+  Starts the sign-in as a top-level page navigation, so the OAuth state cookie is first-party
+  on the API's origin. Answers 400 with no redirect unless `callbackURL` is one of
+  `callbackPaths` on one of `webOrigins`, `errorCallbackURL` (optional) is on one of
+  `webOrigins`, and `trustedOrigins` allows both. It also answers 400 when `Sec-Fetch-Dest` is
+  set and is not `document`. The OAuth callback then redirects to `callbackURL` with
+  `#ott=<token>`, a single-use token that expires in three minutes.
+- `POST {basePath}/one-time-token/verify` — Body `{token}`. Exchanges the token once for the
+  session and the `set-auth-token` header, and sets no cookie. `GET
+  {basePath}/one-time-token/generate` is refused.
+
+With the opt-in `rateLimit`, both paths are in the auth bucket.
 
 **Endpoints (when enabled):**
 - `POST /api/auth/signup/email` — Email/password signup

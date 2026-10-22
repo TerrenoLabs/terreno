@@ -1,5 +1,5 @@
 import {Client, StreamableHTTPClientTransport} from "@modelcontextprotocol/client";
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 
 import {baseUrl as defaultBaseUrl} from "../config/baseUrl";
 import type {AuthProvider} from "../types";
@@ -13,7 +13,10 @@ export interface MCPToolInfo {
 export interface UseMCPToolsOptions {
   /**
    * The app's shared auth provider (the one passed to `createSyncDb` and
-   * `createApiClient`). Works for Better Auth and JWT sessions alike.
+   * `createApiClient`). Works for Better Auth and JWT sessions alike. The transport reads
+   * `getToken()` before every MCP request, so a refreshed or rotated token is used without a
+   * refetch. When there is no token as a fetch starts, that fetch connects without
+   * authentication.
    */
   authProvider: Pick<AuthProvider, "getToken">;
   /** Backend origin. Defaults to `@terreno/syncdb/config` `baseUrl`. */
@@ -37,6 +40,8 @@ export const useMCPTools = ({
   authProvider,
   baseURL = defaultBaseUrl,
 }: UseMCPToolsOptions): UseMCPToolsResult => {
+  // Held in a ref so an inline authProvider object does not change fetchTools and refetch per render.
+  const authProviderRef = useRef(authProvider);
   const [tools, setTools] = useState<MCPToolInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,13 +51,18 @@ export const useMCPTools = ({
     setError(null);
 
     try {
-      const token = await authProvider.getToken();
+      const initialToken = await authProviderRef.current.getToken();
       const client = new Client(
         {name: "terreno-syncdb", version: "1.0.0"},
         {versionNegotiation: {mode: "auto"}}
       );
       const transport = new StreamableHTTPClientTransport(new URL(`${baseURL}/mcp`), {
-        authProvider: token ? {token: async (): Promise<string> => token} : undefined,
+        authProvider: initialToken
+          ? {
+              token: async (): Promise<string | undefined> =>
+                (await authProviderRef.current.getToken()) ?? undefined,
+            }
+          : undefined,
       });
 
       try {
@@ -74,9 +84,15 @@ export const useMCPTools = ({
     } finally {
       setIsLoading(false);
     }
-  }, [authProvider, baseURL]);
+  }, [baseURL]);
 
-  // Load the tool list on mount and whenever the auth provider or backend changes.
+  // Keep the ref on the latest authProvider. Declared before the fetch effect so a fetch started
+  // in the same commit already reads the new provider.
+  useEffect(() => {
+    authProviderRef.current = authProvider;
+  }, [authProvider]);
+
+  // Load the tool list on mount and whenever the backend changes.
   useEffect(() => {
     void fetchTools();
   }, [fetchTools]);

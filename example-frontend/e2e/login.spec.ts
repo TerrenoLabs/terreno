@@ -29,8 +29,8 @@ test.describe("Login", () => {
   test("shows error with invalid credentials", async ({page, consoleGuard}) => {
     // The login fetch is expected to return 401, which the browser logs.
     consoleGuard.allow("Failed to load resource: the server responded with a status of 401");
-    // The RTK Query rejection surfaces as an unhandled pageerror whose body is
-    // the API response object (no message/stack), so it renders as "Object".
+    // A rejected sign-in can surface as an unhandled pageerror whose body is the
+    // API response object (no message/stack), so it renders as "Object".
     consoleGuard.allow(/^Object$/);
     await page.getByTestId("login-screen-email-input").fill("wrong@example.com");
     await page.getByTestId("login-screen-password-input").fill("wrongpassword");

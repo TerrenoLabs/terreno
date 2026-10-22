@@ -662,10 +662,52 @@ if (typeof globalThis.expo === "undefined") {
     EventEmitter: EventEmitterClass,
     NativeModule: class NativeModule {},
     SharedObject: class SharedObject {},
+    SharedRef: class SharedRef {},
     // noExplicitAny: globalThis.expo is typed by expo-modules-core with many native-only APIs
     // that aren't needed for these mocks, so we cast through unknown to satisfy the type.
   } as unknown as typeof globalThis.expo;
 }
+
+// Expo 58's published expo-modules-core compiles the type-only SharedRef
+// declaration to `export {}`. Real expo-router internals (Screen → useNavigation)
+// require expo-constants, which then imports expo-modules-core and crashes bun.
+// Mock both packages so tests never load that empty module.
+const MockCodedError = class CodedError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+};
+const MockSharedRef = class SharedRef {};
+mock.module("expo-constants", () => ({
+  default: {
+    executionEnvironment: "bare",
+    expoConfig: {extra: {router: {}}},
+  },
+  ExecutionEnvironment: {
+    Bare: "bare",
+    Standalone: "standalone",
+    StoreClient: "storeClient",
+  },
+}));
+mock.module("expo-modules-core", () => ({
+  CodedError: MockCodedError,
+  EventEmitter: class EventEmitter {},
+  NativeModule: class NativeModule {},
+  requireNativeModule: mock(() => ({})),
+  requireOptionalNativeModule: mock(() => null),
+  SharedObject: class SharedObject {},
+  SharedRef: MockSharedRef,
+}));
+mock.module("expo-modules-core/build/ts-declarations/SharedRef", () => ({
+  SharedRef: MockSharedRef,
+}));
+mock.module("expo-router/build/views/Screen", () => ({
+  isScreen: mock(() => false),
+  Screen: ({children, ...props}: MockComponentProps) =>
+    React.createElement("Screen", props, children),
+}));
 
 // Mock expo-router
 const mockNavigationFonts = {

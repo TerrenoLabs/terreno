@@ -50,7 +50,7 @@ const signToken = (payload: Record<string, unknown>, secret = "test-token-secret
 describe("extractUserFromHeaders", () => {
   beforeEach(async () => {
     await UserTestModel.deleteMany({});
-    await McpServiceToken.deleteMany({});
+    await McpServiceToken.collection.deleteMany({});
     process.env.TOKEN_SECRET = "test-token-secret";
   });
 
@@ -86,8 +86,12 @@ describe("extractUserFromHeaders", () => {
 
     assert.equal(String((user as unknown as MCPAuthUserFields)?._id), created._id.toString());
 
-    await Bun.sleep(10);
-    const usedToken = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    // lastUsedAt is written without awaiting the request, so poll for it.
+    let usedToken = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    for (let attempt = 0; attempt < 50 && !usedToken?.lastUsedAt; attempt++) {
+      await Bun.sleep(20);
+      usedToken = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    }
     assert.isDefined(usedToken?.lastUsedAt);
   });
 

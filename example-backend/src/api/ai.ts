@@ -826,14 +826,14 @@ export const addAiRoutes = (
   };
   addGptHistoryRoutes(router, {...options, chat});
   addGptRoutes(router, chat);
-  if (fileStorageService) {
-    addFileRoutes(router, {
-      fileStorageService,
-      fileUploadsEnabled: fileUploadsEnabledForRequest,
-      gcsBucket: process.env.GCS_BUCKET ?? "",
-      openApiOptions: options,
-    });
-  }
+  // Always mounted so the routes are in OpenAPI and pick up GCS configured at runtime from
+  // Profile settings; they answer 503 until storage is configured.
+  addFileRoutes(router, {
+    fileStorageService: initFileStorageService,
+    fileUploadsEnabled: fileUploadsEnabledForRequest,
+    gcsBucket: process.env.GCS_BUCKET ?? "",
+    openApiOptions: options,
+  });
 
   if (mcpService) {
     addMcpRoutes(router, {mcpService, openApiOptions: options});

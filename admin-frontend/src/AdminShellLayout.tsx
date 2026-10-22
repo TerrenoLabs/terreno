@@ -18,7 +18,7 @@ export type AdminShellLayoutProps = Omit<AdminShellProps, "children"> & {
  * Use in `app/admin/_layout.tsx` (or your admin root) as:
  *
  * ```tsx
- * <AdminShellLayout api={api} apiBase="/admin" routeBase="/admin" configurationPath="...">
+ * <AdminShellLayout apiBase="/admin" routeBase="/admin" configurationPath="...">
  *   <Stack>...</Stack>
  * </AdminShellLayout>
  * ```

@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {lastError, readLogs} from "../tools/readLogs";
-import {getRtkState, navigate} from "../tools/runtime";
+import {navigate} from "../tools/runtime";
 import {
   cdpRuntimeEvaluate,
   ensureCdpConnected,
@@ -51,15 +51,7 @@ class FakeWebSocket {
       method: string;
       params?: {expression?: string};
     };
-    const evaluateValue = request.params?.expression?.includes("__TERRENO_STORE__")
-      ? {
-          ok: true,
-          state: {
-            betterAuth: {userId: "cdp-user"},
-            "terreno-rtk": {mutations: {}, queries: {}},
-          },
-        }
-      : 2;
+    const evaluateValue = 2;
     const result =
       request.method === "Runtime.evaluate"
         ? {result: {result: {value: evaluateValue}}}
@@ -150,10 +142,6 @@ describe("Metro development session", () => {
     expect(entry).toMatchObject({level: "warn", message: "hello", source: "app"});
 
     expect(await cdpRuntimeEvaluate("1 + 1", true)).toEqual({value: 2});
-    const state = JSON.parse(await getRtkState({slice: "auth"})) as {
-      auth?: {userId?: string};
-    };
-    expect(state.auth?.userId).toBe("cdp-user");
     const logs = JSON.parse(await readLogs({sources: ["app"]})) as {
       entries: Array<{message?: string}>;
     };

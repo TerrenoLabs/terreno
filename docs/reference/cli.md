@@ -2,7 +2,7 @@
 
 Install: `bun add -g @terreno/cli` then run `terreno --help`.
 
-The `terreno` binary is the operator CLI for Terreno apps. It wraps documentation search, codegen (syncdb SDK, RTK OpenAPI SDK, Mongoose models, routes, screens, forms, admin install notes), app bootstrap, local project tools from `@terreno/mcp`, and **OpenAPI-driven REST calls**.
+The `terreno` binary is the operator CLI for Terreno apps. It wraps documentation search, codegen (syncdb collection SDK, typed API request SDK, Mongoose models, routes, screens, forms, admin install notes), app bootstrap, local project tools from `@terreno/mcp`, and **OpenAPI-driven REST calls**.
 
 Generate an app-specific CLI from your backend spec:
 
@@ -18,7 +18,7 @@ terreno generate rest-cli --schema http://localhost:4000/openapi.json --out ./to
 | `docs component <Name>` | Print `@terreno/ui` component props |
 | `docs upgrade --from --to` | Lockstep upgrade notes |
 | `generate syncdb` | Typed syncdb hooks from OpenAPI (`--schema`, `--out`, `--collections`, `--config`, `--no-format`) |
-| `generate sdk` | Run `@rtk-query/codegen-openapi` with `--config` |
+| `generate sdk` | Typed request hooks (`apiSdk.ts`) for every non-synced route via the syncdb codegen (`--schema`, `--out`, `--config`, `--no-format`); same output as `terreno-syncdb-codegen --api-out`. A legacy RTK `--config openapi-config.ts` alone is rejected |
 | `generate rest-cli` | Scaffold a bun CLI from OpenAPI (`--schema`, `--out`, `--name`, `--base-url`) |
 | `generate model` | Mongoose model (`--name`, `--field name:Type:required`, `--owner`, `--soft-delete`) |
 | `generate route` | `modelRouter` module (`--model-name`, `--route-path`, `--owner-filtered`, `--query-fields`, `--sort`) |
@@ -33,7 +33,7 @@ terreno generate rest-cli --schema http://localhost:4000/openapi.json --out ./to
 | `api request <METHOD> <path>` | Invoke by method + path template |
 | `info` | Local `@terreno/*` versions (via MCP local tools) |
 | `logs` | Merge backend/browser JSONL, Metro events, and app CDP console (`--entries`, `--level`, `--since`, `--sources`; `last-error`) |
-| `state` | Inspect Better Auth (via `auth` alias or `betterAuth`) or RTK Query state (`--slice`, `--query`) through the dev store or Metro CDP |
+| `state` | Inspect the live SyncDB client (`get_syncdb_state`): status, entities, outbox, conflicts, cursors, streams, debug events (`--collection`, `--entity-id`, `--limit`, `--name`, `--no-events`). Needs `createSyncDb({debug: true})`. The Terreno 57 `--slice` / `--query` Redux flags were removed in 58 and now exit 1 |
 | `eval` | Evaluate JavaScript in the app runtime through Metro CDP (`--code`; requires `TERRENO_MCP_EVAL=1`) |
 | `navigate` | Navigate Expo Router through Metro CDP (requires `TERRENO_MCP_EVAL=1`) |
 | `web [url]` | Automate the web app with Bun 1.4 `Bun.WebView`; ordered `--action` JSON, `--snapshot`, and `--screenshot` |

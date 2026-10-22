@@ -38,21 +38,15 @@ terreno logs --entries 100 --level error --sources backend,browser,metro,app
 
 ## 2. Inspect client state
 
-Check authentication and non-synced RTK Query cache state:
+Client state lives in `@terreno/syncdb`: synced collections in the local store, and the session in
+`SessionProvider`. There is no Redux store to inspect (the `get_rtk_state` tool and
+`terreno state --slice` were removed with `@terreno/rtk` in Terreno 58). Use the SyncDB tools in
+the next step for data, and `read_logs` / `last_error` above for failed request-client calls.
 
-```json
-{"name":"get_rtk_state","arguments":{"slice":"rtk","query":"todos"}}
-```
-
-The tool reads `globalThis.__TERRENO_STORE__` registered by the app, using CDP when the MCP process
-cannot access the app heap directly. `slice: "auth"` prefers the Better Auth slice and falls back to
-legacy JWT auth; pass `betterAuth` to request that exact slice. The CLI equivalent is:
-
-Sensitive fields whose names include `password`, `token`, `secret`, `authorization`, or `cookie` are
-returned as `[REDACTED]`; use this summary to inspect cache state, never to retrieve credentials.
+CLI equivalent of `get_syncdb_state`:
 
 ```bash
-terreno state --slice rtk --query todos
+terreno state --collection todos
 ```
 
 ## 3. Inspect and change SyncDB state

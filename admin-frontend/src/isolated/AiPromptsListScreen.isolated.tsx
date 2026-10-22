@@ -2,13 +2,21 @@ import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../types";
-import {AiPromptsScreenWidget} from "../widgets/aiObservability/prompts/AiPromptsListScreen";
+import type {AdminConfigResponse} from "../types";
+import {AiPromptsScreenWidget as AiPromptsScreenWidgetBase} from "../widgets/aiObservability/prompts/AiPromptsListScreen";
 import type {PromptListItem} from "../widgets/aiObservability/prompts/promptTypes";
+import {
+  createObservabilityServer,
+  type FakeObservabilityServer,
+  flushObservabilityRequests,
+  withObservabilityServer,
+} from "./observabilityFakeApi.isolated";
 import {
   operatorObservabilityStatus,
   readOnlyPromptObservabilityStatus,
 } from "./observabilityStatusFixtures.isolated";
+
+const AiPromptsScreenWidget = withObservabilityServer(AiPromptsScreenWidgetBase);
 
 const routerPush = mock(() => undefined);
 
@@ -28,36 +36,26 @@ describe("AiPromptsListScreen", () => {
     },
   ];
 
-  let lastCreateBody: Record<string, unknown> | undefined;
+  const CREATE_ROUTE = "POST /ai/observability/prompts";
 
-  const api: AdminApi = {
-    enhanceEndpoints: () => api,
-    injectEndpoints: () => ({
-      useAiObservabilityPromptsQuery: () => ({
-        data: loaded,
-        isError: false,
-        isLoading: false,
-        refetch: mock(() => {}),
+  const createServer = (status: unknown = operatorObservabilityStatus()): FakeObservabilityServer =>
+    createObservabilityServer({
+      [CREATE_ROUTE]: (request) => ({
+        name: String((request.body as {name?: unknown} | undefined)?.name),
+        version: 1,
       }),
-      useAiObservabilityStatusQuery: () => ({
-        data: operatorObservabilityStatus(),
-        isError: false,
-        isLoading: false,
-      }),
-      useCreateAiObservabilityPromptMutation: () => [
-        (body: Record<string, unknown>) => {
-          lastCreateBody = body;
-          return {unwrap: async () => ({name: String(body.name), version: 1})};
-        },
-        {isError: false, isLoading: false},
-      ],
-    }),
-  } as unknown as AdminApi;
+      "GET /ai/observability/prompts": {data: loaded},
+      "GET /ai/observability/status": {data: status},
+    });
+
+  const lastCreateBody = (server: FakeObservabilityServer): Record<string, unknown> | undefined => {
+    const calls = server.callsTo(CREATE_ROUTE);
+    return calls[calls.length - 1]?.body as Record<string, unknown> | undefined;
+  };
 
   const config: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
 
   beforeEach(() => {
-    lastCreateBody = undefined;
     routerPush.mockClear();
   });
 
@@ -69,9 +67,16 @@ describe("AiPromptsListScreen", () => {
   };
 
   it("omits description from create payload when the field is blank", async () => {
+    const server = createServer();
     const view = renderWithTheme(
-      <AiPromptsScreenWidget api={api} config={config} routeBase="/admin" screenName="ai-prompts" />
+      <AiPromptsScreenWidget
+        config={config}
+        routeBase="/admin"
+        screenName="ai-prompts"
+        server={server}
+      />
     );
+    await flushObservabilityRequests();
     await act(async () => {
       fireEvent.press(view.getByTestId("ai-prompts-create"));
       await Promise.resolve();
@@ -81,45 +86,36 @@ describe("AiPromptsListScreen", () => {
       fireEvent.press(view.getByText("Create"));
       await Promise.resolve();
     });
-    expect(lastCreateBody?.description).toBeUndefined();
+    await flushObservabilityRequests();
+    const body = lastCreateBody(server);
+    expect(body?.name).toBe("new-prompt");
+    expect(body && "description" in body).toBe(false);
   });
 
-  it("hides create when status permissions are read-only", () => {
-    const readOnlyApi: AdminApi = {
-      enhanceEndpoints: () => readOnlyApi,
-      injectEndpoints: () => ({
-        useAiObservabilityPromptsQuery: () => ({
-          data: loaded,
-          isError: false,
-          isLoading: false,
-          refetch: mock(() => {}),
-        }),
-        useAiObservabilityStatusQuery: () => ({
-          data: readOnlyPromptObservabilityStatus(),
-          isError: false,
-          isLoading: false,
-        }),
-        useCreateAiObservabilityPromptMutation: () => [
-          mock(() => ({unwrap: async () => ({name: "x", version: 1})})),
-          {isError: false, isLoading: false},
-        ],
-      }),
-    } as unknown as AdminApi;
+  it("hides create when status permissions are read-only", async () => {
     const view = renderWithTheme(
       <AiPromptsScreenWidget
-        api={readOnlyApi}
         config={config}
         routeBase="/admin"
         screenName="ai-prompts"
+        server={createServer(readOnlyPromptObservabilityStatus())}
       />
     );
+    await flushObservabilityRequests();
     expect(view.queryByTestId("ai-prompts-create")).toBeNull();
   });
 
   it("includes trimmed description in the create payload", async () => {
+    const server = createServer();
     const view = renderWithTheme(
-      <AiPromptsScreenWidget api={api} config={config} routeBase="/admin" screenName="ai-prompts" />
+      <AiPromptsScreenWidget
+        config={config}
+        routeBase="/admin"
+        screenName="ai-prompts"
+        server={server}
+      />
     );
+    await flushObservabilityRequests();
     await act(async () => {
       fireEvent.press(view.getByTestId("ai-prompts-create"));
       await Promise.resolve();
@@ -130,6 +126,7 @@ describe("AiPromptsListScreen", () => {
       fireEvent.press(view.getByText("Create"));
       await Promise.resolve();
     });
-    expect(lastCreateBody?.description).toBe("Operator summary");
+    await flushObservabilityRequests();
+    expect(lastCreateBody(server)?.description).toBe("Operator summary");
   });
 });

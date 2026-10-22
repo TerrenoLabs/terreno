@@ -1,11 +1,14 @@
-// noExplicitAny: test harness doubles
 // biome-ignore-all lint/suspicious/noExplicitAny: test harness doubles
 import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {act} from "@testing-library/react-native";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi, AdminConfigResponse} from "./types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
+import type {AdminConfigResponse} from "./types";
 
 mock.module("expo-router", () => ({
   router: {push: mock(() => {})},
@@ -25,22 +28,6 @@ mock.module("./useAdminConfig", () => ({
 }));
 
 import {AdminHome} from "./AdminHome";
-
-const adminApi = {
-  injectEndpoints: ({endpoints}: {endpoints: (builder: unknown) => Record<string, unknown>}) => {
-    endpoints({
-      mutation: (spec: Record<string, unknown>) => spec,
-      query: (spec: Record<string, unknown>) => spec,
-    });
-    return {
-      useAdminVersionConfigQuery: () => ({data: null, error: null, isLoading: false}),
-      useUpdateVersionConfigMutation: () => [
-        () => ({unwrap: async () => ({})}),
-        {isLoading: false},
-      ],
-    };
-  },
-} as unknown as AdminApi;
 
 const buildConfig = (overrides?: Partial<AdminConfigResponse>): AdminConfigResponse => ({
   customScreens: [],
@@ -105,8 +92,8 @@ const countTestIdInSubtree = (root: ReactTestInstance, testId: string): number =
 
 describe("AdminHome", () => {
   beforeEach(() => {
-    resetUseAdminApiDouble();
-    configureUseAdminApiDouble({
+    resetAdminModelApiDouble();
+    configureAdminModelApiDouble({
       useListQuery: () => ({
         data: {data: [], total: 0},
         error: null,
@@ -120,7 +107,7 @@ describe("AdminHome", () => {
 
   it("renders scriptRunner in the top band with contentTop widgets on the same row, not inside main", () => {
     configState.config = buildConfig();
-    const {UNSAFE_root} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
+    const {UNSAFE_root} = renderWithTheme(<AdminHome baseUrl="/admin" />);
     const top = UNSAFE_root.findAll(
       (n: ReactTestInstance) => n.props?.testID === "admin-home-slot-top"
     );
@@ -140,7 +127,7 @@ describe("AdminHome", () => {
 
   it("shows per-model row counts on each model card", () => {
     configState.config = buildConfig();
-    const {UNSAFE_root} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
+    const {UNSAFE_root} = renderWithTheme(<AdminHome baseUrl="/admin" />);
     const modelCountLabels = UNSAFE_root.findAll(
       (n: ReactTestInstance) => n.props?.testID === "admin-home-model-count-Widget"
     );
@@ -158,7 +145,7 @@ describe("AdminHome", () => {
         title: "Test Admin",
       },
     });
-    const {UNSAFE_root} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
+    const {UNSAFE_root} = renderWithTheme(<AdminHome baseUrl="/admin" />);
     const mainSlots = UNSAFE_root.findAll(
       (n: ReactTestInstance) => n.props?.testID === "admin-home-slot-main"
     );
@@ -182,7 +169,7 @@ describe("AdminHome", () => {
         title: "Test Admin",
       },
     });
-    const {UNSAFE_root} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
+    const {UNSAFE_root} = renderWithTheme(<AdminHome baseUrl="/admin" />);
     const sidebar = UNSAFE_root.findAll(
       (n: ReactTestInstance) => n.props?.testID === "admin-home-slot-sidebar"
     );
@@ -210,9 +197,27 @@ describe("AdminHome", () => {
     expect(ids[0]).toBe("admin-home-widget-modelsGrid");
   });
 
-  it("renders the real version config widget without replacing its module", () => {
+  it("renders the real version config widget without replacing its module", async () => {
     configState.config = buildConfig();
-    const {getByTestId} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
-    expect(getByTestId("admin-version-config-widget")).toBeTruthy();
+    const originalFetch = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify({mobileRequiredVersion: 1}), {
+        headers: {"Content-Type": "application/json"},
+        status: 200,
+      });
+    }) as typeof fetch;
+    try {
+      const {getByTestId} = renderWithTheme(<AdminHome baseUrl="/admin" />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(getByTestId("admin-version-config-widget")).toBeTruthy();
+      expect(urls).toContain("/admin/version-config");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

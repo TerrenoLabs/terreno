@@ -1,5 +1,7 @@
 import {useBooleanFlagDetails} from "@openfeature/react-sdk";
-import {canOpenAdminPage, selectBetterAuthUserId, useFeatureFlags} from "@terreno/rtk";
+import {canOpenAdminPage} from "@terreno/syncdb/app";
+import {useSession} from "@terreno/syncdb/auth";
+import {useFeatureFlags} from "@terreno/syncdb/flags";
 import {
   Badge,
   Banner,
@@ -18,26 +20,35 @@ import {
 import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
-import {useSelector} from "react-redux";
 import {useThemePreference} from "@/contexts/ThemePreferenceContext";
-import {logout, useAppDispatch} from "@/store/index";
 import {
-  terrenoApi,
-  useGetMeQuery,
-  usePatchMeMutation,
+  type PatchAuthMeArgs,
+  useCommsTestPushMutation,
+  useGetAuthMeQuery,
+  usePatchAuthMeMutation,
   usePostAuthSendVerificationMutation,
-  usePostCommsDevTestPushMutation,
-} from "@/store/sdk";
+} from "@/store/apiSdk";
+
+/** What POST /comms/dev/testPush reports for the caller's registered devices. */
+interface TestPushResult {
+  accepted?: number;
+  tokenCount?: number;
+}
 
 const ProfileScreen: React.FC = () => {
   const router = useRouter();
-  const dispatch = useAppDispatch();
-  const userId = useSelector(selectBetterAuthUserId);
-  const {data: profileResponse, isLoading, refetch} = useGetMeQuery(undefined, {skip: !userId});
-  const [updateProfile, {isLoading: isUpdating}] = usePatchMeMutation();
+  const {logout, userId} = useSession();
+  const {
+    data: profileResponse,
+    isLoading,
+    refetch,
+  } = useGetAuthMeQuery(undefined, {
+    skip: !userId,
+  });
+  const [updateProfile, {isLoading: isUpdating}] = usePatchAuthMeMutation();
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
-  const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
+  const [sendTestPush, {isLoading: isSendingTestPush}] = useCommsTestPushMutation();
   const {
     colorSchemeSetting,
     isLoading: isThemePreferenceLoading,
@@ -48,7 +59,12 @@ const ProfileScreen: React.FC = () => {
     flags,
     isLoading: isFeatureFlagsLoading,
     error: featureFlagsError,
-  } = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  } = useFeatureFlags({
+    // The root OpenFeatureBridge refetches the shared flag query on socket pushes.
+    skip: !userId,
+    socket: null,
+    userId,
+  });
   const darkModeFlagDetails = useBooleanFlagDetails("dark-mode-toggle", false);
   const featureFlagEntries = useMemo(
     (): Array<{key: string; value: boolean | string | null}> =>
@@ -148,7 +164,9 @@ const ProfileScreen: React.FC = () => {
       setSaveError(null);
       setSaveSuccess(false);
       try {
-        await updateProfile({password: value}).unwrap();
+        // PATCH /auth/me documents no `password` field; the request is unchanged from the
+        // RTK version so this slice does not alter profile password behavior.
+        await updateProfile({password: value} as PatchAuthMeArgs).unwrap();
         setPassword("");
         showSaveSuccess();
       } catch (err) {
@@ -161,9 +179,10 @@ const ProfileScreen: React.FC = () => {
     [showSaveSuccess, updateProfile]
   );
 
+  // useSession().logout signs both sync clients out (wiping local rows) before the auth server.
   const handleLogout = useCallback((): void => {
-    dispatch(logout());
-  }, [dispatch]);
+    void logout();
+  }, [logout]);
 
   const handleResendVerification = useCallback(async (): Promise<void> => {
     setVerificationError(null);
@@ -207,10 +226,10 @@ const ProfileScreen: React.FC = () => {
     setTestPushError(null);
     setTestPushMessage(null);
     try {
-      const result = await sendTestPush({
+      const result = (await sendTestPush({
         body: "Sent from the example app profile screen.",
         title: "Terreno test push",
-      }).unwrap();
+      }).unwrap()) as TestPushResult;
       if (result.tokenCount === 0) {
         setTestPushMessage("No registered push tokens for this account.");
         return;
@@ -417,7 +436,7 @@ const ProfileScreen: React.FC = () => {
               {String(darkModeFlagDetails.reason ?? "")})
             </Text>
             {isFeatureFlagsLoading && <Text color="secondaryLight">Loading feature flags...</Text>}
-            {!isFeatureFlagsLoading && featureFlagsError && (
+            {!isFeatureFlagsLoading && Boolean(featureFlagsError) && (
               <Text color="error">Failed to load feature flags</Text>
             )}
             {!isFeatureFlagsLoading && !featureFlagsError && featureFlagEntries.length === 0 && (
@@ -432,9 +451,15 @@ const ProfileScreen: React.FC = () => {
                   justifyContent="between"
                   key={flagEntry.key}
                   paddingY={1}
+                  testID={`profile-feature-flag-${flagEntry.key}`}
                 >
                   <Text>{flagEntry.key}</Text>
-                  <Text color="secondaryLight">{String(flagEntry.value)}</Text>
+                  <Text
+                    color="secondaryLight"
+                    testID={`profile-feature-flag-${flagEntry.key}-value`}
+                  >
+                    {String(flagEntry.value)}
+                  </Text>
                 </Box>
               ))}
           </Box>

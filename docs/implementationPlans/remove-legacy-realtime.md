@@ -56,4 +56,4 @@ Today a model can enable both `realtime` (RTK `sync` events + cache patching) an
 - [x] Using `modelRouter` `realtime` logs a one-time warning that names Terreno 58 and syncdb.
 - [x] Using `realtimeList` / `realtimeDocument` / `setRealtimeSocket` logs a one-time warning that names Terreno 58 and syncdb.
 - [x] Task list describes 58 deletion without removing `RealtimeApp`.
-- [ ] Terreno 58 removes the deprecated APIs (later).
+- [x] Terreno 58 removes the deprecated APIs.

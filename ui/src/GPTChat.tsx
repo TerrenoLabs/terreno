@@ -11,12 +11,13 @@ import React, {useCallback, useEffect, useRef, useState} from "react";
 import {
   AccessibilityInfo,
   findNodeHandle,
-  type Text as NativeText,
   Platform,
   Image as RNImage,
-  type ScrollView as RNScrollView,
-  type TextInput as RNTextInput,
+  type ScrollViewInstance,
+  type TextInputInstance,
+  type TextInstance,
   View,
+  type ViewInstance,
 } from "react-native";
 
 import {AttachmentPreview} from "./AttachmentPreview";
@@ -1019,10 +1020,10 @@ const AskFocusTarget = ({
   renderCard,
 }: {
   label: string;
-  renderCard: (promptRef: React.RefObject<NativeText | null>) => React.ReactElement;
+  renderCard: (promptRef: React.RefObject<TextInstance | null>) => React.ReactElement;
 }): React.ReactElement => {
-  const viewRef = useRef<View>(null);
-  const promptRef = useRef<NativeText>(null);
+  const viewRef = useRef<ViewInstance>(null);
+  const promptRef = useRef<TextInstance>(null);
 
   // Focus the ask once, when it mounts; later renders of the same ask leave focus alone.
   useEffect(() => {
@@ -1063,7 +1064,7 @@ const AskTranscriptItem = ({
   onAskSubmit?: AskSubmitHandler;
   resolveAskFiles?: AskFilesResolver;
 }): React.ReactElement => {
-  const renderCard = (promptRef?: React.Ref<NativeText>): React.ReactElement => (
+  const renderCard = (promptRef?: React.Ref<TextInstance>): React.ReactElement => (
     <AskCard
       ask={ask}
       errors={errors}
@@ -1447,7 +1448,7 @@ export const GPTChat = ({
   const [inputValue, setInputValue] = useState("");
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
-  const scrollViewRef = useRef<RNScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const contentHeightRef = useRef(0);
   const scrollOffsetRef = useRef(0);
@@ -1552,7 +1553,7 @@ export const GPTChat = ({
   const [inputElement, setInputElement] = useState<HTMLElement | null>(null);
 
   // On React Native Web the TextInput ref is the underlying DOM element.
-  const handleInputRef = useCallback((ref: RNTextInput | null) => {
+  const handleInputRef = useCallback((ref: TextInputInstance | null) => {
     setInputElement(ref as unknown as HTMLElement | null);
   }, []);
 

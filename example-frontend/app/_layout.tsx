@@ -7,18 +7,11 @@ import {Platform, StatusBar} from "react-native";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 import "react-native-reanimated";
 import {OpenFeatureProvider} from "@openfeature/react-sdk";
-import {
-  baseUrl,
-  installTerrenoDevConsoleLogger,
-  selectBetterAuthIsLoading,
-  selectBetterAuthUserId,
-  setRealtimeSocket,
-  useRealtimeDebug,
-  useSocketConnection,
-  useTerrenoFeatureFlags,
-  useUpgradeCheck,
-} from "@terreno/rtk";
-import {SyncDbProvider} from "@terreno/syncdb/react";
+import {installDevConsoleLogger, useUpgradeCheck} from "@terreno/syncdb/app";
+import {SessionProvider, useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
+import {useTerrenoFeatureFlags} from "@terreno/syncdb/flags";
+import {ApiClientProvider, SyncDbProvider} from "@terreno/syncdb/react";
 import {
   AnnouncementNavigator,
   Banner,
@@ -31,41 +24,32 @@ import {
   UpgradeRequiredScreen,
   useTheme,
 } from "@terreno/ui";
-import {Provider, useSelector} from "react-redux";
-import {PersistGate} from "redux-persist/integration/react";
 import {SyncConflictsProvider} from "@/components/SyncConflictsController";
 import {SyncHealthToast} from "@/components/SyncHealthToast";
 import {SyncLabRuntime} from "@/components/SyncLabRuntime";
 import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
-import {getSessionToken} from "@/lib/betterAuth";
-import store, {persistor, syncBetterAuthSession} from "@/store/index";
+import {betterAuthClient} from "@/lib/betterAuth";
+import {apiClient} from "@/store/apiClient";
+import {useGetAuthMeQuery, usePostCommsPushTokensMutation} from "@/store/apiSdk";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
-import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
-import {setSyncDbReady, syncDb} from "@/store/syncdb";
+import {adminSyncDb, setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
 
-installTerrenoDevConsoleLogger();
+installDevConsoleLogger();
 
-interface ProfileData {
-  _id: string;
-  id: string;
-  email?: string;
-  name?: string;
-  admin?: boolean;
-  emailVerified?: boolean;
-  roles?: string[];
-  permissions?: Record<string, readonly string[]>;
-}
+// useSession().logout signs both sync clients out (wiping local rows, `wipeOnSignOut`) before
+// ending the auth session, while they still know the current user.
+const SESSION_SYNC_DBS = [syncDb, adminSyncDb];
 
-const OpenFeatureBridge: FC<{
-  children: ReactNode;
-  socket: ReturnType<typeof useSocketConnection>["socket"];
-}> = ({children, socket}) => {
-  const bridgeUserId = useSelector(selectBetterAuthUserId) ?? undefined;
-  useTerrenoFeatureFlags(terrenoApi, {
+// Flags load through the request client and refresh when the server pushes
+// `featureFlagsChanged` on the syncdb socket, so the app keeps a single socket.
+const OpenFeatureBridge: FC<{children: ReactNode}> = ({children}) => {
+  const bridgeUserId = useSession().userId ?? undefined;
+  useTerrenoFeatureFlags({
+    client: apiClient,
     skip: !bridgeUserId,
-    socket,
+    socket: syncDb,
     userId: bridgeUserId,
   });
   return <OpenFeatureProvider domain="feature-flags">{children}</OpenFeatureProvider>;
@@ -129,13 +113,13 @@ const RootLayout = (): React.ReactElement | null => {
 
   return (
     <GestureHandlerRootView style={{flex: 1}}>
-      <Provider store={store}>
-        <PersistGate loading={null} persistor={persistor}>
+      <SessionProvider authClient={betterAuthClient} syncDbs={SESSION_SYNC_DBS}>
+        <ApiClientProvider client={apiClient}>
           <AppThemeProvider openAPISpecUrl={`${baseUrl}/openapi.json`}>
             <RootLayoutNav />
           </AppThemeProvider>
-        </PersistGate>
-      </Provider>
+        </ApiClientProvider>
+      </SessionProvider>
     </GestureHandlerRootView>
   );
 };
@@ -162,8 +146,9 @@ const RootLayoutNav = (): React.ReactElement => {
   useEffect(() => {
     void SplashScreen.hideAsync();
   }, []);
-  const userId = useSelector(selectBetterAuthUserId) ?? undefined;
-  // The initial syncBetterAuthSession() call below is async (it awaits
+  const session = useSession();
+  const userId = session.userId ?? undefined;
+  // SessionProvider's startup session read is async (it awaits
   // authClient.getSession()), so userId is undefined for one or more render
   // passes on every fresh page load — including a deep link straight to a
   // route like /profile or /admin. Without gating on this flag, the auth
@@ -171,13 +156,12 @@ const RootLayoutNav = (): React.ReactElement => {
   // /login before the session resolves, then bounces to the hardcoded
   // /(tabs) root once it does, silently discarding the originally requested
   // route.
-  const isAuthLoading = useSelector(selectBetterAuthIsLoading);
+  const isAuthLoading = session.isLoading;
   const [syncDbStartError, setSyncDbStartError] = useState<string | null>(null);
   const [syncDbStartAttempt, setSyncDbStartAttempt] = useState<number>(0);
-  const {data: profileData, isLoading: isProfileLoading} = useGetMeQuery(undefined, {
+  const {data: profile, isLoading: isProfileLoading} = useGetAuthMeQuery(undefined, {
     skip: !userId,
   });
-  const profile = profileData as ProfileData | undefined;
   const segments = useSegments();
   const router = useRouter();
   const {
@@ -190,34 +174,16 @@ const RootLayoutNav = (): React.ReactElement => {
     warningMessage,
   } = useUpgradeCheck({pollingIntervalMs: 300_000, recheckOnForeground: true});
 
-  const getAuthToken = useCallback(async (): Promise<string | null> => {
-    return getSessionToken();
-  }, []);
-
   const handleRetrySyncDbStart = useCallback((): void => {
     setSyncDbStartError(null);
     setSyncDbStartAttempt((attempt) => attempt + 1);
   }, []);
 
-  const {socket} = useSocketConnection({
-    baseUrl,
-    getAuthToken,
-    shouldConnect: Boolean(userId),
-  });
-
-  useRealtimeDebug(baseUrl, socket?.connected);
-
+  // Drop cached API responses whenever the signed-in user changes so one account
+  // never sees another's profile or action results.
   useEffect(() => {
-    setRealtimeSocket(socket);
-    return (): void => {
-      setRealtimeSocket(null);
-    };
-  }, [socket]);
-
-  // Hydrate Better Auth session into Redux on startup.
-  useEffect(() => {
-    void syncBetterAuthSession(store.dispatch);
-  }, []);
+    apiClient.reset();
+  }, [userId]);
 
   // Start the local-first syncdb client after login; stop on logout/unmount.
   // setSyncDbReady only flips true once start() resolves a user, so screens gated on
@@ -416,16 +382,16 @@ const RootLayoutNav = (): React.ReactElement => {
   // is fine because seed archives legacy all-audience modals and targets staff vs patient.
   const announcementWrapped = userId ? (
     <AnnouncementNavigator
-      api={terrenoApi}
+      client={apiClient}
       frequency={{
         skipFirstLaunch: false,
         userId: frequencyUserId,
       }}
     >
-      <OpenFeatureBridge socket={socket}>{content}</OpenFeatureBridge>
+      <OpenFeatureBridge>{content}</OpenFeatureBridge>
     </AnnouncementNavigator>
   ) : (
-    <OpenFeatureBridge socket={socket}>{content}</OpenFeatureBridge>
+    <OpenFeatureBridge>{content}</OpenFeatureBridge>
   );
 
   if (userId && !profile?.admin) {
@@ -437,7 +403,7 @@ const RootLayoutNav = (): React.ReactElement => {
     return (
       <>
         <ThemedStatusBar />
-        <ConsentNavigator api={terrenoApi}>{announcementWrapped}</ConsentNavigator>
+        <ConsentNavigator client={apiClient}>{announcementWrapped}</ConsentNavigator>
       </>
     );
   }

@@ -15,8 +15,7 @@ Prefer `unknown` (and narrow) or a precise type. Use `as unknown as T` over `as 
 Explicit `any` is acceptable only at **framework or library boundaries** where types are not expressible in TypeScript today, for example:
 
 - Mongoose model boundaries that inspect consumer-defined schemas (`api/src/populate.ts`)
-- RTK Query `Api<any, any, any, any>` in generic middleware (`rtk/src/offlineMiddleware.ts`)
-- Dynamic RTK hook lookup where endpoint names are not statically known (`admin-frontend`)
+- Dynamic lookups where member names are not statically known
 - Test mocks with type-erased doubles (`*.test.ts`, `*.isolated.tsx`)
 
 Every allowed use must be **lint-clean** and **documented** (see below).
@@ -38,15 +37,15 @@ The audit script (`bun run check:explicit-any`) classifies each explicit `any`:
 When `any` cannot be removed, add **both** comments on the line above (or a file header for tests):
 
 ```typescript
-// noExplicitAny: RTK Query generates hook names dynamically; not statically expressible
-// biome-ignore lint/suspicious/noExplicitAny: dynamic hook lookup on RTK Query enhanced API
-const hook = (api as any)[`useGet${name}Query`];
+// noExplicitAny: plugin methods are registered at runtime; names are not statically known
+// biome-ignore lint/suspicious/noExplicitAny: dynamic method lookup on a runtime-registered plugin
+const handler = (plugin as any)[`handle${name}`];
 ```
 
 For test files with many mocks, a file-level header is fine:
 
 ```typescript
-// noExplicitAny: test mocks use type-erased RTK Query API doubles
+// noExplicitAny: test mocks use type-erased request client doubles
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 ```
 

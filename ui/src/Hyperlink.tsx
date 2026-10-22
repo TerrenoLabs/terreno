@@ -178,9 +178,12 @@ export const Hyperlink = (props: HyperlinkProps) => {
     urlObject.protocol = urlObject.protocol?.toLowerCase() ?? "";
     const normalizedURL = mdurl.format(urlObject);
 
-    void Linking.canOpenURL(normalizedURL).then(
-      (supported) => supported && Linking.openURL(normalizedURL)
-    );
+    void Linking.canOpenURL(normalizedURL).then((supported) => {
+      if (supported) {
+        return Linking.openURL(normalizedURL);
+      }
+      return undefined;
+    });
   };
 
   const onPress = handleLink || props.onPress;

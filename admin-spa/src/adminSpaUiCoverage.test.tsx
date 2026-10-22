@@ -1,4 +1,7 @@
 import {beforeAll, beforeEach, describe, it, mock} from "bun:test";
+import {type ApiClient, createApiClient, type FetchLike} from "@terreno/syncdb/api";
+import {ApiClientProvider} from "@terreno/syncdb/react";
+import {waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
@@ -65,18 +68,13 @@ const registerAdminSpaShellMocks = ({
   appConfigState,
   capturedOrgSwitcherProps,
   capturedShellProps,
-  mockTerrenoApi,
-  profileState,
 }: {
   appConfigState: {appConfig: AdminSpaAppConfig};
   capturedOrgSwitcherProps: {current?: {api?: unknown; routeBase?: string}};
   capturedShellProps: {current?: Record<string, unknown>};
-  mockTerrenoApi: {reducerPath: string};
-  profileState: {data?: {roles?: string[]}};
 }): void => {
   const shellModuleUrl = new URL("../components/AdminSpaShell.tsx", import.meta.url);
   const appConfigGatePath = new URL("./AppConfigGate.tsx", shellModuleUrl).pathname;
-  const sdkPath = new URL("../store/sdk.ts", shellModuleUrl).pathname;
 
   registerSharedAdminFrontendMock({capturedOrgSwitcherProps, capturedShellProps});
   mock.module(appConfigGatePath, () => ({
@@ -85,10 +83,28 @@ const registerAdminSpaShellMocks = ({
       basePath: "",
     }),
   }));
-  mock.module(sdkPath, () => ({
-    terrenoApi: mockTerrenoApi,
-    useGetAdminSpaProfileQuery: () => ({data: profileState.data}),
-  }));
+};
+
+interface FakeProfileServer {
+  client: ApiClient;
+  requests: {credentials?: RequestCredentials; url: string}[];
+}
+
+/** Request client whose `fetch` answers `/auth/me` with `profile` (404 for anything else). */
+const createFakeProfileServer = (profile: {roles?: string[]} | undefined): FakeProfileServer => {
+  const requests: FakeProfileServer["requests"] = [];
+  const fetchImpl: FetchLike = async (input, init) => {
+    const url = String(input);
+    requests.push({credentials: init?.credentials, url});
+    if (url !== "/auth/me") {
+      return new Response(JSON.stringify({title: "Not found"}), {status: 404});
+    }
+    return new Response(JSON.stringify({data: profile ?? {}}), {
+      headers: {"Content-Type": "application/json"},
+      status: 200,
+    });
+  };
+  return {client: createApiClient({credentials: "same-origin", fetchImpl}), requests};
 };
 
 describe("AdminSpaShell", () => {
@@ -101,23 +117,39 @@ describe("AdminSpaShell", () => {
       providers: ["email"],
     },
   };
-  const profileState: {data?: {roles?: string[]}} = {};
   const capturedShellProps: {current?: Record<string, unknown>} = {};
   const capturedOrgSwitcherProps: {current?: {api?: unknown; routeBase?: string}} = {};
-  const mockTerrenoApi = {reducerPath: "terreno-admin-spa-test-api"};
   const breadcrumbs = [{href: "/", label: "Admin"}, {label: "Members"}];
   let AdminSpaShell: React.FC<{
     breadcrumbs?: {href?: string; label: string}[];
     children: React.ReactNode;
   }>;
+  let server: FakeProfileServer;
+
+  const renderShell = (): ReturnType<typeof renderWithTheme> =>
+    renderWithTheme(
+      <ApiClientProvider client={server.client}>
+        <AdminSpaShell breadcrumbs={breadcrumbs}>
+          <Text testID="admin-spa-shell-child">Child</Text>
+        </AdminSpaShell>
+      </ApiClientProvider>
+    );
+
+  /** Wait until `/auth/me` has resolved so the shell re-rendered with the profile. */
+  const waitForProfile = async (): Promise<void> => {
+    await waitFor(() => {
+      assert.equal(
+        server.client.getQueryState({method: "GET", url: "/auth/me"}).status,
+        "fulfilled"
+      );
+    });
+  };
 
   beforeAll(async () => {
     registerAdminSpaShellMocks({
       appConfigState,
       capturedOrgSwitcherProps,
       capturedShellProps,
-      mockTerrenoApi,
-      profileState,
     });
     ({AdminSpaShell} = await import("../components/AdminSpaShell"));
   });
@@ -130,105 +162,91 @@ describe("AdminSpaShell", () => {
       primaryColor: "#2563EB",
       providers: ["email"],
     };
-    profileState.data = undefined;
+    server = createFakeProfileServer(undefined);
     capturedShellProps.current = undefined;
     capturedOrgSwitcherProps.current = undefined;
   });
 
-  it("uses the default /admin api base when app config omits adminApiBasePath", () => {
+  it("uses the default /admin api base when app config omits adminApiBasePath", async () => {
     appConfigState.appConfig = {
       ...appConfigState.appConfig,
       adminApiBasePath: undefined,
     };
 
-    renderWithTheme(
-      <AdminSpaShell breadcrumbs={breadcrumbs}>
-        <Text testID="admin-spa-shell-child">Child</Text>
-      </AdminSpaShell>
-    );
+    renderShell();
+    await waitForProfile();
 
     assert.equal(capturedShellProps.current?.apiBase, "/admin");
   });
 
-  it("uses the configured adminApiBasePath from app config", () => {
+  it("uses the configured adminApiBasePath from app config", async () => {
     appConfigState.appConfig = {
       ...appConfigState.appConfig,
       adminApiBasePath: "/console/admin",
     };
 
-    renderWithTheme(
-      <AdminSpaShell breadcrumbs={breadcrumbs}>
-        <Text testID="admin-spa-shell-child">Child</Text>
-      </AdminSpaShell>
-    );
+    renderShell();
+    await waitForProfile();
 
     assert.equal(capturedShellProps.current?.apiBase, "/console/admin");
   });
 
-  it("marks organization operators when profile roles include operator", () => {
-    profileState.data = {roles: ["operator"]};
+  it("marks organization operators when profile roles include operator", async () => {
+    server = createFakeProfileServer({roles: ["operator"]});
 
-    renderWithTheme(
-      <AdminSpaShell breadcrumbs={breadcrumbs}>
-        <Text testID="admin-spa-shell-child">Child</Text>
-      </AdminSpaShell>
-    );
+    renderShell();
+    await waitForProfile();
 
     assert.isTrue(capturedShellProps.current?.isOrganizationOperator);
   });
 
-  it("marks organization operators when profile roles include superadmin", () => {
-    profileState.data = {roles: ["superadmin"]};
+  it("marks organization operators when profile roles include superadmin", async () => {
+    server = createFakeProfileServer({roles: ["superadmin"]});
 
-    renderWithTheme(
-      <AdminSpaShell breadcrumbs={breadcrumbs}>
-        <Text testID="admin-spa-shell-child">Child</Text>
-      </AdminSpaShell>
-    );
+    renderShell();
+    await waitForProfile();
 
     assert.isTrue(capturedShellProps.current?.isOrganizationOperator);
   });
 
-  it("does not mark organization operators for non-operator roles", () => {
-    profileState.data = {roles: ["org-admin", "member"]};
+  it("does not mark organization operators for non-operator roles", async () => {
+    server = createFakeProfileServer({roles: ["org-admin", "member"]});
 
-    renderWithTheme(
-      <AdminSpaShell breadcrumbs={breadcrumbs}>
-        <Text testID="admin-spa-shell-child">Child</Text>
-      </AdminSpaShell>
-    );
+    renderShell();
+    await waitForProfile();
 
     assert.isFalse(capturedShellProps.current?.isOrganizationOperator);
   });
 
-  it("does not mark organization operators when profile roles are missing", () => {
-    profileState.data = undefined;
+  it("does not mark organization operators when profile roles are missing", async () => {
+    server = createFakeProfileServer(undefined);
 
-    renderWithTheme(
-      <AdminSpaShell breadcrumbs={breadcrumbs}>
-        <Text testID="admin-spa-shell-child">Child</Text>
-      </AdminSpaShell>
-    );
+    renderShell();
+    await waitForProfile();
 
     assert.isFalse(capturedShellProps.current?.isOrganizationOperator);
   });
 
-  it("wires AdminShellLayout, OrgSwitcher, breadcrumbs, and children", () => {
-    const {getByTestId} = renderWithTheme(
-      <AdminSpaShell breadcrumbs={breadcrumbs}>
-        <Text testID="admin-spa-shell-child">Child</Text>
-      </AdminSpaShell>
-    );
+  it("loads the profile from /auth/me with the same-origin session cookie", async () => {
+    renderShell();
+    await waitForProfile();
+
+    assert.deepEqual(server.requests, [{credentials: "same-origin", url: "/auth/me"}]);
+  });
+
+  it("wires AdminShellLayout, OrgSwitcher, breadcrumbs, and children", async () => {
+    const {getByTestId} = renderShell();
+    await waitForProfile();
 
     assert.deepEqual(capturedShellProps.current?.breadcrumbs, breadcrumbs);
-    assert.equal(capturedShellProps.current?.api, mockTerrenoApi);
+    assert.isUndefined(capturedShellProps.current?.api);
     assert.equal(capturedShellProps.current?.configurationPath, "/configuration");
     assert.equal(capturedShellProps.current?.organizationDirectoryPath, "/orgs");
     assert.equal(capturedShellProps.current?.rolesPath, "/roles");
     assert.equal(capturedShellProps.current?.routeBase, "");
     assert.isNotNull(getByTestId("admin-shell-layout-mock"));
     assert.isNotNull(getByTestId("admin-spa-shell-child"));
-    assert.equal(capturedOrgSwitcherProps.current?.api, mockTerrenoApi);
+    assert.isUndefined(capturedOrgSwitcherProps.current?.api);
     assert.equal(capturedOrgSwitcherProps.current?.routeBase, "");
   });
 });
@@ -238,14 +256,12 @@ describe("OrgMembersRoute", () => {
   const capturedRouteShellProps: {
     current?: {breadcrumbs?: {href?: string; label: string}[]; children?: React.ReactNode};
   } = {};
-  const mockTerrenoApi = {reducerPath: "terreno-admin-spa-members-test-api"};
   let OrgMembersRoute: React.FC;
 
   beforeAll(async () => {
     const membersModuleUrl = new URL("../app/orgs/[orgId]/members.tsx", import.meta.url);
     const adminSpaShellPath = new URL("../../../components/AdminSpaShell.tsx", membersModuleUrl)
       .pathname;
-    const membersSdkPath = new URL("../../../store/sdk.ts", membersModuleUrl).pathname;
 
     mock.module(adminSpaShellPath, () => ({
       AdminSpaShell: (props: {
@@ -255,9 +271,6 @@ describe("OrgMembersRoute", () => {
         capturedRouteShellProps.current = props;
         return <Text testID="admin-spa-shell-stub">{props.children}</Text>;
       },
-    }));
-    mock.module(membersSdkPath, () => ({
-      terrenoApi: mockTerrenoApi,
     }));
     ({default: OrgMembersRoute} = await import("../app/orgs/[orgId]/members"));
   });
@@ -290,10 +303,10 @@ describe("OrgMembersRoute", () => {
     ]);
   });
 
-  it("wires OrgMembersScreen with the SDK api and route base", () => {
+  it("wires OrgMembersScreen with the route base and no api prop", () => {
     renderWithTheme(<OrgMembersRoute />);
 
-    assert.equal(capturedMembersProps.current?.api, mockTerrenoApi);
+    assert.isUndefined(capturedMembersProps.current?.api);
     assert.equal(capturedMembersProps.current?.organizationId, "org-42");
     assert.equal(capturedMembersProps.current?.routeBase, "");
     assert.isNotNull(capturedRouteShellProps.current?.children);

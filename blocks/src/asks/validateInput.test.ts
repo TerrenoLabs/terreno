@@ -35,11 +35,9 @@ const COMPACT_ERRORS_BY_FIXTURE: Record<string, {code: string; path: string}[]> 
     {code: "UNKNOWN_KEY", path: "minSelected"},
     {code: "INVALID_ENUM", path: "select"},
   ],
-  "choice-many-options-default-label-collides": [
-    {code: "TOO_MANY", path: "options"},
-    {code: "TOO_LONG", path: "options[0].label"},
-    {code: "TOO_LONG", path: "options[1].label"},
-  ],
+  // Zod 4.6.7+ rejects an oversized options array before parsing its items, so label
+  // errors surface only once the list fits.
+  "choice-many-options-default-label-collides": [{code: "TOO_MANY", path: "options"}],
   "choice-many-options-no-buttons": [{code: "TOO_MANY", path: "options"}],
   "choice-many-options-no-default": [{code: "TOO_MANY", path: "options"}],
   "choice-many-options-with-default": [{code: "TOO_MANY", path: "options"}],
@@ -59,10 +57,7 @@ const COMPACT_ERRORS_BY_FIXTURE: Record<string, {code: string; path: string}[]> 
     {code: "UNKNOWN_KEY", path: "otherLabel"},
     {code: "INVALID_ENUM", path: "select"},
   ],
-  "choice-max-limits": [
-    {code: "TOO_MANY", path: "options"},
-    {code: "TOO_LONG", path: "options[0].label"},
-  ],
+  "choice-max-limits": [{code: "TOO_MANY", path: "options"}],
   "choice-plan-with-default": [],
   "choice-two-options": [],
   "choice-two-options-no-decline": [],

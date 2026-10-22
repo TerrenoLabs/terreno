@@ -12,7 +12,7 @@
  * compile each package's @terreno/* deps in one process so a shared `compiled`
  * set skips duplicate `tsc` work. Packages with `tsconfig.server.json`
  * (admin-spa) compile that config so the published `src/dist` entry exists:
- *   node compile-workspace-deps.js /path/to/api /path/to/rtk
+ *   node compile-workspace-deps.js /path/to/api /path/to/syncdb
  */
 const fs = require("fs");
 const path = require("path");

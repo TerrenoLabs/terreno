@@ -18,9 +18,6 @@ parameters:
   run-blocks:
     type: boolean
     default: false
-  run-rtk:
-    type: boolean
-    default: false
   run-ui:
     type: boolean
     default: false
@@ -210,9 +207,12 @@ commands:
             sudo install /tmp/terraform/terraform /usr/local/bin/terraform
 
   install_bun_and_deps:
-    description: Install Bun (latest) and workspace deps with frozen lockfile (no package cache)
+    description: Install pinned Bun and workspace deps with frozen lockfile (no package cache)
     steps:
-      - node/install-bun
+      # Pinned: Bun 1.4.4 reports lower line coverage than 1.4.2 for the same
+      # tests, which fails the 95% package gates. Bump with the local toolchain.
+      - node/install-bun:
+          version: "1.4.2"
       - node/install-packages:
           pkg-manager: bun
           with-cache: false
@@ -454,7 +454,7 @@ commands:
             shard="<< parameters.spec >>"
             case "$shard" in
               auth) specs="login signup consents forgot-password reset-password verify-email" ;;
-              app) specs="todos todo-windows profile realtime ai-chat pdf notifications" ;;
+              app) specs="todos todo-windows profile realtime ai-chat pdf notifications socket-flags mcp-tokens" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
@@ -724,27 +724,6 @@ jobs:
       - check_new_file_lcov:
           package: blocks
 
-  rtk-ci:
-    executor: node22
-    steps:
-      - checkout
-      - install_bun_and_deps
-      - compile_packages:
-          packages: blocks ui
-      - run:
-          name: Lint / compile / test rtk
-          working_directory: ~/project/rtk
-          environment:
-            CI: "true"
-          command: |
-            set -euo pipefail
-            bun run lint
-            bun run compile
-            bun run test:coverage
-            bash ../scripts/upload-codecov.sh rtk
-      - check_new_file_lcov:
-          package: rtk
-
   ui-ci:
     executor: node22
     steps:
@@ -796,7 +775,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui
+          packages: blocks ui syncdb
       - run:
           name: Lint / compile / test admin-frontend
           working_directory: ~/project/admin-frontend
@@ -850,7 +829,7 @@ jobs:
           name: Fetch coverage base
           command: git fetch origin master
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb admin-frontend admin-spa announcements create-terreno-app mcp-server
       - run:
           name: Check new source file coverage
           command: |
@@ -873,7 +852,6 @@ jobs:
             add_skip "<< pipeline.parameters.run-feature-flags >>" feature-flags
             add_skip "<< pipeline.parameters.run-jobs >>" jobs
             add_skip "<< pipeline.parameters.run-mcp-server >>" mcp-server
-            add_skip "<< pipeline.parameters.run-rtk >>" rtk
             add_skip "<< pipeline.parameters.run-syncdb >>" syncdb
             add_skip "<< pipeline.parameters.run-test-package >>" test
             add_skip "<< pipeline.parameters.run-ui >>" ui
@@ -974,6 +952,9 @@ jobs:
     steps:
       - checkout
       - install_bun_and_deps
+      # generatedApp.compile.test.ts type-checks a scaffolded app against these packages' dist.
+      - compile_packages:
+          packages: api blocks jobs api-health admin-backend ui syncdb admin-frontend
       - run:
           name: Lint / compile / test create-terreno-app
           working_directory: ~/project/create-terreno-app
@@ -1028,7 +1009,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui rtk admin-frontend syncdb
+          packages: blocks ui syncdb admin-frontend
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1113,7 +1094,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb admin-frontend admin-spa announcements example-backend
       - run:
           name: List admin scripts
           working_directory: ~/project/example-backend
@@ -1183,7 +1164,7 @@ jobs:
       - run:
           name: Compile admin-spa dependencies
           command: |
-            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
+            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
       - run:
           name: Lint / compile / types / unit / build / smoke
           working_directory: ~/project/admin-spa
@@ -2145,7 +2126,7 @@ jobs:
           command: |
             set -euo pipefail
             packages=(
-              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
+              api test blocks ui admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             filters=()
@@ -2167,7 +2148,7 @@ jobs:
               npm_tag=latest
             fi
             packages=(
-              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
+              api test blocks ui admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             export TERRENO_PUBLISH_PREBUILT=1
@@ -2190,7 +2171,7 @@ jobs:
             # Publish rewrites catalog:/workspace:* specifiers in the working tree;
             # --force drops those edits so only the version bump is committed.
             git checkout --force -B release-master origin/master
-            for package in api test blocks ui rtk admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
+            for package in api test blocks ui admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
               [ -d "$package" ] || continue
               node -e "
                 const fs=require('fs');
@@ -2365,11 +2346,6 @@ workflows:
     jobs:
       - blocks-ci
 
-  rtk:
-    when: << pipeline.parameters.run-rtk >>
-    jobs:
-      - rtk-ci
-
   ui:
     when: << pipeline.parameters.run-ui >>
     jobs:
@@ -2447,7 +2423,7 @@ workflows:
     jobs:
       - packages-ci:
           package: admin-frontend
-          compile-deps: blocks ui
+          compile-deps: blocks ui syncdb
 
   api-health:
     when: << pipeline.parameters.run-api-health >>

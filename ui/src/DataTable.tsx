@@ -18,6 +18,7 @@ import {
   Pressable,
   type FlatList as RNFlatList,
   ScrollView,
+  type ScrollViewInstance,
   View,
 } from "react-native";
 import {Box} from "./Box";
@@ -460,7 +461,7 @@ interface DataTableHeaderProps {
   pinnedColumns: number;
   pinnedLeftOffsets: number[];
   pinnedWidth: number;
-  headerScrollRef: React.RefObject<ScrollView | null>;
+  headerScrollRef: React.RefObject<ScrollViewInstance | null>;
   sortColumn?: ColumnSortInterface;
   onSort: (index: number) => void;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>, isHeader: boolean) => void;
@@ -573,7 +574,7 @@ interface DataTableContentProps {
   alternateRowBackground: boolean;
   pinnedLeftOffsets: number[];
   pinnedWidth: number;
-  bodyScrollRef: React.RefObject<ScrollView | null>;
+  bodyScrollRef: React.RefObject<ScrollViewInstance | null>;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>, isHeader: boolean) => void;
   moreContentComponent?: React.ComponentType<
     {
@@ -982,8 +983,8 @@ const DataTableComponent: FC<DataTableProps> = ({
 }) => {
   const {theme} = useTheme();
   const tableTestIDs = resolveDataTableTestIDsFromProps({testID, testIDs});
-  const headerScrollRef = useRef<ScrollView>(null);
-  const bodyScrollRef = useRef<ScrollView>(null);
+  const headerScrollRef = useRef<ScrollViewInstance>(null);
+  const bodyScrollRef = useRef<ScrollViewInstance>(null);
   const lastEmittedQueryRef = useRef<string | undefined>(undefined);
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [isNativeFiltersOpen, setIsNativeFiltersOpen] = useState(false);

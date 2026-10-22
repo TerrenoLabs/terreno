@@ -3,13 +3,12 @@ import {useLocalSearchParams} from "expo-router";
 import React, {useMemo} from "react";
 import {AdminSpaShell} from "../../components/AdminSpaShell";
 import {useAppConfig} from "../../components/AppConfigGate";
-import {terrenoApi} from "../../store/sdk";
 
 const ModelTableScreen: React.FC = () => {
   const {model} = useLocalSearchParams<{model: string}>();
   const {appConfig} = useAppConfig();
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
-  const {config} = useAdminConfig(terrenoApi, apiBase);
+  const {config} = useAdminConfig(apiBase);
 
   const breadcrumbs = useMemo(() => {
     const trail: {href?: string; label: string}[] = [{href: "/", label: "Admin"}];
@@ -32,7 +31,7 @@ const ModelTableScreen: React.FC = () => {
 
   return (
     <AdminSpaShell breadcrumbs={breadcrumbs}>
-      <AdminScreenRouter api={terrenoApi} apiBase={apiBase} name={model} routeBase="" />
+      <AdminScreenRouter apiBase={apiBase} name={model} routeBase="" />
     </AdminSpaShell>
   );
 };

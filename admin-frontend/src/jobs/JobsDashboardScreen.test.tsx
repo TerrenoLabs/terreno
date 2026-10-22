@@ -1,9 +1,8 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi} from "../types";
 
 const pushMock = mock(() => {});
 mock.module("expo-router", () => ({
@@ -11,60 +10,115 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-interface ListState {
+interface FakeResponse {
+  body?: unknown;
+  pending?: boolean;
+  status?: number;
+}
+
+interface FakeRequest {
+  method: string;
+  path: string;
+  url: string;
+}
+
+interface QueryState {
+  data?: unknown;
+  error?: unknown;
+  isLoading: boolean;
+}
+
+interface ListState extends QueryState {
   data?: {
     data: unknown[];
     more: boolean;
     page: number;
     total: number;
   };
-  error?: unknown;
-  isLoading: boolean;
 }
 
 const listState: ListState = {isLoading: false};
-const statsState: {
-  data?: {byStatus: Record<string, number>; total: number};
-  error?: unknown;
-  isLoading: boolean;
-} = {isLoading: false};
-const schedulesState: {data?: unknown[]; error?: unknown; isLoading: boolean} = {
+const statsState: QueryState & {data?: {byStatus: Record<string, number>; total: number}} = {
   isLoading: false,
 };
-let pauseImpl = mock(async () => ({data: {enabled: false, name: "nightly"}}) as unknown);
-let resumeImpl = mock(async () => ({data: {enabled: true, name: "nightly"}}) as unknown);
+const schedulesState: QueryState & {data?: unknown[]} = {isLoading: false};
+let pauseImpl = mock((): FakeResponse => ({body: {data: {enabled: false, name: "nightly"}}}));
+let resumeImpl = mock((): FakeResponse => ({body: {data: {enabled: true, name: "nightly"}}}));
+const requests: FakeRequest[] = [];
+const originalFetch = globalThis.fetch;
 
-const createJobsApi = (): AdminApi => {
-  const api = {
-    enhanceEndpoints: () => api,
-    injectEndpoints: () => ({
-      useJobsDashboardCancelMutation: () => [
-        () => ({unwrap: async () => ({})}),
-        {isLoading: false},
-      ],
-      useJobsDashboardDetailQuery: () => ({isLoading: false}),
-      useJobsDashboardListQuery: () => listState,
-      useJobsDashboardPauseScheduleMutation: () => [
-        () => ({unwrap: pauseImpl}),
-        {isLoading: false},
-      ],
-      useJobsDashboardRequeueMutation: () => [
-        () => ({unwrap: async () => ({})}),
-        {isLoading: false},
-      ],
-      useJobsDashboardResumeScheduleMutation: () => [
-        () => ({unwrap: resumeImpl}),
-        {isLoading: false},
-      ],
-      useJobsDashboardRetryMutation: () => [() => ({unwrap: async () => ({})}), {isLoading: false}],
-      useJobsDashboardSchedulesQuery: () => schedulesState,
-      useJobsDashboardStatsQuery: () => statsState,
-    }),
-  };
-  return api as unknown as AdminApi;
+const serveQuery = (state: QueryState, fallback: unknown): FakeResponse => {
+  if (state.isLoading) {
+    return {pending: true};
+  }
+  if (state.error) {
+    return {body: {title: "Server error"}, status: 500};
+  }
+  return {body: state.data ?? fallback};
 };
 
-import {JobsDashboardScreen} from "./JobsDashboardScreen";
+/** Serves the `/jobs` admin routes from the mutable test state above. */
+const route = (request: FakeRequest): FakeResponse => {
+  if (request.method === "GET" && request.path === "/jobs") {
+    return serveQuery(listState, {data: [], more: false, page: 1, total: 0});
+  }
+  if (request.method === "GET" && request.path === "/jobs/stats") {
+    return serveQuery(statsState, {});
+  }
+  if (request.method === "GET" && request.path === "/jobs/schedules") {
+    return serveQuery(schedulesState, []);
+  }
+  if (request.method === "POST" && request.path.endsWith("/pause")) {
+    return pauseImpl();
+  }
+  if (request.method === "POST" && request.path.endsWith("/resume")) {
+    return resumeImpl();
+  }
+  return {body: {title: "Not found"}, status: 404};
+};
+
+const installFetch = (): void => {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const request: FakeRequest = {
+      method: init?.method ?? "GET",
+      path: url.split("?")[0] ?? url,
+      url,
+    };
+    requests.push(request);
+    const response = route(request);
+    if (response.pending) {
+      return new Promise<Response>(() => undefined);
+    }
+    return new Response(JSON.stringify(response.body ?? {}), {
+      headers: {"Content-Type": "application/json"},
+      status: response.status ?? 200,
+    });
+  }) as typeof fetch;
+};
+
+const flush = async (): Promise<void> => {
+  await act(async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  });
+};
+
+import {AdminProvider} from "../AdminProvider";
+import {JobsDashboardScreen, type JobsDashboardScreenProps} from "./JobsDashboardScreen";
+
+const renderScreen = async (
+  props: Partial<JobsDashboardScreenProps> = {}
+): Promise<ReturnType<typeof renderWithTheme>> => {
+  const utils = renderWithTheme(
+    <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+      <JobsDashboardScreen filters={{}} onFiltersChange={() => undefined} {...props} />
+    </AdminProvider>
+  );
+  await flush();
+  return utils;
+};
 
 const deadRow = {
   _id: "j1",
@@ -78,6 +132,8 @@ const deadRow = {
 
 describe("JobsDashboardScreen", () => {
   beforeEach(() => {
+    installFetch();
+    requests.length = 0;
     listState.data = undefined;
     listState.error = undefined;
     listState.isLoading = false;
@@ -90,65 +146,70 @@ describe("JobsDashboardScreen", () => {
     schedulesState.data = undefined;
     schedulesState.error = undefined;
     schedulesState.isLoading = false;
-    pauseImpl = mock(async () => ({data: {enabled: false, name: "nightly"}}) as unknown);
-    resumeImpl = mock(async () => ({data: {enabled: true, name: "nightly"}}) as unknown);
+    pauseImpl = mock((): FakeResponse => ({body: {data: {enabled: false, name: "nightly"}}}));
+    resumeImpl = mock((): FakeResponse => ({body: {data: {enabled: true, name: "nightly"}}}));
     pushMock.mockClear();
   });
 
-  it("renders stats loading and error states", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("renders stats loading and error states", async () => {
     listState.data = {data: [], more: false, page: 1, total: 0};
     statsState.isLoading = true;
-    const loading = renderWithTheme(
-      <JobsDashboardScreen api={createJobsApi()} filters={{}} onFiltersChange={() => undefined} />
-    );
+    const loading = await renderScreen();
     expect(loading.getByTestId("jobs-stats-loading")).toBeTruthy();
     expect(loading.queryByTestId("jobs-stat-dead")).toBeNull();
+    loading.unmount();
 
     statsState.isLoading = false;
     statsState.error = {status: 500};
-    const errored = renderWithTheme(
-      <JobsDashboardScreen api={createJobsApi()} filters={{}} onFiltersChange={() => undefined} />
-    );
+    const errored = await renderScreen();
     expect(errored.getByTestId("jobs-stats-error")).toBeTruthy();
     expect(errored.queryByTestId("jobs-stat-dead")).toBeNull();
   });
 
-  it("renders loading, error, and empty states", () => {
+  it("renders loading, error, and empty states", async () => {
     listState.isLoading = true;
-    const loading = renderWithTheme(
-      <JobsDashboardScreen api={createJobsApi()} filters={{}} onFiltersChange={() => undefined} />
-    );
+    const loading = await renderScreen();
     expect(loading.getByTestId("jobs-dashboard-loading")).toBeTruthy();
+    loading.unmount();
 
     listState.isLoading = false;
     listState.error = {status: 500};
-    const errored = renderWithTheme(
-      <JobsDashboardScreen api={createJobsApi()} filters={{}} onFiltersChange={() => undefined} />
-    );
+    const errored = await renderScreen();
     expect(errored.getByTestId("jobs-dashboard-error")).toBeTruthy();
+    errored.unmount();
 
     listState.error = undefined;
     listState.data = {data: [], more: false, page: 1, total: 0};
-    const empty = renderWithTheme(
-      <JobsDashboardScreen api={createJobsApi()} filters={{}} onFiltersChange={() => undefined} />
-    );
+    const empty = await renderScreen();
     expect(empty.getByTestId("jobs-dashboard-empty")).toBeTruthy();
   });
 
-  it("writes filter changes through onFiltersChange", () => {
+  it("requests the list with the active filters", async () => {
+    listState.data = {data: [], more: false, page: 1, total: 0};
+    await renderScreen({filters: {q: "boom", status: "dead"}});
+    const list = requests.find((request) => request.path === "/jobs");
+    expect(list?.method).toBe("GET");
+    expect(list?.url).toContain("status=dead");
+    expect(list?.url).toContain("q=boom");
+    expect(requests.some((request) => request.path === "/jobs/stats")).toBe(true);
+    expect(requests.some((request) => request.path === "/jobs/schedules")).toBe(true);
+  });
+
+  it("writes filter changes through onFiltersChange", async () => {
     const onFiltersChange = mock((_next: unknown) => {});
     listState.data = {data: [deadRow], more: false, page: 1, total: 1};
     schedulesState.data = [
       {_id: "sched-1", cron: "0 0 * * *", enabled: true, name: "nightly", timezone: "UTC"},
     ];
-    const {getByTestId} = renderWithTheme(
-      <JobsDashboardScreen
-        api={createJobsApi()}
-        filters={{status: "dead"}}
-        onFiltersChange={onFiltersChange}
-        routeBase="/admin"
-      />
-    );
+    const {getByTestId} = await renderScreen({
+      filters: {status: "dead"},
+      onFiltersChange,
+      routeBase: "/admin",
+    });
     fireEvent.changeText(getByTestId("jobs-filter-q"), "timeout");
     assert.equal(onFiltersChange.mock.calls.length, 1);
     const next = (onFiltersChange.mock.calls[0] as unknown as [Record<string, unknown>])[0];
@@ -163,20 +224,17 @@ describe("JobsDashboardScreen", () => {
       {cron: "0 0 * * *", enabled: true, id: "sched-1", name: "nightly", timezone: "UTC"},
     ];
     const onFiltersChange = mock(() => {});
-    const {UNSAFE_root, getByTestId} = renderWithTheme(
-      <JobsDashboardScreen
-        api={createJobsApi()}
-        filters={{
-          end: "2026-01-02T00:00:00.000Z",
-          page: 3,
-          q: "boom",
-          scheduleId: "sched-1",
-          start: "2026-01-01T00:00:00.000Z",
-          status: "dead",
-        }}
-        onFiltersChange={onFiltersChange}
-      />
-    );
+    const {UNSAFE_root, getByTestId} = await renderScreen({
+      filters: {
+        end: "2026-01-02T00:00:00.000Z",
+        page: 3,
+        q: "boom",
+        scheduleId: "sched-1",
+        start: "2026-01-01T00:00:00.000Z",
+        status: "dead",
+      },
+      onFiltersChange,
+    });
 
     const schedulePicker = UNSAFE_root.findAll(
       (node) =>
@@ -204,13 +262,10 @@ describe("JobsDashboardScreen", () => {
   it("pages through results without dropping the active filters", async () => {
     listState.data = {data: [deadRow], more: true, page: 1, total: 60};
     const onFiltersChange = mock(() => {});
-    const {getByTestId} = renderWithTheme(
-      <JobsDashboardScreen
-        api={createJobsApi()}
-        filters={{scheduleId: "sched-1", status: "dead"}}
-        onFiltersChange={onFiltersChange}
-      />
-    );
+    const {getByTestId} = await renderScreen({
+      filters: {scheduleId: "sched-1", status: "dead"},
+      onFiltersChange,
+    });
     await act(async () => {
       fireEvent.press(
         within(getByTestId("jobs-dashboard-table.pagination")).getAllByA11yHint(
@@ -227,14 +282,7 @@ describe("JobsDashboardScreen", () => {
 
   it("navigates to job detail from the row action", async () => {
     listState.data = {data: [deadRow], more: false, page: 1, total: 1};
-    const {getByTestId} = renderWithTheme(
-      <JobsDashboardScreen
-        api={createJobsApi()}
-        filters={{}}
-        onFiltersChange={() => undefined}
-        routeBase="/admin"
-      />
-    );
+    const {getByTestId} = await renderScreen({routeBase: "/admin"});
     await act(async () => {
       fireEvent.press(getByTestId("jobs-row-open"));
     });
@@ -243,21 +291,14 @@ describe("JobsDashboardScreen", () => {
 
   it("navigates with an un-prefixed routeBase for SPA hosts", async () => {
     listState.data = {data: [deadRow], more: false, page: 1, total: 1};
-    const {getByTestId} = renderWithTheme(
-      <JobsDashboardScreen
-        api={createJobsApi()}
-        filters={{}}
-        onFiltersChange={() => undefined}
-        routeBase=""
-      />
-    );
+    const {getByTestId} = await renderScreen({routeBase: ""});
     await act(async () => {
       fireEvent.press(getByTestId("jobs-row-open"));
     });
     expect(String(pushMock.mock.calls[0]?.[0])).toBe("/jobs/j1");
   });
 
-  it("shows summary counts from stats and schedules", () => {
+  it("shows summary counts from stats and schedules", async () => {
     listState.data = {data: [deadRow], more: false, page: 1, total: 1};
     schedulesState.data = [
       {
@@ -268,9 +309,7 @@ describe("JobsDashboardScreen", () => {
         timezone: "UTC",
       },
     ];
-    const {getByTestId, getByText} = renderWithTheme(
-      <JobsDashboardScreen api={createJobsApi()} filters={{}} onFiltersChange={() => undefined} />
-    );
+    const {getByTestId, getByText} = await renderScreen();
     expect(getByTestId("jobs-stat-dead")).toBeTruthy();
     expect(getByText("3")).toBeTruthy();
     expect(getByTestId("jobs-stat-running")).toBeTruthy();
@@ -281,23 +320,24 @@ describe("JobsDashboardScreen", () => {
   it("requires confirmation before pausing or resuming a schedule", async () => {
     listState.data = {data: [], more: false, page: 1, total: 0};
     schedulesState.data = [{cron: "0 0 * * *", enabled: true, name: "nightly", timezone: "UTC"}];
-    const {getAllByText, getByTestId} = renderWithTheme(
-      <JobsDashboardScreen api={createJobsApi()} filters={{}} onFiltersChange={() => undefined} />
-    );
+    const paused = await renderScreen();
 
     await act(async () => {
-      fireEvent.press(getByTestId("jobs-schedule-toggle-nightly"));
+      fireEvent.press(paused.getByTestId("jobs-schedule-toggle-nightly"));
     });
     await act(async () => {
-      const confirms = getAllByText("Confirm");
+      const confirms = paused.getAllByText("Confirm");
       fireEvent.press(confirms[confirms.length - 1]);
     });
+    await flush();
     expect(pauseImpl.mock.calls.length).toBe(1);
+    expect(
+      requests.some((r) => r.method === "POST" && r.path === "/jobs/schedules/nightly/pause")
+    ).toBe(true);
+    paused.unmount();
 
     schedulesState.data = [{cron: "0 0 * * *", enabled: false, name: "nightly", timezone: "UTC"}];
-    const resumed = renderWithTheme(
-      <JobsDashboardScreen api={createJobsApi()} filters={{}} onFiltersChange={() => undefined} />
-    );
+    const resumed = await renderScreen();
     await act(async () => {
       fireEvent.press(resumed.getByTestId("jobs-schedule-toggle-nightly"));
     });
@@ -305,6 +345,10 @@ describe("JobsDashboardScreen", () => {
       const confirms = resumed.getAllByText("Confirm");
       fireEvent.press(confirms[confirms.length - 1]);
     });
+    await flush();
     expect(resumeImpl.mock.calls.length).toBe(1);
+    expect(
+      requests.some((r) => r.method === "POST" && r.path === "/jobs/schedules/nightly/resume")
+    ).toBe(true);
   });
 });

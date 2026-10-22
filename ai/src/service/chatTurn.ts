@@ -414,6 +414,10 @@ const loadHistory = async ({
   if (!historyId) {
     return new GptHistory({prompts: [], userId, ...(projectId ? {projectId} : {})});
   }
+  // History ids are Strings (synced collection); an object here would be read as a query operator.
+  if (typeof historyId !== "string") {
+    throw new APIError({status: 400, title: "historyId must be a string"});
+  }
   const history = await GptHistory.findById(historyId);
   if (!history) {
     throw new APIError({status: 404, title: "History not found"});

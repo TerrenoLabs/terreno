@@ -1,4 +1,4 @@
-import {type FC, useState} from "react";
+import {type ComponentProps, type FC, useState} from "react";
 import {Pressable, View} from "react-native";
 
 import type {FilterAccordionProps} from "./Common";
@@ -12,7 +12,7 @@ import {resolveTestID} from "./testing/resolveTestId";
 // Native Web forwards it. A disclosure button needs its own spacebar handler
 // (per ARIA, Space activates it) since role="button" only activates on Enter.
 interface WebKeyDownEvent {
-  key: string;
+  key?: string;
   preventDefault: () => void;
   repeat?: boolean;
 }
@@ -83,7 +83,7 @@ export const FilterAccordion: FC<FilterAccordionProps> = ({
       testID={testID}
     >
       <Pressable
-        {...webKeyDownProps}
+        {...(webKeyDownProps as Pick<ComponentProps<typeof Pressable>, "onKeyDown">)}
         accessibilityRole="button"
         accessibilityState={{expanded: isExpanded}}
         aria-expanded={isExpanded}

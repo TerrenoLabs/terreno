@@ -17,7 +17,7 @@ RUN bun run --filter "@terreno/announcements" compile
 RUN bun run --filter "@terreno/comms" compile
 RUN bun run --filter "@terreno/feature-flags" compile
 RUN bun run --filter "@terreno/ui" compile
-RUN bun run --filter "@terreno/rtk" compile
+RUN bun run --filter "@terreno/syncdb" compile
 RUN bun run --filter "@terreno/admin-frontend" compile
 RUN bun run --filter "@terreno/admin-spa" compile
 

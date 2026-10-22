@@ -1,27 +1,25 @@
+import {useSession} from "@terreno/syncdb/auth";
 import {Box, Button, Heading, Text} from "@terreno/ui";
 import {useRouter} from "expo-router";
 import React, {useCallback, useState} from "react";
-import {useDispatch} from "react-redux";
-import {useAuth} from "../components/StoreProvider";
 
 const ForbiddenScreen: React.FC = () => {
   const router = useRouter();
-  const dispatch = useDispatch();
-  const {authClient, syncSession} = useAuth();
+  const {logout} = useSession();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleSignOut = useCallback(async (): Promise<void> => {
     setIsSigningOut(true);
     try {
-      await authClient.signOut();
-      await syncSession(dispatch);
+      // logout() signs out of Better Auth, drops cached requests, and clears the session.
+      await logout();
       router.replace("/login");
-    } catch (err) {
-      console.error("Forbidden: sign-out failed", err);
+    } catch (error) {
+      console.error("Forbidden: sign-out failed", error);
     } finally {
       setIsSigningOut(false);
     }
-  }, [authClient, dispatch, router, syncSession]);
+  }, [logout, router]);
 
   return (
     <Box

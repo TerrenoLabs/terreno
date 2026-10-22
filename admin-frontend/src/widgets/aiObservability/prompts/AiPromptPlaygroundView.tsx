@@ -44,7 +44,11 @@ export const AiPromptPlaygroundView: React.FC<AiPromptPlaygroundViewProps> = ({
     for (const name of names) {
       payload[name] = values[name] ?? "";
     }
-    await onRun(payload);
+    try {
+      await onRun(payload);
+    } catch {
+      // The screen renders the failure from the run request state as `runError`.
+    }
   }, [blockedMessage, isApiKeyLoading, names, onRun, values]);
 
   const runDisabled = isRunning || isApiKeyLoading || Boolean(blockedMessage);

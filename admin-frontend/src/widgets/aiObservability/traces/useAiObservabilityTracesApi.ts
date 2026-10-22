@@ -1,15 +1,18 @@
-import {useMemo} from "react";
-import {asDynamicHookApi} from "../../../dynamicHookApi";
-import type {AdminApi, EndpointBuilder} from "../../../types";
+import {asJsonBody, withQueryString} from "../../../adminRpc";
+import type {AdminRpcQueryState} from "../../../useAdminRpc";
+import {
+  OBSERVABILITY_STATUS_URL,
+  type ObservabilityMutation,
+  type ObservabilityQueryOptions,
+  useObservabilityMutation,
+  useObservabilityQuery,
+} from "../shell/observabilityRequest";
 import type {TraceDetail, TraceListFilters, TraceListResponse} from "./traceTypes";
 import {TRACE_PAGE_SIZE} from "./traceTypes";
 
-const LIST_KEY = "aiObservabilityTraces";
-const DETAIL_KEY = "aiObservabilityTrace";
-const EVALUATORS_KEY = "aiObservabilityEvaluators";
-const REVIEW_KEY = "enqueueAiObservabilityReview";
-const TEST_MULTI_STAGE_KEY = "runAiObservabilityTestMultiStage";
-const STATUS_KEY = "aiObservabilityStatus";
+const TRACES_TAGS = ["aiObservabilityTraces"] as const;
+const REVIEW_AND_TRACES_TAGS = ["aiObservabilityReview", "aiObservabilityTraces"] as const;
+const TRACES_URL = "/ai/observability/traces";
 
 export interface TraceListQueryArgs extends TraceListFilters {
   limit?: number;
@@ -67,106 +70,62 @@ const listParams = (args: TraceListQueryArgs): Record<string, unknown> => {
   return params;
 };
 
-const createTracesApi = (api: AdminApi) => {
-  const tagged =
-    typeof api.enhanceEndpoints === "function"
-      ? api.enhanceEndpoints({
-          addTagTypes: ["aiObservabilityReview", "aiObservabilityTraces"],
-        })
-      : api;
-  return tagged.injectEndpoints({
-    endpoints: (build: EndpointBuilder) => ({
-      [LIST_KEY]: build.query({
-        providesTags: ["aiObservabilityTraces"],
-        query: (args: TraceListQueryArgs) => ({
-          method: "GET",
-          params: listParams(args),
-          url: "/ai/observability/traces",
-        }),
-      }),
-      [DETAIL_KEY]: build.query({
-        query: (id: string) => ({
-          method: "GET",
-          url: `/ai/observability/traces/${encodeURIComponent(id)}`,
-        }),
-      }),
-      [EVALUATORS_KEY]: build.query({
-        query: () => ({
-          method: "GET",
-          url: "/ai/observability/evaluators",
-        }),
-      }),
-      [REVIEW_KEY]: build.mutation({
-        invalidatesTags: ["aiObservabilityReview", "aiObservabilityTraces"],
-        query: (body: {evaluatorId: string; reason: "manual"; traceIds: string[]}) => ({
-          body,
-          method: "POST",
-          url: "/ai/observability/traces/review",
-        }),
-      }),
-      [TEST_MULTI_STAGE_KEY]: build.mutation({
-        invalidatesTags: ["aiObservabilityTraces"],
-        query: ({apiKey}: TestMultiStageArgs = {}) => ({
-          body: {input: "Compare two perspectives on local-first AI observability."},
-          headers: apiKey ? {"x-ai-api-key": apiKey} : undefined,
-          method: "POST",
-          url: "/ai/observability/traces/test-multi-stage",
-        }),
-      }),
-      [STATUS_KEY]: build.query({
-        query: () => ({
-          method: "GET",
-          url: "/ai/observability/status",
-        }),
-      }),
-    }),
-    overrideExisting: true,
-  });
-};
-
-interface QueryOptions {
-  skip?: boolean;
+export interface EnqueueReviewBody {
+  evaluatorId: string;
+  reason: "manual";
+  traceIds: string[];
 }
 
-export const useAiObservabilityTracesApi = (api: AdminApi) => {
-  const enhancedApi = useMemo(() => {
-    return createTracesApi(api);
-  }, [api]);
-  const hooks = asDynamicHookApi(enhancedApi);
+export interface AiObservabilityTracesApi {
+  useDetailQuery: (
+    id: string,
+    options?: ObservabilityQueryOptions
+  ) => AdminRpcQueryState<TraceDetail | {data: TraceDetail}>;
+  useEnqueueReviewMutation: () => ObservabilityMutation<EnqueueReviewBody, unknown>;
+  useEvaluatorsQuery: () => AdminRpcQueryState<unknown>;
+  useListQuery: (
+    args: TraceListQueryArgs
+  ) => AdminRpcQueryState<TraceListResponse | TraceListResponse["data"]>;
+  useStatusQuery: () => AdminRpcQueryState<unknown>;
+  useTestMultiStageMutation: () => ObservabilityMutation<
+    TestMultiStageArgs | undefined,
+    TestMultiStageTraceResult
+  >;
+}
+
+/** Trace explorer hooks for `/ai/observability/traces` over the host-bound admin client. */
+export const useAiObservabilityTracesApi = (): AiObservabilityTracesApi => {
   return {
-    useDetailQuery: hooks.useAiObservabilityTraceQuery as (
-      id: string,
-      options?: QueryOptions
-    ) => {
-      data?: TraceDetail | {data: TraceDetail};
-      isError: boolean;
-      isLoading: boolean;
-      refetch: () => void;
-    },
-    useEnqueueReviewMutation: hooks.useEnqueueAiObservabilityReviewMutation as () => [
-      (body: {evaluatorId: string; reason: "manual"; traceIds: string[]}) => {
-        unwrap: () => Promise<unknown>;
-      },
-      {isError: boolean; isLoading: boolean},
-    ],
-    useEvaluatorsQuery: hooks.useAiObservabilityEvaluatorsQuery as () => {
-      data?: unknown;
-      isLoading: boolean;
-    },
-    useListQuery: hooks.useAiObservabilityTracesQuery as (args: TraceListQueryArgs) => {
-      data?: TraceListResponse | TraceListResponse["data"];
-      isError: boolean;
-      isLoading: boolean;
-      refetch: () => void;
-    },
-    useStatusQuery: hooks.useAiObservabilityStatusQuery as () => {
-      data?: unknown;
-      isError: boolean;
-      isLoading: boolean;
-    },
-    useTestMultiStageMutation: hooks.useRunAiObservabilityTestMultiStageMutation as () => [
-      (args?: TestMultiStageArgs) => {unwrap: () => Promise<TestMultiStageTraceResult>},
-      {error?: unknown; isError: boolean; isLoading: boolean},
-    ],
+    useDetailQuery: (id, options) =>
+      useObservabilityQuery({
+        skip: options?.skip,
+        url: `${TRACES_URL}/${encodeURIComponent(id)}`,
+      }),
+    useEnqueueReviewMutation: () =>
+      useObservabilityMutation({
+        invalidatesTags: REVIEW_AND_TRACES_TAGS,
+        toRequest: (body: EnqueueReviewBody) => ({
+          body: asJsonBody(body),
+          method: "POST",
+          url: `${TRACES_URL}/review`,
+        }),
+      }),
+    useEvaluatorsQuery: () => useObservabilityQuery({url: "/ai/observability/evaluators"}),
+    useListQuery: (args) =>
+      useObservabilityQuery({
+        providesTags: TRACES_TAGS,
+        url: withQueryString({params: listParams(args), url: TRACES_URL}),
+      }),
+    useStatusQuery: () => useObservabilityQuery({url: OBSERVABILITY_STATUS_URL}),
+    useTestMultiStageMutation: () =>
+      useObservabilityMutation({
+        invalidatesTags: TRACES_TAGS,
+        toRequest: (args: TestMultiStageArgs | undefined) => ({
+          body: {input: "Compare two perspectives on local-first AI observability."},
+          headers: args?.apiKey ? {"x-ai-api-key": args.apiKey} : undefined,
+          method: "POST",
+          url: `${TRACES_URL}/test-multi-stage`,
+        }),
+      }),
   };
 };

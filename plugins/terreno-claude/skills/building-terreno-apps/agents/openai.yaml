@@ -1,4 +1,4 @@
 interface:
   display_name: "Building Terreno Apps"
-  short_description: "Build Terreno Expo apps with @terreno/ui layout, RTK Query data, Expo Router navigation, and mandatory UI verification"
-  default_prompt: "Use $building-terreno-apps to build or refactor a Terreno screen with @terreno/ui components, generated RTK Query hooks, and Expo Router navigation."
+  short_description: "Build Terreno Expo apps with @terreno/ui layout, @terreno/syncdb data and session, Expo Router navigation, and mandatory UI verification"
+  default_prompt: "Use $building-terreno-apps to build or refactor a Terreno screen with @terreno/ui components, @terreno/syncdb hooks, generated store/apiSdk.ts hooks, and Expo Router navigation."

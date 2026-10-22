@@ -58,7 +58,7 @@ cd .. && bunx create-terreno-app my-app --yes
 | Path | Purpose |
 | --- | --- |
 | `backend/` | Express/Mongoose API (`@terreno/api`, Better Auth, admin, sync) |
-| `frontend/` | Expo universal app (`@terreno/ui`, `@terreno/syncdb`, `@terreno/rtk`) |
+| `frontend/` | Expo universal app (`@terreno/ui`, `@terreno/syncdb`). No Redux: session from `@terreno/syncdb/auth`, requests through `store/apiClient.ts`, generated hooks in `store/apiSdk.ts` |
 | `Dockerfile` | Consumer backend image (`backend/` only — not the Terreno monorepo) |
 | `.dockerignore` | Excludes local env secrets, dependencies, and build output from the image context |
 | `backend/.env`, `frontend/.env` | Gitignored local-dev defaults (written on scaffold) |
@@ -68,6 +68,18 @@ cd .. && bunx create-terreno-app my-app --yes
 | `README.md` | App-specific next steps and deploy links |
 
 Generated `@terreno/*` dependencies pin to `^<create-terreno-app version>` at scaffold time.
+
+### Frontend data and session wiring
+
+| File | What it does |
+| --- | --- |
+| `frontend/lib/betterAuth.ts` | `createBetterAuthClient` from `@terreno/syncdb/auth`, pointed at `baseUrl` from `@terreno/syncdb/config` |
+| `frontend/store/syncdb.ts` | `authProvider` (Better Auth session token) and the `syncDb` client for synced collections |
+| `frontend/store/apiClient.ts` | `createApiClient` from `@terreno/syncdb/api` with the same `authProvider`, `App-Version` / `App-Platform` headers, and `getAdminAuthHeaders` for `AdminProvider` |
+| `frontend/store/apiSdk.ts` | Typed hooks for non-synced routes (`useGetAuthMeQuery`, `usePatchAuthMeMutation`, ...). The scaffold ships the `/auth/me` hooks; `bun run sdk` regenerates the file for every route |
+| `frontend/app/_layout.tsx` | `ApiClientProvider` + `SessionProvider` (`useSession()` gives `userId`, `isLoading`, `refresh`, `logout`) + `SyncDbProvider`; starts `syncDb` after login |
+
+`bun run sdk` runs the `api-sdk` script: `terreno-syncdb-codegen --schema $OPENAPI_URL --api-out ./store/apiSdk.ts` (default schema `http://localhost:4000/openapi.json`). Never edit `apiSdk.ts` by hand.
 
 ## 2. Install dependencies
 
@@ -122,7 +134,7 @@ Health check: `curl http://localhost:4000/health` → `"healthy":true`.
 Terminal 2 — web UI (port `8082`):
 
 ```bash
-(cd frontend && bun run sdk)   # after backend is up; regenerates OpenAPI hooks
+(cd frontend && bun run sdk)   # after backend is up; regenerates store/apiSdk.ts
 (cd frontend && bun run web)
 ```
 

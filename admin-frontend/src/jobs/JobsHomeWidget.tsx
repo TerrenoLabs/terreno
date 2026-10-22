@@ -5,8 +5,8 @@ import React, {useCallback} from "react";
 import type {AdminHomeWidgetProps, HomeWidgetComponent} from "../types";
 import {useJobsDashboardApi} from "./useJobsDashboardApi";
 
-export const JobsHomeWidget: React.FC<AdminHomeWidgetProps> = ({api, routeBase}) => {
-  const {useStatsQuery} = useJobsDashboardApi(api);
+export const JobsHomeWidget: React.FC<AdminHomeWidgetProps> = ({routeBase}) => {
+  const {useStatsQuery} = useJobsDashboardApi();
   const {data, error, isLoading} = useStatsQuery();
   const deadTotal = data?.byStatus?.dead ?? 0;
   const runningTotal = data?.byStatus?.running ?? 0;

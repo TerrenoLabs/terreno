@@ -2,7 +2,8 @@
  * Better Auth client configuration for the example frontend.
  */
 
-import {baseUrl, createBetterAuthClient} from "@terreno/rtk";
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 import Constants from "expo-constants";
 
 const getAppScheme = (): string => {
@@ -10,8 +11,8 @@ const getAppScheme = (): string => {
   return expoExtra?.scheme ?? "frontend";
 };
 
-// `baseUrl` from @terreno/rtk is the single source of truth every other caller
-// (RTK Query, sockets, syncdb) already uses. A separate resolver here previously
+// `baseUrl` from @terreno/syncdb/config is the single source of truth every other caller
+// (the API client, sockets, syncdb) already uses. A separate resolver here previously
 // fell back to `extra.BASE_URL` (localhost:4000) in dev, which points at the
 // device itself on an Android emulator instead of the host machine.
 export const betterAuthClient = createBetterAuthClient({
@@ -72,14 +73,11 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 /**
  * Number of `getSession()` attempts `getSessionToken()` makes before giving up.
- * Callers (e.g. `useSocketConnection`'s `getAuthToken`) only call this once they
- * believe the user is signed in — right after login/session-sync resolved a userId
- * into Redux — so an empty session on the first attempt is more likely a transient
- * race (the freshly-set session cookie not yet consistently queryable) than a real
- * signed-out state. `useSocketConnection` has no retry of its own for this case (its
- * token-refresh-driven reconnect only fires for the JWT auth slice, not Better Auth),
- * so a transient empty result here would otherwise leave the socket connection
- * permanently unattempted until some unrelated effect re-triggers it.
+ * Callers (the AI chat stream, GCS settings, Sync Lab) only call this once the session
+ * reports a signed-in user, so an empty session on the first attempt is more likely a
+ * transient race (the freshly-set session cookie not yet consistently queryable) than a
+ * real signed-out state. Those callers have no retry of their own, so a transient empty
+ * result here would otherwise fail the request.
  */
 const GET_SESSION_TOKEN_RETRY_ATTEMPTS = 3;
 const GET_SESSION_TOKEN_RETRY_DELAY_MS = 250;

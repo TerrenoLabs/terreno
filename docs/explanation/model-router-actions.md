@@ -126,7 +126,7 @@ Instance actions load the document by `id` before the handler runs. Missing docu
 When `openApi` is configured on the router (automatic with `TerrenoApp` and `setupServer`), each action is documented on first route registration. Operations use:
 
 - **Tag** — model collection name by default; override with `action.tag`.
-- **operationId** — `{tag}_{actionName}` (e.g. `todos_markComplete`) for stable RTK Query hook names after SDK regeneration.
+- **operationId** — `{tag}_{actionName}` (e.g. `todos_markComplete`) for stable generated hook names (`store/apiSdk.ts`) after SDK regeneration.
 
 Request/response schemas are derived from Zod when `body`, `query`, or `response` are set. Successful responses are documented as `{data: ...}` to match the wire format.
 

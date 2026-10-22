@@ -5,7 +5,7 @@ globs: **/*
 
 # example-frontend
 
-Example Expo app demonstrating full-stack usage with @terreno/api backend, @terreno/rtk for state, and @terreno/ui for components. This is a **frontend-only** app — no Express, no Mongoose, no backend code.
+Example Expo app demonstrating full-stack usage with @terreno/api backend, @terreno/syncdb for data, session, and requests, and @terreno/ui for components. There is no Redux. This is a **frontend-only** app — no Express, no Mongoose, no backend code.
 
 ## Commands
 
@@ -14,7 +14,8 @@ bun run start            # Start Expo dev server (port 8082)
 bun run web              # Start web version
 bun run ios              # Start iOS simulator
 bun run android          # Start Android emulator
-bun run sdk              # Generate API SDK from backend OpenAPI spec
+bun run sdk              # Generate request hooks (store/apiSdk.ts) from the backend OpenAPI spec
+bun run sync-sdk         # Generate synced collection hooks (store/syncDbSdk.ts)
 bun run test             # Run tests
 bun run lint             # Lint code
 bun run lint:fix         # Fix lint issues
@@ -26,115 +27,86 @@ bun run lint:fix         # Fix lint issues
 
 ```
 app/
-  _layout.tsx            # Root layout: Redux Provider, TerrenoProvider, auth routing
-  login.tsx              # Login screen
+  _layout.tsx            # Root layout: SessionProvider, ApiClientProvider, theme, auth routing,
+                         #   syncdb start/stop, consents and announcements
+  login.tsx / signup.tsx # Better Auth sign-in / sign-up, then useSession().refresh()
+  forgotPassword.tsx, resetPassword.tsx, verifyEmail.tsx  # Account recovery (Better Auth + JWT fallback)
   (tabs)/
-    _layout.tsx          # Tab navigation (Todos, Profile)
-    index.tsx            # Todos list screen
-    profile.tsx          # User profile screen
+    _layout.tsx          # Tab navigation
+    index.tsx            # Todos (syncdb)
+    profile.tsx          # User profile
 store/
-  index.ts               # Redux store: authReducer + appState + API middleware
-  appState.ts            # App-level state (darkMode, language)
-  openApiSdk.ts          # Generated RTK Query hooks (DO NOT EDIT MANUALLY)
-  sdk.ts                 # SDK exports with custom endpoints and cache tags
-  errors.ts              # RTK error middleware with Sentry
-components/
-  useColorScheme.ts      # Dark mode detection
-openapi-config.ts        # SDK code generation configuration
+  apiClient.ts           # Request client for non-synced routes (onError → errors.ts)
+  apiSdk.ts              # Generated request hooks (DO NOT EDIT MANUALLY)
+  errors.ts              # reportApiError: request client onError with Sentry filtering
+  syncdb.ts              # syncdb clients, shared authProvider, getAdminAuthHeaders
+  syncDbSdk.ts           # Generated synced collection hooks (DO NOT EDIT MANUALLY)
+lib/
+  betterAuth.ts          # Better Auth client
+types/                   # Hand-written types layered on generated ones (e.g. gptHistory.ts)
 ```
 
 ### Key Integration Points
 
-1. **Root layout** (`app/_layout.tsx`): Wraps app in Redux Provider + PersistGate + TerrenoProvider. Handles conditional routing based on auth state.
-2. **Redux store** (`store/index.ts`): Uses `generateAuthSlice(api)` from @terreno/rtk. Combines auth, app state, and RTK Query reducers. Includes redux-persist with blacklists.
-3. **SDK** (`store/openApiSdk.ts`): Auto-generated hooks from backend OpenAPI spec. Enhanced in `sdk.ts` with custom endpoints (getMe, patchMe) and cache tags.
-
-## Redux Store Setup
-
-```typescript
-import {generateAuthSlice} from "@terreno/rtk";
-import {openapi} from "./openApiSdk";
-
-const {authReducer, logout, middleware} = generateAuthSlice(openapi);
-
-const store = configureStore({
-  reducer: {
-    auth: authReducer,
-    appState: appStateReducer,
-    [openapi.reducerPath]: openapi.reducer,
-  },
-  middleware: (getDefault) =>
-    getDefault().concat(openapi.middleware, ...middleware, errorMiddleware),
-});
-```
-
-### Persist Configuration
-
-- Uses redux-persist with AsyncStorage
-- Blacklisted slices: tracking, terreno-rtk, profiles
-- SSR-safe storage wrapper (checks `typeof window`)
-
-## SDK Generation
-
-After backend route changes, regenerate:
-
-```bash
-# Backend must be running on port 4000
-bun run sdk
-```
-
-**Never modify `openApiSdk.ts` manually.** Customize in `sdk.ts`:
-
-```typescript
-export const terrenoApi = openapi
-  .injectEndpoints({endpoints: (build) => ({
-    getMe: build.query({query: () => "/auth/me", providesTags: ["profile"]}),
-  })})
-  .enhanceEndpoints({addTagTypes: ["todos", "users", "profile"]});
-```
+1. **Root layout** (`app/_layout.tsx`): `SessionProvider` (Better Auth) → `ApiClientProvider` → `AppThemeProvider`. Reads `userId` / `isLoading` from `useSession()`, redirects to `/login` when signed out, starts and stops `syncDb` and calls `apiClient.reset()` whenever `userId` changes.
+2. **Request client** (`store/apiClient.ts`): `createApiClient` from `@terreno/syncdb/api` with the same `authProvider` as syncdb, `appHeaders`, and `onError: reportApiError`.
+3. **SDK** (`store/apiSdk.ts`): Generated hooks for every non-synced route, from `terreno-syncdb` codegen (`--api-out`). Synced collections use `store/syncDbSdk.ts` and syncdb hooks.
 
 ## API Usage Patterns
 
-Always use generated hooks — never use axios/fetch directly:
+Use generated hooks for non-synced routes and syncdb for synced collections — never axios:
 
 ```typescript
-import {useGetTodosQuery, usePostTodosMutation} from "@/store/openApiSdk";
+import {useSession} from "@terreno/syncdb/auth";
+import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
 
-const {data, isLoading, error, refetch} = useGetTodosQuery({completed: false});
-const [createTodo, {isLoading: isCreating}] = usePostTodosMutation();
+const {userId} = useSession();
+const {data: profile, isLoading, error, refetch} = useGetAuthMeQuery(undefined, {skip: !userId});
+const [updateProfile, {isLoading: isUpdating}] = usePatchAuthMeMutation();
 
-// Create with error handling
-const handleCreate = useCallback(async () => {
+const handleRename = useCallback(async (name: string): Promise<void> => {
   try {
-    await createTodo({title, completed: false}).unwrap();
-  } catch (err) {
-    console.error("Failed to create todo", err);
+    await updateProfile({name}).unwrap();
+  } catch (error) {
+    console.error("Failed to update profile", error);
   }
-}, [createTodo, title]);
+}, [updateProfile]);
 ```
+
+- Mutations invalidate the tags their queries provide; call `useApiClient().invalidateTags([...])` only for changes made outside the request client (e.g. a Better Auth call).
+- When a generated hook cannot express a call (per-call headers), wrap the generated `…Request` builder with `useApiMutation` / `useApiQuery` from `@terreno/syncdb/react`.
+- Errors are `ApiError` (`status`, `data.title`).
+- `fetch` is only for SSE streams and multipart uploads that the client cannot express; authenticate with the session token.
 
 ## Authentication Flow
 
-1. App loads → PersistGate rehydrates Redux state
-2. If no userId in auth state → navigate to login screen
-3. Login screen calls `useEmailLoginMutation` → tokens stored automatically
-4. On success → `setUserId` dispatched → app navigates to tabs
-5. Logout dispatches `logout` action → tokens cleared → back to login
+1. `SessionProvider` reads the Better Auth session on mount (`useSession().isLoading` until it resolves)
+2. No `userId` → root layout redirects to `/login`
+3. Login calls `betterAuthClient.signIn.email`, then `useSession().refresh()`
+4. `userId` set → root layout starts syncdb and navigates to the tabs
+5. Logout: `useSession().logout()` signs the `SessionProvider` `syncDbs` (`syncDb`, `adminSyncDb`) out first (wiping local data), then ends the Better Auth session
+
+## App State
+
+- Session: `useSession()`; never store auth state elsewhere
+- Synced data: syncdb hooks; request results: the request client cache
+- Device preferences: `useStoredState` from `@terreno/ui` (theme via `ThemePreferenceContext`)
+- Local form state: `useState`
 
 ## Expo Router Navigation
 
 - File-based routing in `app/` directory
 - `(tabs)/` group for bottom tab navigation
-- Conditional routing based on auth state in root `_layout.tsx`
+- Conditional routing based on session state in root `_layout.tsx`
 - Tab icons use FontAwesome via `@expo/vector-icons`
 
 ## Conventions
 
 - Use @terreno/ui components (Box, Text, Button, Card) — never raw View/Text
-- Use generated SDK hooks for all API calls
+- Use generated SDK hooks or syncdb for all API calls
 - Use `useCallback` for all event handlers
-- Use `useState` for local form state, Redux for app-wide state
 - Handle loading, error, and empty states in all screens
+- Keep testIDs stable; e2e specs depend on them
 - Use `console.info/debug/warn/error` for permanent logs
 - Use Luxon for date operations
 - Always support React Native Web

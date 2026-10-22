@@ -40,7 +40,10 @@ export interface AiAppOptions {
   maxSteps?: number;
   /** MCP service for connecting to external tool servers. */
   mcpService?: MCPService;
-  /** OpenAPI options passed through to route builders for spec generation. */
+  /**
+   * OpenAPI options passed through to route builders for spec generation. Defaults to the
+   * OpenAPI instance TerrenoApp passes to `register`.
+   */
   openApiOptions?: Record<string, unknown>;
   /**
    * Mount the `/gpt/projects` routes, which register the `Project` model. Defaults to `true`;
@@ -88,7 +91,7 @@ export class AiApp implements TerrenoPlugin {
     this.options = options;
   }
 
-  register(app: express.Application): void {
+  register(app: express.Application, openApi?: unknown): void {
     const router = app;
     const {
       aiService,
@@ -101,13 +104,13 @@ export class AiApp implements TerrenoPlugin {
       gcsBucket,
       maxSteps,
       mcpService,
-      openApiOptions,
       projects,
       titleModelId,
       toolChoice,
       tools,
     } = this.options;
 
+    const openApiOptions = this.options.openApiOptions ?? (openApi ? {openApi} : undefined);
     const hasFileRoutes = Boolean(fileStorageService && gcsBucket);
     const chat = {
       aiService,

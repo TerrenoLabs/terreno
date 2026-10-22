@@ -2,7 +2,7 @@
  * Structural types for the Better Auth client surface consumed by
  * {@link ../auth/betterAuthAdapter!betterAuthAdapter}. Better Auth is NOT a
  * dependency of this package — these narrow interfaces describe just the
- * pieces syncdb touches (the shape produced by `rtk/src/betterAuthClient.ts`
+ * pieces syncdb touches (the shape produced by `createBetterAuthClient`
  * and the admin-spa client), so any object matching them works.
  */
 

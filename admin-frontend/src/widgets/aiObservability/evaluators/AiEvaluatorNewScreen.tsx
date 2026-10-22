@@ -24,10 +24,10 @@ import {
 import {useAiObservabilityEvaluatorsApi} from "./useAiObservabilityEvaluatorsApi";
 
 export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useCreateMutation} = useAiObservabilityEvaluatorsApi(api);
+  const {routeBase} = props;
+  const {useCreateMutation} = useAiObservabilityEvaluatorsApi();
   const {useDetailQuery: usePromptDetailQuery, useListQuery: usePromptListQuery} =
-    useAiObservabilityPromptsApi(api);
+    useAiObservabilityPromptsApi();
   const [createEvaluator, createState] = useCreateMutation();
   const [name, setName] = useState("");
   const [type, setType] = useState<EvaluatorRecord["type"]>("human");

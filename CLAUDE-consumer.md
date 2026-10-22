@@ -1,6 +1,6 @@
 # CLAUDE.md Template for Terreno Projects
 
-Copy this file as `CLAUDE.md` to projects that use @terreno/api, @terreno/ui, @terreno/syncdb, and @terreno/rtk (SDK/auth only).
+Copy this file as `CLAUDE.md` to projects that use @terreno/api, @terreno/ui, and @terreno/syncdb.
 
 ---
 
@@ -28,7 +28,7 @@ Full-stack application built with Terreno packages.
 ## Tech Stack
 
 - **Backend**: Express + Mongoose using @terreno/api (`SyncApp`, `RealtimeApp`, Better Auth)
-- **Frontend**: React Native/Expo using @terreno/ui, `@terreno/syncdb` (collection data), and `@terreno/rtk` (OpenAPI SDK, Better Auth Redux, feature flags)
+- **Frontend**: React Native/Expo using @terreno/ui and `@terreno/syncdb` (collection data, generated API hooks, auth session, feature flags)
 - **Database**: MongoDB (replica set required for sync)
 
 ## Commands
@@ -42,6 +42,7 @@ bun run backend:test     # Run backend tests
 bun run frontend:web     # Start frontend web
 bun run frontend:ios     # Start iOS simulator
 bun run sdk              # Regenerate API SDK from backend
+bun run sync-sdk         # Regenerate synced collection hooks
 bun run frontend:test    # Run frontend tests
 
 # Both
@@ -88,77 +89,82 @@ router.use(
 - **Logging**: Use `logger.info/warn/error/debug` for permanent logs
 - **User casting**: In routes use `req.user as UserDocument`
 
-### Frontend (@terreno/rtk + @terreno/ui)
+### Frontend (@terreno/syncdb + @terreno/ui)
 
-#### Store Setup
+`@terreno/syncdb` is the only data layer. There is no Redux.
+
+#### Clients
 
 ```typescript
-import {generateAuthSlice} from "@terreno/rtk";
-import {combineReducers, configureStore} from "@reduxjs/toolkit";
-import {terrenoApi} from "./sdk";
+// store/syncdb.ts
+import {betterAuthAdapter, bridgeBetterAuthReactClient, createSyncDb} from "@terreno/syncdb";
+import {createApiClient} from "@terreno/syncdb/api";
+import {appHeaders, baseUrl} from "@terreno/syncdb/config";
+import {betterAuthClient} from "@/lib/betterAuth"; // createBetterAuthClient from @terreno/syncdb/auth
+import {SYNC_COLLECTIONS} from "@/store/syncDbSdk";
 
-const authSlice = generateAuthSlice(terrenoApi);
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient));
 
-const rootReducer = combineReducers({
-  auth: authSlice.authReducer,
-  "terreno-rtk": terrenoApi.reducer,
+export const syncDb = createSyncDb({
+  authProvider,
+  baseUrl,
+  collections: [...SYNC_COLLECTIONS],
+  name: "my-app",
+  wipeOnSignOut: true,
 });
 
-const store = configureStore({
-  middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware().concat([
-      ...authSlice.middleware,
-      terrenoApi.middleware,
-    ]),
-  reducer: rootReducer,
-});
+export const apiClient = createApiClient({authProvider, baseUrl, headers: appHeaders});
 ```
 
 #### Root Layout
 
 ```typescript
+import {SessionProvider} from "@terreno/syncdb/auth";
+import {ApiClientProvider, SyncDbProvider} from "@terreno/syncdb/react";
 import {TerrenoProvider} from "@terreno/ui";
-import {Provider} from "react-redux";
-import store from "./store";
 
-const App = () => (
-  <Provider store={store}>
-    <TerrenoProvider openAPISpecUrl={`${API_URL}/openapi.json`}>
-      <RootNavigator />
-    </TerrenoProvider>
-  </Provider>
+const App: React.FC = () => (
+  <SessionProvider authClient={betterAuthClient} syncDbs={[syncDb]} onLogout={() => apiClient.reset()}>
+    <ApiClientProvider client={apiClient}>
+      <SyncDbProvider client={syncDb}>
+        <TerrenoProvider openAPISpecUrl={`${baseUrl}/openapi.json`}>
+          <RootNavigator />
+        </TerrenoProvider>
+      </SyncDbProvider>
+    </ApiClientProvider>
+  </SessionProvider>
 );
 ```
 
-#### Using Generated SDK Hooks
+Start `syncDb` when `useSession().userId` is set and stop it on sign-out.
 
-After backend changes, regenerate SDK:
+#### Data and Generated Hooks
+
+After backend changes, regenerate both SDKs (never edit the generated files):
+
 ```bash
-bun run sdk
+bun run sdk       # terreno-syncdb-codegen --api-out -> store/apiSdk.ts (non-synced routes)
+bun run sync-sdk  # terreno-syncdb-codegen --out -> store/syncDbSdk.ts (synced collections)
 ```
 
-Always use generated hooks (never raw axios/fetch):
+Synced collections read and write locally; other routes use generated hooks. Never use raw axios/fetch:
 
 ```typescript
-import {
-  useGetItemsQuery,
-  usePostItemsMutation,
-  usePatchItemsByIdMutation,
-  useDeleteItemsByIdMutation,
-} from "@/store";
+import {generateMutationId} from "@terreno/syncdb";
+import {useMutate, useQuery} from "@terreno/syncdb/react";
+import {useGetAuthMeQuery} from "@/store/apiSdk";
 
-const ItemsScreen = () => {
-  const {data, isLoading, refetch} = useGetItemsQuery({});
-  const [createItem] = usePostItemsMutation();
-  const [updateItem] = usePatchItemsByIdMutation();
-  const [deleteItem] = useDeleteItemsByIdMutation();
+const ItemsScreen: React.FC = () => {
+  const items = useQuery<Item>("items", {sort: "-created"});
+  const {create, update, remove} = useMutate("items");
+  const {data: me} = useGetAuthMeQuery();
 
-  const handleCreate = async () => {
-    await createItem({body: {title: "New Item"}}).unwrap();
+  const handleCreate = (): void => {
+    create({data: {_id: generateMutationId(), title: "New Item"}});
   };
 
-  const handleUpdate = async (id: string) => {
-    await updateItem({id, body: {status: "done"}}).unwrap();
+  const handleUpdate = (id: string): void => {
+    update({id, data: {status: "done"}});
   };
 };
 ```
@@ -230,7 +236,7 @@ const MyComponent = () => (
 - Always provide return types for functions
 - Add explanatory comment above each `useEffect`
 - Wrap callbacks in `useCallback`
-- Use Redux Toolkit for state management
+- Use React context or `useStoredState` for app state; syncdb for server data
 - Always support React-Native Web
 
 ### Development Practices
@@ -247,8 +253,8 @@ const MyComponent = () => (
 1. **Backend**: Create Mongoose model in `models/`
 2. **Backend**: Add route using `modelRouter` in `api/`
 3. **Backend**: Register route in server setup
-4. **Frontend**: Run `bun run sdk` to regenerate hooks
-5. **Frontend**: Build UI using generated hooks and @terreno/ui components
+4. **Frontend**: Run `bun run sdk` and `bun run sync-sdk` to regenerate hooks
+5. **Frontend**: Build UI using syncdb hooks, generated hooks, and @terreno/ui components
 
 ### Common Permissions Patterns
 
@@ -286,4 +292,4 @@ permissions: {
 
 - **@terreno/api docs**: See backend-example in Terreno repo
 - **@terreno/ui components**: See demo app in Terreno repo
-- **@terreno/rtk integration**: See frontend-example in Terreno repo
+- **@terreno/syncdb integration**: See example-frontend in the Terreno repo and `docs/reference/syncdb.md`

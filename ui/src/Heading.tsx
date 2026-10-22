@@ -1,5 +1,5 @@
 import React from "react";
-import {Text as NativeText, Platform, type StyleProp, type TextStyle} from "react-native";
+import {Text as NativeText, Platform, type TextStyle} from "react-native";
 
 import type {HeadingProps} from "./Common";
 import {useTerrenoFontsLoaded} from "./TerrenoFontProvider";
@@ -33,19 +33,12 @@ const HeadingComponent = ({
   const {theme} = useTheme();
   useTerrenoFontsLoaded();
 
-  const style: StyleProp<TextStyle> = {};
-
-  if (size === "sm") {
-    style.fontFamily = "heading-semibold";
-  } else {
-    style.fontFamily = "heading-bold";
-  }
-
-  style.fontSize = fontSizes[size || "md"].size;
-  if (align) {
-    style.textAlign = align;
-  }
-  style.color = theme.text[color];
+  const style: TextStyle = {
+    color: theme.text[color],
+    fontFamily: size === "sm" ? "heading-semibold" : "heading-bold",
+    fontSize: fontSizes[size || "md"].size,
+    ...(align ? {textAlign: align} : {}),
+  };
 
   const lines = 0;
   return (

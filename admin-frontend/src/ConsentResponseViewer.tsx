@@ -2,9 +2,9 @@ import {Badge, Box, Button, Card, Heading, MarkdownView, Page, Spinner, Text} fr
 import {DateTime} from "luxon";
 import React, {useCallback, useState} from "react";
 import {Image} from "react-native";
-import {generateConsentPdf} from "./generateConsentPdf";
-import {type AdminApi, resolveAdminBases} from "./types";
-import {useAdminApi} from "./useAdminApi";
+import {type ConsentResponseData, generateConsentPdf} from "./generateConsentPdf";
+import {resolveAdminBases} from "./types";
+import {useAdminModelApi} from "./useAdminModelApi";
 
 interface ConsentResponseViewerProps {
   /** @deprecated Use `apiBase`/`routeBase`. Kept as a backward-compatible alias. */
@@ -13,7 +13,6 @@ interface ConsentResponseViewerProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   id: string;
 }
 
@@ -32,14 +31,13 @@ export const ConsentResponseViewer: React.FC<ConsentResponseViewerProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   id,
 }) => {
   const {apiBase: resolvedApiBase} = resolveAdminBases({apiBase, baseUrl, routeBase});
   const routePath = `${resolvedApiBase}/consent-responses`;
-  const {useReadQuery} = useAdminApi(api, routePath, "ConsentResponse");
+  const {useReadQuery} = useAdminModelApi(routePath, "ConsentResponse");
 
-  const {data: response, isLoading} = useReadQuery(id, {skip: !id});
+  const {data: response, isLoading} = useReadQuery<ConsentResponseData>(id, {skip: !id});
 
   // Hooks must run before any early returns to keep React's hook order stable across
   // the loading → loaded transition (otherwise: "Rendered more hooks than during the

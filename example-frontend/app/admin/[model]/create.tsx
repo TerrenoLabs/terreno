@@ -2,7 +2,7 @@ import {type AdminFieldValue, AdminModelForm} from "@terreno/admin-frontend";
 import {Box, Card, Text, TextField, useToast} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
-import {terrenoApi, useSetAdminUserPasswordMutation} from "@/store/sdk";
+import {useAdminUsersPasswordMutation} from "@/store/apiSdk";
 
 const ADMIN_BASE_URL = "/admin";
 const MIN_PASSWORD_LENGTH = 8;
@@ -64,7 +64,7 @@ const AdminCreateScreen: React.FC = () => {
     confirmPassword: "",
     password: "",
   });
-  const [setPasswordForUser] = useSetAdminUserPasswordMutation();
+  const [setPasswordForUser] = useAdminUsersPasswordMutation();
   const isUserModel = model?.toLowerCase() === "user";
 
   const footerContent = useMemo((): React.ReactNode => {
@@ -108,7 +108,7 @@ const AdminCreateScreen: React.FC = () => {
       if (!userId) {
         throw new Error("User created but missing ID for password setup");
       }
-      await setPasswordForUser({id: userId, password: passwordState.password}).unwrap();
+      await setPasswordForUser({body: {password: passwordState.password}, id: userId}).unwrap();
       setPasswordState({confirmPassword: "", password: ""});
       toast.success("User password set");
     },
@@ -117,7 +117,6 @@ const AdminCreateScreen: React.FC = () => {
 
   return (
     <AdminModelForm
-      api={terrenoApi}
       baseUrl={ADMIN_BASE_URL}
       footerContent={footerContent}
       mode="create"

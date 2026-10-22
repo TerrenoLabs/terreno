@@ -27,8 +27,8 @@ Or browse [`mcp-server/src/docs/upgrades/`](../../mcp-server/src/docs/upgrades/)
 | Clean git tree, work on a branch | Rollback is `git checkout -- .` / `git reset --hard` on that branch. |
 | Backend `@terreno/*` first | `/openapi.json` is the contract the frontend typed client is generated from. Regenerating against an old backend omits new routes; screens fail at compile. |
 | Backend compile + tests | Catch API breaks before touching Expo or UI. |
-| Expo SDK (if the Terreno major tracks a new Expo) | `@terreno/ui` pins `react-native` (for example `~0.86.0` on the 57 line in `ui/package.json` `peerDependencies`). Installing Terreno frontend packages before Expo leaves unmet peers. |
-| Frontend `@terreno/*` | UI, syncdb, admin-frontend, admin-spa, rtk. |
+| Expo SDK (if the Terreno major tracks a new Expo) | `@terreno/ui` pins `react-native` (for example `0.88.0-rc.1` on the 58 line in `ui/package.json` `peerDependencies`). Installing Terreno frontend packages before Expo leaves unmet peers. |
+| Frontend `@terreno/*` | UI, syncdb, admin-frontend, admin-spa. |
 | Regenerate typed client | Only after the **upgraded** backend is running. |
 | Compile, lint, tests | Whole app. |
 | Run the app | UI verification. |
@@ -38,11 +38,11 @@ Maintainers watching the next SDK beta use `track-upstream-expo` / [`track-upstr
 
 ### Backend vs frontend packages
 
-From `publish-on-tag.yml`: **backend** `api`, `test`, `admin-backend`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`. **frontend** `ui`, `rtk`, `syncdb`, `admin-frontend`, `admin-spa`. `blocks` holds contracts that both `ai` and `ui` depend on, so it moves with the backend step.
+From `publish-on-tag.yml`: **backend** `api`, `test`, `admin-backend`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`. **frontend** `ui`, `syncdb`, `admin-frontend`, `admin-spa`. `blocks` holds contracts that both `ai` and `ui` depend on, so it moves with the backend step.
 
-## 4. RTK → syncdb is not a version bump
+## 4. Crossing 58 removes `@terreno/rtk`
 
-If the range includes the syncdb release (`56.0.0-beta.2` and later), treat collection CRUD as a **platform migration**. Follow [migrate-rtk-to-syncdb.md](migrate-rtk-to-syncdb.md) in a separate change from the routine lockstep bump. Keep `@terreno/rtk` for the OpenAPI SDK, Better Auth, feature flags, and sockets until that migration is done.
+If the range crosses `58.0.0`, the app must drop `@terreno/rtk` and Redux: there is no 58 release of `@terreno/rtk`. Follow [How to upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)](migrate-rtk-to-syncdb.md) as part of the upgrade. Run the 58 data migrations before deploying 58 frontends.
 
 ## 5. Manual steps
 

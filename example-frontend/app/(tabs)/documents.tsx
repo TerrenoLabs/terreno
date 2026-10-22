@@ -1,15 +1,16 @@
-import {ConsentHistory, DocumentStorageBrowser} from "@terreno/admin-frontend";
-import {selectBetterAuthUserId, useFeatureFlags} from "@terreno/rtk";
+import {AdminProvider, ConsentHistory, DocumentStorageBrowser} from "@terreno/admin-frontend";
+import {useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
+import {useFeatureFlags} from "@terreno/syncdb/flags";
 import {Box, SegmentedControl} from "@terreno/ui";
 import {router, useLocalSearchParams} from "expo-router";
 import type React from "react";
 import {useCallback} from "react";
 import {useSafeAreaInsets} from "react-native-safe-area-context";
-import {useSelector} from "react-redux";
 
 import {DocumentsPdfSection} from "@/components/DocumentsPdfSection";
 import {fileUploadsEnabledFromFlags} from "@/lib/fileUploads";
-import {terrenoApi} from "@/store/sdk";
+import {getAdminAuthHeaders} from "@/store/syncdb";
 
 // Section order drives both the segmented control labels and the `section` query param.
 const SECTIONS = [
@@ -31,8 +32,13 @@ const DocumentsScreen: React.FC = () => {
   const {section} = useLocalSearchParams<{section?: string | string[]}>();
   const selectedIndex = sectionIndexFor(section);
   const selectedKey: SectionKey = SECTIONS[selectedIndex].key;
-  const userId = useSelector(selectBetterAuthUserId);
-  const {flags, isLoading} = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  const {userId} = useSession();
+  const {flags, isLoading} = useFeatureFlags({
+    // The root OpenFeatureBridge refetches the shared flag query on socket pushes.
+    skip: !userId,
+    socket: null,
+    userId,
+  });
   const allowUpload = fileUploadsEnabledFromFlags({flags, isLoading});
 
   const handleSectionChange = useCallback((index: number): void => {
@@ -62,20 +68,22 @@ const DocumentsScreen: React.FC = () => {
           />
         </Box>
       </Box>
-      <Box flex="grow">
-        {selectedKey === "files" && (
-          <DocumentStorageBrowser
-            allowUpload={allowUpload}
-            api={terrenoApi}
-            backButton={false}
-            basePath="/documents"
-            onSettingsPress={handleSettingsPress}
-            title="Files"
-          />
-        )}
-        {selectedKey === "consents" && <ConsentHistory api={terrenoApi} />}
-        {selectedKey === "pdf" && <DocumentsPdfSection />}
-      </Box>
+      {/* Bind the reused admin-frontend screens to the backend origin and Bearer session. */}
+      <AdminProvider apiOrigin={baseUrl} getAuthHeaders={getAdminAuthHeaders}>
+        <Box flex="grow">
+          {selectedKey === "files" && (
+            <DocumentStorageBrowser
+              allowUpload={allowUpload}
+              backButton={false}
+              basePath="/documents"
+              onSettingsPress={handleSettingsPress}
+              title="Files"
+            />
+          )}
+          {selectedKey === "consents" && <ConsentHistory />}
+          {selectedKey === "pdf" && <DocumentsPdfSection />}
+        </Box>
+      </AdminProvider>
     </Box>
   );
 };

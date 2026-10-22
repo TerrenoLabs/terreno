@@ -26,7 +26,7 @@ jobs:
         id: check
         run: |
           FILES=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
-          CHANGES=$(echo "$FILES" | grep -cE '^(example-frontend/|ui/|rtk/|admin-frontend/)' || true)
+          CHANGES=$(echo "$FILES" | grep -cE '^(example-frontend/|ui/|syncdb/|admin-frontend/)' || true)
           echo "has_changes=$( [ "$CHANGES" -gt 0 ] && echo true || echo false )" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}

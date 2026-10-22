@@ -6,6 +6,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  type ScrollViewInstance,
   View,
 } from "react-native";
 
@@ -46,7 +47,7 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
   const [layoutHeight, setLayoutHeight] = useState(0);
   const [isMarkdownLoaded, setIsMarkdownLoaded] = useState(false);
   const lastContentHeightRef = useRef(0);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
 
   const rawContent = form.content[locale] ?? form.content[form.defaultLocale] ?? "";
   const content = variables

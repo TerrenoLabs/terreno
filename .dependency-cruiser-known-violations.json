@@ -656,15 +656,6 @@
   },
   {
     "type": "module",
-    "from": "example-backend/src/modelInterfaces.ts",
-    "to": "example-backend/src/modelInterfaces.ts",
-    "rule": {
-      "severity": "warn",
-      "name": "no-orphans"
-    }
-  },
-  {
-    "type": "module",
     "from": "example-backend/src/types/modelPlugins.ts",
     "to": "example-backend/src/types/modelPlugins.ts",
     "rule": {
@@ -710,15 +701,6 @@
   },
   {
     "type": "module",
-    "from": "example-frontend/comms-openapi-config.ts",
-    "to": "example-frontend/comms-openapi-config.ts",
-    "rule": {
-      "severity": "warn",
-      "name": "no-orphans"
-    }
-  },
-  {
-    "type": "module",
     "from": "example-frontend/constants/adminConstants.ts",
     "to": "example-frontend/constants/adminConstants.ts",
     "rule": {
@@ -739,15 +721,6 @@
     "type": "module",
     "from": "example-frontend/jspdf-native-stub.js",
     "to": "example-frontend/jspdf-native-stub.js",
-    "rule": {
-      "severity": "warn",
-      "name": "no-orphans"
-    }
-  },
-  {
-    "type": "module",
-    "from": "example-frontend/openapi-config.ts",
-    "to": "example-frontend/openapi-config.ts",
     "rule": {
       "severity": "warn",
       "name": "no-orphans"

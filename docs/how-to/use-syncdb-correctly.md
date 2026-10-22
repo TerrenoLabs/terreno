@@ -2,7 +2,7 @@
 
 This page lists `@terreno/syncdb` behavior that a working app has to account for. Each entry says what the library does today, what breaks if you ignore it, and what to do instead. It was checked against `syncdb/src` and `api/src/sync` at 57.13.0. Several entries are library gaps rather than intended behavior. Delete an entry when its gap is fixed.
 
-Read [Local-first data](../explanation/local-first-data.md) and [Migrate from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md) first.
+Read [Local-first data](../explanation/local-first-data.md) and [How to upgrade from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md) first.
 
 ## Startup and snapshots
 

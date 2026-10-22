@@ -11,7 +11,7 @@ import {
 import startCase from "lodash/startCase";
 import React, {useCallback} from "react";
 import {AdminRefField} from "./AdminRefField";
-import type {AdminApi, RefRendererMap} from "./types";
+import type {RefRendererMap} from "./types";
 
 interface AdminPrimitiveArrayFieldProps {
   title: string;
@@ -22,7 +22,6 @@ interface AdminPrimitiveArrayFieldProps {
   itemRef?: string;
   value: PrimitiveItem[];
   onChange: (value: PrimitiveItem[]) => void;
-  api: AdminApi;
   /** @deprecated Use `apiBase`/`routeBase`. Kept as a backward-compatible alias. */
   baseUrl?: string;
   /** Base path where admin API requests are sent. Falls back to `baseUrl`. */
@@ -67,7 +66,6 @@ export const AdminPrimitiveArrayField: React.FC<AdminPrimitiveArrayFieldProps> =
   itemRef,
   value,
   onChange,
-  api,
   baseUrl,
   apiBase,
   routeBase,
@@ -129,7 +127,6 @@ export const AdminPrimitiveArrayField: React.FC<AdminPrimitiveArrayFieldProps> =
       if (CustomRenderer) {
         return (
           <CustomRenderer
-            api={api}
             apiBase={apiBase}
             autocomplete={autocomplete}
             baseUrl={baseUrl}
@@ -146,7 +143,6 @@ export const AdminPrimitiveArrayField: React.FC<AdminPrimitiveArrayFieldProps> =
       if (refModel) {
         return (
           <AdminRefField
-            api={api}
             apiBase={apiBase}
             autocomplete={autocomplete}
             baseUrl={baseUrl}

@@ -203,8 +203,10 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       organizations: {
         settingsSchema: organizationSettingsSchema,
       },
-      // App-owned env: @terreno/api does not read RATE_LIMIT_ENABLED. Unset = limiter off.
-      rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined,
+      // The limiter is on by default. Deployed: Cloud Run is one Google Front End hop, so
+      // trust it to key unauthenticated traffic by client IP. Local dev, Playwright, and
+      // Maestro log in many times from one IP, so the limiter is off there.
+      rateLimit: isDeployed ? {trustProxy: 1} : false,
       skipListen,
       userModel: User as unknown as TerrenoAuthUserModel,
     }).configure(AppConfiguration);
@@ -270,18 +272,19 @@ export const start = async (skipListen = false): Promise<express.Application> =>
         })
       );
 
+    // Kept so FeatureFlagsApp live updates emit on the same socket the syncdb client uses.
+    let realtimeApp: RealtimeApp | undefined;
     if (isWebsocketService) {
-      terraApp.register(
-        new RealtimeApp({
-          changeStream: {
-            ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
-          },
-          debug: websocketsDebug,
-          // Required by the tenant-scoped `projects` sync stream: socket authorization
-          // must load the persisted user id before Membership-based tenant streams resolve.
-          userModel: User as unknown as TerrenoAuthUserModel,
-        })
-      );
+      realtimeApp = new RealtimeApp({
+        changeStream: {
+          ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
+        },
+        debug: websocketsDebug,
+        // Required by the tenant-scoped `projects` sync stream: socket authorization
+        // must load the persisted user id before Membership-based tenant streams resolve.
+        userModel: User as unknown as TerrenoAuthUserModel,
+      });
+      terraApp.register(realtimeApp);
     } else {
       logger.info("RealtimeApp disabled because BACKEND_SERVICE is not websockets/all");
     }
@@ -398,7 +401,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       .register(
         new FeatureFlagsApp({
           liveUpdates: {
-            socketIoServer: () => io,
+            socketIoServer: () => realtimeApp?.getIo() ?? io,
           },
           segments: exampleFeatureFlagSegments,
         })

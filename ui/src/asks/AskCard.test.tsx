@@ -9,7 +9,7 @@ import {
 import {act, fireEvent, render, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import {createRef} from "react";
-import type {Text as NativeText} from "react-native";
+import type {TextInstance} from "react-native";
 import {ThemeProvider} from "../Theme";
 import {TimezonePicker} from "../TimezonePicker";
 import {renderWithTheme} from "../test-utils";
@@ -1301,7 +1301,7 @@ describe("AskCard", () => {
   });
 
   it("shows the question as an accessible header the host can focus through promptRef", () => {
-    const promptRef = createRef<NativeText>();
+    const promptRef = createRef<TextInstance>();
     const prompt = {focus: (): void => {}};
     const {getByRole} = render(
       <AskCard ask={pendingAsk(PLAN_INPUT)} onSubmit={async () => {}} promptRef={promptRef} />,
@@ -1312,7 +1312,7 @@ describe("AskCard", () => {
     );
 
     assert.isOk(getByRole("header", {name: "Which plan should I set up for your workspace?"}));
-    assert.strictEqual(promptRef.current, prompt as unknown as NativeText);
+    assert.strictEqual(promptRef.current, prompt as unknown as TextInstance);
   });
 
   it("disables its controls when the host takes no answers", () => {

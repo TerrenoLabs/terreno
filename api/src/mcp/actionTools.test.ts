@@ -161,7 +161,7 @@ describe("modelRouter actions as MCP tools", () => {
     const [, notAdmin] = await setupDb();
     ownerId = notAdmin._id as mongoose.Types.ObjectId;
     await WidgetModel.deleteMany({});
-    await McpServiceToken.deleteMany({});
+    await McpServiceToken.collection.deleteMany({});
     clearMCPRegistry();
     app = new TerrenoApp({mcpServiceTokens: true, skipListen: true, userModel: typedUserModel})
       .register(widgetRouter())
@@ -314,7 +314,7 @@ describe("modelRouter actions as MCP tools", () => {
   });
 
   it("records the credential type inside the tool handler", async () => {
-    const created = await ownerAgent.post("/mcp/service-tokens").send({name: "Agent"});
+    const created = await ownerAgent.post("/mcp/service-tokens/create").send({name: "Agent"});
     const serviceToken = created.body.data.token as string;
 
     const jwtResult = await callTool(ownerAgent, "widgets_count_mine", {});

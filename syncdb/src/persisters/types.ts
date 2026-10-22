@@ -39,6 +39,12 @@ export type PersisterFactory = ({
  */
 export type SyncPersister = AnyPersister & {
   flush?: () => Promise<void>;
+  /**
+   * Resolve anything a save needs from the network (the web persister's
+   * encryption key) up front, so a stop-time flush after the session has
+   * ended can still write.
+   */
+  prepare?: () => Promise<void>;
 };
 
 /**

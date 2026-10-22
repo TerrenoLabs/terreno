@@ -4,14 +4,14 @@
     "agentStop": [
       {
         "type": "command",
-        "bash": ".rulesync/hooks/quality-check.sh copilot",
+        "command": ".rulesync/hooks/quality-check.sh copilot",
         "timeoutSec": 300
       }
     ],
     "postToolUse": [
       {
         "type": "command",
-        "bash": "bun run analyze:fast",
+        "command": "bun run analyze:fast",
         "timeoutSec": 30
       }
     ]

@@ -4,6 +4,7 @@ description: >-
   Scan recent codebase hot spots for deepening opportunities that improve
   locality, test seams, and agent navigability, then present ranked candidates
   before changing code.
+disable-model-invocation: true
 ---
 # Improve codebase architecture
 

@@ -139,6 +139,11 @@ export const configureE2ePhotoStorage = async (): Promise<() => Promise<void>> =
 
 export interface SeededHistory {
   historyId: string;
+  /**
+   * The history as the server stores it, or `undefined` once it is deleted (the REST read of a
+   * soft-deleted history is a 404). Proves a local-first rename or delete reached the server.
+   */
+  read: () => Promise<{title?: string} | undefined>;
   /** Deletes the history, so the user's chat list does not grow run after run. */
   remove: () => Promise<void>;
 }
@@ -148,7 +153,8 @@ const userToken = async (api: APIRequestContext, user: E2EUser): Promise<string>
 
 /**
  * Stores a conversation through `POST /gpt/histories` as `user`: the user's prompt, then the
- * assistant's `reply`. Callbacks find the reply's blocks at `prompts[1]` (`msg-1`).
+ * assistant's `reply`. Callbacks find the reply's blocks at `prompts[1]` (`msg-1`). The history
+ * reaches a signed-in app over sync (`gpt/histories`), as one saved by `/gpt/prompt` does.
  */
 export const seedGptHistory = async ({
   prompt,
@@ -179,6 +185,16 @@ export const seedGptHistory = async ({
   const historyId = ((await created.json()) as {data: {id: string}}).data.id;
   return {
     historyId,
+    read: async (): Promise<{title?: string} | undefined> => {
+      const response = await api.get(`/gpt/histories/${historyId}`, {headers});
+      if (response.status() === 404) {
+        return undefined;
+      }
+      if (!response.ok()) {
+        throw new Error(`GET /gpt/histories/${historyId} failed with ${response.status()}`);
+      }
+      return ((await response.json()) as {data: {title?: string}}).data;
+    },
     remove: async (): Promise<void> => {
       await api.delete(`/gpt/histories/${historyId}`, {headers});
       await api.dispose();

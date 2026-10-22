@@ -46,17 +46,23 @@ admin-spa/
     appConfig.ts       # AdminSpaAppConfig defaults + merge helper
     index.ts           # Public exports
   app/                 # Expo Router SPA (Better Auth + admin screens)
-  store/               # Redux + Better Auth client
+  components/          # AppConfigGate, StoreProvider (session + request client), AdminGate
+  store/               # Admin window syncdb config
   dist/                # Pre-built static export (produced by build:web)
 ```
 
 Boot flow in the SPA: `AppConfigGate` fetches `${basePath}/app-config.json` →
-`StoreProvider` builds Better Auth + Redux → `AdminGate` redirects anonymous
+`StoreProvider` builds a cookie-session Better Auth client and a same-origin
+request client (`createApiClient({credentials: "same-origin"})` from
+`@terreno/syncdb/api`), then mounts `SessionProvider` (`@terreno/syncdb/auth`) and
+`ApiClientProvider` → `AdminGate` reads `useSession()` and redirects anonymous
 users to `/login` and non-admins to `/forbidden` → the authorized provider reads
-`/admin/config`. When config contains String-`_id` models with `adminBroadcast`
+`/admin/config`. The SPA loads the signed-in profile (`/auth/me`, for operator
+roles) with `useApiQuery` over that request client. It has no Redux store and no
+`@terreno/rtk` dependency. When config contains String-`_id` models with `adminBroadcast`
 and `syncCollection`, it starts a same-origin cookie-authenticated syncdb client
 with those collections in window mode and forwards `useConflicts()` to the admin.
-ObjectId and non-broadcast models remain on RTK.
+ObjectId and non-broadcast models use the cookie-bound `AdminProvider` fetch client.
 
 When the backend enables organizations, the bundled SPA exposes:
 

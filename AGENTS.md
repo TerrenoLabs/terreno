@@ -1,7 +1,3 @@
----
-title: Terreno monorepo root guidelines
-trigger: always_on
----
 # Terreno
 
 Terreno is Django/Rails for TypeScript — with universal app support.
@@ -25,12 +21,14 @@ deploy.
 
 - **api/** - REST API framework built on Express/Mongoose (`@terreno/api`)
 - **ui/** - React Native UI component library (`@terreno/ui`)
-- **rtk/** - Redux Toolkit Query utilities for API backends (`@terreno/rtk`)
-- **syncdb/** - Local-first data layer (TinyBase store, durable outbox, delta sync) for @terreno/api backends (`@terreno/syncdb`)
+- **syncdb/** - Frontend data layer for @terreno/api backends: local-first collections (TinyBase store, durable outbox, delta sync), request client + generated API hooks, auth session, feature flags, and app utilities (`@terreno/syncdb`)
 - **admin-backend/** - Admin panel backend plugin for @terreno/api (`@terreno/admin-backend`)
 - **admin-frontend/** - Admin panel frontend screens for @terreno/api backends (`@terreno/admin-frontend`)
 - **admin-spa/** - Standalone admin SPA (Expo Router web app) + Express plugin to serve it from a backend (`@terreno/admin-spa`)
 - **blocks/** - Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards, and JSON Schemas for native clients (`@terreno/blocks`)
+- **comms/** - Pluggable transactional communications (`@terreno/comms`)
+- **cli/** - Operator CLI (`@terreno/cli`, bin `terreno`) for docs, codegen, bootstrap, and OpenAPI REST
+- **jobs/** - Durable background jobs plugin for `@terreno/api` (`@terreno/jobs`)
 - **mcp-server/** - MCP server for AI assistant integration (`@terreno/mcp`, bins `terreno-mcp` + `terreno-mcp-local`)
 - **demo/** - Demo app for showcasing and testing UI components
 - **example-frontend/** - Example Expo app demonstrating full stack usage
@@ -54,8 +52,9 @@ Taste observes product CI on every discovered host (GitHub Actions, CircleCI,
 Buildkite, and similar), not only GitHub checks. See `plugins/README.md` and
 `docs/reference/lifecycle-plugin.md`.
 
-Lifecycle stages discover and compose the repo-local skills under `.rulesync/skills/`;
-project commands and domain conventions belong there, not in the portable plugin.
+The installed planning plugin also ships the reusable Terreno app, docs, upgrade,
+deployment, and verification skills used by consumer projects. Repository-only roadmap,
+release, and maintenance workflows remain under `.rulesync/skills/`.
 
 ## Documentation
 
@@ -64,7 +63,7 @@ explanation and reference pages for the affected area. Update those pages in the
 same slice using the `update-docs` skill. Missing docs for a user-visible or
 architectural change fails the slice. Install the published skill set with
 `npx skills add TerrenoLabs/terreno`; regenerate `skills/` with
-`bun run skills:sync`. The same five stages install as the Cursor plugin
+`bun run skills:sync`. The combined lifecycle and Terreno app skill set installs as the Cursor plugin
 `terreno-planning` from `.cursor-plugin/marketplace.json` (invoke `/terreno-1-grow`),
 as the Codex plugin `terreno-planning` from `.agents/plugins/marketplace.json`
 (invoke `$terreno-1-grow`), or as the Claude Code plugin `terreno` via
@@ -104,7 +103,22 @@ bun run mcp:build        # Build MCP server
 bun run mcp:start        # Start MCP server
 bun run admin-backend:compile   # Compile admin backend
 bun run admin-frontend:compile  # Compile admin frontend
+bun run comms:compile           # Compile communications package
+bun run comms:test              # Test communications package
+bun run jobs:compile            # Compile jobs package
+bun run jobs:test               # Test jobs package
+bun run jobs:worker             # Example-backend standalone jobs worker
 ```
+
+### Static analysis
+
+Agent post-edit hooks run `bun run analyze:fast`; agent stop hooks run
+`bun run analyze:full`. `.rulesync/hooks.json` is the canonical hook configuration.
+Knip has no baseline: every finding must be fixed or documented as a narrow exception in
+`knip.jsonc`, and `bun run check:knip` enforces zero findings in CI. dependency-cruiser
+keeps a ratcheted baseline; run `bun run analyze:dependency-baseline` only after reviewing
+an intentional repository-wide dependency-graph change. See
+`docs/explanation/static-analysis.md`.
 
 ## How the Packages Work Together
 
@@ -121,32 +135,33 @@ The three core packages form a complete full-stack framework:
               |                               |
      /openapi.json                    sync protocol
               |                               |
-     RTK Query SDK Codegen            @terreno/syncdb
-     (non-synced routes)              (collection CRUD)
+     terreno-syncdb-codegen            terreno-syncdb-codegen
+     --api-out (non-synced routes)    --out (synced collections)
               |                               |
                            FRONTEND
-  @terreno/rtk                         @terreno/syncdb
-  - Generated hooks (auth, admin, AI)  - useQuery / useMutate (local-first)
-  - Better Auth session Redux          - Offline outbox + conflict UI
-  - Feature flags + sockets
+                       @terreno/syncdb
+  /api + /react: request client,       /react: useQuery / useMutate
+    generated hooks (auth, AI, actions)  (local-first), outbox, conflicts
+  /auth: SessionProvider, useSession   /flags: flags over the sync socket
+  /config, /app: base URLs, upgrade check, permissions, MCP tools
                               +
   @terreno/ui
   - React Native components (Box, Button, TextField, etc.)
   - TerrenoProvider for theming
 ```
 
-> **Legacy:** `@terreno/rtk` RTK Query hooks for **collection CRUD** are deprecated — use syncdb. See [migrate-rtk-to-syncdb.md](docs/how-to/migrate-rtk-to-syncdb.md). `modelRouter` `realtime` and RTK `realtimeList` / `realtimeDocument` are removed in Terreno 58; `RealtimeApp` stays for sync sockets.
+> **Removed in Terreno 58:** `@terreno/rtk` and Redux. Never add `@terreno/rtk`, `@reduxjs/toolkit`, `react-redux`, `redux-persist`, or `@rtk-query/codegen-openapi`. Upgrade path: [migrate-rtk-to-syncdb.md](docs/how-to/migrate-rtk-to-syncdb.md). `RealtimeApp` stays as the sync socket host.
 
 ### Integration Flow
 
 1. **Backend (api)**: Define Mongoose models with `syncPlugin` + `isDeletedPlugin`; use `modelRouter` with a `sync` config; register `SyncApp` and `RealtimeApp`
 2. **OpenAPI Generation**: `setupServer` generates `/openapi.json` for non-synced routes
-3. **SDK Codegen**: Frontend runs `bun run sdk` for auth, admin, AI, and custom endpoints — **not** for synced collections
-4. **Frontend (syncdb + ui)**: Use `useQuery` / `useMutate` for synced data; use generated SDK hooks only for non-synced routes; Better Auth via `@terreno/rtk`
+3. **SDK Codegen**: Frontend runs `bun run sdk` (`terreno-syncdb-codegen --api-out` → `store/apiSdk.ts`) for auth, AI, actions, and custom endpoints, and `bun run sync-sdk` (→ `store/syncDbSdk.ts`) for synced collections
+4. **Frontend (syncdb + ui)**: Use `useQuery` / `useMutate` for synced data; use generated `store/apiSdk.ts` hooks for non-synced routes; session via `SessionProvider` / `useSession` from `@terreno/syncdb/auth`
 
 ## Example Apps (Keep These Updated!)
 
-The `example-frontend/` and `example-backend/` directories serve as both documentation and integration tests. When adding features to api, ui, syncdb, or rtk:
+The `example-frontend/` and `example-backend/` directories serve as both documentation and integration tests. When adding features to api, ui, or syncdb:
 
 1. **Add examples** demonstrating new features
 2. **Update SDK** after backend changes: `cd example-frontend && bun run sdk`
@@ -199,7 +214,7 @@ bun run frontend:web
 - Focus on readability over performance
 - Write complete, functional code without TODOs when possible
 - Comments should describe purpose, not effect
-- **Frontend verification is mandatory** for any feature touching frontend packages: launch the app, log in when required, exercise the changed feature, save screenshots/videos to `/opt/cursor/artifacts/`, and attach them to the PR. See the `verify-ui-changes` skill and `02-frontend-verification` rules.
+- **Frontend verification is mandatory** for any feature touching frontend packages: launch the app, log in when required, exercise the changed feature, save screenshots/videos to `/opt/cursor/artifacts/`, and attach them to the PR. See `02-frontend-verification.md` and the `verify-ui-changes` skill.
 
 ## Package Reference
 
@@ -370,63 +385,35 @@ Modals:
 - Don't use raw `View`/`Text` when `Box`/@terreno/ui `Text` are available
 - Don't forget loading and error states
 - Don't use `style` prop when equivalent props exist (`padding`, `margin`)
-- Never modify `openApiSdk.ts` manually
+- Never modify generated `store/apiSdk.ts` or `store/syncDbSdk.ts` manually
 
 ### @terreno/syncdb
 
-Local-first data layer (primary path for collection CRUD):
+The only frontend data layer: local-first collections plus every request/response call.
 
 - **createSyncDb**: Client with durable outbox, socket sync, encrypted persistence
-- **React hooks**: `useQuery`, `useEntity`, `useMutate`, `useSyncStatus`, `useConflicts`
-- **betterAuthAdapter**: Session auth for sync sockets
+- **React hooks**: `useQuery`, `useEntity`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSocketEvent`
+- **Request client** (`/api` + `/react`): `createApiClient`, `ApiClientProvider`, `useApiQuery`, `useApiMutation`; generated hooks in `store/apiSdk.ts`
+- **Auth** (`/auth`): `createBetterAuthClient`, `SessionProvider`, `useSession`, `betterAuthAdapter`, `jwtAuthAdapter`
+- **Config, flags, app** (`/config`, `/flags`, `/app`): `baseUrl`, `useTerrenoFeatureFlags`, `useUpgradeCheck`, `canOpenAdminPage`, `useMCPTools`
 
 Key imports:
 ```typescript
 import {createSyncDb, betterAuthAdapter} from "@terreno/syncdb";
-import {SyncDbProvider, useQuery, useMutate} from "@terreno/syncdb/react";
+import {createApiClient} from "@terreno/syncdb/api";
+import {SessionProvider, useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
+import {ApiClientProvider, SyncDbProvider, useMutate, useQuery} from "@terreno/syncdb/react";
 ```
 
-Use syncdb hooks for synced collections — never RTK Query `useGetXQuery` / `usePostXMutation` for new work:
-
-```typescript
-// Correct — synced collection
-const todos = useQuery<Todo>("todos", {filter: (t) => !t.completed});
-const {create, update, remove} = useMutate("todos");
-
-// Wrong for synced data — legacy RTK path
-// const {data} = useGetTodosQuery();
-```
+One `authProvider` feeds `createSyncDb` and `createApiClient`. Use generated SDK hooks
+for non-synced routes — never use `axios` or `fetch` directly in screens.
 
 For running-app SyncDB bugs, invoke the `debug-syncdb-with-mcp` skill and use
 `get_syncdb_state`, `syncdb_snapshot`, and `syncdb_action` from
 `terreno-mcp-local`. Enable the client with `debug: true`; set
 `TERRENO_MCP_EVAL=1` only for state-changing actions. See
 `docs/how-to/debug-with-mcp.md`.
-
-### @terreno/rtk (legacy data sync; still required for SDK + auth)
-
-Redux Toolkit Query integration for **non-synced** routes and session state:
-
-- **generateBetterAuthSlice**: Better Auth session Redux (default for new apps)
-- **generateAuthSlice**: Legacy JWT auth
-- **emptyApi**: Base RTK Query API for OpenAPI codegen
-- **useTerrenoFeatureFlags**, **useSocketConnection**: Feature flags and realtime
-
-Key imports:
-```typescript
-import {generateBetterAuthSlice} from "@terreno/rtk";
-```
-
-Use generated SDK hooks for non-synced routes only — never use `axios` or `request` directly:
-
-```typescript
-// Correct — non-synced route (e.g. profile, admin)
-import {useGetMeQuery} from "@/store/openApiSdk";
-const {data, isLoading, error} = useGetMeQuery();
-
-// Wrong — don't use axios directly
-// const result = await axios.get("/api/auth/me");
-```
 
 ## React Best Practices (Frontend Packages)
 

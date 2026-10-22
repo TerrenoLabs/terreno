@@ -5,6 +5,10 @@ import type React from "react";
 import {useEffect} from "react";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 
+export const unstable_settings = {
+  initialRouteName: process.env.NODE_ENV === "development" ? "dev" : "demo",
+};
+
 const RootLayout: React.FC = () => {
   const {theme} = useGlobalSearchParams<{theme?: string | string[]}>();
   const requestedTheme = Array.isArray(theme) ? theme[0] : theme;
@@ -22,7 +26,7 @@ const RootLayout: React.FC = () => {
   return (
     <GestureHandlerRootView style={{flex: 1}}>
       <TerrenoProvider colorScheme={colorScheme} icons={customIcons}>
-        <Slot initialRouteName={process.env.NODE_ENV === "development" ? "dev" : "demo"} />
+        <Slot />
       </TerrenoProvider>
     </GestureHandlerRootView>
   );

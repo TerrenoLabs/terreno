@@ -1,6 +1,7 @@
+import {unwrapEnvelope} from "@terreno/syncdb/api";
 import {useCallback, useEffect, useRef, useState} from "react";
 import {useAdminContext} from "./adminContext";
-import type {AdminRequestArgs} from "./adminRequest";
+import {type AdminRequestArgs, adminRequest} from "./adminRequest";
 import type {AdminRpc} from "./adminRpc";
 
 const invalidationListeners = new WeakMap<AdminRpc, Map<string, Set<() => void>>>();
@@ -33,79 +34,154 @@ const invalidateTags = (rpc: AdminRpc, tags: readonly string[]): void => {
   }
 };
 
-export const useAdminRpc = (): AdminRpc | undefined => {
-  const ctx = useAdminContext();
-  return ctx?.adminRpc;
+/**
+ * Unauthenticated, same-origin client used when an admin screen renders outside
+ * `AdminProvider`. Hosts that need cookies, Bearer headers, or a cross-origin API
+ * render `AdminProvider` instead.
+ */
+const defaultAdminRpc: AdminRpc = (args: AdminRequestArgs): Promise<unknown> => {
+  return adminRequest(args);
 };
+
+let warnedMissingProvider = false;
+
+/** @internal Test helper — clears the one-time missing-provider warning. */
+export const resetAdminRpcWarningForTests = (): void => {
+  warnedMissingProvider = false;
+};
+
+/**
+ * Host-bound admin fetch client from `AdminProvider`. Outside a provider this
+ * returns a plain same-origin client and warns once in development.
+ */
+export const useAdminRpc = (): AdminRpc => {
+  const ctx = useAdminContext();
+  if (ctx?.adminRpc) {
+    return ctx.adminRpc;
+  }
+  if (!warnedMissingProvider && typeof __DEV__ !== "undefined" && __DEV__) {
+    warnedMissingProvider = true;
+    console.warn(
+      "[admin] Admin screen rendered outside AdminProvider; requests use same-origin fetch without auth headers."
+    );
+  }
+  return defaultAdminRpc;
+};
+
+/**
+ * List envelopes (`{data, more, …}`) stay whole, and single-document envelopes
+ * (`{data}`) unwrap to the document — the same rule as the syncdb API client.
+ * Admin screens read this shape for model CRUD responses.
+ */
+export const unwrapAdminEnvelope = (result: unknown): unknown => unwrapEnvelope(result);
+
+export interface AdminRpcRefetchResult<T> {
+  data?: T;
+  error?: unknown;
+  isError: boolean;
+}
 
 export interface AdminRpcQueryState<T> {
   data: T | undefined;
   error: unknown;
+  isError: boolean;
   isFetching: boolean;
   isLoading: boolean;
-  refetch: () => void;
+  refetch: () => Promise<AdminRpcRefetchResult<T>>;
 }
 
-/**
- * GET-style admin RPC. Skips when `rpc` is missing or `skip` is true so RTK
- * dual-run callers can keep a stable hook order.
- */
-export const useAdminRpcQuery = <T = unknown>({
-  pollingInterval,
-  providesTags = [],
-  rpc,
-  skip = false,
-  url,
-}: {
+export interface AdminRpcQueryOptions {
+  /** Extra request headers (for example `X-Organization-Id`). */
+  headers?: Record<string, string>;
   pollingInterval?: number;
   providesTags?: readonly string[];
   rpc?: AdminRpc;
   skip?: boolean;
+  /** Maps the parsed response before it is stored as `data`. */
+  transformResponse?: (result: unknown) => unknown;
   url: string;
-}): AdminRpcQueryState<T> => {
+}
+
+/**
+ * GET-style admin query with tag invalidation, polling, and refetch. Skips when
+ * `rpc` is missing or `skip` is true so callers keep a stable hook order.
+ */
+export const useAdminRpcQuery = <T = unknown>({
+  headers,
+  pollingInterval,
+  providesTags = [],
+  rpc,
+  skip = false,
+  transformResponse,
+  url,
+}: AdminRpcQueryOptions): AdminRpcQueryState<T> => {
   const [data, setData] = useState<T | undefined>(undefined);
   const [error, setError] = useState<unknown>(null);
   const [isLoading, setIsLoading] = useState(Boolean(rpc) && !skip);
   const [isFetching, setIsFetching] = useState(Boolean(rpc) && !skip);
   const [generation, setGeneration] = useState(0);
   const hasLoadedRef = useRef(false);
+  const pendingRefetchesRef = useRef<Array<(result: AdminRpcRefetchResult<T>) => void>>([]);
+  const transformRef = useRef(transformResponse);
+  transformRef.current = transformResponse;
   const tagsKey = providesTags.join("\u0000");
+  const headersKey = headers ? JSON.stringify(headers) : "";
 
-  const refetch = useCallback((): void => {
-    setGeneration((current) => current + 1);
+  const settleRefetches = useCallback((result: AdminRpcRefetchResult<T>): void => {
+    const pending = pendingRefetchesRef.current;
+    pendingRefetchesRef.current = [];
+    for (const resolve of pending) {
+      resolve(result);
+    }
   }, []);
 
-  // Fetch whenever the bound client, URL, or skip flag changes.
+  const refetch = useCallback((): Promise<AdminRpcRefetchResult<T>> => {
+    return new Promise((resolve) => {
+      pendingRefetchesRef.current.push(resolve);
+      setGeneration((current) => current + 1);
+    });
+  }, []);
+
+  // Fetch whenever the bound client, URL, headers, or skip flag changes.
   useEffect(() => {
     if (!rpc || skip) {
       setIsLoading(false);
       setIsFetching(false);
+      settleRefetches({isError: false});
       return;
     }
     let cancelled = false;
     setIsLoading(!hasLoadedRef.current);
     setIsFetching(true);
     setError(null);
-    rpc({method: "GET", url})
-      .then((result) => {
-        if (!cancelled) {
-          hasLoadedRef.current = true;
-          setData(result as T);
-          setIsLoading(false);
-          setIsFetching(false);
+    const requestHeaders = headersKey
+      ? (JSON.parse(headersKey) as Record<string, string>)
+      : undefined;
+    rpc({headers: requestHeaders, method: "GET", url})
+      .then((raw) => {
+        if (cancelled) {
+          return;
         }
+        const result = (transformRef.current ? transformRef.current(raw) : raw) as T;
+        hasLoadedRef.current = true;
+        setData(result);
+        setIsLoading(false);
+        setIsFetching(false);
+        settleRefetches({data: result, isError: false});
       })
       .catch((caught: unknown) => {
-        if (!cancelled) {
-          setError(caught);
-          setIsLoading(false);
-          setIsFetching(false);
+        if (cancelled) {
+          return;
         }
+        setError(caught);
+        setIsLoading(false);
+        setIsFetching(false);
+        settleRefetches({error: caught, isError: true});
       });
     return () => {
       cancelled = true;
     };
-  }, [generation, rpc, skip, url]);
+  }, [generation, headersKey, rpc, settleRefetches, skip, url]);
 
   // Refetch mounted queries when a successful RPC mutation invalidates their tags.
   useEffect(() => {
@@ -125,7 +201,7 @@ export const useAdminRpcQuery = <T = unknown>({
     };
   }, [rpc, skip, tagsKey]);
 
-  // Re-run the request on the same interval RTK `pollingInterval` uses.
+  // Re-run the request every `pollingInterval` milliseconds while mounted.
   useEffect(() => {
     if (!rpc || skip || !pollingInterval) {
       return;
@@ -138,14 +214,26 @@ export const useAdminRpcQuery = <T = unknown>({
     };
   }, [pollingInterval, rpc, skip]);
 
-  return {data, error, isFetching, isLoading, refetch};
+  return {data, error, isError: Boolean(error), isFetching, isLoading, refetch};
 };
 
+export interface AdminRpcMutationOptions {
+  invalidatesTags?: readonly string[];
+  /** Maps the parsed response before `unwrap()` resolves. */
+  transformResponse?: (result: unknown) => unknown;
+}
+
+export type AdminRpcMutationTrigger = (args: AdminRequestArgs) => {
+  unwrap: () => Promise<unknown>;
+};
+
+/** Mutation-style admin request: `trigger(args).unwrap()` then invalidate tags. */
 export const useAdminRpcMutation = (
   rpc: AdminRpc | undefined,
-  options: {invalidatesTags?: readonly string[]} = {}
-): [(args: AdminRequestArgs) => {unwrap: () => Promise<unknown>}, {isLoading: boolean}] => {
+  options: AdminRpcMutationOptions = {}
+): [AdminRpcMutationTrigger, {isLoading: boolean}] => {
   const [isLoading, setIsLoading] = useState(false);
+  const {invalidatesTags, transformResponse} = options;
   const trigger = useCallback(
     (args: AdminRequestArgs): {unwrap: () => Promise<unknown>} => {
       return {
@@ -155,19 +243,16 @@ export const useAdminRpcMutation = (
           }
           setIsLoading(true);
           try {
-            const result = await rpc(args);
-            invalidateTags(rpc, options.invalidatesTags ?? []);
-            return result;
+            const raw = await rpc(args);
+            invalidateTags(rpc, invalidatesTags ?? []);
+            return transformResponse ? transformResponse(raw) : raw;
           } finally {
             setIsLoading(false);
           }
         },
       };
     },
-    [options.invalidatesTags, rpc]
+    [invalidatesTags, rpc, transformResponse]
   );
-  return [trigger, {isLoading}] as [
-    (args: AdminRequestArgs) => {unwrap: () => Promise<unknown>},
-    {isLoading: boolean},
-  ];
+  return [trigger, {isLoading}];
 };

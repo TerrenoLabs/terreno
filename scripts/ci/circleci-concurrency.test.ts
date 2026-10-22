@@ -6,6 +6,7 @@ import {join} from "node:path";
 import {readMappings} from "../check-circleci-parity/lib";
 import {PACKAGE_CI_LCOV_SKIP} from "../check-new-file-coverage";
 import {jobCommandBlock} from "../check-package-coverage-ci";
+import {E2E_SHARDS as SHARD_DEFINITIONS} from "./e2eAffected/shards";
 
 const repoRoot = join(import.meta.dir, "../..");
 const continueConfig = readFileSync(join(repoRoot, ".circleci/continue-config.yml"), "utf8");
@@ -124,9 +125,13 @@ describe("CircleCI concurrency", () => {
     const specFiles = readdirSync(join(repoRoot, "example-frontend/e2e")).filter((name) =>
       name.endsWith(".spec.ts")
     );
+    // Shards that do not block a PR (load, cross-site bearer) have no CircleCI PR job.
+    const nonBlockingSpecs = new Set(
+      SHARD_DEFINITIONS.filter((shard) => !shard.blocksPullRequest).flatMap((shard) => shard.specs)
+    );
     const prSpecs = specFiles
       .map((name) => name.replace(/\.spec\.ts$/, ""))
-      .filter((name) => name !== "syncdb-loadlab");
+      .filter((name) => !nonBlockingSpecs.has(name));
     assert.deepEqual([...listed].sort(), [...prSpecs].sort());
   });
 

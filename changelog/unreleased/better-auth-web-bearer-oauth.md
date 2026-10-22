@@ -1,0 +1,6 @@
+---
+category: Added
+---
+
+- `@terreno/syncdb/auth`: `signInSocialWithHandoff({client, provider, callbackURL?, errorCallbackURL?})` starts a social or generic OAuth sign-in for a `createBetterAuthClient({webAuth: "bearer"})` web client. It stores a random nonce in `sessionStorage` and navigates the page to the server's `GET {basePath}/oauth-handoff/start` with `handoff=<nonce>` on the callback URL. It throws on native and in cookie mode.
+- `completeBetterAuthOAuthHandoff({client})` finishes that sign-in on the return page. When the URL has `#ott=<token>` and a `handoff` equal to the stored nonce, it removes both from the URL with `history.replaceState`, then exchanges the token at `{basePath}/one-time-token/verify`, and bearer mode stores the `set-auth-token` that comes back. A token without a matching nonce is removed and never sent. Other query and fragment parts stay, and `?error=` is left for the app. It resolves `true` only when a token was stored. Await it at startup before session reads, other query handling, and Sentry. The server needs `oauthHandoff: {webOrigins, callbackPaths?}`. See [Social sign-in in bearer mode](docs/how-to/configure-better-auth.md#social-sign-in-in-bearer-mode).

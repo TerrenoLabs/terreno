@@ -102,7 +102,7 @@ const uploadLimit = createRouteRateLimitMiddleware({
 | `POST /auth/forgotPassword`, `/auth/resetPassword`, `/resetPassword` | auth |
 | `POST /auth/sendVerification`, `/auth/verifyEmail` | auth |
 | `GET /auth/github`, `/auth/github/callback` | auth |
-| `{betterAuthBasePath}/sign-in/*`, `sign-up/*`, `forget-password`, `request-password-reset`, `reset-password`, `send-verification-email`, `verify-email`, `callback/*` | auth |
+| `{betterAuthBasePath}/sign-in/*`, `sign-up/*`, `forget-password`, `request-password-reset`, `reset-password`, `send-verification-email`, `verify-email`, `callback/*`, `oauth-handoff/*`, `one-time-token/*` | auth |
 | Trailing slash on those paths (`/auth/login/`) | same bucket as the unsuffixed path |
 | `GET`/`PATCH /auth/me` | api (600 / 15 min) |
 | modelRouter, admin, AI HTTP, `POST /mcp`, `POST /sync/mutate` | api |

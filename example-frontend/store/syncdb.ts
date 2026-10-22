@@ -12,7 +12,7 @@ import {
 } from "@terreno/syncdb";
 import {baseUrl} from "@terreno/syncdb/config";
 import {bearerAuthHeaders} from "@/lib/authHeaders";
-import {betterAuthClient} from "@/lib/betterAuth";
+import {betterAuthClient, getStoredBearerToken} from "@/lib/betterAuth";
 import {SYNC_COLLECTIONS} from "@/store/syncDbSdk";
 
 export const SYNC_DB_NAME = "terreno-example";
@@ -35,11 +35,17 @@ const ADMIN_COLLECTIONS = SYNC_COLLECTIONS.filter(
   (collection) => !PRODUCT_ONLY_COLLECTIONS.has(collection)
 );
 
-// Shared by the sync client and the API client (store/apiClient.ts) so both send the
-// same Better Auth session token.
-// pollIntervalMs is only used as a fallback if the session atom bridge is unavailable
-// (e.g. a future Better Auth client shape change); keep it slow.
+/**
+ * The app's one token source, shared by the sync client and the API client
+ * (store/apiClient.ts) so both send the same Better Auth session token.
+ *
+ * `getBearerToken` reads the web bearer token locally, so `getToken()` makes no `get-session`
+ * call per read; it returns null in cookie mode and on native, where the adapter reads the
+ * session instead. pollIntervalMs is only used as a fallback if the session atom bridge is
+ * unavailable (e.g. a future Better Auth client shape change); keep it slow.
+ */
 export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient), {
+  getBearerToken: getStoredBearerToken,
   pollIntervalMs: 60_000,
 });
 

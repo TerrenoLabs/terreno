@@ -2,14 +2,28 @@
  * Better Auth client configuration for the example frontend.
  */
 
-import {createBetterAuthClient} from "@terreno/syncdb/auth";
-import {baseUrl} from "@terreno/syncdb/config";
+import {
+  completeBetterAuthOAuthHandoff,
+  createBetterAuthClient,
+  getBetterAuthBearerToken,
+  signInSocialWithHandoff,
+} from "@terreno/syncdb/auth";
+import {baseUrl, isWeb} from "@terreno/syncdb/config";
 import Constants from "expo-constants";
 
 const getAppScheme = (): string => {
   const expoExtra = Constants.expoConfig?.extra;
   return expoExtra?.scheme ?? "frontend";
 };
+
+const BETTER_AUTH_STORAGE_PREFIX = "terreno-example";
+
+/**
+ * True when the web build authenticates with a stored bearer token instead of Better Auth's
+ * session cookie. Set `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` when the web app and the API are
+ * on different sites, where browsers block or partition third-party cookies. Native ignores it.
+ */
+export const isWebBearerAuth = isWeb && process.env.EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER === "true";
 
 // `baseUrl` from @terreno/syncdb/config is the single source of truth every other caller
 // (the API client, sockets, syncdb) already uses. A separate resolver here previously
@@ -18,12 +32,62 @@ const getAppScheme = (): string => {
 export const betterAuthClient = createBetterAuthClient({
   baseURL: baseUrl,
   scheme: getAppScheme(),
-  storagePrefix: "terreno-example",
+  storagePrefix: BETTER_AUTH_STORAGE_PREFIX,
+  webAuth: isWebBearerAuth ? "bearer" : "cookie",
 });
 
-export const signInWithSocial = async (provider: "google" | "github" | "apple"): Promise<void> => {
-  await betterAuthClient.signIn.social({provider});
+/**
+ * Reads the bearer token the web bearer client stored, without a network call. Returns null in
+ * cookie mode and on native, where the session lives elsewhere.
+ */
+export const getStoredBearerToken = (): string | null => {
+  if (!isWebBearerAuth) {
+    return null;
+  }
+  return getBetterAuthBearerToken({storagePrefix: BETTER_AUTH_STORAGE_PREFIX});
 };
+
+/**
+ * The page a bearer-mode social sign-in returns to. It must be one of example-backend's
+ * `oauthHandoff.callbackPaths`; lib/oauthHandoff.ts takes the one-time token from it at startup.
+ */
+const OAUTH_RETURN_PATH = "/login";
+
+/**
+ * Generic OAuth provider of the local mock OIDC server (e2e/helpers/mockOidcProvider.ts). Its
+ * button shows only in web bearer builds with `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN=true`; example-backend
+ * registers the provider only when `MOCK_OIDC_ISSUER` is set, and never in production.
+ */
+export const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
+
+export const isMockOidcSignInEnabled =
+  isWebBearerAuth && process.env.EXPO_PUBLIC_MOCK_OIDC_SIGN_IN === "true";
+
+/**
+ * Starts a social sign-in. In web bearer mode the page navigates to the API and comes back to
+ * the login page with a one-time token, so this resolves `true` while the page is leaving and
+ * the caller should wait instead of reading the session. Otherwise it resolves `false` once
+ * Better Auth's own flow returns.
+ */
+export const signInWithSocial = async (provider: string): Promise<boolean> => {
+  if (isWebBearerAuth) {
+    signInSocialWithHandoff({
+      callbackURL: OAUTH_RETURN_PATH,
+      client: betterAuthClient,
+      provider,
+    });
+    return true;
+  }
+  await betterAuthClient.signIn.social({provider});
+  return false;
+};
+
+/**
+ * Exchanges the one-time token a bearer-mode social sign-in brought back for the bearer, after
+ * removing it from the URL. Resolves `true` when a bearer was stored; never rejects.
+ */
+export const completeOAuthHandoff = (): Promise<boolean> =>
+  completeBetterAuthOAuthHandoff({client: betterAuthClient});
 
 interface BetterAuthActionResult {
   error?: {message?: string} | null;

@@ -29,6 +29,7 @@ import {SyncHealthToast} from "@/components/SyncHealthToast";
 import {SyncLabRuntime} from "@/components/SyncLabRuntime";
 import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
 import {betterAuthClient} from "@/lib/betterAuth";
+import {oauthHandoff} from "@/lib/oauthHandoff";
 import {apiClient} from "@/store/apiClient";
 import {useGetAuthMeQuery, usePostCommsPushTokensMutation} from "@/store/apiSdk";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
@@ -80,7 +81,7 @@ const PushTokenRegistrar: FC = () => {
 export {ErrorBoundary} from "expo-router";
 
 export const unstable_settings = {
-  initialRouteName: "(tabs)",
+  anchor: "(tabs)",
 };
 
 SplashScreen.preventAutoHideAsync();
@@ -185,6 +186,18 @@ const RootLayoutNav = (): React.ReactElement => {
     apiClient.reset();
   }, [userId]);
 
+  // SessionProvider reads the session on mount, before a bearer-mode social sign-in has
+  // exchanged its one-time token. Re-read it once the handoff stores the bearer, or the app
+  // would stay on the login screen.
+  const {refresh: refreshSession} = session;
+  useEffect(() => {
+    void oauthHandoff.then((stored) => {
+      if (stored) {
+        void refreshSession();
+      }
+    });
+  }, [refreshSession]);
+
   // Start the local-first syncdb client after login; stop on logout/unmount.
   // setSyncDbReady only flips true once start() resolves a user, so screens gated on
   // useSyncDbReady() don't call mutate() during the window where it would throw.
@@ -251,7 +264,7 @@ const RootLayoutNav = (): React.ReactElement => {
   // Hold the navigator until the session (and, for signed-in users, the profile that
   // decides the ConsentNavigator wrapper below) has settled. The wrapper choice changes
   // the Stack's position in the React tree, and re-parenting unmounts and remounts the
-  // Stack — a remounted Stack resets to initialRouteName "(tabs)", silently discarding
+  // Stack — a remounted Stack resets to its anchor "(tabs)", silently discarding
   // a deep-linked route like /profile or /admin. Rendering only once the tree shape is
   // final means the Stack mounts exactly once per auth state and keeps the requested URL.
   if (isAuthLoading || (Boolean(userId) && isProfileLoading)) {

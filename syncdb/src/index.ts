@@ -160,6 +160,7 @@ export {
   DEFAULT_MUTATION_TIMEOUT_MS,
   type SendMutationBatchResult,
   type SendMutationResult,
+  type SocketEventHandler,
   type SyncTransport,
   type TransportStatus,
 } from "./sync/transport";

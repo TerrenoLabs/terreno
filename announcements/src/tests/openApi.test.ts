@@ -1,7 +1,13 @@
 /** Verifies `/openapi.json` documents the user-facing announcement routes. */
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {TerrenoApp, type UserModel as UserModelType} from "@terreno/api";
-import {authAsUser, setupDb, UserModel} from "@terreno/api/testing";
+import {
+  authAsUser,
+  expectDocumentedResponse,
+  type OpenApiResponseSpec,
+  setupDb,
+  UserModel,
+} from "@terreno/api/testing";
 import type express from "express";
 import {DateTime} from "luxon";
 import supertest from "supertest";
@@ -86,7 +92,8 @@ describe("AnnouncementsApp OpenAPI", () => {
       "query:version",
     ]);
     const body = response200(operation);
-    expect(body?.required).toEqual(["data", "page", "total"]);
+    expect(body?.required).toEqual(["data", "more", "page", "total"]);
+    expect(body?.properties?.more?.type).toBe("boolean");
     expect(body?.properties?.data?.type).toBe("array");
     expect(body?.properties?.data?.items?.properties?.id?.type).toBe("string");
     expect(body?.properties?.data?.items?.nullable).toBeUndefined();
@@ -144,5 +151,98 @@ describe("AnnouncementsApp OpenAPI", () => {
       response200(paths["/announcements/feed"]?.get)?.properties ?? {}
     );
     expect([...feedFields, "requestId"]).toEqual(expect.arrayContaining(Object.keys(feed.body)));
+  });
+
+  it("returns bodies that match the documented schemas for every user route", async () => {
+    const spec = (await supertest(app).get("/openapi.json").expect(200))
+      .body as OpenApiResponseSpec;
+    const agent = await authAsUser(app, "notAdmin");
+    const empty = await agent.get("/announcements/pending?platform=web").expect(200);
+    expect(empty.body.data.current).toBeNull();
+    expectDocumentedResponse({
+      method: "get",
+      path: "/announcements/pending",
+      response: empty,
+      spec,
+    });
+
+    const publishedAt = DateTime.utc().minus({minutes: 1}).toJSDate();
+    const withAction = await Announcement.create({
+      acknowledgementPolicy: "required",
+      body: "Body",
+      primaryAction: {label: "Open", url: "https://example.com"},
+      publishedAt,
+      status: "published",
+      title: "With action",
+    });
+    await Announcement.create({body: "Body", publishedAt, status: "published", title: "Plain"});
+    const id = withAction._id.toString();
+
+    const pending = await agent.get("/announcements/pending?platform=web").expect(200);
+    expectDocumentedResponse({
+      method: "get",
+      path: "/announcements/pending",
+      response: pending,
+      spec,
+    });
+
+    const impression = await agent
+      .post(`/announcements/${id}/impression`)
+      .send({platform: "web"})
+      .expect(200);
+    expectDocumentedResponse({
+      method: "post",
+      path: "/announcements/{id}/impression",
+      response: impression,
+      spec,
+    });
+
+    const click = await agent
+      .post(`/announcements/${id}/click?platform=web`)
+      .send({action: "primaryAction"})
+      .expect(200);
+    expectDocumentedResponse({
+      method: "post",
+      path: "/announcements/{id}/click",
+      response: click,
+      spec,
+    });
+
+    const acknowledge = await agent
+      .post(`/announcements/${id}/acknowledge?platform=web`)
+      .expect(200);
+    expectDocumentedResponse({
+      method: "post",
+      path: "/announcements/{id}/acknowledge",
+      response: acknowledge,
+      spec,
+    });
+
+    for (const page of [1, 2]) {
+      const feed = await agent
+        .get(`/announcements/feed?platform=web&limit=1&page=${page}`)
+        .expect(200);
+      expectDocumentedResponse({method: "get", path: "/announcements/feed", response: feed, spec});
+    }
+  });
+
+  it("reports more on every feed page but the last so clients keep the list envelope", async () => {
+    const publishedAt = DateTime.utc().minus({minutes: 1}).toJSDate();
+    for (const title of ["One", "Two", "Three"]) {
+      await Announcement.create({body: "Body", publishedAt, status: "published", title});
+    }
+    const agent = await authAsUser(app, "notAdmin");
+
+    const pages = [];
+    for (const page of [1, 2, 3]) {
+      const res = await agent.get(`/announcements/feed?platform=web&limit=2&page=${page}`);
+      pages.push({count: res.body.data.length, more: res.body.more, total: res.body.total});
+    }
+
+    expect(pages).toEqual([
+      {count: 2, more: true, total: 3},
+      {count: 1, more: false, total: 3},
+      {count: 0, more: false, total: 3},
+    ]);
   });
 });

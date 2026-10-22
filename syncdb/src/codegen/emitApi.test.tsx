@@ -22,7 +22,8 @@ let source: string;
 
 beforeAll(async () => {
   workDir = await mkdtemp(join(tmpdir(), "syncdb-api-codegen-"));
-  sdkPath = join(workDir, "apiSdk.ts");
+  // The `.test.ts` suffix keeps the generated module out of coverage (bunfig ignores test files).
+  sdkPath = join(workDir, "apiSdk.test.ts");
   source = await generateApiSdk({
     config: {apiImportPath: API_ENTRY, sdkImportPath: REACT_ENTRY},
     format: false,
@@ -50,6 +51,7 @@ describe("discoverOperations", () => {
       "getLabels",
       "getVersionCheck",
       "patchAuthMe",
+      "patchNotesById",
       "postAdminMigrationsRun",
       "postAuthForgotPassword",
       "postFilesUpload",
@@ -57,6 +59,32 @@ describe("discoverOperations", () => {
       "revokeMcpServiceToken",
       "todosMarkComplete",
     ]);
+  });
+
+  it("skips excludePaths by prefix or, for patterns starting with ^, by regex", async () => {
+    const spec = await loadSpec(FIXTURE);
+
+    const names = discoverOperations({excludePaths: ["/auth/", "^/files/.+$"], spec}).map(
+      (operation) => operation.name
+    );
+
+    expect(names).not.toContain("getAuthMe");
+    expect(names).not.toContain("postAuthForgotPassword");
+    expect(names).not.toContain("postFilesUpload");
+    expect(names).not.toContain("getFilesByGcsKey");
+    expect(names).toContain("getVersionCheck");
+    expect(names).toContain("patchNotesById");
+  });
+
+  it("treats a request body with no media types as no body", () => {
+    const spec = {
+      paths: {"/ping": {post: {requestBody: {content: {}}, responses: {"204": {}}}}},
+    };
+
+    const [operation] = discoverOperations({spec});
+
+    expect(operation?.body).toBeUndefined();
+    expect(emitApi({operations: [operation], spec})).toContain("export type PostPingArgs = void;");
   });
 
   it("rejects a declared path param the path does not contain", () => {
@@ -108,6 +136,92 @@ describe("emitted types", () => {
   it("parenthesizes unions inside arrays and intersections", () => {
     expect(source).toContain("items?: (Tag | string)[];");
     expect(source).toContain("owner?: Owner & (Tag | string);");
+  });
+
+  it("types a path param plus JSON body as {id, body} and unwraps the documented data", () => {
+    expect(source).toContain(
+      [
+        "export type PatchNotesByIdArgs = {",
+        "  id: string;",
+        "  body: {",
+        "    text?: string;",
+        "    scores?: Record<string, number>;",
+        "  };",
+        "};",
+      ].join("\n")
+    );
+    expect(source).toContain("export type PatchNotesByIdRes = Note;");
+    expect(source).toMatch(/export interface Note \{[\s\S]*owner\?: Owner;[\s\S]*\}/);
+    expect(source).toContain("extra?: Record<string, unknown>;");
+  });
+
+  it("emits components that other components reference, including ones only reachable that way", () => {
+    expect(source).toMatch(/export interface Owner \{[\s\S]*tags\?: Tag\[\];[\s\S]*\}/);
+    expect(source).toMatch(/export interface Owner \{[\s\S]*address\?: Address;[\s\S]*\}/);
+    expect(source).toMatch(/export interface Address \{\s*city: string;\s*\}/);
+    expect(source.match(/export interface Tag /g)).toHaveLength(1);
+  });
+
+  it("falls back to loose types for schemas it cannot describe precisely", () => {
+    const spec = {
+      components: {schemas: {Flag: {nullable: true, properties: {on: {type: "boolean"}}}}},
+      paths: {
+        "/blobs": {
+          post: {
+            requestBody: {content: {"text/csv": {schema: {type: "string"}}}},
+            responses: {
+              "200": {
+                content: {
+                  "application/json": {
+                    schema: {
+                      properties: {
+                        flag: {$ref: "#/components/schemas/Flag"},
+                        list: {type: "array"},
+                        missing: {$ref: "#/components/schemas/Missing"},
+                        mystery: {format: "binary"},
+                      },
+                      type: "object",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const emitted = emitApi({operations: discoverOperations({spec}), spec});
+
+    expect(emitted).toContain("export type PostBlobsArgs = Blob | string;");
+    expect(emitted).toContain("list?: unknown[];");
+    expect(emitted).toContain("missing?: unknown;");
+    expect(emitted).toContain("mystery?: unknown;");
+    // A nullable object component is a type alias so it can carry `| null`.
+    expect(emitted).toMatch(/export type Flag = \{\s*on\?: boolean;\s*\} \| null;/);
+  });
+
+  it("rejects a component whose name shadows a type the SDK declares", () => {
+    const spec = {
+      components: {schemas: {GetThingRes: {type: "string"}}},
+      paths: {
+        "/thing": {
+          get: {
+            responses: {
+              "200": {
+                content: {
+                  "application/json": {schema: {$ref: "#/components/schemas/GetThingRes"}},
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+
+    expect(() => emitApi({operations: discoverOperations({spec}), spec})).toThrow(
+      /Component schema "GetThingRes" becomes "GetThingRes", which the SDK already declares/
+    );
   });
 
   it("rejects component schemas whose sanitized names collide", () => {
@@ -169,6 +283,10 @@ describe("generated hooks", () => {
       if (path === "/todos/t%201/markComplete") {
         return json({data: {_id: "t 1", completed: true, title: "Ship it"}});
       }
+      if (path === "/notes/n%201" && init?.method === "PATCH") {
+        const patch = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return json({data: {_id: "n 1", text: "old", ...patch}});
+      }
       if (path === "/version-check") {
         return json({status: "ok"});
       }
@@ -216,6 +334,27 @@ describe("generated hooks", () => {
     expect(calls[0]).toMatchObject({
       method: "POST",
       url: "http://api.test/todos/t%201/markComplete",
+    });
+  });
+
+  it("sends a path param and JSON body for a non-synced PATCH and unwraps the result", async () => {
+    const sdk = await import(sdkPath);
+    const {calls, client} = fakeBackend();
+    const {result} = renderHook(() => sdk.usePatchNotesByIdMutation(), {
+      wrapper: wrapperFor(client),
+    });
+
+    let note: unknown;
+    await act(async () => {
+      note = await result.current[0]({body: {scores: {a: 1}, text: "new"}, id: "n 1"}).unwrap();
+    });
+
+    expect(note).toEqual({_id: "n 1", scores: {a: 1}, text: "new"});
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({method: "PATCH", url: "http://api.test/notes/n%201"});
+    expect(JSON.parse(String(calls[0].body))).toEqual({scores: {a: 1}, text: "new"});
+    await waitFor(() => {
+      expect(result.current[1].isSuccess).toBe(true);
     });
   });
 

@@ -944,6 +944,86 @@ On web, that container is portaled to `document.body` (`position: fixed`, `z-ind
 
 Only the visible toast takes clicks. Every full-width layer around it (the container, its safe area, and the `Toast` layout wrapper) uses `pointerEvents: "box-none"`, so a button at the same height as an open toast stays clickable. Declare that style through `StyleSheet.create`; react-native-web drops `pointerEvents` from inline styles.
 
+## Consent and announcement navigators
+
+`ConsentNavigator` and `AnnouncementNavigator` gate authenticated app content on the
+consent (`@terreno/api` consents) and announcement (`@terreno/announcements`) routes.
+Both take a request `client` instead of an RTK Query api (the `api` prop was removed in
+Terreno 58). Pass the app's `@terreno/syncdb/api` client:
+
+```tsx
+import {AnnouncementNavigator, ConsentNavigator} from "@terreno/ui";
+import {apiClient} from "@/store/apiClient"; // createApiClient({authProvider, baseUrl, ...})
+
+<ConsentNavigator client={apiClient}>
+  <AnnouncementNavigator client={apiClient} frequency={{userId}}>
+    <AppTabs />
+  </AnnouncementNavigator>
+</ConsentNavigator>
+```
+
+### `TerrenoRequestClient`
+
+`client` is any object with a `request` method of this shape. A syncdb `ApiClient` satisfies
+it structurally; `@terreno/ui` does not depend on `@terreno/syncdb`.
+
+```typescript
+interface TerrenoRequestArgs {
+  url: string;                       // relative paths resolve against the client's base URL
+  method?: string;                   // default "GET"
+  params?: Record<string, unknown>;  // query string; undefined values are omitted
+  body?: Record<string, unknown> | null;
+  headers?: Record<string, string>;
+  unwrap?: boolean;                  // unwrap {data} envelopes (default true)
+}
+
+interface TerrenoRequestClient {
+  request: <T = unknown>(args: TerrenoRequestArgs) => Promise<T>;
+}
+```
+
+A failed request must reject with an error carrying the HTTP `status` (syncdb's `ApiError`
+does). On `401` / `403` both navigators render `children` so the app's auth handling runs;
+any other error shows a **Retry** screen and calls `onError`.
+
+### `ConsentNavigator` props
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `client` | `TerrenoRequestClient` | Required. Sends `GET /consents/pending` and `POST /consents/respond`. |
+| `baseUrl` | `string` | Optional path prefix for the consent routes. |
+| `children` | `ReactNode` | Rendered once no consent forms are pending. |
+| `extraScreens` | `ReactNode[]` | Shown in order after the forms; each element receives an `onNext` prop. |
+| `onError` | `(error: unknown) => void` | Called for non-auth load errors and failed submissions. |
+| `variables` | `Record<string, string>` | Substituted into consent form markdown. |
+
+### `AnnouncementNavigator` props
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `client` | `TerrenoRequestClient` | Required. Sends `GET /announcements/pending`, `GET /announcements/feed`, and the acknowledge / impression / click events. |
+| `baseUrl` | `string` | Optional path prefix for the announcement routes. |
+| `children` | `ReactNode` | App content; hidden behind a modal announcement, kept mounted under a banner. |
+| `frequency` | `AnnouncementFrequencyConfig` | Client-side interrupt caps (`maxInterruptionsPerSession`, `cooldownHours`, `skipFirstLaunch`, `userId`). |
+| `onError` | `(error: unknown) => void` | Called for non-auth load errors and failed acknowledgements. |
+
+### Hooks
+
+The navigators are built on hooks you can call directly. Each takes `(client, baseUrl?)` and
+keeps loading, error, and data in React state (no Redux store).
+
+| Hook | Returns |
+|------|---------|
+| `useConsentForms(client, baseUrl?)` | `{forms, isLoading, error, refetch}` |
+| `useSubmitConsent(client, baseUrl?)` | `{submit, isSubmitting, error}` |
+| `useAnnouncements(client, baseUrl?, {page, limit}?)` | `{pending, feed, isLoading, error, refetch, isFeedLoading, feedError, refetchFeed}` |
+| `useAcknowledgeAnnouncement(client, baseUrl?)` | `{acknowledge, recordImpression, recordClick, isSubmitting, error, ...}` |
+
+Queries fetch on mount and when `client`, `baseUrl`, or feed paging change. `refetch()` joins
+a request already in flight. A successful `submit` refetches every mounted `useConsentForms`
+on the same client, and a successful `acknowledge` refetches every mounted pending
+announcement, the way RTK `invalidatesTags` did.
+
 ## Authentication Components
 
 ### SocialLoginButton
@@ -1041,6 +1121,21 @@ describe("MyComponent", () => {
 ``````
 
 **Why:** Most @terreno/ui components require ThemeProvider context to access theme values.
+
+### createFakeRequestClient
+
+In-repo test helper (`ui/src/test-utils.tsx`) for components that take a
+`TerrenoRequestClient`. Routes are `"METHOD /path/:param"` keys; unmatched requests reject
+with a 404-shaped error. `fakeHttpError(status)` builds an error carrying `status`.
+
+``````typescript
+const {client, callsTo} = createFakeRequestClient({
+  "GET /consents/pending": () => ({data: [form]}),
+  "POST /consents/respond": () => ({agreed: true}),
+});
+renderWithTheme(<ConsentNavigator client={client}>{children}</ConsentNavigator>);
+expect(callsTo("POST /consents/respond")).toHaveLength(1);
+``````
 
 ### TapToEdit testIDs
 

@@ -129,6 +129,7 @@ export * from "./PortalHost";
 export * from "./pdfHtmlTemplate";
 export * from "./Radio";
 export * from "./RadioField";
+export type {TerrenoRequestArgs, TerrenoRequestClient} from "./requestClient";
 export type * from "./Scorecard";
 export * from "./ScrollView";
 export * from "./SectionDivider";

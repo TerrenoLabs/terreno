@@ -8130,12 +8130,25 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "items": {
                         "properties": {
                           "_id": {
+                            "description": "The MCP service token id (String so the synced collection can address it)",
                             "type": "string",
+                          },
+                          "_syncPrevStream": {
+                            "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                            "type": "string",
+                          },
+                          "_syncSeq": {
+                            "description": "Monotonic per-stream sequence stamped on every synced write",
+                            "type": "number",
                           },
                           "created": {
                             "description": "When this document was created",
                             "format": "date-time",
                             "type": "string",
+                          },
+                          "deleted": {
+                            "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                            "type": "boolean",
                           },
                           "expiresAt": {
                             "description": "When this MCP service token expires; unset when it does not expire",
@@ -8438,12 +8451,25 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "_id": {
+                      "description": "The MCP service token id (String so the synced collection can address it)",
                       "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
                     },
                     "created": {
                       "description": "When this document was created",
                       "format": "date-time",
                       "type": "string",
+                    },
+                    "deleted": {
+                      "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
                     },
                     "expiresAt": {
                       "description": "When this MCP service token expires; unset when it does not expire",
@@ -14892,6 +14918,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       },
                       "type": "array",
                     },
+                    "more": {
+                      "description": "Whether a later page has more announcements",
+                      "type": "boolean",
+                    },
                     "page": {
                       "type": "number",
                     },
@@ -14902,6 +14932,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                   },
                   "required": [
                     "data",
+                    "more",
                     "page",
                     "total",
                   ],
@@ -20842,7 +20873,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "items": {
                         "properties": {
                           "_id": {
+                            "description": "The conversation id (a String so offline sync clients can mint ids)",
                             "type": "string",
+                          },
+                          "_syncPrevStream": {
+                            "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                            "type": "string",
+                          },
+                          "_syncSeq": {
+                            "description": "Monotonic per-stream sequence stamped on every synced write",
+                            "type": "number",
                           },
                           "created": {
                             "description": "When this document was created",
@@ -21152,6 +21192,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         "tags": [
           "gpthistories",
         ],
+        "x-terreno-sync": {
+          "collection": "gpt/histories",
+          "scope": "owner",
+        },
       },
       "post": {
         "requestBody": {
@@ -21160,7 +21204,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
               "schema": {
                 "properties": {
                   "_id": {
+                    "description": "The conversation id (a String so offline sync clients can mint ids)",
                     "type": "string",
+                  },
+                  "_syncPrevStream": {
+                    "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                    "type": "string",
+                  },
+                  "_syncSeq": {
+                    "description": "Monotonic per-stream sequence stamped on every synced write",
+                    "type": "number",
                   },
                   "created": {
                     "description": "When this document was created",
@@ -21407,7 +21460,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "_id": {
+                      "description": "The conversation id (a String so offline sync clients can mint ids)",
                       "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
                     },
                     "created": {
                       "description": "When this document was created",
@@ -22034,7 +22096,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "_id": {
+                      "description": "The conversation id (a String so offline sync clients can mint ids)",
                       "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
                     },
                     "created": {
                       "description": "When this document was created",
@@ -22345,7 +22416,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
               "schema": {
                 "properties": {
                   "_id": {
+                    "description": "The conversation id (a String so offline sync clients can mint ids)",
                     "type": "string",
+                  },
+                  "_syncPrevStream": {
+                    "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                    "type": "string",
+                  },
+                  "_syncSeq": {
+                    "description": "Monotonic per-stream sequence stamped on every synced write",
+                    "type": "number",
                   },
                   "created": {
                     "description": "When this document was created",
@@ -22592,7 +22672,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "_id": {
+                      "description": "The conversation id (a String so offline sync clients can mint ids)",
                       "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
                     },
                     "created": {
                       "description": "When this document was created",
@@ -24592,23 +24681,41 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
-    "/mcp/service-tokens": {
+    "/mcp/service-tokens/": {
       "get": {
-        "description": "Lists MCP service tokens owned by the signed-in user. Never includes plaintext or tokenHash.",
-        "operationId": "listMcpServiceTokens",
         "parameters": [
           {
             "in": "query",
+            "name": "_id",
+            "schema": {
+              "properties": {
+                "$in": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+              },
+              "type": "object",
+            },
+          },
+          {
+            "in": "query",
             "name": "page",
-            "required": false,
             "schema": {
               "type": "number",
             },
           },
           {
             "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
             "name": "limit",
-            "required": false,
             "schema": {
               "type": "number",
             },
@@ -24621,6 +24728,78 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
+                      "items": {
+                        "properties": {
+                          "_id": {
+                            "description": "The MCP service token id (String so the synced collection can address it)",
+                            "type": "string",
+                          },
+                          "_syncPrevStream": {
+                            "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                            "type": "string",
+                          },
+                          "_syncSeq": {
+                            "description": "Monotonic per-stream sequence stamped on every synced write",
+                            "type": "number",
+                          },
+                          "created": {
+                            "description": "When this document was created",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "deleted": {
+                            "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                            "type": "boolean",
+                          },
+                          "expiresAt": {
+                            "description": "When this MCP service token expires; unset when it does not expire",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "lastUsedAt": {
+                            "description": "When this MCP service token most recently authenticated an MCP request",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "name": {
+                            "description": "User-provided label identifying the MCP service token",
+                            "type": "string",
+                          },
+                          "revokedAt": {
+                            "description": "When this MCP service token was revoked; unset while it remains active",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "tokenHash": {
+                            "description": "SHA-256 hash of the full MCP service token plaintext",
+                            "type": "string",
+                          },
+                          "tokenPrefix": {
+                            "description": "First eight characters after mcp_ used to identify the token safely",
+                            "type": "string",
+                          },
+                          "updated": {
+                            "description": "When this document was last updated",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "userId": {
+                            "description": "The user this MCP service token acts as",
+                            "format": "objectid",
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "name",
+                          "tokenHash",
+                          "tokenPrefix",
+                          "userId",
+                          "_id",
+                          "created",
+                          "updated",
+                        ],
+                        "type": "object",
+                      },
                       "type": "array",
                     },
                     "limit": {
@@ -24640,7 +24819,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 },
               },
             },
-            "description": "Success",
+            "description": "Successful list",
           },
           "400": {
             "content": {
@@ -24686,14 +24865,20 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "description": "The user is not allowed to perform this action on any document",
           },
         },
-        "summary": "List MCP service tokens",
         "tags": [
-          "mcp",
+          "mcpservicetokens",
         ],
+        "x-terreno-sync": {
+          "collection": "mcp/service-tokens",
+          "scope": "owner",
+        },
       },
+    },
+    "/mcp/service-tokens/create": {
       "post": {
         "description": "Mints a personal MCP service token that acts as the signed-in user on POST /mcp. The plaintext token is returned once.",
-        "operationId": "createMcpServiceToken",
+        "operationId": "mcpServiceTokens_create",
+        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -24701,11 +24886,11 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "properties": {
                   "expiresAt": {
                     "description": "Optional ISO-8601 expiry; omit for a token that does not expire",
+                    "nullable": true,
                     "type": "string",
                   },
                   "name": {
                     "description": "User-visible label for this token",
-                    "required": true,
                     "type": "string",
                   },
                 },
@@ -24730,6 +24915,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "type": "string",
                         },
                         "expiresAt": {
+                          "nullable": true,
                           "type": "string",
                         },
                         "id": {
@@ -24742,20 +24928,33 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "type": "string",
                         },
                         "token": {
+                          "description": "The plaintext mcp_ token. Returned only by this response.",
                           "type": "string",
                         },
                         "tokenPrefix": {
                           "type": "string",
                         },
                       },
+                      "required": [
+                        "created",
+                        "expiresAt",
+                        "id",
+                        "mcpUrl",
+                        "name",
+                        "token",
+                        "tokenPrefix",
+                      ],
                       "type": "object",
                     },
                   },
+                  "required": [
+                    "data",
+                  ],
                   "type": "object",
                 },
               },
             },
-            "description": "Success",
+            "description": "Successful response",
           },
           "400": {
             "content": {
@@ -24803,14 +25002,155 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         },
         "summary": "Create an MCP service token",
         "tags": [
-          "mcp",
+          "mcpServiceTokens",
         ],
       },
     },
     "/mcp/service-tokens/{id}": {
-      "delete": {
-        "description": "Sets revokedAt on a token owned by the signed-in user.",
-        "operationId": "revokeMcpServiceToken",
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "_id": {
+                      "description": "The MCP service token id (String so the synced collection can address it)",
+                      "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
+                    },
+                    "created": {
+                      "description": "When this document was created",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "deleted": {
+                      "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "expiresAt": {
+                      "description": "When this MCP service token expires; unset when it does not expire",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "lastUsedAt": {
+                      "description": "When this MCP service token most recently authenticated an MCP request",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "User-provided label identifying the MCP service token",
+                      "type": "string",
+                    },
+                    "revokedAt": {
+                      "description": "When this MCP service token was revoked; unset while it remains active",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "tokenHash": {
+                      "description": "SHA-256 hash of the full MCP service token plaintext",
+                      "type": "string",
+                    },
+                    "tokenPrefix": {
+                      "description": "First eight characters after mcp_ used to identify the token safely",
+                      "type": "string",
+                    },
+                    "updated": {
+                      "description": "When this document was last updated",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "userId": {
+                      "description": "The user this MCP service token acts as",
+                      "format": "objectid",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "tokenHash",
+                    "tokenPrefix",
+                    "userId",
+                    "_id",
+                    "created",
+                    "updated",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful read",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "tags": [
+          "mcpservicetokens",
+        ],
+      },
+    },
+    "/mcp/service-tokens/{id}/revoke": {
+      "post": {
+        "description": "Sets revokedAt on a token owned by the signed-in user. Unknown, foreign, and already revoked tokens are 404.",
+        "operationId": "mcpServiceTokens_revoke",
         "parameters": [
           {
             "in": "path",
@@ -24828,14 +25168,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                        },
-                        "revokedAt": {
-                          "type": "string",
-                        },
-                      },
                       "type": "object",
                     },
                   },
@@ -24843,7 +25175,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 },
               },
             },
-            "description": "Success",
+            "description": "Successful response",
           },
           "400": {
             "content": {
@@ -24891,7 +25223,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         },
         "summary": "Revoke an MCP service token",
         "tags": [
-          "mcp",
+          "mcpServiceTokens",
         ],
       },
     },

@@ -6,6 +6,7 @@ import {VersionConfig} from "../models/versionConfig";
 import {configureOpenApiValidator, resetOpenApiValidatorConfig} from "../openApiValidator";
 import {TerrenoApp} from "../terrenoApp";
 import {setupDb, UserModel} from "../tests";
+import {expectDocumentedResponse} from "../tests/openApiResponseSchema";
 import {VersionCheckPlugin} from "../versionCheckPlugin";
 
 const typedUserModel = UserModel as unknown as UserModelType;
@@ -387,6 +388,28 @@ describe("VersionCheckPlugin OpenAPI", () => {
       "updateUrl",
       "warningVersion",
     ]);
+  });
+
+  it("returns ok, warning, and required bodies that match the documented schema", async () => {
+    const agent = supertest(buildApp());
+    const spec = (await agent.get("/openapi.json").expect(200)).body;
+    await VersionConfig.create({
+      requiredMessage: "Update required",
+      updateUrl: "https://example.com/update",
+      warningMessage: "Please update",
+      webRequiredVersion: 50,
+      webWarningVersion: 100,
+    });
+
+    for (const [version, status] of [
+      [150, "ok"],
+      [80, "warning"],
+      [10, "required"],
+    ] as const) {
+      const res = await agent.get("/version-check").query({platform: "web", version}).expect(200);
+      expect(res.body.status).toBe(status);
+      expectDocumentedResponse({method: "get", path: "/version-check", response: res, spec});
+    }
   });
 
   it("does not validate documented query params: a non-numeric version is still ok", async () => {

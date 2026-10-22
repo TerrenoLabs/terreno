@@ -48,7 +48,7 @@ const signToken = (payload: Record<string, unknown>, secret = "test-token-secret
 describe("extractUserFromHeaders", () => {
   beforeEach(async () => {
     await UserTestModel.deleteMany({});
-    await McpServiceToken.deleteMany({});
+    await McpServiceToken.collection.deleteMany({});
     process.env.TOKEN_SECRET = "test-token-secret";
   });
 

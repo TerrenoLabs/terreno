@@ -5,10 +5,12 @@ import mongoose from "mongoose";
 import supertest from "supertest";
 
 import type {UserModel as UserModelType} from "./auth";
+import {AuthToken} from "./authTokens";
 import {createAccess} from "./rbac/access";
 import {terrenoStatements} from "./rbac/statements";
 import {TerrenoApp} from "./terrenoApp";
 import {authAsUser, setupDb, UserModel} from "./tests";
+import {expectDocumentedResponse, type OpenApiResponseSpec} from "./tests/openApiResponseSchema";
 
 const typedUserModel = UserModel as unknown as UserModelType;
 
@@ -193,6 +195,122 @@ describe("auth OpenAPI documentation", () => {
       expect(paths["/resetPassword"]).toBeUndefined();
       expect(paths["/auth/sendVerification"]).toBeUndefined();
       expect(paths["/auth/verifyEmail"]).toBeUndefined();
+    });
+  });
+
+  describe("documented responses", () => {
+    interface CapturedMail {
+      text: string;
+    }
+
+    let app: express.Application;
+    let spec: OpenApiResponseSpec;
+    let sentMail: CapturedMail[];
+
+    const tokenFromMail = (index: number): string => {
+      const match = sentMail[index]?.text.match(/token=([0-9a-f]+)/i);
+      expect(match).not.toBeNull();
+      return match?.[1] ?? "";
+    };
+
+    beforeEach(async () => {
+      await AuthToken.deleteMany({});
+      sentMail = [];
+      app = new TerrenoApp({
+        authOptions: {
+          publicAppUrl: "https://app.example.com",
+          sendMail: async (message) => {
+            sentMail.push(message);
+          },
+        },
+        rateLimit: false,
+        skipListen: true,
+        userModel: typedUserModel,
+      }).build();
+      spec = (await supertest(app).get("/openapi.json").expect(200)).body;
+    });
+
+    it("GET and PATCH /auth/me return bodies that match their schemas", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+
+      const me = await agent.get("/auth/me").expect(200);
+      expectDocumentedResponse({method: "get", path: "/auth/me", response: me, spec});
+
+      const patched = await agent.patch("/auth/me").send({name: "Documented"}).expect(200);
+      expectDocumentedResponse({method: "patch", path: "/auth/me", response: patched, spec});
+      expect(patched.body.data.name).toBe("Documented");
+    });
+
+    it("forgotPassword and both resetPassword paths return documented bodies", async () => {
+      for (const email of ["notAdmin@example.com", "nobody@example.com"]) {
+        const forgot = await supertest(app).post("/auth/forgotPassword").send({email}).expect(202);
+        expectDocumentedResponse({
+          method: "post",
+          path: "/auth/forgotPassword",
+          response: forgot,
+          spec,
+        });
+      }
+      expect(sentMail).toHaveLength(1);
+
+      const reset = await supertest(app)
+        .post("/auth/resetPassword")
+        .send({password: "new-password-123", token: tokenFromMail(0)})
+        .expect(200);
+      expectDocumentedResponse({
+        method: "post",
+        path: "/auth/resetPassword",
+        response: reset,
+        spec,
+      });
+
+      // Each request issues a fresh token, so the legacy path gets its own.
+      await supertest(app)
+        .post("/auth/forgotPassword")
+        .send({email: "notAdmin@example.com"})
+        .expect(202);
+      const legacyReset = await supertest(app)
+        .post("/resetPassword")
+        .send({newPassword: "newer-password-456", token: tokenFromMail(1)})
+        .expect(200);
+      expectDocumentedResponse({
+        method: "post",
+        path: "/resetPassword",
+        response: legacyReset,
+        spec,
+      });
+
+      await supertest(app)
+        .post("/auth/login")
+        .send({email: "notAdmin@example.com", password: "newer-password-456"})
+        .expect(200);
+    });
+
+    it("sendVerification and verifyEmail return documented bodies", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+
+      const sent = await agent.post("/auth/sendVerification").expect(202);
+      expectDocumentedResponse({
+        method: "post",
+        path: "/auth/sendVerification",
+        response: sent,
+        spec,
+      });
+      expect(sentMail).toHaveLength(1);
+
+      const verified = await supertest(app)
+        .post("/auth/verifyEmail")
+        .send({token: tokenFromMail(0)})
+        .expect(200);
+      expectDocumentedResponse({
+        method: "post",
+        path: "/auth/verifyEmail",
+        response: verified,
+        spec,
+      });
+
+      const me = await agent.get("/auth/me").expect(200);
+      expect(me.body.data.emailVerified).toBe(true);
     });
   });
 });

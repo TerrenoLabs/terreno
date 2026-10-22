@@ -35,13 +35,13 @@ Cap is **10** active tokens per user. List rows show prefix (`mcp_` + eight hex 
 Use a session or JWT. A service token cannot mint another token.
 
 ```bash
-curl -X POST "$API/mcp/service-tokens" \
+curl -X POST "$API/mcp/service-tokens/create" \
   -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
   -d '{"name":"Perplexity"}'
 ```
 
-Read `data.token` and `data.mcpUrl` from the JSON. List and revoke never return `token`. Do not log the secret.
+Read `data.token` and `data.mcpUrl` from the JSON. Only this create response carries `token`. List, read, revoke, and the synced `mcp/service-tokens` collection never return `token` or `tokenHash`. Do not log the secret.
 
 ## 4. Perplexity custom connector
 
@@ -104,7 +104,13 @@ The token acts as the owning user on **MCP only**. It cannot mint or list tokens
 
 ## 7. Revoke
 
-- **Owner:** Profile → MCP connections → **Revoke** on the row (`DELETE /mcp/service-tokens/:id`).
-- **Admin:** Admin → MCP service tokens (`/admin/mcp-service-tokens`). Create and update are off. Delete sets `revokedAt`; it does not hard-delete the row.
+- **Owner:** Profile → MCP connections → **Revoke** on the row (`POST /mcp/service-tokens/:id/revoke`).
+- **Admin:** Admin → MCP service tokens (`/admin/mcp-service-tokens`). Create and update are off. Delete sets `revokedAt`; it does not hard-delete or tombstone the row.
+
+The token list is a synced collection (`mcp/service-tokens`, owner-scoped), so a revoke from another device or the admin panel shows up on the owner's list as a `revokedAt` update.
 
 Revoked and expired keys fail `tools/call` immediately. Disabled user accounts are refused the same way as over HTTP.
+
+## Upgrading from 57.x
+
+58.0.0 gives `McpServiceToken` String ids. Before deploying, add the `mcp-service-token-string-ids` framework migration to your `migrations/` directory and apply it. Existing tokens keep working and keep their ids as hex strings. See [Run MongoDB migrations](run-mongodb-migrations.md#framework-migrations).

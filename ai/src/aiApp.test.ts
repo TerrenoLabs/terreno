@@ -50,7 +50,7 @@ describe("AiApp", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   const authAsUser = async (app: express.Application) => {

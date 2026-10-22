@@ -1,5 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
-import {fireEvent} from "@testing-library/react-native";
+import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../../../ui/src/test-utils";
 import {AiPromptHubView} from "./AiPromptHubView";
@@ -194,5 +194,49 @@ describe("AiPromptHubView", () => {
     expect(errored.getByTestId("ai-prompt-experiments-error")).toHaveTextContent(
       "Could not load relationships."
     );
+  });
+
+  it("keeps failed save, promote, and playground requests inside the view", async () => {
+    const failure = async (): Promise<void> => {
+      throw new Error("request failed");
+    };
+    const onRunPlayground = mock(failure);
+    const onSaveVersion = mock(failure);
+    const onSetProduction = mock(failure);
+    const view = renderWithTheme(
+      <AiPromptHubView
+        {...baseProps}
+        onRunPlayground={onRunPlayground}
+        onSaveVersion={onSaveVersion}
+        onSetProduction={onSetProduction}
+        playgroundError="run failed"
+        productionError="production failed"
+        saveError="save failed"
+      />
+    );
+    const press = async (testID: string): Promise<void> => {
+      await act(async () => {
+        fireEvent.press(view.getByTestId(testID));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    };
+
+    fireEvent.press(view.getByText("Versions"));
+    await press("ai-prompt-save-next");
+    expect(onSaveVersion).toHaveBeenCalledTimes(1);
+
+    await press("ai-prompt-set-production");
+    await act(async () => {
+      fireEvent.press(view.getByText("Set production"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(onSetProduction).toHaveBeenCalledWith(2);
+    // A failed promote leaves the confirmation open so the operator can retry or cancel.
+    expect(view.getByTestId("ai-prompt-production-modal-copy")).toBeTruthy();
+
+    fireEvent.press(view.getByText("Playground"));
+    await press("ai-prompt-run-once");
+    expect(onRunPlayground).toHaveBeenCalledTimes(1);
+    expect(view.getByTestId("ai-prompt-run-error")).toBeTruthy();
   });
 });

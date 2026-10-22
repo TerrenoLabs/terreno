@@ -1,5 +1,6 @@
 import {beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
+import {expectDocumentedResponse, type OpenApiResponseSpec} from "@terreno/api/testing";
 import type express from "express";
 import type mongoose from "mongoose";
 import supertest from "supertest";
@@ -268,6 +269,38 @@ describe("File Routes", () => {
         .attach("file", Buffer.from("hello"), {contentType: "text/plain", filename: "hi.txt"})
         .expect(200);
       expect(documented).toEqual(expect.arrayContaining(Object.keys(res.body.data)));
+    });
+
+    it("returns upload, read, and delete bodies that match the documented schemas", async () => {
+      const spec = (await supertest(app).get("/openapi.json").expect(200))
+        .body as OpenApiResponseSpec;
+      const keyPath = Object.keys(spec.paths ?? {}).find(
+        (path) => path.startsWith("/files/") && path !== "/files/upload"
+      );
+      expect(keyPath).toBeDefined();
+      const agent = await authAsUser(app, "notAdmin");
+
+      const uploaded = await agent
+        .post("/files/upload")
+        .attach("file", Buffer.from("hello"), {contentType: "text/plain", filename: "hi.txt"})
+        .expect(200);
+      expectDocumentedResponse({method: "post", path: "/files/upload", response: uploaded, spec});
+
+      const gcsKey = `uploads/${userId.toString()}/1727550000000-documented.txt`;
+      await FileAttachment.create({
+        filename: "documented.txt",
+        gcsKey,
+        mimeType: "text/plain",
+        size: 5,
+        url: "https://example.com/documented.txt",
+        userId,
+      });
+
+      const read = await agent.get(`/files/${gcsKey}`).expect(200);
+      expectDocumentedResponse({method: "get", path: keyPath ?? "", response: read, spec});
+
+      const deleted = await agent.delete(`/files/${gcsKey}`).expect(200);
+      expectDocumentedResponse({method: "delete", path: keyPath ?? "", response: deleted, spec});
     });
   });
 

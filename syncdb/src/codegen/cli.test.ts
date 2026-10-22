@@ -77,6 +77,38 @@ describe("terreno-syncdb-codegen CLI", () => {
     }
   });
 
+  it("drops --config excludePaths from the API SDK", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "syncdb-cli-"));
+    const apiOut = join(dir, "apiSdk.ts");
+    const configPath = join(dir, "config.json");
+    const apiFixture = join(import.meta.dir, "fixtures", "openapi.api.json");
+    try {
+      await writeFile(configPath, JSON.stringify({excludePaths: ["/auth/", "^/files/upload$"]}));
+      const proc = Bun.spawn(
+        [
+          "bun",
+          cliPath,
+          "--schema",
+          apiFixture,
+          "--api-out",
+          apiOut,
+          "--config",
+          configPath,
+          "--no-format",
+        ],
+        {stderr: "pipe", stdout: "pipe"}
+      );
+      expect(await proc.exited).toBe(0);
+      const source = await readFile(apiOut, "utf8");
+      expect(source).not.toContain("export const useGetAuthMeQuery");
+      expect(source).not.toContain("export const usePostFilesUploadMutation");
+      expect(source).toContain("export const useGetFilesByGcsKeyQuery");
+      expect(source).toContain("export const useGetVersionCheckQuery");
+    } finally {
+      await rm(dir, {force: true, recursive: true});
+    }
+  });
+
   it("exits 1 with the error message when the spec has clashing operation names", async () => {
     const dir = await mkdtemp(join(tmpdir(), "syncdb-cli-"));
     const spec = join(dir, "clash.json");

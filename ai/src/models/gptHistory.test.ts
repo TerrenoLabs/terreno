@@ -5,11 +5,11 @@ import {GptHistory} from "./gptHistory";
 
 describe("GptHistory Model", () => {
   beforeEach(async () => {
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   afterEach(async () => {
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("schema", () => {
@@ -268,6 +268,7 @@ describe("GptHistory Model", () => {
     it("loads a history saved before asks existed", async () => {
       const userId = new mongoose.Types.ObjectId();
       const {insertedId} = await GptHistory.collection.insertOne({
+        _id: new mongoose.Types.ObjectId().toHexString(),
         created: new Date("2026-01-05T09:00:00.000Z"),
         deleted: false,
         prompts: [

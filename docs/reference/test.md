@@ -106,6 +106,24 @@ If `registerBackendPreload` cannot start Mongo, every later test fails at once w
 | `waitForDocument` / `waitForDocuments` | Poll until documents match a query. |
 | `startTestTransaction` / `abortTestTransaction` | Per-test mongoose transactions when enabled. |
 
+### Documented-response checks (`@terreno/api/testing`)
+
+`expectDocumentedResponse({spec, path, method, response})` validates a real response body
+against the schema `/openapi.json` documents for that path, method, and status (AJV, with
+`#/components/...` refs and `nullable` resolved). It throws listing every violation, or when
+the route, status, or media type is not documented. `validateDocumentedResponse` returns
+`{valid, errors}` instead of throwing. `path` is the OpenAPI template
+(`/announcements/{id}/click`); pass the supertest response as `response`.
+
+```typescript
+import {authAsUser, expectDocumentedResponse} from "@terreno/api/testing";
+
+const spec = (await supertest(app).get("/openapi.json")).body;
+const agent = await authAsUser(app, "notAdmin");
+const res = await agent.get("/auth/me").expect(200);
+expectDocumentedResponse({method: "get", path: "/auth/me", response: res, spec});
+```
+
 ## Conventions
 
 - Preload once per package via `bunfig.toml`; do not start Mongo in individual test files.

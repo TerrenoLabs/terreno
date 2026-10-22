@@ -2,7 +2,8 @@
  * Better Auth client configuration for the example frontend.
  */
 
-import {baseUrl, createBetterAuthClient} from "@terreno/rtk";
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 import Constants from "expo-constants";
 
 const getAppScheme = (): string => {
@@ -10,8 +11,8 @@ const getAppScheme = (): string => {
   return expoExtra?.scheme ?? "frontend";
 };
 
-// `baseUrl` from @terreno/rtk is the single source of truth every other caller
-// (RTK Query, sockets, syncdb) already uses. A separate resolver here previously
+// `baseUrl` from @terreno/syncdb/config is the single source of truth every other caller
+// (the API client, sockets, syncdb) already uses. A separate resolver here previously
 // fell back to `extra.BASE_URL` (localhost:4000) in dev, which points at the
 // device itself on an Android emulator instead of the host machine.
 export const betterAuthClient = createBetterAuthClient({

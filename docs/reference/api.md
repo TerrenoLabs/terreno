@@ -300,7 +300,7 @@ Create, update, and delete tools share REST permission, hook, and persistence se
 
 ### MCP service token model
 
-`McpServiceToken` stores the hashed credential records used by the optional MCP service-token feature. It is not a `modelRouter` model: consumer-facing create, list, and revoke routes are registered only when `mcpServiceTokens` is enabled on `TerrenoApp`.
+`McpServiceToken` stores the hashed credential records used by the optional MCP service-token feature. `_id` is a String (UUID for new rows; ObjectId hex for rows migrated from 57.x). The schema uses `isDeletedPlugin` and `syncPlugin`, so with `mcpServiceTokens` enabled the collection is synced read-only to its owner.
 
 ```typescript
 import {McpServiceToken} from "@terreno/api";
@@ -312,17 +312,23 @@ const {mcpServiceToken, token} = await McpServiceToken.issueFor(
 // Store or show `token` once. Only its SHA-256 hash is persisted.
 ```
 
-The token begins with `mcp_` followed by 32 random bytes encoded as hex. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. Document `deleteOne` (admin DELETE) also sets `revokedAt` and leaves the row for audit. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
+The token begins with `mcp_` followed by 32 random bytes encoded as hex. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. A delete never removes or tombstones the row: document `deleteOne` and a soft delete (admin DELETE sets `deleted: true`) both set `revokedAt` and keep `deleted: false`, so the owner's synced row shows the revoke. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
 
-Self-serve HTTP routes live at `/mcp/service-tokens`. `TerrenoApp` mounts them when `mcpServiceTokens` is enabled, passing its OpenAPI bundle. You can also call `addMcpServiceTokenRoutes(app, {publicMcpUrl, openApi})` yourself. They require session or JWT auth and **reject** `Authorization: Bearer mcp_…` so a service token cannot mint or list tokens.
+Self-serve routes are `modelRouter("/mcp/service-tokens", McpServiceToken, {sync: {scope: {type: "owner", field: "userId"}}})`. `TerrenoApp` mounts them when `mcpServiceTokens` is enabled, passing its OpenAPI bundle. You can also call `addMcpServiceTokenRoutes(app, {publicMcpUrl, openApi})` yourself, or build the registration with `createMcpServiceTokenRouter(options)`. They require session or JWT auth and **reject** `Authorization: Bearer mcp_…` so a service token cannot mint, list, or revoke tokens.
 
 | Method | Path | Body / params | Response |
 | --- | --- | --- | --- |
-| POST | `/mcp/service-tokens` | `{name, expiresAt?}` | `{data: {id, name, token, tokenPrefix, mcpUrl, expiresAt, created}}` |
-| GET | `/mcp/service-tokens` | `?page&limit` | `{data, page, limit, total, more}` — no `token` or `tokenHash` |
-| DELETE | `/mcp/service-tokens/:id` | — | `{data: {id, revokedAt}}` — owner only |
+| POST | `/mcp/service-tokens/create` | `{name, expiresAt?}` | `{data: {id, name, token, tokenPrefix, mcpUrl, expiresAt, created}}` (operation `mcpServiceTokens_create`) |
+| GET | `/mcp/service-tokens` | `?page&limit` | `{data, page, limit, more, total}` — the caller's rows, no `token` or `tokenHash` |
+| GET | `/mcp/service-tokens/:id` | — | `{data}` — owner only (`403` otherwise) |
+| POST | `/mcp/service-tokens/:id/revoke` | — | `{data}` — the revoked row without `tokenHash` (operation `mcpServiceTokens_revoke`) |
+| POST / PATCH / DELETE | `/mcp/service-tokens[/:id]` | — | `405`: client writes are disabled |
 
-`expiresAt` is an optional ISO-8601 datetime (Luxon `DateTime.fromISO`). Omit it for a token that does not expire. Create returns `mcpUrl` from `publicMcpUrl`, else `BETTER_AUTH_URL`, else the request host, with `/mcp` appended when missing. An 11th **active** token for the same user is `400`. Revoke and cross-owner access are `404`. List includes revoked rows for the owner so the UI can show history. Default page size is 100 (maximum 100).
+`expiresAt` is an optional ISO-8601 datetime (Luxon `DateTime.fromISO`). Omit it for a token that does not expire. Create returns `mcpUrl` from `publicMcpUrl`, else `BETTER_AUTH_URL`, else the request host, with `/mcp` appended when missing. An 11th **active** token for the same user is `400`. Revoking an unknown, foreign, or already revoked token is `404`. List includes revoked rows for the owner so the UI can show history. Default and maximum page size is 100.
+
+Sync: collection `mcp/service-tokens`, stream `mcp/service-tokens|owner:{userId}`. Snapshot entities, `/sync/entities` rows, and `sync:delta` payloads go through `toPublicMcpServiceToken`, which drops `tokenHash`. Sync `create`, `update`, and `delete` mutations are nacked `unauthorized`; mint and revoke through the actions above.
+
+Migration: `mcpServiceTokenStringIdsMigration.up` (slug `mcp-service-token-string-ids`) re-inserts each ObjectId row with `_id = oldId.toHexString()` and deletes the original. It is idempotent, resumes an interrupted run, and works without transactions. `migrateMcpServiceTokenStringIds(ctx)` returns `{converted, pending}`. Wire it into an app `migrations/` file as shown in [Run MongoDB migrations](../how-to/run-mongodb-migrations.md#framework-migrations).
 
 ## Authentication
 

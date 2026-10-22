@@ -1,25 +1,16 @@
-import {describe, expect, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
+import {describe, expect, it, mock, spyOn} from "bun:test";
+import {act, renderHook, waitFor} from "@testing-library/react-native";
 
+import {createFakeRequestClient, fakeHttpError} from "./test-utils";
 import type {ConsentFormPublic} from "./useConsentForms";
 import {detectLocale, useConsentForms} from "./useConsentForms";
+import {useSubmitConsent} from "./useSubmitConsent";
 
-type ConsentFormsApi = Parameters<typeof useConsentForms>[0];
+const makeForm = (id: string): ConsentFormPublic =>
+  ({id, title: `Form ${id}`}) as unknown as ConsentFormPublic;
 
 interface GlobalThisWithNavigator {
   navigator: {language: string} | undefined;
-}
-
-interface MockQueryDef {
-  onQueryStarted?: (
-    _arg: unknown,
-    helpers: {queryFulfilled: Promise<{data: ConsentFormPublic[]}> | Promise<never>}
-  ) => Promise<void>;
-  query: () => string;
-}
-
-interface MockInjectOpts {
-  endpoints: (build: {query: (def: MockQueryDef) => string}) => Record<string, unknown>;
 }
 
 mock.module("expo-localization", () => ({
@@ -66,112 +57,68 @@ describe("detectLocale", () => {
 });
 
 describe("useConsentForms", () => {
-  const buildApi = (queryResult: {data?: unknown; error?: unknown; isLoading?: boolean}) => {
-    const refetch = mock(() => {});
-    const useGetPendingConsentsQuery = mock(() => ({
-      data: queryResult.data,
-      error: queryResult.error,
-      isLoading: queryResult.isLoading ?? false,
-      refetch,
-    }));
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock((opts: MockInjectOpts) => {
-          // Call endpoint builder to exercise provides/onQueryStarted
-          const build = {
-            query: mock((def: MockQueryDef) => {
-              // Call onQueryStarted with a successful result
-              if (def.onQueryStarted) {
-                void def.onQueryStarted(undefined, {
-                  queryFulfilled: Promise.resolve({data: [{id: "1"}]}),
-                });
-              }
-              // Also exercise the URL builder
-              def.query();
-              return "pending-query";
-            }),
-          };
-          opts.endpoints(build);
-          return {useGetPendingConsentsQuery};
-        }),
-      })),
-    };
-    return {api, refetch};
-  };
-
-  it("returns an array of forms when response is an array", () => {
-    const {api} = buildApi({data: [{id: "1", title: "Form 1"} as unknown as ConsentFormPublic]});
-    const {result} = renderHook(() => useConsentForms(api as unknown as ConsentFormsApi));
-    expect(result.current.forms).toBeDefined();
-    expect(Array.isArray(result.current.forms)).toBe(true);
-  });
-
-  it("unwraps .data property when response is object shape", () => {
-    const {api} = buildApi({data: {data: [{id: "2"} as unknown as ConsentFormPublic]}});
-    const {result} = renderHook(() => useConsentForms(api as unknown as ConsentFormsApi, "/api"));
-    expect(Array.isArray(result.current.forms)).toBe(true);
-  });
-
-  it("returns empty array when no data is present", () => {
-    const {api} = buildApi({data: undefined, isLoading: true});
-    const {result} = renderHook(() => useConsentForms(api as unknown as ConsentFormsApi));
-    expect(result.current.forms).toEqual([]);
+  it("returns forms from a bare array response", async () => {
+    const {client, calls} = createFakeRequestClient({
+      "GET /consents/pending": () => [makeForm("1")],
+    });
+    const {result} = renderHook(() => useConsentForms(client));
     expect(result.current.isLoading).toBe(true);
+    expect(result.current.forms).toEqual([]);
+    await waitFor(() => expect(result.current.forms).toHaveLength(1));
+    expect(result.current.isLoading).toBe(false);
+    expect(calls[0]?.url).toBe("/consents/pending");
   });
 
-  it("calls onQueryStarted with failing query", () => {
-    const refetch = mock(() => {});
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock((opts: MockInjectOpts) => {
-          const build = {
-            query: mock((def: MockQueryDef) => {
-              if (def.onQueryStarted) {
-                void def.onQueryStarted(undefined, {
-                  queryFulfilled: Promise.reject(new Error("failed")),
-                });
-              }
-              return "q";
-            }),
-          };
-          opts.endpoints(build);
-          return {
-            useGetPendingConsentsQuery: () => ({
-              data: undefined,
-              error: "error",
-              isLoading: false,
-              refetch,
-            }),
-          };
-        }),
-      })),
-    };
-    const {result} = renderHook(() => useConsentForms(api as unknown as ConsentFormsApi));
-    expect(result.current.error).toBe("error");
+  it("unwraps a {data} envelope and prefixes baseUrl", async () => {
+    const {client, calls} = createFakeRequestClient({
+      "GET /api/consents/pending": () => ({data: [makeForm("2")]}),
+    });
+    const {result} = renderHook(() => useConsentForms(client, "/api"));
+    await waitFor(() => expect(result.current.forms[0]?.id).toBe("2"));
+    expect(calls[0]?.url).toBe("/api/consents/pending");
   });
 
-  it("injects the pending-consents endpoint only once per (api, baseUrl)", () => {
-    let injectCallCount = 0;
-    const refetch = mock(() => {});
-    const useGetPendingConsentsQuery = mock(() => ({
-      data: undefined,
-      error: undefined,
-      isLoading: false,
-      refetch,
+  it("returns an empty array when the envelope has no data", async () => {
+    const {client} = createFakeRequestClient({"GET /consents/pending": () => ({})});
+    const {result} = renderHook(() => useConsentForms(client));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.forms).toEqual([]);
+  });
+
+  it("surfaces request errors and logs a warning", async () => {
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    const failure = fakeHttpError(500);
+    const {client} = createFakeRequestClient({
+      "GET /consents/pending": () => {
+        throw failure;
+      },
+    });
+    const {result} = renderHook(() => useConsentForms(client));
+    await waitFor(() => expect(result.current.error).toBe(failure));
+    expect(result.current.forms).toEqual([]);
+    expect(warn).toHaveBeenCalledWith("[useConsentForms] Failed to fetch pending consent forms", {
+      error: failure,
+    });
+    warn.mockRestore();
+  });
+
+  it("refetches when a consent submission invalidates pending consents", async () => {
+    let forms = [makeForm("1")];
+    const {client, callsTo} = createFakeRequestClient({
+      "GET /consents/pending": () => forms,
+      "POST /consents/respond": () => ({agreed: true}),
+    });
+    const {result} = renderHook(() => ({
+      pending: useConsentForms(client),
+      submit: useSubmitConsent(client),
     }));
-    const api = {
-      enhanceEndpoints: () => ({
-        injectEndpoints: () => {
-          injectCallCount += 1;
-          return {useGetPendingConsentsQuery};
-        },
-      }),
-    };
-    const {rerender} = renderHook(() => useConsentForms(api as unknown as ConsentFormsApi));
-    rerender(undefined);
-    rerender(undefined);
-    // The hook reuses the cached enhanced api after the first render so the
-    // dev-mode RTK warning about re-injecting endpoints never fires.
-    expect(injectCallCount).toBe(1);
+    await waitFor(() => expect(result.current.pending.forms).toHaveLength(1));
+
+    forms = [];
+    await act(async () => {
+      await result.current.submit.submit({agreed: true, consentFormId: "1", locale: "en"});
+    });
+    await waitFor(() => expect(result.current.pending.forms).toHaveLength(0));
+    expect(callsTo("GET /consents/pending")).toHaveLength(2);
   });
 });

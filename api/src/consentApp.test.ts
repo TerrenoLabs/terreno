@@ -9,6 +9,7 @@ import {ConsentForm} from "./models/consentForm";
 import {ConsentResponse} from "./models/consentResponse";
 import {TerrenoApp} from "./terrenoApp";
 import {authAsUser, setupDb, type User, UserModel} from "./tests";
+import {expectDocumentedResponse} from "./tests/openApiResponseSchema";
 import type {ConsentFormDocument} from "./types/consentForm";
 
 const buildApp = (consentAppOptions: ConsentAppOptions = {}): express.Application =>
@@ -1021,6 +1022,12 @@ describe("ConsentApp", () => {
       const agent = await authAsUser(app, "notAdmin");
 
       const pendingRes = await agent.get("/consents/pending").expect(200);
+      expectDocumentedResponse({
+        method: "get",
+        path: "/consents/pending",
+        response: pendingRes,
+        spec: docRes.body,
+      });
       const pendingDocumented = Object.keys(
         responseSchema(paths, "/consents/pending", "get")?.properties?.data?.items?.properties ?? {}
       );
@@ -1037,6 +1044,12 @@ describe("ConsentApp", () => {
           signature: "data:image/png;base64,AA",
         })
         .expect(200);
+      expectDocumentedResponse({
+        method: "post",
+        path: "/consents/respond",
+        response: respondRes,
+        spec: docRes.body,
+      });
       const respondDocumented = Object.keys(
         responseSchema(paths, "/consents/respond", "post")?.properties?.data?.properties ?? {}
       );

@@ -1,6 +1,6 @@
 import {describe, expect, it} from "bun:test";
 
-import {ApiError, createApiClient, type FetchLike, isApiError} from "./client";
+import {ApiError, apiFetch, createApiClient, type FetchLike, isApiError} from "./client";
 
 interface RecordedCall {
   url: string;
@@ -573,5 +573,97 @@ describe("query cache races and keys", () => {
     expect(first).toEqual(["a"]);
     expect(second).toEqual(["b"]);
     expect(calls).toHaveLength(2);
+  });
+});
+
+describe("apiFetch called directly", () => {
+  it("cancels an in-flight request when the caller's signal fires after it started", async () => {
+    let started: () => void = () => {};
+    const fetchStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const hanging: FetchLike = (_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("aborted", "AbortError"));
+        });
+        started();
+      });
+    const caller = new AbortController();
+
+    const pending = failureOf(apiFetch({fetchImpl: hanging, signal: caller.signal, url: "/slow"}));
+    await fetchStarted;
+    caller.abort();
+
+    const error = await pending;
+    expect(error.status).toBe(0);
+    expect(error.data).toEqual({code: "request-aborted", title: "Request cancelled"});
+  });
+
+  it("uses the global fetch when no fetchImpl is given", async () => {
+    const originalFetch = globalThis.fetch;
+    const seen: string[] = [];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      seen.push(String(input));
+      return jsonResponse({ok: true});
+    }) as typeof fetch;
+    try {
+      const {result} = await apiFetch({params: {q: "a"}, url: "http://api.test/search"});
+
+      expect(result).toEqual({ok: true});
+      expect(seen).toEqual(["http://api.test/search?q=a"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("falls back to the status text when a JSON error body is malformed or untitled", async () => {
+    const {fetchImpl} = scriptedFetch([
+      () =>
+        new Response("{not json", {
+          headers: {"Content-Type": "application/json"},
+          status: 502,
+          statusText: "Bad Gateway",
+        }),
+      () => jsonResponse({detail: "no title"}, 503),
+    ]);
+
+    const malformed = await failureOf(apiFetch({fetchImpl, url: "/a"}));
+    const untitled = await failureOf(apiFetch({fetchImpl, url: "/b"}));
+
+    expect(malformed.status).toBe(502);
+    expect(malformed.data).toEqual({title: "Bad Gateway"});
+    expect(untitled.data).toEqual({title: "Request failed (503)"});
+  });
+});
+
+describe("tag invalidation failures", () => {
+  it("records a failed refetch on the subscribed entry without an unhandled rejection", async () => {
+    const {fetchImpl} = scriptedFetch([
+      () => jsonResponse({data: {name: "Ada"}}),
+      () => jsonResponse({title: "Gone"}, 500),
+    ]);
+    const client = createApiClient({baseUrl: "http://api.test", fetchImpl});
+    const args = {url: "/auth/me"};
+    let notified = 0;
+    const unsubscribe = client.subscribeQuery(
+      args,
+      () => {
+        notified += 1;
+      },
+      {providesTags: ["profile"]}
+    );
+    await client.fetchQuery(args, {providesTags: ["profile"]});
+
+    client.invalidateTags(["profile"]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const state = client.getQueryState<{name: string}>(args);
+    expect(state.status).toBe("rejected");
+    expect((state.error as ApiError).data.title).toBe("Gone");
+    expect(state.data).toEqual({name: "Ada"});
+    expect(notified).toBeGreaterThan(0);
+    unsubscribe();
+    client.reset();
   });
 });

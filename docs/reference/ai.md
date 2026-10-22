@@ -93,7 +93,8 @@ src/
   `getMCPTools`, `runBufferedChatTurn` (one chat turn to completion without HTTP: the same system
   prompt, tools, and block checks as `/gpt/histories/:id/turn`; takes `{body: {historyId, prompt},
   options, req}` where `req` carries `user` and `headers`)
-- **Models:** `AIRequest`, `GptHistory`, `FileAttachment`, `Project` (lazy; prefer `getProjectModel()`)
+- **Models:** `AIRequest`, `AIDataset`, `GptHistory`, `FileAttachment`, `Project` (lazy; prefer `getProjectModel()`)
+- **Migrations:** `gptHistoryStringIdsMigration` (`{slug, up}` for an app migration file), `migrateGptHistoryStringIds`, `GPT_HISTORY_STRING_IDS_MIGRATION`, type `GptHistoryStringIdsResult` ([GptHistory String ids](#gpthistory-string-ids))
 - **Routes:** `addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`, `addFileRoutes`, `addProjectRoutes`, `addMcpRoutes`
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
 - **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
@@ -221,10 +222,12 @@ Logs all AI calls for monitoring and admin explorer.
 
 ### GptHistory
 
-Conversation history with multi-modal prompts.
+Conversation history with multi-modal prompts. A synced collection: `/gpt/histories` streams each
+user's histories to `@terreno/syncdb` clients (see [addGptHistoryRoutes](#addgpthistoryroutesrouter-options)).
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `_id` | string | A UUID for new histories, so offline sync clients can mint ids. Histories saved before 58 keep their old ObjectId as a hex string after the [migration](#gpthistory-string-ids) |
 | `userId` | ObjectId | Owner (required) |
 | `title` | string? | Auto-generated on the first chat turn's reply (`/gpt/prompt` or `turn`) when empty |
 | `projectId` | ObjectId? | Optional project association |
@@ -234,6 +237,30 @@ Conversation history with multi-modal prompts.
 Assistant replies from `/gpt/prompt` carry `streamId` and `status`: `streaming` while partial text is persisted, then `complete` or `error`. A paused ask's reply is `complete`, and `pendingAsk` is set beside it. `buildMessages` skips `streaming` replies and `error` replies with no output. Attachment `content` parts carry an optional `gcsKey` when the file was uploaded to durable storage.
 
 **Virtual:** `ownerId` aliases `userId` for `Permissions.IsOwner`.
+
+**Plugins:** `createdUpdatedPlugin`, `isDeletedPlugin`, `findOneOrNone`, `findExactlyOne`, `syncPlugin`. `syncPlugin` refuses `GptHistory.deleteMany`, `updateMany`, hard deletes, upserts, and query writes whose filter has no `_id`. Write one history at a time by `_id`; in tests, clear the collection with `GptHistory.collection.deleteMany({})`.
+
+`AIDataset.historyId` is the history's String `_id`. `registerAiDataset` still accepts an ObjectId and stores its hex string.
+
+#### GptHistory String ids
+
+Terreno 58 changed `GptHistory._id` from ObjectId to String. Histories saved before the upgrade still have ObjectId `_id`s, which the String schema cannot find. The `gpt-history-string-ids` migration moves them. Add it to the app's `migrations/` directory and apply it with `terreno-migrate` before deploying 58 frontends:
+
+```typescript
+// migrations/20261022130000-gpt-history-string-ids.ts
+import {gptHistoryStringIdsMigration} from "@terreno/ai";
+
+export const id = "20261022130000-gpt-history-string-ids";
+export const up = gptHistoryStringIdsMigration.up;
+```
+
+| Step | Effect |
+|------|--------|
+| 1 | Copy each ObjectId history (500 per batch) to `_id: oldId.toHexString()`, keeping every stored field. URLs and clients that hold the hex id keep working |
+| 2 | Rewrite `AIDataset.historyId` refs from the ObjectId to the hex string, including refs to histories that no longer exist |
+| 3 | Delete the ObjectId originals |
+
+A dry run (`terreno-migrate up --dry`) only counts the histories and refs it would change. The migration writes through the MongoDB driver, so it does not stamp sync seqs; moved histories reach sync clients as unstamped legacy rows on the next snapshot. Running it again changes nothing, and a run stopped partway finishes on the next run. It has no `down`: new histories get UUIDs, which have no ObjectId to go back to. `migrateGptHistoryStringIds({connection, dryRun, batchSize?, logger?, checkCancellation?})` runs the same steps without a migration file and returns `{historiesMigrated, datasetsUpdated}`.
 
 ### FileAttachment
 
@@ -408,6 +435,8 @@ CRUD at `/gpt/histories` via `modelRouter`:
 |-----------|------------|
 | Create, List | `IsAuthenticated` |
 | Read, Update, Delete | `IsOwner` |
+
+Registered with the three-argument `modelRouter("/gpt/histories", GptHistory, {sync: {scope: {type: "owner", field: "userId"}}})`, so `SyncApp` serves the histories as the sync collection `gpt/histories` on each user's stream `gpt/histories|owner:{userId}`. A client reads them with `useQuery("gpt/histories")` and renames or deletes them with `useMutate("gpt/histories")`; sync payloads go through the same response handler as REST, so they also leave out `pendingAsk.promptIndex` and `pendingAsk.responseMessages`. Register `SyncApp` (and `RealtimeApp` for live deltas) in the app. REST CRUD stays for clients that do not sync. Every history route takes the String `_id`.
 
 Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`. Create sets `userId` to the caller, so `{}` is a valid create body even when the app validates request bodies. Create and update bodies drop `pendingAsk` (including dotted `pendingAsk.*` paths), so only a chat turn writes it; the OpenAPI spec marks it `readOnly` on create and update.
 

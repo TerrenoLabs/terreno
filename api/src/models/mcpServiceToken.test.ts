@@ -1,16 +1,20 @@
 import {beforeEach, describe, it} from "bun:test";
-import {createHash} from "node:crypto";
+import {createHash, randomUUID} from "node:crypto";
 import {assert} from "chai";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
+import {clearSyncRegistry} from "../sync/registry";
 import {McpServiceToken} from "./mcpServiceToken";
 
 const hashToken = (token: string): string => createHash("sha256").update(token).digest("hex");
 
 describe("McpServiceToken", () => {
   beforeEach(async () => {
-    await McpServiceToken.deleteMany({});
+    // Model-level behaviour without the /mcp/service-tokens sync registration.
+    clearSyncRegistry();
+    // Model.deleteMany is rejected once the collection is sync-registered by another suite.
+    await McpServiceToken.collection.deleteMany({});
     await McpServiceToken.syncIndexes();
   });
 
@@ -23,6 +27,51 @@ describe("McpServiceToken", () => {
     assert.equal(issued.mcpServiceToken.tokenHash, hashToken(issued.token));
     assert.equal(issued.mcpServiceToken.tokenPrefix, issued.token.slice(4, 12));
     assert.notInclude(JSON.stringify(issued.mcpServiceToken.toJSON()), issued.token);
+  });
+
+  it("mints UUID string ids", async () => {
+    const issued = await McpServiceToken.issueFor(
+      {_id: new mongoose.Types.ObjectId()},
+      {name: "Uuid"}
+    );
+
+    assert.isString(issued.mcpServiceToken._id);
+    assert.match(
+      issued.mcpServiceToken._id,
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
+    assert.isFalse(issued.mcpServiceToken.deleted);
+  });
+
+  it("turns a soft delete into a revoke so the row stays visible", async () => {
+    const issued = await McpServiceToken.issueFor(
+      {_id: new mongoose.Types.ObjectId()},
+      {name: "Soft delete"}
+    );
+
+    issued.mcpServiceToken.deleted = true;
+    await issued.mcpServiceToken.save();
+
+    const stored = await McpServiceToken.findExactlyOne({_id: issued.mcpServiceToken._id});
+    assert.isFalse(stored.deleted);
+    assert.instanceOf(stored.revokedAt, Date);
+    assert.isNull(await McpServiceToken.verify(issued.token));
+  });
+
+  it("keeps an existing revokedAt when a revoked token is soft deleted", async () => {
+    const issued = await McpServiceToken.issueFor(
+      {_id: new mongoose.Types.ObjectId()},
+      {name: "Already revoked"}
+    );
+    const revokedAt = DateTime.now().minus({day: 1}).toJSDate();
+    issued.mcpServiceToken.revokedAt = revokedAt;
+    await issued.mcpServiceToken.save();
+
+    issued.mcpServiceToken.deleted = true;
+    await issued.mcpServiceToken.save();
+
+    const stored = await McpServiceToken.findExactlyOne({_id: issued.mcpServiceToken._id});
+    assert.equal(stored.revokedAt?.getTime(), revokedAt.getTime());
   });
 
   it("verifies an active token but not a revoked or expired token", async () => {
@@ -63,9 +112,7 @@ describe("McpServiceToken", () => {
     assert.instanceOf(revoked?.revokedAt, Date);
 
     assert.isNull(await McpServiceToken.revokeForUser({_id: ownerId}, issued.mcpServiceToken._id));
-    assert.isNull(
-      await McpServiceToken.revokeForUser({_id: ownerId}, new mongoose.Types.ObjectId())
-    );
+    assert.isNull(await McpServiceToken.revokeForUser({_id: ownerId}, randomUUID()));
   });
 
   it("enforces unique token hashes", async () => {

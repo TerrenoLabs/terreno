@@ -1,18 +1,33 @@
 import type {Application, NextFunction, Request, Response} from "express";
 import {DateTime} from "luxon";
-import mongoose from "mongoose";
+import type {Document} from "mongoose";
 
-import {asyncHandler, type OpenApiMiddleware} from "../api";
-import {authenticateMiddleware, type User} from "../auth";
+import {
+  type ModelRouterOptions,
+  type ModelRouterRegistration,
+  modelRouter,
+  type OpenApiMiddleware,
+  type RESTMethod,
+} from "../api";
+import type {User} from "../auth";
 import {BadRequestError, NotFoundError, UnauthorizedError} from "../errors";
 import {McpServiceToken} from "../models/mcpServiceToken";
-import {createOpenApiBuilder} from "../openApiBuilder";
+import {Permissions} from "../permissions";
+import {defaultResponseHandler} from "../transformers";
 import type {McpServiceTokenDocument} from "../types/mcpServiceToken";
+import {z} from "../zodOpenApi";
 
 export const MAX_ACTIVE_MCP_SERVICE_TOKENS = 10;
 
+/** Route path of the self-serve MCP service token router. */
+export const MCP_SERVICE_TOKENS_ROUTE_PATH = "/mcp/service-tokens";
+
+/** Sync collection tag clients subscribe to (`mcp/service-tokens|owner:{userId}`). */
+export const MCP_SERVICE_TOKENS_SYNC_COLLECTION = "mcp/service-tokens";
+
 const DEFAULT_LIST_LIMIT = 100;
 const MAX_LIST_LIMIT = 100;
+const ACTION_TAG = "mcpServiceTokens";
 
 export interface McpServiceTokenRoutesOptions {
   openApi?: OpenApiMiddleware;
@@ -58,18 +73,14 @@ const rejectMcpServiceTokenBearer = (req: Request, _res: Response, next: NextFun
   next();
 };
 
-const requireAuthenticatedUser = (req: Request): User => {
-  const user = req.user as unknown as User | undefined;
+const requireAuthenticatedUser = (user: User | undefined): User => {
   if (!user?._id) {
     throw new UnauthorizedError("Unauthorized");
   }
   return user;
 };
 
-const parseName = (value: unknown): string => {
-  if (typeof value !== "string") {
-    throw new BadRequestError({title: "name is required"});
-  }
+const parseName = (value: string): string => {
   const name = value.trim();
   if (!name) {
     throw new BadRequestError({title: "name is required"});
@@ -77,12 +88,9 @@ const parseName = (value: unknown): string => {
   return name;
 };
 
-const parseExpiresAt = (value: unknown): Date | undefined => {
+const parseExpiresAt = (value: string | null | undefined): Date | undefined => {
   if (value === undefined || value === null || value === "") {
     return undefined;
-  }
-  if (typeof value !== "string") {
-    throw new BadRequestError({title: "expiresAt must be an ISO-8601 datetime string"});
   }
   const parsed = DateTime.fromISO(value, {setZone: true});
   if (!parsed.isValid) {
@@ -92,28 +100,6 @@ const parseExpiresAt = (value: unknown): Date | undefined => {
     throw new BadRequestError({title: "expiresAt must be in the future"});
   }
   return parsed.toUTC().toJSDate();
-};
-
-const parsePage = (value: unknown): number => {
-  if (value === undefined) {
-    return 1;
-  }
-  const page = Number(value);
-  if (!Number.isInteger(page) || page < 1) {
-    throw new BadRequestError({code: "invalid-page", title: "Invalid page"});
-  }
-  return page;
-};
-
-const parseLimit = (value: unknown): number => {
-  if (value === undefined) {
-    return DEFAULT_LIST_LIMIT;
-  }
-  const limit = Number(value);
-  if (!Number.isInteger(limit) || limit < 1) {
-    throw new BadRequestError({title: "Invalid limit"});
-  }
-  return Math.min(limit, MAX_LIST_LIMIT);
 };
 
 const resolveMcpUrl = (req: Request, publicMcpUrl?: string): string => {
@@ -129,179 +115,168 @@ const resolveMcpUrl = (req: Request, publicMcpUrl?: string): string => {
   return `${req.protocol}://${host}/mcp`;
 };
 
-const toListItem = (doc: McpServiceTokenDocument): Record<string, unknown> => {
-  return {
-    created: doc.created.toISOString(),
-    expiresAt: doc.expiresAt ? doc.expiresAt.toISOString() : null,
-    id: String(doc._id),
-    lastUsedAt: doc.lastUsedAt ? doc.lastUsedAt.toISOString() : null,
-    name: doc.name,
-    revokedAt: doc.revokedAt ? doc.revokedAt.toISOString() : null,
-    tokenPrefix: doc.tokenPrefix,
-  };
+/**
+ * Public shape of a stored MCP service token: every field except `tokenHash`, plus `id`.
+ * Used for REST responses, sync snapshots, and sync deltas so the hash never leaves the server.
+ */
+export const toPublicMcpServiceToken = (doc: Record<string, unknown>): Record<string, unknown> => {
+  const {tokenHash: _tokenHash, ...rest} = doc;
+  return {...rest, id: String(doc._id)};
 };
 
-const serviceTokenGuards = [rejectMcpServiceTokenBearer, authenticateMiddleware()];
-
-const createdTokenFields = {
-  created: {type: "string"},
-  expiresAt: {type: "string"},
-  id: {type: "string"},
-  mcpUrl: {type: "string"},
-  name: {type: "string"},
-  token: {type: "string"},
-  tokenPrefix: {type: "string"},
+const stripTokenHash = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(stripTokenHash);
+  }
+  if (value && typeof value === "object") {
+    const {tokenHash: _tokenHash, ...rest} = value as Record<string, unknown>;
+    return rest;
+  }
+  return value;
 };
 
+const mcpServiceTokenResponseHandler = async (
+  value: Document | Document[],
+  method: "list" | "create" | "read" | "update" | "delete",
+  req: Request,
+  options: ModelRouterOptions<McpServiceTokenDocument>
+): Promise<never> => {
+  const serialized = await defaultResponseHandler(
+    value as never,
+    method as "list" | "create" | "read" | "update",
+    req,
+    options
+  );
+  return stripTokenHash(serialized) as never;
+};
+
+/** Read access is owner-only (no admin bypass: admins use the admin panel). */
+const isTokenOwner = (_method: RESTMethod, user?: User, obj?: unknown): boolean => {
+  if (!user?.id) {
+    return false;
+  }
+  if (!obj) {
+    return true;
+  }
+  return String((obj as {userId?: unknown}).userId) === String(user.id);
+};
+
+const createBody = z.object({
+  expiresAt: z
+    .string()
+    .nullable()
+    .optional()
+    .describe("Optional ISO-8601 expiry; omit for a token that does not expire"),
+  name: z.string().describe("User-visible label for this token"),
+});
+
+const createdTokenResponse = z.object({
+  created: z.string(),
+  expiresAt: z.string().nullable(),
+  id: z.string(),
+  mcpUrl: z.string(),
+  name: z.string(),
+  token: z.string().describe("The plaintext mcp_ token. Returned only by this response."),
+  tokenPrefix: z.string(),
+});
+
+/**
+ * Build the self-serve `/mcp/service-tokens` router. The collection is synced read-only
+ * (owner scope on `userId`): list/read over REST and sync, no client create/update/delete.
+ * Minting and revoking are the `create` collection action and `revoke` instance action.
+ */
+export const createMcpServiceTokenRouter = (
+  options: McpServiceTokenRoutesOptions = {}
+): ModelRouterRegistration =>
+  modelRouter<McpServiceTokenDocument>(MCP_SERVICE_TOKENS_ROUTE_PATH, McpServiceToken, {
+    collectionActions: {
+      create: {
+        body: createBody,
+        description:
+          "Mints a personal MCP service token that acts as the signed-in user on POST /mcp. The plaintext token is returned once.",
+        handler: async ({body, req, user}) => {
+          const owner = requireAuthenticatedUser(user);
+          const {expiresAt: rawExpiresAt, name: rawName} = body as z.infer<typeof createBody>;
+          const name = parseName(rawName);
+          const expiresAt = parseExpiresAt(rawExpiresAt);
+          const activeCount = await McpServiceToken.countActiveForUser(String(owner._id));
+          if (activeCount >= MAX_ACTIVE_MCP_SERVICE_TOKENS) {
+            throw new BadRequestError({
+              title: `Maximum of ${MAX_ACTIVE_MCP_SERVICE_TOKENS} active MCP service tokens`,
+            });
+          }
+          const issued = await McpServiceToken.issueFor({_id: owner._id}, {expiresAt, name});
+          return {
+            created: issued.mcpServiceToken.created.toISOString(),
+            expiresAt: issued.mcpServiceToken.expiresAt
+              ? issued.mcpServiceToken.expiresAt.toISOString()
+              : null,
+            id: String(issued.mcpServiceToken._id),
+            mcpUrl: resolveMcpUrl(req, options.publicMcpUrl),
+            name: issued.mcpServiceToken.name,
+            token: issued.token,
+            tokenPrefix: issued.mcpServiceToken.tokenPrefix,
+          };
+        },
+        method: "POST",
+        permissions: [Permissions.IsAuthenticated],
+        response: createdTokenResponse,
+        summary: "Create an MCP service token",
+        tag: ACTION_TAG,
+      },
+    },
+    defaultLimit: DEFAULT_LIST_LIMIT,
+    instanceActions: {
+      revoke: {
+        description:
+          "Sets revokedAt on a token owned by the signed-in user. Unknown, foreign, and already revoked tokens are 404.",
+        handler: async ({doc, user}) => {
+          const owner = requireAuthenticatedUser(user);
+          const token = doc as McpServiceTokenDocument;
+          if (String(token.userId) !== String(owner._id)) {
+            throw new NotFoundError("MCP service token not found");
+          }
+          const revoked = await McpServiceToken.revokeForUser({_id: owner._id}, token._id);
+          if (!revoked) {
+            throw new NotFoundError("MCP service token not found");
+          }
+          return toPublicMcpServiceToken(revoked.toObject() as Record<string, unknown>);
+        },
+        method: "POST",
+        permissions: [Permissions.IsAuthenticated],
+        summary: "Revoke an MCP service token",
+        tag: ACTION_TAG,
+      },
+    },
+    maxLimit: MAX_LIST_LIMIT,
+    openApi: options.openApi,
+    permissions: {
+      create: [],
+      delete: [],
+      list: [Permissions.IsAuthenticated],
+      read: [isTokenOwner],
+      update: [],
+    },
+    queryFields: ["_id"],
+    queryFilter: (user?: User) => (user?.id ? {userId: user.id} : null),
+    responseHandler:
+      mcpServiceTokenResponseHandler as ModelRouterOptions<McpServiceTokenDocument>["responseHandler"],
+    sort: "-created",
+    sync: {
+      responseHandler: (doc) => toPublicMcpServiceToken(doc),
+      scope: {field: "userId", type: "owner"},
+    },
+  });
+
+/**
+ * Mount the self-serve MCP service token routes at `/mcp/service-tokens`. Callers must
+ * authenticate with a session or JWT; an `mcp_` bearer is rejected so a service token
+ * cannot list, mint, or revoke tokens.
+ */
 export const addMcpServiceTokenRoutes = (
   app: Application,
   options: McpServiceTokenRoutesOptions = {}
 ): void => {
-  const openApiOptions = {openApi: options.openApi};
-
-  app.post(
-    "/mcp/service-tokens",
-    [
-      ...serviceTokenGuards,
-      createOpenApiBuilder(openApiOptions)
-        .withTags(["mcp"])
-        .withOperationId("createMcpServiceToken")
-        .withSummary("Create an MCP service token")
-        .withDescription(
-          "Mints a personal MCP service token that acts as the signed-in user on POST /mcp. The plaintext token is returned once."
-        )
-        .withRequestBody({
-          expiresAt: {
-            description: "Optional ISO-8601 expiry; omit for a token that does not expire",
-            type: "string",
-          },
-          name: {
-            description: "User-visible label for this token",
-            required: true,
-            type: "string",
-          },
-        })
-        .withResponse(200, {
-          data: {
-            properties: createdTokenFields,
-            type: "object",
-          },
-        })
-        .build(),
-    ],
-    asyncHandler(async (req, res) => {
-      const user = requireAuthenticatedUser(req);
-      const name = parseName(req.body?.name);
-      const expiresAt = parseExpiresAt(req.body?.expiresAt);
-      const activeCount = await McpServiceToken.countActiveForUser(
-        new mongoose.Types.ObjectId(String(user._id))
-      );
-      if (activeCount >= MAX_ACTIVE_MCP_SERVICE_TOKENS) {
-        throw new BadRequestError({
-          title: `Maximum of ${MAX_ACTIVE_MCP_SERVICE_TOKENS} active MCP service tokens`,
-        });
-      }
-      const issued = await McpServiceToken.issueFor({_id: user._id}, {expiresAt, name});
-      return res.json({
-        data: {
-          created: issued.mcpServiceToken.created.toISOString(),
-          expiresAt: issued.mcpServiceToken.expiresAt
-            ? issued.mcpServiceToken.expiresAt.toISOString()
-            : null,
-          id: String(issued.mcpServiceToken._id),
-          mcpUrl: resolveMcpUrl(req, options.publicMcpUrl),
-          name: issued.mcpServiceToken.name,
-          token: issued.token,
-          tokenPrefix: issued.mcpServiceToken.tokenPrefix,
-        },
-      });
-    })
-  );
-
-  app.get(
-    "/mcp/service-tokens",
-    [
-      ...serviceTokenGuards,
-      createOpenApiBuilder(openApiOptions)
-        .withTags(["mcp"])
-        .withOperationId("listMcpServiceTokens")
-        .withSummary("List MCP service tokens")
-        .withDescription(
-          "Lists MCP service tokens owned by the signed-in user. Never includes plaintext or tokenHash."
-        )
-        .withQueryParameter("page", {type: "number"}, {required: false})
-        .withQueryParameter("limit", {type: "number"}, {required: false})
-        .withResponse(200, {
-          data: {type: "array"},
-          limit: {type: "number"},
-          more: {type: "boolean"},
-          page: {type: "number"},
-          total: {type: "number"},
-        })
-        .build(),
-    ],
-    asyncHandler(async (req, res) => {
-      const user = requireAuthenticatedUser(req);
-      const page = parsePage(req.query.page);
-      const limit = parseLimit(req.query.limit);
-      const filter = {userId: new mongoose.Types.ObjectId(String(user._id))};
-      const total = await McpServiceToken.countDocuments(filter);
-      const docs = await McpServiceToken.find(filter)
-        .sort("-created")
-        .skip((page - 1) * limit)
-        .limit(limit + 1);
-      const more = docs.length > limit;
-      const pageDocs = more ? docs.slice(0, limit) : docs;
-      return res.json({
-        data: pageDocs.map(toListItem),
-        limit,
-        more,
-        page,
-        total,
-      });
-    })
-  );
-
-  app.delete(
-    "/mcp/service-tokens/:id",
-    [
-      ...serviceTokenGuards,
-      createOpenApiBuilder(openApiOptions)
-        .withTags(["mcp"])
-        .withOperationId("revokeMcpServiceToken")
-        .withSummary("Revoke an MCP service token")
-        .withDescription("Sets revokedAt on a token owned by the signed-in user.")
-        .withPathParameter("id", {type: "string"})
-        .withResponse(200, {
-          data: {
-            properties: {
-              id: {type: "string"},
-              revokedAt: {type: "string"},
-            },
-            type: "object",
-          },
-        })
-        .build(),
-    ],
-    asyncHandler(async (req, res) => {
-      const user = requireAuthenticatedUser(req);
-      const tokenId = req.params.id;
-      if (!mongoose.Types.ObjectId.isValid(tokenId)) {
-        throw new NotFoundError("MCP service token not found");
-      }
-      const revoked = await McpServiceToken.revokeForUser(
-        {_id: user._id},
-        new mongoose.Types.ObjectId(tokenId)
-      );
-      if (!revoked) {
-        throw new NotFoundError("MCP service token not found");
-      }
-      return res.json({
-        data: {
-          id: String(revoked._id),
-          revokedAt: revoked.revokedAt ? revoked.revokedAt.toISOString() : null,
-        },
-      });
-    })
-  );
+  const registration = createMcpServiceTokenRouter(options);
+  app.use(MCP_SERVICE_TOKENS_ROUTE_PATH, rejectMcpServiceTokenBearer, registration.router);
 };

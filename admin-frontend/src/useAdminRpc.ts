@@ -201,7 +201,7 @@ export const useAdminRpcQuery = <T = unknown>({
     };
   }, [rpc, skip, tagsKey]);
 
-  // Re-run the request on the same interval RTK `pollingInterval` uses.
+  // Re-run the request every `pollingInterval` milliseconds while mounted.
   useEffect(() => {
     if (!rpc || skip || !pollingInterval) {
       return;

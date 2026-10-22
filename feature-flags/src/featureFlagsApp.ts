@@ -182,7 +182,7 @@ export class FeatureFlagsApp implements TerrenoPlugin {
         if (!evaluateDeprecationWarned) {
           evaluateDeprecationWarned = true;
           logger.warn(
-            "[feature-flags] GET /evaluate is deprecated; migrate clients to GET /flagConfiguration or use @terreno/rtk useFeatureFlags / useTerrenoFeatureFlags."
+            "[feature-flags] GET /evaluate is deprecated; migrate clients to GET /flagConfiguration or use useFeatureFlags / useTerrenoFeatureFlags from @terreno/syncdb/flags."
           );
         }
 

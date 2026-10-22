@@ -655,7 +655,7 @@ describe("AdminModelTable windowed path", () => {
     assert.isTrue(listRefetch.mock.calls.length > 0);
   });
 
-  it("treats an RTK refetch error envelope as a Refresh failure", async () => {
+  it("treats a refetch error result as a Refresh failure", async () => {
     const {hydrateWindow, syncDb} = createFakeSyncDb();
     listState.data = {
       data: [{_id: "todo-1", title: "Alpha"}],

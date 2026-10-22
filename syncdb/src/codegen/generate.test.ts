@@ -6,7 +6,7 @@ import {join} from "node:path";
 import {discoverCollections} from "./discoverCollections";
 import {emitSdk} from "./emitSdk";
 import {emitInterface} from "./emitTypes";
-import {generateSyncDbSdk, loadConfigFile, parseCollectionsFlag} from "./generate";
+import {generateApiSdk, generateSyncDbSdk, loadConfigFile, parseCollectionsFlag} from "./generate";
 import {friendlyHookNames} from "./hookNames";
 import {loadSpec} from "./loadSpec";
 
@@ -255,6 +255,22 @@ describe("generateSyncDbSdk", () => {
         schema: fixturePath,
       });
       expect(source).toContain("export const SYNC_COLLECTIONS");
+      expect(await readFile(out, "utf8")).toBe(source);
+    } finally {
+      await rm(dir, {force: true, recursive: true});
+    }
+  });
+
+  it("formats the generated API SDK when format is true", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "syncdb-codegen-"));
+    const out = join(dir, "apiSdk.ts");
+    try {
+      const source = await generateApiSdk({
+        format: true,
+        out,
+        schema: join(import.meta.dir, "fixtures", "openapi.api.json"),
+      });
+      expect(source).toContain("export const usePatchNotesByIdMutation");
       expect(await readFile(out, "utf8")).toBe(source);
     } finally {
       await rm(dir, {force: true, recursive: true});

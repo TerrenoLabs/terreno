@@ -8,7 +8,13 @@ import {
   TerrenoApp,
   type UserModel as UserModelType,
 } from "@terreno/api";
-import {authAsUser, getBaseServer, setupDb, UserModel} from "@terreno/api/testing";
+import {
+  authAsUser,
+  expectDocumentedResponse,
+  getBaseServer,
+  setupDb,
+  UserModel,
+} from "@terreno/api/testing";
 import type express from "express";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
@@ -337,8 +343,38 @@ describe("FeatureFlagsApp", () => {
         rolloutPercentage: 100,
         type: "boolean",
       });
+      await FeatureFlag.create({
+        defaultVariant: "compact",
+        enabled: true,
+        key: "documented-variant",
+        name: "Documented variant",
+        rules: [],
+        type: "variant",
+        variants: [
+          {key: "compact", weight: 50},
+          {key: "detailed", weight: 50},
+        ],
+      });
+      await FeatureFlag.create({
+        enabled: false,
+        key: "documented-off",
+        name: "Documented off",
+        rolloutPercentage: 100,
+        type: "boolean",
+      });
       const agent = await authAsUser(terrenoApp, "notAdmin");
       const configRes = await agent.get("/feature-flags/flagConfiguration").expect(200);
+      expect(Object.keys(configRes.body.data).sort()).toEqual([
+        "documented-flag",
+        "documented-off",
+        "documented-variant",
+      ]);
+      expectDocumentedResponse({
+        method: "get",
+        path: "/feature-flags/flagConfiguration",
+        response: configRes,
+        spec: res.body,
+      });
       expect(Object.keys(definition.properties)).toEqual(
         expect.arrayContaining(Object.keys(configRes.body.data["documented-flag"]))
       );

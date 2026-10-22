@@ -32,11 +32,11 @@ const aiDatasetSchema: AIDatasetSchema = new mongoose.Schema(
       type: Date,
     },
     historyId: {
-      description: "The conversation whose tool stored these rows",
+      description: "The conversation whose tool stored these rows (a GptHistory String id)",
       index: true,
       ref: "GptHistory",
       required: true,
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
     },
     rowCount: {
       description: "How many rows were stored",

@@ -36,6 +36,12 @@ export type {
   TraceListItem,
 } from "./langfuseTypes";
 export {createTelemetryConfig, preparePromptForAI} from "./langfuseVercelAi";
+export {
+  GPT_HISTORY_STRING_IDS_MIGRATION,
+  type GptHistoryStringIdsResult,
+  gptHistoryStringIdsMigration,
+  migrateGptHistoryStringIds,
+} from "./migrations/gptHistoryStringIds";
 export {AIDataset} from "./models/aiDataset";
 export {AIRequest} from "./models/aiRequest";
 export {FileAttachment} from "./models/fileAttachment";

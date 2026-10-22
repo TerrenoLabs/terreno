@@ -20,3 +20,22 @@ mock.module("react-native", () => ({
 mock.module("expo-constants", () => ({
   default: {expoConfig: {extra: {}, version: "1.0.0"}},
 }));
+
+// @terreno/syncdb/auth: expo-secure-store and AsyncStorage ship native code. Mirrors the
+// real surface — SecureStore exposes sync getItem/setItem alongside the *Async variants,
+// and createStorageAdapter's native branch depends on the sync pair.
+mock.module("expo-secure-store", () => ({
+  deleteItemAsync: async () => {},
+  getItem: () => null,
+  getItemAsync: async () => null,
+  setItem: () => {},
+  setItemAsync: async () => {},
+}));
+
+mock.module("@react-native-async-storage/async-storage", () => ({
+  default: {
+    getItem: async () => null,
+    removeItem: async () => {},
+    setItem: async () => {},
+  },
+}));

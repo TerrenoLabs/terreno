@@ -130,7 +130,7 @@ describe("admin fetch RPC hooks", () => {
     assert.strictEqual(captured[0]?.method, "GET");
   });
 
-  it("comms queries and retry mutations preserve RTK invalidation behavior", async () => {
+  it("comms retry mutations invalidate and refetch the mounted comms queries", async () => {
     mockOkFetch();
     const hooks = runHookWithRpc(() => {
       const comms = useCommsDashboardApi();
@@ -142,9 +142,20 @@ describe("admin fetch RPC hooks", () => {
       return {retry, retryMany};
     });
     await flushEffects();
-    await hooks.retry("message-1").unwrap();
-    await hooks.retryMany({ids: ["message-1"]}).unwrap();
-    assert.ok(captured.some((row) => row.url === "/comms/messages/message-1"));
+    const detailReads = (): number =>
+      captured.filter((row) => row.method === "GET" && row.url === "/comms/messages/message-1")
+        .length;
+    assert.strictEqual(detailReads(), 1);
+    await act(async () => {
+      await hooks.retry("message-1").unwrap();
+    });
+    await flushEffects();
+    assert.strictEqual(detailReads(), 2);
+    await act(async () => {
+      await hooks.retryMany({ids: ["message-1"]}).unwrap();
+    });
+    await flushEffects();
+    assert.strictEqual(detailReads(), 3);
     assert.ok(captured.some((row) => row.url.includes("/comms/stats")));
     assert.ok(
       captured.some((row) => row.method === "POST" && row.url === "/comms/messages/message-1/retry")

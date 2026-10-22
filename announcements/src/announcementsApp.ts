@@ -437,10 +437,11 @@ export class AnnouncementsApp implements TerrenoPlugin {
           200,
           {
             data: {items: announcementPublicOpenApiSchema, type: "array"},
+            more: {description: "Whether a later page has more announcements", type: "boolean"},
             page: {type: "number"},
             total: {description: "Visible announcements across all pages", type: "number"},
           },
-          {required: ["data", "page", "total"]}
+          {required: ["data", "more", "page", "total"]}
         )
         .build(),
       asyncHandler(async (req: Request, res: Response) => {
@@ -491,6 +492,7 @@ export class AnnouncementsApp implements TerrenoPlugin {
 
         return res.json({
           data: pageItems,
+          more: start + limit < sorted.length,
           page,
           total: sorted.length,
         });

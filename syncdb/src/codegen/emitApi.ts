@@ -140,7 +140,11 @@ const pathParamsOf = (operation: DiscoveredOperation): OpenApiParameter[] => {
   );
 };
 
-const bodyType = (ctx: EmitContext, operation: DiscoveredOperation): string | undefined => {
+const bodyType = (
+  ctx: EmitContext,
+  operation: DiscoveredOperation,
+  indent = ""
+): string | undefined => {
   if (!operation.body) {
     return undefined;
   }
@@ -150,7 +154,7 @@ const bodyType = (ctx: EmitContext, operation: DiscoveredOperation): string | un
   if (operation.body.mediaType !== "application/json") {
     return "Blob | string";
   }
-  return tsType(ctx, operation.body.schema, "");
+  return tsType(ctx, operation.body.schema, indent);
 };
 
 interface ArgShape {
@@ -164,13 +168,16 @@ interface ArgShape {
   accessor: (kind: "path" | "query" | "body", name?: string) => string;
 }
 
+/** The flattened argument is the value itself (and, with no argument, nothing reads it). */
+const wholeArg = (): string => "arg";
+
 /** RTK codegen `flattenArg`: a single path param, query param, or body is the argument itself. */
 const argShape = (ctx: EmitContext, operation: DiscoveredOperation, argsName: string): ArgShape => {
   const pathParams = pathParamsOf(operation);
   const body = bodyType(ctx, operation);
   const count = pathParams.length + operation.queryParams.length + (body ? 1 : 0);
   if (count === 0) {
-    return {accessor: () => "undefined", optional: true, param: "", type: "void"};
+    return {accessor: wholeArg, optional: true, param: "", type: "void"};
   }
   if (count === 1) {
     const [only] = [...pathParams, ...operation.queryParams];
@@ -179,7 +186,7 @@ const argShape = (ctx: EmitContext, operation: DiscoveredOperation, argsName: st
       ? operation.body?.required === false
       : only?.in === "query" && !only.required;
     return {
-      accessor: () => "arg",
+      accessor: wholeArg,
       optional,
       param: optional ? `arg?: ${argsName}` : `arg: ${argsName}`,
       type: optional ? `${type} | undefined` : type,
@@ -194,7 +201,11 @@ const argShape = (ctx: EmitContext, operation: DiscoveredOperation, argsName: st
       (param) =>
         `  ${emitTsPropertyKey(param.name ?? "")}${param.required ? "" : "?"}: ${tsType(ctx, param.schema, "  ")};`
     ),
-    ...(body ? [`  body${operation.body?.required === false ? "?" : ""}: ${body};`] : []),
+    ...(body
+      ? [
+          `  body${operation.body?.required === false ? "?" : ""}: ${bodyType(ctx, operation, "  ")};`,
+        ]
+      : []),
   ];
   return {
     accessor: (kind, name) =>

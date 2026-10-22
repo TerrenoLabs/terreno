@@ -207,8 +207,7 @@
         "expo-status-bar",
         "expo-system-ui",
         "expo-updates",
-        "jspdf",
-        "redux-persist"
+        "jspdf"
       ],
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

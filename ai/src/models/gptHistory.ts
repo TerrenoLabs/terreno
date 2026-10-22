@@ -1,4 +1,12 @@
-import {createdUpdatedPlugin, findExactlyOne, findOneOrNone, isDeletedPlugin} from "@terreno/api";
+import {randomUUID} from "node:crypto";
+
+import {
+  createdUpdatedPlugin,
+  findExactlyOne,
+  findOneOrNone,
+  isDeletedPlugin,
+  syncPlugin,
+} from "@terreno/api";
 import {ASK_KINDS} from "@terreno/blocks";
 import mongoose from "mongoose";
 
@@ -153,6 +161,14 @@ const gptHistoryPromptSchema = new mongoose.Schema(
 
 const gptHistorySchema = new mongoose.Schema<GptHistoryDocument, GptHistoryModel>(
   {
+    _id: {
+      // Synced through @terreno/syncdb: offline clients mint entity ids locally and the sync
+      // mutation channel writes them through as _id. Histories created before Terreno 58 keep
+      // their ObjectId hex string after the gpt-history-string-ids migration.
+      default: (): string => randomUUID(),
+      description: "The conversation id (a String so offline sync clients can mint ids)",
+      type: String,
+    },
     pendingAsk: {
       description:
         "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",
@@ -185,6 +201,8 @@ gptHistorySchema.plugin(createdUpdatedPlugin);
 gptHistorySchema.plugin(isDeletedPlugin);
 gptHistorySchema.plugin(findOneOrNone);
 gptHistorySchema.plugin(findExactlyOne);
+// Stamps a per-stream _syncSeq on every write; required by the /gpt/histories sync config.
+gptHistorySchema.plugin(syncPlugin);
 
 // Virtual ownerId alias so Permissions.IsOwner works with userId field
 gptHistorySchema.virtual("ownerId").get(function () {

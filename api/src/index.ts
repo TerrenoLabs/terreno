@@ -66,10 +66,14 @@ export {generateInputSchema, generateToolDescription} from "./mcp/schemaGenerato
 export {type MCPServerOptions, mountMCPServer} from "./mcp/server";
 export {
   addMcpServiceTokenRoutes,
+  createMcpServiceTokenRouter,
   MAX_ACTIVE_MCP_SERVICE_TOKENS,
+  MCP_SERVICE_TOKENS_ROUTE_PATH,
+  MCP_SERVICE_TOKENS_SYNC_COLLECTION,
   type McpServiceTokenRoutesOptions,
   type McpServiceTokensAppOption,
   resolveMcpServiceTokensOption,
+  toPublicMcpServiceToken,
 } from "./mcp/serviceTokens";
 export {
   generateAllTools,
@@ -86,6 +90,7 @@ export type {
   MCPToolResult,
 } from "./mcp/types";
 export * from "./middleware";
+export * from "./migrations/builtin/mcpServiceTokenStringIds";
 export * from "./migrations/generate";
 export * from "./migrations/load";
 export * from "./migrations/lock";

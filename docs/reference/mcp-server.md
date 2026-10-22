@@ -3,7 +3,7 @@
 Published npm package for the Terreno Model Context Protocol (MCP) server. The monorepo directory is still `mcp-server/`. The package exposes:
 
 - **`terreno-mcp`** — HTTP server used in Cloud Run and local debugging (`src/index.ts`)
-- **`terreno-mcp-local`** — stdio server for project runtime tools (`src/local/index.ts`): app/database/log/browser diagnostics, Redux/RTK inspection, and SyncDB state/action/snapshot tools. `evaluate`, `navigate`, and SyncDB state changes are gated by `TERRENO_MCP_EVAL`. Metro URL defaults from `frontend/package.json` `--port` or `TERRENO_METRO_URL`. `application_info` reads bootstrap `backend/` + `frontend/`, or this monorepo's `example-backend/` + `example-frontend/` (bootstrap names win when both exist).
+- **`terreno-mcp-local`** — stdio server for project runtime tools (`src/local/index.ts`): app/database/log/browser diagnostics and SyncDB state/action/snapshot tools (the Redux `get_rtk_state` tool was removed in Terreno 58). `evaluate`, `navigate`, and SyncDB state changes are gated by `TERRENO_MCP_EVAL`. Metro URL defaults from `frontend/package.json` `--port` or `TERRENO_METRO_URL`. `application_info` reads bootstrap `backend/` + `frontend/`, or this monorepo's `example-backend/` + `example-frontend/` (bootstrap names win when both exist).
 
 It provides AI coding assistants with documentation access, code generation tools, and workflow prompts.
 For editor configuration and runtime prerequisites, see
@@ -94,7 +94,7 @@ Documentation resources accessible via `terreno://` protocol:
 | `terreno://docs/overview` | Monorepo overview and architecture |
 | `terreno://docs/api` | @terreno/api reference documentation |
 | `terreno://docs/ui` | @terreno/ui reference documentation |
-| `terreno://docs/rtk` | @terreno/rtk reference documentation |
+| `terreno://docs/syncdb` | @terreno/syncdb: synced collections, request client + generated API hooks, auth session, config, flags |
 | `terreno://docs/patterns` | Common patterns and best practices |
 
 **How it works:**
@@ -332,7 +332,7 @@ Generate React Native screen component with Terreno UI components.
 **Returns:**
 
 - React Native functional component
-- RTK Query hooks integration
+- @terreno/syncdb hooks (`useQuery` / `useMutate` for synced collections, generated `store/apiSdk.ts` hooks otherwise)
 - @terreno/ui components (Box, Text, Button, Card, etc.)
 - Loading/error/empty states
 
@@ -419,7 +419,7 @@ Scaffold AI coding assistant rules (AGENTS.md, Cursor/Windsurf rules, Copilot in
   appName: string;
   appDisplayName: string;
   description?: string;
-  /** Optional — which @terreno/* packages to merge into rules. Use ids like `api`, `ui`, `rtk`, `admin-backend`, `admin-frontend`, or `@terreno/api`. Omit or pass only what the app uses so admin guidelines stay out of projects without the admin panel. */
+  /** Optional — which @terreno/* packages to merge into rules. Use ids like `api`, `ui`, `syncdb`, `admin-backend`, `admin-frontend`, or `@terreno/api`. Omit or pass only what the app uses so admin guidelines stay out of projects without the admin panel. */
   packages?: string[];
 }
 ``````
@@ -528,7 +528,7 @@ Generate form screen with validation and error handling.
 1. Generate screen component with Page layout
 2. Add form fields from @terreno/ui
 3. Include validation logic
-4. Add RTK mutation hooks
+4. Add generated `store/apiSdk.ts` mutation hooks (or syncdb `useMutate` for synced collections)
 5. Add loading/error/success states
 6. Provide navigation setup
 
@@ -545,7 +545,7 @@ Generate authentication setup for new projects.
 
 1. Configure User model with passport-local-mongoose
 2. Set up auth routes in backend
-3. Configure Redux auth slice in frontend
+3. Wire `SessionProvider` / `useSession` from `@terreno/syncdb/auth` in the frontend
 4. Generate login screen
 5. Generate signup screen
 6. Set up token storage

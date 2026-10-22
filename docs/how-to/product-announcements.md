@@ -87,11 +87,14 @@ Wrap authenticated app content:
 
 ```tsx
 import {AnnouncementNavigator} from "@terreno/ui";
+import {apiClient} from "@/store/apiClient"; // @terreno/syncdb/api createApiClient(...)
 
-<AnnouncementNavigator api={terrenoApi}>
+<AnnouncementNavigator client={apiClient}>
   <AppTabs />
 </AnnouncementNavigator>
 ```
+
+`client` is the app's request client (see [`TerrenoRequestClient`](../reference/ui.md#terrenorequestclient)); the RTK `api` prop was removed in Terreno 58.
 
 Place it after consent/onboarding wrappers if you use `ConsentNavigator`. The navigator sends the native platform (`ios` / `android` / `web`) and, when available, the app build number from `Constants.expoConfig.extra.buildNumber` (same source as `useUpgradeCheck`) on pending and feed requests. Only pending failures block the app — changelog feed errors are non-fatal. These surfaces are not in the `@terreno/ui` component demo; wire them in the app (`example-frontend`) the same way.
 
@@ -120,7 +123,7 @@ Interrupt frequency is enforced **client-side** in `AnnouncementNavigator` befor
 
 ```tsx
 <AnnouncementNavigator
-  api={terrenoApi}
+  client={apiClient}
   frequency={{
     cooldownHours: 24,
     skipFirstLaunch: false,

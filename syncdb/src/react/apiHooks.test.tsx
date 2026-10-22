@@ -345,3 +345,102 @@ describe("useApiQuery re-fetch triggers", () => {
     expect(server.requests).toEqual(["GET /auth/me", "GET /auth/me"]);
   });
 });
+
+describe("background request failures", () => {
+  it("surfaces a failed poll as an error and recovers on the next poll", async () => {
+    const server = profileServer();
+    // Polls are fast, so record every rendered state instead of sampling the latest one.
+    const errors: string[] = [];
+    const {result, unmount} = renderHook(
+      () => {
+        const query = useApiQuery<Profile>(ME, {pollingInterval: 15});
+        if (query.isError) {
+          errors.push(`${(query.error as ApiError).data.title}:${query.data?.name}`);
+        }
+        return query;
+      },
+      {wrapper: wrapperFor(server.client)}
+    );
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    server.failNext(503, "Polling blip");
+    await waitFor(() => {
+      expect(errors).toContain("Polling blip:Ada");
+    });
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+    unmount();
+  });
+
+  it("keeps the error when the retry for a new subscriber fails again", async () => {
+    const server = profileServer();
+    const wrapper = wrapperFor(server.client);
+    server.failNext(500, "Cold start");
+    const first = renderHook(() => useApiQuery<Profile>(ME), {wrapper});
+    await waitFor(() => {
+      expect(first.result.current.isError).toBe(true);
+    });
+
+    server.failNext(500, "Still cold");
+    const second = renderHook(() => useApiQuery<Profile>(ME), {wrapper});
+
+    await waitFor(() => {
+      expect((second.result.current.error as ApiError | undefined)?.data.title).toBe("Still cold");
+    });
+    expect(second.result.current.isError).toBe(true);
+    expect(server.requests).toEqual(["GET /auth/me", "GET /auth/me"]);
+  });
+});
+
+describe("useApiMutation computed invalidation", () => {
+  it("invalidates the tags a function derives from the result and argument", async () => {
+    const server = profileServer();
+    const wrapper = wrapperFor(server.client);
+    const query = renderHook(() => useApiQuery<Profile>(ME, {providesTags: ["profile"]}), {
+      wrapper,
+    });
+    await waitFor(() => {
+      expect(query.result.current.isSuccess).toBe(true);
+    });
+    const seen: Array<{arg: {name: string}; result: Profile}> = [];
+    const mutation = renderHook(
+      () =>
+        useApiMutation<{name: string}, Profile>(
+          (body) => ({body, method: "PATCH", url: "/auth/me"}),
+          {
+            invalidatesTags: (result, arg) => {
+              seen.push({arg, result});
+              return arg.name === "Quiet" ? [] : ["profile"];
+            },
+          }
+        ),
+      {wrapper}
+    );
+
+    await act(async () => {
+      await mutation.result.current[0]({name: "Quiet"}).unwrap();
+    });
+    expect(server.requests).toEqual(["GET /auth/me", "PATCH /auth/me"]);
+
+    await act(async () => {
+      await mutation.result.current[0]({name: "Grace"}).unwrap();
+    });
+    await waitFor(() => {
+      expect(query.result.current.data?.name).toBe("Grace");
+    });
+    expect(server.requests).toEqual([
+      "GET /auth/me",
+      "PATCH /auth/me",
+      "PATCH /auth/me",
+      "GET /auth/me",
+    ]);
+    expect(seen.map(({arg, result}) => [arg.name, result.name])).toEqual([
+      ["Quiet", "Quiet"],
+      ["Grace", "Grace"],
+    ]);
+  });
+});

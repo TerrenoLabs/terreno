@@ -1,5 +1,5 @@
 /**
- * Ported from `@terreno/rtk`'s `authSlice.test.ts` matcher tests: login / signup / Google
+ * Ported from the pre-58 rtk package's `authSlice.test.ts` matcher tests: login / signup / Google
  * login set `isAuthenticating` while pending, record the API error on rejection, clear a stale
  * error on the next attempt, and feed the session that `useSession()` reads.
  */

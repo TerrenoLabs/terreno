@@ -5,7 +5,7 @@
  * the ported JWT adapter later). {@link createSessionStore} turns a source into observable
  * session state — `{userId, user, isLoading, isAuthenticated, error}` — plus `refresh` and
  * `logout`. `SessionProvider` is a thin React binding over this store, which replaces the
- * `@terreno/rtk` Better Auth Redux slice.
+ * pre-58 rtk Better Auth Redux slice.
  */
 import type {BetterAuthSessionClientLike, BetterAuthUser} from "./betterAuthTypes";
 
@@ -58,9 +58,12 @@ export interface SessionStoreConfig<TUser = BetterAuthUser> {
   source?: SessionSource<TUser>;
   /** Better Auth client, wrapped with {@link betterAuthSessionSource}. Use this or `source`. */
   authClient?: BetterAuthSessionClientLike;
-  /** syncdb clients to sign out (stop + wipe when configured) on logout. */
+  /**
+   * syncdb clients to sign out (stop + wipe when configured) on logout. They sign out before
+   * the auth server so `wipeOnSignOut` still knows whose local data to wipe.
+   */
   syncDbs?: readonly SessionSyncDb[];
-  /** Extra app cleanup run on logout after the auth and syncdb sign-outs. */
+  /** Extra app cleanup run on logout after the syncdb and auth sign-outs. */
   onLogout?: () => void | Promise<void>;
   /**
    * Polling cadence used only when the source has no `subscribe` (default
@@ -84,7 +87,10 @@ export interface SessionStore<TUser = BetterAuthUser> {
   stop: () => void;
   /** Re-read the session now (e.g. right after a sign-in). Marks the state loading while it runs. */
   refresh: () => Promise<void>;
-  /** Sign out of the auth server, sign out syncdb clients, run `onLogout`, and clear the session. */
+  /**
+   * Sign out syncdb clients (wiping when configured), then the auth server, run `onLogout`,
+   * and clear the session. A failing step is logged and the remaining steps still run.
+   */
   logout: () => Promise<void>;
 }
 
@@ -354,18 +360,21 @@ export const createSessionStore = <TUser = BetterAuthUser>(
 
   const logout = async (): Promise<void> => {
     readGeneration += 1;
-    try {
-      await source.signOut();
-      console.debug("[terreno/syncdb] Signed out");
-    } catch (error) {
-      console.error("[terreno/syncdb] Error signing out:", error);
-    }
+    // Sync clients sign out first, while the session still names the user: ending the auth
+    // session pushes a signed-out state, apps stop syncdb when userId clears, and a stopped
+    // client has forgotten the user its `wipeOnSignOut` wipe needs.
     for (const syncDb of config.syncDbs ?? []) {
       try {
         await syncDb.signOut();
       } catch (error) {
         console.error("[terreno/syncdb] Error signing out sync client:", error);
       }
+    }
+    try {
+      await source.signOut();
+      console.debug("[terreno/syncdb] Signed out");
+    } catch (error) {
+      console.error("[terreno/syncdb] Error signing out:", error);
     }
     try {
       await config.onLogout?.();

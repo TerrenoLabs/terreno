@@ -21,8 +21,8 @@ interface TodoSummaryDependencies {
 }
 
 interface TodoSummaryCardProps {
-  /** @internal Test seam for hook-backed dependencies. */
-  dependencies?: TodoSummaryDependencies;
+  /** @internal Test seam: replaces any of the hook-backed dependencies. */
+  dependencies?: Partial<TodoSummaryDependencies>;
 }
 
 const useSavedGeminiApiKey = (): string | undefined => {
@@ -72,12 +72,11 @@ const errorTitle = (error: unknown): string | undefined => {
  * example app's traced AI feature: the backend resolves the prompt by name and label, so every
  * run shows up in AI Observability with a prompt reference, user, and session.
  */
-export const TodoSummaryCard: React.FC<TodoSummaryCardProps> = ({
-  dependencies = defaultDependencies,
-}) => {
-  const {data: todos} = dependencies.useTodoList();
-  const geminiApiKey = dependencies.useApiKey();
-  const [summarize, {isLoading}] = dependencies.useSummarize();
+export const TodoSummaryCard: React.FC<TodoSummaryCardProps> = ({dependencies}) => {
+  const {useApiKey, useSummarize, useTodoList} = {...defaultDependencies, ...dependencies};
+  const {data: todos} = useTodoList();
+  const geminiApiKey = useApiKey();
+  const [summarize, {isLoading}] = useSummarize();
   const [summary, setSummary] = useState<string>("");
   const [summaryError, setSummaryError] = useState<string>("");
 

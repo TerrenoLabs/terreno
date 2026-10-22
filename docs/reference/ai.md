@@ -660,7 +660,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 | GET/POST | `/ai/observability/evaluators` | List / create. Create accepts `target: "full trace"` only (`generation span` and `dataset item` → 400). Seeded template install can still store other targets. `llm-judge` requires `judgePromptName`; create rejects when the judge prompt `outputSchema` omits a required dimension (400 names the key). `json-assert` supports `assertion` (`path` + `constraint`) or built-in output-schema mode. Human + `liveSampleRate > 0` → 400. Numeric dimension `range` is `min-max` (for example `0-1`); categorical `range` is `label|label` |
 | GET/PATCH/DELETE | `/ai/observability/evaluators/:id` | Read / update / soft-delete |
 | POST | `/ai/observability/traces/review` | Enqueue one or many traces against a human evaluator (`reason: "manual"`) |
-| GET | `/ai/observability/review` | Queue by `status` with counts; oldest-first. Response includes `more: false` so RTK preserves the count envelope. Rows include `traceName`, `promptName`, assignee, reason, and enqueue time |
+| GET | `/ai/observability/review` | Queue by `status` with counts; oldest-first. Response includes `more: false` so request clients keep the count envelope instead of unwrapping `data`. Rows include `traceName`, `promptName`, assignee, reason, and enqueue time |
 | GET | `/ai/observability/review/:id` | Item + evaluator dimensions + `given` / `wrote` panels and `rawInput` / `rawOutput` for the Raw JSON disclosure |
 | POST | `/ai/observability/review/:id` | `submit` (scores via ScoreSinks, status `done`), `skip`, or `assign` |
 

@@ -71,7 +71,7 @@ import {
 import {AdminProvider, AdminShellLayout} from "@terreno/admin-frontend";
 import {baseUrl} from "@terreno/syncdb/config";
 import {Stack} from "expo-router";
-import {getAdminAuthHeaders} from "@/store/betterAuthApi"; // {Authorization: "Bearer …"}
+import {getAdminAuthHeaders} from "@/store/syncdb"; // bearer header from authProvider.getToken()
 
 export default function AdminLayout() {
   return (

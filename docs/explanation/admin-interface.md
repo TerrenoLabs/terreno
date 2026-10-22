@@ -14,7 +14,7 @@ workflow (consent publish, comms message detail, password-on-create).
 
 | Host | When to use | Route prefix (`routeBase`) | API prefix (`apiBase`) | Fetch auth |
 | --- | --- | --- | --- | --- |
-| Embedded (`example-frontend/app/admin`) | Admin lives inside the product Expo app | `"/admin"` | `"/admin"` | `getAuthHeaders` → Bearer, plus `apiOrigin` = `@terreno/rtk` `baseUrl` so admin requests do not hit the Expo origin |
+| Embedded (`example-frontend/app/admin`) | Admin lives inside the product Expo app | `"/admin"` | `"/admin"` | `getAuthHeaders` → Bearer, plus `apiOrigin` = `baseUrl` from `@terreno/syncdb/config` so admin requests do not hit the Expo origin |
 | Standalone (`@terreno/admin-spa`) | Same-origin console served by `AdminSpaServeApp` | `""` (SPA root; mount is `/console`) | `"/admin"` | `credentials="same-origin"`; omit `getAuthHeaders` and `apiOrigin` |
 
 `apiBase` is the HTTP path for `/config` and CRUD. `routeBase` is the Expo Router

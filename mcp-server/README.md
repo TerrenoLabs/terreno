@@ -11,7 +11,7 @@ Documentation resources accessible via MCP:
 - `terreno://docs/overview` - Overview of the Terreno monorepo
 - `terreno://docs/api` - @terreno/api documentation
 - `terreno://docs/ui` - @terreno/ui documentation
-- `terreno://docs/rtk` - @terreno/rtk documentation
+- `terreno://docs/syncdb` - @terreno/syncdb documentation
 - `terreno://docs/patterns` - Common patterns and best practices
 
 ### Tools

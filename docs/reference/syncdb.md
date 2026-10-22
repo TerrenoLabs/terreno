@@ -1,6 +1,6 @@
 # @terreno/syncdb
 
-Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on device is the UI source of truth: reads come from the local store, writes apply optimistically into a durable outbox, and the server reconciles asynchronously over a socket delta protocol with HTTP snapshot catch-up. Supersedes `@terreno/rtk` for data-synchronization concerns.
+Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on device is the UI source of truth: reads come from the local store, writes apply optimistically into a durable outbox, and the server reconciles asynchronously over a socket delta protocol with HTTP snapshot catch-up. It is also the frontend's request client, session, feature-flag, and app-utility layer; Terreno 58 removed `@terreno/rtk` and Redux ([upgrade guide](../how-to/migrate-rtk-to-syncdb.md)).
 
 ## Table of Contents
 
@@ -485,18 +485,21 @@ await updateMe({name: "Ada"}).unwrap();
 | `useApiMutation(toRequest, {invalidatesTags, client})` | `[trigger(arg), {data, error, isLoading, isSuccess, isError, reset}]` |
 
 Triggers resolve `{data}` or `{error}`; `.unwrap()` resolves the data or throws.
-Failures are `ApiError` (`status`, `data.title`, `data.detail`, `data.fields`); timeouts
-and network failures have `status: 0`.
+Failures are `ApiError` (`status`, `data.title`, `data.detail`, `data.code`, `data.fields`,
+`data.meta`); timeouts and network failures have `status: 0`. `data.disableExternalErrorTracking`
+is `true` when the server marks the error as expected, so an `onError` reporter should skip
+Sentry for it.
 
 ## Config
 
 `@terreno/syncdb/config` resolves the app's API origin once at import (needs
 `expo-constants`):
 
-1. `extra.BASE_URL` in `app.json` (production/staging). `__SAME_ORIGIN__` resolves to the page origin.
-2. `EXPO_PUBLIC_API_URL` (dev web).
-3. Expo `hostUri` plus the dev API port (simulator/device).
-4. `http://localhost:<dev API port>`.
+1. `extra.BASE_URL` set to `__SAME_ORIGIN__` resolves to the page origin (same-origin web SPAs).
+2. `EXPO_PUBLIC_API_URL`, in any build.
+3. `extra.BASE_URL` in `app.json` (production/staging builds only).
+4. Expo `hostUri` plus the dev API port (simulator/device).
+5. `http://localhost:<dev API port>`.
 
 The dev API port is `4000` unless `EXPO_PUBLIC_DEV_API_PORT` or `extra.DEV_API_PORT` sets
 it. `appHeaders()` returns `App-Version` (Expo config version) and `App-Platform`
@@ -539,8 +542,8 @@ blocks every native request. `storagePrefix` defaults to `"terreno"`.
 | `authClient` | Better Auth client | Wrapped with `betterAuthSessionSource`. Use this or `source`. |
 | `source` | `SessionSource` | Any session source (`getSession`, `signOut`, optional `subscribe`). |
 | `store` | `SessionStore` | A store from `createSessionStore`, instead of the props above. Share it with non-React code. |
-| `syncDbs` | `{signOut}[]` | syncdb clients signed out on `logout`. Create them with `wipeOnSignOut: true` to wipe local data. |
-| `onLogout` | `() => void \| Promise<void>` | Extra cleanup after the auth and syncdb sign-outs. |
+| `syncDbs` | `{signOut}[]` | syncdb clients signed out on `logout`, before the auth server. Create them with `wipeOnSignOut: true` to wipe local data. |
+| `onLogout` | `() => void \| Promise<void>` | Extra cleanup after the syncdb and auth sign-outs. |
 | `pollIntervalMs` | `number` | Poll cadence when the source cannot push changes. Default `60000`; `0` turns polling off. |
 
 When the session syncs:
@@ -549,9 +552,11 @@ When the session syncs:
 - **Sign-in, sign-out, user switch:** Better Auth's session atom (`$store.atoms.session`)
   pushes the change. Call `refresh()` after a sign-in to resolve the user immediately.
 - **Polling:** only when the client has no session atom.
-- **Logout:** `logout()` signs out of Better Auth, calls `signOut()` on each `syncDbs`
-  client, runs `onLogout`, then clears the session. A failing step is logged and the rest
-  still run.
+- **Logout:** `logout()` calls `signOut()` on each `syncDbs` client first, then signs out of
+  the auth server, runs `onLogout`, and clears the session. The sync clients go first because
+  they need the current user to wipe local data (`wipeOnSignOut: true`). If they ran after the
+  auth sign-out, an app that stops syncdb when `userId` clears would skip the wipe. A failing
+  step is logged and the rest still run.
 
 A failed startup or `refresh()` read sets `error` to `"Failed to sync session"` and clears the
 session. A failed background read (atom error, poll) keeps the current session, so a network
@@ -813,6 +818,12 @@ terreno-syncdb-codegen \
 
 Do not edit the generated file. `--collections` filters when extensions exist. When they do not, it reads list/create/patch schemas from `GET /{name}` (or `/{name}/`). A missing path, a list response without `data.items`, a spec with no extensions and no `--collections` all exit non-zero.
 
+A collection name is the route path without its leading slash, so a nested route keeps its
+`/`: `modelRouter("/gpt/histories", …)` syncs as `gpt/histories`, and
+`useQuery("gpt/histories")` reads it. Names are letters, digits, `_`, and `-` in
+`/`-separated segments. Hooks drop the separators and singularize the last segment when the
+list item schema has no `$ref` name: `gpt/histories` → `GptHistory`, `useGptHistories`.
+
 ### API SDK (`--api-out`)
 
 `--api-out <file>` writes typed request hooks for every operation that is **not** synced
@@ -838,7 +849,7 @@ terreno-syncdb-codegen \
 
 Names follow the RTK codegen rule, so migrated screens keep their hook names: the
 camelCased `operationId`, otherwise method + path with `{param}` read as `By<Param>`
-(`PATCH /gpt/histories/{id}` → `usePatchGptHistoriesByIdMutation`). Arguments flatten
+(`PATCH /gpt/histories/{id}/rating` → `usePatchGptHistoriesByIdRatingMutation`). Arguments flatten
 the same way: one path param, query param, or body is the argument itself; otherwise an
 object of path params, query params, and `body`. A `multipart/form-data` body is
 `FormData`. Two operations that would share a name exit non-zero; give one an
@@ -1064,8 +1075,9 @@ Backend sync requires a MongoDB replica set (`MONGO_URI` with `replicaSet=`) for
 - **No `bulkWrite` / `updateMany` / `deleteMany`** on synced models — use per-document loops.
 - **Do not write reserved tables** (`_outbox`, `_cursors`, `_conflicts`) directly — use `client.mutate`, hooks, and `resolveConflict`.
 - **User switch wipes local data** — confirmed different-user login clears the previous user's store; bare logout/401 does not (INV-2).
-- **Keep `@terreno/rtk` for non-synced routes** — generated OpenAPI hooks remain
-  the right tool for custom REST endpoints, auth, feature flags, and ObjectId
-  admin compatibility CRUD. Eligible admin String-`_id` collection CRUD uses
-  windowed syncdb; framework admin RPC uses its host-bound fetch client. See
-  [How to migrate from RTK to syncdb](../how-to/migrate-rtk-to-syncdb.md).
+- **Non-synced routes use the request client** — `/auth/me`, modelRouter actions, AI,
+  and other request/response routes go through generated `store/apiSdk.ts` hooks
+  (`terreno-syncdb-codegen --api-out`) or `useApiQuery` / `useApiMutation`. Eligible
+  admin String-`_id` collection CRUD uses windowed syncdb; other admin requests use
+  admin-frontend's host-bound fetch client. See
+  [How to upgrade from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md).

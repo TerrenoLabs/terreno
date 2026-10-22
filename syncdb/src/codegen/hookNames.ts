@@ -44,7 +44,7 @@ export const refName = (ref: string | undefined): string | undefined => {
 
 const WORD = /[A-Z]{2,}(?=[A-Z][a-z]+[0-9]*|[^A-Za-z0-9]|$)|[A-Z]?[a-z]+[0-9]*|[A-Z]|[0-9]+/g;
 
-/** lodash-style camelCase (the rule `@rtk-query/codegen-openapi` used for names). */
+/** lodash-style camelCase (the naming rule the earlier OpenAPI hook codegen used). */
 const toCamelCase = (value: string): string => {
   const words = value.match(WORD) ?? [];
   return words

@@ -2,10 +2,11 @@
  * `@terreno/syncdb/config` — the running app's API base URLs and standard request
  * headers, resolved once from Expo config and env:
  *
- * 1. `extra.BASE_URL` (production/staging; `__SAME_ORIGIN__` → page origin)
- * 2. `EXPO_PUBLIC_API_URL` (dev web)
- * 3. Expo `hostUri` + dev API port (simulator/device)
- * 4. `http://localhost:<dev API port>`
+ * 1. `extra.BASE_URL` set to `__SAME_ORIGIN__` → page origin
+ * 2. `EXPO_PUBLIC_API_URL`
+ * 3. `extra.BASE_URL` (production/staging builds only; ignored in dev)
+ * 4. Expo `hostUri` + dev API port (simulator/device)
+ * 5. `http://localhost:<dev API port>`
  *
  * Requires `expo-constants` (optional peer dependency).
  */

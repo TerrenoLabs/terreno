@@ -1,5 +1,5 @@
 /**
- * Ported from `@terreno/rtk`'s `authSlice*.test.ts` and `isolated/emptyApi*.isolated.ts`:
+ * Ported from the pre-58 rtk package's `authSlice*.test.ts` and `isolated/emptyApi*.isolated.ts`:
  * login, refresh before expiry, 401 refresh-retry, the shared refresh mutex, and logout on
  * refresh failure — now against `jwtAuthAdapter` and the syncdb request client.
  *

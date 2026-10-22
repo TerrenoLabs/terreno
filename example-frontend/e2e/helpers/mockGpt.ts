@@ -1,6 +1,9 @@
 import type {Page, Route} from "@playwright/test";
 import {DateTime} from "luxon";
 
+import type {E2EUser} from "../fixtures/testUsers";
+import {type SeededHistory, seedGptHistory} from "./seedGptHistory";
+
 const API_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
 
 type SseEvent = Record<string, unknown>;
@@ -41,6 +44,38 @@ export const mockGptStream = async (
   await page.route(`${API_URL}/gpt/prompt`, (route) =>
     fulfillSse(route, [...textEvents(responseText), {done: true, historyId, title}])
   );
+};
+
+/**
+ * Mocks `/gpt/prompt` like a server that saves each turn: the prompt and reply are stored as a
+ * real history through `POST /gpt/histories` before the reply streams with its id, so the chat
+ * reaches the sidebar over sync the way a real turn does. `remove` deletes every saved history.
+ */
+export const mockGptStreamSavingHistory = async (
+  page: Page,
+  {responseText, title, user}: {responseText: string; title: string; user: E2EUser}
+): Promise<{remove: () => Promise<void>; saved: SeededHistory[]}> => {
+  const saved: SeededHistory[] = [];
+  await page.route(`${API_URL}/gpt/prompt`, async (route) => {
+    const body = (route.request().postDataJSON() ?? {}) as {prompt?: string};
+    const history = await seedGptHistory({
+      prompt: body.prompt ?? "",
+      reply: responseText,
+      title,
+      user,
+    });
+    saved.push(history);
+    return fulfillSse(route, [
+      ...textEvents(responseText),
+      {done: true, historyId: history.historyId, title},
+    ]);
+  });
+  return {
+    remove: async (): Promise<void> => {
+      await Promise.all(saved.map((history) => history.remove()));
+    },
+    saved,
+  };
 };
 
 /**
@@ -162,7 +197,11 @@ export const savedHistory = ({
   };
 };
 
-/** Serves `history` from `GET /gpt/histories/:id` and as the only conversation in the list. */
+/**
+ * Serves `history` from `GET /gpt/histories/:id`, which the app reads when a turn's stream left
+ * rows out, and from the REST list. The sidebar reads synced rows, so a mocked history never
+ * appears there.
+ */
 export const mockSavedHistory = async (
   page: Page,
   history: Record<string, unknown>

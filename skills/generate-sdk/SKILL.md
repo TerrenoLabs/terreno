@@ -1,65 +1,64 @@
 ---
 name: generate-sdk
 description: >-
-  Regenerate the example-frontend RTK Query SDK (store/openApiSdk.ts) from the
-  example-backend's OpenAPI spec. Handles dependency install, backend startup,
-  SDK codegen, and cleanup from a fresh checkout. Use whenever the backend's API
-  surface changes — new modelRouter routes, custom routes registered via
-  createOpenApiBuilder, new/modified Mongoose models or field descriptions in
-  example-backend, changes to
+  Regenerate the example-frontend SDKs from the example-backend's OpenAPI spec
+  with terreno-syncdb-codegen: store/apiSdk.ts (typed request hooks for every
+  non-synced route, `bun run sdk`) and store/syncDbSdk.ts (synced collection
+  hooks, `bun run sync-sdk`). Handles dependency install, backend startup,
+  codegen, and cleanup from a fresh checkout. Use whenever the backend's API
+  surface changes — new modelRouter routes or actions, custom routes registered
+  via createOpenApiBuilder, new/modified Mongoose models or field descriptions
+  in example-backend, sync config changes, changes to
   permissions/queryFields/populatePaths/responseHandler, edits to @terreno/api
   routing or OpenAPI generation, or any time a route is added/removed/renamed.
-  Also use when the user asks to "regenerate the SDK", "update openApiSdk.ts",
-  "run bun run sdk", or reports stale/missing generated hooks. Lifecycle
-  composition: Pick after API-shape changes; Roast to verify generated-client
-  compatibility.
+  Also use when the user asks to "regenerate the SDK", "update apiSdk.ts" or
+  "syncDbSdk.ts", "run bun run sdk" or "bun run sync-sdk", or reports
+  stale/missing generated hooks. Lifecycle composition: Pick after API-shape
+  changes; Roast to verify generated-client compatibility.
 targets:
   - '*'
 ---
 # Generate Frontend SDK
 
-Regenerates `example-frontend/store/openApiSdk.ts` from the backend OpenAPI spec via RTK Query codegen.
+Regenerates the two generated files in `example-frontend` from the live backend spec at
+`http://localhost:4000/openapi.json` (or `OPENAPI_URL`). Both come from
+`terreno-syncdb-codegen` in `@terreno/syncdb`.
 
-**Scope:** This skill covers **non-synced** routes only (auth, profile, AI,
-feature flags, custom RPC). Synced collections use `@terreno/syncdb` hooks
-(`useQuery`, `useMutate`) — they are **not** in the generated SDK. Built-in
-admin RPC uses admin-frontend's host-bound fetch client; do not add admin
-`injectEndpoints`. See [syncdb reference](../../docs/reference/syncdb.md)
-and [migrate-rtk-to-syncdb.md](../../docs/how-to/migrate-rtk-to-syncdb.md).
+| Command | Output | Covers |
+|---------|--------|--------|
+| `bun run sdk` (runs `api-sdk`) | `store/apiSdk.ts` | Every operation without `x-terreno-sync`: `/auth/me`, modelRouter actions, AI, consents, announcements, version check |
+| `bun run sync-sdk` | `store/syncDbSdk.ts` | `SYNC_COLLECTIONS` + collection hooks for the collections in the script's `--collections` list |
 
-### Legacy RTK data path
-
-During the `@terreno/rtk` support window, some screens may still use generated `useGetXQuery` / `usePostXMutation` for collections. Do not add new collection hooks — migrate to syncdb instead.
-
-The `example-frontend` consumes the `example-backend` API via auto-generated RTK Query hooks in `store/openApiSdk.ts`. The codegen pulls from the live backend at `http://localhost:4000/openapi.json`, so the backend must be running while `bun run sdk` executes.
-
-**Never edit `example-frontend/store/openApiSdk.ts` by hand — it is fully overwritten by this skill.**
+**Never edit `store/apiSdk.ts` or `store/syncDbSdk.ts` by hand — codegen overwrites them.**
+Codegen options live in `example-frontend/syncdb-codegen.json` (`excludePaths` drops
+routes such as the SSE streams; `overrides` sets per-collection options). Built-in admin
+uses admin-frontend's own fetch client and is not generated here.
 
 ## Documentation
 
-Read `docs/reference/syncdb.md` and the backend/OpenAPI reference before regenerating. After a public API change, run `update-docs` in the same slice so reference and how-to pages match the new hooks. Generated SDK files are not hand-edited docs.
+Read `docs/reference/syncdb.md#codegen` and `docs/how-to/generate-the-client-sdk.md`
+before regenerating. After a public API change, run `update-docs` in the same slice.
 
 ## When to run this skill
 
-Run it whenever the backend's OpenAPI surface changes. Common triggers:
+Run `sdk` when the non-synced OpenAPI surface changes; run `sync-sdk` when a synced
+collection's schema or `sync` config changes. Run both when unsure. Triggers:
 
-- New or removed `modelRouter` registration
-- Edits to `permissions`, `queryFields`, `populatePaths`, `defaultQueryParams`, `sort`, `responseHandler`, or `openApiOverwrite` on an existing `modelRouter`
-- New custom routes built with `createOpenApiBuilder` (path params, query params, request body, response schema changes)
-- Mongoose schema changes that affect the public shape: added/removed fields, type changes, required/enum/default changes, `description` updates, ref changes
-- Changes to auth routes (e.g. `addAuthRoutes`, `addMeRoutes`, GitHub OAuth, Better Auth)
-- Edits to `@terreno/api` files that produce the OpenAPI spec (`openApi.ts`, `openApiBuilder.ts`, `api.ts`, `populate.ts`)
-- User asks: "regenerate SDK", "update the SDK", "run bun run sdk", "openApiSdk.ts is out of date"
+- New or removed `modelRouter` registration, `collectionActions`, or `instanceActions`
+- Edits to `permissions`, `queryFields`, `populatePaths`, `defaultQueryParams`, `sort`, `responseHandler`, `sync`, or `openApiOverwrite`
+- New custom routes built with `createOpenApiBuilder`
+- Mongoose schema changes that affect the public shape (fields, types, required/enum/default, `description`, refs)
+- Auth route changes (`addAuthRoutes`, `addMeRoutes`, GitHub OAuth, Better Auth)
+- Edits to `@terreno/api` OpenAPI generation (`openApi.ts`, `openApiBuilder.ts`, `api.ts`, `populate.ts`) or to `syncdb/src/codegen/`
+- A new synced collection: also add it to the `--collections` list in the `sync-sdk` script
 
-If the change is purely backend-internal (logging, refactor that doesn't alter routes/models, test-only edits), the SDK does **not** need regeneration — skip this skill.
+Skip it for backend-internal changes (logging, refactors that keep routes and models, tests).
 
 ## Prerequisites
 
-- Bun is on PATH (run `bun` directly; do not modify PATH)
-- MongoDB reachable at `mongodb://localhost:27017` (the example backend connects on boot)
-- Ports 4000 (backend) must be free
-
-If MongoDB is not running, tell the user and stop — do not try to install or start it automatically.
+- Bun on PATH (run `bun` directly; do not modify PATH)
+- A MongoDB **replica set** at `MONGO_URI` (the backend's change streams need one)
+- Port 4000 free
 
 ## Procedure
 
@@ -67,90 +66,100 @@ Run the steps in order. Stop and report on the first failure.
 
 ### 1. Verify the worktree is bootstrapped
 
-Detect whether dependencies are installed. The repo uses Bun workspaces, so a single root `node_modules` is sufficient.
-
 ```bash
 test -d node_modules && test -d example-backend/node_modules && test -d example-frontend/node_modules && echo "installed" || echo "missing"
 ```
 
-If `missing`, run the full bootstrap from the repo root. This installs deps **and** compiles every workspace package (needed because `example-frontend` imports built artifacts from `@terreno/rtk` and other workspaces):
+If `missing`, run `bun run bootstrap` from the repo root in the background and wait for it.
+It installs deps and compiles every workspace package.
+
+### 2. Start MongoDB if it is not running
+
+`mongosh --quiet --eval 'rs.status().ok'` (or a `node` MongoClient ping) succeeds when a
+replica set is up. Otherwise start one from the `mongodb-memory-server` binary cache and
+initiate it once, as in `/workspace/CLAUDE.md` ("Example full stack"):
 
 ```bash
-bun run bootstrap
+mkdir -p .devdata/mongo
+"$(ls ~/.cache/mongodb-binaries/mongod-* | head -1)" \
+  --replSet rs0 --port 27017 --bind_ip 127.0.0.1 --dbpath .devdata/mongo
 ```
 
-Bootstrap can take a few minutes — run it in the background and wait for it to finish before continuing.
+Run `mongod` in the background. Initiate the replica set with `node` (not `bun`) from
+`example-backend/`. If no `mongod` binary exists, tell the user and stop.
 
-### 2. Ensure backend env vars are set
-
-The backend reads `example-backend/.env`. If that file is missing, copy the example:
+### 3. Ensure backend env vars are set
 
 ```bash
 test -f example-backend/.env || cp example-backend/.env.example example-backend/.env
 ```
 
-The default `.env.example` values are fine for local SDK generation. Do not invent secrets or overwrite an existing `.env`.
+The example values (`MONGO_URI=mongodb://127.0.0.1:27017/terreno-example?replicaSet=rs0`,
+token and session secrets) are fine for codegen. Never overwrite an existing `.env`.
 
-### 3. Start the example backend on port 4000
-
-The dev script watches files, which is fine for a one-shot codegen run. Start it in the background from the repo root:
+### 4. Start the example backend on port 4000
 
 ```bash
 bun run backend:dev
 ```
 
-Use the Bash tool's `run_in_background: true` so the process keeps running while you continue.
+Use `run_in_background: true`.
 
-### 4. Wait for the OpenAPI spec to be served
+### 5. Wait for the OpenAPI spec
 
-Poll `http://localhost:4000/openapi.json` until it returns HTTP 200. The backend has to connect to MongoDB and register all routes before the spec is available, which can take 5–20 seconds on a cold start. Do not skip this wait — running `bun run sdk` before the spec is ready produces an empty/broken `openApiSdk.ts`.
-
-```bash
-until curl -sf -o /dev/null -w "%{http_code}" http://localhost:4000/openapi.json | grep -q 200; do sleep 2; done
-```
-
-If the backend logs an error (Mongo connection refused, port already in use, compile error), stop and surface the error to the user. Do not retry blindly.
-
-### 5. Generate the SDK
-
-Run the codegen from `example-frontend`. The script also runs Biome formatting on the output and strips an empty re-export line, so no follow-up formatting is needed.
+Poll until the spec returns 200 (5–20 s on a cold start). Codegen against a backend that is
+not ready fails or emits an empty SDK.
 
 ```bash
-cd example-frontend && bun run sdk
+until curl -sf -o /dev/null http://localhost:4000/openapi.json; do sleep 2; done
 ```
 
-If the script fails with a missing module error (e.g. `@rtk-query/codegen-openapi`), dependencies are stale — re-run `bun run bootstrap` from the repo root and try again.
+If the backend logs an error (Mongo connection refused, port in use, compile error), stop
+and report it.
 
-### 6. Stop the backend
+### 6. Generate
 
-Kill the background backend process you started in step 3. Use the PID from the background shell, or:
+```bash
+cd example-frontend && bun run sdk && bun run sync-sdk
+```
+
+Both scripts format their output with Biome. A non-zero exit names the problem: two
+operations sharing a hook name (give one an `operationId`), a missing collection path, or a
+list response without `data.items`.
+
+### 7. Stop the backend
+
+Kill the background backend you started (and `mongod`, if you started it):
 
 ```bash
 pkill -f "example-backend.*src/index.ts" || true
 ```
 
-### 7. Verify and report
+### 8. Verify and report
 
-Confirm `example-frontend/store/openApiSdk.ts` exists and was modified. Show the user a short summary:
+```bash
+git diff --stat example-frontend/store/apiSdk.ts example-frontend/store/syncDbSdk.ts
+cd example-frontend && bunx tsc --noEmit
+```
 
-- Which routes/models triggered the regeneration
-- A `git diff --stat example-frontend/store/openApiSdk.ts` to show the size of the change
-- Any warnings or errors emitted by the backend or codegen
-
-Do **not** commit `openApiSdk.ts` automatically — leave that to the user's normal commit flow.
+Report which backend changes triggered the run, the diff stat, and any codegen or compile
+errors. Do not commit the generated files automatically.
 
 ## Common failure modes
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `ECONNREFUSED 127.0.0.1:27017` | MongoDB not running | Ask the user to start Mongo; do not auto-start |
-| `EADDRINUSE :::4000` | Stale backend process | `pkill -f "example-backend.*src/index.ts"` then retry |
-| `Cannot find module '@rtk-query/codegen-openapi'` | Missing/stale deps | Re-run `bun run bootstrap` |
-| `openApiSdk.ts` has no endpoints | Backend wasn't ready when codegen ran | Step 4 wait was skipped — start over with a proper poll |
-| Codegen errors on `$ref` | Backend OpenAPI spec is malformed | Inspect `/openapi.json` manually; check recent changes to `openApi.ts` or model schemas |
+| `ECONNREFUSED 127.0.0.1:27017` | MongoDB not running | Step 2 |
+| Backend boots but change streams fail | Mongo is not a replica set | Start `mongod --replSet rs0` and initiate it |
+| `EADDRINUSE :::4000` | Stale backend process | `pkill -f "example-backend.*src/index.ts"`, then retry |
+| `fetch failed` / empty output | Backend not ready when codegen ran | Redo step 5 |
+| Duplicate hook name error | Two operations map to one name | Add an `operationId` to one route |
+| Screen imports a hook that no longer exists | Route renamed or excluded | Update the import; check `excludePaths` in `syncdb-codegen.json` |
 
 ## Notes
 
-- The codegen config lives at `example-frontend/openapi-config.ts`. The schema URL respects `OPENAPI_URL` if set, otherwise defaults to `http://localhost:4000/openapi.json`.
-- The script entry point is `example-frontend/scripts/generate-sdk.ts` — it shells out to the `@rtk-query/codegen-openapi` CLI, then post-processes the output with Biome.
-- Custom endpoints and cache tag types are layered on top in `example-frontend/store/sdk.ts` via `injectEndpoints`/`enhanceEndpoints`; that file is hand-maintained and is **not** overwritten by codegen.
+- Script definitions: `example-frontend/package.json` (`api-sdk`, `sdk`, `sync-sdk`). They run
+  `syncdb/src/codegen/cli.ts` directly; consumer apps call the `terreno-syncdb-codegen` bin.
+- Hook names match the old RTK codegen rule (`GET /auth/me` → `useGetAuthMeQuery`), so
+  migrated screens keep their names. Apps upgrading from `@terreno/rtk` follow
+  `docs/how-to/migrate-rtk-to-syncdb.md`.

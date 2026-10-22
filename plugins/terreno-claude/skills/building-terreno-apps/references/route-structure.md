@@ -24,10 +24,13 @@ app/
       [id].tsx             # AdminModelForm (edit)
 components/                # Screen components (NOT in app/)
 hooks/                     # Custom hooks
+lib/
+  betterAuth.ts            # createBetterAuthClient (@terreno/syncdb/auth)
 store/
-  index.ts                 # Redux store + generateAuthSlice
-  sdk.ts                   # Hand-maintained SDK extensions
-  openApiSdk.ts            # Generated — never edit manually
+  syncdb.ts                # Shared authProvider + createSyncDb client
+  apiClient.ts             # createApiClient for non-synced routes
+  apiSdk.ts                # Generated request hooks — never edit manually
+  syncDbSdk.ts             # Generated collection hooks — never edit manually
 ```
 
 ### Rules
@@ -42,12 +45,15 @@ store/
 
 ```tsx
 import {Redirect, Stack, useSegments} from "expo-router";
-import {useSelectCurrentUserId} from "@terreno/rtk";
+import {useSession} from "@terreno/syncdb/auth";
 
 const RootLayoutNav: React.FC = () => {
-  const userId = useSelectCurrentUserId();
+  const {userId, isLoading} = useSession();
   const segments = useSegments();
 
+  if (isLoading) {
+    return null;
+  }
   if (!userId && segments[0] !== "login") {
     return <Redirect href="/login" />;
   }
@@ -65,9 +71,9 @@ Wrap admin routes once in `app/admin/_layout.tsx`:
 
 ```tsx
 import {AdminProvider, AdminShellLayout} from "@terreno/admin-frontend";
-import {baseUrl} from "@terreno/rtk";
+import {baseUrl} from "@terreno/syncdb/config";
 import {Stack} from "expo-router";
-import {getAdminAuthHeaders} from "@/store/betterAuthApi";
+import {getAdminAuthHeaders} from "@/store/syncdb"; // Bearer header from authProvider.getToken()
 
 export default function AdminLayout(): React.ReactElement {
   return (

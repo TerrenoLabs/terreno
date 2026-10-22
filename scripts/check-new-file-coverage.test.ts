@@ -70,7 +70,8 @@ describe("isCoverageSourceFile", () => {
     assert.isFalse(isCoverageSourceFile("api/src/newRoute.test.ts"));
     assert.isFalse(isCoverageSourceFile("ui/src/NewComponent.stories.tsx"));
     assert.isFalse(isCoverageSourceFile("example-frontend/e2e/helpers/auditEvents.ts"));
-    assert.isFalse(isCoverageSourceFile("example-frontend/store/openApiSdk.ts"));
+    assert.isFalse(isCoverageSourceFile("example-frontend/store/apiSdk.ts"));
+    assert.isFalse(isCoverageSourceFile("example-frontend/store/syncDbSdk.ts"));
     assert.isFalse(isCoverageSourceFile("api/src/readme.md"));
     assert.isFalse(isCoverageSourceFile("api/src/types/authToken.ts"));
     assert.isFalse(isCoverageSourceFile("announcements/src/types.ts"));

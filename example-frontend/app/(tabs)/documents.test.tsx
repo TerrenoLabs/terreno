@@ -55,7 +55,7 @@ const pressSegment = (view: RenderResult, label: string): void => {
     (node) => Array.isArray(node.children) && node.children.some((child) => child === label)
   )[0];
   assert.exists(labelNode);
-  let current = labelNode;
+  let current: typeof labelNode | null = labelNode;
   while (current && typeof current.props.onPress !== "function") {
     current = current.parent;
   }

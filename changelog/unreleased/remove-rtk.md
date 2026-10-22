@@ -1,0 +1,10 @@
+---
+category: Breaking
+---
+
+- Removed `@terreno/rtk` and every Redux dependency (`@reduxjs/toolkit`, `react-redux`, `redux-persist`, `@rtk-query/codegen-openapi`). `@terreno/rtk` is not published for 58. `@terreno/syncdb` is the only frontend data, request, and session layer. Follow `docs/how-to/migrate-rtk-to-syncdb.md`, which maps every removed export to its replacement, and the 58.0.0 upgrade note.
+- `@terreno/syncdb` adds `@terreno/syncdb/api` (`createApiClient`, `ApiError`), request hooks in `@terreno/syncdb/react` (`ApiClientProvider`, `useApiQuery`, `useLazyApiQuery`, `useApiMutation`, `useSocketEvent`), `@terreno/syncdb/config` (`baseUrl`, `baseWebsocketsUrl`, `appHeaders`), `@terreno/syncdb/auth` (`createBetterAuthClient`, `SessionProvider`, `useSession`, `jwtAuthAdapter`, `useJwtAuth`, token-expiry helpers), `@terreno/syncdb/flags` (`useFeatureFlags`, `useTerrenoFeatureFlags` on the sync socket), `@terreno/syncdb/app` (`useUpgradeCheck`, `hasPermission`, `canOpenAdminPage`, `installDevConsoleLogger`, `useMCPTools`), and `@terreno/syncdb/buildNumber`.
+- `terreno-syncdb-codegen --api-out` generates typed hooks for every non-synced OpenAPI operation (same names as the RTK codegen), replacing `@rtk-query/codegen-openapi`. `bun run sdk` writes `store/apiSdk.ts`.
+- `@terreno/ui` `ConsentNavigator`, `AnnouncementNavigator`, `useConsentForms`, `useSubmitConsent`, `useAnnouncements`, and `useAcknowledgeAnnouncement` take a request `client` instead of an RTK `api`.
+- `GptHistory` (`gpt/histories`) and `McpServiceToken` (`mcp/service-tokens`, read-only) are synced collections with String ids. Run the `gptHistoryStringIdsMigration` (`@terreno/ai`) and `mcpServiceTokenStringIdsMigration` (`@terreno/api`) before deploying 58 frontends.
+- `create-terreno-app`, the `terreno_bootstrap` prompt, and the `terreno_generate_screen` tool scaffold apps without Redux or `@terreno/rtk`. The terreno-mcp-local `get_rtk_state` tool, the MCP resource `terreno://docs/rtk`, and `terreno state --slice rtk` are removed; use `get_syncdb_state` and `terreno state`.

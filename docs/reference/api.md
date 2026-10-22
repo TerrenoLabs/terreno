@@ -50,11 +50,14 @@ Two patterns for building Terreno APIs:
 
 ### Removed: modelRouter `realtime`
 
-Terreno 58 removed `modelRouter({ realtime })` and the legacy RTK `sync` websocket event. Passing `realtime` is now a TypeScript error. Use `sync` with [`@terreno/syncdb`](syncdb.md). See [Migrate from RTK to syncdb](../how-to/migrate-rtk-to-syncdb.md).
+Terreno 58 removed `modelRouter({ realtime })` and the legacy RTK `sync` websocket event. Passing `realtime` is now a TypeScript error. Use `sync` with [`@terreno/syncdb`](syncdb.md). See [Upgrade from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md).
 
 Also removed: `RealtimeConfig`, `RealtimeEvent`, `DocumentSubscription`, `QuerySubscription`, the realtime registry (`registerRealtime`, `getRealtimeRegistry`, `findRegistryEntryByCollection`, `findRegistryEntryByRoutePath`, `updateRealtimeRegistryOptions`, `clearRealtimeRegistry`, `RealtimeRegistryEntry`), the query-subscription store (`addQuerySubscription`, `removeQuerySubscription`, `removeAllSocketQueries`, `getQuerySubscriptionsForCollection`, `computeQueryId`, `clearQueryStore`), and `MAX_MODEL_SUBSCRIPTIONS` / `MAX_DOCUMENT_SUBSCRIPTIONS` / `MAX_QUERY_SUBSCRIPTIONS`. The server no longer handles `subscribe:model`, `subscribe:document`, or `subscribe:query`.
 
 `RealtimeApp` stays. It hosts Socket.io, socket auth, change streams, and `sync:delta`.
+Before it sends a `sync:delta` to a socket, it runs the router's `read` permissions (or RBAC
+read access) against the change's post-image hydrated as a model document, as REST does. So a
+virtual owner field works: `GptHistory`'s `ownerId` alias of `userId` passes `Permissions.IsOwner`.
 
 Keep `admin.realtime` when you want admin `admin:model.changed` events.
 
@@ -357,7 +360,7 @@ setupServer({
 - `POST /auth/login` — Authenticate with email/password
 - `POST /auth/refresh_token` — Refresh access token
 - `POST /auth/forgotPassword` — Always 202; mails a reset link only when the email exists
-- `POST /auth/resetPassword` — `{token, password}`; also aliased at `POST /resetPassword` for the RTK client
+- `POST /auth/resetPassword` — `{token, password}`; also aliased at `POST /resetPassword` (the `jwtAuthAdapter` `resetPassword` path in `@terreno/syncdb/auth`)
 - `POST /auth/sendVerification` — Authenticated; 202 only after delivery succeeds; mails a verification link when `emailVerified` is not true
 - `POST /auth/verifyEmail` — `{token}` sets `emailVerified` true
 - `GET /auth/me` — Get current user profile
@@ -393,7 +396,7 @@ case instead of 202. Email lookup is case-insensitive. Successful reset calls `s
 and deletes Better Auth sessions. Better Auth password reset updates the JWT password
 and `tokenEpoch` for the matching app User. Access
 tokens stay valid until expiry (default 15m). `POST /resetPassword`
-matches the `@terreno/rtk` `resetPassword` mutation path (`password` or `newPassword`).
+matches the `@terreno/syncdb/auth` `jwtAuthAdapter` `resetPassword` path (`password` or `newPassword`).
 
 Add `tokenEpoch` (number, default 0) on the User schema so epoch bumps persist under
 `strict: "throw"`. See `example-backend` User. Opt in to `emailVerified` with

@@ -10,7 +10,7 @@ Terreno avoids **barrel imports** — imports that resolve through an `index.ts`
 
 ## Allowed
 
-- **Published package APIs** — cross-package imports like `@terreno/api`, `@terreno/ui`, and `@terreno/rtk` use each package's public `src/index` entry. That is intentional.
+- **Published package APIs** — cross-package imports like `@terreno/api`, `@terreno/ui`, and `@terreno/syncdb/react` use each package's public entry (`src/index` or a declared subpath export). That is intentional.
 - **Package public entry files** — `api/src/index.ts`, `ui/src/index.tsx`, etc. may re-export for npm consumers. Do not import those barrels from *inside* the same package.
 - **Expo Router routes** — `app/**/index.tsx` files are route entries, not barrels.
 
@@ -29,12 +29,12 @@ import {User} from "../models/user";
 ```
 
 ```typescript
-// Bad — store/index.ts was a barrel of sdk/appState/utils
-import {useGetMeQuery} from "@/store";
+// Bad — a directory barrel
+import {useGetAuthMeQuery} from "@/store";
 
 // Good
-import {useGetMeQuery} from "@/store/sdk";
-import store, {useAppDispatch} from "@/store/index";
+import {useGetAuthMeQuery} from "@/store/apiSdk";
+import {syncDb} from "@/store/syncdb";
 ```
 
 ## Enforcement

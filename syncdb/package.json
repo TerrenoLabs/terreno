@@ -102,6 +102,7 @@
     "@react-native-async-storage/async-storage": "catalog:",
     "better-auth": "catalog:",
     "expo-constants": "*",
+    "expo-network": "catalog:",
     "expo-secure-store": "catalog:",
     "expo-sqlite": "*",
     "react": "catalog:",
@@ -127,6 +128,9 @@
       "optional": true
     },
     "expo-constants": {
+      "optional": true
+    },
+    "expo-network": {
       "optional": true
     },
     "expo-secure-store": {

@@ -344,7 +344,9 @@ export const createApiClient = (config: ApiClientConfig = {}): ApiClient => {
       entry.generation += 1;
       entry.inFlight = undefined;
       entry.tags.clear();
-      entry.state = UNINITIALIZED;
+      // A fresh object, so a hook that rendered the initial state before a request started and
+      // was reset in the same commit still sees a change and fetches again.
+      entry.state = {...UNINITIALIZED};
       // Mounted hooks keep their entry so they see the reset and fetch again.
       if (entry.listeners.size === 0) {
         entries.delete(key);

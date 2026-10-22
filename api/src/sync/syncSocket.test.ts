@@ -14,6 +14,7 @@ import mongoose, {type Model, model, Schema} from "mongoose";
 import type {Server} from "socket.io";
 
 import type {ModelRouterOptions} from "../api";
+import {Permissions} from "../permissions";
 import {createdUpdatedPlugin, type IsDeleted, isDeletedPlugin} from "../plugins";
 import {
   emitSyncDeltaForChange,
@@ -69,6 +70,29 @@ sockStuffSchema.plugin(isDeletedPlugin);
 sockStuffSchema.plugin(createdUpdatedPlugin);
 sockStuffSchema.plugin(syncPlugin);
 const SockStuffModel = model<SockStuff>("SockStuff", sockStuffSchema);
+
+/** Owned through `userId`, with an `ownerId` virtual alias for `Permissions.IsOwner` (as GptHistory). */
+interface SockNote extends IsDeleted {
+  _id: string;
+  text: string;
+  userId: string;
+  _syncSeq?: number;
+}
+
+const sockNoteSchema = new Schema<SockNote>(
+  {
+    text: {description: "The note text", required: true, type: String},
+    userId: {description: "The user who owns this note", type: String},
+  },
+  {toJSON: {virtuals: true}, toObject: {virtuals: true}}
+);
+sockNoteSchema.virtual("ownerId").get(function (this: SockNote) {
+  return this.userId;
+});
+sockNoteSchema.plugin(isDeletedPlugin);
+sockNoteSchema.plugin(createdUpdatedPlugin);
+sockNoteSchema.plugin(syncPlugin);
+const SockNoteModel = model<SockNote>("SockNote", sockNoteSchema);
 
 interface SockProject extends IsDeleted {
   _id: string;
@@ -1122,6 +1146,50 @@ describe("emitSyncDeltaForChange", () => {
     expect(delta.collection).toBe("sockStuff");
     expect((delta.data as Record<string, unknown>).name).toBe("hello");
     expect((delta.data as Record<string, unknown>).id).toBe("doc-1");
+  });
+
+  it("checks read permissions against the model document, so virtual owner fields resolve", async () => {
+    clearSyncRegistry();
+    registerSync({
+      config: {scope: {field: "userId", type: "owner"}},
+      model: SockNoteModel as unknown as Model<unknown>,
+      options: {
+        permissions: {
+          create: [Permissions.IsOwner],
+          delete: [Permissions.IsOwner],
+          list: [Permissions.IsAuthenticated],
+          read: [Permissions.IsOwner],
+          update: [Permissions.IsOwner],
+        },
+      } as unknown as ModelRouterOptions<unknown>,
+      routePath: "/sock/notes",
+    });
+    const entry = findSyncEntryByCollectionTag("sock/notes") as SyncRegistryEntry;
+    const io = makeTrackedIo();
+    io.addSocketToRoom(syncRoomForStream("sock/notes|owner:user1"), {admin: false, id: "user1"});
+    io.addSocketToRoom(syncRoomForStream("sock/notes|owner:user1"), {admin: false, id: "user2"});
+
+    await emitSyncDeltaForChange({
+      change: makeChange({
+        fullDocument: {_id: "note-1", _syncSeq: 3, text: "hi", userId: "user1"},
+        ns: {coll: "socknotes"},
+        operationType: "insert",
+      }),
+      docId: "note-1",
+      entry,
+      io,
+      logDebug: () => {},
+    });
+
+    const deltas = io.emissions.filter((e) => e.event === "sync:delta");
+    expect(deltas.map((e) => e.socketId)).toHaveLength(1);
+    const delta = deltas[0]?.payload as SyncDelta;
+    expect(delta).toMatchObject({
+      collection: "sock/notes",
+      seq: 3,
+      stream: "sock/notes|owner:user1",
+    });
+    expect((delta.data as Record<string, unknown>).text).toBe("hi");
   });
 
   it("adminBroadcast true: create also emits to {collection}|admin", async () => {

@@ -12,7 +12,7 @@ Custom screens need the same `name` on `AdminApp.customScreens` and
 (model CRUD and RPC) goes through its host-bound `adminRequest` fetch client
 (`credentials` for cookie SPAs, `apiOrigin` + `getAuthHeaders` for embedded apps).
 String-`_id` model CRUD uses windowed syncdb when `adminBroadcast` is enabled;
-ObjectId and API-only models use `useAdminModelApi`. Admin components take no RTK
-`api` prop, and admin code never calls `injectEndpoints`.
+ObjectId and API-only models use `useAdminModelApi`. Admin components take no
+`api` prop.
 
 Agent workflow: skill `building-admin-interfaces`.

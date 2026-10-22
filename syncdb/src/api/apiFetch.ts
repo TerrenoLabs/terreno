@@ -121,6 +121,9 @@ const readErrorData = async (response: Response): Promise<ApiErrorData> => {
         if (parsed.meta !== undefined) {
           data.meta = parsed.meta;
         }
+        if (typeof parsed.disableExternalErrorTracking === "boolean") {
+          data.disableExternalErrorTracking = parsed.disableExternalErrorTracking;
+        }
         return data;
       }
     } catch {

@@ -22,16 +22,13 @@
   ],
   // Maestro is installed by CI and developer toolchains rather than package.json.
   "ignoreBinaries": ["maestro"],
-  // Root tooling loads these through package scripts or child CLIs rather than imports:
-  // Biome powers hooks, RTK codegen is resolved by generate-sdk.ts, and ts-node loads
-  // TypeScript codegen configuration.
-  "ignoreDependencies": ["@biomejs/biome", "@rtk-query/codegen-openapi", "ts-node"],
+  // Root tooling loads Biome through package scripts and hooks rather than imports.
+  "ignoreDependencies": ["@biomejs/biome"],
   "ignoreIssues": {
     // Keep the Sentry React Native catalog pin stable for consumer/native fingerprint
     // compatibility even though no current workspace declares it.
     "package.json": ["catalog"],
     "**/generated/**": ["exports", "types"],
-    "**/openApiSdk.ts": ["exports", "types"],
     // Generated syncdb API SDK covers every non-synced route; screens adopt hooks over time.
     "**/apiSdk.ts": ["exports", "types"],
     "api/src/migrations/fixtures/**": ["files", "exports", "types"],
@@ -45,7 +42,6 @@
     "mcp-server/src/local/logPaths.ts": ["exports"],
     "mcp-server/src/local/metro/metroDevSession.ts": ["exports"],
     "mcp-server/src/local/tools/browser.ts": ["exports"],
-    "rtk/src/devConsoleLogger.ts": ["exports"],
     // Generated syncdb SDK surface may include hooks before an example screen adopts them.
     "example-frontend/store/syncDbSdk.ts": ["exports", "types"],
     // check-explicit-any/lib.ts loads BASELINE_PATH/loadBaseline through require() so it
@@ -156,17 +152,6 @@
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!",
         "!src/sync/loadHarness.ts!"
-      ]
-    },
-    "rtk": {
-      "entry": [
-        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/isolated/**/*.isolated.ts"
-      ],
-      "project": [
-        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "!test-preload.ts!"
       ]
     },
     "syncdb": {
@@ -310,11 +295,7 @@
         "react-native-purchases-ui",
         "jspdf",
         // EXPO_UNSTABLE_MCP_SERVER in start/web/ios loads the Expo MCP package.
-        "expo-mcp",
-        // No source imports it any more, but it still pulls in the native modules Better Auth
-        // needs (expo-secure-store, @better-auth/expo) until the app declares them itself
-        // when rtk/ is deleted (docs/tasks/remove-rtk.md Task 4.1).
-        "@terreno/rtk"
+        "expo-mcp"
       ],
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

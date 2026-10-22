@@ -87,8 +87,8 @@ The example-backend Docker job runs only when its image recipe changes
 (`Dockerfile`, `.dockerignore`, package manifests, or `bun.lock`). API/source
 changes are covered by preview CD builds and do not start a duplicate image job.
 
-UI, RTK, and admin-frontend changes do **not** start `example-backend-ci`.
-Those packages are covered by `ui-ci` / `rtk-ci` / `packages-ci` plus e2e and
+UI, syncdb, and admin-frontend changes do **not** start `example-backend-ci`.
+Those packages are covered by `ui-ci` / `syncdb-ci` / `packages-ci` plus e2e and
 admin-spa. `new-file-coverage` starts on package `src/` (and example app
 runtime paths including `example-frontend/components/`), not on every `*.ts`
 file in the repo (Playwright specs no longer compile the world). Package CI
@@ -166,13 +166,13 @@ non-PR branch builds.
 | Path (examples) | Parameter | PR job | `master` job |
 | --- | --- | --- | --- |
 | `demo/**`, `ui/**` | `run-deploy-demo` | `deploy-demo-preview` | `deploy-demo` |
-| `example-frontend/**`, `admin-frontend/**`, `rtk/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
+| `example-frontend/**`, `admin-frontend/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
 | `docs/**`, `website/**` | `run-deploy-docs` | `deploy-docs-preview` | `deploy-docs` |
 | `example-backend/**`, `api/**`, `comms/**`, `jobs/**`, `admin-spa/**`, `feature-flags/**`, `announcements/**`, plus every frontend path above | `run-cd-backend` | `gcp-cd-preview` | `gcp-cd-prod` |
 | `terraform/**`, `infra/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
 | `mcp-server/**`, `ui/**` | `run-cd-mcp` | _(none)_ | `gcp-cd-prod` (runs `mcp-server` `test:ci` first) |
 
-The backend image bundles the admin SPA (ui, rtk, admin-frontend, syncdb), so
+The backend image bundles the admin SPA (ui, admin-frontend, syncdb), so
 those paths redeploy the backend too. Every frontend PR preview therefore gets
 an isolated `pr-N` backend: `deploy-frontend-preview` always points
 `EXPO_PUBLIC_API_URL` at it (the prod backend rejects preview CORS) and waits
@@ -278,7 +278,7 @@ ambient OIDC token for GCP impersonation.
 Branch protection must require the CircleCI job names below. Remove disabled
 GitHub check names or pull requests will wait for checks that can no longer run.
 
-Dedicated package jobs (`api-ci`, `ai-ci`, `blocks-ci`, `rtk-ci`, `ui-ci`, `syncdb-ci`,
+Dedicated package jobs (`api-ci`, `ai-ci`, `blocks-ci`, `ui-ci`, `syncdb-ci`,
 `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run `bun run test:coverage`
 (`scripts/check-coverage.ts`, 95% functions and lines). Isolated `syncdb` tests
 are included by that script. Published packages without a dedicated workflow
@@ -298,7 +298,6 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Admin frontend lint, compile, coverage | `packages-ci` (`admin-frontend`) |
 | Run all tests (AI CI) | `ai-ci` |
 | Lint, compile, and test blocks | `blocks-ci` |
-| RTK Lint and Build | `rtk-ci` |
 | Syncdb Lint, Build, and Tests | `syncdb-ci` |
 | UI Lint, Build, Types, and Tests + demo typecheck | `ui-ci` |
 | Demo Lint and TypeScript Check | `ui-demo-ci` (demo-only PRs) |

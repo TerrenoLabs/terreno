@@ -219,48 +219,6 @@ export const useCommsTestPushMutation = (
     ...options,
   });
 
-export type CreateMcpServiceTokenArgs = {
-  expiresAt?: string;
-  name: string;
-};
-
-export type CreateMcpServiceTokenRes =
-  | {
-      created?: string;
-      expiresAt?: string;
-      id?: string;
-      mcpUrl?: string;
-      name?: string;
-      token?: string;
-      tokenPrefix?: string;
-    }
-  | {
-      data?: {
-        created?: string;
-        expiresAt?: string;
-        id?: string;
-        mcpUrl?: string;
-        name?: string;
-        token?: string;
-        tokenPrefix?: string;
-      };
-    };
-
-export const createMcpServiceTokenRequest = (arg: CreateMcpServiceTokenArgs): ApiRequestArgs => ({
-  body: arg,
-  method: "POST",
-  url: `/mcp/service-tokens`,
-});
-
-/** Create an MCP service token */
-export const useCreateMcpServiceTokenMutation = (
-  options: UseApiMutationOptions<CreateMcpServiceTokenArgs, CreateMcpServiceTokenRes> = {}
-): UseApiMutationResult<CreateMcpServiceTokenArgs, CreateMcpServiceTokenRes> =>
-  useApiMutation<CreateMcpServiceTokenArgs, CreateMcpServiceTokenRes>(
-    createMcpServiceTokenRequest,
-    {invalidatesTags: ["mcp"], ...options}
-  );
-
 export type DeleteAdminAnnouncementsByIdArgs = string;
 
 export type DeleteAdminAnnouncementsByIdRes = null;
@@ -547,23 +505,6 @@ export const useDeleteFilesByGcsKeyMutation = (
     invalidatesTags: ["files"],
     ...options,
   });
-
-export type DeleteGptHistoriesByIdArgs = string;
-
-export type DeleteGptHistoriesByIdRes = null;
-
-export const deleteGptHistoriesByIdRequest = (arg: DeleteGptHistoriesByIdArgs): ApiRequestArgs => ({
-  method: "DELETE",
-  url: `/gpt/histories/${encodeURIComponent(String(arg))}`,
-});
-
-export const useDeleteGptHistoriesByIdMutation = (
-  options: UseApiMutationOptions<DeleteGptHistoriesByIdArgs, DeleteGptHistoriesByIdRes> = {}
-): UseApiMutationResult<DeleteGptHistoriesByIdArgs, DeleteGptHistoriesByIdRes> =>
-  useApiMutation<DeleteGptHistoriesByIdArgs, DeleteGptHistoriesByIdRes>(
-    deleteGptHistoriesByIdRequest,
-    {invalidatesTags: ["gpthistories"], ...options}
-  );
 
 export type DeleteOrgsByIdArgs = string;
 
@@ -2032,6 +1973,7 @@ export type GetAdminMcpServiceTokensArgs = {
 
 export type GetAdminMcpServiceTokensRes = {
   data?: {
+    _id: string;
     expiresAt?: string;
     lastUsedAt?: string;
     name: string;
@@ -2039,9 +1981,11 @@ export type GetAdminMcpServiceTokensRes = {
     tokenHash: string;
     tokenPrefix: string;
     userId: string;
-    _id: string;
     updated: string;
     created: string;
+    deleted?: boolean;
+    _syncPrevStream?: string;
+    _syncSeq?: number;
   }[];
   limit?: number;
   more?: boolean;
@@ -2091,6 +2035,7 @@ export const useLazyGetAdminMcpServiceTokensQuery = (
 export type GetAdminMcpServiceTokensByIdArgs = string;
 
 export type GetAdminMcpServiceTokensByIdRes = {
+  _id: string;
   expiresAt?: string;
   lastUsedAt?: string;
   name: string;
@@ -2098,9 +2043,11 @@ export type GetAdminMcpServiceTokensByIdRes = {
   tokenHash: string;
   tokenPrefix: string;
   userId: string;
-  _id: string;
   updated: string;
   created: string;
+  deleted?: boolean;
+  _syncPrevStream?: string;
+  _syncSeq?: number;
 };
 
 export const getAdminMcpServiceTokensByIdRequest = (
@@ -3856,179 +3803,6 @@ export const useLazyGetGptDatasetsByIdQuery = (
     toRequest: getGptDatasetsByIdRequest,
   });
 
-export type GetGptHistoriesArgs = {
-  _id?: {
-    $in?: string[];
-  };
-  userId?:
-    | string
-    | {
-        $in?: string[];
-      };
-  projectId?:
-    | string
-    | {
-        $in?: string[];
-      };
-  page?: number;
-  sort?: string;
-  limit?: number;
-};
-
-export type GetGptHistoriesRes = {
-  data?: {
-    pendingAsk?: {
-      approvalId?: string;
-      created: string;
-      input: unknown;
-      kind: "choice" | "confirm" | "markdown" | "form" | "files";
-      origin?: "approval";
-      simple: unknown;
-      toolCallId: string;
-      toolName?: string;
-    };
-    projectId?: string;
-    prompts?: {
-      args?: unknown;
-      ask?: {
-        kind: "choice" | "confirm" | "markdown" | "form" | "files";
-        origin?: "approval";
-        status: "pending" | "answered" | "cancelled";
-      };
-      content?: {
-        filename?: string;
-        gcsKey?: string;
-        mimeType?: string;
-        text?: string;
-        type: "text" | "image" | "file";
-        url?: string;
-      }[];
-      model?: string;
-      rating?: "up" | "down";
-      result?: unknown;
-      status?: "streaming" | "complete" | "error";
-      streamId?: string;
-      text: string;
-      toolCallId?: string;
-      toolName?: string;
-      type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
-    }[];
-    title?: string;
-    userId: string;
-    _id: string;
-    updated: string;
-    created: string;
-    deleted?: boolean;
-    ownerId?: unknown;
-  }[];
-  limit?: number;
-  more?: boolean;
-  page?: number;
-  total?: number;
-};
-
-export const getGptHistoriesRequest = (arg: GetGptHistoriesArgs): ApiRequestArgs => ({
-  method: "GET",
-  params: {
-    _id: arg._id,
-    limit: arg.limit,
-    page: arg.page,
-    projectId: arg.projectId,
-    sort: arg.sort,
-    userId: arg.userId,
-  },
-  url: `/gpt/histories/`,
-});
-
-export const useGetGptHistoriesQuery = (
-  arg: GetGptHistoriesArgs,
-  options: ApiSdkQueryOptions<GetGptHistoriesRes> = {}
-): UseApiQueryResult<GetGptHistoriesRes> =>
-  useApiQuery<GetGptHistoriesRes>(getGptHistoriesRequest(arg), {
-    ...options,
-    providesTags: ["gpthistories"],
-  });
-
-export const useLazyGetGptHistoriesQuery = (
-  options: ApiSdkLazyOptions<GetGptHistoriesRes> = {}
-): UseLazyApiQueryResult<GetGptHistoriesRes, GetGptHistoriesArgs> =>
-  useLazyApiQuery<GetGptHistoriesRes, GetGptHistoriesArgs>({
-    ...options,
-    providesTags: ["gpthistories"],
-    toRequest: getGptHistoriesRequest,
-  });
-
-export type GetGptHistoriesByIdArgs = string;
-
-export type GetGptHistoriesByIdRes = {
-  pendingAsk?: {
-    approvalId?: string;
-    created: string;
-    input: unknown;
-    kind: "choice" | "confirm" | "markdown" | "form" | "files";
-    origin?: "approval";
-    simple: unknown;
-    toolCallId: string;
-    toolName?: string;
-  };
-  projectId?: string;
-  prompts?: {
-    args?: unknown;
-    ask?: {
-      kind: "choice" | "confirm" | "markdown" | "form" | "files";
-      origin?: "approval";
-      status: "pending" | "answered" | "cancelled";
-    };
-    content?: {
-      filename?: string;
-      gcsKey?: string;
-      mimeType?: string;
-      text?: string;
-      type: "text" | "image" | "file";
-      url?: string;
-    }[];
-    model?: string;
-    rating?: "up" | "down";
-    result?: unknown;
-    status?: "streaming" | "complete" | "error";
-    streamId?: string;
-    text: string;
-    toolCallId?: string;
-    toolName?: string;
-    type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
-  }[];
-  title?: string;
-  userId: string;
-  _id: string;
-  updated: string;
-  created: string;
-  deleted?: boolean;
-  ownerId?: unknown;
-};
-
-export const getGptHistoriesByIdRequest = (arg: GetGptHistoriesByIdArgs): ApiRequestArgs => ({
-  method: "GET",
-  url: `/gpt/histories/${encodeURIComponent(String(arg))}`,
-});
-
-export const useGetGptHistoriesByIdQuery = (
-  arg: GetGptHistoriesByIdArgs,
-  options: ApiSdkQueryOptions<GetGptHistoriesByIdRes> = {}
-): UseApiQueryResult<GetGptHistoriesByIdRes> =>
-  useApiQuery<GetGptHistoriesByIdRes>(getGptHistoriesByIdRequest(arg), {
-    ...options,
-    providesTags: ["gpthistories"],
-  });
-
-export const useLazyGetGptHistoriesByIdQuery = (
-  options: ApiSdkLazyOptions<GetGptHistoriesByIdRes> = {}
-): UseLazyApiQueryResult<GetGptHistoriesByIdRes, GetGptHistoriesByIdArgs> =>
-  useLazyApiQuery<GetGptHistoriesByIdRes, GetGptHistoriesByIdArgs>({
-    ...options,
-    providesTags: ["gpthistories"],
-    toRequest: getGptHistoriesByIdRequest,
-  });
-
 export type GetGptToolsArgs = void;
 
 export type GetGptToolsRes =
@@ -5222,44 +4996,6 @@ export const useHarnesstasksResolveInterruptedMutation = (
     {invalidatesTags: ["harnesstasks"], ...options}
   );
 
-export type ListMcpServiceTokensArgs = {
-  page?: number;
-  limit?: number;
-};
-
-export type ListMcpServiceTokensRes = {
-  data?: unknown[];
-  limit?: number;
-  more?: boolean;
-  page?: number;
-  total?: number;
-};
-
-export const listMcpServiceTokensRequest = (arg: ListMcpServiceTokensArgs): ApiRequestArgs => ({
-  method: "GET",
-  params: {limit: arg.limit, page: arg.page},
-  url: `/mcp/service-tokens`,
-});
-
-/** List MCP service tokens */
-export const useListMcpServiceTokensQuery = (
-  arg: ListMcpServiceTokensArgs,
-  options: ApiSdkQueryOptions<ListMcpServiceTokensRes> = {}
-): UseApiQueryResult<ListMcpServiceTokensRes> =>
-  useApiQuery<ListMcpServiceTokensRes>(listMcpServiceTokensRequest(arg), {
-    ...options,
-    providesTags: ["mcp"],
-  });
-
-export const useLazyListMcpServiceTokensQuery = (
-  options: ApiSdkLazyOptions<ListMcpServiceTokensRes> = {}
-): UseLazyApiQueryResult<ListMcpServiceTokensRes, ListMcpServiceTokensArgs> =>
-  useLazyApiQuery<ListMcpServiceTokensRes, ListMcpServiceTokensArgs>({
-    ...options,
-    providesTags: ["mcp"],
-    toRequest: listMcpServiceTokensRequest,
-  });
-
 export type LoadtestLoadtestChurnArgs = {
   creates?: number | null;
   deletes?: number | null;
@@ -5330,6 +5066,58 @@ export const useLoadtestLoadtestGenerateMutation = (
   useApiMutation<LoadtestLoadtestGenerateArgs, LoadtestLoadtestGenerateRes>(
     loadtestLoadtestGenerateRequest,
     {invalidatesTags: ["loadtest"], ...options}
+  );
+
+export type McpServiceTokensCreateArgs = {
+  expiresAt?: string | null;
+  name: string;
+};
+
+export type McpServiceTokensCreateRes = {
+  created: string;
+  expiresAt: string | null;
+  id: string;
+  mcpUrl: string;
+  name: string;
+  token: string;
+  tokenPrefix: string;
+};
+
+export const mcpServiceTokensCreateRequest = (arg: McpServiceTokensCreateArgs): ApiRequestArgs => ({
+  body: arg,
+  method: "POST",
+  url: `/mcp/service-tokens/create`,
+});
+
+/** Create an MCP service token */
+export const useMcpServiceTokensCreateMutation = (
+  options: UseApiMutationOptions<McpServiceTokensCreateArgs, McpServiceTokensCreateRes> = {}
+): UseApiMutationResult<McpServiceTokensCreateArgs, McpServiceTokensCreateRes> =>
+  useApiMutation<McpServiceTokensCreateArgs, McpServiceTokensCreateRes>(
+    mcpServiceTokensCreateRequest,
+    {invalidatesTags: ["mcpServiceTokens"], ...options}
+  );
+
+export type McpServiceTokensRevokeArgs = string;
+
+export type McpServiceTokensRevokeRes =
+  | Record<string, unknown>
+  | {
+      data?: Record<string, unknown>;
+    };
+
+export const mcpServiceTokensRevokeRequest = (arg: McpServiceTokensRevokeArgs): ApiRequestArgs => ({
+  method: "POST",
+  url: `/mcp/service-tokens/${encodeURIComponent(String(arg))}/revoke`,
+});
+
+/** Revoke an MCP service token */
+export const useMcpServiceTokensRevokeMutation = (
+  options: UseApiMutationOptions<McpServiceTokensRevokeArgs, McpServiceTokensRevokeRes> = {}
+): UseApiMutationResult<McpServiceTokensRevokeArgs, McpServiceTokensRevokeRes> =>
+  useApiMutation<McpServiceTokensRevokeArgs, McpServiceTokensRevokeRes>(
+    mcpServiceTokensRevokeRequest,
+    {invalidatesTags: ["mcpServiceTokens"], ...options}
   );
 
 export type PatchAdminAnnouncementsByIdArgs = {
@@ -5950,115 +5738,6 @@ export const usePatchFeatureFlagsFlagsByIdMutation = (
   useApiMutation<PatchFeatureFlagsFlagsByIdArgs, PatchFeatureFlagsFlagsByIdRes>(
     patchFeatureFlagsFlagsByIdRequest,
     {invalidatesTags: ["featureflags"], ...options}
-  );
-
-export type PatchGptHistoriesByIdArgs = {
-  id: string;
-  body: {
-    pendingAsk?: {
-      approvalId?: string;
-      created: string;
-      input: unknown;
-      kind: "choice" | "confirm" | "markdown" | "form" | "files";
-      origin?: "approval";
-      simple: unknown;
-      toolCallId: string;
-      toolName?: string;
-    };
-    projectId?: string;
-    prompts?: {
-      args?: unknown;
-      ask?: {
-        kind: "choice" | "confirm" | "markdown" | "form" | "files";
-        origin?: "approval";
-        status: "pending" | "answered" | "cancelled";
-      };
-      content?: {
-        filename?: string;
-        gcsKey?: string;
-        mimeType?: string;
-        text?: string;
-        type: "text" | "image" | "file";
-        url?: string;
-      }[];
-      model?: string;
-      rating?: "up" | "down";
-      result?: unknown;
-      status?: "streaming" | "complete" | "error";
-      streamId?: string;
-      text: string;
-      toolCallId?: string;
-      toolName?: string;
-      type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
-    }[];
-    title?: string;
-    userId?: string;
-    _id?: string;
-    updated?: string;
-    created?: string;
-    deleted?: boolean;
-    ownerId?: unknown;
-  };
-};
-
-export type PatchGptHistoriesByIdRes = {
-  pendingAsk?: {
-    approvalId?: string;
-    created: string;
-    input: unknown;
-    kind: "choice" | "confirm" | "markdown" | "form" | "files";
-    origin?: "approval";
-    simple: unknown;
-    toolCallId: string;
-    toolName?: string;
-  };
-  projectId?: string;
-  prompts?: {
-    args?: unknown;
-    ask?: {
-      kind: "choice" | "confirm" | "markdown" | "form" | "files";
-      origin?: "approval";
-      status: "pending" | "answered" | "cancelled";
-    };
-    content?: {
-      filename?: string;
-      gcsKey?: string;
-      mimeType?: string;
-      text?: string;
-      type: "text" | "image" | "file";
-      url?: string;
-    }[];
-    model?: string;
-    rating?: "up" | "down";
-    result?: unknown;
-    status?: "streaming" | "complete" | "error";
-    streamId?: string;
-    text: string;
-    toolCallId?: string;
-    toolName?: string;
-    type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
-  }[];
-  title?: string;
-  userId: string;
-  _id: string;
-  updated: string;
-  created: string;
-  deleted?: boolean;
-  ownerId?: unknown;
-};
-
-export const patchGptHistoriesByIdRequest = (arg: PatchGptHistoriesByIdArgs): ApiRequestArgs => ({
-  body: arg.body,
-  method: "PATCH",
-  url: `/gpt/histories/${encodeURIComponent(String(arg.id))}`,
-});
-
-export const usePatchGptHistoriesByIdMutation = (
-  options: UseApiMutationOptions<PatchGptHistoriesByIdArgs, PatchGptHistoriesByIdRes> = {}
-): UseApiMutationResult<PatchGptHistoriesByIdArgs, PatchGptHistoriesByIdRes> =>
-  useApiMutation<PatchGptHistoriesByIdArgs, PatchGptHistoriesByIdRes>(
-    patchGptHistoriesByIdRequest,
-    {invalidatesTags: ["gpthistories"], ...options}
   );
 
 export type PatchGptHistoriesByIdRatingArgs = {
@@ -7986,112 +7665,6 @@ export const usePostGptActionsMutation = (
     ...options,
   });
 
-export type PostGptHistoriesArgs = {
-  pendingAsk?: {
-    approvalId?: string;
-    created: string;
-    input: unknown;
-    kind: "choice" | "confirm" | "markdown" | "form" | "files";
-    origin?: "approval";
-    simple: unknown;
-    toolCallId: string;
-    toolName?: string;
-  };
-  projectId?: string;
-  prompts?: {
-    args?: unknown;
-    ask?: {
-      kind: "choice" | "confirm" | "markdown" | "form" | "files";
-      origin?: "approval";
-      status: "pending" | "answered" | "cancelled";
-    };
-    content?: {
-      filename?: string;
-      gcsKey?: string;
-      mimeType?: string;
-      text?: string;
-      type: "text" | "image" | "file";
-      url?: string;
-    }[];
-    model?: string;
-    rating?: "up" | "down";
-    result?: unknown;
-    status?: "streaming" | "complete" | "error";
-    streamId?: string;
-    text: string;
-    toolCallId?: string;
-    toolName?: string;
-    type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
-  }[];
-  title?: string;
-  userId?: string;
-  _id?: string;
-  updated?: string;
-  created?: string;
-  deleted?: boolean;
-  ownerId?: unknown;
-};
-
-export type PostGptHistoriesRes = {
-  pendingAsk?: {
-    approvalId?: string;
-    created: string;
-    input: unknown;
-    kind: "choice" | "confirm" | "markdown" | "form" | "files";
-    origin?: "approval";
-    simple: unknown;
-    toolCallId: string;
-    toolName?: string;
-  };
-  projectId?: string;
-  prompts?: {
-    args?: unknown;
-    ask?: {
-      kind: "choice" | "confirm" | "markdown" | "form" | "files";
-      origin?: "approval";
-      status: "pending" | "answered" | "cancelled";
-    };
-    content?: {
-      filename?: string;
-      gcsKey?: string;
-      mimeType?: string;
-      text?: string;
-      type: "text" | "image" | "file";
-      url?: string;
-    }[];
-    model?: string;
-    rating?: "up" | "down";
-    result?: unknown;
-    status?: "streaming" | "complete" | "error";
-    streamId?: string;
-    text: string;
-    toolCallId?: string;
-    toolName?: string;
-    type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
-  }[];
-  title?: string;
-  userId: string;
-  _id: string;
-  updated: string;
-  created: string;
-  deleted?: boolean;
-  ownerId?: unknown;
-};
-
-export const postGptHistoriesRequest = (arg: PostGptHistoriesArgs): ApiRequestArgs => ({
-  body: arg,
-  method: "POST",
-  url: `/gpt/histories/`,
-});
-
-export const usePostGptHistoriesMutation = (
-  options: UseApiMutationOptions<PostGptHistoriesArgs, PostGptHistoriesRes> = {}
-): UseApiMutationResult<PostGptHistoriesArgs, PostGptHistoriesRes> =>
-  useApiMutation<PostGptHistoriesArgs, PostGptHistoriesRes>(postGptHistoriesRequest, {
-    invalidatesTags: ["gpthistories"],
-    ...options,
-  });
-
 export type PostGptRemixArgs = {
   text?: string;
 };
@@ -8422,34 +7995,6 @@ export const usePostUsersMutation = (
     invalidatesTags: ["users"],
     ...options,
   });
-
-export type RevokeMcpServiceTokenArgs = string;
-
-export type RevokeMcpServiceTokenRes =
-  | {
-      id?: string;
-      revokedAt?: string;
-    }
-  | {
-      data?: {
-        id?: string;
-        revokedAt?: string;
-      };
-    };
-
-export const revokeMcpServiceTokenRequest = (arg: RevokeMcpServiceTokenArgs): ApiRequestArgs => ({
-  method: "DELETE",
-  url: `/mcp/service-tokens/${encodeURIComponent(String(arg))}`,
-});
-
-/** Revoke an MCP service token */
-export const useRevokeMcpServiceTokenMutation = (
-  options: UseApiMutationOptions<RevokeMcpServiceTokenArgs, RevokeMcpServiceTokenRes> = {}
-): UseApiMutationResult<RevokeMcpServiceTokenArgs, RevokeMcpServiceTokenRes> =>
-  useApiMutation<RevokeMcpServiceTokenArgs, RevokeMcpServiceTokenRes>(
-    revokeMcpServiceTokenRequest,
-    {invalidatesTags: ["mcp"], ...options}
-  );
 
 export type SettingsClearGcsArgs = void;
 

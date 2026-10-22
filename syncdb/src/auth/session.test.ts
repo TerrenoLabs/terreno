@@ -406,14 +406,21 @@ describe("createSessionStore", () => {
   });
 
   describe("logout", () => {
-    it("signs out of the source, signs out syncdb clients in order, runs onLogout, and clears", async () => {
+    it("signs out syncdb clients in order, then the source, runs onLogout, and clears", async () => {
       const fake = makeSource(snapshot("u1"));
       const events: string[] = [];
+      const source: SessionSource<User> = {
+        ...fake.source,
+        signOut: async (): Promise<void> => {
+          events.push("source");
+          await fake.source.signOut();
+        },
+      };
       const store = createSessionStore({
         onLogout: async (): Promise<void> => {
           events.push("onLogout");
         },
-        source: fake.source,
+        source,
         syncDbs: [
           {
             signOut: async (): Promise<void> => {
@@ -433,7 +440,7 @@ describe("createSessionStore", () => {
       await store.logout();
 
       expect(fake.signOuts()).toBe(1);
-      expect(events).toEqual(["a", "b", "onLogout"]);
+      expect(events).toEqual(["a", "b", "source", "onLogout"]);
       expect(store.getState()).toEqual({
         error: null,
         isAuthenticated: false,
@@ -441,6 +448,74 @@ describe("createSessionStore", () => {
         user: null,
         userId: null,
       });
+    });
+
+    it("signs syncdb clients out while the session still names the user", async () => {
+      // Better Auth pushes the signed-out session as soon as the server sign-out lands; apps
+      // stop syncdb when userId clears, which would forget the user before the wipe.
+      const fake = makeSource(snapshot("u1"));
+      const source: SessionSource<User> = {
+        ...fake.source,
+        signOut: async (): Promise<void> => {
+          await fake.source.signOut();
+          fake.push(null);
+        },
+      };
+      const userIdsAtSyncSignOut: (string | null)[] = [];
+      const store = createSessionStore({
+        source,
+        syncDbs: [
+          {
+            signOut: async (): Promise<void> => {
+              userIdsAtSyncSignOut.push(store.getState().userId);
+            },
+          },
+        ],
+      });
+      store.start();
+      await flush();
+
+      await store.logout();
+
+      expect(userIdsAtSyncSignOut).toEqual(["u1"]);
+      expect(store.getState().userId).toBeNull();
+    });
+
+    it("still signs out of the source and runs onLogout when a syncdb client fails", async () => {
+      const fake = makeSource(snapshot("u1"));
+      const events: string[] = [];
+      const errors: unknown[][] = [];
+      const originalError = console.error;
+      console.error = (...args: unknown[]): void => {
+        errors.push(args);
+      };
+      const store = createSessionStore({
+        onLogout: (): void => {
+          events.push("onLogout");
+        },
+        source: fake.source,
+        syncDbs: [
+          {
+            signOut: async (): Promise<void> => {
+              throw new Error("persister closed");
+            },
+          },
+        ],
+      });
+      store.start();
+      await flush();
+
+      try {
+        await store.logout();
+      } finally {
+        console.error = originalError;
+      }
+
+      expect(fake.signOuts()).toBe(1);
+      expect(events).toEqual(["onLogout"]);
+      expect(errors).toHaveLength(1);
+      expect(String(errors[0]?.[0])).toContain("Error signing out sync client");
+      expect(store.getState().isAuthenticated).toBe(false);
     });
 
     it("still tears down and clears when every side effect fails", async () => {

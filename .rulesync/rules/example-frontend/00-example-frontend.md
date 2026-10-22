@@ -44,7 +44,6 @@ store/
   syncDbSdk.ts           # Generated synced collection hooks (DO NOT EDIT MANUALLY)
 lib/
   betterAuth.ts          # Better Auth client
-  logout.ts              # logoutAndWipe: sign syncdb out (wipe) before ending the session
 types/                   # Hand-written types layered on generated ones (e.g. gptHistory.ts)
 ```
 
@@ -86,7 +85,7 @@ const handleRename = useCallback(async (name: string): Promise<void> => {
 2. No `userId` → root layout redirects to `/login`
 3. Login calls `betterAuthClient.signIn.email`, then `useSession().refresh()`
 4. `userId` set → root layout starts syncdb and navigates to the tabs
-5. Logout: `logoutAndWipe({logout, syncDbs: [syncDb, adminSyncDb]})` from `lib/logout.ts` signs syncdb out (wiping local data) and then calls `useSession().logout()`
+5. Logout: `useSession().logout()` signs the `SessionProvider` `syncDbs` (`syncDb`, `adminSyncDb`) out first (wiping local data), then ends the Better Auth session
 
 ## App State
 

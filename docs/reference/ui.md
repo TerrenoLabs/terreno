@@ -1010,7 +1010,7 @@ any other error shows a **Retry** screen and calls `onError`.
 ### Hooks
 
 The navigators are built on hooks you can call directly. Each takes `(client, baseUrl?)` and
-keeps loading, error, and data in React state (no Redux store).
+keeps loading, error, and data in React state.
 
 | Hook | Returns |
 |------|---------|
@@ -1022,7 +1022,7 @@ keeps loading, error, and data in React state (no Redux store).
 Queries fetch on mount and when `client`, `baseUrl`, or feed paging change. `refetch()` joins
 a request already in flight. A successful `submit` refetches every mounted `useConsentForms`
 on the same client, and a successful `acknowledge` refetches every mounted pending
-announcement, the way RTK `invalidatesTags` did.
+announcement on the same client.
 
 ## Authentication Components
 

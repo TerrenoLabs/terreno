@@ -173,6 +173,43 @@ describe("discoverCollections", () => {
     expect(discovered[0]?.collection).toBe("todos");
   });
 
+  it("names an inline entity of a nested collection from its singular route segments", () => {
+    const listWithInlineItems = (collection: string): Record<string, unknown> => ({
+      get: {
+        responses: {
+          "200": {
+            content: {
+              "application/json": {
+                schema: {
+                  properties: {
+                    data: {
+                      items: {properties: {title: {type: "string"}}, type: "object"},
+                      type: "array",
+                    },
+                  },
+                  type: "object",
+                },
+              },
+            },
+          },
+        },
+        "x-terreno-sync": {collection, scope: "owner"},
+      },
+    });
+    const spec = {
+      paths: {
+        "/gpt/histories": listWithInlineItems("gpt/histories"),
+        "/mcp/service-tokens": listWithInlineItems("mcp/service-tokens"),
+      },
+    } as Parameters<typeof discoverCollections>[0]["spec"];
+    const discovered = discoverCollections({spec});
+    expect(discovered.map((entry) => [entry.collection, entry.entityName])).toEqual([
+      ["gpt/histories", "GptHistory"],
+      ["mcp/service-tokens", "McpServiceToken"],
+    ]);
+    expect(discovered[0]?.createName).toBe("CreateGptHistoryBody");
+  });
+
   it("does not path-fallback --collections when the spec already has x-terreno-sync", async () => {
     const spec = await loadSpec(fixturePath);
     expect(() => discoverCollections({collections: ["notes"], spec})).toThrow(/matched/);

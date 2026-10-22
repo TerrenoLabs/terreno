@@ -1,5 +1,5 @@
 /**
- * Ported from `@terreno/rtk`'s `isolated/emptyApi*.isolated.ts` token helpers and the
+ * Ported from the pre-58 rtk package's `isolated/emptyApi*.isolated.ts` token helpers and the
  * storage side effects in `authSlice*.test.ts` (SecureStore on native, AsyncStorage on web,
  * SSR guard).
  */

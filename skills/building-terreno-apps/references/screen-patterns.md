@@ -1,32 +1,23 @@
 # Screen Patterns — Terreno Apps
 
-## List screen
+## List screen (synced collection)
+
+Synced collections read from the local store: no loading spinner after bootstrap, and
+writes apply immediately.
 
 ```tsx
-import {Box, Button, Card, Heading, Page, Spinner, Text} from "@terreno/ui";
+import {generateMutationId} from "@terreno/syncdb";
+import {useMutate, useQuery} from "@terreno/syncdb/react";
+import {Box, Button, Card, Heading, Page, Text} from "@terreno/ui";
 import {useCallback} from "react";
-import {useGetTodosQuery} from "@/store/sdk";
 
 const TodoListScreen: React.FC = () => {
-  const {data, isLoading, error, refetch} = useGetTodosQuery({});
+  const todos = useQuery<Todo>("todos", {sort: "-created"});
+  const {create} = useMutate("todos");
 
   const handleCreate = useCallback((): void => {
-    // navigate or open modal
-  }, []);
-
-  if (isLoading) {
-    return <Page title="Todos"><Spinner /></Page>;
-  }
-  if (error) {
-    return (
-      <Page title="Todos">
-        <Text color="error">Failed to load</Text>
-        <Button text="Retry" onClick={refetch} />
-      </Page>
-    );
-  }
-
-  const items = data?.data ?? [];
+    create({data: {_id: generateMutationId(), title: "New todo", completed: false}});
+  }, [create]);
 
   return (
     <Page title="Todos" scroll>
@@ -35,11 +26,11 @@ const TodoListScreen: React.FC = () => {
           <Heading size="lg">Todos</Heading>
           <Button text="Add" onClick={handleCreate} iconName="plus" />
         </Box>
-        {items.length === 0 ? (
+        {todos.length === 0 ? (
           <Text color="secondaryLight">No todos yet</Text>
         ) : (
-          items.map((todo) => (
-            <Card key={todo.id} padding={3}>
+          todos.map((todo) => (
+            <Card key={todo._id} padding={3}>
               <Text>{todo.title}</Text>
             </Card>
           ))
@@ -50,18 +41,20 @@ const TodoListScreen: React.FC = () => {
 };
 ```
 
+Gate the empty state on the stream's bootstrap (see `docs/how-to/use-syncdb-correctly.md`).
+
 ## Profile screen
 
-Use `TapToEdit` for per-field profile edits. Save each field with `usePatchMeMutation` — do not collect every field behind one Save button.
+Use `TapToEdit` for per-field profile edits. Save each field with the generated `usePatchAuthMeMutation` — do not collect every field behind one Save button.
 
 ```tsx
 import {Box, Card, Page, TapToEdit} from "@terreno/ui";
 import {useCallback, useEffect, useState} from "react";
-import {useGetMeQuery, usePatchMeMutation} from "@/store/sdk";
+import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
 
 const ProfileScreen: React.FC = () => {
-  const {data: profile} = useGetMeQuery();
-  const [updateProfile] = usePatchMeMutation();
+  const {data: profile} = useGetAuthMeQuery();
+  const [updateProfile] = usePatchAuthMeMutation();
   const [name, setName] = useState<string>("");
 
   // Seed only this field from the server so saving another TapToEdit does not wipe the draft.
@@ -100,29 +93,26 @@ const ProfileScreen: React.FC = () => {
 ## Form screen
 
 ```tsx
+import {generateMutationId} from "@terreno/syncdb";
+import {useMutate} from "@terreno/syncdb/react";
 import {Box, Button, Page, TextField} from "@terreno/ui";
 import {useCallback, useState} from "react";
 import {useRouter} from "expo-router";
-import {usePostTodosMutation} from "@/store/sdk";
 
 const CreateTodoScreen: React.FC = () => {
   const router = useRouter();
   const [title, setTitle] = useState<string>("");
   const [titleError, setTitleError] = useState<string | undefined>();
-  const [createTodo, {isLoading}] = usePostTodosMutation();
+  const {create} = useMutate("todos");
 
-  const handleSubmit = useCallback(async (): Promise<void> => {
+  const handleSubmit = useCallback((): void => {
     if (!title.trim()) {
       setTitleError("Title is required");
       return;
     }
-    try {
-      await createTodo({title: title.trim(), completed: false}).unwrap();
-      router.back();
-    } catch (err) {
-      console.error("Create failed", err);
-    }
-  }, [createTodo, router, title]);
+    create({data: {_id: generateMutationId(), title: title.trim(), completed: false}});
+    router.back();
+  }, [create, router, title]);
 
   return (
     <Page title="New Todo" scroll>
@@ -133,28 +123,28 @@ const CreateTodoScreen: React.FC = () => {
           onChange={setTitle}
           errorText={titleError}
         />
-        <Button text="Save" onClick={handleSubmit} loading={isLoading} fullWidth />
+        <Button text="Save" onClick={handleSubmit} fullWidth />
       </Box>
     </Page>
   );
 };
 ```
 
+Server rejections arrive later in `useConflicts()` / `useSyncStatus().failedCount`, not
+from `create`.
+
 ## Detail screen with params
 
 ```tsx
-import {Page, Spinner, Text} from "@terreno/ui";
+import {useEntity} from "@terreno/syncdb/react";
+import {Page, Text} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
-import {useGetTodosByIdQuery} from "@/store/sdk";
 
 const TodoDetailScreen: React.FC = () => {
   const {id} = useLocalSearchParams<{id: string}>();
-  const {data, isLoading, error} = useGetTodosByIdQuery({id: id ?? ""}, {skip: !id});
+  const {data, deleted} = useEntity<Todo>("todos", id ?? "");
 
-  if (isLoading) {
-    return <Page title="Todo"><Spinner /></Page>;
-  }
-  if (error || !data) {
+  if (!data || deleted) {
     return <Page title="Todo"><Text color="error">Not found</Text></Page>;
   }
 
@@ -176,7 +166,7 @@ skill `building-admin-interfaces`.
 import {AdminScreenRouter} from "@terreno/admin-frontend";
 import {useLocalSearchParams} from "expo-router";
 
-// Rendered inside the AdminProvider in app/admin/_layout.tsx; no RTK `api` prop.
+// Rendered inside the AdminProvider in app/admin/_layout.tsx.
 const AdminModelScreen: React.FC = () => {
   const {model} = useLocalSearchParams<{model: string}>();
   return <AdminScreenRouter apiBase="/admin" name={model ?? ""} routeBase="/admin" />;

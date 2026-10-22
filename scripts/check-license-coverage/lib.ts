@@ -6,7 +6,6 @@ export const PUBLISHED_PACKAGES = [
   "api",
   "test",
   "ui",
-  "rtk",
   "admin-backend",
   "admin-frontend",
   "admin-spa",

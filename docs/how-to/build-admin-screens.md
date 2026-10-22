@@ -51,8 +51,8 @@ store name and `windowCollections` set; do not mix admin rows into the owner/ten
 product store. Start that client after `canOpenAdminPage` succeeds, block the admin
 shell until `start()` resolves, and call `stop()` when the admin layout unmounts.
 
-Gate entry with `canOpenAdminPage` from `@terreno/rtk` (`admin:access`). Do not
-rely on `user.admin` alone when RBAC is on. Import `baseUrl` from `@terreno/rtk`
+Gate entry with `canOpenAdminPage` from `@terreno/syncdb/app` (`admin:access`). Do not
+rely on `user.admin` alone when RBAC is on. Import `baseUrl` from `@terreno/syncdb/config`
 and pass it as `apiOrigin` so admin RPC (`GET /admin/config`, `/rbac/roles`, …)
 hits the API instead of the Expo web origin.
 
@@ -122,14 +122,14 @@ for those paths. Otherwise `[model]/[id]` treats the id as a generic document.
 ## 5. Fetch data the admin way
 
 - Every admin request goes through the `AdminProvider` fetch client. Admin
-  components take no RTK `api` prop (removed in Terreno 58).
+  components take no `api` prop.
 - String-`_id` collections configured with `adminBroadcast` use windowed syncdb
   when the host passes `syncDb`.
 - ObjectId and API-only models use fetch CRUD. Custom screens call
   `useAdminModelApi(routePath, modelName)` for list/read/create/update/delete.
 - Bulk patch stays server-side at `{routePath}/bulk-patch` for every model.
 - Custom admin RPC uses `useAdminRpc` + `useAdminRpcQuery` / `useAdminRpcMutation`.
-  Do not add axios or `injectEndpoints`.
+  Do not add axios or a second request client.
 
 ## 6. Sidebar and grouping
 

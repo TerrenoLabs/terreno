@@ -327,6 +327,33 @@ describe("useApiQuery re-fetch triggers", () => {
     expect(result.current.data?.name).toBe("Ada");
   });
 
+  it("loads after a reset that lands in the same commit as the first request", async () => {
+    // An app resets its client when the signed-in user changes, in an effect declared after the
+    // query hook that the same user change switches on.
+    const server = profileServer();
+    const useProfileAfterUserChange = (
+      userId?: string
+    ): ReturnType<typeof useApiQuery<Profile>> => {
+      const query = useApiQuery<Profile>(ME, {skip: !userId});
+      React.useEffect(() => {
+        server.client.reset();
+      }, [userId]);
+      return query;
+    };
+    const {result, rerender} = renderHook(
+      ({userId}: {userId?: string}) => useProfileAfterUserChange(userId),
+      {initialProps: {userId: undefined as string | undefined}, wrapper: wrapperFor(server.client)}
+    );
+    expect(server.requests).toEqual([]);
+
+    rerender({userId: "u1"});
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual({_id: "u1", name: "Ada"});
+    });
+    expect(result.current.isLoading).toBe(false);
+  });
+
   it("retries a cached failure when a new component subscribes", async () => {
     const server = profileServer();
     const wrapper = wrapperFor(server.client);

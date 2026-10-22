@@ -18,7 +18,7 @@ const DEFAULT_THRESHOLD = 90;
 const normalizePath = (path: string): string => path.split(sep).join("/");
 const SOURCE_FILE_PATTERN = /\.(?:ts|tsx)$/;
 const EXCLUDED_SOURCE_PATTERN =
-  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|openApiSdk\.ts$/;
+  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|(?:^|\/)(?:apiSdk|syncDbSdk)\.ts$/;
 /**
  * Expo Router route files under `app/`: `index`, `_layout`, `+not-found`, dynamic
  * segments such as `[id]`, thin `create` wrappers, and named recovery routes
@@ -61,7 +61,6 @@ export const PACKAGE_CI_LCOV_SKIP: {packageName: string; pipelineParameter: stri
   {packageName: "feature-flags", pipelineParameter: "run-feature-flags"},
   {packageName: "jobs", pipelineParameter: "run-jobs"},
   {packageName: "mcp-server", pipelineParameter: "run-mcp-server"},
-  {packageName: "rtk", pipelineParameter: "run-rtk"},
   {packageName: "syncdb", pipelineParameter: "run-syncdb"},
   {packageName: "test", pipelineParameter: "run-test-package"},
   {packageName: "ui", pipelineParameter: "run-ui"},

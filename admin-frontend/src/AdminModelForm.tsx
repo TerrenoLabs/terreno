@@ -245,7 +245,6 @@ const inferEditRecordTitle = (params: {
  * @example
  * ```typescript
  * import {AdminModelForm} from "@terreno/admin-frontend";
- * import {} from "@/store/openApiSdk";
  * import {useLocalSearchParams} from "expo-router";
  *
  * function AdminCreateScreen() {

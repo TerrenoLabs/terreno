@@ -8,6 +8,11 @@ export interface ApiErrorData {
   code?: string;
   fields?: Record<string, string>;
   meta?: Record<string, unknown>;
+  /**
+   * Set by the server when the error is expected and must not reach external error tracking
+   * (Sentry). Hosts' `onError` handlers should skip reporting when it is `true`.
+   */
+  disableExternalErrorTracking?: boolean;
 }
 
 /** `data.code` values for failures that never reached an HTTP response (`status: 0`). */

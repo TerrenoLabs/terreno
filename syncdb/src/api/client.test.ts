@@ -374,6 +374,32 @@ describe("apiFetch edge behavior", () => {
     expect(error.data).toEqual({code: "rate-limited", meta: {retryAfter: 30}, title: "Slow down"});
   });
 
+  it("keeps the server's top-level disableExternalErrorTracking flag for onError", async () => {
+    const {fetchImpl} = scriptedFetch([
+      () => jsonResponse({disableExternalErrorTracking: true, status: 400, title: "Expected"}, 400),
+      () => jsonResponse({disableExternalErrorTracking: false, title: "Tracked"}, 400),
+      () => jsonResponse({disableExternalErrorTracking: "yes", title: "Malformed"}, 400),
+    ]);
+    const reported: ApiError[] = [];
+    const client = createApiClient({
+      baseUrl: "http://api.test",
+      fetchImpl,
+      onError: (error) => {
+        reported.push(error);
+      },
+    });
+
+    await failureOf(client.request({url: "/expected"}));
+    await failureOf(client.request({url: "/tracked"}));
+    await failureOf(client.request({url: "/malformed"}));
+
+    expect(reported.map((error) => error.data)).toEqual([
+      {disableExternalErrorTracking: true, title: "Expected"},
+      {disableExternalErrorTracking: false, title: "Tracked"},
+      {title: "Malformed"},
+    ]);
+  });
+
   it("aborts when the caller's signal fires, including one that already fired", async () => {
     const hanging: FetchLike = (_input, init) =>
       new Promise((_resolve, reject) => {

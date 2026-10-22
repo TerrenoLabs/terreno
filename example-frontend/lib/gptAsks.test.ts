@@ -1,4 +1,5 @@
 import {describe, expect, it} from "bun:test";
+import {API_ERROR_CODES, ApiError} from "@terreno/syncdb/api";
 import type {AskSubmission, GPTChatMessage, SelectedFile} from "@terreno/ui";
 
 import type {GptHistory} from "@/types/gptHistory";
@@ -428,9 +429,7 @@ describe("createAskFileUploader", () => {
 
   it("returns nothing when the server's 404 is not JSON", async () => {
     const upload = createAskFileUploader({
-      send: async () => ({
-        error: {data: "Cannot POST /files/upload", originalStatus: 404, status: "PARSING_ERROR"},
-      }),
+      send: async () => ({error: new ApiError({data: {title: "Not Found"}, status: 404})}),
     });
 
     expect(await upload(RECEIPT)).toBeUndefined();
@@ -444,12 +443,33 @@ describe("createAskFileUploader", () => {
     await expect(upload(RECEIPT)).rejects.toThrow("File too large");
   });
 
-  it("fails with the status when the error has no detail", async () => {
+  it("fails with the request client's message when the request never reached the server", async () => {
     const upload = createAskFileUploader({
-      send: async () => ({error: {error: "TypeError: Failed to fetch", status: "FETCH_ERROR"}}),
+      send: async () => ({
+        error: new ApiError({
+          data: {code: API_ERROR_CODES.network, title: "Failed to fetch"},
+          status: 0,
+        }),
+      }),
     });
 
-    await expect(upload(RECEIPT)).rejects.toThrow("FETCH_ERROR");
+    await expect(upload(RECEIPT)).rejects.toThrow("Failed to fetch");
+  });
+
+  it("fails with the status when the error has no body", async () => {
+    const upload = createAskFileUploader({
+      send: async () => ({error: {status: 502}}),
+    });
+
+    await expect(upload(RECEIPT)).rejects.toThrow("Upload failed (502)");
+  });
+
+  it("fails without a status when the error is not a request error", async () => {
+    const upload = createAskFileUploader({
+      send: async () => ({error: "boom"}),
+    });
+
+    await expect(upload(RECEIPT)).rejects.toThrow("Upload failed (unknown error)");
   });
 
   it("fails when a successful response names no upload id or size", async () => {

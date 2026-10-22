@@ -124,13 +124,15 @@ export const useApiQuery = <TRaw = unknown, TData = TRaw>(
   );
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  // Load on mount, on arg change, and again after a reset or tag drop empties the entry.
+  // Load on mount, on arg change, and again after a reset or tag drop empties the entry. Keyed on
+  // the state object, not its status: a reset in the same commit as the first request turns
+  // `uninitialized` → `pending` → `uninitialized` before the next render sees it.
   useEffect(() => {
     if (!key || !argsRef.current || state.status !== "uninitialized") {
       return;
     }
     client.fetchQuery(argsRef.current, {providesTags}).catch(() => {});
-  }, [client, key, providesTags, state.status]);
+  }, [client, key, providesTags, state]);
 
   // A new subscriber retries a previously failed request once, like RTK Query does.
   const retriedKey = useRef<string | null>(null);

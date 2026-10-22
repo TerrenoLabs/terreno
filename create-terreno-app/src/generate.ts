@@ -1153,6 +1153,7 @@ const generateFrontendPackageJson = (args: BootstrapArgs): string => {
         "better-auth": BETTER_AUTH_VERSION,
         expo: "~58.0.14",
         "expo-constants": "~58.0.12",
+        "expo-network": "~58.0.3",
         "expo-router": "~58.0.23",
         "expo-secure-store": "~58.0.2",
         "expo-sqlite": "~58.0.13",
@@ -1824,7 +1825,7 @@ const ProfileScreen: React.FC = () => {
     setEmail(user.email || "");
   }, [user?.email]);
 
-  // logout signs out of Better Auth, signs syncDb out, and clears cached API responses.
+  // logout signs syncDb out, then Better Auth, and clears cached API responses.
   const handleLogout = useCallback(async (): Promise<void> => {
     await logout();
   }, [logout]);

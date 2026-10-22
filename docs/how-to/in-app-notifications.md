@@ -73,7 +73,7 @@ does not skip later channels.
 
 ## 4. Sync collections on the client
 
-Regenerate syncdb hooks (not RTK CRUD) for `notifications` and `notification-preferences`:
+Regenerate syncdb collection hooks for `notifications` and `notification-preferences`:
 
 ```bash
 cd example-frontend

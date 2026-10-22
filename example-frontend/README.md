@@ -192,8 +192,8 @@ layout calls `apiClient.reset()` whenever the signed-in user changes.
 2. No `userId` → the root layout redirects to the login screen
 3. Login calls `betterAuthClient.signIn.email`, then `useSession().refresh()`
 4. With a `userId`, the root layout starts syncdb and navigates to the tabs
-5. Logout (Profile) calls `logoutAndWipe` (`lib/logout.ts`): syncdb clients sign out and wipe
-   this user's local data, then `useSession().logout()` ends the Better Auth session → back to login
+5. Logout (Profile) calls `useSession().logout()`: the syncdb clients passed to `SessionProvider`
+   sign out and wipe this user's local data, then the Better Auth session ends → back to login
 
 ## App State
 

@@ -1,5 +1,5 @@
 /**
- * Legacy `@terreno/api` JWT auth for frontends, without Redux. Ported from `@terreno/rtk`'s
+ * Legacy `@terreno/api` JWT auth for frontends, without Redux. Ported from the pre-58 rtk package's
  * `generateAuthSlice` + `emptyApi` base query.
  *
  * One `jwtAuthAdapter` object is both:
@@ -31,7 +31,7 @@ export const DEFAULT_REFRESH_BEFORE_EXPIRY_SECS = 130;
 /** Default timeout for auth requests. */
 export const DEFAULT_JWT_AUTH_TIMEOUT_MS = 30_000;
 
-/** Auth routes, relative to `baseUrl`. Defaults match `@terreno/api` and `@terreno/rtk`. */
+/** Auth routes, relative to `baseUrl`. Defaults match `@terreno/api`. */
 export interface JwtAuthPaths {
   login: string;
   signup: string;

@@ -1,6 +1,6 @@
 /**
  * Token storage and expiry helpers for legacy `@terreno/api` JWT auth (`/auth/login`,
- * `/auth/refresh_token`). Ported from `@terreno/rtk`'s `authSlice` / `emptyApi`:
+ * `/auth/refresh_token`). Ported from the pre-58 rtk package's `authSlice` / `emptyApi`:
  * tokens live in `expo-secure-store` on native and AsyncStorage on web, under the same
  * `AUTH_TOKEN` / `REFRESH_TOKEN` keys, so a signed-in rtk app stays signed in after the move.
  */

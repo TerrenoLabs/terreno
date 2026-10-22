@@ -12,7 +12,7 @@ One `/release` finishes the release. Do not stop after opening a pull request or
 
 - Pushing a tag matching `X.Y.Z` (no `v` prefix, e.g. `57.10.0`) triggers CircleCI `publish-release` (`.circleci/continue-config.yml`). That job checks upgrade notes, compiles once, publishes in parallel, bumps package versions on master, and notifies Zoom. For stable `X.Y.Z` tags it also runs `deploy-demo`.
 - `.github/workflows/publish-on-tag.yml` is `workflow_dispatch` only. Do not dispatch it after CircleCI has published: npm versions are immutable, so a second publish of the same version fails.
-- CircleCI publishes these packages, all at the same version: `@terreno/api`, `@terreno/test`, `@terreno/blocks`, `@terreno/ui`, `@terreno/rtk`, `@terreno/admin-backend`, `@terreno/admin-frontend`, `@terreno/admin-spa`, `@terreno/ai`, `@terreno/api-health`, `@terreno/announcements`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/jobs`, `create-terreno-app`, `@terreno/mcp`, `@terreno/syncdb`. (`demo`, the example apps, and `@terreno/cli` are not in that job.)
+- CircleCI publishes these packages, all at the same version: `@terreno/api`, `@terreno/test`, `@terreno/blocks`, `@terreno/ui`, `@terreno/admin-backend`, `@terreno/admin-frontend`, `@terreno/admin-spa`, `@terreno/ai`, `@terreno/api-health`, `@terreno/announcements`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/jobs`, `create-terreno-app`, `@terreno/mcp`, `@terreno/syncdb`. (`demo`, the example apps, and `@terreno/cli` are not in that job.)
 - `publish-release` runs `bun run check:upgrade-docs` against the tag first. That check fails the release when the tag's `CHANGELOG.md` has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` section for the version but `mcp-server/src/docs/upgrades/<version>.md` is missing. The assembled changelog and the upgrade note must already be on master.
 - Prerelease tags (`-beta`, `-alpha`) publish to their prerelease npm dist-tag and skip the master version bump. `deploy-demo` runs only for tags with no prerelease suffix.
 - GitHub releases start as **drafts**. This repo has immutable releases on, so publishing a release locks its assets and GitHub answers `422` to any later upload. For `X.Y.0` tags, CircleCI `archive-docs-version` attaches `docs-site.tar.gz` to the draft, publishes the release, then commits the docs snapshot (`chore: cut docs version X.Y.0`) to master. For patch and prerelease tags, `publish-github-release` publishes the draft after `publish-release`. Never publish the draft yourself: that locks the release before the archive is attached. Do not dispatch the GitHub publish workflow to cut docs.
@@ -57,7 +57,7 @@ Scan the diff and PR bodies for anything a consumer must act on:
 - Removed or renamed exports — check the export surface directly:
 
   ```bash
-  git diff <last-tag>..HEAD -- api/src/index.ts ui/src/index.tsx rtk/src/index.ts blocks/src/index.ts ai/src/index.ts
+  git diff <last-tag>..HEAD -- api/src/index.ts ui/src/index.tsx syncdb/src/index.ts blocks/src/index.ts ai/src/index.ts
   ```
 
 - Changed function signatures or component prop types in published packages.
@@ -185,7 +185,7 @@ Create the draft right after the tag push. The CI jobs that need it wait up to 1
 2. Verify every package CircleCI publishes is live on npm (allow a couple of minutes of registry lag):
 
    ```bash
-   for p in @terreno/api @terreno/test @terreno/blocks @terreno/ui @terreno/rtk @terreno/admin-backend @terreno/admin-frontend @terreno/admin-spa @terreno/ai @terreno/api-health @terreno/announcements @terreno/comms @terreno/feature-flags @terreno/jobs create-terreno-app @terreno/mcp @terreno/syncdb; do
+   for p in @terreno/api @terreno/test @terreno/blocks @terreno/ui @terreno/admin-backend @terreno/admin-frontend @terreno/admin-spa @terreno/ai @terreno/api-health @terreno/announcements @terreno/comms @terreno/feature-flags @terreno/jobs create-terreno-app @terreno/mcp @terreno/syncdb; do
      echo "$p: $(npm view "$p" version)"
    done
    ```

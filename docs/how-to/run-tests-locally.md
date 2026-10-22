@@ -21,7 +21,7 @@ with `origin/master`. It applies the CircleCI path-filter mapping in
 `.circleci/config.yml`, then runs the local command for each triggered job: package
 `test:coverage` plus the 90% new-file LCOV gate, `ui` types, demo typecheck,
 example-backend and example-frontend tests, every `repo-policies` step, rulesync drift,
-and the typedoc API reference when `api/src` or `rtk/src` changes. Every step runs even
+and the typedoc API reference when `api/src` changes. Every step runs even
 after a failure, so a single pass lists every problem. Fix them all, then push once.
 
 Jobs that need infrastructure (Playwright e2e, Maestro, admin-spa integration, Docker)
@@ -50,7 +50,6 @@ bun test --only-failures <path>
 | `ai-ci` | `cd ai && bun run test:ci` |
 | `blocks-ci` | `bun run blocks:test` |
 | `ui-ci` | `bun run ui:test` |
-| `rtk-ci` | `bun run rtk:test` |
 | `syncdb-ci` | `bun run syncdb:test` |
 | `comms-ci` | `bun run comms:test` |
 | `jobs-ci` / jobs package | `bun run jobs:test` |

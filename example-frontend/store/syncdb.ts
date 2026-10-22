@@ -19,6 +19,22 @@ export const SYNC_DB_NAME = "terreno-example";
 /** Admin window rows live in their own store so they never leak into the product UI. */
 const ADMIN_SYNC_DB_NAME = `${SYNC_DB_NAME}-admin`;
 
+/** Collection tags for the AI screen's chat list and the MCP settings token list. */
+export const GPT_HISTORIES_COLLECTION = "gpt/histories";
+export const MCP_SERVICE_TOKENS_COLLECTION = "mcp/service-tokens";
+
+/**
+ * Owner-only collections with no `adminBroadcast`: the admin window store never opens them,
+ * and the server has no admin window stream for them.
+ */
+const PRODUCT_ONLY_COLLECTIONS: ReadonlySet<string> = new Set([
+  GPT_HISTORIES_COLLECTION,
+  MCP_SERVICE_TOKENS_COLLECTION,
+]);
+const ADMIN_COLLECTIONS = SYNC_COLLECTIONS.filter(
+  (collection) => !PRODUCT_ONLY_COLLECTIONS.has(collection)
+);
+
 // Shared by the sync client and the API client (store/apiClient.ts) so both send the
 // same Better Auth session token.
 // pollIntervalMs is only used as a fallback if the session atom bridge is unavailable
@@ -63,7 +79,7 @@ export const syncDb: SyncDb = createSyncDb({
   // Todos stay fully synced; `fullSync` also enables server-filtered query windows
   // (`useWindowQuery`) over GET /todos — see app/todo-windows.tsx.
   queryCollections: [{collection: "todos", fullSync: true}],
-  // An explicit logout (lib/logout.ts) signs this client out; wipe the signed-out user's
+  // An explicit logout (useSession().logout) signs this client out; wipe the signed-out user's
   // local rows and queued writes so they never reach the next account on this device.
   wipeOnSignOut: true,
 });
@@ -82,10 +98,10 @@ export const setAdminSyncOrganizationId = (organizationId?: string): void => {
 export const adminSyncDb: SyncDb = createSyncDb({
   authProvider,
   baseUrl,
-  collections: [...SYNC_COLLECTIONS],
+  collections: [...ADMIN_COLLECTIONS],
   name: ADMIN_SYNC_DB_NAME,
   organizationIdProvider: () => adminOrganizationId,
-  windowCollections: [...SYNC_COLLECTIONS],
+  windowCollections: [...ADMIN_COLLECTIONS],
   wipeOnSignOut: true,
 });
 

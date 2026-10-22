@@ -1,7 +1,7 @@
 import {beforeAll, beforeEach, describe, it, mock} from "bun:test";
 import {assert} from "chai";
 import React from "react";
-import {renderToString} from "react-dom/server";
+import {act, create} from "react-test-renderer";
 
 const capturedMembersProps: {
   current?: {api?: unknown; organizationId?: string; routeBase?: string};
@@ -23,6 +23,12 @@ mock.module("expo-router", () => ({
 
 let OrgMembersRoute: React.FC;
 
+const renderRoute = (): void => {
+  act(() => {
+    create(<OrgMembersRoute />);
+  });
+};
+
 describe("OrgMembersRoute", () => {
   beforeAll(async () => {
     ({default: OrgMembersRoute} = await import("../app/admin/orgs/[orgId]/members"));
@@ -36,13 +42,13 @@ describe("OrgMembersRoute", () => {
   it("reads orgId from expo-router search params", () => {
     searchParamsState.orgId = "org-acme-99";
 
-    renderToString(<OrgMembersRoute />);
+    renderRoute();
 
     assert.equal(capturedMembersProps.current?.organizationId, "org-acme-99");
   });
 
-  it("wires OrgMembersScreen with organizationId and routeBase and no RTK api", () => {
-    renderToString(<OrgMembersRoute />);
+  it("wires OrgMembersScreen with organizationId and routeBase and no api prop", () => {
+    renderRoute();
 
     assert.isUndefined(capturedMembersProps.current?.api);
     assert.equal(capturedMembersProps.current?.organizationId, "org-42");

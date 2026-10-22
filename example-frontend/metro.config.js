@@ -22,7 +22,6 @@ config.resolver.blockList = [
 const monorepoPackages = {
   "@terreno/ui": path.resolve(monorepoRoot, "ui"),
   "@terreno/admin-frontend": path.resolve(monorepoRoot, "admin-frontend"),
-  "@terreno/rtk": path.resolve(monorepoRoot, "rtk"),
   "@terreno/syncdb": path.resolve(monorepoRoot, "syncdb"),
 };
 

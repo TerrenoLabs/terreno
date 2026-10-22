@@ -38,8 +38,8 @@ import {buildNavigationTheme} from "@/utils/navigationTheme";
 
 installDevConsoleLogger();
 
-// useSession().logout also tears both sync clients down. Profile's logout signs them out
-// (wiping local rows) before calling it; see lib/logout.ts.
+// useSession().logout signs both sync clients out (wiping local rows, `wipeOnSignOut`) before
+// ending the auth session, while they still know the current user.
 const SESSION_SYNC_DBS = [syncDb, adminSyncDb];
 
 // Flags load through the request client and refresh when the server pushes

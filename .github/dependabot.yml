@@ -90,7 +90,7 @@ updates:
       - "/demo"
       - "/ui"
       - "/example-frontend"
-      - "/rtk"
+      - "/syncdb"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 0
@@ -105,8 +105,6 @@ updates:
       - dependency-name: "@react-native-community/slider"
       - dependency-name: "@react-native-picker/picker"
       - dependency-name: "@react-navigation/native"
-      - dependency-name: "@reduxjs/toolkit"
-      - dependency-name: "@rtk-query/codegen-openapi"
       - dependency-name: "@sentry/react"
       - dependency-name: "@sentry/react-native"
       - dependency-name: "@stripe/stripe-react-native"
@@ -154,11 +152,9 @@ updates:
       - dependency-name: "react-native-web"
       - dependency-name: "react-native-webview"
       - dependency-name: "react-native-worklets"
-      - dependency-name: "react-redux"
       - dependency-name: "react-router"
       - dependency-name: "react-router-dom"
       - dependency-name: "react-test-renderer"
-      - dependency-name: "redux-persist"
       - dependency-name: "typescript"
     groups:
       frontend:

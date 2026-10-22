@@ -141,7 +141,7 @@ exits 0 on a 2-vCPU worker before it prints the `All files` row. When that
 row is still missing after one retry, the script uses `coverage/lcov.info`
 only if it lists every non-test source file under `src/`. Dedicated CircleCI
 jobs (`api-ci`, `ai-ci`, `blocks-ci`,
-`rtk-ci`, `ui-ci`, `syncdb-ci`, `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run
+`ui-ci`, `syncdb-ci`, `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run
 that script. Published packages without a dedicated workflow
 (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `@terreno/test`)
 run the same lint, compile, and coverage commands via the parameterized
@@ -151,7 +151,7 @@ including `.github/workflows/packages-ci.yml`. Those twins run
 pass `secrets.CODECOV_TOKEN` into `upload-codecov`.
 
 Each of those jobs then uploads `coverage/lcov.info` to Codecov with a distinct
-flag (`api`, `ui`, `rtk`, …) via `scripts/upload-codecov.sh`. The script
+flag (`api`, `ui`, `syncdb`, …) via `scripts/upload-codecov.sh`. The script
 downloads the linux uploader over HTTPS and refuses to run it unless the
 SHA-256 digest matches the pin in the script (`CODECOV_UPLOADER_SHA256`).
 `codecov.yml` sets per-package flags, `target: auto` with a 1% threshold so

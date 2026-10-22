@@ -21,7 +21,6 @@ import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {useThemePreference} from "@/contexts/ThemePreferenceContext";
-import {logoutAndWipe} from "@/lib/logout";
 import {
   type PatchAuthMeArgs,
   useCommsTestPushMutation,
@@ -29,7 +28,6 @@ import {
   usePatchAuthMeMutation,
   usePostAuthSendVerificationMutation,
 } from "@/store/apiSdk";
-import {adminSyncDb, syncDb} from "@/store/syncdb";
 
 /** What POST /comms/dev/testPush reports for the caller's registered devices. */
 interface TestPushResult {
@@ -181,8 +179,9 @@ const ProfileScreen: React.FC = () => {
     [showSaveSuccess, updateProfile]
   );
 
+  // useSession().logout signs both sync clients out (wiping local rows) before the auth server.
   const handleLogout = useCallback((): void => {
-    void logoutAndWipe({logout, syncDbs: [syncDb, adminSyncDb]});
+    void logout();
   }, [logout]);
 
   const handleResendVerification = useCallback(async (): Promise<void> => {

@@ -19,37 +19,31 @@ Create a new screen with the following specifications:
 ### Required Elements
 1. Use `Page` component as wrapper
 2. Include proper navigation title
-3. Handle loading states with `Spinner`
-4. Handle error states with appropriate messaging
+3. Handle empty states (synced collection reads are local and have no loading state)
+4. Handle loading and error states for request hooks from `store/apiSdk.ts` with `Spinner` and an error message
 5. Use @terreno/ui components throughout
 
 ### Data Fetching
 {{dataSection}}
 
+Synced collections read with `useQuery` / `useEntity` and write with `useMutate` from
+`@terreno/syncdb/react`. Every other route uses the generated hooks in `store/apiSdk.ts`.
+
 ### Example Structure
 ```tsx
-import {Box, Page, Text, Spinner} from "@terreno/ui";
+import {useQuery} from "@terreno/syncdb/react";
+import {Box, Page, Text} from "@terreno/ui";
 import type React from "react";
-import {useGet{{Model}}Query} from "@/store/sdk";
+import type {{{Model}}} from "@/types/{{model}}";
 
 const {{Name}}Screen: React.FC = () => {
-  const {data, isLoading, error} = useGet{{Model}}Query();
+  const rows = useQuery<{{Model}}>("{{collection}}", {sort: "-created"});
 
-  if (isLoading) {
-    return (
-      <Page navigation={undefined} title="{{title}}">
-        <Box padding={4} alignItems="center">
-          <Spinner />
-        </Box>
-      </Page>
-    );
-  }
-
-  if (error) {
+  if (rows.length === 0) {
     return (
       <Page navigation={undefined} title="{{title}}">
         <Box padding={4}>
-          <Text color="error">Failed to load data</Text>
+          <Text>Nothing here yet</Text>
         </Box>
       </Page>
     );

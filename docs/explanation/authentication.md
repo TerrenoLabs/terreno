@@ -23,7 +23,7 @@ Both systems can run in parallel during migration (`AUTH_PROVIDER` selects the p
 | `@terreno/syncdb` local-first data | Non-cookie API clients only |
 | Socket sessions via `RealtimeApp` | Gradual migration in progress |
 
-**Setup:** [Configure Better Auth](../how-to/configure-better-auth.md). **Data layer:** migrate auth before or with syncdb — see [Migrate from RTK to syncdb](../how-to/migrate-rtk-to-syncdb.md) §7.
+**Setup:** [Configure Better Auth](../how-to/configure-better-auth.md). **Data layer:** migrate auth before or with syncdb — see [Upgrade from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md) §3–4.
 
 ## Authentication Strategies
 
@@ -463,4 +463,4 @@ See [Receive inbound webhooks](../how-to/inbound-webhooks.md).
 - [Add GitHub OAuth](../how-to/add-github-oauth.md)
 - [Create a model](../how-to/create-a-model.md)
 - [API reference](../reference/api.md)
-- [@terreno/rtk reference (legacy)](../reference/legacy/rtk.md)
+- [Upgrade from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md)

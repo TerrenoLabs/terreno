@@ -32,7 +32,6 @@ if `prepush` did not.
 | `api-ci` | `bun run api:test` |
 | `ai-ci` | `cd ai && bun run test:ci` |
 | `ui-ci` | `bun run ui:test` |
-| `rtk-ci` | `bun run rtk:test` |
 | `syncdb-ci` | `bun run syncdb:test` |
 | `example-backend-ci` | `cd example-backend && bun run test:ci` |
 | `example-frontend-ci` | `bun run frontend:test` |
@@ -48,7 +47,7 @@ package a bump touched; otherwise record "not run locally" in the PR body.
 
 | CircleCI job | When a bump touches | Local command |
 | --- | --- | --- |
-| `e2e` (Playwright) | example-frontend, ui, rtk, syncdb, api | `bun run check:e2e-affected`, then `bun run frontend:e2e` or the named shard |
+| `e2e` (Playwright) | example-frontend, ui, syncdb, api | `bun run check:e2e-affected`, then `bun run frontend:e2e` or the named shard |
 | `maestro-e2e` | example-frontend, ui, demo | `bun run maestro:test` |
 | `admin-spa-integration` | admin-spa, admin-frontend, admin-backend | `cd admin-spa && bun run test:integration` |
 

@@ -78,10 +78,10 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
-| `EXPO_PUBLIC_API_URL` | `@terreno/rtk` | ✅ prod web | dev auto-detect | No | **client** |
-| `EXPO_PUBLIC_DEV_API_PORT` | `@terreno/rtk` | ❌ | `4000` | No | **client** |
-| `EXPO_PUBLIC_BUILD_NUMBER` | example-frontend | ❌ | — | No | **client** |
-| `OPENAPI_URL` | example-frontend `sdk` script | ❌ | `http://localhost:4000/openapi.json` | No | tooling |
+| `EXPO_PUBLIC_API_URL` | `@terreno/syncdb/config` | ✅ prod web | dev auto-detect | No | **client** |
+| `EXPO_PUBLIC_DEV_API_PORT` | `@terreno/syncdb/config` | ❌ | `4000` | No | **client** |
+| `EXPO_PUBLIC_BUILD_NUMBER` | `@terreno/syncdb/buildNumber` (`app.config.ts`) | ❌ | git commit count | No | **client** |
+| `OPENAPI_URL` | example-frontend `sdk` / `sync-sdk` scripts | ❌ | `http://localhost:4000/openapi.json` | No | tooling |
 
 ### `app.json` `extra` (not `process.env`)
 
@@ -89,17 +89,16 @@ Configured in `expo.extra` and read via `expo-constants`:
 
 | Key | Read by | Notes |
 |-----|---------|-------|
-| `BASE_URL` | `@terreno/rtk` | Production fallback when `EXPO_PUBLIC_API_URL` unset; use `__SAME_ORIGIN__` for same-origin admin SPA |
-| `DEV_API_PORT` | `@terreno/rtk` | Override dev API port (mirrors `EXPO_PUBLIC_DEV_API_PORT`) |
-| `AUTH_DEBUG` | `@terreno/rtk` | `"true"` enables auth debug logs |
-| `WEBSOCKETS_DEBUG` | `@terreno/rtk` | `"true"` enables socket debug logs |
-| `APP_ENV` | `@terreno/rtk` | Logged at startup |
+| `BASE_URL` | `@terreno/syncdb/config` | Production fallback when `EXPO_PUBLIC_API_URL` unset; use `__SAME_ORIGIN__` for same-origin admin SPA |
+| `DEV_API_PORT` | `@terreno/syncdb/config` | Override dev API port (mirrors `EXPO_PUBLIC_DEV_API_PORT`) |
+| `buildNumber` | `@terreno/syncdb/app` `useUpgradeCheck` | Sent to `GET /version-check`; set it with `resolveBuildNumber` |
 
-Resolution order for API base URL (`rtk/src/constants.ts`):
+Resolution order for API base URL (`syncdb/src/config/resolveBaseUrls.ts`):
 
-1. `EXPO_PUBLIC_API_URL` (production and dev)
-2. `extra.BASE_URL` (production only, when env unset)
-3. Dev fallbacks: `hostUri`, experience URL, `localhost`
+1. `extra.BASE_URL` = `__SAME_ORIGIN__` → the page origin (web)
+2. `EXPO_PUBLIC_API_URL` (production and dev)
+3. `extra.BASE_URL` (production only, when env unset)
+4. Dev fallbacks: `hostUri`, experience URL, `localhost` on the dev API port
 
 ## Development tooling
 

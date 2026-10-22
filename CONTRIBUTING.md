@@ -99,7 +99,7 @@ Run coverage locally from a package directory:
 cd ui && bun run test:coverage
 ```
 
-Replace `ui` with any published package (`api`, `rtk`, `syncdb`, `ai`, `comms`,
+Replace `ui` with any published package (`api`, `syncdb`, `ai`, `comms`,
 `mcp-server`, `admin-backend`, `admin-frontend`, `admin-spa`, `api-health`,
 `feature-flags`, `test`). The script writes `coverage/lcov.info` for Codecov.
 Isolated `*.isolated.ts(x)` suites are merged into that report.
@@ -133,7 +133,7 @@ Consumers can develop against local copies of published packages using Bun's `li
 
 - **@terreno/api** — Link in the consumer's backend. Restart the server after changes; run `bun run api:compile` or `bun run api:dev` in Terreno so the consumer uses the built output.
 - **@terreno/ui** — Link in the consumer's frontend. When the app uses Metro/Expo, update Metro config (see step 5). Run `bun run ui:compile` or `bun run ui:dev` so the consumer uses `ui/dist/`.
-- **@terreno/rtk** — Link in the consumer's frontend. Metro apps that link rtk may need the same resolution tweaks as ui.
+- **@terreno/syncdb** — Link in the consumer's frontend. Run `bun run syncdb:compile` or `bun run syncdb:dev` so the consumer uses `syncdb/dist/`. Metro apps need the same resolution tweaks as ui.
 
 ### One-time setup in the consumer repo
 
@@ -143,7 +143,7 @@ Consumers can develop against local copies of published packages using Bun's `li
    ```json
    "@terreno/api": "link:../../terreno/api",
    "@terreno/ui": "link:../../terreno/ui",
-   "@terreno/rtk": "link:../../terreno/rtk"
+   "@terreno/syncdb": "link:../../terreno/syncdb"
    ```
 
 3. Register and link each package from the consumer repo:
@@ -159,7 +159,7 @@ Consumers can develop against local copies of published packages using Bun's `li
    ln -s /absolute/path/to/terreno/<package-dir> node_modules/@terreno/<name>
    ```
 
-5. When linking **@terreno/ui** (and optionally **@terreno/rtk**) in an Expo/Metro app, the consumer's Metro config must add the linked package directory to `watchFolders` and resolve that package's dependencies from the app's `node_modules` so there is only one copy of React.
+5. When linking **@terreno/ui** (and optionally **@terreno/syncdb**) in an Expo/Metro app, the consumer's Metro config must add the linked package directory to `watchFolders` and resolve that package's dependencies from the app's `node_modules` so there is only one copy of React.
 
 6. Restart the bundler with a clean cache (for example `bun start --clear`). Restart the API server so it picks up a linked `@terreno/api`.
 
@@ -275,7 +275,7 @@ release time with `bun run changelog:assemble <version>`.
 1. **Branch** — create a feature branch from `master`
 2. **Draft PR** — open as a draft until CI is green and you are ready for review
 3. **CI** — `bun run lint`, relevant tests, and repo policy checks must pass
-4. **UI changes** — if you touch frontend packages (`ui/`, `demo/`, `example-frontend/`, `admin-frontend/`, `admin-spa/`, or frontend-integrated `rtk/`), include screenshots or a screen recording in the PR body showing the change
+4. **UI changes** — if you touch frontend packages (`ui/`, `demo/`, `example-frontend/`, `admin-frontend/`, `admin-spa/`, or frontend-integrated `syncdb/`), include screenshots or a screen recording in the PR body showing the change
 5. **Changelog** — add `changelog/unreleased/<feature>.md` for user-facing changes (do not edit `CHANGELOG.md`)
 6. **Description** — explain what changed and why; link related issues or IPs
 

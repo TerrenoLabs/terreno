@@ -198,11 +198,33 @@ export interface AuthorizedEmitEntry {
 const emitCollectionTag = (entry: AuthorizedEmitEntry): string | undefined =>
   entry.collectionTag ?? (entry.routePath ? getCollectionTag(entry.routePath) : undefined);
 
+/**
+ * The change-stream post-image as the model document REST permission checks receive, so
+ * virtuals resolve: `Permissions.IsOwner` reads `ownerId`, which models owned through another
+ * field (GptHistory's `userId`) only have as a virtual. Falls back to the raw image when the
+ * model is not registered or the image does not hydrate.
+ */
+const toPermissionDocument = (
+  modelName: string,
+  doc?: Record<string, unknown>
+): Record<string, unknown> | undefined => {
+  if (!doc || Object.keys(doc).length === 0 || !mongoose.modelNames().includes(modelName)) {
+    return doc;
+  }
+  try {
+    return mongoose.model(modelName).hydrate(doc) as unknown as Record<string, unknown>;
+  } catch (error) {
+    logger.warn(`[realtime] Could not hydrate ${modelName} for a read check: ${error}`);
+    return doc;
+  }
+};
+
 const canReadDocument = async (
   entry: AuthorizedEmitEntry,
   user?: User,
   doc?: Record<string, unknown>
-): Promise<boolean> => canReadDocumentRealtime(entry, user, doc);
+): Promise<boolean> =>
+  canReadDocumentRealtime(entry, user, toPermissionDocument(entry.modelName, doc));
 
 /**
  * Ensure serialized documents include `id` to match REST API responses.

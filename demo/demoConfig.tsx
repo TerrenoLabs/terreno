@@ -62,6 +62,7 @@ import {NumberFieldConfiguration} from "@story-config/NumberField.config";
 import {NumberPickerActionSheetConfiguration} from "@story-config/NumberPickerActionSheet.config";
 import {OAuthButtonsConfiguration} from "@story-config/OAuthButtons.config";
 import {OfflineBannerConfiguration} from "@story-config/OfflineBanner.config";
+import {OtpFieldConfiguration} from "@story-config/OtpField.config";
 import {PageConfiguration} from "@story-config/Page.config";
 import {PaginationConfiguration} from "@story-config/Pagination.config";
 import {PasswordFieldConfiguration} from "@story-config/PasswordField.config";
@@ -109,6 +110,7 @@ import {ThemeConfiguration} from "@story-config/Theme.config";
 import {ThumbsUpDownFeedbackConfiguration} from "@story-config/ThumbsUpDownFeedback.config";
 import {ToastConfiguration} from "@story-config/Toast.config";
 import {TooltipConfiguration} from "@story-config/Tooltip.config";
+import {TwoFactorChallengeScreenConfiguration} from "@story-config/TwoFactorChallengeScreen.config";
 import {TypedSignatureFieldConfiguration} from "@story-config/TypedSignatureField.config";
 import {UnifiedAddressAutoCompleteFieldConfiguration} from "@story-config/UnifiedAddressAutoCompleteField.config";
 import {UpgradeRequiredScreenConfiguration} from "@story-config/UpgradeRequiredScreen.config";
@@ -350,6 +352,7 @@ const Config: DemoConfigurationBase[] = [
   NumberPickerActionSheetConfiguration,
   OAuthButtonsConfiguration,
   OfflineBannerConfiguration,
+  OtpFieldConfiguration,
   OpenAPIContextConfiguration,
   PageConfiguration,
   PaginationConfiguration,
@@ -396,6 +399,7 @@ const Config: DemoConfigurationBase[] = [
   ThumbsUpDownFeedbackConfiguration,
   ToastConfiguration,
   TooltipConfiguration,
+  TwoFactorChallengeScreenConfiguration,
   TypedSignatureFieldConfiguration,
   UnifiedAddressAutoCompleteFieldConfiguration,
   UpgradeRequiredScreenConfiguration,

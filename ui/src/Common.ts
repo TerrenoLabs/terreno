@@ -1046,6 +1046,11 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
   trimOnBlur?: boolean;
 
   aiSuggestion?: AiSuggestionProps;
+
+  /**
+   * Accessible name for the input. Screen readers otherwise announce "Text input field".
+   */
+  accessibilityLabel?: string;
 }
 
 export interface TextAreaProps extends Omit<TextFieldProps, "multiline" | "type"> {}

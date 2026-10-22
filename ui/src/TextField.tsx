@@ -101,6 +101,7 @@ export const TextField: FC<TextFieldProps> = ({
   testIDs,
   id,
   aiSuggestion,
+  accessibilityLabel,
 }) => {
   const {theme} = useTheme();
   const fieldTestIDs = resolveFieldTestIDsFromProps({testID, testIDs});
@@ -310,7 +311,7 @@ export const TextField: FC<TextFieldProps> = ({
             {...webAutoCompleteProps}
             accessibilityHint="Enter text here"
             accessibilityState={{disabled}}
-            aria-label="Text input field"
+            aria-label={accessibilityLabel ?? "Text input field"}
             autoCapitalize={type === "text" ? "sentences" : "none"}
             autoCorrect={shouldAutocorrect}
             blurOnSubmit={blurOnSubmit}

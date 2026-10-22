@@ -579,6 +579,14 @@ describe("TextField", () => {
       expect(input.props["aria-label"]).toBe("Text input field");
     });
 
+    it("uses accessibilityLabel as the input's accessible name", () => {
+      const {getByDisplayValue} = renderWithTheme(
+        <TextField accessibilityLabel="Backup code" onChange={mockOnChange} value="" />
+      );
+
+      expect(getByDisplayValue("").props["aria-label"]).toBe("Backup code");
+    });
+
     it("should indicate disabled state in accessibility", () => {
       const {getByDisplayValue} = renderWithTheme(
         <TextField disabled onChange={mockOnChange} value="" />

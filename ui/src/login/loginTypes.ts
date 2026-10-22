@@ -135,3 +135,62 @@ export interface LoginScreenProps {
   /** Test ID for the root element. */
   testID?: string;
 }
+
+/** Which kind of second factor a two-factor challenge submits. */
+export type TwoFactorCodeKind = "totp" | "backup";
+
+/** What {@link TwoFactorChallengeScreenProps.onSubmit} receives. */
+export interface TwoFactorChallengeSubmission {
+  /** The code as entered: six digits for `totp`, a trimmed backup code for `backup`. */
+  code: string;
+  /** `totp` for an authenticator app code, `backup` for a one-time backup code. */
+  kind: TwoFactorCodeKind;
+  /** True when the user checked "Don't ask again on this device". Always false without `trustDeviceDays`. */
+  trustDevice: boolean;
+}
+
+/**
+ * Props for the TwoFactorChallengeScreen component.
+ */
+export interface TwoFactorChallengeScreenProps {
+  /** Called with the code, its kind, and the trust-device choice. A TOTP code submits itself once complete. */
+  onSubmit: (values: TwoFactorChallengeSubmission) => void | Promise<void>;
+  /** Disables the form and shows a spinner on the submit button. */
+  loading?: boolean;
+  /** Error text, such as an invalid code, shown with `role="alert"`. A new error clears the entered code. */
+  error?: string;
+  /**
+   * Shows a "Don't ask again on this device for N days" checkbox. Leave unset to hide it. Better
+   * Auth trusts a device for 30 days by default.
+   */
+  trustDeviceDays?: number;
+  /** Shows a "Use another method" link (text via `cancelText`), for example back to sign-in. */
+  onCancel?: () => void;
+  /**
+   * Text for the cancel link.
+   * @default "Use another method"
+   */
+  cancelText?: string;
+  /**
+   * Heading text.
+   * @default "Two-factor authentication"
+   */
+  title?: string;
+  /** Optional logo above the heading. */
+  logo?: ReactNode;
+  /**
+   * Digits in an authenticator code.
+   * @default 6
+   */
+  codeLength?: number;
+  /**
+   * The mode the screen opens in.
+   * @default "totp"
+   */
+  initialKind?: TwoFactorCodeKind;
+  /**
+   * Root testID; child testIDs are derived from it.
+   * @default "two-factor-challenge"
+   */
+  testID?: string;
+}

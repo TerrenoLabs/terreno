@@ -563,7 +563,7 @@ Open risks:
   - Docs: `ui.md` LoginScreen section.
   - Skills: terreno-ui, accessibility-testing, verify-ui-changes
 
-- [ ] **T13** — OtpField and TwoFactorChallengeScreen
+- [x] **T13** — OtpField and TwoFactorChallengeScreen
   - Depends on: none
   - Files: ui/src/OtpField.tsx, ui/src/OtpField.test.tsx, ui/src/login/TwoFactorChallengeScreen.tsx, ui/src/login/TwoFactorChallengeScreen.test.tsx, demo/stories/OtpField.stories.tsx, demo/story-config/OtpField.config.tsx, demo/stories/TwoFactorChallengeScreen.stories.tsx, demo/story-config/TwoFactorChallengeScreen.config.tsx
   - Build:

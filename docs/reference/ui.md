@@ -5,13 +5,13 @@ React Native UI component library (a large component library). Layout (Box, Page
 ## Key exports
 
 - Layout: `Box`, `Page`, `SplitPage`, `Card`, `ChartCard`, `DashboardGrid`, `DashboardGridItem`
-- Forms: `TextField`, `SelectField`, `DateTimeField`, `CheckBox`
+- Forms: `TextField`, `SelectField`, `DateTimeField`, `CheckBox`, `OtpField`
 - Display: `Text`, `Heading`, `Badge`, `DataTable`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`
 - Actions: `Button`, `IconButton`, `Link`
 - Feedback: `Spinner`, `Modal`, `Toast`
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
 - AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts), `BlocksView` (a whole-reply YAML document)
-- Authentication: `SocialLoginButton`, `LoginScreen`, `SignUpScreen`
+- Authentication: `SocialLoginButton`, `LoginScreen`, `TwoFactorChallengeScreen`, `SignUpScreen`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
 
@@ -376,6 +376,11 @@ overrides it:
 | Error | `{testID}.error` |
 | Helper | `{testID}.helper` |
 | Show/hide toggle | `{testID}.visibility-toggle` |
+
+### TextField accessibilityLabel
+
+`accessibilityLabel` sets the input's accessible name (`aria-label`). Without it screen readers
+announce "Text input field", so pass it when the visible `title` is missing or not specific.
 
 ### TextField autoComplete
 
@@ -1087,6 +1092,96 @@ optional because apps remember only the method by default; a card without them r
 `OAuthButtons`, which `LoginScreen` and `SignUpScreen` use, takes the same `genericProviders`, a
 `lastUsed={{provider, label?, testID?}}` badge, and `dividerPosition` (`"above"` by default,
 `"below"` when the buttons sit above a form).
+
+### OtpField
+
+One-time code input with one cell per digit. Typing fills the cells left to right, pasting or
+autofilling a whole code into any cell fills every cell, and backspace in an empty cell deletes
+the previous digit and moves back. `onComplete(code)` fires when every cell holds a digit.
+Non-digits are dropped, so a pasted `123 456` or `123-456` works.
+
+``````typescript
+import {OtpField} from "@terreno/ui";
+
+<OtpField
+  autoFocus
+  length={6}                       // default 6
+  value={code}                     // optional; omit to let the field keep its own state
+  onChange={setCode}
+  onComplete={(code) => verifyTotp({code})}
+  errorText={error}
+  testID="verify-otp"
+/>
+``````
+
+Each cell is its own input. Every cell carries the one-time-code autofill hint
+(`autocomplete="one-time-code"` on web, `textContentType="oneTimeCode"` on iOS, `"sms-otp"` on
+Android) and a numeric keyboard, and a full-length code that lands in any cell fills the whole
+field, so platform code suggestions work whichever cell has focus. A full code pasted into a
+filled cell drops that cell's old digit. Tapping a cell past the first empty one moves focus back
+to that empty cell. Only the cell that takes the next digit is a tab stop (roving `tabIndex`), so
+Tab and Shift+Tab move past the field in one step.
+
+Accessibility: the cells sit in a `role="group"` named by `accessibilityLabel` (default
+"Verification code"); each cell is labelled "Digit k of N". With `errorText`, cells get
+`aria-invalid`.
+
+**Test IDs:** the group is `{testID}`; cells are `{testID}-cell-{k}` with `k` from 1 to
+`length`; error, title, and helper are `{testID}-error`, `{testID}-title`, `{testID}-helper`.
+
+### TwoFactorChallengeScreen
+
+Presentational second sign-in step for two-factor authentication. TOTP mode shows an `OtpField`
+and submits on its own once the code is complete; a toggle switches to a backup-code text field
+(backup codes contain letters). It reports `onSubmit({code, kind, trustDevice})` and never calls
+an auth client itself.
+
+``````typescript
+import {TwoFactorChallengeScreen} from "@terreno/ui";
+
+<TwoFactorChallengeScreen
+  error={error}                    // e.g. "That code didn't work"; a new error clears the code
+  loading={isVerifying}
+  onCancel={() => router.replace("/login")}
+  onSubmit={async ({code, kind, trustDevice}) => {
+    if (kind === "totp") {
+      await authClient.twoFactor.verifyTotp({code, trustDevice});
+    } else {
+      await authClient.twoFactor.verifyBackupCode({code, trustDevice});
+    }
+  }}
+  trustDeviceDays={30}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `onSubmit` | `(values: TwoFactorChallengeSubmission) => void \| Promise<void>` | Receives `{code, kind: "totp" \| "backup", trustDevice}`. Backup codes are trimmed. Not called while `loading` or while an earlier call is still pending. A rejection is caught, logged with `console.warn`, and clears the code. |
+| `error` | `string` | Shown under the form with `role="alert"`. The entered code clears (and the first cell refocuses) when a new error arrives, and when a submission finishes (`loading` goes from true to false, or `onSubmit` settles) with an error set, so the same error twice still clears it. |
+| `loading` | `boolean` | Disables every control and shows a spinner on Verify. |
+| `trustDeviceDays` | `number` | Shows a "Don't ask again on this device for N days" checkbox. Unset hides it and `trustDevice` is always `false`. Better Auth trusts a device for 30 days by default. |
+| `onCancel` / `cancelText` | `() => void` / `string` | Shows a "Use another method" button (custom text via `cancelText`). |
+| `codeLength` | `number` | Digits in a TOTP code. Defaults to 6. |
+| `initialKind` | `"totp" \| "backup"` | The mode the screen opens in. Defaults to `"totp"`. |
+| `title` / `logo` | `string` / `ReactNode` | Heading (default "Two-factor authentication") and an optional logo. |
+
+Accessibility: the trust-device control is a `role="checkbox"` with `aria-checked` and its full
+sentence as the accessible name, and toggles with Space or Enter on web; the error is
+`role="alert"`; the code cells are labelled "Digit k of N"; the backup input is named "Backup
+code".
+
+**Test IDs** (with the default `testID="two-factor-challenge"`):
+
+| Element | testID |
+| --- | --- |
+| Screen root | `two-factor-challenge` |
+| TOTP cells | `two-factor-challenge-otp-cell-{k}` (1-based) |
+| Backup code input | `two-factor-challenge-backup-input` |
+| TOTP / backup toggle | `two-factor-challenge-backup-toggle` |
+| Trust-device checkbox | `two-factor-challenge-trust-device` |
+| Error | `two-factor-challenge-error` |
+| Verify button | `two-factor-challenge-submit` |
+| Use another method | `two-factor-challenge-cancel` |
 
 ### SignUpScreen
 

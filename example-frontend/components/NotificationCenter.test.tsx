@@ -92,6 +92,9 @@ const apiClient = createApiClient({baseUrl: "http://localhost:4000", fetchImpl: 
 // local-first reads come from the in-memory rows above.
 const actualSyncDbReact = await import("@terreno/syncdb/react");
 const {ApiClientProvider} = actualSyncDbReact;
+// Bun's mock.module is process-global: spread the real store so sibling suites that import
+// its other exports (documents → getAdminAuthHeaders) still find them.
+const actualStoreSyncDb = await import("@/store/syncdb");
 
 mock.module("@terreno/syncdb", () => ({
   generateMutationId: (): string => "generated-preference-id",
@@ -154,6 +157,7 @@ mock.module("@/hooks/useSyncDbReady", () => ({
 }));
 
 mock.module("@/store/syncdb", () => ({
+  ...actualStoreSyncDb,
   syncDb: {mutate: syncMutate, reconcile},
 }));
 

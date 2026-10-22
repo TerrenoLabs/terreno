@@ -115,6 +115,10 @@ the route, status, or media type is not documented. `validateDocumentedResponse`
 `{valid, errors}` instead of throwing. `path` is the OpenAPI template
 (`/announcements/{id}/click`); pass the supertest response as `response`.
 
+`@terreno/api/testing` also registers api's own test models (including `User`). A package
+that defines its own `User` model imports the same two functions from the side-effect-free
+`@terreno/api/testing/openApi` entry instead, so one test process never compiles `User` twice.
+
 ```typescript
 import {authAsUser, expectDocumentedResponse} from "@terreno/api/testing";
 

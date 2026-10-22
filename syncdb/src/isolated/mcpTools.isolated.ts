@@ -64,7 +64,7 @@ const authProvider = {
 };
 
 const {act, renderHook, waitFor} = await import("@testing-library/react-native");
-const {useMCPTools} = await import("./mcpTools");
+const {useMCPTools} = await import("../app/mcpTools");
 const {baseUrl} = await import("../config/baseUrl");
 
 const flushPromises = async (): Promise<void> => {

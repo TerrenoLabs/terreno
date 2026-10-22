@@ -147,7 +147,7 @@ green. Phase 4.1 (delete `rtk/`) is blocked by every migration task.
   - Acceptance: AC12
   - Skills: `update-docs`, `update-agent-docs`
 
-- [ ] **Task 4.3**: Full verification and UI evidence
+- [x] **Task 4.3**: Full verification and UI evidence
   - Delivers: `bun run prepush`; full `frontend:e2e`; admin-spa e2e; `maestro:test`; screenshots / videos for AC11 under `/opt/cursor/artifacts/`.
   - Files: none (evidence only)
   - Blocked by: 4.2

@@ -53,9 +53,10 @@ export const allowSyncDbNoise = (consoleGuard: ConsoleGuard): void => {
   consoleGuard.allow("[ConsentNavigator] Error fetching pending consents");
   consoleGuard.allow("Error fetching OpenAPI spec");
   // Logging out while offline (see syncdb-storage.spec.ts's user-switch scenario)
-  // legitimately fails Better Auth's session and sign-out network calls.
-  consoleGuard.allow("Better Auth: Error syncing session: TypeError: Failed to fetch");
-  consoleGuard.allow("Better Auth: Error signing out");
+  // legitimately fails Better Auth's session and sign-out network calls. The session
+  // store in @terreno/syncdb/auth logs these (they were "Better Auth: ..." before 58).
+  consoleGuard.allow("[terreno/syncdb] Error syncing session: TypeError: Failed to fetch");
+  consoleGuard.allow("[terreno/syncdb] Error signing out");
   consoleGuard.allow(/sync needs attention/i);
   // Queueing mutations against a severed network is the point of these suites, so the
   // app's own "queue is deep" health warning is expected rather than a defect.

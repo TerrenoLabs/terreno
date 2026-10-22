@@ -1,6 +1,8 @@
 import {beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
-import {expectDocumentedResponse, type OpenApiResponseSpec} from "@terreno/api/testing";
+// The side-effect-free entry: `@terreno/api/testing` registers api's own test `User` model,
+// which collides with this package's `User` when the whole suite shares one process.
+import {expectDocumentedResponse, type OpenApiResponseSpec} from "@terreno/api/testing/openApi";
 import type express from "express";
 import type mongoose from "mongoose";
 import supertest from "supertest";

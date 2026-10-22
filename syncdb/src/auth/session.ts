@@ -160,8 +160,8 @@ const findSessionAtomSubscribe = (client: BetterAuthSessionClientLike): AtomSubs
  *
  * - `getSession` throws when Better Auth reports an error, so a failed read is never
  *   mistaken for a sign-out.
- * - `subscribe` uses the session atom: in-flight (`isPending`) and failed-read (`error`)
- *   emissions are skipped (a transient network error is not a logout); session envelopes
+ * - `subscribe` uses the session atom: in-flight (`isPending`, `isRefetching`) and
+ *   failed-read (`error`) emissions are skipped (a transient network error is not a logout); session envelopes
  *   are applied directly; anything else asks the store to re-read.
  * - `signOut` throws when Better Auth reports an error.
  */
@@ -197,8 +197,11 @@ export const betterAuthSessionSource = (
         listener(undefined);
         return;
       }
-      const emission = value as {isPending?: unknown; error?: unknown};
-      if (emission.isPending === true || emission.error) {
+      const emission = value as {isPending?: unknown; isRefetching?: unknown; error?: unknown};
+      // A refetch re-emits the previous `data` with `isRefetching: true` before the server
+      // answers. After a sign-out that stale data still names the old user, so applying it
+      // would briefly sign them back in (and fire their requests without a session).
+      if (emission.isPending === true || emission.isRefetching === true || emission.error) {
         return;
       }
       if ("data" in emission) {

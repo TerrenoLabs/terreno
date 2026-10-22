@@ -43,9 +43,16 @@ const createBooleanFlag = async (request: APIRequestContext, key: string): Promi
   };
 };
 
-/** Tracks the socket.io websockets the page currently has open. */
+/** Tracks the socket.io websockets the page's current document has open. */
 const trackSocketIoConnections = (page: Page): {openCount: () => number} => {
   const open = new Set<unknown>();
+  // A full-page navigation (page.goto, reload) tears down the old document's sockets, but
+  // Playwright never emits "close" for them, so start counting afresh for the new document.
+  page.on("request", (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      open.clear();
+    }
+  });
   page.on("websocket", (socket) => {
     if (!socket.url().includes("/socket.io/")) {
       return;

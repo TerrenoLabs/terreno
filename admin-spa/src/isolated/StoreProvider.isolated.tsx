@@ -3,9 +3,9 @@ import type {FetchLike} from "@terreno/syncdb/api";
 import {act, waitFor} from "@testing-library/react-native";
 import React from "react";
 import {Text} from "react-native";
-import {renderWithTheme} from "../../ui/src/test-utils";
-import type {AdminSpaAppConfig} from "./AppConfigGate";
-import {useAdminSpaProfile} from "./adminSpaProfile";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminSpaAppConfig} from "../../components/AppConfigGate";
+import {useAdminSpaProfile} from "../../components/adminSpaProfile";
 
 // `@terreno/syncdb/auth` also exports the Expo (native) client factory. The SPA never calls
 // it, but loading it needs native modules the test runtime does not provide.
@@ -77,10 +77,10 @@ const appConfigState: {appConfig: AdminSpaAppConfig} = {
 };
 
 let useSession: typeof import("@terreno/syncdb/auth").useSession;
-let StoreProvider: typeof import("./StoreProvider").StoreProvider;
-let createAdminSpaClients: typeof import("./StoreProvider").createAdminSpaClients;
-let resolveAdminSpaOrigin: typeof import("./StoreProvider").resolveAdminSpaOrigin;
-let useAuthClient: typeof import("./StoreProvider").useAuthClient;
+let StoreProvider: typeof import("../../components/StoreProvider").StoreProvider;
+let createAdminSpaClients: typeof import("../../components/StoreProvider").createAdminSpaClients;
+let resolveAdminSpaOrigin: typeof import("../../components/StoreProvider").resolveAdminSpaOrigin;
+let useAuthClient: typeof import("../../components/StoreProvider").useAuthClient;
 
 const SessionProbe: React.FC = () => {
   const {isAuthenticated, isLoading, logout, userId} = useSession();
@@ -104,12 +104,12 @@ const textOf = (node: {props: {children?: unknown}}): string => String(node.prop
 describe("StoreProvider", () => {
   beforeAll(async () => {
     // StoreProvider reads the loaded app-config; serve it without fetching app-config.json.
-    mock.module(new URL("./AppConfigGate.tsx", import.meta.url).pathname, () => ({
+    mock.module(new URL("../../components/AppConfigGate.tsx", import.meta.url).pathname, () => ({
       useAppConfig: () => ({appConfig: appConfigState.appConfig, basePath: ""}),
     }));
     ({useSession} = await import("@terreno/syncdb/auth"));
     ({createAdminSpaClients, resolveAdminSpaOrigin, StoreProvider, useAuthClient} = await import(
-      "./StoreProvider"
+      "../../components/StoreProvider"
     ));
   });
 

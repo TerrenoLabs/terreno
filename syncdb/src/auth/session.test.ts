@@ -740,6 +740,23 @@ describe("betterAuthSessionSource", () => {
     expect(fake.unsubscribed()).toBe(1);
   });
 
+  it("skips refetch emissions that still carry the previous user's session", () => {
+    const fake = atomClient();
+    const source = betterAuthSessionSource(fake.client);
+    const received: Array<SessionSnapshot | null | undefined> = [];
+    source.subscribe?.((value) => {
+      received.push(value);
+    });
+    const signedIn = {session: {token: "t"}, user: {id: "u1"}};
+
+    fake.emit({data: signedIn, error: null, isPending: false, isRefetching: false});
+    // Sign-out triggers a refetch: Better Auth re-emits the old data while it is in flight.
+    fake.emit({data: signedIn, error: null, isPending: false, isRefetching: true});
+    fake.emit({data: null, error: null, isPending: false, isRefetching: false});
+
+    expect(received).toEqual([{user: {id: "u1"} as never, userId: "u1"}, null]);
+  });
+
   it("subscribes through useSession.subscribe on nanostore-style clients", () => {
     let listener: ((value: unknown) => void) | undefined;
     const source = betterAuthSessionSource({

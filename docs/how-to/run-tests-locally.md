@@ -79,7 +79,7 @@ MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
 | CircleCI shard | Specs |
 | --- | --- |
 | `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` |
-| `e2e` `app` | `todos` `profile` `realtime` `ai-chat` `pdf` |
+| `e2e` `app` | `todos` `todo-windows` `profile` `realtime` `ai-chat` `pdf` `notifications` `socket-flags` `mcp-tokens` |
 | `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` |
 | `e2e` `admin-table` | `admin-table-search-filter` `admin-table-bulk-actions` `admin-custom-screens` `admin-comms-back` `harness-approvals` `harness-intake` |
 | `e2e` `syncdb` | `syncdb-load-delta` `syncdb-offline` `syncdb-conflicts` `syncdb-storage` `syncdb-chaos` |

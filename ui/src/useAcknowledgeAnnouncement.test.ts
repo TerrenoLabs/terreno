@@ -1,18 +1,13 @@
-import {afterEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, describe, expect, it} from "bun:test";
 import {act, renderHook} from "@testing-library/react-native";
+import Constants from "expo-constants";
 import {Platform} from "react-native";
 
-const constantsState = {
-  expoConfig: {
-    extra: {
-      buildNumber: undefined as number | string | undefined,
-    },
-  },
+// Drive the preload's shared expo-constants mock (src/bunSetup.ts) instead of replacing the
+// module: Bun's mock.module is process-global, so a second registration leaks into siblings.
+const constantsState = Constants as unknown as {
+  expoConfig: {extra: {buildNumber?: number | string}};
 };
-
-mock.module("expo-constants", () => ({
-  default: constantsState,
-}));
 
 import {createFakeRequestClient, fakeHttpError} from "./test-utils";
 import {useAcknowledgeAnnouncement} from "./useAcknowledgeAnnouncement";

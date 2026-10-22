@@ -556,7 +556,9 @@ When the session syncs:
 
 - **Start:** the provider reads the session on mount. `isLoading` is `true` until it settles.
 - **Sign-in, sign-out, user switch:** Better Auth's session atom (`$store.atoms.session`)
-  pushes the change. Call `refresh()` after a sign-in to resolve the user immediately.
+  pushes the change. Only settled emissions apply: while a read is in flight (`isPending` or
+  `isRefetching`) the atom still carries the previous user, so a sign-out never briefly
+  restores them. Call `refresh()` after a sign-in to resolve the user immediately.
 - **Polling:** only when the client has no session atom.
 - **Logout:** `logout()` calls `signOut()` on each `syncDbs` client first, then signs out of
   the auth server, runs `onLogout`, and clears the session. The sync clients go first because

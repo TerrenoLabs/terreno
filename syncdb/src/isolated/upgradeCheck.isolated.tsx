@@ -34,7 +34,7 @@ mock.module("react-native", () => ({
   StyleSheet: {create: (styles: unknown) => styles},
 }));
 
-const {useUpgradeCheck} = await import("./upgradeCheck");
+const {useUpgradeCheck} = await import("../app/upgradeCheck");
 
 interface VersionCheckPayload {
   message?: string;

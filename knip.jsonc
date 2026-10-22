@@ -158,7 +158,7 @@
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/isolated/**/*.isolated.ts",
+        "src/isolated/**/*.isolated.{ts,tsx}",
         // Platform resolvers select these shipped implementations without an extension.
         "src/persisters/defaultPersisterFactory.native.ts!",
         "src/persisters/defaultPersisterFactory.web.ts!"
@@ -195,7 +195,8 @@
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "e2e/serveTestApp.ts",
-        "jspdf-native-stub.js"
+        "jspdf-native-stub.js",
+        "src/isolated/**/*.isolated.{ts,tsx}"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

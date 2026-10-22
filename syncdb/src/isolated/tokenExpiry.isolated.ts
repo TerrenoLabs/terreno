@@ -44,8 +44,8 @@ const {
   REFRESH_TOKEN_KEY,
   shouldShowStillThereModal,
   tokenExpirationTimesFor,
-} = await import("./tokenExpiry");
-type JwtTokenStorage = import("./tokenExpiry").JwtTokenStorage;
+} = await import("../auth/tokenExpiry");
+type JwtTokenStorage = import("../auth/tokenExpiry").JwtTokenStorage;
 
 const NOW = DateTime.fromISO("2026-01-01T00:00:00Z");
 

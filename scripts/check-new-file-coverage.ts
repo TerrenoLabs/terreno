@@ -26,6 +26,9 @@ const EXCLUDED_SOURCE_PATTERN =
  * Playwright e2e; submit logic lives in `lib/authRecoveryActions.ts`. Ordinary
  * modules under `app/` stay gated.
  */
+/** Scaffold templates are copied into generated apps as text, never executed here. */
+const TEMPLATE_FILE_PATTERN = /\.template\.(?:ts|tsx)$/;
+
 const EXPO_ROUTER_ENTRY_PATTERN =
   /(?:^|\/)app\/(?:.*\/)?(?:index|_layout|create|\+[^/]+|\[[^/]+\]|forgotPassword|resetPassword|verifyEmail)\.tsx$/;
 
@@ -184,7 +187,31 @@ export const isCoverageSourceFile = (path: string): boolean => {
   return (
     SOURCE_FILE_PATTERN.test(path) &&
     !EXCLUDED_SOURCE_PATTERN.test(path) &&
+    !TEMPLATE_FILE_PATTERN.test(path) &&
     !EXPO_ROUTER_ENTRY_PATTERN.test(path)
+  );
+};
+
+/**
+ * Subpath entry files (`syncdb/src/auth/auth.ts`) hold only comments and `export … from`
+ * statements. Bun emits no LCOV record for them, so they would read as 0% covered.
+ */
+export const isReExportOnlySource = (source: string): boolean => {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .trim();
+  if (code.length === 0) {
+    return false;
+  }
+  const statements = code
+    .split(/;\s*/)
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+  return statements.every((statement) =>
+    /^export\s+(?:type\s+)?(?:\*|\{[\s\S]*\})(?:\s+as\s+\w+)?\s+from\s+["'][^"']+["']$/.test(
+      statement
+    )
   );
 };
 
@@ -283,7 +310,8 @@ const getAddedSourceFiles = (repoRoot: string, base: string): string[] => {
   return output
     .split("\n")
     .map((path) => path.trim())
-    .filter((path) => path.length > 0 && isCoverageSourceFile(path));
+    .filter((path) => path.length > 0 && isCoverageSourceFile(path))
+    .filter((path) => !isReExportOnlySource(readFileSync(join(repoRoot, path), "utf8")));
 };
 
 export const groupFilesByWorkspace = ({

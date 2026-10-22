@@ -1,6 +1,11 @@
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 
+/** Raised when a route or response is undocumented, or a body breaks its documented schema. */
+class DocumentedResponseError extends Error {
+  name = "DocumentedResponseError";
+}
+
 /** The subset of an OpenAPI document needed to look up and validate a response schema. */
 export interface OpenApiResponseSpec {
   components?: Record<string, unknown>;
@@ -45,16 +50,18 @@ const findResponseSchema = ({
   const label = `${method.toUpperCase()} ${path}`;
   const operation = spec.paths?.[path]?.[method.toLowerCase()];
   if (!operation) {
-    throw new Error(`${label} is not documented in the OpenAPI spec`);
+    throw new DocumentedResponseError(`${label} is not documented in the OpenAPI spec`);
   }
   const documented = operation.responses?.[String(status)];
   if (!documented) {
     const statuses = Object.keys(operation.responses ?? {}).join(", ") || "none";
-    throw new Error(`${label} has no documented ${status} response (documented: ${statuses})`);
+    throw new DocumentedResponseError(
+      `${label} has no documented ${status} response (documented: ${statuses})`
+    );
   }
   const schema = documented.content?.[contentType]?.schema;
   if (!schema) {
-    throw new Error(`${label} ${status} response has no ${contentType} schema`);
+    throw new DocumentedResponseError(`${label} ${status} response has no ${contentType} schema`);
   }
   return schema;
 };
@@ -91,7 +98,7 @@ export const expectDocumentedResponse = (options: DocumentedResponseOptions): vo
     return;
   }
   const label = `${options.method.toUpperCase()} ${options.path} ${options.response.status}`;
-  throw new Error(
+  throw new DocumentedResponseError(
     `${label} response does not match its OpenAPI schema:\n- ${errors.join("\n- ")}\nBody: ${JSON.stringify(options.response.body)}`
   );
 };

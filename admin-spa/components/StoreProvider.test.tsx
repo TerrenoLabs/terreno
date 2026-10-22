@@ -47,10 +47,8 @@ const createFakeBackend = (): FakeBackend => {
   const requests: RecordedRequest[] = [];
   const state = {isSignedIn: true};
   const fetchImpl: FetchLike = async (input, init) => {
-    const url = input instanceof Request ? input.url : String(input);
-    const method = (
-      init?.method ?? (input instanceof Request ? input.method : "GET")
-    ).toUpperCase();
+    const url = String(input);
+    const method = (init?.method ?? "GET").toUpperCase();
     requests.push({credentials: init?.credentials, method, url});
     if (url.endsWith("/get-session")) {
       return json(

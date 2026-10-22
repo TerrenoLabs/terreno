@@ -2,6 +2,7 @@ import {beforeEach, describe, it, mock} from "bun:test";
 import {createApiClient} from "@terreno/syncdb/api";
 import type {NotificationInboxItem} from "@terreno/ui";
 import {assert} from "chai";
+import {useRouter} from "expo-router";
 import React, {type ReactNode} from "react";
 import {act, create, type ReactTestInstance, type ReactTestRenderer} from "react-test-renderer";
 
@@ -142,12 +143,11 @@ mock.module("@terreno/ui", () => ({
   useStoredState: () => ["", async (): Promise<void> => undefined, false],
 }));
 
-mock.module("expo-router", () => ({
-  // Include useLocalSearchParams so this incomplete mock does not break sibling
-  // suites that import it from "expo-router" under Bun's process-global mock.module.
-  useLocalSearchParams: () => ({}),
-  useRouter: () => ({back: routerBack, push: routerPush}),
-}));
+// Drive the preload's expo-router mock instead of replacing the module: Bun's
+// mock.module is process-global and sibling suites rely on the shared mock functions.
+(useRouter as unknown as {mockImplementation: (impl: () => unknown) => void}).mockImplementation(
+  () => ({back: routerBack, push: routerPush})
+);
 
 mock.module("@/hooks/useSyncDbReady", () => ({
   useSyncDbReady: (): boolean => isSyncDbReady,

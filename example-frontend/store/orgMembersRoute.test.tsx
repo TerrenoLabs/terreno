@@ -1,5 +1,6 @@
-import {beforeAll, beforeEach, describe, it, mock} from "bun:test";
+import {afterAll, beforeAll, beforeEach, describe, it, mock} from "bun:test";
 import {assert} from "chai";
+import {useLocalSearchParams} from "expo-router";
 import React from "react";
 import {act, create} from "react-test-renderer";
 
@@ -8,18 +9,21 @@ const capturedMembersProps: {
 } = {};
 const searchParamsState: {orgId?: string} = {orgId: "org-42"};
 
+// Spread the real module: Bun's mock.module is process-global, and sibling suites
+// (documents) import other admin-frontend exports.
+const actualAdminFrontend = await import("@terreno/admin-frontend");
 mock.module("@terreno/admin-frontend", () => ({
+  ...actualAdminFrontend,
   OrgMembersScreen: (props: {api?: unknown; organizationId?: string; routeBase?: string}) => {
     capturedMembersProps.current = props;
     return null;
   },
 }));
-mock.module("expo-router", () => ({
-  useLocalSearchParams: () => searchParamsState,
-  // Include useRouter so this incomplete mock does not break sibling suites that
-  // import {useRouter} from "expo-router" under Bun's process-global mock.module.
-  useRouter: () => ({back: (): void => {}, push: (): void => {}}),
-}));
+// Drive the preload's expo-router mock instead of replacing the module: Bun's
+// mock.module is process-global and sibling suites rely on the shared mock functions.
+const searchParamsMock = useLocalSearchParams as unknown as {
+  mockImplementation: (impl: () => {orgId?: string}) => void;
+};
 
 let OrgMembersRoute: React.FC;
 
@@ -30,11 +34,16 @@ const renderRoute = (): void => {
 };
 
 describe("OrgMembersRoute", () => {
+  afterAll(() => {
+    searchParamsMock.mockImplementation(() => ({}));
+  });
+
   beforeAll(async () => {
     ({default: OrgMembersRoute} = await import("../app/admin/orgs/[orgId]/members"));
   });
 
   beforeEach(() => {
+    searchParamsMock.mockImplementation(() => searchParamsState);
     searchParamsState.orgId = "org-42";
     capturedMembersProps.current = undefined;
   });

@@ -20428,7 +20428,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "type": "string",
                         },
                         "gcsKey": {
-                          "description": "Storage key; use it with GET and DELETE /files/{gcsKey}",
+                          "description": "Storage key; GET or DELETE /files/<gcsKey> reads or removes the file",
                           "type": "string",
                         },
                         "id": {

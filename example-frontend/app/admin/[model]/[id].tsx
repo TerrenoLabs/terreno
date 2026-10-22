@@ -51,6 +51,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
           This updates the password immediately for this user.
         </Text>
         <TextField
+          autoComplete="new-password"
           onChange={setPassword}
           placeholder="Enter a new password"
           title="New Password"
@@ -58,6 +59,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
           value={password}
         />
         <TextField
+          autoComplete="new-password"
           onChange={setConfirmPassword}
           placeholder="Re-enter the new password"
           title="Confirm Password"

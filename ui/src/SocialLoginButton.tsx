@@ -39,9 +39,9 @@ const PROVIDER_ICONS: Record<string, string> = {
 };
 
 /**
- * Display names for social providers
+ * Display names for the branded social providers.
  */
-const PROVIDER_NAMES: Record<string, string> = {
+export const SOCIAL_PROVIDER_NAMES: Record<string, string> = {
   apple: "Apple",
   github: "GitHub",
   google: "Google",
@@ -64,6 +64,7 @@ const PROVIDER_NAMES: Record<string, string> = {
  * ```
  */
 export const SocialLoginButton: FC<SocialLoginButtonProps> = ({
+  accessibilityLabel,
   provider,
   onPress,
   loading: propsLoading,
@@ -73,7 +74,10 @@ export const SocialLoginButton: FC<SocialLoginButtonProps> = ({
   text,
   testID,
 }) => {
-  const [loading, setLoading] = useState(propsLoading);
+  // Pressing tracks the button's own onPress; the parent's `loading` prop is read on every render
+  // so a parent can start or clear the spinner after mount.
+  const [isPressing, setIsPressing] = useState(false);
+  const loading = isPressing || propsLoading;
   const {theme} = useTheme();
   const resolvedTestID = testID ?? `social-login-${provider}`;
 
@@ -96,7 +100,7 @@ export const SocialLoginButton: FC<SocialLoginButtonProps> = ({
   }, [provider, variant, theme]);
 
   const iconName = PROVIDER_ICONS[provider];
-  const providerName = PROVIDER_NAMES[provider];
+  const providerName = SOCIAL_PROVIDER_NAMES[provider];
   const buttonText = text ?? `Continue with ${providerName}`;
 
   const handlePress = useMemo(
@@ -104,14 +108,14 @@ export const SocialLoginButton: FC<SocialLoginButtonProps> = ({
       debounce(
         async () => {
           await Unifier.utils.haptic();
-          setLoading(true);
+          setIsPressing(true);
 
           try {
             await onPress();
           } catch (error) {
             console.error(`Social login error (${provider}):`, error);
           } finally {
-            setLoading(false);
+            setIsPressing(false);
           }
         },
         500,
@@ -129,7 +133,7 @@ export const SocialLoginButton: FC<SocialLoginButtonProps> = ({
   return (
     <Pressable
       accessibilityHint={`Sign in with ${providerName}`}
-      aria-label={buttonText}
+      aria-label={accessibilityLabel ?? buttonText}
       aria-role="button"
       disabled={isDisabled}
       onPress={handlePress}

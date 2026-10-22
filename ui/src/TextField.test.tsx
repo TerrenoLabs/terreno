@@ -1017,4 +1017,54 @@ describe("TextField", () => {
       }
     });
   });
+
+  describe("autoComplete", () => {
+    const setOS = (os: string): string => {
+      const reactNative = require("react-native") as {Platform: {OS: string}};
+      const originalOS = reactNative.Platform.OS;
+      reactNative.Platform.OS = os;
+      return originalOS;
+    };
+
+    it("sets autoComplete on the input on web", () => {
+      const originalOS = setOS("web");
+      try {
+        const {getByTestId} = renderWithTheme(
+          <>
+            <TextField
+              autoComplete="current-password"
+              onChange={() => {}}
+              testID="password"
+              type="password"
+              value=""
+            />
+            <TextField
+              autoComplete="username webauthn"
+              onChange={() => {}}
+              testID="email"
+              type="email"
+              value=""
+            />
+          </>
+        );
+        expect(getByTestId("password").props.autoComplete).toBe("current-password");
+        expect(getByTestId("email").props.autoComplete).toBe("username webauthn");
+      } finally {
+        setOS(originalOS);
+      }
+    });
+
+    it("does not set autoComplete on the input on native", () => {
+      const {getByTestId} = renderWithTheme(
+        <TextField
+          autoComplete="current-password"
+          onChange={() => {}}
+          testID="password"
+          type="password"
+          value=""
+        />
+      );
+      expect(getByTestId("password").props.autoComplete).toBeUndefined();
+    });
+  });
 });

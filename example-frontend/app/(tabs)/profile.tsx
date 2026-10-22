@@ -300,6 +300,7 @@ const ProfileScreen: React.FC = () => {
             />
 
             <TapToEdit
+              autoComplete="new-password"
               disabled={isUpdating}
               editable={!isUpdating}
               helperText="Leave blank to keep current password"

@@ -1019,7 +1019,18 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
    */
   showVisibilityToggle?: boolean;
 
-  autoComplete?: "current-password" | "on" | "off" | "username";
+  /**
+   * Autofill hint. On web it is set as the input's `autocomplete` attribute; `"username webauthn"`
+   * asks the browser to offer saved passkeys in the field's autofill.
+   */
+  autoComplete?:
+    | "current-password"
+    | "email"
+    | "new-password"
+    | "on"
+    | "off"
+    | "username"
+    | "username webauthn";
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
 
   grow?: boolean;
@@ -2185,6 +2196,11 @@ export interface ButtonProps extends WithTestID {
  * Used for OAuth social login buttons (Google, GitHub, Apple).
  */
 export interface SocialLoginButtonProps extends WithTestID {
+  /**
+   * Accessible name. Defaults to the button text.
+   */
+  accessibilityLabel?: string;
+
   /**
    * The OAuth provider for the social login.
    */

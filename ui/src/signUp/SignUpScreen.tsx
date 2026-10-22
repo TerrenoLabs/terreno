@@ -106,7 +106,9 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
         <Box gap={4} width="100%">
           {fields.map((field) => (
             <TextField
-              autoComplete={field.autoComplete}
+              autoComplete={
+                field.autoComplete ?? (field.type === "password" ? "new-password" : undefined)
+              }
               disabled={loading}
               id={`${testID}-${field.name}-input`}
               key={field.name}

@@ -1603,7 +1603,7 @@ const Login: React.FC = () => {
     <LoginScreen
       error={errorMessage}
       fields={[
-        {autoComplete: "off", label: "Email", name: "email", required: true, type: "email"},
+        {autoComplete: "username", label: "Email", name: "email", required: true, type: "email"},
         {label: "Password", name: "password", required: true, type: "password"},
       ]}
       loading={isSubmitting}
@@ -1659,7 +1659,7 @@ const SignUp: React.FC = () => {
       error={errorMessage}
       fields={[
         {label: "Name", name: "name", required: true, type: "text"},
-        {autoComplete: "off", label: "Email", name: "email", required: true, type: "email"},
+        {autoComplete: "email", label: "Email", name: "email", required: true, type: "email"},
         {label: "Password", name: "password", required: true, type: "password"},
       ]}
       loading={isSubmitting}
@@ -1867,6 +1867,7 @@ const ProfileScreen: React.FC = () => {
               value={email}
             />
             <TapToEdit
+              autoComplete="new-password"
               helperText="Leave blank to keep your current password"
               onSave={handleSavePassword}
               setValue={setPassword}

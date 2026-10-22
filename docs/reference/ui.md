@@ -377,6 +377,22 @@ overrides it:
 | Helper | `{testID}.helper` |
 | Show/hide toggle | `{testID}.visibility-toggle` |
 
+### TextField autoComplete
+
+On web, `autoComplete` is written to the input's `autocomplete` attribute: `"on"`, `"off"`,
+`"username"`, `"email"`, `"current-password"`, `"new-password"`, or `"username webauthn"`.
+Native ignores the prop apart from turning off autocorrect.
+
+- `"off"` turns autofill off for the field. Prefer `"username"` on a login email field and
+  `"email"` on a sign-up email field.
+- `Field type="password"` defaults to `"current-password"`. Pass `autoComplete="new-password"`
+  (directly or through `TapToEdit`) on fields that set a new password, so password managers
+  offer to generate one.
+- `SignUpScreen` password fields default to `"new-password"`; `LoginScreen` password fields
+  default to `"current-password"`.
+- `"username webauthn"` asks the browser to offer saved passkeys in the field's autofill;
+  `LoginScreen` sets it on the email field when `passkeyAutofill` is on.
+
 ### DropdownPanel
 
 `DropdownPanel` is the compositional dropdown behind the DataTable filter popovers. A
@@ -992,29 +1008,85 @@ import {authClient} from "@/store/authClient";
 - Proper brand colors for each provider (follows brand guidelines)
 - Built-in icons (FontAwesome 6)
 - Primary and outline variants
-- Loading states with spinner
+- Loading states with spinner; the spinner follows later changes to the `loading` prop
 - Automatic text: "Continue with {Provider}"
 
 ### LoginScreen
 
-Complete login screen with email/password and optional social providers.
+Presentational login screen: email/password fields, branded and generic OAuth providers,
+passkeys, a last-used badge, one-tap "Continue" cards, and a notice slot. It renders the methods
+and accounts it is given and reports presses through callbacks; it never calls an auth client
+itself. Without the optional props below it renders the plain email/password form.
 
 ``````typescript
 import {LoginScreen} from "@terreno/ui";
-import {authClient} from "@/store/authClient";
 
 <LoginScreen
-  onEmailLogin={async ({email, password}) => {
+  fields={[
+    {name: "email", label: "Email", type: "email", required: true},
+    {name: "password", label: "Password", type: "password", required: true},
+  ]}
+  onSubmit={async ({email, password}) => {
     await authClient.signIn.email({email, password});
   }}
-  onSocialLogin={async (provider) => {
-    await authClient.signIn.social({provider, callbackURL: "yourapp://auth"});
-  }}
-  socialProviders={["google", "github", "apple"]}
-  onForgotPassword={() => navigation.navigate("ForgotPassword")}
-  onSignUp={() => navigation.navigate("SignUp")}
+  oauthProviders={[
+    {provider: "google", onPress: () => signInWithSocial("google")},
+    {provider: "github", onPress: () => signInWithSocial("github"), loading: isGitHubLoading},
+  ]}
+  genericProviders={[
+    {id: "mock-oidc", label: "Mock OIDC", iconName: "key", onPress: () => signInWithSocial("mock-oidc")},
+  ]}
+  lastUsedMethod="github"            // provider id, "email", or "passkey"
+  onPasskeyPress={signInWithPasskey}
+  passkeyAutofill                    // web: email field gets autocomplete="username webauthn"
+  currentSessions={deviceSessions}   // signed-in sessions on this device
+  rememberedAccounts={remembered}    // accounts remembered from earlier sign-ins
+  onContinue={(account, source) => (source === "session" ? switchTo(account) : reauth(account))}
+  onForget={(account) => forget(account.id)}
+  notice={{tone: "warning", text: "Sign in with Google to link GitHub.", actionLabel: "Continue with Google", onAction: () => signInWithSocial("google")}}
+  onForgotPassword={() => router.push("/forgot-password")}
+  onSignUpPress={() => router.push("/signup")}
 />
 ``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `fields` | `LoginFieldConfig[]` | Form fields; `onSubmit` receives their values keyed by `name`. |
+| `oauthProviders` | `OAuthProviderConfig[]` | Branded Google, GitHub, and Apple buttons (`SocialLoginButton`). |
+| `genericProviders` | `GenericOAuthProviderConfig[]` | Providers without a brand, such as a generic OIDC provider: `{id, label, onPress, loading?, disabled?, iconName?}`. Each renders an outline button "Continue with {label}" after the branded ones. |
+| `lastUsedMethod` | `string` | The method this device signed in with last. It gets a "Last used" badge. A provider moves above the form and to the front of the provider list; `"passkey"` moves the passkey button above the form; `"email"` badges the form in place. A method the screen does not offer is ignored. |
+| `lastUsedLabel` | `string` | Badge text. Defaults to "Last used". |
+| `currentSessions` | `LoginAccountOption[]` | Sessions already signed in on this device. Each renders a "Continue" card; one tap calls `onContinue(account, "session")`. |
+| `rememberedAccounts` | `LoginAccountOption[]` | Accounts remembered on this device. Each renders a "Continue" card (`onContinue(account, "remembered")`) and, with `onForget`, a Forget button. |
+| `onContinue` / `onForget` | callbacks | Cards render only when `onContinue` is set. Sessions never get a Forget button. |
+| `onPasskeyPress` | `() => void \| Promise<void>` | Shows a "Sign in with a passkey" button (text via `passkeyButtonText`). |
+| `passkeyAutofill` | `boolean` | On web, sets the email field's `autocomplete` to `username webauthn` so browsers offer saved passkeys (conditional mediation). Ignored on native. |
+| `notice` | `LoginNotice` | `{tone: "info" \| "warning", text, actionLabel?, onAction?}`, shown above the form; a warning is `role="alert"` (announced at once), info is `role="status"`. |
+
+Accessibility: the button a "Last used" badge marks gets the badge in its accessible name
+("Continue with GitHub, last used"; for email, the Log In button). A `warning` notice has
+`role="alert"` and an `info` notice `role="status"`. Session cards read "Signed in on this
+device · {method}".
+
+`LoginAccountOption` is `{id, name?, email?, image?, method}`. Name, email, and image are
+optional because apps remember only the method by default; a card without them reads
+"Continue with {method}". Show identity only when the app opted in to remembering it.
+
+**Test IDs** (with the default `testID="login-screen"`):
+
+| Element | testID |
+| --- | --- |
+| Branded or generic provider button | `login-screen-oauth-{provider}` (e.g. `login-screen-oauth-github`, `login-screen-oauth-mock-oidc`) |
+| Last-used badge | `login-screen-last-used-{method}` |
+| Continue card (sessions first, then remembered accounts) | `login-screen-continue-{index}` |
+| Forget button | `login-screen-forget-{index}` (same index as its card) |
+| Passkey button | `login-screen-passkey-button` |
+| Notice / its action | `login-screen-notice` / `login-screen-notice-action` |
+| Continue-as card list | `login-screen-accounts` |
+
+`OAuthButtons`, which `LoginScreen` and `SignUpScreen` use, takes the same `genericProviders`, a
+`lastUsed={{provider, label?, testID?}}` badge, and `dividerPosition` (`"above"` by default,
+`"below"` when the buttons sit above a form).
 
 ### SignUpScreen
 

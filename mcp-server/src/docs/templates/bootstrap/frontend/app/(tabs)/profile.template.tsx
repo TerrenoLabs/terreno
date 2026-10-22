@@ -112,6 +112,7 @@ const ProfileScreen: React.FC = () => {
               value={email}
             />
             <TapToEdit
+              autoComplete="new-password"
               helperText="Leave blank to keep your current password"
               onSave={handleSavePassword}
               setValue={setPassword}

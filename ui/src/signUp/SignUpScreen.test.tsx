@@ -1,5 +1,6 @@
 import {describe, expect, it, mock} from "bun:test";
 import {fireEvent} from "@testing-library/react-native";
+import {TextField} from "../TextField";
 import {renderWithTheme} from "../test-utils";
 import {defaultPasswordRequirements} from "./passwordPresets";
 import {SignUpScreen} from "./SignUpScreen";
@@ -130,5 +131,20 @@ describe("SignUpScreen", () => {
       />
     );
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it("hints new-password on password fields unless the field sets its own", () => {
+    const {UNSAFE_getAllByType} = renderWithTheme(
+      <SignUpScreen
+        fields={[
+          {autoComplete: "email", label: "Email", name: "email", type: "email"},
+          {label: "Password", name: "password", type: "password"},
+        ]}
+        onSubmit={mock(() => Promise.resolve())}
+      />
+    );
+    const [email, password] = UNSAFE_getAllByType(TextField);
+    expect(email.props.autoComplete).toBe("email");
+    expect(password.props.autoComplete).toBe("new-password");
   });
 });

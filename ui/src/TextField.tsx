@@ -8,6 +8,7 @@ import {
   type StyleProp,
   TextInput,
   type TextInputChangeEvent,
+  type TextInputProps,
   View,
 } from "react-native";
 
@@ -260,6 +261,13 @@ export const TextField: FC<TextFieldProps> = ({
     onChangeRef.current(text);
   }, []);
 
+  // react-native-web writes `autoComplete` to the input's `autocomplete` attribute, which also
+  // takes token lists such as "username webauthn" that RN's native union does not describe.
+  const webAutoCompleteProps =
+    Platform.OS === "web" && autoComplete
+      ? ({autoComplete} as unknown as Pick<TextInputProps, "autoComplete">)
+      : {};
+
   const keyboardType = keyboardMap[type];
   const textContentType = textContentMap[type || "text"];
 
@@ -299,6 +307,7 @@ export const TextField: FC<TextFieldProps> = ({
         >
           <TextInput
             {...(Platform.OS === "web" ? {spellCheck: false} : {})}
+            {...webAutoCompleteProps}
             accessibilityHint="Enter text here"
             accessibilityState={{disabled}}
             aria-label="Text input field"

@@ -98,7 +98,13 @@ export {
   UpgradeRequiredScreen,
 } from "./lazyBoundaries/heavyOptionalExports";
 export * from "./login/LoginScreen";
-export type {LoginFieldConfig, LoginScreenProps} from "./login/loginTypes";
+export type {
+  LoginAccountOption,
+  LoginAccountSource,
+  LoginFieldConfig,
+  LoginNotice,
+  LoginScreenProps,
+} from "./login/loginTypes";
 export type * from "./MarkdownEditor";
 export type * from "./MarkdownEditorField";
 export * from "./MarkdownView";
@@ -149,6 +155,7 @@ export {
 export {SignUpScreen} from "./signUp/SignUpScreen";
 export {Swiper} from "./signUp/Swiper";
 export type {
+  GenericOAuthProviderConfig,
   OAuthProvider,
   OAuthProviderConfig,
   OnboardingPage,

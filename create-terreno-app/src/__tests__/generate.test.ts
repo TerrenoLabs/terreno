@@ -486,6 +486,18 @@ describe("generated frontend Terreno 57 compatibility", () => {
     }
   });
 
+  test("auth screens give browsers autofill hints instead of turning autofill off", () => {
+    const login = read("frontend/app/login.tsx");
+    const signup = read("frontend/app/signup.tsx");
+    const profile = read("frontend/app/(tabs)/profile.tsx");
+
+    assert.include(login, '{autoComplete: "username", label: "Email"');
+    assert.include(signup, '{autoComplete: "email", label: "Email"');
+    assert.notInclude(login, 'autoComplete: "off"');
+    assert.notInclude(signup, 'autoComplete: "off"');
+    assert.include(profile, 'autoComplete="new-password"');
+  });
+
   test("profile screen reads unwrapped profile fields from rtk's base query", () => {
     const profile = read("frontend/app/(tabs)/profile.tsx");
     const sdk = read("frontend/store/sdk.ts");

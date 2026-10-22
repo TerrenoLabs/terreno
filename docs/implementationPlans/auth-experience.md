@@ -538,7 +538,7 @@ Open risks:
       Screenshots go to `/opt/cursor/artifacts/`. A full Google/Apple sign-in is H2.
   - Skills: verify-ui-changes, deploy-gcp
 
-- [ ] **T12** — LoginScreen v2 (presentational)
+- [x] **T12** — LoginScreen v2 (presentational)
   - Depends on: none
   - Files: ui/src/login/LoginScreen.tsx, ui/src/login/loginTypes.ts, ui/src/login/LoginScreen.test.tsx, ui/src/login/__snapshots__/LoginScreen.test.tsx.snap, ui/src/signUp/OAuthButtons.tsx, ui/src/signUp/signUpTypes.ts, ui/src/SocialLoginButton.tsx, ui/src/Common.ts, demo/stories/LoginScreen.stories.tsx, demo/story-config/LoginScreen.config.tsx, docs/reference/ui.md
   - Build: new optional props.

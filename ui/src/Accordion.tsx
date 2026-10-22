@@ -68,7 +68,7 @@ export const Accordion: FC<AccordionProps> = ({
             }}
             testID={testID ? `${testID}.toggle` : "accordion-toggle"}
           >
-            <Icon color="link" iconName={collapsed ? "chevron-down" : "chevron-up"} size="sm" />
+            <Icon color="link" iconName={collapsed ? "chevron-down" : "chevron-up"} size="md" />
           </Pressable>
         </View>
       </View>

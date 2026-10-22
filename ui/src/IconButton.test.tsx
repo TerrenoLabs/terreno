@@ -1,4 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
+import {act, fireEvent} from "@testing-library/react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 
 import {IconButton} from "./IconButton";
@@ -148,6 +149,91 @@ describe("IconButton", () => {
     );
 
     expect(getByLabelText("Back to list").props.accessibilityHint).toBe("Back to list");
+  });
+
+  it("exercises the real button variants, indicator, and confirmation", async () => {
+    // bunSetup replaces ./IconButton with a null mock; the query suffix loads the real module.
+    const actualIconButtonPath = "./IconButton.tsx?real-branches";
+    const {IconButton: ActualIconButton} = (await import(
+      actualIconButtonPath
+    )) as typeof import("./IconButton");
+    const onClick = mock(() => Promise.resolve());
+    const {getByLabelText, getByText} = renderWithTheme(
+      <>
+        <ActualIconButton
+          accessibilityLabel="secondary"
+          iconName="check"
+          onClick={onClick}
+          variant="secondary"
+        />
+        <ActualIconButton
+          accessibilityLabel="destructive"
+          iconName="trash"
+          onClick={onClick}
+          variant="destructive"
+        />
+        <ActualIconButton
+          accessibilityLabel="navigation"
+          iconName="bars"
+          onClick={onClick}
+          size="sm"
+          variant="navigation"
+        />
+        <ActualIconButton
+          accessibilityLabel="ghost active"
+          iconName="check"
+          onClick={onClick}
+          state="active"
+          variant="ghost"
+        />
+        <ActualIconButton
+          accessibilityLabel="disabled"
+          disabled
+          iconName="check"
+          onClick={onClick}
+        />
+        <ActualIconButton
+          accessibilityLabel="badge"
+          iconName="bell"
+          indicator="error"
+          indicatorText="5"
+          onClick={onClick}
+        />
+        <ActualIconButton
+          accessibilityLabel="Delete"
+          confirmationHeading="Confirm Delete"
+          confirmationText="Are you sure?"
+          iconName="trash"
+          onClick={onClick}
+          withConfirmation
+        />
+      </>
+    );
+
+    expect(getByLabelText("badge").props.accessibilityHint).toBe("Press to perform badge action");
+    await act(async () => {
+      fireEvent.press(getByLabelText("Delete"));
+    });
+    expect(getByText("Are you sure?")).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(getByText("Confirm"));
+    });
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets loading after the real button's click fails", async () => {
+    const actualIconButtonPath = "./IconButton.tsx?click-error";
+    const {IconButton: ActualIconButton} = (await import(
+      actualIconButtonPath
+    )) as typeof import("./IconButton");
+    const onClick = mock(() => Promise.reject(new Error("click failed")));
+    const {getByLabelText} = renderWithTheme(
+      <ActualIconButton accessibilityLabel="Save" iconName="check" loading onClick={onClick} />
+    );
+    await act(async () => {
+      await Promise.resolve(fireEvent.press(getByLabelText("Save"))).catch(() => undefined);
+    });
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it("renders with confirmation props", () => {

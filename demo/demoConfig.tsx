@@ -51,6 +51,7 @@ import {InfoModalIconConfiguration} from "@story-config/InfoModalIcon.config";
 import {InfoTooltipButtonConfiguration} from "@story-config/InfoTooltipButton.config";
 import {LineChartConfiguration} from "@story-config/LineChart.config";
 import {LinkConfiguration} from "@story-config/Link.config";
+import {LinkedAccountsCardConfiguration} from "@story-config/LinkedAccountsCard.config";
 import {LoginScreenConfiguration} from "@story-config/LoginScreen.config";
 import {MarkdownEditorConfiguration} from "@story-config/MarkdownEditor.config";
 import {MarkdownEditorFieldConfiguration} from "@story-config/MarkdownEditorField.config";
@@ -65,6 +66,7 @@ import {OfflineBannerConfiguration} from "@story-config/OfflineBanner.config";
 import {OtpFieldConfiguration} from "@story-config/OtpField.config";
 import {PageConfiguration} from "@story-config/Page.config";
 import {PaginationConfiguration} from "@story-config/Pagination.config";
+import {PasswordCardConfiguration} from "@story-config/PasswordCard.config";
 import {PasswordFieldConfiguration} from "@story-config/PasswordField.config";
 import {PasswordRequirementsConfiguration} from "@story-config/PasswordRequirements.config";
 import {PhoneNumberConfiguration} from "@story-config/PhoneNumberField.config";
@@ -339,6 +341,7 @@ const Config: DemoConfigurationBase[] = [
   InfoTooltipButtonConfiguration,
   LineChartConfiguration,
   LinkConfiguration,
+  LinkedAccountsCardConfiguration,
   LoginScreenConfiguration,
   MarkdownEditorConfiguration,
   MarkdownEditorFieldConfiguration,
@@ -356,6 +359,7 @@ const Config: DemoConfigurationBase[] = [
   OpenAPIContextConfiguration,
   PageConfiguration,
   PaginationConfiguration,
+  PasswordCardConfiguration,
   PasswordFieldConfiguration,
   PasswordRequirementsConfiguration,
   PopoverConfiguration,

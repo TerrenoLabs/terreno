@@ -1,11 +1,11 @@
 import type {FC} from "react";
 import {useCallback, useEffect, useRef, useState} from "react";
-import {Pressable, View} from "react-native";
+import {View} from "react-native";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
-import {CheckBox} from "../CheckBox";
 import {Heading} from "../Heading";
+import {LabeledCheckBox} from "../LabeledCheckBox";
 import {OtpField} from "../OtpField";
 import {Page} from "../Page";
 import {Text} from "../Text";
@@ -13,13 +13,6 @@ import {TextField} from "../TextField";
 import type {TwoFactorChallengeScreenProps, TwoFactorCodeKind} from "./loginTypes";
 
 const DEFAULT_CODE_LENGTH = 6;
-
-/** The keydown event react-native-web hands a Pressable's `onKeyDown`. */
-interface WebKeyDownEvent {
-  key?: string;
-  nativeEvent?: {key?: string};
-  preventDefault?: () => void;
-}
 
 /**
  * The second step of a two-factor sign-in: a one-time code from an authenticator app, or a backup
@@ -139,27 +132,6 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
     setBackupCode("");
   }, []);
 
-  const handleToggleTrustDevice = useCallback((): void => {
-    if (loading) {
-      return;
-    }
-    setTrustDevice((current) => !current);
-  }, [loading]);
-
-  // react-native-web presses a Pressable on Space only for button roles, so a checkbox handles
-  // Space itself (Enter already presses it).
-  const handleTrustDeviceKeyDown = useCallback(
-    (event: WebKeyDownEvent): void => {
-      const key = event.key ?? event.nativeEvent?.key;
-      if (key !== " " && key !== "Spacebar") {
-        return;
-      }
-      event.preventDefault?.();
-      handleToggleTrustDevice();
-    },
-    [handleToggleTrustDevice]
-  );
-
   const trustDeviceLabel = `Don't ask again on this device for ${trustDeviceDays} days`;
 
   return (
@@ -221,25 +193,13 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
           )}
 
           {canTrustDevice && (
-            <Pressable
-              accessibilityLabel={trustDeviceLabel}
-              accessibilityState={{checked: trustDevice, disabled: loading}}
-              aria-checked={trustDevice}
-              aria-disabled={loading}
-              aria-label={trustDeviceLabel}
+            <LabeledCheckBox
+              checked={trustDevice}
               disabled={loading}
-              onPress={handleToggleTrustDevice}
-              {...({onKeyDown: handleTrustDeviceKeyDown} as Record<string, unknown>)}
-              role="checkbox"
+              label={trustDeviceLabel}
+              onChange={setTrustDevice}
               testID={`${testID}-trust-device`}
-            >
-              <Box alignItems="center" direction="row" gap={2}>
-                <CheckBox selected={trustDevice} size="md" />
-                <Box flex="shrink">
-                  <Text>{trustDeviceLabel}</Text>
-                </Box>
-              </Box>
-            </Pressable>
+            />
           )}
 
           {Boolean(error) && (

@@ -151,6 +151,17 @@ export type * from "./SparklineChart";
 export * from "./Spinner";
 export * from "./SplitPage";
 export * from "./SyncStatusBanner";
+export * from "./security/LinkedAccountsCard";
+export * from "./security/PasswordCard";
+export {CREDENTIAL_PROVIDER_ID, hasPasswordCredential} from "./security/securityMethods";
+export type {
+  LinkableProvider,
+  LinkedAccount,
+  LinkedAccountsCardProps,
+  PasswordCardMode,
+  PasswordCardProps,
+  PasswordCardSubmission,
+} from "./security/securityTypes";
 export {OAuthButtons} from "./signUp/OAuthButtons";
 export {PasswordRequirements} from "./signUp/PasswordRequirements";
 export {

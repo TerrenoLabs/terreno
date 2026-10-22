@@ -12,6 +12,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
 - AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts), `BlocksView` (a whole-reply YAML document)
 - Authentication: `SocialLoginButton`, `LoginScreen`, `TwoFactorChallengeScreen`, `SignUpScreen`
+- Account security: `LinkedAccountsCard`, `PasswordCard`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
 
@@ -1206,6 +1207,135 @@ import {authClient} from "@/store/authClient";
 ``````
 
 **Learn more:** [Configure Better Auth](../how-to/configure-better-auth.md)
+
+## Account security
+
+Presentational cards for an account security screen. Each card takes plain data and reports
+actions through callbacks; none of them calls an auth client. The data types are built from
+Better Auth's responses, but they are not a one-to-one copy: `listAccounts()` returns `id`,
+`providerId`, `accountId` and `createdAt` per account and no email, so a connected screen renames
+`createdAt` to `linkedAt` and fills `email` from elsewhere (the session user, or a per-account
+info call) when it wants one shown. Dates may be `Date` objects (the Better Auth client parses
+them) or ISO 8601 strings; Luxon formats both.
+
+Shared types (exported from the package root):
+
+| Type | Shape |
+| --- | --- |
+| `LinkedAccount` | `{id, providerId, accountId?, email?, linkedAt?}`. `id` is Better Auth's own account row id, the value `unlinkAccount({accountId})` takes; `accountId` is the id at the provider (display only). A password is an account with `providerId: "credential"` (`CREDENTIAL_PROVIDER_ID`). `linkedAt` (`string \| Date`) is Better Auth's `createdAt`. |
+| `LinkableProvider` | `{id, label?, iconName?}`. Branded ids (`google`, `github`, `apple`) get their brand name and icon; other ids show `label` (or the id) with a key icon. |
+
+`hasPasswordCredential(accounts)` returns whether the user has a password.
+
+### LinkedAccountsCard
+
+Lists every linked account (with its email, when given, and linked date) under the providers
+the app offers, with a Link row for each offered provider that has no account. Each linked
+account is its own row, so two Google accounts are each unlinkable. A linked account whose
+provider the app no longer offers still shows as a linked row. The password account is not a row (see PasswordCard), but it counts as a
+sign-in method.
+
+``````typescript
+import {LinkedAccountsCard} from "@terreno/ui";
+
+<LinkedAccountsCard
+  accounts={accounts}                      // every account, including "credential"
+  providers={[{id: "google"}, {id: "github"}, {id: "mock-oidc", label: "Company SSO"}]}
+  otherMethodCount={passkeys.length}       // passkeys count as sign-in methods
+  onLink={(providerId) => authClient.linkSocial({provider: providerId, callbackURL})}
+  onUnlink={(_providerId, account) => authClient.unlinkAccount({accountId: account.id})}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `accounts` | `LinkedAccount[]` | Every linked account, including the `credential` password account. |
+| `providers` | `LinkableProvider[]` | Row order. A provider gets one row per linked account, or one Link row when it has none. |
+| `onLink` | `(providerId) => void \| Promise<void>` | Link button on unlinked rows. The row shows a spinner and every row is disabled until the promise settles. A rejection's message shows as the card error. |
+| `onUnlink` | `(providerId, account) => void \| Promise<void>` | Unlink button on linked rows. Pressing it opens a confirm `Modal`; the callback runs only after the user confirms, with that row's account. Pass `account.id` to `unlinkAccount({accountId})`. Same spinner and error handling as `onLink`. |
+| `otherMethodCount` | `number` | Sign-in methods that are not accounts, such as passkeys. Defaults to 0. Pass 0 unless the server sets `allowUnlinkingAll` (see below). |
+| `canUnlinkLast` | `boolean` | Allows unlinking the last sign-in method. Defaults to `false`. |
+| `error` | `string` | Card error with `role="alert"`; overrides a rejection message. |
+| `disabled` | `boolean` | Disables every row, for example while accounts load. |
+| `title` / `description` | `string` | Heading (default "Linked accounts") and the text under it. |
+
+**Last sign-in method.** The card counts `accounts.length + otherMethodCount`. When that is 1
+and `canUnlinkLast` is false, the only linked provider's Unlink is disabled and a sentence under
+the row explains why (`{testID}-last-method-{id}`). Passing the `credential` account is what
+lets a user with a password unlink their only provider. Better Auth enforces its own version of
+the rule: `unlinkAccount` refuses a user's last account (passkeys do not count) unless
+`account.accountLinking.allowUnlinkingAll` is set. So only pass the passkey count as
+`otherMethodCount` when the server allows unlinking every account; otherwise pass 0 and the card
+matches the server.
+
+Accessibility: Link and Unlink are named after their provider and, when known, the account's
+email ("Link GitHub", "Unlink Google (ada@example.com)"); a disabled Unlink has a visible
+explanation; errors are `role="alert"`.
+
+**Test IDs** (with the default `testID="linked-accounts-card"`). `{id}` is the provider id for an
+unlinked row and for a provider's first linked account; a provider's later accounts add `-2`,
+`-3`, and so on (`linked-accounts-card-unlink-google-2`), in `accounts` order:
+
+| Element | testID |
+| --- | --- |
+| Card root | `linked-accounts-card` |
+| Row / name / status | `linked-accounts-card-row-{id}`, `-name-{id}`, `-status-{id}` |
+| Link / Unlink buttons | `linked-accounts-card-link-{id}`, `linked-accounts-card-unlink-{id}` |
+| Last-method explanation | `linked-accounts-card-last-method-{id}` |
+| Confirm modal, confirm, cancel | `linked-accounts-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
+| Error | `linked-accounts-card-error` |
+
+### PasswordCard
+
+Shows "Change password" (current, new and confirm, plus an optional "Sign out of other devices"
+checkbox) when the user has a password, and "Set a password" (new and confirm) for a user who
+only signs in with a provider. It checks the minimum length and the confirmation inline before
+calling `onSubmit`.
+
+``````typescript
+import {hasPasswordCredential, PasswordCard} from "@terreno/ui";
+
+<PasswordCard
+  hasPassword={hasPasswordCredential(accounts)}
+  onSubmit={async ({mode, currentPassword, newPassword, revokeOtherSessions}) => {
+    if (mode === "change") {
+      await authClient.changePassword({currentPassword, newPassword, revokeOtherSessions});
+    } else {
+      await setPassword({newPassword});      // Better Auth's setPassword is server-only
+    }
+  }}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `hasPassword` | `boolean` | `true` shows change mode; `false` shows set mode. When it flips (after a first password is set), the form clears. |
+| `onSubmit` | `(values: PasswordCardSubmission) => Promise<void>` | Receives `{mode, currentPassword?, newPassword, revokeOtherSessions}`. `currentPassword` is present only in change mode; `revokeOtherSessions` is always `false` in set mode. Resolving clears the form and shows a success message (`role="status"`). Rejecting keeps the form and shows the error's message (`role="alert"`). |
+| `showRevokeOtherSessions` | `boolean` | Shows the sign-out checkbox in change mode. Defaults to `true`. |
+| `minLength` | `number` | Minimum new-password length. Defaults to 8, Better Auth's default. |
+| `error` | `string` | Error with `role="alert"`; overrides a rejection message. |
+| `loading` | `boolean` | Disables the form and shows a spinner on the submit button. |
+
+Inline errors: "Enter your current password.", "Use at least N characters.", and "Passwords
+don't match." show under their field after a submit attempt and clear when that field changes.
+A failed attempt also focuses the first invalid field and shows a `role="alert"` summary ("Fix the
+2 highlighted fields.", `{testID}-validation-error`) that updates as fields are fixed. Enter in
+any of the password fields submits. A second submit while `onSubmit` is pending is ignored.
+
+Accessibility: inputs are named "Current password", "New password" and "Confirm new password";
+on web they carry `autocomplete="current-password"` / `"new-password"` so password managers fill
+and save correctly; the sign-out control is a `role="checkbox"` that toggles with Space or Enter.
+
+**Test IDs** (with the default `testID="password-card"`):
+
+| Element | testID |
+| --- | --- |
+| Card root / heading | `password-card`, `password-card-title` |
+| Current / new / confirm inputs | `password-card-current`, `password-card-new`, `password-card-confirm` |
+| Sign-out checkbox | `password-card-revoke-other-sessions` |
+| Submit | `password-card-submit` |
+| Validation summary | `password-card-validation-error` |
+| Error / success | `password-card-error`, `password-card-success` |
 
 ## Testing Utilities
 

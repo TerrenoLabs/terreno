@@ -576,7 +576,7 @@ Open risks:
     - Errors render under `two-factor-challenge-error`.
   - Skills: terreno-ui, accessibility-testing
 
-- [ ] **T14** — LinkedAccountsCard and PasswordCard
+- [x] **T14** — LinkedAccountsCard and PasswordCard
   - Depends on: none
   - Files: ui/src/security/LinkedAccountsCard.tsx, ui/src/security/LinkedAccountsCard.test.tsx, ui/src/security/PasswordCard.tsx, ui/src/security/PasswordCard.test.tsx, ui/src/security/securityTypes.ts, demo/stories/LinkedAccountsCard.stories.tsx, demo/story-config/LinkedAccountsCard.config.tsx, demo/stories/PasswordCard.stories.tsx, demo/story-config/PasswordCard.config.tsx
   - Build:

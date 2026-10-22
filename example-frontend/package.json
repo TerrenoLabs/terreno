@@ -50,7 +50,7 @@
     "mongodb": "catalog:",
     "react-test-renderer": "catalog:",
     "ts-node": "^10.9.2",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.15",
     "typescript": "catalog:"
   },
   "main": "index.js",
@@ -60,7 +60,7 @@
     "android": "bun expo start --android --port 8082",
     "doctor": "bunx expo-doctor",
     "eas-build-post-install": "cd .. && bun run compile && bun run --filter '@terreno/ui' types",
-    "export": "bun expo export --platform web",
+    "export": "NODE_OPTIONS=--max-old-space-size=8192 bun expo export --platform web",
     "ios": "EXPO_UNSTABLE_MCP_SERVER=1 bun expo start --ios --port 8082",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

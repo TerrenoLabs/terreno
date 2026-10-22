@@ -3,7 +3,7 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@ai-sdk/react": "^3.0.118",
+    "@ai-sdk/react": "^4.0.116",
     "@better-auth/expo": "^1.6.25",
     "@modelcontextprotocol/client": "catalog:",
     "@openfeature/core": "catalog:",

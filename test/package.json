@@ -17,8 +17,8 @@
     "@types/luxon": "catalog:",
     "@types/supertest": "catalog:",
     "mongodb-memory-server": "catalog:",
-    "mongodb-memory-server-core": "^11.0.1",
-    "mongodb-memory-server-global": "^11.0.1",
+    "mongodb-memory-server-core": "^11.3.0",
+    "mongodb-memory-server-global": "^11.3.0",
     "mongoose": "catalog:",
     "supertest": "catalog:",
     "typescript": "catalog:"

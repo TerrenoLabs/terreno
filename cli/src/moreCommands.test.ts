@@ -140,11 +140,12 @@ describe("additional command branches", () => {
     expect(io.stdoutLines.join("\n")).toContain("ok");
   });
 
-  it("runs generate sdk against a missing config", async () => {
+  it("rejects a legacy RTK openapi-config for generate sdk", async () => {
     const dir = await mkdtemp(join(tmpdir(), "terreno-cli-"));
     const io = createIo(dir);
-    const code = await runCli(["generate", "sdk", "--config", "missing-config.ts"], io);
+    const code = await runCli(["generate", "sdk", "--config", "openapi-config.ts"], io);
     expect(code).not.toBe(0);
+    expect(io.stderrLines.join("\n")).toContain("--schema <url|path> --out store/apiSdk.ts");
     await rm(dir, {force: true, recursive: true});
   });
 

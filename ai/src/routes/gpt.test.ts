@@ -68,7 +68,7 @@ describe("/gpt/prompt asks", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("pausing on an ask", () => {
@@ -2965,7 +2965,7 @@ describe("/gpt/prompt uiBlocks", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   it("leaves the prompt and the event list unchanged when uiBlocks is off", async () => {

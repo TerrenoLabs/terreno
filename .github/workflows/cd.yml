@@ -68,7 +68,7 @@ jobs:
               - 'blocks/**'
               - 'comms/**'
               - 'jobs/**'
-              - 'rtk/**'
+              - 'syncdb/**'
               - 'ui/**'
               - 'bun.lock'
               - '.github/workflows/cd.yml'

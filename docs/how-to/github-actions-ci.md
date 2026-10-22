@@ -19,8 +19,8 @@ PR builds set `DOCS_PREVIEW=true` and pass `--no-minify`. Both PR and
 | Versioned docs (`57.1.0`, `0.30.0`, …) | Omitted | Prebuilt archives unpacked under `/<version>/` |
 | JS minify | Off | On |
 | Local search index | Skipped | Built |
-| Generated API + component MDX | Restored from cache when `api`/`rtk`/`ui` hashes match | Same cache, then full generate on miss |
-| TypeDoc workspace `tsc` | Once per generate (api+rtk deps share a process) | Same |
+| Generated API + component MDX | Restored from cache when `api`/`ui` hashes match | Same cache, then full generate on miss |
+| TypeDoc workspace `tsc` | Once per generate | Same |
 | Rspack cache (`node_modules/.cache/rspack`) | Restored per `pull_request` vs `push` | Separate production key |
 
 Do not rely on `/57.1.0/…` URLs in a PR deploy preview.

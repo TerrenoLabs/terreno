@@ -132,13 +132,17 @@ const AiPromptEditorForm: React.FC<{
   );
 
   const handleSaveAsNext = useCallback(async (): Promise<void> => {
-    await onSaveVersion({
-      config: {temperature: Number(temperature)},
-      system: type === "chat" ? system : undefined,
-      template,
-      type,
-      variables: parseVariables(variablesText),
-    });
+    try {
+      await onSaveVersion({
+        config: {temperature: Number(temperature)},
+        system: type === "chat" ? system : undefined,
+        template,
+        type,
+        variables: parseVariables(variablesText),
+      });
+    } catch {
+      // The screen renders the failure from the save request state as `saveError`.
+    }
   }, [onSaveVersion, system, temperature, template, type, variablesText]);
 
   return (
@@ -251,8 +255,12 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
   const [confirmProduction, setConfirmProduction] = useState(false);
 
   const handleConfirmProduction = useCallback(async (): Promise<void> => {
-    await onSetProduction(selectedVersion);
-    setConfirmProduction(false);
+    try {
+      await onSetProduction(selectedVersion);
+      setConfirmProduction(false);
+    } catch {
+      // Keep the confirmation open; the screen renders the failure as `productionError`.
+    }
   }, [onSetProduction, selectedVersion]);
 
   if (!current) {

@@ -20,7 +20,8 @@ does) remains supported and unchanged.
   while in-app navigation stays inside the SPA.
 
 Boot flow: `AppConfigGate` fetches `app-config.json` → `StoreProvider` builds the
-Better-Auth client + Redux store → `AdminGate` syncs the session and redirects
+Better-Auth client and a same-origin request client and mounts `SessionProvider` from
+`@terreno/syncdb/auth` → `AdminGate` reads `useSession()` and redirects
 anonymous users to `/login` and non-admins (admin API returns 403) to `/forbidden`.
 
 ## Install

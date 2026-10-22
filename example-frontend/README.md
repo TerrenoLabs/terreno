@@ -1,13 +1,13 @@
 # Example Frontend
 
-Example Expo app demonstrating full-stack Terreno usage with @terreno/api backend, @terreno/rtk for state management, and @terreno/ui for components. Deployed to Netlify on push to master.
+Example Expo app demonstrating full-stack Terreno usage with @terreno/api backend, @terreno/syncdb for data, session, and requests, and @terreno/ui for components. Deployed to Netlify on push to master.
 
 ## Features
 
-- **Authentication**: Email/password login with JWT tokens
-- **Redux State**: Redux Toolkit with persistence and auth management
-- **Type-safe API**: Generated RTK Query hooks from backend OpenAPI spec
-- **Todo CRUD**: Complete todo list with create, read, update, delete
+- **Authentication**: Better Auth email/password and social login; session state from `SessionProvider` / `useSession()` (`@terreno/syncdb/auth`)
+- **No Redux**: session lives in `SessionProvider`, synced data in syncdb, request results in the syncdb request client's cache, and preferences in `useStoredState`
+- **Type-safe API**: Generated request hooks (`store/apiSdk.ts`) for every non-synced route
+- **Todo CRUD**: Local-first todo list on syncdb (works offline, syncs over the socket)
 - **Profile Management**: User profile viewing and editing
 - **Appearance**: Persisted Light, Dark, or Follow system theme choice under Profile → Appearance. The splash stays up until that stored choice is ready, and the status bar follows the resolved scheme.
 - **Tab Navigation**: Expo Router with file-based routing
@@ -97,7 +97,8 @@ Edit `app.json` to add the `extra` field:
 | `bun run web` | Start web version |
 | `bun run ios` | Start iOS simulator |
 | `bun run android` | Start Android emulator |
-| `bun run sdk` | Generate API SDK from backend OpenAPI spec |
+| `bun run sdk` | Generate request hooks (`store/apiSdk.ts`) from the backend OpenAPI spec |
+| `bun run sync-sdk` | Generate synced collection hooks (`store/syncDbSdk.ts`) |
 | `bun run export` | Export static web build |
 | `bun run test` | Run tests |
 | `bun run lint` | Lint code |
@@ -107,25 +108,33 @@ Edit `app.json` to add the `extra` field:
 
 ```
 app/
-  _layout.tsx          # Root layout with Redux, auth, theme providers
-  login.tsx            # Login screen
+  _layout.tsx          # Root layout: SessionProvider, ApiClientProvider, theme, auth routing,
+                       #   syncdb start/stop, consents and announcements
+  login.tsx            # Login screen (Better Auth)
+  signup.tsx           # Sign-up screen (Better Auth)
+  forgotPassword.tsx   # Password reset request
+  resetPassword.tsx    # Password reset with a token
+  verifyEmail.tsx      # Email verification with a token
   (tabs)/              # Tab navigation group
-    _layout.tsx        # Tab layout (Todos, Profile)
-    index.tsx          # Todos list screen
+    _layout.tsx        # Tab layout
+    index.tsx          # Todos list screen (syncdb)
     profile.tsx        # User profile screen
 store/
-  index.ts             # Redux store configuration
-  appState.ts          # App-level state (language)
-  openApiSdk.ts        # Generated RTK Query hooks (DO NOT EDIT)
-  sdk.ts               # SDK exports with custom endpoints
-  errors.ts            # Error handling middleware
+  apiClient.ts         # Request client for non-synced routes; reports failures via errors.ts
+  apiSdk.ts            # Generated request hooks (DO NOT EDIT)
+  errors.ts            # Request client onError: logs failures, sends actionable ones to Sentry
+  syncdb.ts            # syncdb clients + the auth provider shared with the request client
+  syncDbSdk.ts         # Generated synced collection hooks (DO NOT EDIT)
+lib/
+  betterAuth.ts        # Better Auth client
+  logout.ts            # Explicit logout: wipe syncdb, then end the session
 components/            # Reusable React components
 contexts/
   ThemePreferenceContext.tsx # Persisted light/dark/system theme provider
 constants/             # App constants
 hooks/                 # Custom React hooks
+types/                 # Hand-written types layered on generated ones
 utils/                 # Utility functions
-openapi-config.ts      # SDK generation configuration
 ```
 
 ## SDK Generation Workflow
@@ -143,54 +152,60 @@ After making changes to the backend API:
    bun run sdk
    ```
 
-This fetches the OpenAPI spec from the backend and generates type-safe RTK Query hooks in `store/openApiSdk.ts`.
+This fetches the OpenAPI spec from the backend and writes typed request hooks for every
+non-synced route to `store/apiSdk.ts` (`useGetAuthMeQuery`, `usePatchAuthMeMutation`,
+`useLazy…Query`, …). Synced collections (todos, notifications) use `bun run sync-sdk` and
+syncdb's local-first hooks instead.
 
-**Important**: 
-- Never modify `store/openApiSdk.ts` manually - it's auto-generated
-- Custom endpoints go in `store/sdk.ts`
-- Always use generated hooks for API calls (never use `axios` or `fetch` directly)
+**Important**:
+- Never modify `store/apiSdk.ts` or `store/syncDbSdk.ts` manually - they are generated
+- A call the generated hook cannot express (for example per-call headers) wraps the
+  generated request builder with `useApiMutation` / `useApiQuery` from `@terreno/syncdb/react`
+  (see `components/TodoSummaryCard.tsx`)
+- Always use generated hooks or syncdb for API calls (never use `axios` or `fetch` directly)
 
 ### Example Usage
 
 ```typescript
-import {useGetTodosQuery, usePostTodosMutation} from "@/store/sdk";
+import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
 
 // In your component
-const {data, isLoading, error, refetch} = useGetTodosQuery({completed: false});
-const [createTodo, {isLoading: isCreating}] = usePostTodosMutation();
+const {data: profile, isLoading, error, refetch} = useGetAuthMeQuery(undefined, {skip: !userId});
+const [updateProfile, {isLoading: isUpdating}] = usePatchAuthMeMutation();
 
-// Create a todo
-const handleCreate = async () => {
+const handleRename = async (name: string): Promise<void> => {
   try {
-    await createTodo({title: "New todo", completed: false}).unwrap();
-  } catch (err) {
-    console.error("Failed to create todo", err);
+    await updateProfile({name}).unwrap();
+  } catch (error) {
+    console.error("Failed to update profile", error);
   }
 };
 ```
 
+Every hook shares one cache per request client. Mutations invalidate the tags their query
+hooks provide (`usePatchAuthMeMutation` refreshes every `useGetAuthMeQuery`), and the root
+layout calls `apiClient.reset()` whenever the signed-in user changes.
+
 ## Authentication Flow
 
-1. App loads → Redux state rehydrates from AsyncStorage
-2. No `userId` in auth state → navigate to login screen
-3. Login screen calls `useEmailLoginMutation`
-4. On success → tokens stored automatically → `setUserId` dispatched
-5. App navigates to tabs
-6. Logout → `logout` action dispatched → tokens cleared → back to login
+1. App loads → `SessionProvider` reads the Better Auth session (`useSession().isLoading` until it resolves)
+2. No `userId` → the root layout redirects to the login screen
+3. Login calls `betterAuthClient.signIn.email`, then `useSession().refresh()`
+4. With a `userId`, the root layout starts syncdb and navigates to the tabs
+5. Logout (Profile) calls `useSession().logout()`: the syncdb clients passed to `SessionProvider`
+   sign out and wipe this user's local data, then the Better Auth session ends → back to login
 
-## Redux Store
+## App State
 
-The store combines:
-- **auth**: JWT authentication (from `@terreno/rtk`)
-- **appState**: Language preferences
-- **openapi**: RTK Query API slice with all endpoints
-
-### Persistence
-
-Uses `redux-persist` with AsyncStorage:
-- Auth state persists across app restarts
-- Blacklisted slices: tracking, terreno-rtk, profiles
-- SSR-safe storage wrapper (checks `typeof window`)
+There is no Redux store:
+- **Session**: `SessionProvider` / `useSession()` from `@terreno/syncdb/auth`
+- **Synced data**: syncdb (`store/syncdb.ts`), persisted and encrypted on device
+- **Request results**: the request client cache (`store/apiClient.ts`), cleared on user change
+- **Preferences**: `useStoredState` from `@terreno/ui` (theme in `ThemePreferenceContext`,
+  Gemini API key on the Profile screen)
+- **Errors**: `store/errors.ts` is the request client's `onError`. It skips 401, 404, network
+  failures, known auth/permission messages, and `disableExternalErrorTracking` errors; it sends
+  everything else to Sentry with the method, URL, and summarized args.
 
 ## Development Tips
 
@@ -204,17 +219,9 @@ For iOS/Android devices on the same network:
 
 ### Debugging API Calls
 
-Enable debug logging in `app.json`:
-```json
-{
-  "expo": {
-    "extra": {
-      "AUTH_DEBUG": "true",
-      "WEBSOCKETS_DEBUG": "true"
-    }
-  }
-}
-```
+Every failed request through the request client logs `METHOD url rejected query|mutation:
+<title> (args: …)` at `console.debug` (see `store/errors.ts`). For synced collections, use the
+`/syncdb-debug` screen in dev builds, or the `terreno-mcp-local` SyncDB tools.
 
 ### Hot Reloading
 
@@ -251,7 +258,7 @@ bun run dev
 
 **Solutions**:
 - Ensure backend is running and accessible
-- Check `OPENAPI_URL` in `.env` or `openapi-config.ts`
+- Check `OPENAPI_URL` in `.env`
 - Verify backend's OpenAPI endpoint: `curl http://localhost:4000/openapi.json`
 
 ## Testing
@@ -312,9 +319,8 @@ produce a long native build.
 
 - [Terreno Documentation](../docs/README.md)
 - [@terreno/ui Reference](../docs/reference/ui.md)
-- [@terreno/rtk Reference](../docs/reference/rtk.md)
+- [@terreno/syncdb Reference](../docs/reference/syncdb.md) (request client, auth, codegen)
 - [Expo Router Documentation](https://docs.expo.dev/router/introduction/)
-- [RTK Query Documentation](https://redux-toolkit.js.org/rtk-query/overview)
 
 ## Support
 

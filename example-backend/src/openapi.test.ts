@@ -20,6 +20,48 @@ describe("OpenAPI spec generation", () => {
     expect(res.body.paths).toBeDefined();
   });
 
+  it("documents every non-synced route the frontends call", async (): Promise<void> => {
+    const server = supertest(app);
+    const res = await server.get("/openapi.json").expect(200);
+    const paths = res.body.paths;
+    const expected: [string, string][] = [
+      ["/auth/me", "get"],
+      ["/auth/me", "patch"],
+      ["/auth/sendVerification", "post"],
+      ["/auth/forgotPassword", "post"],
+      ["/auth/verifyEmail", "post"],
+      ["/auth/resetPassword", "post"],
+      ["/resetPassword", "post"],
+      ["/version-check", "get"],
+      ["/consents/pending", "get"],
+      ["/consents/respond", "post"],
+      ["/announcements/pending", "get"],
+      ["/announcements/feed", "get"],
+      ["/announcements/{id}/acknowledge", "post"],
+      ["/announcements/{id}/click", "post"],
+      ["/announcements/{id}/impression", "post"],
+      ["/feature-flags/flagConfiguration", "get"],
+      ["/files/upload", "post"],
+    ];
+    const missing = expected.filter(([path, method]) => !paths[path]?.[method]);
+    expect(missing).toEqual([]);
+
+    // The example User model, with roles/permissions from accessControl and no password fields.
+    const me = paths["/auth/me"].get.responses["200"].content["application/json"].schema;
+    expect(me.properties.data.properties.email.type).toBe("string");
+    expect(me.properties.data.properties.permissions.type).toBe("object");
+    expect(me.properties.data.properties.hash).toBeUndefined();
+    expect(me.properties.data.properties.salt).toBeUndefined();
+
+    const upload = paths["/files/upload"].post;
+    expect(upload.requestBody.content["multipart/form-data"].schema.properties.file).toEqual({
+      format: "binary",
+      required: true,
+      type: "string",
+    });
+    expect(paths["/auth/forgotPassword"].post.responses["202"]).toBeDefined();
+  });
+
   it("includes admin todo routes", async () => {
     const server = supertest(app);
     const res = await server.get("/openapi.json").expect(200);

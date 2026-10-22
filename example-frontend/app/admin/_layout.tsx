@@ -9,16 +9,16 @@ import {
   organizationFromPath,
   useOptionalOrgContext,
 } from "@terreno/admin-frontend";
-import {baseUrl, canOpenAdminPage, selectBetterAuthUserId} from "@terreno/rtk";
+import {canOpenAdminPage} from "@terreno/syncdb/app";
+import {useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 import {SyncDbProvider, useConflicts} from "@terreno/syncdb/react";
 import {Box, Spinner, Text, useStoredState, useTheme} from "@terreno/ui";
 import {Stack, ThemeProvider, usePathname} from "expo-router";
 import React, {useEffect, useMemo, useState} from "react";
-import {useSelector} from "react-redux";
 import {ADMIN_ROUTE} from "@/constants/adminConstants";
-import {getAdminAuthHeaders} from "@/store/betterAuthApi";
-import {useGetMeQuery} from "@/store/sdk";
-import {adminSyncDb, setAdminSyncOrganizationId} from "@/store/syncdb";
+import {useGetAuthMeQuery} from "@/store/apiSdk";
+import {adminSyncDb, getAdminAuthHeaders, setAdminSyncOrganizationId} from "@/store/syncdb";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
 import SyncLabScreen from "./SyncLabScreen";
 
@@ -71,8 +71,8 @@ const BindAdminSyncOrganization: React.FC = () => {
  * column (stack navigator). `admin:access` is the only permission that opens this page.
  */
 const AdminLayoutContent: React.FC = () => {
-  const userId = useSelector(selectBetterAuthUserId);
-  const {data: profile, isLoading} = useGetMeQuery(undefined, {skip: !userId});
+  const {userId} = useSession();
+  const {data: profile, isLoading} = useGetAuthMeQuery(undefined, {skip: !userId});
   const syncConflicts = useConflicts();
   const [isAdminSyncReady, setIsAdminSyncReady] = useState(false);
   const [adminSyncError, setAdminSyncError] = useState<string | undefined>();

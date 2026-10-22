@@ -1,3 +1,4 @@
+import {unwrapEnvelope} from "@terreno/syncdb/api";
 import {useCallback, useEffect, useRef, useState} from "react";
 import {useAdminContext} from "./adminContext";
 import {type AdminRequestArgs, adminRequest} from "./adminRequest";
@@ -68,23 +69,11 @@ export const useAdminRpc = (): AdminRpc => {
 };
 
 /**
- * Matches the `@terreno/rtk` base query response handler: list envelopes
- * (`{data, more, …}`) stay whole, and single-document envelopes (`{data}`) unwrap
- * to the document. Admin screens read this shape for model CRUD responses.
+ * List envelopes (`{data, more, …}`) stay whole, and single-document envelopes
+ * (`{data}`) unwrap to the document — the same rule as the syncdb API client.
+ * Admin screens read this shape for model CRUD responses.
  */
-export const unwrapAdminEnvelope = (result: unknown): unknown => {
-  if (result == null || typeof result !== "object" || Array.isArray(result)) {
-    return result;
-  }
-  if ("more" in result) {
-    return result;
-  }
-  const data = (result as {data?: unknown}).data;
-  if (data) {
-    return data;
-  }
-  return result;
-};
+export const unwrapAdminEnvelope = (result: unknown): unknown => unwrapEnvelope(result);
 
 export interface AdminRpcRefetchResult<T> {
   data?: T;
@@ -212,7 +201,7 @@ export const useAdminRpcQuery = <T = unknown>({
     };
   }, [rpc, skip, tagsKey]);
 
-  // Re-run the request on the same interval RTK `pollingInterval` uses.
+  // Re-run the request every `pollingInterval` milliseconds while mounted.
   useEffect(() => {
     if (!rpc || skip || !pollingInterval) {
       return;

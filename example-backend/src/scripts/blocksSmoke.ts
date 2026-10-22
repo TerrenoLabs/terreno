@@ -263,7 +263,11 @@ export const runBlocksSmoke = async ({
   } catch (error: unknown) {
     errors.push(error instanceof Error ? error.message : String(error));
   } finally {
-    await GptHistory.deleteOne({_id: history._id});
+    // GptHistory is synced, so Mongoose refuses hard deletes; the scratch history never
+    // reached a client, so remove it through the driver instead of leaving a tombstone.
+    await mongoose.connection
+      .collection<{_id: string}>(GptHistory.collection.collectionName)
+      .deleteOne({_id: history._id});
   }
 
   const foundSrcs = [...found];

@@ -76,7 +76,7 @@ JavaScript packages, GitHub Actions, and a few Expo JS-only names may update. Me
 | `github-actions` | `github-actions` at `/` |
 | `root` | `bun` at `/` (root catalog and root tools) |
 | `backend` | `bun` under api, ai, backends, … |
-| `frontend` | `bun` under ui, rtk, demo, apps, … |
+| `frontend` | `bun` under ui, syncdb, admin-frontend, demo, apps, … |
 
 Frontend ignores catalog-managed names so those fixes land once, in the root catalog. Root ignores fingerprint-skip names, so a security fix for a native/Expo package never opens a PR; handle it by hand in a release. `dependabot-auto-merge.yml` approves patch and minor Dependabot PRs and enables squash auto-merge, so those security PRs merge when required checks pass. A semver-major security PR (or a group containing one) gets no approval or auto-merge and waits for a human. When one fails because the fix needs code changes, fold the bump into the rolling PR ([Update dependencies](../how-to/update-dependencies.md)); never push to the `dependabot/*` branch.
 

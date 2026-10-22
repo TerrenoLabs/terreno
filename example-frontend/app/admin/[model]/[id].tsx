@@ -2,7 +2,7 @@ import {AdminModelForm} from "@terreno/admin-frontend";
 import {Box, Button, Card, Text, TextField, useToast} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
-import {useSetAdminUserPasswordMutation} from "@/store/sdk";
+import {useAdminUsersPasswordMutation} from "@/store/apiSdk";
 
 const ADMIN_BASE_URL = "/admin";
 const MIN_PASSWORD_LENGTH = 8;
@@ -15,7 +15,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
   const toast = useToast();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [setPasswordForUser, {isLoading}] = useSetAdminUserPasswordMutation();
+  const [setPasswordForUser, {isLoading}] = useAdminUsersPasswordMutation();
 
   const handleSetPassword = useCallback(async (): Promise<void> => {
     if (!userId) {
@@ -32,7 +32,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
     }
 
     try {
-      await setPasswordForUser({id: userId, password}).unwrap();
+      await setPasswordForUser({body: {password}, id: userId}).unwrap();
       setPassword("");
       setConfirmPassword("");
       toast.success("Password updated");

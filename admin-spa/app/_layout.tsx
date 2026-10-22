@@ -13,7 +13,7 @@ import React, {useEffect, useMemo, useState} from "react";
 import {AdminGate} from "../components/AdminGate";
 import {AppConfigGate, useAppConfig} from "../components/AppConfigGate";
 import {useAdminGateConfig} from "../components/adminGateConfig";
-import {StoreProvider, useAuth} from "../components/StoreProvider";
+import {StoreProvider, useAuthClient} from "../components/StoreProvider";
 import {
   createAdminSpaSyncDbConfig,
   resolveAdminSyncCollections,
@@ -96,7 +96,7 @@ const SyncEnabledAdminProvider: React.FC<{
 
 const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) => {
   const {appConfig} = useAppConfig();
-  const {authClient} = useAuth();
+  const authClient = useAuthClient();
   const pathname = usePathname();
   const routeOrganization = useMemo(() => organizationFromPath(pathname), [pathname]);
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
@@ -150,9 +150,10 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
 /**
  * Provider order:
  * - AppConfigGate (outermost): loads app-config.json before anything else, since the
- *   store + auth client are built from it.
- * - StoreProvider: builds the better-auth client + Redux store, mounts <Provider>.
- * - TerrenoProvider: theme/toast context (inside Provider so theme hooks work).
+ *   auth client is built from it.
+ * - StoreProvider: builds the Better Auth client and same-origin request client, mounts
+ *   SessionProvider (`useSession()`) and ApiClientProvider (`useApiQuery`).
+ * - TerrenoProvider: theme/toast context.
  * - AdminProvider (cookie-bound): the same-origin fetch client AdminGate uses for
  *   `/admin/config`. AdminProviderBridge nests a second AdminProvider with syncDb.
  * - AdminGate (innermost): session + admin authorization, gating the route Stack. It

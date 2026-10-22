@@ -6,21 +6,32 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
+    "@openfeature/core": "catalog:",
+    "jwt-decode": "^4.0.0",
     "luxon": "catalog:",
     "socket.io-client": "catalog:",
     "tinybase": "^9.5.1"
   },
   "description": "Local-first data layer with TinyBase, durable outbox, and delta sync — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
+    "@better-auth/expo": "^1.6.25",
     "@biomejs/biome": "catalog:",
+    "@modelcontextprotocol/client": "catalog:",
+    "@openfeature/react-sdk": "catalog:",
+    "@openfeature/web-sdk": "catalog:",
+    "@react-native-async-storage/async-storage": "catalog:",
     "@testing-library/react-native": "catalog:",
     "@types/bun": "catalog:",
     "@types/luxon": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "better-auth": "catalog:",
+    "expo-constants": "catalog:",
+    "expo-secure-store": "catalog:",
     "expo-sqlite": "catalog:",
     "fake-indexeddb": "^6.0.0",
     "react": "catalog:",
+    "react-native": "catalog:",
     "react-test-renderer": "catalog:",
     "socket.io": "catalog:",
     "typescript": "catalog:"
@@ -30,10 +41,34 @@
       "default": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./api": {
+      "default": "./dist/api/client.js",
+      "types": "./dist/api/client.d.ts"
+    },
+    "./app": {
+      "default": "./dist/app/app.js",
+      "types": "./dist/app/app.d.ts"
+    },
+    "./auth": {
+      "default": "./dist/auth/auth.js",
+      "types": "./dist/auth/auth.d.ts"
+    },
+    "./buildNumber": {
+      "default": "./dist/buildNumber.js",
+      "types": "./dist/buildNumber.d.ts"
+    },
     "./codegen": {
       "bun": "./src/codegen/generate.ts",
       "default": "./dist/codegen/generate.js",
       "types": "./dist/codegen/generate.d.ts"
+    },
+    "./config": {
+      "default": "./dist/config/baseUrl.js",
+      "types": "./dist/config/baseUrl.d.ts"
+    },
+    "./flags": {
+      "default": "./dist/flags/useFeatureFlags.js",
+      "types": "./dist/flags/useFeatureFlags.d.ts"
     },
     "./react": {
       "default": "./dist/react/index.js",
@@ -60,14 +95,54 @@
   "main": "dist/index.js",
   "name": "@terreno/syncdb",
   "peerDependencies": {
+    "@better-auth/expo": "^1.6.25",
+    "@modelcontextprotocol/client": "catalog:",
+    "@openfeature/react-sdk": "catalog:",
+    "@openfeature/web-sdk": "catalog:",
+    "@react-native-async-storage/async-storage": "catalog:",
+    "better-auth": "catalog:",
+    "expo-constants": "*",
+    "expo-network": "catalog:",
+    "expo-secure-store": "catalog:",
     "expo-sqlite": "*",
-    "react": "catalog:"
+    "react": "catalog:",
+    "react-native": "catalog:"
   },
   "peerDependenciesMeta": {
+    "@better-auth/expo": {
+      "optional": true
+    },
+    "@modelcontextprotocol/client": {
+      "optional": true
+    },
+    "@openfeature/react-sdk": {
+      "optional": true
+    },
+    "@openfeature/web-sdk": {
+      "optional": true
+    },
+    "@react-native-async-storage/async-storage": {
+      "optional": true
+    },
+    "better-auth": {
+      "optional": true
+    },
+    "expo-constants": {
+      "optional": true
+    },
+    "expo-network": {
+      "optional": true
+    },
+    "expo-secure-store": {
+      "optional": true
+    },
     "expo-sqlite": {
       "optional": true
     },
     "react": {
+      "optional": true
+    },
+    "react-native": {
       "optional": true
     }
   },

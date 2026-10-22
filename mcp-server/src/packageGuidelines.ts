@@ -3,14 +3,7 @@ import {join} from "node:path";
 
 import {getDocsRoot} from "./docsRoot.js";
 
-const GUIDELINE_PACKAGE_IDS = [
-  "api",
-  "ui",
-  "rtk",
-  "syncdb",
-  "admin-backend",
-  "admin-frontend",
-] as const;
+const GUIDELINE_PACKAGE_IDS = ["api", "ui", "syncdb", "admin-backend", "admin-frontend"] as const;
 
 export type GuidelinePackageId = (typeof GUIDELINE_PACKAGE_IDS)[number];
 
@@ -22,7 +15,6 @@ const normalizeGuidelinePackageId = (pkg: string): GuidelinePackageId | null => 
   if (
     n === "api" ||
     n === "ui" ||
-    n === "rtk" ||
     n === "syncdb" ||
     n === "admin-backend" ||
     n === "admin-frontend"
@@ -33,7 +25,8 @@ const normalizeGuidelinePackageId = (pkg: string): GuidelinePackageId | null => 
 };
 
 /**
- * Resolves which bundled guideline packages to include. Unknown ids are dropped.
+ * Resolves which bundled guideline packages to include. Unknown ids (including the removed
+ * `rtk` package) are dropped.
  * An empty array after filtering falls back to all known packages.
  */
 export const resolveBootstrapGuidelinePackages = (requested?: string[]): GuidelinePackageId[] => {
@@ -82,6 +75,4 @@ export const composePackageGuidelinesForRules = (
 export const filterGuidelineIdsForRootRules = (
   ids: readonly GuidelinePackageId[]
 ): GuidelinePackageId[] =>
-  ids.filter(
-    (id): id is GuidelinePackageId => id === "api" || id === "ui" || id === "rtk" || id === "syncdb"
-  );
+  ids.filter((id): id is GuidelinePackageId => id === "api" || id === "ui" || id === "syncdb");

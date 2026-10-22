@@ -2,18 +2,21 @@
 name: terreno-data-fetching
 description: >-
   Use when implementing or debugging ANY network request, API call, or data
-  fetching in a Terreno app. Covers syncdb collection CRUD, RTK Query generated
-  hooks for non-synced routes, admin's host-bound fetch client, auth, caching,
-  and SDK regeneration. Replaces direct fetch, axios, React Query, and SWR in
+  fetching in a Terreno app. Covers syncdb collection CRUD, generated request
+  hooks (store/apiSdk.ts) for non-synced routes, session auth, socket pushes,
+  feature flags, admin's host-bound fetch client, and SDK regeneration. Replaces direct fetch, axios, React Query, and SWR in
   application code.
   Lifecycle composition: Grow for data-flow shape, Pick for implementation, Roast
   for independent network/cache behavior proof.
 ---
 # Terreno Data Fetching
 
-**You MUST use this skill for ANY networking work in Terreno apps.** Use syncdb
-for synced collection CRUD and generated RTK Query hooks for non-synced routes.
+**You MUST use this skill for ANY networking work in Terreno apps.** Everything goes
+through `@terreno/syncdb`: `useQuery` / `useMutate` for synced collection CRUD, and
+generated hooks on the `@terreno/syncdb/api` request client for every other route.
 Never call `axios`, raw `fetch`, React Query, or SWR from application screens.
+`@terreno/rtk` and Redux were removed in Terreno 58; upgrade old code with
+`docs/how-to/migrate-rtk-to-syncdb.md`.
 
 **Related skills:** `generate-sdk` (regenerate hooks after backend changes), `terreno-backend-api` (create backend routes), `building-terreno-apps` (screen integration).
 
@@ -28,9 +31,9 @@ Never call `axios`, raw `fetch`, React Query, or SWR from application screens.
 
 ```
 references/
-  auth-and-tokens.md     generateAuthSlice, login/logout, token refresh
-  realtime.md             Sockets, feature flags, server status
-  sdk-customization.md   injectEndpoints, cache tags, hand-maintained sdk.ts
+  auth-and-tokens.md     SessionProvider/useSession, login/logout, token refresh, JWT
+  realtime.md            Socket events, feature flags, sync status
+  sdk-customization.md   Generated apiSdk.ts, ad-hoc useApiQuery/useApiMutation, cache tags
 ```
 
 ## When to Use
@@ -44,15 +47,19 @@ references/
 
 ## Core Rules
 
-1. **Use syncdb hooks** (`useQuery`, `useEntity`, `useMutate`) for synced collection CRUD.
-2. **Use generated hooks** from `store/openApiSdk.ts` (or `store/sdk.ts`) for non-synced routes.
-3. **Never edit `openApiSdk.ts` manually** — regenerate with `generate-sdk`.
-4. **Never use `axios` or raw `fetch`** in app code. Framework-owned admin
-   requests are the exception: `@terreno/admin-frontend` binds `adminRequest` from
-   `AdminProvider` `credentials` / `getAuthHeaders` / `apiOrigin`.
-5. **Admin does not use RTK.** String-`_id` models with `adminBroadcast` use
+1. **Use syncdb hooks** (`useQuery`, `useEntity`, `useWindowQuery`, `useMutate`) for synced collection CRUD.
+2. **Use generated hooks** from `store/apiSdk.ts` (`terreno-syncdb-codegen --api-out`) for every
+   non-synced route: `/auth/me`, modelRouter actions, AI, consents, announcements.
+3. **Never edit `store/apiSdk.ts` or `store/syncDbSdk.ts`** — regenerate with `generate-sdk`.
+4. **Ad-hoc routes not in OpenAPI** use `useApiQuery` / `useLazyApiQuery` / `useApiMutation`
+   from `@terreno/syncdb/react`. Prefer documenting the route in OpenAPI and regenerating.
+5. **Never use `axios` or raw `fetch`** in app code. Exceptions: SSE streams (`/gpt/prompt`)
+   authenticated with `authProvider.getToken()`, and framework-owned admin requests
+   (`@terreno/admin-frontend` binds `adminRequest` from `AdminProvider` `credentials` /
+   `getAuthHeaders` / `apiOrigin`).
+6. **Admin uses its own fetch client.** String-`_id` models with `adminBroadcast` use
    windowed syncdb; ObjectId/API-only CRUD uses `useAdminModelApi`; admin RPC uses
-   `useAdminRpc`. Never pass an `api` prop to admin components (removed in Terreno 58).
+   `useAdminRpc`. Admin components take no `api` prop (removed in Terreno 58).
 
 ## Quick Start
 
@@ -71,12 +78,13 @@ const TodosScreen: React.FC = () => {
 ### Synced collection write
 
 ```tsx
+import {generateMutationId} from "@terreno/syncdb";
 import {useMutate} from "@terreno/syncdb/react";
 
 const {create, update} = useMutate("todos");
 
 const handleCreate = useCallback((): void => {
-  create({data: {title: "New todo", completed: false}});
+  create({data: {_id: generateMutationId(), title: "New todo", completed: false}});
 }, [create]);
 
 const handleToggle = useCallback((id: string, completed: boolean): void => {
@@ -84,46 +92,47 @@ const handleToggle = useCallback((id: string, completed: boolean): void => {
 }, [update]);
 ```
 
+### Non-synced route
+
+```tsx
+import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
+
+const {data: me, isLoading} = useGetAuthMeQuery(undefined, {skip: !userId});
+const [updateMe, {isLoading: isSaving}] = usePatchAuthMeMutation();
+await updateMe({name}).unwrap();
+```
+
 ### Auth
 
 ```tsx
-import {generateAuthSlice} from "@terreno/rtk";
-import {terrenoApi} from "@/store/sdk";
+import {useSession} from "@terreno/syncdb/auth";
 
-const {authReducer, logout, middleware} = generateAuthSlice(terrenoApi);
-
-// In a component:
-import {useEmailLoginMutation} from "@/store/sdk";
-import {useSelectCurrentUserId} from "@terreno/rtk";
-
-const [login] = useEmailLoginMutation();
-const userId = useSelectCurrentUserId();
+const {userId, isAuthenticated, isLoading, logout} = useSession();
 ```
 
 See `./references/auth-and-tokens.md` for the full auth flow.
 
-## Redux Store Setup
+## Client Setup
+
+One `authProvider` feeds the sync client and the request client, so both send the same
+token and refresh on a 401 the same way. Reference: `example-frontend/store/syncdb.ts`,
+`store/apiClient.ts`, `app/_layout.tsx`.
 
 ```tsx
-import {configureStore} from "@reduxjs/toolkit";
-import {generateAuthSlice} from "@terreno/rtk";
-import {terrenoApi} from "./sdk";
+// store/syncdb.ts
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient));
+export const syncDb = createSyncDb({authProvider, baseUrl, collections: [...SYNC_COLLECTIONS], name: "myapp", wipeOnSignOut: true});
 
-const authSlice = generateAuthSlice(terrenoApi);
+// store/apiClient.ts
+export const apiClient = createApiClient({authProvider, baseUrl, credentials: "include", headers: appHeaders});
 
-const store = configureStore({
-  reducer: {
-    auth: authSlice.authReducer,
-    [terrenoApi.reducerPath]: terrenoApi.reducer,
-  },
-  middleware: (getDefault) =>
-    getDefault().concat(terrenoApi.middleware, ...authSlice.middleware),
-});
-
-export const {logout} = authSlice;
+// app/_layout.tsx — no Redux store
+<SessionProvider authClient={betterAuthClient} syncDbs={[syncDb]} onLogout={() => apiClient.reset()}>
+  <ApiClientProvider client={apiClient}>
+    <SyncDbProvider client={syncDb}>{children}</SyncDbProvider>
+  </ApiClientProvider>
+</SessionProvider>
 ```
-
-See `example-frontend/store/index.ts` for persist and Sentry integration.
 
 ## Environment Variables
 
@@ -133,7 +142,7 @@ See `example-frontend/store/index.ts` for persist and Sentry integration.
 | `EXPO_PUBLIC_DEV_API_PORT` | Dev API port when using Expo host URI (default `4000`) |
 | `expo.extra.BASE_URL` | Production/staging API URL in `app.json` |
 
-Base URL resolution priority (from `@terreno/rtk`):
+Base URL resolution priority (`baseUrl` from `@terreno/syncdb/config`):
 
 1. `expo.extra.BASE_URL`
 2. `EXPO_PUBLIC_API_URL`
@@ -144,13 +153,13 @@ Never put server secrets in `EXPO_PUBLIC_*` variables.
 
 ## Error Handling
 
-RTK Query exposes errors on the hook result:
+Request hooks expose `ApiError` (`@terreno/syncdb/api`) on the result:
 
 ```tsx
-const {error, isError} = useGetMeQuery();
+const {error, isError} = useGetAuthMeQuery();
 
 if (isError) {
-  // error is FetchBaseQueryError | SerializedError
+  // error.status, error.data.title, error.data.detail; status 0 = network error or timeout
   console.error("Query failed", error);
 }
 ```
@@ -160,27 +169,29 @@ For mutations, use `.unwrap()`:
 ```tsx
 try {
   await updateMe({name}).unwrap();
-} catch (err) {
-  // Handle APIError-shaped responses from @terreno/api
-  console.error("Mutation failed", err);
+} catch (error) {
+  if (isApiError(error)) {
+    console.error("Mutation failed", error.data.title);
+  }
 }
 ```
 
-Use `isNetworkFetchError` from `@terreno/rtk` to detect connectivity issues in error UI.
+Report every request failure once with `createApiClient({onError})` (skip Sentry when
+`error.data.disableExternalErrorTracking` is `true`). Synced writes never throw: rejected
+writes surface in `useConflicts()` and `useSyncStatus().failedCount`.
 
 ## SDK Regeneration
 
-After a non-synced backend API change, run the `generate-sdk` skill. Synced
-collection CRUD does not belong in the OpenAPI SDK.
+After a backend API change, run the `generate-sdk` skill.
 
 ```bash
 # Backend running on :4000, then:
-cd example-frontend && bun run sdk
+cd example-frontend && bun run sdk        # store/apiSdk.ts (non-synced routes)
+cd example-frontend && bun run sync-sdk   # store/syncDbSdk.ts (synced collections)
 ```
 
-Triggers: custom routes, non-synced `modelRouter` routes, and OpenAPI builder
-edits. Regenerate syncdb collection types/hooks with its codegen when a synced
-schema changes.
+Triggers: custom routes, modelRouter actions, non-synced `modelRouter` routes, and OpenAPI
+edits (`sdk`); synced schema or `sync` config changes (`sync-sdk`).
 
 ## Decision Tree
 
@@ -190,7 +201,7 @@ Need data in a Terreno app?
   |   \-- @terreno/syncdb hooks
   |
   |-- Non-synced API route?
-  |   \-- useGet*/usePost* from generated SDK
+  |   \-- useGet*/usePost* from store/apiSdk.ts
   |
   |-- Built-in admin?
   |   |-- String id + adminBroadcast -> windowed syncdb
@@ -200,12 +211,12 @@ Need data in a Terreno app?
   |-- Login/logout?
   |   \-- references/auth-and-tokens.md
   |
-  |-- Realtime updates?
-  |   \-- references/realtime.md (useSocketConnection)
+  |-- Server push / feature flags?
+  |   \-- references/realtime.md (useSocketEvent, @terreno/syncdb/flags)
   |
   |-- Custom endpoint not in SDK?
   |   |-- Backend exists? -> generate-sdk first
-  |   \-- App-only extension? -> references/sdk-customization.md
+  |   \-- Route outside OpenAPI? -> references/sdk-customization.md (useApiQuery)
   |
   |-- Backend doesn't exist?
   |   \-- terreno-backend-api, then generate-sdk
@@ -237,10 +248,10 @@ fetch(url, {headers: {Authorization: `Bearer ${token}`}});
 **Right: a generated hook handles auth for a non-synced route**
 
 ```tsx
-const {data: profile} = useGetMeQuery();
+const {data: profile} = useGetAuthMeQuery();
 ```
 
-**Wrong: editing openApiSdk.ts**
+**Wrong: editing store/apiSdk.ts**
 
 ```tsx
 // Adding a new endpoint by hand
@@ -269,8 +280,9 @@ throw new APIError({status: 422, title: "Not a member"});
 ## Example Invocations
 
 - "How do I fetch todos?" → `useQuery("todos")` from `@terreno/syncdb/react`
-- "How do I handle login?" → `useEmailLoginMutation` + `generateAuthSlice`
-- "Should I use React Query?" → No — syncdb for collections, generated RTK hooks for non-synced routes
-- "API calls return 401" → Check token refresh; see auth-and-tokens.md
+- "How do I handle login?" → `betterAuthClient.signIn.email` then `useSession().refresh()`
+- "Should I use React Query?" → No — syncdb for collections, generated `store/apiSdk.ts` hooks for non-synced routes
+- "API calls return 401" → Check the shared `authProvider`; see auth-and-tokens.md
+- "Old code imports `@terreno/rtk`" → `docs/how-to/migrate-rtk-to-syncdb.md`
 - "Hooks are missing after backend change" → Run `generate-sdk` skill
 - "How do I add a custom endpoint?" → Backend route + OpenAPI, then regenerate the SDK

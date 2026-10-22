@@ -2,13 +2,12 @@ import {type OrganizationSummary, OrgDirectoryScreen, useOrgContext} from "@terr
 import {router} from "expo-router";
 import React, {useCallback} from "react";
 import {AdminSpaShell} from "../../components/AdminSpaShell";
-import {useGetAdminSpaProfileQuery} from "../../store/sdk";
+import {isOrganizationOperatorProfile, useAdminSpaProfile} from "../../components/adminSpaProfile";
 
 const OrgDirectoryRoute: React.FC = () => {
-  const {data: profile} = useGetAdminSpaProfileQuery();
+  const {data: profile} = useAdminSpaProfile();
   const {selectOrganization} = useOrgContext();
-  const roles = profile?.roles ?? [];
-  const isOperator = roles.includes("operator") || roles.includes("superadmin");
+  const isOperator = isOrganizationOperatorProfile(profile);
   const handleEnter = useCallback(
     (organization: OrganizationSummary): void => {
       selectOrganization(organization);

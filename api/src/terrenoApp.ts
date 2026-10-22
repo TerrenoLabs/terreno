@@ -444,7 +444,17 @@ export class TerrenoApp {
       options.authOptions = {};
     }
     const authOptions = options.authOptions;
-    addAuthRoutes(app, options.userModel, authOptions);
+    // The OpenAPI generator walks the router stack on each /openapi.json request, so the
+    // instance can exist before it is mounted below. Auth routes need it to document themselves.
+    const oapi = openapi({
+      info: {
+        description: "Generated docs from an Express api",
+        title: "Express Application",
+        version: "1.0.0",
+      },
+      openapi: "3.0.0",
+    });
+    addAuthRoutes(app, options.userModel, authOptions, oapi);
 
     if (options.logRequests !== false) {
       app.use(logRequests);
@@ -480,14 +490,6 @@ export class TerrenoApp {
     app.use(openApiCompatMiddleware);
     app.use(openApiEtagMiddleware);
     app.use(jsonResponseRequestIdMiddleware);
-    const oapi = openapi({
-      info: {
-        description: "Generated docs from an Express api",
-        title: "Express Application",
-        version: "1.0.0",
-      },
-      openapi: "3.0.0",
-    });
     app.use(oapi);
 
     if (process.env.ENABLE_SWAGGER === "true") {
@@ -550,7 +552,7 @@ export class TerrenoApp {
 
     // /auth/me must be registered after plugins so that session middleware
     // (e.g. Better Auth) has a chance to populate req.user first.
-    addMeRoutes(app, options.userModel, options.authOptions, options.accessControl);
+    addMeRoutes(app, options.userModel, options.authOptions, options.accessControl, oapi);
 
     Sentry.setupExpressErrorHandler(app);
 

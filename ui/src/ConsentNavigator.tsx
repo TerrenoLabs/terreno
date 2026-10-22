@@ -3,6 +3,7 @@ import React, {useState} from "react";
 import {Box} from "./Box";
 import {Button} from "./Button";
 import {ConsentFormScreen} from "./ConsentFormScreen";
+import type {TerrenoRequestClient} from "./requestClient";
 import {Spinner} from "./Spinner";
 import {Text} from "./Text";
 import {detectLocale, useConsentForms} from "./useConsentForms";
@@ -11,10 +12,11 @@ import {useSubmitConsent} from "./useSubmitConsent";
 
 interface ConsentNavigatorProps {
   /**
-   * Consumer RTK Query API. Typed as unknown because RTK's injectEndpoints return
-   * type is not structurally compatible with the consent hook stubs until runtime.
+   * Request client for the consent routes, usually the app's `@terreno/syncdb/api` client
+   * (`createApiClient(...)`). Any object with a matching `request` method works.
    */
-  api: unknown;
+  client: TerrenoRequestClient;
+  /** Path prefixed to the consent routes (for example `/api`); defaults to none. */
   baseUrl?: string;
   children: React.ReactNode;
   extraScreens?: React.ReactNode[];
@@ -23,7 +25,7 @@ interface ConsentNavigatorProps {
 }
 
 export const ConsentNavigator: React.FC<ConsentNavigatorProps> = ({
-  api,
+  client,
   baseUrl,
   children,
   extraScreens,
@@ -32,14 +34,8 @@ export const ConsentNavigator: React.FC<ConsentNavigatorProps> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [extraScreenIndex, setExtraScreenIndex] = useState(0);
-  const {forms, isLoading, error, refetch} = useConsentForms(
-    api as Parameters<typeof useConsentForms>[0],
-    baseUrl
-  );
-  const {submit, isSubmitting} = useSubmitConsent(
-    api as Parameters<typeof useSubmitConsent>[0],
-    baseUrl
-  );
+  const {forms, isLoading, error, refetch} = useConsentForms(client, baseUrl);
+  const {submit, isSubmitting} = useSubmitConsent(client, baseUrl);
   const locale = detectLocale();
   const validExtraScreens = extraScreens ?? [];
 
@@ -122,7 +118,7 @@ export const ConsentNavigator: React.FC<ConsentNavigatorProps> = ({
     try {
       await submit(body);
       // Always refetch and reset so we pick up the updated pending list.
-      // Advancing currentIndex is racy because invalidatesTags shrinks
+      // Advancing currentIndex is racy because the submit invalidation shrinks
       // the forms array in the background.
       setCurrentIndex(0);
       await refetch();

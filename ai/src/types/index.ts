@@ -154,7 +154,9 @@ interface GptHistoryPendingAskState {
 /** The ask a history is waiting on. At most one per history. */
 export type GptHistoryPendingAsk = Ask & GptHistoryPendingAskState;
 
-export interface GptHistoryDocument extends mongoose.Document<mongoose.Types.ObjectId> {
+/** Synced through @terreno/syncdb, so `_id` is a String (UUID for new rows, ObjectId hex for migrated rows). */
+export interface GptHistoryDocument extends mongoose.Document<string> {
+  _id: string;
   created: Date;
   deleted: boolean;
   pendingAsk?: GptHistoryPendingAsk;
@@ -515,7 +517,8 @@ export interface AIDatasetDocument extends mongoose.Document<mongoose.Types.Obje
   created: Date;
   deleted: boolean;
   expiresAt?: Date;
-  historyId: mongoose.Types.ObjectId;
+  /** The GptHistory String `_id`. */
+  historyId: string;
   rowCount: number;
   rows: AIDatasetCell[][];
   updated: Date;

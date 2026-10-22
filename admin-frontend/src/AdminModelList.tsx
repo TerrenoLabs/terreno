@@ -115,7 +115,6 @@ const CustomScreenCard: React.FC<{screen: AdminCustomScreen; onPress: () => void
  * @example
  * ```typescript
  * import {AdminModelList} from "@terreno/admin-frontend";
- * import {} from "@/store/openApiSdk";
  *
  * function AdminIndexScreen() {
  *   return <AdminModelList baseUrl="/admin" />;

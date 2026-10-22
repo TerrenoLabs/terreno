@@ -1,7 +1,7 @@
 # Set up Terreno MCP
 
 Configure both Terreno servers: the hosted server supplies documentation and generators; the local
-stdio server inspects the app, database, logs, Metro, and Redux state.
+stdio server inspects the app, database, logs, Metro, and SyncDB state.
 
 Install Bun 1.4 or newer to enable the local server's built-in WebView browser automation.
 

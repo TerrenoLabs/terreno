@@ -1,7 +1,9 @@
+import {API_ERROR_CODES, apiFetch, DEFAULT_API_TIMEOUT_MS, isApiError} from "@terreno/syncdb/api";
+
 import type {AdminGetAuthHeaders} from "./types";
 
 /** Default AbortController timeout for {@link adminRequest}. */
-export const DEFAULT_ADMIN_REQUEST_TIMEOUT_MS = 30_000;
+export const DEFAULT_ADMIN_REQUEST_TIMEOUT_MS = DEFAULT_API_TIMEOUT_MS;
 
 export interface AdminRequestArgs {
   url: string;
@@ -38,123 +40,33 @@ export class AdminAPIError extends Error {
   }
 }
 
-const isFormData = (value: unknown): value is FormData => {
-  return typeof FormData !== "undefined" && value instanceof FormData;
-};
-
-const isJsonBody = (value: unknown): value is Record<string, unknown> => {
-  if (value == null || typeof value !== "object") {
-    return false;
-  }
-  if (isFormData(value)) {
-    return false;
-  }
-  if (typeof Blob !== "undefined" && value instanceof Blob) {
-    return false;
-  }
-  if (typeof ArrayBuffer !== "undefined" && value instanceof ArrayBuffer) {
-    return false;
-  }
-  return true;
-};
-
-const readErrorPayload = async (response: Response): Promise<{detail?: string; title: string}> => {
-  const contentType = response.headers.get("Content-Type") ?? "";
-  if (contentType.includes("application/json")) {
-    try {
-      const parsed = (await response.json()) as {detail?: string; title?: string};
-      if (typeof parsed.title === "string" && parsed.title.length > 0) {
-        return {detail: parsed.detail, title: parsed.title};
-      }
-    } catch {
-      // Fall through to status text.
-    }
-  }
-  const fallback = response.statusText.trim();
-  return {title: fallback.length > 0 ? fallback : `Request failed (${response.status})`};
-};
-
 /**
  * Native `fetch` helper for every admin request (model CRUD, config, scripts, roles, …).
- * Not axios and not RTK Query. Hosts inject auth via {@link bindAdminRequest} /
- * `AdminProvider` `{getAuthHeaders, credentials, apiOrigin}`.
+ * Delegates to `@terreno/syncdb/api`'s `apiFetch` (timeout, body encoding, JSON:API
+ * error parsing) and maps its errors to {@link AdminAPIError}. Hosts inject auth via
+ * {@link bindAdminRequest} / `AdminProvider` `{getAuthHeaders, credentials, apiOrigin}`.
  */
 export const adminRequest = async <T = unknown>({
-  body,
-  credentials,
-  headers,
-  method = "GET",
-  parseAs,
-  signal,
   timeoutMs = DEFAULT_ADMIN_REQUEST_TIMEOUT_MS,
-  url,
+  ...args
 }: AdminRequestArgs): Promise<T> => {
-  const controller = new AbortController();
-  const onAbort = (): void => {
-    controller.abort();
-  };
-  if (signal) {
-    if (signal.aborted) {
-      controller.abort();
-    } else {
-      signal.addEventListener("abort", onAbort, {once: true});
-    }
-  }
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-
-  const requestHeaders = new Headers(headers);
-  let requestBody: BodyInit | undefined;
-  if (isFormData(body)) {
-    requestBody = body;
-  } else if (isJsonBody(body)) {
-    requestBody = JSON.stringify(body);
-    if (!requestHeaders.has("Content-Type")) {
-      requestHeaders.set("Content-Type", "application/json");
-    }
-  } else if (body != null) {
-    requestBody = body as BodyInit;
-  }
-
   try {
-    const response = await globalThis.fetch(url, {
-      body: requestBody,
-      credentials,
-      headers: requestHeaders,
-      method,
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      const payload = await readErrorPayload(response);
-      throw new AdminAPIError({...payload, status: response.status});
-    }
-    if (response.status === 204) {
-      return undefined as T;
-    }
-    if (parseAs === "blob") {
-      return (await response.blob()) as T;
-    }
-    if (parseAs === "text") {
-      return (await response.text()) as T;
-    }
-    const contentType = response.headers.get("Content-Type") ?? "";
-    if (contentType.includes("application/json")) {
-      return (await response.json()) as T;
-    }
-    return (await response.text()) as T;
+    const {response, result} = await apiFetch({...args, timeoutMs});
+    // Admin callers have always received `undefined` for 204 No Content.
+    return (response.status === 204 ? undefined : result) as T;
   } catch (error) {
-    if (error instanceof AdminAPIError) {
-      throw error;
+    // Raw fetch failures (offline, CORS) keep surfacing as the original error.
+    if (isApiError(error) && error.data.code === API_ERROR_CODES.network && error.cause) {
+      throw error.cause;
     }
-    const name = error instanceof Error ? error.name : "";
-    if (name === "AbortError" || controller.signal.aborted) {
-      throw new AdminAPIError({status: 0, title: "Request timed out"});
+    if (isApiError(error)) {
+      throw new AdminAPIError({
+        detail: error.data.detail,
+        status: error.status,
+        title: error.data.title,
+      });
     }
     throw error;
-  } finally {
-    clearTimeout(timeoutId);
-    signal?.removeEventListener("abort", onAbort);
   }
 };
 

@@ -1,6 +1,8 @@
 import {beforeEach, describe, it, mock} from "bun:test";
+import {createApiClient} from "@terreno/syncdb/api";
 import type {NotificationInboxItem} from "@terreno/ui";
 import {assert} from "chai";
+import {useRouter} from "expo-router";
 import React, {type ReactNode} from "react";
 import {act, create, type ReactTestInstance, type ReactTestRenderer} from "react-test-renderer";
 
@@ -56,7 +58,6 @@ const createPreference = mock((_mutation: MockMutation): void => {});
 const reconcile = mock(async (): Promise<void> => {});
 const routerBack = mock((): void => {});
 const routerPush = mock((_href: string): void => {});
-const sendTestNotification = mock(() => ({unwrap: async (): Promise<void> => {}}));
 const syncMutate = mock((_mutation: MockMutation): void => {});
 const updatePreference = mock((_mutation: MockMutation): void => {});
 
@@ -65,11 +66,42 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
+interface RecordedRequest {
+  body: unknown;
+  method: string;
+  url: string;
+}
+
+// The generated mutation hooks send through the real request client; this fake fetch
+// records each request and answers like the dev notify endpoint.
+const requests: RecordedRequest[] = [];
+const fakeFetch = async (input: string, init?: RequestInit): Promise<Response> => {
+  requests.push({
+    body: typeof init?.body === "string" ? JSON.parse(init.body) : init?.body,
+    method: init?.method ?? "GET",
+    url: input,
+  });
+  return new Response(JSON.stringify({data: {notificationId: "notification-new"}}), {
+    headers: {"Content-Type": "application/json"},
+    status: 200,
+  });
+};
+const apiClient = createApiClient({baseUrl: "http://localhost:4000", fetchImpl: fakeFetch});
+
+// Spread the real module so ApiClientProvider and the request hooks stay real; only the
+// local-first reads come from the in-memory rows above.
+const actualSyncDbReact = await import("@terreno/syncdb/react");
+const {ApiClientProvider} = actualSyncDbReact;
+// Bun's mock.module is process-global: spread the real store so sibling suites that import
+// its other exports (documents → getAdminAuthHeaders) still find them.
+const actualStoreSyncDb = await import("@/store/syncdb");
+
 mock.module("@terreno/syncdb", () => ({
   generateMutationId: (): string => "generated-preference-id",
 }));
 
 mock.module("@terreno/syncdb/react", () => ({
+  ...actualSyncDbReact,
   useQuery: (
     collection: string,
     options?: {
@@ -114,29 +146,18 @@ mock.module("@terreno/ui", () => ({
   useStoredState: () => ["", async (): Promise<void> => undefined, false],
 }));
 
-mock.module("expo-router", () => ({
-  // Include useLocalSearchParams so this incomplete mock does not break sibling
-  // suites that import it from "expo-router" under Bun's process-global mock.module.
-  useLocalSearchParams: () => ({}),
-  useRouter: () => ({back: routerBack, push: routerPush}),
-}));
+// Drive the preload's expo-router mock instead of replacing the module: Bun's
+// mock.module is process-global and sibling suites rely on the shared mock functions.
+(useRouter as unknown as {mockImplementation: (impl: () => unknown) => void}).mockImplementation(
+  () => ({back: routerBack, push: routerPush})
+);
 
 mock.module("@/hooks/useSyncDbReady", () => ({
   useSyncDbReady: (): boolean => isSyncDbReady,
 }));
 
-mock.module("@/store/sdk", () => ({
-  // Sibling suites import terrenoApi from this module under Bun's process-global
-  // mock.module; keep a stub so that named export stays resolvable.
-  terrenoApi: {reducerPath: "notification-center-test-api"},
-  usePostNotificationsDevNotifyMutation: () => [sendTestNotification, {isLoading: false}],
-  useSummarizeExampleTextMutation: () => [
-    () => ({unwrap: async (): Promise<{output: string}> => ({output: ""})}),
-    {isLoading: false},
-  ],
-}));
-
 mock.module("@/store/syncdb", () => ({
+  ...actualStoreSyncDb,
   syncDb: {mutate: syncMutate, reconcile},
 }));
 
@@ -150,8 +171,22 @@ const {NotificationCenter, NotificationCenterBell} = await import("./Notificatio
 const {default: NotificationSettingsScreen} = await import("../app/settings/notifications");
 const {default: AllNotificationsScreen} = await import("../app/notifications");
 
+// The UI stand-ins render host elements named after the component, so match on the
+// host type string.
 const findHost = (renderer: ReactTestRenderer, type: string): ReactTestInstance =>
-  renderer.root.findByType(type);
+  renderer.root.find((node) => node.type === type);
+
+const findHosts = (renderer: ReactTestRenderer, type: string): ReactTestInstance[] =>
+  renderer.root.findAll((node) => node.type === type);
+
+const renderNotificationCenter = (): ReactTestRenderer =>
+  create(
+    <ApiClientProvider client={apiClient}>
+      <NotificationCenter>
+        <NotificationCenterBell />
+      </NotificationCenter>
+    </ApiClientProvider>
+  );
 
 describe("NotificationCenter", () => {
   beforeEach(() => {
@@ -177,33 +212,29 @@ describe("NotificationCenter", () => {
     createPreference.mockClear();
     reconcile.mockClear();
     routerPush.mockClear();
-    sendTestNotification.mockClear();
+    requests.splice(0);
     syncMutate.mockClear();
   });
 
   it("opens the inbox and applies notification actions", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
-      renderer = create(
-        <NotificationCenter>
-          <NotificationCenterBell />
-        </NotificationCenter>
-      );
+      renderer = renderNotificationCenter();
     });
 
     act(() => {
-      renderer.root.findAllByType("NotificationBell")[0]?.props.onPress();
+      findHosts(renderer, "NotificationBell")[0]?.props.onPress();
     });
     const drawer = findHost(renderer, "SideDrawer");
     assert.isTrue(drawer.props.isOpen);
 
     act(() => {
-      renderer.root.findAllByType("NotificationBell")[1]?.props.onPress();
+      findHosts(renderer, "NotificationBell")[1]?.props.onPress();
     });
     assert.isFalse(findHost(renderer, "SideDrawer").props.isOpen);
 
     act(() => {
-      renderer.root.findAllByType("NotificationBell")[0]?.props.onPress();
+      findHosts(renderer, "NotificationBell")[0]?.props.onPress();
     });
     const inbox = findHost(renderer, "NotificationInbox");
     const item = inbox.props.items[0];
@@ -232,40 +263,42 @@ describe("NotificationCenter", () => {
   });
 
   it("sends a test notification and reconciles", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
-      renderer = create(
-        <NotificationCenter>
-          <NotificationCenterBell />
-        </NotificationCenter>
-      );
+      renderer = renderNotificationCenter();
     });
 
     await act(async () => {
-      const sendButton = renderer.root
-        .findAllByType("Button")
-        .find((button) => button.props.testID === "notification-send-test-button");
+      const sendButton = findHosts(renderer, "Button").find(
+        (button) => button.props.testID === "notification-send-test-button"
+      );
       await sendButton?.props.onClick();
     });
 
-    assert.equal(sendTestNotification.mock.calls.length, 1);
+    assert.deepEqual(requests, [
+      {
+        body: {
+          body: "Sent from the example todos screen.",
+          href: "/",
+          title: "Terreno test notification",
+        },
+        method: "POST",
+        url: "http://localhost:4000/notifications/dev/notify",
+      },
+    ]);
     assert.equal(reconcile.mock.calls.length, 1);
   });
 
   it("opens the full notification history from the drawer", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
-      renderer = create(
-        <NotificationCenter>
-          <NotificationCenterBell />
-        </NotificationCenter>
-      );
+      renderer = renderNotificationCenter();
     });
 
     await act(async () => {
-      const viewAllButton = renderer.root
-        .findAllByType("Button")
-        .find((button) => button.props.testID === "notification-view-all-button");
+      const viewAllButton = findHosts(renderer, "Button").find(
+        (button) => button.props.testID === "notification-view-all-button"
+      );
       await viewAllButton?.props.onClick();
     });
 
@@ -300,12 +333,12 @@ describe("AllNotificationsScreen", () => {
   });
 
   it("shows active and archived notifications separately", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<AllNotificationsScreen />);
     });
 
-    const inboxes = renderer.root.findAllByType("NotificationInbox");
+    const inboxes = findHosts(renderer, "NotificationInbox");
     assert.deepEqual(
       inboxes.map((inbox) => inbox.props.items.map((item: NotificationInboxItem) => item.id)),
       [["active-notification"], ["archived-notification"]]
@@ -316,14 +349,14 @@ describe("AllNotificationsScreen", () => {
   it("keeps archived inbox loading until syncdb is ready", async (): Promise<void> => {
     isSyncDbReady = false;
     notificationRows.splice(0, notificationRows.length);
-    let renderer: ReactTestRenderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<AllNotificationsScreen />);
     });
 
-    const archivedInbox = renderer.root
-      .findAllByType("NotificationInbox")
-      .find((inbox) => inbox.props.testID === "all-notifications-archived");
+    const archivedInbox = findHosts(renderer, "NotificationInbox").find(
+      (inbox) => inbox.props.testID === "all-notifications-archived"
+    );
     assert.isOk(archivedInbox);
     assert.isTrue(archivedInbox?.props.isLoading);
     assert.equal(
@@ -336,14 +369,14 @@ describe("AllNotificationsScreen", () => {
     syncMutate.mockClear();
     routerBack.mockClear();
     routerPush.mockClear();
-    let renderer: ReactTestRenderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<AllNotificationsScreen />);
     });
 
-    const activeInbox = renderer.root
-      .findAllByType("NotificationInbox")
-      .find((inbox) => inbox.props.testID === "all-notifications-active");
+    const activeInbox = findHosts(renderer, "NotificationInbox").find(
+      (inbox) => inbox.props.testID === "all-notifications-active"
+    );
     const item = activeInbox?.props.items[0];
     act(() => {
       activeInbox?.props.onMarkRead(item);
@@ -368,13 +401,13 @@ describe("AllNotificationsScreen", () => {
   it("ignores history mutations until syncdb is ready", async (): Promise<void> => {
     isSyncDbReady = false;
     syncMutate.mockClear();
-    let renderer: ReactTestRenderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<AllNotificationsScreen />);
     });
-    const activeInbox = renderer.root
-      .findAllByType("NotificationInbox")
-      .find((inbox) => inbox.props.testID === "all-notifications-active");
+    const activeInbox = findHosts(renderer, "NotificationInbox").find(
+      (inbox) => inbox.props.testID === "all-notifications-active"
+    );
     const item = activeInbox?.props.items[0];
     act(() => {
       activeInbox?.props.onMarkRead(item);
@@ -395,7 +428,7 @@ describe("NotificationSettingsScreen", () => {
   });
 
   it("creates defaults on the first preference change and navigates back", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<NotificationSettingsScreen />);
     });
@@ -420,7 +453,7 @@ describe("NotificationSettingsScreen", () => {
       push: true,
       sms: true,
     });
-    let renderer: ReactTestRenderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<NotificationSettingsScreen />);
     });

@@ -17,9 +17,9 @@ Optional peer: `react-native-webview` (for consent/signature fields).
 ```typescript
 // app/admin/_layout.tsx
 import {AdminProvider, AdminShellLayout} from "@terreno/admin-frontend";
-import {baseUrl} from "@terreno/rtk";
+import {baseUrl} from "@terreno/syncdb/config";
 import {Stack} from "expo-router";
-import {getAdminAuthHeaders} from "@/store/betterAuthApi"; // returns {Authorization: "Bearer …"}
+import {getAdminAuthHeaders} from "@/store/syncdb"; // returns {Authorization: "Bearer …"}
 
 const AdminLayout: React.FC = () => {
   return (
@@ -54,7 +54,7 @@ export default AdminIndexScreen;
 
 `AdminProvider` binds every admin request (model CRUD and admin RPC) to your API.
 A same-origin cookie SPA passes `credentials="same-origin"` instead of
-`apiOrigin` / `getAuthHeaders`. Admin components take no RTK `api` prop.
+`apiOrigin` / `getAuthHeaders`. Admin components take no `api` prop.
 
 Pair with `@terreno/admin-backend` on the API so `/admin/config` and CRUD routes exist.
 

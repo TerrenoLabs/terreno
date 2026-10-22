@@ -6,7 +6,7 @@ import {join} from "node:path";
 import {discoverCollections} from "./discoverCollections";
 import {emitSdk} from "./emitSdk";
 import {emitInterface} from "./emitTypes";
-import {generateSyncDbSdk, loadConfigFile, parseCollectionsFlag} from "./generate";
+import {generateApiSdk, generateSyncDbSdk, loadConfigFile, parseCollectionsFlag} from "./generate";
 import {friendlyHookNames} from "./hookNames";
 import {loadSpec} from "./loadSpec";
 
@@ -173,6 +173,43 @@ describe("discoverCollections", () => {
     expect(discovered[0]?.collection).toBe("todos");
   });
 
+  it("names an inline entity of a nested collection from its singular route segments", () => {
+    const listWithInlineItems = (collection: string): Record<string, unknown> => ({
+      get: {
+        responses: {
+          "200": {
+            content: {
+              "application/json": {
+                schema: {
+                  properties: {
+                    data: {
+                      items: {properties: {title: {type: "string"}}, type: "object"},
+                      type: "array",
+                    },
+                  },
+                  type: "object",
+                },
+              },
+            },
+          },
+        },
+        "x-terreno-sync": {collection, scope: "owner"},
+      },
+    });
+    const spec = {
+      paths: {
+        "/gpt/histories": listWithInlineItems("gpt/histories"),
+        "/mcp/service-tokens": listWithInlineItems("mcp/service-tokens"),
+      },
+    } as Parameters<typeof discoverCollections>[0]["spec"];
+    const discovered = discoverCollections({spec});
+    expect(discovered.map((entry) => [entry.collection, entry.entityName])).toEqual([
+      ["gpt/histories", "GptHistory"],
+      ["mcp/service-tokens", "McpServiceToken"],
+    ]);
+    expect(discovered[0]?.createName).toBe("CreateGptHistoryBody");
+  });
+
   it("does not path-fallback --collections when the spec already has x-terreno-sync", async () => {
     const spec = await loadSpec(fixturePath);
     expect(() => discoverCollections({collections: ["notes"], spec})).toThrow(/matched/);
@@ -255,6 +292,22 @@ describe("generateSyncDbSdk", () => {
         schema: fixturePath,
       });
       expect(source).toContain("export const SYNC_COLLECTIONS");
+      expect(await readFile(out, "utf8")).toBe(source);
+    } finally {
+      await rm(dir, {force: true, recursive: true});
+    }
+  });
+
+  it("formats the generated API SDK when format is true", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "syncdb-codegen-"));
+    const out = join(dir, "apiSdk.ts");
+    try {
+      const source = await generateApiSdk({
+        format: true,
+        out,
+        schema: join(import.meta.dir, "fixtures", "openapi.api.json"),
+      });
+      expect(source).toContain("export const usePatchNotesByIdMutation");
       expect(await readFile(out, "utf8")).toBe(source);
     } finally {
       await rm(dir, {force: true, recursive: true});

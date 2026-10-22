@@ -5,7 +5,7 @@ import {E2E_ADMIN_EMAIL, E2E_ADMIN_PASSWORD} from "./credentials";
  * End-to-end: an anonymous visitor opening the SPA root is redirected to the login
  * screen, which renders the config-driven brand name and auth providers. Exercises the
  * full client stack — AppConfigGate (loads app-config.json), StoreProvider (builds the
- * better-auth client + Redux store), and AdminGate (no session -> /login).
+ * Better Auth client and mounts SessionProvider), and AdminGate (no session -> /login).
  */
 test("anonymous visitor is redirected to the login screen", async ({page}) => {
   await page.goto("/console/");
@@ -24,7 +24,7 @@ test("anonymous visitor is redirected to the login screen", async ({page}) => {
 /**
  * End-to-end: email/password login against the test server's mock better-auth
  * endpoints. Exercises the login form, `authClient.signIn.email`, the session cookie,
- * `syncSession` (get-session), and AdminGate's admin check (`/admin/config` 200) before
+ * the session refresh (get-session), and AdminGate's admin check (`/admin/config` 200) before
  * rendering the admin home (models grid from config).
  */
 test("admin logs in with email/password and sees the admin home", async ({page}) => {

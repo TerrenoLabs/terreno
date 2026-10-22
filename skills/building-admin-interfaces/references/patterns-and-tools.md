@@ -45,9 +45,9 @@ Reference: [admin-config](../../../docs/reference/admin-config.md).
 - Admin String-`_id` collection CRUD: windowed syncdb with `adminBroadcast`.
 - ObjectId/API-only model CRUD: `useAdminModelApi(routePath, modelName)`.
 - Framework and custom admin RPC: `useAdminRpc` + `useAdminRpcQuery` /
-  `useAdminRpcMutation` over the `AdminProvider` client; no `injectEndpoints`.
+  `useAdminRpcMutation` over the `AdminProvider` client.
 - After backend route changes: `cd example-frontend && bun run sdk` (non-synced
-  only). Do not generate RTK CRUD for synced product collections.
+  routes, `store/apiSdk.ts`) and `bun run sync-sdk` (synced collections).
 - MCP: `terreno_install_admin` scaffolds wiring; still follow this skill for
   screens and nav. `terreno_search_docs` / `terreno_get_component_docs` for APIs.
 

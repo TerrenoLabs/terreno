@@ -27,6 +27,9 @@ import type {GptHistoryDocument, GptHistoryRouteOptions, GptRouteOptions} from "
 
 type HistoryRouterOptions = Partial<ModelRouterOptions<GptHistoryDocument>>;
 
+/** Route path of the history CRUD; the sync collection tag is this path without the slash. */
+const GPT_HISTORIES_PATH = "/gpt/histories";
+
 /**
  * Only the chat turn writes `pendingAsk`: it holds messages replayed verbatim to the model, so a
  * client must not be able to plant or edit one, including through dotted paths.
@@ -236,58 +239,59 @@ export const addGptHistoryRoutes = (
   if (headlessChat) {
     assertNoReservedToolNames(headlessChat.tools);
   }
-  router.use(
-    "/gpt/histories",
-    modelRouter(GptHistory, {
-      ...openApiOptions,
-      ...routerOptions,
-      ...(headlessChat ? headlessActions({chat: headlessChat, routerOptions}) : {}),
-      openApiExtraModelProperties: {
-        ...routerOptions.openApiExtraModelProperties,
-        pendingAsk: clientPendingAskSchema(),
-      },
-      openApiOverwrite: {
-        ...routerOptions.openApiOverwrite,
-        create: mergeFragments(READ_ONLY_PENDING_ASK, routerOptions.openApiOverwrite?.create),
-        update: mergeFragments(READ_ONLY_PENDING_ASK, routerOptions.openApiOverwrite?.update),
-      },
-      permissions: {
-        create: [Permissions.IsAuthenticated],
-        delete: [Permissions.IsOwner],
-        list: [Permissions.IsAuthenticated],
-        read: [Permissions.IsOwner],
-        update: [Permissions.IsOwner],
-      },
-      preCreate: (body, req) => {
-        return {
-          ...withoutPendingAsk(body),
-          userId: (req.user as {_id: unknown})?._id,
-        } as GptHistoryDocument;
-      },
-      preUpdate: (body, req) => {
-        const update = withoutPendingAsk(body);
-        return routerOptions.preUpdate
-          ? routerOptions.preUpdate(update, req)
-          : (update as GptHistoryDocument);
-      },
-      queryFields: ["userId", "projectId"],
-      queryFilter: (user) => ({userId: user?.id}),
-      responseHandler: async (value, method, req, handlerOptions) => {
-        const hostHandler = routerOptions.responseHandler ?? defaultResponseHandler;
-        const serialized = await hostHandler(
-          value,
-          method as Parameters<typeof defaultResponseHandler>[1],
-          req,
-          handlerOptions
-        );
-        return (
-          Array.isArray(serialized)
-            ? serialized.map(withClientPendingAsk)
-            : withClientPendingAsk(serialized)
-        ) as JSONValue;
-      },
-      sort: "-updated",
-      validation: withCallerUserId(routerOptions.validation),
-    })
-  );
+  // The three-argument form registers the collection, so SyncApp serves it to @terreno/syncdb
+  // clients as the `gpt/histories` collection on the caller's owner stream.
+  const registration = modelRouter(GPT_HISTORIES_PATH, GptHistory, {
+    ...openApiOptions,
+    ...routerOptions,
+    ...(headlessChat ? headlessActions({chat: headlessChat, routerOptions}) : {}),
+    openApiExtraModelProperties: {
+      ...routerOptions.openApiExtraModelProperties,
+      pendingAsk: clientPendingAskSchema(),
+    },
+    openApiOverwrite: {
+      ...routerOptions.openApiOverwrite,
+      create: mergeFragments(READ_ONLY_PENDING_ASK, routerOptions.openApiOverwrite?.create),
+      update: mergeFragments(READ_ONLY_PENDING_ASK, routerOptions.openApiOverwrite?.update),
+    },
+    permissions: {
+      create: [Permissions.IsAuthenticated],
+      delete: [Permissions.IsOwner],
+      list: [Permissions.IsAuthenticated],
+      read: [Permissions.IsOwner],
+      update: [Permissions.IsOwner],
+    },
+    preCreate: (body, req) => {
+      return {
+        ...withoutPendingAsk(body),
+        userId: (req.user as {_id: unknown})?._id,
+      } as GptHistoryDocument;
+    },
+    preUpdate: (body, req) => {
+      const update = withoutPendingAsk(body);
+      return routerOptions.preUpdate
+        ? routerOptions.preUpdate(update, req)
+        : (update as GptHistoryDocument);
+    },
+    queryFields: ["userId", "projectId"],
+    queryFilter: (user) => ({userId: user?.id}),
+    responseHandler: async (value, method, req, handlerOptions) => {
+      const hostHandler = routerOptions.responseHandler ?? defaultResponseHandler;
+      const serialized = await hostHandler(
+        value,
+        method as Parameters<typeof defaultResponseHandler>[1],
+        req,
+        handlerOptions
+      );
+      return (
+        Array.isArray(serialized)
+          ? serialized.map(withClientPendingAsk)
+          : withClientPendingAsk(serialized)
+      ) as JSONValue;
+    },
+    sort: "-updated",
+    sync: {scope: {field: "userId", type: "owner"}},
+    validation: withCallerUserId(routerOptions.validation),
+  });
+  router.use(registration.path, registration.router);
 };

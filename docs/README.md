@@ -53,9 +53,9 @@ Canonical copy, language rules, and the Django/Rails comparison:
 
 | Package | Description |
 |---------|-------------|
-| [@terreno/rtk](reference/legacy/rtk.md) (deprecated for data sync) | OpenAPI SDK, Better Auth Redux, and feature flags for Terreno frontends |
+| [@terreno/rtk](reference/legacy/rtk.md) (removed in 58) | Replaced by `@terreno/syncdb` |
 
-**Migrating from RTK?** See [How to migrate from @terreno/rtk to @terreno/syncdb](how-to/migrate-rtk-to-syncdb.md).
+**Upgrading from RTK?** See [How to upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)](how-to/migrate-rtk-to-syncdb.md).
 
 ## Quick links
 

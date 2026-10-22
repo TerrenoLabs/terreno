@@ -4,7 +4,7 @@ import type React from "react";
 import {useCallback, useState} from "react";
 import {submitPasswordResetRequest} from "@/lib/authRecoveryActions";
 import {requestPasswordReset} from "@/lib/betterAuth";
-import {usePostAuthForgotPasswordMutation} from "@/store/sdk";
+import {usePostAuthForgotPasswordMutation} from "@/store/apiSdk";
 
 const ForgotPasswordScreen: React.FC = () => {
   const router = useRouter();

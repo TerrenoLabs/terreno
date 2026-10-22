@@ -25,10 +25,10 @@ This adds the public `GET /version-check` endpoint. The admin routes (`GET/PUT /
 
 ### 2. Frontend: Add build number injection
 
-Create or update `app.config.ts` in your Expo app root. Use the `resolveBuildNumber` helper from `@terreno/rtk/buildNumber`:
+Create or update `app.config.ts` in your Expo app root. Use the `resolveBuildNumber` helper from `@terreno/syncdb/buildNumber` (node-only, so import it only from `app.config.ts`):
 
 ```typescript
-import {resolveBuildNumber} from "@terreno/rtk/buildNumber";
+import {resolveBuildNumber} from "@terreno/syncdb/buildNumber";
 import type {ConfigContext, ExpoConfig} from "expo/config";
 
 export default ({config}: ConfigContext): ExpoConfig => ({
@@ -54,10 +54,12 @@ This sets `Constants.expoConfig.extra.buildNumber` when Metro loads the config. 
 
 ### 3. Frontend: Wire up the hook
 
+`useUpgradeCheck` calls `/version-check` through the `@terreno/syncdb/api` request client,
+so render it inside `<ApiClientProvider client={apiClient}>` (or pass `{client: apiClient}`).
 In your root layout:
 
 ```typescript
-import {useUpgradeCheck} from "@terreno/rtk";
+import {useUpgradeCheck} from "@terreno/syncdb/app";
 import {UpgradeRequiredScreen} from "@terreno/ui";
 
 function RootLayoutNav() {

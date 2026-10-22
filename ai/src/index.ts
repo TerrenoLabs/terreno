@@ -36,6 +36,12 @@ export type {
   TraceListItem,
 } from "./langfuseTypes";
 export {createTelemetryConfig, preparePromptForAI} from "./langfuseVercelAi";
+export {
+  GPT_HISTORY_STRING_IDS_MIGRATION,
+  type GptHistoryStringIdsResult,
+  gptHistoryStringIdsMigration,
+  migrateGptHistoryStringIds,
+} from "./migrations/gptHistoryStringIds";
 export {AIDataset} from "./models/aiDataset";
 export {AIRequest} from "./models/aiRequest";
 export {FileAttachment} from "./models/fileAttachment";
@@ -98,7 +104,7 @@ export {
   validateObservabilityConfig,
 } from "./observability/types";
 export {addAiRequestsExplorerRoutes} from "./routes/aiRequestsExplorer";
-export {addFileRoutes} from "./routes/files";
+export {addFileRoutes, type FileStorageServiceSource} from "./routes/files";
 export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";

@@ -2,7 +2,7 @@
 
 Local-first data layer for @terreno apps: TinyBase MergeableStore, durable outbox, websocket delta sync, encrypted web persistence.
 
-Local-first data layer for Terreno apps. A TinyBase `MergeableStore` (encrypted IndexedDB on web, expo-sqlite on native) is the UI's source of truth: reads come from the local store, writes apply optimistically and enqueue in a durable outbox, and the server reconciles asynchronously over a socket delta protocol with HTTP snapshot catch-up. Every mutation executes the existing `@terreno/api` modelRouter write path — identical permissions, hooks, and validation as REST. Supersedes `@terreno/rtk` for data-synchronization concerns (see [the migration guide](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md)).
+Local-first data layer for Terreno apps. A TinyBase `MergeableStore` (encrypted IndexedDB on web, expo-sqlite on native) is the UI's source of truth: reads come from the local store, writes apply optimistically and enqueue in a durable outbox, and the server reconciles asynchronously over a socket delta protocol with HTTP snapshot catch-up. Every mutation executes the existing `@terreno/api` modelRouter write path — identical permissions, hooks, and validation as REST. It also ships the request client, generated API hooks, auth session, feature flags, and app utilities that replaced `@terreno/rtk` in Terreno 58 (see [the upgrade guide](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md)).
 
 ## Architecture
 
@@ -116,15 +116,16 @@ Index requirement: `TerrenoApp.start()` awaits `ensureSyncIndexes()` before list
 ### Frontend
 
 ```typescript
-import {betterAuthAdapter, createSyncDb} from "@terreno/syncdb";
+import {betterAuthAdapter, bridgeBetterAuthReactClient, createSyncDb} from "@terreno/syncdb";
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 import {SyncDbProvider, useMutate, useQuery, useSyncStatus} from "@terreno/syncdb/react";
-import {createBetterAuthClient} from "@terreno/rtk";
 
-const authClient = createBetterAuthClient({baseURL: "http://localhost:4000"});
+const authClient = createBetterAuthClient({baseURL: baseUrl, scheme: "myapp"});
 
 export const syncDb = createSyncDb({
-  authProvider: betterAuthAdapter(authClient),
-  baseUrl: "http://localhost:4000",
+  authProvider: betterAuthAdapter(bridgeBetterAuthReactClient(authClient)),
+  baseUrl,
   collections: ["todos"],
   name: "myapp",
 });

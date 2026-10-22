@@ -165,7 +165,7 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   {
     name: "AnnouncementNavigator",
     reason:
-      "Requires a consumer RTK Query `api` and pending queue; exercise in example-frontend, not the isolated UI demo",
+      "Requires a consumer request `client` and pending queue; exercise in example-frontend, not the isolated UI demo",
   },
   {
     name: "AnnouncementScreen",
@@ -180,7 +180,7 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   {
     name: "ConsentNavigator",
     reason:
-      "Requires a consumer RTK Query `api` to fetch and submit forms; ConsentFormScreen already demos the consent UI",
+      "Requires a consumer request `client` to fetch and submit forms; ConsentFormScreen already demos the consent UI",
   },
   {
     name: "DateTimeActionSheet",

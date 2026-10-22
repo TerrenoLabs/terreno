@@ -21,7 +21,7 @@ deploy.
 
 - **api/** - REST API framework built on Express/Mongoose (`@terreno/api`)
 - **ui/** - React Native UI component library (`@terreno/ui`)
-- **rtk/** - Redux Toolkit Query utilities for API backends (`@terreno/rtk`)
+- **syncdb/** - Frontend data layer: local-first collections, request client + generated API hooks, auth session, flags (`@terreno/syncdb`)
 - **admin-backend/** - Admin panel backend plugin for @terreno/api (`@terreno/admin-backend`)
 - **admin-frontend/** - Admin panel frontend screens for @terreno/api backends (`@terreno/admin-frontend`)
 - **mcp-server/** - MCP server for AI assistant integration (`@terreno/mcp`, bins `terreno-mcp` / `terreno-mcp-local`)
@@ -68,13 +68,13 @@ The three core packages form a complete full-stack framework:
                               |
                      /openapi.json
                               |
-                    RTK Query SDK Codegen
+                  terreno-syncdb-codegen
                               |
                            FRONTEND
-  @terreno/rtk
-  - Generated hooks from OpenAPI spec
-  - Auth slice with JWT token management
-  - Automatic token refresh
+  @terreno/syncdb
+  - Generated request hooks + local-first collection hooks
+  - SessionProvider / useSession (Better Auth or JWT)
+  - Shared auth provider with refresh on 401
                               +
   @terreno/ui
   - React Native components (Box, Button, TextField, etc.)
@@ -85,12 +85,12 @@ The three core packages form a complete full-stack framework:
 
 1. **Backend (api)**: Define Mongoose models, use `modelRouter` to create CRUD endpoints with permissions
 2. **OpenAPI Generation**: `setupServer` automatically generates `/openapi.json`
-3. **SDK Codegen**: Frontend runs `bun run sdk` to generate RTK Query hooks from OpenAPI spec
-4. **Frontend (rtk + ui)**: Use generated hooks with UI components for type-safe API calls
+3. **SDK Codegen**: Frontend runs `bun run sdk` (`terreno-syncdb-codegen --api-out` → `store/apiSdk.ts`) and `bun run sync-sdk` (→ `store/syncDbSdk.ts`)
+4. **Frontend (syncdb + ui)**: Use `useQuery` / `useMutate` for synced collections and generated hooks for other routes. `@terreno/rtk` and Redux were removed in Terreno 58.
 
 ## Example Apps (Keep These Updated!)
 
-The `example-frontend/` and `example-backend/` directories serve as both documentation and integration tests. When adding features to api, ui, or rtk:
+The `example-frontend/` and `example-backend/` directories serve as both documentation and integration tests. When adding features to api, ui, or syncdb:
 
 1. **Add examples** demonstrating new features
 2. **Update SDK** after backend changes: `cd example-frontend && bun run sdk`
@@ -290,26 +290,28 @@ Modals:
 - Don't use raw `View`/`Text` when `Box`/@terreno/ui `Text` are available
 - Don't forget loading and error states
 - Don't use `style` prop when equivalent props exist (`padding`, `margin`)
-- Never modify `openApiSdk.ts` manually
+- Never modify generated `store/apiSdk.ts` or `store/syncDbSdk.ts` manually
 
-### @terreno/rtk
+### @terreno/syncdb
 
-Redux Toolkit Query integration:
+Frontend data, request, and session layer:
 
-- **generateAuthSlice**: Creates auth reducer and middleware with JWT handling
-- **emptyApi**: Base RTK Query API for code generation
-- **Platform utilities**: Secure token storage (expo-secure-store for native, AsyncStorage for web)
+- **createSyncDb** + `useQuery` / `useMutate`: Local-first collection CRUD
+- **createApiClient** + generated `store/apiSdk.ts` hooks: Every non-synced route
+- **SessionProvider** / **useSession**: Better Auth (or `jwtAuthAdapter`) session state
 
 Key imports:
 ```typescript
-import {generateAuthSlice} from "@terreno/rtk";
+import {createApiClient} from "@terreno/syncdb/api";
+import {SessionProvider, useSession} from "@terreno/syncdb/auth";
+import {useMutate, useQuery} from "@terreno/syncdb/react";
 ```
 
-Always use generated SDK hooks - never use `axios` or `request` directly:
+Always use generated SDK hooks or syncdb hooks - never use `axios` or `fetch` directly:
 
 ```typescript
 // Correct
-import {useGetYourRouteQuery} from "@/store/openApiSdk";
+import {useGetYourRouteQuery} from "@/store/apiSdk";
 const {data, isLoading, error} = useGetYourRouteQuery({id: "value"});
 
 // Wrong - don't use axios directly

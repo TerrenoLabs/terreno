@@ -4,7 +4,7 @@ Set up Better Auth as the **default** authentication provider for new Terreno ap
 
 ## Overview
 
-Better Auth is the recommended authentication system for new Terreno frontends. Register `BetterAuthApp` on the backend, set `AUTH_PROVIDER=better-auth`, and wire `createBetterAuthClient` + `generateBetterAuthSlice` on the client. Pair with `betterAuthAdapter` when using `@terreno/syncdb`.
+Better Auth is the recommended authentication system for new Terreno frontends. Register `BetterAuthApp` on the backend, set `AUTH_PROVIDER=better-auth`, and on the client create the client with `createBetterAuthClient` and wrap the app in `SessionProvider`, both from `@terreno/syncdb/auth`. Pass the same client to `betterAuthAdapter` for `createSyncDb` and the API client.
 
 JWT/Passport remains available for legacy deployments (`AUTH_PROVIDER=jwt`). Both can run in parallel during migration.
 
@@ -215,29 +215,68 @@ const userSchema = new mongoose.Schema(
 ### 1. Create Better Auth Client
 
 ``````typescript
-import {createBetterAuthClient} from "@terreno/rtk";
+// lib/betterAuth.ts
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 
 export const authClient = createBetterAuthClient({
-  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  baseURL: baseUrl,
+  scheme: "yourapp", // app.json "scheme", for OAuth deep links
+  storagePrefix: "yourapp",
 });
 ``````
 
-### 2. Add Session Redux Slice
+The client stores its session in `expo-secure-store` on native and AsyncStorage on web.
+Install them in the app with `bunx expo install expo-secure-store @react-native-async-storage/async-storage`.
+
+### 2. Provide the Session
+
+Wrap the app in `SessionProvider` and read the session with `useSession()`. No Redux store is
+needed.
+
+``````tsx
+// app/_layout.tsx
+import {SessionProvider, useSession} from "@terreno/syncdb/auth";
+import {authClient} from "@/lib/betterAuth";
+import {syncDb} from "@/store/syncdb";
+
+const RootLayout = (): React.ReactElement => (
+  <SessionProvider authClient={authClient} syncDbs={[syncDb]}>
+    <RootNavigator />
+  </SessionProvider>
+);
+
+const RootNavigator = (): React.ReactElement => {
+  const {userId, isLoading} = useSession();
+  if (isLoading) {
+    return <Spinner />;
+  }
+  return userId ? <AppTabs /> : <LoginScreen />;
+};
+``````
+
+The provider reads the session on start and follows Better Auth's session signal, so a
+sign-in or sign-out updates `useSession()` on its own. `logout()` from `useSession()` signs
+out of Better Auth, signs out each `syncDbs` client (create it with `wipeOnSignOut: true` to
+wipe local data), runs `onLogout`, and clears the session.
+
+After an email sign-in, call `refresh()` to resolve the user right away:
 
 ``````typescript
-import {generateBetterAuthSlice} from "@terreno/rtk";
-import {configureStore} from "@reduxjs/toolkit";
-import {authClient} from "./authClient";
+const {refresh} = useSession();
 
-const {sessionReducer, sessionMiddleware} = generateBetterAuthSlice(authClient);
+const result = await authClient.signIn.email({email, password});
+if (!result.error) {
+  await refresh();
+}
+``````
 
-export const store = configureStore({
-  reducer: {
-    session: sessionReducer,
-    // ... other reducers
-  },
-  middleware: (getDefault) => getDefault().concat(sessionMiddleware),
-});
+For `@terreno/syncdb`, build the auth provider from the same client:
+
+``````typescript
+import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb/auth";
+
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient));
 ``````
 
 ### 3. Add Social Login UI
@@ -246,7 +285,7 @@ Use the SocialLoginButton component:
 
 ``````typescript
 import {SocialLoginButton, Box} from "@terreno/ui";
-import {authClient} from "@/store/authClient";
+import {authClient} from "@/lib/betterAuth";
 
 const LoginScreen = () => {
   return (
@@ -344,6 +383,11 @@ Verify the callback URLs in your OAuth provider settings match your `BETTER_AUTH
 
 Check that `trustedOrigins` in your Better Auth config includes your app's deep link scheme (e.g., `"yourapp://"`).
 
+On native, if every request fails before it is sent after an app update, the stored cookie jar
+may hold an entry the Expo plugin cannot read. `createBetterAuthClient` drops such entries on
+read and logs `Discarded … unreadable Better Auth cookie entry`; sign in again to restore the
+session.
+
 ### Social login opens browser but doesn't redirect back
 
 Ensure your mobile app has the proper deep link configuration in `app.json`:
@@ -370,5 +414,6 @@ Better Auth runs **in parallel** with JWT auth. You don't need to migrate existi
 
 - [Authentication Architecture](../explanation/authentication.md)
 - [@terreno/api Reference](../reference/api.md#better-auth)
-- [@terreno/rtk Reference (legacy)](../reference/legacy/rtk.md#better-auth)
+- [@terreno/syncdb Reference: Auth](../reference/syncdb.md#auth)
+- [Upgrade from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md)
 - [Better Auth Documentation](https://better-auth.com/)

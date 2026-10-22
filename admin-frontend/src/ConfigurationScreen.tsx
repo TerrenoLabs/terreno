@@ -181,7 +181,6 @@ const EmptySections: React.FC = () => (
  * @example
  * ```typescript
  * import {ConfigurationScreen} from "@terreno/admin-frontend";
- * import {} from "@/store/openApiSdk";
  *
  * export default function ConfigScreen() {
  *   return <ConfigurationScreen />;

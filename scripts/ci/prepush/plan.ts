@@ -39,7 +39,6 @@ const COVERAGE_PACKAGES: Record<string, string> = {
   "run-feature-flags": "feature-flags",
   "run-jobs": "jobs",
   "run-mcp-server": "mcp-server",
-  "run-rtk": "rtk",
   "run-syncdb": "syncdb",
   "run-test-package": "test",
   "run-ui": "ui",
@@ -74,7 +73,7 @@ const DEPLOY_PARAMETERS = [
 /** GitHub Actions-only checks that the CircleCI mapping does not cover. */
 const EXTRA_MAPPINGS: Mapping[] = [
   {parameter: "run-cli", regex: "cli/.*"},
-  {parameter: "run-docs-api-reference", regex: "(api|rtk)/src/.*"},
+  {parameter: "run-docs-api-reference", regex: "api/src/.*"},
   {
     parameter: "run-docs-site",
     regex: "(docs|website)/.*|ui/src/.*|demo/story-config/.*|demo/demoConfig\\.tsx",

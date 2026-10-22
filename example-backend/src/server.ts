@@ -272,18 +272,19 @@ export const start = async (skipListen = false): Promise<express.Application> =>
         })
       );
 
+    // Kept so FeatureFlagsApp live updates emit on the same socket the syncdb client uses.
+    let realtimeApp: RealtimeApp | undefined;
     if (isWebsocketService) {
-      terraApp.register(
-        new RealtimeApp({
-          changeStream: {
-            ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
-          },
-          debug: websocketsDebug,
-          // Required by the tenant-scoped `projects` sync stream: socket authorization
-          // must load the persisted user id before Membership-based tenant streams resolve.
-          userModel: User as unknown as TerrenoAuthUserModel,
-        })
-      );
+      realtimeApp = new RealtimeApp({
+        changeStream: {
+          ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
+        },
+        debug: websocketsDebug,
+        // Required by the tenant-scoped `projects` sync stream: socket authorization
+        // must load the persisted user id before Membership-based tenant streams resolve.
+        userModel: User as unknown as TerrenoAuthUserModel,
+      });
+      terraApp.register(realtimeApp);
     } else {
       logger.info("RealtimeApp disabled because BACKEND_SERVICE is not websockets/all");
     }
@@ -400,7 +401,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       .register(
         new FeatureFlagsApp({
           liveUpdates: {
-            socketIoServer: () => io,
+            socketIoServer: () => realtimeApp?.getIo() ?? io,
           },
           segments: exampleFeatureFlagSegments,
         })

@@ -9,7 +9,6 @@ const REPO_ROOT = join(import.meta.dir, "../..");
 const KNOWN_ENTRY_FILES = [
   "admin-frontend/src/isolated/AdminFieldRenderer.isolated.tsx",
   "ai/src/isolated/gptStream.isolated.ts",
-  "rtk/src/isolated/emptyApi.isolated.ts",
   "syncdb/src/isolated/defaultPersisterFactoryNative.isolated.ts",
   "scripts/static-analysis/lib.test.ts",
   ".github/scripts/architectural-pr-review.test.ts",
@@ -27,7 +26,6 @@ const FRONTEND_TOOL_BLIND_DEPENDENCIES = new Map<string, string[]>([
       "expo-system-ui",
       "expo-updates",
       "jspdf",
-      "redux-persist",
     ],
   ],
   [
@@ -145,12 +143,10 @@ describe("Knip entry graph", (): void => {
   );
 
   test(
-    "does not report codegen, Metro stubs, Playwright, fingerprint, or Docusaurus theme files as unused",
+    "does not report Metro stubs, Playwright, fingerprint, or Docusaurus theme files as unused",
     (): void => {
       const unusedFiles = unusedFilePathsFromKnipReport(runKnipReport());
       const knownToolEntries = [
-        "example-frontend/openapi-config.ts",
-        "example-frontend/comms-openapi-config.ts",
         "example-frontend/jspdf-native-stub.js",
         "example-frontend/fingerprint.config.js",
         "example-frontend/playwright.circleci.config.ts",
@@ -265,7 +261,8 @@ describe("Knip entry graph", (): void => {
         "example-frontend/e2e/auth.setup.ts",
         "example-frontend/e2e/helpers/mongoReplicaSet.ts",
         "example-frontend/e2e/helpers/offlineHelpers.ts",
-        "example-frontend/store/commsOpenApiSdk.ts",
+        "example-frontend/store/apiSdk.ts",
+        "example-frontend/store/syncDbSdk.ts",
       ]) {
         assert.notInclude(unusedFiles, retainedFile);
       }

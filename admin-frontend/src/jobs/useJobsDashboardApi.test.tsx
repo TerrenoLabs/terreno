@@ -123,7 +123,7 @@ describe("useJobsDashboardApi", () => {
       "/jobs/schedules/nightly%20run/pause",
       "/jobs/schedules/nightly%20run/resume",
     ]);
-    // Mutation responses unwrap `{data}` the way the @terreno/rtk base query did.
+    // Mutation responses unwrap single-document `{data}` envelopes.
     expect((retried as {_id?: string})._id).toBe("j1");
     expect(requests.filter(isListRead).length).toBeGreaterThan(1);
   });

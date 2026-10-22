@@ -1,3 +1,5 @@
+import {isApiError} from "@terreno/syncdb/api";
+import {useQuery} from "@terreno/syncdb/react";
 import {
   Banner,
   Box,
@@ -7,35 +9,35 @@ import {
   Heading,
   Modal,
   Page,
-  Spinner,
   Text,
   TextField,
   useToast,
 } from "@terreno/ui";
 import {useRouter} from "expo-router";
 import type React from "react";
-import {useCallback, useMemo, useState} from "react";
+import {useCallback, useState} from "react";
 import {
   buildMcpClientSnippet,
   copyMcpText,
   formatMcpTimestamp,
   issuedTokenFromCreateResult,
 } from "@/lib/mcpSettingsHelpers";
-import {
-  useCreateMcpServiceTokenMutation,
-  useListMcpServiceTokensQuery,
-  useRevokeMcpServiceTokenMutation,
-} from "@/store/sdk";
+import {useMcpServiceTokensCreateMutation, useMcpServiceTokensRevokeMutation} from "@/store/apiSdk";
+import {MCP_SERVICE_TOKENS_COLLECTION} from "@/store/syncdb";
 
+/** A synced token row. Sync never carries the token hash; unset dates are omitted. */
 interface McpServiceTokenListItem {
+  _id: string;
   created?: string;
-  expiresAt?: string | null;
-  id?: string;
-  lastUsedAt?: string | null;
+  expiresAt?: string;
+  lastUsedAt?: string;
   name?: string;
-  revokedAt?: string | null;
+  revokedAt?: string;
   tokenPrefix?: string;
 }
+
+/** Newest token first, as the server's list sorts them. */
+const TOKENS_SORT = "-created";
 
 interface IssuedMcpServiceToken {
   mcpUrl: string;
@@ -45,22 +47,18 @@ interface IssuedMcpServiceToken {
 const McpSettingsScreen: React.FC = () => {
   const router = useRouter();
   const toast = useToast();
-  const {data: listResponse, isLoading, error: listError} = useListMcpServiceTokensQuery({});
-  const [createToken, {isLoading: isCreating}] = useCreateMcpServiceTokenMutation();
-  const [revokeToken, {isLoading: isRevoking}] = useRevokeMcpServiceTokenMutation();
+  // Read-only synced collection: minting and revoking are server actions, and the changed rows
+  // arrive over sync.
+  const tokens = useQuery<McpServiceTokenListItem>(MCP_SERVICE_TOKENS_COLLECTION, {
+    sort: TOKENS_SORT,
+  });
+  const [createToken, {isLoading: isCreating}] = useMcpServiceTokensCreateMutation();
+  const [revokeToken, {isLoading: isRevoking}] = useMcpServiceTokensRevokeMutation();
 
   const [name, setName] = useState<string>("");
   const [expiresAt, setExpiresAt] = useState<string>("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [issued, setIssued] = useState<IssuedMcpServiceToken | null>(null);
-
-  const tokens = useMemo((): McpServiceTokenListItem[] => {
-    const rows = listResponse?.data;
-    if (!Array.isArray(rows)) {
-      return [];
-    }
-    return rows as McpServiceTokenListItem[];
-  }, [listResponse?.data]);
 
   const handleBack = useCallback((): void => {
     router.back();
@@ -86,14 +84,10 @@ const McpSettingsScreen: React.FC = () => {
     }
     setCreateError(null);
     try {
-      const result = (await createToken({
+      const result = await createToken({
         ...(expiresAt ? {expiresAt} : {}),
         name: trimmedName,
-      }).unwrap()) as {
-        data?: {mcpUrl?: string; token?: string};
-        mcpUrl?: string;
-        token?: string;
-      };
+      }).unwrap();
       const issuedToken = issuedTokenFromCreateResult(result);
       if (!issuedToken) {
         setCreateError("Create succeeded but the token was not returned");
@@ -103,11 +97,7 @@ const McpSettingsScreen: React.FC = () => {
       setName("");
       setExpiresAt("");
     } catch (error: unknown) {
-      const title =
-        error && typeof error === "object" && "data" in error
-          ? String((error as {data?: {title?: string}}).data?.title ?? "Could not create token")
-          : "Could not create token";
-      setCreateError(title);
+      setCreateError(isApiError(error) ? error.data.title : "Could not create token");
     }
   }, [createToken, expiresAt, name]);
 
@@ -116,10 +106,7 @@ const McpSettingsScreen: React.FC = () => {
   }, []);
 
   const handleRevoke = useCallback(
-    async (id?: string): Promise<void> => {
-      if (!id) {
-        return;
-      }
+    async (id: string): Promise<void> => {
       try {
         await revokeToken(id).unwrap();
         toast.success("Token revoked");
@@ -134,7 +121,7 @@ const McpSettingsScreen: React.FC = () => {
 
   return (
     <Page backButton onBack={handleBack} scroll title="MCP connections">
-      <Box gap={4} padding={4}>
+      <Box gap={4} padding={4} testID="settings-mcp-screen">
         <Text color="secondaryLight">
           Mint a personal key for Perplexity and other remote MCP clients. The secret is shown once.
         </Text>
@@ -170,15 +157,9 @@ const McpSettingsScreen: React.FC = () => {
         </Card>
 
         <Card>
-          <Box gap={4}>
+          <Box gap={4} testID="settings-mcp-token-list">
             <Heading size="md">Your tokens</Heading>
-            {isLoading ? (
-              <Box alignItems="center" padding={4}>
-                <Spinner />
-              </Box>
-            ) : null}
-            {listError ? <Banner status="alert" text="Could not load tokens" /> : null}
-            {!isLoading && tokens.length === 0 ? (
+            {tokens.length === 0 ? (
               <Text color="secondaryLight" testID="settings-mcp-empty">
                 No tokens yet.
               </Text>
@@ -186,7 +167,7 @@ const McpSettingsScreen: React.FC = () => {
             {tokens.map((token) => {
               const isRevoked = Boolean(token.revokedAt);
               return (
-                <Card key={token.id ?? token.tokenPrefix}>
+                <Card key={token._id}>
                   <Box gap={2} testID={`settings-mcp-row-${token.tokenPrefix ?? "unknown"}`}>
                     <Text bold>
                       {token.name ?? "Unnamed"} {isRevoked ? "(revoked)" : ""}
@@ -203,7 +184,7 @@ const McpSettingsScreen: React.FC = () => {
                         confirmationText="Revoke this token? MCP clients using it will stop working."
                         loading={isRevoking}
                         onClick={() => {
-                          void handleRevoke(token.id);
+                          void handleRevoke(token._id);
                         }}
                         testID={`settings-mcp-revoke-${token.tokenPrefix ?? "unknown"}`}
                         text="Revoke"
@@ -225,6 +206,7 @@ const McpSettingsScreen: React.FC = () => {
         primaryButtonOnClick={handleDismissIssued}
         primaryButtonText="Done"
         size="md"
+        testID="settings-mcp-issued-modal"
         title="Copy this token now"
         visible={Boolean(issued)}
       >
@@ -265,7 +247,7 @@ const McpSettingsScreen: React.FC = () => {
               variant="secondary"
             />
           </Box>
-        ) : null}
+        ) : undefined}
       </Modal>
     </Page>
   );

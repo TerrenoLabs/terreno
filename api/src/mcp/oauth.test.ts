@@ -176,7 +176,7 @@ describe("MCP OAuth authorization server", () => {
       McpOAuthAuthorization.deleteMany({}),
       McpOAuthClient.deleteMany({}),
       McpOAuthToken.deleteMany({}),
-      McpServiceToken.deleteMany({}),
+      McpServiceToken.collection.deleteMany({}),
     ]);
     clearMCPRegistry();
     app = buildApp();
@@ -690,7 +690,7 @@ describe("MCP OAuth authorization server", () => {
     });
 
     it("keeps accepting JWT and mcp_ service tokens", async () => {
-      const created = await agent.post("/mcp/service-tokens").send({name: "Agent"});
+      const created = await agent.post("/mcp/service-tokens/create").send({name: "Agent"});
 
       const jwtCall = await agent
         .post("/mcp")

@@ -63,7 +63,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
 
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const detail = useMemo(() => unwrapPromptDetail(data), [data]);
-  // Keep the last loaded hub when a version pin changes the RTK cache key.
+  // Keep the last loaded hub when a version pin changes the detail request URL.
   // A fresh query starts with empty `data` and `isLoading`, which would unmount the hub.
   useEffect(() => {
     if (!detail || !name) {

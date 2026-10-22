@@ -3,8 +3,10 @@ import {assert} from "chai";
 import supertest from "supertest";
 import type {UserModel as UserModelType} from "../auth";
 import {VersionConfig} from "../models/versionConfig";
+import {configureOpenApiValidator, resetOpenApiValidatorConfig} from "../openApiValidator";
 import {TerrenoApp} from "../terrenoApp";
 import {setupDb, UserModel} from "../tests";
+import {expectDocumentedResponse} from "../tests/openApiResponseSchema";
 import {VersionCheckPlugin} from "../versionCheckPlugin";
 
 const typedUserModel = UserModel as unknown as UserModelType;
@@ -351,5 +353,75 @@ describe("VersionCheckPlugin direct usage", () => {
     const res = await testApp.get("/version-check?version=50&platform=web");
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("required");
+  });
+});
+
+describe("VersionCheckPlugin OpenAPI", () => {
+  const buildApp = (): ReturnType<TerrenoApp["build"]> =>
+    new TerrenoApp({skipListen: true, userModel: typedUserModel})
+      .register(new VersionCheckPlugin())
+      .build();
+
+  beforeEach(async () => {
+    await setupDb();
+    await VersionConfig.deleteMany({});
+  });
+
+  it("documents GET /version-check in /openapi.json", async () => {
+    const res = await supertest(buildApp()).get("/openapi.json").expect(200);
+    const operation = res.body.paths["/version-check"]?.get;
+    expect(operation).toBeDefined();
+    const parameters = operation.parameters as {in: string; name: string; schema: unknown}[];
+    expect(parameters.map((parameter) => `${parameter.in}:${parameter.name}`)).toEqual([
+      "query:platform",
+      "query:version",
+    ]);
+    expect(parameters[0]?.schema).toEqual({enum: ["web", "mobile"], type: "string"});
+    const schema = operation.responses["200"].content["application/json"].schema;
+    expect(schema.required).toEqual(["status"]);
+    expect(schema.properties.status.enum).toEqual(["ok", "warning", "required"]);
+    expect(Object.keys(schema.properties).sort()).toEqual([
+      "message",
+      "pollingIntervalMs",
+      "requiredVersion",
+      "status",
+      "updateUrl",
+      "warningVersion",
+    ]);
+  });
+
+  it("returns ok, warning, and required bodies that match the documented schema", async () => {
+    const agent = supertest(buildApp());
+    const spec = (await agent.get("/openapi.json").expect(200)).body;
+    await VersionConfig.create({
+      requiredMessage: "Update required",
+      updateUrl: "https://example.com/update",
+      warningMessage: "Please update",
+      webRequiredVersion: 50,
+      webWarningVersion: 100,
+    });
+
+    for (const [version, status] of [
+      [150, "ok"],
+      [80, "warning"],
+      [10, "required"],
+    ] as const) {
+      const res = await agent.get("/version-check").query({platform: "web", version}).expect(200);
+      expect(res.body.status).toBe(status);
+      expectDocumentedResponse({method: "get", path: "/version-check", response: res, spec});
+    }
+  });
+
+  it("does not validate documented query params: a non-numeric version is still ok", async () => {
+    configureOpenApiValidator({logValidationErrors: false});
+    try {
+      const res = await supertest(buildApp())
+        .get("/version-check")
+        .query({platform: "tv", version: "abc"});
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("ok");
+    } finally {
+      resetOpenApiValidatorConfig();
+    }
   });
 });

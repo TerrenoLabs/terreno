@@ -1,4 +1,4 @@
-import {useCallback, useState} from "react";
+import {useCallback, useRef, useState} from "react";
 import type {AdminRequestArgs} from "../../../adminRequest";
 import {
   type AdminRpcQueryState,
@@ -16,7 +16,7 @@ export interface ObservabilityQueryOptions {
   skip?: boolean;
 }
 
-/** Mutation state mirrored from RTK: the last result, the last error, and in-flight state. */
+/** Mutation state: the last result, the last error, and in-flight state. */
 export interface ObservabilityMutationState<Result> {
   data?: Result;
   error?: unknown;
@@ -31,7 +31,7 @@ export type ObservabilityMutation<Arg, Result> = [
 
 /**
  * GET an observability route through the host-bound admin client. Single-document
- * `{data}` envelopes unwrap to the document, as the RTK base query did.
+ * `{data}` envelopes unwrap to the document (list envelopes stay whole).
  */
 export const useObservabilityQuery = <T>({
   providesTags,
@@ -54,7 +54,7 @@ export const useObservabilityQuery = <T>({
 
 /**
  * Write to an observability route. The request starts when the trigger is called
- * (like an RTK mutation trigger); `unwrap()` resolves to the response or rejects
+ * (not on mount); `unwrap()` resolves to the response or rejects
  * with the request error, and the hook state tracks the last outcome.
  */
 export const useObservabilityMutation = <Arg, Result>({
@@ -72,10 +72,14 @@ export const useObservabilityMutation = <Arg, Result>({
   const [outcome, setOutcome] = useState<{data?: Result; error?: unknown; isError: boolean}>({
     isError: false,
   });
+  // Callers pass an inline `toRequest`; reading it from a ref keeps the trigger stable so
+  // screens can list it as an effect dependency without re-sending the request each render.
+  const toRequestRef = useRef(toRequest);
+  toRequestRef.current = toRequest;
 
   const run = useCallback(
     (arg: Arg): {unwrap: () => Promise<Result>} => {
-      const promise = trigger(toRequest(arg))
+      const promise = trigger(toRequestRef.current(arg))
         .unwrap()
         .then((result) => {
           setOutcome({data: result as Result, isError: false});
@@ -89,7 +93,7 @@ export const useObservabilityMutation = <Arg, Result>({
       promise.catch(() => undefined);
       return {unwrap: (): Promise<Result> => promise};
     },
-    [toRequest, trigger]
+    [trigger]
   );
 
   return [

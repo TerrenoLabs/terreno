@@ -1,41 +1,49 @@
-import {beforeAll, beforeEach, describe, it, mock} from "bun:test";
+import {afterAll, beforeAll, beforeEach, describe, it, mock} from "bun:test";
 import {assert} from "chai";
+import {useLocalSearchParams} from "expo-router";
 import React from "react";
-import {renderToString} from "react-dom/server";
+import {act, create} from "react-test-renderer";
 
 const capturedMembersProps: {
   current?: {api?: unknown; organizationId?: string; routeBase?: string};
 } = {};
-const mockTerrenoApi = {reducerPath: "example-frontend-members-test-api"};
 const searchParamsState: {orgId?: string} = {orgId: "org-42"};
 
+// Spread the real module: Bun's mock.module is process-global, and sibling suites
+// (documents) import other admin-frontend exports.
+const actualAdminFrontend = await import("@terreno/admin-frontend");
 mock.module("@terreno/admin-frontend", () => ({
+  ...actualAdminFrontend,
   OrgMembersScreen: (props: {api?: unknown; organizationId?: string; routeBase?: string}) => {
     capturedMembersProps.current = props;
     return null;
   },
 }));
-mock.module("expo-router", () => ({
-  useLocalSearchParams: () => searchParamsState,
-  // Include useRouter so this incomplete mock does not break sibling suites that
-  // import {useRouter} from "expo-router" under Bun's process-global mock.module.
-  useRouter: () => ({back: (): void => {}, push: (): void => {}}),
-}));
-mock.module("@/store/sdk", () => ({
-  terrenoApi: mockTerrenoApi,
-  // Sibling suites import named RTK hooks from this module under Bun's
-  // process-global mock.module; keep stubs so those exports stay resolvable.
-  usePostNotificationsDevNotifyMutation: () => [async (): Promise<void> => {}, {isLoading: false}],
-}));
+// Drive the preload's expo-router mock instead of replacing the module: Bun's
+// mock.module is process-global and sibling suites rely on the shared mock functions.
+const searchParamsMock = useLocalSearchParams as unknown as {
+  mockImplementation: (impl: () => {orgId?: string}) => void;
+};
 
 let OrgMembersRoute: React.FC;
 
+const renderRoute = (): void => {
+  act(() => {
+    create(<OrgMembersRoute />);
+  });
+};
+
 describe("OrgMembersRoute", () => {
+  afterAll(() => {
+    searchParamsMock.mockImplementation(() => ({}));
+  });
+
   beforeAll(async () => {
     ({default: OrgMembersRoute} = await import("../app/admin/orgs/[orgId]/members"));
   });
 
   beforeEach(() => {
+    searchParamsMock.mockImplementation(() => searchParamsState);
     searchParamsState.orgId = "org-42";
     capturedMembersProps.current = undefined;
   });
@@ -43,13 +51,13 @@ describe("OrgMembersRoute", () => {
   it("reads orgId from expo-router search params", () => {
     searchParamsState.orgId = "org-acme-99";
 
-    renderToString(<OrgMembersRoute />);
+    renderRoute();
 
     assert.equal(capturedMembersProps.current?.organizationId, "org-acme-99");
   });
 
-  it("wires OrgMembersScreen with organizationId and routeBase and no RTK api", () => {
-    renderToString(<OrgMembersRoute />);
+  it("wires OrgMembersScreen with organizationId and routeBase and no api prop", () => {
+    renderRoute();
 
     assert.isUndefined(capturedMembersProps.current?.api);
     assert.equal(capturedMembersProps.current?.organizationId, "org-42");

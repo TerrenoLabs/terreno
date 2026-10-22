@@ -27,6 +27,11 @@ jobs:
         working-directory: .
         run: bun install --frozen-lockfile
 
+      # generatedApp.compile.test.ts type-checks a scaffolded app against these packages' dist.
+      - name: Compile workspace packages the generated app imports
+        working-directory: .
+        run: bun run --filter '@terreno/api' --filter '@terreno/blocks' --filter '@terreno/jobs' --filter '@terreno/api-health' --filter '@terreno/admin-backend' --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/admin-frontend' compile
+
       - name: Lint
         run: bun run lint
 

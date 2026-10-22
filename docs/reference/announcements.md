@@ -82,7 +82,7 @@ The plugin applies `matchAudienceByType` before `matchAudience`. When `isStaff` 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/announcements/pending` | Current interrupt (`modal` or `banner` only) + `remainingCount` (`platform` query: `ios` \| `android` \| `web`; optional `version` build number) |
-| GET | `/announcements/feed` | Paginated published changelog — all display modes (`platform` and optional `version` as above) |
+| GET | `/announcements/feed` | Paginated published changelog — all display modes (`platform` and optional `version` as above; `limit` 1–100, default 20; `page` from 1). Returns `{data, more, page, total}`; `more` is true when a later page has items. |
 | POST | `/announcements/:id/acknowledge` | Record acknowledgement (idempotent per version). Same visibility as pending/feed; **404** when not visible. |
 | POST | `/announcements/:id/impression` | Record a view (`{ platform? }`). Same visibility as pending/feed; **404** when not visible. **400** for unknown keys or an invalid `platform`. |
 | POST | `/announcements/:id/click` | Record a primary-action click (`{ action: "primaryAction", platform? }`; optional `?version=` for min-build visibility). Returns **404** when not visible (checked before action/CTA validation). **400** when `action` is invalid, `primaryAction` is absent, or an explicit `platform` value is invalid. |
@@ -172,11 +172,11 @@ Set these environment variables on the MCP server to include live announcements:
 
 ### `useAcknowledgeAnnouncement`
 
-Injects RTK Query mutations for acknowledgement, impression, and primary-action click tracking:
+Sends acknowledgement, impression, and primary-action click events through the `client` passed to `useAcknowledgeAnnouncement(client, baseUrl?)` (see [`TerrenoRequestClient`](ui.md#terrenorequestclient)):
 
 | Method | Route | Notes |
 |--------|-------|-------|
-| `acknowledge(id)` | `POST /announcements/:id/acknowledge` | Invalidates pending queue. Query includes `platform` and, when available, `version` (same visibility gate as pending/feed). |
+| `acknowledge(id)` | `POST /announcements/:id/acknowledge` | Refetches the pending announcement in every mounted `useAnnouncements` on the same client. Query includes `platform` and, when available, `version` (same visibility gate as pending/feed). |
 | `recordImpression(id)` | `POST /announcements/:id/impression` | Sends current `platform` in body |
 | `recordClick(id)` | `POST /announcements/:id/click` | Body `{ action: "primaryAction", platform }`; query includes `platform` and, when available, `version` (same visibility gate as pending/feed) |
 

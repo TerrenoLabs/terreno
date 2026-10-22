@@ -77,6 +77,10 @@
     "./testing": {
       "default": "./dist/tests.js",
       "types": "./dist/tests.d.ts"
+    },
+    "./testing/openApi": {
+      "default": "./dist/tests/openApiResponseSchema.js",
+      "types": "./dist/tests/openApiResponseSchema.d.ts"
     }
   },
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",

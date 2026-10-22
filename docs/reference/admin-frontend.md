@@ -14,12 +14,12 @@ Home is `AdminHome` inside `AdminProvider` + `AdminShellLayout`. Generic models 
 admin request goes through it: model CRUD, `/admin/config`, scripts, roles,
 configuration, documents, comms, jobs, organizations, consent, announcements,
 version-config, background-tasks, migrations, AI observability, and the object
-picker. Admin components take no RTK `api` prop (removed in Terreno 58).
+picker. Admin components take no `api` prop (the RTK `api` prop was removed in Terreno 58).
 
 | Host | Props |
 | --- | --- |
 | Standalone SPA | `credentials="same-origin"` (cookie session). Omit `apiOrigin` and `getAuthHeaders`. |
-| Embedded app | `getAuthHeaders` that return `Authorization: Bearer …`, plus `apiOrigin` set to the API origin (`@terreno/rtk` `baseUrl`) |
+| Embedded app | `getAuthHeaders` that return `Authorization: Bearer …`, plus `apiOrigin` set to the API origin (`baseUrl` from `@terreno/syncdb/config`) |
 
 `AdminProvider` calls `bindAdminRequest({credentials, getAuthHeaders, origin: apiOrigin})`
 and exposes the result through `useAdminRpc()`. Relative URLs such as `/admin/config` are
@@ -340,17 +340,18 @@ providesTags, headers, skip, pollingInterval, transformResponse})` runs a GET an
 returns `{data, error, isError, isLoading, isFetching, refetch}`;
 `useAdminRpcMutation(rpc, {invalidatesTags})` returns `[trigger, {isLoading}]` where
 `trigger(args).unwrap()` sends the request. Use these for custom admin RPC. The
-client is native `adminRequest` (`AbortController` timeout, JSON or `FormData`,
-`credentials` forwarded); `unwrapAdminEnvelope` unwraps `{data}` responses the way
-`@terreno/rtk` did.
+client is `adminRequest`, built on `apiFetch` from `@terreno/syncdb/api` (timeout, JSON or
+`FormData`, `credentials` forwarded); `unwrapAdminEnvelope` unwraps `{data}` responses the
+same way the syncdb request client does.
 
 ## Expo Router Setup
 
 ``````typescript
 // app/admin/_layout.tsx
 import {AdminProvider} from "@terreno/admin-frontend";
-import {baseUrl} from "@terreno/rtk";
+import {baseUrl} from "@terreno/syncdb/config";
 import {Stack} from "expo-router";
+import {getAdminAuthHeaders} from "@/store/syncdb"; // () => ({Authorization: "Bearer …"})
 
 export default function AdminLayout() {
   return (
@@ -389,20 +390,24 @@ export default () => {
 ## Protecting Admin Routes
 
 ``````typescript
-// app/_layout.tsx
-import {useSelectCurrentUser} from "@/store/openApiSdk";
+// app/admin/_layout.tsx
+import {canOpenAdminPage} from "@terreno/syncdb/app";
+import {useSession} from "@terreno/syncdb/auth";
 import {Redirect} from "expo-router";
+import {useGetAuthMeQuery} from "@/store/apiSdk";
 
-function RootLayout() {
-  const user = useSelectCurrentUser();
-  const pathname = usePathname();
-  
-  if (!user?.admin && pathname.startsWith("/admin")) {
+const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => {
+  const {userId} = useSession();
+  const {data: me, isLoading} = useGetAuthMeQuery(undefined, {skip: !userId});
+
+  if (isLoading) {
+    return null;
+  }
+  if (!canOpenAdminPage({admin: me?.admin, permissions: me?.permissions})) {
     return <Redirect href="/" />;
   }
-  
-  return <Stack />;
-}
+  return <>{children}</>;
+};
 ``````
 
 ## Custom Field Renderers
@@ -492,7 +497,7 @@ prompt** on `aiPrompt:create`, **Create evaluator** on `aiEvaluator:create`, and
 Dataset detail hides **Add item** without `aiDataset:update` and **Run experiment** without
 `aiExperiment:create`; dataset lists hide **Import** without
 `aiDataset:update`. Judge schema checks use the production prompt version, or the latest version
-when production is unset. Widgets do not couple to host Redux.
+when production is unset. Widgets do not couple to host app state.
 
 `ai-prompts` lists prompts with a folder rail, search, type badge, latest vs production columns
 (tooltips), 7-day usage, and **Create prompt** when `aiPrompt:create` is allowed. The create modal
@@ -633,7 +638,7 @@ markdown renders as markdown), plus a **Reason** field and
 | In flight | Both buttons and the reason field are disabled until the decision returns, so it is sent once. |
 
 Requests use the host-bound admin request client (`AdminProvider` `getAuthHeaders` / `apiOrigin`),
-never RTK `injectEndpoints`. Test ids: `harness-approvals` (root), `harness-approvals-list`,
+never a second request client. Test ids: `harness-approvals` (root), `harness-approvals-list`,
 `harness-approvals-empty`, `harness-approvals-error`, `harness-approvals-loading`,
 `harness-approvals-refresh`, `harness-approvals-notice`, `harness-approval-row-<id>-clickable`,
 `harness-approval-detail`, `harness-approval-payload`, `harness-approval-reason`,
@@ -647,7 +652,7 @@ never RTK `injectEndpoints`. Test ids: `harness-approvals` (root), `harness-appr
 
 ```typescript
 import {bindAdminRequest, HarnessApprovalInbox} from "@terreno/admin-frontend";
-import {baseUrl} from "@terreno/rtk";
+import {baseUrl} from "@terreno/syncdb/config";
 import {Page} from "@terreno/ui";
 
 // getAuthHeaders: the host's `() => ({Authorization: "Bearer …"})`, as passed to AdminProvider.

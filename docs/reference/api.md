@@ -50,11 +50,14 @@ Two patterns for building Terreno APIs:
 
 ### Removed: modelRouter `realtime`
 
-Terreno 58 removed `modelRouter({ realtime })` and the legacy RTK `sync` websocket event. Passing `realtime` is now a TypeScript error. Use `sync` with [`@terreno/syncdb`](syncdb.md). See [Migrate from RTK to syncdb](../how-to/migrate-rtk-to-syncdb.md).
+Terreno 58 removed `modelRouter({ realtime })` and the legacy RTK `sync` websocket event. Passing `realtime` is now a TypeScript error. Use `sync` with [`@terreno/syncdb`](syncdb.md). See [Upgrade from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md).
 
 Also removed: `RealtimeConfig`, `RealtimeEvent`, `DocumentSubscription`, `QuerySubscription`, the realtime registry (`registerRealtime`, `getRealtimeRegistry`, `findRegistryEntryByCollection`, `findRegistryEntryByRoutePath`, `updateRealtimeRegistryOptions`, `clearRealtimeRegistry`, `RealtimeRegistryEntry`), the query-subscription store (`addQuerySubscription`, `removeQuerySubscription`, `removeAllSocketQueries`, `getQuerySubscriptionsForCollection`, `computeQueryId`, `clearQueryStore`), and `MAX_MODEL_SUBSCRIPTIONS` / `MAX_DOCUMENT_SUBSCRIPTIONS` / `MAX_QUERY_SUBSCRIPTIONS`. The server no longer handles `subscribe:model`, `subscribe:document`, or `subscribe:query`.
 
 `RealtimeApp` stays. It hosts Socket.io, socket auth, change streams, and `sync:delta`.
+Before it sends a `sync:delta` to a socket, it runs the router's `read` permissions (or RBAC
+read access) against the change's post-image hydrated as a model document, as REST does. So a
+virtual owner field works: `GptHistory`'s `ownerId` alias of `userId` passes `Permissions.IsOwner`.
 
 Keep `admin.realtime` when you want admin `admin:model.changed` events.
 
@@ -315,7 +318,7 @@ Create, update, and delete tools share REST permission, hook, and persistence se
 
 ### MCP service token model
 
-`McpServiceToken` stores the hashed credential records used by the optional MCP service-token feature. It is not a `modelRouter` model: consumer-facing create, list, and revoke routes are registered only when `mcpServiceTokens` is enabled on `TerrenoApp`.
+`McpServiceToken` stores the hashed credential records used by the optional MCP service-token feature. `_id` is a String (UUID for new rows; ObjectId hex for rows migrated from 57.x). The schema uses `isDeletedPlugin` and `syncPlugin`, so with `mcpServiceTokens` enabled the collection is synced read-only to its owner.
 
 ```typescript
 import {McpServiceToken} from "@terreno/api";
@@ -327,17 +330,23 @@ const {mcpServiceToken, token} = await McpServiceToken.issueFor(
 // Store or show `token` once. Only its SHA-256 hash is persisted.
 ```
 
-The token begins with `mcp_` followed by 32 random bytes encoded as hex. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. Document `deleteOne` (admin DELETE) also sets `revokedAt` and leaves the row for audit. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
+The token begins with `mcp_` followed by 32 random bytes encoded as hex. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. A delete never removes or tombstones the row: document `deleteOne` and a soft delete (admin DELETE sets `deleted: true`) both set `revokedAt` and keep `deleted: false`, so the owner's synced row shows the revoke. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
 
-Self-serve HTTP routes live at `/mcp/service-tokens`. `TerrenoApp` mounts them when `mcpServiceTokens` is enabled, passing its OpenAPI bundle. You can also call `addMcpServiceTokenRoutes(app, {publicMcpUrl, openApi})` yourself. They require session or JWT auth and **reject** `Authorization: Bearer mcp_…` so a service token cannot mint or list tokens.
+Self-serve routes are `modelRouter("/mcp/service-tokens", McpServiceToken, {sync: {scope: {type: "owner", field: "userId"}}})`. `TerrenoApp` mounts them when `mcpServiceTokens` is enabled, passing its OpenAPI bundle. You can also call `addMcpServiceTokenRoutes(app, {publicMcpUrl, openApi})` yourself, or build the registration with `createMcpServiceTokenRouter(options)`. They require session or JWT auth and **reject** `Authorization: Bearer mcp_…` so a service token cannot mint, list, or revoke tokens.
 
 | Method | Path | Body / params | Response |
 | --- | --- | --- | --- |
-| POST | `/mcp/service-tokens` | `{name, expiresAt?}` | `{data: {id, name, token, tokenPrefix, mcpUrl, expiresAt, created}}` |
-| GET | `/mcp/service-tokens` | `?page&limit` | `{data, page, limit, total, more}` — no `token` or `tokenHash` |
-| DELETE | `/mcp/service-tokens/:id` | — | `{data: {id, revokedAt}}` — owner only |
+| POST | `/mcp/service-tokens/create` | `{name, expiresAt?}` | `{data: {id, name, token, tokenPrefix, mcpUrl, expiresAt, created}}` (operation `mcpServiceTokens_create`) |
+| GET | `/mcp/service-tokens` | `?page&limit` | `{data, page, limit, more, total}` — the caller's rows, no `token` or `tokenHash` |
+| GET | `/mcp/service-tokens/:id` | — | `{data}` — owner only (`403` otherwise) |
+| POST | `/mcp/service-tokens/:id/revoke` | — | `{data}` — the revoked row without `tokenHash` (operation `mcpServiceTokens_revoke`) |
+| POST / PATCH / DELETE | `/mcp/service-tokens[/:id]` | — | `405`: client writes are disabled |
 
-`expiresAt` is an optional ISO-8601 datetime (Luxon `DateTime.fromISO`). Omit it for a token that does not expire. Create returns `mcpUrl` from `publicMcpUrl`, else `BETTER_AUTH_URL`, else the request host, with `/mcp` appended when missing. An 11th **active** token for the same user is `400`. Revoke and cross-owner access are `404`. List includes revoked rows for the owner so the UI can show history. Default page size is 100 (maximum 100).
+`expiresAt` is an optional ISO-8601 datetime (Luxon `DateTime.fromISO`). Omit it for a token that does not expire. Create returns `mcpUrl` from `publicMcpUrl`, else `BETTER_AUTH_URL`, else the request host, with `/mcp` appended when missing. An 11th **active** token for the same user is `400`. Revoking an unknown, foreign, or already revoked token is `404`. List includes revoked rows for the owner so the UI can show history. Default and maximum page size is 100.
+
+Sync: collection `mcp/service-tokens`, stream `mcp/service-tokens|owner:{userId}`. Snapshot entities, `/sync/entities` rows, and `sync:delta` payloads go through `toPublicMcpServiceToken`, which drops `tokenHash`. Sync `create`, `update`, and `delete` mutations are nacked `unauthorized`; mint and revoke through the actions above.
+
+Migration: `mcpServiceTokenStringIdsMigration.up` (slug `mcp-service-token-string-ids`) re-inserts each ObjectId row with `_id = oldId.toHexString()` and deletes the original. It is idempotent, resumes an interrupted run, and works without transactions. `migrateMcpServiceTokenStringIds(ctx)` returns `{converted, pending}`. Wire it into an app `migrations/` file as shown in [Run MongoDB migrations](../how-to/run-mongodb-migrations.md#framework-migrations).
 
 ### MCP OAuth
 
@@ -421,7 +430,7 @@ setupServer({
 - `POST /auth/login` — Authenticate with email/password
 - `POST /auth/refresh_token` — Refresh access token
 - `POST /auth/forgotPassword` — Always 202; mails a reset link only when the email exists
-- `POST /auth/resetPassword` — `{token, password}`; also aliased at `POST /resetPassword` for the RTK client
+- `POST /auth/resetPassword` — `{token, password}`; also aliased at `POST /resetPassword` (the `jwtAuthAdapter` `resetPassword` path in `@terreno/syncdb/auth`)
 - `POST /auth/sendVerification` — Authenticated; 202 only after delivery succeeds; mails a verification link when `emailVerified` is not true
 - `POST /auth/verifyEmail` — `{token}` sets `emailVerified` true
 - `GET /auth/me` — Get current user profile
@@ -457,7 +466,7 @@ case instead of 202. Email lookup is case-insensitive. Successful reset calls `s
 and deletes Better Auth sessions. Better Auth password reset updates the JWT password
 and `tokenEpoch` for the matching app User. Access
 tokens stay valid until expiry (default 15m). `POST /resetPassword`
-matches the `@terreno/rtk` `resetPassword` mutation path (`password` or `newPassword`).
+matches the `@terreno/syncdb/auth` `jwtAuthAdapter` `resetPassword` path (`password` or `newPassword`).
 
 Add `tokenEpoch` (number, default 0) on the User schema so epoch bumps persist under
 `strict: "throw"`. See `example-backend` User. Opt in to `emailVerified` with

@@ -22,7 +22,6 @@ const DEPENDENCY_INPUTS = [
   "feature-flags/src",
   "jobs/src",
   "mcp-server/src",
-  "rtk/src",
   "scripts",
   "syncdb/src",
   "test/src",

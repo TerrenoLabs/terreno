@@ -6,19 +6,21 @@
  * endpoints for fetching pending consents and submitting responses.
  */
 
-import {type Application, Router} from "express";
+import {type Application, type RequestHandler, Router} from "express";
 import {DateTime} from "luxon";
+import type {Model} from "mongoose";
 import type {CollectionActionConfig} from "./actions";
 import type {AdminContribution} from "./adminTypes";
-import {asyncHandler, modelRouter} from "./api";
+import {asyncHandler, modelRouter, type OpenApiMiddleware} from "./api";
 import type {User} from "./auth";
 import {authenticateMiddleware} from "./auth";
 import {APIError} from "./errors";
 import {logger} from "./logger";
 import {ConsentForm} from "./models/consentForm";
 import {ConsentResponse} from "./models/consentResponse";
+import {createOpenApiBuilder, type OpenApiSchemaProperty} from "./openApiBuilder";
 import {Permissions} from "./permissions";
-import type {PopulatePath} from "./populate";
+import {getOpenApiSpecForModel, type PopulatePath} from "./populate";
 import type {TerrenoPlugin} from "./terrenoPlugin";
 import type {ConsentFormDocument} from "./types/consentForm";
 
@@ -33,6 +35,65 @@ export const consentResponsePopulatePaths: PopulatePath[] = [
     path: "userId",
   },
 ];
+
+/** A consent document as `toJSON` serializes it: model fields plus the `id` virtual. */
+const consentDocumentOpenApiSchema = (model: Model<unknown>): OpenApiSchemaProperty => {
+  const {properties, required} = getOpenApiSpecForModel(model);
+  return {
+    properties: {
+      ...(properties as Record<string, OpenApiSchemaProperty>),
+      id: {description: "The document id, the same value as _id", type: "string"},
+    },
+    required: Array.from(new Set([...required, "_id", "id"])),
+    type: "object",
+  };
+};
+
+/** Documentation only: request validation stays off so the handlers behave as before. */
+const buildConsentOpenApi = (
+  openApi: OpenApiMiddleware | undefined
+): {pending: RequestHandler; respond: RequestHandler} => {
+  const noop: RequestHandler = (_req, _res, next) => next();
+  if (!openApi?.path) {
+    return {pending: noop, respond: noop};
+  }
+  const consentForm = consentDocumentOpenApiSchema(ConsentForm as unknown as Model<unknown>);
+  const consentResponse = consentDocumentOpenApiSchema(
+    ConsentResponse as unknown as Model<unknown>
+  );
+  return {
+    pending: createOpenApiBuilder({openApi})
+      .withTags(["consents"])
+      .withSummary("List active consent forms the current user still has to answer")
+      .withResponse(200, {data: {items: consentForm, type: "array"}}, {required: ["data"]})
+      .withValidation({enabled: false})
+      .build(),
+    respond: createOpenApiBuilder({openApi})
+      .withTags(["consents"])
+      .withSummary("Submit the current user's response to a consent form")
+      .withRequestBody({
+        agreed: {description: "Whether the user agreed", required: true, type: "boolean"},
+        checkboxValues: {
+          additionalProperties: {type: "boolean"},
+          description: "Checkbox index (as a string) to whether it was checked",
+          type: "object",
+        },
+        consentFormId: {
+          description: "The consent form being answered",
+          required: true,
+          type: "string",
+        },
+        locale: {description: "Locale the form was shown in", required: true, type: "string"},
+        signature: {
+          description: "Signature image data, required when the form captures a signature",
+          type: "string",
+        },
+      })
+      .withResponse(200, {data: consentResponse}, {required: ["data"]})
+      .withValidation({enabled: false})
+      .build(),
+  };
+};
 
 export interface ConsentAppOptions {
   auditTrail?: boolean;
@@ -167,8 +228,9 @@ export class ConsentApp implements TerrenoPlugin {
     };
   }
 
-  register(app: Application): void {
+  register(app: Application, openApi?: unknown): void {
     const {auditTrail, resolveConsentForms, aiConfig} = this.options;
+    const consentOpenApi = buildConsentOpenApi(openApi as OpenApiMiddleware | undefined);
 
     const collectionActions: Record<string, CollectionActionConfig<unknown, unknown, unknown>> = {};
 
@@ -312,6 +374,7 @@ export class ConsentApp implements TerrenoPlugin {
     router.get(
       "/pending",
       authenticateMiddleware(),
+      consentOpenApi.pending,
       asyncHandler(async (req, res) => {
         const user = req.user as User | undefined;
         if (!user) {
@@ -383,6 +446,7 @@ export class ConsentApp implements TerrenoPlugin {
     router.post(
       "/respond",
       authenticateMiddleware(),
+      consentOpenApi.respond,
       asyncHandler(async (req, res) => {
         const user = req.user as User | undefined;
         if (!user) {

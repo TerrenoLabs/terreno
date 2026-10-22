@@ -1,7 +1,6 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["../biome.jsonc"],
-  "plugins": ["../biome/plugins/no-barrel-imports.grit"],
   "files": {
     "includes": [
       "package.json",
@@ -15,7 +14,6 @@
       "components/**/*.tsx",
       "e2e/**/*.ts",
       "playwright.config.ts",
-      "!store/openApiSdk.ts",
       "!!**/node_modules",
       "!!node_modules",
       "!!**/dist",
@@ -26,5 +24,6 @@
       "!!coverage"
     ]
   },
+  "plugins": ["../biome/plugins/no-barrel-imports.grit"],
   "root": true
 }

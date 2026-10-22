@@ -13,6 +13,7 @@ import {
   groupFilesByWorkspace,
   isCoveragePathIgnored,
   isCoverageSourceFile,
+  isReExportOnlySource,
   PACKAGE_CI_LCOV_SKIP,
   packageNeedsCompiledDistDeps,
   parseNewFileCoverageArgs,
@@ -70,8 +71,14 @@ describe("isCoverageSourceFile", () => {
     assert.isFalse(isCoverageSourceFile("api/src/newRoute.test.ts"));
     assert.isFalse(isCoverageSourceFile("ui/src/NewComponent.stories.tsx"));
     assert.isFalse(isCoverageSourceFile("example-frontend/e2e/helpers/auditEvents.ts"));
-    assert.isFalse(isCoverageSourceFile("example-frontend/store/openApiSdk.ts"));
+    assert.isFalse(isCoverageSourceFile("example-frontend/store/apiSdk.ts"));
+    assert.isFalse(isCoverageSourceFile("example-frontend/store/syncDbSdk.ts"));
     assert.isFalse(isCoverageSourceFile("api/src/readme.md"));
+    assert.isFalse(
+      isCoverageSourceFile(
+        "mcp-server/src/docs/templates/bootstrap/frontend/app/signup.template.tsx"
+      )
+    );
     assert.isFalse(isCoverageSourceFile("api/src/types/authToken.ts"));
     assert.isFalse(isCoverageSourceFile("announcements/src/types.ts"));
     assert.isFalse(isCoverageSourceFile("admin-frontend/src/testing/useAdminApiDouble.ts"));
@@ -348,5 +355,28 @@ describe("workspaceDepsCompileArgs", () => {
       "/repo/.github/scripts/compile-workspace-deps.js",
       "/repo/admin-backend",
     ]);
+  });
+});
+
+describe("isReExportOnlySource", () => {
+  it("treats subpath entry files of comments and re-exports as having no code", () => {
+    const entry = [
+      "/** `@terreno/syncdb/app` entry. */",
+      'export {type A, b} from "./b";',
+      "export {",
+      "  c,",
+      "  type D,",
+      '} from "./c";',
+      'export * from "./e";',
+      'export * as f from "./f";',
+      "",
+    ].join("\n");
+    assert.isTrue(isReExportOnlySource(entry));
+  });
+
+  it("keeps files with runtime code or local exports", () => {
+    assert.isFalse(isReExportOnlySource('export {a} from "./a";\nexport const b = 1;\n'));
+    assert.isFalse(isReExportOnlySource('import {a} from "./a";\nexport {a};\n'));
+    assert.isFalse(isReExportOnlySource("// only a comment\n"));
   });
 });

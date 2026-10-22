@@ -4,81 +4,52 @@
 
 | File | Editable? | Purpose |
 |------|-----------|---------|
-| `store/openApiSdk.ts` | **Never** | Auto-generated hooks from OpenAPI |
-| `store/sdk.ts` | **Yes** | Extensions, cache tags, custom endpoints |
-| `openapi-config.ts` | **Yes** | Codegen configuration |
+| `store/apiSdk.ts` | **Never** | Typed hooks for every non-synced OpenAPI operation (`--api-out`) |
+| `store/syncDbSdk.ts` | **Never** | `SYNC_COLLECTIONS` + collection hooks (`--out`) |
+| `store/apiClient.ts` | **Yes** | `createApiClient` (auth, headers, `onError`) |
+| `syncdb-codegen.json` | **Yes** | Codegen config (`excludePaths`, per-collection `overrides`) |
 
-## injectEndpoints
+## Generated hooks
 
-Add app-specific endpoints that are not in the OpenAPI spec (rare — prefer backend routes):
+Names follow the old RTK codegen rule: camelCased `operationId`, otherwise method + path with
+`{param}` as `By<Param>` (`PATCH /gpt/histories/{id}` → `usePatchGptHistoriesByIdMutation`).
+Each operation also gets `<Name>Args`, `<Name>Res`, and `<name>Request(arg)` for
+`apiClient.request(...)`. Tags come from the operation's OpenAPI tags.
 
 ```tsx
-import {openapi} from "./openApiSdk";
-
-export const terrenoApi = openapi
-  .injectEndpoints({
-    endpoints: (build) => ({
-      getMe: build.query({
-        query: () => "/auth/me",
-        providesTags: ["profile"],
-      }),
-      patchMe: build.mutation({
-        query: (body) => ({
-          url: "/auth/me",
-          method: "PATCH",
-          body,
-        }),
-        invalidatesTags: ["profile"],
-      }),
-    }),
-  })
-  .enhanceEndpoints({
-    addTagTypes: ["todos", "users", "profile"],
-  });
+import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
 ```
 
-Import hooks from `@/store/sdk`, not `@/store/openApiSdk` directly.
+## Routes outside OpenAPI
+
+Prefer documenting the route in OpenAPI and regenerating. When that is not possible, call it
+directly through the request client:
+
+```tsx
+import {useApiMutation, useApiQuery, useLazyApiQuery} from "@terreno/syncdb/react";
+
+const {data, isLoading, refetch} = useApiQuery<Report>(
+  {url: "/reports/summary", params: {range}},
+  {providesTags: ["reports"], skip: !userId}
+);
+
+const [rebuild, {isLoading: isRebuilding}] = useApiMutation<RebuildBody, Report>(
+  (body) => ({body, method: "POST", url: "/reports/rebuild"}),
+  {invalidatesTags: ["reports"]}
+);
+await rebuild({range}).unwrap();
+```
 
 ## Cache tags
 
-Use `enhanceEndpoints` to add tag types, then `providesTags` / `invalidatesTags` in injected endpoints:
-
-```tsx
-import {invalidatesIdTags, providesIdTags} from "@terreno/rtk";
-
-// In injectEndpoints:
-listItems: build.query({
-  query: (params) => ({url: "/items", params}),
-  providesTags: providesIdTags("items"),
-}),
-createItem: build.mutation({
-  query: (body) => ({url: "/items", method: "POST", body}),
-  invalidatesTags: invalidatesIdTags("items"),
-}),
-```
-
-## Codegen config
-
-```typescript
-// openapi-config.ts
-const config: ConfigFile = {
-  apiFile: "@terreno/rtk",
-  apiImport: "emptySplitApi",
-  outputFile: "./store/openApiSdk.ts",
-  schemaFile: "http://localhost:4000/openapi.json",
-  hooks: true,
-  tag: true,
-  flattenArg: true,
-};
-```
-
-Override schema URL with `OPENAPI_URL` env var when needed.
+Queries register `providesTags`; mutations `invalidatesTags`. Imperatively:
+`apiClient.invalidateTags(["reports"])`. `apiClient.reset()` clears the cache (done on logout
+via `SessionProvider` `onLogout`). Synced collections have no request cache; their data is local.
 
 ## Workflow after backend change
 
 1. Start backend (`bun run backend:dev`)
-2. Run `cd example-frontend && bun run sdk`
-3. Import new hooks from `@/store/sdk`
-4. If the endpoint needs custom cache behavior, update `sdk.ts`
+2. Run `cd example-frontend && bun run sdk` (and `bun run sync-sdk` for synced schema changes)
+3. Import new hooks from `@/store/apiSdk` (or `@/store/syncDbSdk`)
 
 See the `generate-sdk` skill for the full procedure.

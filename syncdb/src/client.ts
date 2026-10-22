@@ -23,7 +23,12 @@ import {repairMarkedEntities} from "./sync/entityRepair";
 import {AuthRequiredError, createHttpChannel, type HttpChannel} from "./sync/httpChannel";
 import {createReplayCoordinator, type ReplayCoordinator} from "./sync/replayCoordinator";
 import {createSocketTransport} from "./sync/socketTransport";
-import type {SendMutationBatchResult, SendMutationResult, SyncTransport} from "./sync/transport";
+import type {
+  SendMutationBatchResult,
+  SendMutationResult,
+  SocketEventHandler,
+  SyncTransport,
+} from "./sync/transport";
 import {type HydrateWindowEntitiesResult, hydrateWindowEntities} from "./sync/windowHydrate";
 import type {
   AuthProvider,
@@ -328,6 +333,15 @@ export interface SyncDb {
    * Returns an unsubscribe function.
    */
   onStatusChange: (callback: () => void) => () => void;
+  /**
+   * Listen for an app-level server event on the sync socket (for example the
+   * feature-flags `featureFlagsChanged` push). One socket serves sync and app
+   * events. Listeners survive stop/start and reconnects; they fire only while the
+   * socket is connected. Names starting with `sync:` and Socket.io lifecycle
+   * events are reserved and throw. Returns an unsubscribe function; a transport
+   * without event support returns a no-op.
+   */
+  onSocketEvent: (event: string, handler: SocketEventHandler) => () => void;
   /**
    * In-memory debug event log when `config.debug` is enabled; otherwise
    * undefined. Its `snapshot()` is a plain serializable object suitable for
@@ -2395,6 +2409,13 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     });
   };
 
+  const onSocketEvent = (event: string, handler: SocketEventHandler): (() => void) => {
+    if (!transport.onEvent) {
+      return () => {};
+    }
+    return transport.onEvent(event, handler);
+  };
+
   const client: SyncDb = {
     debug: debugLog,
     forceResync,
@@ -2403,6 +2424,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     goOnline,
     hydrateWindow,
     mutate,
+    onSocketEvent,
     onStatusChange,
     outbox,
     queryWindows,

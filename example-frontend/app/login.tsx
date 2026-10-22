@@ -1,15 +1,16 @@
-import {baseUrl} from "@terreno/rtk";
+import {useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 import type {LoginScreenProps} from "@terreno/ui";
 import {LoginScreen} from "@terreno/ui";
 import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useMemo, useState} from "react";
 import {betterAuthClient, signInWithSocial} from "@/lib/betterAuth";
-import {syncBetterAuthSession, useAppDispatch} from "@/store/index";
 
 const Login: React.FC = () => {
   const router = useRouter();
-  const dispatch = useAppDispatch();
+  // Re-read the session right after sign-in so the root layout sees the new user before navigating.
+  const {refresh: refreshSession} = useSession();
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,7 +26,7 @@ const Login: React.FC = () => {
           setErrorMessage(result.error.message ?? "Sign in failed.");
           return;
         }
-        await syncBetterAuthSession(dispatch);
+        await refreshSession();
         router.replace("/(tabs)");
       } catch (error: unknown) {
         // A thrown error here is a transport failure rather than rejected credentials
@@ -37,7 +38,7 @@ const Login: React.FC = () => {
         setIsSubmitting(false);
       }
     },
-    [dispatch, router]
+    [refreshSession, router]
   );
 
   const handleSocialLogin = useCallback(
@@ -46,7 +47,7 @@ const Login: React.FC = () => {
       setErrorMessage(undefined);
       try {
         await signInWithSocial(provider);
-        await syncBetterAuthSession(dispatch);
+        await refreshSession();
         router.replace("/(tabs)");
       } catch (error: unknown) {
         console.error("[login] Social sign in threw", {baseUrl, error, provider});
@@ -55,7 +56,7 @@ const Login: React.FC = () => {
         setSocialLoading(null);
       }
     },
-    [dispatch, router]
+    [refreshSession, router]
   );
 
   const oauthProviders = useMemo((): LoginScreenProps["oauthProviders"] => {

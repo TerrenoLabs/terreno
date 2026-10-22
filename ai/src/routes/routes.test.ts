@@ -183,7 +183,7 @@ describe("AI Routes", () => {
   beforeAll(async () => {
     await ensureTestUsers();
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   beforeEach(() => {
@@ -205,7 +205,7 @@ describe("AI Routes", () => {
     streamTextOverride = undefined;
     resetObservabilityApp();
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("GPT History routes", () => {

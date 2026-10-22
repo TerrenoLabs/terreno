@@ -10,6 +10,7 @@ mock.module("@terreno/mcp/local-tools", () => ({
 }));
 
 mock.module("@terreno/syncdb/codegen", () => ({
+  generateApiSdk: async () => "export const useGetAuthMeQuery = () => undefined;",
   generateSyncDbSdk: async () => "export const sdk = {};",
   loadConfigFile: async () => undefined,
   parseCollectionsFlag: (value?: string) => (value ? value.split(",") : undefined),
@@ -49,7 +50,10 @@ describe("mocked local tools and syncdb", () => {
     expect(await runCli(["info", "--json"], io)).toBe(0);
     expect(await runCli(["logs", "--sources", "backend,metro"], io)).toBe(0);
     expect(await runCli(["logs", "last-error", "--json"], io)).toBe(0);
-    expect(await runCli(["state", "--slice", "rtk", "--query", "todos", "--json"], io)).toBe(0);
+    expect(
+      await runCli(["state", "--collection", "todos", "--entity-id", "t1", "--limit", "5"], io)
+    ).toBe(0);
+    expect(await runCli(["state", "--name", "app", "--no-events"], io)).toBe(0);
     expect(await runCli(["eval", "--code", "1 + 1", "--json"], io)).toBe(0);
     expect(await runCli(["navigate", "/profile", "--json"], io)).toBe(0);
     expect(await runCli(["db", "schema", "--json"], io)).toBe(0);
@@ -77,10 +81,51 @@ describe("mocked local tools and syncdb", () => {
     ).toBe(0);
     const output = io.stdoutLines.join("\n");
     expect(output).toContain('"sources":["backend","metro"]');
-    expect(output).toContain("get_rtk_state");
+    expect(output).toContain('get_syncdb_state:{"collection":"todos","entityId":"t1","limit":5}');
+    expect(output).toContain('get_syncdb_state:{"includeDebugEvents":false,"name":"app"}');
+    expect(output).not.toContain("get_rtk_state");
     expect(output).toContain("evaluate");
     expect(output).toContain("navigate");
     expect(output).toContain("database_query");
+  });
+
+  it("rejects removed Redux state flags and invalid limits", async (): Promise<void> => {
+    const io = createIo();
+    assert.equal(await runCli(["state", "--slice", "rtk"], io), 1);
+    assert.include(io.stderrLines.join("\n"), "removed in Terreno 58");
+    assert.equal(await runCli(["state", "--limit", "0"], io), 1);
+    assert.include(io.stderrLines.join("\n"), "--limit must be a positive integer");
+  });
+
+  it("generates an API sdk with the syncdb codegen", async (): Promise<void> => {
+    const dir = await mkdtemp(join(tmpdir(), "terreno-cli-api-sdk-"));
+    const io = createIo(dir);
+    assert.equal(
+      await runCli(
+        [
+          "generate",
+          "sdk",
+          "--schema",
+          "http://localhost:4000/openapi.json",
+          "--out",
+          "store/apiSdk.ts",
+          "--json",
+        ],
+        io
+      ),
+      0
+    );
+    assert.include(io.stdoutLines.join("\n"), "store/apiSdk.ts");
+    assert.equal(
+      await runCli(["generate", "sdk", "--schema", "openapi.json", "--out", "apiSdk.ts"], io),
+      0
+    );
+    assert.include(io.stdoutLines.join("\n"), "Wrote apiSdk.ts");
+    assert.equal(await runCli(["generate", "sdk", "--config", "openapi-config.ts"], io), 1);
+    assert.include(io.stderrLines.join("\n"), "removed in Terreno 58");
+    assert.equal(await runCli(["generate", "sdk", "--schema", "openapi.json"], io), 1);
+    assert.include(io.stderrLines.join("\n"), "Usage: terreno generate sdk");
+    await rm(dir, {force: true, recursive: true});
   });
 
   it("generates a syncdb sdk", async () => {

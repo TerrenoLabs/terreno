@@ -67,7 +67,7 @@ On `BetterAuthConfig` set the same `publicAppUrl`, `sendMail`, and `renderAuthMa
 
 1. Pass `onForgotPassword` (or `onForgotPasswordPress`) to `LoginScreen`.
 2. Add `/forgotPassword` (email form) and `/resetPassword` that reads `token` from the query string.
-3. On Better Auth apps, request reset with `authClient.requestPasswordReset` and submit with `authClient.resetPassword({newPassword, token})`. JWT apps use `POST /auth/forgotPassword` and the RTK `resetPassword` mutation (`POST /resetPassword`). The example app falls back to the JWT request or reset route when Better Auth rejects the operation, so either auth mode can complete.
+3. On Better Auth apps, request reset with `authClient.requestPasswordReset` and submit with `authClient.resetPassword({newPassword, token})`. JWT apps call `POST /auth/forgotPassword` and `POST /resetPassword` through the generated `usePostAuthForgotPasswordMutation` / `usePostResetPasswordMutation` hooks (`store/apiSdk.ts`), or `useJwtAuth().resetPassword` from `@terreno/syncdb/auth`. The example app falls back to the JWT request or reset route when Better Auth rejects the operation, so either auth mode can complete.
 4. Show a profile banner when `emailVerified` is false, with Resend calling `POST /auth/sendVerification`.
 5. Add `/verifyEmail` that reads `token` from the query string. JWT apps call `POST /auth/verifyEmail`. Better Auth apps try `GET /verify-email?token=...` first, then the JWT route so either token type can complete.
 

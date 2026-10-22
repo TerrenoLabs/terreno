@@ -1,8 +1,10 @@
 import {Client, StreamableHTTPClientTransport} from "@modelcontextprotocol/client";
-import {useCallback, useEffect, useState} from "react";
+import type {AuthProvider} from "@terreno/syncdb";
+import {useCallback, useEffect, useRef, useState} from "react";
 
-import {getAuthToken} from "./authSlice";
 import {baseUrl} from "./constants";
+import {jwtTokenSource} from "./emptyApi";
+import {getTokenSource} from "./tokenSource";
 
 export interface MCPToolInfo {
   name: string;
@@ -13,6 +15,14 @@ export interface MCPToolInfo {
 export interface UseMCPToolsOptions {
   /** Base URL of the Terreno backend. Defaults to the resolved baseUrl from constants. */
   baseURL?: string;
+  /**
+   * Token source for the MCP transport's `Authorization: Bearer` header. Defaults to the source
+   * registered with `setTokenSource`, else the built-in JWT source. The transport reads
+   * `getToken()` before every MCP request, so a refreshed or rotated token is used without a
+   * refetch. When the source has no token as a fetch starts, that fetch connects without
+   * authentication.
+   */
+  tokenSource?: AuthProvider;
 }
 
 export interface UseMCPToolsResult {
@@ -29,7 +39,9 @@ export interface UseMCPToolsResult {
  * aligned with the specification.
  */
 export const useMCPTools = (options: UseMCPToolsOptions = {}): UseMCPToolsResult => {
-  const {baseURL = baseUrl} = options;
+  const {baseURL = baseUrl, tokenSource} = options;
+  // Held in a ref so an inline tokenSource object does not change fetchTools and refetch per render.
+  const tokenSourceRef = useRef<AuthProvider | undefined>(tokenSource);
   const [tools, setTools] = useState<MCPToolInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +51,10 @@ export const useMCPTools = (options: UseMCPToolsOptions = {}): UseMCPToolsResult
     setError(null);
 
     try {
-      const token = await getAuthToken();
+      // Resolve the source per read so a source registered after mount is used.
+      const resolveSource = (): AuthProvider =>
+        tokenSourceRef.current ?? getTokenSource() ?? jwtTokenSource;
+      const initialToken = await resolveSource().getToken();
       const client = new Client(
         {name: "terreno-rtk", version: "1.0.0"},
         {
@@ -47,9 +62,10 @@ export const useMCPTools = (options: UseMCPToolsOptions = {}): UseMCPToolsResult
         }
       );
       const transport = new StreamableHTTPClientTransport(new URL(`${baseURL}/mcp`), {
-        authProvider: token
+        authProvider: initialToken
           ? {
-              token: async (): Promise<string> => token,
+              token: async (): Promise<string | undefined> =>
+                (await resolveSource().getToken()) ?? undefined,
             }
           : undefined,
       });
@@ -75,6 +91,12 @@ export const useMCPTools = (options: UseMCPToolsOptions = {}): UseMCPToolsResult
       setIsLoading(false);
     }
   }, [baseURL]);
+
+  // Keep the ref on the latest tokenSource. Declared before the fetch effect so a fetch started
+  // in the same commit already reads the new source.
+  useEffect(() => {
+    tokenSourceRef.current = tokenSource;
+  }, [tokenSource]);
 
   // Fetch tools on mount
   useEffect(() => {

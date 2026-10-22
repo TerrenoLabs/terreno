@@ -34,6 +34,8 @@ registerSimpleMongoPreload({
     Reflect.deleteProperty(process.env, "GOOGLE_VERTEX_PROJECT");
     Reflect.deleteProperty(process.env, "ADMIN_SPA_DIST_DIR");
     Reflect.deleteProperty(process.env, "MIGRATIONS_DIR");
+    Reflect.deleteProperty(process.env, "BETTER_AUTH_OAUTH_HANDOFF");
+    Reflect.deleteProperty(process.env, "MOCK_OIDC_ISSUER");
   },
   testEnv: {
     extra: {

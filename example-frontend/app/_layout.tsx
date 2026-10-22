@@ -37,7 +37,7 @@ import {SyncConflictsProvider} from "@/components/SyncConflictsController";
 import {SyncHealthToast} from "@/components/SyncHealthToast";
 import {SyncLabRuntime} from "@/components/SyncLabRuntime";
 import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
-import {getSessionToken} from "@/lib/betterAuth";
+import {oauthHandoff} from "@/lib/oauthHandoff";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
@@ -190,18 +190,14 @@ const RootLayoutNav = (): React.ReactElement => {
     warningMessage,
   } = useUpgradeCheck({pollingIntervalMs: 300_000, recheckOnForeground: true});
 
-  const getAuthToken = useCallback(async (): Promise<string | null> => {
-    return getSessionToken();
-  }, []);
-
   const handleRetrySyncDbStart = useCallback((): void => {
     setSyncDbStartError(null);
     setSyncDbStartAttempt((attempt) => attempt + 1);
   }, []);
 
+  // Reads the token source registered in store/index.ts.
   const {socket} = useSocketConnection({
     baseUrl,
-    getAuthToken,
     shouldConnect: Boolean(userId),
   });
 
@@ -214,9 +210,10 @@ const RootLayoutNav = (): React.ReactElement => {
     };
   }, [socket]);
 
-  // Hydrate Better Auth session into Redux on startup.
+  // Hydrate Better Auth session into Redux on startup, once any OAuth handoff has stored its
+  // bearer; reading the session first would find none and show the login screen.
   useEffect(() => {
-    void syncBetterAuthSession(store.dispatch);
+    void oauthHandoff.then(() => syncBetterAuthSession(store.dispatch));
   }, []);
 
   // Start the local-first syncdb client after login; stop on logout/unmount.

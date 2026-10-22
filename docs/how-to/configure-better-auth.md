@@ -217,10 +217,15 @@ const userSchema = new mongoose.Schema(
 ``````typescript
 import {createBetterAuthClient} from "@terreno/rtk";
 
+// `scheme` is the app's deep-link scheme (required).
 export const authClient = createBetterAuthClient({
   baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  scheme: "yourapp",
 });
 ``````
+
+On web the client authenticates with Better Auth's session cookie. When the web frontend and
+the API are on different sites, use [bearer mode](#frontend-and-api-on-different-sites).
 
 ### 2. Add Session Redux Slice
 
@@ -229,15 +234,18 @@ import {generateBetterAuthSlice} from "@terreno/rtk";
 import {configureStore} from "@reduxjs/toolkit";
 import {authClient} from "./authClient";
 
-const {sessionReducer, sessionMiddleware} = generateBetterAuthSlice(authClient);
+const betterAuth = generateBetterAuthSlice({authClient});
 
 export const store = configureStore({
   reducer: {
-    session: sessionReducer,
+    betterAuth: betterAuth.reducer, // selectors read `state.betterAuth`
     // ... other reducers
   },
-  middleware: (getDefault) => getDefault().concat(sessionMiddleware),
+  middleware: (getDefault) => getDefault().concat(...betterAuth.middleware),
 });
+
+// Call after sign-in, sign-out, and at app startup to copy the session into Redux
+void betterAuth.syncSession(store.dispatch);
 ``````
 
 ### 3. Add Social Login UI
@@ -284,6 +292,201 @@ const LoginScreen = () => {
   );
 };
 ``````
+
+## Frontend and API on different sites
+
+By default the web client relies on Better Auth's HttpOnly session cookie. When the web app
+and the API are on different sites (for example `app.example.com` and `api.example.net`, or
+two hosting providers' domains), that cookie is a third-party cookie, and browsers such as
+Safari block it. The user signs in and is signed out on the next request.
+
+Use bearer mode in that case. Keep cookie mode when the frontend and API share a site.
+
+``````typescript
+import {createBetterAuthClient} from "@terreno/rtk";
+
+export const authClient = createBetterAuthClient({
+  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  scheme: "yourapp",
+  webAuth: "bearer",
+});
+``````
+
+With `webAuth: "bearer"`, on web only:
+
+- The client stores the `set-auth-token` response header from sign-in under
+  `${storagePrefix}_bearer_token` (default `terreno_bearer_token`) in `localStorage`.
+- Every Better Auth client call, `getSession` included, sends `Authorization: Bearer <token>`
+  and no cookies (`credentials: "omit"`).
+- `signOut()` forgets the token before its request is sent, so a failed sign-out never leaves
+  a usable token on the device.
+- A successful `getSession` that returns no session clears the token, unless a newer token was
+  stored while that request was in flight. A failed or 5xx `getSession` keeps it.
+
+Native apps ignore `webAuth`: the Expo plugin already keeps the session without browser cookies.
+
+Bearer mode covers email and password sign-in directly. Social and generic OAuth sign-in end
+with a redirect, so the page never sees `set-auth-token`. They need the
+[one-time-token handoff](#social-sign-in-in-bearer-mode) below.
+
+Apps that handle PHI should pass `bearerStorage: window.sessionStorage` and serve a strict
+Content-Security-Policy. `localStorage` is readable by any XSS on the frontend's origin and
+outlives the tab, so a stolen or forgotten token stays usable after the person closes it.
+
+Read the stored token outside the client, without a network call, with
+`getBetterAuthBearerToken({storagePrefix?, bearerStorage?})`. Pass the same options the client
+was created with.
+
+example-frontend shows the whole setup. `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` turns on
+bearer mode in `lib/betterAuth.ts`. `store/syncdb.ts` passes the stored token to
+`betterAuthAdapter` as `getBearerToken`, and `store/index.ts` registers that adapter with
+`setTokenSource` before it creates the store, so RTK Query, the socket and MCP tools send the
+same token. `e2e/crossSiteBearer.spec.ts` signs in from `localhost:8082` to an API on
+`127.0.0.1:4000` with every `set-cookie` header stripped, then reloads.
+
+### Server requirements
+
+- The web app's origin must be in `trustedOrigins`. A cookie-less sign-in sends an `Origin`
+  header, and Better Auth rejects an unlisted origin with 403 `INVALID_ORIGIN`:
+
+  ``````typescript
+  const config: BetterAuthConfig = {
+    enabled: true,
+    trustedOrigins: ["https://app.example.com", "yourapp://", "exp://"],
+  };
+  ``````
+
+  Better Auth skips this check when `NODE_ENV=test`, so test it against a non-test build.
+- No CORS change is needed. Bearer mode sends no cookies, so the default `corsOrigin` (`"*"`)
+  works, and so does an explicit list that includes the web origin.
+- No header change is needed. Better Auth's bearer plugin, which `BetterAuthApp` enables, lists
+  `set-auth-token` in `Access-Control-Expose-Headers` itself, so the page can read it.
+
+### Social sign-in in bearer mode
+
+The server adds a single-use, three-minute token to the OAuth callback's redirect, in the URL
+fragment, and the web app exchanges it for the bearer. rtk binds each exchange to a random
+nonce the tab stored when it started the sign-in, so a token planted in a link is never sent.
+
+1. On the server, list the web app's origin and the one page that reads the token. The origin
+   must also be in `trustedOrigins`:
+
+   ``````typescript
+   const config: BetterAuthConfig = {
+     enabled: true,
+     oauthHandoff: {
+       callbackPaths: ["/"], // the default; list only the page that runs the steps below
+       webOrigins: ["https://app.example.com"],
+     },
+     trustedOrigins: ["https://app.example.com", "yourapp://", "exp://"],
+   };
+   ``````
+
+   `webOrigins` takes exact `http(s)` origins. `callbackPaths` takes exact paths in normal form
+   (no trailing-slash or case variants). The query is free. Any other return page is refused.
+
+2. Start the sign-in from the buttons with `signInSocialWithHandoff`. It stores the nonce in
+   `sessionStorage` and navigates the page to `GET {basePath}/oauth-handoff/start`, which keeps
+   Better Auth's OAuth state cookie first-party on the API's origin. The start endpoint answers
+   400 when a request's `Sec-Fetch-Dest` is set and is not `document`, so open it as a page
+   navigation, never with `fetch`, an `<img>`, or an `<iframe>`:
+
+   ``````typescript
+   import {signInSocialWithHandoff} from "@terreno/rtk";
+
+   <SocialLoginButton
+     provider="google"
+     onPress={() =>
+       signInSocialWithHandoff({
+         callbackURL: "/", // must be one of callbackPaths; defaults to "/" on this origin
+         client: authClient,
+         errorCallbackURL: "/login", // optional; defaults to callbackURL
+         provider: "google",
+       })
+     }
+   />
+   ``````
+
+   It throws on native, in cookie mode, and when `sessionStorage` is blocked. Keep
+   `authClient.signIn.social` on native and in cookie mode.
+
+3. On the return page, await `completeBetterAuthOAuthHandoff` at startup, before anything
+   reads the session, before any code acts on other query parameters (such as `next=`), and
+   before Sentry, analytics, or other third-party scripts start:
+
+   ``````typescript
+   import {completeBetterAuthOAuthHandoff} from "@terreno/rtk";
+
+   await completeBetterAuthOAuthHandoff({client: authClient});
+   await betterAuth.syncSession(store.dispatch);
+   initSentry();
+   ``````
+
+   When the URL has `#ott=<token>` and a `handoff=` equal to the stored nonce, it removes
+   `ott`, `handoff` and the stored nonce with `history.replaceState`, then posts the token to
+   `{basePath}/one-time-token/verify`. Bearer mode stores the `set-auth-token` that comes back.
+   It resolves `true` only when a token was stored, and it never rejects. Other query and
+   fragment parts stay. A token without a matching nonce, or an `ott` in the query instead of the
+   fragment, is removed from the URL and never sent.
+   Calls made while one is running share its result, so React strict mode verifies once.
+
+4. Show sign-in errors from the query. A failed start or callback comes back with
+   `?error=provider_not_found`, `?error=sign_in_failed`, or one of Better Auth's own `error=`
+   codes. The function resolves `false` and leaves `error` in the URL.
+
+The return page must not redirect, on the server or in the browser, before the function has
+run. A browser carries the fragment through a redirect that has none of its own, so a redirect
+would hand the token to the next page. For the same reason, keep `callbackPaths` to that page.
+
+example-frontend uses `/login` as the return page. With `BETTER_AUTH_OAUTH_HANDOFF=true`,
+example-backend sets `oauthHandoff` to its web origins and `callbackPaths: ["/login"]`. With
+`NODE_ENV=production` it drops loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any port) from
+the handoff only, so a token never goes to a page on the visitor's own machine, and it refuses to
+start when no other origin is left in `CORS_ORIGINS`. CORS and `trustedOrigins` keep them. In bearer mode `lib/betterAuth.ts` starts the social buttons with
+`signInSocialWithHandoff`. `app/_layout.tsx` syncs the session only after the exchange resolves.
+
+In an Expo Router app, run the exchange from the entry file, not from a layout. Expo Router
+copies the URL, fragment included, as soon as it is imported, and writes that copy back into
+the address bar when it routes, which would put `ott` and `handoff` back. Importing
+`@terreno/rtk` imports Expo Router too (through `@terreno/ui`). example-frontend's `index.js`
+first imports `lib/oauthHandoffUrl.ts`, which has no imports and hides `handoff` and `ott` from
+the URL, then `lib/oauthHandoff.ts`, which puts the URL back and calls
+`completeBetterAuthOAuthHandoff` in the same synchronous step, then `expo-router/entry`.
+
+The login screen shows `?error=` in `login-screen-error`. `e2e/crossSiteOAuth.spec.ts` signs in
+cross-site through a local mock OIDC provider (`e2e/helpers/mockOidcProvider.ts`), which
+example-backend registers as the `mock-oidc` generic OAuth provider only when `MOCK_OIDC_ISSUER`
+is set. example-backend refuses to start when `MOCK_OIDC_ISSUER` is set with
+`NODE_ENV=production` or names a host other than `127.0.0.1`, `localhost` or `[::1]`.
+
+### Trade-offs
+
+A bearer token in web storage is readable by any script on the frontend's origin, so an XSS
+can steal it. An HttpOnly cookie cannot be read that way, which is why cookie mode stays the
+default. `localStorage` also outlives browser restarts, so on a shared device, such as a family
+computer, the next person to open the app is still signed in.
+
+On shared devices, keep the token in `sessionStorage` so it ends when the browser session does.
+Reading `window.sessionStorage` throws when the browser blocks site storage, so guard it:
+
+``````typescript
+const sessionStorageOrDefault = (): Storage | undefined => {
+  try {
+    return typeof window === "undefined" ? undefined : window.sessionStorage;
+  } catch {
+    return undefined; // falls back to localStorage, or to no storage when that is blocked too
+  }
+};
+
+export const authClient = createBetterAuthClient({
+  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  bearerStorage: sessionStorageOrDefault(),
+  scheme: "yourapp",
+  webAuth: "bearer",
+});
+``````
+
+`bearerStorage` takes any synchronous `{getItem, setItem, removeItem}` store.
 
 ## OAuth Provider Setup
 
@@ -370,5 +573,5 @@ Better Auth runs **in parallel** with JWT auth. You don't need to migrate existi
 
 - [Authentication Architecture](../explanation/authentication.md)
 - [@terreno/api Reference](../reference/api.md#better-auth)
-- [@terreno/rtk Reference (legacy)](../reference/legacy/rtk.md#better-auth)
+- [@terreno/rtk Reference (legacy)](../reference/legacy/rtk.md#better-auth-integration)
 - [Better Auth Documentation](https://better-auth.com/)

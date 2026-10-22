@@ -65,6 +65,13 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
+// Bun's mock.module replaces a module for every file in this process, and suites run in a
+// different order under coverage. The @terreno/ui, expo-router, and @/store/sdk stubs spread the
+// package preload's modules so sibling suites (documents.test.tsx) keep every export.
+const preloadUi = await import("@terreno/ui");
+const preloadExpoRouter = await import("expo-router");
+const preloadSdk = await import("@/store/sdk");
+
 mock.module("@terreno/syncdb", () => ({
   generateMutationId: (): string => "generated-preference-id",
 }));
@@ -86,6 +93,7 @@ mock.module("@terreno/syncdb/react", () => ({
 }));
 
 mock.module("@terreno/ui", () => ({
+  ...preloadUi,
   AreaChart: createHostComponent("AreaChart"),
   BarChart: createHostComponent("BarChart"),
   Box: createHostComponent("Box"),
@@ -110,14 +118,12 @@ mock.module("@terreno/ui", () => ({
     ),
   TerrenoProvider: createHostComponent("TerrenoProvider"),
   Text: createHostComponent("Text"),
-  // Sibling suites import useStoredState from @terreno/ui under Bun's process-global mock.module.
   useStoredState: () => ["", async (): Promise<void> => undefined, false],
 }));
 
 mock.module("expo-router", () => ({
-  // Include useLocalSearchParams so this incomplete mock does not break sibling
-  // suites that import it from "expo-router" under Bun's process-global mock.module.
-  useLocalSearchParams: () => ({}),
+  ...preloadExpoRouter,
+  useLocalSearchParams: mock(() => ({})),
   useRouter: () => ({back: routerBack, push: routerPush}),
 }));
 
@@ -126,9 +132,7 @@ mock.module("@/hooks/useSyncDbReady", () => ({
 }));
 
 mock.module("@/store/sdk", () => ({
-  // Sibling suites import terrenoApi from this module under Bun's process-global
-  // mock.module; keep a stub so that named export stays resolvable.
-  terrenoApi: {reducerPath: "notification-center-test-api"},
+  ...preloadSdk,
   usePostNotificationsDevNotifyMutation: () => [sendTestNotification, {isLoading: false}],
   useSummarizeExampleTextMutation: () => [
     () => ({unwrap: async (): Promise<{output: string}> => ({output: ""})}),

@@ -88,41 +88,146 @@ const userId = selectCurrentUserId(state);
 For apps using Better Auth instead of JWT:
 
 ``````typescript
-import {createBetterAuthClient, generateBetterAuthSlice} from "@terreno/rtk";
 import {configureStore} from "@reduxjs/toolkit";
+import {createBetterAuthClient, generateBetterAuthSlice} from "@terreno/rtk";
 
-// Create Better Auth client
+// Create Better Auth client. `scheme` is the app's deep-link scheme (required).
 export const authClient = createBetterAuthClient({
   baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  scheme: "myapp",
 });
 
-// Generate session Redux slice
-const {sessionReducer, sessionMiddleware} = generateBetterAuthSlice(authClient);
+// Generate the session Redux slice
+const betterAuth = generateBetterAuthSlice({authClient});
 
 export const store = configureStore({
   reducer: {
-    session: sessionReducer,
+    betterAuth: betterAuth.reducer, // selectors read `state.betterAuth`
     // ... other reducers
   },
-  middleware: (getDefault) => getDefault().concat(sessionMiddleware),
+  middleware: (getDefault) => getDefault().concat(...betterAuth.middleware),
 });
+
+// Call after sign-in, sign-out, and at app startup to copy the session into Redux
+void betterAuth.syncSession(store.dispatch);
 ``````
 
 **Key exports:**
-- `createBetterAuthClient` — Factory for Better Auth client with Expo support
-- `generateBetterAuthSlice` — Redux slice for session state management
-- `BetterAuthSessionData` — TypeScript types for session/user data
+- `createBetterAuthClient({baseURL, scheme, storagePrefix?, webAuth?, bearerStorage?})` — Factory for Better Auth client with Expo support. `webAuth: "bearer"` authenticates the web client with a stored bearer token and no cookies, for a frontend and API on different sites ([how-to](../../how-to/configure-better-auth.md#frontend-and-api-on-different-sites))
+- `getBetterAuthBearerToken({storagePrefix?, bearerStorage?})` — Reads the token bearer mode stored, or `null`
+- `signInSocialWithHandoff({client, provider, callbackURL?, errorCallbackURL?})` — Starts a social or generic OAuth sign-in for a web bearer client: stores a random nonce in `sessionStorage` and navigates the page to the server's `{basePath}/oauth-handoff/start` with `handoff=<nonce>` on the callback URLs. Throws on native and in cookie mode ([how-to](../../how-to/configure-better-auth.md#social-sign-in-in-bearer-mode))
+- `completeBetterAuthOAuthHandoff({client}): Promise<boolean>` — On the return page, removes `#ott` and `handoff` from the URL first, then exchanges the token at `{basePath}/one-time-token/verify` only when `handoff` matches the stored nonce. Resolves `true` only when a bearer token was stored; never rejects. Await it at startup before session reads and Sentry
+- `generateBetterAuthSlice({authClient, syncInterval?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`
+- `selectBetterAuthIsAuthenticated`, `selectBetterAuthUserId`, `selectBetterAuthUser` — Selectors over `state.betterAuth`
+- `BetterAuthUser`, `BetterAuthState` — TypeScript types for session/user data
 
-**Session State:**
+**Session State (`state.betterAuth`):**
 ``````typescript
 {
-  session: BetterAuthSession | null;
+  isAuthenticated: boolean;
+  userId: string | null;
   user: BetterAuthUser | null;
   isLoading: boolean;
+  error: string | null;
+  lastSyncTimestamp: number | null;
 }
 ``````
 
 **Learn more:** [Configure Better Auth](../../how-to/configure-better-auth.md)
+
+### Token source
+
+rtk reads the request token from one registered **token source**, typed as syncdb's
+`AuthProvider` (`getToken`, `getUserId`, `onAuthChange`, optional `refresh`). A Better Auth
+app registers the same adapter it builds for syncdb, once at startup:
+
+``````typescript
+import {setTokenSource} from "@terreno/rtk";
+import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb";
+import {authClient} from "./betterAuth";
+
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient));
+setTokenSource(authProvider); // before the first RTK Query request
+``````
+
+With `webAuth: "bearer"`, also pass the adapter `getBearerToken` so it reads the stored token
+without a `get-session` call ([syncdb adapter](../syncdb.md#createsyncdb-configuration)).
+
+**Exports:**
+- `setTokenSource(source | undefined)` — Registers the source. `undefined` restores the default.
+- `getTokenSource()` — The registered source, or `undefined` when none is registered.
+- `jwtTokenSource` — The legacy JWT source: `getToken` is `getAuthToken`, `refresh` runs
+  `refreshAuthToken` and resolves `true` on success, `getUserId` reads the stored JWT's `id`
+  (or `sub`) claim, and `onAuthChange` fires on JWT login, logout, and token refresh.
+- `isJwtTokenSource(source)` — `true` for `undefined` or `jwtTokenSource`.
+
+**Base query behavior (`emptySplitApi` / `staggeredBaseQuery`):**
+- **No source registered, or `jwtTokenSource`:** the JWT path below, unchanged. JWT apps need
+  no code change.
+- **Any other source:** sends `authorization: Bearer <token>` from `getToken()` on every
+  request, or no `authorization` header when the token is null. It never logs out because a
+  token is missing. On a 401 it calls `refresh()` once (shared by concurrent requests), re-reads
+  the token, and retries once; only a second 401 dispatches `auth/logout`. The public endpoints
+  `emailLogin`, `emailSignUp`, `getVersionCheck`, `getZoomSignature`, and `googleLogin` skip
+  the refresh and retry.
+
+The registry is module-global, like `baseUrl`: one app, one source. Apps that forked the base
+query to read the Better Auth session can point their SDK back at `emptySplitApi` once they
+register the source.
+
+**Other consumers.** The socket, chat, MCP, and offline APIs read the same source. Each takes a
+`tokenSource` option that overrides it for that one consumer. Without the option they use the
+registered source, else `jwtTokenSource`. Pass `useSocketConnection` a stable object, not a new
+one per render, or it re-subscribes to `onAuthChange`.
+
+| API | Option | How it uses the source |
+| --- | --- | --- |
+| `useSocketConnection` | `tokenSource`, used when `getAuthToken` is omitted | Reads `getToken()` on every connect and reconnect, refreshes once per auth failure, and reconnects when `onAuthChange` brings a new token. See [useSocketConnection](#usesocketconnection). |
+| `useTerrenoChat` | `tokenSource` | Reads `getToken()` per chat request. Sends no `Authorization` header when it returns null. |
+| `useMCPTools` | `tokenSource` | Reads `getToken()` before every MCP request, so a refreshed token needs no refetch. A fetch that starts with no token connects without auth. |
+| `createOfflineMiddleware` | `tokenSource` | With a non-JWT source, tags queued mutations with `getUserId()` and replays them with `getToken()`. See [Offline queue](#offline-queue). |
+
+#### Offline queue
+
+`createOfflineMiddleware({endpoints, api, tokenSource?})` queues the listed mutations while
+offline and replays them on reconnect.
+
+- **JWT source:** the queue reads `state.auth.userId` and the stored JWT, as before.
+- **Any other source** (for example syncdb's `betterAuthAdapter`): each queued mutation carries
+  `userId` from `getUserId()`. Replay runs only while that same user is signed in. It sends
+  `authorization: Bearer <token>` from `getToken()`, or no header when the token is null.
+- **Last user id:** `state.offline.lastUserId` holds the last id the source confirmed. It
+  refreshes on the first action, on rehydrate, on `onAuthChange`, and on reconnect, so a failed
+  session read while offline does not untag new mutations.
+- **Persist the `offline` slice** with redux-persist (do not blacklist it). Otherwise mutations
+  made after an app launches offline carry no user and are dropped on reconnect.
+- **Unconfirmed ids:** a rehydrated id is unconfirmed until a read in this process returns a
+  user. Mutations tagged with it carry `userIdConfirmed: false`. A later read keeps them only
+  when it names the same user and no `onAuthChange` or source swap happened since. Any auth
+  change drops them, even for the same user.
+- **Cost:** syncdb's `betterAuthAdapter` fires `onAuthChange` on the session's first successful
+  load. After an offline launch that happens when the network returns, so it drops
+  offline-launch writes the reconnect read has not confirmed yet.
+- **Residual risk:** the signed-in user changes while no running instance of the middleware sees
+  it (for example in another browser tab that shares the persisted slice), between an
+  unconfirmed write and the next launch's first read. Then that write can replay as a user who
+  did not make it.
+- **Sign-out:** `auth/logout`, `betterAuth/logout` (on a non-JWT source), or the source
+  reporting no user after `onAuthChange` clears the queue, conflicts, and `lastUserId`, and
+  discards in-flight enqueues and replays.
+- **No user on reconnect:** when the source has no user, or the user changes during a replay,
+  the rest of the queue stays for a later reconnect.
+- **Different user on reconnect:** a replay drops each mutation queued by a user other than the
+  one signed in.
+
+Offline-slice exports the middleware uses for the user tag (exported from the package root):
+
+- `setLastUserId(userId | undefined)` — Action that sets `state.offline.lastUserId`.
+- `resolveUnconfirmedMutations(userId)` — Action that keeps unconfirmed mutations tagged with
+  `userId`, marks them confirmed, and drops the other unconfirmed ones.
+- `dropUnconfirmedMutations()` — Action that drops every mutation whose user id is unconfirmed.
+- `selectLastUserId(state)` — The last user id the source confirmed, or `undefined` when unknown
+  or signed out.
 
 ## WebSocket Integration
 
@@ -135,10 +240,10 @@ React hook for managing Socket.io connections with automatic reconnection, token
 ``````typescript
 import {useSocketConnection} from "@terreno/rtk";
 
+// Reads the token source registered with setTokenSource (the JWT in storage by default).
 const {socket, isSocketConnected} = useSocketConnection({
   baseUrl: "wss://api.example.com",
   shouldConnect: !!userId,
-  getAuthToken: () => getAuthToken(),
   onConnect: () => console.info("WebSocket connected"),
   onDisconnect: () => console.warn("WebSocket disconnected"),
   onConnectError: (error) => console.error("Connection error:", error),
@@ -162,7 +267,11 @@ useEffect(() => {
 **Options:**
 - `baseUrl` (string, required) — WebSocket server URL
 - `shouldConnect` (boolean, required) — Whether to connect (typically `!!userId`)
-- `getAuthToken` (function, required) — Async function returning JWT token
+- `tokenSource` (`AuthProvider`) — Source for the handshake token. Defaults to the
+  [registered source](#token-source), else `jwtTokenSource`. Used only when `getAuthToken` is
+  omitted.
+- `getAuthToken` (function) — Legacy getter. When passed, the hook reads the token once per
+  connect, sends it as a static `auth` payload, and ignores `tokenSource`.
 - `onConnect` (function) — Callback on successful connection
 - `onDisconnect` (function) — Callback on disconnection
 - `onConnectError` (function) — Callback on connection error
@@ -175,7 +284,7 @@ useEffect(() => {
 
 **Features:**
 - **Automatic reconnection:** 5 attempts with exponential backoff (1-5 seconds)
-- **Bearer token authentication:** Automatically includes JWT in `socket.auth`
+- **Bearer token authentication:** Sends `Bearer <token>` in `socket.auth`
 - **Token refresh integration:** Reconnects automatically when tokens are refreshed
 - **User feedback:** Toast notifications for disconnections (after 9+ seconds) and token errors
 - **Connection monitoring:** Periodic checks with automatic reconnection attempts
@@ -186,7 +295,18 @@ useEffect(() => {
 - **Reconnection:** Shows "You have been reconnected" (suppressed if reconnect within 10 seconds)
 - **Token error:** Shows "Error refreshing token. Please log out and log back in..." with persistent error state
 
-**Token Management:**
+**Token source behavior (no `getAuthToken`):**
+- The handshake reads `getToken()` on every connect and reconnect, including socket.io's own
+  reconnects.
+- On an auth `connect_error` (the server's `UnauthorizedError`), the hook calls `refresh()`
+  once and reconnects. A second auth failure before a successful connect stops reconnecting and
+  calls `onConnectError`. If the source has no `refresh`, or it fails, the hook stops at once.
+  A successful connect resets this.
+- While `shouldConnect` is true, an `onAuthChange` with a different token drops a live
+  connection and reconnects with the new token. With no token it disconnects. The same token
+  keeps the connection up.
+
+**JWT token management** (`getAuthToken` passed, or the JWT source):
 - Checks token expiration on disconnect and connection errors
 - Automatically refreshes tokens if expiring within 60 seconds
 - Attempts reconnection after successful token refresh
@@ -335,7 +455,7 @@ Base RTK Query API with authentication, retry logic, and automatic token refresh
 - **Query serialization:** Uses `qs.stringify()` for complex queries (`$in`, `$lt`, `$gte`)
 
 **Automatic Headers:**
-- `authorization: Bearer <token>`
+- `authorization: Bearer <token>` (from the registered [token source](#token-source); the JWT in storage by default)
 - `App-Version` (from Expo config)
 - `App-Platform` ("web" or "mobile")
 

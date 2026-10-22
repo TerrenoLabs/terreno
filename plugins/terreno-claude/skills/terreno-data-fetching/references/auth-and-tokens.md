@@ -53,16 +53,26 @@ No manual refresh logic needed in app code.
 For apps using Better Auth instead of JWT/Passport:
 
 ```tsx
-import {createBetterAuthClient, generateBetterAuthSlice} from "@terreno/rtk";
+import {createBetterAuthClient, generateBetterAuthSlice, setTokenSource} from "@terreno/rtk";
+import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb";
 
 const authClient = createBetterAuthClient({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
-  basePath: "/api/auth",
+  scheme: "myapp", // deep-link scheme, required
 });
 
-const {betterAuthReducer, actions, selectors, middleware} =
-  generateBetterAuthSlice(authClient);
+// {reducer, middleware, actions, slice, syncSession}; mount reducer at `betterAuth`
+const betterAuth = generateBetterAuthSlice({authClient});
+
+// One token source for syncdb and every rtk consumer, registered once at startup
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient));
+setTokenSource(authProvider);
 ```
+
+With the source registered, `emptySplitApi` sends the Better Auth token, sends no
+`authorization` header when there is none, and logs out only after a 401 survives one
+`refresh()`. Do not fork the base query to read the session. Without `setTokenSource`, rtk
+uses the JWT tokens in storage (`jwtTokenSource`).
 
 Use `SocialLoginButton` from `@terreno/ui` for OAuth providers.
 

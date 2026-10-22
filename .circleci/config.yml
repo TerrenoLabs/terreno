@@ -96,6 +96,7 @@ workflows:
             blocks/.* run-ai true
             blocks/.* run-ui true
             rtk/.* run-rtk true
+            syncdb/src/.* run-rtk true
             ui/.* run-ui true
             demo/.* run-ui true
             demo/.* run-ui-demo true

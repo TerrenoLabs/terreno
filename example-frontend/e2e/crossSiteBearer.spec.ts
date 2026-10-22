@@ -22,6 +22,7 @@ import {loginAs} from "./helpers/login";
 
 const CROSS_SITE_SOCKET_URL = `${CROSS_SITE_API_URL.replace(/^http/, "ws")}/socket.io/`;
 const SOCKET_TIMEOUT = 20_000;
+const PROFILE_TIMEOUT = 30_000;
 
 /**
  * Socket.IO namespace outcomes per Engine.IO session: `40{"sid"` is a successful CONNECT and
@@ -135,7 +136,10 @@ test.describe("Cross-site bearer sign-in", () => {
     await page.reload();
     await page.getByTestId("todos-screen").waitFor({state: "visible"});
     await page.goto("/profile");
-    await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(TEST_USER.email);
+    // A full page load on the dev server re-reads the session and /auth/me before the profile shows.
+    await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(TEST_USER.email, {
+      timeout: PROFILE_TIMEOUT,
+    });
     expect(await betterAuthCookies(context)).toEqual([]);
 
     // The syncdb socket (which also carries flags and server events) authenticates with the

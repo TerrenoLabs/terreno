@@ -81,7 +81,7 @@ const PushTokenRegistrar: FC = () => {
 export {ErrorBoundary} from "expo-router";
 
 export const unstable_settings = {
-  initialRouteName: "(tabs)",
+  anchor: "(tabs)",
 };
 
 SplashScreen.preventAutoHideAsync();
@@ -264,7 +264,7 @@ const RootLayoutNav = (): React.ReactElement => {
   // Hold the navigator until the session (and, for signed-in users, the profile that
   // decides the ConsentNavigator wrapper below) has settled. The wrapper choice changes
   // the Stack's position in the React tree, and re-parenting unmounts and remounts the
-  // Stack — a remounted Stack resets to initialRouteName "(tabs)", silently discarding
+  // Stack — a remounted Stack resets to its anchor "(tabs)", silently discarding
   // a deep-linked route like /profile or /admin. Rendering only once the tree shape is
   // final means the Stack mounts exactly once per auth state and keeps the requested URL.
   if (isAuthLoading || (Boolean(userId) && isProfileLoading)) {

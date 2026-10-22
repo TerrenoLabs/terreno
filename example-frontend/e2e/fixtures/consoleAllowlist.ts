@@ -18,4 +18,8 @@ export const GLOBAL_CONSOLE_ALLOWLIST: ReadonlyArray<string | RegExp> = [
   // just the syncdb suite (which additionally uses allowSyncDbNoise() for its
   // offline-simulation-specific messages).
   /\[syncdb\] (startup|reconnect) reconcile failed/,
+
+  // React Native Web dev builds only: Animated has no native module on web and falls back to JS.
+  // The cross-site specs run against `expo start` (a dev bundle); CI's static export never logs it.
+  "`useNativeDriver` is not supported because the native animated module is missing",
 ];

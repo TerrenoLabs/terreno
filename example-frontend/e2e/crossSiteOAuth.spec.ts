@@ -114,8 +114,10 @@ test.describe("Cross-site social sign-in", () => {
     }
 
     await page.goto("/profile");
+    // A full page load on the dev server re-reads the session and /auth/me before the profile shows.
     await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(
-      MOCK_OIDC_USER.email
+      MOCK_OIDC_USER.email,
+      {timeout: 30_000}
     );
     expect(await betterAuthSessionCookies(context)).toEqual([]);
     const screenshot = testInfo.outputPath("cross-site-oauth-signed-in.png");

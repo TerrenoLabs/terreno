@@ -23,7 +23,7 @@ const BETTER_AUTH_STORAGE_PREFIX = "terreno-example";
  * session cookie. Set `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` when the web app and the API are
  * on different sites, where browsers block or partition third-party cookies. Native ignores it.
  */
-const isWebBearerAuth = isWeb && process.env.EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER === "true";
+export const isWebBearerAuth = isWeb && process.env.EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER === "true";
 
 // `baseUrl` from @terreno/syncdb/config is the single source of truth every other caller
 // (the API client, sockets, syncdb) already uses. A separate resolver here previously

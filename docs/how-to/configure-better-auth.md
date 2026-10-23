@@ -401,6 +401,89 @@ const LoginScreen = () => {
 };
 ``````
 
+### 4. Remember accounts on this device
+
+The login screen can show how each person signed in last and offer a "Continue as" card per
+account. `createRememberedAccountsStore` keeps that list on the device. It is not a session and
+holds no credential: a remembered account still signs in with its method. Use it alongside
+Better Auth's `lastLoginMethod`, which reads a backend cookie that a cross-site web page cannot
+see.
+
+``````typescript
+import {createRememberedAccountsStore, toLoginAccountOptions, useRememberedAccounts} from "@terreno/rtk";
+import {LoginScreen} from "@terreno/ui";
+
+// One store per app, at module scope.
+export const rememberedAccounts = createRememberedAccountsStore({rememberIdentity: false});
+
+// After a successful sign-in, record the user and the method they used:
+// a provider id ("google", "mock-oidc"), "email", or "passkey".
+await rememberedAccounts.record({
+  email: user.email, // ignored unless rememberIdentity is true
+  image: user.image,
+  method: "google",
+  name: user.name,
+  userId: user.id,
+});
+
+const Login = (): React.ReactElement => {
+  const {accounts, lastUsedMethod, forget} = useRememberedAccounts(rememberedAccounts);
+  return (
+    <LoginScreen
+      lastUsedMethod={lastUsedMethod}
+      onForget={(account) => forget(account.id)}
+      rememberedAccounts={toLoginAccountOptions(accounts)}
+      // ...fields, providers, onContinue
+    />
+  );
+};
+``````
+
+What is stored:
+
+| Field | Stored when | Notes |
+| --- | --- | --- |
+| `userId`, `method`, `lastUsedAt` | Always | `lastUsedAt` is an ISO UTC timestamp |
+| `name` | `rememberIdentity: true` | Stored in clear, not masked. Trimmed, at most 64 characters |
+| `email` | `rememberIdentity: true` | Always masked first: `josh@nang.io` becomes `j***@n***.io` |
+| `image` | `rememberIdentity: true` | `https://` URLs up to 256 characters only |
+
+The store keeps the newest 5 accounts (`max`), one entry per user, and stays under SecureStore's
+2048-byte value limit by dropping the oldest. Storage by platform:
+
+- **iOS:** SecureStore (the keychain) with `WHEN_UNLOCKED_THIS_DEVICE_ONLY`, so the entry is not
+  restored to a new device from a backup.
+- **Android:** SecureStore encrypts the value with an Android Keystore key and keeps it in the
+  app's `SecureStore` shared preferences. The `keychainAccessible` setting does not apply. The
+  `expo-secure-store` config plugin (on by default, `configureAndroidBackup: true`) excludes those
+  preferences from Android Auto Backup. Without the plugin, or when the app already has its own
+  backup rules, the encrypted value can be backed up; the Keystore key does not leave the device,
+  so a restored copy cannot be decrypted. Add the plugin to `app.json` `plugins`.
+- **Web:** localStorage, shared by every tab on the origin. Each change re-reads storage first and
+  each store follows `storage` events, so a stale tab never brings back an account another tab
+  forgot. Call `rememberedAccounts.dispose()` if you create a store that does not live for the
+  whole page.
+
+Native storage loads asynchronously: `useRememberedAccounts` returns `isHydrated: false` until it
+has, so wait for it before deciding there is no last used method. Stored data the store cannot
+read resets to an empty list instead of throwing.
+
+**Privacy.** Apps that handle health or other sensitive data often run on shared devices: a
+family tablet, a clinic kiosk. Showing who has an account there can itself disclose something,
+so identity is opt-in:
+
+- `rememberIdentity` is required. Pass `false` to remember only the method unless the app's
+  users own their devices. Cards then show only the method.
+- With `rememberIdentity: true`, the name is stored and shown in clear. Masking hides most of the
+  email, but the first letters and top-level domain can still hint at an employer or clinic
+  (`j***@f***.health`), so treat the masked email as identifying too.
+- Turning `rememberIdentity` off later scrubs names, emails, and avatars already stored, the next
+  time the store loads.
+- Offer a way to forget. Pass `onForget` to `LoginScreen`, and on a "Sign out and forget me"
+  action call `rememberedAccounts.forget(userId)` after signing out. Call
+  `rememberedAccounts.clear()` to remove every account, for example from a "Not your device?"
+  link.
+
 ## Frontend and API on different sites
 
 By default the web client relies on Better Auth's HttpOnly session cookie. When the web app

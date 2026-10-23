@@ -653,7 +653,7 @@ Open risks:
       unaffected.
   - Skills: terreno-data-fetching
 
-- [ ] **T19** — Remembered accounts on device
+- [x] **T19** — Remembered accounts on device
   - Depends on: none
   - Files: rtk/src/auth/rememberedAccounts.ts, rtk/src/auth/rememberedAccounts.test.ts
   - Build:

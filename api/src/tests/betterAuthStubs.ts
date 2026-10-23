@@ -147,6 +147,10 @@ export const totpCode = (secret: Buffer): string => {
   return String(value).padStart(6, "0");
 };
 
+/** The TOTP secret in an `otpauth://` URI, as `/two-factor/enable` returns it. */
+export const totpSecretFromURI = (totpURI: string): Buffer =>
+  base32Decode(new URL(totpURI).searchParams.get("secret") ?? "");
+
 export interface TwoFactorEnrollment {
   backupCodes: string[];
   totpURI: string;
@@ -173,7 +177,7 @@ export const enrollTwoFactor = async (
     .send({password: PASSWORD});
   expect(enable.status).toBe(200);
   const enrollment = enable.body as TwoFactorEnrollment;
-  const secret = base32Decode(new URL(enrollment.totpURI).searchParams.get("secret") ?? "");
+  const secret = totpSecretFromURI(enrollment.totpURI);
   const confirm = await supertest(app)
     .post("/api/auth/two-factor/verify-totp")
     .set("authorization", bearer)

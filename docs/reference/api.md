@@ -673,6 +673,20 @@ only those. It needs no session. Read it from a frontend with `useAuthMethods(au
 The values come from Better Auth's final context on each request, so `options` overrides and
 plugin-registered providers are reflected.
 
+**Challenge header (`X-Terreno-Auth-Challenge`):**
+
+With `twoFactor` or `passkey` configured, a request that sends `X-Terreno-Auth-Challenge` (`-`
+when empty) gets back the challenge cookies its response sets (`two_factor`, `trust_device`, the
+passkey challenge, and `dont_remember` when it comes with a two-factor challenge) in the same
+header, as URL-search-params `name=value` pairs with the signed cookie values; an empty value
+means the cookie expired. Only values the response sets are carried. Such a sign-in that
+answers with a two-factor challenge has no `set-auth-token`. The header is listed in
+`Access-Control-Expose-Headers`. On `{basePath}/two-factor/*`, `/passkey/*`, and `/sign-in/*`,
+the header's challenge cookies are merged into the request's cookies unless a real cookie of
+the same name is present; other names, including session cookies, are ignored. rtk's bearer mode
+uses it; see
+[Challenges without cookies](../explanation/authentication.md#challenges-without-cookies).
+
 **Endpoints (when enabled):**
 - `GET /api/auth/terreno/methods` — Enabled sign-in methods (public)
 - `POST /api/auth/signup/email` — Email/password signup

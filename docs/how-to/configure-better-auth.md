@@ -363,8 +363,8 @@ const sessions = await authClient.multiSession.listDeviceSessions();
 
 | Feature | Client plugin | Adds |
 | --- | --- | --- |
-| `twoFactor: true \| {onTwoFactorRedirect}` | `twoFactorClient` | `client.twoFactor.*` (`enable`, `disable`, `getTotpUri`, `verifyTotp`, `generateBackupCodes`, `verifyBackupCode`, ...). `onTwoFactorRedirect({twoFactorMethods})` runs when a sign-in answers `twoFactorRedirect` instead of a session. In [bearer mode](#frontend-and-api-on-different-sites) the 2FA challenge and trusted-device cookies are not sent yet, so finishing a 2FA sign-in needs cookie mode or native |
-| `passkey: true` | `passkeyClient` from `@better-auth/passkey/client` | `client.passkey.*` (`addPasskey`, `listUserPasskeys`, `deletePasskey`, `updatePasskey`) and `client.signIn.passkey()`. Web only: React Native has no WebAuthn. In bearer mode the passkey challenge cookie is not sent yet, so registering and signing in need cookie mode |
+| `twoFactor: true \| {onTwoFactorRedirect}` | `twoFactorClient` | `client.twoFactor.*` (`enable`, `disable`, `getTotpUri`, `verifyTotp`, `generateBackupCodes`, `verifyBackupCode`, ...). `onTwoFactorRedirect({twoFactorMethods})` runs when a sign-in answers `twoFactorRedirect` instead of a session. In [bearer mode](#frontend-and-api-on-different-sites) the 2FA challenge and trusted-device value travel in the `X-Terreno-Auth-Challenge` header (see [Challenges without cookies](../explanation/authentication.md#challenges-without-cookies)) |
+| `passkey: true` | `passkeyClient` from `@better-auth/passkey/client` | `client.passkey.*` (`addPasskey`, `listUserPasskeys`, `deletePasskey`, `updatePasskey`) and `client.signIn.passkey()`. Web only: React Native has no WebAuthn. In bearer mode the passkey challenge travels in the `X-Terreno-Auth-Challenge` header |
 | `multiSession: true` | `multiSessionClient` | `client.multiSession.*` (`listDeviceSessions`, `setActive`, `revoke`). Not in bearer mode: the server tracks device sessions in `session_token_multi-*` cookies, so `listDeviceSessions` answers `[]`; use [remembered accounts](#4-remember-accounts-on-this-device) for switching there |
 | `lastLoginMethod: true` | `lastLoginMethodClient` | `client.getLastUsedLoginMethod()`, `isLastUsedLoginMethod(method)`, `clearLastUsedLoginMethod()`. They read the server's cookie, so they return `null` on native and in [bearer mode](#frontend-and-api-on-different-sites); use [remembered accounts](#4-remember-accounts-on-this-device) there |
 | `oneTimeToken: true` | `oneTimeTokenClient` | `client.oneTimeToken.generate()` and `verify({token})`. The OAuth handoff does not need it |
@@ -562,6 +562,10 @@ With `webAuth: "bearer"`, on web only:
   a usable token on the device.
 - A successful `getSession` that returns no session clears the token, unless a newer token was
   stored while that request was in flight. A failed or 5xx `getSession` keeps it.
+- Two-factor, trust-device, and passkey challenges travel in the `X-Terreno-Auth-Challenge`
+  header, stored under `${storagePrefix}_auth_challenge` beside the token and sent only on
+  `/two-factor/*`, `/passkey/*`, and `/sign-in/*` calls, so 2FA and passkey sign-in work with no
+  cookies. See [Challenges without cookies](../explanation/authentication.md#challenges-without-cookies).
 
 Native apps ignore `webAuth`: the Expo plugin already keeps the session without browser cookies.
 
@@ -598,7 +602,10 @@ same token. `e2e/crossSiteBearer.spec.ts` signs in from `localhost:8082` to an A
 
   Better Auth skips this check when `NODE_ENV=test`, so test it against a non-test build.
 - No CORS change is needed. Bearer mode sends no cookies, so the default `corsOrigin` (`"*"`)
-  works, and so does an explicit list that includes the web origin.
+  works, and so does an explicit list that includes the web origin. `cors()` allows any request header the
+  browser asks for, which covers `X-Terreno-Auth-Challenge`. A custom CORS layer with an explicit
+  `allowedHeaders` list must include it, and must not drop the `Access-Control-Expose-Headers`
+  Better Auth sets.
 - No header change is needed. Better Auth's bearer plugin, which `BetterAuthApp` enables, lists
   `set-auth-token` in `Access-Control-Expose-Headers` itself, so the page can read it.
 

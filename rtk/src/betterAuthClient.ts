@@ -169,6 +169,7 @@ type BetterAuthFetchOptions = NonNullable<
 >;
 type BetterAuthRequestHook = NonNullable<BetterAuthFetchOptions["onRequest"]>;
 type BetterAuthSuccessHook = NonNullable<BetterAuthFetchOptions["onSuccess"]>;
+type BetterAuthResponseHook = NonNullable<BetterAuthFetchOptions["onResponse"]>;
 
 // Signed-out fallback for environments with no usable localStorage (SSR, blocked storage).
 const NO_BEARER_STORAGE: BetterAuthBearerStorage = {
@@ -220,6 +221,39 @@ const isAuthEndpoint = (url: string | URL, endpoint: string): boolean => {
   return new URL(url.toString(), "http://localhost").pathname.endsWith(endpoint);
 };
 
+/**
+ * The header `@terreno/api` uses to carry Better Auth's signed challenge cookies (two-factor,
+ * trust-device, passkey) to and from clients that send no cookies.
+ */
+const AUTH_CHALLENGE_HEADER = "X-Terreno-Auth-Challenge";
+
+// Sent when nothing is held, so the server still knows to answer with the header.
+const AUTH_CHALLENGE_EMPTY = "-";
+
+// Better Auth paths whose requests read challenge cookies (a trusted device is checked at sign-in).
+const AUTH_CHALLENGE_PATHS = ["/two-factor/", "/passkey/", "/sign-in/"];
+
+// Successful calls to these end the two-factor challenge.
+const TWO_FACTOR_VERIFY_PATHS = [
+  "/two-factor/verify-totp",
+  "/two-factor/verify-otp",
+  "/two-factor/verify-backup-code",
+];
+
+const authChallengeKey = (storagePrefix?: string): string => {
+  return `${storagePrefix ?? DEFAULT_STORAGE_PREFIX}_auth_challenge`;
+};
+
+const isChallengeEndpoint = (url: string | URL): boolean => {
+  const {pathname} = new URL(url.toString(), "http://localhost");
+  return AUTH_CHALLENGE_PATHS.some((path) => pathname.includes(path));
+};
+
+// Cookie names carry Better Auth's prefix (`better-auth.trust_device`, maybe `__Secure-`).
+const isCookieNamed = (name: string, cookie: string): boolean => {
+  return name === cookie || name.endsWith(`.${cookie}`);
+};
+
 const sentBearerToken = (headers: Headers): string | null => {
   const authorization = headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {
@@ -245,23 +279,87 @@ const createWebBearerFetchOptions = ({
   const tokenKey = bearerTokenKey(storagePrefix);
   const readToken = (): string | null => storage().getItem(tokenKey);
 
+  // The challenge cookies the server handed over, as `name=value` pairs, beside the bearer.
+  const challengeKey = authChallengeKey(storagePrefix);
+  const readChallenge = (): URLSearchParams => {
+    const stored = storage().getItem(challengeKey);
+    return new URLSearchParams(stored && stored !== AUTH_CHALLENGE_EMPTY ? stored : "");
+  };
+  const writeChallenge = (pairs: URLSearchParams): void => {
+    if (pairs.size === 0) {
+      storage().removeItem(challengeKey);
+      return;
+    }
+    storage().setItem(challengeKey, pairs.toString());
+  };
+  // Keeps only the entries `keep` accepts.
+  const filterChallenge = (keep: (name: string) => boolean): void => {
+    const pairs = readChallenge();
+    for (const name of Array.from(pairs.keys())) {
+      if (!keep(name)) {
+        pairs.delete(name);
+      }
+    }
+    writeChallenge(pairs);
+  };
+
   // Counts sign-outs, so a token issued by a request that was in flight across one is dropped.
   let signOutCount = 0;
   const signOutCountAtRequest = new WeakMap<object, number>();
 
   // Runs after the request headers are built and before fetch, so the sign-out request still
   // carries the token for the server to revoke while the device forgets it whatever happens next.
+  // Challenge calls carry the held challenge cookies; nothing else ever sees them.
   const onRequest: BetterAuthRequestHook = (context) => {
     if (isAuthEndpoint(context.url, "/sign-out")) {
       signOutCount += 1;
       storage().removeItem(tokenKey);
+      // A trusted device stays trusted across sign-outs; pending challenges do not.
+      filterChallenge((name) => isCookieNamed(name, "trust_device"));
     }
     signOutCountAtRequest.set(context, signOutCount);
+    if (isChallengeEndpoint(context.url)) {
+      const held = readChallenge();
+      context.headers.set(
+        AUTH_CHALLENGE_HEADER,
+        held.size > 0 ? held.toString() : AUTH_CHALLENGE_EMPTY
+      );
+    }
+  };
+
+  // Runs for every status before onSuccess (so before onTwoFactorRedirect), since a refused
+  // verify can also expire a challenge. An empty value means the server expired that cookie.
+  const onResponse: BetterAuthResponseHook = (context) => {
+    const header = context.response.headers.get(AUTH_CHALLENGE_HEADER);
+    if (header) {
+      const pairs = readChallenge();
+      for (const [name, value] of new URLSearchParams(header)) {
+        if (value) {
+          pairs.set(name, value);
+        } else {
+          pairs.delete(name);
+        }
+      }
+      writeChallenge(pairs);
+    }
+    const isVerified =
+      context.response.ok &&
+      TWO_FACTOR_VERIFY_PATHS.some((path) => isAuthEndpoint(context.request.url, path));
+    // The challenge and the sign-in's "don't remember me" belong to the finished sign-in.
+    if (isVerified) {
+      filterChallenge(
+        (name) => !isCookieNamed(name, "two_factor") && !isCookieNamed(name, "dont_remember")
+      );
+    }
   };
 
   // Only 2xx responses reach onSuccess, so a failed or 5xx get-session never clears the token.
   const onSuccess: BetterAuthSuccessHook = (context) => {
     const issuedToken = context.response.headers.get("set-auth-token");
+    // A sign-in waiting on a second factor has no session yet; any token it carries is dead.
+    if ((context.data as {twoFactorRedirect?: boolean} | null)?.twoFactorRedirect) {
+      return;
+    }
     if (issuedToken) {
       // better-fetch hands onSuccess the same context object that onRequest saw.
       const countAtRequest = signOutCountAtRequest.get(context.request) ?? signOutCount;
@@ -287,6 +385,7 @@ const createWebBearerFetchOptions = ({
     auth: {token: (): string | undefined => readToken() ?? undefined, type: "Bearer"},
     credentials: "omit",
     onRequest,
+    onResponse,
     onSuccess,
   };
 };

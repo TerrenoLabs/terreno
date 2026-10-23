@@ -304,7 +304,7 @@ Open risks:
     `configure-better-auth.md`.
   - Skills: terreno-backend-api, terreno-data-fetching, security-audit
 
-- [ ] **T27** — The 2FA, trust-device and passkey challenges work without cookies
+- [x] **T27** — The 2FA, trust-device and passkey challenges work without cookies
   - Depends on: T5, T18
   - Files: api/src/betterAuthChallengeHeaders.ts, api/src/betterAuthChallengeHeaders.test.ts, api/src/betterAuthFeatures.ts, rtk/src/betterAuthClient.ts, rtk/src/betterAuthClient.test.ts, example-frontend/playwright.config.ts, example-frontend/e2e/crossSiteChallenges.spec.ts, docs/explanation/authentication.md, changelog/unreleased/cookieless-challenges.md
   - Why: bearer mode (#1604) sends no cookies (`credentials: "omit"`). Better Auth keeps

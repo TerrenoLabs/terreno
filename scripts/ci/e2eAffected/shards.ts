@@ -106,7 +106,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
     blocksPullRequest: false,
     name: "cross-site-bearer",
     routes: [`${APP}/login.tsx`, `${APP}/(tabs)/profile.tsx`, `${APP}/(tabs)/ai.tsx`],
-    specs: ["crossSiteBearer", "crossSiteOAuth", "authMethods"],
+    specs: ["crossSiteBearer", "crossSiteOAuth", "authMethods", "crossSiteChallenges"],
   },
   {
     blocksPullRequest: false,

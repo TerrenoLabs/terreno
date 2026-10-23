@@ -17,6 +17,7 @@ import type {
   BetterAuthConfig,
   BetterAuthOptionsOverride,
 } from "./betterAuth";
+import {createChallengeHeadersPlugin} from "./betterAuthChallengeHeaders";
 import {APIError} from "./errors";
 
 const SECONDS_PER_DAY = 24 * 60 * 60;
@@ -78,6 +79,10 @@ export const buildFeaturePlugins = (config: BetterAuthConfig): BetterAuthPlugin[
     const {origin, rpID, rpName} = config.passkey;
     assertPasskeyOrigins(origin, rpID);
     plugins.push(passkey({origin, rpID, rpName}) as unknown as BetterAuthPlugin);
+  }
+  if (config.twoFactor || config.passkey) {
+    // After both, so its after hook sees the challenge cookies their hooks set.
+    plugins.push(createChallengeHeadersPlugin());
   }
   if (config.lastLoginMethod) {
     plugins.push(lastLoginMethod({storeInDatabase: true}) as unknown as BetterAuthPlugin);

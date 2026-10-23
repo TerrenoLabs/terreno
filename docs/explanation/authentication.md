@@ -42,6 +42,50 @@ Modern session-based authentication with built-in social OAuth support.
 
 Email/password create omits `oauthProvider`. Apps that never use social login can keep `strict: "throw"` without declaring that field. OAuth create sets `oauthProvider` and the User schema must declare it.
 
+#### Challenges without cookies
+
+Bearer mode sends no cookies, but Better Auth keeps three short-lived values in signed cookies:
+the two-factor challenge set when a sign-in needs a second factor, the trust-device token set
+when the user ticks "trust this device", and the passkey challenge set by the WebAuthn options
+endpoints. A cross-site bearer client never sends them back, so without help it could not finish
+a 2FA or passkey sign-in.
+
+When `twoFactor` or `passkey` is configured, Terreno adds a plugin that carries those cookies in
+the `X-Terreno-Auth-Challenge` header instead:
+
+1. A bearer client sends the header on every `{basePath}/two-factor/*`, `/passkey/*`, and
+   `/sign-in/*` call. It sends `-` when it holds nothing, which opts it in.
+2. For a request that sent the header, the response copies each challenge cookie it sets into
+   the header as `name=value` pairs (URL search params), still signed with the auth secret. Only
+   values that response sets are copied, never cookies the request already had. An expired
+   cookie comes back with an empty value. A `rememberMe: false` sign-in's `dont_remember` cookie
+   rides along with the two-factor challenge, so the verified session stays short. The header is
+   added to `Access-Control-Expose-Headers`, the same way `bearer()` exposes `set-auth-token`.
+   A sign-in answered with a two-factor challenge loses its `set-auth-token`, which named the
+   session two-factor had just deleted.
+3. On those paths the server turns the header back into cookies before Better Auth reads them.
+   A real cookie always wins, and only the challenge cookies (plus `dont_remember`) are accepted. The header can
+   never set a session cookie, and a tampered value fails Better Auth's signature check (the 2FA
+   verify answers 401, a passkey verify 400 `CHALLENGE_NOT_FOUND`, and a tampered trust value
+   just asks for the second factor).
+4. rtk's bearer mode stores the header under `${storagePrefix}_auth_challenge` in the same
+   `bearerStorage` as the bearer token. It never stores a token from a response that asks for a
+   second factor. It drops the 2FA challenge and `dont_remember` after a successful verify, and
+   everything but the trust-device value on sign-out. The trust-device value stays until the server
+   expires it or `trustDeviceDays` runs out, so the device stays trusted across sign-outs.
+
+Clients that do not send the header (cookie mode, native) never receive it, so their challenge
+cookies stay httpOnly. That holds only for requests the page's own code does not send with the
+header: a script on the page that adds it to a sign-in or verify call can read the challenge
+values that call's response sets.
+
+Exposure: in bearer mode the trust-device token lives in web storage beside the bearer token.
+Any XSS on the frontend's origin can read both, and a stolen trust value skips the second factor
+for that account until it expires (it is still useless without the password). Apps that handle
+PHI should pass `bearerStorage: window.sessionStorage`, which ends trust with the tab, and serve
+a strict Content-Security-Policy. See
+[Frontend and API on different sites](../how-to/configure-better-auth.md#frontend-and-api-on-different-sites).
+
 **Key properties:**
 - Session-based (cookies / bearer session) vs. stateless JWT
 - Built-in OAuth providers with PKCE

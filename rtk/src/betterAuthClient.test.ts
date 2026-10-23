@@ -285,6 +285,7 @@ interface BearerFetchOptions {
   auth: {token: () => string | null; type: string};
   credentials: string;
   onRequest: (context: {headers: Headers; url: string | URL}) => unknown;
+  onResponse: (context: {request: {url: string | URL}; response: Response}) => unknown;
   onSuccess: (context: {
     data: unknown;
     request: {headers: Headers; url: string | URL};
@@ -649,6 +650,272 @@ describe("createBetterAuthClient with webAuth bearer on web", () => {
       },
     };
     expect(getBetterAuthBearerToken()).toBeNull();
+  });
+});
+
+const CHALLENGE_HEADER = "X-Terreno-Auth-Challenge";
+const CHALLENGE_KEY = "terreno_auth_challenge";
+const TWO_FACTOR = "better-auth.two_factor";
+const TRUST_DEVICE = "better-auth.trust_device";
+const PASSKEY = "better-auth.better-auth-passkey";
+const DONT_REMEMBER = "better-auth.dont_remember";
+
+interface ChallengeRequest {
+  challenge: string | null;
+  pathname: string;
+}
+
+// Loose view of the real client the challenge tests drive.
+interface ChallengeClient {
+  getSession: () => Promise<unknown>;
+  passkey: {listUserPasskeys: () => Promise<unknown>};
+  signIn: {
+    email: (body: {email: string; password: string}) => Promise<unknown>;
+    passkey: () => Promise<unknown>;
+  };
+  signOut: () => Promise<unknown>;
+  twoFactor: {verifyTotp: (body: {code: string; trustDevice?: boolean}) => Promise<unknown>};
+}
+
+const challengeHeader = (pairs: Record<string, string>): Record<string, string> => ({
+  [CHALLENGE_HEADER]: new URLSearchParams(pairs).toString(),
+});
+
+// Creates a web bearer client with the 2FA and passkey plugins, backed by a fake server, and
+// records the challenge header each call sent.
+const createChallengeClient = (
+  bearerStorage: MemoryStorage,
+  server: FakeServer
+): {client: ChallengeClient; sent: ChallengeRequest[]} => {
+  const sent: ChallengeRequest[] = [];
+  captured.build = (config: Record<string, unknown>): unknown => {
+    const customFetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+      const {pathname} = new URL(input.toString());
+      sent.push({challenge: new Headers(init?.headers).get(CHALLENGE_HEADER), pathname});
+      return server(pathname);
+    };
+    return createRealAuthClient({
+      baseURL: config.baseURL as string,
+      fetchOptions: {...(config.fetchOptions as Record<string, unknown>), customFetchImpl},
+      plugins: config.plugins as never,
+    });
+  };
+  const client = createBetterAuthClient({
+    baseURL: "http://localhost:4000",
+    bearerStorage,
+    features: {passkey: true, twoFactor: true},
+    scheme: "terreno",
+    webAuth: "bearer",
+  }) as unknown as ChallengeClient;
+  return {client, sent};
+};
+
+const heldChallenge = (bearerStorage: MemoryStorage): Record<string, string> =>
+  Object.fromEntries(new URLSearchParams(bearerStorage.values.get(CHALLENGE_KEY) ?? ""));
+
+describe("cookie-free challenges in web bearer mode", () => {
+  beforeEach(() => {
+    captured.auth = null;
+    captured.build = null;
+  });
+
+  afterEach(() => {
+    captured.build = null;
+  });
+
+  it("stores the challenge from sign-in and sends it on verify, opting in when none is held", async () => {
+    const bearerStorage = createMemoryStorage();
+    const {client, sent} = createChallengeClient(bearerStorage, (pathname) => {
+      if (pathname.endsWith("/sign-in/email")) {
+        return jsonResponse(
+          {twoFactorMethods: ["totp"], twoFactorRedirect: true},
+          {headers: challengeHeader({[TWO_FACTOR]: "2fa-id.sig"})}
+        );
+      }
+      return jsonResponse({token: "t1"}, {headers: {"set-auth-token": "t1"}});
+    });
+
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+    expect(heldChallenge(bearerStorage)).toEqual({[TWO_FACTOR]: "2fa-id.sig"});
+    await client.twoFactor.verifyTotp({code: "123456"});
+
+    expect(sent).toEqual([
+      {challenge: "-", pathname: "/api/auth/sign-in/email"},
+      {
+        challenge: new URLSearchParams({[TWO_FACTOR]: "2fa-id.sig"}).toString(),
+        pathname: "/api/auth/two-factor/verify-totp",
+      },
+    ]);
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("keeps the stored token when a sign-in answers with a two-factor redirect", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t0"});
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse(
+        {twoFactorMethods: ["totp"], twoFactorRedirect: true},
+        {headers: {...challengeHeader({[TWO_FACTOR]: "2fa.sig"}), "set-auth-token": "dead"}}
+      )
+    );
+
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t0");
+    expect(heldChallenge(bearerStorage)).toEqual({[TWO_FACTOR]: "2fa.sig"});
+  });
+
+  it("drops dont_remember with the two-factor challenge after a successful verify", async () => {
+    const bearerStorage = createMemoryStorage({
+      [CHALLENGE_KEY]: new URLSearchParams({
+        [DONT_REMEMBER]: "true.sig",
+        [TRUST_DEVICE]: "trust.sig",
+        [TWO_FACTOR]: "2fa.sig",
+      }).toString(),
+    });
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse({token: "t1"}, {headers: {"set-auth-token": "t1"}})
+    );
+
+    await client.twoFactor.verifyTotp({code: "123456"});
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "trust.sig"});
+  });
+
+  it("sends the challenge only on two-factor, passkey, and sign-in calls", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TRUST_DEVICE}=trust.sig`});
+    const {client, sent} = createChallengeClient(bearerStorage, () => jsonResponse({}));
+
+    await client.getSession();
+    await client.passkey.listUserPasskeys();
+    await client.signOut();
+
+    expect(sent).toEqual([
+      {challenge: null, pathname: "/api/auth/get-session"},
+      {challenge: `${TRUST_DEVICE}=trust.sig`, pathname: "/api/auth/passkey/list-user-passkeys"},
+      {challenge: null, pathname: "/api/auth/sign-out"},
+    ]);
+  });
+
+  it("clears the two-factor challenge after a successful verify and keeps the trusted device", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TWO_FACTOR}=2fa-id.sig`});
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse(
+        {token: "t1"},
+        {headers: {...challengeHeader({[TRUST_DEVICE]: "trust.sig"}), "set-auth-token": "t1"}}
+      )
+    );
+
+    await client.twoFactor.verifyTotp({code: "123456", trustDevice: true});
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "trust.sig"});
+  });
+
+  it("keeps the two-factor challenge when verify fails, so the user can retry", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TWO_FACTOR}=2fa-id.sig`});
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse({code: "INVALID_CODE"}, {status: 401})
+    );
+
+    await client.twoFactor.verifyTotp({code: "000000"});
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TWO_FACTOR]: "2fa-id.sig"});
+  });
+
+  it("forgets a challenge the server expires, even on an error response", async () => {
+    const bearerStorage = createMemoryStorage({
+      [CHALLENGE_KEY]: new URLSearchParams({
+        [TRUST_DEVICE]: "t.sig",
+        [TWO_FACTOR]: "2fa.sig",
+      }).toString(),
+    });
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse(
+        {code: "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE"},
+        {headers: challengeHeader({[TWO_FACTOR]: ""}), status: 400}
+      )
+    );
+
+    await client.twoFactor.verifyTotp({code: "000000"});
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "t.sig"});
+  });
+
+  it("replaces a rotated trust value and removes the key when nothing is left", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TRUST_DEVICE}=old.sig`});
+    let header: Record<string, string> = challengeHeader({[TRUST_DEVICE]: "new.sig"});
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse({token: "t1"}, {headers: {...header, "set-auth-token": "t1"}})
+    );
+
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "new.sig"});
+
+    header = challengeHeader({[TRUST_DEVICE]: ""});
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+    expect(bearerStorage.values.has(CHALLENGE_KEY)).toBe(false);
+  });
+
+  it("drops pending challenges on sign-out but keeps the trusted device", async () => {
+    const bearerStorage = createMemoryStorage({
+      [CHALLENGE_KEY]: new URLSearchParams({
+        [PASSKEY]: "pk.sig",
+        [TRUST_DEVICE]: "trust.sig",
+        [TWO_FACTOR]: "2fa.sig",
+      }).toString(),
+      terreno_bearer_token: "t1",
+    });
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse({message: "down"}, {status: 503})
+    );
+
+    await client.signOut();
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "trust.sig"});
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("removes the challenge key on sign-out when nothing is trusted", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TWO_FACTOR}=2fa.sig`});
+    const {client} = createChallengeClient(bearerStorage, () => jsonResponse({success: true}));
+
+    await client.signOut();
+
+    expect(bearerStorage.values.has(CHALLENGE_KEY)).toBe(false);
+  });
+
+  it("stores the passkey challenge under a custom storagePrefix", async () => {
+    const bearerStorage = createMemoryStorage();
+    const sent: ChallengeRequest[] = [];
+    captured.build = (config: Record<string, unknown>): unknown =>
+      createRealAuthClient({
+        baseURL: config.baseURL as string,
+        fetchOptions: {
+          ...(config.fetchOptions as Record<string, unknown>),
+          customFetchImpl: async (input: string | URL, init?: RequestInit): Promise<Response> => {
+            sent.push({
+              challenge: new Headers(init?.headers).get(CHALLENGE_HEADER),
+              pathname: new URL(input.toString()).pathname,
+            });
+            return jsonResponse(
+              {challenge: "c"},
+              {headers: challengeHeader({[PASSKEY]: "pk.sig"})}
+            );
+          },
+        },
+      });
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage,
+      scheme: "terreno",
+      storagePrefix: "myapp",
+      webAuth: "bearer",
+    }) as unknown as {$fetch: (path: string, options: {method: string}) => Promise<unknown>};
+
+    await client.$fetch("/passkey/generate-authenticate-options", {method: "GET"});
+
+    expect(sent[0].challenge).toBe("-");
+    expect(bearerStorage.values.get("myapp_auth_challenge")).toBe(`${PASSKEY}=pk.sig`);
+    expect(bearerStorage.values.has(CHALLENGE_KEY)).toBe(false);
   });
 });
 

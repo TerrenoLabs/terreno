@@ -128,6 +128,7 @@ describe("buildFeaturePlugins", () => {
       "terreno-methods",
       "two-factor",
       "passkey",
+      "terreno-challenge-headers",
       "last-login-method",
       "multi-session",
       "oauth-proxy",

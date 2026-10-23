@@ -19,6 +19,7 @@ const CROSS_SITE_SPEC_FILES = [
   "crossSiteOAuth.spec.ts",
   // Auth-experience specs that need the mock OIDC provider or cookie-less sessions join here.
   "authMethods.spec.ts",
+  "crossSiteChallenges.spec.ts",
 ];
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const CROSS_SITE_SPECS = new RegExp(

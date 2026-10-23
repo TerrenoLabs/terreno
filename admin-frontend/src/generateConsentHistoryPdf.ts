@@ -1,7 +1,7 @@
-import {buildConsentPdfHtml, type PdfTemplateData, sharePdfFromHtml} from "@terreno/ui";
+import {buildConsentPdfHtml, sharePdfFromHtml} from "@terreno/ui";
 import {DateTime} from "luxon";
 import {Platform} from "react-native";
-
+import {buildConsentHistoryTemplateData, historyProvisionalSection} from "./consentPdfTemplates";
 import {
   CONTENT_WIDTH,
   drawProvisionalSignature,
@@ -10,87 +10,8 @@ import {
   MARGIN_LEFT,
   MARGIN_RIGHT,
   PAGE_WIDTH,
-  type PdfProvisionalSignatureSection,
-  provisionalPdfSignature,
-  provisionalSignerName,
 } from "./pdfUtils";
 import type {ConsentHistoryEntry} from "./useConsentHistory";
-
-/** The user's own printout names the signer and date only, never the signer's note. */
-const provisionalSection = (
-  entry: ConsentHistoryEntry
-): PdfProvisionalSignatureSection | undefined => {
-  if (!entry.provisional) {
-    return undefined;
-  }
-  return {
-    signedAt: entry.agreedAt,
-    signedByName: provisionalSignerName(entry.provisionalSignedBy),
-    voidedAt: entry.voidedAt,
-  };
-};
-
-/** Template data for one of the user's consent entries, used by the native PDF. */
-const buildConsentHistoryTemplateData = (entry: ConsentHistoryEntry): PdfTemplateData => {
-  const formTitle = entry.form?.title ?? "Unknown Form";
-  const formSlug = entry.form?.slug ?? "";
-  const formType = entry.form?.type ?? "";
-  const formVersion = entry.form?.version ?? entry.formVersionSnapshot;
-
-  const fields: PdfTemplateData["fields"] = [];
-  if (formSlug) {
-    fields.push({label: "Form Slug:", value: formSlug});
-  }
-  if (formType) {
-    fields.push({label: "Form Type:", value: formType});
-  }
-  if (formVersion !== undefined) {
-    fields.push({label: "Form Version:", value: String(formVersion)});
-  }
-  fields.push({label: "Decision:", value: entry.agreed ? "Agreed" : "Declined"});
-  if (entry.agreedAt) {
-    fields.push({label: "Agreed At:", value: formatDate(entry.agreedAt)});
-  }
-  if (entry.locale) {
-    fields.push({label: "Locale:", value: entry.locale});
-  }
-
-  const checkboxEntries =
-    entry.checkboxValues && typeof entry.checkboxValues === "object"
-      ? Object.entries(entry.checkboxValues)
-      : [];
-
-  const checkboxes = checkboxEntries.map(([index, checked]) => ({
-    checked: Boolean(checked),
-    label: entry.form?.checkboxes?.[Number(index)]?.label ?? `Checkbox ${index}`,
-  }));
-
-  const auditTrail: PdfTemplateData["fields"] = [];
-  if (entry.ipAddress) {
-    auditTrail.push({label: "IP Address:", value: entry.ipAddress});
-  }
-  if (entry.userAgent) {
-    auditTrail.push({label: "User Agent:", value: entry.userAgent});
-  }
-  if (entry.formVersionSnapshot !== undefined) {
-    auditTrail.push({label: "Form Version:", value: String(entry.formVersionSnapshot)});
-  }
-  if (entry.signedAt) {
-    auditTrail.push({label: "Signed At:", value: formatDate(entry.signedAt)});
-  }
-
-  return {
-    auditTrail: auditTrail.length > 0 ? auditTrail : undefined,
-    checkboxes: checkboxes.length > 0 ? checkboxes : undefined,
-    contentSnapshot: entry.contentSnapshot,
-    fields,
-    formTitle,
-    provisionalSignature: provisionalPdfSignature(provisionalSection(entry)),
-    responseId: entry._id,
-    signature: entry.signature,
-    title: "Consent Record",
-  };
-};
 
 const generatePdfWeb = async (entry: ConsentHistoryEntry): Promise<void> => {
   const {jsPDF: JsPDF} = await import("jspdf");
@@ -205,7 +126,7 @@ const generatePdfWeb = async (entry: ConsentHistoryEntry): Promise<void> => {
     y += 4;
   }
 
-  const provisional = provisionalSection(entry);
+  const provisional = historyProvisionalSection(entry);
   if (provisional) {
     y = drawProvisionalSignature(doc, y, provisional);
   }

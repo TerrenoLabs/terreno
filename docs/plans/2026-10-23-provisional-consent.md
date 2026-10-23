@@ -214,7 +214,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Verification: `bun test --only-failures admin-frontend/src`
   - Skills: terreno:building-admin-interfaces
 
-- [ ] **T10** — Add print buttons and provisional display to admin and user consent views
+- [x] **T10** — Add print buttons and provisional display to admin and user consent views
   - Depends on: T9
   - Files: admin-frontend/src/ConsentResponseViewer.tsx, admin-frontend/src/ConsentResponseViewer.test.tsx, admin-frontend/src/ConsentHistory.tsx, admin-frontend/src/ConsentHistory.test.tsx
   - Criteria: `ConsentResponseViewer` (admin) shows a "Provisional" badge, signer, date, note, and void state. `ConsentHistory` (the user's own) shows the badge, signer, and date, with no note. `consent-response-print-button` and per-entry `consent-history-print-{entryId}` call `printConsentHtml` with HTML containing the provisional block. Tests assert the HTML string. Existing download buttons still work.

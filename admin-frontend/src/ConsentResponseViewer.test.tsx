@@ -22,6 +22,18 @@ mock.module("./generateConsentPdf", () => ({
   },
 }));
 
+const printedHtml: string[] = [];
+let printImpl: () => Promise<void> = async () => {};
+// The native print boundary: @terreno/ui's printConsentHtml hands the HTML to expo-print.
+// printToFileAsync is stubbed too, since this mock is shared by every test in the process.
+mock.module("expo-print", () => ({
+  printAsync: async ({html}: {html: string}) => {
+    printedHtml.push(html);
+    return printImpl();
+  },
+  printToFileAsync: async () => ({uri: "file:///tmp/consent.pdf"}),
+}));
+
 import {ConsentResponseViewer} from "./ConsentResponseViewer";
 
 describe("ConsentResponseViewer", () => {
@@ -39,6 +51,8 @@ describe("ConsentResponseViewer", () => {
     readState.isLoading = false;
     pdfCalls.length = 0;
     pdfImpl = async () => {};
+    printedHtml.length = 0;
+    printImpl = async () => {};
   });
 
   it("renders loading state", () => {
@@ -133,5 +147,100 @@ describe("ConsentResponseViewer", () => {
       <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
     );
     expect(toJSON()).toBeDefined();
+  });
+  describe("provisional signatures", () => {
+    const provisionalResponse = {
+      _id: "response-7",
+      agreed: true,
+      agreedAt: "2026-10-20T15:30:00.000Z",
+      consentFormId: {slug: "intake", title: "Intake Consent", type: "agreement", version: 1},
+      provisional: true,
+      provisionalNote: "Guardian agreed by phone",
+      provisionalSignedBy: {_id: "staff-1", email: "dana@example.com", name: "Dana Rivera"},
+      provisionalSignerIp: "10.0.0.7",
+      userId: {_id: "member-1", email: "sam@example.com", name: "Sam"},
+    };
+
+    it("shows the provisional badge, signer, date, and note", () => {
+      readState.data = provisionalResponse;
+      const {getByTestId, getByText, queryByTestId} = renderWithTheme(
+        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="response-7" />
+      );
+      expect(getByTestId("consent-response-provisional")).toBeDefined();
+      expect(getByText("Provisional")).toBeDefined();
+      expect(getByText("Dana Rivera")).toBeDefined();
+      expect(getByTestId("consent-response-provisional-note")).toBeDefined();
+      expect(getByText("Guardian agreed by phone")).toBeDefined();
+      expect(getByText("10.0.0.7")).toBeDefined();
+      expect(queryByTestId("consent-response-provisional-voided")).toBeNull();
+    });
+
+    it("shows the void state", () => {
+      readState.data = {
+        ...provisionalResponse,
+        voidedAt: "2026-10-21T09:00:00.000Z",
+        voidReason: "Wrong member",
+      };
+      const {getByTestId, getByText} = renderWithTheme(
+        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="response-7" />
+      );
+      expect(getByTestId("consent-response-provisional-voided")).toBeDefined();
+      expect(getByText("Wrong member")).toBeDefined();
+    });
+
+    it("shows no provisional section for the user's own response", () => {
+      readState.data = {agreed: true, consentFormId: {title: "Terms"}, userId: "u1"};
+      const {queryByTestId} = renderWithTheme(
+        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
+      );
+      expect(queryByTestId("consent-response-provisional")).toBeNull();
+    });
+
+    it("prints HTML that includes the provisional block with the note", async () => {
+      readState.data = provisionalResponse;
+      const {getByTestId} = renderWithTheme(
+        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="response-7" />
+      );
+      await act(async () => {
+        fireEvent.press(getByTestId("consent-response-print-button"));
+        await new Promise((r) => setTimeout(r, 100));
+      });
+      expect(printedHtml).toHaveLength(1);
+      expect(printedHtml[0]).toContain("<h2>Provisional signature</h2>");
+      expect(printedHtml[0]).toContain("Dana Rivera");
+      expect(printedHtml[0]).toContain("Guardian agreed by phone");
+      expect(printedHtml[0]).toContain("10.0.0.7");
+      expect(printedHtml[0]).toContain("Intake Consent");
+      expect(pdfCalls).toHaveLength(0);
+    });
+
+    it("prints a non-provisional response without the provisional block", async () => {
+      readState.data = {agreed: true, consentFormId: {title: "Terms"}, userId: "u1"};
+      const {getByTestId} = renderWithTheme(
+        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
+      );
+      await act(async () => {
+        fireEvent.press(getByTestId("consent-response-print-button"));
+        await new Promise((r) => setTimeout(r, 100));
+      });
+      expect(printedHtml).toHaveLength(1);
+      expect(printedHtml[0]).not.toContain("Provisional signature");
+    });
+
+    it("keeps the page usable when printing fails", async () => {
+      readState.data = provisionalResponse;
+      printImpl = async () => {
+        throw new Error("printer offline");
+      };
+      const {getByTestId} = renderWithTheme(
+        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="response-7" />
+      );
+      await act(async () => {
+        fireEvent.press(getByTestId("consent-response-print-button"));
+        await new Promise((r) => setTimeout(r, 100));
+      });
+      expect(printedHtml).toHaveLength(1);
+      expect(getByTestId("consent-response-print-button")).toBeDefined();
+    });
   });
 });

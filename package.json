@@ -299,6 +299,7 @@
     "rules:check": "bunx rulesync generate && git diff --exit-code",
     "skills:sync": "bun run scripts/planning/syncInstallableSkills.ts && bun run scripts/planning/syncClaudePlugin.ts",
     "skills:check": "bun run scripts/planning/syncInstallableSkills.ts --check && bun run scripts/planning/syncClaudePlugin.ts --check",
+    "smoke": "bun run scripts/ci/smoke/runAll.ts",
     "syncdb:compile": "bun run --filter '@terreno/syncdb' compile",
     "syncdb:dev": "bun run --filter '@terreno/syncdb' dev",
     "syncdb:lint": "bun run --filter '@terreno/syncdb' lint",

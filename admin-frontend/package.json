@@ -17,6 +17,7 @@
     "@biomejs/biome": "catalog:",
     "@react-native-community/slider": "catalog:",
     "@reduxjs/toolkit": "catalog:",
+    "@terreno/test": "workspace:*",
     "@testing-library/react-native": "catalog:",
     "@types/lodash": "catalog:",
     "@types/luxon": "catalog:",

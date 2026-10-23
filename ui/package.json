@@ -79,6 +79,7 @@
   "description": "React Native UI component library for iOS, Android, and web — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/test": "workspace:*",
     "@testing-library/react-native": "catalog:",
     "@types/bun": "catalog:",
     "@types/d3-scale": "^4.0.9",

@@ -32,6 +32,7 @@
     "@biomejs/biome": "catalog:",
     "@openfeature/react-sdk": "catalog:",
     "@openfeature/web-sdk": "catalog:",
+    "@terreno/test": "workspace:*",
     "@testing-library/react-native": "catalog:",
     "@types/bun": "catalog:",
     "@types/luxon": "catalog:",

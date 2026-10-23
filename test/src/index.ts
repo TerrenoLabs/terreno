@@ -40,6 +40,19 @@ export {
   registerSimpleMongoPreload,
   type SimpleMongoPreloadOptions,
 } from "./preload/registerBackendPreload";
+export {freePort} from "./smoke/freePort";
+export {type RunBinOptions, type RunBinResult, runBin} from "./smoke/runBin";
+export {type SmokeMongoUriOptions, smokeMongoUri, stopSmokeMongo} from "./smoke/smokeMongoUri";
+export {
+  type ExampleBackend,
+  type SpawnExampleBackendOptions,
+  spawnExampleBackend,
+} from "./smoke/spawnExampleBackend";
+export {
+  type SpawnedProcess,
+  type SpawnUntilReadyOptions,
+  spawnUntilReady,
+} from "./smoke/spawnUntilReady";
 export {
   abortTestTransaction,
   getTestSession,

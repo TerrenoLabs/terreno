@@ -1,6 +1,6 @@
 # @terreno/test
 
-Shared Bun test helpers for Terreno backend packages: in-memory MongoDB lifecycle, auth env defaults, HTTP fixtures, and log silencing.
+Shared Bun test helpers for Terreno packages: in-memory MongoDB lifecycle, auth env defaults, HTTP fixtures, log silencing, and real-process smoke helpers.
 
 ## Install
 
@@ -78,7 +78,7 @@ Defaults: `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET`, `SESSION_SECRE
 | Variable | Effect |
 |----------|--------|
 | `TERRENO_TEST_USE_MEMORY_MONGO` | When `"true"`, `registerSimpleMongoPreload` starts `mongodb-memory-server` if `TERRENO_TEST_MONGODB_URI` is unset. |
-| `TERRENO_TEST_MONGODB_URI` | External MongoDB URI. Takes priority over in-memory server in `startMongoServer` and `registerSimpleMongoPreload`. |
+| `TERRENO_TEST_MONGODB_URI` | External MongoDB URI. Takes priority over in-memory server in `startMongoServer`, `registerSimpleMongoPreload`, and `smokeMongoUri`. |
 | `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` | Per-mongod start timeout for in-memory servers started by `startMongoServer`. Default `60000` (mongodb-memory-server's own default is 10s). Startup is tried twice. |
 | `BUN_TEST_DISABLE_DB` | When `"true"`, `registerBackendPreload` skips all Mongo `beforeAll`/`afterAll` hooks (no DB startup). |
 
@@ -105,6 +105,54 @@ If `registerBackendPreload` cannot start Mongo, every later test fails at once w
 | `ensureTestMongooseConnected` | Connect mongoose to test URI with retries. |
 | `waitForDocument` / `waitForDocuments` | Poll until documents match a query. |
 | `startTestTransaction` / `abortTestTransaction` | Per-test mongoose transactions when enabled. |
+
+## Smoke helpers
+
+A package smoke is a real-process check of the package's built output. It lives in
+`<package>/e2e/smoke.ts` (`e2e/smoke.spec.ts` for browser packages), runs with the package's
+`smoke` script after `bun run compile`, and takes 30 s or less. It starts a server on a real
+port, runs the compiled binary, or opens a page, then walks one happy path. It exits non-zero on
+the first failed check. These helpers do the process work:
+
+| Export | Description |
+|--------|-------------|
+| `freePort()` | An unused TCP port on `127.0.0.1`. |
+| `smokeMongoUri({databaseName?})` | MongoDB URI with the database name (default `terrenoSmoke`). Uses `TERRENO_TEST_MONGODB_URI` when set (the CI sidecar). Otherwise it starts one single-node in-memory replica set per process, so change streams work. `stopSmokeMongo()` stops it. |
+| `spawnUntilReady({cmd, url, timeoutMs?, cwd?, env?})` | Starts a long-running child and resolves once `url` answers 2xx (default timeout 20 s). Returns `{pid, output, stop}`. It rejects with the child's output when the child exits first or is not ready in time. |
+| `spawnExampleBackend({mongoUri, port?, env?, timeoutMs?, backendDir?})` | Starts the monorepo's `example-backend` by path with dev auth secrets and the demo AI model, then waits for `/health` (default timeout 60 s). `env` overrides the defaults; `backendDir` points at another directory holding `src/index.ts`. Returns `{baseUrl, port, pid, output, stop}`. Client smokes (rtk, syncdb, admin-frontend) use it, so they never import `@terreno/api`. |
+| `runBin({bin, args?, cwd?, env?, timeoutMs?})` | Runs a binary to completion and resolves `{exitCode, stdout, stderr}`. A `.js`, `.mjs`, `.cjs`, or `.ts` path runs with Bun. Running past `timeoutMs` (default 30 s) rejects. Background processes the binary leaves behind are killed when it exits. |
+
+Each child that `spawnUntilReady`, `spawnExampleBackend`, or `runBin` starts runs in its own
+process group. `stop()`, a timeout, and the smoke process exiting, crashing, or receiving
+`SIGINT` or `SIGTERM` kill the whole group, so a wrapper command (`sh -c`, `bun run`) and the
+server it started both die and no server is left on a port. A smoke killed with `SIGKILL`
+cannot clean up.
+
+A server smoke can host its own server by re-running its file with an argument, which keeps
+one file per package. `api/e2e/smoke.ts` is the reference:
+
+```typescript
+import {freePort, smokeMongoUri, spawnUntilReady, stopSmokeMongo} from "@terreno/test";
+
+const port = await freePort();
+const server = await spawnUntilReady({
+  cmd: [process.execPath, __filename, "serve"],
+  env: {MONGO_URI: await smokeMongoUri({databaseName: "apiSmoke"}), PORT: String(port)},
+  url: `http://127.0.0.1:${port}/health`,
+});
+try {
+  // fetch() the happy path and throw on the first unexpected response
+} finally {
+  await server.stop();
+  await stopSmokeMongo();
+}
+```
+
+Run one package's smoke with `bun run --cwd <package> smoke`. From the repo root,
+`bun run smoke` runs every workspace's `smoke` script one at a time and prints each package's
+time. It keeps going after a failure and exits 1 if any package failed. Pass workspace
+directory names to run a subset: `bun run smoke api rtk`. Naming a workspace that does not
+exist or has no `smoke` script is an error.
 
 ## Conventions
 

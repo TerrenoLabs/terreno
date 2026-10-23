@@ -224,7 +224,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
 
 ### Phase 2 — Terreno adopts the convention
 
-- [ ] **T8** — Smoke harness, api smoke, and root script (smoke tracer)
+- [x] **T8** — Smoke harness, api smoke, and root script (smoke tracer)
   - Depends on: none
   - Files: test/src/smoke/*.ts, test/package.json (export), api/e2e/smoke.ts, api/package.json, package.json (root `smoke` script), workspace package.json files that lack `@terreno/test` (adding it as a devDependency), bun.lock, knip.jsonc (an `e2e/smoke.{ts,spec.ts}` entry for every workspace)
   - Delivers:

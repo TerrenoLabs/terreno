@@ -13,6 +13,7 @@
   "description": "Shared contracts for agent-driven UI: ask schemas, simple cards, and whole-reply block documents — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "ajv": "8.20.0",
     "typescript": "catalog:"

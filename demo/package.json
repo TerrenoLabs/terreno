@@ -59,6 +59,7 @@
     "@babel/core": "^7.29.0",
     "@biomejs/biome": "catalog:",
     "@expo/metro-runtime": "catalog:",
+    "@terreno/test": "workspace:*",
     "@testing-library/react-native": "catalog:",
     "@types/bun": "catalog:",
     "@types/lodash": "catalog:",

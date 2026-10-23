@@ -8,6 +8,7 @@
   "description": "Scaffold a deployable Terreno full-stack app — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "chai": "catalog:",

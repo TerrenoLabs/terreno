@@ -1648,6 +1648,7 @@ new TerrenoApp({userModel: User})
 | `POST /consent-forms/:id/publish` | admin | Copy the form to `version + 1`, activate it, deactivate other versions |
 | `GET /consent-responses`, `GET /consent-responses/:id` | admin | Read responses, populated with form and user |
 | `POST /consent-responses/provisional` | sign-on-behalf | Record a provisional signature for another user |
+| `GET /consent-responses/status?userId=` | sign-on-behalf | Consent status of each form that applies to a user |
 | `GET /consents/pending` | user | Active forms the user has not answered themselves at the current version |
 | `POST /consents/respond` | user | `{consentFormId, agreed, locale, checkboxValues?, signature?}` |
 | `GET /consents/my` | user | The user's own responses with form data |
@@ -1679,6 +1680,58 @@ The form stays in the target user's `/consents/pending` until they respond thems
 With `AuditApp` registered, each provisional signature writes an `AuditEvent`
 (`modelName: "ConsentResponse"`, `operation: "create"`, `after: {action: "signOnBehalf",
 userId, consentFormId}`, `actorId`: the signer).
+
+`/consent-responses` and its actions are in OpenAPI, so `bun run sdk` generates
+`useConsentresponsesProvisionalMutation` and `useConsentresponsesStatusQuery`. The other
+ConsentApp routes are not in OpenAPI.
+
+### `GET /consent-responses/status` and `getConsentStatuses`
+
+`GET /consent-responses/status?userId=<id>` returns `{data: ConsentStatusRow[]}`, one row per
+active form that applies to the user (after `resolveConsentForms`), in form order. 400 when
+`userId` is missing or malformed, 404 for an unknown user, 405 for callers who may not sign
+on behalf of others. With `AuditApp` registered, each read writes an `AuditEvent`
+(`operation: "read"`, `verb: "viewed"`, `after: {action: "viewStatus", userId}`).
+
+The same rows come from the exported helper, for server code that needs the "considered
+signed" answer:
+
+```typescript
+import {getConsentStatuses} from "@terreno/api";
+
+const rows = await getConsentStatuses({userId, resolveConsentForms});
+const allConsented = rows.every((row) => row.isConsented);
+```
+
+```typescript
+interface ConsentStatusRow {
+  form: ConsentStatusForm; // the form as clients receive it: string ids, content as an object
+  status: "pending" | "provisional" | "signed" | "declined";
+  isConsented: boolean; // true for "signed" and "provisional"
+  respondedAt?: Date; // agreedAt of the response that decided the status
+  provisional?: {
+    responseId: string;
+    signedAt: Date;
+    signedBy: {id: string; name?: string; email?: string} | null;
+    note?: string;
+  };
+}
+```
+
+Only responses to each form's current version count:
+
+1. The user's own latest response decides: `agreed` → `signed`, declined → `declined`.
+2. Otherwise a provisional response → `provisional`.
+3. Otherwise → `pending`.
+
+`provisional` is set whenever a provisional response exists for the current version, even
+when the user's own answer decides the status. The helper throws `APIError` 400 for a
+malformed `userId` and 404 for an unknown user.
+
+### Admin columns
+
+The "Consent Responses" admin model lists `provisional`, offers a "Provisional" boolean
+filter, and populates `provisionalSignedBy` (`name`, `email`).
 
 ### Provisional data on user-facing payloads
 

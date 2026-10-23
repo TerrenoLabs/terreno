@@ -66,6 +66,16 @@ stay for audit.
 A separate `ProvisionalConsent` model was rejected. A field on `ConsentResponse` keeps one
 audit trail per user and reuses the existing admin screens, populate paths, and PDF code.
 
+### What counts as signed
+
+`getConsentStatuses` (and `GET /consent-responses/status`) is the "considered signed"
+contract. For each form that applies to the user, only responses to the current version
+count. The user's own latest answer always wins: agreeing makes the form `signed`, declining
+makes it `declined`. Without one, a provisional signature makes it `provisional`, which
+counts as consented. Otherwise it is `pending`. App code that needs to know whether a user
+may proceed (for example before scheduling a visit) checks `isConsented` on these rows
+instead of reading responses directly.
+
 ### Who may sign for another user
 
 Pass `accessControl` to `ConsentApp` to use RBAC. Any authenticated user whose roles grant
@@ -78,7 +88,9 @@ warning at register.
 
 There is no relationship check: a permitted signer may sign for any user. A signer cannot
 sign for themselves, and the form must be active and must apply to the target user under
-`resolveConsentForms`. When `AuditApp` is registered, every provisional signature writes an
-`AuditEvent` naming the signer, the target user, and the form.
+`resolveConsentForms`. The same permission covers reading another user's consent statuses.
+When `AuditApp` is registered, every provisional signature and every status read writes an
+`AuditEvent` naming the actor and the target user. Audit events gain a `read` operation and
+a `viewed` verb for these reads.
 
 Reference: [ConsentApp](../reference/api.md#consent-forms-consentapp).

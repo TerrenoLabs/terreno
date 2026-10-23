@@ -38,7 +38,10 @@ modelRouter("/todos", Todo, {
 | PATCH `/:id/:field/:itemId` | `updated` | `arrayUpdate` | Changed fields; `recordId` set |
 | DELETE `/:id/:field/:itemId` | `updated` | `arrayRemove` | Changed fields; `recordId` set |
 
-`source` is `modelRouter` for these writes. Secrets (`password`, `hash`, `salt`, `token`,
+`source` is `modelRouter` for these writes. `ConsentApp` also writes `modelRouter` events for
+provisional consent actions: `created`/`create` for a provisional signature and
+`viewed`/`read` when staff read another user's consent statuses. `read` and `viewed` mark
+audited reads; no other surface writes them. Secrets (`password`, `hash`, `salt`, `token`,
 `secret`, `refreshToken`) are omitted at every object and array depth, including compound
 keys such as `tokenHash`. Extra `redact` names merge with that list as exact field names.
 

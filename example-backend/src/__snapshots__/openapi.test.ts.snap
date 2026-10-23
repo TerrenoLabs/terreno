@@ -3517,11 +3517,12 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "schema": {
               "oneOf": [
                 {
-                  "description": "Widget-compatible mutation verb",
+                  "description": "Widget-compatible mutation verb, or viewed for an audited read",
                   "enum": [
                     "created",
                     "deleted",
                     "updated",
+                    "viewed",
                   ],
                   "type": "string",
                 },
@@ -3663,13 +3664,14 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "type": "string",
                           },
                           "operation": {
-                            "description": "Fine-grained mutation kind",
+                            "description": "Fine-grained mutation kind, or read for an audited read",
                             "enum": [
                               "arrayPush",
                               "arrayRemove",
                               "arrayUpdate",
                               "create",
                               "delete",
+                              "read",
                               "update",
                             ],
                             "type": "string",
@@ -3701,11 +3703,12 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "type": "string",
                           },
                           "verb": {
-                            "description": "Widget-compatible mutation verb",
+                            "description": "Widget-compatible mutation verb, or viewed for an audited read",
                             "enum": [
                               "created",
                               "deleted",
                               "updated",
+                              "viewed",
                             ],
                             "type": "string",
                           },
@@ -3933,13 +3936,14 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "type": "string",
                     },
                     "operation": {
-                      "description": "Fine-grained mutation kind",
+                      "description": "Fine-grained mutation kind, or read for an audited read",
                       "enum": [
                         "arrayPush",
                         "arrayRemove",
                         "arrayUpdate",
                         "create",
                         "delete",
+                        "read",
                         "update",
                       ],
                       "type": "string",
@@ -3971,11 +3975,12 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "type": "string",
                     },
                     "verb": {
-                      "description": "Widget-compatible mutation verb",
+                      "description": "Widget-compatible mutation verb, or viewed for an audited read",
                       "enum": [
                         "created",
                         "deleted",
                         "updated",
+                        "viewed",
                       ],
                       "type": "string",
                     },
@@ -5813,6 +5818,30 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
           },
           {
             "in": "query",
+            "name": "provisional",
+            "schema": {
+              "oneOf": [
+                {
+                  "default": false,
+                  "description": "Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves",
+                  "type": "boolean",
+                },
+                {
+                  "properties": {
+                    "$in": {
+                      "items": {
+                        "type": "boolean",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              ],
+            },
+          },
+          {
+            "in": "query",
             "name": "locale",
             "schema": {
               "oneOf": [
@@ -5977,6 +6006,35 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "description": "Locale code of the content version the user viewed when responding",
                             "type": "string",
                           },
+                          "provisional": {
+                            "description": "Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves",
+                            "type": "boolean",
+                          },
+                          "provisionalNote": {
+                            "description": "Required note from the provisional signer explaining how consent was obtained",
+                            "type": "string",
+                          },
+                          "provisionalSignedBy": {
+                            "properties": {
+                              "email": {
+                                "description": "The user's email address, used for authentication",
+                                "type": "string",
+                              },
+                              "name": {
+                                "description": "The user's display name",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "provisionalSignerIp": {
+                            "description": "IP address of the provisional signer, captured for audit purposes",
+                            "type": "string",
+                          },
+                          "provisionalSignerUserAgent": {
+                            "description": "User-agent string of the provisional signer's browser or app",
+                            "type": "string",
+                          },
                           "signature": {
                             "description": "Base64-encoded signature image or typed signature text, if captured",
                             "type": "string",
@@ -6014,6 +6072,8 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "agreedAt",
                           "consentFormId",
                           "locale",
+                          "provisionalNote",
+                          "provisionalSignedBy",
                           "userId",
                           "_id",
                           "created",
@@ -6283,6 +6343,35 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "description": "Locale code of the content version the user viewed when responding",
                       "type": "string",
                     },
+                    "provisional": {
+                      "description": "Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves",
+                      "type": "boolean",
+                    },
+                    "provisionalNote": {
+                      "description": "Required note from the provisional signer explaining how consent was obtained",
+                      "type": "string",
+                    },
+                    "provisionalSignedBy": {
+                      "properties": {
+                        "email": {
+                          "description": "The user's email address, used for authentication",
+                          "type": "string",
+                        },
+                        "name": {
+                          "description": "The user's display name",
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "provisionalSignerIp": {
+                      "description": "IP address of the provisional signer, captured for audit purposes",
+                      "type": "string",
+                    },
+                    "provisionalSignerUserAgent": {
+                      "description": "User-agent string of the provisional signer's browser or app",
+                      "type": "string",
+                    },
                     "signature": {
                       "description": "Base64-encoded signature image or typed signature text, if captured",
                       "type": "string",
@@ -6320,6 +6409,8 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "agreedAt",
                     "consentFormId",
                     "locale",
+                    "provisionalNote",
+                    "provisionalSignedBy",
                     "userId",
                     "_id",
                     "created",
@@ -17101,6 +17192,787 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         "tags": [
           "admin",
           "comms",
+        ],
+      },
+    },
+    "/consent-responses/": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "_id",
+            "schema": {
+              "properties": {
+                "$in": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+              },
+              "type": "object",
+            },
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "number",
+            },
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "_id": {
+                            "type": "string",
+                          },
+                          "agreed": {
+                            "description": "Whether the user agreed (true) or declined (false) the consent form",
+                            "type": "boolean",
+                          },
+                          "agreedAt": {
+                            "description": "Timestamp when the user submitted their agreement or declination",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "checkboxValues": {
+                            "additionalProperties": {
+                              "type": "boolean",
+                            },
+                            "description": "Map of checkbox index to boolean indicating whether each checkbox was checked",
+                            "type": "object",
+                          },
+                          "consentFormId": {
+                            "properties": {
+                              "slug": {
+                                "description": "URL-safe identifier for this form, combined with version to uniquely identify a form",
+                                "type": "string",
+                              },
+                              "title": {
+                                "description": "Human-readable title of the consent form",
+                                "type": "string",
+                              },
+                              "type": {
+                                "description": "Category of consent form",
+                                "enum": [
+                                  "agreement",
+                                  "privacy",
+                                  "hipaa",
+                                  "research",
+                                  "terms",
+                                  "custom",
+                                ],
+                                "type": "string",
+                              },
+                              "version": {
+                                "default": 1,
+                                "description": "Version number of this form. Incrementing the version requires users to re-consent",
+                                "type": "number",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "contentSnapshot": {
+                            "description": "Snapshot of the form content in the user's locale at the time of response",
+                            "type": "string",
+                          },
+                          "created": {
+                            "description": "When this document was created",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "deleted": {
+                            "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                            "type": "boolean",
+                          },
+                          "formVersionSnapshot": {
+                            "description": "Version number of the form at the time the user responded",
+                            "type": "number",
+                          },
+                          "ipAddress": {
+                            "description": "IP address of the user at the time of response, captured for audit purposes",
+                            "type": "string",
+                          },
+                          "locale": {
+                            "description": "Locale code of the content version the user viewed when responding",
+                            "type": "string",
+                          },
+                          "provisional": {
+                            "description": "Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves",
+                            "type": "boolean",
+                          },
+                          "provisionalNote": {
+                            "description": "Required note from the provisional signer explaining how consent was obtained",
+                            "type": "string",
+                          },
+                          "provisionalSignedBy": {
+                            "properties": {
+                              "email": {
+                                "description": "The user's email address, used for authentication",
+                                "type": "string",
+                              },
+                              "name": {
+                                "description": "The user's display name",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "provisionalSignerIp": {
+                            "description": "IP address of the provisional signer, captured for audit purposes",
+                            "type": "string",
+                          },
+                          "provisionalSignerUserAgent": {
+                            "description": "User-agent string of the provisional signer's browser or app",
+                            "type": "string",
+                          },
+                          "signature": {
+                            "description": "Base64-encoded signature image or typed signature text, if captured",
+                            "type": "string",
+                          },
+                          "signedAt": {
+                            "description": "Timestamp when the user provided their signature",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "updated": {
+                            "description": "When this document was last updated",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "userAgent": {
+                            "description": "User-agent string of the browser or app used to submit the response",
+                            "type": "string",
+                          },
+                          "userId": {
+                            "properties": {
+                              "email": {
+                                "description": "The user's email address, used for authentication",
+                                "type": "string",
+                              },
+                              "name": {
+                                "description": "The user's display name",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                        },
+                        "required": [
+                          "agreed",
+                          "agreedAt",
+                          "consentFormId",
+                          "locale",
+                          "provisionalNote",
+                          "provisionalSignedBy",
+                          "userId",
+                          "_id",
+                          "created",
+                          "updated",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "limit": {
+                      "type": "number",
+                    },
+                    "more": {
+                      "type": "boolean",
+                    },
+                    "page": {
+                      "type": "number",
+                    },
+                    "total": {
+                      "type": "number",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful list",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "tags": [
+          "consentresponses",
+        ],
+      },
+    },
+    "/consent-responses/provisional": {
+      "post": {
+        "description": "Record that another user agreed to a consent form on the target user's behalf. The form stays in the target user's pending list until they respond themselves.",
+        "operationId": "consentresponses_provisional",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "consentFormId": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "locale": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "note": {
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "userId": {
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "consentFormId",
+                  "note",
+                  "userId",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful response",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Sign a consent form provisionally on behalf of another user",
+        "tags": [
+          "consentresponses",
+        ],
+      },
+    },
+    "/consent-responses/status": {
+      "get": {
+        "description": "Consent status of every form that applies to a user: pending, provisional, signed, or declined. Provisional counts as consented.",
+        "operationId": "consentresponses_status",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "form": {
+                            "additionalProperties": {
+                              "nullable": true,
+                            },
+                            "properties": {
+                              "_id": {
+                                "type": "string",
+                              },
+                              "content": {
+                                "additionalProperties": {
+                                  "type": "string",
+                                },
+                                "type": "object",
+                              },
+                              "id": {
+                                "type": "string",
+                              },
+                              "slug": {
+                                "type": "string",
+                              },
+                              "title": {
+                                "type": "string",
+                              },
+                              "type": {
+                                "type": "string",
+                              },
+                              "version": {
+                                "type": "number",
+                              },
+                            },
+                            "required": [
+                              "_id",
+                              "content",
+                              "id",
+                              "slug",
+                              "title",
+                              "type",
+                              "version",
+                            ],
+                            "type": "object",
+                          },
+                          "isConsented": {
+                            "type": "boolean",
+                          },
+                          "provisional": {
+                            "properties": {
+                              "note": {
+                                "type": "string",
+                              },
+                              "responseId": {
+                                "type": "string",
+                              },
+                              "signedAt": {
+                                "type": "string",
+                              },
+                              "signedBy": {
+                                "nullable": true,
+                                "properties": {
+                                  "email": {
+                                    "type": "string",
+                                  },
+                                  "id": {
+                                    "type": "string",
+                                  },
+                                  "name": {
+                                    "type": "string",
+                                  },
+                                },
+                                "required": [
+                                  "id",
+                                ],
+                                "type": "object",
+                              },
+                            },
+                            "required": [
+                              "responseId",
+                              "signedAt",
+                              "signedBy",
+                            ],
+                            "type": "object",
+                          },
+                          "respondedAt": {
+                            "type": "string",
+                          },
+                          "status": {
+                            "enum": [
+                              "pending",
+                              "provisional",
+                              "signed",
+                              "declined",
+                            ],
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "form",
+                          "isConsented",
+                          "status",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful response",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List a user's consent status for each form",
+        "tags": [
+          "consentresponses",
+        ],
+      },
+    },
+    "/consent-responses/{id}": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "_id": {
+                      "type": "string",
+                    },
+                    "agreed": {
+                      "description": "Whether the user agreed (true) or declined (false) the consent form",
+                      "type": "boolean",
+                    },
+                    "agreedAt": {
+                      "description": "Timestamp when the user submitted their agreement or declination",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "checkboxValues": {
+                      "additionalProperties": {
+                        "type": "boolean",
+                      },
+                      "description": "Map of checkbox index to boolean indicating whether each checkbox was checked",
+                      "type": "object",
+                    },
+                    "consentFormId": {
+                      "properties": {
+                        "slug": {
+                          "description": "URL-safe identifier for this form, combined with version to uniquely identify a form",
+                          "type": "string",
+                        },
+                        "title": {
+                          "description": "Human-readable title of the consent form",
+                          "type": "string",
+                        },
+                        "type": {
+                          "description": "Category of consent form",
+                          "enum": [
+                            "agreement",
+                            "privacy",
+                            "hipaa",
+                            "research",
+                            "terms",
+                            "custom",
+                          ],
+                          "type": "string",
+                        },
+                        "version": {
+                          "default": 1,
+                          "description": "Version number of this form. Incrementing the version requires users to re-consent",
+                          "type": "number",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "contentSnapshot": {
+                      "description": "Snapshot of the form content in the user's locale at the time of response",
+                      "type": "string",
+                    },
+                    "created": {
+                      "description": "When this document was created",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "deleted": {
+                      "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "formVersionSnapshot": {
+                      "description": "Version number of the form at the time the user responded",
+                      "type": "number",
+                    },
+                    "ipAddress": {
+                      "description": "IP address of the user at the time of response, captured for audit purposes",
+                      "type": "string",
+                    },
+                    "locale": {
+                      "description": "Locale code of the content version the user viewed when responding",
+                      "type": "string",
+                    },
+                    "provisional": {
+                      "description": "Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves",
+                      "type": "boolean",
+                    },
+                    "provisionalNote": {
+                      "description": "Required note from the provisional signer explaining how consent was obtained",
+                      "type": "string",
+                    },
+                    "provisionalSignedBy": {
+                      "properties": {
+                        "email": {
+                          "description": "The user's email address, used for authentication",
+                          "type": "string",
+                        },
+                        "name": {
+                          "description": "The user's display name",
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                    "provisionalSignerIp": {
+                      "description": "IP address of the provisional signer, captured for audit purposes",
+                      "type": "string",
+                    },
+                    "provisionalSignerUserAgent": {
+                      "description": "User-agent string of the provisional signer's browser or app",
+                      "type": "string",
+                    },
+                    "signature": {
+                      "description": "Base64-encoded signature image or typed signature text, if captured",
+                      "type": "string",
+                    },
+                    "signedAt": {
+                      "description": "Timestamp when the user provided their signature",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "updated": {
+                      "description": "When this document was last updated",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "userAgent": {
+                      "description": "User-agent string of the browser or app used to submit the response",
+                      "type": "string",
+                    },
+                    "userId": {
+                      "properties": {
+                        "email": {
+                          "description": "The user's email address, used for authentication",
+                          "type": "string",
+                        },
+                        "name": {
+                          "description": "The user's display name",
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "agreed",
+                    "agreedAt",
+                    "consentFormId",
+                    "locale",
+                    "provisionalNote",
+                    "provisionalSignedBy",
+                    "userId",
+                    "_id",
+                    "created",
+                    "updated",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful read",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "tags": [
+          "consentresponses",
         ],
       },
     },

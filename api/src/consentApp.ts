@@ -8,25 +8,32 @@
 
 import {type Application, Router} from "express";
 import {DateTime} from "luxon";
-import mongoose from "mongoose";
-import {z} from "zod";
+import type mongoose from "mongoose";
 import type {CollectionActionConfig} from "./actions";
 import type {AdminContribution} from "./adminTypes";
-import {asyncHandler, modelRouter} from "./api";
+import {asyncHandler, modelRouter, type OpenApiMiddleware} from "./api";
+import type {AuditEventOperation, AuditEventVerb} from "./audit/auditEventModel";
 import {isAuditRecorderInstalled, recordAuditEvent} from "./audit/record";
 import type {User} from "./auth";
 import {authenticateMiddleware} from "./auth";
+import {
+  getConsentStatuses,
+  loadConsentTargetUser,
+  provisionalSignerPopulate,
+  type ResolveConsentForms,
+  resolveFormsForUser,
+} from "./consentStatus";
 import {APIError} from "./errors";
 import {logger} from "./logger";
 import {ConsentForm} from "./models/consentForm";
 import {ConsentResponse} from "./models/consentResponse";
 import {type PermissionMethod, Permissions} from "./permissions";
-import {findOneOrNoneFor} from "./plugins";
 import type {PopulatePath} from "./populate";
 import type {AnyTerrenoAccess} from "./rbac/types";
 import type {TerrenoPlugin} from "./terrenoPlugin";
 import type {ConsentFormDocument} from "./types/consentForm";
 import {isValidObjectId} from "./utils";
+import {z} from "./zodOpenApi";
 
 /** Shared populate config for consent response list/read endpoints. */
 export const consentResponsePopulatePaths: PopulatePath[] = [
@@ -38,10 +45,11 @@ export const consentResponsePopulatePaths: PopulatePath[] = [
     fields: ["name", "email"],
     path: "userId",
   },
+  {
+    fields: ["name", "email"],
+    path: "provisionalSignedBy",
+  },
 ];
-
-/** Fields returned for the provisional signer on provisional consent responses. */
-const provisionalSignerPopulate = {path: "provisionalSignedBy", select: "name email"};
 
 const PROVISIONAL_NOTE_MAX_LENGTH = 2000;
 
@@ -63,6 +71,44 @@ const provisionalSignBody = z
 
 type ProvisionalSignBody = z.infer<typeof provisionalSignBody>;
 
+const consentStatusQuery = z.object({userId: z.string().min(1, "userId is required")});
+
+type ConsentStatusQuery = z.infer<typeof consentStatusQuery>;
+
+const consentStatusSigner = z.object({
+  email: z.string().optional(),
+  id: z.string(),
+  name: z.string().optional(),
+});
+
+/** OpenAPI shape of `ConsentStatusRow`, so generated SDKs type the status rows. */
+const consentStatusRows = z.array(
+  z.object({
+    form: z
+      .object({
+        _id: z.string(),
+        content: z.record(z.string(), z.string()),
+        id: z.string(),
+        slug: z.string(),
+        title: z.string(),
+        type: z.string(),
+        version: z.number(),
+      })
+      .passthrough(),
+    isConsented: z.boolean(),
+    provisional: z
+      .object({
+        note: z.string().optional(),
+        responseId: z.string(),
+        signedAt: z.string(),
+        signedBy: consentStatusSigner.nullable(),
+      })
+      .optional(),
+    respondedAt: z.string().optional(),
+    status: z.enum(["pending", "provisional", "signed", "declined"]),
+  })
+);
+
 export interface ConsentAppOptions {
   /**
    * RBAC access control. When set, users whose roles grant `consentResponse:signOnBehalf` may
@@ -82,10 +128,7 @@ export interface ConsentAppOptions {
       toLocale: string;
     }) => Promise<string>;
   };
-  resolveConsentForms?: (
-    user: User,
-    forms: ConsentFormDocument[]
-  ) => ConsentFormDocument[] | Promise<ConsentFormDocument[]>;
+  resolveConsentForms?: ResolveConsentForms;
   supportedLocales?: string[];
 }
 
@@ -113,17 +156,39 @@ const signerDisplayName = (signer: PopulatedSigner | null): string => {
   return signer?.name || signer?.email || "Staff";
 };
 
-/** Load the consent forms that apply to a user: active forms, narrowed by the app's resolver. */
-const resolveFormsForUser = async (
-  user: User,
-  resolveConsentForms: ConsentAppOptions["resolveConsentForms"]
-): Promise<{activeForms: ConsentFormDocument[]; resolvedForms: ConsentFormDocument[]}> => {
-  const activeForms = await ConsentForm.find({active: true}).sort({order: 1});
-  if (!resolveConsentForms) {
-    return {activeForms, resolvedForms: activeForms};
+/** Best-effort AuditEvent for sign-on-behalf actions; a no-op unless AuditApp is registered. */
+const recordConsentAudit = ({
+  action,
+  actorId,
+  consentFormId,
+  operation,
+  recordId,
+  recordLabel,
+  userId,
+  verb,
+}: {
+  action: "signOnBehalf" | "viewStatus" | "voidProvisional";
+  actorId: string;
+  consentFormId?: string;
+  operation: AuditEventOperation;
+  recordId?: string;
+  recordLabel?: string;
+  userId: string;
+  verb: AuditEventVerb;
+}): void => {
+  if (!isAuditRecorderInstalled()) {
+    return;
   }
-  const resolvedForms = await resolveConsentForms(user, activeForms);
-  return {activeForms, resolvedForms};
+  void recordAuditEvent({
+    actorId,
+    after: {action, userId, ...(consentFormId ? {consentFormId} : {})},
+    modelName: "ConsentResponse",
+    operation,
+    recordId,
+    recordLabel,
+    source: "modelRouter",
+    verb,
+  });
 };
 
 export class ConsentApp implements TerrenoPlugin {
@@ -217,12 +282,13 @@ export class ConsentApp implements TerrenoPlugin {
             displayName: "Consent Responses",
             filters: [
               {field: "agreed", kind: "boolean", label: "Agreed"},
+              {field: "provisional", kind: "boolean", label: "Provisional"},
               {field: "locale", kind: "text", label: "Locale"},
             ],
             group: "Compliance",
-            listFields: ["userId", "agreed", "locale", "agreedAt"],
+            listFields: ["userId", "agreed", "provisional", "locale", "agreedAt"],
             searchFields: ["locale"],
-            sortableFields: ["agreed", "locale", "agreedAt", "created"],
+            sortableFields: ["agreed", "provisional", "locale", "agreedAt", "created"],
           },
           model: ConsentResponse as unknown as import("mongoose").Model<unknown>,
           populatePaths: consentResponsePopulatePaths,
@@ -232,7 +298,7 @@ export class ConsentApp implements TerrenoPlugin {
     };
   }
 
-  register(app: Application): void {
+  register(app: Application, openApi?: unknown): void {
     const {accessControl, auditTrail, resolveConsentForms, aiConfig} = this.options;
 
     if (!accessControl) {
@@ -369,6 +435,8 @@ export class ConsentApp implements TerrenoPlugin {
     app.use(
       "/consent-responses",
       modelRouter(ConsentResponse, {
+        // Documented in OpenAPI so client SDKs get the provisional signing actions.
+        ...(openApi ? {openApi: openApi as OpenApiMiddleware} : {}),
         collectionActions: {
           provisional: {
             body: provisionalSignBody,
@@ -379,9 +447,6 @@ export class ConsentApp implements TerrenoPlugin {
               const signer = user as User;
               const {consentFormId, locale, note, userId} = body as ProvisionalSignBody;
 
-              if (!isValidObjectId(userId)) {
-                throw new APIError({status: 400, title: "userId is invalid"});
-              }
               if (!isValidObjectId(consentFormId)) {
                 throw new APIError({status: 400, title: "consentFormId is invalid"});
               }
@@ -389,10 +454,7 @@ export class ConsentApp implements TerrenoPlugin {
                 throw new APIError({status: 400, title: "Cannot sign provisionally for yourself"});
               }
 
-              const targetUser = await findOneOrNoneFor(mongoose.model("User"), {_id: userId});
-              if (!targetUser) {
-                throw new APIError({status: 404, title: "User not found"});
-              }
+              const targetUser = await loadConsentTargetUser(userId);
               const form = await ConsentForm.findOneOrNone({_id: consentFormId});
               if (!form) {
                 throw new APIError({status: 404, title: "Consent form not found"});
@@ -401,10 +463,7 @@ export class ConsentApp implements TerrenoPlugin {
                 throw new APIError({status: 400, title: "Consent form is not active"});
               }
 
-              const {resolvedForms} = await resolveFormsForUser(
-                targetUser as unknown as User,
-                resolveConsentForms
-              );
+              const {resolvedForms} = await resolveFormsForUser(targetUser, resolveConsentForms);
               if (!resolvedForms.some((resolved) => resolved._id.equals(form._id))) {
                 throw new APIError({
                   status: 400,
@@ -433,18 +492,16 @@ export class ConsentApp implements TerrenoPlugin {
 
               const response = await ConsentResponse.create(responseData);
 
-              if (isAuditRecorderInstalled()) {
-                void recordAuditEvent({
-                  actorId: String(signer.id),
-                  after: {action: "signOnBehalf", consentFormId: form._id.toString(), userId},
-                  modelName: "ConsentResponse",
-                  operation: "create",
-                  recordId: response._id.toString(),
-                  recordLabel: form.title,
-                  source: "modelRouter",
-                  verb: "created",
-                });
-              }
+              recordConsentAudit({
+                action: "signOnBehalf",
+                actorId: String(signer.id),
+                consentFormId: form._id.toString(),
+                operation: "create",
+                recordId: response._id.toString(),
+                recordLabel: form.title,
+                userId,
+                verb: "created",
+              });
 
               logger.info("Provisional consent recorded", {
                 consentFormId: form._id.toString(),
@@ -457,6 +514,29 @@ export class ConsentApp implements TerrenoPlugin {
             method: "POST",
             permissions: signOnBehalfPermissions,
             summary: "Sign a consent form provisionally on behalf of another user",
+          },
+          status: {
+            description:
+              "Consent status of every form that applies to a user: pending, provisional, " +
+              "signed, or declined. Provisional counts as consented.",
+            handler: async ({query, user}) => {
+              const {userId} = query as ConsentStatusQuery;
+              const rows = await getConsentStatuses({resolveConsentForms, userId});
+              recordConsentAudit({
+                action: "viewStatus",
+                actorId: String((user as User).id),
+                operation: "read",
+                recordLabel: "Consent status",
+                userId,
+                verb: "viewed",
+              });
+              return rows;
+            },
+            method: "GET",
+            permissions: signOnBehalfPermissions,
+            query: consentStatusQuery,
+            response: consentStatusRows,
+            summary: "List a user's consent status for each form",
           },
         },
         permissions: {

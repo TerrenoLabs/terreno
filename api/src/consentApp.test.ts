@@ -46,7 +46,20 @@ describe("ConsentApp", () => {
     expect(contribution.models?.[1]?.populatePaths).toEqual([
       {fields: ["title", "slug", "version", "type"], path: "consentFormId"},
       {fields: ["name", "email"], path: "userId"},
+      {fields: ["name", "email"], path: "provisionalSignedBy"},
     ]);
+    expect(contribution.models?.[1]?.admin.listFields).toEqual([
+      "userId",
+      "agreed",
+      "provisional",
+      "locale",
+      "agreedAt",
+    ]);
+    expect(contribution.models?.[1]?.admin.filters).toContainEqual({
+      field: "provisional",
+      kind: "boolean",
+      label: "Provisional",
+    });
   });
 
   let admin: HydratedDocument<User>;
@@ -1438,6 +1451,166 @@ describe("ConsentApp", () => {
       expect(entry.provisionalSignerIp).toBe(stored.provisionalSignerIp);
       expect(entry.provisionalSignerIp).toBeTruthy();
       expect(entry.provisionalSignerUserAgent).toBe("intake-desk");
+    });
+  });
+  describe("GET /consent-responses/status", () => {
+    let form: ConsentFormDocument;
+
+    beforeEach(async () => {
+      form = await ConsentForm.create({
+        active: true,
+        content: new Map([["en", "# Release of information"]]),
+        order: 1,
+        slug: "release",
+        title: "Release of information",
+        type: "hipaa",
+        version: 1,
+      });
+    });
+
+    const buildStatusRbacApp = async (): Promise<express.Application> => {
+      const access = createAccess({
+        connection: mongoose.connection,
+        defaultRoles: [
+          {
+            displayName: "Intake staff",
+            name: "intake-staff",
+            permissions: {consentResponse: ["signOnBehalf"]},
+          },
+        ],
+        statements: terrenoStatements,
+      });
+      await access.roles.seedDefaults();
+      return buildApp({accessControl: access});
+    };
+
+    it("returns pending, then provisional after a provisional sign", async () => {
+      const before = await adminAgent
+        .get(`/consent-responses/status?userId=${notAdmin._id}`)
+        .expect(200);
+      expect(before.body.data).toHaveLength(1);
+      expect(before.body.data[0].form.title).toBe("Release of information");
+      expect(before.body.data[0].status).toBe("pending");
+      expect(before.body.data[0].isConsented).toBe(false);
+
+      await adminAgent
+        .post("/consent-responses/provisional")
+        .send({consentFormId: form._id.toString(), note: "Phone", userId: notAdmin._id.toString()})
+        .expect(200);
+
+      const after = await adminAgent
+        .get(`/consent-responses/status?userId=${notAdmin._id}`)
+        .expect(200);
+      expect(after.body.data[0].status).toBe("provisional");
+      expect(after.body.data[0].isConsented).toBe(true);
+      expect(after.body.data[0].provisional.note).toBe("Phone");
+      expect(after.body.data[0].provisional.signedBy).toEqual({
+        email: "admin@example.com",
+        id: admin._id.toString(),
+        name: "Admin",
+      });
+    });
+
+    it("returns signed after the user agrees themselves", async () => {
+      await adminAgent
+        .post("/consent-responses/provisional")
+        .send({consentFormId: form._id.toString(), note: "Phone", userId: notAdmin._id.toString()})
+        .expect(200);
+      await userAgent
+        .post("/consents/respond")
+        .send({agreed: true, consentFormId: form._id.toString(), locale: "en"})
+        .expect(200);
+
+      const res = await adminAgent
+        .get(`/consent-responses/status?userId=${notAdmin._id}`)
+        .expect(200);
+      expect(res.body.data[0].status).toBe("signed");
+    });
+
+    it("applies resolveConsentForms for the target user", async () => {
+      const app = buildApp({
+        resolveConsentForms: (user, forms) =>
+          String(user.id) === notAdmin._id.toString() ? [] : forms,
+      });
+      const agent = await authAsUser(app, "admin");
+      const res = await agent.get(`/consent-responses/status?userId=${notAdmin._id}`).expect(200);
+      expect(res.body.data).toEqual([]);
+    });
+
+    it("rejects a missing userId", async () => {
+      await adminAgent.get("/consent-responses/status").expect(400);
+    });
+
+    it("documents the provisional and status actions in OpenAPI", async () => {
+      const app = buildApp();
+      const res = await supertest(app).get("/openapi.json").expect(200);
+      expect(res.body.paths["/consent-responses/status"].get).toBeDefined();
+      expect(res.body.paths["/consent-responses/provisional"].post).toBeDefined();
+    });
+
+    it("returns 404 for an unknown user", async () => {
+      await adminAgent
+        .get(`/consent-responses/status?userId=${new mongoose.Types.ObjectId()}`)
+        .expect(404);
+    });
+
+    it("returns 400 for a malformed userId", async () => {
+      const res = await adminAgent.get("/consent-responses/status?userId=abc").expect(400);
+      expect(res.body.title).toBe("userId is invalid");
+    });
+
+    it("rejects a non-admin without accessControl", async () => {
+      await userAgent.get(`/consent-responses/status?userId=${admin._id}`).expect(405);
+    });
+
+    it("lets a non-admin with consentResponse:signOnBehalf read statuses", async () => {
+      const app = await buildStatusRbacApp();
+      await UserModel.updateOne({_id: notAdmin._id}, {$set: {roles: ["intake-staff"]}});
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent.get(`/consent-responses/status?userId=${admin._id}`).expect(200);
+      expect(res.body.data[0].status).toBe("pending");
+    });
+
+    it("rejects a non-admin without the role when accessControl is set", async () => {
+      const app = await buildStatusRbacApp();
+      const agent = await authAsUser(app, "notAdmin");
+      await agent.get(`/consent-responses/status?userId=${admin._id}`).expect(405);
+    });
+
+    describe("with AuditApp registered", () => {
+      beforeEach(() => {
+        resetAuditRecorderForTests();
+      });
+
+      afterEach(() => {
+        resetAuditRecorderForTests();
+      });
+
+      it("writes an AuditEvent for each status read", async () => {
+        const app = new TerrenoApp({
+          skipListen: true,
+          userModel: UserModel as unknown as UserMongooseModel,
+        })
+          .register(new AuditApp())
+          .register(new ConsentApp())
+          .build();
+        const agent = await authAsUser(app, "admin");
+        await mongoose.connection.collection("auditevents").deleteMany({});
+
+        await agent.get(`/consent-responses/status?userId=${notAdmin._id}`).expect(200);
+        await agent.get(`/consent-responses/status?userId=${notAdmin._id}`).expect(200);
+        await flushAuditRecorderForTests();
+
+        const events = await mongoose.connection
+          .collection("auditevents")
+          .find({modelName: "ConsentResponse"})
+          .toArray();
+        expect(events).toHaveLength(2);
+        expect(events[0].actorId.toString()).toBe(admin._id.toString());
+        expect(events[0].operation).toBe("read");
+        expect(events[0].verb).toBe("viewed");
+        expect(events[0].after).toEqual({action: "viewStatus", userId: notAdmin._id.toString()});
+      });
     });
   });
 });

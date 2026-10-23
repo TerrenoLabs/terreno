@@ -8,7 +8,7 @@ import {
   findOneOrNone,
 } from "../plugins";
 
-export type AuditEventVerb = "created" | "deleted" | "updated";
+export type AuditEventVerb = "created" | "deleted" | "updated" | "viewed";
 export type AuditEventSource = "admin" | "modelRouter" | "rbac";
 export type AuditEventOperation =
   | "arrayPush"
@@ -16,6 +16,7 @@ export type AuditEventOperation =
   | "arrayUpdate"
   | "create"
   | "delete"
+  | "read"
   | "update";
 
 type AuditEventMethods = Record<string, never>;
@@ -74,8 +75,8 @@ const auditEventSchema: AuditEventSchema = new mongoose.Schema<
       type: String,
     },
     operation: {
-      description: "Fine-grained mutation kind",
-      enum: ["arrayPush", "arrayRemove", "arrayUpdate", "create", "delete", "update"],
+      description: "Fine-grained mutation kind, or read for an audited read",
+      enum: ["arrayPush", "arrayRemove", "arrayUpdate", "create", "delete", "read", "update"],
       required: true,
       type: String,
     },
@@ -102,8 +103,8 @@ const auditEventSchema: AuditEventSchema = new mongoose.Schema<
       type: String,
     },
     verb: {
-      description: "Widget-compatible mutation verb",
-      enum: ["created", "deleted", "updated"],
+      description: "Widget-compatible mutation verb, or viewed for an audited read",
+      enum: ["created", "deleted", "updated", "viewed"],
       index: true,
       required: true,
       type: String,

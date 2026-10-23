@@ -164,7 +164,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Docs: response shapes in `docs/reference/api.md`.
   - Skills: terreno:terreno-backend-api
 
-- [ ] **T3** — Add getConsentStatuses helper, status endpoint, and provisional admin columns
+- [x] **T3** — Add getConsentStatuses helper, status endpoint, and provisional admin columns
   - Depends on: T2
   - Files: api/src/consentStatus.ts (new), api/src/consentStatus.test.ts (new), api/src/index.ts, api/src/consentApp.ts, api/src/consentApp.test.ts, docs/reference/api.md, docs/explanation/consent-forms.md, example-frontend/store/openApiSdk.ts
   - Criteria: `getConsentStatuses` implements the status rules, with one test each for `pending`, `provisional`, `signed`, `declined`, "user agrees after provisional → `signed`", "user declines after provisional → `declined`", "old-version responses ignored", and "resolver filters forms for the target user". It is exported from `@terreno/api`. `GET /consent-responses/status?userId=` returns its rows, with the same permission matrix as T1, and writes an `AuditEvent` per read when `AuditApp` is registered. The "Consent Responses" admin contribution adds `provisional` to `listFields` plus a boolean filter, and `provisionalSignedBy` to populate paths.

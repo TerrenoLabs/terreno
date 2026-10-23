@@ -41,6 +41,7 @@ export * from "./config";
 export * from "./configurationApp";
 export * from "./configurationPlugin";
 export * from "./consentApp";
+export * from "./consentStatus";
 export * from "./envConfigurationPlugin";
 export * from "./errors";
 export * from "./expressServer";

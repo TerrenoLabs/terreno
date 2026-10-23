@@ -14,6 +14,7 @@ import {
   addMeRoutes,
   generateTokens,
   type HasSetPassword,
+  isRbacUserModelName,
   MAX_PASSWORD_LENGTH,
   omitUserRolesFromWriteBody,
   PRIVILEGED_USER_FIELDS,
@@ -1134,6 +1135,18 @@ describe("privileged user fields", () => {
     expect(omitUserRolesFromWriteBody("User", {}, {admin: true, "admin.flag": true}, true)).toEqual(
       {admin: true}
     );
+  });
+
+  it("recognizes the createAccess user model by its compiled name", () => {
+    const access = {userModel: {modelName: "Account"}};
+    expect(isRbacUserModelName("Account", access)).toBe(true);
+    expect(isRbacUserModelName("User", access)).toBe(true);
+    expect(isRbacUserModelName("Todo", access)).toBe(false);
+    expect(isRbacUserModelName("Account", undefined)).toBe(false);
+    expect(omitUserRolesFromWriteBody("Account", access, {name: "a", roles: ["x"]})).toEqual({
+      name: "a",
+    });
+    expect(omitUserRolesFromWriteBody("Account", {}, {roles: ["x"]})).toEqual({roles: ["x"]});
   });
 
   it("does not let anonymous signup self-assign roles through dotted paths", async () => {

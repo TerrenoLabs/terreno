@@ -215,9 +215,25 @@ const omitPrivilegedFieldsFromObject = (item: unknown, allowAdminWrite: boolean)
 };
 
 /**
+ * True when RBAC is enabled and `modelName` names the user model: `"User"`, or the compiled
+ * name of the `userModel` passed to `createAccess`.
+ */
+export const isRbacUserModelName = (modelName: string, accessControl: unknown): boolean => {
+  if (!accessControl) {
+    return false;
+  }
+  if (modelName === "User") {
+    return true;
+  }
+  const userModelName = (accessControl as {userModel?: {modelName?: unknown}}).userModel?.modelName;
+  return typeof userModelName === "string" && userModelName === modelName;
+};
+
+/**
  * When RBAC is enabled, authority-bearing User fields must not flow through ordinary mongoose
  * writes on `/users`, sync, or MCP. AdminApp captures role assignments before this runs and
- * explicitly marks authorized legacy-admin writes after its additional checks.
+ * explicitly marks authorized legacy-admin writes after its additional checks. The user model is
+ * recognized by {@link isRbacUserModelName}.
  */
 export const omitUserRolesFromWriteBody = (
   modelName: string,
@@ -225,7 +241,7 @@ export const omitUserRolesFromWriteBody = (
   body: unknown,
   allowAdminWrite = false
 ): unknown => {
-  if (modelName !== "User" || !accessControl || body == null) {
+  if (!isRbacUserModelName(modelName, accessControl) || body == null) {
     return body;
   }
   if (Array.isArray(body)) {

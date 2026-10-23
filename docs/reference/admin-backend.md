@@ -259,7 +259,8 @@ status. `AuditEvent` itself is never audited.
 
 Admin create, update, bulk-patch, and admin-window sync bodies drop `readonlyFields`,
 `hiddenFields`, `excludeFields`, and system fields, including dotted paths into them
-(`address.city` for a readonly `address`). With `accessControl`, User writes also drop
+(`address.city` for a readonly `address`). With `accessControl`, writes to the user model (`"User"`, or the `userModel` passed to
+`createAccess` under any name) also drop
 `organizationIds` and `roles` in any key form (`roles.0`). A `roles` array in the body is
 assigned after the write through `access.roles.assign`, which requires `rbac:assignRoles`.
 

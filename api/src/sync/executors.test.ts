@@ -1,14 +1,16 @@
 import {beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
 import {assert} from "chai";
 import type express from "express";
-import {model, Schema} from "mongoose";
+import mongoose, {type Model, model, Schema} from "mongoose";
 
 import type {ModelRouterOptions} from "../api";
-import type {User} from "../auth";
+import type {UserModel as AuthUserModel, User} from "../auth";
 import {APIError} from "../errors";
 import {Permissions} from "../permissions";
 import {createdUpdatedPlugin, type IsDeleted, isDeletedPlugin} from "../plugins";
-import {setupDb} from "../tests";
+import {createAccess} from "../rbac/access";
+import {terrenoStatements} from "../rbac/statements";
+import {setupDb, UserModel} from "../tests";
 import {ExecutorConflictError, executeCreate, executeDelete, executeUpdate} from "./executors";
 
 interface ExecStuff extends IsDeleted {
@@ -69,6 +71,14 @@ const execUserishSchema = new Schema<ExecUserish>({
   roles: {description: "Authority-bearing roles stripped after hooks", type: [String]},
 });
 const ExecUserishModel = model<ExecUserish>("ExecUserish", execUserishSchema);
+
+interface UserishAccount {
+  admin?: boolean;
+  email: string;
+  name?: string;
+  roles?: string[];
+  tokenEpoch?: number;
+}
 
 const owner = {_id: "u-owner", admin: false, id: "u-owner"} as unknown as User;
 const stranger = {_id: "u-stranger", admin: false, id: "u-stranger"} as unknown as User;
@@ -967,5 +977,79 @@ describe("executeDelete", () => {
     expect(error.status).toBe(400);
     expect(error.title).toBe("postDelete hook error");
     expect(error.detail).toBe("cascade failed");
+  });
+});
+
+describe("RBAC user-model strip on a user model not compiled as User", () => {
+  // The configured RBAC user model, compiled under a name other than "User".
+  const AccountModel =
+    (mongoose.models.ExecRbacAccount as Model<UserishAccount> | undefined) ??
+    model<UserishAccount>("ExecRbacAccount", UserModel.schema.clone());
+
+  beforeAll(async () => {
+    await setupDb();
+  });
+
+  beforeEach(async () => {
+    await AccountModel.deleteMany({});
+  });
+
+  it("strips authority fields on update for the configured user model", async () => {
+    const access = createAccess({
+      connection: mongoose.connection,
+      statements: terrenoStatements,
+      userModel: AccountModel as unknown as AuthUserModel,
+    });
+    const account = await AccountModel.create({email: "renamed-self@example.com", name: "Self"});
+    const actor = account as unknown as User;
+
+    await executeUpdate<UserishAccount>({
+      body: {admin: true, name: "renamed", roles: ["superadmin"], tokenEpoch: 99},
+      id: String(account._id),
+      model: AccountModel,
+      options: {
+        accessControl: access,
+        permissions: {
+          create: [],
+          delete: [],
+          list: [],
+          read: [],
+          update: [Permissions.IsAuthenticated],
+        },
+      } as unknown as ModelRouterOptions<UserishAccount>,
+      user: actor,
+    });
+
+    const stored = await AccountModel.findById(account._id).lean();
+    expect(stored?.name).toBe("renamed");
+    expect(stored?.admin).toBe(false);
+    expect(stored?.roles ?? []).toEqual([]);
+    expect(stored?.tokenEpoch ?? 0).toBe(0);
+  });
+
+  it("strips authority fields on create for the configured user model", async () => {
+    const access = createAccess({
+      connection: mongoose.connection,
+      statements: terrenoStatements,
+      userModel: AccountModel as unknown as AuthUserModel,
+    });
+    const {doc} = await executeCreate<UserishAccount>({
+      body: {admin: true, email: "renamed-create@example.com", roles: ["superadmin"]},
+      model: AccountModel,
+      options: {
+        accessControl: access,
+        permissions: {
+          create: [Permissions.IsAuthenticated],
+          delete: [],
+          list: [],
+          read: [],
+          update: [],
+        },
+      } as unknown as ModelRouterOptions<UserishAccount>,
+      user: owner,
+    });
+    const stored = await AccountModel.findById(doc._id).lean();
+    expect(stored?.admin).toBe(false);
+    expect(stored?.roles ?? []).toEqual([]);
   });
 });

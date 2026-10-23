@@ -15,6 +15,7 @@ import {
   describeModel,
   findSyncEntryByModelName,
   getOrgContext,
+  isRbacUserModelName,
   isWriteKeyForField,
   type JSONValue,
   logger,
@@ -1429,6 +1430,11 @@ export class AdminApp {
       };
 
       const updatePermissions = adminPermission(config.permissions?.update, "update");
+      // The RBAC user model: "User" or the userModel given to createAccess, whatever its name.
+      const isRbacUserModel = isRbacUserModelName(
+        config.model.modelName,
+        this.options.accessControl
+      );
 
       const stripProtectedFromBody = (body: unknown): Record<string, unknown> => {
         if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -1443,7 +1449,7 @@ export class AdminApp {
         // Self-service never writes these fields. Admin CRUD may set `admin`.
         // When RBAC is enabled, `roles` must go through RoleManager.assign and
         // tenant membership is not a generic User document field.
-        if (config.model.modelName === "User" && this.options.accessControl) {
+        if (isRbacUserModel) {
           protectedFields.push("organizationIds", "roles");
         }
         // Mongoose applies dotted keys (`roles.0`) as paths, so drop paths inside a protected
@@ -1469,7 +1475,7 @@ export class AdminApp {
         body: Record<string, unknown>,
         request: express.Request
       ): void => {
-        if (config.model.modelName !== "User" || !this.options.accessControl) {
+        if (!isRbacUserModel) {
           return;
         }
         if (!("roles" in body)) {
@@ -1676,7 +1682,7 @@ export class AdminApp {
         currentAdmin = false,
         targetUserId?: string
       ): Promise<void> => {
-        if (config.model.modelName !== "User" || !("admin" in body)) {
+        if (!isRbacUserModel || !("admin" in body)) {
           return;
         }
         const accessControl = this.options.accessControl;
@@ -1732,11 +1738,7 @@ export class AdminApp {
         body: Record<string, unknown>,
         request: express.Request
       ): void => {
-        if (
-          config.model.modelName !== "User" ||
-          !this.options.accessControl ||
-          !("admin" in body)
-        ) {
+        if (!isRbacUserModel || !("admin" in body)) {
           return;
         }
         (
@@ -1938,11 +1940,7 @@ export class AdminApp {
           }
           const patch = stripProtectedFromBody(rawPatch);
           let pendingRoles: string[] | undefined;
-          if (
-            config.model.modelName === "User" &&
-            this.options.accessControl &&
-            "roles" in rawPatch
-          ) {
+          if (isRbacUserModel && "roles" in rawPatch) {
             pendingRoles = parseRoleNames(rawPatch.roles);
           }
           if (Object.keys(patch).length === 0 && pendingRoles === undefined) {

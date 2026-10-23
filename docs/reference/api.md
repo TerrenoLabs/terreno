@@ -439,7 +439,7 @@ passport-local-mongoose fields `hash`, `salt`, `attempts`, and `last`, and `disa
 Better Auth sync, GitHub link, and password flows write those. Dotted paths into a dropped
 field (`roles.0`, `organizationIds.1`) are dropped too, because Mongoose applies a dotted key
 as a path into the field. With `accessControl` set, modelRouter, sync, and MCP writes to the user
-model drop `PRIVILEGED_USER_FIELDS` and dotted paths into them the same way; assign roles with
+model (compiled as `"User"`, or the `userModel` passed to `createAccess` under any name) drop `PRIVILEGED_USER_FIELDS` and dotted paths into them the same way; assign roles with
 `access.roles.assign`. Request logs redact `password`, `newPassword`,
 `oldPassword`, `token`, and `refreshToken` in request bodies and in URL query strings. Changing the mailbox through `PATCH /auth/me`
 invalidates unused `passwordReset` AuthTokens for that user even when the schema has no

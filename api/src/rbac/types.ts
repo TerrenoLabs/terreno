@@ -200,4 +200,9 @@ export interface TerrenoAccess<S extends Statements> {
   permission: (permissions: PermissionRequest<S>) => PermissionMethod<unknown>;
   roles: RoleManager;
   invalidateCache: (args?: {userId?: string}) => void;
+  /**
+   * The `userModel` passed to `createAccess`. Write paths use it to recognize the user model when
+   * it is compiled under a name other than `"User"`.
+   */
+  readonly userModel?: UserModel;
 }

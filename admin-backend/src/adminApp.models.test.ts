@@ -2570,6 +2570,62 @@ describe("AdminApp user elevation and scoped bulk-patch", () => {
     expect(permissions.allowed).toBe(false);
   });
 
+  it("applies the User role and admin-flag gates to a user model not compiled as User", async () => {
+    const AccountModel =
+      (mongoose.models.AdminRbacAccount as mongoose.Model<Record<string, unknown>> | undefined) ??
+      mongoose.model<Record<string, unknown>>("AdminRbacAccount", UserModel.schema.clone());
+    await AccountModel.deleteMany({});
+    const accessControl = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Account editor",
+          name: "account-editor",
+          permissions: {admin: ["access"], user: ["list", "read", "update"]},
+        },
+      ],
+      statements: terrenoStatements,
+      userModel: AccountModel as unknown as UserModelType,
+    });
+    await accessControl.roles.seedDefaults();
+    const localApp = buildApp(
+      [
+        {
+          adminAccess: {resource: "user"},
+          displayName: "Accounts",
+          listFields: ["email", "admin"],
+          model: AccountModel,
+          routePath: "/accounts",
+        },
+      ],
+      {accessControl}
+    );
+    const actor = await UserModel.findOne({email: "notAdmin@example.com"}).orFail();
+    await UserModel.updateOne({_id: actor._id}, {$set: {roles: ["account-editor"]}});
+    const target = await AccountModel.create({email: "renamed-target@example.com", name: "T"});
+    const agent = await authAsUser(localApp, "notAdmin");
+
+    await agent
+      .patch(`/admin/accounts/${String(target._id)}`)
+      .send({roles: ["superadmin"]})
+      .expect(403);
+    await agent
+      .patch(`/admin/accounts/${String(target._id)}`)
+      .send({admin: true})
+      .expect(403);
+    await agent
+      .patch(`/admin/accounts/${String(target._id)}`)
+      .send({name: "Renamed", organizationIds: ["other-tenant"], tokenEpoch: 99})
+      .expect(200);
+
+    const after = await AccountModel.findById(target._id).lean();
+    expect(after?.name).toBe("Renamed");
+    expect(after?.admin).toBe(false);
+    expect(after?.roles ?? []).toEqual([]);
+    expect(after?.organizationIds ?? []).toEqual([]);
+    expect(after?.tokenEpoch ?? 0).toBe(0);
+  });
+
   it("does not persist organizationIds on RBAC admin User writes", async () => {
     const accessControl = createAccess({
       connection: mongoose.connection,

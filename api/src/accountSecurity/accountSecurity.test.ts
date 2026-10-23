@@ -1,33 +1,38 @@
 import {afterEach, beforeAll, beforeEach, describe, expect, it, spyOn} from "bun:test";
 import express from "express";
-import mongoose, {Schema} from "mongoose";
-import passportLocalMongoose from "passport-local-mongoose";
+import mongoose from "mongoose";
 import supertest from "supertest";
 
 import {AuditApp} from "../audit/auditApp";
-import {createAuditEventModel} from "../audit/auditEventModel";
-import {flushAuditRecorderForTests, resetAuditRecorderForTests} from "../audit/record";
-import type {UserModel} from "../auth";
-import type {BetterAuthConfig} from "../betterAuth";
-import {BetterAuthApp} from "../betterAuthApp";
+import {resetAuditRecorderForTests} from "../audit/record";
 import {apiErrorMiddleware, NotFoundError} from "../errors";
 import {logger} from "../logger";
-import {clearMCPRegistry} from "../mcp/registry";
 import {McpServiceToken} from "../models/mcpServiceToken";
-import {createAccess} from "../rbac/access";
-import {terrenoStatements} from "../rbac/statements";
 import {type RequestCredential, runWithRequestContext} from "../requestContext";
-import {TerrenoApp} from "../terrenoApp";
 import {
-  API_ORIGIN,
+  AuditEvent,
+  access,
+  appUserId,
+  betterAuthCollection,
+  betterAuthIdFor,
+  buildApp,
+  getSummary,
+  resetAccountSecurityState,
+  resetTwoFactor,
+  SecurityUser,
+  securityEventsFor,
+  securityUserModel,
+  signInWithPassword,
+  signUp,
+} from "../tests/accountSecurityTestApp";
+import {
   enrollTwoFactor,
   PASSWORD,
-  SECRET,
   setCookies,
   totpCode,
   uniqueEmail,
 } from "../tests/betterAuthStubs";
-import {AccountSecurityApp, type AccountSecurityAppOptions} from "./accountSecurityApp";
+import {AccountSecurityApp, resetTwoFactorAction} from "./accountSecurityApp";
 import {
   type AccountSecuritySummary,
   storesTrustDeviceIdentifiersPlain,
@@ -38,155 +43,6 @@ import {
   recordSecurityAction,
   type SecurityActionEvent,
 } from "./securityEvents";
-
-interface SecurityUserFields {
-  admin?: boolean;
-  betterAuthId?: string;
-  disabled?: boolean;
-  email: string;
-  name?: string;
-  roles?: string[];
-}
-
-// TerrenoApp's JWT setup needs passport-local-mongoose's createStrategy on the user model.
-const getSecurityUserModel = (): mongoose.Model<SecurityUserFields> => {
-  if (mongoose.models.AccountSecurityTestUser) {
-    return mongoose.models.AccountSecurityTestUser as mongoose.Model<SecurityUserFields>;
-  }
-  const schema = new Schema<SecurityUserFields>({
-    admin: {default: false, description: "Whether the user is an admin", type: Boolean},
-    betterAuthId: {description: "Linked Better Auth user id", index: true, type: String},
-    disabled: {default: false, description: "Whether the account is disabled", type: Boolean},
-    email: {description: "Email address", required: true, type: String},
-    name: {description: "Display name", type: String},
-    roles: {default: [], description: "RBAC role names", type: [String]},
-  });
-  schema.plugin(
-    passportLocalMongoose as unknown as (target: Schema, options?: Record<string, unknown>) => void,
-    {usernameField: "email"}
-  );
-  return mongoose.model<SecurityUserFields>("AccountSecurityTestUser", schema);
-};
-
-const SecurityUser = getSecurityUserModel();
-const securityUserModel = SecurityUser as unknown as UserModel;
-const AuditEvent = createAuditEventModel(mongoose.connection);
-
-const access = createAccess({
-  connection: mongoose.connection,
-  organizations: true,
-  statements: terrenoStatements,
-  userModel: securityUserModel,
-});
-
-const baseConfig: BetterAuthConfig = {
-  baseURL: API_ORIGIN,
-  enabled: true,
-  passkey: {origin: [API_ORIGIN], rpID: "localhost", rpName: "Terreno"},
-  secret: SECRET,
-  twoFactor: {issuer: "Terreno"},
-};
-
-interface BuildOptions {
-  accessControl?: boolean;
-  auditApp?: boolean;
-  config?: Partial<BetterAuthConfig>;
-  security?: AccountSecurityAppOptions;
-}
-
-interface SecurityTestApp {
-  app: express.Application;
-  betterAuthApp: BetterAuthApp;
-}
-
-const buildApp = ({
-  accessControl = true,
-  auditApp = true,
-  config = {},
-  security = {},
-}: BuildOptions = {}): SecurityTestApp => {
-  const betterAuthApp = new BetterAuthApp({
-    config: {...baseConfig, ...config},
-    userModel: securityUserModel,
-  });
-  const terrenoApp = new TerrenoApp({
-    ...(accessControl ? {accessControl: access} : {}),
-    mcpServiceTokens: true,
-    skipListen: true,
-    userModel: securityUserModel,
-  }).register(betterAuthApp);
-  if (auditApp) {
-    terrenoApp.register(new AuditApp());
-  }
-  terrenoApp.register(new AccountSecurityApp(security));
-  return {app: terrenoApp.build(), betterAuthApp};
-};
-
-interface SignedUpUser {
-  id: string;
-  token: string;
-}
-
-const appUserId = async (email: string): Promise<string> => {
-  const user = await SecurityUser.findOne({email});
-  if (!user) {
-    throw new Error(`No app User for ${email}`);
-  }
-  return String(user._id);
-};
-
-const signUp = async (
-  app: express.Application,
-  label: string,
-  roles: string[] = []
-): Promise<SignedUpUser & {email: string}> => {
-  const email = uniqueEmail(label);
-  const res = await supertest(app)
-    .post("/api/auth/sign-up/email")
-    .set("content-type", "application/json")
-    .send({email, name: label, password: PASSWORD});
-  expect(res.status).toBe(200);
-  const id = await appUserId(email);
-  if (roles.length > 0) {
-    await SecurityUser.updateOne({_id: id}, {$set: {roles}});
-  }
-  return {email, id, token: res.body.token as string};
-};
-
-const signInWithPassword = (app: express.Application, email: string): supertest.Test =>
-  supertest(app)
-    .post("/api/auth/sign-in/email")
-    .set("content-type", "application/json")
-    .send({email, password: PASSWORD});
-
-const getSummary = (app: express.Application, token: string, userId: string): supertest.Test =>
-  supertest(app).get(`/users/${userId}/security`).set("authorization", `Bearer ${token}`);
-
-const resetTwoFactor = (app: express.Application, token: string, userId: string): supertest.Test =>
-  supertest(app)
-    .post(`/users/${userId}/security/reset-two-factor`)
-    .set("authorization", `Bearer ${token}`)
-    .send({});
-
-const securityEventsFor = async (
-  userId: string
-): Promise<{actorId?: unknown; after?: unknown}[]> => {
-  await flushAuditRecorderForTests();
-  return AuditEvent.find({recordId: userId, source: "security"}).lean();
-};
-
-const betterAuthCollection = (name: string): ReturnType<mongoose.mongo.Db["collection"]> => {
-  const db = mongoose.connection.db;
-  if (!db) {
-    throw new Error("The test database is not connected");
-  }
-  return db.collection(name);
-};
-
-const betterAuthIdFor = async (userId: string): Promise<string> => {
-  const user = await SecurityUser.findById(userId);
-  return user?.betterAuthId ?? "";
-};
 
 /**
  * Signs in with the password and answers the 2FA challenge with "trust this device", returning
@@ -289,22 +145,7 @@ describe("AccountSecurityApp", () => {
   });
 
   beforeEach(async () => {
-    clearMCPRegistry();
-    clearSecurityActionListenersForTests();
-    resetAuditRecorderForTests();
-    await SecurityUser.deleteMany({});
-    await AuditEvent.deleteMany({});
-    await McpServiceToken.deleteMany({});
-    for (const collection of [
-      "user",
-      "session",
-      "account",
-      "twoFactor",
-      "passkey",
-      "verification",
-    ]) {
-      await betterAuthCollection(collection).deleteMany({});
-    }
+    await resetAccountSecurityState();
   });
 
   afterEach(() => {
@@ -856,7 +697,11 @@ describe("AccountSecurityApp", () => {
       const allowed = await supertest(host).get(`/custom/${target.id}/security`);
       expect(allowed.status).toBe(200);
       expect(allowed.body.data.betterAuthLinked).toBe(false);
-      expect(security.getActions().map((action) => action.id)).toEqual(["reset-two-factor"]);
+      expect(security.getActions().map((action) => action.id)).toEqual([
+        "reset-two-factor",
+        "remove-passkey",
+        "unlink-provider",
+      ]);
       await supertest(host).get(`/custom/${target.id}/security`).expect(200);
       const noBetterAuthWarnings = warn.mock.calls.filter((call) =>
         String(call[0]).includes("AccountSecurityApp found no Better Auth instance")
@@ -900,15 +745,15 @@ describe("AccountSecurityApp", () => {
         security: {
           actions: [
             {
-              id: "remove-passkey",
+              id: "issue-sign-in-link",
               isApplicable: () => true,
               isSupported: () => true,
               method: "delete",
-              path: "/passkeys/:passkeyId",
+              path: "/audit-details/:itemId",
               run: async ({req}) => ({
-                audit: {passkeyId: req.params.passkeyId, securityAction: "spoofed"},
+                audit: {itemId: req.params.itemId, securityAction: "spoofed"},
                 changed: true,
-                data: {passkeyId: req.params.passkeyId},
+                data: {itemId: req.params.itemId},
               }),
             },
           ],
@@ -920,17 +765,21 @@ describe("AccountSecurityApp", () => {
       const summary = await getSummary(app, operator.token, target.id);
       expect(summary.status).toBe(200);
       expect(summary.body.data.actions.map((action: {id: string}) => action.id)).toEqual([
-        "remove-passkey",
+        "issue-sign-in-link",
       ]);
       const res = await supertest(app)
-        .delete(`/users/${target.id}/security/passkeys/pk-123`)
+        .delete(`/users/${target.id}/security/audit-details/pk-123`)
         .set("authorization", `Bearer ${operator.token}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.data).toEqual({action: "remove-passkey", changed: true, passkeyId: "pk-123"});
+      expect(res.body.data).toEqual({
+        action: "issue-sign-in-link",
+        changed: true,
+        itemId: "pk-123",
+      });
       const events = await securityEventsFor(target.id);
       expect(events).toHaveLength(1);
-      expect(events[0].after).toEqual({passkeyId: "pk-123", securityAction: "remove-passkey"});
+      expect(events[0].after).toEqual({itemId: "pk-123", securityAction: "issue-sign-in-link"});
     });
   });
 
@@ -951,6 +800,16 @@ describe("AccountSecurityApp", () => {
       expect(reset.status).toBe(200);
       expect(reset.body.data.changed).toBe(true);
       expect(await securityEventsFor(targetId)).toHaveLength(0);
+    });
+
+    it("throws when a custom action reuses an action id", () => {
+      expect(
+        () =>
+          new AccountSecurityApp({
+            actions: [{...resetTwoFactorAction, path: "/another-reset"}],
+            audit: false,
+          })
+      ).toThrow("Duplicate security action id");
     });
 
     it("throws without a user model", () => {

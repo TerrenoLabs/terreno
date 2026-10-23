@@ -1,8 +1,8 @@
 # Account security reference
 
 `AccountSecurityApp` is a `@terreno/api` plugin that adds per-user security routes for
-platform staff: a summary of a user's sign-in methods and recovery actions such as resetting
-two-factor authentication. Every action that changes something writes an `AuditEvent` with
+platform staff: a summary of a user's sign-in methods and recovery actions: resetting
+two-factor authentication, removing a passkey, and unlinking a sign-in provider. Every action that changes something writes an `AuditEvent` with
 `source: "security"`.
 
 It reads Better Auth's data (`user`, `account`, `session`, `twoFactor`, `passkey`) through
@@ -40,7 +40,7 @@ registered on. With `setupServer` there is no `TerrenoApp`, so:
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `actions` | `SecurityRouteAction[]` | none | Extra recovery actions, mounted and listed after the built-in ones |
+| `actions` | `SecurityRouteAction[]` | none | Extra recovery actions, mounted and listed after the built-in ones. Construction throws `Duplicate security action id` when one reuses another action's `id` |
 | `accessControl` | `AnyTerrenoAccess` | the TerrenoApp's `accessControl` | RBAC used for the platform routes. Without RBAC, the routes require `admin: true` |
 | `audit` | `boolean` | `true` | `false` boots without `AuditApp`. Actions still run and still reach listeners, but nothing is written to the audit log |
 | `basePath` | `string` | `"/users"` | Prefix for the platform routes |
@@ -89,11 +89,13 @@ All responses use the `{data: ...}` envelope.
 | --- | --- | --- |
 | `GET` | `/users/:id/security` | Security summary |
 | `POST` | `/users/:id/security/reset-two-factor` | Remove the TOTP secret and backup codes and turn 2FA off |
+| `DELETE` | `/users/:id/security/passkeys/:passkeyId` | Remove one of the user's passkeys |
+| `DELETE` | `/users/:id/security/accounts/:providerId` | Unlink a sign-in provider (every account the user has with it) |
 
 `:id` is the app `User` id. An unknown id, or one that is not an ObjectId, returns
 `404 User not found`. An action whose Better Auth feature is off on this server (for example
-`reset-two-factor` without `twoFactor` in `BetterAuthConfig`) returns
-`404 Security action not available`.
+`reset-two-factor` without `twoFactor` in `BetterAuthConfig`, or `remove-passkey` without
+`passkey`) returns `404 Security action not available`.
 
 ### `GET /users/:id/security`
 
@@ -159,6 +161,66 @@ also cancels a pending password reset link) and logs a warning. Rows kept only i
 A reset that changes nothing is not audited and does not notify listeners, so the user is not
 told that an administrator reset something that was never set.
 
+### `DELETE /users/:id/security/passkeys/:passkeyId`
+
+Deletes the passkey with that id (the `id` from the summary's `passkeys.items`), but only when it
+belongs to the target. Another user's passkey id gets `404` and is never touched. Sessions are not
+revoked. Removing the user's last sign-in method follows the
+[last sign-in method rule](#last-sign-in-method).
+
+| Result | Response |
+| --- | --- |
+| Removed | `200 {data: {action: "remove-passkey", changed: true, passkeyId, passwordResetSent}}`, one security `AuditEvent` with `after: {passkeyId, passkeyName, passwordResetSent, securityAction}` |
+| Unknown id, another user's passkey, or a user with no Better Auth link | `404 Passkey not found` |
+| `passkey` is off in `BetterAuthConfig` | `404 Security action not available` |
+| Last sign-in method and the email is unverified | `409 Cannot remove the last sign-in method` |
+| Last sign-in method, email verified, `sendMail` not configured | `409 Password reset email is not configured` |
+| Last sign-in method, email verified, `publicAppUrl` not configured | `501 publicAppUrl is required to send recovery mail` (from the mail hook) |
+
+### `DELETE /users/:id/security/accounts/:providerId`
+
+Removes the target's Better Auth `account` rows for `providerId` (such as `github` or
+`mock-oidc`). The summary never exposes provider account ids, so a user who linked two accounts
+of the same provider loses both; the response's `accountCount` says how many went. The password
+(`credential`) account is never removed here: send a password reset instead. Removing the
+user's last sign-in method follows the [last sign-in method rule](#last-sign-in-method).
+
+Unlinking does not end sessions the user started with that provider: Better Auth sessions do not
+record which method created them, so they cannot be told apart. When the provider account may be
+compromised, follow the unlink with `revoke-sessions` to sign the user out everywhere.
+
+| Result | Response |
+| --- | --- |
+| Unlinked | `200 {data: {action: "unlink-provider", changed: true, providerId, accountCount, passwordResetSent}}`, one security `AuditEvent` with `after: {providerId, accountCount, passwordResetSent, securityAction}` |
+| `providerId` is `credential` | `400 The password cannot be unlinked` |
+| The user has no account with that provider, or no Better Auth link | `404 Provider not linked` |
+| Last sign-in method and the email is unverified | `409 Cannot remove the last sign-in method` |
+| Last sign-in method, email verified, `sendMail` not configured | `409 Password reset email is not configured` |
+| Last sign-in method, email verified, `publicAppUrl` not configured | `501 publicAppUrl is required to send recovery mail` (from the mail hook) |
+
+### Last sign-in method
+
+Recovery must not lock a user out. Before `remove-passkey` or `unlink-provider` runs, the route
+counts the sign-in methods the user would have left: their remaining accounts (including the
+password) plus their passkeys. Passkeys count only when `passkey` is on, because otherwise they
+cannot sign in. When none would remain:
+
+- If the user's Better Auth email is not verified, the action is refused with `409`.
+- If it is verified, the route first mails a password-reset link through
+  `BetterAuthConfig.sendMail`, then removes the method. The link uses the same template and
+  `publicAppUrl` link as a self-service reset, and is valid for Better Auth's
+  `resetPasswordTokenExpiresIn`. The user sets a password from the link and signs in with it.
+  The response and audit event say `passwordResetSent: true`.
+- If the reset mail cannot be sent, nothing is removed.
+
+Two recovery actions running at once can each see the other's method and both remove theirs.
+So after removing, the route counts again. If nothing is left and no reset went out yet, it
+mails one when the email is verified (and reports `passwordResetSent: true`). If the email is
+unverified, or that late mail fails, the action still succeeds, reports
+`passwordResetSent: false`, and logs an error. If the method was removed by the other request
+before this one could, the route answers `404`. Any reset it already mailed is still audited, as
+a `send-password-reset` event with `after: {providerId | passkeyId, reason: "last-sign-in-method"}`.
+
 ## Actions
 
 The summary's `actions` list and the routes come from one action table. Each action has an
@@ -167,6 +229,8 @@ The summary's `actions` list and the routes come from one action table. Each act
 | `id` | Label | Destructive | Listed when |
 | --- | --- | --- | --- |
 | `reset-two-factor` | Reset two-factor | yes | `twoFactor` is on and the user has 2FA enabled |
+| `remove-passkey` | Remove passkey | yes | `passkey` is on and the user has at least one passkey |
+| `unlink-provider` | Unlink provider | yes | Better Auth is on and the user has at least one linked provider |
 
 Every action name the security log can record, including self-service changes:
 
@@ -230,7 +294,7 @@ its own params needs `Router({mergeParams: true})` so the authorizer can read th
 | `MANAGE_SECURITY_PERMISSION` | `{user: ["manageSecurity"]}` |
 | `SECURITY_ACTIONS`, `SecurityActionId` | Action names, labels, and origins |
 | `recordSecurityAction`, `onSecurityAction` | Record an action; subscribe to actions |
-| `createAccountSecurityService` | The summary and reset logic without routes |
+| `createAccountSecurityService` | The summary, reset, and credential logic without routes |
 | `AccountSecuritySummary`, `SecurityAuthorizer`, `SecurityRouteAction` | Types |
 
 Related: [Enable the framework audit log](../how-to/audit-log.md),

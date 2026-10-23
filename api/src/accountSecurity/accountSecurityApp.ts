@@ -34,7 +34,9 @@ import {
   type AccountSecurityState,
   type AccountSecuritySummary,
   createAccountSecurityService,
+  userIdOf,
 } from "./accountSecurityService";
+import {removePasskeyAction, unlinkProviderAction} from "./credentialActions";
 import {
   recordSecurityAction,
   SECURITY_ACTIONS,
@@ -93,7 +95,7 @@ export interface SecurityRouteAction {
   /** Whether this server can run it at all. Unsupported actions answer 404. */
   isSupported: (features: AccountSecurityFeatures) => boolean;
   method: "delete" | "post";
-  /** Path under `/:userId/security`, such as `/reset-two-factor`. */
+  /** Path under `/:userId/security`, such as `/reset-two-factor` or `/passkeys/:passkeyId`. */
   path: string;
   run: (context: SecurityActionContext) => Promise<SecurityActionResult>;
 }
@@ -108,7 +110,11 @@ export const resetTwoFactorAction: SecurityRouteAction = {
 };
 
 /** The built-in action table, in display order. */
-export const defaultSecurityActions = (): SecurityRouteAction[] => [resetTwoFactorAction];
+export const defaultSecurityActions = (): SecurityRouteAction[] => [
+  resetTwoFactorAction,
+  removePasskeyAction,
+  unlinkProviderAction,
+];
 
 export interface AccountSecurityAppOptions {
   /** Extra recovery actions, mounted and listed after the built-in ones. */
@@ -208,11 +214,24 @@ const missingPermissions = (held: PermissionSet, required: PermissionSet): strin
   return missing;
 };
 
-const userIdOf = (user: User): string => (user._id ? String(user._id) : user.id);
-
 const targetUserIdOf = (req: Request): string => {
   const value = req.params.userId;
   return typeof value === "string" ? value : "";
+};
+
+/** Two actions with one id would share a summary entry and an audit name, so refuse them. */
+const assertUniqueActionIds = (actions: readonly SecurityRouteAction[]): void => {
+  const seen = new Set<string>();
+  for (const action of actions) {
+    if (seen.has(action.id)) {
+      throw new APIError({
+        detail: `Two security actions use the id "${action.id}"; give the custom action its own id.`,
+        status: 500,
+        title: "Duplicate security action id",
+      });
+    }
+    seen.add(action.id);
+  }
 };
 
 export class AccountSecurityApp implements TerrenoPlugin {
@@ -226,6 +245,7 @@ export class AccountSecurityApp implements TerrenoPlugin {
   constructor(options: AccountSecurityAppOptions = {}) {
     this.options = options;
     this.actions = [...defaultSecurityActions(), ...(options.actions ?? [])];
+    assertUniqueActionIds(this.actions);
     this.service = createAccountSecurityService({
       getAuth: () => this.resolveBetterAuth(),
       getUserModel: () => this.resolveUserModel(),

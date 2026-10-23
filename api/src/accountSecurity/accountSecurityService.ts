@@ -4,6 +4,7 @@
  * TOTP secret, no backup codes, no session or OAuth tokens.
  */
 
+import {generateRandomString} from "better-auth/crypto";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
@@ -84,6 +85,8 @@ interface BetterAuthAdapterLike {
 }
 
 interface BetterAuthUserRow {
+  email: string;
+  emailVerified?: boolean | null;
   id: string;
   lastLoginMethod?: string | null;
   twoFactorEnabled?: boolean | null;
@@ -91,6 +94,7 @@ interface BetterAuthUserRow {
 
 interface BetterAuthAccountRow {
   createdAt?: Date;
+  id: string;
   providerId: string;
 }
 
@@ -116,7 +120,13 @@ export type VerificationStoreIdentifier =
 /** The parts of Better Auth's context this service uses. */
 interface BetterAuthSecurityContext {
   adapter: BetterAuthAdapterLike;
+  baseURL: string;
   internalAdapter: {
+    createVerificationValue: (data: {
+      expiresAt: Date;
+      identifier: string;
+      value: string;
+    }) => Promise<unknown>;
     findAccounts: (userId: string) => Promise<BetterAuthAccountRow[]>;
     findUserById: (userId: string) => Promise<BetterAuthUserRow | null>;
     listSessions: (
@@ -126,6 +136,14 @@ interface BetterAuthSecurityContext {
     updateUser: (userId: string, data: Record<string, unknown>) => Promise<unknown>;
   };
   options: Parameters<typeof readBetterAuthMethods>[0]["options"] & {
+    emailAndPassword?: {
+      resetPasswordTokenExpiresIn?: number;
+      sendResetPassword?: (data: {
+        token: string;
+        url: string;
+        user: BetterAuthUserRow;
+      }) => Promise<void>;
+    };
     verification?: {storeIdentifier?: VerificationStoreIdentifier};
   };
   socialProviders: Parameters<typeof readBetterAuthMethods>[0]["socialProviders"];
@@ -135,7 +153,11 @@ interface ViewBackupCodesApi {
   viewBackupCodes: (args: {body: {userId: string}}) => Promise<{backupCodes?: unknown}>;
 }
 
-const PASSWORD_PROVIDER_ID = "credential";
+/** Better Auth's provider id for the email and password credential. */
+export const PASSWORD_PROVIDER_ID = "credential";
+
+/** Better Auth's default reset-link lifetime, used when `resetPasswordTokenExpiresIn` is unset. */
+const DEFAULT_RESET_TOKEN_SECONDS = 3600;
 
 const NO_FEATURES: AccountSecurityFeatures = {
   betterAuth: false,
@@ -158,7 +180,8 @@ const isCanonicalObjectId = (id: string): boolean => {
   return new mongoose.Types.ObjectId(id).toString() === id;
 };
 
-const userIdOf = (user: User): string => (user._id ? String(user._id) : user.id);
+/** The app User id as a string. */
+export const userIdOf = (user: User): string => (user._id ? String(user._id) : user.id);
 
 const betterAuthIdOf = (user: User): string | undefined => {
   const value = (user as User & {betterAuthId?: unknown}).betterAuthId;
@@ -228,14 +251,39 @@ const deleteTrustedDevices = async (
   return context.adapter.deleteMany({model: "verification", where});
 };
 
+/** One user's sign-in methods as stored by Better Auth. Holds ids only, never key material. */
+export interface AccountSecurityCredentials {
+  /** Account rows: one per linked provider account, plus `credential` for the password. */
+  accounts: {id: string; providerId: string}[];
+  betterAuthId: string;
+  /** Better Auth `emailVerified`. */
+  emailVerified: boolean;
+  /** Passkeys; always empty when the `passkey` feature is off. */
+  passkeys: {id: string; name: string | null}[];
+}
+
+/** Why a password reset was not sent. */
+export type PasswordResetSkipReason = "not-configured" | "not-linked";
+
+export type PasswordResetResult = {sent: true} | {reason: PasswordResetSkipReason; sent: false};
+
 export interface AccountSecurityServiceOptions {
   getAuth: () => BetterAuthInstance | undefined;
   getUserModel: () => UserModel;
 }
 
 export interface AccountSecurityService {
+  /** Deletes the user's account rows for `providerId`. Returns how many were removed. */
+  deleteAccounts: (args: {betterAuthId: string; providerId: string}) => Promise<number>;
+  /** Deletes one passkey, only when it belongs to `betterAuthId`. Returns whether it existed. */
+  deletePasskey: (args: {betterAuthId: string; passkeyId: string}) => Promise<boolean>;
   /** The app User with this id, or 404 (an id that is not an ObjectId is also 404). */
   loadTarget: (userId: string) => Promise<User>;
+  /** The user's sign-in methods, or `undefined` when the user has no Better Auth link. */
+  readCredentials: (
+    target: User,
+    features: AccountSecurityFeatures
+  ) => Promise<AccountSecurityCredentials | undefined>;
   readFeatures: () => Promise<AccountSecurityFeatures>;
   readState: (target: User, features: AccountSecurityFeatures) => Promise<AccountSecurityState>;
   /**
@@ -243,6 +291,13 @@ export interface AccountSecurityService {
    * 2FA was already off (or the user has no Better Auth link).
    */
   resetTwoFactor: (target: User) => Promise<{changed: boolean}>;
+  /**
+   * Mails the user a Better Auth password-reset link through the configured
+   * `emailAndPassword.sendResetPassword` hook (Terreno's `sendMail` + `publicAppUrl`). The hook
+   * is awaited, so a delivery failure (such as the hook's 501 for a missing `publicAppUrl`)
+   * throws instead of being logged and dropped as Better Auth's own endpoint does.
+   */
+  sendPasswordReset: (target: User) => Promise<PasswordResetResult>;
 }
 
 export const createAccountSecurityService = ({
@@ -384,5 +439,120 @@ export const createAccountSecurityService = ({
     return {changed: wasEnrolled || trustedDevicesRemoved > 0};
   };
 
-  return {loadTarget, readFeatures, readState, resetTwoFactor};
+  const readCredentials = async (
+    target: User,
+    features: AccountSecurityFeatures
+  ): Promise<AccountSecurityCredentials | undefined> => {
+    const betterAuthId = betterAuthIdOf(target);
+    const context = await getContext();
+    if (!betterAuthId || !context) {
+      return undefined;
+    }
+    const betterAuthUser = await context.internalAdapter.findUserById(betterAuthId);
+    if (!betterAuthUser) {
+      return undefined;
+    }
+    const [accounts, passkeyRows] = await Promise.all([
+      context.internalAdapter.findAccounts(betterAuthId),
+      features.passkey
+        ? context.adapter.findMany<BetterAuthPasskeyRow>({
+            model: "passkey",
+            where: [{field: "userId", value: betterAuthId}],
+          })
+        : Promise.resolve([] as BetterAuthPasskeyRow[]),
+    ]);
+    return {
+      accounts: accounts.map((account) => ({
+        id: String(account.id),
+        providerId: account.providerId,
+      })),
+      betterAuthId,
+      emailVerified: betterAuthUser.emailVerified === true,
+      passkeys: passkeyRows.map((row) => ({id: String(row.id), name: row.name ?? null})),
+    };
+  };
+
+  const deletePasskey = async ({
+    betterAuthId,
+    passkeyId,
+  }: {
+    betterAuthId: string;
+    passkeyId: string;
+  }): Promise<boolean> => {
+    const context = await getContext();
+    if (!context) {
+      return false;
+    }
+    // Matching on both id and owner means another user's passkey id never deletes anything.
+    const where: AdapterWhere[] = [
+      {field: "id", value: passkeyId},
+      {field: "userId", value: betterAuthId},
+    ];
+    const removed = await context.adapter.deleteMany({model: "passkey", where});
+    return removed > 0;
+  };
+
+  const deleteAccounts = async ({
+    betterAuthId,
+    providerId,
+  }: {
+    betterAuthId: string;
+    providerId: string;
+  }): Promise<number> => {
+    const context = await getContext();
+    if (!context) {
+      return 0;
+    }
+    return context.adapter.deleteMany({
+      model: "account",
+      where: [
+        {field: "userId", value: betterAuthId},
+        {field: "providerId", value: providerId},
+      ],
+    });
+  };
+
+  const sendPasswordReset = async (target: User): Promise<PasswordResetResult> => {
+    const betterAuthId = betterAuthIdOf(target);
+    const context = await getContext();
+    if (!betterAuthId || !context) {
+      return {reason: "not-linked", sent: false};
+    }
+    const sendResetPassword = context.options.emailAndPassword?.sendResetPassword;
+    if (!sendResetPassword) {
+      return {reason: "not-configured", sent: false};
+    }
+    const betterAuthUser = await context.internalAdapter.findUserById(betterAuthId);
+    if (!betterAuthUser) {
+      return {reason: "not-linked", sent: false};
+    }
+    // The same token, identifier, and lifetime Better Auth's /request-password-reset issues, so
+    // its /reset-password endpoint accepts the link.
+    // Better Auth's generateId(24): 24 characters from a-z, A-Z, 0-9.
+    const token = generateRandomString(24, "a-z", "A-Z", "0-9");
+    const expiresInSeconds =
+      context.options.emailAndPassword?.resetPasswordTokenExpiresIn || DEFAULT_RESET_TOKEN_SECONDS;
+    await context.internalAdapter.createVerificationValue({
+      expiresAt: DateTime.now().plus({seconds: expiresInSeconds}).toJSDate(),
+      identifier: `reset-password:${token}`,
+      value: betterAuthId,
+    });
+    await sendResetPassword({
+      token,
+      url: `${context.baseURL}/reset-password/${token}?callbackURL=`,
+      user: betterAuthUser,
+    });
+    return {sent: true};
+  };
+
+  return {
+    deleteAccounts,
+    deletePasskey,
+    loadTarget,
+    readCredentials,
+    readFeatures,
+    readState,
+    resetTwoFactor,
+    sendPasswordReset,
+  };
 };

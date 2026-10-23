@@ -376,7 +376,7 @@ Open risks:
     `audit-log.md` gains a `security` source row.
   - Skills: terreno-backend-api, mongoose-schema-safety, security-audit
 
-- [ ] **T7** — Recovery: remove passkey, unlink provider
+- [x] **T7** — Recovery: remove passkey, unlink provider
   - Depends on: T6
   - Files: api/src/accountSecurity/credentialActions.ts, api/src/accountSecurity/accountSecurityApp.ts, api/src/accountSecurity/credentialActions.test.ts, docs/reference/account-security.md
   - Build:
@@ -395,6 +395,12 @@ Open risks:
   - Depends on: T7
   - Files: api/src/accountSecurity/accessActions.ts, api/src/accountSecurity/accountSecurityApp.ts, api/src/accountSecurity/accessActions.test.ts, example-backend/src/models/user.ts, example-backend/src/types/models/userTypes.ts, docs/reference/account-security.md
   - Build:
+    - Fix the existing Better Auth reset-password JWT sync: over HTTP,
+      `applyBetterAuthPasswordResetToJwt` re-reads a request body Better Auth already
+      consumed, so `POST {basePath}/reset-password` answers 500 whenever a `userModel`
+      is set (found in T7). Capture `newPassword` from the parsed endpoint body instead
+      (a `hooks.before` matcher on `/reset-password`). Proof: an HTTP reset with a
+      `userModel` succeeds, signs in with the new password, and bumps `tokenEpoch`.
     - `POST .../revoke-sessions`
     - `POST .../send-password-reset`, which uses `sendMail` and returns 501 when
       `publicAppUrl` is unset, matching the existing hooks.
@@ -921,6 +927,7 @@ Open risks:
 | D7 | Master merged #1604 after approval: web bearer mode, the OAuth one-time-token handoff, the mock OIDC provider, and a cross-site bearer Playwright project | Reuse them (engineering reconciliation, no product change) | T4 reuses `mock-oidc`; T5 becomes the link handoff; T27 narrows to the 2FA/passkey challenges; T11 extends the handoff to oauth-proxy returns; cross-site proofs use the bearer project, where cookies are never sent, instead of WebKit |
 | D8 | Review found that a refused unverified sign-up left a Better Auth user behind, which a later email verification could turn into a takeover of the legacy User | Refuse before the Better Auth user is created; T8's admin action issues a set-password link instead of marking an email verified | T3 adds a `user.create.before` guard; T8 `verify-email` becomes `issue-sign-in-link` |
 | D9 | Review: should recovery routes let an operator act on a superadmin, or on themselves? | No: refuse targets holding permissions the actor lacks (a `*` target needs a superadmin actor) and refuse self-targeting; self-service lives on the user's own Security screen | T6 adds the guard to the shared route pipeline, so T9 org routes inherit it (alongside D3's platform-staff refusal) |
+| D10 | Review of T7: removing a user's last passkey can lock them out just like unlinking their last provider | Apply Q5's rule to passkey removal too: 409 unless the email is verified, then send a reset first | T7 guards both routes; unlink also points operators to revoke-sessions, since sessions don't record their provider |
 | D5 (durable) | Remember name, email and avatar on the login screen by default? | No: method only by default; identity is opt-in (`rememberIdentity`); the example opts in | T19, T20 and T26 as written |
 
 ## Sign-off

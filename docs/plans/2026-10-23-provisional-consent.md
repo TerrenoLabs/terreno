@@ -242,7 +242,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Verification: `bun run frontend:e2e -- provisionalConsent.spec.ts`; terreno:verify-ui-changes evidence
   - Skills: terreno:verify-ui-changes, accessibility-testing
 
-- [ ] **T13** — Document provisional consent signing and printing
+- [x] **T13** — Document provisional consent signing and printing
   - Depends on: T10, T12
   - Files: docs/reference/ui.md, docs/reference/admin-frontend.md, docs/how-to/sign-consent-on-behalf.md (new), docs/how-to/README.md, docs/explanation/README.md, changelog/unreleased/provisional-consent-signing.md (new)
   - Criteria: `ui.md` documents `ProvisionalConsentSigner`, `useProvisionalConsent`, `printConsentHtml`, and the gate notice. `admin-frontend.md` documents the print buttons and provisional display. The how-to covers granting `consentResponse:signOnBehalf` (including the existing-admin-role merge on upgrade), passing `accessControl` to `ConsentApp`, mounting the component, using `getConsentStatuses`, voiding, and printing. Both README indexes link the new pages. There is an `Added` changelog fragment.

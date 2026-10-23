@@ -984,6 +984,11 @@ When staff signed the form provisionally, the pending form carries
 declines themselves: the scroll gate, checkboxes, and signature work as for any other form.
 The signer's note is never shown.
 
+`useConsentForms.ts` also exports two helpers the consent components share:
+`applyConsentVariables(content, variables?)` replaces `{{name}}` placeholders and leaves
+unknown ones as written, and `resolveConsentLocale(form, locale)` picks the content locale to
+show: the exact locale, then its language (`en-GB` → `en`), then the form's default.
+
 ### ProvisionalConsentSigner and useProvisionalConsent
 
 For staff who record consent on a user's behalf. The server must grant the viewer

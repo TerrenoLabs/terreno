@@ -273,6 +273,38 @@ users' Better Auth email verified, so `verified-email` linking treats them as th
 owner. The seed still works with `AUTH_SIGN_UP=closed`: it builds its own instance with sign-up
 open.
 
+#### Auth features in generated apps
+
+[create-terreno-app](../reference/create-terreno-app.md) generates the same suite in
+`backend/src/utils/betterAuthConfig.ts`, with the same env vars (`AUTH_ACCOUNT_LINKING`,
+`AUTH_SIGN_UP`, `FRONTEND_URL`, `PASSKEY_RP_ID`) and the same production rule for passkeys on a
+loopback `FRONTEND_URL`, and `getWebOrigins` adds the `FRONTEND_URL` origin to CORS and
+`trustedOrigins`. It differs from example-backend in five ways:
+
+- `twoFactor.issuer` and `passkey.rpName` are the app's display name (`APP_NAME`), and
+  `twoFactor.trustDeviceDays` is 30, matching the login screen's `trustDeviceDays`.
+- It configures no social providers and no `oauthHandoff`: the web client stays in cookie mode.
+  Add providers as in [OAuth Provider Setup](#oauth-provider-setup); the login and security
+  screens show them once `/terreno/methods` lists them.
+- `server.ts` registers `AuditApp` and then `AccountSecurityApp({accessControl: access})`, so
+  operators get the recovery routes at `/users/:id/security/*`.
+- The seed builds its own instance with `signUp` unset, so `AUTH_SIGN_UP=closed` still seeds.
+- It sets no `sendMail`. Until the app passes `@terreno/comms` `sendMail` and `renderAuthMail`
+  (as example-backend does), nothing that sends mail works: forgot-password, the operator
+  recovery actions `send-password-reset` and `issue-sign-in-link` (they answer 501), any flow
+  that depends on a reset or set-password link, and
+  [security notification emails](../reference/account-security.md#notifications).
+
+On the frontend, `lib/betterAuth.ts` passes `features: {lastLoginMethod, multiSession, passkey,
+twoFactor}` and exports `rememberedAccounts` with `rememberIdentity: false`, so the device keeps
+only how each account signed in. `app/login.tsx` renders the
+[drop-in login screen](#5-drop-in-login-screen) with `callbackURL="/login"`, and
+`app/settings/security.tsx` renders the [drop-in security screen](#6-drop-in-security-screen)
+with `callbackURL="/settings/security"`. The Profile tab's **Security** button
+(`profile-security-button`) opens it, and passwords are changed there: the Profile tab edits
+only name and email. Its email field changes the app `User`'s email through `PATCH /auth/me`,
+not the Better Auth sign-in email, so the user keeps signing in with the old one.
+
 ### 3. Register BetterAuthApp Plugin
 
 Use the TerrenoApp plugin system:

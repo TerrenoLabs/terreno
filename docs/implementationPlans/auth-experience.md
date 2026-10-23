@@ -827,7 +827,7 @@ Open risks:
     401 while disabled, and sign-in works after enable.
   - Skills: building-admin-interfaces, verify-ui-changes
 
-- [ ] **T26** — create-terreno-app generates the auth suite
+- [x] **T26** — create-terreno-app generates the auth suite
   - Depends on: T4, T21
   - Files: create-terreno-app/src/generate.ts, create-terreno-app/src/__tests__/generate.test.ts, docs/how-to/configure-better-auth.md, changelog/unreleased/cta-auth-suite.md
   - Build: the generated backend config enables:
@@ -838,8 +838,9 @@ Open risks:
     - `multiSession`
     - `nativeApps`
 
-    The generated frontend uses `TerrenoLoginScreen`, `settings/security`, and the
-    `auth/callback` route.
+    The generated frontend uses `TerrenoLoginScreen` and `settings/security`. The
+    login route is the OAuth return page (#1604's handoff and T20 make a separate
+    `auth/callback` route unnecessary).
   - Proof: generator test asserting the generated `server.ts` and `app/login.tsx`
     contain the features and the connected screens. The existing generator tests pass.
   - Skills: build-terreno-app, update-docs

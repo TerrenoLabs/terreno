@@ -516,6 +516,81 @@ export const applyBetterAuthPasswordResetToJwt = async (
   await appUser.save();
 };
 
+const UNSAFE_METHODS = new Set(["DELETE", "PATCH", "POST", "PUT"]);
+
+interface OriginCheckContext {
+  isTrustedOrigin: (url: string, settings?: {allowRelativePaths: boolean}) => boolean;
+  options: {advanced?: {disableCSRFCheck?: boolean; disableOriginCheck?: boolean | string[]}};
+}
+
+const headerValue = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
+
+const originOfReferer = (referer: string | undefined): string | undefined => {
+  if (!referer) {
+    return undefined;
+  }
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return "null";
+  }
+};
+
+// True when the request's own `Authorization: Bearer` token is the session Better Auth resolved,
+// rather than a cookie sent beside some other header. The bearer plugin accepts the raw token or
+// the signed `token.signature` form.
+const isBearerSession = (req: Request, sessionToken: string): boolean => {
+  const match = /^Bearer\s+(.+)$/i.exec(headerValue(req.headers.authorization) ?? "");
+  if (!match || !sessionToken) {
+    return false;
+  }
+  let bearer = match[1].trim();
+  try {
+    bearer = decodeURIComponent(bearer);
+  } catch {
+    return false;
+  }
+  return bearer === sessionToken || bearer.startsWith(`${sessionToken}.`);
+};
+
+/**
+ * A session cookie rides along on requests other sites start, so a cookie-authenticated write is
+ * accepted only from an origin in Better Auth's `trustedOrigins` (which includes the API's own
+ * origin), the same rule Better Auth applies to its own routes. Bearer requests cannot be forged
+ * by another site. A request with no Origin, Referer, or cross-site Fetch Metadata did not come
+ * from a browser page, so it is not a cross-site forgery.
+ */
+const isUntrustedCookieWrite = async (
+  auth: BetterAuthInstance,
+  req: Request,
+  sessionToken: string
+): Promise<boolean> => {
+  if (!UNSAFE_METHODS.has(req.method) || !req.headers.cookie) {
+    return false;
+  }
+  if (isBearerSession(req, sessionToken)) {
+    return false;
+  }
+  const context = (await auth.$context) as unknown as OriginCheckContext;
+  const advanced = context.options.advanced;
+  const isCsrfCheckDisabled =
+    advanced?.disableCSRFCheck === true ||
+    (advanced?.disableOriginCheck === true && advanced.disableCSRFCheck === undefined);
+  if (isCsrfCheckDisabled) {
+    return false;
+  }
+  const origin =
+    headerValue(req.headers.origin) ?? originOfReferer(headerValue(req.headers.referer));
+  if (!origin) {
+    return headerValue(req.headers["sec-fetch-site"]) === "cross-site";
+  }
+  if (origin === "null") {
+    return true;
+  }
+  return !context.isTrustedOrigin(origin, {allowRelativePaths: false});
+};
+
 /**
  * Creates Express middleware that extracts the Better Auth session
  * and populates req.user with the application User model.
@@ -530,7 +605,16 @@ export const createBetterAuthSessionMiddleware = (
         headers: req.headers as Record<string, string>,
       });
 
-      if (session?.user && session?.session) {
+      if (
+        session?.user &&
+        session?.session &&
+        (await isUntrustedCookieWrite(auth, req, String(session.session.token ?? "")))
+      ) {
+        // Fall through as anonymous, like a disabled user, so protected routes answer 401.
+        logger.warn(
+          `[better-auth] Ignored a session cookie on ${req.method} ${req.path} from an untrusted origin`
+        );
+      } else if (session?.user && session?.session) {
         const betterAuthUser = session.user as BetterAuthUser;
 
         const reqWithSession = req as Request & {

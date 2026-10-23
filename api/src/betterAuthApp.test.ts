@@ -589,3 +589,161 @@ describe("BetterAuthApp credential changes on a dual-enrolled account", () => {
     await supertest(app).post("/auth/refresh_token").send({refreshToken}).expect(401);
   });
 });
+
+describe("BetterAuthApp cookie sessions on cross-site writes", () => {
+  const API_ORIGIN = "http://localhost:3000";
+  const WEB_ORIGIN = "https://web.example.com";
+  const EVIL_ORIGIN = "https://evil.example.com";
+
+  interface CsrfUserFields {
+    betterAuthId?: string;
+    email: string;
+    name?: string;
+  }
+
+  interface CsrfNoteFields {
+    ownerId?: string;
+    title?: string;
+  }
+
+  const getCsrfUserModel = (): mongoose.Model<CsrfUserFields> => {
+    if (mongoose.models.BetterAuthCsrfUser) {
+      return mongoose.models.BetterAuthCsrfUser as mongoose.Model<CsrfUserFields>;
+    }
+    const schema = new Schema<CsrfUserFields>({
+      betterAuthId: {description: "Linked Better Auth user id", index: true, type: String},
+      email: {description: "Email address", required: true, type: String},
+      name: {description: "Display name", type: String},
+    });
+    schema.plugin(
+      passportLocalMongoose as unknown as (
+        target: Schema,
+        options?: Record<string, unknown>
+      ) => void,
+      {usernameField: "email"}
+    );
+    return mongoose.model<CsrfUserFields>("BetterAuthCsrfUser", schema);
+  };
+
+  const getCsrfNoteModel = (): mongoose.Model<CsrfNoteFields> => {
+    if (mongoose.models.BetterAuthCsrfNote) {
+      return mongoose.models.BetterAuthCsrfNote as mongoose.Model<CsrfNoteFields>;
+    }
+    const schema = new Schema<CsrfNoteFields>({
+      ownerId: {description: "Creator", type: String},
+      title: {description: "Note title", type: String},
+    });
+    return mongoose.model<CsrfNoteFields>("BetterAuthCsrfNote", schema);
+  };
+
+  const CsrfUser = getCsrfUserModel();
+  const CsrfNote = getCsrfNoteModel();
+
+  const buildApp = (): express.Application => {
+    const betterAuthApp = new BetterAuthApp({
+      config: {
+        baseURL: API_ORIGIN,
+        crossDomainCookies: true,
+        enabled: true,
+        secret: "test-secret-at-least-32-characters-long",
+        trustedOrigins: [WEB_ORIGIN],
+      },
+      userModel: CsrfUser as unknown as UserModel,
+    });
+    const noteRouter = modelRouter("/csrfNotes", CsrfNote, {
+      permissions: {
+        create: [Permissions.IsAuthenticated],
+        delete: [],
+        list: [Permissions.IsAuthenticated],
+        read: [Permissions.IsAuthenticated],
+        update: [],
+      },
+      preCreate: (body, req) => ({...body, ownerId: String(req.user?.id)}),
+    });
+    return new TerrenoApp({
+      corsOrigin: [WEB_ORIGIN],
+      skipListen: true,
+      userModel: CsrfUser as unknown as UserModel,
+    })
+      .register(betterAuthApp)
+      .register(noteRouter)
+      .build();
+  };
+
+  // Signs up from the trusted web origin and returns the session cookies and the bearer token.
+  const signUp = async (app: express.Application): Promise<{bearer: string; cookie: string}> => {
+    const res = await supertest(app)
+      .post("/api/auth/sign-up/email")
+      .set("origin", WEB_ORIGIN)
+      .send({email: "csrf-victim@example.com", name: "Victim", password: "password-123456"})
+      .expect(200);
+    const setCookie = res.headers["set-cookie"] as unknown as string[];
+    const cookie = setCookie.map((value) => value.split(";")[0]).join("; ");
+    return {bearer: res.body.token as string, cookie};
+  };
+
+  const formPost = (app: express.Application, cookie: string): supertest.Test =>
+    supertest(app)
+      .post("/csrfNotes")
+      .set("cookie", cookie)
+      .set("content-type", "application/x-www-form-urlencoded")
+      .send("title=forged");
+
+  beforeEach(async () => {
+    await CsrfUser.deleteMany({});
+    await CsrfNote.deleteMany({});
+    for (const collection of ["user", "session", "account"]) {
+      await mongoose.connection.db?.collection(collection).deleteMany({});
+    }
+  });
+
+  it("does not authenticate a cookie write from an untrusted origin", async () => {
+    const app = buildApp();
+    const {cookie} = await signUp(app);
+
+    const fromOrigin = await formPost(app, cookie)
+      .set("origin", EVIL_ORIGIN)
+      .set("sec-fetch-site", "cross-site");
+    const fromNullOrigin = await formPost(app, cookie).set("origin", "null");
+    const fromReferer = await formPost(app, cookie).set("referer", `${EVIL_ORIGIN}/page`);
+    const fromFetchMetadata = await formPost(app, cookie).set("sec-fetch-site", "cross-site");
+    const withOtherBearer = await formPost(app, cookie)
+      .set("origin", EVIL_ORIGIN)
+      .set("authorization", "Bearer not-the-session-token");
+
+    expect(fromOrigin.status).toBe(401);
+    expect(fromNullOrigin.status).toBe(401);
+    expect(fromReferer.status).toBe(401);
+    expect(fromFetchMetadata.status).toBe(401);
+    expect(withOtherBearer.status).toBe(401);
+    expect(await CsrfNote.countDocuments()).toBe(0);
+  });
+
+  it("authenticates cookie writes from a trusted origin and from non-browser clients", async () => {
+    const app = buildApp();
+    const {cookie} = await signUp(app);
+
+    await formPost(app, cookie).set("origin", WEB_ORIGIN).expect(201);
+    await formPost(app, cookie).set("origin", API_ORIGIN).expect(201);
+    await formPost(app, cookie).set("referer", `${WEB_ORIGIN}/notes`).expect(201);
+    await formPost(app, cookie).expect(201);
+    expect(await CsrfNote.countDocuments()).toBe(4);
+  });
+
+  it("still authenticates cookie reads and bearer writes from any origin", async () => {
+    const app = buildApp();
+    const {bearer, cookie} = await signUp(app);
+
+    await supertest(app)
+      .get("/csrfNotes")
+      .set("cookie", cookie)
+      .set("origin", EVIL_ORIGIN)
+      .expect(200);
+    await supertest(app)
+      .post("/csrfNotes")
+      .set("authorization", `Bearer ${bearer}`)
+      .set("origin", EVIL_ORIGIN)
+      .send({title: "bearer"})
+      .expect(201);
+  });
+});

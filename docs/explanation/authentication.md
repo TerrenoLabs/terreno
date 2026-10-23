@@ -44,6 +44,7 @@ Email/password create omits `oauthProvider`. Apps that never use social login ca
 
 **Key properties:**
 - Session-based (cookies / bearer session) vs. stateless JWT
+- A session cookie is sent with requests other sites start, so a cookie-authenticated write counts only when it comes from a trusted origin. Bearer tokens are never sent automatically, so they need no such check
 - Built-in OAuth providers with PKCE
 - `betterAuthAdapter` for syncdb socket auth
 - `sync:auth-expired` socket event when the session is no longer valid

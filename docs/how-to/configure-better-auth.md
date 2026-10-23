@@ -231,6 +231,15 @@ export const authClient = createBetterAuthClient({
 On web the client authenticates with Better Auth's session cookie. When the web frontend and
 the API are on different sites, use [bearer mode](#frontend-and-api-on-different-sites).
 
+A cookie-authenticated `POST`, `PUT`, `PATCH`, or `DELETE` to any Terreno route is
+authenticated only when its `Origin` (or, without one, its `Referer`) is in `trustedOrigins` or
+is the API's own origin. Otherwise `req.user` stays unset and protected routes answer 401, so
+another site cannot submit a form that writes as the signed-in user. Add every web origin that
+uses cookie mode to `trustedOrigins`. Requests with an `Authorization: Bearer` session token,
+safe methods, and clients that send no `Origin`, `Referer`, or cross-site `Sec-Fetch-Site`
+(native apps, server scripts) are not affected. Better Auth's `advanced.disableCSRFCheck` turns
+the check off. A `trustedOrigins` function is not consulted; list the origins.
+
 ### 2. Add Session Redux Slice
 
 ``````typescript

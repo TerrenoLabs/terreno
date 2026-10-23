@@ -559,6 +559,12 @@ replaced, explicit values win), and `plugins` appends Better Auth plugins after 
 See [Pass other Better Auth options and plugins](../how-to/configure-better-auth.md#pass-other-better-auth-options-and-plugins)
 for the defaults each override replaces.
 
+`createBetterAuthSessionMiddleware` does not set `req.user` from a session cookie on a `POST`,
+`PUT`, `PATCH`, or `DELETE` whose `Origin` (or `Referer` origin) is `null` or is not a Better Auth
+trusted origin (`trustedOrigins` plus the API's own origin), or that has neither header but
+`Sec-Fetch-Site: cross-site`. Bearer session requests, safe methods, and requests without those
+browser headers are unchanged; `advanced.disableCSRFCheck` disables the check.
+
 On first contact, `syncBetterAuthUser` finds the app `User` by `betterAuthId` and creates it
 when missing. It links an existing app `User` that has the same email only when Better Auth has
 verified that email and the row has no other `betterAuthId`. Otherwise the session does not set

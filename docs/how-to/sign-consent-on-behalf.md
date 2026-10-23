@@ -88,7 +88,7 @@ const ConsentSignScreen: React.FC = () => {
 ```
 
 Put the route outside your admin area if non-admin staff use it. The component lists every
-form that applies to the user with its status. Staff open a pending or declined form, read it,
+form that applies to the user with its status. Staff open a pending form, read it,
 write a note saying how consent was obtained, and sign. The user then sees "Signed on your
 behalf by <name> on <date>" above the form in their consent gate, but not the note.
 

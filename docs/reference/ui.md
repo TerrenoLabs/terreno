@@ -1014,7 +1014,8 @@ badge: "Pending", "Signed provisionally by <signer> on <date>", "Signed by user 
 or "Declined by user on <date>". It shows a spinner while loading and the server error with
 a Retry button on failure. Lazily exported from the package root.
 
-Pending and declined forms have a "Sign on behalf" button. It opens the form read-only
+Pending forms have a "Sign on behalf" button. Declined forms do not: the user's own decline
+always decides the status, so a provisional signature would not count. It opens the form read-only
 (`MarkdownView`, `variables` applied, in the viewer's locale, then that locale's language,
 then the form's default) with a required "Note" box. "Sign provisionally" stays disabled until
 the note has text. Submitting sends `{userId, consentFormId, note, locale}` to

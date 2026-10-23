@@ -92,7 +92,9 @@ const signerNameOf = (response: ProvisionalConsentResponse): string => {
   return "staff";
 };
 
-const CAN_SIGN_STATUSES = new Set<ProvisionalConsentStatusRow["status"]>(["pending", "declined"]);
+// Only pending forms can be signed on the user's behalf: the user's own answer always decides
+// the status, so a provisional signature on a declined form would change nothing.
+const CAN_SIGN_STATUSES = new Set<ProvisionalConsentStatusRow["status"]>(["pending"]);
 
 const contentFor = (
   row: ProvisionalConsentStatusRow,

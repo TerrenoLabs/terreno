@@ -288,6 +288,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
 | D5 | Can a provisional signature made in error be undone? | 1a: yes, void action that keeps the record | T4, void button in T11 |
 | D6 | Should the user see the signer's note? | 2a: no, name and date only | Note only in admin, audit, printouts (T2, T5, T9, T10) |
 | D7 | Without RBAC, fall back to `user.admin`? | 3a: yes, with a warning log | T1, T3, T4 permission matrix |
+| D8 | Signing on declined forms: hide it, or let a newer provisional signature outrank an older decline? (asked after build: T7 offered sign on declined rows, but the status rules let the user's decline win) | ok → hide | `ProvisionalConsentSigner` offers "Sign on behalf" on pending rows only |
 | D4 | (follow-up message) Printing | "add in the ability to print consent forms and make sure the provisional is included" | T8–T11 |
 
 ## Sign-off

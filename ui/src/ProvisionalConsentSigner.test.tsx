@@ -237,13 +237,13 @@ describe("ProvisionalConsentSigner", () => {
       form: {...row.form, content: {en: content}},
     });
 
-    it("offers signing only for pending and declined forms", () => {
+    it("offers signing only for pending forms", () => {
       const {api} = buildApi({data: rows});
       const {getByTestId, queryByTestId} = renderWithTheme(
         <ProvisionalConsentSigner api={api} userId="member-1" />
       );
       expect(getByTestId("provisional-consent-open-form-pending")).toBeTruthy();
-      expect(getByTestId("provisional-consent-open-form-declined")).toBeTruthy();
+      expect(queryByTestId("provisional-consent-open-form-declined")).toBeNull();
       expect(queryByTestId("provisional-consent-open-form-provisional")).toBeNull();
       expect(queryByTestId("provisional-consent-open-form-signed")).toBeNull();
     });

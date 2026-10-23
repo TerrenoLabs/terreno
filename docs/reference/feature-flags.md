@@ -301,4 +301,4 @@ Segment names can be referenced in flag rules via the admin UI.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `FEATURE_FLAGS_DEBUG` | Set to `"false"` to disable evaluation debug logs | Enabled |
+| `FEATURE_FLAGS_DEBUG` | Set to `"true"` to write evaluation diagnostics at `debug` level: flag key, rule field, operator, and result. User attribute values are never logged | Disabled |

@@ -87,6 +87,76 @@ describe("installTerrenoDevConsoleLogger", () => {
     expect(secondBody.entries).toHaveLength(1);
   });
 
+  it("does not install outside dev and the test opt-in", (): void => {
+    delete process.env.TERRENO_DEV_CONSOLE_LOGGER_TEST;
+    installTerrenoDevConsoleLogger({baseUrl: BASE_URL});
+    const g = globalThis as typeof globalThis & {__TERRENO_CONSOLE_LOGGER__?: boolean};
+    assert.isUndefined(g.__TERRENO_CONSOLE_LOGGER__);
+  });
+
+  it("drops the oldest queued lines once the queue is full", async (): Promise<void> => {
+    const fetchMock = mock((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(new Response(null, {status: 204}))
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const originalWarn = console.warn;
+    console.warn = (): void => {};
+
+    try {
+      installTerrenoDevConsoleLogger({baseUrl: BASE_URL});
+      for (let index = 0; index < 1001; index += 1) {
+        console.warn(`q-${index}`);
+      }
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 450);
+      });
+    } finally {
+      resetTerrenoDevConsoleLoggerForTests();
+      console.warn = originalWarn;
+    }
+
+    assert.isAtLeast(fetchMock.mock.calls.length, 1);
+    const firstBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      entries: Array<{message: string}>;
+    };
+    assert.equal(firstBody.entries[0]?.message, "q-1");
+    assert.notEqual(firstBody.entries[0]?.message, "q-0");
+  });
+
+  it("gives up when the retry also throws", async (): Promise<void> => {
+    const fetchMock = mock(() => Promise.reject(new Error("backend down")));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const originalWarn = console.warn;
+    console.warn = (): void => {};
+
+    try {
+      installTerrenoDevConsoleLogger({baseUrl: BASE_URL});
+      console.warn("drop-me");
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 450);
+      });
+    } finally {
+      resetTerrenoDevConsoleLoggerForTests();
+      console.warn = originalWarn;
+    }
+
+    assert.equal(fetchMock.mock.calls.length, 2);
+  });
+
+  it("cancels a pending flush when tests reset the logger", async (): Promise<void> => {
+    const fetchMock = mock((_input: RequestInfo | URL, _init?: RequestInit) =>
+      Promise.resolve(new Response(null, {status: 204}))
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    installTerrenoDevConsoleLogger({baseUrl: BASE_URL});
+    console.warn("pending");
+    resetTerrenoDevConsoleLoggerForTests();
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 450);
+    });
+    assert.equal(fetchMock.mock.calls.length, 0);
+  });
+
   it("retries a rejected backend batch once", async () => {
     const fetchMock = mock((_input: RequestInfo | URL, _init?: RequestInit) =>
       Promise.resolve(

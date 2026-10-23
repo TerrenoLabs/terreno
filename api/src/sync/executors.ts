@@ -270,11 +270,17 @@ const hydrateCreateCandidate = <T>(model: Model<T>, item: unknown): unknown => {
   }
 };
 
+/** Sync bookkeeping that `syncPlugin` stamps on every write; clients never set it. */
+const SYNC_STAMP_FIELDS = ["_syncSeq", "_syncPrevStream"];
+
 /**
- * Remove lifecycle fields that only the server may set from a client write body. `deleted` on a
- * soft-delete model is set only by the delete operation, so update authority cannot soft-delete
- * a record without delete permission, `preDelete` / `postDelete`, and the delete audit. Server
- * hooks (`preCreate` / `preUpdate`) run after this and may still set these fields.
+ * Remove fields that only the server may set from a client write body:
+ * - `deleted` on a soft-delete model is set only by the delete operation, so update authority
+ *   cannot soft-delete a record without delete permission, `preDelete` / `postDelete`, and the
+ *   delete audit.
+ * - `_syncSeq` / `_syncPrevStream` order the sync streams, so a client cannot pin a document's
+ *   seq and hide it from other members' snapshots and deltas.
+ * Server hooks (`preCreate` / `preUpdate`) run after this and may still set `deleted`.
  */
 const stripServerOwnedFields = <T>(model: Model<T>, body: unknown): unknown => {
   if (Array.isArray(body)) {
@@ -284,10 +290,14 @@ const stripServerOwnedFields = <T>(model: Model<T>, body: unknown): unknown => {
     return body;
   }
   const isSoftDeleteModel = model.schema.path("deleted")?.instance === "Boolean";
-  if (!isSoftDeleteModel || !Object.hasOwn(body, "deleted")) {
+  const fields = isSoftDeleteModel ? [...SYNC_STAMP_FIELDS, "deleted"] : SYNC_STAMP_FIELDS;
+  if (!fields.some((field) => Object.hasOwn(body, field))) {
     return body;
   }
-  const {deleted: _deleted, ...rest} = body as Record<string, unknown>;
+  const rest = {...(body as Record<string, unknown>)};
+  for (const field of fields) {
+    delete rest[field];
+  }
   return rest;
 };
 

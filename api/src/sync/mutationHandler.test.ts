@@ -192,6 +192,45 @@ describe("applySyncMutation", () => {
       const tombstones = await MutStuffModel.find({_id: doc._id, deleted: true});
       expect(tombstones).toHaveLength(1);
     });
+
+    it("ignores client-sent sync bookkeeping fields on update", async () => {
+      const doc = await MutStuffModel.create({name: "original", ownerId: owner.id});
+      const outcome = await applySyncMutation({
+        mutation: {
+          baseVersion: 1,
+          collection: "mutStuff",
+          data: {_syncPrevStream: "mutStuff|owner:elsewhere", _syncSeq: 777},
+          id: doc._id.toString(),
+          mutationId: "m-update-pinned-seq",
+          operation: "update",
+        },
+        user: owner,
+      });
+      const ack = expectAck(outcome);
+      expect(ack.seq).toBe(1);
+      const saved = await MutStuffModel.findById(doc._id).lean();
+      expect(saved?._syncSeq).toBe(1);
+      expect((saved as {_syncPrevStream?: string | null})?._syncPrevStream ?? null).toBeNull();
+    });
+
+    it("stamps a fresh seq when a client-sent seq rides along with a real change", async () => {
+      const doc = await MutStuffModel.create({name: "original", ownerId: owner.id});
+      const outcome = await applySyncMutation({
+        mutation: {
+          baseVersion: 1,
+          collection: "mutStuff",
+          data: {_syncSeq: 999, name: "changed"},
+          id: doc._id.toString(),
+          mutationId: "m-update-seq-and-name",
+          operation: "update",
+        },
+        user: owner,
+      });
+      expect(expectAck(outcome).seq).toBe(2);
+      const saved = await MutStuffModel.findById(doc._id).lean();
+      expect(saved?._syncSeq).toBe(2);
+      expect(saved?.name).toBe("changed");
+    });
   });
 
   describe("idempotency", () => {

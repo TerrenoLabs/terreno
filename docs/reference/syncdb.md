@@ -91,6 +91,10 @@ todoSchema.plugin(syncPlugin);      // stamps per-stream _syncSeq on every write
 
 Apply plugins **before** the model compiles. Registration validates their presence.
 
+`_syncSeq` and `_syncPrevStream` are server-owned. modelRouter create and update (REST, MCP
+tools, and sync mutations) drop them from the client body, and a save that changes only these
+fields gets a freshly claimed seq instead of keeping the value it was given.
+
 ### modelRouter sync config
 
 Use the three-argument `modelRouter` form:

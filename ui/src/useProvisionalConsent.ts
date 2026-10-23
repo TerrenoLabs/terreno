@@ -51,15 +51,16 @@ type MutationTrigger<TBody> = (body: TBody) => {unwrap: () => Promise<unknown>};
 
 type MutationHook<TBody> = () => [MutationTrigger<TBody>, {isLoading: boolean; error?: unknown}];
 
+export interface VoidProvisionalConsentArgs {
+  responseId: string;
+  reason: string;
+}
+
 interface ProvisionalConsentQueryBuilder {
   query: (options: {providesTags: string[]; query: (userId: string) => string}) => unknown;
-  mutation: (options: {
+  mutation: <TArgs>(options: {
     invalidatesTags: string[];
-    query: (body: SignConsentProvisionallyBody) => {
-      body: SignConsentProvisionallyBody;
-      method: "POST";
-      url: string;
-    };
+    query: (args: TArgs) => {body: unknown; method: "POST"; url: string};
   }) => unknown;
 }
 
@@ -73,6 +74,7 @@ interface ProvisionalConsentQueryState {
 interface ProvisionalConsentEnhancedApi {
   useGetConsentStatusQuery: (userId: string) => ProvisionalConsentQueryState;
   useSignConsentProvisionallyMutation: MutationHook<SignConsentProvisionallyBody>;
+  useVoidProvisionalConsentMutation: MutationHook<VoidProvisionalConsentArgs>;
 }
 
 interface ProvisionalConsentApiWithTags {
@@ -80,6 +82,7 @@ interface ProvisionalConsentApiWithTags {
     endpoints: (build: ProvisionalConsentQueryBuilder) => {
       getConsentStatus: unknown;
       signConsentProvisionally: unknown;
+      voidProvisionalConsent: unknown;
     };
     overrideExisting: boolean;
   }) => ProvisionalConsentEnhancedApi;
@@ -98,6 +101,9 @@ export interface UseProvisionalConsentResult {
   /** Sign a form provisionally for the user. Rejects with the RTK error on failure. */
   sign: (body: Omit<SignConsentProvisionallyBody, "userId">) => Promise<ProvisionalConsentResponse>;
   isSigning: boolean;
+  /** Void a provisional signature made in error. Rejects with the RTK error on failure. */
+  voidSignature: (args: VoidProvisionalConsentArgs) => Promise<ProvisionalConsentResponse>;
+  isVoiding: boolean;
 }
 
 /** Mutations may arrive as `{data}` envelopes or already unwrapped by the base query. */
@@ -139,12 +145,21 @@ const getEnhancedApi = (
           `${base}/consent-responses/status?userId=${encodeURIComponent(userId)}`,
       }),
       // A provisional signature changes the target's statuses and their pending notice.
-      signConsentProvisionally: build.mutation({
+      signConsentProvisionally: build.mutation<SignConsentProvisionallyBody>({
         invalidatesTags: ["ConsentStatus", "PendingConsents"],
-        query: (body: SignConsentProvisionallyBody) => ({
+        query: (body) => ({
           body,
           method: "POST",
           url: `${base}/consent-responses/provisional`,
+        }),
+      }),
+      // A void brings the form back to pending and removes the user's notice.
+      voidProvisionalConsent: build.mutation<VoidProvisionalConsentArgs>({
+        invalidatesTags: ["ConsentStatus", "PendingConsents"],
+        query: ({reason, responseId}) => ({
+          body: {reason},
+          method: "POST",
+          url: `${base}/consent-responses/${encodeURIComponent(responseId)}/void`,
         }),
       }),
     }),
@@ -179,5 +194,14 @@ export const useProvisionalConsent = ({
     [signMutation, userId]
   );
 
-  return {error, isLoading, isSigning, refetch, sign, statuses};
+  const [voidMutation, {isLoading: isVoiding}] = enhancedApi.useVoidProvisionalConsentMutation();
+  const voidSignature = useCallback(
+    async (args: VoidProvisionalConsentArgs): Promise<ProvisionalConsentResponse> => {
+      const result = await voidMutation(args).unwrap();
+      return unwrapData<ProvisionalConsentResponse>(result);
+    },
+    [voidMutation]
+  );
+
+  return {error, isLoading, isSigning, isVoiding, refetch, sign, statuses, voidSignature};
 };

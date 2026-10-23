@@ -14,7 +14,7 @@ interface CapturedQuery {
 
 interface CapturedMutation {
   invalidatesTags: string[];
-  query: (body: Record<string, unknown>) => {body: unknown; method: string; url: string};
+  query: (args: Record<string, unknown>) => {body: unknown; method: string; url: string};
 }
 
 const row: ProvisionalConsentStatusRow = {
@@ -42,8 +42,10 @@ const row: ProvisionalConsentStatusRow = {
 
 const buildApi = (
   state: {data?: unknown; error?: unknown; isLoading?: boolean} = {},
-  signResult: () => Promise<unknown> = () => Promise.resolve({})
+  signResult: () => Promise<unknown> = () => Promise.resolve({}),
+  voidResult: () => Promise<unknown> = () => Promise.resolve({})
 ): {
+  voidedArgs: unknown[];
   api: ProvisionalConsentApi;
   captured: CapturedQuery[];
   capturedMutations: CapturedMutation[];
@@ -56,6 +58,7 @@ const buildApi = (
   const addTagTypes: string[][] = [];
   const queriedUserIds: string[] = [];
   const signedBodies: unknown[] = [];
+  const voidedArgs: unknown[] = [];
   const api = {
     enhanceEndpoints: mock((options: {addTagTypes: string[]}) => {
       addTagTypes.push(options.addTagTypes);
@@ -94,13 +97,20 @@ const buildApi = (
                 },
                 {isLoading: false},
               ],
+              useVoidProvisionalConsentMutation: () => [
+                (args: unknown) => {
+                  voidedArgs.push(args);
+                  return {unwrap: voidResult};
+                },
+                {isLoading: false},
+              ],
             };
           }
         ),
       };
     }),
   } as unknown as ProvisionalConsentApi;
-  return {addTagTypes, api, captured, capturedMutations, queriedUserIds, signedBodies};
+  return {addTagTypes, api, captured, capturedMutations, queriedUserIds, signedBodies, voidedArgs};
 };
 
 describe("useProvisionalConsent", () => {
@@ -136,7 +146,7 @@ describe("useProvisionalConsent", () => {
     const {api, capturedMutations} = buildApi({data: []});
     renderHook(() => useProvisionalConsent({api, baseUrl: "/api", userId: "a"}));
 
-    expect(capturedMutations).toHaveLength(1);
+    expect(capturedMutations).toHaveLength(2);
     expect(capturedMutations[0].invalidatesTags).toEqual(["ConsentStatus", "PendingConsents"]);
     const body = {consentFormId: "form-1", note: "Phone", userId: "a"};
     expect(capturedMutations[0].query(body)).toEqual({
@@ -181,6 +191,35 @@ describe("useProvisionalConsent", () => {
     const {result} = renderHook(() => useProvisionalConsent({api, userId: "member-1"}));
 
     await expect(result.current.sign({consentFormId: "form-1", note: "Phone"})).rejects.toBe(error);
+  });
+
+  it("defines the void mutation for a response id", () => {
+    const {api, capturedMutations} = buildApi({data: []});
+    renderHook(() => useProvisionalConsent({api, baseUrl: "/api", userId: "a"}));
+
+    expect(capturedMutations[1].invalidatesTags).toEqual(["ConsentStatus", "PendingConsents"]);
+    expect(capturedMutations[1].query({reason: "Wrong member", responseId: "resp 1"})).toEqual({
+      body: {reason: "Wrong member"},
+      method: "POST",
+      url: "/api/consent-responses/resp%201/void",
+    });
+  });
+
+  it("voids a signature and unwraps the response", async () => {
+    const response = {_id: "response-1", voidedAt: "2026-10-21T09:00:00.000Z"};
+    const {api, voidedArgs} = buildApi({data: []}, undefined, () =>
+      Promise.resolve({data: response})
+    );
+    const {result} = renderHook(() => useProvisionalConsent({api, userId: "member-1"}));
+
+    let voided: unknown;
+    await act(async () => {
+      voided = await result.current.voidSignature({reason: "Wrong member", responseId: "r1"});
+    });
+
+    expect(voidedArgs).toEqual([{reason: "Wrong member", responseId: "r1"}]);
+    expect(voided).toEqual(response);
+    expect(result.current.isVoiding).toBe(false);
   });
 
   it("accepts an unwrapped array response", () => {

@@ -1,8 +1,8 @@
-import {describe, expect, it, mock} from "bun:test";
+import {afterEach, describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {DateTime} from "luxon";
-
 import {ProvisionalConsentSigner} from "./ProvisionalConsentSigner";
+import * as pdfHtmlTemplate from "./pdfHtmlTemplate";
 import {renderWithTheme} from "./test-utils";
 import type {ConsentFormPublic} from "./useConsentForms";
 import type {ProvisionalConsentApi, ProvisionalConsentStatusRow} from "./useProvisionalConsent";
@@ -68,16 +68,19 @@ const rows: ProvisionalConsentStatusRow[] = [
 /** A fake of the consumer's RTK api: the status query returns `initial`, signing runs `signResult`. */
 const buildApi = (
   initial: QueryState,
-  signResult: () => Promise<unknown> = () => Promise.resolve({})
+  signResult: () => Promise<unknown> = () => Promise.resolve({}),
+  voidResult: () => Promise<unknown> = () => Promise.resolve({})
 ): {
   api: ProvisionalConsentApi;
   refetch: ReturnType<typeof mock>;
   signedBodies: unknown[];
   userIds: string[];
+  voidedArgs: unknown[];
 } => {
   const refetch = mock(() => {});
   const userIds: string[] = [];
   const signedBodies: unknown[] = [];
+  const voidedArgs: unknown[] = [];
   const api = {
     enhanceEndpoints: () => ({
       injectEndpoints: () => ({
@@ -97,10 +100,17 @@ const buildApi = (
           },
           {isLoading: false},
         ],
+        useVoidProvisionalConsentMutation: () => [
+          (args: unknown) => {
+            voidedArgs.push(args);
+            return {unwrap: voidResult};
+          },
+          {isLoading: false},
+        ],
       }),
     }),
   } as unknown as ProvisionalConsentApi;
-  return {api, refetch, signedBodies, userIds};
+  return {api, refetch, signedBodies, userIds, voidedArgs};
 };
 
 describe("ProvisionalConsentSigner", () => {
@@ -387,6 +397,176 @@ describe("ProvisionalConsentSigner", () => {
           getByText(`Telehealth signed provisionally by staff on ${formatted(signedAt)}`)
         ).toBeTruthy();
       });
+    });
+  });
+  describe("printing and voiding", () => {
+    const printed: string[] = [];
+    let printSpy: ReturnType<typeof spyOn> | undefined;
+
+    const spyOnPrint = (impl: () => Promise<void> = () => Promise.resolve()): void => {
+      printed.length = 0;
+      printSpy = spyOn(pdfHtmlTemplate, "printConsentHtml").mockImplementation(
+        async ({html}: {html: string}) => {
+          printed.push(html);
+          return impl();
+        }
+      );
+    };
+
+    afterEach(() => {
+      printSpy?.mockRestore();
+      printSpy = undefined;
+    });
+
+    const press = async (getByTestId: (id: string) => unknown, id: string): Promise<void> => {
+      await act(async () => {
+        fireEvent.press(getByTestId(id) as never);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+    };
+
+    it("offers print on provisional, signed, and declined rows, and void on provisional only", () => {
+      const {api} = buildApi({data: rows});
+      const {getByTestId, queryByTestId} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} userId="member-1" />
+      );
+      expect(queryByTestId("provisional-consent-print-form-pending")).toBeNull();
+      expect(getByTestId("provisional-consent-print-form-provisional")).toBeTruthy();
+      expect(getByTestId("provisional-consent-print-form-signed")).toBeTruthy();
+      expect(getByTestId("provisional-consent-print-form-declined")).toBeTruthy();
+      expect(getByTestId("provisional-consent-void-form-provisional")).toBeTruthy();
+      expect(queryByTestId("provisional-consent-void-form-signed")).toBeNull();
+      expect(queryByTestId("provisional-consent-void-form-declined")).toBeNull();
+    });
+
+    it("prints a provisional row with the form content and the provisional block with the note", async () => {
+      spyOnPrint();
+      const {api} = buildApi({data: rows});
+      const {getByTestId} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} userId="member-1" />
+      );
+
+      await press(getByTestId, "provisional-consent-print-form-provisional");
+
+      expect(printed).toHaveLength(1);
+      expect(printed[0]).toContain("# Treatment");
+      expect(printed[0]).toContain("<h2>Provisional signature</h2>");
+      expect(printed[0]).toContain("Dana Rivera");
+      expect(printed[0]).toContain("Guardian agreed by phone");
+    });
+
+    it("prints a signed row without a provisional block", async () => {
+      spyOnPrint();
+      const {api} = buildApi({data: rows});
+      const {getByTestId} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} userId="member-1" />
+      );
+
+      await press(getByTestId, "provisional-consent-print-form-signed");
+
+      expect(printed).toHaveLength(1);
+      expect(printed[0]).toContain("# Privacy");
+      expect(printed[0]).toContain(`Signed by user on ${formatted(respondedAt)}`);
+      expect(printed[0]).not.toContain("Provisional signature");
+    });
+
+    it("keeps working when printing fails", async () => {
+      spyOnPrint(() => Promise.reject(new Error("printer offline")));
+      const {api} = buildApi({data: rows});
+      const {getByTestId} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} userId="member-1" />
+      );
+      await press(getByTestId, "provisional-consent-print-form-declined");
+      expect(printed).toHaveLength(1);
+      expect(getByTestId("provisional-consent-row-form-declined")).toBeTruthy();
+    });
+
+    it("prints the just-signed form from the success state", async () => {
+      spyOnPrint();
+      const response = {
+        _id: "response-9",
+        agreedAt: signedAt,
+        provisionalNote: "Guardian agreed by phone",
+        provisionalSignedBy: {_id: "staff-1", name: "Dana Rivera"},
+      };
+      const {api} = buildApi({data: [rows[0]]}, () => Promise.resolve({data: response}));
+      const {getByTestId} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} userId="member-1" />
+      );
+      await press(getByTestId, "provisional-consent-open-form-pending");
+      act(() => {
+        fireEvent.changeText(
+          getByTestId("provisional-consent-note-input"),
+          "Guardian agreed by phone"
+        );
+      });
+      await press(getByTestId, "provisional-consent-submit-button");
+      await waitFor(() => {
+        expect(getByTestId("provisional-consent-success")).toBeTruthy();
+      });
+
+      await press(getByTestId, "provisional-consent-success-print");
+
+      expect(printed).toHaveLength(1);
+      expect(printed[0]).toContain("# Telehealth");
+      expect(printed[0]).toContain("<h2>Provisional signature</h2>");
+      expect(printed[0]).toContain("Guardian agreed by phone");
+      expect(printed[0]).toContain("response-9");
+    });
+
+    it("voids with a required reason and refetches", async () => {
+      const {api, refetch, voidedArgs} = buildApi({data: rows});
+      const {getByTestId} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} userId="member-1" />
+      );
+
+      await press(getByTestId, "provisional-consent-void-form-provisional");
+      await waitFor(() => {
+        expect(getByTestId("provisional-consent-void-reason-input")).toBeTruthy();
+      });
+      const confirm = (): {props: {accessibilityState?: {disabled?: boolean}}} =>
+        getByTestId("provisional-consent-void-modal.primary") as never;
+      expect(confirm().props.accessibilityState?.disabled).toBe(true);
+
+      act(() => {
+        fireEvent.changeText(
+          getByTestId("provisional-consent-void-reason-input"),
+          " Wrong member "
+        );
+      });
+      expect(confirm().props.accessibilityState?.disabled).toBe(false);
+      await press(getByTestId, "provisional-consent-void-modal.primary");
+
+      await waitFor(() => {
+        expect(voidedArgs).toEqual([{reason: "Wrong member", responseId: "response-1"}]);
+      });
+      await waitFor(() => {
+        expect(refetch).toHaveBeenCalled();
+      });
+    });
+
+    it("shows a void error in the dialog and calls onError", async () => {
+      const failure = {data: {title: "Provisional signature is already voided"}, status: 400};
+      const onError = mock(() => {});
+      const {api, refetch} = buildApi({data: rows}, undefined, () => Promise.reject(failure));
+      const {getByTestId, getByText} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} onError={onError} userId="member-1" />
+      );
+
+      await press(getByTestId, "provisional-consent-void-form-provisional");
+      await waitFor(() => {
+        expect(getByTestId("provisional-consent-void-reason-input")).toBeTruthy();
+      });
+      act(() => {
+        fireEvent.changeText(getByTestId("provisional-consent-void-reason-input"), "Wrong member");
+      });
+      await press(getByTestId, "provisional-consent-void-modal.primary");
+
+      await waitFor(() => {
+        expect(getByText("Provisional signature is already voided")).toBeTruthy();
+      });
+      expect(onError).toHaveBeenCalledWith(failure);
+      expect(refetch).not.toHaveBeenCalled();
     });
   });
 });

@@ -221,7 +221,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Verification: `bun test --only-failures admin-frontend/src/ConsentResponseViewer.test.tsx admin-frontend/src/ConsentHistory.test.tsx`
   - Skills: terreno:building-admin-interfaces, terreno:terreno-ui
 
-- [ ] **T11** — Print and void from ProvisionalConsentSigner
+- [x] **T11** — Print and void from ProvisionalConsentSigner
   - Depends on: T7, T8
   - Files: ui/src/useProvisionalConsent.ts, ui/src/useProvisionalConsent.test.ts, ui/src/ProvisionalConsentSigner.tsx, ui/src/ProvisionalConsentSigner.test.tsx
   - Criteria: `provisional`, `signed`, and `declined` rows, plus the success state, show `provisional-consent-print-{formId}`. It calls `printConsentHtml` with HTML from `buildConsentPdfHtml` containing the form content and, for provisional rows, the provisional block with the note. `provisional` rows show `provisional-consent-void-{formId}`, which asks for a reason in a `Modal`, POSTs `/void`, and refetches, so the row returns to `Pending`.
@@ -257,6 +257,10 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
 - The target user is loaded with `mongoose.model("User")`. `resolveConsentForms` receives that document.
 - The provisional signer does not tick checkboxes or draw a signature. The note is the only box (D3). Required checkboxes stay the user's to tick.
 - `ConsentNavigator` needs no change. It renders whatever `/consents/pending` returns, and T5 adds the notice inside `ConsentFormScreen`.
+- Build notes: `useProvisionalConsent` takes `{api, baseUrl?, userId}` (RORO), not
+  `(api, baseUrl)`. The success state's print button is `provisional-consent-success-print`,
+  so it never shares `provisional-consent-print-{formId}` with the refetched row. The admin
+  PDF template builders live in `admin-frontend/src/consentPdfTemplates.ts`.
 - The user's own decline still clears the gate, as today. A decline after a provisional sign makes the status `declined`, not signed.
 
 ## Open questions (recommendation assumed)

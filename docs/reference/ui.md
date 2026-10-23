@@ -1018,12 +1018,21 @@ the signer and time, and calls `onSigned`. A server error shows under the note a
 `onError`. The signer never ticks the form's checkboxes or draws a signature: those stay the
 user's.
 
+Provisional, signed, and declined rows have a "Print" button, and so does the confirmation
+after signing. It calls `printConsentHtml` with `buildConsentPdfHtml` HTML: the form content,
+its status, and, when there is a provisional signature, the "Provisional signature" block with
+the signer, date, and note. Provisional rows also have "Void". It opens a dialog that asks for
+a required reason, sends it to `POST /consent-responses/:id/void`, and refetches, so the row
+returns to "Pending". A void error shows in the dialog and calls `onError`.
+
 `useProvisionalConsent({api, baseUrl?, userId})` returns `{statuses, isLoading, error,
-refetch, sign, isSigning}`. `statuses` are `ProvisionalConsentStatusRow`s
+refetch, sign, isSigning, voidSignature, isVoiding}`. `statuses` are `ProvisionalConsentStatusRow`s
 (`{form, status, isConsented, respondedAt?, provisional?}`). `sign({consentFormId, note,
 locale?})` signs for the hook's `userId` and resolves to the `ConsentResponse`, or rejects
-with the RTK error. The hook injects `getConsentStatus` and `signConsentProvisionally` once
-per `(api, baseUrl)`. Signing invalidates the `ConsentStatus` and `PendingConsents` tags.
+with the RTK error. `voidSignature({responseId, reason})` voids a provisional signature the
+same way. The hook injects `getConsentStatus`, `signConsentProvisionally`, and
+`voidProvisionalConsent` once per `(api, baseUrl)`. Signing and voiding invalidate the
+`ConsentStatus` and `PendingConsents` tags.
 
 testIDs: `provisional-consent-signer`, `provisional-consent-loading`,
 `provisional-consent-error`, `provisional-consent-retry-button`, `provisional-consent-empty`,
@@ -1031,7 +1040,10 @@ testIDs: `provisional-consent-signer`, `provisional-consent-loading`,
 `provisional-consent-open-{formId}`, `provisional-consent-form-content`,
 `provisional-consent-note-input`, `provisional-consent-submit-button`,
 `provisional-consent-cancel-button`, `provisional-consent-submit-error`,
-`provisional-consent-success`.
+`provisional-consent-success`, `provisional-consent-success-print`,
+`provisional-consent-print-{formId}`, `provisional-consent-void-{formId}`,
+`provisional-consent-void-modal` (confirm button `provisional-consent-void-modal.primary`),
+`provisional-consent-void-reason-input`, `provisional-consent-void-error`.
 
 ### Consent printouts
 

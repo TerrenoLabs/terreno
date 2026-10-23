@@ -9,6 +9,8 @@ import {Card} from "./Card";
 import type {BadgeProps} from "./Common";
 import {Heading} from "./Heading";
 import {MarkdownView} from "./MarkdownView";
+import {Modal} from "./Modal";
+import {buildConsentPdfHtml, printConsentHtml} from "./pdfHtmlTemplate";
 import {Spinner} from "./Spinner";
 import {Text} from "./Text";
 import {TextField} from "./TextField";
@@ -39,6 +41,8 @@ interface SignedSummary {
   formTitle: string;
   signerName: string;
   signedAt: string;
+  /** The just-signed form as a provisional row, for printing before statuses refetch. */
+  row: ProvisionalConsentStatusRow;
 }
 
 const STATUS_BADGE: Record<ProvisionalConsentStatusRow["status"], BadgeProps["status"]> = {
@@ -91,6 +95,53 @@ const signerNameOf = (response: ProvisionalConsentResponse): string => {
 
 const CAN_SIGN_STATUSES = new Set<ProvisionalConsentStatusRow["status"]>(["pending", "declined"]);
 
+const contentFor = (
+  row: ProvisionalConsentStatusRow,
+  variables?: Record<string, string>
+): string => {
+  const locale = resolveConsentLocale(row.form, detectLocale());
+  return applyConsentVariables(
+    row.form.content[locale] ?? row.form.content[row.form.defaultLocale] ?? "",
+    variables
+  );
+};
+
+/** Printable HTML for a row: the form content, its status, and any provisional signature. */
+const rowPrintHtml = (
+  row: ProvisionalConsentStatusRow,
+  variables?: Record<string, string>
+): string => {
+  const signer = row.provisional?.signedBy;
+  return buildConsentPdfHtml({
+    contentSnapshot: contentFor(row, variables),
+    fields: [
+      {label: "Status:", value: provisionalConsentStatusLabel(row)},
+      {label: "Form Version:", value: String(row.form.version)},
+    ],
+    formTitle: row.form.title,
+    provisionalSignature: row.provisional
+      ? {
+          note: row.provisional.note,
+          signedAt: row.provisional.signedAt,
+          signedByName: signer?.name || signer?.email || "Staff",
+        }
+      : undefined,
+    responseId: row.provisional?.responseId,
+    title: "Consent Record",
+  });
+};
+
+const printRow = async (
+  row: ProvisionalConsentStatusRow,
+  variables?: Record<string, string>
+): Promise<void> => {
+  try {
+    await printConsentHtml({html: rowPrintHtml(row, variables)});
+  } catch (printError) {
+    console.warn("[ProvisionalConsentSigner] Printing failed", {printError});
+  }
+};
+
 const rowFormId = (row: ProvisionalConsentStatusRow): string => row.form.id ?? row.form._id ?? "";
 
 /**
@@ -105,15 +156,19 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
   onError,
   variables,
 }) => {
-  const {error, isLoading, isSigning, refetch, sign, statuses} = useProvisionalConsent({
-    api,
-    baseUrl,
-    userId,
-  });
+  const {error, isLoading, isSigning, isVoiding, refetch, sign, statuses, voidSignature} =
+    useProvisionalConsent({
+      api,
+      baseUrl,
+      userId,
+    });
   const [openFormId, setOpenFormId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [signed, setSigned] = useState<SignedSummary | null>(null);
+  const [voidRow, setVoidRow] = useState<ProvisionalConsentStatusRow | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidError, setVoidError] = useState<string | null>(null);
 
   const openRow = statuses.find((row) => rowFormId(row) === openFormId);
   const locale = openRow ? resolveConsentLocale(openRow.form, detectLocale()) : undefined;
@@ -138,11 +193,24 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
     setSubmitError(null);
     try {
       const response = await sign({consentFormId: rowFormId(openRow), locale, note: note.trim()});
+      const signerName = signerNameOf(response);
       setSigned({
         formId: rowFormId(openRow),
         formTitle: openRow.form.title,
+        row: {
+          form: openRow.form,
+          isConsented: true,
+          provisional: {
+            note: response.provisionalNote ?? note.trim(),
+            responseId: response._id,
+            signedAt: response.agreedAt,
+            signedBy: {id: "", name: signerName},
+          },
+          respondedAt: response.agreedAt,
+          status: "provisional",
+        },
         signedAt: response.agreedAt,
-        signerName: signerNameOf(response),
+        signerName,
       });
       setOpenFormId(null);
       setNote("");
@@ -153,6 +221,36 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
       onError?.(signError);
     }
   }, [isNoteBlank, locale, note, onError, onSigned, openRow, sign]);
+
+  const handleOpenVoid = useCallback((row: ProvisionalConsentStatusRow): void => {
+    setVoidRow(row);
+    setVoidReason("");
+    setVoidError(null);
+  }, []);
+
+  const handleCloseVoid = useCallback((): void => {
+    setVoidRow(null);
+    setVoidError(null);
+  }, []);
+
+  const handleVoid = useCallback(async (): Promise<void> => {
+    const responseId = voidRow?.provisional?.responseId;
+    if (!responseId || voidReason.trim().length === 0) {
+      return;
+    }
+    setVoidError(null);
+    try {
+      await voidSignature({reason: voidReason.trim(), responseId});
+    } catch (voidFailure) {
+      console.warn("[ProvisionalConsentSigner] Voiding failed", {voidFailure});
+      setVoidError(errorMessage(voidFailure, "Could not void the signature."));
+      onError?.(voidFailure);
+      return;
+    }
+    setVoidRow(null);
+    setSigned(null);
+    await refetch();
+  }, [onError, refetch, voidReason, voidRow, voidSignature]);
 
   if (isLoading) {
     return (
@@ -182,11 +280,8 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
     );
   }
 
-  if (openRow && locale) {
-    const content = applyConsentVariables(
-      openRow.form.content[locale] ?? openRow.form.content[openRow.form.defaultLocale] ?? "",
-      variables
-    );
+  if (openRow) {
+    const content = contentFor(openRow, variables);
     return (
       <Box gap={3} testID="provisional-consent-signer">
         <Heading size="md">{openRow.form.title}</Heading>
@@ -230,11 +325,22 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
     <Box gap={3} testID="provisional-consent-signer">
       {signed && (
         <Card testID="provisional-consent-success">
-          <Text>
-            {`${signed.formTitle} signed provisionally by ${signed.signerName}${onDate(
-              signed.signedAt
-            )}`}
-          </Text>
+          <Box gap={2}>
+            <Text>
+              {`${signed.formTitle} signed provisionally by ${signed.signerName}${onDate(
+                signed.signedAt
+              )}`}
+            </Text>
+            <Box alignSelf="start">
+              <Button
+                iconName="print"
+                onClick={() => printRow(signed.row, variables)}
+                testID="provisional-consent-success-print"
+                text="Print"
+                variant="outline"
+              />
+            </Box>
+          </Box>
         </Card>
       )}
       {statuses.length === 0 && (
@@ -255,20 +361,71 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
                   value={provisionalConsentStatusLabel(row)}
                 />
               </Box>
-              {CAN_SIGN_STATUSES.has(row.status) && (
-                <Box alignSelf="start">
+              <Box direction="row" gap={2} wrap>
+                {CAN_SIGN_STATUSES.has(row.status) && (
                   <Button
                     onClick={() => handleOpen(formId)}
                     testID={`provisional-consent-open-${formId}`}
                     text="Sign on behalf"
                     variant="outline"
                   />
-                </Box>
-              )}
+                )}
+                {row.status !== "pending" && (
+                  <Button
+                    iconName="print"
+                    onClick={() => printRow(row, variables)}
+                    testID={`provisional-consent-print-${formId}`}
+                    text="Print"
+                    variant="outline"
+                  />
+                )}
+                {row.status === "provisional" && (
+                  <Button
+                    onClick={() => handleOpenVoid(row)}
+                    testID={`provisional-consent-void-${formId}`}
+                    text="Void"
+                    variant="destructive"
+                  />
+                )}
+              </Box>
             </Box>
           </Card>
         );
       })}
+      <Modal
+        onDismiss={handleCloseVoid}
+        primaryButtonDisabled={voidReason.trim().length === 0 || isVoiding}
+        primaryButtonOnClick={handleVoid}
+        primaryButtonText="Void signature"
+        secondaryButtonOnClick={handleCloseVoid}
+        secondaryButtonText="Cancel"
+        size="md"
+        testID="provisional-consent-void-modal"
+        text={
+          voidRow
+            ? `The provisional signature on ${voidRow.form.title} will no longer count as consent. The record is kept.`
+            : undefined
+        }
+        title="Void provisional signature"
+        visible={Boolean(voidRow)}
+      >
+        <Box gap={2}>
+          <TextField
+            helperText="Required. Why this signature was made in error."
+            multiline
+            onChange={setVoidReason}
+            rows={3}
+            testID="provisional-consent-void-reason-input"
+            title="Reason"
+            value={voidReason}
+          />
+          {Boolean(voidError) && (
+            <Text color="error" testID="provisional-consent-void-error">
+              {voidError}
+            </Text>
+          )}
+        </Box>
+      </Modal>
     </Box>
   );
 };

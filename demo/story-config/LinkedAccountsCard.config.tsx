@@ -12,8 +12,25 @@ import {
 const renderLinkedAccountsCardDemo = (): ReactElement => <LinkedAccountsCardDemo />;
 
 export const LinkedAccountsCardConfiguration: DemoConfiguration = {
-  usageExample:
-    'import {LinkedAccountsCard} from "@terreno/ui";\n\n<LinkedAccountsCard accounts={accounts} providers={[{id: "google"}, {id: "github"}]} onLink={(providerId) => authClient.linkSocial({provider: providerId, callbackURL})} onUnlink={(_providerId, account) => authClient.unlinkAccount({accountId: account.id})} />',
+  usageExample: `import {LinkedAccountsCard} from "@terreno/ui";
+
+// The Better Auth client resolves {data, error} rather than throwing; throw so the card shows it.
+<LinkedAccountsCard
+  accounts={accounts}
+  providers={[{id: "google"}, {id: "github"}]}
+  onLink={async (providerId) => {
+    const {error} = await authClient.linkSocial({provider: providerId, callbackURL});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't link that account.");
+    }
+  }}
+  onUnlink={async (_providerId, account) => {
+    const {error} = await authClient.unlinkAccount({accountId: account.id});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't unlink that account.");
+    }
+  }}
+/>`,
   name: "LinkedAccountsCard",
   component: LinkedAccountsCard,
   related: ["PasswordCard", "SocialLoginButton", "LoginScreen"],

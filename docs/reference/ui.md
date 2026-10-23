@@ -12,7 +12,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
 - AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts), `BlocksView` (a whole-reply YAML document)
 - Authentication: `SocialLoginButton`, `LoginScreen`, `TwoFactorChallengeScreen`, `SignUpScreen`
-- Account security: `LinkedAccountsCard`, `PasswordCard`
+- Account security: `LinkedAccountsCard`, `PasswordCard`, `PasskeysCard`, `SessionsCard`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
 
@@ -996,14 +996,19 @@ Branded social login buttons for OAuth authentication with Google, GitHub, and A
 import {SocialLoginButton} from "@terreno/ui";
 import {authClient} from "@/store/authClient";
 
+// The Better Auth client resolves {data, error} rather than throwing, and SocialLoginButton only
+// logs a rejected onPress, so show the error yourself.
 <SocialLoginButton
   provider="google"  // "google" | "github" | "apple"
   variant="primary"  // "primary" | "outline"
   onPress={async () => {
-    await authClient.signIn.social({
+    const {error} = await authClient.signIn.social({
       provider: "google",
       callbackURL: "yourapp://auth/callback",
     });
+    if (error) {
+      setError(error.message ?? "Couldn't sign in with Google.");
+    }
   }}
   loading={isLoading}
   fullWidth
@@ -1027,13 +1032,23 @@ itself. Without the optional props below it renders the plain email/password for
 ``````typescript
 import {LoginScreen} from "@terreno/ui";
 
+// The Better Auth client resolves {data, error} rather than throwing, and LoginScreen does not
+// catch a rejected onSubmit, so put the error in state and pass it as `error`.
+// signInWithSocial and the other handlers below are app helpers that do the same.
+const [error, setError] = useState<string | undefined>(undefined);
+
 <LoginScreen
+  error={error}
   fields={[
     {name: "email", label: "Email", type: "email", required: true},
     {name: "password", label: "Password", type: "password", required: true},
   ]}
-  onSubmit={async ({email, password}) => {
-    await authClient.signIn.email({email, password});
+  onSubmit={async ({email = "", password = ""}) => {
+    setError(undefined);
+    const {error: signInError} = await authClient.signIn.email({email, password});
+    if (signInError) {
+      setError(signInError.message ?? "Couldn't sign in.");
+    }
   }}
   oauthProviders={[
     {provider: "google", onPress: () => signInWithSocial("google")},
@@ -1140,15 +1155,22 @@ an auth client itself.
 ``````typescript
 import {TwoFactorChallengeScreen} from "@terreno/ui";
 
+// The Better Auth client resolves {data, error} rather than throwing; show its error through the
+// `error` prop (a rejected onSubmit only clears the code).
+const [error, setError] = useState<string | undefined>(undefined);
+
 <TwoFactorChallengeScreen
   error={error}                    // e.g. "That code didn't work"; a new error clears the code
   loading={isVerifying}
   onCancel={() => router.replace("/login")}
   onSubmit={async ({code, kind, trustDevice}) => {
-    if (kind === "totp") {
-      await authClient.twoFactor.verifyTotp({code, trustDevice});
-    } else {
-      await authClient.twoFactor.verifyBackupCode({code, trustDevice});
+    setError(undefined);
+    const result =
+      kind === "totp"
+        ? await authClient.twoFactor.verifyTotp({code, trustDevice})
+        : await authClient.twoFactor.verifyBackupCode({code, trustDevice});
+    if (result.error) {
+      setError(result.error.message ?? "That code didn't work.");
     }
   }}
   trustDeviceDays={30}
@@ -1192,17 +1214,37 @@ Complete signup screen with email/password and optional social providers.
 import {SignUpScreen} from "@terreno/ui";
 import {authClient} from "@/store/authClient";
 
+// The Better Auth client resolves {data, error} rather than throwing, and SignUpScreen does not
+// catch a rejected onSubmit, so put the error in state and pass it as `error`.
+const [error, setError] = useState<string | undefined>(undefined);
+
+const signUpWithGoogle = async (): Promise<void> => {
+  setError(undefined);
+  const {error: socialError} = await authClient.signIn.social({
+    provider: "google",
+    callbackURL: "yourapp://auth",
+  });
+  if (socialError) {
+    setError(socialError.message ?? "Couldn't sign up with Google.");
+  }
+};
+
 <SignUpScreen
-  onEmailSignUp={async ({email, password, name}) => {
-    await authClient.signUp.email({email, password, name});
+  error={error}
+  fields={[
+    {name: "name", label: "Name", required: true},
+    {name: "email", label: "Email", type: "email", required: true},
+    {name: "password", label: "Password", type: "password", required: true},
+  ]}
+  onSubmit={async ({name = "", email = "", password = ""}) => {
+    setError(undefined);
+    const {error: signUpError} = await authClient.signUp.email({email, password, name});
+    if (signUpError) {
+      setError(signUpError.message ?? "Couldn't create your account.");
+    }
   }}
-  onSocialLogin={async (provider) => {
-    await authClient.signIn.social({provider, callbackURL: "yourapp://auth"});
-  }}
-  socialProviders={["google", "github"]}
-  onSignIn={() => navigation.navigate("Login")}
-  requireName
-  requireTermsAcceptance
+  oauthProviders={[{provider: "google", onPress: signUpWithGoogle}]}
+  onLoginPress={() => router.push("/login")}
 />
 ``````
 
@@ -1218,14 +1260,35 @@ Better Auth's responses, but they are not a one-to-one copy: `listAccounts()` re
 info call) when it wants one shown. Dates may be `Date` objects (the Better Auth client parses
 them) or ISO 8601 strings; Luxon formats both.
 
+**Callbacks must throw to show an error.** Each card catches a rejected callback and shows its
+message as a `role="alert"` card error. The Better Auth client does not reject on failure: its
+calls resolve `{data, error}`. Unwrap every call, as the examples below do:
+
+``````typescript
+const {error} = await authClient.unlinkAccount({accountId: account.id});
+if (error) {
+  throw new Error(error.message ?? "Couldn't unlink that account.");
+}
+``````
+
 Shared types (exported from the package root):
 
 | Type | Shape |
 | --- | --- |
 | `LinkedAccount` | `{id, providerId, accountId?, email?, linkedAt?}`. `id` is Better Auth's own account row id, the value `unlinkAccount({accountId})` takes; `accountId` is the id at the provider (display only). A password is an account with `providerId: "credential"` (`CREDENTIAL_PROVIDER_ID`). `linkedAt` (`string \| Date`) is Better Auth's `createdAt`. |
 | `LinkableProvider` | `{id, label?, iconName?}`. Branded ids (`google`, `github`, `apple`) get their brand name and icon; other ids show `label` (or the id) with a key icon. |
+| `AccountPasskey` | `{id, name?, authenticatorName?, createdAt?, lastUsedAt?, backedUp?}`. A subset of `@better-auth/passkey`'s `Passkey`, so `authClient.passkey.listUserPasskeys()` items pass as is. `authenticatorName` labels an unnamed passkey; a connected screen can fill it with `getAuthenticatorName(aaguid)` from `@better-auth/passkey` (ui does not depend on it). Better Auth stores no last-used time; pass `lastUsedAt` only when the app records one. |
+| `AccountSession` | `{id, token?, userAgent?, ipAddress?, location?, createdAt?, updatedAt?, expiresAt?}`. A subset of Better Auth's session, so `listSessions()` items pass as is. `location` is for a place name the app looks up; Better Auth has none. `updatedAt` moves only once per `session.updateAge` (a day by default), so the card labels it "Last refreshed", not "Last active". |
 
 `hasPasswordCredential(accounts)` returns whether the user has a password.
+`parseUserAgent(userAgent)` returns `{browser?, os?, deviceType}` (`deviceType` is `desktop`,
+`mobile`, `tablet` or `unknown`) for common browsers and for the HTTP clients React Native apps
+send (`CFNetwork`/`Darwin` reads as "App" on iOS, `okhttp` as "App" on Android). Two limits
+of user agent sniffing: iPadOS Safari asks for desktop sites by default and reports itself as
+`Macintosh`, so it reads as Safari on macOS; and a macOS native app also sends
+`CFNetwork`/`Darwin`, so it reads as an iOS app.
+`describeUserAgent(userAgent)` turns that into "Chrome on macOS", whichever part is known, or
+"Unknown device". Neither adds a dependency.
 
 ### LinkedAccountsCard
 
@@ -1242,8 +1305,18 @@ import {LinkedAccountsCard} from "@terreno/ui";
   accounts={accounts}                      // every account, including "credential"
   providers={[{id: "google"}, {id: "github"}, {id: "mock-oidc", label: "Company SSO"}]}
   otherMethodCount={passkeys.length}       // passkeys count as sign-in methods
-  onLink={(providerId) => authClient.linkSocial({provider: providerId, callbackURL})}
-  onUnlink={(_providerId, account) => authClient.unlinkAccount({accountId: account.id})}
+  onLink={async (providerId) => {
+    const {error} = await authClient.linkSocial({provider: providerId, callbackURL});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't link that account.");
+    }
+  }}
+  onUnlink={async (_providerId, account) => {
+    const {error} = await authClient.unlinkAccount({accountId: account.id});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't unlink that account.");
+    }
+  }}
 />
 ``````
 
@@ -1299,7 +1372,14 @@ import {hasPasswordCredential, PasswordCard} from "@terreno/ui";
   hasPassword={hasPasswordCredential(accounts)}
   onSubmit={async ({mode, currentPassword, newPassword, revokeOtherSessions}) => {
     if (mode === "change") {
-      await authClient.changePassword({currentPassword, newPassword, revokeOtherSessions});
+      const {error} = await authClient.changePassword({
+        currentPassword: currentPassword ?? "",
+        newPassword,
+        revokeOtherSessions,
+      });
+      if (error) {
+        throw new Error(error.message ?? "Couldn't change your password.");
+      }
     } else {
       await setPassword({newPassword});      // Better Auth's setPassword is server-only
     }
@@ -1336,6 +1416,134 @@ and save correctly; the sign-out control is a `role="checkbox"` that toggles wit
 | Submit | `password-card-submit` |
 | Validation summary | `password-card-validation-error` |
 | Error / success | `password-card-error`, `password-card-success` |
+
+### PasskeysCard
+
+Lists the user's passkeys, each with its name (else `authenticatorName`, else "Unnamed passkey"), the date it
+was added, the date it was last used (when given), and a "Synced" badge when `backedUp` is true.
+Add, Rename and Remove each open a dialog. A device that can't create passkeys gets an
+explanation instead of the Add button.
+
+``````typescript
+import {PasskeysCard} from "@terreno/ui";
+
+<PasskeysCard
+  passkeys={passkeys}                      // authClient.passkey.listUserPasskeys() data
+  supported={typeof window !== "undefined" && "PublicKeyCredential" in window}
+  onAdd={async (name) => {
+    const {error} = await authClient.passkey.addPasskey({name});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't add a passkey.");
+    }
+  }}
+  onRename={async (id, name) => {
+    const {error} = await authClient.passkey.updatePasskey({id, name});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't rename that passkey.");
+    }
+  }}
+  onRemove={async (passkey) => {
+    const {error} = await authClient.passkey.deletePasskey({id: passkey.id});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't remove that passkey.");
+    }
+  }}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `passkeys` | `AccountPasskey[]` | One row per passkey, keyed by `id`. An empty list shows "You haven't added a passkey yet." |
+| `onAdd` | `(name?) => void \| Promise<void>` | Add opens a dialog with an optional name field; Continue calls `onAdd` with the trimmed name, or `undefined` when blank. The Add button shows a spinner and every row is disabled until the promise settles. A rejection (for example, the user cancelling the browser prompt) shows its message as the card error. |
+| `onRename` | `(id, name) => void \| Promise<void>` | Rename opens a dialog with the current name; Save is disabled while the name is blank or unchanged and calls `onRename` with the trimmed name. Same pending and error handling. |
+| `onRemove` | `(passkey) => void \| Promise<void>` | Remove opens a confirm `Modal`; the callback runs only after the user confirms. The row's Remove shows a spinner. |
+| `supported` | `boolean` | `false` hides Add and explains that this device or browser can't create passkeys. Existing passkeys can still be renamed and removed. Defaults to `true`. |
+| `error` | `string` | Card error with `role="alert"`; overrides a rejection message. |
+| `disabled` | `boolean` | Disables every button, for example while passkeys load. |
+| `title` / `description` | `string` | Heading (default "Passkeys") and the text under it. |
+
+A button whose callback is not passed is not rendered.
+
+Accessibility: Rename and Remove are named after their passkey ("Rename passkey Work laptop",
+"Remove passkey Work laptop"); dialog inputs are named "Passkey name"; errors are `role="alert"`.
+
+**Test IDs** (with the default `testID="passkeys-card"`; `{id}` is the passkey id):
+
+| Element | testID |
+| --- | --- |
+| Card root / heading | `passkeys-card`, `passkeys-card-title` |
+| Row / name / dates / synced badge | `passkeys-card-row-{id}`, `-name-{id}`, `-status-{id}`, `-synced-{id}` |
+| Rename / Remove buttons | `passkeys-card-rename-{id}`, `passkeys-card-remove-{id}` |
+| Add button | `passkeys-card-add` |
+| Empty state / unsupported explanation | `passkeys-card-empty`, `passkeys-card-unsupported` |
+| Add dialog, name input, Continue, Cancel | `passkeys-card-add-dialog`, `-add-dialog-name`, `-add-dialog-submit`, `-add-dialog-cancel` |
+| Rename dialog, name input, Save, Cancel | `passkeys-card-rename-dialog`, `-rename-dialog-name`, `-rename-dialog-submit`, `-rename-dialog-cancel` |
+| Remove confirm, confirm, cancel | `passkeys-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
+| Error | `passkeys-card-error` |
+
+### SessionsCard
+
+Lists the user's signed-in sessions. Each row shows the browser and OS parsed from the session's
+user agent ("Safari on iOS") with a desktop, phone or tablet icon, the location and IP address
+when known, "Signed in 3 days ago" from `createdAt`, and "Last refreshed 2 hours ago" from
+`updatedAt` (Luxon `toRelative`; anything under a minute old or in the future reads "just now").
+Better Auth refreshes `updatedAt` only once per `session.updateAge` (a day by default), so it is
+not shown as a live "last active" time. The current session is listed first, marked "This
+device", reads "Active now", and has no Sign out button: sign the current device out with the
+app's own sign-out action. The rest follow, most recently refreshed first. Without `now`, the card
+recomputes relative times every minute.
+
+``````typescript
+import {SessionsCard} from "@terreno/ui";
+
+<SessionsCard
+  sessions={sessions}                      // authClient.listSessions() data
+  currentSessionId={session.data?.session.id}
+  onRevoke={async (revoked) => {
+    if (!revoked.token) {
+      throw new Error("This session can't be signed out.");
+    }
+    const {error} = await authClient.revokeSession({token: revoked.token});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't sign out that session.");
+    }
+  }}
+  onRevokeOthers={async () => {
+    const {error} = await authClient.revokeOtherSessions();
+    if (error) {
+      throw new Error(error.message ?? "Couldn't sign out your other sessions.");
+    }
+  }}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `sessions` | `AccountSession[]` | One row per session, keyed by `id`. |
+| `currentSessionId` / `currentSessionToken` | `string` | Identify the current session by `id` or by `token`; either match marks the row. |
+| `onRevoke` | `(session) => void \| Promise<void>` | Sign out on every non-current row. No confirm. The row shows a spinner and every other button is disabled until the promise settles; a rejection's message shows as the card error. |
+| `onRevokeOthers` | `() => void \| Promise<void>` | "Sign out everywhere else" opens a confirm `Modal` that names how many sessions it ends; the callback runs after the user confirms. Disabled, with "You're not signed in anywhere else.", when no other session exists. |
+| `now` | `Date` | The time relative times are measured from. When omitted, the card uses the current time and recomputes it every 60 seconds (the interval is cleared on unmount or when `now` is passed); pass it in tests and screenshots. |
+| `error` | `string` | Card error with `role="alert"`; overrides a rejection message. |
+| `disabled` | `boolean` | Disables every button, for example while sessions load. |
+| `title` / `description` | `string` | Heading (default "Where you're signed in") and the text under it. |
+
+Accessibility: each Sign out button names its session and when it signed in ("Sign out Safari
+on iOS, signed in 3 days ago"), so two sessions on the same browser stay distinguishable; "This device" is visible text; errors are `role="alert"`.
+
+**Test IDs** (with the default `testID="sessions-card"`; `{id}` is the session id):
+
+| Element | testID |
+| --- | --- |
+| Card root / heading | `sessions-card`, `sessions-card-title` |
+| Row / device name / location and IP | `sessions-card-row-{id}`, `-name-{id}`, `-details-{id}` |
+| "Signed in" / "Active now" or "Last refreshed" | `sessions-card-signed-in-{id}`, `sessions-card-activity-{id}` |
+| "This device" badge | `sessions-card-current-{id}` |
+| Sign out (one session) | `sessions-card-revoke-{id}` |
+| Sign out everywhere else | `sessions-card-revoke-others` |
+| Confirm, confirm, cancel | `sessions-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
+| No other sessions / empty | `sessions-card-no-others`, `sessions-card-empty` |
+| Error | `sessions-card-error` |
 
 ## Testing Utilities
 

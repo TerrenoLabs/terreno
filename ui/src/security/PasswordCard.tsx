@@ -59,7 +59,15 @@ const MODE_COPY: Record<
  *   hasPassword={accounts.some((account) => account.providerId === "credential")}
  *   onSubmit={async ({mode, currentPassword, newPassword, revokeOtherSessions}) => {
  *     if (mode === "change") {
- *       await authClient.changePassword({currentPassword, newPassword, revokeOtherSessions});
+ *       // The Better Auth client resolves {data, error} rather than throwing.
+ *       const {error} = await authClient.changePassword({
+ *         currentPassword: currentPassword ?? "",
+ *         newPassword,
+ *         revokeOtherSessions,
+ *       });
+ *       if (error) {
+ *         throw new Error(error.message ?? "Couldn't change your password.");
+ *       }
  *     } else {
  *       await setPassword({newPassword}); // a server route: Better Auth's setPassword is server-only
  *     }

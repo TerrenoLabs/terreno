@@ -589,7 +589,7 @@ Open risks:
     set/change variants.
   - Skills: terreno-ui, accessibility-testing
 
-- [ ] **T15** — PasskeysCard and SessionsCard
+- [x] **T15** — PasskeysCard and SessionsCard
   - Depends on: none
   - Files: ui/src/security/PasskeysCard.tsx, ui/src/security/PasskeysCard.test.tsx, ui/src/security/SessionsCard.tsx, ui/src/security/SessionsCard.test.tsx, demo/stories/PasskeysCard.stories.tsx, demo/story-config/PasskeysCard.config.tsx, demo/stories/SessionsCard.stories.tsx, demo/story-config/SessionsCard.config.tsx
   - Build:

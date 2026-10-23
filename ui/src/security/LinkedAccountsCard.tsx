@@ -96,8 +96,19 @@ const describeLinkedAccount = (account: LinkedAccount): string => {
  *   accounts={accounts}               // listAccounts() entries as LinkedAccount ({id, providerId, linkedAt: createdAt})
  *   providers={[{id: "google"}, {id: "github"}]}
  *   otherMethodCount={passkeys.length}
- *   onLink={(providerId) => authClient.linkSocial({provider: providerId, callbackURL})}
- *   onUnlink={(_providerId, account) => authClient.unlinkAccount({accountId: account.id})}
+ *   onLink={async (providerId) => {
+ *     const {error} = await authClient.linkSocial({provider: providerId, callbackURL});
+ *     if (error) {
+ *       throw new Error(error.message ?? "Couldn't link that account.");
+ *     }
+ *   }}
+ *   onUnlink={async (_providerId, account) => {
+ *     // The Better Auth client resolves {data, error} rather than throwing.
+ *     const {error} = await authClient.unlinkAccount({accountId: account.id});
+ *     if (error) {
+ *       throw new Error(error.message ?? "Couldn't unlink that account.");
+ *     }
+ *   }}
  * />
  * ```
  */

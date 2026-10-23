@@ -66,6 +66,7 @@ import {OfflineBannerConfiguration} from "@story-config/OfflineBanner.config";
 import {OtpFieldConfiguration} from "@story-config/OtpField.config";
 import {PageConfiguration} from "@story-config/Page.config";
 import {PaginationConfiguration} from "@story-config/Pagination.config";
+import {PasskeysCardConfiguration} from "@story-config/PasskeysCard.config";
 import {PasswordCardConfiguration} from "@story-config/PasswordCard.config";
 import {PasswordFieldConfiguration} from "@story-config/PasswordField.config";
 import {PasswordRequirementsConfiguration} from "@story-config/PasswordRequirements.config";
@@ -78,6 +79,7 @@ import {SectionDividerConfiguration} from "@story-config/SectionDivider.config";
 import {SegmentedControlConfiguration} from "@story-config/SegmentedControl.config";
 import {SelectBadgeConfiguration} from "@story-config/SelectBadge.config";
 import {SelectFieldConfiguration} from "@story-config/SelectField.config";
+import {SessionsCardConfiguration} from "@story-config/SessionsCard.config";
 import {
   SidebarNavigationConfiguration,
   SidebarNavigationExpoRouterConfiguration,
@@ -359,6 +361,7 @@ const Config: DemoConfigurationBase[] = [
   OpenAPIContextConfiguration,
   PageConfiguration,
   PaginationConfiguration,
+  PasskeysCardConfiguration,
   PasswordCardConfiguration,
   PasswordFieldConfiguration,
   PasswordRequirementsConfiguration,
@@ -371,6 +374,7 @@ const Config: DemoConfigurationBase[] = [
   SegmentedControlConfiguration,
   SelectBadgeConfiguration,
   SelectFieldConfiguration,
+  SessionsCardConfiguration,
   SidebarNavigationConfiguration,
   SidebarNavigationExpoRouterConfiguration,
   SideDrawerConfiguration,

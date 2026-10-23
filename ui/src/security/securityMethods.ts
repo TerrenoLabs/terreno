@@ -43,19 +43,44 @@ export const getProviderDisplay = ({
   return {iconName: "key", iconType: "solid", label};
 };
 
+/** Parses a `Date` or ISO string with Luxon, or undefined when missing or invalid. */
+const toSecurityDateTime = (value?: string | Date): DateTime | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  const date = value instanceof Date ? DateTime.fromJSDate(value) : DateTime.fromISO(value);
+  return date.isValid ? date : undefined;
+};
+
 /**
  * Formats a `Date` or ISO string as a short local date ("Mar 3, 2026"), or undefined when missing
  * or invalid.
  */
 export const formatSecurityDate = (value?: string | Date): string | undefined => {
-  if (!value) {
+  return toSecurityDateTime(value)?.toLocaleString(DateTime.DATE_MED);
+};
+
+/**
+ * Formats a `Date` or ISO string relative to `now` ("5 minutes ago"), or undefined when missing or
+ * invalid. Anything under a minute old, or in the future (clock skew between client and server),
+ * reads "just now". Pass `now` to make the output deterministic.
+ */
+export const formatRelativeSecurityTime = ({
+  value,
+  now,
+}: {
+  value?: string | Date;
+  now?: Date;
+}): string | undefined => {
+  const date = toSecurityDateTime(value);
+  if (!date) {
     return undefined;
   }
-  const date = value instanceof Date ? DateTime.fromJSDate(value) : DateTime.fromISO(value);
-  if (!date.isValid) {
-    return undefined;
+  const base = now ? DateTime.fromJSDate(now) : DateTime.now();
+  if (base.diff(date, "seconds").seconds < 60) {
+    return "just now";
   }
-  return date.toLocaleString(DateTime.DATE_MED);
+  return date.toRelative({base}) ?? undefined;
 };
 
 /** The message of a rejected callback, or a fallback for non-Error rejections. */

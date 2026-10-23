@@ -2,6 +2,7 @@ import {describe, expect, it} from "bun:test";
 import {DateTime} from "luxon";
 
 import {
+  formatRelativeSecurityTime,
   formatSecurityDate,
   getProviderDisplay,
   getRejectionMessage,
@@ -57,5 +58,34 @@ describe("securityMethods", () => {
     );
     expect(getRejectionMessage({error: "string", fallback: "Fallback"})).toBe("Fallback");
     expect(getRejectionMessage({error: {message: 3}, fallback: "Fallback"})).toBe("Fallback");
+  });
+
+  it("formatRelativeSecurityTime is relative to the injected now", () => {
+    const now = new Date("2026-03-03T12:00:00.000Z");
+    const base = DateTime.fromJSDate(now);
+    const fiveMinutesAgo = "2026-03-03T11:55:00.000Z";
+    expect(formatRelativeSecurityTime({now, value: fiveMinutesAgo})).toBe(
+      DateTime.fromISO(fiveMinutesAgo).toRelative({base}) ?? ""
+    );
+    const twoDaysAgo = new Date("2026-03-01T12:00:00.000Z");
+    expect(formatRelativeSecurityTime({now, value: twoDaysAgo})).toBe(
+      DateTime.fromJSDate(twoDaysAgo).toRelative({base}) ?? ""
+    );
+  });
+
+  it("formatRelativeSecurityTime says just now within a minute and for future times", () => {
+    const now = new Date("2026-03-03T12:00:00.000Z");
+    expect(formatRelativeSecurityTime({now, value: "2026-03-03T11:59:30.000Z"})).toBe("just now");
+    expect(formatRelativeSecurityTime({now, value: "2026-03-03T12:05:00.000Z"})).toBe("just now");
+  });
+
+  it("formatRelativeSecurityTime returns undefined for a missing or invalid value", () => {
+    expect(formatRelativeSecurityTime({value: undefined})).toBeUndefined();
+    expect(formatRelativeSecurityTime({value: "not-a-date"})).toBeUndefined();
+  });
+
+  it("formatRelativeSecurityTime defaults now to the current time", () => {
+    const value = DateTime.now().minus({hours: 3});
+    expect(formatRelativeSecurityTime({value: value.toJSDate()})).toBe(value.toRelative() ?? "");
   });
 });

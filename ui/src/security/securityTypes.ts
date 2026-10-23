@@ -55,7 +55,8 @@ export interface LinkedAccountsCardProps {
   onLink?: (providerId: string) => void | Promise<void>;
   /**
    * Called after the user confirms Unlink, with the row's account. Pass `account.id` to Better
-   * Auth's `unlinkAccount({accountId})`. The row shows a spinner until the returned promise
+   * Auth's `unlinkAccount({accountId})`, and throw when it resolves an `error` (the client
+   * resolves `{data, error}` instead of rejecting). The row shows a spinner until the returned promise
    * settles. A rejection shows its message as the card error.
    */
   onUnlink?: (providerId: string, account: LinkedAccount) => void | Promise<void>;
@@ -140,6 +141,163 @@ export interface PasswordCardProps {
   /**
    * Root testID; child testIDs are derived from it.
    * @default "password-card"
+   */
+  testID?: string;
+}
+
+/**
+ * A passkey registered to the user. The shape is a subset of `@better-auth/passkey`'s `Passkey`,
+ * so `authClient.passkey.listUserPasskeys()` data can be passed as is.
+ */
+export interface AccountPasskey {
+  /** Better Auth's passkey id: what `deletePasskey({id})` and `updatePasskey({id, name})` take. */
+  id: string;
+  /** The user's label for the passkey. Takes precedence over `authenticatorName`. */
+  name?: string;
+  /**
+   * A fallback label for an unnamed passkey, such as the authenticator model a connected screen
+   * looks up with `getAuthenticatorName(aaguid)` from `@better-auth/passkey` ("iCloud Keychain").
+   * With neither `name` nor this, the row shows "Unnamed passkey".
+   */
+  authenticatorName?: string;
+  /** When the passkey was added, as a `Date` (the Better Auth client parses dates) or ISO string. */
+  createdAt?: string | Date;
+  /**
+   * When the passkey was last used to sign in. Better Auth does not store this; pass it when the
+   * app tracks it.
+   */
+  lastUsedAt?: string | Date;
+  /** Whether the credential is backed up (synced) by its provider, such as iCloud Keychain. */
+  backedUp?: boolean;
+}
+
+/**
+ * Props for the PasskeysCard component.
+ */
+export interface PasskeysCardProps {
+  /** The user's passkeys, one row each, keyed by `id`. */
+  passkeys: AccountPasskey[];
+  /**
+   * Called when the user confirms the Add dialog, with the name they typed (trimmed), or
+   * undefined when they left it blank. Pass it to `authClient.passkey.addPasskey({name})`. The
+   * Add button shows a spinner until the returned promise settles. A rejection (for example, the
+   * user cancelling the browser prompt) shows its message as the card error. The Better Auth
+   * client resolves `{data, error}` instead of rejecting, so throw when `error` is set; the same
+   * applies to every callback below.
+   */
+  onAdd?: (name?: string) => void | Promise<void>;
+  /**
+   * Called when the user saves a new name in the Rename dialog, with the trimmed name. Pass it to
+   * `authClient.passkey.updatePasskey({id, name})`. Same spinner and error handling as `onAdd`.
+   */
+  onRename?: (id: string, name: string) => void | Promise<void>;
+  /**
+   * Called after the user confirms Remove, with the row's passkey. Pass `passkey.id` to
+   * `authClient.passkey.deletePasskey({id})`. Same spinner and error handling as `onAdd`.
+   */
+  onRemove?: (passkey: AccountPasskey) => void | Promise<void>;
+  /**
+   * Whether this device and browser can create passkeys (for example, WebAuthn is available).
+   * False hides Add and explains why; existing passkeys can still be renamed and removed.
+   * @default true
+   */
+  supported?: boolean;
+  /** Error text shown with `role="alert"`; overrides a rejection message. */
+  error?: string;
+  /** Disables every button, for example while passkeys load. */
+  disabled?: boolean;
+  /**
+   * Heading text.
+   * @default "Passkeys"
+   */
+  title?: string;
+  /**
+   * Text under the heading.
+   * @default "Sign in with your fingerprint, face, or screen lock instead of a password."
+   */
+  description?: string;
+  /**
+   * Root testID; child testIDs are derived from it.
+   * @default "passkeys-card"
+   */
+  testID?: string;
+}
+
+/**
+ * A signed-in session. The shape is a subset of Better Auth's session, so `listSessions()` data
+ * can be passed as is.
+ */
+export interface AccountSession {
+  /** Better Auth's session id. Keys the row. */
+  id: string;
+  /** The session token: what `revokeSession({token})` takes. */
+  token?: string;
+  /** The user agent that created the session. The row shows the browser and OS parsed from it. */
+  userAgent?: string | null;
+  /** The IP address that created the session. */
+  ipAddress?: string | null;
+  /** A place name for the session ("Denver, US"), when the app looks one up. */
+  location?: string;
+  /** When the session signed in, as a `Date` or ISO string: the row's "Signed in" time. */
+  createdAt?: string | Date;
+  /**
+   * When the session was last refreshed: the row's "Last refreshed" time. Better Auth moves it
+   * only once per `session.updateAge` (a day by default), so it is not a live activity time.
+   */
+  updatedAt?: string | Date;
+  /** When the session expires. */
+  expiresAt?: string | Date;
+}
+
+/**
+ * Props for the SessionsCard component.
+ */
+export interface SessionsCardProps {
+  /** The user's active sessions, one row each, keyed by `id`. The current session is listed first. */
+  sessions: AccountSession[];
+  /**
+   * The current session's id (`useSession().data.session.id`). The matching row is marked "This
+   * device" and cannot be revoked on its own. Pass this or `currentSessionToken`.
+   */
+  currentSessionId?: string;
+  /** The current session's token, matched against each session's `token`. */
+  currentSessionToken?: string;
+  /**
+   * Called when the user signs out another session, with that session. Pass `session.token` to
+   * `authClient.revokeSession({token})` and throw when it resolves an `error` (the Better Auth
+   * client resolves `{data, error}` instead of rejecting). Not offered for the current session. The row shows a
+   * spinner until the returned promise settles; a rejection shows its message as the card error.
+   */
+  onRevoke?: (session: AccountSession) => void | Promise<void>;
+  /**
+   * Called after the user confirms "Sign out everywhere else". Call
+   * `authClient.revokeOtherSessions()` and throw when it resolves an `error`. Disabled when there
+   * are no other sessions.
+   */
+  onRevokeOthers?: () => void | Promise<void>;
+  /**
+   * The time relative times ("Signed in 5 minutes ago") are measured from. When omitted, the card
+   * uses the current time and recomputes it every minute; pass it to make the output
+   * deterministic (tests, screenshots).
+   */
+  now?: Date;
+  /** Error text shown with `role="alert"`; overrides a rejection message. */
+  error?: string;
+  /** Disables every button, for example while sessions load. */
+  disabled?: boolean;
+  /**
+   * Heading text.
+   * @default "Where you're signed in"
+   */
+  title?: string;
+  /**
+   * Text under the heading.
+   * @default "Sign out of any device you don't recognize."
+   */
+  description?: string;
+  /**
+   * Root testID; child testIDs are derived from it.
+   * @default "sessions-card"
    */
   testID?: string;
 }

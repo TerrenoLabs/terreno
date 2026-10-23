@@ -152,16 +152,24 @@ export * from "./Spinner";
 export * from "./SplitPage";
 export * from "./SyncStatusBanner";
 export * from "./security/LinkedAccountsCard";
+export * from "./security/PasskeysCard";
 export * from "./security/PasswordCard";
+export * from "./security/SessionsCard";
 export {CREDENTIAL_PROVIDER_ID, hasPasswordCredential} from "./security/securityMethods";
 export type {
+  AccountPasskey,
+  AccountSession,
   LinkableProvider,
   LinkedAccount,
   LinkedAccountsCardProps,
+  PasskeysCardProps,
   PasswordCardMode,
   PasswordCardProps,
   PasswordCardSubmission,
+  SessionsCardProps,
 } from "./security/securityTypes";
+export type {ParsedUserAgent, UserAgentDeviceType} from "./security/userAgent";
+export {describeUserAgent, parseUserAgent} from "./security/userAgent";
 export {OAuthButtons} from "./signUp/OAuthButtons";
 export {PasswordRequirements} from "./signUp/PasswordRequirements";
 export {

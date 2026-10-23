@@ -111,6 +111,23 @@ describe("Cloud Run preview readiness", (): void => {
     assert.notInclude(previewBranch.slice(0, previewBranch.indexOf("else")), "GCS_FOLDER_PREFIX");
   });
 
+  it("turns on the OAuth handoff for the bearer web build on prod and previews", (): void => {
+    // The shared env_vars line feeds both the prod and the pr-* deploy.
+    const sharedEnv = deployScript.match(/^ {2}env_vars="NODE_ENV=production,.*$/m)?.[0] ?? "";
+    assert.include(sharedEnv, "BETTER_AUTH_OAUTH_HANDOFF=true");
+    assert.include(sharedEnv, "CROSS_DOMAIN_AUTH_COOKIES=true");
+    // The handoff's web origins come from CORS_ORIGINS: the Netlify site for each environment.
+    assert.include(deployScript, "CORS_ORIGINS=https://terreno-frontend.netlify.app");
+    assert.include(
+      deployScript,
+      "CORS_ORIGINS=https://pr-${PR_NUMBER}--terreno-frontend.netlify.app"
+    );
+    // The mock OIDC provider signs in anyone it names; no deploy may configure it.
+    for (const config of [deployScript, cdWorkflow, setupConfig, continueConfig]) {
+      assert.notInclude(config, "MOCK_OIDC");
+    }
+  });
+
   it("keeps CPU allocated and gates the preview deployment on health", (): void => {
     assert.match(
       deployScript,

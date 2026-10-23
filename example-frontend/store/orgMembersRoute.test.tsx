@@ -3,40 +3,44 @@ import {assert} from "chai";
 import React from "react";
 import {renderToString} from "react-dom/server";
 
+// Bun's mock.module replaces a module for every file in this process, and suites run in
+// different orders under coverage. Each stub below spreads the module it replaces and overrides
+// only what this test needs, so sibling suites keep every export (documents.test.tsx needs
+// generateConsentHistoryPdf, and calls mockImplementation on useLocalSearchParams).
+const realAdminFrontend = await import("@terreno/admin-frontend");
+const preloadExpoRouter = await import("expo-router");
+
 const capturedMembersProps: {
   current?: {api?: unknown; organizationId?: string; routeBase?: string};
 } = {};
-const mockTerrenoApi = {reducerPath: "example-frontend-members-test-api"};
 const searchParamsState: {orgId?: string} = {orgId: "org-42"};
+const useLocalSearchParams = mock((): {orgId?: string} => searchParamsState);
 
 mock.module("@terreno/admin-frontend", () => ({
+  ...realAdminFrontend,
   OrgMembersScreen: (props: {api?: unknown; organizationId?: string; routeBase?: string}) => {
     capturedMembersProps.current = props;
     return null;
   },
 }));
 mock.module("expo-router", () => ({
-  useLocalSearchParams: () => searchParamsState,
-  // Include useRouter so this incomplete mock does not break sibling suites that
-  // import {useRouter} from "expo-router" under Bun's process-global mock.module.
-  useRouter: () => ({back: (): void => {}, push: (): void => {}}),
-}));
-mock.module("@/store/sdk", () => ({
-  terrenoApi: mockTerrenoApi,
-  // Sibling suites import named RTK hooks from this module under Bun's
-  // process-global mock.module; keep stubs so those exports stay resolvable.
-  usePostNotificationsDevNotifyMutation: () => [async (): Promise<void> => {}, {isLoading: false}],
+  ...preloadExpoRouter,
+  useLocalSearchParams,
 }));
 
 let OrgMembersRoute: React.FC;
+let terrenoApi: unknown;
 
 describe("OrgMembersRoute", () => {
   beforeAll(async () => {
     ({default: OrgMembersRoute} = await import("../app/admin/orgs/[orgId]/members"));
+    // The real SDK (as the package preload provides it), not a stub that would leak.
+    ({terrenoApi} = await import("@/store/sdk"));
   });
 
   beforeEach(() => {
     searchParamsState.orgId = "org-42";
+    useLocalSearchParams.mockImplementation(() => searchParamsState);
     capturedMembersProps.current = undefined;
   });
 
@@ -51,7 +55,7 @@ describe("OrgMembersRoute", () => {
   it("wires OrgMembersScreen with terrenoApi, organizationId, and routeBase", () => {
     renderToString(<OrgMembersRoute />);
 
-    assert.equal(capturedMembersProps.current?.api, mockTerrenoApi);
+    assert.equal(capturedMembersProps.current?.api, terrenoApi);
     assert.equal(capturedMembersProps.current?.organizationId, "org-42");
     assert.equal(capturedMembersProps.current?.routeBase, "/admin");
   });

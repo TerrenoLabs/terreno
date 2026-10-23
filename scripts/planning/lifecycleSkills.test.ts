@@ -124,7 +124,7 @@ describe("lifecycle skill architecture", (): void => {
       content: readStage("terreno-5-taste")
         .replaceAll("## Standalone entry", "## Exit")
         .replaceAll("Never hand a wait back to the human", "Tell the human to run Taste later")
-        .replaceAll("at most 3 fix pushes", "any number of fix pushes"),
+        .replaceAll("at most 3 fix rounds", "any number of fix rounds"),
       definition: {
         directory: "terreno-5-taste",
         nextMarkers: ["next: taste", "next: null"],
@@ -134,7 +134,24 @@ describe("lifecycle skill architecture", (): void => {
 
     assert.isTrue(errors.some((error) => error.includes("standalone entry for direct human")));
     assert.isTrue(errors.some((error) => error.includes("must not return PENDING to a human")));
-    assert.isTrue(errors.some((error) => error.includes("bounded by pushes and wait time")));
+    assert.isTrue(errors.some((error) => error.includes("bounded by fix rounds and wait time")));
+  });
+
+  it("rejects Taste that leaves a red PR or bot comments behind", (): void => {
+    const errors = validateStageContent({
+      content: readStage("terreno-5-taste")
+        .replaceAll("push-ownership.md", "nothing.md")
+        .replaceAll("still red after", "probably fine after")
+        .replaceAll("unanswered bot thread", "bot thread"),
+      definition: {
+        directory: "terreno-5-taste",
+        nextMarkers: ["next: taste", "next: null"],
+        stage: "taste",
+      },
+    });
+
+    assert.isTrue(errors.some((error) => error.includes("stays red after its fix rounds")));
+    assert.isTrue(errors.some((error) => error.includes("unanswered review-bot thread")));
   });
 
   it("rejects Taste without a no-push emit path", (): void => {

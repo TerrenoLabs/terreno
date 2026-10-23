@@ -78,6 +78,10 @@ const AUTH_EXACT = new Set([
   "/auth/github",
   "/auth/github/callback",
   "/auth/github/failure",
+  "/oauth/register",
+  "/oauth/authorize",
+  "/oauth/token",
+  "/oauth/revoke",
 ]);
 
 const AUTH_PREFIXES = ["/auth/github/"];
@@ -94,6 +98,8 @@ const betterAuthAuthPrefixes = (basePath: string): string[] => {
     `${base}/send-verification-email`,
     `${base}/verify-email`,
     `${base}/callback`,
+    `${base}/oauth-handoff`,
+    `${base}/one-time-token`,
   ];
 };
 

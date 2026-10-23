@@ -5,7 +5,7 @@ import mongoose from "mongoose";
 import {asyncHandler, type OpenApiMiddleware} from "../api";
 import {authenticateMiddleware, type User} from "../auth";
 import {BadRequestError, NotFoundError, UnauthorizedError} from "../errors";
-import {McpServiceToken} from "../models/mcpServiceToken";
+import {MCP_SERVICE_TOKEN_PREFIX, McpServiceToken} from "../models/mcpServiceToken";
 import {createOpenApiBuilder} from "../openApiBuilder";
 import type {McpServiceTokenDocument} from "../types/mcpServiceToken";
 
@@ -51,7 +51,7 @@ const bearerFromRequest = (req: Request): string | undefined => {
 
 const rejectMcpServiceTokenBearer = (req: Request, _res: Response, next: NextFunction): void => {
   const token = bearerFromRequest(req);
-  if (token?.startsWith("mcp_")) {
+  if (token?.startsWith(MCP_SERVICE_TOKEN_PREFIX)) {
     next(new UnauthorizedError("MCP service tokens cannot manage service tokens"));
     return;
   }

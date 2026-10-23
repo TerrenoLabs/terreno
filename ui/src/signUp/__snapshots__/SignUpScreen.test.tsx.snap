@@ -660,7 +660,7 @@ exports[`SignUpScreen renders correctly with all props 1`] = `
                                           ],
                                           "props": {
                                             "style": {
-                                              "color": "#092E3A",
+                                              "color": "#FFFFFF",
                                               "fontSize": 16,
                                               "fontWeight": "700",
                                             },
@@ -683,7 +683,7 @@ exports[`SignUpScreen renders correctly with all props 1`] = `
                                           "$$typeof": Symbol(react.test.json),
                                           "children": null,
                                           "props": {
-                                            "color": "#092E3A",
+                                            "color": "#FFFFFF",
                                             "size": "small",
                                           },
                                           "type": "ActivityIndicator",

@@ -1,4 +1,5 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
+import type {AuthProvider} from "@terreno/syncdb";
 
 import type {QueuedMutation} from "../offlineSlice";
 
@@ -19,6 +20,18 @@ mock.module("../constants", () => ({
   baseUrl: "http://localhost:4000",
   LOGOUT_ACTION_TYPE: "auth/logout",
 }));
+// Stand-in for the built-in JWT token source, which rtk uses when no source is registered. Its
+// delegation to getAuthToken is tested in emptyApi.staggered.isolated.ts and tokenSource.test.ts.
+const fakeJwtTokenSource: AuthProvider = {
+  getToken: async (): Promise<string | null> => authToken,
+  getUserId: async (): Promise<string | null> => "jwt-source-user",
+  onAuthChange: (): (() => void) => (): void => {},
+};
+mock.module("../emptyApi", () => ({
+  isJwtTokenSource: (source: AuthProvider | undefined): boolean =>
+    !source || source === fakeJwtTokenSource,
+  jwtTokenSource: fakeJwtTokenSource,
+}));
 
 const {configureStore} = await import("@reduxjs/toolkit");
 const {createApi, fetchBaseQuery} = await import("@reduxjs/toolkit/query");
@@ -34,6 +47,8 @@ const {
   setOnlineStatus,
   setSyncing,
 } = await import("../offlineSlice");
+const {setTokenSource} = await import("../tokenSource");
+const {selectLastUserId} = await import("../offlineSlice");
 
 interface TodoRecord {
   _id?: string;
@@ -937,3 +952,892 @@ describe("offline middleware helpers", () => {
 });
 
 const baseUrlForTest = "http://localhost:4000";
+
+interface FakeTokenSource extends AuthProvider {
+  authListenerCount: () => number;
+  emitAuthChange: () => void;
+  token: string | null;
+  userId: string | null;
+}
+
+const makeTokenSource = ({
+  token,
+  userId,
+}: {
+  token: string | null;
+  userId: string | null;
+}): FakeTokenSource => {
+  const listeners = new Set<() => void>();
+  const source: FakeTokenSource = {
+    authListenerCount: (): number => listeners.size,
+    emitAuthChange: (): void => {
+      for (const listener of listeners) {
+        listener();
+      }
+    },
+    getToken: mock(async (): Promise<string | null> => source.token),
+    getUserId: mock(async (): Promise<string | null> => source.userId),
+    onAuthChange: (callback: () => void): (() => void) => {
+      listeners.add(callback);
+      return (): void => {
+        listeners.delete(callback);
+      };
+    },
+    token,
+    userId,
+  };
+  return source;
+};
+
+// A Better Auth app has no `auth` slice: the store holds only the API and offline reducers.
+const createSourceStore = (tokenSource?: AuthProvider) => {
+  const offline = createOfflineMiddleware({
+    api: api as unknown as Parameters<typeof createOfflineMiddleware>[0]["api"],
+    endpoints: ["postTodos", "patchTodosById", "deleteTodosById"],
+    tokenSource,
+  });
+
+  // Stands in for redux-persist: REHYDRATE replaces the offline slice with the persisted one.
+  const persistedOfflineReducer = (
+    state: ReturnType<typeof offline.offlineReducer> | undefined,
+    action: {type: string; payload?: {offline?: Partial<ReturnType<typeof offline.offlineReducer>>}}
+  ): ReturnType<typeof offline.offlineReducer> => {
+    const next = offline.offlineReducer(state, action);
+    if (action.type === "persist/REHYDRATE" && action.payload?.offline) {
+      return {...next, ...action.payload.offline};
+    }
+    return next;
+  };
+
+  return configureStore({
+    middleware: (getDefault) =>
+      getDefault({serializableCheck: false}).concat(api.middleware, offline.middleware),
+    reducer: {
+      [api.reducerPath]: api.reducer,
+      offline: persistedOfflineReducer,
+    },
+  });
+};
+
+type SourceStore = ReturnType<typeof createSourceStore>;
+
+const queueSourceMutation = (store: SourceStore, title: string): void => {
+  store.dispatch({
+    error: {message: "fetch failed"},
+    meta: {arg: {endpointName: "postTodos", originalArgs: {body: {title}}}},
+    payload: {error: "Network error", status: "FETCH_ERROR"},
+    type: "terreno-rtk/executeMutation/rejected",
+  });
+};
+
+// Any action primes the middleware's cached user id from the source.
+const primeSourceStore = async (store: SourceStore): Promise<void> => {
+  store.dispatch({type: "test/prime"});
+  await waitForEffects();
+};
+
+// Holds every getUserId() read (each returns the user id at call time) until open() is called;
+// reads made after that settle immediately.
+const gateUserIdReads = (source: FakeTokenSource): {open: () => void} => {
+  const pending: (() => void)[] = [];
+  let isOpen = false;
+  source.getUserId = mock((): Promise<string | null> => {
+    const userId = source.userId;
+    if (isOpen) {
+      return Promise.resolve(userId);
+    }
+    return new Promise((resolve) => {
+      pending.push(() => resolve(userId));
+    });
+  });
+  return {
+    open: (): void => {
+      isOpen = true;
+      for (const release of pending.splice(0)) {
+        release();
+      }
+    },
+  };
+};
+
+const rehydrateOffline = (
+  store: SourceStore,
+  offline: {isOnline: boolean; lastUserId?: string; queue?: QueuedMutation[]}
+): void => {
+  store.dispatch({
+    payload: {offline: {conflicts: [], isSyncing: false, queue: [], ...offline}},
+    type: "persist/REHYDRATE",
+  });
+};
+
+const replayedAuthorizations = (): (string | undefined)[] =>
+  mockFetch.mock.calls.map(
+    (call) =>
+      ((call as unknown[])[1] as RequestInit & {headers: Record<string, string>}).headers
+        .authorization
+  );
+
+const replayedTitles = (): unknown[] =>
+  mockFetch.mock.calls.map(
+    (call) => JSON.parse(((call as unknown[])[1] as RequestInit).body as string).title
+  );
+
+describe("createOfflineMiddleware with a token source", () => {
+  beforeEach(() => {
+    authToken = null;
+    setTokenSource(undefined);
+    mockFetch.mockReset();
+    mockFetch.mockImplementation(() => Promise.resolve(createResponse()));
+  });
+
+  afterEach(() => {
+    setTokenSource(undefined);
+  });
+
+  it("queues an offline mutation under the registered source's user and replays it with its token", async () => {
+    const store = createSourceStore();
+    const source = makeTokenSource({token: "ba-token", userId: "ba-user"});
+    setTokenSource(source);
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Offline create");
+
+    const queue = selectOfflineQueue(store.getState());
+    expect(queue).toHaveLength(1);
+    expect(queue[0].userId).toBe("ba-user");
+
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, options] = getFetchCall();
+    expect(url).toBe("http://localhost:4000/todos");
+    expect((options.headers as Record<string, string>).authorization).toBe("Bearer ba-token");
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("tags offline mutations with the last known user when the source cannot read it offline", async () => {
+    const source = makeTokenSource({token: "ba-token", userId: "ba-user"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    // A Better Auth session read fails while offline and degrades to null.
+    source.userId = null;
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Offline create");
+
+    expect(selectOfflineQueue(store.getState())[0].userId).toBe("ba-user");
+  });
+
+  it("does not replay another user's queued mutations after a user switch", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Written by A");
+
+    source.token = "b-token";
+    source.userId = "user-b";
+    source.emitAuthChange();
+    await waitForEffects();
+    queueSourceMutation(store, "Written by B");
+
+    expect(selectOfflineQueue(store.getState()).map((m) => m.userId)).toEqual(["user-a", "user-b"]);
+
+    await syncQueuedMutations(store);
+
+    expect(replayedTitles()).toEqual(["Written by B"]);
+    expect(replayedAuthorizations()).toEqual(["Bearer b-token"]);
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("replays without an authorization header when the source has no token", async () => {
+    const source = makeTokenSource({token: null, userId: "ba-user"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Offline create");
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(replayedAuthorizations()).toEqual([undefined]);
+  });
+
+  it("keeps the queue and replays nothing when the source has no user on reconnect", async () => {
+    const source = makeTokenSource({token: "ba-token", userId: "ba-user"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Offline create");
+    source.userId = null;
+    store.dispatch(setSyncing(true));
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(selectOfflineQueue(store.getState())).toHaveLength(1);
+    expect(selectIsSyncing(store.getState())).toBe(false);
+
+    // The same user signing back in replays it on the next reconnect.
+    source.userId = "ba-user";
+    store.dispatch(setOnlineStatus(false));
+    await syncQueuedMutations(store);
+
+    expect(replayedTitles()).toEqual(["Offline create"]);
+  });
+
+  it("prefers the tokenSource option over the registered source", async () => {
+    setTokenSource(makeTokenSource({token: "registered-token", userId: "registered-user"}));
+    const option = makeTokenSource({token: "option-token", userId: "option-user"});
+    const store = createSourceStore(option);
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Offline create");
+    expect(selectOfflineQueue(store.getState())[0].userId).toBe("option-user");
+
+    await syncQueuedMutations(store);
+
+    expect(replayedAuthorizations()).toEqual(["Bearer option-token"]);
+  });
+
+  it("keeps queue order while the first user id read is still in flight", async () => {
+    const source = makeTokenSource({token: "ba-token", userId: "ba-user"});
+    let releaseUserId: () => void = () => {};
+    const userIdGate = new Promise<void>((resolve) => {
+      releaseUserId = resolve;
+    });
+    source.getUserId = mock(async (): Promise<string | null> => {
+      await userIdGate;
+      return source.userId;
+    });
+    setTokenSource(source);
+    const store = createSourceStore();
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "First");
+    queueSourceMutation(store, "Second");
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+
+    releaseUserId();
+    await waitForEffects();
+    queueSourceMutation(store, "Third");
+
+    const queue = selectOfflineQueue(store.getState());
+    expect(queue.map((m) => (m.args as {body: {title: string}}).body.title)).toEqual([
+      "First",
+      "Second",
+      "Third",
+    ]);
+    expect(queue.every((m) => m.userId === "ba-user")).toBe(true);
+  });
+
+  it("includes mutations still waiting for a user id in a reconnect replay", async () => {
+    const source = makeTokenSource({token: "ba-token", userId: "ba-user"});
+    let releaseUserId: () => void = () => {};
+    const userIdGate = new Promise<void>((resolve) => {
+      releaseUserId = resolve;
+    });
+    source.getUserId = mock(async (): Promise<string | null> => {
+      await userIdGate;
+      return source.userId;
+    });
+    setTokenSource(source);
+    const store = createSourceStore();
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Pending create");
+    store.dispatch(setOnlineStatus(true));
+    releaseUserId();
+    await waitForEffects(120);
+
+    expect(replayedTitles()).toEqual(["Pending create"]);
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("uses the newest user id when an auth change overtakes an earlier read", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    const releases: (() => void)[] = [];
+    source.getUserId = mock((): Promise<string | null> => {
+      const userId = source.userId;
+      return new Promise((resolve) => {
+        releases.push(() => resolve(userId));
+      });
+    });
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    source.userId = "user-b";
+    source.emitAuthChange();
+    // The newer read settles first; the stale read for user A must not overwrite it.
+    releases[1]();
+    await waitForEffects();
+    releases[0]();
+    await waitForEffects();
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Offline create");
+
+    expect(selectOfflineQueue(store.getState())[0].userId).toBe("user-b");
+  });
+
+  it("queues without a user and drops the mutation on reconnect when the user id read throws", async () => {
+    const source = makeTokenSource({token: "ba-token", userId: "ba-user"});
+    source.getUserId = mock(async (): Promise<string | null> => {
+      throw new Error("session read failed");
+    });
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Offline create");
+    expect(selectOfflineQueue(store.getState())[0].userId).toBeUndefined();
+
+    source.getUserId = mock(async (): Promise<string | null> => "ba-user");
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("drops mutations from an offline launch when no user id was ever persisted", async () => {
+    // A Better Auth session read fails while offline, so an app launched offline has no user yet.
+    const source = makeTokenSource({token: "ba-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Offline create");
+    source.userId = "ba-user";
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("does not replay with a new user's token when the user switches during the reconnect read", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    const releases: (() => void)[] = [];
+    source.getUserId = mock((): Promise<string | null> => {
+      const userId = source.userId;
+      return new Promise((resolve) => {
+        releases.push(() => resolve(userId));
+      });
+    });
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    releases[0]();
+    await waitForEffects();
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Written by A");
+    store.dispatch(setOnlineStatus(true));
+    await waitForEffects();
+
+    source.token = "b-token";
+    source.userId = "user-b";
+    source.emitAuthChange();
+    // The reconnect read started for user A settles after the switch to user B.
+    releases[1]();
+    releases[2]();
+    await waitForEffects(120);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(selectOfflineQueue(store.getState()).map((m) => m.userId)).toEqual(["user-a"]);
+  });
+
+  it("stops a replay when the user switches partway through it", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "First by A");
+    queueSourceMutation(store, "Second by A");
+    mockFetch.mockImplementationOnce(() => {
+      source.token = "b-token";
+      source.userId = "user-b";
+      source.emitAuthChange();
+      return Promise.resolve(createResponse());
+    });
+
+    await syncQueuedMutations(store);
+
+    expect(replayedTitles()).toEqual(["First by A"]);
+    expect(replayedAuthorizations()).toEqual(["Bearer a-token"]);
+    expect(
+      selectOfflineQueue(store.getState()).map(
+        (m) => (m.args as {body: {title: string}}).body.title
+      )
+    ).toEqual(["Second by A"]);
+  });
+
+  it("tags no user on a mutation that fails while a user switch is being read", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    const releases: (() => void)[] = [];
+    source.getUserId = mock((): Promise<string | null> => {
+      const userId = source.userId;
+      return new Promise((resolve) => {
+        releases.push(() => resolve(userId));
+      });
+    });
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    releases[0]();
+    await waitForEffects();
+
+    source.token = "b-token";
+    source.userId = "user-b";
+    source.emitAuthChange();
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Failed during the switch");
+    releases[1]();
+    await waitForEffects();
+
+    expect(selectOfflineQueue(store.getState())[0].userId).toBeUndefined();
+  });
+
+  it("tags no user after a sign-out, even when a reconnect read overtakes the sign-out read", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    const releases: (() => void)[] = [];
+    source.getUserId = mock((): Promise<string | null> => {
+      const userId = source.userId;
+      return new Promise((resolve) => {
+        releases.push(() => resolve(userId));
+      });
+    });
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    releases[0]();
+    await waitForEffects();
+
+    source.token = null;
+    source.userId = null;
+    source.emitAuthChange();
+    store.dispatch(setOnlineStatus(false));
+    store.dispatch(setOnlineStatus(true));
+    await waitForEffects();
+    // The reconnect read (null) settles first; the superseded sign-out read is ignored.
+    releases[2]();
+    await waitForEffects();
+    releases[1]();
+    await waitForEffects();
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "After sign-out");
+
+    expect(selectOfflineQueue(store.getState())[0].userId).toBeUndefined();
+  });
+
+  it("tags mutations after an offline launch with the persisted user and replays them as that user", async () => {
+    // Offline, a Better Auth session read fails and the adapter reports no user.
+    const source = makeTokenSource({token: "a-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    rehydrateOffline(store, {isOnline: false, lastUserId: "user-a"});
+    await waitForEffects();
+
+    queueSourceMutation(store, "Offline launch create");
+    expect(selectOfflineQueue(store.getState())[0].userId).toBe("user-a");
+
+    source.userId = "user-a";
+    await syncQueuedMutations(store);
+
+    expect(replayedTitles()).toEqual(["Offline launch create"]);
+    expect(replayedAuthorizations()).toEqual(["Bearer a-token"]);
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("does not send an offline-launch mutation when another user is signed in on reconnect", async () => {
+    const source = makeTokenSource({token: "a-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    rehydrateOffline(store, {isOnline: false, lastUserId: "user-a"});
+    await waitForEffects();
+
+    queueSourceMutation(store, "Written by A");
+    source.token = "b-token";
+    source.userId = "user-b";
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+    expect(selectLastUserId(store.getState())).toBe("user-b");
+  });
+
+  it("clears the persisted user id on logout and on sign-out", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    expect(selectLastUserId(store.getState())).toBe("user-a");
+
+    store.dispatch({type: "auth/logout"});
+    expect(selectLastUserId(store.getState())).toBeUndefined();
+
+    store.dispatch(setOnlineStatus(false));
+    store.dispatch(setOnlineStatus(true));
+    await waitForEffects();
+    expect(selectLastUserId(store.getState())).toBe("user-a");
+
+    source.token = null;
+    source.userId = null;
+    source.emitAuthChange();
+    await waitForEffects();
+    expect(selectLastUserId(store.getState())).toBeUndefined();
+  });
+
+  it("tags no user when the user switches after a failure made before any user id was known", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    const gate = gateUserIdReads(source);
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Written by A");
+    source.token = "b-token";
+    source.userId = "user-b";
+    source.emitAuthChange();
+    gate.open();
+    await waitForEffects();
+
+    expect(selectOfflineQueue(store.getState()).map((m) => m.userId)).toEqual([undefined]);
+
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("tags no user when a sign-out and a new sign-in follow a failure before any user id was known", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    const gate = gateUserIdReads(source);
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Written by A");
+    source.token = null;
+    source.userId = null;
+    source.emitAuthChange();
+    source.token = "b-token";
+    source.userId = "user-b";
+    source.emitAuthChange();
+    gate.open();
+    await waitForEffects();
+
+    expect(selectOfflineQueue(store.getState()).map((m) => m.userId)).toEqual([undefined]);
+
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not queue a mutation still waiting on a user id read once the user logs out", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    const gate = gateUserIdReads(source);
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Written by A");
+    store.dispatch({type: "auth/logout"});
+    gate.open();
+    await waitForEffects();
+
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+
+    // A signing back in must not replay the write made before the logout.
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("stops a replay when the user logs out partway through it", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "First by A");
+    queueSourceMutation(store, "Second by A");
+    mockFetch.mockImplementationOnce(() => {
+      store.dispatch({type: "auth/logout"});
+      return Promise.resolve(createResponse());
+    });
+
+    await syncQueuedMutations(store);
+
+    expect(replayedTitles()).toEqual(["First by A"]);
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("never replays an offline-launch mutation tagged with a stale persisted user into that user's account", async () => {
+    // A is signed in, but the persisted id is B (a lost write); offline, reads report no user.
+    const source = makeTokenSource({token: "a-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    rehydrateOffline(store, {isOnline: false, lastUserId: "user-b"});
+    await waitForEffects();
+
+    queueSourceMutation(store, "By A");
+    expect(selectOfflineQueue(store.getState())[0]).toMatchObject({
+      userId: "user-b",
+      userIdConfirmed: false,
+    });
+
+    // A signs out, B signs in, and the device reconnects.
+    source.emitAuthChange();
+    await waitForEffects();
+    source.token = "b-token";
+    source.userId = "user-b";
+    source.emitAuthChange();
+    await waitForEffects();
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("confirms offline-launch mutations when the reconnect read matches their user with no auth change", async () => {
+    const source = makeTokenSource({token: "a-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    rehydrateOffline(store, {isOnline: false, lastUserId: "user-a"});
+    await waitForEffects();
+    queueSourceMutation(store, "Offline launch create");
+    expect(selectOfflineQueue(store.getState())[0].userIdConfirmed).toBe(false);
+
+    source.userId = "user-a";
+    await syncQueuedMutations(store);
+
+    expect(replayedTitles()).toEqual(["Offline launch create"]);
+    expect(replayedAuthorizations()).toEqual(["Bearer a-token"]);
+
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "After confirmation");
+    expect(selectOfflineQueue(store.getState())[0].userIdConfirmed).toBeUndefined();
+  });
+
+  it("drops offline-launch mutations when the reconnect read names another user", async () => {
+    const source = makeTokenSource({token: "a-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    rehydrateOffline(store, {isOnline: false, lastUserId: "user-b"});
+    await waitForEffects();
+    queueSourceMutation(store, "By A");
+
+    source.userId = "user-a";
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+    expect(selectLastUserId(store.getState())).toBe("user-a");
+  });
+
+  it("drops an unconfirmed mutation when a new sign-in's read settles before the sign-out's read", async () => {
+    // P7b: the persisted id is B while A is signed in; A writes offline.
+    const source = makeTokenSource({token: "a-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    rehydrateOffline(store, {isOnline: false, lastUserId: "user-b"});
+    await waitForEffects();
+    queueSourceMutation(store, "By A");
+
+    const releases: (() => void)[] = [];
+    source.getUserId = mock((): Promise<string | null> => {
+      const userId = source.userId;
+      return new Promise((resolve) => {
+        releases.push(() => resolve(userId));
+      });
+    });
+    // A signs out, then B signs in; B's read settles first, so the sign-out read is superseded.
+    source.emitAuthChange();
+    source.token = "b-token";
+    source.userId = "user-b";
+    source.emitAuthChange();
+    releases[1]();
+    await waitForEffects();
+    releases[0]();
+    await waitForEffects();
+
+    source.getUserId = mock(async (): Promise<string | null> => source.userId);
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("drops an unconfirmed mutation when the user switches directly to the persisted user", async () => {
+    // P7c: the persisted id is B while A is signed in; A writes offline, then B signs in directly.
+    const source = makeTokenSource({token: "a-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    rehydrateOffline(store, {isOnline: false, lastUserId: "user-b"});
+    await waitForEffects();
+    queueSourceMutation(store, "By A");
+
+    source.token = "b-token";
+    source.userId = "user-b";
+    source.emitAuthChange();
+    await waitForEffects();
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+  });
+
+  it("drops unconfirmed mutations on any auth change, even when the same user is reported", async () => {
+    const source = makeTokenSource({token: "a-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    rehydrateOffline(store, {isOnline: false, lastUserId: "user-a"});
+    await waitForEffects();
+    queueSourceMutation(store, "Unconfirmed by A");
+
+    source.userId = "user-a";
+    source.emitAuthChange();
+    await waitForEffects();
+    queueSourceMutation(store, "Confirmed by A");
+
+    expect(
+      selectOfflineQueue(store.getState()).map(
+        (m) => (m.args as {body: {title: string}}).body.title
+      )
+    ).toEqual(["Confirmed by A"]);
+  });
+
+  it("drops unconfirmed mutations when the token source is swapped", async () => {
+    const source = makeTokenSource({token: "a-token", userId: null});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    rehydrateOffline(store, {isOnline: false, lastUserId: "user-a"});
+    await waitForEffects();
+    queueSourceMutation(store, "Unconfirmed by A");
+    const consoleError = spyOn(console, "error");
+
+    try {
+      const nextSource = makeTokenSource({token: "a-token", userId: "user-a"});
+      setTokenSource(nextSource);
+      await primeSourceStore(store);
+
+      expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+      // The swap subscribes and reads once; it must not re-enter itself through its own dispatch.
+      expect(source.authListenerCount()).toBe(0);
+      expect(nextSource.authListenerCount()).toBe(1);
+      expect(nextSource.getUserId).toHaveBeenCalledTimes(1);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("clears the queue when the source reports a sign-out", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Written by A");
+
+    source.token = null;
+    source.userId = null;
+    source.emitAuthChange();
+    await waitForEffects();
+
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+
+    source.token = "a-token";
+    source.userId = "user-a";
+    source.emitAuthChange();
+    await syncQueuedMutations(store);
+
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("clears the queue on the Better Auth slice's logout action", async () => {
+    const source = makeTokenSource({token: "a-token", userId: "user-a"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    store.dispatch(setOnlineStatus(false));
+    queueSourceMutation(store, "Written by A");
+
+    store.dispatch({type: "betterAuth/logout"});
+
+    expect(selectOfflineQueue(store.getState())).toHaveLength(0);
+    expect(selectLastUserId(store.getState())).toBeUndefined();
+  });
+
+  it("stops listening to a source once the app goes back to the JWT path", async () => {
+    const source = makeTokenSource({token: "ba-token", userId: "ba-user"});
+    setTokenSource(source);
+    const store = createSourceStore();
+    await primeSourceStore(store);
+    expect(source.authListenerCount()).toBe(1);
+    expect(source.getUserId).toHaveBeenCalledTimes(1);
+    const consoleError = spyOn(console, "error");
+
+    try {
+      setTokenSource(undefined);
+      await primeSourceStore(store);
+
+      expect(source.authListenerCount()).toBe(0);
+      expect(source.getUserId).toHaveBeenCalledTimes(1);
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("leaves the JWT queue alone on the Better Auth slice's logout action", () => {
+    const store = createTestStore();
+    goOfflineAndQueue(store);
+
+    store.dispatch({type: "betterAuth/logout"});
+
+    expect(selectOfflineQueue(store.getState())).toHaveLength(1);
+  });
+
+  it("keeps the JWT path when the built-in JWT source is registered explicitly", async () => {
+    setTokenSource(fakeJwtTokenSource);
+    currentUserId = "test-user";
+    authToken = "jwt-token";
+    const store = createTestStore();
+
+    goOfflineAndQueue(store, {
+      endpointName: "postTodos",
+      originalArgs: {body: {title: "JWT create"}},
+    });
+    expect(selectOfflineQueue(store.getState())[0].userId).toBe("test-user");
+
+    await syncQueuedMutations(store);
+
+    expect(replayedAuthorizations()).toEqual(["Bearer jwt-token"]);
+  });
+});

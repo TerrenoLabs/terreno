@@ -18,19 +18,19 @@ const PreferenceProbe = (): ReactElement => {
 };
 
 describe("ThemePreferenceContext", () => {
-  it("defaults to follow-system outside the provider", async () => {
+  it("defaults to light outside the provider", async () => {
     let renderer: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       renderer = TestRenderer.create(React.createElement(PreferenceProbe));
     });
     assert.isDefined(renderer);
     const probe = renderer.root.findByType("PreferenceProbe");
-    assert.equal(probe.props.colorSchemeSetting, "system");
+    assert.equal(probe.props.colorSchemeSetting, "light");
     assert.isFalse(probe.props.isLoading);
     await act(async () => {
       probe.props.onSetDark();
     });
-    assert.equal(probe.props.colorSchemeSetting, "system");
+    assert.equal(probe.props.colorSchemeSetting, "light");
   });
 
   it("passes the stored scheme to TerrenoProvider", async () => {

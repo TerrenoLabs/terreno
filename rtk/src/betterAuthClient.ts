@@ -10,11 +10,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type {BetterAuthClientPlugin} from "better-auth/client";
 import {createAuthClient} from "better-auth/react";
 import * as SecureStore from "expo-secure-store";
-import type {BetterAuthClientConfig} from "./betterAuthTypes";
+import type {BetterAuthBearerStorage, BetterAuthClientConfig} from "./betterAuthTypes";
 import {IsWeb} from "./platform";
 
 // Re-export types for convenience
 export type {
+  BetterAuthBearerStorage,
   BetterAuthClientConfig,
   BetterAuthOAuthProvider,
   BetterAuthSession,
@@ -151,8 +152,165 @@ export const withCookieJarRepair = ({
   },
 });
 
+type BetterAuthFetchOptions = NonNullable<
+  NonNullable<Parameters<typeof createAuthClient>[0]>["fetchOptions"]
+>;
+type BetterAuthRequestHook = NonNullable<BetterAuthFetchOptions["onRequest"]>;
+type BetterAuthSuccessHook = NonNullable<BetterAuthFetchOptions["onSuccess"]>;
+
+// Signed-out fallback for environments with no usable localStorage (SSR, blocked storage).
+const NO_BEARER_STORAGE: BetterAuthBearerStorage = {
+  getItem: () => null,
+  removeItem: () => {},
+  setItem: () => {},
+};
+
+const resolveBearerStorage = (bearerStorage?: BetterAuthBearerStorage): BetterAuthBearerStorage => {
+  if (bearerStorage) {
+    return bearerStorage;
+  }
+  if (typeof window === "undefined") {
+    return NO_BEARER_STORAGE;
+  }
+  try {
+    // Reading `window.localStorage` throws when the browser blocks site storage.
+    return window.localStorage ?? NO_BEARER_STORAGE;
+  } catch {
+    return NO_BEARER_STORAGE;
+  }
+};
+
+const bearerTokenKey = (storagePrefix?: string): string => {
+  return `${storagePrefix ?? DEFAULT_STORAGE_PREFIX}_bearer_token`;
+};
+
+/**
+ * Reads the bearer token that `createBetterAuthClient({webAuth: "bearer"})` stored, without a
+ * network call. Pass the same `storagePrefix` and `bearerStorage` the client was created with.
+ * Returns `null` when signed out or when no storage is available.
+ *
+ * @example
+ * ```typescript
+ * const token = getBetterAuthBearerToken({storagePrefix: "myapp"});
+ * ```
+ */
+export const getBetterAuthBearerToken = ({
+  bearerStorage,
+  storagePrefix,
+}: {
+  bearerStorage?: BetterAuthBearerStorage;
+  storagePrefix?: string;
+} = {}): string | null => {
+  return resolveBearerStorage(bearerStorage).getItem(bearerTokenKey(storagePrefix));
+};
+
+const isAuthEndpoint = (url: string | URL, endpoint: string): boolean => {
+  return new URL(url.toString(), "http://localhost").pathname.endsWith(endpoint);
+};
+
+const sentBearerToken = (headers: Headers): string | null => {
+  const authorization = headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) {
+    return null;
+  }
+  return authorization.slice("Bearer ".length);
+};
+
+/**
+ * better-fetch options that authenticate every Better Auth call with a stored bearer token and
+ * no cookies. They are client-wide defaults: per-call hooks still run alongside them, but a
+ * per-call `auth` or `credentials` overrides them.
+ */
+const createWebBearerFetchOptions = ({
+  bearerStorage,
+  storagePrefix,
+}: {
+  bearerStorage?: BetterAuthBearerStorage;
+  storagePrefix?: string;
+}): BetterAuthFetchOptions => {
+  // Resolved per access so a client created before `window` exists (SSR) still finds storage.
+  const storage = (): BetterAuthBearerStorage => resolveBearerStorage(bearerStorage);
+  const tokenKey = bearerTokenKey(storagePrefix);
+  const readToken = (): string | null => storage().getItem(tokenKey);
+
+  // Counts sign-outs, so a token issued by a request that was in flight across one is dropped.
+  let signOutCount = 0;
+  const signOutCountAtRequest = new WeakMap<object, number>();
+
+  // Runs after the request headers are built and before fetch, so the sign-out request still
+  // carries the token for the server to revoke while the device forgets it whatever happens next.
+  const onRequest: BetterAuthRequestHook = (context) => {
+    if (isAuthEndpoint(context.url, "/sign-out")) {
+      signOutCount += 1;
+      storage().removeItem(tokenKey);
+    }
+    signOutCountAtRequest.set(context, signOutCount);
+  };
+
+  // Only 2xx responses reach onSuccess, so a failed or 5xx get-session never clears the token.
+  const onSuccess: BetterAuthSuccessHook = (context) => {
+    const issuedToken = context.response.headers.get("set-auth-token");
+    if (issuedToken) {
+      // better-fetch hands onSuccess the same context object that onRequest saw.
+      const countAtRequest = signOutCountAtRequest.get(context.request) ?? signOutCount;
+      if (countAtRequest === signOutCount) {
+        storage().setItem(tokenKey, issuedToken);
+      }
+      return;
+    }
+    if (!isAuthEndpoint(context.request.url, "/get-session")) {
+      return;
+    }
+    if ((context.data as {session?: unknown} | null)?.session) {
+      return;
+    }
+    // The server rejected the token this request sent. A token stored while it was in flight
+    // (a sign-in that finished first) is newer and must survive.
+    if (sentBearerToken(context.request.headers) === readToken()) {
+      storage().removeItem(tokenKey);
+    }
+  };
+
+  return {
+    auth: {token: (): string | undefined => readToken() ?? undefined, type: "Bearer"},
+    credentials: "omit",
+    onRequest,
+    onSuccess,
+  };
+};
+
+/** What the OAuth handoff needs to know about a client `createBetterAuthClient` made. */
+interface HandoffClientConfig {
+  /** Better Auth's base URL with its path, as the client resolved it, without a trailing slash. */
+  authBaseURL: string;
+  bearerStorage?: BetterAuthBearerStorage;
+  isWebBearer: boolean;
+  storagePrefix: string;
+}
+
+// Keyed by the client itself: Better Auth's client is a route proxy, so nothing can be added to
+// it, and bearer mode only exists on clients this factory made.
+const handoffClients = new WeakMap<object, HandoffClientConfig>();
+
+// Better Auth appends `/api/auth` to a baseURL that has no path of its own.
+const resolveAuthBaseURL = (baseURL: string): string => {
+  const trimmed = baseURL.replace(/\/+$/, "");
+  try {
+    if (new URL(baseURL).pathname.replace(/\/+$/, "") !== "") {
+      return trimmed;
+    }
+  } catch {
+    // Better Auth rejects such a baseURL itself when the client is created.
+  }
+  return `${trimmed}/api/auth`;
+};
+
 /**
  * Creates a Better Auth client configured for Expo/React Native.
+ *
+ * Pass `webAuth: "bearer"` when the web frontend and the API are on different sites: the web
+ * client then authenticates with a stored bearer token instead of cookies. Read that token
+ * elsewhere with `getBetterAuthBearerToken`.
  *
  * @example
  * ```typescript
@@ -190,13 +348,323 @@ export const createBetterAuthClient = (config: BetterAuthClientConfig) => {
     storagePrefix,
   }) as unknown as BetterAuthClientPlugin;
 
-  return createAuthClient({
+  // Native and cookie mode pass exactly the options they always have.
+  const isWebBearer = IsWeb && config.webAuth === "bearer";
+
+  const client = createAuthClient({
     baseURL: config.baseURL,
     plugins: [expoAuthPlugin],
+    ...(isWebBearer
+      ? {
+          fetchOptions: createWebBearerFetchOptions({
+            bearerStorage: config.bearerStorage,
+            storagePrefix,
+          }),
+        }
+      : {}),
   });
+  handoffClients.set(client, {
+    authBaseURL: resolveAuthBaseURL(config.baseURL),
+    bearerStorage: config.bearerStorage,
+    isWebBearer,
+    storagePrefix,
+  });
+  return client;
 };
 
 /**
  * Type of the Better Auth client returned by createBetterAuthClient.
  */
 export type BetterAuthClient = ReturnType<typeof createBetterAuthClient>;
+
+// URL parameters of the OAuth handoff: T12's server puts the one-time token in the fragment as
+// `ott`, and the sign-in's nonce comes back in the callback query as `handoff`.
+const HANDOFF_TOKEN_PARAM = "ott";
+const HANDOFF_NONCE_PARAM = "handoff";
+const HANDOFF_NONCE_BYTES = 32;
+
+const handoffNonceKey = (storagePrefix: string): string => {
+  return `${storagePrefix}_oauth_handoff_nonce`;
+};
+
+const NOT_WEB_BEARER_MESSAGE =
+  'signInSocialWithHandoff needs a web client from createBetterAuthClient({webAuth: "bearer"}). ' +
+  "Use authClient.signIn.social on native and in cookie mode.";
+
+const createHandoffNonce = (): string => {
+  // A crypto-random nonce only: a guessable one would let a planted token through.
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(HANDOFF_NONCE_BYTES));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+// Compares every character so the time taken does not depend on where the strings differ.
+const nonceMatches = (received: string, stored: string): boolean => {
+  if (received.length !== stored.length) {
+    return false;
+  }
+  let difference = 0;
+  for (let index = 0; index < received.length; index += 1) {
+    difference |= received.charCodeAt(index) ^ stored.charCodeAt(index);
+  }
+  return difference === 0;
+};
+
+const decodeParamPart = (part: string): string | null => {
+  try {
+    return decodeURIComponent(part.replace(/\+/g, " "));
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Splits a raw query or fragment (without its `?` or `#`) into the values of `name` and the
+ * other parts, kept byte-for-byte so stripping never re-encodes what the app put there.
+ */
+const takeParam = (raw: string, name: string): {kept: string[]; values: Array<string | null>} => {
+  const kept: string[] = [];
+  const values: Array<string | null> = [];
+  for (const part of raw.split("&")) {
+    if (part === "") {
+      continue;
+    }
+    const separator = part.indexOf("=");
+    const key = separator === -1 ? part : part.slice(0, separator);
+    if (decodeParamPart(key) !== name) {
+      kept.push(part);
+      continue;
+    }
+    values.push(separator === -1 ? "" : decodeParamPart(part.slice(separator + 1)));
+  }
+  return {kept, values};
+};
+
+const sessionStorageOrNull = (): BetterAuthBearerStorage | null => {
+  try {
+    return window.sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+};
+
+// Reads and removes the nonce in one step, so each sign-in's nonce is good for one return only.
+const takeStoredNonce = (storagePrefix: string): string | null => {
+  const storage = sessionStorageOrNull();
+  if (!storage) {
+    return null;
+  }
+  try {
+    const nonce = storage.getItem(handoffNonceKey(storagePrefix));
+    storage.removeItem(handoffNonceKey(storagePrefix));
+    return nonce;
+  } catch {
+    return null;
+  }
+};
+
+// Appends `handoff=<nonce>` to the query as written, so the app's own parameters reach the
+// return page byte-for-byte. Any `handoff` already there is replaced.
+const withHandoffNonce = (url: string, nonce: string): string => {
+  const parsed = new URL(url, window.location.href);
+  const {kept} = takeParam(parsed.search.slice(1), HANDOFF_NONCE_PARAM);
+  kept.push(`${HANDOFF_NONCE_PARAM}=${nonce}`);
+  return `${parsed.origin}${parsed.pathname}?${kept.join("&")}${parsed.hash}`;
+};
+
+/**
+ * Starts a social or generic OAuth sign-in for a web client in bearer mode. It stores a random
+ * nonce in sessionStorage and navigates the whole page to the server's
+ * `GET {basePath}/oauth-handoff/start`, with `handoff=<nonce>` added to `callbackURL` (and to
+ * `errorCallbackURL`). A top-level navigation keeps Better Auth's OAuth state cookie
+ * first-party on the API's origin. After the provider, the page comes back to `callbackURL`
+ * with `#ott=<token>`, and `completeBetterAuthOAuthHandoff` exchanges it for the bearer.
+ *
+ * `callbackURL` defaults to `/` on the current origin (pass the full path for an app served
+ * under a sub-path). It is resolved against the current page, and its path must be one of the
+ * server's `oauthHandoff.callbackPaths` (default `["/"]`) on one of its
+ * `oauthHandoff.webOrigins`, or the server answers 400. `errorCallbackURL` defaults to
+ * `callbackURL`; a failed start or callback comes back there with `?error=`. It is always sent,
+ * because without one Better Auth sends callback errors to its own error page on the API.
+ *
+ * Throws on native, in cookie mode, for a client `createBetterAuthClient` did not make, and
+ * when sessionStorage cannot hold the nonce. Use `authClient.signIn.social` in those cases.
+ *
+ * @example
+ * ```typescript
+ * <SocialLoginButton
+ *   provider="google"
+ *   onPress={() => signInSocialWithHandoff({client: authClient, provider: "google"})}
+ * />
+ * ```
+ */
+export const signInSocialWithHandoff = ({
+  callbackURL = "/",
+  client,
+  errorCallbackURL,
+  provider,
+}: {
+  callbackURL?: string;
+  client: BetterAuthClient;
+  errorCallbackURL?: string;
+  provider: string;
+}): void => {
+  const config = handoffClients.get(client);
+  if (!IsWeb || typeof window === "undefined" || !config?.isWebBearer) {
+    throw new Error(NOT_WEB_BEARER_MESSAGE);
+  }
+  const nonce = createHandoffNonce();
+  const start = new URL(`${config.authBaseURL}/oauth-handoff/start`);
+  start.searchParams.set("provider", provider);
+  start.searchParams.set("callbackURL", withHandoffNonce(callbackURL, nonce));
+  start.searchParams.set(
+    "errorCallbackURL",
+    withHandoffNonce(errorCallbackURL ?? callbackURL, nonce)
+  );
+  // Throws when storage is blocked: without a stored nonce the return would be refused anyway.
+  window.sessionStorage.setItem(handoffNonceKey(config.storagePrefix), nonce);
+  window.location.assign(start.toString());
+};
+
+/**
+ * Removes the handoff from the page URL and returns the one-time token when this tab started
+ * the sign-in, or null. Runs synchronously, so a second call made before the first finishes
+ * finds a clean URL.
+ */
+const takeHandoffToken = (
+  client: BetterAuthClient
+): {config: HandoffClientConfig; token: string} | null => {
+  let current: URL;
+  try {
+    current = new URL(window.location.href);
+  } catch {
+    return null;
+  }
+  const query = takeParam(current.search.slice(1), HANDOFF_NONCE_PARAM);
+  // The server only puts the token in the fragment. An `ott` in the query was planted: it is
+  // removed from the URL with the rest and never sent.
+  const queryToken = takeParam(query.kept.join("&"), HANDOFF_TOKEN_PARAM);
+  const fragment = takeParam(current.hash.slice(1), HANDOFF_TOKEN_PARAM);
+  const hasHandoff =
+    query.values.length > 0 || queryToken.values.length > 0 || fragment.values.length > 0;
+  if (!hasHandoff) {
+    return null;
+  }
+  const config = handoffClients.get(client);
+  const storedNonce = config ? takeStoredNonce(config.storagePrefix) : null;
+
+  // The token leaves the address bar, and so history, before anything else can read or send it.
+  const search = queryToken.kept.length > 0 ? `?${queryToken.kept.join("&")}` : "";
+  const hash = fragment.kept.length > 0 ? `#${fragment.kept.join("&")}` : "";
+  try {
+    window.history.replaceState(window.history.state, "", `${current.pathname}${search}${hash}`);
+  } catch (error) {
+    console.warn("[terreno/rtk] Could not remove the OAuth handoff from the URL; not verifying", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    return null;
+  }
+
+  if (!config?.isWebBearer || fragment.values.length !== 1 || query.values.length !== 1) {
+    return null;
+  }
+  const [token] = fragment.values;
+  const [receivedNonce] = query.values;
+  // A token without the nonce this tab stored was planted, so it is never sent.
+  if (!token || !receivedNonce || !storedNonce || !nonceMatches(receivedNonce, storedNonce)) {
+    return null;
+  }
+  return {config, token};
+};
+
+const verifyHandoffToken = async ({
+  client,
+  config,
+  token,
+}: {
+  client: BetterAuthClient;
+  config: HandoffClientConfig;
+  token: string;
+}): Promise<boolean> => {
+  let issuedToken: string | null = null;
+  try {
+    // Through the client, so bearer mode's hooks store the token and apply the sign-out guard.
+    const result = await client.$fetch("/one-time-token/verify", {
+      body: {token},
+      method: "POST",
+      onSuccess: (context): void => {
+        issuedToken = context.response.headers.get("set-auth-token");
+      },
+    });
+    if (result.error) {
+      console.warn("[terreno/rtk] OAuth handoff verify was refused", {
+        status: result.error.status,
+      });
+      return false;
+    }
+    if (!issuedToken) {
+      return false;
+    }
+    const stored = getBetterAuthBearerToken({
+      bearerStorage: config.bearerStorage,
+      storagePrefix: config.storagePrefix,
+    });
+    if (stored !== issuedToken) {
+      return false;
+    }
+  } catch (error) {
+    console.warn("[terreno/rtk] OAuth handoff verify failed", {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    return false;
+  }
+  // `$fetch` skips the session signal that the client's own routes send, so a mounted
+  // `useSession` refetches with the new token.
+  client.$store?.notify("$sessionSignal");
+  return true;
+};
+
+const pendingHandoffs = new WeakMap<object, Promise<boolean>>();
+
+/**
+ * Finishes a sign-in that `signInSocialWithHandoff` started, on the page the provider sent the
+ * browser back to. Await it once at startup, before anything reads the session, before any code
+ * acts on other query parameters, and before Sentry or analytics start.
+ *
+ * When the URL has `#ott=<token>` and `?handoff=` equal to the nonce this tab stored, it removes
+ * `ott`, `handoff` and the stored nonce (`history.replaceState`), then exchanges the token at
+ * `POST {basePath}/one-time-token/verify`. Bearer mode stores the `set-auth-token` that comes
+ * back. Other query and fragment parts are kept. A token without a matching nonce, or an `ott`
+ * in the query (the server only uses the fragment), is removed from the URL and never sent. Native, cookie mode, and a page without `ott` make no request.
+ *
+ * Resolves `true` only when a bearer token was stored, and never rejects. A return with
+ * `?error=` (such as `provider_not_found` or `sign_in_failed`) resolves `false` and leaves the
+ * error in the URL for the app to show. Calls made while one is running share its result.
+ *
+ * @example
+ * ```typescript
+ * await completeBetterAuthOAuthHandoff({client: authClient});
+ * await betterAuth.syncSession(store.dispatch);
+ * ```
+ */
+export const completeBetterAuthOAuthHandoff = ({
+  client,
+}: {
+  client: BetterAuthClient;
+}): Promise<boolean> => {
+  if (!IsWeb || typeof window === "undefined") {
+    return Promise.resolve(false);
+  }
+  const pending = pendingHandoffs.get(client);
+  if (pending) {
+    return pending;
+  }
+  const handoff = takeHandoffToken(client);
+  if (!handoff) {
+    return Promise.resolve(false);
+  }
+  const result = verifyHandoffToken({client, ...handoff}).finally(() => {
+    pendingHandoffs.delete(client);
+  });
+  pendingHandoffs.set(client, result);
+  return result;
+};

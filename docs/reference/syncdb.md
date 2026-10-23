@@ -139,8 +139,14 @@ new TerrenoApp({userModel: User})
 - **`ensureSyncIndexes`** — `TerrenoApp.start()` binds the HTTP port first (or attaches to `httpServer` if the process already listened), then awaits index builds for snapshot queries and sync bookkeeping (`SyncMutation.mutationId` unique, `SyncCounter.stream` unique, etc.). Registration queues this work without contacting MongoDB, so models can load before the database connects. Hosts that build Express without `TerrenoApp.start()` should await `ensureSyncIndexes()` after connecting.
 
 Socket auth requires at least one configured authentication method. It enables legacy JWT
-validation when `tokenSecret` or `TOKEN_SECRET` is available. Better Auth can be used without
-a JWT secret:
+validation when `tokenSecret` or `TOKEN_SECRET` is available. When a `BetterAuthApp` is
+registered on the same `TerrenoApp`, `RealtimeApp` validates Better Auth sessions with its
+instance automatically, with or without a JWT secret. The handshake creates the app `User` on
+first contact and refuses disabled users. A `RealtimeApp` without its own `userModel` uses the
+`TerrenoApp`'s, for JWT and Better Auth sockets alike: socket authorization reads the user from
+the database instead of the token's claims, and the revalidation sweep disconnects users who
+were disabled or deleted. Pass `betterAuth` only for a `RealtimeApp` mounted without
+`TerrenoApp`:
 
 ```typescript
 new RealtimeApp({betterAuth: {auth, userModel: User}})
@@ -168,6 +174,49 @@ falls back to polling `getSession()` and produces constant `/api/auth/get-sessio
 bridge exposes the client's `$store.atoms.session` atom and degrades to the polling fallback when
 that atom is absent. Clients that already expose `getSession` plus a subscribable `useSession` can
 be passed to `betterAuthAdapter` directly.
+
+`betterAuthAdapter(client, options)` options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `getBearerToken` | `() => string \| null` | — | Reads a locally stored session token. When it returns a token, `getToken` uses it and skips `getSession()`. A null or empty result, or a throw, falls back to `getSession()`. `getUserId`, `onAuthChange` and `refresh` always read the session. |
+| `pollIntervalMs` | `number` | `5000` | Polling cadence when the client has no subscribable session |
+| `setIntervalFn` / `clearIntervalFn` | test hooks | global timers | Inject timers for deterministic tests |
+
+For a web app in Better Auth bearer mode (`createBetterAuthClient({webAuth: "bearer"})`), pass
+rtk's `getBetterAuthBearerToken` so every sync request reads the stored token without a
+`get-session` round trip. syncdb does not import rtk; the app wires the two together:
+
+```typescript
+import {getBetterAuthBearerToken} from "@terreno/rtk";
+import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb";
+
+const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient), {
+  getBearerToken: () => getBetterAuthBearerToken({storagePrefix: "myapp"}),
+});
+```
+
+Pass the same `storagePrefix` and `bearerStorage` you gave `createBetterAuthClient`. The option
+is explicit: the adapter never detects bearer mode from the client.
+
+The adapter never throws on a failed session read (a rejected `getSession()`, or a `{error}`
+envelope other than a 401). `getToken` and `refresh` answer null and false. `getUserId` answers
+with the user id the server last confirmed, through a successful read or a session-atom
+emission, and null before the first confirmation. A read that fails while the device is offline
+is therefore never reported as a sign-out, which would clear the client's current user and make
+`mutate()` throw. A successful read with no session, or a 401 (from `getSession()` or the session
+atom), is a sign-out; a 401 emission also fires `onAuthChange`, deduped like any other
+signed-out emission.
+
+The last confirmed user id follows the newest answer, not the last one to arrive. A read counts
+from when it started; an emission that changes or clears the identity counts from when it
+arrived. A read that started before a sign-out or user switch and resolves after it still
+answers its own caller, but does not update the confirmed user id. Emissions that repeat the
+atom's cached session are not new answers: a refetch-start emission (`isRefetching: true`) is
+ignored, and the value a new subscriber receives on subscribing only fills the confirmed user id
+before anything else has confirmed one.
+
+`createSyncDb(options)` options:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|

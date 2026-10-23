@@ -110,7 +110,7 @@ new TerrenoApp({
 | Option | Default | Meaning |
 |--------|---------|---------|
 | `store` | `"memory"` | `"memory"` \| `"redis"` \| `"mongo"` |
-| `limits.authMax` | 20 / 15 min | login, signup, refresh, OTP, GitHub OAuth, Better Auth sign-in / sign-up / password reset / OAuth callback |
+| `limits.authMax` | 20 / 15 min | login, signup, refresh, OTP, GitHub OAuth, Better Auth sign-in / sign-up / password reset / OAuth callback / OAuth handoff |
 | `betterAuthBasePath` | `BetterAuthApp` `config.basePath` or `/api/auth` | Prefix used to classify Better Auth credential routes |
 | `limits.apiMax` | 600 / 15 min | modelRouter and other HTTP |
 | `trustProxy` | `false` | Express `trust proxy`. Use `1` on Cloud Run. Unauthenticated key is `req.ip` |
@@ -228,6 +228,21 @@ export const todoRouter = modelRouter("/todos", Todo, {
 Do not add `endpoints: (router) => { router.get(...) }` when an action fits.
 Action config supports `allowAnonymous: true` as a per-action override; it does not change authentication for CRUD or sibling actions.
 
+| Option | Meaning |
+| --- | --- |
+| `method` | `"GET"` or `"POST"` |
+| `permissions` | Required unless `access` is set. `[]` disables the action (405) |
+| `access` | RBAC `{resource, action}` checked with the router's `accessControl` |
+| `allowAnonymous` | Accept unauthenticated calls for this action only |
+| `body` / `query` | Zod schemas; failures are 400 `Validation failed` with `meta.fields` |
+| `response` | Zod schema for OpenAPI |
+| `status` | Success status (default 200) |
+| `summary` / `description` / `tag` | OpenAPI metadata |
+| `mcp` | `{name, description?}` — also expose the action as an MCP tool named `name` |
+| `unwrapResponse` | REST only. Send the return value as the body instead of `{data: …}`; `undefined` sends an empty body |
+
+An action with `mcp` runs the same permission chain (including RBAC `access`) over `/mcp`. Its input is `{id, ...body}` for an instance POST, `{id, ...query}` for an instance GET, and the body or query alone for a collection action, so `body` / `query` must be a `z.object()`, and an instance action's schema cannot define `id`. A collection action's `id` field passes through to its body or query. The handler receives `req.isMCPRequest === true` and a `res` that throws if touched. See [modelRouter actions → MCP tools](../explanation/model-router-actions.md#mcp-tools).
+
 ## modelRouter list queries
 
 `GET /{path}` accepts filters on fields listed in `queryFields` (qs syntax, so operators work:
@@ -286,7 +301,7 @@ const todoRouter = modelRouter("/todos", Todo, {
 });
 ```
 
-Cross-model tools use `registerMCPTool` (see the example backend's `users_todo_statuses`). How-to: [Expose MCP tools](../how-to/expose-mcp-tools.md). In-process Vercel AI SDK wrappers: `getMCPTools` from `@terreno/ai`.
+Named operations become tools with `mcp: {name}` on a `collectionActions` / `instanceActions` entry (see [modelRouter actions](#modelrouter-actions)). Cross-model tools use `registerMCPTool` (see the example backend's `users_todo_statuses`). How-to: [Expose MCP tools](../how-to/expose-mcp-tools.md). In-process Vercel AI SDK wrappers: `getMCPTools` from `@terreno/ai`.
 
 Create, update, and delete tools share REST permission, hook, and persistence semantics: they call the same `executeCreate` / `executeUpdate` / `executeDelete` pipeline. MCP error results use `APIError.title` (for example `Create not allowed`, `preCreate hook error`). User-role stripping for RBAC User writes happens in the executor after hooks; MCP supplies the registry `modelName` for that check. List and read stay MCP handlers. `excludeFields` and `mcpResponseHandler` still apply after the executor returns. Invalid ids on instance writes 404 only when the document `_id` cannot be cast, not when a populate ref fails.
 
@@ -315,6 +330,61 @@ Self-serve HTTP routes live at `/mcp/service-tokens`. `TerrenoApp` mounts them w
 | DELETE | `/mcp/service-tokens/:id` | — | `{data: {id, revokedAt}}` — owner only |
 
 `expiresAt` is an optional ISO-8601 datetime (Luxon `DateTime.fromISO`). Omit it for a token that does not expire. Create returns `mcpUrl` from `publicMcpUrl`, else `BETTER_AUTH_URL`, else the request host, with `/mcp` appended when missing. An 11th **active** token for the same user is `400`. Revoke and cross-owner access are `404`. List includes revoked rows for the owner so the UI can show history. Default page size is 100 (maximum 100).
+
+### MCP OAuth
+
+Opt-in OAuth 2.1 authorization server for `/mcp`, so remote MCP clients (Claude.ai custom connectors, ChatGPT apps) can connect to an app that signs users in with Terreno JWTs. Everything is off by default. Omitted or `enabled: false` mounts no `/oauth/*` route and no `.well-known/oauth-*` document, and `/mcp` sends no OAuth challenge. Dynamic client registration is a second opt-in on top of `enabled`.
+
+```typescript
+new TerrenoApp({
+  userModel: User,
+  mcpOAuth: {
+    allowedRedirectHosts: ["claude.ai", "chatgpt.com", "localhost"],
+    consentUrl: "https://app.example.com/oauth/consent",
+    dynamicClientRegistration: true, // omit to accept only clients you create
+    enabled: true,
+    issuer: "https://api.example.com",
+  },
+});
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `issuer` | — | Public origin of the API (no path). RFC 8414 `issuer` and base of every endpoint URL. Must be https outside localhost |
+| `consentUrl` | — | App page that hosts the consent screen; receives `?request=<id>` |
+| `enabled` | — | Turns the authorization server on. Every other option is ignored while false |
+| `dynamicClientRegistration` | `false` | Mount `POST /oauth/register` and advertise `registration_endpoint`. The endpoint is unauthenticated, so anyone who can reach the API can create a client; leave it off unless clients you cannot pre-register must connect |
+| `allowedRedirectHosts` | `[]` | Hostnames a registering client may put redirect URIs on. Required (non-empty) with `dynamicClientRegistration`, unused without it. `*.example.com` matches subdomains. Add `localhost` for loopback `http://` redirects |
+| `resource` | `${issuer}/mcp` | RFC 8707 resource identifier |
+| `scopesSupported` | `["mcp"]` | Advertised and accepted scopes |
+| `accessTokenTtlSeconds` | 3600 | Access token lifetime |
+| `refreshTokenTtlSeconds` | 30 days | Refresh token lifetime |
+| `authorizationRequestTtlSeconds` | 600 | How long a request waits for a consent decision |
+| `authorizationCodeTtlSeconds` | 60 | How long a code can be exchanged |
+
+Misconfiguration (an issuer with a path, a non-URL `consentUrl`, registration on with no redirect hosts) throws at boot. With registration off, create clients yourself as `McpOAuthClient` documents (`clientId`, `clientName`, `redirectUris`, `grantTypes: ["authorization_code", "refresh_token"]`, `responseTypes: ["code"]`); `/oauth/register` is then 404 and the metadata has no `registration_endpoint`.
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/mcp` | none | RFC 9728 metadata: `resource`, `authorization_servers`, `bearer_methods_supported`, `scopes_supported` |
+| GET | `/.well-known/oauth-authorization-server` | none | RFC 8414 metadata: `issuer`, endpoints, `response_types_supported: ["code"]`, `grant_types_supported`, `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported: ["none"]` |
+| POST | `/oauth/register` | none | Only with `dynamicClientRegistration`. RFC 7591 dynamic client registration. Public clients only. 201 with `client_id`; `invalid_redirect_uri` for a redirect outside `allowedRedirectHosts`, non-https (except loopback), or with a fragment |
+| GET | `/oauth/authorize` | none | Validates `client_id`, `redirect_uri`, `response_type=code`, PKCE (`S256` only), `scope`, and `resource`, stores a pending request, and redirects to `consentUrl?request=<id>`. An unknown client or unregistered redirect is a 400 in place; other errors redirect with `error` and `state` |
+| GET | `/oauth/authorize/:request` | JWT or session | What the consent screen shows: `{data: {clientId, clientName, redirectUri, redirectHost, scope, resource, expiresAt}}` |
+| POST | `/oauth/authorize/:request/approve` | JWT or session | `{data: {redirectUrl}}` carrying `code`, `state`, and `iss` |
+| POST | `/oauth/authorize/:request/deny` | JWT or session | `{data: {redirectUrl}}` carrying `error=access_denied` and `state` |
+| POST | `/oauth/token` | `client_id` | `authorization_code` (with `code`, `redirect_uri`, `code_verifier`) or `refresh_token`. Returns `{access_token, token_type: "Bearer", expires_in, refresh_token, scope}` with `Cache-Control: no-store` |
+| POST | `/oauth/revoke` | `client_id` | RFC 7009. Always 200. Revoking a refresh token revokes its whole chain |
+
+The consent endpoints are in OpenAPI (`getMcpOAuthRequest`, `approveMcpOAuthRequest`, `denyMcpOAuthRequest`) and refuse `mcp_` and `mcpat_` bearers, so an agent cannot approve its own grants. A pending request that expired is 400 `Authorization request expired`; one already decided is 409. Protocol endpoints answer `{error, error_description}` per RFC 6749 and never carry the `requestId` member TerrenoApp adds to other JSON bodies. `/oauth/register`, `/oauth/authorize`, `/oauth/token`, and `/oauth/revoke` count against the `auth` rate-limit bucket.
+
+Tokens are opaque (`mcpat_` access, `mcprt_` refresh) and stored only as SHA-256 hashes in `McpOAuthToken`. Each refresh rotates the pair; reusing a rotated refresh token revokes every pair issued from that authorization (its family). Codes are single-use: a failed exchange burns the code, and replaying a used code revokes the tokens it issued. The code exchange fixes the family id when it consumes the code, so a replay can revoke the family before its tokens exist.
+
+`McpOAuthToken.revokeFamily(familyId)` first writes an `McpOAuthRevokedFamily` tombstone, then revokes every pair in the family. `McpOAuthToken.issue` refuses a tombstoned family with `McpOAuthFamilyRevokedError` (the token endpoint answers `invalid_grant`), and checks again after creating the pair, revoking it if a revoke landed meanwhile. A request that won a rotation or code exchange before a concurrent revoke therefore cannot leave a live pair behind. Tombstones expire after the family's last refresh expiry, and at least one hour after the revoke.
+
+Models: `McpOAuthClient` (`mcpoauthclients`), `McpOAuthAuthorization` (`mcpoauthauthorizations`, TTL on `expiresAt`), `McpOAuthToken` (`mcpoauthtokens`, TTL on `refreshExpiresAt`), `McpOAuthRevokedFamily` (`mcpoauthrevokedfamilies`, unique `familyId`, TTL on `expiresAt`).
+
+With `mcpOAuth` enabled, `/mcp` resolves `mcpat_` access tokens alongside JWTs, Better Auth sessions, and `mcp_` service tokens, and answers any request it cannot authenticate (including `initialize` and `tools/list`) with `401` and `WWW-Authenticate: Bearer resource_metadata="<issuer>/.well-known/oauth-protected-resource/mcp"`, adding `error="invalid_token"` when a credential was presented. Revoked or expired tokens and disabled users are refused. Operator steps: [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md).
 
 ## Authentication
 
@@ -467,6 +537,47 @@ In-process seed helpers (for example `seedBetterAuthUserInProcess`) should pass
 turns its built-in limiter on when `NODE_ENV=production`, so seeding six demo
 users during a preview smoke test otherwise 429s on the fourth signup. Do not
 set this on the public `BetterAuthApp`.
+
+`options` passes any other Better Auth option, deep-merged over Terreno's defaults (arrays
+replaced, explicit values win), and `plugins` appends Better Auth plugins after `bearer()`.
+See [Pass other Better Auth options and plugins](../how-to/configure-better-auth.md#pass-other-better-auth-options-and-plugins)
+for the defaults each override replaces.
+
+A session whose app `User` has `disabled: true` does not set `req.user`, so protected routes
+answer 401 while Better Auth's own routes, such as sign-out, still work. `RealtimeApp` uses the
+registered `BetterAuthApp` instance for socket sessions. With a user model (its own or the
+`TerrenoApp`'s), the handshake creates the app `User` on first contact and refuses disabled users.
+
+**Social sign-in for a web app on another site (`oauthHandoff`):**
+
+`oauthHandoff: {webOrigins, callbackPaths?}` lets a bearer-mode web client on another site
+finish a social or generic OAuth sign-in without cookies. Unset by default, which adds no
+routes. See [Social sign-in in bearer mode](../how-to/configure-better-auth.md#social-sign-in-in-bearer-mode).
+
+- `webOrigins` — Exact `http(s)` origins of the web apps that may receive the token. Patterns,
+  paths, other schemes, and an empty list are rejected when Better Auth is created. Each origin
+  must also be in `trustedOrigins`.
+- `callbackPaths` — Exact paths on those origins that may receive the token, in normal form.
+  Default `["/"]`. The query is free. List only the page that reads the token; it must never
+  redirect before it strips the fragment.
+- Production: the framework applies the same rules in every environment, so list only the
+  deployed origins. Leave loopback origins (`localhost`, `127.0.0.1`, `[::1]`) out of a
+  production `webOrigins`: a token sent there reaches whatever runs on the visitor's machine.
+  example-backend drops them when `NODE_ENV=production` and refuses to start when none is left.
+
+Endpoints it adds, under `basePath` (default `/api/auth`):
+- `GET {basePath}/oauth-handoff/start?provider=<id>&callbackURL=<url>&errorCallbackURL=<url>` —
+  Starts the sign-in as a top-level page navigation, so the OAuth state cookie is first-party
+  on the API's origin. Answers 400 with no redirect unless `callbackURL` is one of
+  `callbackPaths` on one of `webOrigins`, `errorCallbackURL` (optional) is on one of
+  `webOrigins`, and `trustedOrigins` allows both. It also answers 400 when `Sec-Fetch-Dest` is
+  set and is not `document`. The OAuth callback then redirects to `callbackURL` with
+  `#ott=<token>`, a single-use token that expires in three minutes.
+- `POST {basePath}/one-time-token/verify` — Body `{token}`. Exchanges the token once for the
+  session and the `set-auth-token` header, and sets no cookie. `GET
+  {basePath}/one-time-token/generate` is refused.
+
+With the opt-in `rateLimit`, both paths are in the auth bucket.
 
 **Endpoints (when enabled):**
 - `POST /api/auth/signup/email` — Email/password signup
@@ -1326,6 +1437,8 @@ What you get:
   and `sessionId` are added.
 - **Correlation fields**: `requestId`, `jobId`, `sessionId`, `userId`, `traceId`, `spanId` (when
   available) are merged onto every line as top-level Winston metadata.
+- **Credential type**: `getCurrentRequestContext()?.credential` records how the caller
+  authenticated (see [Request credential](#request-credential)). It is also a Sentry tag.
 - **Structured object**: every line also carries **`terrenoRequestLog`**: `{requestId, userId}`
   (with `userId: null` for anonymous requests) so Log Explorer and BigQuery can always filter on a
   single nested object. This object is structured metadata only — it is not repeated in the
@@ -1352,6 +1465,38 @@ Propagating correlation to other services (so the same `requestId` / `traceId` f
 import {getCurrentRequestContextAttributes} from "@terreno/api";
 
 await fetch(downstreamUrl, {headers: getCurrentRequestContextAttributes()});
+``````
+
+### Request credential
+
+`getCurrentRequestContext()?.credential` says which credential authenticated `userId`. Permission
+functions receive only `(method, user, obj)`, so read it from the request context when an
+operation must tell the user's own session apart from a delegated agent:
+
+| Value | Set when |
+| --- | --- |
+| `"jwt"` | A Terreno JWT bearer authenticated the request (REST or `/mcp`) |
+| `"better-auth-session"` | A Better Auth session authenticated the request (REST or `/mcp`) |
+| `"mcp-service-token"` | An `mcp_` service token authenticated a `/mcp` call |
+| `"oauth"` | An MCP OAuth access token (`mcpat_`) authenticated a `/mcp` call |
+
+It is `undefined` for anonymous requests and for jobs. The JWT and Better Auth middlewares set it
+for REST; the MCP server sets it on `/mcp` before any tool runs. `extractAuthFromHeaders` returns
+the same `{user, credential}` pair for custom MCP mounts.
+
+``````typescript
+import {getCurrentRequestContext, type PermissionMethod} from "@terreno/api";
+
+const DELEGATED = new Set(["mcp-service-token", "oauth"]);
+
+// Admins may act on any workspace from their own session, but not through an agent's token.
+const IsWorkspaceMemberOrAdmin: PermissionMethod<Workspace> = (method, user, obj) => {
+  const credential = getCurrentRequestContext()?.credential;
+  if (user?.admin && !DELEGATED.has(credential ?? "")) {
+    return true;
+  }
+  return Boolean(obj?.memberIds.some((id) => String(id) === String(user?._id)));
+};
 ``````
 
 ### Configuring transports

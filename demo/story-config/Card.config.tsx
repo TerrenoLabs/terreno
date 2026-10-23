@@ -28,7 +28,7 @@ export const CardConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=656-24249&t=Hxfv5dAP1P29ZnF3-11",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-24016",
     ios: "ready",
     android: "ready",
     web: "ready",

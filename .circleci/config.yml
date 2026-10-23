@@ -96,6 +96,7 @@ workflows:
             blocks/.* run-ai true
             blocks/.* run-ui true
             rtk/.* run-rtk true
+            syncdb/src/.* run-rtk true
             ui/.* run-ui true
             demo/.* run-ui true
             demo/.* run-ui-demo true
@@ -239,6 +240,7 @@ workflows:
             scripts/ci/check-new-file-coverage-lcov\.sh run-new-file-coverage true
             changelog/.* run-repo-policies true
             CHANGELOG.md run-repo-policies true
+            example-frontend/constants/whatsNew\.generated\.json run-repo-policies true
             docs/explanation/no-barrel-imports\.md run-repo-policies true
             docs/explanation/explicit-any-policy\.md run-repo-policies true
             docs/explanation/source-rules\.md run-repo-policies true

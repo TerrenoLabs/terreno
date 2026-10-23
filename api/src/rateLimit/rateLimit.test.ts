@@ -145,6 +145,12 @@ describe("HTTP rate limiting", () => {
       "/api/auth/send-verification-email",
       "/api/auth/verify-email?token=secret",
       "/api/auth/callback/github",
+      "/api/auth/oauth-handoff/start?provider=google",
+      "/api/auth/one-time-token/verify",
+      "/oauth/register",
+      "/oauth/authorize?client_id=abc",
+      "/oauth/token",
+      "/oauth/revoke",
     ];
     for (const originalUrl of authPaths) {
       assert.equal(
@@ -154,6 +160,13 @@ describe("HTTP rate limiting", () => {
       );
     }
     assert.equal(classifyRateLimitPolicy({method: "GET", originalUrl: "/auth/me"} as never), "api");
+    assert.equal(
+      classifyRateLimitPolicy({
+        method: "POST",
+        originalUrl: "/oauth/authorize/req/approve",
+      } as never),
+      "api"
+    );
     assert.equal(
       classifyRateLimitPolicy({method: "PATCH", originalUrl: "/auth/me"} as never),
       "api"

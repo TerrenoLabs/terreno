@@ -155,7 +155,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
     - PLAN-new-4 holds in T34.
   - Skills: update-agent-docs
 
-- [ ] **T3** — Roast runs planned specs and rejects vague regression steps
+- [x] **T3** — Roast runs planned specs and rejects vague regression steps
   - Depends on: T1
   - Files: plugins/terreno-planning/skills/terreno-3-roast/SKILL.md, generated copies
   - Delivers:

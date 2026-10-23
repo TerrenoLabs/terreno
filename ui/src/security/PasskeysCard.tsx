@@ -187,7 +187,7 @@ export const PasskeysCard: FC<PasskeysCardProps> = ({
     <Card testID={testID}>
       <Box gap={4}>
         <Box gap={1}>
-          <Heading size="md" testID={`${testID}-title`}>
+          <Heading level={2} size="md" testID={`${testID}-title`}>
             {title}
           </Heading>
           <Text color="secondaryLight">{description}</Text>

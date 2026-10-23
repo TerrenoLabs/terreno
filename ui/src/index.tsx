@@ -151,6 +151,7 @@ export type * from "./SparklineChart";
 export * from "./Spinner";
 export * from "./SplitPage";
 export * from "./SyncStatusBanner";
+export * from "./security/AccountSecurityScreen";
 export * from "./security/LinkedAccountsCard";
 export * from "./security/PasskeysCard";
 export * from "./security/PasswordCard";
@@ -158,6 +159,7 @@ export * from "./security/SessionsCard";
 export {CREDENTIAL_PROVIDER_ID, hasPasswordCredential} from "./security/securityMethods";
 export type {
   AccountPasskey,
+  AccountSecurityScreenProps,
   AccountSession,
   LinkableProvider,
   LinkedAccount,

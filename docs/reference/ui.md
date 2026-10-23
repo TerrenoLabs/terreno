@@ -12,7 +12,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
 - AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts), `BlocksView` (a whole-reply YAML document)
 - Authentication: `SocialLoginButton`, `LoginScreen`, `TwoFactorChallengeScreen`, `SignUpScreen`
-- Account security: `LinkedAccountsCard`, `PasswordCard`, `PasskeysCard`, `SessionsCard`, `TwoFactorSettingsCard`
+- Account security: `LinkedAccountsCard`, `PasswordCard`, `PasskeysCard`, `SessionsCard`, `TwoFactorSettingsCard`, `AccountSecurityScreen`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
 
@@ -1252,8 +1252,12 @@ const signUpWithGoogle = async (): Promise<void> => {
 
 ## Account security
 
-Presentational cards for an account security screen. Each card takes plain data and reports
-actions through callbacks; none of them calls an auth client. The data types are built from
+Presentational cards for an account security screen, and `AccountSecurityScreen`, which
+composes them (see [AccountSecurityScreen](#accountsecurityscreen)). Each card takes plain data
+and reports actions through callbacks; none of them calls an auth client. Each card's title
+is a level 2 heading and `AccountSecurityScreen`'s title is level 1, through `Heading`'s `level`
+prop: with `level` set, `Heading` renders `role="heading"` and `aria-level` (an `<h1>`–`<h6>`
+on web, the header accessibility role on native); without it, `Heading` stays plain text. The data types are built from
 Better Auth's responses, but they are not a one-to-one copy: `listAccounts()` returns `id`,
 `providerId`, `accountId` and `createdAt` per account and no email, so a connected screen renames
 `createdAt` to `linkedAt` and fills `email` from elsewhere (the session user, or a per-account
@@ -1672,6 +1676,273 @@ Accessibility:
 | "I saved these" / Finish | `two-factor-settings-card-saved`, `-finish` |
 | Turn-off confirm, confirm, cancel | `two-factor-settings-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
 | Error | `two-factor-settings-card-error` |
+
+### AccountSecurityScreen
+
+The account security cards composed into one screen. Each card's props go in as one object, and
+a card renders only when its object is given, so a feature the server has off simply leaves its
+prop out. The order is fixed:
+
+1. **Sign-in methods:** `LinkedAccountsCard`, then `PasswordCard`, grouped in
+   `{testID}-sign-in-methods` when either is given.
+2. `PasskeysCard`.
+3. `TwoFactorSettingsCard`.
+4. `SessionsCard`.
+
+Above the cards is a heading (`title`, default "Security"), an optional `description`, and an
+optional `header` node (for example, "Signed in as ada@example.com"). `children` render after the
+cards, for an app-specific card. The cards stack in one column at every width, and the content
+stops growing at `maxWidth` (720px by default) and centers on wide screens. At 768px wide and
+below, `Card` draws edge to edge, so the screen drops its own side padding there and insets the
+heading, `header` and empty text to line up with the cards' content.
+
+By default the screen wraps itself in a scrolling ui `Page` (the same `Page` LoginScreen uses),
+so it works as a route on its own on native and web. Inside your own `Page`, `ScrollView` or tab
+layout, pass `withPage={false}`: the screen then renders only its content and leaves scrolling to
+the parent, so scroll views don't nest.
+
+``````typescript
+import {AccountSecurityScreen, hasPasswordCredential} from "@terreno/ui";
+
+// Two-factor is off on this server, so `twoFactor` is left out and its card is hidden.
+<AccountSecurityScreen
+  isLoading={isLoading}
+  error={loadError}
+  onRetry={reload}
+  linkedAccounts={{accounts, providers, onLink, onUnlink}}
+  password={{hasPassword: hasPasswordCredential(accounts), onSubmit: onPasswordSubmit}}
+  passkeys={{passkeys, onAdd, onRename, onRemove}}
+  sessions={{sessions, currentSessionId, onRevoke, onRevokeOthers}}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `linkedAccounts` | `LinkedAccountsCardProps` | Props for `LinkedAccountsCard`. Omit to hide it. |
+| `password` | `PasswordCardProps` | Props for `PasswordCard`. Omit to hide it. |
+| `passkeys` | `PasskeysCardProps` | Props for `PasskeysCard`. Omit to hide it, for example when the server has no passkey plugin. |
+| `twoFactor` | `TwoFactorSettingsCardProps` | Props for `TwoFactorSettingsCard`. Omit to hide it. |
+| `sessions` | `SessionsCardProps` | Props for `SessionsCard`. Omit to hide it. |
+| `title` / `description` | `string` | Heading (default "Security") and the text under it. |
+| `header` | `ReactNode` | Content under the heading and above the cards. Shown in every state. |
+| `children` | `ReactNode` | Content after the cards. Hidden with the cards while loading or in the error state. |
+| `isLoading` | `boolean` | Shows a spinner and "Loading your security settings…" instead of the cards. Takes precedence over `error`, so a retry in flight shows as loading. |
+| `error` | `string` | A page-level error, such as the data failing to load, shown in a `role="alert"` card instead of the cards. A card action's error belongs in that card's own `error` prop (or a rejected callback), not here. |
+| `onRetry` | `() => void` | The error card's **Try again** button. Hidden when not passed. |
+| `withPage` | `boolean` | Wrap the screen in a scrolling `Page`. Defaults to `true`. |
+| `maxWidth` | `number` | The widest the content grows, in pixels. Defaults to 720. |
+
+With no card props and no `children`, the screen says "There are no security settings to
+manage." (`{testID}-empty`).
+
+Accessibility: the title is a level 1 heading and each card's title is level 2, so screen
+reader heading navigation lists Security, then each card; the loading state is a `progressbar`
+named "Loading security settings" with visible text; the page error is an alert.
+
+**Test IDs** (with the default `testID="account-security-screen"`; each card keeps its own default
+testID, unless you pass `testID` in its props):
+
+| Element | testID |
+| --- | --- |
+| Root / heading block / title / description | `account-security-screen`, `-heading`, `-title`, `-description` |
+| Sign-in methods group | `account-security-screen-sign-in-methods` |
+| Loading | `account-security-screen-loading` |
+| Error card / message / Try again | `account-security-screen-error`, `-error-message`, `-retry` |
+| No cards | `account-security-screen-empty` |
+
+#### A connected screen
+
+A connected version, `TerrenoAccountSecurityScreen`, is planned for `@terreno/rtk`: it wires every
+card to the Better Auth client and refetches after each change. Until then, connect the
+presentational screen yourself, along the lines below. It needs a client created with the
+passkey and two-factor client plugins (for `authClient.passkey` and `authClient.twoFactor`), reads
+which features are on from `useAuthMethods`, and unwraps every Better Auth call, because the
+client resolves `{data, error}` instead of rejecting. Better Auth's `setPassword` is server-only,
+so "Set a password" posts to an app endpoint here.
+
+``````typescript
+import {useAuthMethods} from "@terreno/rtk";
+import type {AccountPasskey, AccountSession, LinkedAccount} from "@terreno/ui";
+import {AccountSecurityScreen, hasPasswordCredential, Text} from "@terreno/ui";
+import {type FC, useCallback, useEffect, useState} from "react";
+
+import {authClient} from "@/store/authClient";
+import {setPasswordOnServer} from "@/store/setPassword"; // your endpoint calling auth.api.setPassword
+
+/** Throws the Better Auth error, so the card that called shows its message. */
+const unwrap = <T,>(result: {data: T | null; error: {message?: string} | null}, fallback: string): T => {
+  if (result.error || result.data === null) {
+    throw new Error(result.error?.message ?? fallback);
+  }
+  return result.data;
+};
+
+// useAuthMethods fetches once per mount, so retrying a failed methods request means remounting.
+export const SecurityRoute: FC = () => {
+  const [attempt, setAttempt] = useState(0);
+  return <SecurityScreen key={attempt} onRemount={() => setAttempt((count) => count + 1)} />;
+};
+
+const SecurityScreen: FC<{onRemount: () => void}> = ({onRemount}) => {
+  const {methods, isLoading: isMethodsLoading, error: methodsError} = useAuthMethods(authClient);
+  const session = authClient.useSession();
+  const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
+  const [passkeys, setPasskeys] = useState<AccountPasskey[]>([]);
+  const [sessions, setSessions] = useState<AccountSession[]>([]);
+  // False until the first load settles, so the cards never flash empty and a methods failure
+  // (no load runs) is not stuck behind a spinner.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | undefined>();
+
+  const loadAccounts = useCallback(async (): Promise<void> => {
+    const data = unwrap(await authClient.listAccounts(), "Couldn't load your accounts.");
+    setAccounts(data.map((account) => ({...account, linkedAt: account.createdAt})));
+  }, []);
+  const loadPasskeys = useCallback(async (): Promise<void> => {
+    setPasskeys(unwrap(await authClient.passkey.listUserPasskeys(), "Couldn't load passkeys."));
+  }, []);
+  const loadSessions = useCallback(async (): Promise<void> => {
+    setSessions(unwrap(await authClient.listSessions(), "Couldn't load your sessions."));
+  }, []);
+
+  const load = useCallback(async (): Promise<void> => {
+    setIsLoading(true);
+    setLoadError(undefined);
+    try {
+      await Promise.all([loadAccounts(), methods?.passkey ? loadPasskeys() : null, loadSessions()]);
+    } catch (error) {
+      setLoadError((error as Error).message);
+    } finally {
+      setIsLoading(false);
+      setHasLoaded(true);
+    }
+  }, [loadAccounts, loadPasskeys, loadSessions, methods?.passkey]);
+
+  // Load the cards' data once the server says which features are on.
+  useEffect(() => {
+    if (methods) {
+      void load();
+    }
+  }, [load, methods]);
+
+  const hasPassword = hasPasswordCredential(accounts);
+  const user = session.data?.user;
+
+  return (
+    <AccountSecurityScreen
+      error={methodsError ?? loadError}
+      header={user ? <Text color="secondaryLight">Signed in as {user.email}</Text> : undefined}
+      isLoading={
+        isMethodsLoading || session.isPending || isLoading || (Boolean(methods) && !hasLoaded)
+      }
+      onRetry={methods ? load : onRemount}
+      linkedAccounts={
+        methods && methods.providers.length > 0
+          ? {
+              accounts,
+              providers: methods.providers.map((id) => ({id})),
+              // Bearer-mode web clients link through linkSocialWithHandoff instead.
+              onLink: async (provider) => {
+                unwrap(await authClient.linkSocial({callbackURL: "/security", provider}), "Couldn't link that account.");
+              },
+              onUnlink: async (_providerId, account) => {
+                unwrap(await authClient.unlinkAccount({accountId: account.id}), "Couldn't unlink that account.");
+                await loadAccounts();
+              },
+            }
+          : undefined
+      }
+      password={
+        methods?.emailPassword
+          ? {
+              hasPassword,
+              onSubmit: async ({mode, currentPassword, newPassword, revokeOtherSessions}) => {
+                if (mode === "change") {
+                  unwrap(
+                    await authClient.changePassword({currentPassword: currentPassword ?? "", newPassword, revokeOtherSessions}),
+                    "Couldn't change your password."
+                  );
+                  return;
+                }
+                await setPasswordOnServer({newPassword});
+                await loadAccounts();
+              },
+            }
+          : undefined
+      }
+      passkeys={
+        methods?.passkey
+          ? {
+              passkeys,
+              supported: typeof window !== "undefined" && "PublicKeyCredential" in window,
+              onAdd: async (name) => {
+                unwrap(await authClient.passkey.addPasskey({name}), "Couldn't add a passkey.");
+                await loadPasskeys();
+              },
+              onRename: async (id, name) => {
+                unwrap(await authClient.passkey.updatePasskey({id, name}), "Couldn't rename that passkey.");
+                await loadPasskeys();
+              },
+              onRemove: async (passkey) => {
+                unwrap(await authClient.passkey.deletePasskey({id: passkey.id}), "Couldn't remove that passkey.");
+                await loadPasskeys();
+              },
+            }
+          : undefined
+      }
+      twoFactor={
+        methods?.twoFactor
+          ? {
+              enabled: Boolean(user?.twoFactorEnabled),
+              hasPassword,
+              onStartEnroll: async (password) => {
+                const data = unwrap(await authClient.twoFactor.enable({password: password ?? ""}), "Couldn't start two-factor setup.");
+                if (!("totpURI" in data)) {
+                  throw new Error("Couldn't start two-factor setup.");
+                }
+                return {backupCodes: data.backupCodes, totpURI: data.totpURI};
+              },
+              onVerify: async (code) => {
+                unwrap(await authClient.twoFactor.verifyTotp({code}), "That code didn't work.");
+                await session.refetch();
+              },
+              onRegenerateBackupCodes: async (password) => {
+                const data = unwrap(
+                  await authClient.twoFactor.generateBackupCodes({password: password ?? ""}),
+                  "Couldn't create new backup codes."
+                );
+                return data.backupCodes;
+              },
+              onDisable: async (password) => {
+                unwrap(await authClient.twoFactor.disable({password: password ?? ""}), "Couldn't turn off two-factor authentication.");
+                await session.refetch();
+              },
+            }
+          : undefined
+      }
+      sessions={{
+        currentSessionId: session.data?.session.id,
+        sessions,
+        onRevoke: async (revoked) => {
+          unwrap(await authClient.revokeSession({token: revoked.token ?? ""}), "Couldn't sign out that session.");
+          await loadSessions();
+        },
+        onRevokeOthers: async () => {
+          unwrap(await authClient.revokeOtherSessions(), "Couldn't sign out your other sessions.");
+          await loadSessions();
+        },
+      }}
+    />
+  );
+};
+``````
+
+`useAuthMethods` reports `passkey`, `twoFactor`, `emailPassword` and `providers`, so a card
+appears only for a feature the server has on. It fetches once per mount and has no refetch, so
+when the methods request fails, Try again remounts the screen through `SecurityRoute`'s `key`;
+when the methods loaded but the cards' data failed, Try again calls `load` again. Leave `sessions` out on apps that don't want to
+show it.
 
 ## Testing Utilities
 

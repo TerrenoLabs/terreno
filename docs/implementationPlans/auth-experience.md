@@ -617,7 +617,7 @@ Open risks:
     regenerate showing the new codes.
   - Skills: terreno-ui, accessibility-testing
 
-- [ ] **T17** — AccountSecurityScreen, exports, demo registration
+- [x] **T17** — AccountSecurityScreen, exports, demo registration
   - Depends on: T12, T14, T15, T16
   - Files: ui/src/security/AccountSecurityScreen.tsx, ui/src/security/AccountSecurityScreen.test.tsx, ui/src/index.tsx, demo/demoConfig.tsx, demo/stories/AccountSecurityScreen.stories.tsx, demo/story-config/AccountSecurityScreen.config.tsx, docs/reference/ui.md, changelog/unreleased/ui-auth-components.md
   - Build:

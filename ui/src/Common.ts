@@ -1159,6 +1159,12 @@ export interface HeadingProps extends WithTestID {
   align?: "left" | "right" | "center" | "justify"; // default "left"
   children?: React.ReactNode;
   color?: TextColor;
+  /**
+   * Outline level, 1 for the page title. When set, the heading is exposed to assistive
+   * technology as a heading: `role="heading"` with `aria-level` (an `<h1>`–`<h6>` on web, the
+   * header accessibility role on native). When omitted, the heading is plain text.
+   */
+  level?: 1 | 2 | 3 | 4 | 5 | 6;
   overflow?: "normal" | "breakWord"; // default "breakWord"
   size?: "sm" | "md" | "lg" | "xl" | "2xl"; // default "sm"
   truncate?: boolean; // default false

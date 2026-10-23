@@ -1,4 +1,5 @@
 import {AccordionConfiguration} from "@story-config/Accordion.config";
+import {AccountSecurityScreenConfiguration} from "@story-config/AccountSecurityScreen.config";
 import {ActionSheetConfiguration} from "@story-config/ActionSheet.config";
 import {AddressFieldConfiguration} from "@story-config/AddressField.config";
 import {AIRequestExplorerConfiguration} from "@story-config/AIRequestExplorer.config";
@@ -291,6 +292,7 @@ const OpenAPIContextConfiguration: DemoConfigurationBase = {
 
 const Config: DemoConfigurationBase[] = [
   AccordionConfiguration,
+  AccountSecurityScreenConfiguration,
   ActionSheetConfiguration,
   AIRequestExplorerConfiguration,
   AiSuggestionBoxConfiguration,

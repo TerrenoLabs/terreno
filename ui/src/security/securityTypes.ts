@@ -1,3 +1,5 @@
+import type {ReactNode} from "react";
+
 import type {IconName} from "../Common";
 
 /**
@@ -397,6 +399,72 @@ export interface TwoFactorSettingsCardProps {
   /**
    * Root testID; child testIDs are derived from it.
    * @default "two-factor-settings-card"
+   */
+  testID?: string;
+}
+
+/**
+ * Props for the AccountSecurityScreen component. Each card renders only when its props are given,
+ * so leave out the props of a feature the app has turned off (for example, `passkeys` when the
+ * server has no passkey plugin) and its card disappears.
+ */
+export interface AccountSecurityScreenProps {
+  /**
+   * Props for the LinkedAccountsCard, shown first under "Sign-in methods". Omit to hide the card.
+   */
+  linkedAccounts?: LinkedAccountsCardProps;
+  /** Props for the PasswordCard, shown after linked accounts. Omit to hide the card. */
+  password?: PasswordCardProps;
+  /** Props for the PasskeysCard. Omit to hide the card, for example when passkeys are off. */
+  passkeys?: PasskeysCardProps;
+  /** Props for the TwoFactorSettingsCard. Omit to hide the card, for example when 2FA is off. */
+  twoFactor?: TwoFactorSettingsCardProps;
+  /** Props for the SessionsCard, shown last. Omit to hide the card. */
+  sessions?: SessionsCardProps;
+  /**
+   * Page heading.
+   * @default "Security"
+   */
+  title?: string;
+  /** Text under the heading. */
+  description?: string;
+  /**
+   * Content under the heading and description and above the cards, such as the signed-in
+   * user's name and email or a notice. Shown in every state.
+   */
+  header?: ReactNode;
+  /**
+   * Extra content after the cards, such as an app-specific card. Hidden with the cards while
+   * loading or showing `error`.
+   */
+  children?: ReactNode;
+  /**
+   * Shows a spinner instead of the cards, for example while the session, accounts, passkeys and
+   * sessions load. Takes precedence over `error`, so a retry in flight shows as loading.
+   */
+  isLoading?: boolean;
+  /**
+   * A page-level error, for example when the data the cards need failed to load. Shown with
+   * `role="alert"` instead of the cards. Errors from a card's own action belong in that card's
+   * `error` prop.
+   */
+  error?: string;
+  /** Called by the Try again button under `error`. Without it the button is hidden. */
+  onRetry?: () => void;
+  /**
+   * Wraps the screen in a scrolling ui `Page`. Pass false when the screen sits inside your own
+   * `Page`, `ScrollView` or tab layout, so scroll views do not nest.
+   * @default true
+   */
+  withPage?: boolean;
+  /**
+   * The widest the content grows, in pixels. Cards stack in one column at any width.
+   * @default 720
+   */
+  maxWidth?: number;
+  /**
+   * Root testID; child testIDs are derived from it.
+   * @default "account-security-screen"
    */
   testID?: string;
 }

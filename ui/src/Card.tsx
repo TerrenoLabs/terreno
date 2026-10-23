@@ -13,7 +13,11 @@ const MOBILE_ROW_IMAGE_WIDTH = 100;
 const DESKTOP_ROW_IMAGE_WIDTH = 160;
 const MOBILE_LARGE_IMAGE_HEIGHT = 300;
 const TITLE_DESCRIPTION_GAP = 2;
-const MOBILE_BREAKPOINT = 768;
+/**
+ * Window width (px) at or below which Card renders its mobile layout: a container card drops its
+ * side borders and rounding and runs edge to edge.
+ */
+export const CARD_MOBILE_BREAKPOINT = 768;
 
 const getDisplayCardWidth = ({
   isMobile,
@@ -175,7 +179,7 @@ const ContainerCard = ({
 
 export const Card = ({variant = "container", ...props}: CardProps): React.ReactElement => {
   const {width: windowWidth} = useWindowDimensions();
-  const isMobile = windowWidth <= MOBILE_BREAKPOINT;
+  const isMobile = windowWidth <= CARD_MOBILE_BREAKPOINT;
 
   if (variant === "display") {
     return <DisplayCard {...props} isMobile={isMobile} variant={variant} />;

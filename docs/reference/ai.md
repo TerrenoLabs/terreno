@@ -379,7 +379,7 @@ Errors raised before the stream starts return JSON `{status, title, detail, fiel
 
 Each `attachments` item is `{type: "image" | "file", url, mimeType, filename?}`. The `url` must be `http(s):` or `data:`. Client-only URLs (`blob:`, `file:`, `content:`, `ph:`) return `400` before streaming starts, because neither the model provider nor a later page load can read them. Upload the file with `POST /files/upload` first, or send it as a `data:` URL.
 
-When `fileStorageService` is set, `data:` attachments are uploaded with `FileStorageService.upload`. The saved user prompt then stores the storage `url` plus `gcsKey`, not the base64 payload. The model still receives the original data for that turn. On later turns, parts with a `gcsKey` are sent to the model as 1-hour signed URLs. A failed upload returns `502 Attachment upload failed`. Without storage, attachments are saved as sent.
+When `fileStorageService` is set, `data:` attachments are uploaded with `FileStorageService.upload`. The saved user prompt then stores the storage `url` plus `gcsKey`, not the base64 payload. The model still receives the original data for that turn. On later turns, a part whose `gcsKey` names a live `FileAttachment` owned by the conversation's owner is sent to the model as a 1-hour signed URL; any other part keeps its stored `url` and is not signed. A custom `fileStorageService` whose `upload` does not create `FileAttachment` records therefore gets no signed URLs on later turns. A failed upload returns `502 Attachment upload failed`. Without storage, attachments are saved as sent.
 
 `fileUploadsEnabled` turns uploads off without removing storage. Pass `false`, or a function that returns `false`, and any prompt that includes attachments returns `403 File uploads are disabled` before streaming. Omit it, or pass `true`, to leave uploads enabled. The example app wires this to the `file-uploads` feature flag.
 
@@ -409,7 +409,7 @@ CRUD at `/gpt/histories` via `modelRouter`:
 | Create, List | `IsAuthenticated` |
 | Read, Update, Delete | `IsOwner` |
 
-Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`. Create sets `userId` to the caller, so `{}` is a valid create body even when the app validates request bodies. Create and update bodies drop `pendingAsk` (including dotted `pendingAsk.*` paths), so only a chat turn writes it; the OpenAPI spec marks it `readOnly` on create and update.
+Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`. Create sets `userId` to the caller, so `{}` is a valid create body even when the app validates request bodies. Create and update bodies drop `pendingAsk` (including dotted `pendingAsk.*` paths), so only a chat turn writes it; the OpenAPI spec marks it `readOnly` on create and update. Create and update bodies also drop any `gcsKey` on `prompts[].content[]` parts (including dotted `prompts.N.content.M.gcsKey` paths) that the history does not already store, so a client can send stored prompts back but cannot add an attachment key.
 
 Pass `chat`, the options given to `addGptRoutes`, to add two headless actions for clients that do not read server-sent events, such as a watch app. Both exist only when `chat` turns `asks` on: without `chat`, or with `asks` off, neither action exists, so a host that never turned asks on gets no new endpoints. `AiApp` adds them when its `asks` option is set.
 

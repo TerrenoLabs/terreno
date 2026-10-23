@@ -1,8 +1,23 @@
-import {isRbacUserModelName, type User} from "../auth";
+import type {User} from "../auth";
 import {APIError} from "../errors";
 import {logger} from "../logger";
 import {isPermissionSubset} from "./permissionUtils";
 import type {PermissionSet} from "./statements";
+
+/**
+ * True when RBAC is enabled and `modelName` names the user model: `"User"`, or the compiled
+ * name of the `userModel` passed to `createAccess`.
+ */
+export const isRbacUserModelName = (modelName: string, accessControl: unknown): boolean => {
+  if (!accessControl) {
+    return false;
+  }
+  if (modelName === "User") {
+    return true;
+  }
+  const userModelName = (accessControl as {userModel?: {modelName?: unknown}}).userModel?.modelName;
+  return typeof userModelName === "string" && userModelName === modelName;
+};
 
 /**
  * Enforces RoleManager's target-privilege rule on generic writes to the RBAC user model: an actor

@@ -18,6 +18,7 @@ import {APIError, apiErrorMiddleware, errorMessage} from "./errors";
 import type {AuthOptions} from "./expressServer";
 import {logger} from "./logger";
 import {isJwtCredentialExchangePath} from "./rateLimit/policies";
+import {isRbacUserModelName} from "./rbac/userWriteGuards";
 import {
   getCurrentRequestContext,
   getSessionIdFromJwtPayload,
@@ -223,21 +224,6 @@ const omitPrivilegedFieldsFromObject = (item: unknown, allowAdminWrite: boolean)
   }
   logger.warn(`Ignored privileged User fields on a modelRouter write: ${fieldsToDrop.join(", ")}`);
   return next;
-};
-
-/**
- * True when RBAC is enabled and `modelName` names the user model: `"User"`, or the compiled
- * name of the `userModel` passed to `createAccess`.
- */
-export const isRbacUserModelName = (modelName: string, accessControl: unknown): boolean => {
-  if (!accessControl) {
-    return false;
-  }
-  if (modelName === "User") {
-    return true;
-  }
-  const userModelName = (accessControl as {userModel?: {modelName?: unknown}}).userModel?.modelName;
-  return typeof userModelName === "string" && userModelName === modelName;
 };
 
 /**

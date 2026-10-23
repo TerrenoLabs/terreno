@@ -202,7 +202,7 @@ export * from "./rbac/scopes";
 export * from "./rbac/statements";
 export * from "./rbac/types";
 export * from "./rbac/userPlugin";
-export {assertCanWriteTargetUser} from "./rbac/userWriteGuards";
+export {assertCanWriteTargetUser, isRbacUserModelName} from "./rbac/userWriteGuards";
 export {
   type AuthorizedEmitEntry,
   emitPayloadToAuthorizedRoom,

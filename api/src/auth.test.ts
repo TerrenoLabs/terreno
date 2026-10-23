@@ -14,7 +14,6 @@ import {
   addMeRoutes,
   generateTokens,
   type HasSetPassword,
-  isRbacUserModelName,
   MAX_PASSWORD_LENGTH,
   omitUserRolesFromWriteBody,
   PRIVILEGED_USER_FIELDS,
@@ -28,6 +27,7 @@ import {apiUnauthorizedMiddleware} from "./errors";
 import {githubUserPlugin} from "./githubAuth";
 import {logger} from "./logger";
 import {Permissions} from "./permissions";
+import {isRbacUserModelName} from "./rbac/userWriteGuards";
 import {getCurrentRequestContext} from "./requestContext";
 import {TerrenoApp} from "./terrenoApp";
 import {type Food, FoodModel, getBaseServer, setupDb, setupTestData, UserModel} from "./tests";

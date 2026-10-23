@@ -599,6 +599,8 @@ export class AccountSecurityApp implements TerrenoPlugin {
         destructive: SECURITY_ACTIONS[action.id].destructive,
         id: action.id,
         label: SECURITY_ACTIONS[action.id].label,
+        method: action.method === "delete" ? "DELETE" : "POST",
+        path: action.path,
       }));
 
   private docs = (summary: string): express.RequestHandler =>

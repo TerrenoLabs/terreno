@@ -103,6 +103,7 @@ export {
   serializeJobsDashboardSearchParams,
 } from "./jobs/jobsDashboardParams";
 export {LocaleContentEditor} from "./LocaleContentEditor";
+export {MemberSecurityPanel, type MemberSecurityPanelProps} from "./orgs/MemberSecurityPanel";
 export {
   type OrganizationSummary,
   OrgDirectoryScreen,
@@ -115,6 +116,16 @@ export {
   type OrganizationSettings,
   organizationSettingsOf,
 } from "./orgs/organizationSettings";
+export {
+  type MemberSecurityAction,
+  type MemberSecurityActionResult,
+  type MemberSecuritySummary,
+  memberSecurityPath,
+  resolveSecurityActionRequest,
+  type UseMemberSecurityApiArgs,
+  type UseMemberSecurityApiResult,
+  useMemberSecurityApi,
+} from "./orgs/useMemberSecurityApi";
 export {useOrganizationsApi} from "./orgs/useOrganizationsApi";
 export {
   OrgContextProvider,

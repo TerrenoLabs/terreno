@@ -42,6 +42,13 @@ export interface AccountSecurityActionSummary {
   destructive: boolean;
   id: string;
   label: string;
+  /** HTTP method of the action's route, such as `POST` or `DELETE`. */
+  method: "DELETE" | "POST";
+  /**
+   * Route path relative to the user's security base (`.../:userId/security`), with `:param`
+   * placeholders for values the caller fills from the summary, such as `/passkeys/:passkeyId`.
+   */
+  path: string;
 }
 
 /** The body of `GET /users/:id/security`. */

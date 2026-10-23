@@ -800,7 +800,7 @@ Open risks:
     Screenshots go to artifacts.
   - Skills: verify-ui-changes, accessibility-testing, building-terreno-apps
 
-- [ ] **T24** — Org-admin member security panel
+- [x] **T24** — Org-admin member security panel
   - Depends on: T4, T9
   - Files: admin-frontend/src/orgs/MemberSecurityPanel.tsx, admin-frontend/src/orgs/MemberSecurityPanel.test.tsx, admin-frontend/src/orgs/useMemberSecurityApi.ts, admin-frontend/src/orgs/OrgMembersScreen.tsx, admin-frontend/src/index.tsx, example-frontend/e2e/org-admin-security.spec.ts, docs/reference/admin-frontend.md, changelog/unreleased/admin-member-security.md
   - Build:

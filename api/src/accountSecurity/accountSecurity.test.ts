@@ -174,10 +174,34 @@ describe("AccountSecurityApp", () => {
       expect(summary.lastSignIn.at).toBeTruthy();
       expect(summary.disabled).toBe(false);
       expect(summary.actions).toEqual([
-        {destructive: true, id: "reset-two-factor", label: "Reset two-factor"},
-        {destructive: true, id: "revoke-sessions", label: "Sign out everywhere"},
-        {destructive: false, id: "send-password-reset", label: "Send password reset"},
-        {destructive: true, id: "disable", label: "Disable account"},
+        {
+          destructive: true,
+          id: "reset-two-factor",
+          label: "Reset two-factor",
+          method: "POST",
+          path: "/reset-two-factor",
+        },
+        {
+          destructive: true,
+          id: "revoke-sessions",
+          label: "Sign out everywhere",
+          method: "POST",
+          path: "/revoke-sessions",
+        },
+        {
+          destructive: false,
+          id: "send-password-reset",
+          label: "Send password reset",
+          method: "POST",
+          path: "/send-password-reset",
+        },
+        {
+          destructive: true,
+          id: "disable",
+          label: "Disable account",
+          method: "POST",
+          path: "/disable",
+        },
       ]);
 
       // The summary never carries the TOTP secret, backup codes, or session tokens.
@@ -364,7 +388,15 @@ describe("AccountSecurityApp", () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({
         // issue-sign-in-link also applies, but an operator lacks user:issueSignInLink.
-        actions: [{destructive: false, id: "enable", label: "Enable account"}],
+        actions: [
+          {
+            destructive: false,
+            id: "enable",
+            label: "Enable account",
+            method: "POST",
+            path: "/enable",
+          },
+        ],
         betterAuthLinked: false,
         disabled: true,
         emailVerified: false,
@@ -785,9 +817,14 @@ describe("AccountSecurityApp", () => {
 
       const summary = await getSummary(app, operator.token, target.id);
       expect(summary.status).toBe(200);
-      expect(summary.body.data.actions.map((action: {id: string}) => action.id)).toContain(
-        "password-changed"
-      );
+      // Clients run a custom action from the summary alone: its method and placeholder path.
+      expect(summary.body.data.actions).toContainEqual({
+        destructive: false,
+        id: "password-changed",
+        label: "Password changed",
+        method: "DELETE",
+        path: "/audit-details/:itemId",
+      });
       const res = await supertest(app)
         .delete(`/users/${target.id}/security/audit-details/pk-123`)
         .set("authorization", `Bearer ${operator.token}`);

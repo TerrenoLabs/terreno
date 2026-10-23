@@ -195,7 +195,22 @@ User model has no `disabled` field (add `isDisabledPlugin`).
     "twoFactor": {"enabled": true, "backupCodesRemaining": 8},
     "sessions": {"active": 2},
     "lastSignIn": {"method": "github", "at": "2026-10-22T18:04:11.000Z"},
-    "actions": [{"id": "reset-two-factor", "label": "Reset two-factor", "destructive": true}]
+    "actions": [
+      {
+        "id": "reset-two-factor",
+        "label": "Reset two-factor",
+        "destructive": true,
+        "method": "POST",
+        "path": "/reset-two-factor"
+      },
+      {
+        "id": "remove-passkey",
+        "label": "Remove passkey",
+        "destructive": true,
+        "method": "DELETE",
+        "path": "/passkeys/:passkeyId"
+      }
+    ]
   }
 }
 ```
@@ -214,7 +229,7 @@ User model has no `disabled` field (add `isDisabledPlugin`).
 | `sessions.active` | Unexpired Better Auth sessions |
 | `lastSignIn.method` | Better Auth `lastLoginMethod`. Needs `lastLoginMethod: true` in `BetterAuthConfig` |
 | `lastSignIn.at` | Start time of the user's most recent Better Auth session |
-| `actions` | Recovery actions this server supports and that apply to this user, in display order |
+| `actions` | Recovery actions this server supports and that apply to this user, in display order. Each has `id`, `label`, `destructive`, `method` (`POST` or `DELETE`), and `path` relative to the user's security base, with `:param` placeholders (`/passkeys/:passkeyId`, `/accounts/:providerId`) filled from the summary's items |
 
 The summary never contains secrets: no TOTP secret, no backup codes, no session tokens, no
 OAuth tokens or provider account ids, and no passkey key material.
@@ -426,7 +441,13 @@ a `send-password-reset` event with `after: {providerId | passkeyId, reason: "las
 ## Actions
 
 The summary's `actions` list and the routes come from one action table. Each action has an
-`id`, a `label`, and a `destructive` flag (the admin UI confirms destructive actions first).
+`id`, a `label`, a `destructive` flag (the admin UI confirms destructive actions first), and
+its route: `method` and `path` under `.../:userId/security`. A client runs any listed action,
+including a custom one, from the summary alone: `{method} {securityBase}{path}`, filling
+`:passkeyId` from `passkeys.items[].id` and `:providerId` from `providers[].providerId`.
+`@terreno/admin-frontend`'s
+[`MemberSecurityPanel`](./admin-frontend.md#membersecuritypanel) renders this list on the
+org members screen, so a new action gets a button without a frontend change.
 
 | `id` | Label | Destructive | Listed when |
 | --- | --- | --- | --- |

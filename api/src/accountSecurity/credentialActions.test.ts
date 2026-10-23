@@ -123,10 +123,16 @@ const CREDENTIAL_ACTION_IDS = new Set(["remove-passkey", "unlink-provider"]);
 /** The summary's credential actions (the access actions are covered in accessActions.test.ts). */
 const credentialActionsOf = (
   res: supertest.Response
-): {destructive: boolean; id: string; label: string}[] =>
-  (res.body.data.actions as {destructive: boolean; id: string; label: string}[]).filter((action) =>
-    CREDENTIAL_ACTION_IDS.has(action.id)
-  );
+): {destructive: boolean; id: string; label: string; method: string; path: string}[] =>
+  (
+    res.body.data.actions as {
+      destructive: boolean;
+      id: string;
+      label: string;
+      method: string;
+      path: string;
+    }[]
+  ).filter((action) => CREDENTIAL_ACTION_IDS.has(action.id));
 
 const actionIdsOf = (res: supertest.Response): string[] =>
   credentialActionsOf(res).map((action) => action.id);
@@ -753,8 +759,20 @@ describe("credential recovery actions", () => {
 
       expect(actionIdsOf(after)).toEqual(["remove-passkey", "unlink-provider"]);
       expect(credentialActionsOf(after)).toEqual([
-        {destructive: true, id: "remove-passkey", label: "Remove passkey"},
-        {destructive: true, id: "unlink-provider", label: "Unlink provider"},
+        {
+          destructive: true,
+          id: "remove-passkey",
+          label: "Remove passkey",
+          method: "DELETE",
+          path: "/passkeys/:passkeyId",
+        },
+        {
+          destructive: true,
+          id: "unlink-provider",
+          label: "Unlink provider",
+          method: "DELETE",
+          path: "/accounts/:providerId",
+        },
       ]);
     });
   });

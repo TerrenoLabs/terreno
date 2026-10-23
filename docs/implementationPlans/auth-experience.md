@@ -639,7 +639,7 @@ Open risks:
   - Docs: `ui.md` gets an "Account security" section.
   - Skills: terreno-ui, update-docs, verify-ui-changes
 
-- [ ] **T18** — rtk client feature plugins
+- [x] **T18** — rtk client feature plugins
   - Depends on: T2
   - Files: rtk/src/betterAuthClient.ts, rtk/src/betterAuthTypes.ts, rtk/src/betterAuthClient.test.ts
   - Build:

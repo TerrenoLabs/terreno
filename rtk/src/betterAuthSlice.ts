@@ -217,10 +217,12 @@ export const generateBetterAuthSlice = (config: GenerateBetterAuthSliceConfig) =
       const sessionData = await authClient.getSession();
 
       if (sessionData?.data?.user && sessionData?.data?.session) {
+        const {user} = sessionData.data;
+        // A client created with `features` types `image` as optional; the state keeps null.
         dispatch(
           betterAuthSlice.actions.setSession({
-            user: sessionData.data.user as BetterAuthUser,
-            userId: sessionData.data.user.id,
+            user: {...user, image: user.image ?? null} as BetterAuthUser,
+            userId: user.id,
           })
         );
       } else {

@@ -83,7 +83,7 @@
     "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
-    "compile": "tsc",
+    "compile": "tsc && tsc -p tsconfig.typetests.json",
     "compile:watch": "tsc -w",
     "dev": "tsc -w",
     "lint": "biome check .",

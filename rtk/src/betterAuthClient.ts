@@ -6,17 +6,29 @@
  */
 
 import {expoClient} from "@better-auth/expo/client";
+import {passkeyClient} from "@better-auth/passkey/client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type {BetterAuthClientPlugin} from "better-auth/client";
-import {createAuthClient} from "better-auth/react";
+import {
+  lastLoginMethodClient,
+  multiSessionClient,
+  oneTimeTokenClient,
+  twoFactorClient,
+} from "better-auth/client/plugins";
+import {createAuthClient, type ReactAuthClient} from "better-auth/react";
 import * as SecureStore from "expo-secure-store";
-import type {BetterAuthBearerStorage, BetterAuthClientConfig} from "./betterAuthTypes";
+import type {
+  BetterAuthBearerStorage,
+  BetterAuthClientConfig,
+  BetterAuthClientFeatures,
+} from "./betterAuthTypes";
 import {IsWeb} from "./platform";
 
 // Re-export types for convenience
 export type {
   BetterAuthBearerStorage,
   BetterAuthClientConfig,
+  BetterAuthClientFeatures,
   BetterAuthOAuthProvider,
   BetterAuthSession,
   BetterAuthSessionData,
@@ -305,6 +317,98 @@ const resolveAuthBaseURL = (baseURL: string): string => {
   return `${trimmed}/api/auth`;
 };
 
+// The client plugin a feature adds when it is on. A feature set to `false`, or left out, adds
+// nothing; a widened `boolean` (read from env, say) is typed as on.
+type FeaturePlugin<
+  Features extends BetterAuthClientFeatures,
+  Key extends keyof BetterAuthClientFeatures,
+  Plugin,
+> = Key extends keyof Features ? ([Features[Key]] extends [false | undefined] ? [] : [Plugin]) : [];
+
+/**
+ * The typed client plugins for a `features` object, in the order `createBetterAuthClient`
+ * registers them. Better Auth infers each namespace (`client.twoFactor`, `client.passkey`, ...)
+ * from this tuple.
+ */
+export type BetterAuthFeaturePlugins<Features extends BetterAuthClientFeatures> = [
+  ...FeaturePlugin<Features, "twoFactor", ReturnType<typeof twoFactorClient>>,
+  ...FeaturePlugin<Features, "passkey", ReturnType<typeof passkeyClient>>,
+  ...FeaturePlugin<Features, "multiSession", ReturnType<typeof multiSessionClient>>,
+  ...FeaturePlugin<Features, "lastLoginMethod", ReturnType<typeof lastLoginMethodClient>>,
+  ...FeaturePlugin<Features, "oneTimeToken", ReturnType<typeof oneTimeTokenClient>>,
+];
+
+/**
+ * Type of the Better Auth client returned by createBetterAuthClient without `features`. Its
+ * plugins are typed as a generic list, so plugin namespaces are untyped.
+ */
+export type BetterAuthClient = ReactAuthClient<{
+  baseURL: string;
+  fetchOptions?: BetterAuthFetchOptions;
+  plugins: BetterAuthClientPlugin[];
+}>;
+
+/**
+ * Type of the Better Auth client returned by createBetterAuthClient with `features`, such as
+ * `BetterAuthClientWithFeatures<{twoFactor: true}>`. Every enabled feature's namespace is typed.
+ *
+ * The expo plugin is left out of the type: it is typed only as a generic plugin (see
+ * createBetterAuthClient), which would widen every namespace to `any`. It adds only `getCookie`.
+ */
+export type BetterAuthClientWithFeatures<Features extends BetterAuthClientFeatures> =
+  ReactAuthClient<{
+    baseURL: string;
+    fetchOptions?: BetterAuthFetchOptions;
+    plugins: BetterAuthFeaturePlugins<Features>;
+  }>;
+
+/**
+ * What the OAuth handoff helpers need from a client: any client createBetterAuthClient returns,
+ * with or without features.
+ */
+export type BetterAuthHandoffClient = Pick<BetterAuthClient, "$fetch" | "$store">;
+
+/**
+ * The client createBetterAuthClient returns for a `features` type. When the features are not
+ * known at compile time (no `features`, or a config typed as `BetterAuthClientConfig`), it is
+ * `BetterAuthClient`, exactly the client it always returned. When they are written out, every
+ * enabled feature's namespace is typed.
+ */
+export type BetterAuthClientFor<Features extends BetterAuthClientFeatures> =
+  BetterAuthClientFeatures extends Features
+    ? BetterAuthClient
+    : BetterAuthClientWithFeatures<Features>;
+
+/**
+ * Builds the client plugins for the enabled features, in BetterAuthFeaturePlugins order. They go
+ * after the expo plugin: better-fetch runs plugin hooks in order, so on native the expo plugin
+ * stores the 2FA challenge cookie before `onTwoFactorRedirect` runs, and its request hook adds the
+ * stored cookies to every feature call.
+ */
+const createFeaturePlugins = (features?: BetterAuthClientFeatures): BetterAuthClientPlugin[] => {
+  if (!features) {
+    return [];
+  }
+  const plugins: BetterAuthClientPlugin[] = [];
+  if (features.twoFactor) {
+    plugins.push(twoFactorClient(features.twoFactor === true ? undefined : features.twoFactor));
+  }
+  if (features.passkey) {
+    // Same declared-vs-structural mismatch as expoClient below.
+    plugins.push(passkeyClient() as unknown as BetterAuthClientPlugin);
+  }
+  if (features.multiSession) {
+    plugins.push(multiSessionClient());
+  }
+  if (features.lastLoginMethod) {
+    plugins.push(lastLoginMethodClient());
+  }
+  if (features.oneTimeToken) {
+    plugins.push(oneTimeTokenClient());
+  }
+  return plugins;
+};
+
 /**
  * Creates a Better Auth client configured for Expo/React Native.
  *
@@ -312,10 +416,15 @@ const resolveAuthBaseURL = (baseURL: string): string => {
  * client then authenticates with a stored bearer token instead of cookies. Read that token
  * elsewhere with `getBetterAuthBearerToken`.
  *
+ * Pass `features` to add the client plugins for the Better Auth features the server enables.
+ * Each one adds a typed namespace: `client.twoFactor`, `client.passkey`, `client.multiSession`,
+ * `client.oneTimeToken`, and `client.getLastUsedLoginMethod`.
+ *
  * @example
  * ```typescript
  * const authClient = createBetterAuthClient({
  *   baseURL: "http://localhost:3000",
+ *   features: {passkey: true, twoFactor: {onTwoFactorRedirect: () => router.push("/2fa")}},
  *   scheme: "terreno",
  * });
  *
@@ -326,9 +435,16 @@ const resolveAuthBaseURL = (baseURL: string): string => {
  *
  * // Get current session
  * const session = await authClient.getSession();
+ *
+ * // Feature namespaces are typed
+ * await authClient.twoFactor.enable({password});
  * ```
  */
-export const createBetterAuthClient = (config: BetterAuthClientConfig) => {
+export const createBetterAuthClient = <
+  const Features extends BetterAuthClientFeatures = BetterAuthClientFeatures,
+>(
+  config: BetterAuthClientConfig<Features>
+): BetterAuthClientFor<Features> => {
   const storagePrefix = config.storagePrefix ?? DEFAULT_STORAGE_PREFIX;
   // Mirrors the plugin's own `cookieName = `${storagePrefix}_cookie``.
   const storage = withCookieJarRepair({
@@ -353,7 +469,7 @@ export const createBetterAuthClient = (config: BetterAuthClientConfig) => {
 
   const client = createAuthClient({
     baseURL: config.baseURL,
-    plugins: [expoAuthPlugin],
+    plugins: [expoAuthPlugin, ...createFeaturePlugins(config.features)],
     ...(isWebBearer
       ? {
           fetchOptions: createWebBearerFetchOptions({
@@ -369,13 +485,9 @@ export const createBetterAuthClient = (config: BetterAuthClientConfig) => {
     isWebBearer,
     storagePrefix,
   });
-  return client;
+  // The plugins are built at runtime from `features`; BetterAuthClientFor is their type.
+  return client as unknown as BetterAuthClientFor<Features>;
 };
-
-/**
- * Type of the Better Auth client returned by createBetterAuthClient.
- */
-export type BetterAuthClient = ReturnType<typeof createBetterAuthClient>;
 
 // URL parameters of the OAuth handoff: T12's server puts the one-time token in the fragment as
 // `ott`, and the sign-in's nonce comes back in the callback query as `handoff`.
@@ -504,7 +616,7 @@ export const signInSocialWithHandoff = ({
   provider,
 }: {
   callbackURL?: string;
-  client: BetterAuthClient;
+  client: BetterAuthHandoffClient;
   errorCallbackURL?: string;
   provider: string;
 }): void => {
@@ -531,7 +643,7 @@ export const signInSocialWithHandoff = ({
  * finds a clean URL.
  */
 const takeHandoffToken = (
-  client: BetterAuthClient
+  client: BetterAuthHandoffClient
 ): {config: HandoffClientConfig; token: string} | null => {
   let current: URL;
   try {
@@ -581,7 +693,7 @@ const verifyHandoffToken = async ({
   config,
   token,
 }: {
-  client: BetterAuthClient;
+  client: BetterAuthHandoffClient;
   config: HandoffClientConfig;
   token: string;
 }): Promise<boolean> => {
@@ -649,7 +761,7 @@ const pendingHandoffs = new WeakMap<object, Promise<boolean>>();
 export const completeBetterAuthOAuthHandoff = ({
   client,
 }: {
-  client: BetterAuthClient;
+  client: BetterAuthHandoffClient;
 }): Promise<boolean> => {
   if (!IsWeb || typeof window === "undefined") {
     return Promise.resolve(false);

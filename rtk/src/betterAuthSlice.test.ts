@@ -229,6 +229,36 @@ describe("generateBetterAuthSlice", () => {
     expect(dispatchedActions[0].type).toBe("betterAuth/setLoading");
   });
 
+  it("syncSession stores a missing user image as null", async () => {
+    // A client created with `features` infers `image` as optional, so it can be absent.
+    const {image: _image, ...userWithoutImage} = {
+      createdAt: new Date(),
+      email: "test@example.com",
+      emailVerified: true,
+      id: "user-123",
+      image: null,
+      name: "Test User",
+      updatedAt: new Date(),
+    };
+    const authClient = {
+      getSession: mock(() =>
+        Promise.resolve({data: {session: {id: "session-456"}, user: userWithoutImage}})
+      ),
+      signOut: mock(() => Promise.resolve()),
+    };
+    const betterAuthSlice = generateBetterAuthSlice({authClient});
+
+    const dispatchedActions: UnknownAction[] = [];
+    await betterAuthSlice.syncSession((action: UnknownAction) => {
+      dispatchedActions.push(action);
+    });
+
+    const setSession = dispatchedActions.find((action) => action.type === "betterAuth/setSession");
+    const payload = (setSession as {payload: {user: BetterAuthUser}} | undefined)?.payload;
+    expect(payload?.user.image).toBeNull();
+    expect(payload?.user.email).toBe("test@example.com");
+  });
+
   it("syncSession clears state when no user session is returned", async () => {
     mockAuthClient.getSession = mock(() =>
       Promise.resolve({

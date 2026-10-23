@@ -336,6 +336,54 @@ export const authClient = createBetterAuthClient({
 On web the client authenticates with Better Auth's session cookie. When the web frontend and
 the API are on different sites, use [bearer mode](#frontend-and-api-on-different-sites).
 
+#### Client features
+
+When the server turns on [auth features](#auth-features), pass `features` so the client gets
+the matching Better Auth client plugins and their typed methods:
+
+``````typescript
+import {router} from "expo-router";
+import {createBetterAuthClient} from "@terreno/rtk";
+
+export const authClient = createBetterAuthClient({
+  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  features: {
+    lastLoginMethod: true,
+    multiSession: true,
+    passkey: true,
+    twoFactor: {onTwoFactorRedirect: () => router.push("/twoFactor")},
+  },
+  scheme: "yourapp",
+});
+
+await authClient.twoFactor.enable({password});
+await authClient.passkey.addPasskey({name: "Laptop"});
+const sessions = await authClient.multiSession.listDeviceSessions();
+``````
+
+| Feature | Client plugin | Adds |
+| --- | --- | --- |
+| `twoFactor: true \| {onTwoFactorRedirect}` | `twoFactorClient` | `client.twoFactor.*` (`enable`, `disable`, `getTotpUri`, `verifyTotp`, `generateBackupCodes`, `verifyBackupCode`, ...). `onTwoFactorRedirect({twoFactorMethods})` runs when a sign-in answers `twoFactorRedirect` instead of a session. In [bearer mode](#frontend-and-api-on-different-sites) the 2FA challenge and trusted-device cookies are not sent yet, so finishing a 2FA sign-in needs cookie mode or native |
+| `passkey: true` | `passkeyClient` from `@better-auth/passkey/client` | `client.passkey.*` (`addPasskey`, `listUserPasskeys`, `deletePasskey`, `updatePasskey`) and `client.signIn.passkey()`. Web only: React Native has no WebAuthn. In bearer mode the passkey challenge cookie is not sent yet, so registering and signing in need cookie mode |
+| `multiSession: true` | `multiSessionClient` | `client.multiSession.*` (`listDeviceSessions`, `setActive`, `revoke`). Not in bearer mode: the server tracks device sessions in `session_token_multi-*` cookies, so `listDeviceSessions` answers `[]`; use [remembered accounts](#4-remember-accounts-on-this-device) for switching there |
+| `lastLoginMethod: true` | `lastLoginMethodClient` | `client.getLastUsedLoginMethod()`, `isLastUsedLoginMethod(method)`, `clearLastUsedLoginMethod()`. They read the server's cookie, so they return `null` on native and in [bearer mode](#frontend-and-api-on-different-sites); use [remembered accounts](#4-remember-accounts-on-this-device) there |
+| `oneTimeToken: true` | `oneTimeTokenClient` | `client.oneTimeToken.generate()` and `verify({token})`. The OAuth handoff does not need it |
+
+Notes:
+
+- **Types.** Each enabled feature's namespace is typed from the plugin, with no casts, when
+  `features` is written out at the call. Without `features`, or when the config's type does not
+  say which features are on (a config typed `BetterAuthClientConfig`, or a wrapper that forwards
+  `features?: BetterAuthClientFeatures`), the client is `BetterAuthClient`, exactly what it was
+  before, and `ReturnType<typeof createBetterAuthClient>` is still `BetterAuthClient`. `false`
+  or a missing key adds nothing; a `boolean` read at runtime (`{twoFactor: isOn}`) is typed as
+  on. Name the typed client with `BetterAuthClientWithFeatures<{twoFactor: true}>`.
+- **Native.** The feature plugins go after the Expo plugin. Better-fetch runs plugin hooks in
+  order, so on native the Expo plugin stores the 2FA challenge cookie before
+  `onTwoFactorRedirect` runs, and every feature call sends the stored cookies.
+- **Server first.** A client feature only adds client methods. Turn the feature on in
+  `BetterAuthConfig` too, or its calls answer 404.
+
 ### 2. Add Session Redux Slice
 
 ``````typescript

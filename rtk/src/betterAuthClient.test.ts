@@ -1,4 +1,5 @@
 import {afterAll, afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
+import type {BetterAuthClient, BetterAuthClientFeatures} from "./betterAuthClient";
 
 // Force IsWeb=true regardless of load order with native test files (authSliceNative).
 mock.module("./platform", () => ({IsWeb: true}));
@@ -772,10 +773,7 @@ describe("OAuth handoff for web bearer clients", () => {
     });
 
   // Starts a sign-in on the app's home page and returns the nonce it stored.
-  const startSignIn = (
-    client: ReturnType<typeof createBetterAuthClient>,
-    browser: FakeBrowser
-  ): string => {
+  const startSignIn = (client: BetterAuthClient, browser: FakeBrowser): string => {
     signInSocialWithHandoff({client, provider: "google"});
     const nonce = browser.sessionStorage.getItem(NONCE_KEY);
     if (!nonce) {
@@ -1240,9 +1238,213 @@ describe("OAuth handoff for web bearer clients", () => {
     await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
 
     const browser = installBrowser("http://localhost:8082/?handoff=n#ott=abc");
-    const foreign = {} as ReturnType<typeof createBetterAuthClient>;
+    const foreign = {} as BetterAuthClient;
     await expect(completeBetterAuthOAuthHandoff({client: foreign})).resolves.toBe(false);
     expect(browser.href()).toBe("http://localhost:8082/");
+  });
+});
+
+interface FeatureRequest {
+  method: string | undefined;
+  pathname: string;
+}
+
+// Loose view of the real client the feature tests drive, since the test file is not type-checked
+// against the feature overloads.
+interface FeatureClient {
+  getLastUsedLoginMethod: () => string | null;
+  isLastUsedLoginMethod: (method: string) => boolean;
+  multiSession: {listDeviceSessions: () => Promise<unknown>};
+  oneTimeToken: {verify: (body: {token: string}) => Promise<unknown>};
+  passkey: {addPasskey: () => Promise<{error: unknown}>};
+  signIn: {email: (body: {email: string; password: string}) => Promise<unknown>};
+  twoFactor: {enable: (body: {password: string}) => Promise<unknown>};
+}
+
+// Makes createBetterAuthClient return the real Better Auth client built from the plugins and
+// options it passed, with fetch replaced by a fake server.
+const useRealFeatureClient = (
+  server: FakeServer
+): {auth: Array<Omit<SentRequest, "pathname">>; sent: FeatureRequest[]} => {
+  const sent: FeatureRequest[] = [];
+  const auth: Array<Omit<SentRequest, "pathname">> = [];
+  captured.build = (config: Record<string, unknown>): unknown => {
+    const customFetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+      sent.push({method: init?.method, pathname: new URL(input.toString()).pathname});
+      auth.push({
+        authorization: new Headers(init?.headers).get("authorization"),
+        credentials: init?.credentials,
+      });
+      return server(new URL(input.toString()).pathname);
+    };
+    return createRealAuthClient({
+      baseURL: config.baseURL as string,
+      fetchOptions: {...(config.fetchOptions as Record<string, unknown>), customFetchImpl},
+      // The mocked expo plugin has no hooks, so the real client runs only the feature plugins.
+      plugins: config.plugins as never,
+    });
+  };
+  return {auth, sent};
+};
+
+const pluginIds = (): unknown[] => {
+  const plugins = (captured.auth?.plugins ?? []) as Array<{id?: string; name?: string}>;
+  return plugins.map((plugin) => plugin.id ?? plugin.name);
+};
+
+const createFeatureClient = (features: BetterAuthClientFeatures): FeatureClient => {
+  return createBetterAuthClient({
+    baseURL: "http://localhost:4000",
+    features,
+    scheme: "terreno",
+  }) as unknown as FeatureClient;
+};
+
+describe("createBetterAuthClient features", () => {
+  const globalWithDocument = globalThis as {document?: unknown};
+  const hadDocument = "document" in globalWithDocument;
+  const originalDocument = globalWithDocument.document;
+
+  beforeEach(() => {
+    captured.auth = null;
+    captured.build = null;
+  });
+
+  afterEach(() => {
+    captured.build = null;
+    if (hadDocument) {
+      globalWithDocument.document = originalDocument;
+    } else {
+      delete globalWithDocument.document;
+    }
+  });
+
+  it("registers only the expo plugin without features, as before", () => {
+    createBetterAuthClient({baseURL: "http://localhost:4000", scheme: "terreno"});
+    expect(pluginIds()).toEqual(["expo-plugin"]);
+    expect(Object.keys(captured.auth ?? {}).sort()).toEqual(["baseURL", "plugins"]);
+  });
+
+  it("registers no feature plugins for features that are off", () => {
+    createFeatureClient({});
+    expect(pluginIds()).toEqual(["expo-plugin"]);
+    createFeatureClient({
+      lastLoginMethod: false,
+      multiSession: false,
+      oneTimeToken: false,
+      passkey: false,
+      twoFactor: false,
+    });
+    expect(pluginIds()).toEqual(["expo-plugin"]);
+  });
+
+  it("registers every feature plugin after the expo plugin", () => {
+    createFeatureClient({
+      lastLoginMethod: true,
+      multiSession: true,
+      oneTimeToken: true,
+      passkey: true,
+      twoFactor: true,
+    });
+    expect(pluginIds()).toEqual([
+      "expo-plugin",
+      "two-factor",
+      "passkey",
+      "multi-session",
+      "last-login-method-client",
+      "one-time-token",
+    ]);
+  });
+
+  it("twoFactor exposes client.twoFactor, posting enable to /two-factor/enable", async () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse({totpURI: "otpauth://x"}));
+    const client = createFeatureClient({twoFactor: true});
+
+    await client.twoFactor.enable({password: "secret"});
+
+    expect(pluginIds()).toContain("two-factor");
+    expect(sent).toEqual([{method: "POST", pathname: "/api/auth/two-factor/enable"}]);
+  });
+
+  it("twoFactor calls onTwoFactorRedirect with the methods when sign-in needs a second factor", async () => {
+    useRealFeatureClient(() => jsonResponse({twoFactorMethods: ["totp"], twoFactorRedirect: true}));
+    const redirects: unknown[] = [];
+    const client = createFeatureClient({
+      twoFactor: {
+        onTwoFactorRedirect: (context): void => {
+          redirects.push(context);
+        },
+      },
+    });
+
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+
+    expect(redirects).toEqual([{twoFactorMethods: ["totp"]}]);
+  });
+
+  it("passkey exposes client.passkey.addPasskey, which asks /passkey/generate-register-options", async () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse({message: "nope"}, {status: 401}));
+    const client = createFeatureClient({passkey: true});
+
+    const result = await client.passkey.addPasskey();
+
+    expect(result.error).toBeTruthy();
+    expect(sent).toEqual([
+      {method: "GET", pathname: "/api/auth/passkey/generate-register-options"},
+    ]);
+  });
+
+  it("multiSession exposes client.multiSession, reading /multi-session/list-device-sessions", async () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse([]));
+    const client = createFeatureClient({multiSession: true});
+
+    await client.multiSession.listDeviceSessions();
+
+    expect(pluginIds()).toContain("multi-session");
+    expect(sent).toEqual([
+      {method: "GET", pathname: "/api/auth/multi-session/list-device-sessions"},
+    ]);
+  });
+
+  it("lastLoginMethod exposes getLastUsedLoginMethod, read from the cookie with no request", () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse({}));
+    globalWithDocument.document = {cookie: "better-auth.last_used_login_method=github"};
+    const client = createFeatureClient({lastLoginMethod: true});
+
+    expect(client.getLastUsedLoginMethod()).toBe("github");
+    expect(client.isLastUsedLoginMethod("github")).toBe(true);
+    expect(sent).toEqual([]);
+  });
+
+  it("sends feature calls with the stored bearer and no cookies in web bearer mode", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    const {auth, sent} = useRealFeatureClient(() =>
+      jsonResponse({totpURI: "otpauth://x"}, {headers: {"set-auth-token": "t2"}})
+    );
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage,
+      features: {twoFactor: true},
+      scheme: "terreno",
+      webAuth: "bearer",
+    }) as unknown as FeatureClient;
+
+    await client.twoFactor.enable({password: "secret"});
+
+    expect(sent).toEqual([{method: "POST", pathname: "/api/auth/two-factor/enable"}]);
+    expect(auth).toEqual([{authorization: "Bearer t1", credentials: "omit"}]);
+    // A token a feature endpoint issues replaces the stored one.
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t2");
+  });
+
+  it("oneTimeToken exposes client.oneTimeToken, posting verify to /one-time-token/verify", async () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse({session: null}));
+    const client = createFeatureClient({oneTimeToken: true});
+
+    await client.oneTimeToken.verify({token: "t"});
+
+    expect(pluginIds()).toContain("one-time-token");
+    expect(sent).toEqual([{method: "POST", pathname: "/api/auth/one-time-token/verify"}]);
   });
 });
 

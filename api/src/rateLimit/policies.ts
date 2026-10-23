@@ -21,10 +21,31 @@ const normalizeRequestPath = (url: string): string => {
   return withoutSlash.toLowerCase();
 };
 
+const PATH_BASE = "http://terreno.invalid";
+
+/**
+ * Resolve `.`/`..` segments (including `%2e` forms) the way the WHATWG URL parser does. Better
+ * Auth routes on that parsed pathname, so `/api/auth/%2e/sign-in/email` reaches sign-in.
+ */
+const resolveDotSegments = (path: string): string => {
+  try {
+    const url = path.startsWith("/") ? new URL(`${PATH_BASE}${path}`) : new URL(path, PATH_BASE);
+    return url.pathname;
+  } catch {
+    return path;
+  }
+};
+
 /** Prefer Express `req.path` (routing) over the raw request-target. */
-const requestPath = (req: Request): string => {
+const rawRequestPath = (req: Request): string => {
   const raw = req.path || req.url || req.originalUrl || "";
   return normalizeRequestPath(raw);
+};
+
+/** The request path as a WHATWG-normalizing router such as Better Auth's sees it. */
+const requestPath = (req: Request): string => {
+  const raw = req.path || req.url || req.originalUrl || "";
+  return normalizeRequestPath(resolveDotSegments(stripQueryAndFragment(raw)));
 };
 
 const JWT_CREDENTIAL_EXCHANGE_EXACT = new Set([
@@ -42,7 +63,7 @@ const JWT_CREDENTIAL_EXCHANGE_EXACT = new Set([
  * `setupAuth` runs before those routes so the client can still exchange credentials.
  */
 export const isJwtCredentialExchangePath = (req: Request): boolean => {
-  return JWT_CREDENTIAL_EXCHANGE_EXACT.has(requestPath(req));
+  return JWT_CREDENTIAL_EXCHANGE_EXACT.has(rawRequestPath(req));
 };
 
 export const shouldSkipRateLimit = (
@@ -50,6 +71,10 @@ export const shouldSkipRateLimit = (
   extraSkip?: (req: Request) => boolean
 ): boolean => {
   const path = requestPath(req);
+  // A path with dot segments may route somewhere else than it looks; never exempt it.
+  if (path !== rawRequestPath(req)) {
+    return false;
+  }
   if (req.method === "GET" && (path === "/health" || path === "/healthz")) {
     return true;
   }
@@ -103,23 +128,36 @@ const betterAuthAuthPrefixes = (basePath: string): string[] => {
   ];
 };
 
-export const classifyRateLimitPolicy = (
-  req: Request,
-  betterAuthBasePath = DEFAULT_BETTER_AUTH_BASE_PATH
-): RateLimitPolicyName => {
-  const path = requestPath(req);
+const isAuthPath = (path: string, betterAuthBasePath: string): boolean => {
   if (AUTH_EXACT.has(path)) {
-    return "auth";
+    return true;
   }
   for (const prefix of AUTH_PREFIXES) {
     if (path.startsWith(prefix)) {
-      return "auth";
+      return true;
     }
   }
   for (const prefix of betterAuthAuthPrefixes(betterAuthBasePath)) {
     if (path === prefix || path.startsWith(`${prefix}/`)) {
-      return "auth";
+      return true;
     }
+  }
+  return false;
+};
+
+/**
+ * Charge the auth bucket when either the path as written or its dot-segment-resolved form is a
+ * credential route, since Express and Better Auth may route the same request differently.
+ */
+export const classifyRateLimitPolicy = (
+  req: Request,
+  betterAuthBasePath = DEFAULT_BETTER_AUTH_BASE_PATH
+): RateLimitPolicyName => {
+  if (
+    isAuthPath(requestPath(req), betterAuthBasePath) ||
+    isAuthPath(rawRequestPath(req), betterAuthBasePath)
+  ) {
+    return "auth";
   }
   return "api";
 };

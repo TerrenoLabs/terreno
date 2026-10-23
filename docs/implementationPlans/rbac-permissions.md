@@ -880,6 +880,9 @@ export interface PermissionSource {
   // "use-stale-bounded" with a short staleMaxAgeMs — never unbounded stale reuse.
   staleOnFailure?: StaleOnFailurePolicy;
   staleMaxAgeMs?: number; // required when staleOnFailure === "use-stale-bounded"
+  // Default true: a failure with no last-known deny posture for the user throws 503.
+  // Set false on additive-only sources that never return deny.
+  failClosedWhenDenyUnknown?: boolean;
   getGrants(args: {user: User}): Promise<PermissionSourceGrants | null>;
 }
 ```
@@ -909,7 +912,7 @@ behavior is per-source `staleOnFailure` (default `"deny"`):
 
 | Policy | Behavior |
 |---|---|
-| `"deny"` (default) | Omit this source's additive grants (`roles`, `permissions`) for the request. Local `user.roles` and other sources still apply. If a prior fetch returned a `deny` set, keep applying that last-known deny so IdP/ABAC restrictions do not lift while the source is down; cache invalidation and eviction do not drop it, and a set resolved during a failure is not cached. With no last-known deny (cold process), local roles apply unless the source sets `failClosedWhenDenyUnknown: true`, which throws 503. Revoked upstream *elevations* cannot linger because a dependency is down. |
+| `"deny"` (default) | Omit this source's additive grants (`roles`, `permissions`) for the request. Local `user.roles` and other sources still apply. If a prior fetch returned a `deny` set, keep applying that last-known deny so IdP/ABAC restrictions do not lift while the source is down; cache invalidation and eviction do not drop it, and a set resolved during a failure is not cached. With no last-known deny (cold process, or the posture was evicted), the check throws 503 `Permission source unavailable`, because the source's deny is unknown. Additive-only sources that never return `deny` set `failClosedWhenDenyUnknown: false`; their failure then only drops their grants and local roles apply. Revoked upstream *elevations* cannot linger because a dependency is down. |
 | `"use-stale-bounded"` | Reuse the last successful grants only if younger than `staleMaxAgeMs` (hard cap). Suitable for read-only hints, not elevation. |
 | `"use-stale"` | Reuse last successful grants until TTL expiry. **Not permitted** for sources that can grant roles/permissions beyond what local roles already provide — elevation paths must fail closed. |
 

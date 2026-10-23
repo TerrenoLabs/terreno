@@ -112,9 +112,10 @@ export interface PermissionSource {
   staleOnFailure?: StaleOnFailurePolicy;
   staleMaxAgeMs?: number;
   /**
-   * When true, a failed `getGrants` for a user this process has no last-known deny posture for
-   * (cold instance, or the posture was evicted) throws a 503 instead of resolving local roles
-   * without this source's deny. Set it on sources whose `deny` must never lift. Default `false`.
+   * When true (the default), a failed `getGrants` for a user this process has no last-known deny
+   * posture for (cold instance, or the posture was evicted) throws a 503 instead of resolving
+   * local roles without this source's deny. Set it to `false` on additive-only sources that never
+   * return `deny`, so their outage drops only their grants.
    */
   failClosedWhenDenyUnknown?: boolean;
   getGrants: (args: {user: User}) => Promise<PermissionSourceGrants | null>;

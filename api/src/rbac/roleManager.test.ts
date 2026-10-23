@@ -635,6 +635,7 @@ describe("roleManager", () => {
     const UserModel = getRbacTestUserModel();
     let shouldFail = false;
     const source: PermissionSource = {
+      failClosedWhenDenyUnknown: false,
       getGrants: async () => {
         if (shouldFail) {
           throw new Error("source unavailable");

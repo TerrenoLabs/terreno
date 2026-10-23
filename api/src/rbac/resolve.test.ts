@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 
 import type {User} from "../auth";
 import {setupDb} from "../tests";
+import {membershipOrgAdminPermissionSource} from "./membershipOrgAdminSource";
 import {createPermissionResolver} from "./resolve";
 import {createRbacRoleModel} from "./roleModel";
 import {terrenoStatements} from "./statements";
@@ -329,12 +330,13 @@ describe("createPermissionResolver", () => {
     expect(afterFailure.todo ?? []).not.toContain("list");
   });
 
-  it("skips failed sources when stale policy is deny", async () => {
+  it("skips failed additive-only sources when stale policy is deny", async () => {
     await setupDb();
     const RbacRole = createRbacRoleModel(mongoose.connection);
     await RbacRole.seedDefaults({statements: appStatements});
 
     const source: PermissionSource = {
+      failClosedWhenDenyUnknown: false,
       getGrants: mock(async () => {
         throw new Error("source unavailable");
       }),
@@ -457,13 +459,15 @@ describe("createPermissionResolver", () => {
       expect((await resolver.resolvePermissionsForUser(userA)).todo).toEqual(["read"]);
 
       setDown(true);
-      await resolver.resolvePermissionsForUser(createTestUser({roles: ["writer"]}));
+      await expect(
+        resolver.resolvePermissionsForUser(createTestUser({roles: ["writer"]}))
+      ).rejects.toMatchObject({status: 503});
       expect((await resolver.resolvePermissionsForUser(userA)).todo).toEqual(["read"]);
     });
 
     it("does not cache a set computed while a source was failing", async () => {
       const RbacRole = await seedWriter();
-      const {source, setDown} = flakyDenySource();
+      const {source, setDown} = flakyDenySource({failClosedWhenDenyUnknown: false});
       const resolver = createPermissionResolver({
         cacheTtlMs: 60_000,
         rbacRoleModel: RbacRole,
@@ -476,6 +480,43 @@ describe("createPermissionResolver", () => {
       expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read", "update"]);
       setDown(false);
       expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read"]);
+    });
+
+    it("fails closed on a cold failure by default", async () => {
+      const RbacRole = await seedWriter();
+      const {source, setDown} = flakyDenySource();
+      const resolver = createPermissionResolver({
+        cacheTtlMs: 0,
+        rbacRoleModel: RbacRole,
+        sources: [source],
+        statements: appStatements,
+      });
+      setDown(true);
+      await expect(
+        resolver.resolvePermissionsForUser(createTestUser({roles: ["writer"]}))
+      ).rejects.toMatchObject({status: 503, title: "Permission source unavailable"});
+      await expect(
+        resolver.resolvePermissionsForUserUncached(createTestUser({roles: ["writer"]}))
+      ).rejects.toMatchObject({status: 503, title: "Permission source unavailable"});
+    });
+
+    it("resolves local roles on a cold failure when the source opts out", async () => {
+      const RbacRole = await seedWriter();
+      const {source, setDown} = flakyDenySource({failClosedWhenDenyUnknown: false});
+      const resolver = createPermissionResolver({
+        cacheTtlMs: 0,
+        rbacRoleModel: RbacRole,
+        sources: [source],
+        statements: appStatements,
+      });
+      setDown(true);
+      expect(
+        (await resolver.resolvePermissionsForUser(createTestUser({roles: ["writer"]}))).todo
+      ).toEqual(["read", "update"]);
+    });
+
+    it("keeps the built-in membership source open on a cold failure", () => {
+      expect(membershipOrgAdminPermissionSource().failClosedWhenDenyUnknown).toBe(false);
     });
 
     it("fails closed on a cold failure when the source opts in", async () => {

@@ -26,6 +26,11 @@ interface SourceFetchResult {
 }
 
 const DEFAULT_CACHE_TTL_MS = 30_000;
+
+/** Sources fail closed on a cold failure unless they opt out (additive-only sources). */
+const failsClosedWhenDenyUnknown = (source: PermissionSource): boolean => {
+  return source.failClosedWhenDenyUnknown !== false;
+};
 const DEFAULT_MAX_CACHE_ENTRIES = 10_000;
 
 const getUserRoles = (user: User): string[] => {
@@ -73,7 +78,8 @@ export const createPermissionResolver = <S extends Statements>(args: {
   // Last-known deny set per user and source from the last successful fetch. Kept apart from the
   // grant caches so role edits (invalidateCache) and permission-cache eviction cannot lift an
   // IdP/ABAC restriction while its source is down. Only users with a deny set (or a source that
-  // opts into failClosedWhenDenyUnknown, which needs a "no deny" marker) take an entry.
+  // fails closed when the deny is unknown, the default, which needs a "no deny" marker) take an
+  // entry.
   const denyPosture = new Map<string, Map<string, PermissionSet | null>>();
 
   const enforceCacheBound = (): void => {
@@ -113,7 +119,7 @@ export const createPermissionResolver = <S extends Statements>(args: {
   ): void => {
     const deny = grants?.deny && Object.keys(grants.deny).length > 0 ? grants.deny : null;
     const userPosture = denyPosture.get(userId);
-    if (!deny && !source.failClosedWhenDenyUnknown) {
+    if (!deny && !failsClosedWhenDenyUnknown(source)) {
       userPosture?.delete(source.name);
       if (userPosture?.size === 0) {
         denyPosture.delete(userId);
@@ -217,7 +223,7 @@ export const createPermissionResolver = <S extends Statements>(args: {
       const deny = userPosture.get(source.name);
       return deny ? {deny} : null;
     }
-    if (source.failClosedWhenDenyUnknown) {
+    if (failsClosedWhenDenyUnknown(source)) {
       throw new APIError({
         detail: `Permission source ${source.name} failed before its deny set was known`,
         status: 503,

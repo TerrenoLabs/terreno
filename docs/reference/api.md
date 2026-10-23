@@ -1149,16 +1149,21 @@ statements must list `updateIdentity` for any role to hold it.
 
 `createAccess({sources})` adds `PermissionSource`s (IdP or ABAC lookups) whose `getGrants` returns
 `roles`, `permissions`, and `deny`. When `getGrants` throws, the source's `staleOnFailure` applies
-(default `"deny"`: drop its additive grants, keep local `user.roles`). Under every policy:
+(default `"deny"`: drop its additive grants, keep local `user.roles`) once this process knows the
+source's deny posture for the user. Under every policy:
 
 - The last `deny` set a source returned for a user stays in force while the source is down. It is
   kept apart from the grant caches, so `invalidateCache` (every role edit) and permission-cache
   eviction do not lift it. A later successful fetch without `deny` clears it.
 - A permission set resolved while any source was failing is not cached, so recovery takes effect
   on the next check.
-- A process that never fetched the user's grants (a new instance) has no last-known deny. It
-  resolves local roles without the source's `deny`, unless the source sets
-  `failClosedWhenDenyUnknown: true`; then the check throws 503 `Permission source unavailable`.
+- A process with no last-known deny for the user (a new instance, or the posture was evicted)
+  fails closed by default: the check throws 503 `Permission source unavailable`, because the
+  source's deny is unknown. `failClosedWhenDenyUnknown` defaults to `true`.
+- Set `failClosedWhenDenyUnknown: false` on additive-only sources that never return `deny` (IdP
+  role mappings, membership lookups). Their cold failure then drops only their grants and local
+  roles apply. The built-in organization membership source (`createAccess({organizations: true})`)
+  sets it.
 
 ## Request Validation
 

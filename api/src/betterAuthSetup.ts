@@ -345,7 +345,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
       bearer(),
       createMethodsPlugin(),
       createSetPasswordPlugin({userModel}),
-      ...buildFeaturePlugins(config),
+      ...buildFeaturePlugins(config, typeof merged.baseURL === "string" ? merged.baseURL : baseURL),
       ...(isLinkingDisabled ? [createLinkingDisabledPlugin()] : []),
       ...(userModel
         ? [createAppUserSyncPlugin(userModel), createSecurityEventsPlugin(userModel)]

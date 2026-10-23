@@ -3,6 +3,7 @@ import {
   type AuthProvider,
   type BetterAuthAccountLinkingMode,
   type BetterAuthConfig,
+  type BetterAuthOAuthProxyConfig,
   type BetterAuthPasskeyConfig,
   logger,
 } from "@terreno/api";
@@ -44,6 +45,12 @@ const MOCK_OIDC_CLIENT_ID = "terreno-example-e2e";
 const MOCK_OIDC_CLIENT_SECRET = "terreno-example-e2e-secret";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/**
+ * Sign in with Apple posts its `form_post` return from this origin. A browser that holds a
+ * `SameSite=None` cookie for the API sends it on that POST, so Better Auth checks the Origin.
+ */
+export const APPLE_SIGN_IN_ORIGIN = "https://appleid.apple.com";
 
 /**
  * The generic OAuth plugin for the mock OIDC provider at `MOCK_OIDC_ISSUER`, or undefined when
@@ -177,6 +184,73 @@ const buildDeployablePasskeyConfig = (): BetterAuthPasskeyConfig | undefined => 
   return undefined;
 };
 
+/**
+ * `OAUTH_PROXY_PRODUCTION_URL`: the backend that owns the registered OAuth callbacks (the stable
+ * deploy). Previews set it so their OAuth sign-ins return through it; the stable deploy sets it
+ * to its own URL, because its callback is what forwards a preview's return.
+ */
+const buildOAuthProxyConfig = (): BetterAuthOAuthProxyConfig | undefined => {
+  const value = process.env.OAUTH_PROXY_PRODUCTION_URL;
+  if (!value) {
+    return undefined;
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new APIError({status: 500, title: "OAUTH_PROXY_PRODUCTION_URL must be an http(s) URL"});
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new APIError({status: 500, title: "OAUTH_PROXY_PRODUCTION_URL must be an http(s) URL"});
+  }
+  return {productionURL: url.origin};
+};
+
+/**
+ * Stands in for a provider's client secret on a preview behind oauth-proxy. A preview only starts
+ * sign-ins (which need the client ID); the stable deploy exchanges every code with the real
+ * secret, so previews never get client secrets or the Apple key. Better Auth still refuses to
+ * configure Google or GitHub without some secret, so previews pass this value.
+ */
+export const OAUTH_PROXY_PREVIEW_CLIENT_SECRET = "unused-on-oauth-proxy-preview";
+
+// Whether this server is a preview that proxies OAuth through another (production) server.
+const isOAuthProxyPreview = (
+  baseURL: string,
+  proxy: BetterAuthOAuthProxyConfig | undefined
+): boolean => {
+  if (!proxy) {
+    return false;
+  }
+  try {
+    return new URL(baseURL).origin !== proxy.productionURL;
+  } catch {
+    return true;
+  }
+};
+
+// A provider's client secret from env, or the preview placeholder when only the ID is mounted.
+const clientSecretFor = (envSecret: string | undefined, isPreview: boolean): string | undefined =>
+  envSecret || (isPreview ? OAUTH_PROXY_PREVIEW_CLIENT_SECRET : undefined);
+
+/**
+ * Sign in with Apple from env: the key form (`APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`,
+ * `APPLE_PRIVATE_KEY`), from which Terreno signs the client secret at startup, or a pre-made
+ * `APPLE_CLIENT_SECRET`. The key form wins when both are set.
+ */
+const buildAppleOAuthConfig = (isPreview: boolean): BetterAuthConfig["appleOAuth"] => {
+  const clientId = process.env.APPLE_CLIENT_ID;
+  if (!clientId) {
+    return undefined;
+  }
+  const {APPLE_CLIENT_SECRET, APPLE_KEY_ID, APPLE_PRIVATE_KEY, APPLE_TEAM_ID} = process.env;
+  if (APPLE_TEAM_ID && APPLE_KEY_ID && APPLE_PRIVATE_KEY) {
+    return {clientId, keyId: APPLE_KEY_ID, privateKey: APPLE_PRIVATE_KEY, teamId: APPLE_TEAM_ID};
+  }
+  const clientSecret = clientSecretFor(APPLE_CLIENT_SECRET, isPreview);
+  return clientSecret ? {clientId, clientSecret} : undefined;
+};
+
 export const getAuthProvider = (): AuthProvider => {
   const provider = process.env.AUTH_PROVIDER as AuthProvider | undefined;
   return provider ?? "better-auth";
@@ -236,7 +310,8 @@ export const buildBetterAuthConfig = (): BetterAuthConfig | undefined => {
     return undefined;
   }
 
-  // The example turns on every auth feature except oauthProxy; env tunes the policy.
+  // The example turns on every auth feature; env tunes the policy, and oauthProxy follows
+  // OAUTH_PROXY_PRODUCTION_URL, which only deploys set.
   const config: BetterAuthConfig = {
     accountLinking: {mode: getAccountLinkingMode()},
     baseURL: process.env.BETTER_AUTH_URL ?? DEFAULT_BETTER_AUTH_URL,
@@ -260,25 +335,26 @@ export const buildBetterAuthConfig = (): BetterAuthConfig | undefined => {
     config.passkey = passkey;
   }
 
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    config.googleOAuth = {
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    };
+  const oauthProxy = buildOAuthProxyConfig();
+  if (oauthProxy) {
+    config.oauthProxy = oauthProxy;
+  }
+  const isPreview = isOAuthProxyPreview(config.baseURL ?? DEFAULT_BETTER_AUTH_URL, oauthProxy);
+
+  const googleSecret = clientSecretFor(process.env.GOOGLE_CLIENT_SECRET, isPreview);
+  if (process.env.GOOGLE_CLIENT_ID && googleSecret) {
+    config.googleOAuth = {clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: googleSecret};
   }
 
-  if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-    config.githubOAuth = {
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    };
+  const githubSecret = clientSecretFor(process.env.GITHUB_CLIENT_SECRET, isPreview);
+  if (process.env.GITHUB_CLIENT_ID && githubSecret) {
+    config.githubOAuth = {clientId: process.env.GITHUB_CLIENT_ID, clientSecret: githubSecret};
   }
 
-  if (process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET) {
-    config.appleOAuth = {
-      clientId: process.env.APPLE_CLIENT_ID,
-      clientSecret: process.env.APPLE_CLIENT_SECRET,
-    };
+  const appleOAuth = buildAppleOAuthConfig(isPreview);
+  if (appleOAuth) {
+    config.appleOAuth = appleOAuth;
+    config.trustedOrigins = [...(config.trustedOrigins ?? []), APPLE_SIGN_IN_ORIGIN];
   }
 
   // Cross-site web apps in bearer mode get the session from a one-time token on the

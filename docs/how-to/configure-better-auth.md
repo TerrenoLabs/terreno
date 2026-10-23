@@ -184,7 +184,7 @@ after them. `GET {basePath}/terreno/methods` reports `twoFactor`, `passkey`, `mu
 | `signUp: {mode: "open" \| "closed"}` | `closed`: `emailAndPassword.disableSignUp`, plus `disableSignUp` and `disableImplicitSignUp` on every social and `genericOAuth` provider (not on other sign-in plugins) | `open` |
 | `lastLoginMethod: true` | `lastLoginMethod({storeInDatabase: true})` (a cookie plus `user.lastLoginMethod`) | Off |
 | `multiSession: {maximumSessions?}` | `multiSession()` | Off. When on: 5 sessions |
-| `oauthProxy: {productionURL}` | `oAuthProxy()` | Off |
+| `oauthProxy: {productionURL}` | `oAuthProxy()`. Turn it on for previews and for the production server (naming itself), with one shared `secret`. When `productionURL` is on the server's own `baseURL` origin, Terreno also sets `currentURL`, so the production server's own sign-ins skip the proxy and keep the state-cookie check. See [Set up social login](set-up-social-login.md#how-previews-sign-in) | Off |
 | `nativeApps: true` | `expo()` from `@better-auth/expo` (`GET {basePath}/expo-authorization-proxy` for native social sign-in) | Off |
 | `appleOAuth: {clientId, teamId, keyId, privateKey, appBundleIdentifier?}` | `socialProviders.apple`, with the ES256 client secret signed from the key at startup | The `{clientId, clientSecret}` form still works |
 
@@ -231,7 +231,8 @@ Notes:
   fields.
 - **Rate limits.** With `TerrenoApp` `rateLimit` on, `{basePath}/two-factor/*`,
   `/passkey/*`, `/link-social`, `/unlink-account`, `/multi-session/*`,
-  `/oauth-proxy-callback`, and `/expo-authorization-proxy` count against the `auth` bucket.
+  `/oauth-proxy-callback`, and `/expo-authorization-proxy` count against the `auth` bucket
+  (oauth-proxy's `/callback/:id/oauth-proxy` is under `/callback/*`, which already does).
 - **Linking.** `never` (or `options.account.accountLinking.enabled: false`) adds a
   `terreno-linking-disabled` plugin that refuses `POST {basePath}/link-social` with 403
   `LINKING_DISABLED`. In every mode an unverified sign-up never claims an existing app `User`
@@ -242,8 +243,8 @@ Notes:
 
 #### Auth features in example-backend
 
-example-backend (`src/utils/betterAuthConfig.ts`) turns every feature on except `oauthProxy`.
-These env vars tune it:
+example-backend (`src/utils/betterAuthConfig.ts`) turns every feature on; `oauthProxy` follows
+`OAUTH_PROXY_PRODUCTION_URL`, which only deploys set. These env vars tune it:
 
 | Env var | Sets | Default |
 | --- | --- | --- |
@@ -251,6 +252,9 @@ These env vars tune it:
 | `AUTH_SIGN_UP` | `signUp.mode`: `open` or `closed` | `open` |
 | `FRONTEND_URL` | The first `passkey.origin` (its origin) and the default `passkey.rpID` (its host); also the auth mail links | `http://localhost:8082` |
 | `PASSKEY_RP_ID` | `passkey.rpID`. Must be the `FRONTEND_URL` host or a parent domain of it, such as `example.com` for `https://app.example.com` | The `FRONTEND_URL` host |
+| `OAUTH_PROXY_PRODUCTION_URL` | `oauthProxy.productionURL` (its origin): the stable backend that owns the registered OAuth callbacks | Unset (off) |
+| `APPLE_CLIENT_ID` with `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | `appleOAuth` in the key form, and `https://appleid.apple.com` in `trustedOrigins` | Unset (Apple off) |
+| `APPLE_CLIENT_ID` with `APPLE_CLIENT_SECRET` | `appleOAuth` in the client-secret form, used when the key form is incomplete | Unset |
 
 The rest is fixed: `twoFactor.issuer` and `passkey.rpName` are `Terreno Example`, and
 `lastLoginMethod`, `multiSession` (5 sessions) and `nativeApps` are on. Email verification

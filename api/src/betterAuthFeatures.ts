@@ -58,11 +58,47 @@ const assertPasskeyOrigins = (origins: string[], rpID: string): void => {
   }
 };
 
+// The origin of an absolute URL, or undefined when it does not parse.
+const originOf = (url: string | undefined): string | undefined => {
+  if (!url) {
+    return undefined;
+  }
+  try {
+    return new URL(url).origin;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Better Auth's `oAuthProxy` for `config.oauthProxy`. On the production server itself
+ * (`productionURL` on the same origin as `baseURL`), `currentURL` is set to `productionURL`, so
+ * every sign-in it starts skips the proxy: a server-side start (such as the OAuth handoff) has no
+ * request URL to compare, and clients may reach it on another host (a Cloud Run tag URL). Its
+ * own sign-ins then keep Better Auth's state-cookie check, while its callback still forwards
+ * previews' returns.
+ */
+const buildOAuthProxyPlugin = (
+  proxy: NonNullable<BetterAuthConfig["oauthProxy"]>,
+  baseURL: string | undefined
+): BetterAuthPlugin => {
+  const isProductionServer =
+    originOf(baseURL) !== undefined && originOf(baseURL) === originOf(proxy.productionURL);
+  return oAuthProxy({
+    productionURL: proxy.productionURL,
+    ...(isProductionServer ? {currentURL: proxy.productionURL} : {}),
+  }) as unknown as BetterAuthPlugin;
+};
+
 /**
  * Builds the Better Auth plugins for every configured auth feature, in a fixed order. Features
- * are opt-in: a config with none of the fields returns an empty list.
+ * are opt-in: a config with none of the fields returns an empty list. `baseURL` is the resolved
+ * server URL (it defaults to `config.baseURL`), which `oauthProxy` compares with `productionURL`.
  */
-export const buildFeaturePlugins = (config: BetterAuthConfig): BetterAuthPlugin[] => {
+export const buildFeaturePlugins = (
+  config: BetterAuthConfig,
+  baseURL: string | undefined = config.baseURL
+): BetterAuthPlugin[] => {
   const plugins: BetterAuthPlugin[] = [];
   if (config.twoFactor) {
     const {backupCodes, issuer, trustDeviceDays} = config.twoFactor;
@@ -93,9 +129,7 @@ export const buildFeaturePlugins = (config: BetterAuthConfig): BetterAuthPlugin[
     plugins.push(multiSession(maximumSessions === undefined ? {} : {maximumSessions}));
   }
   if (config.oauthProxy) {
-    plugins.push(
-      oAuthProxy({productionURL: config.oauthProxy.productionURL}) as unknown as BetterAuthPlugin
-    );
+    plugins.push(buildOAuthProxyPlugin(config.oauthProxy, baseURL));
   }
   if (config.nativeApps) {
     plugins.push(expo() as unknown as BetterAuthPlugin);

@@ -482,7 +482,7 @@ Open risks:
     - No email is sent when `sendMail` is unset.
   - Skills: terreno-backend-api, security-audit
 
-- [ ] **T11** — Previews sign in through oauth-proxy on the stable deploy
+- [x] **T11** — Previews sign in through oauth-proxy on the stable deploy
   - Depends on: T5
   - Files: example-backend/src/utils/betterAuthConfig.ts, example-backend/src/utils/betterAuthConfig.test.ts, api/src/betterAuthOAuthHandoff.ts, api/src/betterAuthOAuthProxy.test.ts, scripts/ci/gcp-deploy.sh, infra/flourish/main.tf, docs/how-to/set-up-social-login.md, changelog/unreleased/preview-oauth.md
   - Build:

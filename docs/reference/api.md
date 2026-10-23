@@ -607,7 +607,10 @@ Endpoints it adds, under `basePath` (default `/api/auth`):
   `callbackPaths` on one of `webOrigins`, `errorCallbackURL` (optional) is on one of
   `webOrigins`, and `trustedOrigins` allows both. It also answers 400 when `Sec-Fetch-Dest` is
   set and is not `document`. The OAuth callback then redirects to `callbackURL` with
-  `#ott=<token>`, a single-use token that expires in three minutes.
+  `#ott=<token>`, a single-use token that expires in three minutes. With `oauthProxy` on a
+  preview, the session is created on the preview's `GET {basePath}/callback/:id/oauth-proxy`
+  (or the deprecated `GET {basePath}/oauth-proxy-callback`) after the production server
+  receives the provider's return, and that redirect carries the `#ott` instead.
 - `POST {basePath}/one-time-token/verify` — Body `{token}`. Exchanges the token once for the
   session and the `set-auth-token` header, and sets no cookie. `GET
   {basePath}/one-time-token/generate` is refused.

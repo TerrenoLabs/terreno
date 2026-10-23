@@ -4,7 +4,8 @@
  * A social sign-in ends with a top-level redirect from the API to the web app, so the web app
  * never sees the `set-auth-token` header. When the OAuth callback creates a session and
  * redirects to a configured web origin, this adds a single-use, short-lived token to the
- * redirect's URL fragment, which the web app exchanges for the bearer at
+ * redirect's URL fragment (also when oauth-proxy finishes a preview's sign-in, since the preview
+ * creates the session on its own completion endpoint), which the web app exchanges for the bearer at
  * `POST {basePath}/one-time-token/verify`. Fragments are not sent to servers or in `Referer`.
  *
  * Linking a provider to a signed-in bearer user works the same way in reverse: the web app
@@ -38,6 +39,17 @@ const LINK_TOKEN_LENGTH = 32;
 const HANDOFF_FRAGMENT_KEY = "ott";
 
 const HTTP_STATUS_FOUND = 302;
+
+// oauth-proxy's deprecated completion path; its current one is `/callback/:id/oauth-proxy`.
+const LEGACY_OAUTH_PROXY_CALLBACK_PATH = "/oauth-proxy-callback";
+
+// The endpoints that end a social sign-in with a session and a redirect: the provider callback
+// (`/callback/:id`) and, on a preview behind oauth-proxy, the completion the stable deploy sends
+// the browser to (`/callback/:id/oauth-proxy`, or the deprecated `/oauth-proxy-callback`).
+const isSessionCallbackPath = (context: {path?: string}): boolean =>
+  Boolean(
+    context.path?.startsWith("/callback/") || context.path === LEGACY_OAUTH_PROXY_CALLBACK_PATH
+  );
 
 // The redirect must name its own scheme and host; anything else is relative to the API.
 const ABSOLUTE_HTTP_URL = /^https?:\/\//i;
@@ -588,8 +600,7 @@ export const createOAuthHandoffPlugins = ({
             dropSessionFromResponse(headers, ctx.context.authCookies);
             ctx.setHeader("location", withHandoffToken(location, token));
           }),
-          matcher: (context: {path?: string}): boolean =>
-            Boolean(context.path?.startsWith("/callback/")),
+          matcher: isSessionCallbackPath,
         },
         {
           // Verify is for bearer clients only. It signs the session in with a cookie, which the

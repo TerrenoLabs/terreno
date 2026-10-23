@@ -108,6 +108,26 @@ describe("buildFeaturePlugins", () => {
     expect(multiSessionOptions({maximumSessions: 3})).toEqual({maximumSessions: 3});
   });
 
+  it("skips oauth-proxy for the production server's own sign-ins only", () => {
+    const proxyOptions = (baseURL: string | undefined): unknown => {
+      const plugin = buildFeaturePlugins(
+        {enabled: true, oauthProxy: {productionURL: "https://api.example.com/"}},
+        baseURL
+      ).find((candidate) => candidate.id === "oauth-proxy") as
+        | {options?: Record<string, unknown>}
+        | undefined;
+      return plugin?.options;
+    };
+    expect(proxyOptions("https://api.example.com")).toEqual({
+      currentURL: "https://api.example.com/",
+      productionURL: "https://api.example.com/",
+    });
+    expect(proxyOptions("https://pr-1---api.example.run.app")).toEqual({
+      productionURL: "https://api.example.com/",
+    });
+    expect(proxyOptions(undefined)).toEqual({productionURL: "https://api.example.com/"});
+  });
+
   it("adds no plugins when no feature is configured", () => {
     expect(pluginIds(buildApp().auth)).toEqual([
       "bearer",

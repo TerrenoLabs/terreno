@@ -1,7 +1,4 @@
 import {afterAll, beforeAll, beforeEach, describe, expect, it} from "bun:test";
-import {once} from "node:events";
-import type {Server} from "node:http";
-import type {AddressInfo} from "node:net";
 import type {BetterAuthPlugin} from "better-auth";
 import {createAuthMiddleware} from "better-auth/api";
 import {genericOAuth} from "better-auth/plugins";
@@ -16,77 +13,12 @@ import {
   getMongoClientFromMongoose,
   mountBetterAuthRoutes,
 } from "./betterAuthSetup";
+import {type MockOidcProvider, startMockOidcProvider} from "./tests/mockOidcProvider";
 
 const API_ORIGIN = "http://localhost:3000";
 const WEB_ORIGIN = "https://web.example.com";
 const PROVIDER_ID = "mock-oidc";
-const MOCK_CODE = "mock-authorization-code";
-const MOCK_ACCESS_TOKEN = "mock-access-token";
 const SECRET = "test-secret-at-least-32-characters-long";
-
-interface MockOidcUser {
-  email: string;
-  id: string;
-  name: string;
-}
-
-interface MockOidcProvider {
-  close: () => Promise<void>;
-  issuer: string;
-  /** The user the next sign-in authenticates as. */
-  setUser: (user: MockOidcUser) => void;
-}
-
-// A minimal OIDC provider: discovery, an authorize step that approves at once, a token
-// endpoint, and userinfo. Real enough for Better Auth's generic OAuth code flow with PKCE.
-const startMockOidcProvider = async (): Promise<MockOidcProvider> => {
-  let issuer = "";
-  let user: MockOidcUser = {email: "oidc@example.com", id: "oidc-user", name: "OIDC User"};
-  const app = express();
-  app.use(express.urlencoded({extended: false}));
-  app.get("/.well-known/openid-configuration", (_req, res) => {
-    res.json({
-      authorization_endpoint: `${issuer}/authorize`,
-      issuer,
-      response_types_supported: ["code"],
-      token_endpoint: `${issuer}/token`,
-      userinfo_endpoint: `${issuer}/userinfo`,
-    });
-  });
-  app.get("/authorize", (req, res) => {
-    const redirect = new URL(String(req.query.redirect_uri));
-    redirect.searchParams.set("code", MOCK_CODE);
-    redirect.searchParams.set("state", String(req.query.state));
-    res.redirect(redirect.toString());
-  });
-  app.post("/token", (req, res) => {
-    if (req.body.code !== MOCK_CODE) {
-      res.status(400).json({error: "invalid_grant"});
-      return;
-    }
-    res.json({access_token: MOCK_ACCESS_TOKEN, expires_in: 3600, token_type: "Bearer"});
-  });
-  app.get("/userinfo", (req, res) => {
-    if (req.headers.authorization !== `Bearer ${MOCK_ACCESS_TOKEN}`) {
-      res.status(401).json({error: "invalid_token"});
-      return;
-    }
-    res.json({...user, email_verified: true, sub: user.id});
-  });
-  const server: Server = app.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  issuer = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return {
-    close: async (): Promise<void> => {
-      server.close();
-      await once(server, "close");
-    },
-    issuer,
-    setUser: (next: MockOidcUser): void => {
-      user = next;
-    },
-  };
-};
 
 // Lets a case replace what Better Auth put on the callback response before the handoff hook
 // reads it, to probe the hook with redirects Better Auth's own origin check would refuse.

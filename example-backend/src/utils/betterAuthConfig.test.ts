@@ -1,7 +1,10 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
+import {spawnSync} from "node:child_process";
+import {generateKeyPairSync} from "node:crypto";
 import {once} from "node:events";
 import {createServer, type Server} from "node:http";
 import type {AddressInfo} from "node:net";
+import {join} from "node:path";
 import {
   BetterAuthApp,
   type BetterAuthConfig,
@@ -12,12 +15,14 @@ import express from "express";
 import supertest from "supertest";
 import {User} from "../models/user";
 import {
+  APPLE_SIGN_IN_ORIGIN,
   buildBetterAuthConfig,
   EXAMPLE_APP_NAME,
   getOAuthHandoffWebOrigins,
   getWebOrigins,
   MOCK_OIDC_PROVIDER_ID,
   OAUTH_HANDOFF_CALLBACK_PATHS,
+  OAUTH_PROXY_PREVIEW_CLIENT_SECRET,
 } from "./betterAuthConfig";
 
 const WEB_ORIGIN = "http://localhost:8082";
@@ -335,5 +340,181 @@ describe("buildBetterAuthConfig", () => {
     } finally {
       await discovery.close();
     }
+  });
+});
+
+const AUTH_ENV_SCRIPT = join(import.meta.dir, "../../../scripts/ci/backend-auth-env.sh");
+
+// The variables scripts/ci/backend-auth-env.sh prints for one deploy, as the deploy would set them.
+const deployAuthEnv = (
+  tag: string,
+  stable: Record<string, string> = {}
+): Record<string, string> => {
+  const result = spawnSync("bash", [AUTH_ENV_SCRIPT, "env", tag], {
+    encoding: "utf8",
+    env: {PATH: process.env.PATH ?? "", ...stable},
+  });
+  if (result.status !== 0) {
+    throw new Error(`backend-auth-env.sh failed: ${result.stderr}`);
+  }
+  const env: Record<string, string> = {};
+  for (const line of result.stdout.split("\n").filter(Boolean)) {
+    const at = line.indexOf("=");
+    env[line.slice(0, at)] = line.slice(at + 1);
+  }
+  return env;
+};
+
+const DEPLOY_ENV_KEYS = [
+  "BETTER_AUTH_URL",
+  "GITHUB_CLIENT_ID",
+  "GITHUB_CLIENT_SECRET",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "CORS_ORIGINS",
+  "FRONTEND_URL",
+  "NODE_ENV",
+  "OAUTH_PROXY_PRODUCTION_URL",
+  "PASSKEY_RP_ID",
+];
+
+describe("buildBetterAuthConfig on the deploys", () => {
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const key of DEPLOY_ENV_KEYS) {
+      saved[key] = process.env[key];
+      Reflect.deleteProperty(process.env, key);
+    }
+  });
+
+  afterEach(() => {
+    for (const key of DEPLOY_ENV_KEYS) {
+      if (saved[key] === undefined) {
+        Reflect.deleteProperty(process.env, key);
+      } else {
+        process.env[key] = saved[key];
+      }
+    }
+  });
+
+  // Applies one deploy's env, as Cloud Run would, and builds the config it starts with.
+  const configForDeploy = (tag: string, stable: Record<string, string> = {}): BetterAuthConfig => {
+    Object.assign(process.env, deployAuthEnv(tag, stable), {NODE_ENV: "production"});
+    return requireConfig();
+  };
+
+  it("leaves oauthProxy off without OAUTH_PROXY_PRODUCTION_URL", () => {
+    expect(requireConfig().oauthProxy).toBeUndefined();
+  });
+
+  it("proxies a preview's OAuth through the stable backend", async () => {
+    const config = configForDeploy("pr-42");
+    expect(config.oauthProxy).toEqual({
+      productionURL: "https://terreno-backend-example-7knxlrnpqq-uc.a.run.app",
+    });
+    expect(config.baseURL).toBe("https://pr-42---terreno-backend-example-7knxlrnpqq-uc.a.run.app");
+    // netlify.app is a public suffix, so a preview's passkeys stay on its own host.
+    expect(config.passkey?.rpID).toBe("pr-42--terreno-frontend.netlify.app");
+    expect((await methodsFor(config)).passkey).toBe(true);
+  });
+
+  it("runs oauthProxy on stable naming itself, so it forwards preview returns", () => {
+    const config = configForDeploy("prod");
+    expect(config.baseURL).toBe("https://terreno-backend-example-7knxlrnpqq-uc.a.run.app");
+    expect(config.oauthProxy?.productionURL).toBe(config.baseURL);
+    // Before the move, stable's passkeys bind to the netlify.app host.
+    expect(config.passkey?.rpID).toBe("terreno-frontend.netlify.app");
+  });
+
+  it("binds stable passkeys to the shared parent domain once both sites move", () => {
+    const config = configForDeploy("prod", {
+      STABLE_BACKEND_URL: "https://api.example.com",
+      STABLE_FRONTEND_URL: "https://app.example.com",
+    });
+    expect(config.passkey?.rpID).toBe("example.com");
+    expect(config.passkey?.origin).toEqual(["https://app.example.com"]);
+    expect(config.oauthProxy?.productionURL).toBe("https://api.example.com");
+    // Same-site subdomains work with host-only cookies; the session never spans the domain.
+    const advanced = config.options?.advanced as {crossSubDomainCookies?: unknown} | undefined;
+    expect(advanced?.crossSubDomainCookies).toBeUndefined();
+    // The old Netlify host stays trusted during the move.
+    expect(config.trustedOrigins).toContain("https://app.example.com");
+    expect(config.trustedOrigins).toContain("https://terreno-frontend.netlify.app");
+  });
+
+  it("configures providers on a preview from client IDs alone", async () => {
+    // A preview mounts only *_CLIENT_ID; stable exchanges each code with the real secret.
+    Object.assign(process.env, {
+      APPLE_CLIENT_ID: "com.example.web",
+      GITHUB_CLIENT_ID: "github-id",
+      GOOGLE_CLIENT_ID: "google-id",
+    });
+    const config = configForDeploy("pr-42");
+    expect(config.googleOAuth).toEqual({
+      clientId: "google-id",
+      clientSecret: OAUTH_PROXY_PREVIEW_CLIENT_SECRET,
+    });
+    expect(config.githubOAuth?.clientSecret).toBe(OAUTH_PROXY_PREVIEW_CLIENT_SECRET);
+    expect(config.appleOAuth).toEqual({
+      clientId: "com.example.web",
+      clientSecret: OAUTH_PROXY_PREVIEW_CLIENT_SECRET,
+    });
+    expect((await methodsFor(config)).providers).toEqual(["apple", "github", "google"]);
+  });
+
+  it("leaves providers off on stable without their real secrets", () => {
+    Object.assign(process.env, {APPLE_CLIENT_ID: "com.example.web", GOOGLE_CLIENT_ID: "google-id"});
+    const config = configForDeploy("prod");
+    expect(config.googleOAuth).toBeUndefined();
+    expect(config.appleOAuth).toBeUndefined();
+  });
+
+  it("refuses an OAUTH_PROXY_PRODUCTION_URL that is not an http(s) URL", () => {
+    process.env.OAUTH_PROXY_PRODUCTION_URL = "ftp://stable.example.com";
+    expect(() => buildBetterAuthConfig()).toThrow(/OAUTH_PROXY_PRODUCTION_URL/);
+    process.env.OAUTH_PROXY_PRODUCTION_URL = "not a url";
+    expect(() => buildBetterAuthConfig()).toThrow(/OAUTH_PROXY_PRODUCTION_URL/);
+  });
+});
+
+describe("buildBetterAuthConfig Sign in with Apple", () => {
+  const privateKey = generateKeyPairSync("ec", {namedCurve: "P-256"})
+    .privateKey.export({format: "pem", type: "pkcs8"})
+    .toString();
+
+  it("uses the key form when the team ID, key ID and private key are set", async () => {
+    process.env.APPLE_CLIENT_ID = "com.example.web";
+    process.env.APPLE_TEAM_ID = "TEAM123456";
+    process.env.APPLE_KEY_ID = "KEY1234567";
+    // Secret Manager may hand back the PEM with escaped newlines.
+    process.env.APPLE_PRIVATE_KEY = privateKey.replace(/\n/g, "\\n");
+    process.env.APPLE_CLIENT_SECRET = "ignored-when-the-key-is-set";
+    const config = requireConfig();
+    expect(config.appleOAuth).toEqual({
+      clientId: "com.example.web",
+      keyId: "KEY1234567",
+      privateKey: process.env.APPLE_PRIVATE_KEY,
+      teamId: "TEAM123456",
+    });
+    expect(config.trustedOrigins).toContain(APPLE_SIGN_IN_ORIGIN);
+    expect((await methodsFor(config)).providers).toContain("apple");
+  });
+
+  it("keeps the pre-made client secret form working", () => {
+    process.env.APPLE_CLIENT_ID = "com.example.web";
+    process.env.APPLE_CLIENT_SECRET = "pre-made-jwt";
+    expect(requireConfig().appleOAuth).toEqual({
+      clientId: "com.example.web",
+      clientSecret: "pre-made-jwt",
+    });
+  });
+
+  it("leaves Apple off without a secret or a complete key", () => {
+    process.env.APPLE_CLIENT_ID = "com.example.web";
+    process.env.APPLE_TEAM_ID = "TEAM123456";
+    const config = requireConfig();
+    expect(config.appleOAuth).toBeUndefined();
+    expect(config.trustedOrigins).not.toContain(APPLE_SIGN_IN_ORIGIN);
   });
 });

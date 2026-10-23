@@ -347,4 +347,47 @@ describe("realtimeAccess", () => {
 
     expect(await canReadDocumentRealtime(entry, user, {title: "Any"})).toBe(false);
   });
+
+  it("applies access.also.read to realtime document reads", async () => {
+    const owner = createTestUser();
+    const other = createTestUser();
+    const doc = {ownerId: owner.id, text: "dummy-owner-only"};
+    const entry = makeEntry({
+      access: {also: {read: [Permissions.IsOwner]}, resource: "todo"},
+      accessControl: makeStubAccess({allowed: true}),
+    });
+
+    expect(await canReadDocumentRealtime(entry, owner, doc)).toBe(true);
+    expect(await canReadDocumentRealtime(entry, other, doc)).toBe(false);
+  });
+
+  it("applies access.also.read after a scope check returns extra permissions", async () => {
+    const owner = createTestUser();
+    const other = createTestUser();
+    const doc = {ownerId: owner.id, text: "dummy-owner-only"};
+    const entry = makeEntry({
+      access: {
+        also: {read: [Permissions.IsOwner]},
+        resource: "todo",
+        scope: {check: () => ({todo: ["read"]})},
+      },
+      accessControl: makeStubAccess({allowed: true}),
+    });
+
+    expect(await canReadDocumentRealtime(entry, owner, doc)).toBe(true);
+    expect(await canReadDocumentRealtime(entry, other, doc)).toBe(false);
+  });
+
+  it("applies access.also to realtime subscriptions", async () => {
+    const admin = createTestUser({admin: true});
+    const member = createTestUser();
+    const entry = makeEntry({
+      access: {also: {list: [Permissions.IsAdmin]}, resource: "todo"},
+      accessControl: makeStubAccess({allowed: true}),
+    });
+
+    expect(await canSubscribeRealtime(entry, "list", admin)).toBe(true);
+    expect(await canSubscribeRealtime(entry, "list", member)).toBe(false);
+    expect(await canSubscribeRealtime(entry, "read", member)).toBe(true);
+  });
 });

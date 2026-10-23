@@ -419,6 +419,38 @@ describe("generateProfileEndpoints", () => {
   });
 });
 
+describe("logout cache reset", () => {
+  it("purges cached query responses on logout", async () => {
+    const withMe = api.injectEndpoints({
+      endpoints: (builder) => ({
+        getCachedMe: builder.query<{id: string}, void>({
+          queryFn: () => ({data: {id: "alice"}}),
+        }),
+      }),
+      overrideExisting: true,
+    });
+    const {logout, setUserId, store} = createTestStore();
+    const cachedQueries = (): string[] =>
+      Object.keys(
+        (store.getState() as Record<string, {queries: Record<string, unknown>}>)["terreno-rtk"]
+          .queries
+      );
+    const subscription = store.dispatch(withMe.endpoints.getCachedMe.initiate());
+    await subscription;
+    subscription.unsubscribe();
+
+    // A logout while already signed out (a query failing without a token) keeps the cache, so
+    // the reset cannot drive a refetch loop.
+    store.dispatch(logout());
+    expect(cachedQueries()).toHaveLength(1);
+
+    store.dispatch(setUserId({userId: "alice"}));
+    store.dispatch(logout());
+
+    expect(cachedQueries()).toEqual([]);
+  });
+});
+
 describe("listener middleware side effects", () => {
   it("emits a JWT auth change after login and after logout", async () => {
     const {logout, store} = createTestStore();

@@ -10,7 +10,9 @@ import {APIError, ForbiddenError, ValidationError} from "./errors";
 import {defaultOpenApiErrorResponses} from "./openApi";
 import {checkPermissions, type PermissionMethod} from "./permissions";
 import {createIsPermitted} from "./rbac/middleware";
+import {buildAccessScopeCheck} from "./rbac/modelRouterAccess";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
+import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
 
 // At least two characters: leading letter plus one or more alphanumeric/_/- chars.
 export const ACTION_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_-]+$/;
@@ -139,7 +141,21 @@ export const runActionPermissions = async <T>(
     const rbacCheck = isPermitted({
       [rbacAccess.resource]: [rbacAccess.action],
     }) as PermissionMethod<unknown>;
-    permissions = [...(action.permissions ?? []), rbacCheck];
+    // Same resource as the router: its per-document `access.scope` and `access.also` apply to
+    // the action exactly as they do to the mapped CRUD method.
+    const routerChecks: PermissionMethod<unknown>[] = [];
+    if (routerAccess && routerAccess.resource === rbacAccess.resource) {
+      const scopeCheck = buildAccessScopeCheck<unknown>(
+        accessControl,
+        routerAccess,
+        rbacAccess.action
+      );
+      if (scopeCheck) {
+        routerChecks.push(scopeCheck);
+      }
+      routerChecks.push(...((routerAccess.also?.[method] ?? []) as PermissionMethod<unknown>[]));
+    }
+    permissions = [...(action.permissions ?? []), rbacCheck, ...routerChecks];
   }
   if (!permissions) {
     throw new APIError({status: 500, title: "Action missing permissions configuration"});
@@ -516,6 +532,22 @@ const buildActionMiddleware = <T>(
               options.accessControl,
               options.access
             );
+            // A write action on a user record is a write to that user.
+            if (action.method !== "GET") {
+              await assertCanWriteTargetUser({
+                accessControl: options.accessControl,
+                actor: req.user,
+                modelName: model.modelName,
+                target: doc,
+              });
+              await assertCanWriteUserIdentity({
+                accessControl: options.accessControl,
+                actor: req.user,
+                body: req.body,
+                modelName: model.modelName,
+                target: doc,
+              });
+            }
             return next();
           } catch (error) {
             return next(error);

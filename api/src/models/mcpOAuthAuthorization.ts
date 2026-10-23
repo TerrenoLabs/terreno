@@ -65,6 +65,10 @@ const mcpOAuthAuthorizationSchema = new mongoose.Schema<
       enum: ["pending", "approved", "denied", "used"],
       type: String,
     },
+    tokenEpoch: {
+      description: "The approving user's tokenEpoch; a code is refused after it changes",
+      type: Number,
+    },
     usedAt: {
       description: "When the authorization code was exchanged",
       type: Date,

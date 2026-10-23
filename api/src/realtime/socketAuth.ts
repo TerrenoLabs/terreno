@@ -1,11 +1,12 @@
 import {authorize, UnauthorizedError} from "@thream/socketio-jwt";
 import type {Socket} from "socket.io";
 
-import type {UserModel} from "../auth";
+import {isUserDisabled, type UserModel} from "../auth";
 import type {BetterAuthUser} from "../betterAuth";
 import {type BetterAuthInstance, resolveBetterAuthAppUser} from "../betterAuthSetup";
 import {APIError} from "../errors";
 import {logger} from "../logger";
+import {findOneOrNoneFor} from "../plugins";
 import type {SocketWithDecodedToken} from "./socketUser";
 
 /**
@@ -75,10 +76,15 @@ export interface BetterAuthSocketOptions {
  * (e.g. test suites that mutate it between fixtures). Pass a thunk to preserve that
  * per-request freshness; a plain string is still supported for callers who intentionally
  * want a fixed value.
+ *
+ * When `userModel` is provided, the token's user is loaded after verification and the
+ * handshake is refused when that user is missing or disabled, matching the HTTP JWT
+ * middleware and the Better Auth validator. Without it, only the token is checked.
  */
 export const createLegacyJwtValidator = (
   tokenSecret: string,
-  issuer?: string | (() => string | undefined)
+  issuer?: string | (() => string | undefined),
+  userModel?: UserModel
 ): SocketAuthValidator => {
   const resolveIssuer = (): string | undefined =>
     typeof issuer === "function" ? issuer() : issuer;
@@ -102,16 +108,58 @@ export const createLegacyJwtValidator = (
           reject(error);
           return;
         }
-        // D1: stamp which validator authenticated this socket so the periodic
-        // re-validation sweep knows to re-check local JWT expiry (not a Better Auth
-        // session lookup) for it. The library already populated decodedToken with the
-        // full JWT payload (exp/iss included), so this only adds the discriminator.
-        if (socket.decodedToken) {
-          socket.decodedToken.authKind = "jwt";
-        }
-        resolve();
+        rejectUnusableJwtUser(socket, userModel)
+          .then(() => {
+            // D1: stamp which validator authenticated this socket so the periodic
+            // re-validation sweep knows to re-check local JWT expiry (not a Better Auth
+            // session lookup) for it. The library already populated decodedToken with the
+            // full JWT payload (exp/iss included), so this only adds the discriminator.
+            if (socket.decodedToken) {
+              socket.decodedToken.authKind = "jwt";
+            }
+            resolve();
+          })
+          .catch((userError: unknown) => {
+            socket.decodedToken = undefined;
+            reject(userError);
+          });
       });
     });
+};
+
+/**
+ * Refuse a verified JWT whose user no longer exists or is disabled, so disabling an account
+ * blocks new socket handshakes the same way the HTTP JWT middleware blocks requests.
+ */
+const rejectUnusableJwtUser = async (
+  socket: AuthenticatableSocket,
+  userModel?: UserModel
+): Promise<void> => {
+  const userId = socket.decodedToken?.id;
+  if (!userModel || !userId) {
+    return;
+  }
+  let user: unknown;
+  try {
+    user = await findOneOrNoneFor(userModel, {_id: userId});
+  } catch (error) {
+    // Keep database details out of the client error.
+    logger.error(`[socket] Could not load the user for a JWT handshake: ${error}`);
+    throw new UnauthorizedError("invalid_token", {
+      message: "Unauthorized: could not resolve the application user",
+    });
+  }
+  if (!user) {
+    throw new UnauthorizedError("invalid_token", {
+      message: "Unauthorized: user not found",
+    });
+  }
+  if (isUserDisabled(user)) {
+    logger.warn(`[socket] User ${userId} is disabled, rejecting JWT`);
+    throw new UnauthorizedError("invalid_token", {
+      message: "Unauthorized: user is disabled",
+    });
+  }
 };
 
 /** Strip an optional `Bearer ` prefix from the handshake token. */
@@ -204,6 +252,7 @@ export const createSocketAuthMiddleware = ({
   tokenSecret,
   issuer,
   betterAuth,
+  userModel,
   extraValidators = [],
 }: {
   /** Secret enabling the legacy JWT validator (same handling as before the refactor). */
@@ -216,12 +265,17 @@ export const createSocketAuthMiddleware = ({
   issuer?: string | (() => string | undefined);
   /** Enables the Better Auth session validator after the legacy JWT validator. */
   betterAuth?: BetterAuthSocketOptions;
+  /**
+   * Application user model. When set, the legacy JWT validator refuses tokens whose user is
+   * missing or disabled.
+   */
+  userModel?: UserModel;
   /** Additional validators appended to the chain (after JWT and Better Auth). */
   extraValidators?: SocketAuthValidator[];
 }): ((socket: Socket, next: (error?: Error) => void) => void) => {
   const validators: SocketAuthValidator[] = [];
   if (tokenSecret) {
-    validators.push(createLegacyJwtValidator(tokenSecret, issuer));
+    validators.push(createLegacyJwtValidator(tokenSecret, issuer, userModel));
   }
   if (betterAuth) {
     validators.push(createBetterAuthValidator(betterAuth));

@@ -1,0 +1,5 @@
+---
+category: Breaking
+---
+
+`PATCH /auth/me` now requires `currentPassword` when the body changes the email to a different mailbox (casing-only changes and an unchanged email echoed back still need none). A missing or wrong password gets 403 and nothing is saved; a user with no password (for example GitHub-only) gets 400 and must set one through the reset flow first. The password is checked against the passport hash, which counts toward its `limitAttempts` lockout, or against the Better Auth credential when `BetterAuthApp` is registered (new `authOptions.verifyBetterAuthPassword`, wired by TerrenoApp, and `verifyBetterAuthCredentialPassword`). After a change the old address gets a `sensitive: true` notice through `authOptions.sendMail` with the new address partially masked and no links. Clients that let users change their email must collect and send `currentPassword`; the example frontend, `create-terreno-app`, and the MCP bootstrap profile screens now show a "Current password" field when the email is edited. See [Changing the email on PATCH /auth/me](docs/reference/api.md#changing-the-email-on-patch-authme).

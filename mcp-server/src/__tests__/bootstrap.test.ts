@@ -208,6 +208,20 @@ describe("bootstrap", () => {
       expect(fullText).toContain("## Admin panel frontend");
     });
 
+    test("admin-only packages leave the root package reference without guidelines", () => {
+      const result = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
+        appDisplayName: "Admin Only",
+        appName: "admin-only",
+        packages: ["admin-backend", "admin-frontend"],
+      });
+      const text = result.content[0].text;
+      expect(text).toContain(
+        "## Package Reference\n\n_(No package guidelines matched the selected packages.)_"
+      );
+      expect(text).toContain("## Admin panel backend");
+      expect(text).toContain("## Admin panel frontend");
+    });
+
     test("includes SyncDB MCP debugging guidance when syncdb is selected", () => {
       const withSyncDb = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
         appDisplayName: "Sync App",

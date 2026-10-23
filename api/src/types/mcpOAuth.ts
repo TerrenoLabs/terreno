@@ -43,6 +43,7 @@ export interface McpOAuthAuthorizationDocument extends mongoose.Document {
   scope?: string;
   state?: string;
   status: McpOAuthAuthorizationStatus;
+  tokenEpoch?: number;
   updated: Date;
   usedAt?: Date;
   userId?: mongoose.Types.ObjectId;
@@ -88,6 +89,7 @@ export interface McpOAuthTokenDocument extends mongoose.Document {
   revokedAt?: Date;
   rotatedAt?: Date;
   scope?: string;
+  tokenEpoch?: number;
   updated: Date;
   userId: mongoose.Types.ObjectId;
 }
@@ -99,6 +101,8 @@ export interface McpOAuthTokenIssueOptions {
   refreshTokenTtlSeconds: number;
   resource?: string;
   scope?: string;
+  /** The user's tokenEpoch when the grant was approved (default 0); a later bump ends the family. */
+  tokenEpoch?: number;
   userId: mongoose.Types.ObjectId;
 }
 

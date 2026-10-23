@@ -81,4 +81,44 @@ describe("applicationInfo", () => {
     expect(text).not.toContain("example-backend/");
     expect(text).not.toContain("example-frontend/");
   });
+
+  it("lists root @terreno packages and notes the bun.lock workspace versions", (): void => {
+    writePkg(projectRoot, {
+      dependencies: {"@terreno/api": "^57.2.0", lodash: "^4.17.21"},
+      devDependencies: {"@terreno/test": "^57.2.0"},
+      name: "app-root",
+      version: "2.0.0",
+    });
+    writeFileSync(join(projectRoot, "bun.lock"), "{}\n");
+
+    const text = applicationInfo();
+    expect(text).toContain("- **root package**: app-root @ 2.0.0");
+    expect(text).toContain("- **bun.lock present**: yes");
+    expect(text).toContain("## @terreno/* (root package.json)");
+    expect(text).toContain("- @terreno/api: ^57.2.0");
+    expect(text).toContain("- @terreno/test: ^57.2.0");
+    expect(text).not.toContain("lodash");
+    expect(text).toContain("## Lockfile");
+    expect(text).toContain(
+      "Workspace package versions are recorded under `workspaces` in `bun.lock`"
+    );
+  });
+
+  it("skips a workspace whose package.json cannot be parsed", (): void => {
+    mkdirSync(join(projectRoot, "backend"), {recursive: true});
+    writeFileSync(join(projectRoot, "backend", "package.json"), "{not json");
+    writePkg(join(projectRoot, "frontend"), {
+      devDependencies: {expo: "~54.0.0"},
+      name: "consumer-frontend",
+    });
+
+    const text = applicationInfo();
+    expect(text).toContain("- **bun.lock present**: no");
+    expect(text).not.toContain("## Backend workspace");
+    expect(text).not.toContain("## @terreno/* (root package.json)");
+    expect(text).not.toContain("## Lockfile");
+    expect(text).toContain("## Frontend workspace (frontend/)");
+    expect(text).toContain("- **version**: ?");
+    expect(text).toContain("- **expo**: ~54.0.0");
+  });
 });

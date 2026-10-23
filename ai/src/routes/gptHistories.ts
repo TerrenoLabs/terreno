@@ -50,6 +50,102 @@ const READ_ONLY_PENDING_ASK: OpenApiFragment = {
 const isFragment = (value: unknown): value is OpenApiFragment =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/** A content part without its `gcsKey`, unless the history already stores that key. */
+const withKnownGcsKey = (part: unknown, knownKeys: Set<string>): unknown => {
+  if (!isFragment(part) || !("gcsKey" in part)) {
+    return part;
+  }
+  if (typeof part.gcsKey === "string" && knownKeys.has(part.gcsKey)) {
+    return part;
+  }
+  const {gcsKey: _dropped, ...rest} = part;
+  return rest;
+};
+
+const withKnownGcsKeys = (parts: unknown, knownKeys: Set<string>): unknown =>
+  Array.isArray(parts) ? parts.map((part) => withKnownGcsKey(part, knownKeys)) : parts;
+
+const promptWithKnownGcsKeys = (prompt: unknown, knownKeys: Set<string>): unknown =>
+  isFragment(prompt) && Array.isArray(prompt.content)
+    ? {...prompt, content: withKnownGcsKeys(prompt.content, knownKeys)}
+    : prompt;
+
+/**
+ * One body entry with client-written attachment keys removed. `key` is `prompts` or a dotted path
+ * into it, such as `prompts.0.content.1` or `prompts.0.content.1.gcsKey`. Returns undefined to
+ * drop the entry.
+ */
+const promptsEntryWithKnownGcsKeys = (
+  key: string,
+  value: unknown,
+  knownKeys: Set<string>
+): unknown => {
+  const [, , contentSegment, , field] = key.split(".");
+  const depth = key.split(".").length;
+  if (depth === 1) {
+    return Array.isArray(value)
+      ? value.map((prompt) => promptWithKnownGcsKeys(prompt, knownKeys))
+      : value;
+  }
+  if (depth === 2) {
+    return promptWithKnownGcsKeys(value, knownKeys);
+  }
+  if (contentSegment !== "content") {
+    return value;
+  }
+  if (depth === 3) {
+    return withKnownGcsKeys(value, knownKeys);
+  }
+  if (depth === 4) {
+    return withKnownGcsKey(value, knownKeys);
+  }
+  if (depth === 5 && field === "gcsKey") {
+    return typeof value === "string" && knownKeys.has(value) ? value : undefined;
+  }
+  return value;
+};
+
+const isPromptsKey = (key: string): boolean => key === "prompts" || key.startsWith("prompts.");
+
+/** The attachment keys the chat turn stored on a history. */
+const storedGcsKeys = async (historyId: unknown): Promise<Set<string>> => {
+  if (typeof historyId !== "string") {
+    return new Set();
+  }
+  const history = await GptHistory.findById(historyId).select({"prompts.content": 1}).lean();
+  return new Set(
+    (history?.prompts ?? []).flatMap((prompt) =>
+      (prompt.content ?? []).flatMap((part) =>
+        part.type !== "text" && part.gcsKey ? [part.gcsKey] : []
+      )
+    )
+  );
+};
+
+/**
+ * Only the chat turn writes `gcsKey`: a stored key is signed for the model on later turns, so a
+ * client may send back keys the history already holds but cannot add new ones.
+ */
+const withoutClientGcsKeys = async (
+  body: Partial<GptHistoryDocument>,
+  historyId?: unknown
+): Promise<Partial<GptHistoryDocument>> => {
+  const entries = Object.entries(body);
+  if (!entries.some(([key]) => isPromptsKey(key))) {
+    return body;
+  }
+  const knownKeys = await storedGcsKeys(historyId);
+  return Object.fromEntries(
+    entries.flatMap(([key, value]) => {
+      if (!isPromptsKey(key)) {
+        return [[key, value]];
+      }
+      const kept = promptsEntryWithKnownGcsKeys(key, value, knownKeys);
+      return kept === undefined ? [] : [[key, kept]];
+    })
+  ) as Partial<GptHistoryDocument>;
+};
+
 /** Server-only fields of `pendingAsk`: the paused turn's messages, replayed only to the model. */
 const SERVER_ONLY_PENDING_ASK_FIELDS = ["promptIndex", "responseMessages"];
 
@@ -258,17 +354,18 @@ export const addGptHistoryRoutes = (
         read: [Permissions.IsOwner],
         update: [Permissions.IsOwner],
       },
-      preCreate: (body, req) => {
+      preCreate: async (body, req): Promise<GptHistoryDocument> => {
         return {
-          ...withoutPendingAsk(body),
+          ...(await withoutClientGcsKeys(withoutPendingAsk(body))),
           userId: (req.user as {_id: unknown})?._id,
         } as GptHistoryDocument;
       },
-      preUpdate: (body, req) => {
-        const update = withoutPendingAsk(body);
-        return routerOptions.preUpdate
-          ? routerOptions.preUpdate(update, req)
-          : (update as GptHistoryDocument);
+      preUpdate: async (body, req): Promise<GptHistoryDocument> => {
+        const update = await withoutClientGcsKeys(withoutPendingAsk(body), req.params.id);
+        // A host hook that returns null still refuses the update; modelRouter checks the value.
+        return (
+          routerOptions.preUpdate ? await routerOptions.preUpdate(update, req) : update
+        ) as GptHistoryDocument;
       },
       queryFields: ["userId", "projectId"],
       queryFilter: (user) => ({userId: user?.id}),

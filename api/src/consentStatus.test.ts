@@ -141,6 +141,34 @@ describe("getConsentStatuses", () => {
     expect(row.provisional).toBeUndefined();
   });
 
+  it("ignores voided provisional signatures", async () => {
+    await signProvisionally({
+      voidedAt: new Date("2026-01-16T00:00:00.000Z"),
+      voidedBy: admin._id,
+      voidReason: "Wrong member",
+    });
+
+    const [row] = await getConsentStatuses({userId: member._id.toString()});
+
+    expect(row.status).toBe("pending");
+    expect(row.isConsented).toBe(false);
+    expect(row.provisional).toBeUndefined();
+  });
+
+  it("falls back to an earlier provisional signature when the latest is voided", async () => {
+    const earlierId = await signProvisionally({agreedAt: new Date("2026-01-10T00:00:00.000Z")});
+    await signProvisionally({
+      voidedAt: new Date("2026-01-16T00:00:00.000Z"),
+      voidedBy: admin._id,
+      voidReason: "Wrong member",
+    });
+
+    const [row] = await getConsentStatuses({userId: member._id.toString()});
+
+    expect(row.status).toBe("provisional");
+    expect(row.provisional?.responseId).toBe(earlierId.toString());
+  });
+
   it("ignores inactive forms and other users' responses", async () => {
     await ConsentForm.create({
       active: false,

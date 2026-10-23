@@ -6066,6 +6066,20 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             },
                             "type": "object",
                           },
+                          "voidReason": {
+                            "description": "Why the provisional signature was voided",
+                            "type": "string",
+                          },
+                          "voidedAt": {
+                            "description": "When a provisional signature was voided. Voided signatures no longer count as consent",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "voidedBy": {
+                            "description": "The user who voided this provisional signature",
+                            "format": "objectid",
+                            "type": "string",
+                          },
                         },
                         "required": [
                           "agreed",
@@ -6402,6 +6416,20 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                       },
                       "type": "object",
+                    },
+                    "voidReason": {
+                      "description": "Why the provisional signature was voided",
+                      "type": "string",
+                    },
+                    "voidedAt": {
+                      "description": "When a provisional signature was voided. Voided signatures no longer count as consent",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "voidedBy": {
+                      "description": "The user who voided this provisional signature",
+                      "format": "objectid",
+                      "type": "string",
                     },
                   },
                   "required": [
@@ -17378,6 +17406,20 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             },
                             "type": "object",
                           },
+                          "voidReason": {
+                            "description": "Why the provisional signature was voided",
+                            "type": "string",
+                          },
+                          "voidedAt": {
+                            "description": "When a provisional signature was voided. Voided signatures no longer count as consent",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "voidedBy": {
+                            "description": "The user who voided this provisional signature",
+                            "format": "objectid",
+                            "type": "string",
+                          },
                         },
                         "required": [
                           "agreed",
@@ -17908,6 +17950,20 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       },
                       "type": "object",
                     },
+                    "voidReason": {
+                      "description": "Why the provisional signature was voided",
+                      "type": "string",
+                    },
+                    "voidedAt": {
+                      "description": "When a provisional signature was voided. Voided signatures no longer count as consent",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "voidedBy": {
+                      "description": "The user who voided this provisional signature",
+                      "format": "objectid",
+                      "type": "string",
+                    },
                   },
                   "required": [
                     "agreed",
@@ -17971,6 +18027,107 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "description": "The user is not allowed to perform this action on any document",
           },
         },
+        "tags": [
+          "consentresponses",
+        ],
+      },
+    },
+    "/consent-responses/{id}/void": {
+      "post": {
+        "description": "Mark a provisional signature made in error as void. The record is kept for audit and no longer counts as consent.",
+        "operationId": "consentresponses_void",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "reason",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful response",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Void a provisional consent signature",
         "tags": [
           "consentresponses",
         ],

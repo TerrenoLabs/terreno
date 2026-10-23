@@ -172,7 +172,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Docs: helper and endpoint in `docs/reference/api.md`; "considered signed" rules in the explanation page.
   - Skills: terreno:terreno-backend-api, terreno:generate-sdk
 
-- [ ] **T4** — Void a provisional consent signature
+- [x] **T4** — Void a provisional consent signature
   - Depends on: T3
   - Files: api/src/types/consentResponse.ts, api/src/models/consentResponse.ts, api/src/consentApp.ts, api/src/consentStatus.ts, api/src/consentApp.test.ts, api/src/consentStatus.test.ts, docs/reference/api.md, example-frontend/store/openApiSdk.ts
   - Criteria: `POST /consent-responses/:id/void` with a reason sets `voidedAt`/`voidedBy`/`voidReason` and never deletes the record. Voiding a non-provisional response, voiding twice, or a blank reason → 400. Same permission matrix as T1. After a void, `getConsentStatuses` returns `pending`, and `/consents/pending` drops `provisionalSignature`. With `AuditApp`, a void writes an `AuditEvent`.

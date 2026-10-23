@@ -66,11 +66,20 @@ stay for audit.
 A separate `ProvisionalConsent` model was rejected. A field on `ConsentResponse` keeps one
 audit trail per user and reuses the existing admin screens, populate paths, and PDF code.
 
+### Voiding a provisional signature
+
+A provisional signature recorded in error (the wrong member, the wrong form) is voided with
+`POST /consent-responses/:id/void` and a required reason. Voiding sets `voidedAt`,
+`voidedBy`, and `voidReason`; it never deletes the record, so the audit history shows both
+the signature and its void. A voided signature no longer counts as consent, and the user's
+gate no longer mentions it. Only provisional signatures can be voided: the user's own
+answers are theirs to change by answering again.
+
 ### What counts as signed
 
 `getConsentStatuses` (and `GET /consent-responses/status`) is the "considered signed"
-contract. For each form that applies to the user, only responses to the current version
-count. The user's own latest answer always wins: agreeing makes the form `signed`, declining
+contract. For each form that applies to the user, only non-voided responses to the current
+version count. The user's own latest answer always wins: agreeing makes the form `signed`, declining
 makes it `declined`. Without one, a provisional signature makes it `provisional`, which
 counts as consented. Otherwise it is `pending`. App code that needs to know whether a user
 may proceed (for example before scheduling a visit) checks `isConsented` on these rows
@@ -89,7 +98,7 @@ warning at register.
 There is no relationship check: a permitted signer may sign for any user. A signer cannot
 sign for themselves, and the form must be active and must apply to the target user under
 `resolveConsentForms`. The same permission covers reading another user's consent statuses.
-When `AuditApp` is registered, every provisional signature and every status read writes an
+When `AuditApp` is registered, every provisional signature, void, and status read writes an
 `AuditEvent` naming the actor and the target user. Audit events gain a `read` operation and
 a `viewed` verb for these reads.
 

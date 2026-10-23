@@ -1649,6 +1649,7 @@ new TerrenoApp({userModel: User})
 | `GET /consent-responses`, `GET /consent-responses/:id` | admin | Read responses, populated with form and user |
 | `POST /consent-responses/provisional` | sign-on-behalf | Record a provisional signature for another user |
 | `GET /consent-responses/status?userId=` | sign-on-behalf | Consent status of each form that applies to a user |
+| `POST /consent-responses/:id/void` | sign-on-behalf | Void a provisional signature made in error |
 | `GET /consents/pending` | user | Active forms the user has not answered themselves at the current version |
 | `POST /consents/respond` | user | `{consentFormId, agreed, locale, checkboxValues?, signature?}` |
 | `GET /consents/my` | user | The user's own responses with form data |
@@ -1682,8 +1683,26 @@ With `AuditApp` registered, each provisional signature writes an `AuditEvent`
 userId, consentFormId}`, `actorId`: the signer).
 
 `/consent-responses` and its actions are in OpenAPI, so `bun run sdk` generates
-`useConsentresponsesProvisionalMutation` and `useConsentresponsesStatusQuery`. The other
+`useConsentresponsesProvisionalMutation`, `useConsentresponsesStatusQuery`, and
+`useConsentresponsesVoidMutation`. The other
 ConsentApp routes are not in OpenAPI.
+
+### `POST /consent-responses/:id/void`
+
+Body: `{reason}` (required, trimmed, at most 2000 characters). Sets `voidedAt`, `voidedBy`
+(the caller), and `voidReason` on a provisional response and returns
+`{data: ConsentResponse}` with `provisionalSignedBy` and `voidedBy` populated. The record is
+never deleted. A voided signature no longer counts: `getConsentStatuses` ignores it, and
+`/consents/pending` drops its `provisionalSignature`.
+
+| Status | When |
+| --- | --- |
+| 400 | Blank or too-long reason, the response is not provisional, or it is already voided |
+| 404 | Unknown response |
+| 405 | The caller may not sign on behalf of others |
+
+With `AuditApp` registered, each void writes an `AuditEvent` (`operation: "update"`,
+`verb: "updated"`, `after: {action: "voidProvisional", userId, consentFormId}`).
 
 ### `GET /consent-responses/status` and `getConsentStatuses`
 
@@ -1718,7 +1737,7 @@ interface ConsentStatusRow {
 }
 ```
 
-Only responses to each form's current version count:
+Only non-voided responses to each form's current version count:
 
 1. The user's own latest response decides: `agreed` → `signed`, declined → `declined`.
 2. Otherwise a provisional response → `provisional`.
@@ -1740,9 +1759,9 @@ signer's request metadata.
 
 | Endpoint | Adds |
 | --- | --- |
-| `GET /consents/pending` | `provisionalSignature?: {signedAt, signedByName}` on each form, from the latest provisional response for the form's current version. Absent when there is none. Provisional responses never remove a form from this list |
-| `GET /consents/my` | `provisional: boolean` and `provisionalSignedBy: {name} \| null` on each entry. No note, IP, or user agent of the signer |
-| `GET /consents/audit/:userId` | `provisional`, `provisionalSignedBy: {_id, name, email} \| null`, `provisionalNote`, `provisionalSignerIp`, `provisionalSignerUserAgent` |
+| `GET /consents/pending` | `provisionalSignature?: {signedAt, signedByName}` on each form, from the latest non-voided provisional response for the form's current version. Absent when there is none. Provisional responses never remove a form from this list |
+| `GET /consents/my` | `provisional: boolean`, `provisionalSignedBy: {name} \| null`, and `voidedAt` on each entry. No note, IP, or user agent of the signer, and no void reason |
+| `GET /consents/audit/:userId` | `provisional`, `provisionalSignedBy: {_id, name, email} \| null`, `provisionalNote`, `provisionalSignerIp`, `provisionalSignerUserAgent`, `voidedAt`, `voidedBy: {_id, name, email} \| null`, `voidReason` |
 
 `signedByName` falls back to the signer's email, then `"Staff"`.
 
@@ -1760,6 +1779,7 @@ signer's request metadata.
 | `provisionalSignedBy` | User ref; required when `provisional` |
 | `provisionalNote` | Required when `provisional`; max 2000 characters |
 | `provisionalSignerIp`, `provisionalSignerUserAgent` | Signer's request metadata, with `auditTrail` |
+| `voidedAt`, `voidedBy`, `voidReason` | Set only by the void action |
 
 ## In-app notifications
 

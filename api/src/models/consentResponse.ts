@@ -98,6 +98,22 @@ const consentResponseSchema = new mongoose.Schema<ConsentResponseDocument, Conse
       required: true,
       type: mongoose.Schema.Types.ObjectId,
     },
+    voidedAt: {
+      description:
+        "When a provisional signature was voided. Voided signatures no longer count as consent",
+      type: Date,
+    },
+    voidedBy: {
+      description: "The user who voided this provisional signature",
+      ref: "User",
+      type: mongoose.Schema.Types.ObjectId,
+    },
+    voidReason: {
+      description: "Why the provisional signature was voided",
+      maxlength: 2000,
+      trim: true,
+      type: String,
+    },
   },
   {strict: "throw", toJSON: {virtuals: true}, toObject: {virtuals: true}}
 );

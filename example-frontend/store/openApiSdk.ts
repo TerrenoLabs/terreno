@@ -86,6 +86,14 @@ const injectedRtkApi = api
           url: `/consent-responses/status`,
         }),
       }),
+      consentresponsesVoid: build.mutation<ConsentresponsesVoidRes, ConsentresponsesVoidArgs>({
+        invalidatesTags: ["consentresponses"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/consent-responses/${queryArg.id}/void`,
+        }),
+      }),
       createMcpServiceToken: build.mutation<CreateMcpServiceTokenRes, CreateMcpServiceTokenArgs>({
         invalidatesTags: ["mcp"],
         query: (queryArg) => ({
@@ -5493,6 +5501,12 @@ export type GetAdminConsentResponsesRes = /** status 200 Successful list */ {
       /** The user's email address, used for authentication */
       email?: string;
     };
+    /** When a provisional signature was voided. Voided signatures no longer count as consent */
+    voidedAt?: string;
+    /** The user who voided this provisional signature */
+    voidedBy?: string;
+    /** Why the provisional signature was voided */
+    voidReason?: string;
     _id: string;
     /** When this document was last updated */
     updated: string;
@@ -5604,6 +5618,12 @@ export type GetAdminConsentResponsesByIdRes = /** status 200 Successful read */ 
     /** The user's email address, used for authentication */
     email?: string;
   };
+  /** When a provisional signature was voided. Voided signatures no longer count as consent */
+  voidedAt?: string;
+  /** The user who voided this provisional signature */
+  voidedBy?: string;
+  /** Why the provisional signature was voided */
+  voidReason?: string;
   _id: string;
   /** When this document was last updated */
   updated: string;
@@ -6837,6 +6857,15 @@ export type AdminMigrationsStatusRes = /** status 200 Successful response */ {
   data?: object;
 };
 export type AdminMigrationsStatusArgs = undefined;
+export type ConsentresponsesVoidRes = /** status 200 Successful response */ {
+  data?: object;
+};
+export type ConsentresponsesVoidArgs = {
+  id: string;
+  body: {
+    reason: string;
+  };
+};
 export type ConsentresponsesProvisionalRes = /** status 200 Successful response */ {
   data?: object;
 };
@@ -6930,6 +6959,12 @@ export type GetConsentResponsesRes = /** status 200 Successful list */ {
       /** The user's email address, used for authentication */
       email?: string;
     };
+    /** When a provisional signature was voided. Voided signatures no longer count as consent */
+    voidedAt?: string;
+    /** The user who voided this provisional signature */
+    voidedBy?: string;
+    /** Why the provisional signature was voided */
+    voidReason?: string;
     _id: string;
     /** When this document was last updated */
     updated: string;
@@ -7004,6 +7039,12 @@ export type GetConsentResponsesByIdRes = /** status 200 Successful read */ {
     /** The user's email address, used for authentication */
     email?: string;
   };
+  /** When a provisional signature was voided. Voided signatures no longer count as consent */
+  voidedAt?: string;
+  /** The user who voided this provisional signature */
+  voidedBy?: string;
+  /** Why the provisional signature was voided */
+  voidReason?: string;
   _id: string;
   /** When this document was last updated */
   updated: string;
@@ -8112,6 +8153,7 @@ export const {
   useDeleteAdminUsersByIdMutation,
   useAdminMigrationsRunMutation,
   useAdminMigrationsStatusQuery,
+  useConsentresponsesVoidMutation,
   useConsentresponsesProvisionalMutation,
   useConsentresponsesStatusQuery,
   useGetConsentResponsesQuery,

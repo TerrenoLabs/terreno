@@ -31,6 +31,9 @@ export interface ConsentResponseDocument extends mongoose.Document {
   provisionalNote?: string;
   provisionalSignerIp?: string;
   provisionalSignerUserAgent?: string;
+  voidedAt?: Date;
+  voidedBy?: mongoose.Types.ObjectId;
+  voidReason?: string;
   created: Date;
   updated: Date;
   deleted: boolean;

@@ -127,7 +127,7 @@ const statusForResponses = (
 
 /**
  * Consent status for every active form that applies to the user, in form order. Only
- * responses to each form's current version count. The user's own latest response decides
+ * non-voided responses to each form's current version count. The user's own latest response decides
  * (`signed` or `declined`); otherwise a provisional signature makes it `provisional`, which
  * counts as consented; otherwise `pending`.
  */
@@ -144,6 +144,7 @@ export const getConsentStatuses = async ({
   const responses = await ConsentResponse.find({
     consentFormId: {$in: resolvedForms.map((form) => form._id)},
     userId,
+    voidedAt: null,
   })
     .sort({agreedAt: -1})
     .populate(provisionalSignerPopulate);

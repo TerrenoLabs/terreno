@@ -39,7 +39,7 @@ modelRouter("/todos", Todo, {
 | DELETE `/:id/:field/:itemId` | `updated` | `arrayRemove` | Changed fields; `recordId` set |
 
 `source` is `modelRouter` for these writes. `ConsentApp` also writes `modelRouter` events for
-provisional consent actions: `created`/`create` for a provisional signature and
+provisional consent actions: `created`/`create` for a provisional signature, `updated`/`update` for a void, and
 `viewed`/`read` when staff read another user's consent statuses. `read` and `viewed` mark
 audited reads; no other surface writes them. Secrets (`password`, `hash`, `salt`, `token`,
 `secret`, `refreshToken`) are omitted at every object and array depth, including compound

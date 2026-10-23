@@ -32,6 +32,7 @@ import type {PopulatePath} from "./populate";
 import type {AnyTerrenoAccess} from "./rbac/types";
 import type {TerrenoPlugin} from "./terrenoPlugin";
 import type {ConsentFormDocument} from "./types/consentForm";
+import type {ConsentResponseDocument} from "./types/consentResponse";
 import {isValidObjectId} from "./utils";
 import {z} from "./zodOpenApi";
 
@@ -70,6 +71,23 @@ const provisionalSignBody = z
   .strict();
 
 type ProvisionalSignBody = z.infer<typeof provisionalSignBody>;
+
+const voidProvisionalBody = z
+  .object({
+    reason: z
+      .string()
+      .trim()
+      .min(1, "reason is required")
+      .max(
+        PROVISIONAL_NOTE_MAX_LENGTH,
+        `reason must be at most ${PROVISIONAL_NOTE_MAX_LENGTH} characters`
+      ),
+  })
+  .strict();
+
+type VoidProvisionalBody = z.infer<typeof voidProvisionalBody>;
+
+const voidedByPopulate = {path: "voidedBy", select: "name email"};
 
 const consentStatusQuery = z.object({userId: z.string().min(1, "userId is required")});
 
@@ -154,6 +172,14 @@ const populatedSigner = (value: unknown): PopulatedSigner | null => {
 
 const signerDisplayName = (signer: PopulatedSigner | null): string => {
   return signer?.name || signer?.email || "Staff";
+};
+
+/** The id of a ref that may or may not be populated. */
+const idOf = (value: unknown): string => {
+  if (value && typeof value === "object" && "_id" in value) {
+    return String((value as {_id: unknown})._id);
+  }
+  return String(value);
 };
 
 /** Best-effort AuditEvent for sign-on-behalf actions; a no-op unless AuditApp is registered. */
@@ -539,6 +565,72 @@ export class ConsentApp implements TerrenoPlugin {
             summary: "List a user's consent status for each form",
           },
         },
+        instanceActions: {
+          void: {
+            body: voidProvisionalBody,
+            description:
+              "Mark a provisional signature made in error as void. The record is kept for audit " +
+              "and no longer counts as consent.",
+            handler: async ({body, doc, user}) => {
+              const response = doc as ConsentResponseDocument;
+              const {reason} = body as VoidProvisionalBody;
+              if (!response.provisional) {
+                throw new APIError({
+                  status: 400,
+                  title: "Only provisional signatures can be voided",
+                });
+              }
+              if (response.voidedAt) {
+                throw new APIError({
+                  status: 400,
+                  title: "Provisional signature is already voided",
+                });
+              }
+
+              const actorId = String((user as User).id);
+              const voided = await ConsentResponse.findOneAndUpdate(
+                {_id: response._id, voidedAt: null},
+                {
+                  $set: {
+                    voidedAt: DateTime.now().toJSDate(),
+                    voidedBy: actorId,
+                    voidReason: reason,
+                  },
+                },
+                {returnDocument: "after"}
+              );
+              if (!voided) {
+                throw new APIError({
+                  status: 400,
+                  title: "Provisional signature is already voided",
+                });
+              }
+
+              const targetUserId = idOf(response.userId);
+              const consentFormId = idOf(response.consentFormId);
+              recordConsentAudit({
+                action: "voidProvisional",
+                actorId,
+                consentFormId,
+                operation: "update",
+                recordId: response._id.toString(),
+                userId: targetUserId,
+                verb: "updated",
+              });
+              logger.info("Provisional consent voided", {
+                consentFormId,
+                responseId: response._id.toString(),
+                userId: targetUserId,
+                voidedBy: actorId,
+              });
+
+              return voided.populate([provisionalSignerPopulate, voidedByPopulate]);
+            },
+            method: "POST",
+            permissions: signOnBehalfPermissions,
+            summary: "Void a provisional consent signature",
+          },
+        },
         permissions: {
           create: [],
           delete: [],
@@ -598,6 +690,7 @@ export class ConsentApp implements TerrenoPlugin {
           consentFormId: {$in: pendingForms.map((form) => form._id)},
           provisional: true,
           userId: user.id,
+          voidedAt: null,
         })
           .sort({agreedAt: -1})
           .populate(provisionalSignerPopulate);
@@ -776,6 +869,7 @@ export class ConsentApp implements TerrenoPlugin {
             signature: response.signature,
             signedAt: response.signedAt,
             userAgent: response.userAgent,
+            voidedAt: response.voidedAt,
           };
         });
 
@@ -795,7 +889,8 @@ export class ConsentApp implements TerrenoPlugin {
 
           const responses = await ConsentResponse.find({userId: req.params.userId})
             .sort({agreedAt: -1})
-            .populate(provisionalSignerPopulate);
+            .populate(provisionalSignerPopulate)
+            .populate(voidedByPopulate);
 
           const formIds = responses.map((r) => r.consentFormId);
           const forms = await ConsentForm.find({_id: {$in: formIds}});
@@ -826,6 +921,9 @@ export class ConsentApp implements TerrenoPlugin {
               responseId: response._id,
               signedAt: response.signedAt,
               userAgent: response.userAgent,
+              voidedAt: response.voidedAt,
+              voidedBy: populatedSigner(response.voidedBy),
+              voidReason: response.voidReason,
             };
           });
 

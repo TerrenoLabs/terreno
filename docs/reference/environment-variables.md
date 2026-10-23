@@ -47,7 +47,7 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
-| `BETTER_AUTH_SECRET` | `@terreno/api` | ✅ if Better Auth | — | Yes | server |
+| `BETTER_AUTH_SECRET` | `@terreno/api`, example-backend | ✅ if Better Auth | example-backend outside production: a published dev-only value. With `NODE_ENV=production`, example-backend refuses to start when it is unset or equals that value | Yes | server |
 | `BETTER_AUTH_URL` | `@terreno/api` | ✅ if Better Auth | — | No | server |
 | `GOOGLE_CLIENT_ID` | `@terreno/api` | ❌ | — | No | server |
 | `GOOGLE_CLIENT_SECRET` | `@terreno/api` | ❌ | — | Yes | server |

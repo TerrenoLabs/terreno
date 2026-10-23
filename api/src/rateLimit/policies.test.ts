@@ -24,6 +24,7 @@ describe("classifyRateLimitPolicy for Better Auth feature routes", () => {
       "/api/auth/oauth-handoff/link-start",
       "/api/auth/oauth-proxy-callback",
       "/api/auth/expo-authorization-proxy",
+      "/api/auth/terreno/set-password",
     ];
     for (const path of paths) {
       expect({path, policy: classifyRateLimitPolicy(request(path))}).toEqual({
@@ -40,6 +41,10 @@ describe("classifyRateLimitPolicy for Better Auth feature routes", () => {
     expect(classifyRateLimitPolicy(request("/api/auth/two-factor/verify-totp"), "/auth/v2")).toBe(
       "api"
     );
+  });
+
+  it("leaves the public methods discovery in the api bucket", () => {
+    expect(classifyRateLimitPolicy(request("/api/auth/terreno/methods", "GET"))).toBe("api");
   });
 
   it("does not match a route that only shares a prefix", () => {

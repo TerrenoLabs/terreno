@@ -660,6 +660,101 @@ if (login.step === "login") {
 Social providers need their OAuth apps and callback URLs set up first; see
 [Set up social login](set-up-social-login.md).
 
+### 6. Drop-in security screen
+
+`TerrenoAccountSecurityScreen` is a complete account security screen for the signed-in user. It
+renders `@terreno/ui`'s [`AccountSecurityScreen`](../reference/ui.md#account-security) and wires
+every card to the Better Auth client. Each card shows only when the server's
+[`/terreno/methods`](../reference/api.md#better-auth-authentication) turns its feature on.
+
+``````typescript
+import {TerrenoAccountSecurityScreen} from "@terreno/rtk";
+import {useLocalSearchParams} from "expo-router";
+
+const Security = (): React.ReactElement => {
+  const {error} = useLocalSearchParams<{error?: string}>();
+  return (
+    <TerrenoAccountSecurityScreen
+      callbackURL="/security" // where linking a provider returns
+      client={authClient} // createBetterAuthClient({features: {passkey, twoFactor}})
+      linkError={error} // the ?error= a failed link brings back
+      providerLabels={{"mock-oidc": "Mock OIDC"}}
+    />
+  );
+};
+``````
+
+| Card | Shown when | Calls |
+| --- | --- | --- |
+| Linked accounts | The server has at least one provider | `listAccounts`; Link: `linkSocialWithHandoff` (the [bearer handoff](#linking-a-provider-in-bearer-mode) in bearer mode, `linkSocial` otherwise); Unlink: `unlinkAccount({accountId})`. No Link button under `accountLinking: {mode: "never"}` |
+| Password | `emailPassword` is on | Change: `changePassword`. Set (no password yet, as after a social sign-up): `POST {basePath}/terreno/set-password` |
+| Passkeys | `passkey` is on, the client has the `passkey` feature, and the app runs on web | `passkey.listUserPasskeys`, `addPasskey`, `updatePasskey`, `deletePasskey` |
+| Two-factor | `twoFactor` is on and the client has the `twoFactor` feature | `twoFactor.enable` (its backup codes go to the card), `verifyTotp`, `generateBackupCodes`, `disable`. On or off comes from the session user's `twoFactorEnabled` |
+| Sessions | Always | `listSessions`, `revokeSession({token})`, `revokeOtherSessions` ("Sign out everywhere else") |
+
+How it behaves:
+
+- **Errors.** Every Better Auth call resolves `{data, error}`; the hook turns an `error` into a
+  thrown `Error` with the server's message, so the card that called shows it. A section that
+  fails to load shows its error on its own card; only a failed methods or session load replaces
+  the cards with a page error and **Try again**.
+- **Refetching.** After each change only the affected section reloads: unlinking or setting a
+  password reloads the accounts, a passkey change the passkeys, revoking the sessions. Turning
+  two-factor on or off, or changing the password with "Sign out of other devices", replaces the
+  current session on the server, so those reload the session and the sessions list. The session
+  is read with `disableCookieCache`, so a two-factor change shows at once.
+- **Last sign-in method.** The screen never asks the server to unlink the user's only account,
+  or to remove a passkey that is their only sign-in method. It answers "You can't remove your
+  only sign-in method. Add another one first." Better Auth refuses unlinking the last account
+  too; the screen does not offer it.
+- **Recent sign-in.** Better Auth asks for a session signed in within `session.freshAge` (a day
+  by default) before listing sessions, unlinking, or setting a password. The screen shows its
+  `SESSION_NOT_FRESH` refusal as "Sign in again to manage this."
+- **A credential row without a password.** Better Auth's account list does not say whether the
+  `credential` row holds a password. If a change is refused with `CREDENTIAL_ACCOUNT_NOT_FOUND`,
+  the password card switches to "Set a password" and says "You don't have a password yet. Set
+  one below."
+- **Linking in bearer mode.** The page leaves for the provider and comes back to `callbackURL`,
+  which may be any page on one of the server's `oauthHandoff.webOrigins`. A failed link comes
+  back with `?error=`; pass it as `linkError`. Known codes read as guidance (such as "That
+  account is already linked to another user."); any other value reads "Couldn't link that
+  account. Please try again." Text from the URL is never shown.
+- **Sessions in bearer mode.** `listSessions` and `revokeSession` authenticate with the bearer,
+  so the sessions card works on another site. (`multiSession` does not.)
+- **Passkeys on native.** React Native has no WebAuthn, so the passkeys card is web-only.
+
+Pass `methods` when the app already loaded them with `useAuthMethods`, so the screen does not
+request them again. `minPasswordLength` sets the password card's minimum to match the server's.
+The screen also takes `AccountSecurityScreen`'s `title`, `description`, `header`, `children`,
+`withPage`, `maxWidth`, and `testID`.
+
+#### Set a password for a social-only user
+
+A user who signed up with a provider has no password. Better Auth's own `setPassword` is
+server-only, so `@terreno/api` serves `POST {basePath}/terreno/set-password` (`{newPassword}`)
+for the signed-in user. It needs a fresh session (signed in within Better Auth's
+`session.freshAge`, a day by default; otherwise 403 `SESSION_NOT_FRESH`), refuses with 409
+`PASSWORD_ALREADY_SET` when the user already has a password (changing one goes through
+`/change-password`, which checks the current password), follows Better Auth's password length
+rules, and counts against the `auth` rate-limit bucket. With a `userModel`, it sets the app User's
+JWT password too, and records a `password-set`
+security event, which emails the user when
+[security notifications](../reference/account-security.md#notifications) are on. See the
+[API reference](../reference/api.md#better-auth-authentication).
+
+With a `userModel`, a successful `/change-password` also replaces the app User's JWT password and
+bumps its `tokenEpoch`, so the old password stops working at `POST /auth/login`.
+
+#### Your own security screen
+
+`useAccountSecurity` takes the same options and returns `screenProps` for
+`AccountSecurityScreen`, plus `methods`, `user`, and `refetch()`:
+
+``````typescript
+const security = useAccountSecurity({callbackURL: "/security", client: authClient});
+return <AccountSecurityScreen header={<ProfileHeader />} {...security.screenProps} />;
+``````
+
 ## Frontend and API on different sites
 
 By default the web client relies on Better Auth's HttpOnly session cookie. When the web app

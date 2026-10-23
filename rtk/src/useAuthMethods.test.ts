@@ -1,5 +1,5 @@
 import {afterEach, describe, expect, it, spyOn} from "bun:test";
-import {renderHook, waitFor} from "@testing-library/react-native";
+import {act, renderHook, waitFor} from "@testing-library/react-native";
 
 import {type AuthMethodsClient, type BetterAuthMethods, useAuthMethods} from "./useAuthMethods";
 
@@ -129,6 +129,46 @@ describe("useAuthMethods", () => {
     await waitFor(() => expect(result.current.methods).toEqual(secondMethods));
     expect(first.calls).toHaveLength(1);
     expect(second.calls).toHaveLength(1);
+  });
+
+  it("requests the methods again on refetch after an error, showing a loading state", async () => {
+    spyOn(console, "warn").mockImplementation(() => {});
+    let release: (value: {data: unknown; error: unknown}) => void = () => {};
+    let answer: () => Promise<{data: unknown; error: unknown}> = async () => ({
+      data: null,
+      error: {message: "Offline"},
+    });
+    const client = fakeClient(() => answer());
+    const {result} = renderHook(() => useAuthMethods(client));
+    await waitFor(() => expect(result.current.error).toBe("Offline"));
+
+    // The retry is held, so the state in between can be seen.
+    answer = (): Promise<{data: unknown; error: unknown}> =>
+      new Promise((done) => {
+        release = done;
+      });
+    act(() => {
+      result.current.refetch();
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(true));
+    expect(result.current.error).toBeUndefined();
+    expect(result.current.methods).toBeUndefined();
+
+    await act(async () => {
+      release({data: METHODS, error: null});
+    });
+    await waitFor(() => expect(result.current.methods).toEqual(METHODS));
+    expect(result.current.isLoading).toBe(false);
+    expect(client.calls).toHaveLength(2);
+  });
+
+  it("makes no request when skipped", async () => {
+    const client = fakeClient(async () => ({data: METHODS, error: null}));
+    const {result} = renderHook(() => useAuthMethods(client, {skip: true}));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.methods).toBeUndefined();
+    expect(client.calls).toHaveLength(0);
   });
 
   it("fetches once per client across re-renders", async () => {

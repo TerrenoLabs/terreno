@@ -3,7 +3,7 @@
  * those. The server side is `GET {basePath}/terreno/methods` from `@terreno/api`.
  */
 
-import {useEffect, useState} from "react";
+import {useCallback, useEffect, useState} from "react";
 
 /**
  * How a sign-in with a new method relates to an existing account with the same email.
@@ -42,7 +42,20 @@ export interface UseAuthMethodsResult {
   isLoading: boolean;
   /** A readable message when the request failed. */
   error: string | undefined;
+  /** Requests the methods again, for a Try again button after an error. */
+  refetch: () => void;
 }
+
+export interface UseAuthMethodsOptions {
+  /**
+   * Skip the request, for a caller that already has the methods. The result then stays
+   * `{methods: undefined, isLoading: false}`.
+   * @default false
+   */
+  skip?: boolean;
+}
+
+type AuthMethodsState = Omit<UseAuthMethodsResult, "refetch">;
 
 const METHODS_PATH = "/terreno/methods";
 const FALLBACK_ERROR = "Could not load sign-in methods";
@@ -70,18 +83,34 @@ const errorMessage = (error: unknown): string => {
  * const providers = isLoading ? [] : (methods?.providers ?? []);
  * ```
  */
-export const useAuthMethods = (authClient: AuthMethodsClient): UseAuthMethodsResult => {
-  const [result, setResult] = useState<UseAuthMethodsResult>({
+export const useAuthMethods = (
+  authClient: AuthMethodsClient,
+  {skip = false}: UseAuthMethodsOptions = {}
+): UseAuthMethodsResult => {
+  const [result, setResult] = useState<AuthMethodsState>({
     error: undefined,
-    isLoading: true,
+    isLoading: !skip,
     methods: undefined,
   });
+  const [attempt, setAttempt] = useState(0);
 
-  // Fetch the methods when the client changes; a response after unmount is dropped.
+  const refetch = useCallback((): void => {
+    setAttempt((count) => count + 1);
+  }, []);
+
+  // Fetch the methods when the client changes or on refetch; a response after unmount is dropped.
   useEffect(() => {
+    if (skip) {
+      setResult({error: undefined, isLoading: false, methods: undefined});
+      return;
+    }
     let isCancelled = false;
+    // Every attempt after the first starts from a loading state, so a Try again shows progress.
+    if (attempt > 0) {
+      setResult({error: undefined, isLoading: true, methods: undefined});
+    }
     const load = async (): Promise<void> => {
-      let next: UseAuthMethodsResult;
+      let next: AuthMethodsState;
       try {
         const {data, error} = await authClient.$fetch(METHODS_PATH, {method: "GET"});
         next = error
@@ -102,7 +131,7 @@ export const useAuthMethods = (authClient: AuthMethodsClient): UseAuthMethodsRes
     return (): void => {
       isCancelled = true;
     };
-  }, [authClient]);
+  }, [attempt, authClient, skip]);
 
-  return result;
+  return {...result, refetch};
 };

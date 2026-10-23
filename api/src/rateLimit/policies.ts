@@ -107,6 +107,7 @@ const betterAuthAuthPrefixes = (basePath: string): string[] => {
     `${base}/multi-session`,
     `${base}/oauth-proxy-callback`,
     `${base}/expo-authorization-proxy`,
+    `${base}/terreno/set-password`,
   ];
 };
 

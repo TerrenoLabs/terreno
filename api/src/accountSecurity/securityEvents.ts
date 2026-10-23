@@ -41,6 +41,7 @@ export const SECURITY_ACTIONS = {
   "passkey-removed": {destructive: false, label: "Passkey removed", origin: "self"},
   "password-changed": {destructive: false, label: "Password changed", origin: "self"},
   "password-reset": {destructive: false, label: "Password reset with a link", origin: "self"},
+  "password-set": {destructive: false, label: "Password added", origin: "self"},
   "provider-linked": {destructive: false, label: "Sign-in provider linked", origin: "self"},
   "provider-unlinked": {destructive: false, label: "Sign-in provider unlinked", origin: "self"},
   "remove-passkey": {destructive: true, label: "Remove passkey", origin: "admin"},

@@ -1082,9 +1082,14 @@ describe("createBetterAuth options and plugins passthrough", () => {
     expect(withPlugin.options.plugins?.map((p) => p.id)).toEqual([
       "bearer",
       "terreno-methods",
+      "terreno-set-password",
       "terreno-test",
     ]);
-    expect(plain.options.plugins?.map((p) => p.id)).toEqual(["bearer", "terreno-methods"]);
+    expect(plain.options.plugins?.map((p) => p.id)).toEqual([
+      "bearer",
+      "terreno-methods",
+      "terreno-set-password",
+    ]);
     expect(plain.options.trustedOrigins).toEqual([]);
   });
 });

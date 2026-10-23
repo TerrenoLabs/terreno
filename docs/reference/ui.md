@@ -1753,13 +1753,16 @@ testID, unless you pass `testID` in its props):
 
 #### A connected screen
 
-A connected version, `TerrenoAccountSecurityScreen`, is planned for `@terreno/rtk`: it wires every
-card to the Better Auth client and refetches after each change. Until then, connect the
-presentational screen yourself, along the lines below. It needs a client created with the
-passkey and two-factor client plugins (for `authClient.passkey` and `authClient.twoFactor`), reads
-which features are on from `useAuthMethods`, and unwraps every Better Auth call, because the
-client resolves `{data, error}` instead of rejecting. Better Auth's `setPassword` is server-only,
-so "Set a password" posts to an app endpoint here.
+`@terreno/rtk` ships the connected version: `TerrenoAccountSecurityScreen` (and the
+`useAccountSecurity` hook behind it) wires every card to the Better Auth client, refetches the
+affected section after each change, and links in bearer mode through the OAuth handoff. See
+[Drop-in security screen](../how-to/configure-better-auth.md#6-drop-in-security-screen). To connect
+the presentational screen yourself instead, work along the lines below. It needs a client created
+with the passkey and two-factor client plugins (for `authClient.passkey` and
+`authClient.twoFactor`), reads which features are on from `useAuthMethods`, and unwraps every
+Better Auth call, because the client resolves `{data, error}` instead of rejecting. Better Auth's
+`setPassword` is server-only, so "Set a password" posts to `@terreno/api`'s
+`POST {basePath}/terreno/set-password`.
 
 ``````typescript
 import {useAuthMethods} from "@terreno/rtk";
@@ -1768,7 +1771,6 @@ import {AccountSecurityScreen, hasPasswordCredential, Text} from "@terreno/ui";
 import {type FC, useCallback, useEffect, useState} from "react";
 
 import {authClient} from "@/store/authClient";
-import {setPasswordOnServer} from "@/store/setPassword"; // your endpoint calling auth.api.setPassword
 
 /** Throws the Better Auth error, so the card that called shows its message. */
 const unwrap = <T,>(result: {data: T | null; error: {message?: string} | null}, fallback: string): T => {
@@ -1778,14 +1780,13 @@ const unwrap = <T,>(result: {data: T | null; error: {message?: string} | null}, 
   return result.data;
 };
 
-// useAuthMethods fetches once per mount, so retrying a failed methods request means remounting.
-export const SecurityRoute: FC = () => {
-  const [attempt, setAttempt] = useState(0);
-  return <SecurityScreen key={attempt} onRemount={() => setAttempt((count) => count + 1)} />;
-};
-
-const SecurityScreen: FC<{onRemount: () => void}> = ({onRemount}) => {
-  const {methods, isLoading: isMethodsLoading, error: methodsError} = useAuthMethods(authClient);
+export const SecurityScreen: FC = () => {
+  const {
+    methods,
+    isLoading: isMethodsLoading,
+    error: methodsError,
+    refetch: refetchMethods,
+  } = useAuthMethods(authClient);
   const session = authClient.useSession();
   const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
   const [passkeys, setPasskeys] = useState<AccountPasskey[]>([]);
@@ -1837,7 +1838,7 @@ const SecurityScreen: FC<{onRemount: () => void}> = ({onRemount}) => {
       isLoading={
         isMethodsLoading || session.isPending || isLoading || (Boolean(methods) && !hasLoaded)
       }
-      onRetry={methods ? load : onRemount}
+      onRetry={methods ? load : refetchMethods}
       linkedAccounts={
         methods && methods.providers.length > 0
           ? {
@@ -1866,7 +1867,13 @@ const SecurityScreen: FC<{onRemount: () => void}> = ({onRemount}) => {
                   );
                   return;
                 }
-                await setPasswordOnServer({newPassword});
+                const result = await authClient.$fetch("/terreno/set-password", {
+                  body: {newPassword},
+                  method: "POST",
+                });
+                if (result.error) {
+                  throw new Error(result.error.message ?? "Couldn't set your password.");
+                }
                 await loadAccounts();
               },
             }
@@ -1940,9 +1947,8 @@ const SecurityScreen: FC<{onRemount: () => void}> = ({onRemount}) => {
 ``````
 
 `useAuthMethods` reports `passkey`, `twoFactor`, `emailPassword` and `providers`, so a card
-appears only for a feature the server has on. It fetches once per mount and has no refetch, so
-when the methods request fails, Try again remounts the screen through `SecurityRoute`'s `key`;
-when the methods loaded but the cards' data failed, Try again calls `load` again. Leave `sessions` out on apps that don't want to
+appears only for a feature the server has on. When the methods request fails, Try again calls its
+`refetch()`; when the methods loaded but the cards' data failed, Try again calls `load` again. Leave `sessions` out on apps that don't want to
 show it.
 
 ## Testing Utilities

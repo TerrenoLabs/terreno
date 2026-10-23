@@ -33,6 +33,7 @@ export const SECURITY_MAIL_TEMPLATE_IDS = [
   "securityPasskeyRemoved",
   "securityPasswordChanged",
   "securityPasswordReset",
+  "securityPasswordSet",
   "securityProviderLinked",
   "securityProviderUnlinked",
   "securitySessionsRevoked",
@@ -117,6 +118,14 @@ export const DEFAULT_SECURITY_MAIL_TEMPLATES: Record<SecurityMailTemplateId, Sec
       subject: "Your password was reset",
       text: "The password for your account was reset with a reset link on {{occurredAt}}.\n\n{{secureAccountLine}}",
     },
+    securityPasswordSet: {
+      html: paragraphs(
+        "{{actor}}{{orgClause}} added a password to your account on {{occurredAt}}. It can now be used to sign in.",
+        "{{secureAccountLine}}"
+      ),
+      subject: "A password was added to your account",
+      text: "{{actor}}{{orgClause}} added a password to your account on {{occurredAt}}. It can now be used to sign in.\n\n{{secureAccountLine}}",
+    },
     securityProviderLinked: {
       html: paragraphs(
         "{{actor}}{{orgClause}} connected {{providerName}} to your account on {{occurredAt}}. It can now be used to sign in.",
@@ -185,6 +194,7 @@ export const SECURITY_NOTIFICATION_TEMPLATES: Record<
   "passkey-removed": "securityPasskeyRemoved",
   "password-changed": "securityPasswordChanged",
   "password-reset": "securityPasswordReset",
+  "password-set": "securityPasswordSet",
   "provider-linked": "securityProviderLinked",
   "provider-unlinked": "securityProviderUnlinked",
   "remove-passkey": "securityPasskeyRemoved",

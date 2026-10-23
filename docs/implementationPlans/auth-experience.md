@@ -711,7 +711,7 @@ Open risks:
     to `set-up-social-login.md`.
   - Skills: terreno-data-fetching, terreno-ui
 
-- [ ] **T21** — Connected TerrenoAccountSecurityScreen
+- [x] **T21** — Connected TerrenoAccountSecurityScreen
   - Depends on: T20
   - Files: rtk/src/auth/useAccountSecurity.ts, rtk/src/auth/useAccountSecurity.test.ts, rtk/src/auth/TerrenoAccountSecurityScreen.tsx, rtk/src/index.ts, docs/how-to/configure-better-auth.md, api/src/betterAuthSetPassword.ts, api/src/betterAuthSetPassword.test.ts, api/src/rateLimit/policies.ts
   - Build: the hook wraps:

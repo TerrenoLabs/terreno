@@ -30,6 +30,7 @@ import {
 } from "./betterAuthFeatures";
 import {createMethodsPlugin} from "./betterAuthMethods";
 import {createOAuthHandoffPlugins} from "./betterAuthOAuthHandoff";
+import {createSetPasswordPlugin} from "./betterAuthSetPassword";
 import {APIError, isAPIError} from "./errors";
 import type {AuthRecoveryMail} from "./expressServer";
 import {logger} from "./logger";
@@ -331,7 +332,8 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     // websocket handshakes (RealtimeApp's Better Auth socket validator forwards the handshake
     // token as a bearer header) — without it, a raw session token cannot be validated and
     // socket auth silently fails (the sync client shows perpetually "offline").
-    // The methods plugin serves `GET {basePath}/terreno/methods` for login screens.
+    // The methods plugin serves `GET {basePath}/terreno/methods` for login screens, and the
+    // set-password plugin serves `POST {basePath}/terreno/set-password` for security screens.
     // With a user model, the app user sync plugin links or creates the app User as each session
     // is created (see createAppUserSyncPlugin), and the security events plugin records the
     // user's own security changes (see createSecurityEventsPlugin).
@@ -342,6 +344,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     plugins: [
       bearer(),
       createMethodsPlugin(),
+      createSetPasswordPlugin({userModel}),
       ...buildFeaturePlugins(config),
       ...(isLinkingDisabled ? [createLinkingDisabledPlugin()] : []),
       ...(userModel

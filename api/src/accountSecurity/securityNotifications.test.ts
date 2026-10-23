@@ -698,6 +698,7 @@ describe("security notification emails", () => {
       "passkey-removed": "A passkey was removed from your account",
       "password-changed": "Your password was changed",
       "password-reset": "Your password was reset",
+      "password-set": "A password was added to your account",
       "provider-linked": "A sign-in method was connected to your account",
       "provider-unlinked": "A sign-in method was disconnected from your account",
       "remove-passkey": "A passkey was removed from your account",

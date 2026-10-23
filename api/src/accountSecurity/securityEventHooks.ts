@@ -141,6 +141,8 @@ const actionFor = (
   switch (ctx.path) {
     case "/change-password":
       return {action: "password-changed"};
+    case "/terreno/set-password":
+      return {action: "password-set"};
     case "/revoke-other-sessions":
       return {action: "other-sessions-revoked"};
     case "/passkey/verify-registration": {
@@ -161,6 +163,7 @@ const RECORDED_PATHS = new Set([
   "/passkey/delete-passkey",
   "/passkey/verify-registration",
   "/revoke-other-sessions",
+  "/terreno/set-password",
   ...TWO_FACTOR_PATHS,
 ]);
 
@@ -168,7 +171,8 @@ const RECORDED_PATHS = new Set([
  * The Better Auth plugin that records self-service security changes. `createBetterAuth` adds it
  * whenever it has a `userModel` (security principals are app User ids).
  *
- * - Endpoint `hooks.after`: `/change-password` (password-changed), `/revoke-other-sessions`
+ * - Endpoint `hooks.after`: `/change-password` (password-changed), `/terreno/set-password`
+ *   (password-set, a first password for an OAuth- or passkey-only user), `/revoke-other-sessions`
  *   (other-sessions-revoked), `/passkey/verify-registration` (passkey-added),
  *   `/passkey/delete-passkey` (passkey-removed), and a successful `/two-factor/*` request that
  *   changed the user's stored `twoFactorEnabled` (two-factor-enabled / two-factor-disabled). The

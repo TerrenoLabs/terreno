@@ -468,7 +468,7 @@ Every action name the security log can record, including self-service changes:
 | `id` | Started by |
 | --- | --- |
 | `reset-two-factor`, `remove-passkey`, `unlink-provider`, `revoke-sessions`, `send-password-reset`, `disable`, `enable`, `suspend-membership`, `issue-sign-in-link` | An administrator |
-| `provider-linked`, `provider-unlinked`, `passkey-added`, `passkey-removed`, `two-factor-enabled`, `two-factor-disabled`, `password-changed`, `password-reset`, `other-sessions-revoked` | The user (see [Self-service events](#self-service-events)) |
+| `provider-linked`, `provider-unlinked`, `passkey-added`, `passkey-removed`, `two-factor-enabled`, `two-factor-disabled`, `password-changed`, `password-set`, `password-reset`, `other-sessions-revoked` | The user (see [Self-service events](#self-service-events)) |
 
 `SECURITY_ACTIONS` exports the full table with labels.
 
@@ -515,6 +515,7 @@ so they never show up here twice.
 | `two-factor-enabled` | A successful `/two-factor/verify-totp`, `verify-otp`, or `enable` request that turned the stored `twoFactorEnabled` on (enrolment). The 2FA step of a sign-in is not recorded | none |
 | `two-factor-disabled` | A successful `POST {basePath}/two-factor/disable` that turned the stored `twoFactorEnabled` off | none |
 | `password-changed` | `POST {basePath}/change-password` succeeds | none |
+| `password-set` | `POST {basePath}/terreno/set-password` adds a first password | none |
 | `password-reset` | `POST {basePath}/reset-password` completes (Better Auth's `onPasswordReset`) | none |
 | `other-sessions-revoked` | `POST {basePath}/revoke-other-sessions` succeeds | none |
 
@@ -584,6 +585,7 @@ email. No-op actions (`changed: false`) are not recorded, so they send nothing.
 | `revoke-sessions` | `securitySessionsRevoked` | You were signed out everywhere |
 | `other-sessions-revoked` | `securityOtherSessionsRevoked` | Your other sessions were signed out |
 | `password-changed` | `securityPasswordChanged` | Your password was changed |
+| `password-set` | `securityPasswordSet` | A password was added to your account |
 | `password-reset` | `securityPasswordReset` | Your password was reset (the body does not say who: anyone holding the link can reset) |
 | `disable` | `securityAccountDisabled` | Your account was disabled |
 | `enable` | `securityAccountEnabled` | Your account was re-enabled |

@@ -673,6 +673,33 @@ only those. It needs no session. Read it from a frontend with `useAuthMethods(au
 The values come from Better Auth's final context on each request, so `options` overrides and
 plugin-registered providers are reflected.
 
+**Set a first password (`POST {basePath}/terreno/set-password`):**
+
+Every Better Auth server serves `POST {basePath}/terreno/set-password` (default
+`/api/auth/terreno/set-password`) so a signed-in user who has no password, such as one who signed
+up with a provider, can add one. Better Auth's own `setPassword` is server-only. rtk's
+`useAccountSecurity` calls it from the password card's "Set a password" form.
+
+| Request | Response |
+| --- | --- |
+| Body `{newPassword}` with a bearer or session cookie, and no password yet | `200 {status: true}` with `cache-control: no-store`; the user can now sign in with email and password |
+| The user already has a password | `409` `PASSWORD_ALREADY_SET` (change it with `/change-password`). Of two concurrent sets, one succeeds and the other gets this 409; one credential row remains |
+| No session, or a revoked one (the session is read from the database, not the cookie cache) | `401` |
+| The session signed in longer ago than Better Auth's `session.freshAge` (a day by default) | `403` `SESSION_NOT_FRESH`: sign in again first, so a stolen old session cannot add a lasting password |
+| Shorter than `emailAndPassword.minPasswordLength` (8) or longer than `maxPasswordLength` (128) | `400` `PASSWORD_TOO_SHORT` / `PASSWORD_TOO_LONG` |
+| Email and password sign-in is off | `400` `EMAIL_PASSWORD_DISABLED` |
+
+With a `userModel`, the new password is also set on the app User's passport-local-mongoose hash
+(when the model has one), so `POST /auth/login` accepts it on dual-enrolled apps, and the request
+records a `password-set` security event. The app User is the one whose `betterAuthId` matches, or
+else the one with the same email, but only when the Better Auth email is verified and that User is
+not linked to another Better Auth user. A successful `POST {basePath}/change-password` syncs the
+same way and also bumps the app User's `tokenEpoch`, so the old password stops working at
+`POST /auth/login` (which has no second factor) and outstanding JWT refresh tokens stop
+refreshing (see
+[Self-service events](account-security.md#self-service-events)). With the opt-in `rateLimit`, the
+path is in the auth bucket.
+
 **Challenge header (`X-Terreno-Auth-Challenge`):**
 
 With `twoFactor` or `passkey` configured, a request that sends `X-Terreno-Auth-Challenge` (`-`
@@ -689,6 +716,7 @@ uses it; see
 
 **Endpoints (when enabled):**
 - `GET /api/auth/terreno/methods` — Enabled sign-in methods (public)
+- `POST /api/auth/terreno/set-password` — Add a first password for the signed-in user
 - `POST /api/auth/signup/email` — Email/password signup
 - `POST /api/auth/signin/email` — Email/password signin
 - `GET /api/auth/signin/{provider}` — Initiate OAuth (google, github, apple)

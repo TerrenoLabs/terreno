@@ -45,7 +45,9 @@ Set `accountLinking: {mode}` on `BetterAuthConfig`. The mode controls the Better
 
 `/terreno/methods` reports the mode so clients can word their guidance. Unlinking the only
 remaining sign-in method is refused in every mode (400 `FAILED_TO_UNLINK_LAST_ACCOUNT`), so a user
-cannot lock themselves out.
+cannot lock themselves out. rtk's `TerrenoAccountSecurityScreen` checks the same rule before it
+asks, and a social-only user can add a password there (`POST {basePath}/terreno/set-password`) to
+gain a second method before unlinking a provider.
 
 ### What the refusals look like
 

@@ -109,7 +109,11 @@ describe("buildFeaturePlugins", () => {
   });
 
   it("adds no plugins when no feature is configured", () => {
-    expect(pluginIds(buildApp().auth)).toEqual(["bearer", "terreno-methods"]);
+    expect(pluginIds(buildApp().auth)).toEqual([
+      "bearer",
+      "terreno-methods",
+      "terreno-set-password",
+    ]);
   });
 
   it("puts feature plugins before config.plugins", () => {
@@ -126,6 +130,7 @@ describe("buildFeaturePlugins", () => {
     expect(pluginIds(auth)).toEqual([
       "bearer",
       "terreno-methods",
+      "terreno-set-password",
       "two-factor",
       "passkey",
       "terreno-challenge-headers",
@@ -353,7 +358,7 @@ describe("signUp: closed", () => {
       const {app, auth} = buildApp({signUp});
       const res = await supertest(app).get("/api/auth/terreno/methods");
       expect(res.body.signUp).toBe(true);
-      expect(pluginIds(auth)).toEqual(["bearer", "terreno-methods"]);
+      expect(pluginIds(auth)).toEqual(["bearer", "terreno-methods", "terreno-set-password"]);
     }
   });
 });

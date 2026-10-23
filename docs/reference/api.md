@@ -1063,6 +1063,22 @@ the mapped resource action. Callers with `user.admin === true` still receive ful
 mutations. Route mapping (for example prompt label moves → `aiPrompt:promote`, review
 submit → `aiReview:score`) is documented in [AI reference — Observability](ai.md#observability).
 
+### RBAC role edits
+
+`PATCH /rbac/roles/:name` (`access.roles.update`) requires `rbac:manageRoles` and never lets the
+actor hand out permissions it does not hold. Users hold roles by name, so a rename (`{name}`) is
+checked like a permission edit:
+
+- Locked and sealed roles cannot be renamed (400).
+- The actor must hold every permission of the role being renamed (403 `Cannot grant permissions
+  you do not hold`).
+- The new name must not belong to another role or appear in any user's `roles` (409).
+- Users holding the old name, and other roles' `excludesRoles` entries, move to the new name, so
+  holders keep the same grants.
+
+A `PermissionSource` that returns role names keeps returning the old name after a rename; update
+the source's mapping in the same change.
+
 ## Request Validation
 
 @terreno/api provides runtime validation of incoming requests against OpenAPI schemas using [AJV](https://ajv.js.org/). Validation is opt-in and can be enabled globally or per-route.

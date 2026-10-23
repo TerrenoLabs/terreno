@@ -658,6 +658,24 @@ describe("GitHub callback handler (fake strategy)", () => {
     expect(res.headers.location).toContain("userId=");
   });
 
+  it("GET /auth/github/callback refuses to issue tokens to a disabled user", async () => {
+    const user = await GitHubTestUserModel.create({
+      disabled: true,
+      email: "cb-disabled@example.com",
+      githubId: "cb-gh-disabled",
+      name: "CB Disabled",
+    } as unknown as TestUser);
+
+    fakeGithubOutcome = {type: "success", user};
+
+    const res = await agent
+      .get("/auth/github/callback")
+      .set("x-mock-return-to", "https://example.com/cb")
+      .expect(401);
+    expect(res.headers.location).toBeUndefined();
+    expect(res.body.data?.token).toBeUndefined();
+  });
+
   it("GET /auth/github/callback redirects on failure", async () => {
     fakeGithubOutcome = {challenge: {message: "denied"}, type: "fail"};
     const res = await agent.get("/auth/github/callback").expect(302);

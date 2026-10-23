@@ -3,7 +3,7 @@ import {Router} from "express";
 import type {Schema} from "mongoose";
 import passport from "passport";
 import {Strategy as GitHubStrategy, type Profile} from "passport-github2";
-import {generateTokens, type User, type UserModel} from "./auth";
+import {generateTokens, isUserDisabled, type User, type UserModel} from "./auth";
 import {APIError} from "./errors";
 import type {AuthOptions} from "./expressServer";
 import {logger} from "./logger";
@@ -251,6 +251,10 @@ export const addGitHubAuthRoutes = (
       session: false,
     }),
     async (req: express.Request, res: express.Response) => {
+      if (isUserDisabled(req.user)) {
+        logger.warn(`[github] Refusing GitHub login for disabled user ${req.user?._id}`);
+        return res.status(401).json({status: 401, title: "User is disabled"});
+      }
       try {
         const tokens = await generateTokens(req.user, authOptions);
         const returnTo = (req as express.Request & {session?: {returnTo?: string}}).session

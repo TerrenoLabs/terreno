@@ -5,6 +5,7 @@ import {
   authenticateMiddleware,
   generateTokens,
   type HasSetPassword,
+  isUserDisabled,
   MAX_PASSWORD_LENGTH,
   setPasswordForUser,
   type User,
@@ -189,6 +190,9 @@ export const addAuthRecoveryRoutes = (
     const user = await userModel.findById(consumed.userId);
     if (!user) {
       throw new APIError({status: 400, title: "Invalid or expired reset token"});
+    }
+    if (isUserDisabled(user)) {
+      throw new APIError({status: 401, title: "User is disabled"});
     }
     await setPasswordForUser(user as unknown as HasSetPassword, password);
     incrementTokenEpoch(user);

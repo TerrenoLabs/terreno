@@ -422,6 +422,14 @@ export const generateTokens = async (
   return {refreshToken, sessionId, token};
 };
 
+/**
+ * Whether an account has been disabled (`isDisabledPlugin`). Disabled users must not
+ * authenticate or receive new tokens on any path.
+ * @internal
+ */
+export const isUserDisabled = (user: unknown): boolean =>
+  (user as {disabled?: boolean} | null | undefined)?.disabled === true;
+
 export const setupAuth = (app: express.Application, userModel: UserModel): void => {
   if (!userModel.createStrategy) {
     throw new APIError({status: 500, title: "setupAuth userModel must have .createStrategy()"});
@@ -447,14 +455,17 @@ export const setupAuth = (app: express.Application, userModel: UserModel): void 
     ) as passport.Strategy
   );
 
+  // Only the jwt cookie or the Bearer scheme carries an access JWT. Other schemes (such as
+  // "Secret") skip decodeJWTMiddleware, so passport must not read a JWT out of them either.
   const customTokenExtractor: JwtFromRequestFunction = (req) => {
-    let token: string | null = null;
     if (req?.cookies?.jwt) {
-      token = req.cookies.jwt;
-    } else if (req?.headers?.authorization) {
-      token = req?.headers?.authorization.split(" ")[1];
+      return req.cookies.jwt;
     }
-    return token;
+    const [scheme, value] = (req?.headers?.authorization ?? "").split(" ");
+    if (scheme?.toLowerCase() === "bearer" && value) {
+      return value;
+    }
+    return null;
   };
 
   if (process.env.TOKEN_SECRET) {
@@ -482,6 +493,10 @@ export const setupAuth = (app: express.Application, userModel: UserModel): void 
           return done(error, false);
         }
         if (user) {
+          if (isUserDisabled(user)) {
+            logger.warn(`[jwt] User ${user.id} is disabled`);
+            return done(null, false);
+          }
           return done(null, user);
         }
         if (userModel.createAnonymousUser) {
@@ -605,6 +620,10 @@ export const addAuthRoutes = (
           logger.warn(`Invalid login: ${info}`);
           return res.status(401).json({message: info?.message});
         }
+        if (isUserDisabled(user)) {
+          logger.warn(`[auth] Refusing login for disabled user ${user._id}`);
+          return next(new APIError({status: 401, title: "User is disabled"}));
+        }
         if (authOptions?.requireEmailVerification && user.emailVerified !== true) {
           return next(
             new APIError({
@@ -655,7 +674,7 @@ export const addAuthRoutes = (
       const user = await userModel.findById(decoded.id);
       const tokenEpoch = typeof decoded.te === "number" ? decoded.te : 0;
       const userEpoch = (user as User | null)?.tokenEpoch ?? 0;
-      if (!user || tokenEpoch !== userEpoch) {
+      if (!user || tokenEpoch !== userEpoch || isUserDisabled(user)) {
         logger.error(`Invalid refresh token, user id: ${req.user?.id}`);
         return res.status(401).json({message: "Invalid refresh token"});
       }

@@ -20,6 +20,7 @@ import {
   signupUser,
   stripPrivilegedUserFields,
 } from "./auth";
+import {apiUnauthorizedMiddleware} from "./errors";
 import {logger} from "./logger";
 import {Permissions} from "./permissions";
 import {getCurrentRequestContext} from "./requestContext";
@@ -1413,6 +1414,95 @@ describe("login error and disabled user paths", () => {
       .set("authorization", `Bearer ${token}`)
       .expect(401);
     expect(res.body.title).toContain("disabled");
+  });
+});
+
+describe("disabled users on the legacy JWT stack", () => {
+  let app: express.Application;
+  let token: string;
+  let refreshToken: string;
+  let userId: string;
+
+  beforeEach(async () => {
+    setSystemTime();
+    await setupTestData();
+    app = new TerrenoApp({
+      configureApp: (router: express.Router) => {
+        router.use(
+          "/food",
+          modelRouter(FoodModel, {
+            permissions: {
+              create: [Permissions.IsAuthenticated],
+              delete: [],
+              list: [Permissions.IsAuthenticated],
+              read: [Permissions.IsAuthenticated],
+              update: [],
+            },
+          })
+        );
+      },
+      skipListen: true,
+      userModel: UserModel as unknown as AuthUserModel,
+    }).build();
+    const loginRes = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
+    ({refreshToken, token, userId} = loginRes.body.data);
+    assert.isString(refreshToken);
+    await UserModel.findByIdAndUpdate(userId, {disabled: true});
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  it("rejects the access JWT under a non-Bearer authorization scheme", async () => {
+    await supertest(app).get("/auth/me").set("authorization", `Secret ${token}`).expect(401);
+  });
+
+  it("rejects a modelRouter create sent with a non-Bearer authorization scheme", async () => {
+    await supertest(app)
+      .post("/food")
+      .set("authorization", `Secret ${token}`)
+      .send({calories: 1, name: "disabled-user-food"})
+      .expect(401);
+    const count = await FoodModel.countDocuments({name: "disabled-user-food"});
+    expect(count).toBe(0);
+  });
+
+  it("rejects the jwt cookie when the decode middleware is skipped", async () => {
+    const cookieApp = getBaseServer();
+    cookieApp.use((req: express.Request, _res: express.Response, next: express.NextFunction) => {
+      req.cookies = {jwt: token};
+      next();
+    });
+    setupAuth(cookieApp, UserModel as unknown as AuthUserModel);
+    addMeRoutes(cookieApp, UserModel as unknown as AuthUserModel);
+    cookieApp.use(apiUnauthorizedMiddleware);
+    await supertest(cookieApp).get("/auth/me").set("authorization", "Secret not-a-jwt").expect(401);
+  });
+
+  it("refuses to log in a disabled user", async () => {
+    const res = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(401);
+    expect(res.body.data?.token).toBeUndefined();
+  });
+
+  it("refuses to refresh tokens for a disabled user", async () => {
+    const res = await supertest(app).post("/auth/refresh_token").send({refreshToken}).expect(401);
+    expect(res.body.data?.token).toBeUndefined();
+  });
+
+  it("still authenticates an enabled user's Bearer token", async () => {
+    await UserModel.findByIdAndUpdate(userId, {disabled: false});
+    const res = await supertest(app)
+      .get("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .expect(200);
+    expect(res.body.data.email).toBe("notAdmin@example.com");
   });
 });
 

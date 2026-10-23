@@ -419,6 +419,11 @@ setupServer({
 - `GET /auth/me` — Get current user profile
 - `PATCH /auth/me` — Update current user profile
 
+An access JWT is read only from the `jwt` cookie or an `Authorization: Bearer <token>`
+header; any other scheme is not a JWT credential. A user with `disabled: true` gets 401 on
+every JWT-authenticated route, and `POST /auth/login`, `POST /auth/refresh_token`,
+`POST /auth/resetPassword`, and `GET /auth/github/callback` refuse to issue tokens to them.
+
 JWT recovery routes default on. In `authOptions`, set `passwordReset: false` to omit
 forgot-password and both token-reset paths, `emailVerification: false` to omit send/verify
 email, or `legacyResetPasswordRoute: false` to omit only the deprecated

@@ -145,8 +145,11 @@ modelRouter(Model, {
 **Access Token (short-lived)**
 - Default expiration: 15 minutes (`TOKEN_EXPIRES_IN`)
 - Used for API requests
-- Included in `Authorization: Bearer <token>` header
+- Included in `Authorization: Bearer <token>` header (or the `jwt` cookie). Other
+  `Authorization` schemes are never read as a JWT
 - Contains user ID and permissions in payload
+- Rejected with 401 once the user is `disabled`. Login, refresh, password reset, and GitHub
+  sign-in also stop issuing tokens to a disabled user, so disabling an account ends its access
 
 **Refresh Token (long-lived)**
 - Default expiration: 30 days (`REFRESH_TOKEN_EXPIRES_IN`)

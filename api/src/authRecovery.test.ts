@@ -218,6 +218,27 @@ describe("password reset routes", () => {
     assert.equal(synced[0]?.password, "bridged-password-123");
   });
 
+  it("refuses to reset the password or issue tokens for a disabled user", async () => {
+    await supertest(app)
+      .post("/auth/forgotPassword")
+      .send({email: "notAdmin@example.com"})
+      .expect(202);
+    const token = tokenFromResetUrl(sentMail[0]?.text ?? "");
+    await UserModel.updateOne({email: "notAdmin@example.com"}, {disabled: true});
+
+    const reset = await supertest(app)
+      .post("/auth/resetPassword")
+      .send({password: "disabled-new-password", token})
+      .expect(401);
+    assert.isUndefined(reset.body.data?.token);
+
+    await UserModel.updateOne({email: "notAdmin@example.com"}, {disabled: false});
+    await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "disabled-new-password"})
+      .expect(401);
+  });
+
   it("does not consume a reset token when the new password is too long", async () => {
     await supertest(app)
       .post("/auth/forgotPassword")

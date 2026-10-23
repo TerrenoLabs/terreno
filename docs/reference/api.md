@@ -417,7 +417,9 @@ setupServer({
 - `POST /auth/sendVerification` — Authenticated; 202 only after delivery succeeds; mails a verification link when `emailVerified` is not true
 - `POST /auth/verifyEmail` — `{token}` sets `emailVerified` true
 - `GET /auth/me` — Get current user profile
-- `PATCH /auth/me` — Update current user profile
+- `PATCH /auth/me` — Update current user profile. It does not change passwords: a body with
+  `password` or `newPassword` gets 400 and nothing is saved. Change a password through
+  `POST /auth/forgotPassword` and `POST /auth/resetPassword`, or Better Auth change-password
 
 An access JWT is read only from the `jwt` cookie or an `Authorization: Bearer <token>`
 header; any other scheme is not a JWT credential. A user with `disabled: true` gets 401 on

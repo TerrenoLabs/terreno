@@ -1292,6 +1292,46 @@ describe("self-service identity and credential fields", () => {
   });
 });
 
+describe("PATCH /auth/me password changes", () => {
+  let agent: TestAgent;
+
+  beforeEach(async () => {
+    await setupTestData();
+    const app = new TerrenoApp({
+      configureApp: () => {},
+      skipListen: true,
+      userModel: UserModel as unknown as AuthUserModel,
+    }).build();
+    agent = supertest.agent(app);
+  });
+
+  it("rejects a password in the profile body instead of reporting success", async () => {
+    const login = await agent
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
+    const token = login.body.data.token as string;
+
+    for (const body of [
+      {password: "brand-new-password-1"},
+      {newPassword: "brand-new-password-1"},
+    ]) {
+      const res = await agent
+        .patch("/auth/me")
+        .set("authorization", `Bearer ${token}`)
+        .send({...body, name: "Should Not Save"});
+      expect(res.status).toBe(400);
+    }
+
+    const reloaded = await UserModel.findOne({email: "notAdmin@example.com"}).lean();
+    expect((reloaded as unknown as {name?: string})?.name).toBe("Not Admin");
+    await agent
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
+  });
+});
+
 describe("Secret prefix authorization bypass", () => {
   let app: express.Application;
   let agent: TestAgent;

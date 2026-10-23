@@ -169,6 +169,9 @@ export const stripPrivilegedUserFields = (
   return sanitized;
 };
 
+// Password keys clients send to a profile update; PATCH /me rejects them rather than ignore them.
+const PROFILE_PASSWORD_FIELDS = ["password", "newPassword"] as const;
+
 const isEmailUpdateChangingMailbox = (currentEmail: unknown, nextEmail: unknown): boolean => {
   if (typeof currentEmail !== "string" || typeof nextEmail !== "string") {
     return false;
@@ -811,8 +814,16 @@ export const addMeRoutes = (
     // } catch (e) {
     //   return res.status(403).send({message: (e as Error).message});
     // }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    // `password` is not a schema path, so assigning it would save nothing and still answer 200.
+    if (PROFILE_PASSWORD_FIELDS.some((field) => field in body)) {
+      return res.status(400).send({
+        message:
+          "PATCH /auth/me does not change passwords. Use the password reset flow or Better Auth change-password.",
+      });
+    }
     try {
-      const update = stripPrivilegedUserFields(req.body ?? {}, "PATCH /auth/me");
+      const update = stripPrivilegedUserFields(body, "PATCH /auth/me");
       const isMailboxChange = isEmailUpdateChangingMailbox(doc.email, update.email);
       Object.assign(doc, update);
       if (isMailboxChange) {

@@ -2516,6 +2516,60 @@ describe("AdminApp user elevation and scoped bulk-patch", () => {
     expect((await UserModel.findById(target?._id))?.admin).toBe(true);
   });
 
+  it("does not let a user editor without assignRoles write roles through dotted paths", async () => {
+    const accessControl = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Support",
+          name: "support",
+          permissions: {admin: ["access"], user: ["list", "read", "update"]},
+        },
+      ],
+      statements: terrenoStatements,
+      userModel: UserModel as unknown as UserModelType,
+    });
+    await accessControl.roles.seedDefaults();
+    const localApp = buildApp(
+      [
+        {
+          displayName: "Users",
+          listFields: ["email", "admin"],
+          model: UserModel,
+          routePath: "/users",
+        },
+      ],
+      {accessControl}
+    );
+    const self = await UserModel.findOne({email: "notAdmin@example.com"}).orFail();
+    await UserModel.updateOne({_id: self._id}, {$set: {roles: ["support"]}});
+    const agent = await authAsUser(localApp, "notAdmin");
+
+    await agent
+      .patch(`/admin/users/${String(self._id)}`)
+      .send({roles: ["support", "superadmin"]})
+      .expect(403);
+
+    await agent
+      .patch(`/admin/users/${String(self._id)}`)
+      .send({name: "Dotted", "organizationIds.0": "other-tenant", "roles.1": "superadmin"})
+      .expect(200);
+    await agent
+      .patch(`/admin/users/${String(self._id)}`)
+      .send({"roles.0": "superadmin"})
+      .expect(200);
+
+    const after = await UserModel.findById(self._id).lean();
+    expect(after?.name).toBe("Dotted");
+    expect((after as {roles?: string[]} | null)?.roles).toEqual(["support"]);
+    expect((after as {organizationIds?: string[]} | null)?.organizationIds ?? []).toEqual([]);
+    const permissions = await accessControl.can({
+      permissions: {rbac: ["assignRoles"]},
+      user: after as never,
+    });
+    expect(permissions.allowed).toBe(false);
+  });
+
   it("does not persist organizationIds on RBAC admin User writes", async () => {
     const accessControl = createAccess({
       connection: mongoose.connection,

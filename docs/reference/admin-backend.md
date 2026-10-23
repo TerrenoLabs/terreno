@@ -257,6 +257,12 @@ When `AuditApp` is registered, successful admin POST/PATCH/DELETE persist append
 not required for the framework log. Failures in either sink do not change the mutation HTTP
 status. `AuditEvent` itself is never audited.
 
+Admin create, update, bulk-patch, and admin-window sync bodies drop `readonlyFields`,
+`hiddenFields`, `excludeFields`, and system fields, including dotted paths into them
+(`address.city` for a readonly `address`). With `accessControl`, User writes also drop
+`organizationIds` and `roles` in any key form (`roles.0`). A `roles` array in the body is
+assigned after the write through `access.roles.assign`, which requires `rbac:assignRoles`.
+
 **Important:** Only expose models that should be editable via admin panel. Avoid sensitive internal models.
 
 ## Document storage

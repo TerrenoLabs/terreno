@@ -147,8 +147,22 @@ export const SELF_SERVICE_BLOCKED_USER_FIELDS = [
 ] as const;
 
 /**
- * Removes {@link SELF_SERVICE_BLOCKED_USER_FIELDS} from a self-service body. Fields are dropped
- * rather than rejected so clients that echo a whole user object back still succeed.
+ * True when a write-body key addresses `field` itself or a path inside it. Mongoose `set`,
+ * `create`, and the document constructor treat a dotted key such as `roles.0` as a path into
+ * `roles`, so field filters must match the first path segment, not only the exact key.
+ */
+export const isWriteKeyForField = (key: string, field: string): boolean => {
+  return key === field || key.startsWith(`${field}.`);
+};
+
+const isWriteKeyForAnyField = (key: string, fields: readonly string[]): boolean => {
+  return fields.some((field) => isWriteKeyForField(key, field));
+};
+
+/**
+ * Removes {@link SELF_SERVICE_BLOCKED_USER_FIELDS} from a self-service body, including dotted
+ * paths into them (`roles.0`). Fields are dropped rather than rejected so clients that echo a
+ * whole user object back still succeed.
  */
 export const stripPrivilegedUserFields = (
   body: Record<string, unknown>,
@@ -157,7 +171,7 @@ export const stripPrivilegedUserFields = (
   const sanitized: Record<string, unknown> = {};
   const dropped: string[] = [];
   for (const [key, value] of Object.entries(body)) {
-    if ((SELF_SERVICE_BLOCKED_USER_FIELDS as readonly string[]).includes(key)) {
+    if (isWriteKeyForAnyField(key, SELF_SERVICE_BLOCKED_USER_FIELDS)) {
       dropped.push(key);
       continue;
     }
@@ -184,8 +198,10 @@ const omitPrivilegedFieldsFromObject = (item: unknown, allowAdminWrite: boolean)
     return item;
   }
   const record = item as Record<string, unknown>;
-  const fieldsToDrop = PRIVILEGED_USER_FIELDS.filter(
-    (field) => field in record && !(field === "admin" && allowAdminWrite)
+  // Only the exact `admin` key is an authorized legacy-admin write; `admin.x` is never one.
+  const fieldsToDrop = Object.keys(record).filter(
+    (key) =>
+      isWriteKeyForAnyField(key, PRIVILEGED_USER_FIELDS) && !(key === "admin" && allowAdminWrite)
   );
   if (fieldsToDrop.length === 0) {
     return item;

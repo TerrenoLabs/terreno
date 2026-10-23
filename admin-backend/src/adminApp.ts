@@ -15,6 +15,7 @@ import {
   describeModel,
   findSyncEntryByModelName,
   getOrgContext,
+  isWriteKeyForField,
   type JSONValue,
   logger,
   type ModelRouterOptions,
@@ -1433,25 +1434,26 @@ export class AdminApp {
         if (!body || typeof body !== "object" || Array.isArray(body)) {
           return {};
         }
-        const next = {...(body as Record<string, unknown>)};
-        for (const key of readonlySet) {
-          delete next[key];
-        }
-        for (const key of hiddenFieldSet) {
-          delete next[key];
-        }
-        for (const key of excludeFieldSet) {
-          delete next[key];
-        }
-        for (const key of SYSTEM_ADMIN_FIELDS) {
-          delete next[key];
-        }
+        const protectedFields = [
+          ...readonlySet,
+          ...hiddenFieldSet,
+          ...excludeFieldSet,
+          ...SYSTEM_ADMIN_FIELDS,
+        ];
         // Self-service never writes these fields. Admin CRUD may set `admin`.
         // When RBAC is enabled, `roles` must go through RoleManager.assign and
         // tenant membership is not a generic User document field.
         if (config.model.modelName === "User" && this.options.accessControl) {
-          delete next.organizationIds;
-          delete next.roles;
+          protectedFields.push("organizationIds", "roles");
+        }
+        // Mongoose applies dotted keys (`roles.0`) as paths, so drop paths inside a protected
+        // field as well as the field itself.
+        const next: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+          if (protectedFields.some((field) => isWriteKeyForField(key, field))) {
+            continue;
+          }
+          next[key] = value;
         }
         return next;
       };

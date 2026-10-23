@@ -1111,6 +1111,50 @@ describe("privileged user fields", () => {
     expect((user as unknown as {roles?: string[]}).roles ?? []).toEqual([]);
   });
 
+  it("drops dotted-path forms of privileged fields from self-service and RBAC write bodies", () => {
+    const body = {
+      "emailVerified.flag": true,
+      name: "Someone",
+      "organizationIds.0": "other-tenant",
+      "profile.nickname": "kept",
+      "roles.0": "superadmin",
+      "roles.1": "superadmin",
+      rolesNote: "kept",
+    };
+    expect(stripPrivilegedUserFields(body, "test")).toEqual({
+      name: "Someone",
+      "profile.nickname": "kept",
+      rolesNote: "kept",
+    });
+    expect(omitUserRolesFromWriteBody("User", {}, body)).toEqual({
+      name: "Someone",
+      "profile.nickname": "kept",
+      rolesNote: "kept",
+    });
+    expect(omitUserRolesFromWriteBody("User", {}, {admin: true, "admin.flag": true}, true)).toEqual(
+      {admin: true}
+    );
+  });
+
+  it("does not let anonymous signup self-assign roles through dotted paths", async () => {
+    await agent
+      .post("/auth/signup")
+      .send({
+        email: "dotted-escalate@example.com",
+        "organizationIds.0": "other-tenant",
+        password: "Password123!",
+        "roles.0": "superadmin",
+      })
+      .expect(200);
+
+    const created = await UserModel.findOne({email: "dotted-escalate@example.com"});
+    expect(created).toBeTruthy();
+    expect((created as unknown as {roles?: string[]})?.roles ?? []).toEqual([]);
+    expect(
+      (created as unknown as {organizationIds?: string[]})?.organizationIds ?? []
+    ).not.toContain("other-tenant");
+  });
+
   it("does not let PATCH /auth/me escalate to admin or join organizations", async () => {
     const [_admin, notAdmin] = await setupDb();
     const jwtLib = (await import("jsonwebtoken")).default;

@@ -436,7 +436,11 @@ privileged fields `admin`, `roles`, `organizationIds`, `emailVerified`, and `tok
 (`PRIVILEGED_USER_FIELDS`), the identity-binding fields `betterAuthId`, `githubId`,
 `githubUsername`, `githubProfileUrl`, `githubAvatarUrl`, and `oauthProvider`, the
 passport-local-mongoose fields `hash`, `salt`, `attempts`, and `last`, and `disabled`. Only the
-Better Auth sync, GitHub link, and password flows write those. Request logs redact `password`, `newPassword`,
+Better Auth sync, GitHub link, and password flows write those. Dotted paths into a dropped
+field (`roles.0`, `organizationIds.1`) are dropped too, because Mongoose applies a dotted key
+as a path into the field. With `accessControl` set, modelRouter, sync, and MCP writes to the user
+model drop `PRIVILEGED_USER_FIELDS` and dotted paths into them the same way; assign roles with
+`access.roles.assign`. Request logs redact `password`, `newPassword`,
 `oldPassword`, `token`, and `refreshToken` in request bodies and in URL query strings. Changing the mailbox through `PATCH /auth/me`
 invalidates unused `passwordReset` AuthTokens for that user even when the schema has no
 `emailVerified` field. When the schema uses `emailVerificationPlugin`, mailbox change also

@@ -173,6 +173,28 @@ describe("executeCreate", () => {
     assert.deepEqual(stored?.roles ?? [], []);
   });
 
+  it("strips dotted-path User roles on create when writeModelName is User", async () => {
+    await ExecUserishModel.deleteMany({});
+    const {doc} = await executeCreate<ExecUserish>({
+      body: {email: "exec-dotted-roles@example.com", "roles.0": "superadmin"},
+      model: ExecUserishModel,
+      options: {
+        accessControl: {} as never,
+        permissions: {
+          create: [Permissions.IsAuthenticated],
+          delete: [],
+          list: [],
+          read: [],
+          update: [],
+        },
+      } as ModelRouterOptions<ExecUserish>,
+      user: owner,
+      writeModelName: "User",
+    });
+    const stored = await ExecUserishModel.findById(doc._id).lean();
+    assert.deepEqual(stored?.roles ?? [], []);
+  });
+
   it("passes a {user} stub request to preCreate when no req is provided", async () => {
     const options = baseOptions({
       preCreate: (body, request) => ({
@@ -484,6 +506,33 @@ describe("executeUpdate", () => {
     expect(error.status).toBe(400);
     expect(error.title).toBe("preUpdate hook error");
     expect(error.detail).toBe(`preUpdate hook error on ${doc._id.toString()}: nope`);
+  });
+
+  it("strips dotted-path User roles on update when writeModelName is User", async () => {
+    await ExecUserishModel.deleteMany({});
+    const target = await ExecUserishModel.create({
+      email: "exec-dotted-update@example.com",
+      roles: ["support"],
+    });
+    await executeUpdate<ExecUserish>({
+      body: {"roles.0": "superadmin", "roles.1": "superadmin"},
+      id: String(target._id),
+      model: ExecUserishModel,
+      options: {
+        accessControl: {} as never,
+        permissions: {
+          create: [],
+          delete: [],
+          list: [],
+          read: [],
+          update: [Permissions.IsAuthenticated],
+        },
+      } as ModelRouterOptions<ExecUserish>,
+      user: owner,
+      writeModelName: "User",
+    });
+    const stored = await ExecUserishModel.findById(target._id).lean();
+    assert.deepEqual(stored?.roles ?? [], ["support"]);
   });
 
   it("strips _updatedAt from the body before preUpdate", async () => {

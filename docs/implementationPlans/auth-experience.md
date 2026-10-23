@@ -281,7 +281,8 @@ Open risks:
   - Build:
     - `POST {basePath}/oauth-handoff/link-intent` (bearer-authenticated,
       `{provider, callbackURL}`) mints a single-use, three-minute link token for the
-      caller's session. Same `callbackURL` rules as the handoff start.
+      caller's session. `callbackURL` follows the handoff's `errorCallbackURL` rule
+      (any page on a listed web origin), since no token travels on a link return.
     - `POST {basePath}/oauth-handoff/link-start` takes the token from a form body in a
       top-level navigation (so it never lands in a URL or access log), consumes it,
       runs `linkSocial` for that session, forwards the state cookie, and redirects to
@@ -391,7 +392,7 @@ Open risks:
     - The summary `actions` include both.
   - Skills: terreno-backend-api, security-audit
 
-- [ ] **T8** — Recovery: revoke sessions, send reset, disable/enable
+- [x] **T8** — Recovery: revoke sessions, send reset, disable/enable
   - Depends on: T7
   - Files: api/src/accountSecurity/accessActions.ts, api/src/accountSecurity/accountSecurityApp.ts, api/src/accountSecurity/accessActions.test.ts, example-backend/src/models/user.ts, example-backend/src/types/models/userTypes.ts, docs/reference/account-security.md
   - Build:
@@ -928,6 +929,7 @@ Open risks:
 | D8 | Review found that a refused unverified sign-up left a Better Auth user behind, which a later email verification could turn into a takeover of the legacy User | Refuse before the Better Auth user is created; T8's admin action issues a set-password link instead of marking an email verified | T3 adds a `user.create.before` guard; T8 `verify-email` becomes `issue-sign-in-link` |
 | D9 | Review: should recovery routes let an operator act on a superadmin, or on themselves? | No: refuse targets holding permissions the actor lacks (a `*` target needs a superadmin actor) and refuse self-targeting; self-service lives on the user's own Security screen | T6 adds the guard to the shared route pipeline, so T9 org routes inherit it (alongside D3's platform-staff refusal) |
 | D10 | Review of T7: removing a user's last passkey can lock them out just like unlinking their last provider | Apply Q5's rule to passkey removal too: 409 unless the email is verified, then send a reset first | T7 guards both routes; unlink also points operators to revoke-sessions, since sessions don't record their provider |
+| D11 | Review of T8: a sign-in link sets the password of a user with no inbox, which is a full takeover by whoever issues it | It needs its own RBAC statement, `user:issueSignInLink`, granted to superadmin only by default; expired links can be reissued | T8 |
 | D5 (durable) | Remember name, email and avatar on the login screen by default? | No: method only by default; identity is opt-in (`rememberIdentity`); the example opts in | T19, T20 and T26 as written |
 
 ## Sign-off

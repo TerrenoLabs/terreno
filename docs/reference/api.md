@@ -573,6 +573,13 @@ the app `User` as each Better Auth session is created
 - A password-proven link that fails to save fails the sign-in with 500 `APP_USER_LINK_FAILED`.
   Other sync failures are logged and the session proceeds; the session middleware retries.
 
+With a user model, Terreno's `onPasswordReset` sets the same password on the app `User`'s
+passport hash and bumps `tokenEpoch`. It reads the new password (`newPassword`, or `password` for
+the email-OTP and phone-number resets) from the parsed body of the Better Auth endpoint being
+served, through Better Auth's endpoint context. Better Auth reads an HTTP body before the hook
+runs, so the request it passes cannot be read again. HTTP requests and direct `auth.api` calls
+both work.
+
 `accountLinking: {mode: "never"}` refuses `POST {basePath}/link-social` with 403
 `LINKING_DISABLED`. See [Account linking](../explanation/account-linking.md).
 

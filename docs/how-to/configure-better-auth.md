@@ -97,7 +97,8 @@ email-verification mail match the JWT recovery templates. The hooks throw 501 an
 `publicAppUrl` is missing. JWT `POST /auth/resetPassword` updates the Better Auth password and
 deletes Better Auth sessions when this plugin is registered. Better Auth password reset updates
 the JWT password and `tokenEpoch` for the matching app User so dual-enrolled accounts cannot keep
-the old passport hash.
+the old passport hash. Terreno reads the new password from Better Auth's parsed request body, so
+this works over HTTP (`POST {basePath}/reset-password`).
 
 ```typescript
 import {getCommsService, renderAuthMail} from "@terreno/comms";

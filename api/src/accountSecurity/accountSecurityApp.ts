@@ -28,6 +28,13 @@ import {getCurrentRequestContext, type RequestCredential} from "../requestContex
 import type {TerrenoApp} from "../terrenoApp";
 import type {TerrenoPlugin} from "../terrenoPlugin";
 import {
+  disableAccountAction,
+  enableAccountAction,
+  issueSignInLinkAction,
+  revokeSessionsAction,
+  sendPasswordResetAction,
+} from "./accessActions";
+import {
   type AccountSecurityActionSummary,
   type AccountSecurityFeatures,
   type AccountSecurityService,
@@ -97,6 +104,17 @@ export interface SecurityRouteAction {
   method: "delete" | "post";
   /** Path under `/:userId/security`, such as `/reset-two-factor` or `/passkeys/:passkeyId`. */
   path: string;
+  /**
+   * Only platform staff may run it. `mountSecurityRoutes` skips it unless the mount passes
+   * `includePlatformOnly`, so org-admin prefixes never expose it.
+   */
+  platformOnly?: boolean;
+  /**
+   * An RBAC permission the actor needs on top of the route's authorizer, such as
+   * `{user: ["issueSignInLink"]}`. Without RBAC the actor needs `admin: true`. Actions the actor
+   * may not run answer 403 and are left out of the summary.
+   */
+  requiredPermission?: {readonly [resource: string]: readonly string[]};
   run: (context: SecurityActionContext) => Promise<SecurityActionResult>;
 }
 
@@ -114,7 +132,21 @@ export const defaultSecurityActions = (): SecurityRouteAction[] => [
   resetTwoFactorAction,
   removePasskeyAction,
   unlinkProviderAction,
+  revokeSessionsAction,
+  sendPasswordResetAction,
+  disableAccountAction,
+  enableAccountAction,
+  issueSignInLinkAction,
 ];
+
+/** Options for {@link AccountSecurityApp.mountSecurityRoutes}. */
+export interface MountSecurityRoutesOptions {
+  /**
+   * Mount and list actions marked `platformOnly` (such as `issue-sign-in-link`). Only the
+   * platform mount sets it; org-admin prefixes leave it off.
+   */
+  includePlatformOnly?: boolean;
+}
 
 export interface AccountSecurityAppOptions {
   /** Extra recovery actions, mounted and listed after the built-in ones. */
@@ -136,6 +168,11 @@ export interface AccountSecurityAppOptions {
    * TerrenoApp (setupServer); without it every Better Auth feature reads as off.
    */
   getBetterAuth?: () => BetterAuthInstance | undefined;
+  /**
+   * App page base for `issue-sign-in-link` URLs (`{publicAppUrl}/resetPassword?token=`). Defaults
+   * to the registered BetterAuthApp's `publicAppUrl`.
+   */
+  publicAppUrl?: string;
   /** App User model. Defaults to the TerrenoApp's `userModel`. */
   userModel?: UserModel;
 }
@@ -214,6 +251,11 @@ const missingPermissions = (held: PermissionSet, required: PermissionSet): strin
   return missing;
 };
 
+const permissionLabels = (permission: SecurityRouteAction["requiredPermission"]): string[] =>
+  Object.entries(permission ?? {}).flatMap(([resource, actions]) =>
+    actions.map((action) => `${resource}:${action}`)
+  );
+
 const targetUserIdOf = (req: Request): string => {
   const value = req.params.userId;
   return typeof value === "string" ? value : "";
@@ -248,6 +290,7 @@ export class AccountSecurityApp implements TerrenoPlugin {
     assertUniqueActionIds(this.actions);
     this.service = createAccountSecurityService({
       getAuth: () => this.resolveBetterAuth(),
+      getPublicAppUrl: () => this.resolvePublicAppUrl(),
       getUserModel: () => this.resolveUserModel(),
     });
   }
@@ -263,7 +306,7 @@ export class AccountSecurityApp implements TerrenoPlugin {
     this.assertAuditRegistered();
     this.resolveUserModel();
     const router = Router();
-    this.mountSecurityRoutes(router, this.authorizePlatform);
+    this.mountSecurityRoutes(router, this.authorizePlatform, {includePlatformOnly: true});
     app.use(this.options.basePath ?? "/users", router);
   }
 
@@ -272,32 +315,44 @@ export class AccountSecurityApp implements TerrenoPlugin {
    * `authorize`. Routers mounted under a prefix with its own params (such as `:orgId`) need
    * `Router({mergeParams: true})` so the authorizer can read them.
    */
-  mountSecurityRoutes(router: Router, authorize: SecurityAuthorizer): void {
+  mountSecurityRoutes(
+    router: Router,
+    authorize: SecurityAuthorizer,
+    {includePlatformOnly = false}: MountSecurityRoutesOptions = {}
+  ): void {
     const guards = [rejectDelegatedBearer, authenticateMiddleware(), requireOwnSession];
+    const actions = this.actions.filter((action) => includePlatformOnly || !action.platformOnly);
 
     router.get(
       "/:userId/security",
       ...guards,
       this.docs("Get a user's sign-in security summary"),
       asyncHandler(async (req, res) => {
-        const {org, target} = await this.resolveTarget(req, authorize);
+        const {actor, org, target} = await this.resolveTarget(req, authorize);
         const features = await this.service.readFeatures();
         const state = await this.service.readState(target, features);
+        const permitted = await this.filterPermitted({actions, actor, req});
         const summary: AccountSecuritySummary = {
           ...state,
-          actions: this.listActions({features, org, state}),
+          actions: this.listActions(permitted, {features, org, state}),
         };
         return res.json({data: summary});
       })
     );
 
-    for (const action of this.actions) {
+    for (const action of actions) {
       router[action.method](
         `/:userId/security${action.path}`,
         ...guards,
         this.docs(SECURITY_ACTIONS[action.id].label),
         asyncHandler(async (req, res) => {
           const {actor, org, target} = await this.resolveTarget(req, authorize);
+          if (!(await this.mayRun({action, actor, req}))) {
+            throw new ForbiddenError({
+              detail: `${action.id} needs ${permissionLabels(action.requiredPermission).join(", ")}`,
+              title: "Access denied",
+            });
+          }
           const features = await this.service.readFeatures();
           if (!action.isSupported(features)) {
             throw new NotFoundError({
@@ -404,12 +459,53 @@ export class AccountSecurityApp implements TerrenoPlugin {
     return {actor};
   };
 
-  private listActions = (args: {
-    features: AccountSecurityFeatures;
-    org?: SecurityActionOrg;
-    state: AccountSecurityState;
-  }): AccountSecurityActionSummary[] =>
-    this.actions
+  /** Whether the actor holds the action's `requiredPermission` (or `admin: true` without RBAC). */
+  private mayRun = async ({
+    action,
+    actor,
+    req,
+  }: {
+    action: SecurityRouteAction;
+    actor: User;
+    req: Request;
+  }): Promise<boolean> => {
+    if (!action.requiredPermission) {
+      return true;
+    }
+    const accessControl = this.resolveAccessControl();
+    if (!accessControl) {
+      return actor.admin === true;
+    }
+    const result = await accessControl.can({
+      context: {req},
+      permissions: action.requiredPermission as never,
+      user: actor,
+    });
+    return result.allowed;
+  };
+
+  private filterPermitted = async ({
+    actions,
+    actor,
+    req,
+  }: {
+    actions: readonly SecurityRouteAction[];
+    actor: User;
+    req: Request;
+  }): Promise<SecurityRouteAction[]> => {
+    const allowed = await Promise.all(actions.map((action) => this.mayRun({action, actor, req})));
+    return actions.filter((_action, index) => allowed[index]);
+  };
+
+  private listActions = (
+    actions: readonly SecurityRouteAction[],
+    args: {
+      features: AccountSecurityFeatures;
+      org?: SecurityActionOrg;
+      state: AccountSecurityState;
+    }
+  ): AccountSecurityActionSummary[] =>
+    actions
       .filter((action) => action.isSupported(args.features) && action.isApplicable(args))
       .map((action) => ({
         destructive: SECURITY_ACTIONS[action.id].destructive,
@@ -443,6 +539,16 @@ export class AccountSecurityApp implements TerrenoPlugin {
 
   private resolveAccessControl = (): AnyTerrenoAccess | undefined =>
     this.options.accessControl ?? this.terrenoApp?.getAccessControl();
+
+  private resolvePublicAppUrl = (): string | undefined => {
+    if (this.options.publicAppUrl) {
+      return this.options.publicAppUrl;
+    }
+    const provider = this.terrenoApp
+      ? findBetterAuthProvider(this.terrenoApp.getRegistrations())
+      : undefined;
+    return provider?.getBetterAuthConfig?.().publicAppUrl;
+  };
 
   private resolveBetterAuth = (): BetterAuthInstance | undefined => {
     const auth = this.options.getBetterAuth

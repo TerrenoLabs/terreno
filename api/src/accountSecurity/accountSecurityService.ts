@@ -10,14 +10,16 @@ import mongoose from "mongoose";
 
 import type {User, UserModel} from "../auth";
 import {readBetterAuthMethods} from "../betterAuthMethods";
-import type {BetterAuthInstance} from "../betterAuthSetup";
+import {type BetterAuthInstance, betterAuthResetPasswordUrl} from "../betterAuthSetup";
 import {NotFoundError} from "../errors";
 import {logger} from "../logger";
 import {findOneOrNoneFor} from "../plugins";
 
-/** Which Better Auth features this server has on. All `false` without Better Auth. */
+/** Which features this server has on. The Better Auth ones are all `false` without Better Auth. */
 export interface AccountSecurityFeatures {
   betterAuth: boolean;
+  /** Whether the app User model has `disabled` (`isDisabledPlugin`), so accounts can be disabled. */
+  disableAccount: boolean;
   multiSession: boolean;
   passkey: boolean;
   twoFactor: boolean;
@@ -50,6 +52,13 @@ export interface AccountSecuritySummary {
   betterAuthLinked: boolean;
   /** `User.disabled`. */
   disabled: boolean;
+  /** Better Auth `emailVerified` (`false` without a Better Auth link). */
+  emailVerified: boolean;
+  /**
+   * Whether the app User has a legacy JWT (passport-local-mongoose) password hash. A user with
+   * neither this nor a Better Auth link (a GitHub-JWT user) needs an admin-issued sign-in link.
+   */
+  legacyPassword: boolean;
   lastSignIn: {
     /** ISO time of the most recent session start, when known. */
     at: string | null;
@@ -80,6 +89,8 @@ interface AdapterWhere {
 }
 
 interface BetterAuthAdapterLike {
+  create: <T>(args: {data: Record<string, unknown>; model: string}) => Promise<T>;
+  delete: (args: {model: string; where: AdapterWhere[]}) => Promise<void>;
   deleteMany: (args: {model: string; where: AdapterWhere[]}) => Promise<number>;
   findMany: <T>(args: {model: string; where: AdapterWhere[]}) => Promise<T[]>;
 }
@@ -127,7 +138,9 @@ interface BetterAuthSecurityContext {
       identifier: string;
       value: string;
     }) => Promise<unknown>;
+    deleteUserSessions: (userId: string) => Promise<void>;
     findAccounts: (userId: string) => Promise<BetterAuthAccountRow[]>;
+    findUserByEmail: (email: string) => Promise<{user: BetterAuthUserRow} | null>;
     findUserById: (userId: string) => Promise<BetterAuthUserRow | null>;
     listSessions: (
       userId: string,
@@ -159,7 +172,7 @@ export const PASSWORD_PROVIDER_ID = "credential";
 /** Better Auth's default reset-link lifetime, used when `resetPasswordTokenExpiresIn` is unset. */
 const DEFAULT_RESET_TOKEN_SECONDS = 3600;
 
-const NO_FEATURES: AccountSecurityFeatures = {
+const NO_BETTER_AUTH_FEATURES: Omit<AccountSecurityFeatures, "disableAccount"> = {
   betterAuth: false,
   multiSession: false,
   passkey: false,
@@ -212,13 +225,19 @@ const TRUST_DEVICE_IDENTIFIER_PREFIX = "trust-device-";
  */
 export const storesTrustDeviceIdentifiersPlain = (
   storeIdentifier: VerificationStoreIdentifier | undefined
+): boolean => storesIdentifiersPlain(storeIdentifier, TRUST_DEVICE_IDENTIFIER_PREFIX);
+
+/** Whether Better Auth stores verification identifiers starting with `identifierPrefix` as written. */
+const storesIdentifiersPlain = (
+  storeIdentifier: VerificationStoreIdentifier | undefined,
+  identifierPrefix: string
 ): boolean => {
   if (!storeIdentifier) {
     return true;
   }
   if (typeof storeIdentifier === "object" && "default" in storeIdentifier) {
     for (const [prefix, option] of Object.entries(storeIdentifier.overrides ?? {})) {
-      if (TRUST_DEVICE_IDENTIFIER_PREFIX.startsWith(prefix)) {
+      if (identifierPrefix.startsWith(prefix)) {
         return option === "plain";
       }
     }
@@ -226,6 +245,9 @@ export const storesTrustDeviceIdentifiersPlain = (
   }
   return storeIdentifier === "plain";
 };
+
+/** Better Auth's prefix for password-reset verification identifiers. */
+const RESET_PASSWORD_IDENTIFIER_PREFIX = "reset-password:";
 
 /**
  * Deletes the user's trusted-device rows (`verification` rows whose value is the Better Auth user
@@ -267,8 +289,27 @@ export type PasswordResetSkipReason = "not-configured" | "not-linked";
 
 export type PasswordResetResult = {sent: true} | {reason: PasswordResetSkipReason; sent: false};
 
+/** Why a sign-in link was not issued. */
+export type SignInLinkRefusal =
+  /** Better Auth is not running, or `publicAppUrl` is unset so there is no page to link to. */
+  | "not-configured"
+  /** The User is linked to a Better Auth user that has a sign-in method or a verified email. */
+  | "linked"
+  /** The User has a legacy password; they can sign up with it instead (T3 migration). */
+  | "has-password"
+  /** The User has no email to create the Better Auth user with. */
+  | "no-email"
+  /** Another Better Auth user already uses the email. */
+  | "email-taken";
+
+export type SignInLinkResult =
+  | {betterAuthId: string; expiresAt: string; issued: true; url: string}
+  | {issued: false; reason: SignInLinkRefusal};
+
 export interface AccountSecurityServiceOptions {
   getAuth: () => BetterAuthInstance | undefined;
+  /** The app page base for set-password links (`BetterAuthConfig.publicAppUrl`). */
+  getPublicAppUrl?: () => string | undefined;
   getUserModel: () => UserModel;
 }
 
@@ -277,6 +318,13 @@ export interface AccountSecurityService {
   deleteAccounts: (args: {betterAuthId: string; providerId: string}) => Promise<number>;
   /** Deletes one passkey, only when it belongs to `betterAuthId`. Returns whether it existed. */
   deletePasskey: (args: {betterAuthId: string; passkeyId: string}) => Promise<boolean>;
+  /**
+   * For a User with no Better Auth link and no legacy password: creates their Better Auth user
+   * (email unverified), links it by `betterAuthId`, and returns a single-use set-password link.
+   * A User whose link was never used (its Better Auth user still has no sign-in method and an
+   * unverified email) gets a fresh link for the same Better Auth user; earlier links stop working.
+   */
+  issueSignInLink: (target: User) => Promise<SignInLinkResult>;
   /** The app User with this id, or 404 (an id that is not an ObjectId is also 404). */
   loadTarget: (userId: string) => Promise<User>;
   /** The user's sign-in methods, or `undefined` when the user has no Better Auth link. */
@@ -292,6 +340,14 @@ export interface AccountSecurityService {
    */
   resetTwoFactor: (target: User) => Promise<{changed: boolean}>;
   /**
+   * Deletes every Better Auth session the user has (bearer tokens and cookie sessions alike) and,
+   * when the User model has `tokenEpoch`, bumps it so legacy JWT refresh tokens stop working.
+   * `revokedCount` is how many active sessions were deleted.
+   */
+  revokeSessions: (target: User) => Promise<{jwtRefreshRevoked: boolean; revokedCount: number}>;
+  /** Sets `User.disabled`. `changed` is false when it already had that value. */
+  setDisabled: (target: User, disabled: boolean) => Promise<{changed: boolean}>;
+  /**
    * Mails the user a Better Auth password-reset link through the configured
    * `emailAndPassword.sendResetPassword` hook (Terreno's `sendMail` + `publicAppUrl`). The hook
    * is awaited, so a delivery failure (such as the hook's 501 for a missing `publicAppUrl`)
@@ -300,10 +356,45 @@ export interface AccountSecurityService {
   sendPasswordReset: (target: User) => Promise<PasswordResetResult>;
 }
 
+// The raw collection and schema reads the service makes on the consumer's User model.
+interface UserModelInternals {
+  collection: {
+    find: (
+      filter: Record<string, unknown>,
+      options?: {projection: Record<string, number>}
+    ) => {limit: (count: number) => {next: () => Promise<Record<string, unknown> | null>}};
+  };
+  schema: {path: (name: string) => unknown};
+  updateOne: (
+    filter: Record<string, unknown>,
+    update: Record<string, unknown>
+  ) => Promise<{modifiedCount: number}>;
+}
+
+const appUserObjectId = (user: User): unknown => user._id ?? userIdOf(user);
+
 export const createAccountSecurityService = ({
   getAuth,
+  getPublicAppUrl,
   getUserModel,
 }: AccountSecurityServiceOptions): AccountSecurityService => {
+  const userModelInternals = (): UserModelInternals =>
+    getUserModel() as unknown as UserModelInternals;
+
+  const hasSchemaPath = (name: string): boolean => Boolean(userModelInternals().schema?.path(name));
+
+  /** Whether the User has a passport-local-mongoose hash (stored with `select: false`). */
+  const hasLegacyPassword = async (target: User): Promise<boolean> => {
+    if (!hasSchemaPath("hash")) {
+      return false;
+    }
+    const stored = await userModelInternals()
+      .collection.find({_id: appUserObjectId(target)}, {projection: {hash: 1}})
+      .limit(1)
+      .next();
+    return typeof stored?.hash === "string" && stored.hash.length > 0;
+  };
+
   const getContext = async (): Promise<BetterAuthSecurityContext | undefined> => {
     const auth = getAuth();
     if (!auth) {
@@ -314,12 +405,14 @@ export const createAccountSecurityService = ({
 
   const readFeatures = async (): Promise<AccountSecurityFeatures> => {
     const context = await getContext();
+    const disableAccount = hasSchemaPath("disabled");
     if (!context) {
-      return NO_FEATURES;
+      return {...NO_BETTER_AUTH_FEATURES, disableAccount};
     }
     const methods = readBetterAuthMethods(context);
     return {
       betterAuth: true,
+      disableAccount,
       multiSession: methods.multiSession,
       passkey: methods.passkey,
       twoFactor: methods.twoFactor,
@@ -359,7 +452,9 @@ export const createAccountSecurityService = ({
     const empty: AccountSecurityState = {
       betterAuthLinked: false,
       disabled: Boolean((target as User & {disabled?: boolean}).disabled),
+      emailVerified: false,
       lastSignIn: {at: null, method: null},
+      legacyPassword: await hasLegacyPassword(target),
       passkeys: {count: 0, items: []},
       password: false,
       providers: [],
@@ -391,6 +486,7 @@ export const createAccountSecurityService = ({
     return {
       ...empty,
       betterAuthLinked: true,
+      emailVerified: betterAuthUser.emailVerified === true,
       lastSignIn: {
         at: latestIso(allSessions),
         method: betterAuthUser.lastLoginMethod ?? null,
@@ -512,6 +608,79 @@ export const createAccountSecurityService = ({
     });
   };
 
+  /**
+   * Writes the same token, identifier, and lifetime Better Auth's /request-password-reset issues,
+   * so its /reset-password endpoint accepts the token, and consumes it there (single use).
+   */
+  const createResetToken = async (
+    context: BetterAuthSecurityContext,
+    betterAuthId: string
+  ): Promise<{expiresAt: DateTime; token: string}> => {
+    // Better Auth's generateId(24): 24 characters from a-z, A-Z, 0-9.
+    const token = generateRandomString(24, "a-z", "A-Z", "0-9");
+    const expiresInSeconds =
+      context.options.emailAndPassword?.resetPasswordTokenExpiresIn || DEFAULT_RESET_TOKEN_SECONDS;
+    const expiresAt = DateTime.now().plus({seconds: expiresInSeconds});
+    await context.internalAdapter.createVerificationValue({
+      expiresAt: expiresAt.toJSDate(),
+      identifier: `${RESET_PASSWORD_IDENTIFIER_PREFIX}${token}`,
+      value: betterAuthId,
+    });
+    return {expiresAt, token};
+  };
+
+  /**
+   * Whether a Better Auth user looks like one `issueSignInLink` created and nobody has used yet:
+   * no account rows (no password, no provider), no passkey, and an unverified email. Only such a
+   * user may get a new link, so a reissue never hands over an account someone signs in to.
+   */
+  const isUnusedSignInLinkUser = async (
+    context: BetterAuthSecurityContext,
+    betterAuthUser: BetterAuthUserRow
+  ): Promise<boolean> => {
+    if (betterAuthUser.emailVerified === true) {
+      return false;
+    }
+    const accounts = await context.internalAdapter.findAccounts(betterAuthUser.id);
+    if (accounts.length > 0) {
+      return false;
+    }
+    const features = await readFeatures();
+    if (!features.passkey) {
+      return true;
+    }
+    const passkeys = await context.adapter.findMany<BetterAuthPasskeyRow>({
+      model: "passkey",
+      where: [{field: "userId", value: betterAuthUser.id}],
+    });
+    return passkeys.length === 0;
+  };
+
+  /** Deletes the user's outstanding password-reset tokens, so only the newest link works. */
+  const deleteResetTokens = async (
+    context: BetterAuthSecurityContext,
+    betterAuthId: string
+  ): Promise<void> => {
+    if (
+      !storesIdentifiersPlain(
+        context.options.verification?.storeIdentifier,
+        RESET_PASSWORD_IDENTIFIER_PREFIX
+      )
+    ) {
+      logger.warn(
+        "Better Auth hashes verification identifiers; earlier sign-in links stay valid until they expire"
+      );
+      return;
+    }
+    await context.adapter.deleteMany({
+      model: "verification",
+      where: [
+        {field: "value", value: betterAuthId},
+        {field: "identifier", operator: "starts_with", value: RESET_PASSWORD_IDENTIFIER_PREFIX},
+      ],
+    });
+  };
+
   const sendPasswordReset = async (target: User): Promise<PasswordResetResult> => {
     const betterAuthId = betterAuthIdOf(target);
     const context = await getContext();
@@ -526,17 +695,7 @@ export const createAccountSecurityService = ({
     if (!betterAuthUser) {
       return {reason: "not-linked", sent: false};
     }
-    // The same token, identifier, and lifetime Better Auth's /request-password-reset issues, so
-    // its /reset-password endpoint accepts the link.
-    // Better Auth's generateId(24): 24 characters from a-z, A-Z, 0-9.
-    const token = generateRandomString(24, "a-z", "A-Z", "0-9");
-    const expiresInSeconds =
-      context.options.emailAndPassword?.resetPasswordTokenExpiresIn || DEFAULT_RESET_TOKEN_SECONDS;
-    await context.internalAdapter.createVerificationValue({
-      expiresAt: DateTime.now().plus({seconds: expiresInSeconds}).toJSDate(),
-      identifier: `reset-password:${token}`,
-      value: betterAuthId,
-    });
+    const {token} = await createResetToken(context, betterAuthId);
     await sendResetPassword({
       token,
       url: `${context.baseURL}/reset-password/${token}?callbackURL=`,
@@ -545,14 +704,116 @@ export const createAccountSecurityService = ({
     return {sent: true};
   };
 
+  const revokeSessions = async (
+    target: User
+  ): Promise<{jwtRefreshRevoked: boolean; revokedCount: number}> => {
+    const betterAuthId = betterAuthIdOf(target);
+    const context = await getContext();
+    let revokedCount = 0;
+    if (betterAuthId && context) {
+      const active = await context.internalAdapter.listSessions(betterAuthId, {
+        onlyActiveSessions: true,
+      });
+      revokedCount = active.length;
+      await context.internalAdapter.deleteUserSessions(betterAuthId);
+    }
+    const jwtRefreshRevoked = hasSchemaPath("tokenEpoch");
+    if (jwtRefreshRevoked) {
+      await userModelInternals().updateOne({_id: appUserObjectId(target)}, {$inc: {tokenEpoch: 1}});
+    }
+    return {jwtRefreshRevoked, revokedCount};
+  };
+
+  const setDisabled = async (target: User, disabled: boolean): Promise<{changed: boolean}> => {
+    const result = await userModelInternals().updateOne(
+      {_id: appUserObjectId(target), disabled: {$ne: disabled}},
+      {$set: {disabled}}
+    );
+    return {changed: result.modifiedCount > 0};
+  };
+
+  const issueSignInLink = async (target: User): Promise<SignInLinkResult> => {
+    const context = await getContext();
+    const publicAppUrl = getPublicAppUrl?.();
+    if (!context || !publicAppUrl) {
+      return {issued: false, reason: "not-configured"};
+    }
+    const previousBetterAuthId = betterAuthIdOf(target);
+    const linkedUser = previousBetterAuthId
+      ? await context.internalAdapter.findUserById(previousBetterAuthId)
+      : null;
+    if (linkedUser && !(await isUnusedSignInLinkUser(context, linkedUser))) {
+      return {issued: false, reason: "linked"};
+    }
+    if (await hasLegacyPassword(target)) {
+      return {issued: false, reason: "has-password"};
+    }
+    if (linkedUser) {
+      await deleteResetTokens(context, linkedUser.id);
+      const {expiresAt, token} = await createResetToken(context, linkedUser.id);
+      return {
+        betterAuthId: linkedUser.id,
+        expiresAt: expiresAt.toUTC().toISO() ?? "",
+        issued: true,
+        url: betterAuthResetPasswordUrl(publicAppUrl, token),
+      };
+    }
+    const email = typeof target.email === "string" ? target.email.trim().toLowerCase() : "";
+    if (!email) {
+      return {issued: false, reason: "no-email"};
+    }
+    if (await context.internalAdapter.findUserByEmail(email)) {
+      return {issued: false, reason: "email-taken"};
+    }
+    const name = (target as User & {name?: unknown}).name;
+    const now = DateTime.now().toJSDate();
+    // The adapter call skips Better Auth's user.create hooks on purpose: Terreno's guard there
+    // refuses an unverified user whose email matches an unclaimed app User, which is exactly the
+    // User an administrator is vouching for here. The email stays unverified: the administrator
+    // hands the link over themselves, so nothing proves the user controls the inbox.
+    const created = await context.adapter.create<{id: string}>({
+      data: {
+        createdAt: now,
+        email,
+        emailVerified: false,
+        name: typeof name === "string" && name.length > 0 ? name : email.split("@")[0],
+        updatedAt: now,
+      },
+      model: "user",
+    });
+    const betterAuthId = String(created.id);
+    // Link only if nobody linked the User in the meantime (a concurrent link or sign-up).
+    const linked = await userModelInternals().updateOne(
+      {
+        _id: appUserObjectId(target),
+        betterAuthId: previousBetterAuthId ?? {$in: [null, ""]},
+      },
+      {$set: {betterAuthId}}
+    );
+    if (linked.modifiedCount === 0) {
+      await context.adapter.delete({model: "user", where: [{field: "id", value: betterAuthId}]});
+      return {issued: false, reason: "linked"};
+    }
+    const {expiresAt, token} = await createResetToken(context, betterAuthId);
+    return {
+      betterAuthId,
+      expiresAt: expiresAt.toUTC().toISO() ?? "",
+      issued: true,
+      url: betterAuthResetPasswordUrl(publicAppUrl, token),
+    };
+  };
+
   return {
     deleteAccounts,
     deletePasskey,
+    issueSignInLink,
     loadTarget,
     readCredentials,
     readFeatures,
     readState,
     resetTwoFactor,
+    revokeSessions,
     sendPasswordReset,
+    setDisabled,
   };
 };

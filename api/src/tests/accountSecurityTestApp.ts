@@ -34,6 +34,7 @@ interface SecurityUserFields {
   email: string;
   name?: string;
   roles?: string[];
+  tokenEpoch?: number;
 }
 
 // TerrenoApp's JWT setup needs passport-local-mongoose's createStrategy on the user model.
@@ -48,6 +49,7 @@ const getSecurityUserModel = (): mongoose.Model<SecurityUserFields> => {
     email: {description: "Email address", required: true, type: String},
     name: {description: "Display name", type: String},
     roles: {default: [], description: "RBAC role names", type: [String]},
+    tokenEpoch: {default: 0, description: "Bumped to invalidate JWT refresh tokens", type: Number},
   });
   schema.plugin(
     passportLocalMongoose as unknown as (target: Schema, options?: Record<string, unknown>) => void,
@@ -80,6 +82,8 @@ interface BuildOptions {
   auditApp?: boolean;
   config?: Partial<BetterAuthConfig>;
   security?: AccountSecurityAppOptions;
+  /** Another app User model (needs passport-local-mongoose). Defaults to `SecurityUser`. */
+  userModel?: UserModel;
 }
 
 interface SecurityTestApp {
@@ -92,22 +96,53 @@ export const buildApp = ({
   auditApp = true,
   config = {},
   security = {},
+  userModel = securityUserModel,
 }: BuildOptions = {}): SecurityTestApp => {
   const betterAuthApp = new BetterAuthApp({
     config: {...baseConfig, ...config},
-    userModel: securityUserModel,
+    userModel,
   });
   const terrenoApp = new TerrenoApp({
     ...(accessControl ? {accessControl: access} : {}),
     mcpServiceTokens: true,
     skipListen: true,
-    userModel: securityUserModel,
+    userModel,
   }).register(betterAuthApp);
   if (auditApp) {
     terrenoApp.register(new AuditApp());
   }
   terrenoApp.register(new AccountSecurityApp(security));
   return {app: terrenoApp.build(), betterAuthApp};
+};
+
+/** A recovery mail captured by {@link captureMail}. */
+export interface SentMail {
+  subject: string;
+  text: string;
+  to: string;
+}
+
+/** A `sendMail` that keeps every message, plus the `publicAppUrl` recovery links need. */
+export const captureMail = (): {
+  config: Pick<BetterAuthConfig, "publicAppUrl" | "sendMail">;
+  sent: SentMail[];
+} => {
+  const sent: SentMail[] = [];
+  return {
+    config: {
+      publicAppUrl: "https://app.example.com",
+      sendMail: async (message): Promise<void> => {
+        sent.push(message);
+      },
+    },
+    sent,
+  };
+};
+
+/** The reset token in a recovery mail's `?token=` link. */
+export const resetTokenFrom = (mail: SentMail): string => {
+  const match = /[?&]token=([^&\s"]+)/.exec(mail.text);
+  return decodeURIComponent(match?.[1] ?? "");
 };
 
 interface SignedUpUser {

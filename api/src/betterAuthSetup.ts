@@ -78,6 +78,13 @@ const interpolateMail = (value: string, data: Record<string, string>): string =>
     return data[key] ?? "";
   });
 
+/**
+ * The app page that finishes a Better Auth password reset: `{publicAppUrl}/resetPassword?token=`.
+ * The built-in reset mail and the admin sign-in link both point here.
+ */
+export const betterAuthResetPasswordUrl = (publicAppUrl: string, token: string): string =>
+  `${publicAppUrl.replace(/\/$/, "")}/resetPassword?token=${encodeURIComponent(token)}`;
+
 const fallbackRenderAuthMail = ({
   publicAppUrl,
   templateId,
@@ -91,7 +98,7 @@ const fallbackRenderAuthMail = ({
 }): {html?: string; subject: string; text?: string} => {
   const template = templates?.[templateId] ?? FALLBACK_AUTH_MAIL[templateId];
   const base = publicAppUrl.replace(/\/$/, "");
-  const resetUrl = `${base}/resetPassword?token=${encodeURIComponent(token)}`;
+  const resetUrl = betterAuthResetPasswordUrl(base, token);
   const verifyUrl = `${base}/verifyEmail?token=${encodeURIComponent(token)}`;
   const data = {publicAppUrl: base, resetUrl, token, verifyUrl};
   return {
@@ -251,7 +258,12 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
               {user}: {user: {email?: string; id?: string}},
               request?: PasswordResetRequestLike
             ): Promise<void> => {
-              await applyBetterAuthPasswordResetToJwt(userModel, user, request);
+              await applyBetterAuthPasswordResetToJwt(
+                userModel,
+                user,
+                request,
+                passwordFromUnknown(currentBetterAuthEndpointBody())
+              );
             },
           }
         : {}),
@@ -418,6 +430,32 @@ const passwordFromUnknown = (value: unknown): string => {
   return candidate;
 };
 
+// Better Auth keeps the AsyncLocalStorage of the endpoint being served on this global; the
+// store holds the endpoint's context, including its parsed body. `tryGetCurrentAuthEndpointContext`
+// in `@better-auth/core/context` reads the same store, but that package is not a direct
+// dependency of @terreno/api and `better-auth` does not re-export it.
+const BETTER_AUTH_GLOBAL = Symbol.for("better-auth:global");
+
+interface BetterAuthGlobalLike {
+  context?: {endpointContextAsyncStorage?: {getStore: () => unknown}};
+}
+
+/**
+ * The parsed body of the Better Auth endpoint now being served (HTTP or a direct `auth.api`
+ * call), or `undefined` outside one. Better Auth reads an HTTP body before its handler runs, so a
+ * hook such as `onPasswordReset` can no longer read it from the request.
+ */
+export const currentBetterAuthEndpointBody = (): unknown => {
+  const betterAuthGlobal = (globalThis as Record<symbol, BetterAuthGlobalLike | undefined>)[
+    BETTER_AUTH_GLOBAL
+  ];
+  const store = betterAuthGlobal?.context?.endpointContextAsyncStorage?.getStore();
+  if (!store || typeof store !== "object") {
+    return undefined;
+  }
+  return (store as {body?: unknown}).body;
+};
+
 export const readPasswordFromBetterAuthResetRequest = async (
   request: PasswordResetRequestLike | undefined
 ): Promise<string> => {
@@ -442,11 +480,16 @@ export const readPasswordFromBetterAuthResetRequest = async (
  * After Better Auth password reset, update the JWT/passport hash and bump
  * `tokenEpoch` so a dual-enrolled account cannot keep the old password or
  * outstanding refresh tokens.
+ *
+ * `capturedPassword` is the new password from the parsed body of the reset endpoint being served
+ * (`newPassword`, or `password` for the email-OTP and phone-number resets). Without it the
+ * password is read from `request`, which works only while the request body is unread.
  */
 export const applyBetterAuthPasswordResetToJwt = async (
   userModel: UserModel,
   betterAuthUser: {email?: string; id?: string},
-  request: PasswordResetRequestLike | undefined
+  request: PasswordResetRequestLike | undefined,
+  capturedPassword?: string
 ): Promise<void> => {
   const betterAuthId = typeof betterAuthUser.id === "string" ? betterAuthUser.id : "";
   const email = typeof betterAuthUser.email === "string" ? betterAuthUser.email : "";
@@ -457,7 +500,7 @@ export const applyBetterAuthPasswordResetToJwt = async (
   if (!appUser) {
     return;
   }
-  const password = await readPasswordFromBetterAuthResetRequest(request);
+  const password = capturedPassword || (await readPasswordFromBetterAuthResetRequest(request));
   if (!password) {
     logger.error("[auth] Better Auth password reset did not include a password to sync to JWT");
     throw new APIError({

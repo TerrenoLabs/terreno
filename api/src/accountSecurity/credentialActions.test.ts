@@ -14,19 +14,14 @@ import {
   buildApp,
   getSummary,
   resetAccountSecurityState,
+  resetTokenFrom,
   SecurityUser,
+  type SentMail,
   securityEventsFor,
   signInWithPassword,
   signUp,
 } from "../tests/accountSecurityTestApp";
-import {API_ORIGIN} from "../tests/betterAuthStubs";
 import {clearSecurityActionListenersForTests} from "./securityEvents";
-
-interface SentMail {
-  subject: string;
-  text: string;
-  to: string;
-}
 
 const NEW_PASSWORD = "new-password-654321";
 
@@ -123,8 +118,18 @@ const passkeyCount = async (betterAuthApp: BetterAuthApp, userId: string): Promi
   return rows.length;
 };
 
+const CREDENTIAL_ACTION_IDS = new Set(["remove-passkey", "unlink-provider"]);
+
+/** The summary's credential actions (the access actions are covered in accessActions.test.ts). */
+const credentialActionsOf = (
+  res: supertest.Response
+): {destructive: boolean; id: string; label: string}[] =>
+  (res.body.data.actions as {destructive: boolean; id: string; label: string}[]).filter((action) =>
+    CREDENTIAL_ACTION_IDS.has(action.id)
+  );
+
 const actionIdsOf = (res: supertest.Response): string[] =>
-  (res.body.data.actions as {id: string}[]).map((action) => action.id);
+  credentialActionsOf(res).map((action) => action.id);
 
 /** A build with a capturing mailer and `publicAppUrl`, so reset mail can be sent. */
 const buildMailingApp = (
@@ -173,11 +178,6 @@ const interleaveNextDelete = async (
     await concurrently(original);
     return original(args);
   });
-};
-
-const resetTokenFrom = (mail: SentMail): string => {
-  const match = /[?&]token=([^&\s"]+)/.exec(mail.text);
-  return decodeURIComponent(match?.[1] ?? "");
 };
 
 describe("credential recovery actions", () => {
@@ -684,17 +684,12 @@ describe("credential recovery actions", () => {
       expect(verification.value).toBe(await betterAuthIdFor(target.id));
       expect(DateTime.fromJSDate(verification.expiresAt) > DateTime.now()).toBe(true);
 
-      // The user follows the link, sets a password, and signs in with it. Terreno's password
-      // reset hook reads the new password from the request, so the call carries one as HTTP would.
-      const body = {newPassword: NEW_PASSWORD, token: resetTokenFrom(resetMails[0])};
-      await betterAuthApp.ensureAuth().api.resetPassword({
-        body,
-        request: new Request(`${API_ORIGIN}/api/auth/reset-password`, {
-          body: JSON.stringify(body),
-          headers: {"content-type": "application/json"},
-          method: "POST",
-        }),
-      });
+      // The user follows the link, sets a password, and signs in with it.
+      await supertest(app)
+        .post("/api/auth/reset-password")
+        .set("content-type", "application/json")
+        .send({newPassword: NEW_PASSWORD, token: resetTokenFrom(resetMails[0])})
+        .expect(200);
       const signIn = await supertest(app)
         .post("/api/auth/sign-in/email")
         .set("content-type", "application/json")
@@ -757,7 +752,7 @@ describe("credential recovery actions", () => {
       const after = await getSummary(app, operator.token, target.id);
 
       expect(actionIdsOf(after)).toEqual(["remove-passkey", "unlink-provider"]);
-      expect(after.body.data.actions).toEqual([
+      expect(credentialActionsOf(after)).toEqual([
         {destructive: true, id: "remove-passkey", label: "Remove passkey"},
         {destructive: true, id: "unlink-provider", label: "Unlink provider"},
       ]);

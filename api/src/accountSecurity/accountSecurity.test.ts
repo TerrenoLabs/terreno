@@ -174,6 +174,9 @@ describe("AccountSecurityApp", () => {
       expect(summary.disabled).toBe(false);
       expect(summary.actions).toEqual([
         {destructive: true, id: "reset-two-factor", label: "Reset two-factor"},
+        {destructive: true, id: "revoke-sessions", label: "Sign out everywhere"},
+        {destructive: false, id: "send-password-reset", label: "Send password reset"},
+        {destructive: true, id: "disable", label: "Disable account"},
       ]);
 
       // The summary never carries the TOTP secret, backup codes, or session tokens.
@@ -200,7 +203,11 @@ describe("AccountSecurityApp", () => {
 
       const after = await getSummary(app, operator.token, targetId);
       expect(after.body.data.twoFactor).toEqual({backupCodesRemaining: null, enabled: false});
-      expect(after.body.data.actions).toEqual([]);
+      expect(after.body.data.actions.map((action: {id: string}) => action.id)).toEqual([
+        "revoke-sessions",
+        "send-password-reset",
+        "disable",
+      ]);
       const twoFactorRows = await mongoose.connection.db
         ?.collection("twoFactor")
         .countDocuments({});
@@ -355,10 +362,13 @@ describe("AccountSecurityApp", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({
-        actions: [],
+        // issue-sign-in-link also applies, but an operator lacks user:issueSignInLink.
+        actions: [{destructive: false, id: "enable", label: "Enable account"}],
         betterAuthLinked: false,
         disabled: true,
+        emailVerified: false,
         lastSignIn: {at: null, method: null},
+        legacyPassword: false,
         passkeys: {count: 0, items: []},
         password: false,
         providers: [],
@@ -530,7 +540,11 @@ describe("AccountSecurityApp", () => {
 
       const summary = await getSummary(app, operator.token, target.id);
       expect(summary.status).toBe(200);
-      expect(summary.body.data.actions).toEqual([]);
+      expect(summary.body.data.actions.map((action: {id: string}) => action.id)).toEqual([
+        "revoke-sessions",
+        "send-password-reset",
+        "disable",
+      ]);
       expect(summary.body.data.passkeys).toEqual({count: 0, items: []});
 
       const reset = await resetTwoFactor(app, operator.token, target.id);
@@ -701,6 +715,11 @@ describe("AccountSecurityApp", () => {
         "reset-two-factor",
         "remove-passkey",
         "unlink-provider",
+        "revoke-sessions",
+        "send-password-reset",
+        "disable",
+        "enable",
+        "issue-sign-in-link",
       ]);
       await supertest(host).get(`/custom/${target.id}/security`).expect(200);
       const noBetterAuthWarnings = warn.mock.calls.filter((call) =>
@@ -745,7 +764,7 @@ describe("AccountSecurityApp", () => {
         security: {
           actions: [
             {
-              id: "issue-sign-in-link",
+              id: "password-changed",
               isApplicable: () => true,
               isSupported: () => true,
               method: "delete",
@@ -764,22 +783,22 @@ describe("AccountSecurityApp", () => {
 
       const summary = await getSummary(app, operator.token, target.id);
       expect(summary.status).toBe(200);
-      expect(summary.body.data.actions.map((action: {id: string}) => action.id)).toEqual([
-        "issue-sign-in-link",
-      ]);
+      expect(summary.body.data.actions.map((action: {id: string}) => action.id)).toContain(
+        "password-changed"
+      );
       const res = await supertest(app)
         .delete(`/users/${target.id}/security/audit-details/pk-123`)
         .set("authorization", `Bearer ${operator.token}`);
 
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual({
-        action: "issue-sign-in-link",
+        action: "password-changed",
         changed: true,
         itemId: "pk-123",
       });
       const events = await securityEventsFor(target.id);
       expect(events).toHaveLength(1);
-      expect(events[0].after).toEqual({itemId: "pk-123", securityAction: "issue-sign-in-link"});
+      expect(events[0].after).toEqual({itemId: "pk-123", securityAction: "password-changed"});
     });
   });
 

@@ -35,6 +35,8 @@ export interface BetterAuthProvider {
   adoptUserModel?: (userModel: UserModel) => void;
   markSessionMiddlewareMounted?: () => void;
   getBetterAuthBasePath?: () => string;
+  /** The Terreno config the instance was built from (for `publicAppUrl` and similar). */
+  getBetterAuthConfig?: () => BetterAuthConfig;
 }
 
 /** Whether a registered plugin provides the app's Better Auth instance. */
@@ -120,6 +122,10 @@ export class BetterAuthApp implements TerrenoPlugin {
     }
 
     logger.info("Better Auth initialized via BetterAuthApp plugin");
+  }
+
+  getBetterAuthConfig(): BetterAuthConfig {
+    return this.options.config;
   }
 
   getBetterAuthBasePath(): string {

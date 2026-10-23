@@ -299,15 +299,18 @@ loopback `FRONTEND_URL`, and `getWebOrigins` adds the `FRONTEND_URL` origin to C
   that depends on a reset or set-password link, and
   [security notification emails](../reference/account-security.md#notifications).
 
-On the frontend, `lib/betterAuth.ts` passes `features: {lastLoginMethod, multiSession, passkey,
-twoFactor}` and exports `rememberedAccounts` with `rememberIdentity: false`, so the device keeps
-only how each account signed in. `app/login.tsx` renders the
-[drop-in login screen](#5-drop-in-login-screen) with `callbackURL="/login"`, and
-`app/settings/security.tsx` renders the [drop-in security screen](#6-drop-in-security-screen)
-with `callbackURL="/settings/security"`. The Profile tab's **Security** button
-(`profile-security-button`) opens it, and passwords are changed there: the Profile tab edits
-only name and email. Its email field changes the app `User`'s email through `PATCH /auth/me`,
-not the Better Auth sign-in email, so the user keeps signing in with the old one.
+On the frontend of a generated app (not the example app, whose screen is described under
+[Linking in cookie mode on web](#6-drop-in-security-screen)), `lib/betterAuth.ts` passes
+`features: {lastLoginMethod, multiSession, passkey, twoFactor}` and exports
+`rememberedAccounts` with `rememberIdentity: false`, so the device keeps only how each account
+signed in. `app/login.tsx` renders the [drop-in login screen](#5-drop-in-login-screen) with
+`callbackURL="/login"`, and `app/settings/security.tsx` renders the
+[drop-in security screen](#6-drop-in-security-screen) with the bare path
+`callbackURL="/settings/security"` (the example app passes a full URL on web instead). The
+generated Profile tab's **Security** button (`profile-security-button`; the example's is
+`profile-security-link`) opens it, and passwords are changed there: the Profile tab edits only
+name and email. Its email field changes the app `User`'s email through `PATCH /auth/me`, not the
+Better Auth sign-in email, so the user keeps signing in with the old one.
 
 ### 3. Register BetterAuthApp Plugin
 
@@ -778,6 +781,12 @@ How it behaves:
   back with `?error=`; pass it as `linkError`. Known codes read as guidance (such as "That
   account is already linked to another user."); any other value reads "Couldn't link that
   account. Please try again." Text from the URL is never shown.
+- **Linking in cookie mode on web.** When the app and the API are on different origins, pass
+  the full URL (`${window.location.origin}/settings/security`), as for the login screen: Better
+  Auth resolves a bare path against the API's host. The example app's
+  `app/settings/security.tsx` passes the full URL on web and the path on native
+  (`getSecurityCallbackURL` in `lib/betterAuth.ts`), and the Profile tab opens it from its
+  **Security** button (`profile-security-link`).
 - **Sessions in bearer mode.** `listSessions` and `revokeSession` authenticate with the bearer,
   so the sessions card works on another site. (`multiSession` does not.)
 - **Passkeys on native.** React Native has no WebAuthn, so the passkeys card is web-only.

@@ -12,9 +12,22 @@ test.describe("Profile", () => {
   test("profile screen renders correctly", async ({page}) => {
     await expect(page.getByTestId("profile-name-input.edit-clickable").first()).toBeVisible();
     await expect(page.getByTestId("profile-email-input.edit-clickable").first()).toBeVisible();
-    await expect(page.getByTestId("profile-password-input.edit-clickable").first()).toBeVisible();
+    await expect(page.getByTestId("profile-security-link").first()).toBeVisible();
     await expect(page.getByTestId("profile-logout-button").first()).toBeVisible();
     await expect(page.getByTestId("profile-verify-email-banner").first()).toBeVisible();
+  });
+
+  test("user opens Security from the profile", async ({page}) => {
+    // Passwords change on the Security screen, not on the profile.
+    await expect(page.getByTestId("profile-password-input.edit-clickable")).toHaveCount(0);
+    await page.getByTestId("profile-security-link").first().click();
+
+    await page.getByTestId("security-screen").waitFor({state: "visible"});
+    await expect(page.getByTestId("password-card").first()).toBeVisible();
+    await expect(page.getByTestId("sessions-card").first()).toBeVisible();
+
+    await page.getByTestId("security-screen-back-button").click();
+    await page.getByTestId("profile-security-link").first().waitFor({state: "visible"});
   });
 
   test("shows current user info", async ({page}) => {

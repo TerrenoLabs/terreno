@@ -392,6 +392,14 @@ describe("useAccountSecurity", () => {
     expect(linkedAccountsOf(result).onUnlink).toBeDefined();
   });
 
+  it("leaves a provider unlabelled when its id matches an Object.prototype key", async () => {
+    const client = fakeClient({methods: {...METHODS, providers: ["__proto__", "constructor"]}});
+    const {result} = renderSecurity(client, {providerLabels: {"mock-oidc": "Mock OIDC"}});
+    await waitForLoaded(result);
+
+    expect(linkedAccountsOf(result).providers).toEqual([{id: "__proto__"}, {id: "constructor"}]);
+  });
+
   describe("linked accounts", () => {
     it("never calls the client to unlink the last sign-in method", async () => {
       const client = fakeClient({accounts: [GOOGLE], passkeys: [PASSKEY]});
@@ -579,6 +587,16 @@ describe("useAccountSecurity", () => {
         "Couldn't link that account. Please try again."
       );
       expect(getLinkErrorMessage(null)).toBeUndefined();
+    });
+
+    it("shows the generic link error for a ?error= that matches an Object.prototype key", async () => {
+      for (const code of ["__proto__", "constructor"]) {
+        expect(getLinkErrorMessage(code)).toBe("Couldn't link that account. Please try again.");
+      }
+      const client = fakeClient();
+      const {result} = renderSecurity(client, {linkError: "__proto__"});
+      await waitForLoaded(result);
+      expect(linkedAccountsOf(result).error).toBe("Couldn't link that account. Please try again.");
     });
   });
 

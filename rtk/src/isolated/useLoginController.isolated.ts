@@ -489,6 +489,30 @@ describe("useLoginController", () => {
     expect(texts[2]).toBe("This email already has an account. Sign in with Google instead.");
   });
 
+  it("names a remembered method or a provider id that matches an Object.prototype key as text", async () => {
+    const texts: string[] = [];
+    for (const method of ["__proto__", "constructor"]) {
+      const store = createStore();
+      await store.record({method, userId: JANE.id});
+      const {result} = renderController({
+        client: fakeClient({
+          methods: {...METHODS, accountLinking: {mode: "never"}, providers: [method]},
+        }),
+        error: "account_not_linked",
+        providerLabels: {"mock-oidc": "Mock OIDC"},
+        rememberedAccounts: store,
+      });
+      await waitForLoginScreen(result);
+      texts.push(result.current.screenProps.notice?.text ?? "");
+      const labels = result.current.screenProps.genericProviders?.map(({label}) => label) ?? [];
+      expect(labels.every((label) => typeof label === "string")).toBe(true);
+    }
+    expect(texts).toEqual([
+      "This email already has an account. Sign in with Proto instead.",
+      "This email already has an account. Sign in with Constructor instead.",
+    ]);
+  });
+
   it("maps the ID-token refusal 'account not linked' from a sign-in response", async () => {
     const client = fakeClient(
       {methods: {...METHODS, accountLinking: {mode: "never"}}},

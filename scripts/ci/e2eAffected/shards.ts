@@ -71,6 +71,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/(tabs)/ai.tsx`,
       `${APP}/(tabs)/documents.tsx`,
       `${APP}/notifications.tsx`,
+      `${APP}/settings/security.tsx`,
       `${APP}/todo-windows/**`,
     ],
     specs: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
@@ -126,6 +127,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/signup.tsx`,
       `${APP}/(tabs)/profile.tsx`,
       `${APP}/(tabs)/ai.tsx`,
+      `${APP}/settings/security.tsx`,
     ],
     specs: [
       "crossSiteBearer",
@@ -134,6 +136,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "crossSiteChallenges",
       "crossSiteLogin",
       "account-linking",
+      "account-security",
     ],
   },
   {

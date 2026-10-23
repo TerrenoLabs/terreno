@@ -7,3 +7,4 @@ category: Added
 - `getBetterAuthClientWebAuth(client)` reports whether a client is in web bearer mode and the token it holds. `recordRememberedSignIn` records a sign-in finished on an app's own screen.
 - `@terreno/ui` `LoginScreen` takes `initialValues`, which prefill form fields; a new object later replaces those fields and keeps what the user typed in the others. With `fields={[]}` it leaves out the form block (fields, Log In, forgot-password, and the email dividers), and `TerrenoLoginScreen` does that when the server has email and password off. `OAuthButtons` takes `dividerPosition: "none"`.
 - `TerrenoLoginScreen` takes `onStepChange`, called with each step the screen moves to, so an app that already holds a session can leave a login route the screen could not skip.
+- A remembered method or a provider id that matches an `Object.prototype` key (`__proto__`, `constructor`) is named from the id ("Proto", "Constructor") instead of an inherited value.

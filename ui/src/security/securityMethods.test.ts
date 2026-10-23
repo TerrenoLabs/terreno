@@ -39,6 +39,16 @@ describe("securityMethods", () => {
     });
   });
 
+  it("getProviderDisplay names a provider id that matches an Object.prototype key by its id", () => {
+    for (const providerId of ["__proto__", "constructor"]) {
+      expect(getProviderDisplay({providerId})).toEqual({
+        iconName: "key",
+        iconType: "solid",
+        label: providerId,
+      });
+    }
+  });
+
   it("formatSecurityDate formats ISO dates and ignores missing or invalid ones", () => {
     const iso = "2026-03-03T12:00:00.000Z";
     // Expectations come from Luxon so they follow the runner's locale and time zone.

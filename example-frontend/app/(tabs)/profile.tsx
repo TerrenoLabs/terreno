@@ -72,7 +72,6 @@ const ProfileScreen: React.FC = () => {
 
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [testPushMessage, setTestPushMessage] = useState<string | null>(null);
@@ -150,27 +149,6 @@ const ProfileScreen: React.FC = () => {
     [showSaveSuccess, updateProfile]
   );
 
-  const handleSavePassword = useCallback(
-    async (value: string): Promise<void> => {
-      if (!value) {
-        return;
-      }
-      setSaveError(null);
-      setSaveSuccess(false);
-      try {
-        await updateProfile({password: value}).unwrap();
-        setPassword("");
-        showSaveSuccess();
-      } catch (err) {
-        console.error("Error updating password:", err);
-        setSaveError(
-          (err as {data?: {message?: string}})?.data?.message || "Failed to update password"
-        );
-      }
-    },
-    [showSaveSuccess, updateProfile]
-  );
-
   const handleLogout = useCallback((): void => {
     dispatch(logout());
   }, [dispatch]);
@@ -207,6 +185,10 @@ const ProfileScreen: React.FC = () => {
 
   const handleNavigateToMcp = useCallback((): void => {
     router.push("/settings/mcp");
+  }, [router]);
+
+  const handleNavigateToSecurity = useCallback((): void => {
+    router.push("/settings/security");
   }, [router]);
 
   const handleNavigateToNotificationSettings = useCallback((): void => {
@@ -309,19 +291,6 @@ const ProfileScreen: React.FC = () => {
               value={email}
             />
 
-            <TapToEdit
-              autoComplete="new-password"
-              disabled={isUpdating}
-              editable={!isUpdating}
-              helperText="Leave blank to keep current password"
-              onSave={handleSavePassword}
-              setValue={setPassword}
-              testID="profile-password-input"
-              title="New Password"
-              type="password"
-              value={password}
-            />
-
             {saveSuccess && (
               <Box testID="profile-save-success">
                 <Text color="success">Profile updated successfully!</Text>
@@ -333,6 +302,20 @@ const ProfileScreen: React.FC = () => {
                 <Text color="error">{saveError}</Text>
               </Box>
             )}
+
+            <Text color="secondaryLight" size="sm">
+              Change your password, linked sign-in methods, passkeys, two-factor authentication and
+              signed-in devices in Security.
+            </Text>
+            <Box alignItems="start">
+              <Button
+                iconName="shield-halved"
+                onClick={handleNavigateToSecurity}
+                testID="profile-security-link"
+                text="Security"
+                variant="secondary"
+              />
+            </Box>
           </Box>
         </Card>
 

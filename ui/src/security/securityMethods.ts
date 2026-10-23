@@ -1,7 +1,7 @@
 import {DateTime} from "luxon";
 
 import type {IconName} from "../Common";
-import {SOCIAL_PROVIDER_NAMES} from "../SocialLoginButton";
+import {getSocialProviderName} from "../SocialLoginButton";
 import type {LinkableProvider, LinkedAccount} from "./securityTypes";
 
 /** Better Auth's `providerId` for an email and password account. */
@@ -33,7 +33,7 @@ export const getProviderDisplay = ({
   providerId: string;
   provider?: LinkableProvider;
 }): ProviderDisplay => {
-  const label = provider?.label ?? SOCIAL_PROVIDER_NAMES[providerId] ?? providerId;
+  const label = provider?.label ?? getSocialProviderName(providerId) ?? providerId;
   if (provider?.iconName) {
     return {iconName: provider.iconName, iconType: "solid", label};
   }

@@ -22,6 +22,7 @@ const CROSS_SITE_SPEC_FILES = [
   "crossSiteChallenges.spec.ts",
   "crossSiteLogin.spec.ts",
   "account-linking.spec.ts",
+  "account-security.spec.ts",
 ];
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const CROSS_SITE_SPECS = new RegExp(

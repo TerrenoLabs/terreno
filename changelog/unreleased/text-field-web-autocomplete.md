@@ -10,7 +10,7 @@ category: Fixed
   templates switch their email fields from `"off"` to `"username"` (login) and `"email"`
   (sign-up).
 - `Field type="password"` still defaults to `"current-password"`; pass `autoComplete="new-password"`
-  (also through `TapToEdit`) on fields that set a new password. The example and generated
-  profile "New Password" fields and the example admin set-password fields now do.
+  (also through `TapToEdit`) on fields that set a new password. The example admin set-password
+  fields now do.
   `SignUpScreen` password fields default to `"new-password"` and `LoginScreen` password fields to
   `"current-password"` unless the field config sets its own.

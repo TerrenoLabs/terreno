@@ -1,4 +1,4 @@
-import {SOCIAL_PROVIDER_NAMES} from "../SocialLoginButton";
+import {getSocialProviderName} from "../SocialLoginButton";
 import type {GenericOAuthProviderConfig} from "../signUp/signUpTypes";
 
 /** Ways to name a sign-in method in the login screen's copy. */
@@ -27,7 +27,7 @@ export const getLoginMethodLabels = ({
     return {name: "passkey", phrase: "a passkey"};
   }
   const generic = genericProviders.find((provider) => provider.id === method);
-  const name = generic?.label ?? SOCIAL_PROVIDER_NAMES[method] ?? method;
+  const name = generic?.label ?? getSocialProviderName(method) ?? method;
   return {name, phrase: name};
 };
 

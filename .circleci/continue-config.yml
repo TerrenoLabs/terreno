@@ -1773,9 +1773,10 @@ jobs:
 
   # The cross-site web bearer specs (CROSS_SITE_SPEC_FILES in playwright.config.ts): social
   # sign-in through the mock OIDC provider, remembered accounts, passkeys, two-factor challenges
-  # without cookies, and account linking. They need their own web build (cross-site API URL,
-  # bearer flag), backend (OAuth handoff, mock provider) and mock provider server, which
-  # playwright.config.ts starts itself, so the shared cookie-mode export cannot serve them.
+  # without cookies, account linking, and the Security screen. They need their own web build
+  # (cross-site API URL, bearer flag), backend (OAuth handoff, mock provider) and mock provider
+  # server, which playwright.config.ts starts itself, so the shared cookie-mode export cannot
+  # serve them.
   # Not a required check: a red run here does not block a merge.
   e2e-cross-site:
     executor: node22_browsers_mongo_rs_heavy

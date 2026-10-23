@@ -48,6 +48,18 @@ export const SOCIAL_PROVIDER_NAMES: Record<string, string> = {
 };
 
 /**
+ * The display name of a branded provider id, or undefined for any other id. Ids come from the
+ * server and from device storage, so an id such as `__proto__` or `constructor` must not read an
+ * `Object.prototype` member.
+ */
+export const getSocialProviderName = (providerId: string): string | undefined => {
+  if (!Object.hasOwn(SOCIAL_PROVIDER_NAMES, providerId)) {
+    return undefined;
+  }
+  return SOCIAL_PROVIDER_NAMES[providerId];
+};
+
+/**
  * A branded social login button for OAuth authentication.
  *
  * Supports Google, GitHub, and Apple sign-in with appropriate brand colors

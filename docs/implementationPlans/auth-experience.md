@@ -781,7 +781,7 @@ Open risks:
   - Docs: `set-up-social-login.md` gets a "Native" section (scheme, `trustedOrigins`).
   - Skills: verify-ui-changes, building-terreno-apps
 
-- [ ] **T23** — Example security screen
+- [x] **T23** — Example security screen
   - Depends on: T21, T22
   - Files: example-frontend/app/settings/security.tsx, example-frontend/app/settings/_layout.tsx, example-frontend/app/(tabs)/profile.tsx, example-frontend/e2e/account-security.spec.ts
   - Build:

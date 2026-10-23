@@ -28,6 +28,7 @@ import type {BetterAuthWebAuth} from "../betterAuthTypes";
 import {IsWeb} from "../platform";
 import {type AuthMethodsClient, type BetterAuthMethods, useAuthMethods} from "../useAuthMethods";
 import {getLoginFeedback, type LoginFailure} from "./loginErrors";
+import {getOwnEntry} from "./ownEntry";
 import {
   type RememberedAccountsStore,
   toLoginAccountOptions,
@@ -747,7 +748,11 @@ export const useLoginController = ({
       if (!method) {
         return undefined;
       }
-      return METHOD_NAMES[method] ?? providerLabels?.[method] ?? humanizeProviderId(method);
+      return (
+        getOwnEntry(METHOD_NAMES, method) ??
+        getOwnEntry(providerLabels, method) ??
+        humanizeProviderId(method)
+      );
     },
     [providerLabels]
   );
@@ -857,7 +862,7 @@ export const useLoginController = ({
       .map((id) => ({
         disabled: isLoading,
         id,
-        label: providerLabels?.[id] ?? humanizeProviderId(id),
+        label: getOwnEntry(providerLabels, id) ?? humanizeProviderId(id),
         loading: busy === id,
         onPress: (): Promise<void> => signInSocial(id),
       }));

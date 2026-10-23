@@ -16,3 +16,5 @@ the first invalid field plus an alert summary, Enter to submit, and a promise-ba
 Also exported: the `LinkedAccount` (`linkedAt` accepts a `Date` or ISO string),
 `LinkableProvider` and `PasswordCardSubmission` types, `CREDENTIAL_PROVIDER_ID`, and
 `hasPasswordCredential(accounts)`.
+A provider id that matches an `Object.prototype` key (`__proto__`, `constructor`) is labelled
+with its id instead of an inherited value.

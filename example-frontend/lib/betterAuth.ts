@@ -83,6 +83,22 @@ export const getLoginCallbackURL = (): string => {
   return `${window.location.origin}${OAUTH_RETURN_PATH}`;
 };
 
+/** The security screen's route (app/settings/security.tsx). */
+const SECURITY_RETURN_PATH = "/settings/security";
+
+/**
+ * Where linking a provider from the security screen returns. On web it is the page's absolute
+ * URL: bearer mode accepts any page on the server's `oauthHandoff.webOrigins`, and cookie mode
+ * would otherwise resolve the path against the API's host. Native passes the path, which Better
+ * Auth's Expo plugin turns into a deep link.
+ */
+export const getSecurityCallbackURL = (): string => {
+  if (!IsWeb || typeof window === "undefined" || !window.location?.origin) {
+    return SECURITY_RETURN_PATH;
+  }
+  return `${window.location.origin}${SECURITY_RETURN_PATH}`;
+};
+
 /**
  * Generic OAuth provider of the local mock OIDC server (e2e/helpers/mockOidcProvider.ts). Its
  * button shows when the server's `/terreno/methods` lists it: example-backend registers the

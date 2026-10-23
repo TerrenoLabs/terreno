@@ -29,6 +29,7 @@ import {
 } from "../betterAuthClient";
 import {IsWeb} from "../platform";
 import {type AuthMethodsClient, type BetterAuthMethods, useAuthMethods} from "../useAuthMethods";
+import {getOwnEntry} from "./ownEntry";
 
 /** A Better Auth error as the client returns it. */
 export interface AccountSecurityClientError {
@@ -203,7 +204,7 @@ export const getLinkErrorMessage = (
   if (!value) {
     return undefined;
   }
-  return LINK_ERROR_MESSAGES[value] ?? LINK_FAILED_MESSAGE;
+  return getOwnEntry(LINK_ERROR_MESSAGES, value) ?? LINK_FAILED_MESSAGE;
 };
 
 /** Throws the Better Auth error, so the card that called shows its message. */
@@ -401,7 +402,7 @@ export const useAccountSecurity = ({
       });
       if (error) {
         throw new Error(
-          (error.code ? LINK_ERROR_MESSAGES[error.code] : undefined) ??
+          (error.code ? getOwnEntry(LINK_ERROR_MESSAGES, error.code) : undefined) ??
             error.message ??
             LINK_FAILED_MESSAGE
         );
@@ -571,10 +572,10 @@ export const useAccountSecurity = ({
       // With linking off, the card lists linked providers but offers no Link button.
       ...(methods.accountLinking.mode === "never" ? {} : {onLink}),
       onUnlink,
-      providers: methods.providers.map((id) => ({
-        id,
-        ...(providerLabels?.[id] ? {label: providerLabels[id]} : {}),
-      })),
+      providers: methods.providers.map((id) => {
+        const label = getOwnEntry(providerLabels, id);
+        return {id, ...(label ? {label} : {})};
+      }),
     };
   }, [accountRows, accounts.error, linkErrorMessage, methods, onLink, onUnlink, providerLabels]);
 

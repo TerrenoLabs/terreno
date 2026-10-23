@@ -671,7 +671,7 @@ is 2 requests (`GET /sync/streams` plus one batch) instead of 101.
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /sync/snapshot?collection=&stream=&cursor=&limit=` | Bootstrap + catch-up for one stream (`limit` max 100) |
+| `GET /sync/snapshot?collection=&stream=&cursor=&limit=` | Bootstrap + catch-up for one stream (`limit` max 100). Soft-deleted documents, including pre-sync rows paged by `legacyCursor` (seq 0), arrive as tombstones with `data: null` |
 | `POST /sync/snapshot/batch` | Bootstrap + catch-up for many streams in one round trip. Body `{streams: [{stream, cursor?, legacyCursor?}], limit?}`, at most 500 streams, no repeats. `limit` (default 5,000, max 10,000) is the entity budget for the whole response, split evenly across the streams. Returns `{pages}`, one `GET /sync/snapshot`-shaped page per stream in request order. Any stream the caller may not read fails the whole request |
 | `GET /sync/streams` | Current stream membership for the user |
 | `GET /sync/entities` | Point lookup for entity repair and admin window hydrate. Admin-window callers (`admin:access` with RBAC, else `user.admin`) on `adminBroadcast` collections receive requested ids across product streams. When AdminApp registered a scope, list/read/`queryFilter` still apply; unknown or out-of-scope ids are omitted |

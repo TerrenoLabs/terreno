@@ -86,7 +86,8 @@ OAuth 2.0 authentication with GitHub.
 5. GitHub redirects back to `GET /auth/github/callback`
 6. Backend verifies authorization code with GitHub
 7. Backend finds/creates user, issues JWT tokens
-8. Backend redirects to `returnTo` URL with tokens as query params
+8. Backend redirects to `returnTo` with tokens in the URL fragment, only when `returnTo` matches
+   `githubAuth.allowedReturnTo`; otherwise it returns the tokens as JSON
 
 Every flow carries an OAuth `state` value bound to the starting browser by a signed, HttpOnly,
 short-lived cookie. The callback rejects a response without matching state.

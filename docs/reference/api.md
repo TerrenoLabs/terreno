@@ -571,9 +571,15 @@ setupServer({
     callbackURL: process.env.GITHUB_CALLBACK_URL!,
     scope: ["user:email"],
     allowAccountLinking: true,
+    allowedReturnTo: ["https://app.example.com", "myapp://auth"],
   },
 });
 ``````
+
+`allowedReturnTo` lists the exact http(s) origins or custom-scheme authorities that
+`GET /auth/github?returnTo=` may name. A value outside the list returns 400, the callback checks
+it again before redirecting, and tokens go in the URL fragment. Without `allowedReturnTo`,
+`returnTo` is ignored and the callback returns JSON.
 
 **Endpoints (when configured):**
 - `GET /auth/github` — Initiate OAuth flow

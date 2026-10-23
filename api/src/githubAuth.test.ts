@@ -686,6 +686,7 @@ describe("GitHub callback handler (fake strategy)", () => {
       configureApp: addRoutes,
       githubAuth: {
         allowAccountLinking: true,
+        allowedReturnTo: ["https://example.com"],
         callbackURL: "http://localhost:9000/auth/github/callback",
         clientId: "test-client-id",
         clientSecret: "test-client-secret",
@@ -718,7 +719,7 @@ describe("GitHub callback handler (fake strategy)", () => {
     expect(res.body.data.userId).toBeDefined();
   });
 
-  it("GET /auth/github/callback redirects to returnTo with tokens when session.returnTo is set", async () => {
+  it("GET /auth/github/callback redirects to an allowlisted returnTo with tokens in the fragment", async () => {
     const user = await GitHubTestUserModel.create({
       email: "cb2@example.com",
       githubId: "cb-gh-2",
@@ -730,10 +731,11 @@ describe("GitHub callback handler (fake strategy)", () => {
       .get("/auth/github/callback")
       .set("x-mock-return-to", "https://example.com/cb")
       .expect(302);
-    expect(res.headers.location).toContain("https://example.com/cb");
+    expect(res.headers.location).toContain("https://example.com/cb#");
     expect(res.headers.location).toContain("token=");
     expect(res.headers.location).toContain("refreshToken=");
     expect(res.headers.location).toContain("userId=");
+    expect(new URL(res.headers.location).search).toBe("");
   });
 
   it("GET /auth/github/callback refuses to issue tokens to a disabled user", async () => {
@@ -1154,5 +1156,150 @@ describe("GitHub OAuth state binding", () => {
     expect(res.headers.location).toContain("/auth/github/failure");
     const victimRow = await GitHubTestUserModel.findById(victim._id);
     expect(victimRow?.githubId).toBeUndefined();
+  });
+});
+
+describe("GitHub OAuth returnTo allowlist", () => {
+  const buildApp = (allowedReturnTo?: string[]): express.Application => {
+    const sessions = new Map<string, Record<string, unknown>>();
+    let nextSessionId = 0;
+    const built = new TerrenoApp({
+      beforeJsonSetup: (a) => {
+        // Minimal cookie-keyed session store standing in for express-session.
+        a.use((req, res, next) => {
+          const match = /(?:^|;\s*)sid=([^;]+)/.exec(req.headers.cookie ?? "");
+          let sessionId = match?.[1];
+          if (!sessionId || !sessions.has(sessionId)) {
+            nextSessionId += 1;
+            sessionId = `session-${nextSessionId}`;
+            sessions.set(sessionId, {});
+            res.cookie("sid", sessionId, {httpOnly: true, path: "/"});
+          }
+          const session = sessions.get(sessionId) as Record<string, unknown>;
+          const planted = req.headers["x-plant-return-to"];
+          if (typeof planted === "string") {
+            session.returnTo = planted;
+          }
+          (req as unknown as {session: Record<string, unknown>}).session = session;
+          next();
+        });
+      },
+      githubAuth: {
+        allowedReturnTo,
+        callbackURL: "http://localhost:9000/auth/github/callback",
+        clientId: "test-client-id",
+        clientSecret: "test-client-secret",
+      },
+      skipListen: true,
+      userModel: GitHubTestUserModel as unknown as UserModel,
+    }).build();
+    installFakeGithubStrategy();
+    return built;
+  };
+
+  beforeEach(async () => {
+    setSystemTime();
+    await connectDb();
+    await GitHubTestUserModel.deleteMany({});
+  });
+
+  afterEach(() => {
+    setSystemTime();
+    fakeGithubOutcome = {type: "redirect", url: "http://github.com/mock"};
+  });
+
+  const createGitHubUser = async (suffix: string): Promise<unknown> => {
+    return GitHubTestUserModel.create({
+      email: `returnto-${suffix}@example.test`,
+      githubId: `returnto-gh-${suffix}`,
+    } as unknown as TestUser);
+  };
+
+  it("rejects a returnTo outside the allowlist and sends no tokens there", async () => {
+    const app = buildApp(["https://app.example.test", "myapp://auth"]);
+    const browser = supertest.agent(app);
+    await browser.get("/auth/github?returnTo=https://attacker.example/steal").expect(400);
+
+    fakeGithubOutcome = {type: "success", user: await createGitHubUser("a")};
+    const res = await browser.get("/auth/github/callback").expect(200);
+    expect(res.headers.location).toBeUndefined();
+  });
+
+  it("rejects look-alike and non-http returnTo values", async () => {
+    const app = buildApp(["https://app.example.test", "myapp://auth"]);
+    const targets = [
+      "https://app.example.test.attacker.example/cb",
+      "https://app.example.test@attacker.example/cb",
+      "http://app.example.test/cb",
+      "javascript:alert(1)",
+      "myapp://other/cb",
+      "/relative/path",
+    ];
+    for (const target of targets) {
+      await supertest(app)
+        .get(`/auth/github?returnTo=${encodeURIComponent(target)}`)
+        .expect(400);
+    }
+    await supertest(app).get("/auth/github?returnTo=a&returnTo=b").expect(400);
+  });
+
+  it("redirects an allowlisted returnTo with tokens in the fragment, not the query", async () => {
+    const app = buildApp(["https://app.example.test"]);
+    const browser = supertest.agent(app);
+    await browser
+      .get(`/auth/github?returnTo=${encodeURIComponent("https://app.example.test/auth/callback")}`)
+      .expect(302);
+
+    const user = await createGitHubUser("b");
+    fakeGithubOutcome = {type: "success", user};
+    const res = await browser.get("/auth/github/callback").expect(302);
+    const location = new URL(res.headers.location);
+    expect(location.origin).toBe("https://app.example.test");
+    expect(location.pathname).toBe("/auth/callback");
+    expect(location.search).toBe("");
+    const fragment = new URLSearchParams(location.hash.slice(1));
+    expect(fragment.get("token")).toBeTruthy();
+    expect(fragment.get("refreshToken")).toBeTruthy();
+    expect(fragment.get("userId")).toBe(String((user as {_id: unknown})._id));
+
+    // The stored target is used once.
+    const again = await browser.get("/auth/github/callback").expect(200);
+    expect(again.headers.location).toBeUndefined();
+  });
+
+  it("accepts an allowlisted custom-scheme authority", async () => {
+    const app = buildApp(["myapp://auth"]);
+    const browser = supertest.agent(app);
+    await browser
+      .get(`/auth/github?returnTo=${encodeURIComponent("myapp://auth/github")}`)
+      .expect(302);
+
+    fakeGithubOutcome = {type: "success", user: await createGitHubUser("c")};
+    const res = await browser.get("/auth/github/callback").expect(302);
+    expect(res.headers.location.startsWith("myapp://auth/github#token=")).toBe(true);
+  });
+
+  it("ignores returnTo when no allowlist is configured", async () => {
+    const app = buildApp();
+    const browser = supertest.agent(app);
+    await browser.get("/auth/github?returnTo=https://attacker.example/steal").expect(302);
+
+    fakeGithubOutcome = {type: "success", user: await createGitHubUser("d")};
+    const res = await browser.get("/auth/github/callback").expect(200);
+    expect(res.headers.location).toBeUndefined();
+    expect(res.body.data.token).toBeDefined();
+  });
+
+  it("re-checks a stored returnTo before redirecting", async () => {
+    const app = buildApp(["https://app.example.test"]);
+    const browser = supertest.agent(app);
+    // Prime a session, then plant a target that did not pass the start-time check.
+    await browser.get("/auth/github").expect(302);
+    fakeGithubOutcome = {type: "success", user: await createGitHubUser("e")};
+    const res = await browser
+      .get("/auth/github/callback")
+      .set("x-plant-return-to", "https://attacker.example/steal")
+      .expect(200);
+    expect(res.headers.location).toBeUndefined();
   });
 });

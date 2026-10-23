@@ -28,6 +28,13 @@ export interface GitHubAuthOptions {
    */
   allowAccountLinking?: boolean;
   /**
+   * Redirect targets allowed for the `returnTo` query parameter of `GET /auth/github`. Each entry
+   * is an exact http(s) origin (`https://app.example.com`) or an exact custom-scheme authority
+   * (`myapp://auth`). A `returnTo` that matches no entry is rejected with 400. When this is
+   * unset or empty, `returnTo` is ignored and the callback always returns JSON.
+   */
+  allowedReturnTo?: string[];
+  /**
    * Custom function to handle user creation or lookup from GitHub profile.
    * If not provided, a default implementation will be used.
    * `existingUser` is the user who started `GET /auth/github/link`, read from the verified
@@ -253,6 +260,35 @@ const createSignedCookieStateStore = (callbackURL: string): GitHubStateStore => 
   };
 };
 
+// http(s) targets compare by origin; custom schemes compare by scheme plus authority.
+const returnToKey = (value: string): string | undefined => {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol === "http:" || url.protocol === "https:") {
+    return url.origin.toLowerCase();
+  }
+  if (!url.host || url.username || url.password) {
+    return undefined;
+  }
+  return `${url.protocol}//${url.host}`.toLowerCase();
+};
+
+/** Whether `value` is a redirect target the operator allowed in `allowedReturnTo`. */
+const isAllowedReturnTo = (value: unknown, allowed: string[] | undefined): value is string => {
+  if (typeof value !== "string" || !allowed?.length) {
+    return false;
+  }
+  const key = returnToKey(value);
+  if (!key) {
+    return false;
+  }
+  return allowed.some((entry) => returnToKey(entry) === key);
+};
+
 /**
  * Sets up GitHub OAuth authentication strategy.
  * Call this after setupAuth() in your server initialization.
@@ -409,14 +445,24 @@ export const addGitHubAuthRoutes = (
   router.get(
     "/github",
     (req: express.Request, _res: express.Response, next: express.NextFunction) => {
-      // Store the return URL in session or query for redirect after auth
-      const returnTo = req.query.returnTo as string | undefined;
-      if (returnTo) {
-        const reqWithSession = req as express.Request & {session?: {returnTo?: string}};
-        reqWithSession.session = reqWithSession.session ?? {};
-        reqWithSession.session.returnTo = returnTo;
+      // Store an allowlisted return URL in the session for the redirect after auth
+      const returnTo = req.query.returnTo;
+      if (returnTo === undefined || returnTo === "") {
+        return next();
       }
-      next();
+      if (!githubOptions.allowedReturnTo?.length) {
+        logger.warn("[github] Ignoring returnTo because githubAuth.allowedReturnTo is not set");
+        return next();
+      }
+      if (!isAllowedReturnTo(returnTo, githubOptions.allowedReturnTo)) {
+        return next(
+          new APIError({status: 400, title: "returnTo is not an allowed redirect target"})
+        );
+      }
+      const reqWithSession = req as express.Request & {session?: {returnTo?: string}};
+      reqWithSession.session = reqWithSession.session ?? {};
+      reqWithSession.session.returnTo = returnTo;
+      return next();
     },
     passport.authenticate("github", {session: false})
   );
@@ -435,18 +481,26 @@ export const addGitHubAuthRoutes = (
       }
       try {
         const tokens = await generateTokens(req.user, authOptions);
-        const returnTo = (req as express.Request & {session?: {returnTo?: string}}).session
-          ?.returnTo;
+        const session = (req as express.Request & {session?: {returnTo?: string}}).session;
+        const returnTo = session?.returnTo;
+        if (session && returnTo !== undefined) {
+          delete session.returnTo;
+        }
 
-        // If there's a return URL, redirect with tokens as query params
-        if (returnTo) {
+        // Redirect only to an allowlisted target, with tokens in the fragment so they stay out
+        // of server logs and Referer headers
+        if (returnTo && isAllowedReturnTo(returnTo, githubOptions.allowedReturnTo)) {
           const url = new URL(returnTo);
-          url.searchParams.set("token", tokens.token ?? "");
+          const fragment = new URLSearchParams({token: tokens.token ?? ""});
           if (tokens.refreshToken) {
-            url.searchParams.set("refreshToken", tokens.refreshToken);
+            fragment.set("refreshToken", tokens.refreshToken);
           }
-          url.searchParams.set("userId", req.user?._id ? String(req.user._id) : "");
+          fragment.set("userId", req.user?._id ? String(req.user._id) : "");
+          url.hash = fragment.toString();
           return res.redirect(url.toString());
+        }
+        if (returnTo) {
+          logger.warn("[github] Not redirecting to a returnTo outside githubAuth.allowedReturnTo");
         }
 
         // Otherwise return JSON response

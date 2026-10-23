@@ -186,6 +186,15 @@ describe("scan plugin", (): void => {
     assert.property(state.properties.goal.properties, "review");
   });
 
+  it("plans e2e specs and regression cases in every Plot brief", (): void => {
+    const plot = readSkill("terreno-scan-4-plot");
+    assert.include(plot, "## E2E tests");
+    assert.include(plot, "## Regression cases");
+    assert.include(plot, "None — <reason>");
+    assert.include(plot, "references/testing-plan.md");
+    assert.match(plot, /briefs missing verification methods or a testing-plan\s+section/);
+  });
+
   it("generates a Claude copy with shortened scan and lifecycle names", (): void => {
     const files = buildClaudePluginFiles({rootDirectory: ROOT_DIRECTORY, target: SCAN_TARGET});
     const paths = files.map(({path}) => path);

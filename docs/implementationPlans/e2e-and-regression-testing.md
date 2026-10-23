@@ -195,7 +195,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
     - PLAN-new-5 holds in T34.
   - Skills: update-agent-docs
 
-- [ ] **T6** — Unattended Grow and scan Plot emit both sections
+- [x] **T6** — Unattended Grow and scan Plot emit both sections
   - Depends on: T1
   - Files: .rulesync/skills/implement-ready-for-dev/SKILL.md, plugins/terreno-scan/skills/terreno-scan-4-plot/SKILL.md, plugins/terreno-scan/.cursor-plugin/plugin.json, plugins/terreno-scan/.codex-plugin/plugin.json, generated outputs of `bun run rules` and `bun run skills:sync`
   - Delivers:

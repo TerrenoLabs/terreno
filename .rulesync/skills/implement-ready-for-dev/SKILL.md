@@ -197,9 +197,12 @@ issue (template in that reference), apply `status:needs-info`, remove
 `status:in-progress`, unassign yourself, and stop. Do not open a PR.
 
 Otherwise write the IP and task list, treat Grow as `PASS`, and continue. Task count
-may exceed five; do not BLOCKED for size after Grow `PASS`.
+may exceed five; do not BLOCKED for size after Grow `PASS`. The IP has both
+testing-plan sections, `## E2E tests` and `## Regression cases`, as Grow requires;
+either may be `None — <reason>`, neither may be missing.
 
-Completion: approved IP path, task-file path, and a written assumption log.
+Completion: approved IP path with both testing-plan sections, task-file path, and a
+written assumption log.
 
 ### 4. Pin the Pick plan and assumptions
 
@@ -215,11 +218,27 @@ Grow treated these as settled. Override on the issue if a later run must stop.
 ```
 
 If a trusted pinned Pick plan already exists (same rules as [`pick-plan.md`](../work-github-issues/references/pick-plan.md)),
-use it when it matches the Grow task list.
+use it when it matches the Grow task list and carries the `E2E tests` and
+`Regression cases` fields described below.
 
 Otherwise post a new plan comment whose first line is `<!-- terreno-pick-plan -->`,
-drawn from the Grow tasks (Outcome, Non-scope, Acceptance, Files/seams, Verify, Docs).
-Pin the URL `gh issue comment` prints. Every task has Files/seams, Acceptance, Verify, and Docs. Non-scope is non-empty.
+drawn from the Grow tasks (Outcome, Non-scope, Acceptance, Files/seams, Verify, Docs,
+E2E tests, Regression cases). The testing fields come from the IP's `## E2E tests` and
+`## Regression cases` sections:
+
+```markdown
+1. **<task name>**
+   - Docs: <page>
+   - E2E tests: E1 `<spec path>` (<layer>)   <!-- rows whose Written in is this task, or "none" -->
+
+### Regression cases
+
+- <AREA>-new-1: <case> — Steps: <steps> — Expected: <expected>   <!-- or "None — <reason>" -->
+```
+
+The `### Regression cases` section follows `### Tasks`. Roast proves each task's
+`E2E tests` entries as well as its Acceptance and Verify lines.
+Pin the URL `gh issue comment` prints. Every task has Files/seams, Acceptance, Verify, Docs, and E2E tests. Non-scope is non-empty.
 
 Completion: a pinned comment URL on `$NUMBER`.
 

@@ -439,8 +439,15 @@ passport-local-mongoose fields `hash`, `salt`, `attempts`, and `last`, and `disa
 Better Auth sync, GitHub link, and password flows write those. Dotted paths into a dropped
 field (`roles.0`, `organizationIds.1`) are dropped too, because Mongoose applies a dotted key
 as a path into the field. With `accessControl` set, modelRouter, sync, and MCP writes to the user
-model (compiled as `"User"`, or the `userModel` passed to `createAccess` under any name) drop `PRIVILEGED_USER_FIELDS` and dotted paths into them the same way; assign roles with
-`access.roles.assign`. Request logs redact `password`, `newPassword`,
+model (compiled as `"User"`, or the `userModel` passed to `createAccess` under any name) drop
+`PRIVILEGED_USER_FIELDS`, the passport fields `hash`, `salt`, `attempts`, and `last` (`USER_CREDENTIAL_FIELDS`), and dotted paths into them the same way; assign
+roles with `access.roles.assign`. Those writes, plus array operations and POST instance actions on
+the user model, also apply the RoleManager target-privilege rule: an actor whose permissions do not
+cover the target user's gets 403 `Cannot modify a user with permissions you do not hold` on update
+or delete. This runs on REST, sync (including admin-window mutations), and MCP. Writes to the
+actor's own record and writes by legacy `admin: true` users are not checked.
+
+Request logs redact `password`, `newPassword`,
 `oldPassword`, `token`, and `refreshToken` in request bodies and in URL query strings. Changing the mailbox through `PATCH /auth/me`
 invalidates unused `passwordReset` AuthTokens for that user even when the schema has no
 `emailVerified` field. When the schema uses `emailVerificationPlugin`, mailbox change also

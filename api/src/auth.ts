@@ -124,12 +124,22 @@ export const PRIVILEGED_USER_FIELDS = [
 ] as const;
 
 /**
+ * passport-local-mongoose password and lockout fields. Only the password flows (reset,
+ * `setPassword`-gated actions) write them, so RBAC user-model writes through modelRouter, sync,
+ * MCP, and the admin panel drop them along with {@link PRIVILEGED_USER_FIELDS}.
+ */
+export const USER_CREDENTIAL_FIELDS = ["hash", "salt", "attempts", "last"] as const;
+
+const RBAC_USER_WRITE_BLOCKED_FIELDS = [...PRIVILEGED_USER_FIELDS, ...USER_CREDENTIAL_FIELDS];
+
+/**
  * Fields self-service requests (anonymous signup, `PATCH /me`) must never set: the
  * {@link PRIVILEGED_USER_FIELDS} plus the fields that bind an external credential to the row
  * (Better Auth id, GitHub link, OAuth provider), the passport-local-mongoose password and
  * lockout state, and the disabled flag. Only the Better Auth sync, GitHub link, and password
  * flows that own them write these. Kept apart from PRIVILEGED_USER_FIELDS so authorized admin
- * User writes through modelRouter, sync, MCP, and the admin panel can still manage them.
+ * User writes through modelRouter, sync, MCP, and the admin panel can still manage the identity
+ * and disabled fields (those writes still drop {@link USER_CREDENTIAL_FIELDS}).
  */
 export const SELF_SERVICE_BLOCKED_USER_FIELDS = [
   ...PRIVILEGED_USER_FIELDS,
@@ -201,7 +211,8 @@ const omitPrivilegedFieldsFromObject = (item: unknown, allowAdminWrite: boolean)
   // Only the exact `admin` key is an authorized legacy-admin write; `admin.x` is never one.
   const fieldsToDrop = Object.keys(record).filter(
     (key) =>
-      isWriteKeyForAnyField(key, PRIVILEGED_USER_FIELDS) && !(key === "admin" && allowAdminWrite)
+      isWriteKeyForAnyField(key, RBAC_USER_WRITE_BLOCKED_FIELDS) &&
+      !(key === "admin" && allowAdminWrite)
   );
   if (fieldsToDrop.length === 0) {
     return item;

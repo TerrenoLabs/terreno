@@ -34,6 +34,7 @@ import {
 } from "../errors";
 import {checkPermissions} from "../permissions";
 import {validateAccessWritePayload} from "../rbac/modelRouterAccess";
+import {assertCanWriteTargetUser} from "../rbac/userWriteGuards";
 import {transform} from "../transformers";
 
 /** A hydrated mongoose document joined with the router's base type. */
@@ -406,6 +407,14 @@ export const executeUpdate = async <T>({
     });
   }
 
+  // Runs even for admin-window writes that skip modelRouter permissions.
+  await assertCanWriteTargetUser({
+    accessControl: options.accessControl,
+    actor: user,
+    modelName: writeModelName ?? model.modelName,
+    target: doc,
+  });
+
   let cleanedBody: Partial<T> | T | null | undefined;
   try {
     cleanedBody = transform<T>(options, body as Partial<T>, "update", user) as Partial<T>;
@@ -694,6 +703,13 @@ export const executeDelete = async <T>({
       title: `Access to GET on ${model.modelName}:${id} denied for ${user?.id}`,
     });
   }
+
+  await assertCanWriteTargetUser({
+    accessControl: options.accessControl,
+    actor: user,
+    modelName: model.modelName,
+    target: doc,
+  });
 
   if (options.preDelete) {
     let body: T | null | undefined;

@@ -55,6 +55,7 @@ import {checkPermissions, permissionMiddleware, type RESTPermissions} from "./pe
 import type {PopulatePath} from "./populate";
 import {resolveModelRouterAccess, validateAccessWriteBody} from "./rbac/modelRouterAccess";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
+import {assertCanWriteTargetUser} from "./rbac/userWriteGuards";
 import {warnRealtimeDeprecated} from "./realtime/deprecation";
 import type {RealtimeConfig} from "./realtime/types";
 import {
@@ -1273,6 +1274,13 @@ const _buildModelRouter = <T>(
         title: "Update not allowed",
       });
     }
+
+    await assertCanWriteTargetUser({
+      accessControl: options.accessControl,
+      actor: req.user,
+      modelName: model.modelName,
+      target: doc,
+    });
 
     const field = req.params.field as string;
     const itemId = req.params.itemId as string;

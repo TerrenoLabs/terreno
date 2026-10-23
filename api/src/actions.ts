@@ -11,6 +11,7 @@ import {defaultOpenApiErrorResponses} from "./openApi";
 import {checkPermissions, type PermissionMethod} from "./permissions";
 import {createIsPermitted} from "./rbac/middleware";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
+import {assertCanWriteTargetUser} from "./rbac/userWriteGuards";
 
 // At least two characters: leading letter plus one or more alphanumeric/_/- chars.
 export const ACTION_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_-]+$/;
@@ -516,6 +517,15 @@ const buildActionMiddleware = <T>(
               options.accessControl,
               options.access
             );
+            // A write action on a user record is a write to that user.
+            if (action.method !== "GET") {
+              await assertCanWriteTargetUser({
+                accessControl: options.accessControl,
+                actor: req.user,
+                modelName: model.modelName,
+                target: doc,
+              });
+            }
             return next();
           } catch (error) {
             return next(error);

@@ -4,15 +4,34 @@ import {Platform} from "react-native";
 
 import {
   CONTENT_WIDTH,
+  drawProvisionalSignature,
   ensureSpace,
   formatDate,
   MARGIN_LEFT,
   MARGIN_RIGHT,
   PAGE_WIDTH,
+  type PdfProvisionalSignatureSection,
+  provisionalPdfSignature,
+  provisionalSignerName,
 } from "./pdfUtils";
 import type {ConsentHistoryEntry} from "./useConsentHistory";
 
-const buildTemplateData = (entry: ConsentHistoryEntry): PdfTemplateData => {
+/** The user's own printout names the signer and date only, never the signer's note. */
+const provisionalSection = (
+  entry: ConsentHistoryEntry
+): PdfProvisionalSignatureSection | undefined => {
+  if (!entry.provisional) {
+    return undefined;
+  }
+  return {
+    signedAt: entry.agreedAt,
+    signedByName: provisionalSignerName(entry.provisionalSignedBy),
+    voidedAt: entry.voidedAt,
+  };
+};
+
+/** Template data for one of the user's consent entries, used by the native PDF. */
+const buildConsentHistoryTemplateData = (entry: ConsentHistoryEntry): PdfTemplateData => {
   const formTitle = entry.form?.title ?? "Unknown Form";
   const formSlug = entry.form?.slug ?? "";
   const formType = entry.form?.type ?? "";
@@ -66,6 +85,7 @@ const buildTemplateData = (entry: ConsentHistoryEntry): PdfTemplateData => {
     contentSnapshot: entry.contentSnapshot,
     fields,
     formTitle,
+    provisionalSignature: provisionalPdfSignature(provisionalSection(entry)),
     responseId: entry._id,
     signature: entry.signature,
     title: "Consent Record",
@@ -185,6 +205,11 @@ const generatePdfWeb = async (entry: ConsentHistoryEntry): Promise<void> => {
     y += 4;
   }
 
+  const provisional = provisionalSection(entry);
+  if (provisional) {
+    y = drawProvisionalSignature(doc, y, provisional);
+  }
+
   if (entry.signature) {
     y = ensureSpace(doc, y, 50);
     doc.setFontSize(12);
@@ -244,7 +269,7 @@ const generatePdfWeb = async (entry: ConsentHistoryEntry): Promise<void> => {
 };
 
 const generatePdfMobile = async (entry: ConsentHistoryEntry): Promise<void> => {
-  const templateData = buildTemplateData(entry);
+  const templateData = buildConsentHistoryTemplateData(entry);
   const html = buildConsentPdfHtml(templateData);
   const formSlug = entry.form?.slug ?? "response";
   const filename = `consent-${formSlug}-${DateTime.now().toFormat("yyyy-MM-dd")}.pdf`;

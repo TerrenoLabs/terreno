@@ -207,7 +207,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Verification: `bun test --only-failures ui/src/pdfHtmlTemplate.test.ts`
   - Skills: terreno:terreno-ui
 
-- [ ] **T9** — Include provisional signatures in admin-frontend consent PDFs
+- [x] **T9** — Include provisional signatures in admin-frontend consent PDFs
   - Depends on: T8
   - Files: admin-frontend/src/generateConsentPdf.ts, admin-frontend/src/generateConsentHistoryPdf.ts, admin-frontend/src/useConsentHistory.ts, admin-frontend/src/isolated/generateConsentPdf.isolated.ts, admin-frontend/src/isolated/generateConsentHistoryPdf.isolated.ts, admin-frontend/src/isolated/generateConsentPdfMobile.isolated.ts, admin-frontend/src/isolated/generateConsentPdfsMobile.isolated.ts, plus their test files
   - Criteria: response and history types carry the provisional fields. Web jsPDF output for a provisional response contains "Provisional signature", the signer name, and the date. The admin response PDF also has the note and signer IP. The user history PDF has no note. The native path passes `provisionalSignature` to `buildConsentPdfHtml`, and both mobile isolated tests assert it (extend their `@terreno/ui` mocks). Non-provisional output is unchanged. Each generator exports the template-data builder it uses, for T10.

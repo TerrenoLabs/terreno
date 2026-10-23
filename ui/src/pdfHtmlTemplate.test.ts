@@ -147,6 +147,15 @@ describe("buildConsentPdfHtml provisional signature", () => {
     expect(html).toContain('<td class="field-value">Oct 20, 2026</td>');
   });
 
+  it("omits the date row when the signing date is unknown", () => {
+    const html = buildConsentPdfHtml({
+      ...baseData,
+      provisionalSignature: {signedAt: "", signedByName: "Dana Rivera"},
+    });
+    expect(html).toContain("<h2>Provisional signature</h2>");
+    expect(html).not.toContain("Signed at:");
+  });
+
   it("renders nothing extra without a provisional signature", () => {
     expect(buildConsentPdfHtml(baseData)).not.toContain("Provisional signature");
   });

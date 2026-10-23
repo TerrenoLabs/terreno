@@ -67,7 +67,9 @@ const renderProvisionalSignature = (signature?: PdfProvisionalSignature): string
   }
   const rows = [
     renderField({label: "Signed by:", value: signature.signedByName}),
-    renderField({label: "Signed at:", value: formatPrintDate(signature.signedAt)}),
+    signature.signedAt
+      ? renderField({label: "Signed at:", value: formatPrintDate(signature.signedAt)})
+      : "",
     signature.note ? renderField({label: "Note:", value: signature.note}) : "",
     signature.signerIp ? renderField({label: "Signer IP:", value: signature.signerIp}) : "",
   ].join("\n");

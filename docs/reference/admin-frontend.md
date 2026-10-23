@@ -296,6 +296,19 @@ Renders reference fields as clickable links.
 />
 ``````
 
+### Consent records and PDFs
+
+`ConsentResponseViewer` (admin, one `ConsentResponse`) and `ConsentHistory` (the signed-in
+user's own `GET /consents/my` entries) download a consent record as a PDF:
+`generateConsentPdf(response)` and `generateConsentHistoryPdf(entry)`. Web builds the PDF with
+jsPDF; native renders `buildConsentPdfHtml` from `@terreno/ui` and shares it with
+`sharePdfFromHtml`.
+
+When the response is provisional (staff signed on the user's behalf), both PDFs add a
+"Provisional signature" section: the signer and date, and "Voided <date>" when it was voided.
+The admin PDF also includes the signer's note and IP address. The user's own PDF never
+includes the note.
+
 ## Hooks
 
 ### useAdminConfig

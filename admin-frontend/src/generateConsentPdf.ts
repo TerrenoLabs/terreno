@@ -4,11 +4,15 @@ import {Platform} from "react-native";
 
 import {
   CONTENT_WIDTH,
+  drawProvisionalSignature,
   ensureSpace,
   formatDate,
   MARGIN_LEFT,
   MARGIN_RIGHT,
   PAGE_WIDTH,
+  type PdfProvisionalSignatureSection,
+  provisionalPdfSignature,
+  provisionalSignerName,
 } from "./pdfUtils";
 
 interface ConsentResponseData {
@@ -21,11 +25,32 @@ interface ConsentResponseData {
   formVersionSnapshot?: number;
   ipAddress?: string;
   locale?: string;
+  provisional?: boolean;
+  provisionalNote?: string;
+  provisionalSignedBy?: {_id?: string; email?: string; name?: string} | string | null;
+  provisionalSignerIp?: string;
   signature?: string;
   signedAt?: string;
   userAgent?: string;
   userId?: {_id?: string; email?: string; id?: string; name?: string} | string;
+  voidedAt?: string;
 }
+
+/** Admin printouts show every provisional detail, including the signer's note and IP. */
+const provisionalSection = (
+  response: ConsentResponseData
+): PdfProvisionalSignatureSection | undefined => {
+  if (!response.provisional) {
+    return undefined;
+  }
+  return {
+    note: response.provisionalNote,
+    signedAt: response.agreedAt,
+    signedByName: provisionalSignerName(response.provisionalSignedBy),
+    signerIp: response.provisionalSignerIp,
+    voidedAt: response.voidedAt,
+  };
+};
 
 const extractResponseFields = (response: ConsentResponseData) => {
   const formTitle =
@@ -56,7 +81,8 @@ const extractResponseFields = (response: ConsentResponseData) => {
   return {formSlug, formTitle, formType, formVersion, userEmail, userId, userName};
 };
 
-const buildTemplateData = (response: ConsentResponseData): PdfTemplateData => {
+/** Template data for one admin consent response, used by the native PDF. */
+const buildConsentResponseTemplateData = (response: ConsentResponseData): PdfTemplateData => {
   const {formTitle, formSlug, formType, formVersion, userId, userEmail, userName} =
     extractResponseFields(response);
 
@@ -108,6 +134,7 @@ const buildTemplateData = (response: ConsentResponseData): PdfTemplateData => {
     contentSnapshot: response.contentSnapshot,
     fields,
     formTitle,
+    provisionalSignature: provisionalPdfSignature(provisionalSection(response)),
     responseId: response._id,
     signature: response.signature,
     title: "Consent Record",
@@ -250,6 +277,11 @@ const generatePdfWeb = async (response: ConsentResponseData): Promise<void> => {
     y += 4;
   }
 
+  const provisional = provisionalSection(response);
+  if (provisional) {
+    y = drawProvisionalSignature(doc, y, provisional);
+  }
+
   // Signature
   if (response.signature) {
     y = ensureSpace(doc, y, 50);
@@ -314,7 +346,7 @@ const generatePdfWeb = async (response: ConsentResponseData): Promise<void> => {
 };
 
 const generatePdfMobile = async (response: ConsentResponseData): Promise<void> => {
-  const templateData = buildTemplateData(response);
+  const templateData = buildConsentResponseTemplateData(response);
   const html = buildConsentPdfHtml(templateData);
   const {formSlug, userId} = extractResponseFields(response);
   const filename = `consent-${formSlug || "response"}-${userId.slice(-6)}-${DateTime.now().toFormat("yyyy-MM-dd")}.pdf`;

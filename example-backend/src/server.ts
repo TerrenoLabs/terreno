@@ -11,6 +11,7 @@ import {
 import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
+  AccountSecurityApp,
   AuditApp,
   BetterAuthApp,
   backfillAdmins,
@@ -431,6 +432,9 @@ export const start = async (skipListen = false): Promise<express.Application> =>
         })
       )
       .register(new AuditApp())
+      // Platform account recovery at /users/:id/security/* (operators and superadmins).
+      // Needs AuditApp: every recovery action writes a security AuditEvent.
+      .register(new AccountSecurityApp({accessControl: access}))
       .register(new AIAdminApp());
 
     const exampleJobsApp = createExampleJobsApp({accessControl: access});

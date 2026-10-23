@@ -267,6 +267,13 @@ export class TerrenoApp {
   }
 
   /**
+   * The RBAC access control passed as `accessControl`, if any.
+   */
+  getAccessControl(): TerrenoAppOptions["accessControl"] {
+    return this.options.accessControl;
+  }
+
+  /**
    * The application user model this app authenticates against.
    */
   getUserModel(): TerrenoAppOptions["userModel"] {

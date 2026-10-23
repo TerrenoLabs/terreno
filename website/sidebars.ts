@@ -19,6 +19,7 @@ const sidebars: SidebarsConfig = {
     {
       items: [
         "reference/api",
+        "reference/account-security",
         "reference/ui",
         "reference/syncdb",
         "reference/ai",

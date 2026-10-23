@@ -65,7 +65,16 @@ export const terrenoStatements = {
   featureFlag: MODEL_CRUD,
   organization: ORGANIZATION_ACTIONS,
   rbac: ["read", "manageRoles", "assignRoles"],
-  user: ["create", "list", "read", "update", "delete", "impersonate", "setPassword"],
+  user: [
+    "create",
+    "list",
+    "read",
+    "update",
+    "delete",
+    "impersonate",
+    "setPassword",
+    "manageSecurity",
+  ],
 } as const;
 
 export type Statements = Record<string, readonly string[]>;
@@ -130,6 +139,9 @@ export const terrenoStatementDescriptions: Record<string, Record<string, string>
   aiTrace: {
     list: "List traces and observability status",
     read: "View trace detail and run trace test helpers",
+  },
+  user: {
+    manageSecurity: "View any user's sign-in methods and run account recovery (AccountSecurityApp)",
   },
 };
 

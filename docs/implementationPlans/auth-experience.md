@@ -333,7 +333,7 @@ Open risks:
     `sessionStorage`.
   - Skills: terreno-backend-api, terreno-data-fetching, security-audit
 
-- [ ] **T6** — Security summary, 2FA reset, security audit events, platform routes
+- [x] **T6** — Security summary, 2FA reset, security audit events, platform routes
   - Depends on: T2
   - Files: api/src/accountSecurity/accountSecurityService.ts, api/src/accountSecurity/accountSecurityApp.ts, api/src/accountSecurity/securityEvents.ts, api/src/accountSecurity/accountSecurity.test.ts, api/src/audit/record.ts, api/src/audit/auditEventModel.ts, api/src/rbac/statements.ts, api/src/rbac/roleModel.ts, api/src/index.ts, example-backend/src/server.ts, docs/reference/account-security.md, docs/how-to/audit-log.md, changelog/unreleased/account-security-app.md
   - Build:
@@ -920,6 +920,7 @@ Open risks:
 | D6 | Stable frontend and backend will move to subdomains of one domain. Does the plan still work? | Yes. Stable becomes same-site, so cookies work in Safari there; previews stay cross-site, so T27 stays | H1 callbacks go on `api.<domain>`; new H3; T4 adds `PASSKEY_RP_ID`; T11 reads `STABLE_*` URLs; X9 parks same-site previews |
 | D7 | Master merged #1604 after approval: web bearer mode, the OAuth one-time-token handoff, the mock OIDC provider, and a cross-site bearer Playwright project | Reuse them (engineering reconciliation, no product change) | T4 reuses `mock-oidc`; T5 becomes the link handoff; T27 narrows to the 2FA/passkey challenges; T11 extends the handoff to oauth-proxy returns; cross-site proofs use the bearer project, where cookies are never sent, instead of WebKit |
 | D8 | Review found that a refused unverified sign-up left a Better Auth user behind, which a later email verification could turn into a takeover of the legacy User | Refuse before the Better Auth user is created; T8's admin action issues a set-password link instead of marking an email verified | T3 adds a `user.create.before` guard; T8 `verify-email` becomes `issue-sign-in-link` |
+| D9 | Review: should recovery routes let an operator act on a superadmin, or on themselves? | No: refuse targets holding permissions the actor lacks (a `*` target needs a superadmin actor) and refuse self-targeting; self-service lives on the user's own Security screen | T6 adds the guard to the shared route pipeline, so T9 org routes inherit it (alongside D3's platform-staff refusal) |
 | D5 (durable) | Remember name, email and avatar on the login screen by default? | No: method only by default; identity is opt-in (`rememberIdentity`); the example opts in | T19, T20 and T26 as written |
 
 ## Sign-off

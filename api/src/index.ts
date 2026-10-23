@@ -1,8 +1,12 @@
+export * from "./accountSecurity/accountSecurityApp";
+export * from "./accountSecurity/accountSecurityService";
+export * from "./accountSecurity/securityEvents";
 export * from "./actions";
 export * from "./adminTypes";
 export * from "./api";
 export {AuditApp, type AuditAppOptions} from "./audit/auditApp";
 export {
+  AUDIT_EVENT_SOURCES,
   type AuditEventDocument,
   type AuditEventModel,
   type AuditEventOperation,

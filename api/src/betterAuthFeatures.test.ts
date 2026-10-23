@@ -1,5 +1,5 @@
 import {afterAll, describe, expect, it} from "bun:test";
-import {createHmac, createVerify, generateKeyPairSync} from "node:crypto";
+import {createVerify, generateKeyPairSync} from "node:crypto";
 import type {BetterAuthPlugin} from "better-auth";
 import {twoFactor} from "better-auth/plugins";
 import express from "express";
@@ -25,12 +25,14 @@ import {
   API_ORIGIN,
   betterAuthUsers,
   cookieHeaderFrom,
+  enrollTwoFactor,
   newStubIdentity,
   PASSWORD,
   SECRET,
   setCookies,
   signInWithStub,
   stubOidcPlugin,
+  totpCode,
   uniqueEmail,
 } from "./tests/betterAuthStubs";
 
@@ -54,63 +56,6 @@ const buildApp = (overrides: Partial<BetterAuthConfig> = {}): FeatureApp => {
 
 const pluginIds = (auth: BetterAuthInstance): string[] =>
   (auth.options.plugins ?? []).map((plugin) => plugin.id);
-
-const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-
-const base32Decode = (value: string): Buffer => {
-  let bits = "";
-  for (const char of value.replace(/=+$/, "").toUpperCase()) {
-    bits += BASE32_ALPHABET.indexOf(char).toString(2).padStart(5, "0");
-  }
-  const bytes: number[] = [];
-  for (let index = 0; index + 8 <= bits.length; index += 8) {
-    bytes.push(Number.parseInt(bits.slice(index, index + 8), 2));
-  }
-  return Buffer.from(bytes);
-};
-
-// The current RFC 6238 code (SHA-1, 6 digits, 30-second steps) an authenticator app would show.
-const totpCode = (secret: Buffer): string => {
-  const counter = Buffer.alloc(8);
-  counter.writeBigUInt64BE(BigInt(Math.floor(DateTime.now().toSeconds() / 30)));
-  const digest = createHmac("sha1", secret).update(counter).digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  const value = (digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
-  return String(value).padStart(6, "0");
-};
-
-interface TwoFactorEnrollment {
-  backupCodes: string[];
-  totpURI: string;
-}
-
-// Signs up, enables two-factor, and confirms it with a TOTP code, as the Security screen does.
-const enrollTwoFactor = async (
-  app: express.Application,
-  email: string
-): Promise<{enrollment: TwoFactorEnrollment; secret: Buffer}> => {
-  const signUp = await supertest(app)
-    .post("/api/auth/sign-up/email")
-    .set("content-type", "application/json")
-    .send({email, name: "Two Factor", password: PASSWORD});
-  expect(signUp.status).toBe(200);
-  const bearer = `Bearer ${signUp.body.token}`;
-  const enable = await supertest(app)
-    .post("/api/auth/two-factor/enable")
-    .set("authorization", bearer)
-    .set("content-type", "application/json")
-    .send({password: PASSWORD});
-  expect(enable.status).toBe(200);
-  const enrollment = enable.body as TwoFactorEnrollment;
-  const secret = base32Decode(new URL(enrollment.totpURI).searchParams.get("secret") ?? "");
-  const confirm = await supertest(app)
-    .post("/api/auth/two-factor/verify-totp")
-    .set("authorization", bearer)
-    .set("content-type", "application/json")
-    .send({code: totpCode(secret)});
-  expect(confirm.status).toBe(200);
-  return {enrollment, secret};
-};
 
 describe("buildFeaturePlugins", () => {
   it("each feature mounts only when configured", async () => {

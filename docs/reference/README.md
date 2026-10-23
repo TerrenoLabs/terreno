@@ -5,6 +5,7 @@ Technical reference for Terreno packages and APIs. Information-oriented, precise
 ## Packages
 
 - [@terreno/api](api.md) — modelRouter, auth, permissions, setupServer
+- [Account security](account-security.md) — `AccountSecurityApp`: per-user security summary, 2FA reset, security audit events
 - [@terreno/ui](ui.md) — Components, theming, layout
 - [@terreno/syncdb](syncdb.md) — Local-first data layer (reads, writes, offline sync)
 - [@terreno/ai](ai.md) — AI service, GPT routes, Langfuse integration

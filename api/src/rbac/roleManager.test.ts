@@ -773,6 +773,44 @@ describe("roleManager", () => {
     ).rejects.toMatchObject({status: 400, title: "Cannot rename a locked role"});
   });
 
+  it("rejects non-object permissions on a role update without changing the role", async () => {
+    await setupDb();
+    const access = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Role manager",
+          name: "role-manager",
+          permissions: {rbac: ["read", "manageRoles"], todo: ["read"]},
+        },
+      ],
+      statements: appStatements,
+    });
+    await access.roles.seedDefaults();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    const before = (await RbacRole.findExactlyOne({name: "admin"})).permissions;
+    const manager = createTestUser({roles: ["role-manager"]});
+    const superadmin = createTestUser({roles: ["superadmin"]});
+
+    for (const actor of [manager, superadmin]) {
+      for (const permissions of [false, 0, "", null, ["todo"]]) {
+        await expect(
+          access.roles.update({
+            actor,
+            changes: {permissions: permissions as never},
+            roleName: "admin",
+          })
+        ).rejects.toMatchObject({status: 400, title: "Invalid permissions"});
+      }
+    }
+    await expect(
+      access.roles.update({actor: manager, changes: {permissions: {}}, roleName: "admin"})
+    ).rejects.toMatchObject({status: 403});
+
+    const after = (await RbacRole.findExactlyOne({name: "admin"})).permissions;
+    expect(after).toEqual(before);
+  });
+
   describe("role renames", () => {
     const setup = async () => {
       await setupDb();

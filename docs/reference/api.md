@@ -1066,8 +1066,11 @@ submit → `aiReview:score`) is documented in [AI reference — Observability](a
 ### RBAC role edits
 
 `PATCH /rbac/roles/:name` (`access.roles.update`) requires `rbac:manageRoles` and never lets the
-actor hand out permissions it does not hold. Users hold roles by name, so a rename (`{name}`) is
-checked like a permission edit:
+actor hand out permissions it does not hold. A `permissions` key must be an object of action lists
+valid for the statements; any other value (`false`, `0`, `""`, `null`, an array) is a 400
+`Invalid permissions`. The actor must hold the role's current grants plus the new ones, so emptying
+a role (`{permissions: {}}`) still needs every permission the role had. Users hold roles by name,
+so a rename (`{name}`) is checked like a permission edit:
 
 - Locked and sealed roles cannot be renamed (400).
 - The actor must hold every permission of the role being renamed (403 `Cannot grant permissions

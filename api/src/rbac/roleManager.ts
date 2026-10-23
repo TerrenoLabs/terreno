@@ -431,12 +431,22 @@ export const createRoleManager = (args: {
           });
         }
       }
-      if (changes.permissions) {
-        assertValidPermissionSet(changes.permissions, statements);
+      // Any `permissions` key is written below, so validate on presence, not truthiness:
+      // `false` or `""` would otherwise skip both checks and empty the role.
+      if ("permissions" in changes) {
+        const incoming: unknown = changes.permissions;
+        if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+          throw new APIError({
+            detail: "permissions must be an object of resource action lists",
+            status: 400,
+            title: "Invalid permissions",
+          });
+        }
+        assertValidPermissionSet(incoming as PermissionSet, statements);
         await assertNoEscalationOrAudit({
           action: "role.update",
           actor,
-          permissions: unionPermissionSets(existing.permissions ?? {}, changes.permissions),
+          permissions: unionPermissionSets(existing.permissions ?? {}, incoming as PermissionSet),
           targetRoleName: roleName,
         });
       }

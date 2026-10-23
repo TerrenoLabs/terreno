@@ -36,8 +36,9 @@ const SENSITIVE_KEY_FRAGMENTS = [
 ] as const;
 
 // Matched as whole words of a key, so `code` covers OAuth and verification codes without
-// matching unrelated words that merely contain the letters.
-const SENSITIVE_KEY_WORDS = new Set<string>(["code", "otp", "pin"]);
+// matching unrelated words that merely contain the letters. `note` and `reason` are free text
+// that can hold PHI, such as a provisional consent signer's note or a void reason.
+const SENSITIVE_KEY_WORDS = new Set<string>(["code", "note", "otp", "pin", "reason"]);
 
 const keyWords = (key: string): string[] => {
   return key

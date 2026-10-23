@@ -263,13 +263,13 @@ export const sharePdfFromHtml = async (options: {
   });
 };
 
+/** The last web print frame, removed before the next print in case `afterprint` never fired. */
+let lastPrintFrame: HTMLIFrameElement | undefined;
+
 /**
  * Open the print dialog for consent HTML (for example from `buildConsentPdfHtml`). Native uses
  * `expo-print`; web prints from a hidden iframe so the app page itself is not printed.
  */
-/** The last web print frame, removed before the next print in case `afterprint` never fired. */
-let lastPrintFrame: HTMLIFrameElement | undefined;
-
 export const printConsentHtml = async ({html}: {html: string}): Promise<void> => {
   if (Platform.OS !== "web") {
     const Print = await import("expo-print");

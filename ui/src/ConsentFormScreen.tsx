@@ -53,12 +53,15 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
   const content = applyConsentVariables(rawContent, variables);
 
   // Staff may have signed provisionally; the user still reads and answers the form.
+  const provisionalSignedAt = form.provisionalSignature
+    ? DateTime.fromISO(form.provisionalSignature.signedAt).setLocale(locale)
+    : undefined;
   const provisionalNotice = form.provisionalSignature
-    ? `Signed on your behalf by ${form.provisionalSignature.signedByName} on ${DateTime.fromISO(
-        form.provisionalSignature.signedAt
-      )
-        .setLocale(locale)
-        .toLocaleString(DateTime.DATETIME_MED)}`
+    ? `Signed on your behalf by ${form.provisionalSignature.signedByName}${
+        provisionalSignedAt?.isValid
+          ? ` on ${provisionalSignedAt.toLocaleString(DateTime.DATETIME_MED)}`
+          : ""
+      }`
     : undefined;
 
   const allRequiredCheckboxesChecked = form.checkboxes.every((checkbox, index) => {

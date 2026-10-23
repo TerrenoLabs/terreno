@@ -57,6 +57,19 @@ describe("ConsentFormScreen", () => {
       );
     });
 
+    it("leaves the date off when the signing date cannot be parsed", () => {
+      const {getByTestId} = renderWithTheme(
+        <ConsentFormScreen
+          form={{...baseForm, provisionalSignature: {signedAt: "bad", signedByName: "Dana Rivera"}}}
+          locale="en"
+          onAgree={() => {}}
+        />
+      );
+      expect(getByTestId("consent-form-provisional-notice-text").props.children).toBe(
+        "Signed on your behalf by Dana Rivera"
+      );
+    });
+
     it("shows no notice when the form has no provisional signature", () => {
       const {queryByTestId} = renderWithTheme(
         <ConsentFormScreen form={baseForm} locale="en" onAgree={() => {}} />

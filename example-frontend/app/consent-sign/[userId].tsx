@@ -1,4 +1,4 @@
-import {Page, ProvisionalConsentSigner} from "@terreno/ui";
+import {Page, ProvisionalConsentSigner, Text} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import type React from "react";
 import {terrenoApi} from "@/store/sdk";
@@ -8,10 +8,17 @@ import {terrenoApi} from "@/store/sdk";
  * the consentResponse:signOnBehalf role, who are not admins, can reach it.
  */
 const ConsentSignScreen: React.FC = () => {
-  const {userId} = useLocalSearchParams<{userId: string}>();
+  const {userId} = useLocalSearchParams<{userId: string | string[]}>();
+  const targetUserId = typeof userId === "string" ? userId : undefined;
   return (
     <Page backButton maxWidth={800} scroll title="Sign consent on behalf">
-      <ProvisionalConsentSigner api={terrenoApi} userId={userId} />
+      {targetUserId ? (
+        <ProvisionalConsentSigner api={terrenoApi} userId={targetUserId} />
+      ) : (
+        <Text color="error" testID="consent-sign-missing-user">
+          No user selected.
+        </Text>
+      )}
     </Page>
   );
 };

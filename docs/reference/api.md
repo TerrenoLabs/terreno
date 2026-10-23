@@ -540,7 +540,9 @@ Request logs redact credential values at any depth in request bodies and in URL 
 any key whose name contains `password`, `passwd`, `passphrase`, `passcode`, `token`, `secret`,
 `verifier`, `signature`, `apikey`, `authorization`, `credential`, or `privatekey` (case and `_`/`-`
 ignored, so `currentPassword`, `refresh_token`, `client_secret`, and `idToken.token` all match), or
-that has `code`, `otp`, or `pin` as a word (`code`, `zipCode`, `otp_code`). Changing the mailbox through `PATCH /auth/me`
+that has `code`, `otp`, `pin`, `note`, or `reason` as a word (`code`, `zipCode`, `otp_code`,
+`provisionalNote`). `note` and `reason` are free text that can hold PHI, such as a provisional
+consent signer's note. Changing the mailbox through `PATCH /auth/me`
 invalidates unused `passwordReset` AuthTokens for that user even when the schema has no
 `emailVerified` field. When the schema uses `emailVerificationPlugin`, mailbox change also
 sets `emailVerified` to false and invalidates unused `emailVerification` tokens; changing letter
@@ -1521,7 +1523,8 @@ background job can be followed across many log lines, both in plain-text console
 transports (Google Cloud Logging, Sentry).
 
 > Never use `console.log` for permanent server logs — use `logger` or a scoped logger. Request
-> logging already redacts password, token, secret, and code fields in bodies and query strings;
+> logging already redacts password, token, secret, code, note, and reason fields in bodies and
+> query strings;
 > never log secrets, full auth tokens, or raw passwords.
 
 ### Quick reference

@@ -339,6 +339,9 @@ export const serializeDoc = async (
   return ensureApiId(maskedFallback);
 };
 
+/** Returned by a `buildPayload` callback to send nothing to that socket. */
+const SKIP_EMISSION = Symbol("skipEmission");
+
 /**
  * Generalized authorized-room emitter: iterates the sockets in `room`, runs the per-socket
  * read-permission check against `fullDocument`, builds the payload per socket (so
@@ -361,7 +364,10 @@ export const emitPayloadToAuthorizedRoom = async ({
   eventName: string;
   entry: AuthorizedEmitEntry;
   fullDocument: Record<string, unknown> | undefined;
-  /** Build the per-socket payload; a throw drops the emission for that socket only. */
+  /**
+   * Build the per-socket payload; a throw drops the emission for that socket only, and
+   * returning SKIP_EMISSION sends nothing to it.
+   */
   buildPayload: (user: User | undefined) => Promise<unknown> | unknown;
   logDebug: (msg: string) => void;
 }): Promise<void> => {
@@ -384,7 +390,10 @@ export const emitPayloadToAuthorizedRoom = async ({
           continue;
         }
         if (adminDecision === "allow") {
-          socket.emit(eventName, await buildPayload(user));
+          const adminPayload = await buildPayload(user);
+          if (adminPayload !== SKIP_EMISSION) {
+            socket.emit(eventName, adminPayload);
+          }
           continue;
         }
       }
@@ -394,7 +403,11 @@ export const emitPayloadToAuthorizedRoom = async ({
         continue;
       }
 
-      socket.emit(eventName, await buildPayload(user));
+      const payload = await buildPayload(user);
+      if (payload === SKIP_EMISSION) {
+        continue;
+      }
+      socket.emit(eventName, payload);
     } catch (error) {
       logger.error(
         `[realtime] Failed to emit ${eventName} for ${entry.modelName} to socket ${socket.id}: ${error}`
@@ -427,6 +440,56 @@ export const emitToAuthorizedRoom = async (
     io,
     logDebug,
     room,
+  });
+
+/**
+ * Query-room fan-out for routers with RBAC field views. Each recipient's match is evaluated
+ * against the document as masked for that recipient, so a field hidden from them cannot
+ * decide whether they receive a create, update, or delete.
+ */
+const emitMaskedQueryRoomEvent = async ({
+  io,
+  queryRoom,
+  event,
+  entry,
+  fullDocument,
+  query,
+  logDebug,
+}: {
+  io: Server;
+  queryRoom: string;
+  event: RealtimeEvent;
+  entry: RealtimeRegistryEntry;
+  fullDocument: Record<string, unknown>;
+  query: Record<string, unknown>;
+  logDebug: (msg: string) => void;
+}): Promise<void> =>
+  emitPayloadToAuthorizedRoom({
+    buildPayload: async (user) => {
+      const masked = await maskRealtimeDocument(entry, user, fullDocument, "read");
+      const matches =
+        typeof masked === "object" &&
+        masked !== null &&
+        !Array.isArray(masked) &&
+        matchesQuery(masked as Record<string, unknown>, query);
+      let method: RealtimeEvent["method"] | undefined;
+      if (event.method === "update") {
+        method = matches ? "update" : "delete";
+      } else if (matches) {
+        method = event.method;
+      }
+      if (!method) {
+        return SKIP_EMISSION;
+      }
+      const data = await serializeDoc(entry, fullDocument, method, user);
+      return {...event, data, method};
+    },
+    entry,
+    eventName: "sync",
+    fullDocument,
+    io,
+    logDebug,
+    room: queryRoom,
   });
 
 /**
@@ -464,6 +527,7 @@ export const emitToDocumentAndQueryRooms = async (
   logDebug(`[realtime] Emitted ${event.method} to ${docRoom}`);
 
   const isOwnerStrategy = entry?.config.roomStrategy === "owner";
+  const hasFieldViews = Boolean(entry?.options.access && entry?.options.accessControl);
 
   // Evaluate query subscriptions
   const querySubscriptions = getQuerySubscriptionsForCollection(collection);
@@ -490,6 +554,19 @@ export const emitToDocumentAndQueryRooms = async (
         continue;
       }
 
+      if (entry && hasFieldViews) {
+        await emitMaskedQueryRoomEvent({
+          entry,
+          event,
+          fullDocument,
+          io,
+          logDebug,
+          query,
+          queryRoom,
+        });
+        continue;
+      }
+
       // Soft delete: only forward to query rooms whose filter the document satisfies.
       if (matchesQuery(fullDocument, query)) {
         if (entry) {
@@ -503,6 +580,11 @@ export const emitToDocumentAndQueryRooms = async (
     }
 
     if (!fullDocument) {
+      continue;
+    }
+
+    if (entry && hasFieldViews) {
+      await emitMaskedQueryRoomEvent({entry, event, fullDocument, io, logDebug, query, queryRoom});
       continue;
     }
 

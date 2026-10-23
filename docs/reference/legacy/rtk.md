@@ -233,6 +233,12 @@ Offline-slice exports the middleware uses for the user tag (exported from the pa
 
 > **Deprecated (removed in Terreno 58):** `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, and `getRealtimeSocket` patch RTK Query caches from `sync` events. Use [`@terreno/syncdb`](../syncdb.md). `useSocketConnection` remains for feature flags and other sockets.
 
+A `realtimeList` query subscription (`subscribe:query`) may filter only on fields in the router's
+`queryFields`, the same as the REST list; the server ignores a subscription that names any other
+field. On RBAC routers with field views, each subscriber's create, update, or delete event is
+decided against the document as their field view masks it, so a hidden field never changes which
+event they receive.
+
 ### useSocketConnection
 
 React hook for managing Socket.io connections with automatic reconnection, token refresh, and user feedback.

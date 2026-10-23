@@ -756,6 +756,7 @@ describe("installRealtimeSocketHandlers", () => {
           read: [() => true],
           update: [() => true],
         },
+        queryFields: ["completed", "priority"],
       },
       routePath: "/todos",
     });
@@ -774,6 +775,7 @@ describe("installRealtimeSocketHandlers", () => {
           read: [() => true],
           update: [() => true],
         },
+        queryFields: ["priority"],
       },
       routePath: "/broadcasts",
     });
@@ -792,6 +794,7 @@ describe("installRealtimeSocketHandlers", () => {
           read: [(_method: string, user?: {admin?: boolean}) => user?.admin === true],
           update: [(_method: string, user?: {admin?: boolean}) => user?.admin === true],
         },
+        queryFields: ["classification"],
       },
       routePath: "/secrets",
     });
@@ -1065,6 +1068,7 @@ describe("installRealtimeSocketHandlers", () => {
             read: [() => true],
             update: [() => true],
           },
+          queryFields: ["status"],
           queryFilter: () => ({tenantId: "tenant-1"}),
         },
         routePath: "/filtered",
@@ -1093,6 +1097,7 @@ describe("installRealtimeSocketHandlers", () => {
             read: [() => true],
             update: [() => true],
           },
+          queryFields: ["status"],
           queryFilter: () => {
             throw new Error("tenant lookup failed");
           },
@@ -1109,6 +1114,38 @@ describe("installRealtimeSocketHandlers", () => {
       expect(queryRooms).toHaveLength(0);
       expect(getQuerySubscriptionsForCollection("filtered")).toHaveLength(0);
       expect(socket.emitted.some((e) => e.event === "query:subscribed")).toBe(false);
+    });
+
+    it("denies query keys outside the modelRouter queryFields allowlist", async () => {
+      registerRealtime({
+        collectionName: "charts",
+        config: {methods: ["create", "update", "delete"], roomStrategy: "model"},
+        modelName: "Chart",
+        options: {...permissiveOptions, queryFields: ["status"]},
+        routePath: "/charts",
+      });
+      const socket = createMockSocket({id: "user1"});
+      installRealtimeSocketHandlers(socket);
+      await socket.trigger("subscribe:query", {
+        collection: "charts",
+        query: {diagnosis: {$in: ["F32.1"]}},
+      });
+      await socket.trigger("subscribe:query", {
+        collection: "charts",
+        query: {$or: [{status: "open"}, {diagnosis: "F41.1"}]},
+      });
+      await socket.trigger("subscribe:query", {
+        collection: "charts",
+        query: {"diagnosis.code": "F41", status: "open"},
+      });
+      expect(getQuerySubscriptionsForCollection("charts")).toHaveLength(0);
+      expect(socket.emitted.some((e) => e.event === "query:subscribed")).toBe(false);
+
+      await socket.trigger("subscribe:query", {
+        collection: "charts",
+        query: {$or: [{status: "open"}, {status: {$in: ["closed"]}}]},
+      });
+      expect(getQuerySubscriptionsForCollection("charts")).toHaveLength(1);
     });
 
     it("ignores malformed query payloads", async () => {
@@ -1978,6 +2015,54 @@ describe("emitToDocumentAndQueryRooms", () => {
       const queryEmissions = emissions.filter((e) => e.room === `query:${queryId}`);
       expect(queryEmissions).toHaveLength(1);
       expect(queryEmissions[0].payload).toMatchObject({method: "delete"});
+    });
+
+    it("matches query rooms against the recipient's RBAC-masked document", async () => {
+      const fieldMaskRequests: unknown[] = [];
+      const rbacEntry: RealtimeRegistryEntry = {
+        ...modelEntry,
+        options: {
+          ...modelEntry.options,
+          access: {resource: "chart"},
+          accessControl: {
+            can: async () => ({allowed: true}),
+            fieldMask: async (args: unknown) => {
+              fieldMaskRequests.push(args);
+              return {omit: ["diagnosis"], read: "*", write: "*"};
+            },
+            statements: {chart: ["read", "list"]},
+          } as unknown as NonNullable<RealtimeRegistryEntry["options"]["accessControl"]>,
+        },
+      };
+      const matchingId = computeQueryId("todos", {diagnosis: "F32.1"});
+      const otherId = computeQueryId("todos", {diagnosis: "F41.1"});
+      addQuerySubscription("socket-a", "todos", {diagnosis: "F32.1"}, matchingId);
+      addQuerySubscription("socket-b", "todos", {diagnosis: "F41.1"}, otherId);
+      const {addSocketToRoom, emissions, io} = makeIo();
+      addSocketToRoom(`query:${matchingId}`, {id: "scheduler"});
+      addSocketToRoom(`query:${otherId}`, {id: "scheduler"});
+
+      await emitToDocumentAndQueryRooms(
+        io,
+        "todos",
+        makeEvent("update"),
+        {_id: "doc-1", diagnosis: "F32.1", status: "open"},
+        () => {},
+        rbacEntry
+      );
+
+      const methodFor = (queryId: string): unknown =>
+        (emissions.find((e) => e.room === `query:${queryId}`)?.payload as {method?: string})
+          ?.method;
+      // The hidden value must not decide which event each room receives.
+      expect(methodFor(matchingId)).toBe(methodFor(otherId));
+      expect(methodFor(matchingId)).toBe("delete");
+      for (const emission of emissions) {
+        expect((emission.payload as {data?: Record<string, unknown>}).data).not.toHaveProperty(
+          "diagnosis"
+        );
+      }
+      expect(fieldMaskRequests.length).toBeGreaterThan(0);
     });
 
     it("skips query rooms whose subscribers cannot read the document", async () => {

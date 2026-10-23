@@ -74,6 +74,44 @@ export interface RealtimeSocketLike extends SocketWithDecodedToken {
   on: (event: string, handler: (...args: never[]) => void | Promise<void>) => void;
 }
 
+const LOGICAL_QUERY_KEYS = new Set(["$and", "$or"]);
+
+const isPlainQueryObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Returns the first field a client query names outside `queryFields`, walking `$and` / `$or`
+ * clauses, or undefined when every field is allowed. A query room's event method reveals
+ * whether a document matches, so subscriptions may only filter on the fields REST list
+ * accepts.
+ */
+const findDisallowedQueryField = (
+  query: Record<string, unknown>,
+  queryFields: string[]
+): string | undefined => {
+  for (const [key, condition] of Object.entries(query)) {
+    if (LOGICAL_QUERY_KEYS.has(key)) {
+      if (!Array.isArray(condition)) {
+        return key;
+      }
+      for (const clause of condition) {
+        if (!isPlainQueryObject(clause)) {
+          return key;
+        }
+        const nested = findDisallowedQueryField(clause, queryFields);
+        if (nested) {
+          return nested;
+        }
+      }
+      continue;
+    }
+    if (!queryFields.includes(key)) {
+      return key;
+    }
+  }
+  return undefined;
+};
+
 const canSubscribe = async (
   entry: RealtimeRegistryEntry,
   method: "list" | "read",
@@ -272,6 +310,18 @@ export const installRealtimeSocketHandlers = (
       logInfo(
         `[realtime] User ${userId} denied query subscription: ` +
           `collection "${payload.collection}" not registered`
+      );
+      return;
+    }
+
+    const disallowedField = findDisallowedQueryField(
+      payload.query,
+      entry.options.queryFields ?? []
+    );
+    if (disallowedField) {
+      logInfo(
+        `[realtime] User ${userId} denied query subscription for ${payload.collection}: ` +
+          `${disallowedField} is not in queryFields`
       );
       return;
     }

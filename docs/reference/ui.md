@@ -1072,7 +1072,7 @@ const [error, setError] = useState<string | undefined>(undefined);
 
 | Prop | Type | Behavior |
 | --- | --- | --- |
-| `fields` | `LoginFieldConfig[]` | Form fields; `onSubmit` receives their values keyed by `name`. |
+| `fields` | `LoginFieldConfig[]` | Form fields; `onSubmit` receives their values keyed by `name`. An empty array leaves out the whole form block: fields, the Log In button, the forgot-password link, and the "Or log in with email" dividers, for apps without email and password sign-in. |
 | `oauthProviders` | `OAuthProviderConfig[]` | Branded Google, GitHub, and Apple buttons (`SocialLoginButton`). |
 | `genericProviders` | `GenericOAuthProviderConfig[]` | Providers without a brand, such as a generic OIDC provider: `{id, label, onPress, loading?, disabled?, iconName?}`. Each renders an outline button "Continue with {label}" after the branded ones. |
 | `lastUsedMethod` | `string` | The method this device signed in with last. It gets a "Last used" badge. A provider moves above the form and to the front of the provider list; `"passkey"` moves the passkey button above the form; `"email"` badges the form in place. A method the screen does not offer is ignored. |
@@ -1083,6 +1083,7 @@ const [error, setError] = useState<string | undefined>(undefined);
 | `onPasskeyPress` | `() => void \| Promise<void>` | Shows a "Sign in with a passkey" button (text via `passkeyButtonText`). |
 | `passkeyAutofill` | `boolean` | On web, sets the email field's `autocomplete` to `username webauthn` so browsers offer saved passkeys (conditional mediation). Ignored on native. |
 | `notice` | `LoginNotice` | `{tone: "info" \| "warning", text, actionLabel?, onAction?}`, shown above the form; a warning is `role="alert"` (announced at once), info is `role="status"`. |
+| `initialValues` | `Record<string, string>` | Values the form starts with, keyed by field `name`. Passing a new object later replaces those fields and keeps what the user typed in the others, so a "Continue" card can prefill the email. |
 
 Accessibility: the button a "Last used" badge marks gets the badge in its accessible name
 ("Continue with GitHub, last used"; for email, the Log In button). A `warning` notice has
@@ -1107,7 +1108,7 @@ optional because apps remember only the method by default; a card without them r
 
 `OAuthButtons`, which `LoginScreen` and `SignUpScreen` use, takes the same `genericProviders`, a
 `lastUsed={{provider, label?, testID?}}` badge, and `dividerPosition` (`"above"` by default,
-`"below"` when the buttons sit above a form).
+`"below"` when the buttons sit above a form, `"none"` for no divider).
 
 ### OtpField
 

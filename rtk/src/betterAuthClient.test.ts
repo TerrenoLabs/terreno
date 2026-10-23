@@ -95,6 +95,7 @@ const {
   createBetterAuthClient,
   createStorageAdapter,
   getBetterAuthBearerToken,
+  getBetterAuthClientWebAuth,
   linkSocialWithHandoff,
   repairCookieJar,
   signInSocialWithHandoff,
@@ -371,6 +372,37 @@ describe("createBetterAuthClient with webAuth bearer on web", () => {
     } else {
       delete globalWithWindow.window;
     }
+  });
+
+  it("reports a client's web auth mode and its stored bearer token", () => {
+    const bearerStorage = createMemoryStorage();
+    const bearerClient = createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      storagePrefix: "app",
+      webAuth: "bearer",
+    });
+    expect(getBetterAuthClientWebAuth(bearerClient)).toEqual({
+      bearerToken: null,
+      webAuth: "bearer",
+    });
+    bearerStorage.setItem("app_bearer_token", "t9");
+    expect(getBetterAuthClientWebAuth(bearerClient)).toEqual({
+      bearerToken: "t9",
+      webAuth: "bearer",
+    });
+
+    const cookieClient = createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      scheme: "terreno",
+    });
+    expect(getBetterAuthClientWebAuth(cookieClient)).toEqual({
+      bearerToken: null,
+      webAuth: "cookie",
+    });
+    // A client createBetterAuthClient did not make is treated as cookie mode.
+    expect(getBetterAuthClientWebAuth({})).toEqual({bearerToken: null, webAuth: "cookie"});
   });
 
   it("stores set-auth-token in localStorage, sends it as the bearer, and omits cookies", async () => {

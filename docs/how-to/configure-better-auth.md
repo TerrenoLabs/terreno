@@ -536,6 +536,130 @@ so identity is opt-in:
   `rememberedAccounts.clear()` to remove every account, for example from a "Not your device?"
   link.
 
+### 5. Drop-in login screen
+
+`TerrenoLoginScreen` is a complete login screen. It renders `@terreno/ui`'s `LoginScreen` from
+the server's [`/terreno/methods`](../reference/api.md#better-auth-authentication), so it shows
+only the sign-in methods the server enables, and it records each sign-in in the
+[remembered accounts](#4-remember-accounts-on-this-device) store.
+
+``````typescript
+import {createRememberedAccountsStore, TerrenoLoginScreen} from "@terreno/rtk";
+import {useLocalSearchParams, useRouter} from "expo-router";
+
+export const rememberedAccounts = createRememberedAccountsStore({rememberIdentity: false});
+
+const Login = (): React.ReactElement => {
+  const router = useRouter();
+  const {error} = useLocalSearchParams<{error?: string}>();
+  return (
+    <TerrenoLoginScreen
+      callbackURL="/login" // where a social sign-in returns
+      client={authClient} // createBetterAuthClient({features: {multiSession, passkey, twoFactor}})
+      error={error} // the ?error= an OAuth return brings back
+      onForgotPasswordPress={() => router.push("/forgotPassword")}
+      onSignUpPress={() => router.push("/signup")}
+      onSignedIn={async () => {
+        await betterAuth.syncSession(store.dispatch);
+        router.replace("/");
+      }}
+      providerLabels={{"mock-oidc": "Mock OIDC"}}
+      rememberedAccounts={rememberedAccounts}
+      trustDeviceDays={30}
+    />
+  );
+};
+``````
+
+What it does:
+
+- **Live session.** On mount it checks for a session. A valid one calls `onSignedIn` and the
+  form never shows. In bearer mode it first finishes any OAuth handoff the URL carries
+  (`completeBetterAuthOAuthHandoff`, safe to call twice), then reads the token; with no stored
+  token it asks the server nothing. Pass `skipWhenSignedIn={false}` on an "add another account"
+  route. If `onSignedIn` throws, the screen comes back with "Sign in failed. Please try again."
+- **"Continue as" cards.** Sessions signed in on this device (`multiSession`) come first and
+  switch with one tap (`multiSession.setActive`). Remembered accounts follow, minus any user
+  who already has a session card, and sign in again with their method: a provider, a passkey,
+  or email. The store masks emails, so an email card asks for the email and password instead
+  of filling them in.
+- **Last used method.** Read from the remembered-accounts store, not from Better Auth's
+  `lastLoginMethod` cookie, which a page on another site cannot read.
+- **Passkeys.** With the server's `passkey` on and the client's `passkey` feature, the screen
+  shows a passkey button on web only: React Native has no WebAuthn, so native shows none, and a
+  remembered passkey card there says the method is not available. On web it also offers saved
+  passkeys in the email field's autofill (`passkeyAutofill`, default `true`) when the browser
+  supports it. Autofill starts again whenever the screen returns to the login step.
+- **Social sign-in.** Bearer mode uses [the OAuth handoff](#social-sign-in-in-bearer-mode)
+  (`signInSocialWithHandoff`); cookie mode and native use `signIn.social`. Pass `callbackURL`
+  set to the login route: the page returns there, the controller finds the new session, and it
+  records the provider. In bearer mode that path must be one of the server's
+  `oauthHandoff.callbackPaths`. Providers Google, GitHub and Apple get branded buttons; any
+  other provider id (a generic OIDC provider) gets a plain button labelled from
+  `providerLabels`.
+- **Sign-up.** The sign-up link hides when the server's sign-up is closed (`signUp: false`).
+- **No email and password.** When the server has `emailPassword` off, the form, the Log In
+  button, and the forgot-password link are left out (`LoginScreen` with `fields={[]}`), and a
+  remembered email card says the method is not available.
+
+`multiSession` does not work in bearer mode: the server tracks device sessions in cookies that a
+bearer client never sends. Remembered accounts are the only cards there.
+
+On native, a refused social sign-in shows nothing: Better Auth's Expo plugin takes the
+`?error=` from the deep link it returns on, so the controller sees only "no session". If your
+app reads that error itself, pass it as `error`.
+
+#### Two-factor step
+
+When a password sign-in needs a second factor, the screen shows `TwoFactorChallengeScreen`
+inline and finishes the sign-in itself. To use your own route instead, pass
+`onTwoFactorRequired`:
+
+``````typescript
+<TerrenoLoginScreen
+  onTwoFactorRequired={({twoFactorMethods}) => router.push("/twoFactor")}
+  // ...
+/>
+``````
+
+Your screen then calls `authClient.twoFactor.verifyTotp` or `verifyBackupCode`, and after it
+succeeds calls `recordRememberedSignIn({store: rememberedAccounts, user, method: "email"})` so the
+device still remembers the account. Don't also set the client's
+`features.twoFactor.onTwoFactorRedirect`, or both run.
+
+#### Messages
+
+Server refusals become guidance above the form. Text from the URL is never shown: an unknown
+`?error=` gets "Sign in failed. Please try again."
+
+| Server says | The screen shows |
+| --- | --- |
+| `account_not_linked` (redirect) or "account not linked" (ID token), linking mode `verified-email` | "An account with this email already exists. Verify your email address, then sign in again to link this sign-in method." |
+| The same, mode `explicit` | "... Sign in with {last used method}, then link this sign-in method from Security." |
+| The same, mode `never` | "This email already has an account. Sign in with {last used method} instead." |
+| `VERIFY_EMAIL_TO_USE_ACCOUNT` (409 or redirect) | "Verify your email to use this account. ..." |
+| `signup_disabled` (redirect), "signup disabled" (ID token), or `EMAIL_PASSWORD_SIGN_UP_DISABLED` | "Sign-up is closed for this app. Ask your administrator for access." The sign-up link hides |
+| `provider_not_found` | "That sign-in provider is not available." |
+| Any other refused request | The server's message, such as "Invalid email or password" |
+
+See [Account linking](../explanation/account-linking.md) for why each refusal happens.
+
+#### Your own screen
+
+`useLoginController` takes the same options and returns `screenProps` for `LoginScreen`, the
+inline challenge state (`twoFactor`), the current `step`, and the handlers (`signInEmail`,
+`signInSocial`, `signInPasskey`, `continueAs`, `forget`):
+
+``````typescript
+const login = useLoginController({client: authClient, onSignedIn, rememberedAccounts});
+if (login.step === "login") {
+  return <LoginScreen fields={fields} logo={<Logo />} {...login.screenProps} />;
+}
+``````
+
+Social providers need their OAuth apps and callback URLs set up first; see
+[Set up social login](set-up-social-login.md).
+
 ## Frontend and API on different sites
 
 By default the web client relies on Better Auth's HttpOnly session cookie. When the web app

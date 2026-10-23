@@ -21,6 +21,7 @@ import type {
   BetterAuthBearerStorage,
   BetterAuthClientConfig,
   BetterAuthClientFeatures,
+  BetterAuthWebAuth,
 } from "./betterAuthTypes";
 import {IsWeb} from "./platform";
 
@@ -215,6 +216,32 @@ export const getBetterAuthBearerToken = ({
   storagePrefix?: string;
 } = {}): string | null => {
   return resolveBearerStorage(bearerStorage).getItem(bearerTokenKey(storagePrefix));
+};
+
+/**
+ * How a client `createBetterAuthClient` made authenticates on web, and, in bearer mode, the token
+ * it holds. Returns `{webAuth: "cookie", bearerToken: null}` on native (the Expo plugin keeps the
+ * session there), in cookie mode, and for a client this factory did not make. Makes no request.
+ *
+ * @example
+ * ```typescript
+ * const {webAuth, bearerToken} = getBetterAuthClientWebAuth(authClient);
+ * ```
+ */
+export const getBetterAuthClientWebAuth = (
+  client: object
+): {webAuth: BetterAuthWebAuth; bearerToken: string | null} => {
+  const config = handoffClients.get(client);
+  if (!config?.isWebBearer) {
+    return {bearerToken: null, webAuth: "cookie"};
+  }
+  return {
+    bearerToken: getBetterAuthBearerToken({
+      bearerStorage: config.bearerStorage,
+      storagePrefix: config.storagePrefix,
+    }),
+    webAuth: "bearer",
+  };
 };
 
 const isAuthEndpoint = (url: string | URL, endpoint: string): boolean => {

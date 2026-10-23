@@ -116,6 +116,70 @@ describe("LoginScreen", () => {
     expect(emailInput.props.value).toBe("test@example.com");
   });
 
+  it("starts the form from initialValues and applies later changes to it", async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const {getByTestId, rerender} = renderWithTheme(
+      <LoginScreen
+        fields={defaultFields}
+        initialValues={{email: "first@example.com"}}
+        onSubmit={onSubmit}
+      />
+    );
+    expect(getByTestId("login-screen-email-input").props.value).toBe("first@example.com");
+    expect(getByTestId("login-screen-password-input").props.value).toBe("");
+
+    await act(async () => {
+      fireEvent.changeText(getByTestId("login-screen-password-input"), "secret123");
+    });
+    rerender(
+      <LoginScreen
+        fields={defaultFields}
+        initialValues={{email: "second@example.com"}}
+        onSubmit={onSubmit}
+      />
+    );
+    expect(getByTestId("login-screen-email-input").props.value).toBe("second@example.com");
+    // Fields the new values leave out keep what the user typed.
+    expect(getByTestId("login-screen-password-input").props.value).toBe("secret123");
+  });
+
+  it("leaves out the whole form block when there are no fields", () => {
+    const {getByTestId, queryByTestId, queryByText} = renderWithTheme(
+      <LoginScreen
+        error="Sign in failed."
+        fields={[]}
+        lastUsedMethod="github"
+        oauthProviders={[{onPress: () => Promise.resolve(), provider: "github"}]}
+        onForgotPassword={() => {}}
+        onPasskeyPress={() => {}}
+        onSignUpPress={() => {}}
+        onSubmit={mock(() => Promise.resolve())}
+      />
+    );
+    expect(queryByTestId("login-screen-submit-button")).toBeNull();
+    expect(queryByTestId("login-screen-forgot-password")).toBeNull();
+    expect(queryByText("Or log in with email")).toBeNull();
+    expect(queryByText("Or continue with")).toBeNull();
+    expect(getByTestId("login-screen-oauth-github")).toBeTruthy();
+    expect(getByTestId("login-screen-last-used-github")).toBeTruthy();
+    expect(getByTestId("login-screen-passkey-button")).toBeTruthy();
+    expect(getByTestId("login-screen-signup-link")).toBeTruthy();
+    expect(getByTestId("login-screen-error")).toBeTruthy();
+  });
+
+  it("drops the passkey divider when a passkey was last used and there is no form", () => {
+    const {getByTestId, queryByText} = renderWithTheme(
+      <LoginScreen
+        fields={[]}
+        lastUsedMethod="passkey"
+        onPasskeyPress={() => {}}
+        onSubmit={mock(() => Promise.resolve())}
+      />
+    );
+    expect(getByTestId("login-screen-last-used-passkey")).toBeTruthy();
+    expect(queryByText("Or log in with email")).toBeNull();
+  });
+
   it("renders with custom testID", () => {
     const {getByTestId} = renderWithTheme(
       <LoginScreen

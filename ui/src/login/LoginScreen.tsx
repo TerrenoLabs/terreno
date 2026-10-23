@@ -1,5 +1,5 @@
 import type {FC, ReactElement} from "react";
-import {useCallback, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import {Platform, View} from "react-native";
 
 import {Box} from "../Box";
@@ -142,15 +142,26 @@ export const LoginScreen: FC<LoginScreenProps> = ({
   passkeyButtonText = "Sign in with a passkey",
   passkeyAutofill = false,
   notice,
+  initialValues,
   testID = "login-screen",
 }) => {
   const [formValues, setFormValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const field of fields) {
-      initial[field.name] = "";
+      initial[field.name] = initialValues?.[field.name] ?? "";
     }
     return initial;
   });
+
+  // Applies a new initialValues object over the form; the first render already used it.
+  const appliedInitialValues = useRef(initialValues);
+  useEffect(() => {
+    if (!initialValues || appliedInitialValues.current === initialValues) {
+      return;
+    }
+    appliedInitialValues.current = initialValues;
+    setFormValues((prev) => ({...prev, ...initialValues}));
+  }, [initialValues]);
 
   const onForgotPasswordAction = onForgotPasswordPress ?? onForgotPassword;
 
@@ -208,10 +219,11 @@ export const LoginScreen: FC<LoginScreenProps> = ({
     });
   }
 
-  const renderProviders = (placement: "above" | "below"): ReactElement => (
+  // "alone" is a screen without a form, where nothing needs dividing from the providers.
+  const renderProviders = (placement: "above" | "below" | "alone"): ReactElement => (
     <OAuthButtons
       disabled={loading}
-      dividerPosition={placement === "above" ? "below" : "above"}
+      dividerPosition={placement === "above" ? "below" : placement === "below" ? "above" : "none"}
       dividerText={placement === "above" ? "Or log in with email" : undefined}
       genericProviders={otherProviders}
       lastUsed={
@@ -254,6 +266,8 @@ export const LoginScreen: FC<LoginScreenProps> = ({
   // already draws one.
   const isPasskeyBelow = Boolean(onPasskeyPress) && !isPasskeyLastUsed;
   const areProvidersBelow = hasProviders && !isProviderLastUsed;
+  // Without fields (the server has email and password off) the whole form block is left out.
+  const hasForm = fields.length > 0;
 
   return (
     <Page navigation={undefined}>
@@ -286,13 +300,17 @@ export const LoginScreen: FC<LoginScreenProps> = ({
           {isPasskeyLastUsed && (
             <Box width="100%">
               {renderPasskeyButton()}
-              <MethodDivider text="Or log in with email" />
+              {hasForm && <MethodDivider text="Or log in with email" />}
             </Box>
           )}
 
-          {isProviderLastUsed && renderProviders("above")}
+          {hasForm && isProviderLastUsed && renderProviders("above")}
 
-          {isEmailLastUsed && (
+          {!hasForm && hasProviders && renderProviders("alone")}
+
+          {!hasForm && isPasskeyBelow && renderPasskeyButton()}
+
+          {hasForm && isEmailLastUsed && (
             <LastUsedBadge label={lastUsedLabel} testID={`${testID}-last-used-email`} />
           )}
 
@@ -319,21 +337,23 @@ export const LoginScreen: FC<LoginScreenProps> = ({
             </Text>
           )}
 
-          <Box marginTop={4}>
-            <Button
-              accessibilityLabel={
-                isEmailLastUsed ? withLastUsedLabel({label: "Log In", lastUsedLabel}) : undefined
-              }
-              disabled={isSubmitDisabled}
-              fullWidth
-              loading={loading}
-              onClick={handleSubmit}
-              testID={`${testID}-submit-button`}
-              text="Log In"
-            />
-          </Box>
+          {hasForm && (
+            <Box marginTop={4}>
+              <Button
+                accessibilityLabel={
+                  isEmailLastUsed ? withLastUsedLabel({label: "Log In", lastUsedLabel}) : undefined
+                }
+                disabled={isSubmitDisabled}
+                fullWidth
+                loading={loading}
+                onClick={handleSubmit}
+                testID={`${testID}-submit-button`}
+                text="Log In"
+              />
+            </Box>
+          )}
 
-          {Boolean(onForgotPasswordAction) && (
+          {hasForm && Boolean(onForgotPasswordAction) && (
             <Box alignItems="center" marginTop={2}>
               <Button
                 disabled={loading}
@@ -358,11 +378,13 @@ export const LoginScreen: FC<LoginScreenProps> = ({
             </Box>
           )}
 
-          {areProvidersBelow && renderProviders("below")}
+          {hasForm && areProvidersBelow && renderProviders("below")}
 
-          {isPasskeyBelow && !areProvidersBelow && <MethodDivider text="Or continue with" />}
+          {hasForm && isPasskeyBelow && !areProvidersBelow && (
+            <MethodDivider text="Or continue with" />
+          )}
 
-          {isPasskeyBelow && renderPasskeyButton()}
+          {hasForm && isPasskeyBelow && renderPasskeyButton()}
         </Box>
       </Box>
     </Page>

@@ -130,6 +130,12 @@ export interface LoginScreenProps {
    * saved passkeys in the field's autofill (conditional mediation). Ignored on native.
    */
   passkeyAutofill?: boolean;
+  /**
+   * Values the form starts with, keyed by field name, such as `{email: "jane@example.com"}`.
+   * When a new object is passed later, its fields replace what is in the form and the other
+   * fields keep what the user typed, so a "Continue" card can prefill the email.
+   */
+  initialValues?: Record<string, string>;
   /** A message shown above the form (testID `${testID}-notice`). */
   notice?: LoginNotice;
   /** Test ID for the root element. */

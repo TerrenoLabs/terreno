@@ -31,8 +31,8 @@ interface OAuthButtonsProps {
   disabled?: boolean;
   /** Divider text displayed next to the OAuth buttons. */
   dividerText?: string;
-  /** Where the divider sits: above the buttons (default) or below them. */
-  dividerPosition?: "above" | "below";
+  /** Where the divider sits: above the buttons (default), below them, or `"none"` for no divider. */
+  dividerPosition?: "above" | "below" | "none";
   /** Test ID prefix for the component. */
   testID?: string;
 }

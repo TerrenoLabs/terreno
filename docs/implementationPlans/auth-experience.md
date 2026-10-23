@@ -676,7 +676,7 @@ Open risks:
     - Ordering is by `lastUsedAt`.
   - Skills: terreno-data-fetching, security-audit
 
-- [ ] **T20** — Connected TerrenoLoginScreen and login controller
+- [x] **T20** — Connected TerrenoLoginScreen and login controller
   - Depends on: T3, T11, T17, T19, T27
   - Files: rtk/src/auth/useLoginController.ts, rtk/src/auth/useLoginController.test.ts, rtk/src/auth/TerrenoLoginScreen.tsx, rtk/src/index.ts, docs/how-to/configure-better-auth.md, changelog/unreleased/terreno-login-screen.md
   - Build: the controller combines:

@@ -472,7 +472,40 @@ setupServer({
 - `GET /auth/me` — Get current user profile
 - `PATCH /auth/me` — Update current user profile. It does not change passwords: a body with
   `password` or `newPassword` gets 400 and nothing is saved. Change a password through
-  `POST /auth/forgotPassword` and `POST /auth/resetPassword`, or Better Auth change-password
+  `POST /auth/forgotPassword` and `POST /auth/resetPassword`, or Better Auth change-password.
+  Changing the email needs the current password; see [Changing the email on PATCH /auth/me](#changing-the-email-on-patch-authme)
+
+#### Changing the email on PATCH /auth/me
+
+A body whose `email` differs from the stored email (compared after trimming and lowercasing)
+must also send `currentPassword`. An unchanged email echoed back, or one that differs only in
+letter case, needs no password. `currentPassword` is never saved.
+
+| Case | Response | Saved |
+|------|----------|-------|
+| `currentPassword` missing or empty | 403 `Enter your current password to change your email.` | Nothing |
+| Wrong `currentPassword` | 403 `The current password is incorrect.` | Nothing |
+| passport-local-mongoose lockout reached (`limitAttempts`) | 403 with the lockout message | Nothing |
+| User has no password (for example GitHub-only or social-only) | 400 `Set a password on your account before changing your email. …` | Nothing |
+| Right `currentPassword` | 200 with the updated user | The whole body |
+
+The status is 403, not 401, so `@terreno/rtk` does not treat a wrong password as an expired
+session and log the user out.
+
+The password is checked against the passport-local-mongoose hash first. A wrong password
+counts toward the model's passport lockout when `limitAttempts` is on, the same counter
+`POST /auth/login` uses. When the user has no passport hash and `BetterAuthApp` is registered,
+the password is checked against the user's Better Auth credential account (found through
+`betterAuthId`). TerrenoApp wires that check as `authOptions.verifyBetterAuthPassword`; hosts
+that call `addMeRoutes` themselves can set it with `verifyBetterAuthCredentialPassword(auth,
+user, password)`, which returns `"verified"`, `"wrong"`, or `"no-password"`.
+
+After the change is saved, the old address gets a notice through `authOptions.sendMail` with
+`sensitive: true`, subject `Your account email was changed`. It names the new address partially
+masked (`r***@e***.com`), tells the reader to contact support if they did not make the change,
+and carries no link or token. With no `sendMail`, the server logs a warning and still completes
+the change; a delivery failure is logged and does not undo it. The change does not bump
+`tokenEpoch`, and it does not change the Better Auth user's email.
 
 An access JWT is read only from the `jwt` cookie or an `Authorization: Bearer <token>`
 header; any other scheme is not a JWT credential. A user with `disabled: true` gets 401 on

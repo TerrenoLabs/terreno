@@ -25,6 +25,7 @@ import {
   resolveBetterAuthAppUser,
   setupBetterAuthUserSync,
   syncBetterAuthUser,
+  verifyBetterAuthCredentialPassword,
 } from "./betterAuthSetup";
 
 type SessionRequest = Request & {betterAuthSession?: BetterAuthSessionData};
@@ -648,6 +649,43 @@ describe("createBetterAuth email and password-reset wiring", () => {
     );
     const reloaded = await DualAuthUser.findOne({email: "hook@example.com"});
     assert.equal(reloaded?.tokenEpoch, 1);
+  });
+});
+
+describe("verifyBetterAuthCredentialPassword", () => {
+  const makeAuth = (): BetterAuthInstance =>
+    createBetterAuth({
+      config: {
+        baseURL: "http://localhost:3000",
+        enabled: true,
+        secret: "test-secret-at-least-32-characters-long",
+      },
+      mongoClient: getClient(),
+    });
+
+  it("verifies the right password and rejects a wrong one for a credential account", async () => {
+    await setup;
+    const auth = makeAuth();
+    const signedUp = await auth.api.signUpEmail({
+      body: {email: "verify-me@example.com", name: "Verify Me", password: "right-password-123"},
+    });
+    const betterAuthId = signedUp.user.id;
+
+    expect(
+      await verifyBetterAuthCredentialPassword(auth, {betterAuthId}, "right-password-123")
+    ).toBe("verified");
+    expect(await verifyBetterAuthCredentialPassword(auth, {betterAuthId}, "wrong-password")).toBe(
+      "wrong"
+    );
+  });
+
+  it("returns no-password without a linked Better Auth user or credential account", async () => {
+    await setup;
+    const auth = makeAuth();
+    expect(await verifyBetterAuthCredentialPassword(auth, {}, "anything")).toBe("no-password");
+    expect(
+      await verifyBetterAuthCredentialPassword(auth, {betterAuthId: "missing-user"}, "anything")
+    ).toBe("no-password");
   });
 });
 

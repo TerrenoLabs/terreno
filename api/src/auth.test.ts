@@ -24,6 +24,7 @@ import {
   stripPrivilegedUserFields,
 } from "./auth";
 import {apiUnauthorizedMiddleware} from "./errors";
+import type {AuthOptions, AuthRecoveryMail} from "./expressServer";
 import {githubUserPlugin} from "./githubAuth";
 import {logger} from "./logger";
 import {Permissions} from "./permissions";
@@ -201,7 +202,7 @@ describe("auth tests", () => {
 
     const mePatchRes = await agent
       .patch("/auth/me")
-      .send({email: "new2@example.com"})
+      .send({currentPassword: "123", email: "new2@example.com"})
       .set("authorization", `Bearer ${token}`)
       .expect(200);
     expect(mePatchRes.body.data._id).toBeDefined();
@@ -381,7 +382,7 @@ describe("auth tests", () => {
 
     const mePatchRes = await agent
       .patch("/auth/me")
-      .send({email: "admin2@example.com"})
+      .send({currentPassword: "securePassword", email: "admin2@example.com"})
       .expect(200);
     expect(mePatchRes.body.data._id).toBeDefined();
     expect(mePatchRes.body.data.id).toBeDefined();
@@ -1210,7 +1211,7 @@ describe("privileged user fields", () => {
     await agent
       .patch("/auth/me")
       .set("authorization", `Bearer ${token}`)
-      .send({email: "unproven@example.com"})
+      .send({currentPassword: "password", email: "unproven@example.com"})
       .expect(200);
 
     const reloaded = await UserModel.findById(notAdminId);
@@ -1234,6 +1235,220 @@ describe("privileged user fields", () => {
 
     const reloaded = await UserModel.findById(notAdminId);
     expect((reloaded as unknown as {emailVerified?: boolean})?.emailVerified).toBe(true);
+  });
+});
+
+describe("PATCH /auth/me email change step-up", () => {
+  let agent: TestAgent;
+  let sentMail: AuthRecoveryMail[];
+  let token: string;
+  let notAdminId: string;
+
+  const buildAgent = (authOptions: AuthOptions): TestAgent => {
+    const app = new TerrenoApp({
+      authOptions,
+      configureApp: () => {},
+      skipListen: true,
+      userModel: UserModel as unknown as AuthUserModel,
+    }).build();
+    return supertest.agent(app);
+  };
+
+  const signToken = async (id: string): Promise<string> => {
+    const jwtLib = (await import("jsonwebtoken")).default;
+    return jwtLib.sign({id}, process.env.TOKEN_SECRET as string, {
+      issuer: process.env.TOKEN_ISSUER,
+    });
+  };
+
+  const reloadNotAdmin = async (): Promise<Record<string, unknown> | null> => {
+    return (await UserModel.findById(notAdminId).lean()) as Record<string, unknown> | null;
+  };
+
+  beforeEach(async () => {
+    setSystemTime();
+    const [_admin, notAdmin] = await setupDb();
+    notAdminId = String((notAdmin as unknown as {_id: {toString(): string}})._id);
+    token = await signToken(notAdminId);
+    sentMail = [];
+    agent = buildAgent({
+      sendMail: async (message) => {
+        sentMail.push(message);
+      },
+    });
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  it("rejects an email change without the current password and writes nothing", async () => {
+    const res = await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({email: "taken-over@example.com", name: "Should Not Save"})
+      .expect(403);
+    expect(res.body.message).toContain("current password");
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("notAdmin@example.com");
+    expect(reloaded?.name).toBe("Not Admin");
+    expect(sentMail).toHaveLength(0);
+  });
+
+  it("rejects an email change with a wrong current password and counts the attempt", async () => {
+    await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({currentPassword: "wrong-password", email: "taken-over@example.com"})
+      .expect(403);
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("notAdmin@example.com");
+    expect(reloaded?.attempts).toBe(1);
+    expect(sentMail).toHaveLength(0);
+  });
+
+  it("reports the passport lockout once wrong current passwords reach maxAttempts", async () => {
+    const messages: string[] = [];
+    // The test user model locks after three wrong attempts.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const res = await agent
+        .patch("/auth/me")
+        .set("authorization", `Bearer ${token}`)
+        .send({currentPassword: "wrong-password", email: "taken-over@example.com"})
+        .expect(403);
+      messages.push(res.body.message);
+    }
+    expect(messages.slice(0, 2)).toEqual([
+      "The current password is incorrect.",
+      "The current password is incorrect.",
+    ]);
+    expect(messages[2]).not.toBe("The current password is incorrect.");
+    const locked = await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({currentPassword: "password", email: "taken-over@example.com"})
+      .expect(403);
+    expect(locked.body.message).not.toBe("The current password is incorrect.");
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("notAdmin@example.com");
+  });
+
+  it("changes the email with the right current password and notifies the old address", async () => {
+    const res = await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({currentPassword: "password", email: "renamed@example.com"})
+      .expect(200);
+    expect(res.body.data.email).toBe("renamed@example.com");
+    expect(res.body.data.currentPassword).toBeUndefined();
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("renamed@example.com");
+    expect(reloaded?.currentPassword).toBeUndefined();
+    expect(reloaded?.tokenEpoch ?? 0).toBe(0);
+
+    expect(sentMail).toHaveLength(1);
+    const [notice] = sentMail;
+    expect(notice.to).toBe("notAdmin@example.com");
+    expect(notice.sensitive).toBe(true);
+    expect(notice.text).not.toContain("renamed@example.com");
+    expect(notice.text).toContain("r***@e***.com");
+    expect(notice.text).toContain("support");
+    expect(`${notice.text} ${notice.html ?? ""}`).not.toMatch(/https?:|token=/i);
+
+    // The new address now signs in with the same password.
+    await agent
+      .post("/auth/login")
+      .send({email: "renamed@example.com", password: "password"})
+      .expect(200);
+  });
+
+  it("accepts an unchanged email echoed back without a password", async () => {
+    await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({email: " NOTADMIN@example.com ", name: "Renamed"})
+      .expect(200);
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.name).toBe("Renamed");
+    expect(sentMail).toHaveLength(0);
+  });
+
+  it("returns 400 for a user with no password to confirm", async () => {
+    const passwordless = await UserModel.create({
+      email: "github-only@example.com",
+      name: "GitHub Only",
+    });
+    const passwordlessToken = await signToken(String(passwordless._id));
+
+    const res = await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${passwordlessToken}`)
+      .send({currentPassword: "anything", email: "moved@example.com"})
+      .expect(400);
+    expect(res.body.message).toContain("Set a password");
+
+    const reloaded = await UserModel.findById(passwordless._id).lean();
+    expect((reloaded as unknown as {email?: string})?.email).toBe("github-only@example.com");
+  });
+
+  it("verifies a passwordless app user against the Better Auth credential", async () => {
+    const checked: Array<{password: string; userId: string}> = [];
+    const betterAuthAgent = buildAgent({
+      sendMail: async (message) => {
+        sentMail.push(message);
+      },
+      verifyBetterAuthPassword: async (user, password) => {
+        checked.push({password, userId: String(user._id)});
+        return password === "better-auth-password" ? "verified" : "wrong";
+      },
+    });
+    const betterAuthUser = await UserModel.create({
+      email: "better-auth@example.com",
+      name: "Better Auth",
+    });
+    const betterAuthToken = await signToken(String(betterAuthUser._id));
+
+    await betterAuthAgent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${betterAuthToken}`)
+      .send({currentPassword: "wrong-password", email: "moved@example.com"})
+      .expect(403);
+    await betterAuthAgent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${betterAuthToken}`)
+      .send({currentPassword: "better-auth-password", email: "moved@example.com"})
+      .expect(200);
+
+    expect(checked).toEqual([
+      {password: "wrong-password", userId: String(betterAuthUser._id)},
+      {password: "better-auth-password", userId: String(betterAuthUser._id)},
+    ]);
+    const reloaded = await UserModel.findById(betterAuthUser._id).lean();
+    expect((reloaded as unknown as {email?: string})?.email).toBe("moved@example.com");
+    expect(sentMail.map((message) => message.to)).toEqual(["better-auth@example.com"]);
+  });
+
+  it("completes the change and logs a warning when no mail sender is configured", async () => {
+    const warnSpy = spyOn(logger, "warn");
+    const noMailAgent = buildAgent({});
+
+    await noMailAgent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({currentPassword: "password", email: "renamed@example.com"})
+      .expect(200);
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("renamed@example.com");
+    expect(warnSpy.mock.calls.some((call) => String(call[0]).includes("email change notice"))).toBe(
+      true
+    );
+    warnSpy.mockRestore();
   });
 });
 

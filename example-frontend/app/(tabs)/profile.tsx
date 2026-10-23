@@ -66,6 +66,7 @@ const ProfileScreen: React.FC = () => {
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [testPushMessage, setTestPushMessage] = useState<string | null>(null);
@@ -126,12 +127,21 @@ const ProfileScreen: React.FC = () => {
     [showSaveSuccess, updateProfile]
   );
 
+  // Changing the email needs the current password; an unchanged or re-cased email does not.
+  const isEmailChanged = useMemo(
+    (): boolean => email.trim().toLowerCase() !== (profile?.email ?? "").trim().toLowerCase(),
+    [email, profile?.email]
+  );
+
   const handleSaveEmail = useCallback(
     async (value: string): Promise<void> => {
       setSaveError(null);
       setSaveSuccess(false);
       try {
-        await updateProfile({email: value}).unwrap();
+        await updateProfile(
+          isEmailChanged ? {currentPassword, email: value} : {email: value}
+        ).unwrap();
+        setCurrentPassword("");
         showSaveSuccess();
       } catch (err) {
         console.error("Error updating email:", err);
@@ -140,7 +150,7 @@ const ProfileScreen: React.FC = () => {
         );
       }
     },
-    [showSaveSuccess, updateProfile]
+    [currentPassword, isEmailChanged, showSaveSuccess, updateProfile]
   );
 
   const handleSavePassword = useCallback(
@@ -305,6 +315,18 @@ const ProfileScreen: React.FC = () => {
               type="email"
               value={email}
             />
+
+            {isEmailChanged && (
+              <TextField
+                disabled={isUpdating}
+                helperText="Enter your current password to change your email"
+                onChange={setCurrentPassword}
+                testID="profile-current-password-input"
+                title="Current password"
+                type="password"
+                value={currentPassword}
+              />
+            )}
 
             <TapToEdit
               disabled={isUpdating}

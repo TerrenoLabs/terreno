@@ -297,6 +297,23 @@ modelRouter(Model, {
 });
 ``````
 
+### Why changing the email needs the current password
+
+The account email is where password-reset links go. If a session alone could change it, anyone
+holding a stolen or borrowed session could move the recovery address to a mailbox they control,
+request a reset, and keep the account after the session ends. So `PATCH /auth/me` asks for the
+current password before it changes the mailbox, and then tells the old address that the change
+happened. The notice holds no link or token, so forwarding it or leaving it in an inbox exposes
+nothing that acts on the account.
+
+The check uses whichever password the user has: the passport-local-mongoose hash, or, for a
+Better Auth user with no passport hash, the Better Auth credential. A user who signed up only
+through a social provider has no password to confirm, so they must set one through the reset
+flow first. Wrong attempts share the passport lockout with login rather than a separate counter.
+The new email is not held as pending and existing sessions are not ended; the notice to the old
+address is the signal that lets the owner react. Status codes and messages are in the
+[API reference](../reference/api.md#changing-the-email-on-patch-authme).
+
 ## Security Best Practices
 
 ### Backend

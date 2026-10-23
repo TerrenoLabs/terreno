@@ -136,6 +136,76 @@ const deliverRecoveryMail = async (
   );
 };
 
+const EMAIL_CHANGED_SUBJECT = "Your account email was changed";
+
+const maskSegment = (value: string): string => {
+  if (value.length === 0) {
+    return "***";
+  }
+  return `${value[0]}***`;
+};
+
+/**
+ * Partially mask an email for a notice: `renamed@example.com` becomes `r***@e***.com`. Keeps the
+ * first character of the local part and of the domain, plus the top-level domain.
+ */
+export const maskEmailAddress = (email: string): string => {
+  const trimmed = email.trim();
+  const atIndex = trimmed.lastIndexOf("@");
+  if (atIndex <= 0) {
+    return maskSegment(trimmed);
+  }
+  const local = trimmed.slice(0, atIndex);
+  const domain = trimmed.slice(atIndex + 1);
+  const dotIndex = domain.lastIndexOf(".");
+  if (dotIndex <= 0) {
+    return `${maskSegment(local)}@${maskSegment(domain)}`;
+  }
+  return `${maskSegment(local)}@${maskSegment(domain.slice(0, dotIndex))}${domain.slice(dotIndex)}`;
+};
+
+const emailChangedText = (maskedNewEmail: string): string =>
+  `The email address on your account was changed to ${maskedNewEmail}. ` +
+  "If you did not make this change, contact support right away.";
+
+const emailChangedHtml = (maskedNewEmail: string): string =>
+  `<p>The email address on your account was changed to ${maskedNewEmail}.</p>` +
+  "<p>If you did not make this change, contact support right away.</p>";
+
+/**
+ * Tell the previous address that the account email changed. The notice carries no link or token
+ * that acts on the account. Without a configured `sendMail` it logs a warning and sends nothing;
+ * a delivery failure is logged and never undoes the change.
+ */
+export const sendEmailChangedNotice = async ({
+  authOptions,
+  newEmail,
+  previousEmail,
+}: {
+  authOptions?: AuthOptions;
+  newEmail: string;
+  previousEmail: string;
+}): Promise<void> => {
+  if (!authOptions?.sendMail) {
+    logger.warn(
+      "[auth] No sendMail configured; skipped the email change notice to the old address"
+    );
+    return;
+  }
+  const maskedNewEmail = maskEmailAddress(newEmail);
+  try {
+    await authOptions.sendMail({
+      html: emailChangedHtml(maskedNewEmail),
+      sensitive: true,
+      subject: EMAIL_CHANGED_SUBJECT,
+      text: emailChangedText(maskedNewEmail),
+      to: previousEmail,
+    });
+  } catch (error: unknown) {
+    logger.error("[auth] Failed to send the email change notice to the old address", {error});
+  }
+};
+
 const incrementTokenEpoch = (user: User): void => {
   user.tokenEpoch = (user.tokenEpoch ?? 0) + 1;
 };

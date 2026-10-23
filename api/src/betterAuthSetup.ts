@@ -18,7 +18,7 @@ import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
 import {createOAuthHandoffPlugins} from "./betterAuthOAuthHandoff";
 import {APIError, isAPIError} from "./errors";
-import type {AuthRecoveryMail} from "./expressServer";
+import type {AuthRecoveryMail, BetterAuthPasswordCheck} from "./expressServer";
 import {logger} from "./logger";
 import {findOneOrNoneFor} from "./plugins";
 import {updateRequestContextFromRequest} from "./requestContext";
@@ -293,6 +293,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
 };
 
 interface BetterAuthCredentialAccount {
+  password?: string | null;
   providerId?: string;
 }
 
@@ -314,7 +315,10 @@ interface BetterAuthPasswordResetContext {
     findUserById: (userId: string) => Promise<{id?: string} | null>;
     updatePassword: (userId: string, password: string) => Promise<unknown>;
   };
-  password: {hash: (password: string) => Promise<string>};
+  password: {
+    hash: (password: string) => Promise<string>;
+    verify: (data: {hash: string; password: string}) => Promise<boolean>;
+  };
 }
 
 /**
@@ -356,6 +360,32 @@ export const applyJwtPasswordResetToBetterAuth = async (
     });
   }
   await ctx.internalAdapter.deleteUserSessions(betterAuthUserId);
+};
+
+/**
+ * Check `password` against the Better Auth credential account linked to an app user through
+ * `betterAuthId`. Returns "no-password" when the user has no linked Better Auth user or that user
+ * has no credential password (for example a social-only account).
+ */
+export const verifyBetterAuthCredentialPassword = async (
+  auth: BetterAuthInstance,
+  user: {betterAuthId?: string},
+  password: string
+): Promise<BetterAuthPasswordCheck> => {
+  const betterAuthUserId = typeof user.betterAuthId === "string" ? user.betterAuthId : "";
+  if (!betterAuthUserId) {
+    return "no-password";
+  }
+  const ctx = (await auth.$context) as BetterAuthPasswordResetContext;
+  const accounts = await ctx.internalAdapter.findAccounts(betterAuthUserId);
+  const credential = accounts.find(
+    (account) => account.providerId === "credential" && typeof account.password === "string"
+  );
+  if (!credential?.password) {
+    return "no-password";
+  }
+  const isMatch = await ctx.password.verify({hash: credential.password, password});
+  return isMatch ? "verified" : "wrong";
 };
 
 // Better Auth endpoints that change or revoke a user's credentials; the legacy JWT credential

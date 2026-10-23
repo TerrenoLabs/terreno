@@ -12,10 +12,10 @@ import {
   type StrategyOptions,
 } from "passport-jwt";
 import {Strategy as LocalStrategy} from "passport-local";
-import {addAuthRecoveryRoutes, sendVerificationEmail} from "./authRecovery";
+import {addAuthRecoveryRoutes, sendEmailChangedNotice, sendVerificationEmail} from "./authRecovery";
 import {AuthToken} from "./authTokens";
 import {APIError, apiErrorMiddleware, errorMessage} from "./errors";
-import type {AuthOptions} from "./expressServer";
+import type {AuthOptions, BetterAuthPasswordCheck} from "./expressServer";
 import {logger} from "./logger";
 import {isJwtCredentialExchangePath} from "./rateLimit/policies";
 import {isRbacUserModelName, isWriteKeyForField} from "./rbac/userWriteGuards";
@@ -193,6 +193,55 @@ const isEmailUpdateChangingMailbox = (currentEmail: unknown, nextEmail: unknown)
     return false;
   }
   return currentEmail.trim().toLowerCase() !== nextEmail.trim().toLowerCase();
+};
+
+// The body field PATCH /me reads to confirm an email change. It is never written to the user.
+const CURRENT_PASSWORD_FIELD = "currentPassword";
+
+// passport-local-mongoose errors that mean the user has no passport password to check.
+const NO_PASSPORT_PASSWORD_ERRORS = new Set(["IncorrectUsernameError", "NoSaltValueStoredError"]);
+
+// passport-local-mongoose lockout errors (`limitAttempts`), reported to the user as they are.
+const LOCKOUT_ERRORS = new Set(["AttemptTooSoonError", "TooManyAttemptsError"]);
+
+interface PassportAuthenticateResult {
+  error?: {message?: string; name?: string};
+  user?: unknown;
+}
+
+interface CurrentPasswordCheck {
+  message?: string;
+  status: BetterAuthPasswordCheck;
+}
+
+/**
+ * Confirm `password` is the user's current password: first against the passport-local-mongoose
+ * hash (which counts a wrong attempt toward its lockout when `limitAttempts` is on), then, for a
+ * user with no passport password, against the Better Auth credential when Better Auth is wired.
+ */
+const checkCurrentPassword = async (
+  doc: User,
+  password: string,
+  authOptions: AuthOptions | undefined
+): Promise<CurrentPasswordCheck> => {
+  const authenticate = (doc as unknown as {authenticate?: (password: string) => unknown})
+    .authenticate;
+  if (typeof authenticate === "function") {
+    const result = (await authenticate.call(doc, password)) as PassportAuthenticateResult;
+    if (result?.user) {
+      return {status: "verified"};
+    }
+    const errorName = result?.error?.name ?? "";
+    if (!NO_PASSPORT_PASSWORD_ERRORS.has(errorName)) {
+      // Pass the lockout message through so the user knows why a right password fails.
+      const message = LOCKOUT_ERRORS.has(errorName) ? result?.error?.message : undefined;
+      return {message, status: "wrong"};
+    }
+  }
+  if (authOptions?.verifyBetterAuthPassword) {
+    return {status: await authOptions.verifyBetterAuthPassword(doc, password)};
+  }
+  return {status: "no-password"};
 };
 
 const omitPrivilegedFieldsFromObject = (item: unknown, allowAdminWrite: boolean): unknown => {
@@ -794,7 +843,7 @@ export const addAuthRoutes = (
 export const addMeRoutes = (
   app: express.Application,
   userModel: UserModel,
-  _authOptions?: AuthOptions,
+  authOptions?: AuthOptions,
   accessControl?: import("./rbac/types").AnyTerrenoAccess
 ): void => {
   const router = express.Router();
@@ -842,9 +891,33 @@ export const addMeRoutes = (
           "PATCH /auth/me does not change passwords. Use the password reset flow or Better Auth change-password.",
       });
     }
+    const {[CURRENT_PASSWORD_FIELD]: currentPassword, ...profileBody} = body;
+    const previousEmail = doc.email;
     try {
-      const update = stripPrivilegedUserFields(body, "PATCH /auth/me");
+      const update = stripPrivilegedUserFields(profileBody, "PATCH /auth/me");
       const isMailboxChange = isEmailUpdateChangingMailbox(doc.email, update.email);
+      if (isMailboxChange) {
+        // A stolen session must not be able to move the recovery address, so changing the
+        // mailbox needs the current password.
+        if (typeof currentPassword !== "string" || currentPassword.length === 0) {
+          return res.status(403).send({
+            message: "Enter your current password to change your email.",
+          });
+        }
+        const check = await checkCurrentPassword(doc, currentPassword, authOptions);
+        if (check.status === "no-password") {
+          return res.status(400).send({
+            message:
+              "Set a password on your account before changing your email. Use the password reset flow to set one.",
+          });
+        }
+        if (check.status === "wrong") {
+          logger.warn(`[auth] Rejected email change for user ${String(doc._id)}: wrong password`);
+          return res.status(403).send({
+            message: check.message ?? "The current password is incorrect.",
+          });
+        }
+      }
       Object.assign(doc, update);
       if (isMailboxChange) {
         await AuthToken.invalidateUnusedFor({_id: String(doc._id)}, "passwordReset");
@@ -854,6 +927,9 @@ export const addMeRoutes = (
         }
       }
       await doc.save();
+      if (isMailboxChange && typeof previousEmail === "string" && typeof doc.email === "string") {
+        await sendEmailChangedNotice({authOptions, newEmail: doc.email, previousEmail});
+      }
 
       const dataObject = doc.toObject() as unknown as Record<string, unknown>;
       dataObject.id = doc._id;

@@ -1,6 +1,6 @@
-import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text} from "@terreno/ui";
+import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text, TextField} from "@terreno/ui";
 import type React from "react";
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useMemo, useState} from "react";
 import {signOut} from "@/lib/betterAuth";
 import {logout, syncBetterAuthSession, useAppDispatch} from "@/store/index";
 import {useGetMeQuery, usePatchMeMutation} from "@/store/sdk";
@@ -12,6 +12,7 @@ const ProfileScreen: React.FC = () => {
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const user = profile?.data;
@@ -51,17 +52,27 @@ const ProfileScreen: React.FC = () => {
     [updateProfile]
   );
 
+  // Changing the email needs the current password; an unchanged or re-cased email does not.
+  const isEmailChanged = useMemo(
+    (): boolean => email.trim().toLowerCase() !== (user?.email ?? "").trim().toLowerCase(),
+    [email, user?.email]
+  );
+
   const handleSaveEmail = useCallback(
     async (value: string): Promise<void> => {
       setSaveError(null);
       try {
-        await updateProfile({email: value}).unwrap();
+        const body = isEmailChanged ? {currentPassword, email: value} : {email: value};
+        await updateProfile(body).unwrap();
+        setCurrentPassword("");
       } catch (err) {
         console.error("Error updating email:", err);
-        setSaveError("Failed to update email");
+        setSaveError(
+          (err as {data?: {message?: string}})?.data?.message || "Failed to update email"
+        );
       }
     },
-    [updateProfile]
+    [currentPassword, isEmailChanged, updateProfile]
   );
 
   const handleSavePassword = useCallback(
@@ -111,6 +122,16 @@ const ProfileScreen: React.FC = () => {
               type="email"
               value={email}
             />
+            {isEmailChanged && (
+              <TextField
+                helperText="Enter your current password to change your email"
+                onChange={setCurrentPassword}
+                testID="profile-current-password-input"
+                title="Current password"
+                type="password"
+                value={currentPassword}
+              />
+            )}
             <TapToEdit
               helperText="Leave blank to keep your current password"
               onSave={handleSavePassword}

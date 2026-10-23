@@ -299,7 +299,19 @@ export interface AuthOptions {
    * BetterAuthApp is registered.
    */
   syncPasswordResetToBetterAuth?: (user: User, password: string) => Promise<void>;
+  /**
+   * Check a password against the user's Better Auth credential account. `PATCH /auth/me` uses it
+   * to confirm an email change for a user with no passport password. TerrenoApp wires this when
+   * BetterAuthApp is registered.
+   */
+  verifyBetterAuthPassword?: (user: User, password: string) => Promise<BetterAuthPasswordCheck>;
 }
+
+/**
+ * Result of {@link AuthOptions.verifyBetterAuthPassword}: the password matched, did not match, or
+ * the user has no Better Auth credential password to check.
+ */
+export type BetterAuthPasswordCheck = "verified" | "wrong" | "no-password";
 
 export const cronjob = (
   name: string,

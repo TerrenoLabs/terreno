@@ -156,7 +156,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Docs: create `docs/explanation/consent-forms.md` (forms, responses, versions, the gate, provisional signing, and why it doesn't clear the gate). Add a `ConsentApp` section to `docs/reference/api.md`: the options table with `accessControl`, plus the provisional endpoint.
   - Skills: terreno:terreno-backend-api, terreno:mongoose-schema-safety, model-router-actions, terreno:backend-test-env
 
-- [ ] **T2** — Expose provisional signature notice data on user-facing consent payloads
+- [x] **T2** — Expose provisional signature notice data on user-facing consent payloads
   - Depends on: T1
   - Files: api/src/consentApp.ts, api/src/consentApp.test.ts, docs/reference/api.md
   - Criteria: after a provisional sign, the `/consents/pending` form has `provisionalSignature.{signedAt, signedByName}` and no `note`. A form without one has no `provisionalSignature`. `/consents/my` entries include `provisional` and `provisionalSignedBy.name`, but no note and no signer IP/UA (asserted absent). `/consents/audit/:userId` includes all provisional fields. Existing pending/my/audit tests still pass.

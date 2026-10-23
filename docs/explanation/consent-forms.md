@@ -7,9 +7,9 @@ until they have answered every form that applies to them.
 ## Forms and versions
 
 A `ConsentForm` has a `slug`, a `version`, localized markdown `content`, and options such as
-required checkboxes, a drawn signature, and whether the user may decline. Publishing (`POST /consent-forms/:id/publish`)
-copies the form to `version + 1`, activates the copy, and deactivates every other version of
-the same slug. Only active forms are shown to users. Publish a new version rather than editing
+required checkboxes, a drawn signature, and whether the user may decline. Publishing
+(`POST /consent-forms/:id/publish`) copies the form to `version + 1`, activates the copy, and
+deactivates every other version of the same slug. Only active forms are shown to users. Publish a new version rather than editing
 a form users have already answered, so each response still points at the text the user saw.
 
 An app can narrow which active forms apply to a user with `resolveConsentForms(user, forms)`,
@@ -59,7 +59,8 @@ user's own device and signature, and the user did not sign.
 Only the user's own responses remove a form from `/consents/pending`. A provisional signature
 is a record that someone else vouched for the user's consent. It is not the user's consent in
 their own words. Keeping the form in the gate means the user still meets it, reads it, and
-agrees or declines. The user's own answer is stored as a separate response, so both records
+agrees or declines. The gate tells them who signed on their behalf and when, but not the
+signer's note: that stays in the admin audit history. The user's own answer is stored as a separate response, so both records
 stay for audit.
 
 A separate `ProvisionalConsent` model was rejected. A field on `ConsentResponse` keeps one

@@ -95,6 +95,24 @@ const requireAdmin = (user: User | undefined): void => {
   }
 };
 
+interface PopulatedSigner {
+  _id: mongoose.Types.ObjectId;
+  email?: string;
+  name?: string;
+}
+
+/** The populated provisional signer, or null when unset or not populated. */
+const populatedSigner = (value: unknown): PopulatedSigner | null => {
+  if (!value || typeof value !== "object" || !("_id" in value)) {
+    return null;
+  }
+  return value as PopulatedSigner;
+};
+
+const signerDisplayName = (signer: PopulatedSigner | null): string => {
+  return signer?.name || signer?.email || "Staff";
+};
+
 /** Load the consent forms that apply to a user: active forms, narrowed by the app's resolver. */
 const resolveFormsForUser = async (
   user: User,
@@ -495,6 +513,33 @@ export class ConsentApp implements TerrenoPlugin {
           return !matchingResponses.some((r) => r.formVersionSnapshot === form.version);
         });
 
+        // The user sees who signed provisionally and when, never the signer's note.
+        const provisionalResponses = await ConsentResponse.find({
+          consentFormId: {$in: pendingForms.map((form) => form._id)},
+          provisional: true,
+          userId: user.id,
+        })
+          .sort({agreedAt: -1})
+          .populate(provisionalSignerPopulate);
+        const pendingData = pendingForms.map((form) => {
+          const latest = provisionalResponses.find(
+            (response) =>
+              response.consentFormId.toString() === form._id.toString() &&
+              response.formVersionSnapshot === form.version
+          );
+          const formJson = form.toJSON();
+          if (!latest) {
+            return formJson;
+          }
+          return {
+            ...formJson,
+            provisionalSignature: {
+              signedAt: latest.agreedAt,
+              signedByName: signerDisplayName(populatedSigner(latest.provisionalSignedBy)),
+            },
+          };
+        });
+
         const filteredOutByResolverCount = Math.max(activeForms.length - resolvedForms.length, 0);
         const filteredOutByResponsesCount = Math.max(resolvedForms.length - pendingForms.length, 0);
 
@@ -509,7 +554,7 @@ export class ConsentApp implements TerrenoPlugin {
           userId: user.id,
         });
 
-        return res.json({data: pendingForms});
+        return res.json({data: pendingData});
       })
     );
 
@@ -614,7 +659,9 @@ export class ConsentApp implements TerrenoPlugin {
           throw new APIError({status: 401, title: "Authentication required"});
         }
 
-        const responses = await ConsentResponse.find({userId: user.id}).sort({agreedAt: -1});
+        const responses = await ConsentResponse.find({userId: user.id})
+          .sort({agreedAt: -1})
+          .populate(provisionalSignerPopulate);
 
         const formIds = responses.map((r) => r.consentFormId);
         const forms = await ConsentForm.find({_id: {$in: formIds}});
@@ -641,6 +688,11 @@ export class ConsentApp implements TerrenoPlugin {
             formVersionSnapshot: response.formVersionSnapshot,
             ipAddress: response.ipAddress,
             locale: response.locale,
+            provisional: Boolean(response.provisional),
+            // Name only: the signer's note and request metadata stay admin-only.
+            provisionalSignedBy: response.provisional
+              ? {name: signerDisplayName(populatedSigner(response.provisionalSignedBy))}
+              : null,
             signature: response.signature,
             signedAt: response.signedAt,
             userAgent: response.userAgent,
@@ -661,9 +713,9 @@ export class ConsentApp implements TerrenoPlugin {
             throw new APIError({status: 403, title: "Admin access required"});
           }
 
-          const responses = await ConsentResponse.find({userId: req.params.userId}).sort({
-            agreedAt: -1,
-          });
+          const responses = await ConsentResponse.find({userId: req.params.userId})
+            .sort({agreedAt: -1})
+            .populate(provisionalSignerPopulate);
 
           const formIds = responses.map((r) => r.consentFormId);
           const forms = await ConsentForm.find({_id: {$in: formIds}});
@@ -686,6 +738,11 @@ export class ConsentApp implements TerrenoPlugin {
               formVersionSnapshot: response.formVersionSnapshot,
               ipAddress: response.ipAddress,
               locale: response.locale,
+              provisional: Boolean(response.provisional),
+              provisionalNote: response.provisionalNote,
+              provisionalSignedBy: populatedSigner(response.provisionalSignedBy),
+              provisionalSignerIp: response.provisionalSignerIp,
+              provisionalSignerUserAgent: response.provisionalSignerUserAgent,
               responseId: response._id,
               signedAt: response.signedAt,
               userAgent: response.userAgent,

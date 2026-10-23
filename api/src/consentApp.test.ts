@@ -1286,4 +1286,158 @@ describe("ConsentApp", () => {
       });
     });
   });
+  describe("provisional signatures on user-facing payloads", () => {
+    let form: ConsentFormDocument;
+
+    const signProvisionally = async (targetForm: ConsentFormDocument): Promise<string> => {
+      const res = await adminAgent
+        .post("/consent-responses/provisional")
+        .set("User-Agent", "intake-desk")
+        .send({
+          consentFormId: targetForm._id.toString(),
+          note: "Guardian agreed by phone",
+          userId: notAdmin._id.toString(),
+        })
+        .expect(200);
+      return res.body.data._id;
+    };
+
+    beforeEach(async () => {
+      form = await ConsentForm.create({
+        active: true,
+        content: new Map([["en", "# Telehealth consent"]]),
+        order: 1,
+        slug: "telehealth",
+        title: "Telehealth consent",
+        type: "agreement",
+        version: 1,
+      });
+    });
+
+    it("adds the signer name and time to the pending form, without the note", async () => {
+      const responseId = await signProvisionally(form);
+      const stored = await ConsentResponse.findExactlyOne({_id: responseId});
+
+      const res = await userAgent.get("/consents/pending").expect(200);
+      expect(res.body.data).toHaveLength(1);
+      expect(res.body.data[0].title).toBe("Telehealth consent");
+      expect(res.body.data[0].content).toEqual({en: "# Telehealth consent"});
+      expect(res.body.data[0].provisionalSignature).toEqual({
+        signedAt: stored.agreedAt.toISOString(),
+        signedByName: "Admin",
+      });
+      expect(JSON.stringify(res.body.data[0])).not.toContain("Guardian agreed by phone");
+    });
+
+    it("omits provisionalSignature on forms nobody signed provisionally", async () => {
+      await ConsentForm.create({
+        active: true,
+        content: new Map([["en", "# Privacy"]]),
+        order: 2,
+        slug: "privacy-notice",
+        title: "Privacy",
+        type: "privacy",
+        version: 1,
+      });
+      await signProvisionally(form);
+
+      const res = await userAgent.get("/consents/pending").expect(200);
+      const privacy = res.body.data.find((item: {slug: string}) => item.slug === "privacy-notice");
+      expect(privacy).toBeDefined();
+      expect("provisionalSignature" in privacy).toBe(false);
+    });
+
+    it("uses the latest provisional signature for the form's current version", async () => {
+      await ConsentResponse.create({
+        agreed: true,
+        agreedAt: new Date("2026-01-01T00:00:00.000Z"),
+        consentFormId: form._id,
+        formVersionSnapshot: 1,
+        locale: "en",
+        provisional: true,
+        provisionalNote: "Older",
+        provisionalSignedBy: notAdmin._id,
+        userId: notAdmin._id,
+      });
+      await ConsentResponse.create({
+        agreed: true,
+        agreedAt: new Date("2026-03-01T00:00:00.000Z"),
+        consentFormId: form._id,
+        formVersionSnapshot: 1,
+        locale: "en",
+        provisional: true,
+        provisionalNote: "Newer",
+        provisionalSignedBy: admin._id,
+        userId: notAdmin._id,
+      });
+
+      const res = await userAgent.get("/consents/pending").expect(200);
+      expect(res.body.data[0].provisionalSignature).toEqual({
+        signedAt: "2026-03-01T00:00:00.000Z",
+        signedByName: "Admin",
+      });
+    });
+
+    it("ignores provisional signatures for an older form version", async () => {
+      await ConsentResponse.create({
+        agreed: true,
+        agreedAt: new Date("2026-01-01T00:00:00.000Z"),
+        consentFormId: form._id,
+        formVersionSnapshot: 0,
+        locale: "en",
+        provisional: true,
+        provisionalNote: "Old version",
+        provisionalSignedBy: admin._id,
+        userId: notAdmin._id,
+      });
+
+      const res = await userAgent.get("/consents/pending").expect(200);
+      expect(res.body.data).toHaveLength(1);
+      expect("provisionalSignature" in res.body.data[0]).toBe(false);
+    });
+
+    it("lists provisional entries in /consents/my with the signer name only", async () => {
+      await signProvisionally(form);
+
+      const res = await userAgent.get("/consents/my").expect(200);
+      expect(res.body.data).toHaveLength(1);
+      const entry = res.body.data[0];
+      expect(entry.provisional).toBe(true);
+      expect(entry.provisionalSignedBy).toEqual({name: "Admin"});
+      expect(entry).not.toHaveProperty("provisionalNote");
+      expect(entry).not.toHaveProperty("provisionalSignerIp");
+      expect(entry).not.toHaveProperty("provisionalSignerUserAgent");
+      expect(JSON.stringify(entry)).not.toContain("Guardian agreed by phone");
+    });
+
+    it("marks the user's own entries in /consents/my as not provisional", async () => {
+      await userAgent
+        .post("/consents/respond")
+        .send({agreed: true, consentFormId: form._id.toString(), locale: "en"})
+        .expect(200);
+
+      const res = await userAgent.get("/consents/my").expect(200);
+      expect(res.body.data[0].provisional).toBe(false);
+      expect(res.body.data[0].provisionalSignedBy).toBeNull();
+    });
+
+    it("includes every provisional field in the admin audit history", async () => {
+      const responseId = await signProvisionally(form);
+      const stored = await ConsentResponse.findExactlyOne({_id: responseId});
+
+      const res = await adminAgent.get(`/consents/audit/${notAdmin._id}`).expect(200);
+      expect(res.body.data).toHaveLength(1);
+      const entry = res.body.data[0];
+      expect(entry.provisional).toBe(true);
+      expect(entry.provisionalSignedBy).toEqual({
+        _id: admin._id.toString(),
+        email: "admin@example.com",
+        name: "Admin",
+      });
+      expect(entry.provisionalNote).toBe("Guardian agreed by phone");
+      expect(entry.provisionalSignerIp).toBe(stored.provisionalSignerIp);
+      expect(entry.provisionalSignerIp).toBeTruthy();
+      expect(entry.provisionalSignerUserAgent).toBe("intake-desk");
+    });
+  });
 });

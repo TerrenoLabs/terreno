@@ -1680,6 +1680,19 @@ With `AuditApp` registered, each provisional signature writes an `AuditEvent`
 (`modelName: "ConsentResponse"`, `operation: "create"`, `after: {action: "signOnBehalf",
 userId, consentFormId}`, `actorId`: the signer).
 
+### Provisional data on user-facing payloads
+
+The user sees who signed on their behalf and when. They never see the signer's note or the
+signer's request metadata.
+
+| Endpoint | Adds |
+| --- | --- |
+| `GET /consents/pending` | `provisionalSignature?: {signedAt, signedByName}` on each form, from the latest provisional response for the form's current version. Absent when there is none. Provisional responses never remove a form from this list |
+| `GET /consents/my` | `provisional: boolean` and `provisionalSignedBy: {name} \| null` on each entry. No note, IP, or user agent of the signer |
+| `GET /consents/audit/:userId` | `provisional`, `provisionalSignedBy: {_id, name, email} \| null`, `provisionalNote`, `provisionalSignerIp`, `provisionalSignerUserAgent` |
+
+`signedByName` falls back to the signer's email, then `"Staff"`.
+
 ### RBAC
 
 `terrenoStatements.consentResponse` is `["list", "read", "signOnBehalf"]`. The built-in

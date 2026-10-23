@@ -492,6 +492,117 @@ const emitMaskedQueryRoomEvent = async ({
     room: queryRoom,
   });
 
+/** Fan one change out to one query room. */
+const emitToQueryRoom = async ({
+  io,
+  queryRoom,
+  query,
+  event,
+  fullDocument,
+  entry,
+  hasFieldViews,
+  isOwnerStrategy,
+  logDebug,
+}: {
+  io: Server;
+  queryRoom: string;
+  query: Record<string, unknown>;
+  event: RealtimeEvent;
+  fullDocument: Record<string, unknown> | undefined;
+  entry?: RealtimeRegistryEntry;
+  hasFieldViews: boolean;
+  isOwnerStrategy: boolean;
+  logDebug: (msg: string) => void;
+}): Promise<void> => {
+  if (event.method === "delete") {
+    if (!fullDocument) {
+      // Hard delete with no document context. For owner-strategy collections we can't
+      // tell which query rooms belong to the owner without leaking activity to others,
+      // so skip query fanout entirely — subscribers will reconcile on next fetch.
+      if (isOwnerStrategy) {
+        logDebug(
+          `[realtime] Skipping hard delete fanout to ${queryRoom} (owner strategy, no fullDocument)`
+        );
+        return;
+      }
+      if (entry) {
+        await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
+      } else {
+        io.to(queryRoom).emit("sync", event);
+      }
+      logDebug(`[realtime] Emitted hard delete to ${queryRoom}`);
+      return;
+    }
+
+    if (entry && hasFieldViews) {
+      await emitMaskedQueryRoomEvent({
+        entry,
+        event,
+        fullDocument,
+        io,
+        logDebug,
+        query,
+        queryRoom,
+      });
+      return;
+    }
+
+    // Soft delete: only forward to query rooms whose filter the document satisfies.
+    if (matchesQuery(fullDocument, query)) {
+      if (entry) {
+        await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
+      } else {
+        io.to(queryRoom).emit("sync", event);
+      }
+      logDebug(`[realtime] Emitted soft delete to ${queryRoom} (query matched)`);
+    }
+    return;
+  }
+
+  if (!fullDocument) {
+    return;
+  }
+
+  if (entry && hasFieldViews) {
+    await emitMaskedQueryRoomEvent({entry, event, fullDocument, io, logDebug, query, queryRoom});
+    return;
+  }
+
+  const docMatches = matchesQuery(fullDocument, query);
+
+  if (event.method === "create" && docMatches) {
+    // New document matches the query — send create event
+    if (entry) {
+      await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
+    } else {
+      io.to(queryRoom).emit("sync", event);
+    }
+    logDebug(`[realtime] Emitted create to ${queryRoom} (query matched)`);
+  } else if (event.method === "update") {
+    if (docMatches) {
+      // Document still matches (or newly matches) — send update event
+      if (entry) {
+        await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
+      } else {
+        io.to(queryRoom).emit("sync", event);
+      }
+      logDebug(`[realtime] Emitted update to ${queryRoom} (query matched)`);
+    } else {
+      // Document no longer matches the query — send delete event so client removes it
+      const removeEvent: RealtimeEvent = {
+        ...event,
+        method: "delete",
+      };
+      if (entry) {
+        await emitToAuthorizedRoom(io, queryRoom, removeEvent, entry, fullDocument, logDebug);
+      } else {
+        io.to(queryRoom).emit("sync", removeEvent);
+      }
+      logDebug(`[realtime] Emitted delete to ${queryRoom} (query no longer matched)`);
+    }
+  }
+};
+
 /**
  * Emit a sync event to document-specific and query rooms.
  *
@@ -531,95 +642,24 @@ export const emitToDocumentAndQueryRooms = async (
 
   // Evaluate query subscriptions
   const querySubscriptions = getQuerySubscriptionsForCollection(collection);
-  for (const {queryId, query} of querySubscriptions) {
-    const queryRoom = `query:${queryId}`;
-
-    if (event.method === "delete") {
-      if (!fullDocument) {
-        // Hard delete with no document context. For owner-strategy collections we can't
-        // tell which query rooms belong to the owner without leaking activity to others,
-        // so skip query fanout entirely — subscribers will reconcile on next fetch.
-        if (isOwnerStrategy) {
-          logDebug(
-            `[realtime] Skipping hard delete fanout to ${queryRoom} (owner strategy, no fullDocument)`
-          );
-          continue;
-        }
-        if (entry) {
-          await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
-        } else {
-          io.to(queryRoom).emit("sync", event);
-        }
-        logDebug(`[realtime] Emitted hard delete to ${queryRoom}`);
-        continue;
-      }
-
-      if (entry && hasFieldViews) {
-        await emitMaskedQueryRoomEvent({
-          entry,
-          event,
-          fullDocument,
-          io,
-          logDebug,
-          query,
-          queryRoom,
-        });
-        continue;
-      }
-
-      // Soft delete: only forward to query rooms whose filter the document satisfies.
-      if (matchesQuery(fullDocument, query)) {
-        if (entry) {
-          await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
-        } else {
-          io.to(queryRoom).emit("sync", event);
-        }
-        logDebug(`[realtime] Emitted soft delete to ${queryRoom} (query matched)`);
-      }
-      continue;
-    }
-
-    if (!fullDocument) {
-      continue;
-    }
-
-    if (entry && hasFieldViews) {
-      await emitMaskedQueryRoomEvent({entry, event, fullDocument, io, logDebug, query, queryRoom});
-      continue;
-    }
-
-    const docMatches = matchesQuery(fullDocument, query);
-
-    if (event.method === "create" && docMatches) {
-      // New document matches the query — send create event
-      if (entry) {
-        await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
-      } else {
-        io.to(queryRoom).emit("sync", event);
-      }
-      logDebug(`[realtime] Emitted create to ${queryRoom} (query matched)`);
-    } else if (event.method === "update") {
-      if (docMatches) {
-        // Document still matches (or newly matches) — send update event
-        if (entry) {
-          await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
-        } else {
-          io.to(queryRoom).emit("sync", event);
-        }
-        logDebug(`[realtime] Emitted update to ${queryRoom} (query matched)`);
-      } else {
-        // Document no longer matches the query — send delete event so client removes it
-        const removeEvent: RealtimeEvent = {
-          ...event,
-          method: "delete",
-        };
-        if (entry) {
-          await emitToAuthorizedRoom(io, queryRoom, removeEvent, entry, fullDocument, logDebug);
-        } else {
-          io.to(queryRoom).emit("sync", removeEvent);
-        }
-        logDebug(`[realtime] Emitted delete to ${queryRoom} (query no longer matched)`);
-      }
+  for (const subscription of querySubscriptions) {
+    try {
+      await emitToQueryRoom({
+        entry,
+        event,
+        fullDocument,
+        hasFieldViews,
+        io,
+        isOwnerStrategy,
+        logDebug,
+        query: subscription.query,
+        queryRoom: `query:${subscription.queryId}`,
+      });
+    } catch (error) {
+      // One subscription's failure must not stop the others or the change's sync:delta.
+      logger.warn(
+        `[realtime] Query subscription ${subscription.queryId} failed to evaluate; skipping it: ${error}`
+      );
     }
   }
 };
@@ -1063,7 +1103,13 @@ const openChangeStream = ({
         }
 
         if (entry) {
-          await processRealtimeChange({change, docId, entry, io, logDebug, logInfo});
+          // A legacy realtime failure must not skip the independent sync:delta emission.
+          try {
+            await processRealtimeChange({change, docId, entry, io, logDebug, logInfo});
+          } catch (error) {
+            logger.error(`[realtime] Error processing realtime change: ${error}`);
+            Sentry.captureException(error);
+          }
         }
 
         if (syncEntry) {

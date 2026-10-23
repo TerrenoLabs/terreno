@@ -88,6 +88,17 @@ const setConnectionDb = (db: unknown): void => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("matchesQuery", () => {
+  describe("malformed predicates", () => {
+    it("fails closed instead of throwing", () => {
+      expect(matchesQuery({a: 1}, {$and: [null]})).toBe(false);
+      expect(matchesQuery({a: 1}, {$and: [{a: 1}, 5]})).toBe(false);
+      expect(matchesQuery({a: 1}, {$or: [null, {a: 1}]})).toBe(true);
+      expect(matchesQuery({a: 1}, {$or: [null, "x"]})).toBe(false);
+      expect(matchesQuery({a: 1}, {a: {$eq: {toString: 1}}})).toBe(false);
+      expect(matchesQuery({a: 1}, null as unknown as Record<string, unknown>)).toBe(false);
+    });
+  });
+
   describe("direct equality", () => {
     it("matches string equality", () => {
       expect(matchesQuery({name: "Alice"}, {name: "Alice"})).toBe(true);
@@ -1156,6 +1167,8 @@ describe("installRealtimeSocketHandlers", () => {
       await socket.trigger("subscribe:query", {});
       await socket.trigger("subscribe:query", {collection: "todos"});
       await socket.trigger("subscribe:query", {collection: "todos", query: [1, 2, 3]});
+      await socket.trigger("subscribe:query", {collection: "todos", query: {$and: [null]}});
+      await socket.trigger("subscribe:query", {collection: "todos", query: {$or: "priority"}});
       const queryRooms = Array.from(socket.rooms).filter((r) => r.startsWith("query:"));
       expect(queryRooms).toHaveLength(0);
     });
@@ -1552,6 +1565,40 @@ describe("emitToDocumentAndQueryRooms", () => {
     };
     await emitToDocumentAndQueryRooms(io, "todos", event, {}, () => {});
     expect(emissions.some((e) => e.room === "document:todos:doc-1")).toBe(true);
+  });
+
+  it("keeps fanning out to later query rooms when one subscription fails", async () => {
+    addQuerySubscription("socket-a", "todos", {priority: 1}, "failing");
+    const healthyId = computeQueryId("todos", {priority: 1});
+    addQuerySubscription("socket-b", "todos", {priority: 1}, healthyId);
+    const {addSocketToRoom, emissions, io} = makeIo();
+    addSocketToRoom(`query:${healthyId}`);
+    const throwingIo = {
+      ...io,
+      to: (room: string) => {
+        if (room === "query:failing") {
+          throw new Error("emit failed");
+        }
+        return io.to(room);
+      },
+    } as unknown as Server;
+    const event: RealtimeEvent = {
+      collection: "todos",
+      id: "doc-1",
+      method: "create",
+      model: "Todo",
+      timestamp: 1,
+    };
+
+    await emitToDocumentAndQueryRooms(
+      throwingIo,
+      "todos",
+      event,
+      {name: "x", priority: 1},
+      () => {}
+    );
+
+    expect(emissions.some((e) => e.room === `query:${healthyId}`)).toBe(true);
   });
 
   it("forwards hard deletes to every query room for non-owner strategies", async () => {

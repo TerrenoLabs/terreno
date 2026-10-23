@@ -15,6 +15,8 @@ export interface ConsentFormPublic {
   allowDecline: boolean;
   declineButtonText: string;
   required: boolean;
+  /** Set when staff signed this form provisionally for the user; the user still signs it. */
+  provisionalSignature?: {signedAt: string; signedByName: string};
 }
 
 import {getLocales} from "expo-localization";

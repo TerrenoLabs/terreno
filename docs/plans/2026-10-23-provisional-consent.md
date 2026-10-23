@@ -179,7 +179,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Verification: `bun test --only-failures api/src/consentApp.test.ts api/src/consentStatus.test.ts`; SDK regenerated
   - Skills: terreno:terreno-backend-api, terreno:mongoose-schema-safety
 
-- [ ] **T5** — Show provisional notice in the consent gate
+- [x] **T5** — Show provisional notice in the consent gate
   - Depends on: none (contract above)
   - Files: ui/src/useConsentForms.ts, ui/src/ConsentFormScreen.tsx, ui/src/ConsentFormScreen.test.tsx
   - Criteria: adds `ConsentFormPublic.provisionalSignature?: {signedAt, signedByName}`. When it is set, `consent-form-provisional-notice` shows "Signed on your behalf by <name> on <date>" (Luxon `DATETIME_MED`) above the content. Agree, decline, the scroll gate, checkboxes, and the signature requirement are unchanged, and existing tests pass. When it is unset, no notice shows.

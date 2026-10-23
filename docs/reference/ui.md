@@ -964,6 +964,26 @@ On web, that container is portaled to `document.body` (`position: fixed`, `z-ind
 
 Only the visible toast takes clicks. Every full-width layer around it (the container, its safe area, and the `Toast` layout wrapper) uses `pointerEvents: "box-none"`, so a button at the same height as an open toast stays clickable. Declare that style through `StyleSheet.create`; react-native-web drops `pointerEvents` from inline styles.
 
+## Consent components
+
+Client side of `ConsentApp` ([API reference](api.md#consent-forms-consentapp),
+[concepts](../explanation/consent-forms.md)). Lazily exported from the package root.
+
+### ConsentNavigator and ConsentFormScreen
+
+`ConsentNavigator` wraps app content, fetches `GET /consents/pending` through
+`useConsentForms(api, baseUrl)`, and renders `ConsentFormScreen` for each pending form until
+the list is empty. `ConsentFormScreen` shows the form's markdown (with `{{variable}}`
+substitution), required checkboxes, an optional signature, the scroll-to-bottom gate, and the
+agree and decline buttons.
+
+When staff signed the form provisionally, the pending form carries
+`provisionalSignature: {signedAt, signedByName}` (`ConsentFormPublic`), and the screen shows
+"Signed on your behalf by <name> on <date>" above the content (`testID`
+`consent-form-provisional-notice`, date in Luxon `DATETIME_MED` for the screen's `locale`). The user still agrees or
+declines themselves: the scroll gate, checkboxes, and signature work as for any other form.
+The signer's note is never shown.
+
 ## Authentication Components
 
 ### SocialLoginButton

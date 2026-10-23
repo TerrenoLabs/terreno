@@ -1,3 +1,4 @@
+import {DateTime} from "luxon";
 import React, {useCallback, useRef, useState} from "react";
 import {
   type LayoutChangeEvent,
@@ -52,6 +53,15 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
   const content = variables
     ? rawContent.replace(/\{\{(\w+)\}\}/g, (match, key) => variables[key] ?? match)
     : rawContent;
+
+  // Staff may have signed provisionally; the user still reads and answers the form.
+  const provisionalNotice = form.provisionalSignature
+    ? `Signed on your behalf by ${form.provisionalSignature.signedByName} on ${DateTime.fromISO(
+        form.provisionalSignature.signedAt
+      )
+        .setLocale(locale)
+        .toLocaleString(DateTime.DATETIME_MED)}`
+    : undefined;
 
   const allRequiredCheckboxesChecked = form.checkboxes.every((checkbox, index) => {
     if (!checkbox.required) {
@@ -244,6 +254,19 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
         testID="consent-form-scroll-view"
       >
         <Box direction="column" gap={3} paddingY={2}>
+          {Boolean(provisionalNotice) && (
+            <Box
+              border="default"
+              color="secondaryExtraLight"
+              padding={3}
+              rounding="md"
+              testID="consent-form-provisional-notice"
+            >
+              <Text size="md" testID="consent-form-provisional-notice-text">
+                {provisionalNotice}
+              </Text>
+            </Box>
+          )}
           <MarkdownView onLoad={handleMarkdownLoad}>{content}</MarkdownView>
 
           {form.checkboxes.length > 0 && (

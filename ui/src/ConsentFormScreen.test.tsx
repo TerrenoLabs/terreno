@@ -1,6 +1,7 @@
 import {afterEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
+import {DateTime} from "luxon";
 import {Platform} from "react-native";
 
 import {ConsentFormScreen} from "./ConsentFormScreen";
@@ -35,6 +36,76 @@ const waitForConsentMarkdown = async (getByText: (text: string) => unknown): Pro
 };
 
 describe("ConsentFormScreen", () => {
+  describe("provisional signature notice", () => {
+    const signedAt = "2026-10-20T15:30:00.000Z";
+
+    it("shows who signed on the user's behalf and when", () => {
+      const {getByTestId} = renderWithTheme(
+        <ConsentFormScreen
+          form={{...baseForm, provisionalSignature: {signedAt, signedByName: "Dana Rivera"}}}
+          locale="en"
+          onAgree={() => {}}
+        />
+      );
+      const expectedDate = DateTime.fromISO(signedAt)
+        .setLocale("en")
+        .toLocaleString(DateTime.DATETIME_MED);
+      const notice = getByTestId("consent-form-provisional-notice");
+      expect(notice).toBeTruthy();
+      expect(getByTestId("consent-form-provisional-notice-text").props.children).toBe(
+        `Signed on your behalf by Dana Rivera on ${expectedDate}`
+      );
+    });
+
+    it("shows no notice when the form has no provisional signature", () => {
+      const {queryByTestId} = renderWithTheme(
+        <ConsentFormScreen form={baseForm} locale="en" onAgree={() => {}} />
+      );
+      expect(queryByTestId("consent-form-provisional-notice")).toBeNull();
+    });
+
+    it("still requires the user's own checkboxes and signature to agree", () => {
+      const onAgree = mock(() => {});
+      const {getByTestId} = renderWithTheme(
+        <ConsentFormScreen
+          form={{
+            ...baseForm,
+            captureSignature: true,
+            checkboxes: [{label: "I understand", required: true}],
+            provisionalSignature: {signedAt, signedByName: "Dana Rivera"},
+          }}
+          locale="en"
+          onAgree={onAgree}
+        />
+      );
+      expect(getByTestId("consent-form-agree-button").props.accessibilityState?.disabled).toBe(
+        true
+      );
+      expect(getByTestId("consent-footer-checkboxes-hint")).toBeTruthy();
+      expect(getByTestId("consent-footer-signature-hint")).toBeTruthy();
+      fireEvent.press(getByTestId("consent-form-agree-button"));
+      expect(onAgree).not.toHaveBeenCalled();
+    });
+
+    it("lets the user decline a provisionally signed form", async () => {
+      const onDecline = mock(() => {});
+      const {getByTestId} = renderWithTheme(
+        <ConsentFormScreen
+          form={{...baseForm, provisionalSignature: {signedAt, signedByName: "Dana Rivera"}}}
+          locale="en"
+          onAgree={() => {}}
+          onDecline={onDecline}
+        />
+      );
+      act(() => {
+        fireEvent.press(getByTestId("consent-form-decline-button"));
+      });
+      await waitFor(() => {
+        expect(onDecline).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
   it("renders with default state and a locale fallback", () => {
     const onAgree = mock(() => {});
     const {getByTestId, getByText} = renderWithTheme(

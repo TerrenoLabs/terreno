@@ -1,3 +1,5 @@
+import {useCallback} from "react";
+
 import type {ConsentFormPublic} from "./useConsentForms";
 
 export type ProvisionalConsentStatus = "pending" | "provisional" | "signed" | "declined";
@@ -27,8 +29,38 @@ interface ConsentStatusResponse {
   data?: ProvisionalConsentStatusRow[];
 }
 
+export interface SignConsentProvisionallyBody {
+  userId: string;
+  consentFormId: string;
+  note: string;
+  locale?: string;
+}
+
+/** The `ConsentResponse` the server returns for a provisional signature. */
+export interface ProvisionalConsentResponse {
+  _id: string;
+  agreedAt: string;
+  consentFormId: string;
+  userId: string;
+  provisional: boolean;
+  provisionalNote?: string;
+  provisionalSignedBy?: {_id: string; name?: string; email?: string} | string;
+}
+
+type MutationTrigger<TBody> = (body: TBody) => {unwrap: () => Promise<unknown>};
+
+type MutationHook<TBody> = () => [MutationTrigger<TBody>, {isLoading: boolean; error?: unknown}];
+
 interface ProvisionalConsentQueryBuilder {
   query: (options: {providesTags: string[]; query: (userId: string) => string}) => unknown;
+  mutation: (options: {
+    invalidatesTags: string[];
+    query: (body: SignConsentProvisionallyBody) => {
+      body: SignConsentProvisionallyBody;
+      method: "POST";
+      url: string;
+    };
+  }) => unknown;
 }
 
 interface ProvisionalConsentQueryState {
@@ -40,11 +72,15 @@ interface ProvisionalConsentQueryState {
 
 interface ProvisionalConsentEnhancedApi {
   useGetConsentStatusQuery: (userId: string) => ProvisionalConsentQueryState;
+  useSignConsentProvisionallyMutation: MutationHook<SignConsentProvisionallyBody>;
 }
 
 interface ProvisionalConsentApiWithTags {
   injectEndpoints: (options: {
-    endpoints: (build: ProvisionalConsentQueryBuilder) => {getConsentStatus: unknown};
+    endpoints: (build: ProvisionalConsentQueryBuilder) => {
+      getConsentStatus: unknown;
+      signConsentProvisionally: unknown;
+    };
     overrideExisting: boolean;
   }) => ProvisionalConsentEnhancedApi;
 }
@@ -59,7 +95,18 @@ export interface UseProvisionalConsentResult {
   isLoading: boolean;
   error: unknown;
   refetch: () => void | Promise<void>;
+  /** Sign a form provisionally for the user. Rejects with the RTK error on failure. */
+  sign: (body: Omit<SignConsentProvisionallyBody, "userId">) => Promise<ProvisionalConsentResponse>;
+  isSigning: boolean;
 }
+
+/** Mutations may arrive as `{data}` envelopes or already unwrapped by the base query. */
+const unwrapData = <T>(result: unknown): T => {
+  if (result && typeof result === "object" && "data" in result) {
+    return (result as {data: T}).data;
+  }
+  return result as T;
+};
 
 /**
  * Cache the enhanced api per (api, baseUrl) so `injectEndpoints` runs once, as in
@@ -91,6 +138,15 @@ const getEnhancedApi = (
         query: (userId: string) =>
           `${base}/consent-responses/status?userId=${encodeURIComponent(userId)}`,
       }),
+      // A provisional signature changes the target's statuses and their pending notice.
+      signConsentProvisionally: build.mutation({
+        invalidatesTags: ["ConsentStatus", "PendingConsents"],
+        query: (body: SignConsentProvisionallyBody) => ({
+          body,
+          method: "POST",
+          url: `${base}/consent-responses/provisional`,
+        }),
+      }),
     }),
     overrideExisting: false,
   });
@@ -110,6 +166,18 @@ export const useProvisionalConsent = ({
 }): UseProvisionalConsentResult => {
   const enhancedApi = getEnhancedApi(api, baseUrl || "");
   const {data, error, isLoading, refetch} = enhancedApi.useGetConsentStatusQuery(userId);
+  const [signMutation, {isLoading: isSigning}] = enhancedApi.useSignConsentProvisionallyMutation();
   const statuses = Array.isArray(data) ? data : (data?.data ?? []);
-  return {error, isLoading, refetch, statuses};
+
+  const sign = useCallback(
+    async (
+      body: Omit<SignConsentProvisionallyBody, "userId">
+    ): Promise<ProvisionalConsentResponse> => {
+      const result = await signMutation({...body, userId}).unwrap();
+      return unwrapData<ProvisionalConsentResponse>(result);
+    },
+    [signMutation, userId]
+  );
+
+  return {error, isLoading, isSigning, refetch, sign, statuses};
 };

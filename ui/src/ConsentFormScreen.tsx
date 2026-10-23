@@ -18,7 +18,7 @@ import {Modal} from "./Modal";
 import {Page} from "./Page";
 import {SignatureField} from "./SignatureField";
 import {Text} from "./Text";
-import type {ConsentFormPublic} from "./useConsentForms";
+import {applyConsentVariables, type ConsentFormPublic} from "./useConsentForms";
 
 interface ConsentFormScreenProps {
   form: ConsentFormPublic;
@@ -50,9 +50,7 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
   const scrollViewRef = useRef<ScrollView>(null);
 
   const rawContent = form.content[locale] ?? form.content[form.defaultLocale] ?? "";
-  const content = variables
-    ? rawContent.replace(/\{\{(\w+)\}\}/g, (match, key) => variables[key] ?? match)
-    : rawContent;
+  const content = applyConsentVariables(rawContent, variables);
 
   // Staff may have signed provisionally; the user still reads and answers the form.
   const provisionalNotice = form.provisionalSignature

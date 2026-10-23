@@ -1000,20 +1000,38 @@ import {ProvisionalConsentSigner} from "@terreno/ui";
 | `api` | RTK Query api | The consumer api, as passed to `ConsentNavigator` |
 | `baseUrl` | `string` | Optional prefix for consent routes |
 | `userId` | `string` | The user being signed for |
+| `onSigned` | `(response) => void` | Called with the stored `ConsentResponse` after a provisional signature |
+| `onError` | `(error) => void` | Called with the server error when signing fails |
+| `variables` | `Record<string, string>` | Values for `{{name}}` placeholders in form content |
 
 It lists every form that applies to the user (`GET /consent-responses/status`) with a status
 badge: "Pending", "Signed provisionally by <signer> on <date>", "Signed by user on <date>",
 or "Declined by user on <date>". It shows a spinner while loading and the server error with
 a Retry button on failure. Lazily exported from the package root.
 
+Pending and declined forms have a "Sign on behalf" button. It opens the form read-only
+(`MarkdownView`, `variables` applied, in the viewer's locale, then that locale's language,
+then the form's default) with a required "Note" box. "Sign provisionally" stays disabled until
+the note has text. Submitting sends `{userId, consentFormId, note, locale}` to
+`POST /consent-responses/provisional`, then returns to the list with a confirmation naming
+the signer and time, and calls `onSigned`. A server error shows under the note and calls
+`onError`. The signer never ticks the form's checkboxes or draws a signature: those stay the
+user's.
+
 `useProvisionalConsent({api, baseUrl?, userId})` returns `{statuses, isLoading, error,
-refetch}`, where `statuses` are `ProvisionalConsentStatusRow`s
-(`{form, status, isConsented, respondedAt?, provisional?}`). It injects the
-`getConsentStatus` endpoint once per `(api, baseUrl)` and tags it `ConsentStatus`.
+refetch, sign, isSigning}`. `statuses` are `ProvisionalConsentStatusRow`s
+(`{form, status, isConsented, respondedAt?, provisional?}`). `sign({consentFormId, note,
+locale?})` signs for the hook's `userId` and resolves to the `ConsentResponse`, or rejects
+with the RTK error. The hook injects `getConsentStatus` and `signConsentProvisionally` once
+per `(api, baseUrl)`. Signing invalidates the `ConsentStatus` and `PendingConsents` tags.
 
 testIDs: `provisional-consent-signer`, `provisional-consent-loading`,
 `provisional-consent-error`, `provisional-consent-retry-button`, `provisional-consent-empty`,
-`provisional-consent-row-{formId}`, `provisional-consent-status-{formId}`.
+`provisional-consent-row-{formId}`, `provisional-consent-status-{formId}`,
+`provisional-consent-open-{formId}`, `provisional-consent-form-content`,
+`provisional-consent-note-input`, `provisional-consent-submit-button`,
+`provisional-consent-cancel-button`, `provisional-consent-submit-error`,
+`provisional-consent-success`.
 
 ## Authentication Components
 

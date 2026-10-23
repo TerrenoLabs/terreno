@@ -58,6 +58,29 @@ interface ConsentFormsApi {
   enhanceEndpoints: (options: {addTagTypes: string[]}) => ConsentFormsApiWithTags;
 }
 
+/** Replace `{{name}}` placeholders in consent content; unknown placeholders stay as written. */
+export const applyConsentVariables = (
+  content: string,
+  variables?: Record<string, string>
+): string => {
+  if (!variables) {
+    return content;
+  }
+  return content.replace(/\{\{(\w+)\}\}/g, (match, key) => variables[key] ?? match);
+};
+
+/** The content locale to show: the exact locale, then its language, then the form default. */
+export const resolveConsentLocale = (form: ConsentFormPublic, locale: string): string => {
+  if (form.content[locale] !== undefined) {
+    return locale;
+  }
+  const language = locale.split("-")[0];
+  if (form.content[language] !== undefined) {
+    return language;
+  }
+  return form.defaultLocale;
+};
+
 export const detectLocale = (): string => {
   // Web
   if (typeof navigator !== "undefined" && navigator.language) {

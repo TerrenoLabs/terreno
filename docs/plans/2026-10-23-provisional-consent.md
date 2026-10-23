@@ -193,7 +193,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Verification: `bun test --only-failures ui/src/useProvisionalConsent.test.ts ui/src/ProvisionalConsentSigner.test.tsx ui/src/RootImportRegression.test.tsx`
   - Skills: terreno:terreno-ui, terreno:terreno-data-fetching
 
-- [ ] **T7** — Sign on behalf with a note box in ProvisionalConsentSigner
+- [x] **T7** — Sign on behalf with a note box in ProvisionalConsentSigner
   - Depends on: T6
   - Files: ui/src/useProvisionalConsent.ts, ui/src/useProvisionalConsent.test.ts, ui/src/ProvisionalConsentSigner.tsx, ui/src/ProvisionalConsentSigner.test.tsx
   - Criteria: `pending` and `declined` rows have `provisional-consent-open-{formId}`. Opening one shows the form content read-only (`MarkdownView`, `variables` applied) and a required multiline `provisional-consent-note-input`. Submit stays disabled until the note is non-blank. Submit POSTs `{userId, consentFormId, note, locale}`, then shows `provisional-consent-success` with the signer name and time from the response, and calls `onSigned`. Server errors show inline and call `onError`.

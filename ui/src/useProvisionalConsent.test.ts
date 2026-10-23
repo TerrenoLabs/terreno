@@ -1,5 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
+import {act, renderHook} from "@testing-library/react-native";
 
 import {
   type ProvisionalConsentApi,
@@ -10,6 +10,11 @@ import {
 interface CapturedQuery {
   providesTags: string[];
   query: (userId: string) => string;
+}
+
+interface CapturedMutation {
+  invalidatesTags: string[];
+  query: (body: Record<string, unknown>) => {body: unknown; method: string; url: string};
 }
 
 const row: ProvisionalConsentStatusRow = {
@@ -36,23 +41,37 @@ const row: ProvisionalConsentStatusRow = {
 };
 
 const buildApi = (
-  state: {data?: unknown; error?: unknown; isLoading?: boolean} = {}
+  state: {data?: unknown; error?: unknown; isLoading?: boolean} = {},
+  signResult: () => Promise<unknown> = () => Promise.resolve({})
 ): {
   api: ProvisionalConsentApi;
   captured: CapturedQuery[];
+  capturedMutations: CapturedMutation[];
   addTagTypes: string[][];
   queriedUserIds: string[];
+  signedBodies: unknown[];
 } => {
   const captured: CapturedQuery[] = [];
+  const capturedMutations: CapturedMutation[] = [];
   const addTagTypes: string[][] = [];
   const queriedUserIds: string[] = [];
+  const signedBodies: unknown[] = [];
   const api = {
     enhanceEndpoints: mock((options: {addTagTypes: string[]}) => {
       addTagTypes.push(options.addTagTypes);
       return {
         injectEndpoints: mock(
-          (options: {endpoints: (build: {query: (def: CapturedQuery) => unknown}) => unknown}) => {
+          (options: {
+            endpoints: (build: {
+              mutation: (def: CapturedMutation) => unknown;
+              query: (def: CapturedQuery) => unknown;
+            }) => unknown;
+          }) => {
             options.endpoints({
+              mutation: (def: CapturedMutation) => {
+                capturedMutations.push(def);
+                return def;
+              },
               query: (def: CapturedQuery) => {
                 captured.push(def);
                 return def;
@@ -68,13 +87,20 @@ const buildApi = (
                   refetch: () => {},
                 };
               },
+              useSignConsentProvisionallyMutation: () => [
+                (body: unknown) => {
+                  signedBodies.push(body);
+                  return {unwrap: signResult};
+                },
+                {isLoading: false},
+              ],
             };
           }
         ),
       };
     }),
   } as unknown as ProvisionalConsentApi;
-  return {addTagTypes, api, captured, queriedUserIds};
+  return {addTagTypes, api, captured, capturedMutations, queriedUserIds, signedBodies};
 };
 
 describe("useProvisionalConsent", () => {
@@ -104,6 +130,57 @@ describe("useProvisionalConsent", () => {
     expect(captured).toHaveLength(2);
     expect(captured[0].query("a")).toBe("/consent-responses/status?userId=a");
     expect(captured[1].query("a")).toBe("/v2/consent-responses/status?userId=a");
+  });
+
+  it("defines the provisional sign mutation and invalidates statuses and pending consents", () => {
+    const {api, capturedMutations} = buildApi({data: []});
+    renderHook(() => useProvisionalConsent({api, baseUrl: "/api", userId: "a"}));
+
+    expect(capturedMutations).toHaveLength(1);
+    expect(capturedMutations[0].invalidatesTags).toEqual(["ConsentStatus", "PendingConsents"]);
+    const body = {consentFormId: "form-1", note: "Phone", userId: "a"};
+    expect(capturedMutations[0].query(body)).toEqual({
+      body,
+      method: "POST",
+      url: "/api/consent-responses/provisional",
+    });
+  });
+
+  it("signs for the hook's user and unwraps the response envelope", async () => {
+    const response = {_id: "response-1", agreedAt: "2026-10-20T15:30:00.000Z"};
+    const {api, signedBodies} = buildApi({data: []}, () => Promise.resolve({data: response}));
+    const {result} = renderHook(() => useProvisionalConsent({api, userId: "member-1"}));
+
+    let signed: unknown;
+    await act(async () => {
+      signed = await result.current.sign({consentFormId: "form-1", locale: "en", note: "Phone"});
+    });
+
+    expect(signedBodies).toEqual([
+      {consentFormId: "form-1", locale: "en", note: "Phone", userId: "member-1"},
+    ]);
+    expect(signed).toEqual(response);
+    expect(result.current.isSigning).toBe(false);
+  });
+
+  it("returns an already-unwrapped sign response as is", async () => {
+    const response = {_id: "response-2", agreedAt: "2026-10-20T15:30:00.000Z"};
+    const {api} = buildApi({data: []}, () => Promise.resolve(response));
+    const {result} = renderHook(() => useProvisionalConsent({api, userId: "member-1"}));
+
+    let signed: unknown;
+    await act(async () => {
+      signed = await result.current.sign({consentFormId: "form-1", note: "Phone"});
+    });
+    expect(signed).toEqual(response);
+  });
+
+  it("rejects with the server error when signing fails", async () => {
+    const error = {data: {title: "Consent form is not active"}, status: 400};
+    const {api} = buildApi({data: []}, () => Promise.reject(error));
+    const {result} = renderHook(() => useProvisionalConsent({api, userId: "member-1"}));
+
+    await expect(result.current.sign({consentFormId: "form-1", note: "Phone"})).rejects.toBe(error);
   });
 
   it("accepts an unwrapped array response", () => {

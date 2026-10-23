@@ -9,7 +9,10 @@ import {APIError} from "../errors";
 import {Permissions} from "../permissions";
 import {createdUpdatedPlugin, type IsDeleted, isDeletedPlugin} from "../plugins";
 import {createAccess} from "../rbac/access";
+import {resolveModelRouterAccess} from "../rbac/modelRouterAccess";
+import {OwnerScope} from "../rbac/scopes";
 import {terrenoStatements} from "../rbac/statements";
+import type {AnyTerrenoAccess} from "../rbac/types";
 import {setupDb, UserModel} from "../tests";
 import {ExecutorConflictError, executeCreate, executeDelete, executeUpdate} from "./executors";
 
@@ -1051,5 +1054,195 @@ describe("RBAC user-model strip on a user model not compiled as User", () => {
     const stored = await AccountModel.findById(doc._id).lean();
     expect(stored?.admin).toBe(false);
     expect(stored?.roles ?? []).toEqual([]);
+  });
+});
+
+describe("owner scope on the written document", () => {
+  const admin = {_id: "u-admin", admin: true, id: "u-admin"} as unknown as User;
+  const scopeStatements = {
+    ...terrenoStatements,
+    execStuff: ["create", "read", "update", "delete", "list"],
+  } as const;
+
+  beforeAll(async () => {
+    await setupDb();
+  });
+
+  beforeEach(async () => {
+    await ExecStuffModel.deleteMany({});
+  });
+
+  const ownerRouterOptions = (): ModelRouterOptions<ExecStuff> =>
+    baseOptions({
+      permissions: {
+        create: [Permissions.IsAuthenticated],
+        delete: [Permissions.IsOwner],
+        list: [Permissions.IsAuthenticated],
+        read: [Permissions.IsOwner],
+        update: [Permissions.IsOwner],
+      },
+    });
+
+  const rbacOptions = async (): Promise<ModelRouterOptions<ExecStuff>> => {
+    const access = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Exec member",
+          name: "execMember",
+          permissions: {execStuff: ["create", "read", "update", "delete", "list"]},
+        },
+      ],
+      statements: scopeStatements,
+    });
+    await access.roles.seedDefaults();
+    const routerAccess = {resource: "execStuff", scope: OwnerScope()};
+    return {
+      access: routerAccess,
+      accessControl: access,
+      permissions: resolveModelRouterAccess<ExecStuff>({
+        access: routerAccess,
+        accessControl: access as AnyTerrenoAccess,
+      }).permissions,
+    } as unknown as ModelRouterOptions<ExecStuff>;
+  };
+
+  const member = (id: string): User =>
+    ({_id: id, admin: false, id, roles: ["execMember"]}) as unknown as User;
+
+  it("rejects an update that moves an owned document to another user", async () => {
+    const doc = await ExecStuffModel.create({name: "mine", ownerId: owner.id});
+    const error = await caught(
+      executeUpdate<ExecStuff>({
+        body: {name: "moved", ownerId: stranger.id},
+        id: doc._id.toString(),
+        model: ExecStuffModel,
+        options: ownerRouterOptions(),
+        user: owner,
+      })
+    );
+    expect(error.status).toBe(403);
+    const stored = await ExecStuffModel.findById(doc._id).lean();
+    expect(stored?.ownerId).toBe(owner.id);
+    expect(stored?.name).toBe("mine");
+  });
+
+  it("still lets the owner update other fields and an admin reassign the owner", async () => {
+    const doc = await ExecStuffModel.create({name: "mine", ownerId: owner.id});
+    await executeUpdate<ExecStuff>({
+      body: {name: "renamed", ownerId: owner.id},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: owner,
+    });
+    await executeUpdate<ExecStuff>({
+      body: {ownerId: stranger.id},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: admin,
+    });
+    const stored = await ExecStuffModel.findById(doc._id).lean();
+    expect(stored?.name).toBe("renamed");
+    expect(stored?.ownerId).toBe(stranger.id);
+  });
+
+  it("rejects a create that names another user as the owner", async () => {
+    const error = await caught(
+      executeCreate<ExecStuff>({
+        body: {name: "planted", ownerId: stranger.id},
+        model: ExecStuffModel,
+        options: ownerRouterOptions(),
+        user: owner,
+      })
+    );
+    expect(error.status).toBe(403);
+    expect(await ExecStuffModel.countDocuments({ownerId: stranger.id})).toBe(0);
+  });
+
+  it("allows creates that name the caller or no owner", async () => {
+    await executeCreate<ExecStuff>({
+      body: {name: "self", ownerId: owner.id},
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: owner,
+    });
+    await executeCreate<ExecStuff>({
+      body: {name: "unowned"},
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: owner,
+    });
+    await executeCreate<ExecStuff>({
+      body: {name: "for someone", ownerId: stranger.id},
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: admin,
+    });
+    expect(await ExecStuffModel.countDocuments({})).toBe(3);
+  });
+
+  it("does not apply the owner check to routers without owner permissions", async () => {
+    await executeCreate<ExecStuff>({
+      body: {name: "open", ownerId: stranger.id},
+      model: ExecStuffModel,
+      options: baseOptions({
+        permissions: {
+          create: [Permissions.IsAuthenticated],
+          delete: [Permissions.IsAdmin],
+          list: [Permissions.IsAny],
+          read: [Permissions.IsAny],
+          update: [Permissions.IsAdmin],
+        },
+      }),
+      user: owner,
+    });
+    expect(await ExecStuffModel.countDocuments({ownerId: stranger.id})).toBe(1);
+  });
+
+  it("rejects RBAC OwnerScope updates and creates that leave the caller's scope", async () => {
+    const options = await rbacOptions();
+    const alice = member(new mongoose.Types.ObjectId().toString());
+    const bob = member(new mongoose.Types.ObjectId().toString());
+
+    const {doc} = await executeCreate<ExecStuff>({
+      body: {name: "alice's", ownerId: alice.id},
+      model: ExecStuffModel,
+      options,
+      user: alice,
+    });
+    await executeUpdate<ExecStuff>({
+      body: {name: "alice renamed"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options,
+      user: alice,
+    });
+
+    const moveError = await caught(
+      executeUpdate<ExecStuff>({
+        body: {name: "attacker-authored", ownerId: bob.id},
+        id: doc._id.toString(),
+        model: ExecStuffModel,
+        options,
+        user: alice,
+      })
+    );
+    expect(moveError.status).toBe(403);
+    const stored = await ExecStuffModel.findById(doc._id).lean();
+    expect(stored?.ownerId).toBe(alice.id);
+    expect(stored?.name).toBe("alice renamed");
+
+    const plantError = await caught(
+      executeCreate<ExecStuff>({
+        body: {name: "planted", ownerId: bob.id},
+        model: ExecStuffModel,
+        options,
+        user: alice,
+      })
+    );
+    expect(plantError.status).toBe(403);
+    expect(await ExecStuffModel.countDocuments({ownerId: bob.id})).toBe(0);
   });
 });

@@ -56,6 +56,17 @@ const ownerOptions: ModelRouterOptions<MutStuff> = {
   },
 };
 
+// For broadcast and tenant collections, where `ownerId` is not an owner binding.
+const sharedOptions: ModelRouterOptions<MutStuff> = {
+  permissions: {
+    create: [Permissions.IsAuthenticated],
+    delete: [Permissions.IsAuthenticated],
+    list: [Permissions.IsAny],
+    read: [Permissions.IsAny],
+    update: [Permissions.IsAuthenticated],
+  },
+};
+
 const registerMutStuff = (
   overrides: {config?: Partial<SyncConfig>; options?: ModelRouterOptions<MutStuff>} = {}
 ): void => {
@@ -1084,7 +1095,7 @@ describe("applySyncMutation", () => {
 
   describe("write scope enforcement", () => {
     it("skips the write-scope check for broadcast collections", async () => {
-      registerMutStuff({config: {scope: {type: "broadcast"}}});
+      registerMutStuff({config: {scope: {type: "broadcast"}}, options: sharedOptions});
       const ack = expectAck(
         await applySyncMutation({
           mutation: {
@@ -1120,7 +1131,10 @@ describe("applySyncMutation", () => {
     });
 
     it("acks a tenant-scoped create when the resolver confirms the membership", async () => {
-      registerMutStuff({config: {scope: {field: "ownerId", type: "tenant"}}});
+      registerMutStuff({
+        config: {scope: {field: "ownerId", type: "tenant"}},
+        options: sharedOptions,
+      });
       const ack = expectAck(
         await applySyncMutation({
           mutation: {

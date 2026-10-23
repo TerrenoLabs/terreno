@@ -243,6 +243,25 @@ Action config supports `allowAnonymous: true` as a per-action override; it does 
 
 An action with `mcp` runs the same permission chain (including RBAC `access`) over `/mcp`. Its input is `{id, ...body}` for an instance POST, `{id, ...query}` for an instance GET, and the body or query alone for a collection action, so `body` / `query` must be a `z.object()`, and an instance action's schema cannot define `id`. A collection action's `id` field passes through to its body or query. The handler receives `req.isMCPRequest === true` and a `res` that throws if touched. See [modelRouter actions → MCP tools](../explanation/model-router-actions.md#mcp-tools).
 
+## modelRouter write scope
+
+Create and update check the document as it will be written, not only as it was loaded. REST,
+MCP tools, and sync mutations all share this check. A non-admin caller gets `403` with title
+`Write scope violation on {Model}` when:
+
+- The router uses `Permissions.IsOwner` or `Permissions.IsOwnerOrReadOnly` on any method, and
+  a create (after `preCreate`) sets `ownerId` to someone other than the caller. A create that
+  leaves `ownerId` unset is still allowed.
+- The router's `update` permissions use `IsOwner` or `IsOwnerOrReadOnly`, and the update would
+  set `ownerId` to someone else or clear it.
+- The router uses RBAC `access`, and the written document fails the role check or the router
+  `access.scope` for that method. For example, with `scope: OwnerScope()`, a create or update
+  must leave `ownerId` set to the caller. Entries in `access.also` other than `IsOwner` /
+  `IsOwnerOrReadOnly` run only against the loaded document.
+
+Admins pass `IsOwner`, so they can still reassign records. Admin-window sync writes skip this
+check, as they skip the other modelRouter permissions.
+
 ## modelRouter list queries
 
 `GET /{path}` accepts filters on fields listed in `queryFields` (qs syntax, so operators work:

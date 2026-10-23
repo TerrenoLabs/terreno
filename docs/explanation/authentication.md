@@ -266,6 +266,15 @@ permissions: {
 }
 ``````
 
+### Owner scope on writes
+
+Object permissions such as `IsOwner` first run against the document as it was loaded. On
+create and update, modelRouter also checks the document as it will be written. A user cannot
+create a record that names another user as `ownerId`, or move their own record to another
+user, even when the router has no `preUpdate` that strips `ownerId`. RBAC routers get the same
+check from their role scopes and `access.scope`. Admins can still reassign owners. See
+[modelRouter write scope](../reference/api.md#modelrouter-write-scope).
+
 ### Custom Permissions
 
 Create custom permission functions:

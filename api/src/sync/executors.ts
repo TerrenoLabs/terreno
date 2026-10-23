@@ -32,8 +32,8 @@ import {
   passthroughOrWrap,
   passthroughOrWrapWrite,
 } from "../errors";
-import {checkPermissions} from "../permissions";
-import {validateAccessWritePayload} from "../rbac/modelRouterAccess";
+import {checkPermissions, type PermissionMethod, Permissions} from "../permissions";
+import {buildAccessPermissions, validateAccessWritePayload} from "../rbac/modelRouterAccess";
 import {assertCanWriteTargetUser} from "../rbac/userWriteGuards";
 import {transform} from "../transformers";
 
@@ -175,6 +175,102 @@ const reloadDocForConflict = async <T>(
 };
 
 /**
+ * True for legacy permissions whose object check binds a document to its owner. Read lazily:
+ * `permissions` and this module import each other.
+ */
+const isOwnerIdentityPermission = (permission: unknown): boolean =>
+  permission === Permissions.IsOwner || permission === Permissions.IsOwnerOrReadOnly;
+
+/**
+ * Owner and scope checks that must hold for the document as written, not only as loaded.
+ *
+ * - RBAC routers (`access` + `accessControl`): the framework-built role and scope checks for
+ *   the method (the role grant evaluated against the document, plus the router `access.scope`),
+ *   and any owner-identity entries in `access.also`. Other `also` entries are left out so
+ *   state-dependent consumer checks keep running only against the pre-write document.
+ * - Legacy routers: `IsOwner` when the method's permissions use an owner-identity check.
+ */
+const getWriteScopeChecks = <T>(
+  options: ModelRouterOptions<T>,
+  method: "create" | "update"
+): PermissionMethod<T>[] => {
+  if (options.access && options.accessControl) {
+    const scoped = buildAccessPermissions<T>(options.accessControl, {
+      ...options.access,
+      also: undefined,
+    })[method];
+    const alsoOwner = ((options.access.also?.[method] ?? []) as PermissionMethod<T>[]).filter(
+      isOwnerIdentityPermission
+    );
+    return [...scoped, ...alsoOwner];
+  }
+  if (method === "update") {
+    return (options.permissions?.update ?? []).some(isOwnerIdentityPermission)
+      ? [Permissions.IsOwner as PermissionMethod<T>]
+      : [];
+  }
+  // A create is owner-scoped when any method on the router binds documents to their owner.
+  const lists = [
+    options.permissions?.create,
+    options.permissions?.read,
+    options.permissions?.update,
+    options.permissions?.delete,
+  ];
+  if (!lists.some((list) => (list ?? []).some(isOwnerIdentityPermission))) {
+    return [];
+  }
+  // Only a named owner is checked, so a create that leaves the owner for a hook or default
+  // to fill keeps working.
+  return [
+    (method_, user, obj) =>
+      (obj as {ownerId?: unknown} | undefined)?.ownerId == null ||
+      Permissions.IsOwner(method_, user, obj),
+  ];
+};
+
+/**
+ * Reject a write whose resulting document would fall outside the caller's owner or RBAC scope,
+ * for example a create naming another user as owner or an update that moves the owner field.
+ * Runs on REST, MCP and sync writes alike because they share these executors.
+ */
+const assertWriteStaysInScope = async <T>({
+  doc,
+  method,
+  model,
+  options,
+  user,
+}: {
+  doc: unknown;
+  method: "create" | "update";
+  model: Model<T>;
+  options: ModelRouterOptions<T>;
+  user?: User;
+}): Promise<void> => {
+  const checks = getWriteScopeChecks(options, method);
+  for (const check of checks) {
+    if (!(await check(method, user, doc as T))) {
+      throw new APIError({
+        status: 403,
+        title: `Write scope violation on ${model.modelName}`,
+      });
+    }
+  }
+};
+
+/**
+ * Hydrate a create body item without saving it, so owner checks see defaults and virtuals the
+ * way they see a loaded document. Returns undefined when the item cannot be cast; `create`
+ * then reports the same validation error.
+ */
+const hydrateCreateCandidate = <T>(model: Model<T>, item: unknown): unknown => {
+  try {
+    return new (model as unknown as new (doc: unknown) => unknown)(item);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
  * Create a document through the same pipeline as `POST /`: method-level permissions,
  * `transformer.transform`, `preCreate`, `Model.create` (Mongoose validation), population,
  * and `postCreate`. Throws APIErrors with the same statuses/titles as the REST handler.
@@ -277,6 +373,15 @@ export const executeCreate = async <T>({
     phase: "create",
     user,
   });
+  if (!skipPermissionChecks) {
+    const items = Array.isArray(cleanedBody) ? cleanedBody : [cleanedBody];
+    for (const item of items) {
+      const candidate = item ? hydrateCreateCandidate(model, item) : undefined;
+      if (candidate) {
+        await assertWriteStaysInScope({doc: candidate, method: "create", model, options, user});
+      }
+    }
+  }
   let data: ExecutorDoc<T>;
   try {
     data = (await model.create(cleanedBody as T)) as ExecutorDoc<T>;
@@ -542,6 +647,10 @@ export const executeUpdate = async <T>({
   // updates. We won't wind up with corrupted data, just an API error.
   try {
     doc.set(cleanedBody);
+    // The pre-write document passed the update checks; the written state must stay in scope too.
+    if (!skipPermissionChecks) {
+      await assertWriteStaysInScope({doc, method: "update", model, options, user});
+    }
     await doc.save();
   } catch (error: unknown) {
     // Task 9.13: `syncPlugin` enables Mongoose `optimisticConcurrency` on synced schemas, so

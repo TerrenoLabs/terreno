@@ -327,9 +327,11 @@ const pageLegacyStratum = async ({
     if (!(await checkPermissions("read", entry.options.permissions.read, user, doc))) {
       continue;
     }
+    const isTombstone = Boolean(doc.deleted);
     entities.push({
-      data: await serializeSyncDoc({doc, entry, req}),
-      deleted: Boolean(doc.deleted),
+      // C7: tombstones carry no data, the same as the seq stratum and /sync/entities.
+      data: isTombstone ? null : await serializeSyncDoc({doc, entry, req}),
+      deleted: isTombstone,
       id: String(doc._id),
       seq: 0,
     });

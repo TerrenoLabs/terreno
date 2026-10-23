@@ -89,6 +89,11 @@ const mcpOAuthTokenSchema = new mongoose.Schema<McpOAuthTokenDocument, McpOAuthT
       description: "Space-separated scopes granted",
       type: String,
     },
+    tokenEpoch: {
+      description:
+        "The user's tokenEpoch when the grant was approved; the pair stops working after it changes",
+      type: Number,
+    },
     userId: {
       description: "The user the tokens act as",
       index: true,
@@ -128,6 +133,7 @@ mcpOAuthTokenSchema.statics = {
       refreshTokenHash: hashMcpOAuthSecret(refreshToken),
       resource: options.resource,
       scope: options.scope,
+      tokenEpoch: options.tokenEpoch ?? 0,
       userId: options.userId,
     });
     // revokeFamily writes the tombstone before it revokes pairs, so a revoke that raced this

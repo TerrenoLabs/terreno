@@ -177,7 +177,7 @@ describe("rbac role model", () => {
 
     const admin = await RbacRole.findExactlyOne({name: "admin"});
     expect(admin.permissions.customApp).toBeUndefined();
-    expect(admin.permissions.user).toEqual(["create", "list", "read", "update"]);
+    expect(admin.permissions.user).toEqual(["create", "list", "read", "update", "updateIdentity"]);
     expect(admin.permissions.consentResponse).toEqual(["signOnBehalf"]);
   });
 

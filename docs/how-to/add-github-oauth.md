@@ -68,7 +68,8 @@ setupServer({
     clientSecret: process.env.GITHUB_CLIENT_SECRET!,
     callbackURL: process.env.GITHUB_CALLBACK_URL || "http://localhost:4000/auth/github/callback",
     scope: ["user:email"], // Optional, defaults to ["user:email"]
-    allowAccountLinking: true, // Optional, defaults to true
+    allowAccountLinking: true, // Optional
+    allowedReturnTo: ["https://app.yourapp.com", "yourapp://auth"], // Optional, needed for returnTo
   },
 });
 ``````
@@ -81,7 +82,8 @@ setupServer({
 | `clientSecret` | string | Yes | GitHub OAuth Client Secret |
 | `callbackURL` | string | Yes | OAuth callback URL (must match GitHub app settings) |
 | `scope` | string[] | No | OAuth scopes (default: `["user:email"]`) |
-| `allowAccountLinking` | boolean | No | Allow linking GitHub to existing accounts (default: `true`) |
+| `allowAccountLinking` | boolean | No | `true` lets `GET /auth/github/link` attach GitHub to the signed-in user. When omitted, the link route is mounted but linking returns 400, and a GitHub login whose email matches an existing account links to it. `false` turns off both. |
+| `allowedReturnTo` | string[] | No | Exact http(s) origins (`https://app.yourapp.com`) or custom-scheme authorities (`yourapp://auth`) that `returnTo` may point to. Unset means `returnTo` is ignored. |
 | `findOrCreateUser` | function | No | Custom user creation/lookup handler |
 
 ## Step 4: Set Environment Variables
@@ -106,8 +108,20 @@ The following routes are automatically added when `githubAuth` is configured:
 GET /auth/github
 ``````
 
-Redirects users to GitHub for authentication. Optional query parameter:
-- `returnTo` — URL to redirect after successful authentication (tokens will be appended as query params)
+Redirects users to GitHub for authentication. The redirect carries an OAuth `state` value, and
+the response sets a short-lived (10 minute), signed, HttpOnly, `SameSite=Lax` cookie named
+`terreno_github_oauth_state` that holds the same value. The callback accepts the GitHub response
+only from the browser that holds that cookie, and each cookie works once. The cookie is signed
+with `SESSION_SECRET` (or `TOKEN_SECRET` when `SESSION_SECRET` is unset).
+
+Optional query parameter:
+- `returnTo` — URL to redirect to after successful authentication. Its origin (or custom-scheme
+  authority) must be listed in `allowedReturnTo`; any other value returns 400. When
+  `allowedReturnTo` is unset, `returnTo` is ignored and the callback returns JSON. Tokens are
+  delivered in the URL fragment (`#token=...&refreshToken=...&userId=...`), never the query
+  string. `returnTo` is kept in `req.session` between the two requests, so it needs a
+  persistent session middleware (for example `express-session`) mounted through
+  `beforeJsonSetup` or `addMiddleware`; TerrenoApp ships none.
 
 ### OAuth Callback
 
@@ -115,7 +129,7 @@ Redirects users to GitHub for authentication. Optional query parameter:
 GET /auth/github/callback
 ``````
 
-Handles the GitHub OAuth callback. Returns JSON with tokens:
+Handles the GitHub OAuth callback. Without an allowlisted `returnTo`, returns JSON with tokens:
 
 ``````json
 {
@@ -134,7 +148,12 @@ GET /auth/github/link
 Authorization: Bearer <jwt-token>
 ``````
 
-Links GitHub to the authenticated user's existing account. Redirects to GitHub, then back to callback.
+Links GitHub to the authenticated user's existing account. Redirects to GitHub, then back to
+the callback. The user ID from the bearer token is recorded in the signed state cookie, and the
+callback links GitHub only to that user. A session cookie or token that happens to be on the
+callback request is never used as the link target. Open this route in the same browser that will
+return to the callback, so the state cookie is present there. Requires
+`allowAccountLinking: true`.
 
 ### Unlink GitHub Account (Requires Auth)
 
@@ -164,7 +183,7 @@ Removes GitHub authentication from the user's account. Returns:
 3. User authorizes on GitHub
 4. Backend receives callback, creates new user with GitHub profile data
 5. Backend generates JWT tokens
-6. Backend redirects to `returnTo` URL with tokens in query params
+6. Backend checks `returnTo` against `allowedReturnTo` again and redirects there with tokens in the URL fragment
 7. Frontend stores tokens and logs user in
 
 ### Existing User Login
@@ -195,7 +214,8 @@ setupServer({
       // - profile: GitHub profile data
       // - accessToken: GitHub access token
       // - refreshToken: GitHub refresh token (if available)
-      // - existingUser: If user is authenticated, their user document
+      // - existingUser: The user who started GET /auth/github/link (from the verified
+      //   OAuth state), otherwise undefined
       
       if (existingUser) {
         // Link GitHub to existing user
@@ -243,6 +263,7 @@ const handleGitHubLogin = async () => {
   });
   
   if (result.type === "success") {
+    // Tokens arrive in the fragment; expo-auth-session merges fragment values into params
     const {token, refreshToken, userId} = result.params;
     // Store tokens and log in user
   }
@@ -258,12 +279,13 @@ const handleGitHubLogin = () => {
   window.location.href = `https://api.yourapp.com/auth/github?returnTo=${window.location.origin}/auth/callback`;
 };
 
-// On callback page (/auth/callback)
-const urlParams = new URLSearchParams(window.location.search);
-const token = urlParams.get("token");
-const refreshToken = urlParams.get("refreshToken");
-const userId = urlParams.get("userId");
-// Store tokens and redirect to app
+// On callback page (/auth/callback). Tokens are in the fragment, not the query string.
+const fragment = new URLSearchParams(window.location.hash.slice(1));
+const token = fragment.get("token");
+const refreshToken = fragment.get("refreshToken");
+const userId = fragment.get("userId");
+// Clear the fragment, store tokens, and redirect to app
+window.history.replaceState(null, "", window.location.pathname);
 ``````
 
 ## Creating a GitHub OAuth App
@@ -284,8 +306,9 @@ const userId = urlParams.get("userId");
 ## Security Considerations
 
 - **Never expose client secrets** — They should only exist on the backend
+- **State is enforced** — The callback rejects a response without a valid, unexpired state cookie from the same browser (redirect to `/auth/github/failure`), which blocks login CSRF and cross-site account linking
 - **Use HTTPS in production** — GitHub OAuth requires HTTPS for production callbacks
-- **Validate redirect URLs** — Only allow trusted domains in `returnTo` parameters
+- **Redirect allowlist** — List only your own app origins in `allowedReturnTo`. Matching is exact on origin (or custom-scheme authority); subdomains and other ports are not included
 - **Scope minimization** — Only request GitHub scopes your app actually needs
 - **Token storage** — Store tokens securely on the frontend (SecureStore on mobile, httpOnly cookies on web)
 
@@ -301,13 +324,23 @@ const userId = urlParams.get("userId");
 
 A different user has already linked this GitHub account. Users must unlink it first or use a different GitHub account.
 
+### Callback redirects to `/auth/github/failure` right away
+
+The OAuth state did not verify. The flow must start (`/auth/github` or `/auth/github/link`) and
+finish (`/auth/github/callback`) in the same browser within 10 minutes, and the API host that
+serves `callbackURL` must be the host that set the cookie. Check that `SESSION_SECRET` is the
+same on every instance.
+
 ### "Account linking is disabled"
 
 Set `allowAccountLinking: true` in `githubAuth` configuration.
 
 ### Tokens not included in callback
 
-If using `returnTo`, tokens are appended as query parameters. Check that your frontend is reading them correctly.
+Tokens are in the URL fragment (`window.location.hash`), not the query string. If the callback
+returns JSON instead of redirecting, check that `allowedReturnTo` lists the `returnTo` origin and
+that a session middleware keeps `req.session` between `/auth/github` and the callback. A 400
+"returnTo is not an allowed redirect target" means the origin is not listed.
 
 ## Learn More
 

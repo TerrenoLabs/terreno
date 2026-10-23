@@ -128,6 +128,37 @@ describe("rtkQueryErrorMiddleware", () => {
     assert.ok(consoleDebugSpy.mock.calls[0][1]);
   });
 
+  it("masks password args in logs and the Sentry context", () => {
+    const contexts: Array<Record<string, unknown>> = [];
+    mockSentry.withScope.mockImplementationOnce((callback: (scope: SentryScope) => void) => {
+      callback({
+        setContext: (_name: string, context: Record<string, unknown>): void => {
+          contexts.push(context);
+        },
+      });
+    });
+    const action = {
+      error: true,
+      meta: {
+        arg: {
+          endpointName: "patchMe",
+          originalArgs: {currentPassword: "dummy-secret-1", email: "new@example.com"},
+          type: "mutation",
+        },
+        baseQueryMeta: {request: {method: "PATCH", url: "/auth/me"}},
+      },
+      payload: {data: {message: "Something else failed"}, status: 500},
+    };
+
+    middleware(action);
+
+    const logged = JSON.stringify([consoleDebugSpy.mock.calls, consoleWarnSpy.mock.calls]);
+    assert.ok(!logged.includes("dummy-secret-1"));
+    assert.ok(logged.includes("<REDACTED>"));
+    assert.strictEqual(contexts.length, 1);
+    assert.ok(!JSON.stringify(contexts[0]).includes("dummy-secret-1"));
+  });
+
   it("falls back to meta.arg when baseQueryMeta is not available", () => {
     const action = {
       error: true,

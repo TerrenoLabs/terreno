@@ -16,7 +16,11 @@ import {authProvider} from "./syncdb";
 // already read the Better Auth token instead of rtk's default JWT source.
 setTokenSource(authProvider);
 
-const betterAuth = generateBetterAuthSlice({authClient: betterAuthClient});
+// Purge the SDK cache on logout or user switch so no account sees another's cached responses.
+const betterAuth = generateBetterAuthSlice({
+  apisToReset: [terrenoApi],
+  authClient: betterAuthClient,
+});
 
 export const logout = betterAuth.actions.logout;
 export const syncBetterAuthSession = betterAuth.syncSession;

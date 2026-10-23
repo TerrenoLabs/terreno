@@ -163,7 +163,7 @@ export const terrenoDefaultRoles: RoleDefinition[] = [
       adminAnnouncementImpression: ["read"],
       configuration: ["read", "update"],
       consentResponse: ["signOnBehalf"],
-      user: ["create", "list", "read", "update"],
+      user: ["create", "list", "read", "update", "updateIdentity"],
       ...observabilityAdminPermissionSpec(),
     },
   },

@@ -209,5 +209,6 @@ export const createAccess = <S extends Statements>(options: AccessOptions<S>): T
     queryFilter,
     roles: roleManager,
     statements: mergedStatements,
+    userModel: options.userModel,
   };
 };

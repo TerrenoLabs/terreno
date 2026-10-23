@@ -65,7 +65,16 @@ export const terrenoStatements = {
   featureFlag: MODEL_CRUD,
   organization: ORGANIZATION_ACTIONS,
   rbac: ["read", "manageRoles", "assignRoles"],
-  user: ["create", "list", "read", "update", "delete", "impersonate", "setPassword"],
+  user: [
+    "create",
+    "list",
+    "read",
+    "update",
+    "delete",
+    "impersonate",
+    "setPassword",
+    "updateIdentity",
+  ],
 } as const;
 
 export type Statements = Record<string, readonly string[]>;
@@ -135,6 +144,10 @@ export const terrenoStatementDescriptions: Record<string, Record<string, string>
     list: "List consent responses",
     read: "View consent responses",
     signOnBehalf: "Record, view, and void provisional consent signatures for other users",
+  },
+  user: {
+    updateIdentity:
+      "Change another user's email, disabled flag, email verification, or linked Better Auth and GitHub ids",
   },
 };
 

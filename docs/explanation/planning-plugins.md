@@ -112,3 +112,7 @@ Install both from the marketplaces described in
 [install agent skills](../how-to/install-agent-skills.md). Claude Code resolves a plugin
 skill's command from its frontmatter `name`, which is why the two `*-claude/` trees are
 generated with shortened names by `bun run skills:sync`.
+
+## Related
+
+- [AI development loop](ai-development-loop.md): the tool layer these stages use to see the running app

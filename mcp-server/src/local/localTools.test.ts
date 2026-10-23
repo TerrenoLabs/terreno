@@ -9,7 +9,11 @@ import {handleLocalToolCall, localMcpTools} from "./localTools";
 import {resolveTerrenoLogDirs} from "./logPaths";
 import {resolveMetroHttpBase} from "./metro/metroDevSession";
 import {lastError, readLogs} from "./tools/readLogs";
-import {evaluate, getRtkState, navigate} from "./tools/runtime";
+import {evaluate, getClientState, navigate} from "./tools/runtime";
+
+const readRtk = async (args: {query?: string; slice?: string}): Promise<unknown> => {
+  return (JSON.parse(await getClientState(args)) as {rtk?: unknown}).rtk;
+};
 
 describe("local MCP runtime tools", () => {
   let projectRoot: string;
@@ -199,27 +203,27 @@ describe("local MCP runtime tools", () => {
       }),
     };
 
-    const state = JSON.parse(await getRtkState({query: "todo", slice: "rtk"})) as {
+    const state = (await readRtk({query: "todo", slice: "rtk"})) as {
       queries: Array<{endpoint?: string}>;
     };
     expect(state.queries[0]?.endpoint).toBe("getTodos");
-    const mutationState = JSON.parse(await getRtkState({slice: "rtk"})) as {
+    const mutationState = (await readRtk({slice: "rtk"})) as {
       mutations: Array<{args?: {nested?: {accessToken?: string; password?: string}}}>;
     };
     expect(mutationState.mutations[0]?.args?.nested).toEqual({
       accessToken: "[REDACTED]",
       password: "[REDACTED]",
     });
-    const noMatch = JSON.parse(await getRtkState({query: "missing", slice: "rtk"})) as {
+    const noMatch = (await readRtk({query: "missing", slice: "rtk"})) as {
       mutations: unknown[];
       queries: unknown[];
     };
     expect(noMatch).toEqual({mutations: [], queries: []});
-    expect(JSON.parse(await getRtkState({slice: "auth"}))).toEqual({
+    expect(await readRtk({slice: "auth"})).toEqual({
       auth: {userId: "user-1"},
     });
-    expect(JSON.parse(await getRtkState({slice: "custom"}))).toEqual({});
-    expect(JSON.parse(await getRtkState({}))).toMatchObject({
+    expect(await readRtk({slice: "custom"})).toEqual({});
+    expect(await readRtk({})).toMatchObject({
       auth: {userId: "user-1"},
     });
     expect(await evaluate({code: "1 + 1"})).toContain("Refused");
@@ -232,7 +236,7 @@ describe("local MCP runtime tools", () => {
     devGlobal.__TERRENO_STORE__ = {
       getState: (): Record<string, unknown> => ({auth: {userId: "user-1"}}),
     };
-    expect(JSON.parse(await getRtkState({slice: "rtk"}))).toEqual({
+    expect(await readRtk({slice: "rtk"})).toEqual({
       note: "No terreno-rtk slice found on store.",
     });
 
@@ -245,14 +249,14 @@ describe("local MCP runtime tools", () => {
         },
       }),
     };
-    expect(JSON.parse(await getRtkState({slice: "auth"}))).toEqual({
+    expect(await readRtk({slice: "auth"})).toEqual({
       auth: {
         createdAt: "2026-09-21T00:00:00.000Z",
         sessionToken: "[REDACTED]",
         user: {id: "better-auth-user"},
       },
     });
-    expect(JSON.parse(await getRtkState({slice: "betterAuth"}))).toEqual({
+    expect(await readRtk({slice: "betterAuth"})).toEqual({
       betterAuth: {
         createdAt: "2026-09-21T00:00:00.000Z",
         sessionToken: "[REDACTED]",

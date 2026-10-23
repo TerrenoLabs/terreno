@@ -271,6 +271,27 @@ const hydrateCreateCandidate = <T>(model: Model<T>, item: unknown): unknown => {
 };
 
 /**
+ * Remove lifecycle fields that only the server may set from a client write body. `deleted` on a
+ * soft-delete model is set only by the delete operation, so update authority cannot soft-delete
+ * a record without delete permission, `preDelete` / `postDelete`, and the delete audit. Server
+ * hooks (`preCreate` / `preUpdate`) run after this and may still set these fields.
+ */
+const stripServerOwnedFields = <T>(model: Model<T>, body: unknown): unknown => {
+  if (Array.isArray(body)) {
+    return body.map((item) => stripServerOwnedFields(model, item));
+  }
+  if (!body || typeof body !== "object") {
+    return body;
+  }
+  const isSoftDeleteModel = model.schema.path("deleted")?.instance === "Boolean";
+  if (!isSoftDeleteModel || !Object.hasOwn(body, "deleted")) {
+    return body;
+  }
+  const {deleted: _deleted, ...rest} = body as Record<string, unknown>;
+  return rest;
+};
+
+/**
  * Create a document through the same pipeline as `POST /`: method-level permissions,
  * `transformer.transform`, `preCreate`, `Model.create` (Mongoose validation), population,
  * and `postCreate`. Throws APIErrors with the same statuses/titles as the REST handler.
@@ -320,7 +341,12 @@ export const executeCreate = async <T>({
 
   let cleanedBody: Partial<T> | (Partial<T> | undefined)[] | null | undefined;
   try {
-    cleanedBody = transform<T>(options, body as Partial<T> | Partial<T>[], "create", user);
+    cleanedBody = transform<T>(
+      options,
+      stripServerOwnedFields(model, body) as Partial<T> | Partial<T>[],
+      "create",
+      user
+    );
   } catch (error: unknown) {
     throw passthroughOrWrap(error, {
       code: "transform-error",
@@ -522,7 +548,12 @@ export const executeUpdate = async <T>({
 
   let cleanedBody: Partial<T> | T | null | undefined;
   try {
-    cleanedBody = transform<T>(options, body as Partial<T>, "update", user) as Partial<T>;
+    cleanedBody = transform<T>(
+      options,
+      stripServerOwnedFields(model, body) as Partial<T>,
+      "update",
+      user
+    ) as Partial<T>;
   } catch (error: unknown) {
     throw passthroughOrWrap(error, {
       code: "transform-error",

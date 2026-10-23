@@ -1246,3 +1246,56 @@ describe("owner scope on the written document", () => {
     expect(await ExecStuffModel.countDocuments({ownerId: bob.id})).toBe(0);
   });
 });
+
+describe("soft-delete flag in client write bodies", () => {
+  beforeAll(async () => {
+    await setupDb();
+  });
+
+  beforeEach(async () => {
+    await ExecStuffModel.deleteMany({deleted: {$in: [true, false]}} as never);
+  });
+
+  const noDeleteOptions = (): ModelRouterOptions<ExecStuff> => {
+    const options = baseOptions();
+    options.permissions = {...options.permissions, delete: []};
+    return options;
+  };
+
+  it("ignores deleted in an update body, so update permission cannot soft-delete", async () => {
+    const doc = await ExecStuffModel.create({name: "keep", ownerId: owner.id});
+    const {doc: updated} = await executeUpdate<ExecStuff>({
+      body: {deleted: true, name: "renamed"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: noDeleteOptions(),
+      user: owner,
+    });
+    expect(updated.name).toBe("renamed");
+    expect(updated.deleted).toBe(false);
+    expect(await ExecStuffModel.countDocuments({_id: doc._id})).toBe(1);
+  });
+
+  it("ignores deleted in a create body", async () => {
+    const {doc} = await executeCreate<ExecStuff>({
+      body: {deleted: true, name: "fresh", ownerId: owner.id},
+      model: ExecStuffModel,
+      options: noDeleteOptions(),
+      user: owner,
+    });
+    expect(doc.deleted).toBe(false);
+    expect(await ExecStuffModel.countDocuments({_id: doc._id})).toBe(1);
+  });
+
+  it("still lets a server-side preUpdate hook set deleted", async () => {
+    const doc = await ExecStuffModel.create({name: "archive me", ownerId: owner.id});
+    await executeUpdate<ExecStuff>({
+      body: {name: "archived"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: baseOptions({preUpdate: (body) => ({...body, deleted: true})}),
+      user: owner,
+    });
+    expect(await ExecStuffModel.countDocuments({_id: doc._id})).toBe(0);
+  });
+});

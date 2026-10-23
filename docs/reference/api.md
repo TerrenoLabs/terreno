@@ -833,6 +833,11 @@ todo.deleted = true;
 await todo.save();
 ``````
 
+modelRouter create and update (REST, MCP tools, and sync mutations) drop `deleted` from the
+client body. Only `DELETE` sets it, so soft delete always needs `delete` permission and runs
+`preDelete` / `postDelete`. A `preCreate` or `preUpdate` hook can still set `deleted` on
+purpose.
+
 ### isDisabledPlugin
 
 Disable user accounts (returns 401 for disabled users).

@@ -81,7 +81,7 @@ setupServer({
 | `clientSecret` | string | Yes | GitHub OAuth Client Secret |
 | `callbackURL` | string | Yes | OAuth callback URL (must match GitHub app settings) |
 | `scope` | string[] | No | OAuth scopes (default: `["user:email"]`) |
-| `allowAccountLinking` | boolean | No | Allow linking GitHub to existing accounts (default: `true`) |
+| `allowAccountLinking` | boolean | No | `true` lets `GET /auth/github/link` attach GitHub to the signed-in user. When omitted, the link route is mounted but linking returns 400, and a GitHub login whose email matches an existing account links to it. `false` turns off both. |
 | `findOrCreateUser` | function | No | Custom user creation/lookup handler |
 
 ## Step 4: Set Environment Variables
@@ -106,7 +106,13 @@ The following routes are automatically added when `githubAuth` is configured:
 GET /auth/github
 ``````
 
-Redirects users to GitHub for authentication. Optional query parameter:
+Redirects users to GitHub for authentication. The redirect carries an OAuth `state` value, and
+the response sets a short-lived (10 minute), signed, HttpOnly, `SameSite=Lax` cookie named
+`terreno_github_oauth_state` that holds the same value. The callback accepts the GitHub response
+only from the browser that holds that cookie, and each cookie works once. The cookie is signed
+with `SESSION_SECRET` (or `TOKEN_SECRET` when `SESSION_SECRET` is unset).
+
+Optional query parameter:
 - `returnTo` — URL to redirect after successful authentication (tokens will be appended as query params)
 
 ### OAuth Callback
@@ -134,7 +140,12 @@ GET /auth/github/link
 Authorization: Bearer <jwt-token>
 ``````
 
-Links GitHub to the authenticated user's existing account. Redirects to GitHub, then back to callback.
+Links GitHub to the authenticated user's existing account. Redirects to GitHub, then back to
+the callback. The user ID from the bearer token is recorded in the signed state cookie, and the
+callback links GitHub only to that user. A session cookie or token that happens to be on the
+callback request is never used as the link target. Open this route in the same browser that will
+return to the callback, so the state cookie is present there. Requires
+`allowAccountLinking: true`.
 
 ### Unlink GitHub Account (Requires Auth)
 
@@ -195,7 +206,8 @@ setupServer({
       // - profile: GitHub profile data
       // - accessToken: GitHub access token
       // - refreshToken: GitHub refresh token (if available)
-      // - existingUser: If user is authenticated, their user document
+      // - existingUser: The user who started GET /auth/github/link (from the verified
+      //   OAuth state), otherwise undefined
       
       if (existingUser) {
         // Link GitHub to existing user
@@ -284,6 +296,7 @@ const userId = urlParams.get("userId");
 ## Security Considerations
 
 - **Never expose client secrets** — They should only exist on the backend
+- **State is enforced** — The callback rejects a response without a valid, unexpired state cookie from the same browser (redirect to `/auth/github/failure`), which blocks login CSRF and cross-site account linking
 - **Use HTTPS in production** — GitHub OAuth requires HTTPS for production callbacks
 - **Validate redirect URLs** — Only allow trusted domains in `returnTo` parameters
 - **Scope minimization** — Only request GitHub scopes your app actually needs
@@ -300,6 +313,13 @@ const userId = urlParams.get("userId");
 ### "This GitHub account is already linked to another user"
 
 A different user has already linked this GitHub account. Users must unlink it first or use a different GitHub account.
+
+### Callback redirects to `/auth/github/failure` right away
+
+The OAuth state did not verify. The flow must start (`/auth/github` or `/auth/github/link`) and
+finish (`/auth/github/callback`) in the same browser within 10 minutes, and the API host that
+serves `callbackURL` must be the host that set the cookie. Check that `SESSION_SECRET` is the
+same on every instance.
 
 ### "Account linking is disabled"
 

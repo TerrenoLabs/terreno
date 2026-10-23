@@ -320,6 +320,45 @@ const invokeGitHubVerify = (
   });
 };
 
+type StateStoreCallback = (err: unknown, ok?: unknown) => void;
+
+interface StateStoreLike {
+  store: (req: unknown, state: unknown, meta: unknown, callback: StateStoreCallback) => void;
+  verify: (req: unknown, state: unknown, meta: unknown, callback: StateStoreCallback) => void;
+}
+
+// Build a callback request whose link target was bound by the strategy's own state store, the
+// way /auth/github/link binds it.
+const linkRequestFor = async (userId: unknown): Promise<Record<string, unknown>> => {
+  const strategy = (
+    passport as unknown as {_strategies: Record<string, {_stateStore: StateStoreLike}>}
+  )._strategies.github;
+  let cookieValue = "";
+  const startReq = {
+    headers: {},
+    res: {
+      cookie: (_name: string, value: string): void => {
+        cookieValue = value;
+      },
+    },
+  };
+  const state = await new Promise<unknown>((resolve, reject) => {
+    strategy._stateStore.store(startReq, {linkUserId: String(userId)}, {}, (err, nonce) =>
+      err ? reject(err) : resolve(nonce)
+    );
+  });
+  const callbackReq = {
+    headers: {cookie: `terreno_github_oauth_state=${encodeURIComponent(cookieValue)}`},
+    res: {clearCookie: (): void => {}},
+  };
+  await new Promise<void>((resolve, reject) => {
+    strategy._stateStore.verify(callbackReq, state, {}, (err, ok) =>
+      err || !ok ? reject(err ?? new Error("state not verified")) : resolve()
+    );
+  });
+  return callbackReq;
+};
+
 describe("GitHub strategy verify callback", () => {
   const testApp = {get: () => {}, use: () => {}} as unknown as express.Application;
 
@@ -400,7 +439,7 @@ describe("GitHub strategy verify callback", () => {
       clientSecret: "secret",
     });
 
-    const req = {user: existingUser};
+    const req = await linkRequestFor(existingUser._id);
     const result = await invokeGitHubVerify(req, "access", "refresh", {
       id: "gh-link-1",
       photos: [{value: "http://avatar"}],
@@ -408,8 +447,47 @@ describe("GitHub strategy verify callback", () => {
       username: "linkedghuser",
     });
     expect(result.err).toBeNull();
+    expect(result.user._id.toString()).toBe(existingUser._id.toString());
     expect(result.user.githubId).toBe("gh-link-1");
     expect(result.user.githubUsername).toBe("linkedghuser");
+  });
+
+  it("does not treat an ambient req.user as a link target", async () => {
+    const ambientUser = await GitHubTestUserModel.create({email: "ambient@example.com"});
+
+    setupGitHubAuth(testApp, GitHubTestUserModel as unknown as UserModel, {
+      allowAccountLinking: true,
+      callbackURL: "http://localhost:9000/auth/github/callback",
+      clientId: "id",
+      clientSecret: "secret",
+    });
+
+    const result = await invokeGitHubVerify({user: ambientUser}, "access", "refresh", {
+      emails: [{value: "ambient-gh@example.com"}],
+      id: "gh-ambient-1",
+    });
+    expect(result.err).toBeNull();
+    expect(result.user._id.toString()).not.toBe(ambientUser._id.toString());
+    const ambientRow = await GitHubTestUserModel.findById(ambientUser._id);
+    expect(ambientRow?.githubId).toBeUndefined();
+  });
+
+  it("passes the bound link user to a custom findOrCreateUser", async () => {
+    const linkUser = await GitHubTestUserModel.create({email: "customlink@example.com"});
+    let received: unknown;
+    setupGitHubAuth(testApp, GitHubTestUserModel as unknown as UserModel, {
+      callbackURL: "http://localhost:9000/auth/github/callback",
+      clientId: "id",
+      clientSecret: "secret",
+      findOrCreateUser: async (_profile, _access, _refresh, existingUser) => {
+        received = existingUser;
+        return existingUser;
+      },
+    });
+
+    const req = await linkRequestFor(linkUser._id);
+    await invokeGitHubVerify(req, "access", "refresh", {id: "gh-custom-link-1"});
+    expect(String((received as {_id: unknown})._id)).toBe(String(linkUser._id));
   });
 
   it("rejects linking when allowAccountLinking=false", async () => {
@@ -424,7 +502,7 @@ describe("GitHub strategy verify callback", () => {
       clientSecret: "secret",
     });
 
-    const req = {user: existingUser};
+    const req = await linkRequestFor(existingUser._id);
     const result = await invokeGitHubVerify(req, "access", "refresh", {id: "gh-nolink-1"});
     expect(result.err).toBeDefined();
     expect(result.err?.status).toBe(400);
@@ -446,7 +524,7 @@ describe("GitHub strategy verify callback", () => {
       clientSecret: "secret",
     });
 
-    const req = {user: userA};
+    const req = await linkRequestFor(userA._id);
     const result = await invokeGitHubVerify(req, "access", "refresh", {id: "gh-other-1"});
     expect(result.err).toBeDefined();
     expect(result.err?.status).toBe(400);
@@ -867,15 +945,214 @@ describe("GitHub strategy verify callback edge cases", () => {
       clientSecret: "secret",
     });
 
+    const req = await linkRequestFor((existingUser as unknown as {_id: unknown})._id);
+
     // Delete user before verify runs to hit the 404 path.
     await GitHubTestUserModel.deleteOne({_id: (existingUser as unknown as {_id: unknown})._id});
 
-    const req = {user: existingUser};
     const result = await invokeGitHubVerify(req, "access", "refresh", {
       id: "gh-missing-1",
       username: "missing",
     });
     expect(result.err).toBeDefined();
     expect(result.err?.status).toBe(404);
+  });
+});
+
+interface OAuth2Stub {
+  getOAuthAccessToken: (
+    code: string,
+    params: Record<string, unknown>,
+    callback: (err: unknown, accessToken?: string, refreshToken?: string, params?: unknown) => void
+  ) => void;
+}
+
+interface StubbableGitHubStrategy {
+  _oauth2: OAuth2Stub;
+  userProfile: (accessToken: string, done: (err: unknown, profile?: unknown) => void) => void;
+}
+
+// Replace only the GitHub HTTP exchange: the code maps to a dummy profile with the same id.
+const stubGitHubExchange = (): void => {
+  const strategy = (passport as unknown as {_strategies: Record<string, unknown>})._strategies
+    .github as StubbableGitHubStrategy;
+  strategy._oauth2.getOAuthAccessToken = (code, _params, callback): void => {
+    callback(null, `access-${code}`, undefined, {});
+  };
+  strategy.userProfile = (accessToken, done): void => {
+    const id = accessToken.replace(/^access-/, "");
+    done(null, {
+      emails: [{value: `${id}@github.example`}],
+      id,
+      photos: [],
+      profileUrl: `https://github.example/${id}`,
+      provider: "github",
+      username: `gh-${id}`,
+    });
+  };
+};
+
+const stateFromLocation = (location: string | undefined): string | null => {
+  if (!location) {
+    return null;
+  }
+  return new URL(location).searchParams.get("state");
+};
+
+describe("GitHub OAuth state binding", () => {
+  let app: express.Application;
+
+  beforeEach(async () => {
+    setSystemTime();
+    await connectDb();
+    await GitHubTestUserModel.deleteMany({});
+
+    app = new TerrenoApp({
+      beforeJsonSetup: (a) => {
+        // Stand-in for an ambient cookie session (such as Better Auth) that sets req.user on
+        // every request the browser makes, including the GitHub callback.
+        a.use(async (req, _res, next) => {
+          const ambientUserId = req.headers["x-ambient-session-user"];
+          if (typeof ambientUserId === "string") {
+            const ambientUser = await GitHubTestUserModel.findById(ambientUserId);
+            req.user = ambientUser as unknown as express.Request["user"];
+          }
+          next();
+        });
+      },
+      githubAuth: {
+        allowAccountLinking: true,
+        callbackURL: "http://localhost:9000/auth/github/callback",
+        clientId: "test-client-id",
+        clientSecret: "test-client-secret",
+      },
+      skipListen: true,
+      userModel: GitHubTestUserModel as unknown as UserModel,
+    }).build();
+    stubGitHubExchange();
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  it("GET /auth/github sends a state parameter and sets an HttpOnly state cookie", async () => {
+    const res = await supertest(app).get("/auth/github").expect(302);
+    expect(stateFromLocation(res.headers.location)).toBeTruthy();
+    const setCookie = String(res.headers["set-cookie"] ?? "");
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie.toLowerCase()).toContain("samesite=lax");
+  });
+
+  it("callback without state does not link GitHub to an ambient session user", async () => {
+    const victim = await GitHubTestUserModel.create({email: "victim@example.test"});
+
+    await supertest(app)
+      .get("/auth/github/callback?code=attacker-gh-1")
+      .set("x-ambient-session-user", String(victim._id))
+      .expect(302);
+
+    const victimRow = await GitHubTestUserModel.findById(victim._id);
+    expect(victimRow?.githubId).toBeUndefined();
+  });
+
+  it("callback with another browser's state is rejected", async () => {
+    const attacker = supertest.agent(app);
+    const start = await attacker.get("/auth/github").expect(302);
+    const attackerState = stateFromLocation(start.headers.location);
+
+    const victim = await GitHubTestUserModel.create({email: "victim2@example.test"});
+    const res = await supertest(app)
+      .get(`/auth/github/callback?code=attacker-gh-2&state=${attackerState}`)
+      .set("x-ambient-session-user", String(victim._id))
+      .expect(302);
+    expect(res.headers.location).toContain("/auth/github/failure");
+
+    const victimRow = await GitHubTestUserModel.findById(victim._id);
+    expect(victimRow?.githubId).toBeUndefined();
+    expect(await GitHubTestUserModel.countDocuments({githubId: "attacker-gh-2"})).toBe(0);
+  });
+
+  it("login flow with valid state ignores the ambient session user", async () => {
+    const victim = await GitHubTestUserModel.create({email: "victim3@example.test"});
+    const browser = supertest.agent(app);
+    const start = await browser.get("/auth/github").expect(302);
+    const state = stateFromLocation(start.headers.location);
+
+    const res = await browser
+      .get(`/auth/github/callback?code=gh-login-3&state=${state}`)
+      .set("x-ambient-session-user", String(victim._id))
+      .expect(200);
+
+    const victimRow = await GitHubTestUserModel.findById(victim._id);
+    expect(victimRow?.githubId).toBeUndefined();
+    expect(String(res.body.data.userId)).not.toBe(String(victim._id));
+  });
+
+  it("state is single use", async () => {
+    const browser = supertest.agent(app);
+    const start = await browser.get("/auth/github").expect(302);
+    const state = stateFromLocation(start.headers.location);
+
+    await browser.get(`/auth/github/callback?code=gh-once-1&state=${state}`).expect(200);
+    const replay = await browser
+      .get(`/auth/github/callback?code=gh-once-2&state=${state}`)
+      .expect(302);
+    expect(replay.headers.location).toContain("/auth/github/failure");
+  });
+
+  it("link flow links GitHub to the user who started /auth/github/link", async () => {
+    const user = await GitHubTestUserModel.create({email: "linker@example.test"});
+    const {token} = await generateTokens({_id: user._id});
+    const browser = supertest.agent(app);
+
+    const start = await browser
+      .get("/auth/github/link")
+      .set("authorization", `Bearer ${token}`)
+      .expect(302);
+    const state = stateFromLocation(start.headers.location);
+    expect(state).toBeTruthy();
+
+    const res = await browser
+      .get(`/auth/github/callback?code=gh-link-4&state=${state}`)
+      .expect(200);
+    expect(String(res.body.data.userId)).toBe(String(user._id));
+
+    const linked = await GitHubTestUserModel.findById(user._id);
+    expect(linked?.githubId).toBe("gh-link-4");
+    expect(linked?.githubUsername).toBe("gh-gh-link-4");
+  });
+
+  it("an expired state cookie is rejected", async () => {
+    const browser = supertest.agent(app);
+    const start = await browser.get("/auth/github").expect(302);
+    const state = stateFromLocation(start.headers.location);
+
+    setSystemTime(new Date(Date.now() + 11 * 60 * 1000));
+    const res = await browser
+      .get(`/auth/github/callback?code=gh-late-1&state=${state}`)
+      .expect(302);
+    expect(res.headers.location).toContain("/auth/github/failure");
+  });
+
+  it("a tampered state cookie is rejected", async () => {
+    const victim = await GitHubTestUserModel.create({email: "victim5@example.test"});
+    const browser = supertest.agent(app);
+    const start = await browser.get("/auth/github").expect(302);
+    const state = stateFromLocation(start.headers.location);
+    const setCookie = String(start.headers["set-cookie"]);
+    const cookieValue = setCookie.split(";")[0].split("=").slice(1).join("=");
+    const [, signature] = decodeURIComponent(cookieValue).split(".");
+    const forgedPayload = Buffer.from(
+      JSON.stringify({expiresAt: Date.now() + 60_000, linkUserId: String(victim._id), nonce: state})
+    ).toString("base64url");
+
+    const res = await supertest(app)
+      .get(`/auth/github/callback?code=gh-forged-1&state=${state}`)
+      .set("cookie", `terreno_github_oauth_state=${forgedPayload}.${signature}`)
+      .expect(302);
+    expect(res.headers.location).toContain("/auth/github/failure");
+    const victimRow = await GitHubTestUserModel.findById(victim._id);
+    expect(victimRow?.githubId).toBeUndefined();
   });
 });

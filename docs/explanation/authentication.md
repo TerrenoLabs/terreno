@@ -88,8 +88,13 @@ OAuth 2.0 authentication with GitHub.
 7. Backend finds/creates user, issues JWT tokens
 8. Backend redirects to `returnTo` URL with tokens as query params
 
+Every flow carries an OAuth `state` value bound to the starting browser by a signed, HttpOnly,
+short-lived cookie. The callback rejects a response without matching state.
+
 **Account Linking:**
-- Authenticated users can link their GitHub account via `GET /auth/github/link`
+- Authenticated users can link their GitHub account via `GET /auth/github/link`. The bearer
+  user's ID is recorded in the signed state, and the callback links only to that user, never to
+  a session or token present on the callback request
 - Multiple authentication methods can be attached to one user account
 - Users must have a password set before unlinking GitHub
 

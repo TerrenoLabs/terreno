@@ -578,8 +578,14 @@ setupServer({
 **Endpoints (when configured):**
 - `GET /auth/github` — Initiate OAuth flow
 - `GET /auth/github/callback` — OAuth callback handler
-- `GET /auth/github/link` — Link GitHub to authenticated user (requires JWT)
+- `GET /auth/github/link` — Link GitHub to authenticated user (requires JWT; the user ID is bound into the OAuth state)
 - `DELETE /auth/github/unlink` — Unlink GitHub from account (requires JWT)
+
+The flow sets a signed, HttpOnly, `SameSite=Lax` `terreno_github_oauth_state` cookie (10 minute
+lifetime, signed with `SESSION_SECRET`, falling back to `TOKEN_SECRET`). The callback accepts the
+GitHub response only with a matching, unexpired, single-use state, and links an account only to
+the user recorded by `/auth/github/link`. `findOrCreateUser`'s `existingUser` argument is that
+user, not the callback request's `req.user`.
 
 **Learn more:** [Add GitHub OAuth authentication](../how-to/add-github-oauth.md)
 

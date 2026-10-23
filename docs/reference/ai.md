@@ -546,7 +546,7 @@ the `chat-safety-agreement` llm-judge, and the 12-item proofread synthetic datas
 labeled for 988 vs care-team routing, toxicity, a privacy leak, and a dismissive reply.
 Admin → Scripts → `seedChatSafetyDataset`, or `bun run script seedChatSafetyDataset --wet` from
 `example-backend`, loads that set into an already-running database. `SEED_DEFAULTS=true` loads
-it on boot, including PR preview. Invalid price JSON or negative/non-numeric prices
+it on boot outside deployed (`NODE_ENV=production`) processes, which ignore the flag. Invalid price JSON or negative/non-numeric prices
 fail startup with `AI_OBS_PRICE_MAP_JSON` in the error.
 
 `POST /ai/example-summarize` (example backend) runs that seeded prompt with

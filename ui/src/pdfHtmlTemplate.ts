@@ -17,6 +17,16 @@ interface PdfUserInfo {
   email?: string;
 }
 
+/** A signature staff recorded on the user's behalf. Dates are ISO strings. */
+export interface PdfProvisionalSignature {
+  signedAt: string;
+  signedByName: string;
+  /** The signer's note. Pass it only on admin printouts; the user never sees it. */
+  note?: string;
+  signerIp?: string;
+  voidedAt?: string;
+}
+
 export interface PdfTemplateData {
   title: string;
   formTitle: string;
@@ -27,6 +37,7 @@ export interface PdfTemplateData {
   contentSnapshot?: string;
   responseId?: string;
   userInfo?: PdfUserInfo;
+  provisionalSignature?: PdfProvisionalSignature;
 }
 
 const escapeHtml = (text: string): string => {
@@ -42,6 +53,32 @@ const renderField = (field: PdfField): string => {
     <td class="field-label">${escapeHtml(field.label)}</td>
     <td class="field-value">${escapeHtml(field.value)}</td>
   </tr>`;
+};
+
+/** Format an ISO date for print; anything that is not ISO prints as written. */
+const formatPrintDate = (value: string): string => {
+  const date = DateTime.fromISO(value);
+  return date.isValid ? date.toLocaleString(DateTime.DATETIME_FULL) : value;
+};
+
+const renderProvisionalSignature = (signature?: PdfProvisionalSignature): string => {
+  if (!signature) {
+    return "";
+  }
+  const rows = [
+    renderField({label: "Signed by:", value: signature.signedByName}),
+    renderField({label: "Signed at:", value: formatPrintDate(signature.signedAt)}),
+    signature.note ? renderField({label: "Note:", value: signature.note}) : "",
+    signature.signerIp ? renderField({label: "Signer IP:", value: signature.signerIp}) : "",
+  ].join("\n");
+  const voidedHtml = signature.voidedAt
+    ? `<div class="voided">Voided ${escapeHtml(formatPrintDate(signature.voidedAt))}</div>`
+    : "";
+  return `<div class="section">
+      <h2>Provisional signature</h2>
+      <table>${rows}</table>
+      ${voidedHtml}
+    </div>`;
 };
 
 export const buildConsentPdfHtml = (data: PdfTemplateData): string => {
@@ -168,6 +205,11 @@ export const buildConsentPdfHtml = (data: PdfTemplateData): string => {
     .section {
       margin-bottom: 4mm;
     }
+    .voided {
+      font-weight: bold;
+      color: #a00000;
+      margin-top: 2mm;
+    }
     @page {
       size: A4;
       margin: 20mm;
@@ -187,6 +229,7 @@ export const buildConsentPdfHtml = (data: PdfTemplateData): string => {
   ${userInfoHtml}
   ${checkboxesHtml}
   ${auditTrailHtml}
+  ${renderProvisionalSignature(data.provisionalSignature)}
   ${signatureHtml}
   ${contentSnapshotHtml}
 
@@ -215,5 +258,53 @@ export const sharePdfFromHtml = async (options: {
     dialogTitle: options.filename,
     mimeType: "application/pdf",
     UTI: "com.adobe.pdf",
+  });
+};
+
+/**
+ * Open the print dialog for consent HTML (for example from `buildConsentPdfHtml`). Native uses
+ * `expo-print`; web prints from a hidden iframe so the app page itself is not printed.
+ */
+/** The last web print frame, removed before the next print in case `afterprint` never fired. */
+let lastPrintFrame: HTMLIFrameElement | undefined;
+
+export const printConsentHtml = async ({html}: {html: string}): Promise<void> => {
+  if (Platform.OS !== "web") {
+    const Print = await import("expo-print");
+    await Print.printAsync({html});
+    return;
+  }
+
+  // Consent HTML can hold PHI, so never leave an old frame in the page.
+  lastPrintFrame?.remove();
+  await new Promise<void>((resolve, reject) => {
+    const iframe = document.createElement("iframe");
+    lastPrintFrame = iframe;
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.position = "fixed";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.visibility = "hidden";
+    iframe.onload = (): void => {
+      const frameWindow = iframe.contentWindow;
+      if (!frameWindow) {
+        iframe.remove();
+        reject(new Error("Print frame did not load"));
+        return;
+      }
+      // Some browsers return from print() before the dialog closes; remove the frame after.
+      frameWindow.addEventListener("afterprint", () => iframe.remove());
+      try {
+        frameWindow.focus();
+        frameWindow.print();
+        resolve();
+      } catch (error) {
+        iframe.remove();
+        reject(error);
+      }
+    };
+    iframe.srcdoc = html;
+    document.body.appendChild(iframe);
   });
 };

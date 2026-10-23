@@ -200,7 +200,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Verification: `bun test --only-failures ui/src/ProvisionalConsentSigner.test.tsx ui/src/useProvisionalConsent.test.ts`
   - Skills: terreno:terreno-ui, terreno:terreno-data-fetching, accessibility-testing
 
-- [ ] **T8** — Add print helper and provisional block to the consent PDF template
+- [x] **T8** — Add print helper and provisional block to the consent PDF template
   - Depends on: none
   - Files: ui/src/pdfHtmlTemplate.ts, ui/src/pdfHtmlTemplate.test.ts
   - Criteria: `buildConsentPdfHtml` renders a "Provisional signature" section (signer, date, escaped note when given, signer IP when given, "Voided <date>" when voided) when `provisionalSignature` is set, and nothing extra otherwise. `printConsentHtml({html})` calls `expo-print` `printAsync({html})` on native. On web it appends a hidden iframe with the HTML, calls `contentWindow.print()`, and removes the iframe. Unit tests cover both paths with mocks.

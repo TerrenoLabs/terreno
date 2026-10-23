@@ -1033,6 +1033,23 @@ testIDs: `provisional-consent-signer`, `provisional-consent-loading`,
 `provisional-consent-cancel-button`, `provisional-consent-submit-error`,
 `provisional-consent-success`.
 
+### Consent printouts
+
+`buildConsentPdfHtml(data)` builds a self-contained HTML document for a consent response
+(response details, user info, checkboxes, audit trail, signature, content snapshot). Native
+apps turn it into a PDF with `sharePdfFromHtml({html, filename})`.
+
+`printConsentHtml({html})` opens the print dialog for that HTML: `expo-print` `printAsync`
+on native, and on web a hidden `iframe` (`srcdoc`) whose window is printed, so the app page
+itself is not. The iframe is removed after printing, or at the next print if the browser
+never reports that printing finished, so consent HTML does not linger in the page. The
+promise rejects if printing throws.
+
+`PdfTemplateData.provisionalSignature?: {signedAt, signedByName, note?, signerIp?, voidedAt?}`
+adds a "Provisional signature" section with the signer and date (ISO dates are printed with
+Luxon `DATETIME_FULL`), the escaped note and signer IP when given, and "Voided <date>" when
+voided. Pass `note` and `signerIp` only on admin printouts: the user never sees the note.
+
 ## Authentication Components
 
 ### SocialLoginButton

@@ -1,6 +1,7 @@
 import type {Page, Route} from "@playwright/test";
 import {expect, test} from "./fixtures/test";
 import {TEST_USER} from "./fixtures/testUsers";
+import {ensureLoggedOut, loginAs} from "./helpers/login";
 
 const METHODS_ROUTE = "**/api/auth/terreno/methods";
 
@@ -111,19 +112,18 @@ test.describe("Login providers", () => {
     await methods.answered;
 
     await expect(page.getByTestId(/^login-screen-oauth/)).toHaveCount(0);
-    await expect(page.getByTestId("login-mock-oidc-button")).toHaveCount(0);
   });
 
-  test("user sees branded and mock providers the server lists", async ({page}) => {
-    await stubMethods(page, ["github", "mock-oidc", "unknown"]);
+  test("user sees branded and generic providers the server lists", async ({page}) => {
+    await stubMethods(page, ["github", "mock-oidc"]);
     await page.goto("/login");
     await page.getByTestId("login-screen").waitFor({state: "visible"});
 
     await expect(page.getByTestId("login-screen-oauth-github")).toBeVisible();
-    await expect(page.getByTestId("login-mock-oidc-button")).toBeVisible();
+    // The mock provider has no brand, so it gets a generic button with the example's label.
+    await expect(page.getByTestId("login-screen-oauth-mock-oidc")).toContainText("Mock OIDC");
     await expect(page.getByTestId("login-screen-oauth-google")).toHaveCount(0);
     await expect(page.getByTestId("login-screen-oauth-apple")).toHaveCount(0);
-    await expect(page.getByTestId("login-screen-oauth-unknown")).toHaveCount(0);
   });
 
   test("typed email survives the methods response", async ({page}) => {
@@ -133,7 +133,38 @@ test.describe("Login providers", () => {
     await page.getByTestId("login-screen-email-input").fill(TEST_USER.email);
 
     methods.release();
-    await expect(page.getByTestId("login-mock-oidc-button")).toBeVisible();
+    await expect(page.getByTestId("login-screen-oauth-mock-oidc")).toBeVisible();
     await expect(page.getByTestId("login-screen-email-input")).toHaveValue(TEST_USER.email);
+  });
+});
+
+test.describe("Remembered accounts", () => {
+  // Each test starts on the login screen after TEST_USER signed in and out on this device.
+  test.beforeEach(async ({page}) => {
+    await loginAs(page, TEST_USER);
+    await ensureLoggedOut(page);
+  });
+
+  test("user sees email as the last used method after signing out", async ({page}) => {
+    await expect(page.getByTestId("login-screen-last-used-email")).toBeVisible();
+    // The example opts into rememberIdentity, so the card names the user.
+    await expect(page.getByTestId("login-screen-continue-0")).toContainText(TEST_USER.name);
+  });
+
+  test("user continues as a remembered email account", async ({page}) => {
+    // The stored email is masked, so the card asks for the email and password.
+    await page.getByTestId("login-screen-continue-0").click();
+    await expect(page.getByTestId("login-screen-notice")).toContainText(
+      `Enter your email and password to continue as ${TEST_USER.name}.`
+    );
+
+    await loginAs(page, TEST_USER);
+  });
+
+  test("user can forget a remembered account", async ({page}) => {
+    await page.getByTestId("login-screen-forget-0").click();
+
+    await expect(page.getByTestId("login-screen-continue-0")).toHaveCount(0);
+    await expect(page.getByTestId("login-screen-last-used-email")).toHaveCount(0);
   });
 });

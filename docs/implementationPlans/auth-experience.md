@@ -733,12 +733,12 @@ Open risks:
     - "sign out everywhere else" calls `revokeOtherSessions`.
   - Skills: terreno-data-fetching, terreno-ui
 
-- [ ] **T22** — Example login, 2FA challenge, passkey sign-in
+- [x] **T22** — Example login, 2FA challenge, passkey sign-in
   - Depends on: T4, T20
-  - Files: example-frontend/app/login.tsx, example-frontend/app/twoFactor.tsx, example-frontend/app/_layout.tsx, example-frontend/lib/betterAuth.ts, example-frontend/e2e/login.spec.ts, example-frontend/e2e/two-factor.spec.ts, example-frontend/e2e/account-linking.spec.ts, example-frontend/e2e/helpers/login.ts
+  - Files: example-frontend/app/login.tsx, example-frontend/app/_layout.tsx, example-frontend/lib/betterAuth.ts, example-frontend/e2e/login.spec.ts, example-frontend/e2e/two-factor.spec.ts, example-frontend/e2e/account-linking.spec.ts, example-frontend/e2e/helpers/login.ts
   - Build:
     - The example login uses `TerrenoLoginScreen` with `rememberIdentity: true`.
-    - `app/twoFactor.tsx` becomes a public route.
+    - The two-factor challenge runs inline on the login route (TerrenoLoginScreen's default), so there is no separate `app/twoFactor.tsx`.
     - `loginAs` handles a 2FA challenge when a fixture user has a TOTP secret.
   - Proof (Playwright; social, 2FA and passkey cases run in the cross-site bearer
     project, which has the mock OIDC provider; the rest in the default project):

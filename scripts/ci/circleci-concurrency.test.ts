@@ -19,6 +19,8 @@ const E2E_SHARDS: Record<string, string[]> = {
     "admin-form",
     "admin-todo-crud",
     "admin-title-update-depth",
+    "org-admin-security",
+    "admin-user-security",
   ],
   "admin-table": [
     "admin-table-search-filter",
@@ -29,7 +31,15 @@ const E2E_SHARDS: Record<string, string[]> = {
     "harness-intake",
   ],
   app: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
-  auth: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],
+  auth: [
+    "login",
+    "signup",
+    "consents",
+    "forgot-password",
+    "reset-password",
+    "verify-email",
+    "two-factor",
+  ],
   syncdb: [
     "syncdb-load-delta",
     "syncdb-offline",

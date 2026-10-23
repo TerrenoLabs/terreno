@@ -1,5 +1,12 @@
 import {useBooleanFlagDetails} from "@openfeature/react-sdk";
-import {canOpenAdminPage, selectBetterAuthUserId, useFeatureFlags} from "@terreno/rtk";
+import {
+  canOpenAdminPage,
+  SIGN_OUT_FAILED_MESSAGE,
+  selectBetterAuthError,
+  selectBetterAuthIsSigningOut,
+  selectBetterAuthUserId,
+  useFeatureFlags,
+} from "@terreno/rtk";
 import {
   Badge,
   Banner,
@@ -33,6 +40,9 @@ const ProfileScreen: React.FC = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const userId = useSelector(selectBetterAuthUserId);
+  // Set when a sign-out could not reach the server and the session stayed.
+  const isSignOutFailed = useSelector(selectBetterAuthError) === SIGN_OUT_FAILED_MESSAGE;
+  const isSigningOut = useSelector(selectBetterAuthIsSigningOut);
   const {data: profileResponse, isLoading, refetch} = useGetMeQuery(undefined, {skip: !userId});
   const [updateProfile, {isLoading: isUpdating}] = usePatchMeMutation();
   const [sendVerification, {isLoading: isSendingVerification}] =
@@ -476,8 +486,14 @@ const ProfileScreen: React.FC = () => {
             <Text color="secondaryLight" testID="profile-logged-in-as">
               Logged in as {profile?.email}
             </Text>
+            {isSignOutFailed ? (
+              <Text color="error" testID="profile-logout-error">
+                {SIGN_OUT_FAILED_MESSAGE}
+              </Text>
+            ) : null}
             <Button
               iconName="right-from-bracket"
+              loading={isSigningOut}
               onClick={handleLogout}
               testID="profile-logout-button"
               text="Logout"

@@ -3,9 +3,11 @@ import {configureStore, type UnknownAction} from "@reduxjs/toolkit";
 import {
   type BetterAuthState,
   generateBetterAuthSlice,
+  SIGN_OUT_FAILED_MESSAGE,
   selectBetterAuthError,
   selectBetterAuthIsAuthenticated,
   selectBetterAuthIsLoading,
+  selectBetterAuthIsSigningOut,
   selectBetterAuthState,
   selectBetterAuthUser,
   selectBetterAuthUserId,
@@ -173,10 +175,9 @@ describe("generateBetterAuthSlice", () => {
     expect(state.isLoading).toBe(false);
   });
 
-  it("logout action clears session state", () => {
+  it("logout action keeps the session while the sign-out runs", () => {
     const betterAuthSlice = generateBetterAuthSlice({authClient: mockAuthClient});
 
-    // First set a session
     let state = betterAuthSlice.reducer(
       undefined,
       betterAuthSlice.actions.setSession({
@@ -192,13 +193,16 @@ describe("generateBetterAuthSlice", () => {
         userId: "user-123",
       })
     );
+    state = betterAuthSlice.reducer(state, betterAuthSlice.actions.setError("old"));
 
-    // Then logout
     state = betterAuthSlice.reducer(state, betterAuthSlice.actions.logout());
 
-    expect(state.isAuthenticated).toBe(false);
-    expect(state.userId).toBeNull();
-    expect(state.user).toBeNull();
+    expect(state.isSigningOut).toBe(true);
+    // A navigator gated on isLoading keeps its screen while the sign-out runs.
+    expect(state.isLoading).toBe(false);
+    expect(state.error).toBeNull();
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.userId).toBe("user-123");
   });
 
   it("returns middleware array", () => {
@@ -306,77 +310,237 @@ describe("generateBetterAuthSlice", () => {
     console.error = originalConsoleError;
   });
 
-  it("logout middleware calls signOut for slice logout action", async () => {
-    const betterAuthSlice = generateBetterAuthSlice({authClient: mockAuthClient});
+  const SIGNED_IN_USER = {
+    createdAt: new Date(),
+    email: "test@example.com",
+    emailVerified: true,
+    id: "user-123",
+    image: null,
+    name: "Test User",
+    updatedAt: new Date(),
+  };
+
+  // A store with the slice's middleware, signed in as SIGNED_IN_USER.
+  const signedInStore = (authClient: typeof mockAuthClient, signOutTimeoutMs?: number) => {
+    const betterAuthSlice = generateBetterAuthSlice({authClient, signOutTimeoutMs});
     const store = configureStore({
       middleware: (getDefaultMiddleware) =>
         getDefaultMiddleware().concat(...betterAuthSlice.middleware),
-      reducer: {
-        betterAuth: betterAuthSlice.reducer,
-      },
+      reducer: {betterAuth: betterAuthSlice.reducer},
     });
+    store.dispatch(betterAuthSlice.actions.setSession({user: SIGNED_IN_USER, userId: "user-123"}));
+    return {betterAuthSlice, store};
+  };
+
+  // Waits for the logout listener to finish (isSigningOut drops back to false).
+  const waitForLogout = async (store: ReturnType<typeof signedInStore>["store"]): Promise<void> => {
+    for (let attempt = 0; attempt < 50 && store.getState().betterAuth.isSigningOut; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  };
+
+  it("logout signs out first, then clears the session", async () => {
+    let resolveSignOut: (value: unknown) => void = () => {};
+    mockAuthClient.signOut = mock(
+      () =>
+        new Promise((resolve) => {
+          resolveSignOut = resolve;
+        })
+    ) as unknown as typeof mockAuthClient.signOut;
+    const {betterAuthSlice, store} = signedInStore(mockAuthClient);
 
     store.dispatch(betterAuthSlice.actions.logout());
     await Promise.resolve();
 
+    // Still signed in (and loading) while the server has not answered.
     expect(mockAuthClient.signOut).toHaveBeenCalledTimes(1);
+    expect(store.getState().betterAuth.userId).toBe("user-123");
+    expect(selectBetterAuthIsSigningOut(store.getState())).toBe(true);
+    expect(store.getState().betterAuth.isLoading).toBe(false);
+
+    resolveSignOut({data: {success: true}});
+    await waitForLogout(store);
+
+    expect(store.getState().betterAuth.isAuthenticated).toBe(false);
+    expect(store.getState().betterAuth.userId).toBeNull();
+    expect(store.getState().betterAuth.error).toBeNull();
+    expect(mockAuthClient.getSession).not.toHaveBeenCalled();
   });
 
-  it("logs and swallows signOut errors triggered by the slice logout action", async () => {
-    mockAuthClient.signOut = mock(() =>
-      Promise.reject(new Error("slice-signout-fail"))
+  it("treats a sign-out that never answers as failed once the timeout passes", async () => {
+    mockAuthClient.signOut = mock(
+      () => new Promise(() => {})
     ) as unknown as typeof mockAuthClient.signOut;
-    const originalError = console.error;
-    const errorCalls: unknown[][] = [];
-    console.error = (...args: unknown[]): void => {
-      errorCalls.push(args);
+    const originalWarn = console.warn;
+    const warnCalls: unknown[][] = [];
+    console.warn = (...args: unknown[]): void => {
+      warnCalls.push(args);
     };
-    const betterAuthSlice = generateBetterAuthSlice({authClient: mockAuthClient});
-    const store = configureStore({
-      middleware: (getDefaultMiddleware) =>
-        getDefaultMiddleware().concat(...betterAuthSlice.middleware),
-      reducer: {betterAuth: betterAuthSlice.reducer},
-    });
+    const {betterAuthSlice, store} = signedInStore(mockAuthClient, 20);
 
     try {
       store.dispatch(betterAuthSlice.actions.logout());
-      await Promise.resolve();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      const logged = errorCalls.find((args) =>
-        args.some((v) => typeof v === "string" && v.includes("Error signing out"))
-      );
-      expect(logged).toBeDefined();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(selectBetterAuthIsSigningOut(store.getState())).toBe(true);
+      expect(mockAuthClient.getSession).not.toHaveBeenCalled();
+
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      // The session check after the timeout finds the session still live.
+      expect(mockAuthClient.getSession).toHaveBeenCalledTimes(1);
+      expect(selectBetterAuthIsSigningOut(store.getState())).toBe(false);
+      expect(store.getState().betterAuth.userId).toBe("user-123");
+      expect(selectBetterAuthError(store.getState())).toBe(SIGN_OUT_FAILED_MESSAGE);
+      expect(
+        warnCalls.some((args) => args.some((v) => v instanceof Error && v.message.includes("20ms")))
+      ).toBe(true);
     } finally {
-      console.error = originalError;
+      console.warn = originalWarn;
     }
   });
 
-  it("logs and swallows signOut errors triggered by the global auth/logout action", async () => {
+  it("keeps a cookie session when the session check after a timed-out sign-out never answers too", async () => {
+    mockAuthClient.signOut = mock(
+      () => new Promise(() => {})
+    ) as unknown as typeof mockAuthClient.signOut;
+    mockAuthClient.getSession = mock(
+      () => new Promise(() => {})
+    ) as unknown as typeof mockAuthClient.getSession;
+    const originalWarn = console.warn;
+    console.warn = mock(() => {});
+    const {betterAuthSlice, store} = signedInStore(mockAuthClient, 10);
+
+    try {
+      store.dispatch(betterAuthSlice.actions.logout());
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
+      expect(selectBetterAuthIsSigningOut(store.getState())).toBe(false);
+      expect(store.getState().betterAuth.userId).toBe("user-123");
+      expect(selectBetterAuthError(store.getState())).toBe(SIGN_OUT_FAILED_MESSAGE);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("keeps a session that is still live after a failed sign-out, with an error", async () => {
+    mockAuthClient.signOut = mock(() =>
+      Promise.reject(new Error("slice-signout-fail"))
+    ) as unknown as typeof mockAuthClient.signOut;
+    const originalWarn = console.warn;
+    const warnCalls: unknown[][] = [];
+    console.warn = (...args: unknown[]): void => {
+      warnCalls.push(args);
+    };
+    const {betterAuthSlice, store} = signedInStore(mockAuthClient);
+
+    try {
+      store.dispatch(betterAuthSlice.actions.logout());
+      await waitForLogout(store);
+
+      expect(mockAuthClient.getSession).toHaveBeenCalledTimes(1);
+      expect(store.getState().betterAuth.userId).toBe("user-123");
+      expect(selectBetterAuthIsSigningOut(store.getState())).toBe(false);
+      expect(selectBetterAuthError(store.getState())).toBe(SIGN_OUT_FAILED_MESSAGE);
+      expect(
+        warnCalls.some((args) =>
+          args.some((v) => typeof v === "string" && v.includes("Error signing out"))
+        )
+      ).toBe(true);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("keeps a cookie session when neither the sign-out nor the session check can reach the server", async () => {
+    mockAuthClient.signOut = mock(() =>
+      Promise.reject(new Error("offline"))
+    ) as unknown as typeof mockAuthClient.signOut;
+    mockAuthClient.getSession = mock(() =>
+      Promise.reject(new Error("offline"))
+    ) as unknown as typeof mockAuthClient.getSession;
+    const originalWarn = console.warn;
+    console.warn = mock(() => {});
+    const {betterAuthSlice, store} = signedInStore(mockAuthClient);
+
+    try {
+      store.dispatch(betterAuthSlice.actions.logout());
+      await waitForLogout(store);
+
+      // A cookie client may still hold the session, so the app must not show signed out.
+      expect(store.getState().betterAuth.userId).toBe("user-123");
+      expect(selectBetterAuthError(store.getState())).toBe(SIGN_OUT_FAILED_MESSAGE);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("clears the session when a refused sign-out left no session behind", async () => {
+    mockAuthClient.signOut = mock(() =>
+      Promise.resolve({data: null, error: {message: "Failed to get session", status: 400}})
+    ) as unknown as typeof mockAuthClient.signOut;
+    mockAuthClient.getSession = mock(() =>
+      Promise.resolve({data: null})
+    ) as unknown as typeof mockAuthClient.getSession;
+    const originalWarn = console.warn;
+    console.warn = mock(() => {});
+    const {betterAuthSlice, store} = signedInStore(mockAuthClient);
+
+    try {
+      store.dispatch(betterAuthSlice.actions.logout());
+      await waitForLogout(store);
+
+      expect(store.getState().betterAuth.userId).toBeNull();
+      expect(store.getState().betterAuth.error).toBeNull();
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("keeps the session when the session check after a refused sign-out is refused too", async () => {
+    mockAuthClient.signOut = mock(() =>
+      Promise.resolve({data: null, error: {status: 500}})
+    ) as unknown as typeof mockAuthClient.signOut;
+    mockAuthClient.getSession = mock(() =>
+      Promise.resolve({data: null, error: {status: 503}})
+    ) as unknown as typeof mockAuthClient.getSession;
+    const originalWarn = console.warn;
+    console.warn = mock(() => {});
+    const {betterAuthSlice, store} = signedInStore(mockAuthClient);
+
+    try {
+      store.dispatch(betterAuthSlice.actions.logout());
+      await waitForLogout(store);
+
+      expect(store.getState().betterAuth.userId).toBe("user-123");
+      expect(selectBetterAuthError(store.getState())).toBe(SIGN_OUT_FAILED_MESSAGE);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("the global auth/logout action clears the session even when the sign-out fails", async () => {
     mockAuthClient.signOut = mock(() =>
       Promise.reject(new Error("global-signout-fail"))
     ) as unknown as typeof mockAuthClient.signOut;
-    const originalError = console.error;
-    const errorCalls: unknown[][] = [];
-    console.error = (...args: unknown[]): void => {
-      errorCalls.push(args);
+    const originalWarn = console.warn;
+    const warnCalls: unknown[][] = [];
+    console.warn = (...args: unknown[]): void => {
+      warnCalls.push(args);
     };
-    const betterAuthSlice = generateBetterAuthSlice({authClient: mockAuthClient});
-    const store = configureStore({
-      middleware: (getDefaultMiddleware) =>
-        getDefaultMiddleware().concat(...betterAuthSlice.middleware),
-      reducer: {betterAuth: betterAuthSlice.reducer},
-    });
+    const {store} = signedInStore(mockAuthClient);
 
     try {
       store.dispatch({type: "auth/logout"});
       await Promise.resolve();
       await new Promise((resolve) => setTimeout(resolve, 0));
-      const logged = errorCalls.find((args) =>
+      const logged = warnCalls.find((args) =>
         args.some((v) => typeof v === "string" && v.includes("Error signing out"))
       );
       expect(logged).toBeDefined();
+      expect(store.getState().betterAuth.userId).toBeNull();
+      expect(mockAuthClient.getSession).not.toHaveBeenCalled();
     } finally {
-      console.error = originalError;
+      console.warn = originalWarn;
     }
   });
 
@@ -408,6 +572,7 @@ describe("generateBetterAuthSlice", () => {
 
     store.dispatch({type: "auth/logout"});
     await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(mockAuthClient.signOut).toHaveBeenCalledTimes(1);
     expect(store.getState().betterAuth.isAuthenticated).toBe(false);
@@ -421,6 +586,7 @@ describe("Better Auth selectors", () => {
       error: null,
       isAuthenticated: false,
       isLoading: false,
+      isSigningOut: false,
       lastSyncTimestamp: null,
       user: null,
       userId: null,
@@ -456,6 +622,12 @@ describe("Better Auth selectors", () => {
   it("selectBetterAuthIsLoading returns correct value", () => {
     expect(selectBetterAuthIsLoading(createMockState({isLoading: true}))).toBe(true);
     expect(selectBetterAuthIsLoading(createMockState({isLoading: false}))).toBe(false);
+  });
+
+  it("selectBetterAuthIsSigningOut returns correct value", () => {
+    expect(selectBetterAuthIsSigningOut(createMockState({isSigningOut: true}))).toBe(true);
+    expect(selectBetterAuthIsSigningOut(createMockState({isSigningOut: false}))).toBe(false);
+    expect(selectBetterAuthIsSigningOut({})).toBe(false);
   });
 
   it("selectBetterAuthError returns correct value", () => {

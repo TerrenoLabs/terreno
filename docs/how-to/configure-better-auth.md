@@ -571,6 +571,10 @@ const Login = (): React.ReactElement => {
 };
 ``````
 
+`example-frontend/app/login.tsx` is a working copy. The example opts into `rememberIdentity: true`
+(its store is in `lib/betterAuth.ts`), shows the two-factor challenge inline, and labels its e2e
+mock provider with `providerLabels`.
+
 What it does:
 
 - **Live session.** On mount it checks for a session. A valid one calls `onSignedIn` and the
@@ -594,9 +598,28 @@ What it does:
   (`signInSocialWithHandoff`); cookie mode and native use `signIn.social`. Pass `callbackURL`
   set to the login route: the page returns there, the controller finds the new session, and it
   records the provider. In bearer mode that path must be one of the server's
-  `oauthHandoff.callbackPaths`. Providers Google, GitHub and Apple get branded buttons; any
-  other provider id (a generic OIDC provider) gets a plain button labelled from
-  `providerLabels`.
+  `oauthHandoff.callbackPaths`. In cookie mode on web, when the app and the API are on different
+  origins, pass the full URL (`${window.location.origin}/login`): Better Auth resolves a bare path
+  against the API's host, and list the web page's origin in the server's `trustedOrigins`, or
+  Better Auth refuses the URL. Native takes the path, which the Expo plugin turns into a deep link.
+  Providers Google, GitHub and Apple get branded buttons; any other provider id (a generic OIDC
+  provider) gets a plain button labelled from `providerLabels`.
+  If your root layout sends signed-in users away from the login route, let that route through:
+  the screen has to see the returned session to record it, and it navigates on by itself. Pass
+  `onStepChange` to catch the screen landing on its `login` step while your app already holds a
+  session (the live-session check failed), and navigate away there; example-frontend's
+  `app/login.tsx` does both, and skips re-syncing Redux in `onSignedIn` when it already holds the
+  user.
+- **Signing out.** Dispatch `generateBetterAuthSlice`'s `logout()`. It keeps the session until
+  `authClient.signOut()` answers, then clears it, so the login screen never opens while the old
+  session is still live. Meanwhile `selectBetterAuthIsSigningOut` is true: show it on the
+  sign-out control. `logout()` leaves `isLoading` alone, so the screen stays put; if your
+  navigator shows a spinner on `selectBetterAuthIsLoading`, show it only while no user is
+  loaded (`isLoading && !userId`), or a session refresh would remount the navigator on its
+  first tab. A sign-out that cannot reach the server leaves a cookie or native session in place
+  and sets the slice's `error` (`SIGN_OUT_FAILED_MESSAGE`); show it. Stop anything that calls the
+  API with the session first: example-frontend's `logout` in `store/index.ts` stops syncdb,
+  then dispatches `logout()`, and its profile screen shows both.
 - **Sign-up.** The sign-up link hides when the server's sign-up is closed (`signUp: false`).
 - **No email and password.** When the server has `emailPassword` off, the form, the Log In
   button, and the forgot-password link are left out (`LoginScreen` with `fields={[]}`), and a
@@ -911,8 +934,12 @@ example-frontend uses `/login` as the return page. With `BETTER_AUTH_OAUTH_HANDO
 example-backend sets `oauthHandoff` to its web origins and `callbackPaths: ["/login"]`. With
 `NODE_ENV=production` it drops loopback origins (`localhost`, `127.0.0.1`, `[::1]`, any port) from
 the handoff only, so a token never goes to a page on the visitor's own machine, and it refuses to
-start when no other origin is left in `CORS_ORIGINS`. CORS and `trustedOrigins` keep them. In bearer mode `lib/betterAuth.ts` starts the social buttons with
-`signInSocialWithHandoff`. `app/_layout.tsx` syncs the session only after the exchange resolves.
+start when no other origin is left in `CORS_ORIGINS`. CORS and `trustedOrigins` keep them.
+`app/login.tsx` renders `TerrenoLoginScreen` with `callbackURL="/login"` in bearer mode, so its
+social buttons start with `signInSocialWithHandoff` and come back to the same screen, which finds
+the session and records the method. `app/_layout.tsx` syncs the session only after the exchange
+resolves, and leaves a signed-in user on `/login` so the screen can record the sign-in before it
+navigates on.
 
 In an Expo Router app, run the exchange from the entry file, not from a layout. Expo Router
 copies the URL, fragment included, as soon as it is imported, and writes that copy back into
@@ -922,7 +949,8 @@ first imports `lib/oauthHandoffUrl.ts`, which has no imports and hides `handoff`
 the URL, then `lib/oauthHandoff.ts`, which puts the URL back and calls
 `completeBetterAuthOAuthHandoff` in the same synchronous step, then `expo-router/entry`.
 
-The login screen shows `?error=` in `login-screen-error`. `e2e/crossSiteOAuth.spec.ts` signs in
+The login screen (`TerrenoLoginScreen`) turns `?error=` into guidance in `login-screen-notice` or
+a short message in `login-screen-error`, never the raw text. `e2e/crossSiteOAuth.spec.ts` signs in
 cross-site through a local mock OIDC provider (`e2e/helpers/mockOidcProvider.ts`), which
 example-backend registers as the `mock-oidc` generic OAuth provider only when `MOCK_OIDC_ISSUER`
 is set. example-backend refuses to start when `MOCK_OIDC_ISSUER` is set with

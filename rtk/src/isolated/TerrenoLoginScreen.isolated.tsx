@@ -157,6 +157,35 @@ describe("TerrenoLoginScreen", () => {
     expect(onSignedIn).toHaveBeenCalledWith({method: "email", user: JANE});
   });
 
+  it("reports each step it moves to", async () => {
+    const onStepChange = mock((_step: string) => {});
+    await act(async () => {
+      renderer = create(
+        <TerrenoLoginScreen
+          client={fakeClient()}
+          onSignedIn={mock(() => {})}
+          onStepChange={onStepChange}
+          rememberedAccounts={memoryStore()}
+          webAuth="cookie"
+        />
+      );
+    });
+    await flush();
+    const login = last("LoginScreen");
+    await act(async () => {
+      await (login.onSubmit as (values: Record<string, string>) => Promise<void>)({
+        email: "jane@example.com",
+        password: "pw",
+      });
+    });
+
+    expect(onStepChange.mock.calls.map(([step]) => step)).toEqual([
+      "checking",
+      "login",
+      "twoFactor",
+    ]);
+  });
+
   it("passes no fields when the server has email and password off", async () => {
     await act(async () => {
       renderer = create(

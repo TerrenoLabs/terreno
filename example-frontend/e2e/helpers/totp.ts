@@ -19,9 +19,16 @@ const base32Decode = (value: string): Buffer => {
   return Buffer.from(bytes);
 };
 
+/** The base32 secret in a `otpauth://totp/...?secret=...` URI, as `/two-factor/enable` returns it. */
+export const base32TotpSecretFromURI = (totpURI: string): string =>
+  new URL(totpURI).searchParams.get("secret") ?? "";
+
 /** The secret in a `otpauth://totp/...?secret=...` URI, as `/two-factor/enable` returns it. */
 export const totpSecretFromURI = (totpURI: string): Buffer =>
-  base32Decode(new URL(totpURI).searchParams.get("secret") ?? "");
+  base32Decode(base32TotpSecretFromURI(totpURI));
+
+/** The secret an authenticator app is given as base32 text (an `E2EUser.totpSecret`). */
+export const totpSecretFromBase32 = (secret: string): Buffer => base32Decode(secret);
 
 /** The current RFC 6238 code (SHA-1, 6 digits, 30-second steps). */
 export const totpCode = (secret: Buffer): string => {

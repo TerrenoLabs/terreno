@@ -17,13 +17,22 @@ import {
 } from "better-auth/client/plugins";
 import {createAuthClient, type ReactAuthClient} from "better-auth/react";
 import * as SecureStore from "expo-secure-store";
+import {
+  bearerTokenKey,
+  DEFAULT_STORAGE_PREFIX,
+  getBetterAuthBearerToken,
+  type HandoffClientConfig,
+  handoffClients,
+  resolveBearerStorage,
+} from "./betterAuthClientRegistry";
 import type {
   BetterAuthBearerStorage,
   BetterAuthClientConfig,
   BetterAuthClientFeatures,
-  BetterAuthWebAuth,
 } from "./betterAuthTypes";
 import {IsWeb} from "./platform";
+
+export {getBetterAuthBearerToken, getBetterAuthClientWebAuth} from "./betterAuthClientRegistry";
 
 // Re-export types for convenience
 export type {
@@ -95,8 +104,6 @@ export const createStorageAdapter = (isWeb: boolean = IsWeb): StorageAdapter => 
     setItem: (key: string, value: string) => SecureStore.setItem(key, value),
   };
 };
-
-const DEFAULT_STORAGE_PREFIX = "terreno";
 
 /**
  * Drops cookie-jar entries that `@better-auth/expo` cannot read.
@@ -171,78 +178,6 @@ type BetterAuthFetchOptions = NonNullable<
 type BetterAuthRequestHook = NonNullable<BetterAuthFetchOptions["onRequest"]>;
 type BetterAuthSuccessHook = NonNullable<BetterAuthFetchOptions["onSuccess"]>;
 type BetterAuthResponseHook = NonNullable<BetterAuthFetchOptions["onResponse"]>;
-
-// Signed-out fallback for environments with no usable localStorage (SSR, blocked storage).
-const NO_BEARER_STORAGE: BetterAuthBearerStorage = {
-  getItem: () => null,
-  removeItem: () => {},
-  setItem: () => {},
-};
-
-const resolveBearerStorage = (bearerStorage?: BetterAuthBearerStorage): BetterAuthBearerStorage => {
-  if (bearerStorage) {
-    return bearerStorage;
-  }
-  if (typeof window === "undefined") {
-    return NO_BEARER_STORAGE;
-  }
-  try {
-    // Reading `window.localStorage` throws when the browser blocks site storage.
-    return window.localStorage ?? NO_BEARER_STORAGE;
-  } catch {
-    return NO_BEARER_STORAGE;
-  }
-};
-
-const bearerTokenKey = (storagePrefix?: string): string => {
-  return `${storagePrefix ?? DEFAULT_STORAGE_PREFIX}_bearer_token`;
-};
-
-/**
- * Reads the bearer token that `createBetterAuthClient({webAuth: "bearer"})` stored, without a
- * network call. Pass the same `storagePrefix` and `bearerStorage` the client was created with.
- * Returns `null` when signed out or when no storage is available.
- *
- * @example
- * ```typescript
- * const token = getBetterAuthBearerToken({storagePrefix: "myapp"});
- * ```
- */
-export const getBetterAuthBearerToken = ({
-  bearerStorage,
-  storagePrefix,
-}: {
-  bearerStorage?: BetterAuthBearerStorage;
-  storagePrefix?: string;
-} = {}): string | null => {
-  return resolveBearerStorage(bearerStorage).getItem(bearerTokenKey(storagePrefix));
-};
-
-/**
- * How a client `createBetterAuthClient` made authenticates on web, and, in bearer mode, the token
- * it holds. Returns `{webAuth: "cookie", bearerToken: null}` on native (the Expo plugin keeps the
- * session there), in cookie mode, and for a client this factory did not make. Makes no request.
- *
- * @example
- * ```typescript
- * const {webAuth, bearerToken} = getBetterAuthClientWebAuth(authClient);
- * ```
- */
-export const getBetterAuthClientWebAuth = (
-  client: object
-): {webAuth: BetterAuthWebAuth; bearerToken: string | null} => {
-  const config = handoffClients.get(client);
-  if (!config?.isWebBearer) {
-    return {bearerToken: null, webAuth: "cookie"};
-  }
-  return {
-    bearerToken: getBetterAuthBearerToken({
-      bearerStorage: config.bearerStorage,
-      storagePrefix: config.storagePrefix,
-    }),
-    webAuth: "bearer",
-  };
-};
 
 const isAuthEndpoint = (url: string | URL, endpoint: string): boolean => {
   return new URL(url.toString(), "http://localhost").pathname.endsWith(endpoint);
@@ -416,19 +351,6 @@ const createWebBearerFetchOptions = ({
     onSuccess,
   };
 };
-
-/** What the OAuth handoff needs to know about a client `createBetterAuthClient` made. */
-interface HandoffClientConfig {
-  /** Better Auth's base URL with its path, as the client resolved it, without a trailing slash. */
-  authBaseURL: string;
-  bearerStorage?: BetterAuthBearerStorage;
-  isWebBearer: boolean;
-  storagePrefix: string;
-}
-
-// Keyed by the client itself: Better Auth's client is a route proxy, so nothing can be added to
-// it, and bearer mode only exists on clients this factory made.
-const handoffClients = new WeakMap<object, HandoffClientConfig>();
 
 // Better Auth appends `/api/auth` to a baseURL that has no path of its own.
 const resolveAuthBaseURL = (baseURL: string): string => {

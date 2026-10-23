@@ -4,9 +4,13 @@
  */
 import type {LoginFieldConfig, LoginScreenProps} from "@terreno/ui";
 import {Box, LoginScreen, Spinner, TwoFactorChallengeScreen} from "@terreno/ui";
-import type {FC, ReactNode} from "react";
+import {type FC, type ReactNode, useEffect, useRef} from "react";
 
-import {type UseLoginControllerOptions, useLoginController} from "./useLoginController";
+import {
+  type LoginControllerStep,
+  type UseLoginControllerOptions,
+  useLoginController,
+} from "./useLoginController";
 
 /** The email and password fields the screen shows unless `fields` is passed. */
 export const DEFAULT_LOGIN_FIELDS: LoginFieldConfig[] = [
@@ -33,6 +37,12 @@ export interface TerrenoLoginScreenProps extends UseLoginControllerOptions {
    * the server's `twoFactor.trustDeviceDays`; leave unset to hide it.
    */
   trustDeviceDays?: number;
+  /**
+   * Called with each step the screen moves to (`checking`, `login`, `twoFactor`, `signedIn`).
+   * An app that already holds a session can use `login` to leave the route, for example when
+   * the live-session check failed.
+   */
+  onStepChange?: (step: LoginControllerStep) => void;
   /**
    * Root testID of the login screen. The checking spinner is `${testID}-checking`; the inline
    * challenge keeps `TwoFactorChallengeScreen`'s own `two-factor-challenge`.
@@ -69,10 +79,18 @@ export const TerrenoLoginScreen: FC<TerrenoLoginScreenProps> = ({
   passkeyButtonText,
   lastUsedLabel,
   trustDeviceDays,
+  onStepChange,
   testID = "login-screen",
   ...options
 }) => {
   const controller = useLoginController(options);
+
+  // Reports each new step; the latest callback is read so a new function does not re-report.
+  const onStepChangeRef = useRef(onStepChange);
+  onStepChangeRef.current = onStepChange;
+  useEffect(() => {
+    onStepChangeRef.current?.(controller.step);
+  }, [controller.step]);
 
   if (controller.step === "checking" || controller.step === "signedIn") {
     return (

@@ -60,6 +60,30 @@ test.describe("Profile", () => {
     await expect(page.getByTestId("profile-feature-flags-card").first()).toBeVisible();
   });
 
+  test("user who cannot reach the server stays signed in and sees the sign-out error", async ({
+    consoleGuard,
+    page,
+  }) => {
+    // The sign-out and the session check after it both fail, as they do offline. A cookie
+    // session may still be live on the server, so the app keeps it rather than showing the
+    // login screen.
+    consoleGuard.allow("Failed to load resource");
+    consoleGuard.allow("Better Auth: Error signing out");
+    consoleGuard.allow("Better Auth: Could not check the session after a failed sign out");
+    await page.route("**/api/auth/sign-out", (route) => route.abort("connectionrefused"));
+    await page.route("**/api/auth/get-session**", (route) => route.abort("connectionrefused"));
+
+    await page.getByTestId("profile-logout-button").first().click();
+
+    await expect(page.getByTestId("profile-logout-error").first()).toBeVisible();
+    await expect(page.getByTestId("profile-logout-error").first()).toContainText(
+      "Couldn't sign out"
+    );
+    await expect(page).toHaveURL(/\/profile$/);
+    await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(TEST_USER.email);
+    await expect(page.getByTestId("login-screen")).toHaveCount(0);
+  });
+
   test("logout redirects to login", async ({page}) => {
     await page.getByTestId("profile-logout-button").first().click();
     await page.getByTestId("login-screen").waitFor({state: "visible"});

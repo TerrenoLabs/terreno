@@ -1,0 +1,5 @@
+---
+category: Changed
+---
+
+`@terreno/rtk` `generateBetterAuthSlice`: `logout()` no longer clears the session before the server answers. The session stays in the state until `authClient.signOut()` finishes (`signOutTimeoutMs`, default 10 seconds), and then it is cleared. Meanwhile the new `isSigningOut` state (`selectBetterAuthIsSigningOut`) is true; `isLoading` is left alone, so a navigator gated on it keeps its screen. Before, a login screen that opened at once could find the still-live session and sign the user straight back in. A sign-out that fails or times out checks the session first. A session that is still live, or a cookie or native session the server cannot be asked about, stays signed in, and `error` is set to `SIGN_OUT_FAILED_MESSAGE` ("Couldn't sign out. Check your connection and try again."). A web bearer client, which drops its token before the request leaves, ends signed out. The global `auth/logout` action (a refused session) now ends signed out even when the sign-out request fails. Show `selectBetterAuthIsSigningOut` on the sign-out control and `selectBetterAuthError` after a failed sign-out.

@@ -502,8 +502,11 @@ actor's own record and writes by legacy `admin: true` users are not checked. Cha
 user's identity fields also needs `user:updateIdentity`; see
 [RBAC user identity writes](#rbac-user-identity-writes).
 
-Request logs redact `password`, `newPassword`,
-`oldPassword`, `token`, and `refreshToken` in request bodies and in URL query strings. Changing the mailbox through `PATCH /auth/me`
+Request logs redact credential values at any depth in request bodies and in URL query strings:
+any key whose name contains `password`, `passwd`, `passphrase`, `passcode`, `token`, `secret`,
+`verifier`, `signature`, `apikey`, `authorization`, `credential`, or `privatekey` (case and `_`/`-`
+ignored, so `currentPassword`, `refresh_token`, `client_secret`, and `idToken.token` all match), or
+that has `code`, `otp`, or `pin` as a word (`code`, `zipCode`, `otp_code`). Changing the mailbox through `PATCH /auth/me`
 invalidates unused `passwordReset` AuthTokens for that user even when the schema has no
 `emailVerified` field. When the schema uses `emailVerificationPlugin`, mailbox change also
 sets `emailVerified` to false and invalidates unused `emailVerification` tokens; changing letter
@@ -1484,8 +1487,8 @@ background job can be followed across many log lines, both in plain-text console
 transports (Google Cloud Logging, Sentry).
 
 > Never use `console.log` for permanent server logs — use `logger` or a scoped logger. Request
-> logging already redacts `password` on bodies; never log secrets, full auth tokens, or raw
-> passwords.
+> logging already redacts password, token, secret, and code fields in bodies and query strings;
+> never log secrets, full auth tokens, or raw passwords.
 
 ### Quick reference
 
@@ -1692,6 +1695,10 @@ const IsWorkspaceMemberOrAdmin: PermissionMethod<Workspace> = (method, user, obj
 ``````
 
 ### Configuring transports
+
+Request logging (one debug line per request with method, URL, user, and redacted body) is on by
+default. Turn it off with `logRequests: false` on `TerrenoApp` or `loggingOptions: {logRequests: false}`;
+either one disables it.
 
 `setupLogging` is called for you by `TerrenoApp` / `setupServer` (pass `loggingOptions`). Console
 and file transports are enabled by default; add custom transports (such as Google Cloud Logging) to

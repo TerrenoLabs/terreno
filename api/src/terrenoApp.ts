@@ -442,7 +442,7 @@ export class TerrenoApp {
     const authOptions = options.authOptions;
     addAuthRoutes(app, options.userModel, authOptions);
 
-    if (options.logRequests !== false) {
+    if (options.logRequests !== false && options.loggingOptions?.logRequests !== false) {
       app.use(logRequests);
     }
 

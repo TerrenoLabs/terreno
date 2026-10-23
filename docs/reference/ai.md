@@ -790,6 +790,8 @@ const model = vertex.languageModel("gemini-3.8-flash");
 
 Env fallbacks: `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` (default `global`).
 
+`languageModel`, `imageModel`, and `isModelAllowed` accept only a plain model id: letters, digits, `.`, `_`, and `-`, with an optional `publishers/google/models/` or `models/` prefix and an optional `@version`. Any other id (one with another `/`, `:`, `?`, or `#`) is refused with `400 Model not permitted`, with or without `allowedModels`. With `allowedModels` set, the id without its prefix and `@version` must match an entry. The provider is given the checked id without its prefix, so a model id sent in a request body cannot name a different model than the one the allow-list checked.
+
 ## Web search types
 
 `WebSearchProvider` and `WebSearchResult` define a pluggable search interface for custom Vercel AI SDK tools. The package does not ship a default provider — implement `search(query)` and wire it into a `tool()` passed to `AiApp` `tools`.

@@ -61,7 +61,7 @@ export const terrenoStatements = {
   announcementImpression: ["list", "read"],
   configuration: ["read", "update"],
   consentForm: MODEL_CRUD,
-  consentResponse: ["list", "read"],
+  consentResponse: ["list", "read", "signOnBehalf"],
   featureFlag: MODEL_CRUD,
   organization: ORGANIZATION_ACTIONS,
   rbac: ["read", "manageRoles", "assignRoles"],
@@ -130,6 +130,11 @@ export const terrenoStatementDescriptions: Record<string, Record<string, string>
   aiTrace: {
     list: "List traces and observability status",
     read: "View trace detail and run trace test helpers",
+  },
+  consentResponse: {
+    list: "List consent responses",
+    read: "View consent responses",
+    signOnBehalf: "Record, view, and void provisional consent signatures for other users",
   },
 };
 

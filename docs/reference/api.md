@@ -14,6 +14,7 @@ REST API framework built on Express and Mongoose. Provides modelRouter (CRUD end
 - [Middleware](#middleware)
 - [Logging & Tracing](#logging--tracing)
 - [Extensibility](#extensibility)
+- [Consent forms (ConsentApp)](#consent-forms-consentapp)
 - [In-app notifications](#in-app-notifications)
 - [Webhooks & Notifications](#webhooks--notifications)
 - [HTTP Client](#http-client)
@@ -1617,6 +1618,82 @@ setupServer({
 - Testable in isolation
 - Optional/configurable functionality
 - Clean separation of concerns
+
+## Consent forms (ConsentApp)
+
+Versioned consent forms, user responses, and the consent gate. Concepts:
+[Consent forms](../explanation/consent-forms.md).
+
+```typescript
+import {ConsentApp, TerrenoApp} from "@terreno/api";
+
+new TerrenoApp({userModel: User})
+  .register(new ConsentApp({accessControl: access, auditTrail: true}))
+  .start();
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `accessControl` | — | RBAC access control. When set, roles granting `consentResponse:signOnBehalf` may sign provisionally for other users. When unset, only `user.admin` may, and register logs a warning |
+| `auditTrail` | `false` | Store IP address, user agent, and content snapshots on responses, and mount `GET /consents/audit/:userId` |
+| `resolveConsentForms` | — | `(user, forms) => forms` narrows the active forms that apply to a user |
+| `supportedLocales` | — | Accepted for app configuration; `ConsentApp` does not read it |
+| `aiConfig` | — | `{generateContent, translateContent}` enables `POST /consent-forms/generate` and `/translate` |
+
+### Endpoints
+
+| Method + path | Who | Description |
+| --- | --- | --- |
+| `GET/POST/PATCH/DELETE /consent-forms` | admin | Form CRUD |
+| `POST /consent-forms/:id/publish` | admin | Copy the form to `version + 1`, activate it, deactivate other versions |
+| `GET /consent-responses`, `GET /consent-responses/:id` | admin | Read responses, populated with form and user |
+| `POST /consent-responses/provisional` | sign-on-behalf | Record a provisional signature for another user |
+| `GET /consents/pending` | user | Active forms the user has not answered themselves at the current version |
+| `POST /consents/respond` | user | `{consentFormId, agreed, locale, checkboxValues?, signature?}` |
+| `GET /consents/my` | user | The user's own responses with form data |
+| `GET /consents/audit/:userId` | admin | Full audit history (only with `auditTrail`) |
+
+"sign-on-behalf" means an authenticated user with `consentResponse:signOnBehalf` when
+`accessControl` is set, otherwise `user.admin`. Others get 405.
+
+### `POST /consent-responses/provisional`
+
+Body: `{userId, consentFormId, note, locale?}`. `note` is required, trimmed, and at most 2000
+characters. `locale` defaults to the form's `defaultLocale`.
+
+Creates a `ConsentResponse` for `userId` with `provisional: true`, `agreed: true`,
+`agreedAt` (server time), `provisionalSignedBy` (the caller), `provisionalNote`, and
+`formVersionSnapshot`. With `auditTrail`, it also stores `contentSnapshot`,
+`provisionalSignerIp`, and `provisionalSignerUserAgent`. `ipAddress`, `userAgent`,
+`signature`, and `signedAt` stay unset: they describe the user's own device and signature.
+
+Returns `{data: ConsentResponse}` with `provisionalSignedBy` populated as `{_id, name, email}`.
+The form stays in the target user's `/consents/pending` until they respond themselves.
+
+| Status | When |
+| --- | --- |
+| 400 | Missing or invalid ids, blank or too-long note, `userId` is the caller, inactive form, or the form is filtered out for the target user by `resolveConsentForms` |
+| 404 | Unknown user or form |
+| 405 | The caller may not sign on behalf of others |
+
+With `AuditApp` registered, each provisional signature writes an `AuditEvent`
+(`modelName: "ConsentResponse"`, `operation: "create"`, `after: {action: "signOnBehalf",
+userId, consentFormId}`, `actorId`: the signer).
+
+### RBAC
+
+`terrenoStatements.consentResponse` is `["list", "read", "signOnBehalf"]`. The built-in
+`admin` role grants `consentResponse: ["signOnBehalf"]`. Seeding adds it to existing unsealed
+`admin` roles without removing other grants. `superadmin` has every action.
+
+### Response fields
+
+| Field | Notes |
+| --- | --- |
+| `provisional` | `false` by default; `true` only on responses from `/consent-responses/provisional` |
+| `provisionalSignedBy` | User ref; required when `provisional` |
+| `provisionalNote` | Required when `provisional`; max 2000 characters |
+| `provisionalSignerIp`, `provisionalSignerUserAgent` | Signer's request metadata, with `auditTrail` |
 
 ## In-app notifications
 

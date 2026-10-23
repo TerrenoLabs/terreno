@@ -42,6 +42,43 @@ const consentResponseSchema = new mongoose.Schema<ConsentResponseDocument, Conse
       required: true,
       type: String,
     },
+    provisional: {
+      default: false,
+      description:
+        "Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves",
+      type: Boolean,
+    },
+    provisionalNote: {
+      description: "Required note from the provisional signer explaining how consent was obtained",
+      maxlength: 2000,
+      required: [
+        function (this: ConsentResponseDocument): boolean {
+          return this.provisional === true;
+        },
+        "provisionalNote is required for a provisional signature",
+      ],
+      trim: true,
+      type: String,
+    },
+    provisionalSignedBy: {
+      description: "The user who recorded this provisional signature",
+      ref: "User",
+      required: [
+        function (this: ConsentResponseDocument): boolean {
+          return this.provisional === true;
+        },
+        "provisionalSignedBy is required for a provisional signature",
+      ],
+      type: mongoose.Schema.Types.ObjectId,
+    },
+    provisionalSignerIp: {
+      description: "IP address of the provisional signer, captured for audit purposes",
+      type: String,
+    },
+    provisionalSignerUserAgent: {
+      description: "User-agent string of the provisional signer's browser or app",
+      type: String,
+    },
     signature: {
       description: "Base64-encoded signature image or typed signature text, if captured",
       type: String,

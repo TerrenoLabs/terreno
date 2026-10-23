@@ -46,7 +46,7 @@ export const store = configureStore({
 **Returns:**
 - `authReducer` — Redux reducer for auth state
 - `authSlice` — Full Redux slice
-- `logout` — Action to clear tokens and reset state
+- `logout` — Action to clear tokens and reset state. A logout that ends a signed-in session also purges the API's RTK Query cache (`resetApiState`), so the next user never gets the previous user's cached responses
 - `setUserId` — Action to set current user ID
 - `tokenRefreshedSuccess` — Action signaling token refresh
 - `middleware` — Login/logout listener middleware array
@@ -90,6 +90,7 @@ For apps using Better Auth instead of JWT:
 ``````typescript
 import {configureStore} from "@reduxjs/toolkit";
 import {createBetterAuthClient, generateBetterAuthSlice} from "@terreno/rtk";
+import {api} from "./sdk"; // the app's generated RTK Query API
 
 // Create Better Auth client. `scheme` is the app's deep-link scheme (required).
 export const authClient = createBetterAuthClient({
@@ -97,8 +98,8 @@ export const authClient = createBetterAuthClient({
   scheme: "myapp",
 });
 
-// Generate the session Redux slice
-const betterAuth = generateBetterAuthSlice({authClient});
+// Generate the session Redux slice; list the APIs whose cache belongs to the signed-in user
+const betterAuth = generateBetterAuthSlice({apisToReset: [api], authClient});
 
 export const store = configureStore({
   reducer: {
@@ -117,7 +118,7 @@ void betterAuth.syncSession(store.dispatch);
 - `getBetterAuthBearerToken({storagePrefix?, bearerStorage?})` — Reads the token bearer mode stored, or `null`
 - `signInSocialWithHandoff({client, provider, callbackURL?, errorCallbackURL?})` — Starts a social or generic OAuth sign-in for a web bearer client: stores a random nonce in `sessionStorage` and navigates the page to the server's `{basePath}/oauth-handoff/start` with `handoff=<nonce>` on the callback URLs. Throws on native and in cookie mode ([how-to](../../how-to/configure-better-auth.md#social-sign-in-in-bearer-mode))
 - `completeBetterAuthOAuthHandoff({client}): Promise<boolean>` — On the return page, removes `#ott` and `handoff` from the URL first, then exchanges the token at `{basePath}/one-time-token/verify` only when `handoff` matches the stored nonce. Resolves `true` only when a bearer token was stored; never rejects. Await it at startup before session reads and Sentry
-- `generateBetterAuthSlice({authClient, syncInterval?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`
+- `generateBetterAuthSlice({authClient, apisToReset?, syncInterval?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`. Pass the app's RTK Query APIs (for example `apisToReset: [terrenoApi]`) so their caches are purged (`util.resetApiState()`) when a signed-in session logs out (`betterAuth/logout` or `auth/logout`), when `syncSession` finds the session gone, and when the session changes to another user. Without it, the next account on the same client can be served the previous account's cached responses
 - `selectBetterAuthIsAuthenticated`, `selectBetterAuthUserId`, `selectBetterAuthUser` — Selectors over `state.betterAuth`
 - `BetterAuthUser`, `BetterAuthState` — TypeScript types for session/user data
 

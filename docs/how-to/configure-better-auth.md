@@ -246,8 +246,10 @@ the check off. A `trustedOrigins` function is not consulted; list the origins.
 import {generateBetterAuthSlice} from "@terreno/rtk";
 import {configureStore} from "@reduxjs/toolkit";
 import {authClient} from "./authClient";
+import {api} from "./sdk"; // the app's generated RTK Query API
 
-const betterAuth = generateBetterAuthSlice({authClient});
+// Purge the SDK's cached responses on logout or user switch.
+const betterAuth = generateBetterAuthSlice({apisToReset: [api], authClient});
 
 export const store = configureStore({
   reducer: {

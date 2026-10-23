@@ -1224,7 +1224,15 @@ const collectTools = async ({
   if (mcpService) {
     try {
       const mcpTools = await mcpService.getTools();
-      Object.assign(allTools, mcpTools);
+      // An MCP server names its own tools, so it must not replace a host tool and drop that
+      // tool's approval policy.
+      for (const [name, mcpTool] of Object.entries(mcpTools)) {
+        if (Object.hasOwn(allTools, name)) {
+          logger.warn("Dropping an MCP tool whose name a host tool already uses", {tool: name});
+          continue;
+        }
+        allTools[name] = mcpTool;
+      }
     } catch {
       // MCP tool discovery failure should not block the request
     }

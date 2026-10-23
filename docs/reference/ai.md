@@ -762,6 +762,8 @@ await mcp.reconnectServer("my-server");
 await mcp.disconnect();
 ```
 
+`getTools()` merges every connected server's tools by name. When two servers offer the same name, the first server in the config keeps it and the later one is dropped with a warning. In a chat turn, MCP tools never replace a route tool or a `createRequestTools` tool of the same name: the MCP tool is dropped with a warning, so a host tool keeps its `execute` and its `needsApproval` policy.
+
 ## Gemini and Vertex helpers
 
 **Gemini Developer API** (API-key based):

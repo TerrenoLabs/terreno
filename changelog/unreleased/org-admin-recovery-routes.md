@@ -1,0 +1,10 @@
+---
+category: Added
+---
+
+- Org-admins can run account recovery on members of their organization. When the app registers `AccountSecurityApp`, `OrgsApp` mounts the security routes at `/orgs/:orgId/members/:userId/security/*` (`TerrenoApp` passes the registered plugin; pass `accountSecurity` to a hand-registered `OrgsApp`). An org-admin may act on any active member of the org, even one in other orgs. Suspended members and non-members answer `404`; platform staff (`superadmin`, `operator`) and `admin: true` targets answer `403`; disabled orgs answer `403`. Platform staff holding `user:manageSecurity` pass the org checks. Every event records the org.
+- New org-only action `suspend-membership` replaces `disable` under the org prefix: it suspends the membership in that org only, so the user still signs in and keeps their other orgs. `disable`, `enable`, and `issue-sign-in-link` stay platform-only. Security route actions can be marked `orgOnly`, mounted only with `mountSecurityRoutes(..., {includeOrgOnly: true})`. `mountSecurityRoutes` also takes `pathPrefix` (such as `/:orgId/members`) so a prefix's params appear in OpenAPI.
+- `OrgsApp` takes `orgRecovery: {minMembershipDays}` (default `0`) to refuse org-admin recovery on members who joined too recently.
+- The recovery routes' "target holds permissions you lack" check resolves each user in their own context: outside any organization on the platform routes, and under each user's own membership in `:orgId` on the org routes (authorizers return it as `orgScope`). A target is never judged by the acting org-admin's membership grants.
+- `OrgsApp` throws `OrgsApp accountSecurity is not registered` when handed an `AccountSecurityApp` that is not registered (`AccountSecurityApp.isRegistered()`), so the org routes never run without the audit check, access control, or user model.
+- `suspend-membership` keeps the last-org-admin rule under concurrency (suspend, recount, undo), so two org-admins suspending each other never leave the org without one.

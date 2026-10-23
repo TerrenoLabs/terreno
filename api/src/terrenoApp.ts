@@ -5,6 +5,7 @@ import cors from "cors";
 import express from "express";
 import mongoose from "mongoose";
 import qs from "qs";
+import {AccountSecurityApp} from "./accountSecurity/accountSecurityApp";
 import type {AdminChangeEvent, TerrenoAppAdminEvent} from "./adminTypes";
 import type {ModelRouterRegistration} from "./api";
 import {addAuthRoutes, addMeRoutes, setupAuth, type UserModel as UserMongooseModel} from "./auth";
@@ -605,10 +606,19 @@ export class TerrenoApp {
       if (!hasOrgsPlugin) {
         const orgConfig =
           typeof this.options.organizations === "object" ? this.options.organizations : {};
+        // Org-admins get member recovery routes only when the app registered AccountSecurityApp.
+        const accountSecurity =
+          orgConfig.accountSecurity ??
+          this.registrations.find(
+            (registration): registration is AccountSecurityApp =>
+              !this.isModelRouterRegistration(registration) &&
+              registration instanceof AccountSecurityApp
+          );
         this.register(
           new OrgsApp({
             ...orgConfig,
             access: this.options.accessControl,
+            accountSecurity,
             userModel: this.options.userModel,
           })
         );

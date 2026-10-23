@@ -1,7 +1,7 @@
 # Account security reference
 
 `AccountSecurityApp` is a `@terreno/api` plugin that adds per-user security routes for
-platform staff: a summary of a user's sign-in methods, and recovery actions. Staff can reset
+platform staff and, through `OrgsApp`, for org-admins: a summary of a user's sign-in methods, and recovery actions. Staff can reset
 two-factor authentication, remove a passkey, unlink a sign-in provider, sign the user out
 everywhere, mail a password reset, disable or enable the account, and issue a set-password link to
 a legacy user who has no way to sign in. Every action that changes something writes an
@@ -88,6 +88,67 @@ Each route runs the same steps before its handler:
      not also hold. Recovery can never be used to take over a more privileged account.
 
 Routes mounted with `mountSecurityRoutes` (such as the org-admin prefix) run the same steps.
+Each user's permissions are resolved in their own context. On the platform routes both are
+resolved outside any organization. On the org-admin routes the actor is resolved under their own
+membership in `:orgId` and the target under theirs, so org-scoped grants count for both and a
+target is never judged by the acting org-admin's membership.
+
+## Org-admin routes
+
+With organizations on, `OrgsApp` mounts the same handlers at
+`/orgs/:orgId/members/:userId/security/*` when the app registers `AccountSecurityApp`
+(`TerrenoApp` passes the registered one; pass `accountSecurity` yourself when you register
+`OrgsApp` by hand). An app without `AccountSecurityApp` has no `/orgs/*/security` routes. The
+instance must be registered too (on the same `TerrenoApp`, in any order, or with `register`
+before `OrgsApp` outside one): `OrgsApp` throws `OrgsApp accountSecurity is not registered`
+otherwise, because only registration applies the `AuditApp` check, access control, and the user
+model.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `GET` | `/orgs/:orgId/members/:userId/security` | Security summary |
+| `POST` | `.../reset-two-factor`, `.../revoke-sessions`, `.../send-password-reset` | As on the platform routes |
+| `DELETE` | `.../passkeys/:passkeyId`, `.../accounts/:providerId` | As on the platform routes |
+| `POST` | `.../suspend-membership` | Org only. Suspend the member's membership in `:orgId` |
+
+The platform-only actions (`disable`, `enable`, `issue-sign-in-link`) are not mounted there. The
+org authorizer runs these checks, in order:
+
+| Check | Response |
+| --- | --- |
+| No session | `401` |
+| `:orgId` unknown or not an ObjectId | `404 Organization not found` |
+| The organization is disabled | `403 Organization is disabled` |
+| The caller is neither platform staff (`user:manageSecurity`) nor an active `org-admin` of `:orgId` | `403 Only org-admins of this organization can manage member security` |
+| The target has no active membership in `:orgId` (including a suspended one) | `404 Member not found` |
+| Org-admin callers only: the target holds `superadmin` or `operator`, or has `admin: true` | `403 Platform staff are managed by platform staff` |
+| Org-admin callers only: the membership is younger than `orgRecovery.minMembershipDays` | `403 Member joined too recently` |
+
+Then the shared steps above apply (self-target and out-of-reach refusals). The target may belong
+to other organizations too (D2). Every event records the organization: `after.organizationId` and
+the AuditEvent's `organizationId`.
+
+`orgRecovery` is an `OrgsApp` option (`new TerrenoApp({organizations: {orgRecovery:
+{minMembershipDays: 7}}})`). It defaults to `0` (off). Set it to stop an org-admin from attaching
+an existing user by email and running recovery on them the same day.
+
+### `POST /orgs/:orgId/members/:userId/security/suspend-membership`
+
+Sets the member's `Membership.status` to `suspended` in `:orgId` only (Q8). `User.disabled`, the
+user's sessions, and their other memberships are untouched: they still sign in and use their
+other organizations. The suspended member is then out of the recovery routes' reach (`404`);
+restore them with `PATCH /orgs/:orgId/members/:memberId` and `{status: "active"}`.
+
+| Result | Response |
+| --- | --- |
+| Suspended | `200 {data: {action: "suspend-membership", changed: true, membershipId, status: "suspended"}}`, one security `AuditEvent` with `after: {membershipId, roleName, securityAction, organizationId}` |
+| The member is the org's last active `org-admin` | `400 Cannot remove the last org-admin` |
+| Another request suspended the membership first | `200 {data: {..., changed: false}}`, no `AuditEvent` |
+
+The last-org-admin rule holds under concurrency: two org-admins suspending each other at once
+never leave the org without one. The action suspends with a conditional update, then counts the
+active org-admins left and undoes its own suspension (answering `400`) when none remain. It needs
+no transaction, so it works on a standalone MongoDB too.
 
 ## Routes
 
@@ -280,8 +341,8 @@ does. A disabled user is refused everywhere:
 
 Apply `isDisabledPlugin` to the User schema to enable both. Both are platform only:
 `mountSecurityRoutes` leaves them out unless the mount passes `includePlatformOnly`. Under the
-org-admin prefix, "disable" suspends the org membership instead; the global flag stays
-platform-only (Q8).
+org-admin prefix, `suspend-membership` takes their place and suspends the org membership
+instead; the global flag stays platform-only (Q8).
 
 ### `POST /users/:id/security/issue-sign-in-link`
 
@@ -372,13 +433,14 @@ The summary's `actions` list and the routes come from one action table. Each act
 | `send-password-reset` | Send password reset | no | Better Auth is on and the user has a Better Auth account |
 | `disable` | Disable account | yes | Platform mount only; the User model has `disabled` and the user is enabled |
 | `enable` | Enable account | no | Platform mount only; the User model has `disabled` and the user is disabled |
+| `suspend-membership` | Suspend membership | yes | Org mount only |
 | `issue-sign-in-link` | Issue sign-in link | no | Platform mount only; the caller holds `user:issueSignInLink`; Better Auth is on; the user has no legacy password and either no Better Auth account or one whose link was never used |
 
 Every action name the security log can record, including self-service changes:
 
 | `id` | Started by |
 | --- | --- |
-| `reset-two-factor`, `remove-passkey`, `unlink-provider`, `revoke-sessions`, `send-password-reset`, `disable`, `enable`, `issue-sign-in-link` | An administrator |
+| `reset-two-factor`, `remove-passkey`, `unlink-provider`, `revoke-sessions`, `send-password-reset`, `disable`, `enable`, `suspend-membership`, `issue-sign-in-link` | An administrator |
 | `provider-linked`, `provider-unlinked`, `passkey-added`, `passkey-removed`, `two-factor-enabled`, `two-factor-disabled`, `password-changed` | The user |
 
 `SECURITY_ACTIONS` exports the full table with labels.
@@ -414,15 +476,21 @@ function. Listeners receive the record plus `occurredAt` (ISO time) and `origin`
 `GET /:userId/security` and every action route on any Express router, guarded by `authorize`.
 Actions marked `platformOnly` (`disable`, `enable`, `issue-sign-in-link`) are mounted and listed only when
 `options.includePlatformOnly` is `true`; the platform routes pass it, other mounts should not.
+Actions marked `orgOnly` (`suspend-membership`) are mounted and listed only when
+`options.includeOrgOnly` is `true`; the org-admin prefix passes it.
 
 ```typescript
 type SecurityAuthorizer = (args: {
   req: express.Request;
   targetUserId: string;
-}) => Promise<{actor: User; org?: {id: string; name?: string}}>;
+}) => Promise<{actor: User; org?: {id: string; name?: string}; orgScope?: SecurityOrgScope}>;
 ```
 
-A route action is `{id, method, path, isSupported, isApplicable, run, platformOnly?,
+`orgScope` (`{organization, actorMembership?, targetMembership}`) makes the reach check resolve
+each user under their own membership in that organization. Omit it for routes that are not
+org-scoped.
+
+A route action is `{id, method, path, isSupported, isApplicable, run, platformOnly?, orgOnly?,
 requiredPermission?}`. `requiredPermission` (such as `{user: ["issueSignInLink"]}`) is checked on
 top of the authorizer; without RBAC it requires `admin: true`. An action the caller may not run
 answers `403` and is left out of the summary. `run` returns
@@ -430,8 +498,11 @@ answers `403` and is left out of the summary. `run` returns
 
 The authorizer throws an `APIError` to refuse: `403` when the caller lacks the right, `404`
 when the target is out of their reach. A returned `org` is recorded on each audit event. The
-platform routes use `accountSecurityApp.authorizePlatform`. A router mounted under a prefix with
-its own params needs `Router({mergeParams: true})` so the authorizer can read them.
+platform routes use `accountSecurityApp.authorizePlatform`. Put a prefix's own params in
+`options.pathPrefix` (the org routes pass `/:orgId/members`) so the leaf routes carry them: the
+authorizer can read them and the OpenAPI spec documents them as path parameters. A router nested
+under a param prefix instead needs `Router({mergeParams: true})`, and OpenAPI then shows the
+prefix's params as literal text.
 
 ## Exports
 
@@ -443,7 +514,10 @@ its own params needs `Router({mergeParams: true})` so the authorizer can read th
 | `SECURITY_ACTIONS`, `SecurityActionId` | Action names, labels, and origins |
 | `recordSecurityAction`, `onSecurityAction` | Record an action; subscribe to actions |
 | `createAccountSecurityService` | The summary, reset, credential, and access logic without routes |
-| `AccountSecuritySummary`, `MountSecurityRoutesOptions`, `SecurityAuthorizer`, `SecurityRouteAction` | Types |
+| `createOrgSecurityAuthorizer`, `mountOrgSecurityRoutes`, `OrgRecoveryOptions` | The org-admin authorizer and mount that `OrgsApp` uses |
+| `suspendMembershipAction` | The org-only `suspend-membership` action |
+| `AccountSecuritySummary`, `MountSecurityRoutesOptions`, `SecurityAuthorization`, `SecurityAuthorizer`, `SecurityOrgScope`, `SecurityRouteAction` | Types |
 
-Related: [Enable the framework audit log](../how-to/audit-log.md),
+Related: [Recover a locked-out user](../how-to/recover-locked-out-user.md),
+[Enable the framework audit log](../how-to/audit-log.md),
 [Configure Better Auth](../how-to/configure-better-auth.md).

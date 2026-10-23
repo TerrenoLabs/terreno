@@ -2,6 +2,11 @@ import type express from "express";
 import {type Application, Router} from "express";
 import type mongoose from "mongoose";
 
+import type {AccountSecurityApp} from "../accountSecurity/accountSecurityApp";
+import {
+  mountOrgSecurityRoutes,
+  type OrgRecoveryOptions,
+} from "../accountSecurity/orgSecurityRoutes";
 import {asyncHandler, type OpenApiMiddleware} from "../api";
 import {authenticateMiddleware, type User, type UserModel} from "../auth";
 import {APIError, ConflictError, ForbiddenError, NotFoundError} from "../errors";
@@ -9,9 +14,11 @@ import {logger} from "../logger";
 import {createOpenApiBuilder, type OpenApiSchemaProperty} from "../openApiBuilder";
 import {findOneOrNoneFor} from "../plugins";
 import type {AnyTerrenoAccess} from "../rbac/types";
+import type {TerrenoApp} from "../terrenoApp";
 import type {TerrenoPlugin} from "../terrenoPlugin";
 import type {MembershipDocument} from "../types/membership";
 import type {OrganizationDocument} from "../types/organization";
+import {assertNotLastOrgAdmin} from "./membershipGuards";
 import {
   assertOrganizationSlugAvailable,
   Membership,
@@ -56,8 +63,15 @@ export interface OrgAuditEvent {
 
 export interface OrgsAppOptions {
   access: AnyTerrenoAccess;
+  /**
+   * The app's AccountSecurityApp. When set, org-admins get the member recovery routes at
+   * `{basePath}/:orgId/members/:userId/security/*`. TerrenoApp passes the registered one.
+   */
+  accountSecurity?: AccountSecurityApp;
   basePath?: string;
   onOrgAudit?: (event: OrgAuditEvent, req: express.Request) => void | Promise<void>;
+  /** Hardening for the org-admin recovery routes, such as `{minMembershipDays: 7}`. */
+  orgRecovery?: OrgRecoveryOptions;
   /** Nested schema for `Organization.settings`. Same as `registerOrganizationSettings`. */
   settingsSchema?: mongoose.Schema;
   userModel: UserModel;
@@ -121,36 +135,6 @@ const loadActiveMembership = async (
   return membership ?? undefined;
 };
 
-const countActiveOrgAdmins = async (
-  organizationId: OrganizationDocument["_id"]
-): Promise<number> => {
-  return Membership.countDocuments({
-    organizationId,
-    roleName: "org-admin",
-    status: "active",
-  });
-};
-
-const assertNotLastOrgAdmin = async (
-  membership: MembershipDocument,
-  nextRoleName?: string,
-  nextStatus?: string
-): Promise<void> => {
-  const remainsOrgAdmin =
-    (nextRoleName ?? membership.roleName) === "org-admin" &&
-    (nextStatus ?? membership.status) === "active";
-  if (remainsOrgAdmin) {
-    return;
-  }
-  if (membership.roleName !== "org-admin" || membership.status !== "active") {
-    return;
-  }
-  const activeAdmins = await countActiveOrgAdmins(membership.organizationId);
-  if (activeAdmins <= 1) {
-    throw new APIError({status: 400, title: "Cannot remove the last org-admin"});
-  }
-};
-
 const assertCan = async (args: {
   access: AnyTerrenoAccess;
   organization?: OrganizationDocument;
@@ -170,21 +154,26 @@ const assertCan = async (args: {
 
 export class OrgsApp implements TerrenoPlugin {
   private readonly access: AnyTerrenoAccess;
+  private readonly accountSecurity?: AccountSecurityApp;
   private readonly basePath: string;
   private readonly onOrgAudit?: OrgsAppOptions["onOrgAudit"];
+  private readonly orgRecovery?: OrgRecoveryOptions;
   private readonly userModel: UserModel;
 
   constructor(options: OrgsAppOptions) {
     this.access = options.access;
+    this.accountSecurity = options.accountSecurity;
     this.basePath = options.basePath ?? "/orgs";
     this.onOrgAudit = options.onOrgAudit;
+    this.orgRecovery = options.orgRecovery;
     this.userModel = options.userModel;
     if (options.settingsSchema) {
       registerOrganizationSettings(options.settingsSchema);
     }
   }
 
-  register(app: Application, openApi?: unknown): void {
+  register(app: Application, openApi?: unknown, terrenoApp?: TerrenoApp): void {
+    this.assertAccountSecurityRegistered(terrenoApp);
     const router = Router();
     const openApiMiddleware = openApi as OpenApiMiddleware | undefined;
     const docs = (
@@ -558,6 +547,37 @@ export class OrgsApp implements TerrenoPlugin {
       })
     );
 
+    if (this.accountSecurity) {
+      mountOrgSecurityRoutes({
+        access: this.access,
+        accountSecurity: this.accountSecurity,
+        orgRecovery: this.orgRecovery,
+        router,
+        userModel: this.userModel,
+      });
+    }
+
     app.use(this.basePath, router);
   }
+
+  /**
+   * The org recovery routes reuse AccountSecurityApp's pipeline, which only registration wires
+   * up: the AuditApp check, access control for the D9 reach check, and the user model. Refuse an
+   * instance that is neither registered nor about to be on the same TerrenoApp.
+   */
+  private assertAccountSecurityRegistered = (terrenoApp?: TerrenoApp): void => {
+    const accountSecurity = this.accountSecurity;
+    if (!accountSecurity || accountSecurity.isRegistered()) {
+      return;
+    }
+    if (terrenoApp?.getRegistrations().includes(accountSecurity)) {
+      return;
+    }
+    throw new APIError({
+      detail:
+        "Register the AccountSecurityApp you pass to OrgsApp (app.register(accountSecurity)) so its audit check, access control, and user model apply to the org routes.",
+      status: 500,
+      title: "OrgsApp accountSecurity is not registered",
+    });
+  };
 }

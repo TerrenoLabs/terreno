@@ -22,11 +22,14 @@ import {logger} from "../logger";
 import {MCP_OAUTH_ACCESS_TOKEN_PREFIX} from "../models/mcpOAuthToken";
 import {MCP_SERVICE_TOKEN_PREFIX} from "../models/mcpServiceToken";
 import {createOpenApiBuilder} from "../openApiBuilder";
+import {runWithOrgContext} from "../orgs/orgContext";
 import type {PermissionSet} from "../rbac/statements";
 import type {AnyTerrenoAccess} from "../rbac/types";
 import {getCurrentRequestContext, type RequestCredential} from "../requestContext";
 import type {TerrenoApp} from "../terrenoApp";
 import type {TerrenoPlugin} from "../terrenoPlugin";
+import type {MembershipDocument} from "../types/membership";
+import type {OrganizationDocument} from "../types/organization";
 import {
   disableAccountAction,
   enableAccountAction,
@@ -44,6 +47,7 @@ import {
   userIdOf,
 } from "./accountSecurityService";
 import {removePasskeyAction, unlinkProviderAction} from "./credentialActions";
+import {suspendMembershipAction} from "./membershipActions";
 import {
   recordSecurityAction,
   SECURITY_ACTIONS,
@@ -58,6 +62,21 @@ export const MANAGE_SECURITY_PERMISSION = {user: ["manageSecurity"]} as const;
 export interface SecurityAuthorization {
   actor: User;
   org?: SecurityActionOrg;
+  /**
+   * Org routes: the organization and each user's own membership in it. The D9 reach check then
+   * resolves the actor under `actorMembership` and the target under `targetMembership`, so both
+   * are judged with their org-scoped grants. Without it (platform routes) both are resolved
+   * outside any org context.
+   */
+  orgScope?: SecurityOrgScope;
+}
+
+/** Each user's own membership in the organization an org route acts for. */
+export interface SecurityOrgScope {
+  /** Absent for platform staff acting through the org prefix without a membership. */
+  actorMembership?: MembershipDocument;
+  organization: OrganizationDocument;
+  targetMembership: MembershipDocument;
 }
 
 /**
@@ -102,6 +121,12 @@ export interface SecurityRouteAction {
   /** Whether this server can run it at all. Unsupported actions answer 404. */
   isSupported: (features: AccountSecurityFeatures) => boolean;
   method: "delete" | "post";
+  /**
+   * Only org-admin prefixes run it (such as `suspend-membership`, which needs the `org`).
+   * `mountSecurityRoutes` skips it unless the mount passes `includeOrgOnly`, so the platform
+   * `/users` prefix never exposes it.
+   */
+  orgOnly?: boolean;
   /** Path under `/:userId/security`, such as `/reset-two-factor` or `/passkeys/:passkeyId`. */
   path: string;
   /**
@@ -136,6 +161,7 @@ export const defaultSecurityActions = (): SecurityRouteAction[] => [
   sendPasswordResetAction,
   disableAccountAction,
   enableAccountAction,
+  suspendMembershipAction,
   issueSignInLinkAction,
 ];
 
@@ -146,6 +172,17 @@ export interface MountSecurityRoutesOptions {
    * platform mount sets it; org-admin prefixes leave it off.
    */
   includePlatformOnly?: boolean;
+  /**
+   * Mount and list actions marked `orgOnly` (such as `suspend-membership`). Only the org-admin
+   * prefix (`OrgsApp`) sets it.
+   */
+  includeOrgOnly?: boolean;
+  /**
+   * Path in front of `/:userId/security` on `router`, such as `/:orgId/members`. Put a parent
+   * prefix's params here rather than mounting a nested router under them: OpenAPI documents only
+   * the params in each leaf route's own path.
+   */
+  pathPrefix?: string;
 }
 
 export interface AccountSecurityAppOptions {
@@ -282,6 +319,7 @@ export class AccountSecurityApp implements TerrenoPlugin {
   private terrenoApp: TerrenoApp | undefined;
   private openApi: OpenApiMiddleware | undefined;
   private readonly service: AccountSecurityService;
+  private registered = false;
   private warnedNoBetterAuth = false;
 
   constructor(options: AccountSecurityAppOptions = {}) {
@@ -300,7 +338,16 @@ export class AccountSecurityApp implements TerrenoPlugin {
     return this.actions;
   }
 
+  /**
+   * Whether `register` has run. A mount elsewhere (OrgsApp) needs a registered instance: only
+   * registration checks for AuditApp and wires access control and the user model.
+   */
+  isRegistered(): boolean {
+    return this.registered;
+  }
+
   register(app: express.Application, openApi?: unknown, terrenoApp?: TerrenoApp): void {
+    this.registered = true;
     this.terrenoApp = terrenoApp;
     this.openApi = openApi as OpenApiMiddleware | undefined;
     this.assertAuditRegistered();
@@ -311,20 +358,28 @@ export class AccountSecurityApp implements TerrenoPlugin {
   }
 
   /**
-   * Mounts `GET /:userId/security` and every action route on `router`, each guarded by
-   * `authorize`. Routers mounted under a prefix with its own params (such as `:orgId`) need
-   * `Router({mergeParams: true})` so the authorizer can read them.
+   * Mounts `GET {pathPrefix}/:userId/security` and every action route on `router`, each guarded
+   * by `authorize`. Pass a prefix's params (such as `/:orgId/members`) as `pathPrefix` so they
+   * reach the authorizer and the OpenAPI spec; a router nested under them instead needs
+   * `Router({mergeParams: true})` and leaves them out of the spec.
    */
   mountSecurityRoutes(
     router: Router,
     authorize: SecurityAuthorizer,
-    {includePlatformOnly = false}: MountSecurityRoutesOptions = {}
+    {
+      includeOrgOnly = false,
+      includePlatformOnly = false,
+      pathPrefix = "",
+    }: MountSecurityRoutesOptions = {}
   ): void {
     const guards = [rejectDelegatedBearer, authenticateMiddleware(), requireOwnSession];
-    const actions = this.actions.filter((action) => includePlatformOnly || !action.platformOnly);
+    const actions = this.actions.filter(
+      (action) =>
+        (includePlatformOnly || !action.platformOnly) && (includeOrgOnly || !action.orgOnly)
+    );
 
     router.get(
-      "/:userId/security",
+      `${pathPrefix}/:userId/security`,
       ...guards,
       this.docs("Get a user's sign-in security summary"),
       asyncHandler(async (req, res) => {
@@ -342,7 +397,7 @@ export class AccountSecurityApp implements TerrenoPlugin {
 
     for (const action of actions) {
       router[action.method](
-        `/:userId/security${action.path}`,
+        `${pathPrefix}/:userId/security${action.path}`,
         ...guards,
         this.docs(SECURITY_ACTIONS[action.id].label),
         asyncHandler(async (req, res) => {
@@ -393,7 +448,11 @@ export class AccountSecurityApp implements TerrenoPlugin {
   ): Promise<SecurityAuthorization & {target: User}> => {
     const authorization = await authorize({req, targetUserId: targetUserIdOf(req)});
     const target = await this.service.loadTarget(targetUserIdOf(req));
-    await this.assertWithinReach({actor: authorization.actor, target});
+    await this.assertWithinReach({
+      actor: authorization.actor,
+      orgScope: authorization.orgScope,
+      target,
+    });
     return {...authorization, target};
   };
 
@@ -404,9 +463,11 @@ export class AccountSecurityApp implements TerrenoPlugin {
    */
   private assertWithinReach = async ({
     actor,
+    orgScope,
     target,
   }: {
     actor: User;
+    orgScope?: SecurityOrgScope;
     target: User;
   }): Promise<void> => {
     if (userIdOf(actor) === userIdOf(target)) {
@@ -422,9 +483,20 @@ export class AccountSecurityApp implements TerrenoPlugin {
     if (!accessControl) {
       return;
     }
+    // Resolve each user under their own org context. Org-scoped permission sources read the
+    // context's membership, so sharing one context would hand the target the actor's grants (or
+    // drop the target's own). Platform routes resolve both outside any org.
     const [actorPermissions, targetPermissions] = await Promise.all([
-      accessControl.getPermissions({user: actor}),
-      accessControl.getPermissions({user: target}),
+      runWithOrgContext(
+        orgScope ? {membership: orgScope.actorMembership, organization: orgScope.organization} : {},
+        () => accessControl.getPermissions({user: actor})
+      ),
+      runWithOrgContext(
+        orgScope
+          ? {membership: orgScope.targetMembership, organization: orgScope.organization}
+          : {},
+        () => accessControl.getPermissions({user: target})
+      ),
     ]);
     const missing = missingPermissions(actorPermissions, targetPermissions);
     if (missing.length > 0) {

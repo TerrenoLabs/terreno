@@ -719,6 +719,7 @@ describe("AccountSecurityApp", () => {
         "send-password-reset",
         "disable",
         "enable",
+        "suspend-membership",
         "issue-sign-in-link",
       ]);
       await supertest(host).get(`/custom/${target.id}/security`).expect(200);

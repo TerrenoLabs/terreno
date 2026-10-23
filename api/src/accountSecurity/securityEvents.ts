@@ -41,6 +41,7 @@ export const SECURITY_ACTIONS = {
   "reset-two-factor": {destructive: true, label: "Reset two-factor", origin: "admin"},
   "revoke-sessions": {destructive: true, label: "Sign out everywhere", origin: "admin"},
   "send-password-reset": {destructive: false, label: "Send password reset", origin: "admin"},
+  "suspend-membership": {destructive: true, label: "Suspend membership", origin: "admin"},
   "two-factor-disabled": {destructive: false, label: "Two-factor turned off", origin: "self"},
   "two-factor-enabled": {destructive: false, label: "Two-factor turned on", origin: "self"},
   "unlink-provider": {destructive: true, label: "Unlink provider", origin: "admin"},

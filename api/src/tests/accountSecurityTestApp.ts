@@ -24,7 +24,8 @@ import {clearMCPRegistry} from "../mcp/registry";
 import {McpServiceToken} from "../models/mcpServiceToken";
 import {createAccess} from "../rbac/access";
 import {terrenoStatements} from "../rbac/statements";
-import {TerrenoApp} from "../terrenoApp";
+import type {AnyTerrenoAccess} from "../rbac/types";
+import {TerrenoApp, type TerrenoAppOptions} from "../terrenoApp";
 import {API_ORIGIN, PASSWORD, SECRET, uniqueEmail} from "./betterAuthStubs";
 
 interface SecurityUserFields {
@@ -77,24 +78,41 @@ const baseConfig: BetterAuthConfig = {
   twoFactor: {issuer: "Terreno"},
 };
 
+/** The Better Auth config every security test app uses, plus `overrides`. */
+export const testBetterAuthConfig = (
+  overrides: Partial<BetterAuthConfig> = {}
+): BetterAuthConfig => ({
+  ...baseConfig,
+  ...overrides,
+});
+
 interface BuildOptions {
-  accessControl?: boolean;
+  /** `false` builds without RBAC; an access instance replaces the shared {@link access}. */
+  accessControl?: boolean | AnyTerrenoAccess;
+  /** Pass `false` to build without AccountSecurityApp. */
+  accountSecurity?: boolean;
   auditApp?: boolean;
   config?: Partial<BetterAuthConfig>;
+  /** TerrenoApp `organizations`; set, the app is started (skipListen) so OrgsApp registers. */
+  organizations?: TerrenoAppOptions["organizations"];
   security?: AccountSecurityAppOptions;
   /** Another app User model (needs passport-local-mongoose). Defaults to `SecurityUser`. */
   userModel?: UserModel;
 }
 
 interface SecurityTestApp {
+  /** The registered AccountSecurityApp, unless built with `accountSecurity: false`. */
+  accountSecurityApp?: AccountSecurityApp;
   app: express.Application;
   betterAuthApp: BetterAuthApp;
 }
 
 export const buildApp = ({
   accessControl = true,
+  accountSecurity = true,
   auditApp = true,
   config = {},
+  organizations,
   security = {},
   userModel = securityUserModel,
 }: BuildOptions = {}): SecurityTestApp => {
@@ -103,16 +121,21 @@ export const buildApp = ({
     userModel,
   });
   const terrenoApp = new TerrenoApp({
-    ...(accessControl ? {accessControl: access} : {}),
+    ...(accessControl ? {accessControl: accessControl === true ? access : accessControl} : {}),
     mcpServiceTokens: true,
+    ...(organizations ? {organizations} : {}),
     skipListen: true,
     userModel,
   }).register(betterAuthApp);
   if (auditApp) {
     terrenoApp.register(new AuditApp());
   }
-  terrenoApp.register(new AccountSecurityApp(security));
-  return {app: terrenoApp.build(), betterAuthApp};
+  const accountSecurityApp = accountSecurity ? new AccountSecurityApp(security) : undefined;
+  if (accountSecurityApp) {
+    terrenoApp.register(accountSecurityApp);
+  }
+  const app = organizations ? terrenoApp.start() : terrenoApp.build();
+  return {accountSecurityApp, app, betterAuthApp};
 };
 
 /** A recovery mail captured by {@link captureMail}. */

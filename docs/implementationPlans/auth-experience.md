@@ -421,7 +421,7 @@ Open risks:
       the same app User; the link is refused on reuse.
   - Skills: terreno-backend-api, mongoose-schema-safety, security-audit
 
-- [ ] **T9** — Org-admin scoped recovery routes
+- [x] **T9** — Org-admin scoped recovery routes
   - Depends on: T6
   - Files: api/src/orgs/orgsApp.ts, api/src/terrenoApp.ts, api/src/accountSecurity/orgSecurityRoutes.ts, api/src/accountSecurity/orgSecurityRoutes.test.ts, api/src/rbac/membershipOrgAdminSource.ts, docs/explanation/organizations.md, docs/how-to/recover-locked-out-user.md
   - Build:
@@ -438,8 +438,11 @@ Open risks:
       org-admin attaching an existing user by email
       (`api/src/orgs/orgsApp.ts:406-450`) and acting on them right away. T10's email
       tells the user whenever an org-admin acts.
-    - Under the org prefix, "disable" suspends the membership. Global `User.disabled`
-      stays platform-only (Q8).
+    - Under the org prefix, a separate `suspend-membership` action
+      (`POST /orgs/:orgId/members/:userId/security/suspend-membership`) suspends that
+      membership; `disable`, `enable` and `issue-sign-in-link` are not mounted there.
+      Global `User.disabled` stays platform-only (Q8). Restoring a member uses the
+      existing `PATCH /orgs/:id/members/:memberId {status: "active"}`.
     - Platform actors always pass.
     - Events record `org`.
   - Proof (`orgSecurityRoutes.test.ts`, authorization matrix on summary and
@@ -452,8 +455,8 @@ Open risks:
     - The org-admin of A acting on another org-admin of A is allowed.
     - With `minMembershipDays: 7`, attaching an existing user by email and resetting
       their 2FA the same day gets 403. With the default 0, it is allowed.
-    - Org-prefix disable suspends only the A membership, and the user can still sign
-      in.
+    - Org-prefix `suspend-membership` suspends only the A membership, and the user can
+      still sign in.
     - An app without `AccountSecurityApp` exposes no `/orgs/*/security` routes.
     - A plain member gets 403.
     - A disabled org gets 403.
@@ -502,7 +505,9 @@ Open risks:
       `api/src/betterAuthOAuthHandoff.ts` (ordered after T5).
   - Proof:
     - Config test: the preview env includes the oauthProxy plugin, with `productionURL`
-      set to stable. The stable env does not.
+      set to stable. Stable runs it too (Better Auth 1.7.4 forwards a preview's return
+      from stable's callback hook), naming itself, and its own sign-ins skip the proxy
+      so they keep the state-cookie check.
     - api test (`betterAuthOAuthProxy.test.ts`): two Better Auth instances, "stable" and
       "preview", with separate databases and one secret. A mock-provider sign-in started
       on the preview returns through stable's callback to the preview, and the preview's
@@ -753,6 +758,8 @@ Open risks:
       3. The same todos show.
       The unverified variant shows "verify your email to link", and after verifying,
       the same sign-in joins the account.
+    - Remove `test.fixme` from `e2e/crossSiteChallenges.spec.ts` (added by T27) once the
+      example login wires 2FA and passkey, and make it pass.
     - In the cross-site bearer project, "last used" and "Continue as" both render after
       sign-out (they come from T19's on-device store, not a backend cookie).
 

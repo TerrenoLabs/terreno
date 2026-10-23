@@ -1,6 +1,12 @@
 export {ISSUE_SIGN_IN_LINK_PERMISSION} from "./accountSecurity/accessActions";
 export * from "./accountSecurity/accountSecurityApp";
 export * from "./accountSecurity/accountSecurityService";
+export {suspendMembershipAction} from "./accountSecurity/membershipActions";
+export {
+  createOrgSecurityAuthorizer,
+  mountOrgSecurityRoutes,
+  type OrgRecoveryOptions,
+} from "./accountSecurity/orgSecurityRoutes";
 export * from "./accountSecurity/securityEvents";
 export * from "./actions";
 export * from "./adminTypes";

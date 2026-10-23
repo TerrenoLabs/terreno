@@ -64,6 +64,32 @@ stop, but operators can still manage the organization record itself:
 Disabling or deleting an organization suspends its memberships. Re-enabling does
 not automatically reactivate them.
 
+## Member recovery
+
+When the app registers `AccountSecurityApp`, an org-admin can help a locked-out member without
+platform staff. `OrgsApp` mounts the same recovery handlers the platform uses at
+`/orgs/:orgId/members/:userId/security/*`, behind an org authorizer.
+
+- **Reach.** An org-admin may act on any active member of their org, even one who also belongs
+  to other orgs (D2). A suspended member, or a user outside the org, answers `404`, so the routes
+  do not reveal who exists elsewhere.
+- **Guards.** Platform staff (`superadmin`, `operator`) and `admin: true` users are never reachable
+  through an org (D3). Neither is anyone who holds a permission the org-admin lacks, nor the
+  org-admin themselves (D9). Disabled orgs answer `403`.
+- **Disable means suspend.** One org must not lock a user out of every other org, so the org
+  path has no account disable. It offers `suspend-membership` instead, which suspends the
+  membership in that org only (Q8). The user still signs in and keeps their other orgs.
+  `User.disabled` and `issue-sign-in-link` stay platform-only.
+- **Attach-then-act.** An org-admin can attach any existing user by email
+  (`POST /orgs/:id/members`). Every org-admin action is audited with the org's id. Apps that
+  want more can set `orgRecovery.minMembershipDays` to refuse members who joined too recently.
+- **Platform staff** holding `user:manageSecurity` pass the org checks. The target must still be
+  an active member of the org in the path.
+
+See [Recover a locked-out user](../how-to/recover-locked-out-user.md) for who can do what, and
+the [account security reference](../reference/account-security.md#org-admin-routes) for every
+response.
+
 ## Why organizations are optional
 
 Automatically registering routes, roles, or Mongoose models would change
@@ -83,6 +109,7 @@ multi-tenant-ready apps.
 ## Related
 
 - [Add organizations](../how-to/add-organizations.md)
+- [Recover a locked-out user](../how-to/recover-locked-out-user.md)
 - [API reference](../reference/api.md#organizations)
 - [Admin backend reference](../reference/admin-backend.md#organization-scoping)
 - [Admin frontend reference](../reference/admin-frontend.md#orgdirectoryscreen)

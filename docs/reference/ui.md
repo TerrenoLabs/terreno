@@ -984,6 +984,37 @@ When staff signed the form provisionally, the pending form carries
 declines themselves: the scroll gate, checkboxes, and signature work as for any other form.
 The signer's note is never shown.
 
+### ProvisionalConsentSigner and useProvisionalConsent
+
+For staff who record consent on a user's behalf. The server must grant the viewer
+`consentResponse:signOnBehalf` (or `user.admin` when `ConsentApp` has no `accessControl`).
+
+```tsx
+import {ProvisionalConsentSigner} from "@terreno/ui";
+
+<ProvisionalConsentSigner api={terrenoApi} userId={memberId} />
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `api` | RTK Query api | The consumer api, as passed to `ConsentNavigator` |
+| `baseUrl` | `string` | Optional prefix for consent routes |
+| `userId` | `string` | The user being signed for |
+
+It lists every form that applies to the user (`GET /consent-responses/status`) with a status
+badge: "Pending", "Signed provisionally by <signer> on <date>", "Signed by user on <date>",
+or "Declined by user on <date>". It shows a spinner while loading and the server error with
+a Retry button on failure. Lazily exported from the package root.
+
+`useProvisionalConsent({api, baseUrl?, userId})` returns `{statuses, isLoading, error,
+refetch}`, where `statuses` are `ProvisionalConsentStatusRow`s
+(`{form, status, isConsented, respondedAt?, provisional?}`). It injects the
+`getConsentStatus` endpoint once per `(api, baseUrl)` and tags it `ConsentStatus`.
+
+testIDs: `provisional-consent-signer`, `provisional-consent-loading`,
+`provisional-consent-error`, `provisional-consent-retry-button`, `provisional-consent-empty`,
+`provisional-consent-row-{formId}`, `provisional-consent-status-{formId}`.
+
 ## Authentication Components
 
 ### SocialLoginButton

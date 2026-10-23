@@ -186,7 +186,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Verification: `bun test --only-failures ui/src/ConsentFormScreen.test.tsx`
   - Skills: terreno:terreno-ui, accessibility-testing
 
-- [ ] **T6** — Add ProvisionalConsentSigner status list and useProvisionalConsent hook
+- [x] **T6** — Add ProvisionalConsentSigner status list and useProvisionalConsent hook
   - Depends on: none (contract above)
   - Files: ui/src/useProvisionalConsent.ts, ui/src/useProvisionalConsent.test.ts, ui/src/ProvisionalConsentSigner.tsx, ui/src/ProvisionalConsentSigner.test.tsx, ui/src/lazyBoundaries/heavyOptionalExports.tsx, ui/src/index.tsx
   - Criteria: the hook injects `getConsentStatus` (`GET {base}/consent-responses/status?userId=`) once per (api, baseUrl), following the `useConsentForms` cache pattern. The component shows a spinner while loading, an error with Retry on failure, and one row per form with title and status badge: `Pending`, `Signed provisionally by X on date`, `Signed by user on date`, or `Declined by user on date`. It is exported lazily from `@terreno/ui`, like `ConsentNavigator`. `RootImportRegression` passes.

@@ -75,6 +75,6 @@ A new `issueFor` for the same user and type invalidates earlier unused tokens of
 
 To set a password from your own server code (for example an admin action), call `changeUserPassword(user, password, {adminId, app: req.app})` from `@terreno/api` so the change revokes sessions the same way a reset does. The example backend's `POST /users/:id/password` uses it.
 
-Either reset path also ends the user's MCP credentials: `mcp_` service tokens and MCP OAuth grants issued before the reset stop working, because they are bound to `tokenEpoch`.
+Either reset path also ends the user's MCP credentials: `mcp_` service tokens and MCP OAuth grants issued before the reset stop working, because they are bound to `tokenEpoch`. With `CommsApp` registered, push also stops going to devices the user registered before the reset until each device registers again.
 
 Better Auth password reset revokes that user's Better Auth sessions (`revokeSessionsOnPasswordReset`) and, when an app User exists, updates the JWT password and `tokenEpoch` so `POST /auth/login` cannot keep the old passport hash. JWT `POST /auth/resetPassword` does the reverse for Better Auth when `BetterAuthApp` is registered: it updates the Better Auth password and deletes Better Auth sessions. Console mail in development prints length only; check `CommsMessage` / console adapter logs for delivery, not the raw token in logger output. Request logs redact `password`, `newPassword`, `oldPassword`, `token`, and `refreshToken` in bodies and in URL query strings.

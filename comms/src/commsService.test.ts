@@ -409,6 +409,35 @@ describe("CommsService", () => {
     assert.equal(await CommsMessage.countDocuments({to: "person@example.com"}), 0);
   });
 
+  it("skips push for a soft-deleted user from the configured user model", async (): Promise<void> => {
+    const userId = new mongoose.Types.ObjectId();
+    await PushToken.upsert(
+      {token: "ExponentPushToken[soft-deleted]"},
+      {active: true, lastSeenAt: DateTime.utc().toJSDate(), platform: "ios", userId}
+    );
+    const sent: string[][] = [];
+    const push: PushProvider = {
+      id: "soft-deleted",
+      sendPush: async (message): Promise<SendResult[]> => {
+        sent.push(message.tokens);
+        return [{accepted: true}];
+      },
+    };
+    const service = new CommsService({
+      push,
+      userModel: {findById: async (): Promise<unknown> => ({_id: userId, deleted: true})},
+    });
+    service.setUserModel({findById: async (): Promise<unknown> => ({_id: userId})});
+
+    const results = await service.sendPushToUser({body: "Hello", title: "Title", userId});
+
+    assert.lengthOf(results, 0);
+    assert.lengthOf(sent, 0);
+    assert.isFalse(
+      (await PushToken.findExactlyOne({token: "ExponentPushToken[soft-deleted]"})).active
+    );
+  });
+
   it("logs missing push results as temporary failures without pruning tokens", async (): Promise<void> => {
     const userId = new mongoose.Types.ObjectId();
     const tokens = await Promise.all(

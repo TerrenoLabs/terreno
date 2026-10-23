@@ -65,6 +65,15 @@ await getCommsService().sendSms({
 `context.attempt === 2`); push retries only the failed tokens. `checkVerification()` does
 not retry.
 
+Push follows the account lifecycle. `POST /comms/pushTokens` records the caller's `tokenEpoch`
+on the token. When `CommsService` has a user model (`CommsApp` takes `TerrenoApp`'s unless
+`userModel` is set; a standalone `CommsService` or `setupServer` app passes `userModel` or calls
+`service.setUserModel(User)`), `sendPushToUser()` sends nothing to a missing, disabled, or
+`deleted` user and deactivates that user's tokens. It also deactivates tokens registered under
+an earlier `tokenEpoch`, so a password reset, password change, or session revocation stops pushes
+to devices bound before it until the device registers again. A token stored without
+`tokenEpoch` counts as epoch 0.
+
 `beforeSend` may mutate the message or cancel (`status: "cancelled"`, no provider call).
 A throwing `beforeSend` is logged and treated as no-op (send continues). Adapters later
 call `recordDeliveryEvent()` / `recordOptOut()` to update the log and fire
@@ -319,7 +328,9 @@ default `createRequire("expo-server-sdk")` is not bundled into that binary.
 
 example-frontend requests notification permission, then `getExpoPushTokenAsync`, then
 `POST /comms/pushTokens` after login. Denied permission and web skip registration (empty
-token). Physical-device gating via `expo-device` is deferred until the native baseline
+token). Sign-out on the profile screen sends `DELETE /comms/pushTokens/:id` for the token this
+session registered before it signs out, so the signed-out account stops receiving pushes on the
+device and the next account can claim it (an active token held by another user answers `409`). Physical-device gating via `expo-device` is deferred until the native baseline
 lands. The profile **Send test push** card is `__DEV__` only, so production web exports
 (CircleCI Playwright) do not render it.
 
@@ -343,6 +354,7 @@ interface CommsAppOptions {
   redactRecipients?: boolean; // default: true
   retainPayloadDays?: number; // default: 30; 0 stores no payload
   sms?: SmsProvider;
+  userModel?: {findById: (id) => PromiseLike<unknown>}; // default: TerrenoApp's user model
   verification?: VerificationProvider;
 }
 ```

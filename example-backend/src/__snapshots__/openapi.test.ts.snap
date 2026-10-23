@@ -16842,6 +16842,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "description": "Push provider token identifying the device",
                       "type": "string",
                     },
+                    "tokenEpoch": {
+                      "description": "The owner's tokenEpoch when the device registered; push stops after it changes",
+                      "type": "number",
+                    },
                     "updated": {
                       "description": "When this document was last updated",
                       "format": "date-time",

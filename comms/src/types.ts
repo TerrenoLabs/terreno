@@ -113,6 +113,11 @@ export interface OptOutEvent {
   to: string;
 }
 
+/** The app's user model, as far as push delivery reads it. */
+export interface CommsUserModel {
+  findById: (id: mongoose.Types.ObjectId | string) => PromiseLike<unknown>;
+}
+
 export interface CommsOptions {
   beforeSend?: (context: CommsHookContext) => Promise<BeforeSendResult | undefined>;
   defaultFrom?: string;
@@ -128,6 +133,12 @@ export interface CommsOptions {
   redactRecipients?: boolean;
   retainPayloadDays?: number;
   sms?: SmsProvider;
+  /**
+   * The app's user model. When set, push goes only to users that exist and are not disabled or
+   * deleted, and only to devices registered under the user's current `tokenEpoch`; the other
+   * devices are released. `CommsApp` sets it from `TerrenoApp` when omitted.
+   */
+  userModel?: CommsUserModel;
   verification?: VerificationProvider;
 }
 

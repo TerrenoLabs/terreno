@@ -11,7 +11,7 @@ import {
 import {evaluateRetryBlock, throwRetryBlock} from "./commsRetry";
 import {CommsMessage} from "./models/commsMessage";
 import {PushToken} from "./models/pushToken";
-import type {CommsMessageAttempt, CommsMessageDocument} from "./modelTypes";
+import type {CommsMessageAttempt, CommsMessageDocument, PushTokenDocument} from "./modelTypes";
 import type {
   CheckVerificationOptions,
   CommsChannel,
@@ -20,6 +20,7 @@ import type {
   CommsMessageStatus,
   CommsOptions,
   CommsSendOptions,
+  CommsUserModel,
   DeliveryEvent,
   MailMessage,
   MailProvider,
@@ -68,8 +69,56 @@ export class CommsService {
   private readonly consoleSms = new ConsoleSmsProvider();
   private readonly consoleVerification = new ConsoleVerificationProvider();
 
+  private userModel: CommsUserModel | undefined;
+
   constructor(options?: CommsOptions) {
     this.options = options ?? {};
+    this.userModel = this.options.userModel;
+  }
+
+  /** Set the user model push delivery checks, unless one was passed in the options. */
+  setUserModel(userModel: CommsUserModel | undefined): void {
+    this.userModel = this.options.userModel ?? userModel;
+  }
+
+  /**
+   * The user's devices that may receive push: none for a missing, disabled, or deleted user, and
+   * only those registered under the user's current tokenEpoch, so a password reset or session
+   * revocation ends delivery to devices bound before it. The rest are released.
+   */
+  private async deliverablePushTokens(
+    userId: mongoose.Types.ObjectId | string
+  ): Promise<PushTokenDocument[]> {
+    const tokens = await PushToken.find({active: true, userId});
+    if (!this.userModel || tokens.length === 0) {
+      return tokens;
+    }
+    const user = (await this.userModel.findById(userId)) as {
+      deleted?: unknown;
+      disabled?: unknown;
+      tokenEpoch?: unknown;
+    } | null;
+    if (!user || user.disabled === true || user.deleted === true) {
+      logger.info(`[comms] Releasing push tokens of inactive user ${String(userId)}`);
+      await PushToken.updateMany({active: true, userId}, {$set: {active: false}});
+      return [];
+    }
+    const currentEpoch = typeof user.tokenEpoch === "number" ? user.tokenEpoch : 0;
+    const isCurrent = (token: PushTokenDocument): boolean =>
+      (token.tokenEpoch ?? 0) === currentEpoch;
+    if (tokens.every(isCurrent)) {
+      return tokens;
+    }
+    // A row stored without tokenEpoch counts as epoch 0.
+    await PushToken.updateMany(
+      {
+        active: true,
+        tokenEpoch: {$nin: currentEpoch === 0 ? [0, null] : [currentEpoch]},
+        userId,
+      },
+      {$set: {active: false}}
+    );
+    return tokens.filter(isCurrent);
   }
 
   async recordDeliveryEvent(event: DeliveryEvent): Promise<void> {
@@ -731,7 +780,7 @@ export class CommsService {
   ): Promise<SendResult[]> {
     const provider = this.pushProvider();
     const hookErrors: Record<string, string[]> = {};
-    const tokens = await PushToken.find({active: true, userId: message.userId});
+    const tokens = await this.deliverablePushTokens(message.userId);
     if (tokens.length === 0) {
       return [];
     }

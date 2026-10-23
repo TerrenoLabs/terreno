@@ -17,6 +17,7 @@ import type TestAgent from "supertest/lib/agent";
 import {CommsApp, getCommsService} from "./commsApp";
 import {CommsMessage} from "./models/commsMessage";
 import {PushToken} from "./models/pushToken";
+import type {PushProvider, SendResult} from "./types";
 
 const buildApp = (): express.Application => {
   const app = getBaseServer();
@@ -457,5 +458,93 @@ describe("CommsApp", () => {
     ]) {
       assert.includeMembers(operation.tags, ["comms"]);
     }
+  });
+
+  describe("push delivery and the account lifecycle", () => {
+    let sentTokens: string[][];
+    const push: PushProvider = {
+      id: "lifecycle-push",
+      sendPush: async (message): Promise<SendResult[]> => {
+        sentTokens.push(message.tokens);
+        return message.tokens.map((): SendResult => ({accepted: true}));
+      },
+    };
+
+    const buildLifecycleApp = (): {app: express.Application; plugin: CommsApp} => {
+      const plugin = new CommsApp({logMessages: false, push});
+      const app = new TerrenoApp({
+        skipListen: true,
+        userModel: UserModel as unknown as UserModelType,
+      })
+        .register(plugin)
+        .build();
+      return {app, plugin};
+    };
+
+    const registerDevice = async (agent: TestAgent, token: string): Promise<void> => {
+      await agent.post("/comms/pushTokens").send({platform: "ios", token}).expect(201);
+    };
+
+    beforeEach((): void => {
+      sentTokens = [];
+    });
+
+    it("stops pushing to a device registered before the user's credentials changed", async (): Promise<void> => {
+      const {app, plugin} = buildLifecycleApp();
+      const {agent, userId} = await signUpAgent(app, "epoch@example.com");
+      await registerDevice(agent, "ExponentPushToken[epoch]");
+      assert.lengthOf(await plugin.service.sendPushToUser({body: "B", title: "T", userId}), 1);
+
+      await UserModel.updateOne({_id: userId}, {$inc: {tokenEpoch: 1}});
+      const afterReset = await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      assert.lengthOf(afterReset, 0);
+      assert.deepEqual(sentTokens, [["ExponentPushToken[epoch]"]]);
+      const stored = await PushToken.findExactlyOne({token: "ExponentPushToken[epoch]"});
+      assert.isFalse(stored.active);
+    });
+
+    it("pushes again after the device registers under the new credentials", async (): Promise<void> => {
+      const {app, plugin} = buildLifecycleApp();
+      const {agent, userId} = await signUpAgent(app, "reregister@example.com");
+      await registerDevice(agent, "ExponentPushToken[again]");
+      await UserModel.updateOne({_id: userId}, {$inc: {tokenEpoch: 1}});
+      await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      await agent
+        .post("/comms/pushTokens")
+        .send({platform: "ios", token: "ExponentPushToken[again]"})
+        .expect(200);
+      const results = await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      assert.lengthOf(results, 1);
+      assert.deepEqual(sentTokens, [["ExponentPushToken[again]"]]);
+    });
+
+    it("does not push to a disabled user and releases their devices", async (): Promise<void> => {
+      const {app, plugin} = buildLifecycleApp();
+      const {agent, userId} = await signUpAgent(app, "disabled@example.com");
+      await registerDevice(agent, "ExponentPushToken[disabled]");
+
+      await UserModel.updateOne({_id: userId}, {$set: {disabled: true}});
+      const results = await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      assert.lengthOf(results, 0);
+      assert.lengthOf(sentTokens, 0);
+      assert.equal(await PushToken.countDocuments({active: true}), 0);
+    });
+
+    it("does not push to a user that no longer exists", async (): Promise<void> => {
+      const {app, plugin} = buildLifecycleApp();
+      const {agent, userId} = await signUpAgent(app, "deleted@example.com");
+      await registerDevice(agent, "ExponentPushToken[deleted]");
+
+      await UserModel.deleteOne({_id: userId});
+      const results = await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      assert.lengthOf(results, 0);
+      assert.lengthOf(sentTokens, 0);
+      assert.equal(await PushToken.countDocuments({active: true}), 0);
+    });
   });
 });

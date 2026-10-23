@@ -21,8 +21,10 @@ import {useCallback, useEffect, useMemo, useState} from "react";
 import {useSelector} from "react-redux";
 import {useThemePreference} from "@/contexts/ThemePreferenceContext";
 import {logout, useAppDispatch} from "@/store/index";
+import {releaseExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {
   terrenoApi,
+  useDeleteCommsPushTokensByIdMutation,
   useGetMeQuery,
   usePatchMeMutation,
   usePostAuthSendVerificationMutation,
@@ -38,6 +40,7 @@ const ProfileScreen: React.FC = () => {
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
   const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
+  const [deletePushToken] = useDeleteCommsPushTokensByIdMutation();
   const {
     colorSchemeSetting,
     isLoading: isThemePreferenceLoading,
@@ -161,9 +164,13 @@ const ProfileScreen: React.FC = () => {
     [showSaveSuccess, updateProfile]
   );
 
-  const handleLogout = useCallback((): void => {
+  const handleLogout = useCallback(async (): Promise<void> => {
+    // Release this device's push token while the session can still authenticate the request.
+    await releaseExpoPushTokenSafely({
+      deleteToken: async (id) => deletePushToken(id).unwrap(),
+    });
     dispatch(logout());
-  }, [dispatch]);
+  }, [deletePushToken, dispatch]);
 
   const handleResendVerification = useCallback(async (): Promise<void> => {
     setVerificationError(null);

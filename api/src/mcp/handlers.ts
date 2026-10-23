@@ -5,11 +5,12 @@ import type {User} from "../auth";
 import {isAPIError} from "../errors";
 import {checkPermissions} from "../permissions";
 import type {PopulatePath} from "../populate";
+import {checkSortFields, getAllowedSortFields} from "../sortFields";
 import {executeCreate, executeDelete, executeUpdate} from "../sync/executors";
 import {defaultResponseHandler} from "../transformers";
 import {createMCPRequest} from "./createMCPRequest";
 import {buildListQuery} from "./query";
-import {restWriteExcludeFields, writeExcludeFields} from "./schemaGenerator";
+import {isFieldExcluded, restWriteExcludeFields, writeExcludeFields} from "./schemaGenerator";
 import type {MCPDocument, MCPMethod, MCPRegistryEntry, MCPToolArgs, MCPToolResult} from "./types";
 
 /** Methods whose responses go through a responseHandler (delete returns only a status). */
@@ -305,8 +306,22 @@ export const handleList = async (
     builtQuery = builtQuery.skip((page - 1) * limit);
   }
 
-  // Sort
-  const sort = asOptionalString(args.sort) ?? options.sort;
+  // Sort: client keys are limited to declared sortable fields minus excludeFields, because
+  // the order of results reveals the order of the sorted field's hidden values.
+  const sortArg = asOptionalString(args.sort);
+  if (sortArg) {
+    const excludeFields = config.excludeFields ?? [];
+    const allowedSortFields = getAllowedSortFields(options).filter(
+      (field) => !isFieldExcluded(field, excludeFields)
+    );
+    const sortCheck = checkSortFields(sortArg, allowedSortFields);
+    if (!sortCheck.allowed) {
+      const allowed = allowedSortFields.length > 0 ? allowedSortFields.join(", ") : "(none)";
+      const field = sortCheck.error === "sort-field-not-allowed" ? sortCheck.field : sortArg;
+      return errorResult(`${field} is not an allowed sort field. Allowed: ${allowed}`);
+    }
+  }
+  const sort = sortArg ?? options.sort;
   if (sort) {
     builtQuery = builtQuery.sort(sort);
   }

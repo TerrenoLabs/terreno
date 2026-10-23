@@ -286,6 +286,35 @@ it can never be stripped and silently ignored:
 `@terreno/syncdb` raises this as `QueryFieldNotAllowedError` (see
 [Query windows](syncdb.md#query-windows)).
 
+`sort` is allowlisted the same way. A client sort (`?sort=-created name`, or the object form
+`?sort[created]=-1`) may name only fields in `queryFields`, fields named in the router's own
+`sort`, and fields in `sortFields`. Any other field, or a repeated `sort` parameter, returns 400
+before the query runs:
+
+```json
+{
+  "status": 400,
+  "code": "sort-field-not-allowed",
+  "title": "Sort field not allowed",
+  "source": {"parameter": "sort"},
+  "meta": {"sortField": "priority", "model": "Todo", "allowedSortFields": ["completed", "created", "ownerId"]}
+}
+```
+
+Use `sortFields` for columns clients may order by but not filter on:
+
+```typescript
+modelRouter("/todos", Todo, {
+  queryFields: ["completed", "ownerId"],
+  sort: "-created",
+  sortFields: ["title", "priority"],
+});
+```
+
+Sort order reveals a field's values (one compound sort exposes a hidden boolean), so keep
+fields hidden from some readers (RBAC field views, `responseHandler` stripping) out of
+`queryFields` and `sortFields`. `AdminApp` passes each model's `sortableFields` as `sortFields`.
+
 ## modelRouter array operations
 
 When a model has at least one array field, `modelRouter` provides subroutes for adding,

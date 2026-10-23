@@ -1924,6 +1924,7 @@ export class AdminApp {
         responseHandler: async (value, _method, request): Promise<JSONValue> =>
           addRecordCapabilities(value, request),
         sort: config.defaultSort ?? "-created",
+        sortFields: modelMeta?.sortableFields ?? [],
         ...(config.populatePaths ? {populatePaths: config.populatePaths} : {}),
         ...(auditHooks.postDelete ? {postDelete: auditHooks.postDelete} : {}),
       };

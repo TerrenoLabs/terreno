@@ -58,6 +58,7 @@ import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
 import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
 import {warnRealtimeDeprecated} from "./realtime/deprecation";
 import type {RealtimeConfig} from "./realtime/types";
+import {checkSortFields, getAllowedSortFields} from "./sortFields";
 import {
   type ExecutorConcurrencyCheck,
   executeCreate,
@@ -213,6 +214,13 @@ export interface ModelRouterOptions<T> {
    * Note: you should have an index field on these fields or Mongo may slow down considerably.
    * */
   sort?: string | {[key: string]: "ascending" | "descending"};
+  /**
+   * Extra fields that list requests may sort by. A client `sort` may name only fields in
+   * `queryFields`, fields named in `sort`, and fields listed here; any other field returns
+   * 400 `sort-field-not-allowed`. Do not list fields that some readers cannot see (RBAC
+   * field views, responseHandler stripping): sort order reveals their values.
+   */
+  sortFields?: string[];
   /**
    * Default queries to provide to Mongo before any user queries or transforms happen when making
    * list queries. Accepts any Mongoose-style queries, and runs for all user types.
@@ -534,6 +542,39 @@ const checkQueryParamAllowed = (
   }
 };
 
+// Sorting by a field discloses its order even when responses hide it, so list sorts are
+// limited to fields the router declares sortable (queryFields, options.sort, sortFields).
+const checkListSortAllowed = <T>(
+  sort: unknown,
+  options: ModelRouterOptions<T>,
+  modelName: string
+): void => {
+  const allowed = getAllowedSortFields(options);
+  const result = checkSortFields(sort, allowed);
+  if (result.allowed) {
+    return;
+  }
+  if (result.error === "invalid-sort") {
+    throw new BadRequestError({
+      code: "invalid-sort",
+      detail: "sort must be a space-separated list of fields, each optionally prefixed with -.",
+      source: {parameter: "sort"},
+      title: "Invalid sort",
+    });
+  }
+  const allowedList = allowed.length > 0 ? allowed.join(", ") : "(none)";
+  throw new BadRequestError({
+    code: "sort-field-not-allowed",
+    detail:
+      `${result.field} is not allowed as a sort field. ` +
+      `Add "${result.field}" to sortFields or queryFields on the ${modelName} modelRouter ` +
+      `to sort on it. Allowed: ${allowedList}.`,
+    meta: {allowedSortFields: allowed, model: modelName, sortField: result.field},
+    source: {parameter: "sort"},
+    title: "Sort field not allowed",
+  });
+};
+
 // Handles dot notation patches, creates a normal object to be used for updates.
 // function flattenDotNotationPatch(data: any) {
 //   const result = {};
@@ -845,6 +886,9 @@ const _buildModelRouter = <T>(
       // Runs before query validation so a field missing from queryFields is always
       // reported with this error, whatever the validator's settings.
       (req: Request, _res: Response, next: NextFunction): void => {
+        if (req.query.sort !== undefined) {
+          checkListSortAllowed(req.query.sort, options, model.modelName);
+        }
         for (const queryParam of Object.keys(req.query)) {
           if (PAGINATION_QUERY_PARAMS.includes(queryParam)) {
             continue;

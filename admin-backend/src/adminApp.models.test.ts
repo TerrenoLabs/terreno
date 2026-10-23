@@ -2033,6 +2033,24 @@ describe("AdminApp per-model queryFilter", () => {
     await agent.get("/admin/foods?sort=-created").expect(200);
   });
 
+  it("sorts by a configured sortableFields entry that is not a list or filter field", async () => {
+    const localApp = buildApp([
+      {
+        displayName: "Foods",
+        listFields: ["name"],
+        model: FoodModel,
+        routePath: "/foods",
+        sortableFields: ["calories"],
+      },
+    ]);
+    await FoodModel.create({calories: 1, name: "Low"});
+    await FoodModel.create({calories: 9, name: "High"});
+    const agent = await authAsUser(localApp, "admin");
+    const res = await agent.get("/admin/foods?sort=-calories").expect(200);
+    expect(res.body.data.map((row: {name: string}) => row.name)).toEqual(["High", "Low"]);
+    await agent.get("/admin/foods?sort=name").expect(400);
+  });
+
   it("strips excludeFields from admin create and update bodies", async () => {
     const localApp = buildApp([
       {

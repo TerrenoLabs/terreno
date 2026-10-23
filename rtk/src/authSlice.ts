@@ -263,7 +263,15 @@ export const generateAuthSlice = (api: Api<any, any, any, any, any>) => {
   // we need to use a listener middleware.
   const logoutListenerMiddleware = createListenerMiddleware();
   logoutListenerMiddleware.startListening({
-    effect: async () => {
+    effect: async (_action, listenerApi) => {
+      // Cached responses belong to the user who is signing out. Only a logout that ends a
+      // signed-in session resets, so a query that keeps failing while signed out cannot loop
+      // through logout, reset, and refetch.
+      const previousUserId = (listenerApi.getOriginalState() as {auth?: {userId?: string | null}})
+        .auth?.userId;
+      if (previousUserId) {
+        listenerApi.dispatch(api.util.resetApiState());
+      }
       // TODO: We should only clear local storage when we're logging out, not disconnected.
       // await clearLocalStorage();
       if (!IsWeb) {

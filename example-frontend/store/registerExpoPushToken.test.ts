@@ -1,6 +1,11 @@
 import {describe, expect, it} from "bun:test";
 
-import {registerExpoPushToken, registerExpoPushTokenSafely} from "./registerExpoPushToken";
+import {
+  registerExpoPushToken,
+  registerExpoPushTokenSafely,
+  releaseExpoPushToken,
+  releaseExpoPushTokenSafely,
+} from "./registerExpoPushToken";
 
 describe("registerExpoPushToken", () => {
   it("skips web platforms without fetching a token", async () => {
@@ -79,5 +84,50 @@ describe("registerExpoPushTokenSafely", () => {
     } finally {
       console.warn = originalWarn;
     }
+  });
+});
+
+describe("releaseExpoPushToken", () => {
+  it("skips when this session registered no token", async () => {
+    const deleted: string[] = [];
+    const result = await releaseExpoPushToken({
+      deleteToken: async (id) => {
+        deleted.push(id);
+      },
+    });
+    expect(result).toBe("skipped");
+    expect(deleted).toEqual([]);
+  });
+
+  it("deletes the token this session registered, once", async () => {
+    await registerExpoPushToken({
+      getToken: async () => ({data: "ExponentPushToken[release]"}),
+      platform: "ios",
+      postToken: async () => ({data: {_id: "push-token-1"}}),
+    });
+    const deleted: string[] = [];
+    const deleteToken = async (id: string): Promise<void> => {
+      deleted.push(id);
+    };
+
+    expect(await releaseExpoPushToken({deleteToken})).toBe("released");
+    expect(await releaseExpoPushToken({deleteToken})).toBe("skipped");
+    expect(deleted).toEqual(["push-token-1"]);
+  });
+
+  it("reads the id from an unwrapped response and does not throw on a failed delete", async () => {
+    await registerExpoPushToken({
+      getToken: async () => ({data: "ExponentPushToken[unwrapped]"}),
+      platform: "android",
+      postToken: async () => ({_id: "push-token-2"}),
+    });
+
+    const result = await releaseExpoPushTokenSafely({
+      deleteToken: async () => {
+        throw new Error("network down");
+      },
+    });
+
+    expect(result).toBe("skipped");
   });
 });

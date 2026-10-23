@@ -359,12 +359,13 @@ export const syncPlugin = (schema: Schema): void => {
     // behind; drop it so this save's post hook never acts on the earlier attempt's claim.
     this.$locals[PENDING_COMMIT_KEY] = undefined;
     // m10: a save that changes nothing meaningful must not burn a seq or emit a delta.
-    // Excluded from the "meaningful" set: the sync stamps this hook writes (`_syncSeq`,
-    // `_syncPrevStream`) and auto-managed timestamp metadata (`updated`, which
-    // createdUpdatedPlugin bumps on EVERY save — otherwise no save would ever be a
-    // no-op). A save whose only modified paths are these is a no-op: skip the claim.
+    // Excluded from the "meaningful" set: auto-managed timestamp metadata (`updated`, which
+    // createdUpdatedPlugin bumps on EVERY save — otherwise no save would ever be a no-op).
+    // A save whose only modified path is that is a no-op: skip the claim. The sync stamps
+    // (`_syncSeq`, `_syncPrevStream`) still count: this hook has not written them yet, so a
+    // change to them came from the caller, and it must be restamped rather than persisted.
     if (!this.isNew) {
-      const ignored = new Set(["_syncSeq", "_syncPrevStream", "updated"]);
+      const ignored = new Set(["updated"]);
       const meaningful = this.modifiedPaths().filter((p) => !ignored.has(p));
       if (meaningful.length === 0) {
         return;

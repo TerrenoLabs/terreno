@@ -1,6 +1,7 @@
 import {afterEach, beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {
   ADMIN_MODEL_ACCESS,
+  type AdminConfig,
   AuditApp,
   addAuthRoutes,
   apiErrorMiddleware,
@@ -13,6 +14,7 @@ import {
   modelRouter,
   Organization,
   orgScopedPlugin,
+  type PermissionMethod,
   Permissions,
   resetAuditRecorderForTests,
   setupAuth,
@@ -2031,6 +2033,24 @@ describe("AdminApp per-model queryFilter", () => {
     await agent.get("/admin/foods?sort=-created").expect(200);
   });
 
+  it("sorts by a configured sortableFields entry that is not a list or filter field", async () => {
+    const localApp = buildApp([
+      {
+        displayName: "Foods",
+        listFields: ["name"],
+        model: FoodModel,
+        routePath: "/foods",
+        sortableFields: ["calories"],
+      },
+    ]);
+    await FoodModel.create({calories: 1, name: "Low"});
+    await FoodModel.create({calories: 9, name: "High"});
+    const agent = await authAsUser(localApp, "admin");
+    const res = await agent.get("/admin/foods?sort=-calories").expect(200);
+    expect(res.body.data.map((row: {name: string}) => row.name)).toEqual(["High", "Low"]);
+    await agent.get("/admin/foods?sort=name").expect(400);
+  });
+
   it("strips excludeFields from admin create and update bodies", async () => {
     const localApp = buildApp([
       {
@@ -2056,6 +2076,234 @@ describe("AdminApp per-model queryFilter", () => {
     expect(patched.body.data.name).toBe("Renamed");
     const after = await FoodModel.findById(createdId).lean();
     expect(after?.calories).toBe(12);
+  });
+
+  describe("row scope on by-id routes and bulk-patch", () => {
+    const ownerScopedConfig: AdminModelConfig = {
+      ...foodModelConfig,
+      bulkPatchAllowlist: ["name", "calories"],
+      queryFilter: (user, query): Record<string, unknown> => ({
+        ...(query ?? {}),
+        ownerId: user?.id,
+      }),
+    };
+
+    let agent: TestAgent;
+    let actorId: string;
+    let otherOwnerId: mongoose.Types.ObjectId;
+
+    beforeEach(async () => {
+      const localApp = buildApp([ownerScopedConfig]);
+      agent = await authAsUser(localApp, "admin");
+      const actor = await findOneOrNoneFor(UserModel, {email: "admin@example.com"});
+      actorId = String(actor?._id);
+      otherOwnerId = new mongoose.Types.ObjectId();
+    });
+
+    it("reads, updates, and deletes rows inside the scope", async () => {
+      const mine = await FoodModel.create({calories: 1, name: "Mine", ownerId: actorId});
+      await agent.get(`/admin/foods/${mine._id}`).expect(200);
+      await agent.patch(`/admin/foods/${mine._id}`).send({calories: 5}).expect(200);
+      const bulk = await agent
+        .post("/admin/foods/bulk-patch")
+        .send({ids: [String(mine._id)], patch: {name: "MineBulk"}})
+        .expect(200);
+      expect(bulk.body.updated).toBe(1);
+      await agent.delete(`/admin/foods/${mine._id}`).expect(204);
+    });
+
+    it("denies read, update, delete, and bulk-patch of rows outside the scope", async () => {
+      const theirs = await FoodModel.create({calories: 1, name: "Theirs", ownerId: otherOwnerId});
+      const theirsToo = await FoodModel.create({
+        calories: 2,
+        name: "TheirsToo",
+        ownerId: otherOwnerId,
+      });
+
+      await agent.get(`/admin/foods/${theirs._id}`).expect(403);
+      await agent.patch(`/admin/foods/${theirs._id}`).send({calories: 999}).expect(403);
+      const bulk = await agent
+        .post("/admin/foods/bulk-patch")
+        .send({ids: [String(theirs._id)], patch: {name: "BULK"}})
+        .expect(200);
+      expect(bulk.body.updated).toBe(0);
+      expect(bulk.body.failures).toHaveLength(1);
+      await agent.delete(`/admin/foods/${theirsToo._id}`).expect(403);
+
+      const reloaded = await FoodModel.findById(theirs._id).lean();
+      expect(reloaded?.name).toBe("Theirs");
+      expect(reloaded?.calories).toBe(1);
+      expect(await FoodModel.findById(theirsToo._id).lean()).not.toBeNull();
+    });
+
+    it("denies moving an in-scope row outside the scope", async () => {
+      const mine = await FoodModel.create({calories: 1, name: "Mine", ownerId: actorId});
+      await agent
+        .patch(`/admin/foods/${mine._id}`)
+        .send({ownerId: String(otherOwnerId)})
+        .expect(403);
+      const reloaded = await FoodModel.findById(mine._id).lean();
+      expect(String(reloaded?.ownerId)).toBe(actorId);
+    });
+
+    it("denies by-id routes when the scope returns null", async () => {
+      const localApp = buildApp([{...foodModelConfig, queryFilter: (): null => null}]);
+      const nullAgent = await authAsUser(localApp, "admin");
+      const row = await FoodModel.create({calories: 1, name: "Hidden", ownerId: actorId});
+      await nullAgent.get("/admin/foods").expect(200);
+      await nullAgent.get(`/admin/foods/${row._id}`).expect(403);
+    });
+  });
+
+  describe("declared list filters on a scoped field", () => {
+    let agent: TestAgent;
+    let actorId: string;
+    let otherOwnerId: mongoose.Types.ObjectId;
+
+    beforeEach(async () => {
+      const localApp = buildApp([
+        {
+          ...foodModelConfig,
+          filters: [
+            {field: "ownerId", kind: "ref", refModel: "User"},
+            {field: "name", kind: "text"},
+          ],
+          queryFilter: (user, query): Record<string, unknown> => ({
+            ...(query ?? {}),
+            ownerId: user?.id,
+          }),
+          searchFields: ["name"],
+        },
+      ]);
+      agent = await authAsUser(localApp, "admin");
+      const actor = await findOneOrNoneFor(UserModel, {email: "admin@example.com"});
+      actorId = String(actor?._id);
+      otherOwnerId = new mongoose.Types.ObjectId();
+      await FoodModel.create({calories: 1, name: "Mine", ownerId: actorId});
+      await FoodModel.create({calories: 2, name: "Theirs", ownerId: otherOwnerId});
+    });
+
+    it("keeps the row scope when the client filters on the scoped field", async () => {
+      const res = await agent.get(`/admin/foods?ownerId=${otherOwnerId}`).expect(200);
+      expect(res.body.data.map((row: {name: string}) => row.name)).toEqual(["Mine"]);
+    });
+
+    it("keeps the row scope when the scoped-field filter is combined with search", async () => {
+      const res = await agent.get(`/admin/foods?ownerId=${otherOwnerId}&q=T`).expect(200);
+      expect(res.body.data).toEqual([]);
+    });
+
+    it("still applies declared filters on other fields inside the scope", async () => {
+      const mine = await agent.get("/admin/foods?name=Mine").expect(200);
+      expect(mine.body.data.map((row: {name: string}) => row.name)).toEqual(["Mine"]);
+      const theirs = await agent.get("/admin/foods?name=Theirs").expect(200);
+      expect(theirs.body.data).toEqual([]);
+      const searched = await agent.get("/admin/foods?name=Mine&q=M").expect(200);
+      expect(searched.body.data.map((row: {name: string}) => row.name)).toEqual(["Mine"]);
+    });
+  });
+});
+
+describe("AdminApp adminPermissions methods", () => {
+  const buildContributionApp = (
+    adminPermissions: NonNullable<AdminConfig["adminPermissions"]>
+  ): express.Application => {
+    const plugin: TerrenoPlugin = {
+      adminContribution: () => ({
+        models: [
+          {
+            admin: {
+              adminPermissions,
+              bulkPatchAllowlist: ["calories"],
+              displayName: "Locked foods",
+              listFields: ["name", "calories"],
+              searchFields: ["name"],
+            },
+            model: FoodModel,
+            routePath: "/locked-foods",
+          },
+        ],
+      }),
+      register() {},
+    };
+    const terrenoApp = {
+      getPlugins: () => [plugin],
+      getRegistrations: () => [],
+    } as unknown as TerrenoApp;
+    const localApp = getBaseServer();
+    setupAuth(localApp, UserModel as unknown as UserModelType);
+    addAuthRoutes(localApp, UserModel as unknown as UserModelType);
+    new AdminApp({basePath: "/admin"}).register(localApp, undefined, terrenoApp);
+    localApp.use(apiUnauthorizedMiddleware);
+    localApp.use(apiErrorMiddleware);
+    return localApp;
+  };
+
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  afterEach(async () => {
+    await FoodModel.deleteMany({});
+  });
+
+  it("denies list, read, and search when list and read are empty arrays", async () => {
+    const row = await FoodModel.create({calories: 5, name: "Locked"});
+    const agent = await authAsUser(buildContributionApp({list: [], read: []}), "admin");
+    await agent.get("/admin/locked-foods").expect(405);
+    await agent.get(`/admin/locked-foods/${row._id}`).expect(405);
+    await agent.get("/admin/locked-foods/search?q=Lock").expect(403);
+    const config = await agent.get("/admin/config").expect(200);
+    expect(config.body.models.map((model: {routePath: string}) => model.routePath)).not.toContain(
+      "/admin/locked-foods"
+    );
+  });
+
+  it("evaluates configured update methods on PATCH, bulk-patch, and capabilities", async () => {
+    const row = await FoodModel.create({calories: 5, name: "Locked"});
+    let denyCalls = 0;
+    const denyAll: PermissionMethod<unknown> = async () => {
+      denyCalls += 1;
+      return false;
+    };
+    const agent = await authAsUser(buildContributionApp({update: [denyAll]}), "admin");
+
+    const read = await agent.get(`/admin/locked-foods/${row._id}`).expect(200);
+    expect(read.body.data._adminCapabilities.update).toBe(false);
+    expect(read.body.data._adminCapabilities.delete).toBe(true);
+    await agent.patch(`/admin/locked-foods/${row._id}`).send({calories: 77}).expect(405);
+    await agent
+      .post("/admin/locked-foods/bulk-patch")
+      .send({ids: [String(row._id)], patch: {calories: 78}})
+      .expect(403);
+    const config = await agent.get("/admin/config").expect(200);
+    const meta = config.body.models.find(
+      (model: {routePath: string}) => model.routePath === "/admin/locked-foods"
+    );
+    expect(meta?.permissions.update).toBe(false);
+
+    expect(denyCalls).toBeGreaterThan(0);
+    const stored = await FoodModel.findById(row._id).lean();
+    expect(stored?.calories).toBe(5);
+  });
+
+  it("ANDs configured methods with the admin check and passes the document", async () => {
+    const row = await FoodModel.create({calories: 5, name: "Editable"});
+    const seen: unknown[] = [];
+    const onlyEditable: PermissionMethod<unknown> = async (_method, _user, obj) => {
+      seen.push(obj);
+      return obj === undefined || (obj as {name?: string}).name === "Editable";
+    };
+    const app = buildContributionApp({update: [onlyEditable]});
+    const agent = await authAsUser(app, "admin");
+    await agent.patch(`/admin/locked-foods/${row._id}`).send({calories: 9}).expect(200);
+    expect(seen.some((obj) => obj !== undefined)).toBe(true);
+
+    const other = await FoodModel.create({calories: 5, name: "Other"});
+    await agent.patch(`/admin/locked-foods/${other._id}`).send({calories: 9}).expect(403);
+
+    const notAdmin = await authAsUser(app, "notAdmin");
+    await notAdmin.patch(`/admin/locked-foods/${row._id}`).send({calories: 10}).expect(405);
   });
 });
 
@@ -2514,6 +2762,233 @@ describe("AdminApp user elevation and scoped bulk-patch", () => {
       .send({admin: false})
       .expect(403);
     expect((await UserModel.findById(target?._id))?.admin).toBe(true);
+  });
+
+  it("does not let a user editor without assignRoles write roles through dotted paths", async () => {
+    const accessControl = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Support",
+          name: "support",
+          permissions: {admin: ["access"], user: ["list", "read", "update"]},
+        },
+      ],
+      statements: terrenoStatements,
+      userModel: UserModel as unknown as UserModelType,
+    });
+    await accessControl.roles.seedDefaults();
+    const localApp = buildApp(
+      [
+        {
+          displayName: "Users",
+          listFields: ["email", "admin"],
+          model: UserModel,
+          routePath: "/users",
+        },
+      ],
+      {accessControl}
+    );
+    const self = await UserModel.findOne({email: "notAdmin@example.com"}).orFail();
+    await UserModel.updateOne({_id: self._id}, {$set: {roles: ["support"]}});
+    const agent = await authAsUser(localApp, "notAdmin");
+
+    await agent
+      .patch(`/admin/users/${String(self._id)}`)
+      .send({roles: ["support", "superadmin"]})
+      .expect(403);
+
+    await agent
+      .patch(`/admin/users/${String(self._id)}`)
+      .send({name: "Dotted", "organizationIds.0": "other-tenant", "roles.1": "superadmin"})
+      .expect(200);
+    await agent
+      .patch(`/admin/users/${String(self._id)}`)
+      .send({"roles.0": "superadmin"})
+      .expect(200);
+
+    const after = await UserModel.findById(self._id).lean();
+    expect(after?.name).toBe("Dotted");
+    expect((after as {roles?: string[]} | null)?.roles).toEqual(["support"]);
+    expect((after as {organizationIds?: string[]} | null)?.organizationIds ?? []).toEqual([]);
+    const permissions = await accessControl.can({
+      permissions: {rbac: ["assignRoles"]},
+      user: after as never,
+    });
+    expect(permissions.allowed).toBe(false);
+  });
+
+  it("applies the User role and admin-flag gates to a user model not compiled as User", async () => {
+    const AccountModel =
+      (mongoose.models.AdminRbacAccount as mongoose.Model<Record<string, unknown>> | undefined) ??
+      mongoose.model<Record<string, unknown>>("AdminRbacAccount", UserModel.schema.clone());
+    await AccountModel.deleteMany({});
+    const accessControl = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Account editor",
+          name: "account-editor",
+          permissions: {admin: ["access"], user: ["list", "read", "update"]},
+        },
+      ],
+      statements: terrenoStatements,
+      userModel: AccountModel as unknown as UserModelType,
+    });
+    await accessControl.roles.seedDefaults();
+    const localApp = buildApp(
+      [
+        {
+          adminAccess: {resource: "user"},
+          displayName: "Accounts",
+          listFields: ["email", "admin"],
+          model: AccountModel,
+          routePath: "/accounts",
+        },
+      ],
+      {accessControl}
+    );
+    const actor = await UserModel.findOne({email: "notAdmin@example.com"}).orFail();
+    await UserModel.updateOne({_id: actor._id}, {$set: {roles: ["account-editor"]}});
+    const target = await AccountModel.create({email: "renamed-target@example.com", name: "T"});
+    const agent = await authAsUser(localApp, "notAdmin");
+
+    await agent
+      .patch(`/admin/accounts/${String(target._id)}`)
+      .send({roles: ["superadmin"]})
+      .expect(403);
+    await agent
+      .patch(`/admin/accounts/${String(target._id)}`)
+      .send({admin: true})
+      .expect(403);
+    await agent
+      .patch(`/admin/accounts/${String(target._id)}`)
+      .send({name: "Renamed", organizationIds: ["other-tenant"], tokenEpoch: 99})
+      .expect(200);
+
+    const after = await AccountModel.findById(target._id).lean();
+    expect(after?.name).toBe("Renamed");
+    expect(after?.admin).toBe(false);
+    expect(after?.roles ?? []).toEqual([]);
+    expect(after?.organizationIds ?? []).toEqual([]);
+    expect(after?.tokenEpoch ?? 0).toBe(0);
+  });
+
+  it("does not let an RBAC admin delegate rewrite a more privileged user", async () => {
+    const accessControl = createAccess({
+      connection: mongoose.connection,
+      statements: terrenoStatements,
+      userModel: UserModel as unknown as UserModelType,
+    });
+    await accessControl.roles.seedDefaults();
+    const localApp = buildApp(
+      [
+        {
+          bulkPatchAllowlist: ["disabled", "name"],
+          displayName: "Users",
+          listFields: ["email", "admin"],
+          model: UserModel,
+          routePath: "/users",
+        },
+      ],
+      {accessControl}
+    );
+    const delegate = await UserModel.findOne({email: "notAdmin@example.com"}).orFail();
+    await UserModel.updateOne({_id: delegate._id}, {$set: {roles: ["admin"]}});
+    const [superadmin, member] = await UserModel.create([
+      {email: "admin-target-super@example.com", name: "Super", roles: ["superadmin"]},
+      {email: "admin-target-member@example.com", name: "Member", roles: ["member"]},
+    ]);
+    const agent = await authAsUser(localApp, "notAdmin");
+
+    await agent
+      .patch(`/admin/users/${String(superadmin._id)}`)
+      .send({email: "redirect@example.com"})
+      .expect(403);
+    await agent
+      .patch(`/admin/users/${String(superadmin._id)}`)
+      .send({disabled: true})
+      .expect(403);
+    const bulk = await agent
+      .post("/admin/users/bulk-patch")
+      .send({ids: [String(superadmin._id), String(member._id)], patch: {disabled: true}})
+      .expect(200);
+    expect(bulk.body.updated).toBe(1);
+    expect(bulk.body.failures).toEqual([
+      {id: String(superadmin._id), title: "Cannot modify a user with permissions you do not hold"},
+    ]);
+
+    const storedSuper = await UserModel.findById(superadmin._id).lean();
+    expect(storedSuper?.email).toBe("admin-target-super@example.com");
+    expect((storedSuper as {disabled?: boolean} | null)?.disabled ?? false).toBe(false);
+    const storedMember = await UserModel.findById(member._id).lean();
+    expect((storedMember as {disabled?: boolean} | null)?.disabled).toBe(true);
+
+    await agent
+      .patch(`/admin/users/${String(member._id)}`)
+      .send({name: "Member renamed"})
+      .expect(200);
+  });
+
+  it("requires user:updateIdentity for admin identity-field writes to another user", async () => {
+    const accessControl = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "User editor",
+          name: "userEditor",
+          permissions: {admin: ["access"], user: ["create", "list", "read", "update"]},
+        },
+      ],
+      statements: terrenoStatements,
+      userModel: UserModel as unknown as UserModelType,
+    });
+    await accessControl.roles.seedDefaults();
+    const localApp = buildApp(
+      [
+        {
+          bulkPatchAllowlist: ["disabled", "name"],
+          displayName: "Users",
+          listFields: ["email", "admin"],
+          model: UserModel,
+          routePath: "/users",
+        },
+      ],
+      {accessControl}
+    );
+    const delegate = await UserModel.findOne({email: "notAdmin@example.com"}).orFail();
+    await UserModel.updateOne({_id: delegate._id}, {$set: {roles: ["userEditor"]}});
+    const member = await UserModel.create({
+      email: "identity-target-member@example.com",
+      name: "Member",
+      roles: ["member"],
+    });
+    const memberId = String(member._id);
+    const agent = await authAsUser(localApp, "notAdmin");
+
+    const patch = await agent.patch(`/admin/users/${memberId}`).send({disabled: true}).expect(403);
+    expect(patch.body.title).toBe("Missing user:updateIdentity permission");
+    await agent
+      .patch(`/admin/users/${memberId}`)
+      .send({email: "identity-redirect@example.com"})
+      .expect(403);
+    const bulk = await agent
+      .post("/admin/users/bulk-patch")
+      .send({ids: [memberId], patch: {disabled: true}})
+      .expect(200);
+    expect(bulk.body.updated).toBe(0);
+    expect(bulk.body.failures).toEqual([
+      {id: memberId, title: "Missing user:updateIdentity permission"},
+    ]);
+
+    await agent
+      .patch(`/admin/users/${memberId}`)
+      .send({email: "identity-target-member@example.com", name: "Member renamed"})
+      .expect(200);
+    const stored = await UserModel.findById(memberId).lean();
+    expect(stored?.email).toBe("identity-target-member@example.com");
+    expect((stored as {disabled?: boolean} | null)?.disabled ?? false).toBe(false);
+    expect(stored?.name).toBe("Member renamed");
   });
 
   it("does not persist organizationIds on RBAC admin User writes", async () => {

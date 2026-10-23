@@ -139,6 +139,30 @@ describe("buildBetterAuthConfig", () => {
     expect(() => buildBetterAuthConfig()).toThrow(/MOCK_OIDC_ISSUER must not be set in production/);
   });
 
+  it("refuses to start in production without BETTER_AUTH_SECRET", () => {
+    process.env.NODE_ENV = "production";
+    Reflect.deleteProperty(process.env, "BETTER_AUTH_SECRET");
+    expect(() => buildBetterAuthConfig()).toThrow(/BETTER_AUTH_SECRET is required/);
+  });
+
+  it("refuses to start in production with the committed development secret", () => {
+    process.env.NODE_ENV = "production";
+    process.env.BETTER_AUTH_SECRET = "terreno-example-better-auth-secret-dev-only-32";
+    expect(() => buildBetterAuthConfig()).toThrow(/BETTER_AUTH_SECRET is required/);
+  });
+
+  it("uses the supplied BETTER_AUTH_SECRET in production", () => {
+    process.env.NODE_ENV = "production";
+    process.env.BETTER_AUTH_SECRET = "dummy-deployed-better-auth-secret-0123456789";
+    expect(buildBetterAuthConfig()?.secret).toBe("dummy-deployed-better-auth-secret-0123456789");
+  });
+
+  it("falls back to the development secret outside production", () => {
+    process.env.NODE_ENV = "development";
+    Reflect.deleteProperty(process.env, "BETTER_AUTH_SECRET");
+    expect(buildBetterAuthConfig()?.secret).toBe("terreno-example-better-auth-secret-dev-only-32");
+  });
+
   it("refuses a MOCK_OIDC_ISSUER that is not an http(s) origin", () => {
     process.env.MOCK_OIDC_ISSUER = "javascript:alert(1)";
     expect(() => buildBetterAuthConfig()).toThrow(/MOCK_OIDC_ISSUER/);

@@ -272,6 +272,131 @@ describe("admin/script durable job adapter", () => {
     expect(refreshed?.error).toInclude("Script not found");
   });
 
+  it("does not run the durable handler for a task that already started", async () => {
+    let calls = 0;
+    const countingScript: AdminScriptJobTarget = {
+      name: "counting",
+      runner: async (wetRun: boolean) => {
+        calls += 1;
+        return {results: [`wetRun=${wetRun} call=${calls}`], success: true};
+      },
+    };
+    const handler = getAdminScriptHandler(() => countingScript);
+    const task = await BackgroundTask.create({
+      isDryRun: false,
+      logs: [],
+      status: "running",
+      taskType: "counting",
+    });
+
+    await expect(
+      handler(
+        {args: {}, scriptName: "counting", taskId: String(task._id), wetRun: true},
+        mockJobContext
+      )
+    ).rejects.toThrow("already started");
+    expect(calls).toBe(0);
+    expect((await BackgroundTask.findById(task._id))?.status).toBe("running");
+  });
+
+  it("skips the durable handler quietly for a task cancelled before it started", async () => {
+    let calls = 0;
+    const countingScript: AdminScriptJobTarget = {
+      name: "counting",
+      runner: async () => {
+        calls += 1;
+        return {results: [], success: true};
+      },
+    };
+    const handler = getAdminScriptHandler(() => countingScript);
+    const task = await BackgroundTask.create({
+      isDryRun: false,
+      logs: [],
+      status: "cancelled",
+      taskType: "counting",
+    });
+
+    await handler(
+      {args: {}, scriptName: "counting", taskId: String(task._id), wetRun: true},
+      mockJobContext
+    );
+    expect(calls).toBe(0);
+    expect((await BackgroundTask.findById(task._id))?.status).toBe("cancelled");
+  });
+
+  it("still runs the in-process script path for a task created as running", async () => {
+    const task = await BackgroundTask.create({
+      isDryRun: true,
+      logs: [],
+      status: "running",
+      taskType: "echo",
+    });
+    const {args} = createScriptArgs({values: {}});
+    await runRegisteredScriptTask({
+      args,
+      script: echoScript,
+      taskId: String(task._id),
+      wetRun: false,
+    });
+    const refreshed = await BackgroundTask.findById(task._id);
+    expect(refreshed?.status).toBe("completed");
+    expect(refreshed?.result).toContain("dry");
+  });
+
+  it("runs a wet script once when a duplicate dispatch arrives after the lock TTL", async () => {
+    let calls = 0;
+    let concurrent = 0;
+    let maxConcurrent = 0;
+    const slowScript: AdminScriptJobTarget = {
+      name: "slow-wet",
+      runner: async (wetRun: boolean) => {
+        calls += 1;
+        const call = calls;
+        concurrent += 1;
+        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        if (call === 1) {
+          await Bun.sleep(400);
+        }
+        concurrent -= 1;
+        return {results: [`wetRun=${wetRun} call=${call}`], success: true};
+      },
+    };
+    const jobsApp = new JobsApp({lockTtlMs: 100});
+    defineAdminScriptJob(jobsApp, (name) => (name === "slow-wet" ? slowScript : undefined));
+    const app = getBaseServer();
+    jobsApp.register(app);
+
+    const task = await BackgroundTask.create({
+      isDryRun: false,
+      logs: [],
+      status: "pending",
+      taskType: "slow-wet",
+    });
+    const enqueued = await tryEnqueueAdminScriptJob({
+      args: {},
+      scriptName: "slow-wet",
+      taskId: String(task._id),
+      wetRun: true,
+    });
+    const jobId = String(enqueued?.id);
+
+    const first = jobsApp.executeQueuedJob(jobId);
+    await Bun.sleep(30);
+    const withinTtl = await jobsApp.executeQueuedJob(jobId);
+    await Bun.sleep(170);
+    const afterTtl = await jobsApp.executeQueuedJob(jobId);
+    const firstOutcome = await first;
+
+    expect(withinTtl.kind).toBe("conflict");
+    expect(afterTtl.kind).toBe("conflict");
+    expect(firstOutcome.kind).toBe("executed");
+    expect(calls).toBe(1);
+    expect(maxConcurrent).toBe(1);
+    const refreshed = await BackgroundTask.findById(task._id);
+    expect(refreshed?.status).toBe("completed");
+    expect(refreshed?.result).toEqual(["wetRun=true call=1"]);
+  });
+
   it("cancels the matching job row for a script task", async () => {
     const jobsApp = new JobsApp({pollIntervalMs: 50});
     defineAdminScriptJob(jobsApp, (name) => (name === "echo" ? echoScript : undefined));

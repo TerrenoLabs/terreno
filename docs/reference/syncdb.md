@@ -697,6 +697,12 @@ Conflict responses on mutate: **409** with `{nack}` body (`code: "conflict"`).
 
 Limits: 50 collection subscriptions per socket; 100 mutations/second per socket (each batch mutation counts); batches capped at 100.
 
+A redelivered `mutationId` returns the outcome recorded for it only to the same user and only
+for the collection it was first sent to; any other replay gets an `unauthorized` nack. A
+replayed `conflict` nack includes `serverDoc` only when the caller can still read the document
+now (read permission and stream membership, or the admin broadcast scope for an admin-window
+mutation); otherwise it carries `serverSeq` alone.
+
 ## Encryption at rest
 
 **Web:** AES-256-GCM encrypted IndexedDB by default via pluggable `KeyProvider`:

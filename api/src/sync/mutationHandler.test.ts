@@ -43,6 +43,17 @@ mutStuffSchema.plugin(createdUpdatedPlugin);
 mutStuffSchema.plugin(syncPlugin);
 const MutStuffModel = model<MutStuff>("MutStuff", mutStuffSchema);
 
+// A second synced collection, for ledger replays that name a different collection.
+const mutOtherSchema = new Schema<MutStuff>({
+  _id: {description: "Client-minted string id", type: String},
+  name: {description: "The name of the item", required: true, type: String},
+  ownerId: {description: "The user who owns this item", type: String},
+});
+mutOtherSchema.plugin(isDeletedPlugin);
+mutOtherSchema.plugin(createdUpdatedPlugin);
+mutOtherSchema.plugin(syncPlugin);
+const MutOtherModel = model<MutStuff>("MutOther", mutOtherSchema);
+
 const owner = {_id: "mut-owner", admin: false, id: "mut-owner"} as unknown as User;
 const stranger = {_id: "mut-stranger", admin: false, id: "mut-stranger"} as unknown as User;
 
@@ -1240,6 +1251,106 @@ describe("applySyncMutation", () => {
       const nack = expectNack(await replay("m-conflict-bad-id"));
       assert.equal(nack.code, "conflict");
       assert.isUndefined(nack.serverDoc);
+    });
+  });
+
+  describe("ledger replay authorization", () => {
+    const attacker = {_id: "mut-attacker", admin: false, id: "mut-attacker"} as unknown as User;
+    const victim = {_id: "mut-victim", admin: false, id: "mut-victim"} as unknown as User;
+
+    beforeEach(async () => {
+      registerSync({
+        config: {scope: {type: "owner"}},
+        model: MutOtherModel,
+        options: ownerOptions,
+        routePath: "/mutOther",
+      });
+      await MutOtherModel.collection.deleteMany({});
+    });
+
+    it("does not replay a recorded outcome for another collection", async () => {
+      const sharedId = new mongoose.Types.ObjectId().toHexString();
+      await MutOtherModel.create({_id: sharedId, name: "DUMMY-victim-secret", ownerId: victim.id});
+      expectAck(
+        await applySyncMutation({
+          mutation: {
+            collection: "mutStuff",
+            data: {name: "attacker own", ownerId: attacker.id},
+            id: sharedId,
+            mutationId: "m-cross-own",
+            operation: "create",
+          },
+          user: attacker,
+        })
+      );
+      const conflict = expectNack(
+        await applySyncMutation({
+          mutation: {
+            baseVersion: 999,
+            collection: "mutStuff",
+            data: {name: "stale"},
+            id: sharedId,
+            mutationId: "m-cross-conflict",
+            operation: "update",
+          },
+          user: attacker,
+        })
+      );
+      expect(conflict.code).toBe("conflict");
+
+      const replayed = expectNack(
+        await applySyncMutation({
+          mutation: {
+            baseVersion: 0,
+            collection: "mutOther",
+            data: {name: "z"},
+            id: "unrelated",
+            mutationId: "m-cross-conflict",
+            operation: "update",
+          },
+          user: attacker,
+        })
+      );
+      expect(replayed.code).toBe("unauthorized");
+      expect(replayed.serverDoc).toBeUndefined();
+      expect(JSON.stringify(replayed)).not.toContain("DUMMY-victim-secret");
+    });
+
+    it("omits the server doc on replay after the caller loses access to the document", async () => {
+      const created = expectAck(
+        await applySyncMutation({
+          mutation: {
+            collection: "mutStuff",
+            data: {name: "attacker own", ownerId: attacker.id},
+            mutationId: "m-stale-own",
+            operation: "create",
+          },
+          user: attacker,
+        })
+      );
+      const mutation: SyncMutateRequest = {
+        baseVersion: 999,
+        collection: "mutStuff",
+        data: {name: "stale"},
+        id: created.id,
+        mutationId: "m-stale-conflict",
+        operation: "update",
+      };
+      const first = expectNack(await applySyncMutation({mutation, user: attacker}));
+      expect((first.serverDoc as {name: string}).name).toBe("attacker own");
+
+      const doc = await MutStuffModel.findById(created.id);
+      if (!doc) {
+        throw new Error("expected doc");
+      }
+      doc.ownerId = victim.id;
+      doc.name = "DUMMY-after-transfer";
+      await doc.save();
+
+      const replayed = expectNack(await applySyncMutation({mutation, user: attacker}));
+      expect(replayed.code).toBe("conflict");
+      expect(replayed.serverSeq).toBe(first.serverSeq);
+      expect(replayed.serverDoc).toBeUndefined();
     });
   });
 

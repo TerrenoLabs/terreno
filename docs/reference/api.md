@@ -1082,6 +1082,21 @@ so a rename (`{name}`) is checked like a permission edit:
 A `PermissionSource` that returns role names keeps returning the old name after a rename; update
 the source's mapping in the same change.
 
+### RBAC permission sources
+
+`createAccess({sources})` adds `PermissionSource`s (IdP or ABAC lookups) whose `getGrants` returns
+`roles`, `permissions`, and `deny`. When `getGrants` throws, the source's `staleOnFailure` applies
+(default `"deny"`: drop its additive grants, keep local `user.roles`). Under every policy:
+
+- The last `deny` set a source returned for a user stays in force while the source is down. It is
+  kept apart from the grant caches, so `invalidateCache` (every role edit) and permission-cache
+  eviction do not lift it. A later successful fetch without `deny` clears it.
+- A permission set resolved while any source was failing is not cached, so recovery takes effect
+  on the next check.
+- A process that never fetched the user's grants (a new instance) has no last-known deny. It
+  resolves local roles without the source's `deny`, unless the source sets
+  `failClosedWhenDenyUnknown: true`; then the check throws 503 `Permission source unavailable`.
+
 ## Request Validation
 
 @terreno/api provides runtime validation of incoming requests against OpenAPI schemas using [AJV](https://ajv.js.org/). Validation is opt-in and can be enabled globally or per-route.

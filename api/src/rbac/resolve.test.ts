@@ -387,4 +387,141 @@ describe("createPermissionResolver", () => {
     const refreshed = await resolver.resolvePermissionsForUser(userA);
     expect(refreshed.todo).toEqual(["read"]);
   });
+
+  describe("deny-capable sources during an outage", () => {
+    const seedWriter = async () => {
+      await setupDb();
+      const RbacRole = createRbacRoleModel(mongoose.connection);
+      await RbacRole.seedDefaults({statements: appStatements});
+      await RbacRole.findOneAndUpdate(
+        {name: "writer"},
+        {$set: {displayName: "Writer", name: "writer", permissions: {todo: ["read", "update"]}}},
+        {upsert: true}
+      );
+      return RbacRole;
+    };
+
+    const flakyDenySource = (
+      overrides: Partial<PermissionSource> = {}
+    ): {source: PermissionSource; setDown: (down: boolean) => void} => {
+      let down = false;
+      return {
+        setDown: (next: boolean): void => {
+          down = next;
+        },
+        source: {
+          getGrants: async () => {
+            if (down) {
+              throw new Error("idp down");
+            }
+            return {deny: {todo: ["update"]}};
+          },
+          name: "idp-deny",
+          staleOnFailure: "deny",
+          ...overrides,
+        },
+      };
+    };
+
+    it("keeps the last-known deny after invalidateCache during an outage", async () => {
+      const RbacRole = await seedWriter();
+      const {source, setDown} = flakyDenySource();
+      const resolver = createPermissionResolver({
+        cacheTtlMs: 0,
+        rbacRoleModel: RbacRole,
+        sources: [source],
+        statements: appStatements,
+      });
+      const user = createTestUser({roles: ["writer"]});
+      expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read"]);
+
+      setDown(true);
+      resolver.invalidateCache();
+      expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read"]);
+      resolver.invalidateCache({userId: user.id});
+      expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read"]);
+      expect((await resolver.resolvePermissionsForUserUncached(user)).todo).toEqual(["read"]);
+    });
+
+    it("keeps the last-known deny when other users churn the cache", async () => {
+      const RbacRole = await seedWriter();
+      const {source, setDown} = flakyDenySource();
+      const resolver = createPermissionResolver({
+        cacheTtlMs: 0,
+        maxCacheEntries: 1,
+        rbacRoleModel: RbacRole,
+        sources: [source],
+        statements: appStatements,
+      });
+      const userA = createTestUser({roles: ["writer"]});
+      expect((await resolver.resolvePermissionsForUser(userA)).todo).toEqual(["read"]);
+
+      setDown(true);
+      await resolver.resolvePermissionsForUser(createTestUser({roles: ["writer"]}));
+      expect((await resolver.resolvePermissionsForUser(userA)).todo).toEqual(["read"]);
+    });
+
+    it("does not cache a set computed while a source was failing", async () => {
+      const RbacRole = await seedWriter();
+      const {source, setDown} = flakyDenySource();
+      const resolver = createPermissionResolver({
+        cacheTtlMs: 60_000,
+        rbacRoleModel: RbacRole,
+        sources: [{...source, ttlMs: 0}],
+        statements: appStatements,
+      });
+      const user = createTestUser({roles: ["writer"]});
+
+      setDown(true);
+      expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read", "update"]);
+      setDown(false);
+      expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read"]);
+    });
+
+    it("fails closed on a cold failure when the source opts in", async () => {
+      const RbacRole = await seedWriter();
+      const {source, setDown} = flakyDenySource({failClosedWhenDenyUnknown: true});
+      const resolver = createPermissionResolver({
+        cacheTtlMs: 0,
+        rbacRoleModel: RbacRole,
+        sources: [source],
+        statements: appStatements,
+      });
+      setDown(true);
+      await expect(
+        resolver.resolvePermissionsForUser(createTestUser({roles: ["writer"]}))
+      ).rejects.toMatchObject({status: 503, title: "Permission source unavailable"});
+    });
+
+    it("lifts the deny once the source stops returning it, and keeps additive-only sources open", async () => {
+      const RbacRole = await seedWriter();
+      let deny = true;
+      let down = false;
+      const source: PermissionSource = {
+        getGrants: async () => {
+          if (down) {
+            throw new Error("idp down");
+          }
+          return deny ? {deny: {todo: ["update"]}} : {permissions: {todo: ["list"]}};
+        },
+        name: "idp-changing",
+        staleOnFailure: "deny",
+      };
+      const resolver = createPermissionResolver({
+        cacheTtlMs: 0,
+        rbacRoleModel: RbacRole,
+        sources: [{...source, ttlMs: 0}],
+        statements: appStatements,
+      });
+      const user = createTestUser({roles: ["writer"]});
+      expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read"]);
+      deny = false;
+      expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(
+        expect.arrayContaining(["read", "update", "list"])
+      );
+      down = true;
+      resolver.invalidateCache();
+      expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read", "update"]);
+    });
+  });
 });

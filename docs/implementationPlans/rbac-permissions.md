@@ -909,7 +909,7 @@ behavior is per-source `staleOnFailure` (default `"deny"`):
 
 | Policy | Behavior |
 |---|---|
-| `"deny"` (default) | Omit this source's additive grants (`roles`, `permissions`) for the request. Local `user.roles` and other sources still apply. If a prior fetch cached a `deny` set, keep applying that last-known deny so IdP/ABAC restrictions do not lift while the source is down. Revoked upstream *elevations* cannot linger because a dependency is down. |
+| `"deny"` (default) | Omit this source's additive grants (`roles`, `permissions`) for the request. Local `user.roles` and other sources still apply. If a prior fetch returned a `deny` set, keep applying that last-known deny so IdP/ABAC restrictions do not lift while the source is down; cache invalidation and eviction do not drop it, and a set resolved during a failure is not cached. With no last-known deny (cold process), local roles apply unless the source sets `failClosedWhenDenyUnknown: true`, which throws 503. Revoked upstream *elevations* cannot linger because a dependency is down. |
 | `"use-stale-bounded"` | Reuse the last successful grants only if younger than `staleMaxAgeMs` (hard cap). Suitable for read-only hints, not elevation. |
 | `"use-stale"` | Reuse last successful grants until TTL expiry. **Not permitted** for sources that can grant roles/permissions beyond what local roles already provide — elevation paths must fail closed. |
 

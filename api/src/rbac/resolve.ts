@@ -2,6 +2,7 @@ import {createAccessControl} from "better-auth/plugins/access";
 import {DateTime} from "luxon";
 
 import type {User} from "../auth";
+import {APIError} from "../errors";
 import {logger} from "../logger";
 import {getOrgContext} from "../orgs/orgContext";
 import {unionPermissionSets} from "./permissionUtils";
@@ -17,6 +18,11 @@ interface CacheEntry {
 interface SourceCacheEntry {
   grants: PermissionSourceGrants | null;
   fetchedAt: number;
+}
+
+interface SourceFetchResult {
+  grants: PermissionSourceGrants | null;
+  failed: boolean;
 }
 
 const DEFAULT_CACHE_TTL_MS = 30_000;
@@ -64,6 +70,11 @@ export const createPermissionResolver = <S extends Statements>(args: {
   const ac = createAccessControl(statements);
   const permissionCache = new Map<string, CacheEntry>();
   const sourceCache = new Map<string, Map<string, SourceCacheEntry>>();
+  // Last-known deny set per user and source from the last successful fetch. Kept apart from the
+  // grant caches so role edits (invalidateCache) and permission-cache eviction cannot lift an
+  // IdP/ABAC restriction while its source is down. Only users with a deny set (or a source that
+  // opts into failClosedWhenDenyUnknown, which needs a "no deny" marker) take an entry.
+  const denyPosture = new Map<string, Map<string, PermissionSet | null>>();
 
   const enforceCacheBound = (): void => {
     const now = DateTime.now().toMillis();
@@ -93,6 +104,33 @@ export const createPermissionResolver = <S extends Statements>(args: {
     permissionCache.delete(cacheKey);
     permissionCache.set(cacheKey, entry);
     enforceCacheBound();
+  };
+
+  const recordDenyPosture = (
+    userId: string,
+    source: PermissionSource,
+    grants: PermissionSourceGrants | null
+  ): void => {
+    const deny = grants?.deny && Object.keys(grants.deny).length > 0 ? grants.deny : null;
+    const userPosture = denyPosture.get(userId);
+    if (!deny && !source.failClosedWhenDenyUnknown) {
+      userPosture?.delete(source.name);
+      if (userPosture?.size === 0) {
+        denyPosture.delete(userId);
+      }
+      return;
+    }
+    const next = userPosture ?? new Map<string, PermissionSet | null>();
+    next.set(source.name, deny);
+    denyPosture.delete(userId);
+    denyPosture.set(userId, next);
+    while (denyPosture.size > maxCacheEntries) {
+      const oldestUserId = denyPosture.keys().next().value;
+      if (oldestUserId === undefined) {
+        break;
+      }
+      denyPosture.delete(oldestUserId);
+    }
   };
 
   const invalidateCache = (invalidateArgs?: {userId?: string}): void => {
@@ -162,6 +200,7 @@ export const createPermissionResolver = <S extends Statements>(args: {
   };
 
   const grantsAfterSourceFailure = (
+    user: User,
     source: PermissionSource,
     cached: SourceCacheEntry | undefined,
     now: number
@@ -170,27 +209,44 @@ export const createPermissionResolver = <S extends Statements>(args: {
     if (stale) {
       return stale;
     }
-    return denyOnlyFromCache(cached);
+    if (cached) {
+      return denyOnlyFromCache(cached);
+    }
+    const userPosture = denyPosture.get(user.id);
+    if (userPosture?.has(source.name)) {
+      const deny = userPosture.get(source.name);
+      return deny ? {deny} : null;
+    }
+    if (source.failClosedWhenDenyUnknown) {
+      throw new APIError({
+        detail: `Permission source ${source.name} failed before its deny set was known`,
+        status: 503,
+        title: "Permission source unavailable",
+      });
+    }
+    return null;
   };
 
   const fetchSourceGrants = async (
     user: User,
     source: PermissionSource,
     shouldCache = true
-  ): Promise<PermissionSourceGrants | null> => {
+  ): Promise<SourceFetchResult> => {
     const now = DateTime.now().toMillis();
     const cached = sourceCache.get(user.id)?.get(source.name);
 
     if (!shouldCache) {
       try {
-        return await source.getGrants({user});
+        const grants = await source.getGrants({user});
+        recordDenyPosture(user.id, source, grants);
+        return {failed: false, grants};
       } catch (error) {
         logger.warn("Permission source refresh failed during uncached resolution", {
           error: error instanceof Error ? error.message : String(error),
           policy: source.staleOnFailure ?? "deny",
           source: source.name,
         });
-        return grantsAfterSourceFailure(source, cached, now);
+        return {failed: true, grants: grantsAfterSourceFailure(user, source, cached, now)};
       }
     }
 
@@ -202,20 +258,24 @@ export const createPermissionResolver = <S extends Statements>(args: {
     const cachedAfterTouch = userSources.get(source.name);
 
     if (cachedAfterTouch && now - cachedAfterTouch.fetchedAt < ttlMs) {
-      return cachedAfterTouch.grants;
+      return {failed: false, grants: cachedAfterTouch.grants};
     }
 
     try {
       const grants = await source.getGrants({user});
       userSources.set(source.name, {fetchedAt: now, grants});
-      return grants;
+      recordDenyPosture(user.id, source, grants);
+      return {failed: false, grants};
     } catch (error) {
       logger.warn("Permission source refresh failed", {
         error: error instanceof Error ? error.message : String(error),
         policy: source.staleOnFailure ?? "deny",
         source: source.name,
       });
-      return grantsAfterSourceFailure(source, cachedAfterTouch, now);
+      return {
+        failed: true,
+        grants: grantsAfterSourceFailure(user, source, cachedAfterTouch, now),
+      };
     }
   };
 
@@ -235,9 +295,11 @@ export const createPermissionResolver = <S extends Statements>(args: {
     const roleNames = [...getUserRoles(user)];
     const permissionSets: PermissionSet[] = [];
     const sourceResults = new Map<string, PermissionSourceGrants | null>();
+    let anySourceFailed = false;
 
     for (const source of sources) {
-      const grants = await fetchSourceGrants(user, source, shouldCache);
+      const {failed, grants} = await fetchSourceGrants(user, source, shouldCache);
+      anySourceFailed = anySourceFailed || failed;
       sourceResults.set(source.name, grants);
       if (!grants) {
         continue;
@@ -269,7 +331,8 @@ export const createPermissionResolver = <S extends Statements>(args: {
       }
     }
 
-    if (shouldCache) {
+    // A set computed during a source outage is not cached, so recovery takes effect at once.
+    if (shouldCache && !anySourceFailed) {
       rememberPermissions(cacheKey, {
         expiresAt: DateTime.now().plus({milliseconds: cacheTtlMs}).toMillis(),
         permissions,

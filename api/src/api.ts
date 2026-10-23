@@ -1329,9 +1329,17 @@ const _buildModelRouter = <T>(
         });
       }
       // For PATCHing an item by ID, we need to merge the objects so we don't override the _id or
-      // other parts of the subdocument.
+      // other parts of the subdocument. Merge into a detached copy: the array elements are the
+      // loaded document's live subdocuments, and only the body that survives the hooks below
+      // may change the document.
       if (operation === "PATCH" && isValidObjectId(itemId)) {
-        Object.assign(array[index] as object, req.body[field]);
+        const current = array[index] as {$clone?: () => object} | object;
+        const detached =
+          typeof (current as {$clone?: unknown}).$clone === "function"
+            ? (current as {$clone: () => object}).$clone()
+            : {...current};
+        Object.assign(detached, req.body[field]);
+        array[index] = detached;
       } else if (operation === "PATCH") {
         // For PATCHing a string array, we can replace the whole object.
         array[index] = req.body[field];

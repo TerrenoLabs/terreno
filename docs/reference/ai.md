@@ -14,6 +14,7 @@ AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI 
 - [Models](#models)
 - [Route registrars](#route-registrars)
 - [AiApp plugin](#aiapp-plugin)
+- [Cost and abuse limits](#cost-and-abuse-limits)
 - [LangfuseApp plugin](#langfuseapp-plugin)
 - [Observability](#observability)
 - [Durable agent harness](#durable-agent-harness)
@@ -494,6 +495,45 @@ new AiApp({
 | `titleModelId` | Cheaper model for conversation title generation |
 | `openApiOptions` | Passed to route OpenAPI builders |
 | `projects` | Default `true`. `false` skips the `/gpt/projects` routes, so `AiApp` never registers the `Project` model |
+
+## Cost and abuse limits
+
+`@terreno/ai` sets no per-user limit on concurrent turns, tokens, or spend for `/gpt/prompt`
+or the headless turn action (`POST /gpt/histories/:id/turn`). Any signed-in user can start as
+many turns as the host lets through, and each one calls the model with the app's server-side
+key unless the request brings its own `x-ai-api-key`.
+
+A reply keeps running after the client disconnects. This is by design: `/gpt/prompt` saves the
+reply as a `streaming` prompt so a reload can resume it through `GET /gpt/histories/:id/stream`,
+and the turn action finishes and saves the turn whether or not the client waits. Closing the tab
+does not stop the model call or its cost.
+
+Before exposing AI routes to users, do both:
+
+1. Enable HTTP rate limiting on `TerrenoApp`. It is off unless you pass `rateLimit`. AI routes
+   fall in the `api` bucket, which counts requests, not tokens:
+
+   ```typescript
+   new TerrenoApp({
+     userModel: User,
+     rateLimit: {
+       store: "redis", // "memory" (default) | "redis" | "mongo"; use a shared store with more than one instance
+       trustProxy: 1, // behind a load balancer such as Cloud Run
+       limits: {
+         windowMs: 15 * 60 * 1000, // default 15 minutes
+         apiMax: 600, // default; lower it to bound chat turns per user or IP
+         authMax: 20, // default
+       },
+     },
+   });
+   ```
+
+   For a tighter limit on chat alone, add `createRouteRateLimitMiddleware({name, max, windowMs,
+   store, keyBy})` from `@terreno/api` in front of the AI routes. See
+   [Rate limiting](../how-to/rate-limiting.md).
+2. Set a budget, quota, or spend alert with the model provider (for example a Google Cloud
+   budget alert and Vertex AI or Gemini API quotas), so a runaway caller or bug is caught by the
+   provider even when the app's own limits are loose.
 
 ## LangfuseApp plugin
 

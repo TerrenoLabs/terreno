@@ -10,7 +10,8 @@ execute without conversation history.
 
 Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
 [`documentation contract`](references/documentation-contract.md),
-[`PR deployments`](references/pr-deployments.md), and
+[`PR deployments`](references/pr-deployments.md),
+[`testing plan`](references/testing-plan.md), and
 [`grilling procedure`](references/grilling.md) before acting. Follow grilling for every
 human decision until the answer is executable.
 
@@ -31,7 +32,10 @@ human decision until the answer is executable.
 1. **Reconstruct.** Resolve the repository's existing IP/task conventions from its
    instructions and nearby artifacts. If none exists, choose a colocated IP/task pair,
    record the new convention, and avoid creating a shared mutable index. Read prior state
-   and verify it against repository reality.
+   and verify it against repository reality. Resolve the testing spot: the e2e guide,
+   the regression-suite directory, and the smoke command, from the agent instructions'
+   `## Testing conventions` table or the testing-plan defaults. Read the e2e guide and
+   the suite files for the affected areas.
 2. **Read architecture docs.** Load the repository's architecture, domain, and operator
    docs for the affected area. Treat them as the current design. If docs are missing or
    contradict the code, the IP must resolve that in this invocation.
@@ -59,13 +63,21 @@ human decision until the answer is executable.
    compatibility/regression case). When the input is a PRD from `terreno-prd`, carry
    each success metric and guardrail into an acceptance criterion, grill each `TBD` as a
    human decision, and do not re-ask product decisions the PRD already settled.
+   Pair each UI or cross-process criterion with a planned e2e spec at the path and layer
+   the e2e guide prescribes, or record why it needs none. List the manual regression
+   cases the feature adds or changes, each meeting the testing-plan regression-step bar.
 8. **Write.** Produce the IP and a dependency-aware tracer-bullet task list. Each task
    names files/seams, acceptance criteria, blockers, verification, docs to create or
    update, and relevant supporting skills when discoverable. Docs updates follow the
-   documentation contract and are not deferred.
+   documentation contract and are not deferred. The IP always has both testing-plan
+   sections, `## E2E tests` and `## Regression cases`, in the testing-plan table
+   formats; either may be `None — <reason>`, neither may be missing. Every E2E row
+   names the task that writes it. When no file exists at the resolved e2e guide path,
+   add a task that writes it there, ahead of every task that writes a planned spec.
 9. **Approve.** Post the standalone approval brief from grilling: an orientation
    paragraph on where the repository is and where this change takes it, optional
-   background on current state, the idea, the plan, then the unbounded Decisions table
+   background on current state, the idea, the plan with its `E2E:` and `Regression:`
+   lines, then the unbounded Decisions table
    pairing each settled human decision with the question that prompted it. Skip that
    table when grilling settled none. The brief must be readable without the IP, the
    ticket, or the grilling history. Set the repository's approved status only after human
@@ -85,6 +97,7 @@ none is universally required.
 - Research findings and recorded assumptions (not chain-of-thought)
 - Decision log/human gates, listed in full with their prompting questions when any exist
 - Acceptance-criterion → verification mapping
+- `## E2E tests` and `## Regression cases` sections, each with rows or `None — <reason>`
 - Selected supporting skills
 - Docs files named on each task
 - Updated execution state and structured Grow result
@@ -92,6 +105,7 @@ none is universally required.
 ## Success conditions
 
 - IP/task artifacts are approved, implementation-ready, dependency-aware, and testable.
+- The IP has both testing-plan sections, and every E2E row names its writing task.
 - A fresh Pick invocation can identify the next unblocked task, applicable criteria,
   decisions, supporting skills, and risks from durable artifacts.
 - A reviewer with no prior context can approve or push back from the brief alone.

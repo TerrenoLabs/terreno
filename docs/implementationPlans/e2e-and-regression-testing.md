@@ -117,7 +117,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
 
 ### Phase 1 — Lifecycle contract (terreno-planning plugin)
 
-- [ ] **T1** — Define the testing-plan contract and require it in Grow
+- [x] **T1** — Define the testing-plan contract and require it in Grow
   - Depends on: none
   - Files: plugins/terreno-planning/references/testing-plan.md, plugins/terreno-planning/skills/terreno-1-grow/SKILL.md, plugins/terreno-planning/skills/terreno-1-grow/references/grilling.md, scripts/planning/lifecycleSkills.ts, scripts/planning/lifecycleSkills.test.ts, generated copies under plugins/terreno-claude/ and skills/
   - Delivers: `references/testing-plan.md` defines:

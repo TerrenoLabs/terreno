@@ -1,8 +1,11 @@
 import {describe, it} from "bun:test";
-import {readFileSync} from "node:fs";
-import {resolve} from "node:path";
+import {cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {dirname, join, resolve} from "node:path";
 import {assert} from "chai";
 import {
+  PORTABILITY_MARKERS,
+  readTestingPlanContract,
   validateAsyncReviewBotsContract,
   validateClaudePluginHost,
   validateCodexPluginHost,
@@ -13,6 +16,7 @@ import {
   validatePrDeploymentsContract,
   validateProductCiContract,
   validateStageContent,
+  validateTestingPlanContract,
 } from "./lifecycleSkills.ts";
 
 const ROOT_DIRECTORY = resolve(import.meta.dir, "../..");
@@ -32,16 +36,48 @@ const readGrilling = (): string =>
     "utf8"
   );
 
+const readTestingPlan = (): string =>
+  readFileSync(
+    resolve(ROOT_DIRECTORY, "plugins/terreno-planning/references/testing-plan.md"),
+    "utf8"
+  );
+
+const GROW_DEFINITION = {
+  directory: "terreno-1-grow",
+  nextMarkers: ["next: pick", "next: grow", "next: null"],
+  stage: "grow" as const,
+};
+
 const validateGrilling = (grillingContent: string): string[] =>
   validateStageContent({
     content: readStage("terreno-1-grow"),
-    definition: {
-      directory: "terreno-1-grow",
-      nextMarkers: ["next: pick", "next: grow", "next: null"],
-      stage: "grow",
-    },
+    definition: GROW_DEFINITION,
     grillingContent,
   });
+
+/** Paths validateLifecyclePlugin reads, copied so a fixture can drop one file. */
+const PLUGIN_FIXTURE_PATHS = [
+  "plugins",
+  "skills-lock.json",
+  ".github/PULL_REQUEST_TEMPLATE.md",
+  ".cursor-plugin",
+  ".agents/plugins",
+  ".claude-plugin",
+  "CONTRIBUTING.md",
+];
+
+const withPluginFixture = (run: (rootDirectory: string) => void): void => {
+  const rootDirectory = mkdtempSync(join(tmpdir(), "lifecycle-skills-"));
+  try {
+    for (const path of PLUGIN_FIXTURE_PATHS) {
+      mkdirSync(dirname(join(rootDirectory, path)), {recursive: true});
+      cpSync(join(ROOT_DIRECTORY, path), join(rootDirectory, path), {recursive: true});
+    }
+    run(rootDirectory);
+  } finally {
+    rmSync(rootDirectory, {force: true, recursive: true});
+  }
+};
 
 describe("lifecycle skill architecture", (): void => {
   it("validates the real plugin lifecycle", (): void => {
@@ -585,6 +621,85 @@ describe("lifecycle skill architecture", (): void => {
 
     assert.isTrue(errors.some((error) => error.includes("standalone approval brief")));
     assert.isTrue(errors.some((error) => error.includes("question that prompted them")));
+  });
+
+  for (const [search, replacement, expected] of [
+    [
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "terreno-1-grow: Grow must load the testing-plan contract",
+    ],
+    [
+      "## E2E tests",
+      "an e2e note",
+      "terreno-1-grow: Grow must require the IP section ## E2E tests",
+    ],
+    [
+      "## Regression cases",
+      "a regression note",
+      "terreno-1-grow: Grow must require the IP section ## Regression cases",
+    ],
+    [
+      "neither may be missing",
+      "either may be skipped",
+      "terreno-1-grow: Grow must forbid omitting a testing-plan section",
+    ],
+  ] as const) {
+    it(`rejects Grow without ${search}`, (): void => {
+      const content = readStage("terreno-1-grow").replaceAll(search, replacement);
+
+      assert.deepEqual(validateStageContent({content, definition: GROW_DEFINITION}), [expected]);
+    });
+  }
+
+  it("rejects an approval brief without E2E and Regression lines", (): void => {
+    const content = readGrilling()
+      .replaceAll("E2E: <", "Specs: <")
+      .replaceAll("Regression: <", "Manual: <");
+
+    assert.deepEqual(validateGrilling(content), [
+      "grilling: the approval brief plan must include the E2E: line",
+      "grilling: the approval brief plan must include the Regression: line",
+    ]);
+  });
+
+  it("accepts the real testing-plan contract", (): void => {
+    assert.deepEqual(validateTestingPlanContract(readTestingPlan()), []);
+  });
+
+  it("rejects a plugin whose testing-plan contract is missing", (): void => {
+    withPluginFixture((rootDirectory): void => {
+      const pluginDirectory = join(rootDirectory, "plugins/terreno-planning");
+      assert.deepEqual(validateLifecyclePlugin({rootDirectory}), []);
+
+      rmSync(join(pluginDirectory, "references/testing-plan.md"));
+
+      assert.isUndefined(readTestingPlanContract({pluginDirectory}));
+      assert.deepEqual(validateLifecyclePlugin({rootDirectory}), [
+        "testing-plan contract is missing: references/testing-plan.md",
+      ]);
+    });
+  });
+
+  it("rejects a testing-plan contract that drops its tables or rules", (): void => {
+    const content = readTestingPlan()
+      .replaceAll("| ID | Spec or flow | Layer | Proves | Written in |", "| Spec | Notes |")
+      .replaceAll("## Deferral rule", "## Later")
+      .replaceAll("predates contract", "is old");
+
+    assert.deepEqual(validateTestingPlanContract(content), [
+      "testing-plan contract must define | ID | Spec or flow | Layer | Proves | Written in |",
+      "testing-plan contract must define ## Deferral rule",
+      "testing-plan contract must define predates contract",
+    ]);
+  });
+
+  it("keeps the testing-plan contract portable", (): void => {
+    const content = readTestingPlan();
+
+    for (const marker of PORTABILITY_MARKERS) {
+      assert.notInclude(content, marker);
+    }
   });
 
   it("accepts the real grilling approval brief", (): void => {

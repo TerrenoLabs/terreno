@@ -141,7 +141,34 @@ const TASTE_UNBOUNDED_LOOP_PATTERNS = [
   /wait until all CI is green/i,
 ];
 
-const PORTABILITY_MARKERS = [
+const TESTING_PLAN_SECTIONS = ["## E2E tests", "## Regression cases"] as const;
+
+const TESTING_PLAN_REQUIRED_PHRASES = [
+  "## Standardized spot",
+  "docs/testing/e2e.md",
+  "docs/regression/",
+  "## Testing conventions",
+  "`E2E guide`",
+  "`Regression suites`",
+  "`Smoke command`",
+  "| ID | Spec or flow | Layer | Proves | Written in |",
+  "| ID | Case | Steps | Expected | Platforms | Automated by | Added |",
+  "None — <reason>",
+  "<AREA>-new-<n>",
+  "Destination:",
+  "## Suite file format",
+  "Area:",
+  "Last full run:",
+  "<AREA>-NNN",
+  "next free ID",
+  "## Deferral rule",
+  "`deferred`",
+  "## Regression-step bar",
+  "## Legacy rule",
+  "predates contract",
+] as const;
+
+export const PORTABILITY_MARKERS = [
   "@terreno/",
   "example-frontend",
   "admin-frontend",
@@ -225,6 +252,17 @@ export const validateStageContent = ({
     }
     if (!content.includes("question that prompted")) {
       errors.push(`${prefix}: Grow decisions must carry the question that prompted them`);
+    }
+    if (!content.includes("../../references/testing-plan.md")) {
+      errors.push(`${prefix}: Grow must load the testing-plan contract`);
+    }
+    for (const section of TESTING_PLAN_SECTIONS) {
+      if (!content.includes(section)) {
+        errors.push(`${prefix}: Grow must require the IP section ${section}`);
+      }
+    }
+    if (!content.includes("neither may be missing")) {
+      errors.push(`${prefix}: Grow must forbid omitting a testing-plan section`);
     }
     if (grillingContent) {
       errors.push(...validateGrillingProcedure(grillingContent));
@@ -475,7 +513,36 @@ const validateGrillingProcedure = (content: string): string[] => {
     errors.push("grilling: the Decisions table must stay unbounded");
   }
 
+  for (const label of ["E2E:", "Regression:"]) {
+    if (!content.includes(`${label} <`)) {
+      errors.push(`grilling: the approval brief plan must include the ${label} line`);
+    }
+  }
+
   return errors;
+};
+
+/** Validates the testing-plan reference; `undefined` means the file is missing. */
+export const validateTestingPlanContract = (content: string | undefined): string[] => {
+  if (content === undefined) {
+    return ["testing-plan contract is missing: references/testing-plan.md"];
+  }
+
+  return TESTING_PLAN_REQUIRED_PHRASES.filter((phrase) => !content.includes(phrase)).map(
+    (phrase) => `testing-plan contract must define ${phrase}`
+  );
+};
+
+interface ReadTestingPlanContractOptions {
+  pluginDirectory: string;
+}
+
+/** Reads the plugin's testing-plan reference, or `undefined` when the file is missing. */
+export const readTestingPlanContract = ({
+  pluginDirectory,
+}: ReadTestingPlanContractOptions): string | undefined => {
+  const path = join(pluginDirectory, "references/testing-plan.md");
+  return existsSync(path) ? readFileSync(path, "utf8") : undefined;
 };
 
 export const validateDocumentationContract = (content: string): string[] => {
@@ -1000,6 +1067,8 @@ export const validateLifecyclePlugin = ({
     "utf8"
   );
   errors.push(...validateDocumentationContract(documentationContract));
+
+  errors.push(...validateTestingPlanContract(readTestingPlanContract({pluginDirectory})));
 
   const productCi = readFileSync(join(pluginDirectory, "references/product-ci.md"), "utf8");
   errors.push(...validateProductCiContract(productCi));

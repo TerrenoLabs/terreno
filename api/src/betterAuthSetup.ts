@@ -873,18 +873,20 @@ export const mountBetterAuthRoutes = (
 };
 
 /**
- * Gets the MongoDB client from the mongoose connection.
+ * Gets a MongoDB client view whose db() is the mongoose connection's database (its dbName).
  */
 export const getMongoClientFromMongoose = (): MongoClientLike => {
   const connection = mongoose.connection;
-  const client = (connection as unknown as {client?: MongoClientLike}).client;
+  const client = (connection as unknown as {client?: {db: (dbName?: string) => Db}}).client;
   if (!client) {
     throw new APIError({
       status: 500,
       title: "Mongoose is not connected. Ensure MongoDB connection is established first.",
     });
   }
-  return client;
+  // Use the connection's database (mongoose's dbName option), not the URI default, so Better
+  // Auth's collections live beside the app's models.
+  return {db: (): Db => client.db(connection.name || undefined)};
 };
 
 /**

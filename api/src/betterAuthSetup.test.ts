@@ -1426,6 +1426,19 @@ describe("getMongoClientFromMongoose", () => {
     expect(client).toBeDefined();
   });
 
+  it("returns the connection's database, not the connection string's default", () => {
+    // A dbName passed to mongoose.connect only sets the connection name; the client's
+    // default database still comes from the URI.
+    const connection = mongoose.connection as unknown as {name: string};
+    const originalName = connection.name;
+    connection.name = "terreno-isolated-dbname-test";
+    try {
+      expect(getMongoClientFromMongoose().db().databaseName).toBe("terreno-isolated-dbname-test");
+    } finally {
+      connection.name = originalName;
+    }
+  });
+
   it("throws when the mongoose connection has no client", () => {
     const connection = mongoose.connection as unknown as {client?: unknown};
     const originalClient = connection.client;

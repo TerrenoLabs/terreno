@@ -149,7 +149,7 @@ const config: BetterAuthConfig = {
 
 | Terreno default | Set from | What overriding it drops |
 | --- | --- | --- |
-| `database` | MongoDB adapter on the app's connection | Users and sessions in the app's database |
+| `database` | MongoDB adapter on the app's connection, in the connection's database (the `dbName` passed to `mongoose.connect`, else the URI's database) | Users and sessions in the app's database |
 | `emailAndPassword.enabled` | `true` | Email/password sign-in |
 | `emailAndPassword.revokeSessionsOnPasswordReset` | `true` | Signing out other sessions after a password reset |
 | `emailAndPassword.sendResetPassword` | `sendMail` | Terreno's reset email |
@@ -192,6 +192,8 @@ const server = app.start();
 ``````
 
 `RealtimeApp` (registered directly or through `TerrenoApp({realtime})`) uses this plugin's Better Auth instance for socket sessions. Do not build a second instance with `createBetterAuth` for sockets.
+
+`BetterAuthApp` keeps Better Auth's `user`, `account`, `session`, and `verification` collections in the mongoose connection's database, so a `dbName` passed to `mongoose.connect` (the example backend's `MONGO_DB_NAME`) isolates them along with your models. Earlier releases wrote them to the connection string's default database instead. If your app connects with a `dbName` that differs from the URI's database, copy those four collections into the `dbName` database when you upgrade, or users must sign up and sign in again.
 
 ### 4. Update User Model
 

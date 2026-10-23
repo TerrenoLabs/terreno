@@ -175,11 +175,12 @@ export const useProvisionalConsent = ({
   baseUrl,
   userId,
 }: {
-  api: ProvisionalConsentApi;
+  /** The consumer's RTK Query api. Typed loosely, like `ConsentNavigator`, so any app api fits. */
+  api: unknown;
   baseUrl?: string;
   userId: string;
 }): UseProvisionalConsentResult => {
-  const enhancedApi = getEnhancedApi(api, baseUrl || "");
+  const enhancedApi = getEnhancedApi(api as ProvisionalConsentApi, baseUrl || "");
   const {data, error, isLoading, refetch} = enhancedApi.useGetConsentStatusQuery(userId);
   const [signMutation, {isLoading: isSigning}] = enhancedApi.useSignConsentProvisionallyMutation();
   const statuses = Array.isArray(data) ? data : (data?.data ?? []);

@@ -228,7 +228,7 @@ testIDs: `provisional-consent-signer`, `provisional-consent-row-{formId}`, `prov
   - Verification: `bun test --only-failures ui/src/ProvisionalConsentSigner.test.tsx ui/src/useProvisionalConsent.test.ts`
   - Skills: terreno:terreno-ui
 
-- [ ] **T12** — Wire provisional signing into the example apps with E2E coverage
+- [x] **T12** — Wire provisional signing into the example apps with E2E coverage
   - Depends on: T4, T5, T11
   - Files: example-backend/src/server.ts, example-frontend/app/consent-sign/[userId].tsx (new), example-frontend/app/admin/consent-responses/[id].tsx, example-frontend/e2e/provisionalConsent.spec.ts (new), example-frontend/e2e/helpers/consentForms.ts, example-frontend/e2e/fixtures/testUsers.ts
   - Criteria: `ConsentApp` gets `accessControl: access`. `/consent-sign/[userId]` (outside `/admin`, so non-admin staff can reach it) renders `ProvisionalConsentSigner`. The admin response detail links to it. E2E cases:

@@ -16,7 +16,6 @@ import {Text} from "./Text";
 import {TextField} from "./TextField";
 import {applyConsentVariables, detectLocale, resolveConsentLocale} from "./useConsentForms";
 import {
-  type ProvisionalConsentApi,
   type ProvisionalConsentResponse,
   type ProvisionalConsentStatusRow,
   useProvisionalConsent,
@@ -24,7 +23,7 @@ import {
 
 export interface ProvisionalConsentSignerProps {
   /** The consumer's RTK Query api, as passed to `ConsentNavigator`. */
-  api: ProvisionalConsentApi;
+  api: unknown;
   baseUrl?: string;
   /** The user whose consent forms are listed and signed on their behalf. */
   userId: string;

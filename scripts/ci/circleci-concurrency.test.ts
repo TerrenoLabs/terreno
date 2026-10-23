@@ -29,7 +29,15 @@ const E2E_SHARDS: Record<string, string[]> = {
     "harness-intake",
   ],
   app: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
-  auth: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],
+  auth: [
+    "login",
+    "signup",
+    "consents",
+    "provisionalConsent",
+    "forgot-password",
+    "reset-password",
+    "verify-email",
+  ],
   syncdb: [
     "syncdb-load-delta",
     "syncdb-offline",

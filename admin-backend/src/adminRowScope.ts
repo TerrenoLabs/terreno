@@ -7,9 +7,7 @@ import type {Model} from "mongoose";
  * here apply the same scope to routes that resolve one document by id.
  */
 export interface AdminRowScopeConfig {
-  // noExplicitAny: Model<T> is invariant; the admin panel must accept any document shape.
-  // biome-ignore lint/suspicious/noExplicitAny: Model<T> is invariant; the admin panel must accept any document shape.
-  model: Model<any>;
+  model: Pick<Model<unknown>, "exists" | "schema">;
   queryFilter?: (
     user?: User,
     query?: Record<string, unknown>

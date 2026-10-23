@@ -167,7 +167,10 @@ export type {
   PasswordCardProps,
   PasswordCardSubmission,
   SessionsCardProps,
+  TwoFactorEnrollment,
+  TwoFactorSettingsCardProps,
 } from "./security/securityTypes";
+export * from "./security/TwoFactorSettingsCard";
 export type {ParsedUserAgent, UserAgentDeviceType} from "./security/userAgent";
 export {describeUserAgent, parseUserAgent} from "./security/userAgent";
 export {OAuthButtons} from "./signUp/OAuthButtons";

@@ -301,3 +301,102 @@ export interface SessionsCardProps {
    */
   testID?: string;
 }
+
+/**
+ * What {@link TwoFactorSettingsCardProps.onStartEnroll} resolves: the TOTP branch of Better
+ * Auth's `twoFactor.enable()` data. `enable()` resolves `{method: "otp"}` or
+ * `{method: "totp", totpURI, backupCodes}`, so narrow it with `"totpURI" in data` first.
+ */
+export interface TwoFactorEnrollment {
+  /**
+   * The `otpauth://totp/...` URI the authenticator app scans. The card draws it as a QR code and
+   * shows its `secret` parameter for manual entry.
+   */
+  totpURI: string;
+  /** The single-use backup codes generated with the secret. */
+  backupCodes: string[];
+}
+
+/**
+ * Props for the TwoFactorSettingsCard component.
+ */
+export interface TwoFactorSettingsCardProps {
+  /**
+   * Whether two-factor authentication is on (Better Auth's `user.twoFactorEnabled`). False offers
+   * "Turn on"; true offers new backup codes and "Turn off". An enrollment or new-codes flow in
+   * progress keeps showing until the user finishes it, even after this flips.
+   */
+  enabled: boolean;
+  /**
+   * How many unused backup codes the user has left. Shown when given, with a warning below 3.
+   * Better Auth does not report this on the session; pass it when the app knows it.
+   */
+  backupCodesRemaining?: number;
+  /**
+   * Called after the password step (or at once when `requirePassword` is false) to start
+   * enrollment. Call `authClient.twoFactor.enable({password})`; throw when it resolves an `error`
+   * (the Better Auth client resolves `{data, error}` instead of rejecting) or data without a
+   * `totpURI` (the `{method: "otp"}` branch), else return `{totpURI, backupCodes}` from it.
+   * The same applies to every callback below. A rejection shows its message on the step.
+   */
+  onStartEnroll: (password?: string) => Promise<TwoFactorEnrollment>;
+  /**
+   * Called with the code the user typed from their authenticator app. Call
+   * `authClient.twoFactor.verifyTotp({code})`, which turns two-factor on once it succeeds. A
+   * rejection clears the code and shows its message.
+   */
+  onVerify: (code: string) => Promise<void>;
+  /**
+   * Called after the password step to replace the backup codes. Call
+   * `authClient.twoFactor.generateBackupCodes({password})` and return `data.backupCodes`. Hidden
+   * when not passed.
+   */
+  onRegenerateBackupCodes?: (password?: string) => Promise<string[]>;
+  /**
+   * Called after the password step and a destructive confirm. Call
+   * `authClient.twoFactor.disable({password})`. Hidden when not passed.
+   */
+  onDisable?: (password?: string) => Promise<void>;
+  /**
+   * Asks for the password before enrolling, replacing backup codes, and turning off. Better Auth
+   * requires it unless its two-factor plugin sets `allowPasswordless` (Terreno's `twoFactor`
+   * config does not), and even then for users who have a password; with `allowPasswordless`,
+   * pass `requirePassword={hasPassword}`. When false, callbacks get `undefined`.
+   * @default true
+   */
+  requirePassword?: boolean;
+  /**
+   * Whether the user has a password (a `"credential"` account; see `hasPasswordCredential`).
+   * With `requirePassword`, a user without one can't confirm, so Turn on, Get new backup codes
+   * and Turn off are disabled and the card asks them to set a password first.
+   * @default true
+   */
+  hasPassword?: boolean;
+  /**
+   * Digits in an authenticator code: Better Auth's `totpOptions.digits`. Defaults to the
+   * `digits` parameter of the enrollment's `totpURI`, else 6.
+   */
+  digits?: number;
+  /** Error text shown with `role="alert"`; overrides a rejection message. */
+  error?: string;
+  /**
+   * Disables Turn on, Get new backup codes, Turn off and the password step, for example while
+   * the user loads.
+   */
+  disabled?: boolean;
+  /**
+   * Heading text.
+   * @default "Two-factor authentication"
+   */
+  title?: string;
+  /**
+   * Text under the heading.
+   * @default "Sign in with a code from an authenticator app as well as your password."
+   */
+  description?: string;
+  /**
+   * Root testID; child testIDs are derived from it.
+   * @default "two-factor-settings-card"
+   */
+  testID?: string;
+}

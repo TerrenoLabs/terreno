@@ -12,7 +12,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
 - AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts), `BlocksView` (a whole-reply YAML document)
 - Authentication: `SocialLoginButton`, `LoginScreen`, `TwoFactorChallengeScreen`, `SignUpScreen`
-- Account security: `LinkedAccountsCard`, `PasswordCard`, `PasskeysCard`, `SessionsCard`
+- Account security: `LinkedAccountsCard`, `PasswordCard`, `PasskeysCard`, `SessionsCard`, `TwoFactorSettingsCard`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
 
@@ -1279,6 +1279,7 @@ Shared types (exported from the package root):
 | `LinkableProvider` | `{id, label?, iconName?}`. Branded ids (`google`, `github`, `apple`) get their brand name and icon; other ids show `label` (or the id) with a key icon. |
 | `AccountPasskey` | `{id, name?, authenticatorName?, createdAt?, lastUsedAt?, backedUp?}`. A subset of `@better-auth/passkey`'s `Passkey`, so `authClient.passkey.listUserPasskeys()` items pass as is. `authenticatorName` labels an unnamed passkey; a connected screen can fill it with `getAuthenticatorName(aaguid)` from `@better-auth/passkey` (ui does not depend on it). Better Auth stores no last-used time; pass `lastUsedAt` only when the app records one. |
 | `AccountSession` | `{id, token?, userAgent?, ipAddress?, location?, createdAt?, updatedAt?, expiresAt?}`. A subset of Better Auth's session, so `listSessions()` items pass as is. `location` is for a place name the app looks up; Better Auth has none. `updatedAt` moves only once per `session.updateAge` (a day by default), so the card labels it "Last refreshed", not "Last active". |
+| `TwoFactorEnrollment` | `{totpURI, backupCodes}`: the TOTP branch of Better Auth's `twoFactor.enable()` data. `enable()` resolves `{method: "otp"}` \| `{method: "totp", totpURI, backupCodes}`, so `onStartEnroll` narrows it with `"totpURI" in data` (see the example below). |
 
 `hasPasswordCredential(accounts)` returns whether the user has a password.
 `parseUserAgent(userAgent)` returns `{browser?, os?, deviceType}` (`deviceType` is `desktop`,
@@ -1544,6 +1545,133 @@ on iOS, signed in 3 days ago"), so two sessions on the same browser stay disting
 | Confirm, confirm, cancel | `sessions-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
 | No other sessions / empty | `sessions-card-no-others`, `sessions-card-empty` |
 | Error | `sessions-card-error` |
+
+### TwoFactorSettingsCard
+
+Turns two-factor authentication with an authenticator app (TOTP) on and off and manages backup
+codes. While off, the card shows "Status: Off" and **Turn on**, which walks through four steps
+("Step 1 of 4"):
+
+1. **Password.** Better Auth asks for it before `twoFactor.enable`.
+2. **Scan.** A QR code of `totpURI` (`react-native-qrcode-svg`, drawn black on white so it scans
+   in dark mode), plus the setup key (the URI's `secret`, in groups of four) with **Copy key**
+   for users who can't scan. `parseTotpSecret(totpURI)` and `parseTotpDigits(totpURI)` are
+   exported for connected screens.
+3. **Verify.** An `OtpField` with one cell per digit (the URI's `digits`, else 6). A full code submits itself; **Verify** does the
+   same. A rejection clears the code and shows the error. **Back** returns to the QR code.
+4. **Backup codes.** The codes from `onStartEnroll`, with **Copy** (one code per line, through
+   `expo-clipboard`) and **Download** on web (a `two-factor-backup-codes.txt` file) or **Share**
+   on native (the system share sheet). **Finish** stays disabled until the user checks "I saved
+   these backup codes". This step has no Cancel: two-factor is already on, and the codes are shown
+   only once.
+
+**Cancel** on steps 1–3 returns to the card without verifying. Better Auth keeps an unverified
+secret until the next `enable`, which replaces it; `user.twoFactorEnabled` stays false.
+
+While on, the card shows "Status: On", the backup codes left (when `backupCodesRemaining` is given,
+with a warning below 3), **Get new backup codes** (password, then the new codes with the same "I
+saved these" gate) and **Turn off** (password, then a destructive confirm `Modal`). A flow in
+progress keeps showing when `enabled` changes underneath it, so refetching the session in
+`onVerify` doesn't hide the backup codes.
+
+**Password and OAuth-only users.** Better Auth's `enable`, `generateBackupCodes`, `getTotpUri` and
+`disable` require the user's password unless its two-factor plugin sets `allowPasswordless`.
+Terreno's `twoFactor` config does not set it, so by default a user who signed up with a social
+provider must set a password first: pass `hasPassword={hasPasswordCredential(accounts)}` and the
+card disables **Turn on** (or, when two-factor is already on, **Get new backup codes** and
+**Turn off**) and says so. A consumer that adds `twoFactor({allowPasswordless: true})`
+through `config.plugins` passes `requirePassword={hasPassword}`: Better Auth still asks users who
+have a password for it, and skips it for the rest. Without `requirePassword` the password steps are
+skipped and the callbacks get `undefined`.
+
+``````typescript
+import {TwoFactorSettingsCard, hasPasswordCredential} from "@terreno/ui";
+
+<TwoFactorSettingsCard
+  enabled={Boolean(session.data?.user.twoFactorEnabled)}
+  hasPassword={hasPasswordCredential(accounts)}
+  onStartEnroll={async (password) => {
+    const {data, error} = await authClient.twoFactor.enable({password: password ?? ""});
+    // enable() resolves {method: "otp"} for the email/SMS OTP method; only TOTP has a URI.
+    if (error || !data || !("totpURI" in data)) {
+      throw new Error(error?.message ?? "Couldn't start two-factor setup.");
+    }
+    return {backupCodes: data.backupCodes, totpURI: data.totpURI};
+  }}
+  onVerify={async (code) => {
+    const {error} = await authClient.twoFactor.verifyTotp({code});
+    if (error) {
+      throw new Error(error.message ?? "That code didn't work.");
+    }
+  }}
+  onRegenerateBackupCodes={async (password) => {
+    const {data, error} = await authClient.twoFactor.generateBackupCodes({password: password ?? ""});
+    if (error || !data) {
+      throw new Error(error?.message ?? "Couldn't create new backup codes.");
+    }
+    return data.backupCodes;
+  }}
+  onDisable={async (password) => {
+    const {error} = await authClient.twoFactor.disable({password: password ?? ""});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't turn off two-factor authentication.");
+    }
+  }}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `enabled` | `boolean` | Better Auth's `user.twoFactorEnabled`. False offers Turn on; true offers new backup codes and Turn off. |
+| `backupCodesRemaining` | `number` | Shown as "8 backup codes left" while on; below 3 adds a warning. Better Auth does not put this on the session; pass it when the app knows it. |
+| `onStartEnroll` | `(password?) => Promise<TwoFactorEnrollment>` | Called after the password step (or at once without `requirePassword`). Resolve `{totpURI, backupCodes}`, narrowed from `enable()`'s TOTP branch; a rejection stays on the password step with the error. |
+| `onVerify` | `(code) => Promise<void>` | Called with the full code. Resolve to move to the backup codes; reject to clear the code and show the error. |
+| `onRegenerateBackupCodes` | `(password?) => Promise<string[]>` | Called after the password step. Resolve the new codes to show them; hidden when not passed. |
+| `onDisable` | `(password?) => Promise<void>` | Called after the password step and the confirm. Hidden when not passed. |
+| `requirePassword` | `boolean` | Ask for the password before each action. Defaults to `true`; see above. |
+| `hasPassword` | `boolean` | With `requirePassword`, `false` disables Turn on, Get new backup codes and Turn off, and asks the user to set a password first. Defaults to `true`. |
+| `digits` | `number` | Cells in the code field: Better Auth's `totpOptions.digits`. Defaults to the `digits` parameter of the enrollment's `totpURI`, else 6. |
+| `error` | `string` | Card error with `role="alert"`; overrides a rejection message. |
+| `disabled` | `boolean` | Disables Turn on, Get new backup codes, Turn off and the password step, for example while the user loads. |
+| `title` / `description` | `string` | Heading (default "Two-factor authentication") and the text under it. |
+
+The card never logs the codes or the URI; a rejection is logged with `console.warn` as the
+callback threw it, so don't put secrets in error messages.
+
+Accessibility:
+
+- Each step replaces the content that had focus, so the card moves focus when the step changes.
+  On web, focus goes to the step's heading (a `tabIndex={-1}` view holding "Step N of M" and the
+  step's lead text), or to the field on the password and code steps. On native, where a view
+  can't take focus, the card calls `AccessibilityInfo.announceForAccessibility` with the step
+  ("Step 2 of 4. Scan this QR code…"), and announces the outcome when it returns to the card
+  ("Two-factor authentication is on.", "Two-factor authentication is off."). Nothing moves on
+  first render.
+- The QR code is an image named "QR code for your authenticator app".
+- Copy results ("Copied", "Couldn't copy") are in a polite live region (`aria-live` on web,
+  `accessibilityLiveRegion` on Android); iOS VoiceOver ignores live regions, so the card also
+  announces them there.
+- "I saved these backup codes" is a `role="checkbox"` control that Space toggles; the backup codes
+  are a list; errors are `role="alert"`.
+- The password is dropped from the card's state as soon as `onStartEnroll` or
+  `onRegenerateBackupCodes` resolves; the Turn off flow keeps it until the confirm.
+
+**Test IDs** (with the default `testID="two-factor-settings-card"`):
+
+| Element | testID |
+| --- | --- |
+| Card root / heading / status ("On" / "Off") | `two-factor-settings-card`, `-title`, `-status` |
+| Turn on / Get new backup codes / Turn off | `two-factor-settings-card-enable`, `-regenerate`, `-disable` |
+| Backup codes left / low warning / set-a-password note | `two-factor-settings-card-backup-codes-remaining`, `-backup-codes-low`, `-needs-password` |
+| Step heading (focus target) / step indicator / Cancel | `two-factor-settings-card-step-heading`, `-step`, `-cancel` |
+| Password prompt, field, submit | `two-factor-settings-card-password-prompt`, `-password`, `-password-submit` |
+| QR code / setup key / Copy key / Next | `two-factor-settings-card-qr`, `-secret`, `-copy-secret`, `-next` |
+| Code field (cells `-otp-cell-1`…) / Verify / Back | `two-factor-settings-card-otp`, `-verify`, `-back` |
+| Codes heading / list / code N (from 1) | `two-factor-settings-card-codes-title`, `-backup-codes`, `-backup-code-{n}` |
+| Copy / Download or Share / copy status | `two-factor-settings-card-copy-codes`, `-download-codes`, `-copy-codes-status` (`-copy-secret-status` for the key) |
+| "I saved these" / Finish | `two-factor-settings-card-saved`, `-finish` |
+| Turn-off confirm, confirm, cancel | `two-factor-settings-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
+| Error | `two-factor-settings-card-error` |
 
 ## Testing Utilities
 

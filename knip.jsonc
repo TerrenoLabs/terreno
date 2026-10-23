@@ -451,10 +451,7 @@
         // Tests mock expo-modules-core subpaths by string; TypeDoc is invoked by
         // the package's `types` script.
         "expo-modules-core",
-        "typedoc",
-        // auth-experience T2 owns the lockfile and adds this ahead of its first import
-        // (T16 TwoFactorSettingsCard). Remove the entry when T16 lands.
-        "react-native-qrcode-svg"
+        "typedoc"
       ],
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

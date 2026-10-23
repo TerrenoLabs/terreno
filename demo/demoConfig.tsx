@@ -115,6 +115,7 @@ import {ThumbsUpDownFeedbackConfiguration} from "@story-config/ThumbsUpDownFeedb
 import {ToastConfiguration} from "@story-config/Toast.config";
 import {TooltipConfiguration} from "@story-config/Tooltip.config";
 import {TwoFactorChallengeScreenConfiguration} from "@story-config/TwoFactorChallengeScreen.config";
+import {TwoFactorSettingsCardConfiguration} from "@story-config/TwoFactorSettingsCard.config";
 import {TypedSignatureFieldConfiguration} from "@story-config/TypedSignatureField.config";
 import {UnifiedAddressAutoCompleteFieldConfiguration} from "@story-config/UnifiedAddressAutoCompleteField.config";
 import {UpgradeRequiredScreenConfiguration} from "@story-config/UpgradeRequiredScreen.config";
@@ -408,6 +409,7 @@ const Config: DemoConfigurationBase[] = [
   ToastConfiguration,
   TooltipConfiguration,
   TwoFactorChallengeScreenConfiguration,
+  TwoFactorSettingsCardConfiguration,
   TypedSignatureFieldConfiguration,
   UnifiedAddressAutoCompleteFieldConfiguration,
   UpgradeRequiredScreenConfiguration,

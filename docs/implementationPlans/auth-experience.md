@@ -601,7 +601,7 @@ Open risks:
     individually, and relative time rendering.
   - Skills: terreno-ui, accessibility-testing
 
-- [ ] **T16** — TwoFactorSettingsCard (enroll, backup codes)
+- [x] **T16** — TwoFactorSettingsCard (enroll, backup codes)
   - Depends on: T2, T13
   - Files: ui/src/security/TwoFactorSettingsCard.tsx, ui/src/security/TwoFactorSettingsCard.test.tsx, demo/stories/TwoFactorSettingsCard.stories.tsx, demo/story-config/TwoFactorSettingsCard.config.tsx
   - Build: the card walks through these steps:

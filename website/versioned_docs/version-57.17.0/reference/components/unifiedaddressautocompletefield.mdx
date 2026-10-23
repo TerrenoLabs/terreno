@@ -1,0 +1,35 @@
+---
+title: "UnifiedAddressAutoCompleteField"
+description: "Address field that uses Places when a Google key is present, otherwise a text field."
+sidebar_label: "UnifiedAddressAutoCompleteField"
+slug: /reference/components/unifiedaddressautocompletefield
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# UnifiedAddressAutoCompleteField
+
+Address field that uses Places when a Google key is present, otherwise a text field.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `AddressAutocompleteProps`  
+**Story source:** [`demo/stories/UnifiedAddressAutoCompleteField.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/UnifiedAddressAutoCompleteField.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="UnifiedAddressAutoCompleteField" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `handleAddressChange` | `OnChangeCallback` | Yes |  |
+| `handleAutoCompleteChange` | `reflection` | Yes |  |
+| `inputValue` | `string` | Yes |  |
+| `disabled` | `boolean` |  |  |
+| `googleMapsApiKey` | `string` |  |  |
+| `googlePlacesMobileStyles` | `Styles` |  |  |
+| `includeCounty` | `boolean` |  |  |
+| `styles` | `Styles` |  |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

@@ -20,6 +20,8 @@ export interface MCPAuthContext {
 /** The authenticated user plus the credential type that proved it. */
 export interface MCPAuthResult {
   credential: RequestCredential;
+  /** Scopes granted to an MCP OAuth access token; unset for other credentials. */
+  scopes?: string[];
   user: User;
 }
 
@@ -118,7 +120,8 @@ const authenticateOAuthAccessToken = async (
     await McpOAuthToken.revokeFamily(accessToken.familyId);
     return undefined;
   }
-  return {credential: "oauth", user: activeUser};
+  const scopes = (accessToken.scope ?? "").split(" ").filter((scope) => scope.length > 0);
+  return {credential: "oauth", scopes, user: activeUser};
 };
 
 /**

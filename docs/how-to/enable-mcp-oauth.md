@@ -115,6 +115,7 @@ curl https://api.example.com/.well-known/oauth-authorization-server
 - Every request that cannot be authenticated, including `initialize` and `tools/list`, gets the 401 challenge. A rejected credential adds `error="invalid_token"` so clients refresh.
 - JWTs, Better Auth sessions, and `mcp_` service tokens keep working.
 - Tools see the approving user. `getCurrentRequestContext()?.credential` is `"oauth"`, so permission code can treat an agent's token differently from the user's own session (for example, no admin bypass). See [Request credential](../reference/api.md#request-credential).
+- Scopes are not enforced for you. A token can call every tool its user can, whatever scope it was granted. If `scopesSupported` lists scopes with different meanings (for example `["read", "write"]`), add `requireOAuthScope("write")` to the permissions of the methods and actions that need it. The granted scopes are in `getCurrentRequestContext()?.oauthScopes`.
 
 ## Revoking access
 

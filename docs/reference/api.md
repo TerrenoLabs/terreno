@@ -409,7 +409,7 @@ new TerrenoApp({
 | `dynamicClientRegistration` | `false` | Mount `POST /oauth/register` and advertise `registration_endpoint`. The endpoint is unauthenticated, so anyone who can reach the API can create a client; leave it off unless clients you cannot pre-register must connect |
 | `allowedRedirectHosts` | `[]` | Hostnames a registering client may put redirect URIs on. Required (non-empty) with `dynamicClientRegistration`, unused without it. `*.example.com` matches subdomains. Add `localhost` for loopback `http://` redirects |
 | `resource` | `${issuer}/mcp` | RFC 8707 resource identifier |
-| `scopesSupported` | `["mcp"]` | Advertised and accepted scopes |
+| `scopesSupported` | `["mcp"]` | Advertised and accepted scopes. Terreno does not map scopes to tools: a token may call every tool its user can. Enforce scopes in permissions with `requireOAuthScope` (see [Request credential](#request-credential)) |
 | `accessTokenTtlSeconds` | 3600 | Access token lifetime |
 | `refreshTokenTtlSeconds` | 30 days | Refresh token lifetime |
 | `authorizationRequestTtlSeconds` | 600 | How long a request waits for a consent decision |
@@ -1646,7 +1646,23 @@ operation must tell the user's own session apart from a delegated agent:
 
 It is `undefined` for anonymous requests and for jobs. The JWT and Better Auth middlewares set it
 for REST; the MCP server sets it on `/mcp` before any tool runs. `extractAuthFromHeaders` returns
-the same `{user, credential}` pair for custom MCP mounts.
+the same `{user, credential}` pair for custom MCP mounts, plus `scopes` for an OAuth token.
+
+For an `"oauth"` credential, `getCurrentRequestContext()?.oauthScopes` lists the scopes the
+token was granted. Terreno does not limit tools by scope on its own. With more than one entry in
+`mcpOAuth.scopesSupported`, add `requireOAuthScope(scope)` to the permissions of each action or
+method that needs it: it refuses an OAuth token without `scope` and lets every other credential
+through.
+
+``````typescript
+import {Permissions, requireOAuthScope} from "@terreno/api";
+
+permissions: {
+  create: [Permissions.IsAuthenticated, requireOAuthScope("write")],
+  list: [Permissions.IsAuthenticated],
+  // ...
+},
+``````
 
 ``````typescript
 import {getCurrentRequestContext, type PermissionMethod} from "@terreno/api";

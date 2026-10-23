@@ -13,7 +13,7 @@ import {McpOAuthAuthorization} from "../models/mcpOAuthAuthorization";
 import {McpOAuthClient} from "../models/mcpOAuthClient";
 import {McpOAuthToken} from "../models/mcpOAuthToken";
 import {McpServiceToken} from "../models/mcpServiceToken";
-import {Permissions} from "../permissions";
+import {Permissions, requireOAuthScope} from "../permissions";
 import {getCurrentRequestContext} from "../requestContext";
 import {TerrenoApp} from "../terrenoApp";
 import {authAsUser, setupDb, UserModel} from "../tests";
@@ -788,6 +788,112 @@ describe("MCP OAuth authorization server", () => {
     expect(res.body.paths["/oauth/authorize/{request}/approve"].post.operationId).toBe(
       "approveMcpOAuthRequest"
     );
+  });
+});
+
+describe("MCP OAuth granted scopes", () => {
+  let app: express.Application;
+  let agent: TestAgent;
+
+  const scopedRouter = () =>
+    modelRouter("/scoped-notes", OAuthNote, {
+      collectionActions: {
+        scopes: {
+          handler: async () => ({scopes: getCurrentRequestContext()?.oauthScopes ?? null}),
+          mcp: {name: "scoped_scopes"},
+          method: "GET",
+          permissions: [Permissions.IsAuthenticated],
+        },
+        write: {
+          handler: async () => ({written: true}),
+          mcp: {name: "scoped_write"},
+          method: "POST",
+          permissions: [Permissions.IsAuthenticated, requireOAuthScope("write")],
+        },
+      },
+      permissions: {create: [], delete: [], list: [], read: [], update: []},
+    });
+
+  const callTool = (bearer: string, name: string) =>
+    supertest(app)
+      .post("/mcp")
+      .set("accept", "application/json, text/event-stream")
+      .set("Authorization", `Bearer ${bearer}`)
+      .send({id: 1, jsonrpc: "2.0", method: "tools/call", params: {arguments: {}, name}});
+
+  const rpcResult = (text: string): {content: {text: string}[]; isError?: boolean} => {
+    const dataLine = text.split("\n").find((line) => line.startsWith("data:"));
+    return JSON.parse(dataLine ? dataLine.slice("data:".length) : text).result;
+  };
+
+  const tokenWithScope = async (scope: string): Promise<string> => {
+    const clientId = await registerClient(app);
+    const {challenge, verifier} = createPkce();
+    const authorize = await startAuthorization(app, {
+      client_id: clientId,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+      scope,
+    });
+    const approve = await agent.post(
+      `/oauth/authorize/${requestIdFrom(authorize.headers.location)}/approve`
+    );
+    const code = new URL(approve.body.data.redirectUrl).searchParams.get("code") as string;
+    const token = await exchangeCode(app, {clientId, code, verifier});
+    expect(token.body.scope).toBe(scope);
+    return token.body.access_token as string;
+  };
+
+  beforeEach(async () => {
+    await setupDb();
+    await Promise.all([
+      McpOAuthAuthorization.deleteMany({}),
+      McpOAuthClient.deleteMany({}),
+      McpOAuthToken.deleteMany({}),
+      McpServiceToken.deleteMany({}),
+    ]);
+    clearMCPRegistry();
+    app = new TerrenoApp({
+      mcpOAuth: {...oauthOptions, scopesSupported: ["read", "write"]},
+      mcpServiceTokens: true,
+      skipListen: true,
+      userModel: typedUserModel,
+    })
+      .register(scopedRouter())
+      .build();
+    agent = await authAsUser(app, "notAdmin");
+  });
+
+  it("puts the token's granted scopes in the request context", async () => {
+    const token = await tokenWithScope("read");
+
+    const res = await callTool(token, "scoped_scopes");
+
+    expect(JSON.parse(rpcResult(res.text).content[0].text)).toEqual({scopes: ["read"]});
+  });
+
+  it("refuses a tool that requires a scope the token was not granted", async () => {
+    const readToken = await tokenWithScope("read");
+    const writeToken = await tokenWithScope("read write");
+
+    const denied = rpcResult((await callTool(readToken, "scoped_write")).text);
+    const allowed = rpcResult((await callTool(writeToken, "scoped_write")).text);
+
+    expect(denied.isError).toBe(true);
+    expect(JSON.parse(allowed.content[0].text)).toEqual({written: true});
+  });
+
+  it("does not apply OAuth scopes to the user's own JWT or service token", async () => {
+    const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "Agent"})).body.data
+      .token as string;
+
+    const viaServiceToken = rpcResult((await callTool(serviceToken, "scoped_write")).text);
+    const viaScopes = rpcResult((await callTool(serviceToken, "scoped_scopes")).text);
+
+    expect(JSON.parse(viaServiceToken.content[0].text)).toEqual({written: true});
+    expect(JSON.parse(viaScopes.content[0].text)).toEqual({scopes: null});
   });
 });
 

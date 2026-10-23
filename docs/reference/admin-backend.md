@@ -186,6 +186,22 @@ pipeline (Mongoose validation, conflict/baseVersion checks, and ledger ordering 
 Organization-scoped models do not register this scope and use REST mutations. Product clients
 that omit the marker keep product sync permissions and hooks.
 
+### Row scope
+
+A model's `queryFilter` (or `admin.adminFilter`, which AdminApp turns into one) is its admin row
+scope, the equivalent of Django's `get_queryset`. List and search add it to the query. Every route
+that resolves one document by id applies it too:
+
+- `GET`, `PATCH`, and `DELETE {basePath}{routePath}/:id` (and the array-field routes) return 403
+  when the document does not match the scope. The check runs in MongoDB with the same filter the
+  list uses. A scope that returns `null` denies every by-id route; the list stays empty.
+- `bulk-patch` lists out-of-scope ids under `failures` with `Forbidden` and patches the rest.
+- Admin-window sync `update` and `delete` mutations nack with 403 for out-of-scope rows.
+- `PATCH`, `bulk-patch`, and admin-window sync updates that write a field the scope constrains
+  must leave the document inside the scope (the new state is checked in memory with
+  `matchesQuery`). Otherwise they get 403 `Admin write outside row scope`. Creates are not checked
+  against the scope, because hooks and defaults often fill the scoped field after validation.
+
 With `accessControl`, each model can use a standard admin resource with three actions:
 
 | Action | Access |

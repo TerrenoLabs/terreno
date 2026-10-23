@@ -50,6 +50,7 @@ import type {Model} from "mongoose";
 import mongoose from "mongoose";
 import {assignUniqueAdminConfigNames, findAdminModelMetaByRoutePath} from "./adminConfigIdentity";
 import {mountAdminMigrationRoutes} from "./adminMigrations";
+import {assertAdminRowScopeAfterUpdate, buildAdminRowScopePermission} from "./adminRowScope";
 import {
   ADMIN_SCRIPT_JOB_NAME,
   defineAdminScriptJob,
@@ -158,7 +159,8 @@ export interface AdminModelConfig {
   /** Allowlisted keys for POST .../bulk-patch (defaults from listFields minus system/readonly/hidden) */
   bulkPatchAllowlist?: string[];
   /**
-   * Per-model `modelRouter` query filter (list and other query-shaped reads).
+   * Per-model admin row scope. List and search add it to the query; by-id read/update/delete,
+   * bulk-patch, and admin-window sync writes deny documents outside it.
    * Same contract as {@link ModelRouterOptions.queryFilter} in `@terreno/api`: merge into the
    * Mongoose query, return the incoming `query` unchanged if allowed, or return `null` to yield
    * an empty list without error.
@@ -1431,7 +1433,20 @@ export class AdminApp {
         return permissions;
       };
 
-      const updatePermissions = adminPermission(config.permissions?.update, "update");
+      // Read/update/delete of one document must stay inside the same row scope list and search use.
+      const rowScopePermission = config.queryFilter
+        ? buildAdminRowScopePermission(config)
+        : undefined;
+      const withRowScope = (
+        permissions: PermissionMethod<unknown>[]
+      ): PermissionMethod<unknown>[] => {
+        if (!rowScopePermission || permissions.length === 0) {
+          return permissions;
+        }
+        return [...permissions, rowScopePermission];
+      };
+
+      const updatePermissions = withRowScope(adminPermission(config.permissions?.update, "update"));
       // The RBAC user model: "User" or the userModel given to createAccess, whatever its name.
       const isRbacUserModel = isRbacUserModelName(
         config.model.modelName,
@@ -1736,6 +1751,24 @@ export class AdminApp {
         return Boolean((existing as {admin?: boolean} | null)?.admin);
       };
 
+      // The document an update applies to: the one the REST permission check loaded, or (for
+      // admin-window sync updates, which set req.params.id) the stored row.
+      const currentDocumentForUpdate = async (request: express.Request): Promise<unknown> => {
+        const loaded = (request as express.Request & {obj?: unknown}).obj;
+        if (loaded) {
+          return loaded;
+        }
+        const id = request.params?.id;
+        if (!id || !rowScopePermission) {
+          return undefined;
+        }
+        const query: Record<string, unknown> = {_id: id};
+        if (config.model.schema.path("deleted")) {
+          query.deleted = {$in: [true, false]};
+        }
+        return config.model.findById(id).where(query).lean();
+      };
+
       const markAuthorizedUserAdminWrite = (
         body: Record<string, unknown>,
         request: express.Request
@@ -1795,10 +1828,10 @@ export class AdminApp {
         maxLimit: 500,
         permissions: {
           create: adminPermission(config.permissions?.create, "create"),
-          delete: adminPermission(config.permissions?.delete, "delete"),
+          delete: withRowScope(adminPermission(config.permissions?.delete, "delete")),
           list: adminPermission(true, "list"),
-          read: adminPermission(true, "read"),
-          update: adminPermission(config.permissions?.update, "update"),
+          read: withRowScope(adminPermission(true, "read")),
+          update: updatePermissions,
         },
         postCreate: async (value, request) => {
           await applyPendingUserRoles(value, request, true);
@@ -1844,7 +1877,14 @@ export class AdminApp {
           takePendingUserRoles(record, req);
           await assertCanWriteUserAdminFlag(record, req, await currentUserAdminFlag(req));
           markAuthorizedUserAdminWrite(record, req);
-          return stripProtectedFromBody(body) as typeof body;
+          const stripped = stripProtectedFromBody(body) as Record<string, unknown>;
+          await assertAdminRowScopeAfterUpdate({
+            config,
+            current: await currentDocumentForUpdate(req),
+            patch: stripped,
+            user: req.user as User | undefined,
+          });
+          return stripped as typeof body;
         },
         queryFields: buildAdminModelQueryFields({
           filters: config.filters,
@@ -1879,7 +1919,7 @@ export class AdminApp {
         registerAdminWindowMutationScope(config.model.modelName, {
           accessControl: this.options.accessControl,
           createPermissions: adminPermission(config.permissions?.create, "create"),
-          deletePermissions: adminPermission(config.permissions?.delete, "delete"),
+          deletePermissions: withRowScope(adminPermission(config.permissions?.delete, "delete")),
           modelName: config.model.modelName,
           permissions: {
             create: config.permissions?.create !== false,
@@ -1892,7 +1932,7 @@ export class AdminApp {
           preCreate: routerOptions.preCreate,
           preUpdate: routerOptions.preUpdate,
           stripMutationData: (data) => stripProtectedFromBody(data),
-          updatePermissions: adminPermission(config.permissions?.update, "update"),
+          updatePermissions,
         });
       }
 
@@ -1969,6 +2009,7 @@ export class AdminApp {
                 failures.push({id, title: "Forbidden"});
                 continue;
               }
+              await assertAdminRowScopeAfterUpdate({config, current: doc, patch, user: actor});
               await assertCanWriteTargetUser({
                 accessControl: this.options.accessControl,
                 actor,

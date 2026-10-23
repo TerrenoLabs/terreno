@@ -85,11 +85,13 @@ const productSyncOptions = {
 };
 
 const buildHarness = ({
+  adminModelOverrides,
   grants,
   onAdminAudit,
   productHookTracker,
   resolvePermissions,
 }: {
+  adminModelOverrides?: Partial<AdminModelConfig>;
   grants: Record<string, string[]>;
   onAdminAudit?: (event: AdminAuditEvent) => void | Promise<void>;
   productHookTracker?: {postUpdateCalls: number; preCreateCalls: number; preUpdateCalls: number};
@@ -152,6 +154,7 @@ const buildHarness = ({
           isOwned: adminOwnedBy("ownerId"),
           resource: "adminWindowTodo",
         },
+        ...adminModelOverrides,
       },
     ],
     onAdminAudit,
@@ -646,5 +649,125 @@ describe("admin window org-scoped mutation membership", () => {
     expect(JSON.stringify(syncRes.body)).toContain("adminBroadcast");
     const afterSyncAttempt = await WindowOrgTodoModel.findById(owned._id).lean();
     expect(afterSyncAttempt?.title).toBe("REST ok");
+  });
+});
+
+describe("admin window sync mutation row scope", () => {
+  let agent: TestAgent;
+  let actorId: string;
+  let otherOwnerId: string;
+
+  beforeEach(async () => {
+    await setupDb();
+    otherOwnerId = new mongoose.Types.ObjectId().toHexString();
+    const app = buildHarness({
+      adminModelOverrides: {
+        permissions: {delete: true, update: true},
+        queryFilter: (user, query): Record<string, unknown> => ({
+          ...(query ?? {}),
+          ownerId: String(user?.id),
+        }),
+      },
+      grants: {admin: ["access"], adminWindowTodo: ["read", "write"]},
+    });
+    agent = await authAsUser(app, "admin");
+    const actor = await findOneOrNoneFor(UserModel, {email: "admin@example.com"});
+    actorId = String(actor?._id);
+  });
+
+  afterEach(async () => {
+    clearSyncRegistry();
+    await WindowTodoModel.deleteMany({});
+  });
+
+  it("nacks update and delete of rows outside the AdminApp row scope", async () => {
+    const theirs = await WindowTodoModel.create({ownerId: otherOwnerId, title: "Theirs"});
+    const theirsToo = await WindowTodoModel.create({ownerId: otherOwnerId, title: "TheirsToo"});
+
+    const updateRes = await agent
+      .post("/sync/mutate")
+      .send(
+        adminWindowMutate({
+          baseVersion: theirs._syncSeq ?? 1,
+          collection: "window-todos",
+          data: {title: "overwritten"},
+          id: theirs._id,
+          mutationId: "admin-row-scope-update",
+          operation: "update",
+        })
+      )
+      .expect(403);
+    expect(updateRes.body.nack.code).toBe("unauthorized");
+
+    await agent
+      .post("/sync/mutate")
+      .send(
+        adminWindowMutate({
+          collection: "window-todos",
+          id: theirsToo._id,
+          mutationId: "admin-row-scope-delete",
+          operation: "delete",
+        })
+      )
+      .expect(403);
+
+    const batchRes = await agent
+      .post("/sync/mutate/batch")
+      .send({
+        mutations: [
+          adminWindowMutate({
+            baseVersion: theirs._syncSeq ?? 1,
+            collection: "window-todos",
+            data: {title: "batch overwritten"},
+            id: theirs._id,
+            mutationId: "admin-row-scope-batch",
+            operation: "update",
+          }),
+        ],
+      })
+      .expect(200);
+    expect(batchRes.body.results[0].type).toBe("nack");
+
+    const reloaded = await WindowTodoModel.findById(theirs._id).lean();
+    expect(reloaded?.title).toBe("Theirs");
+    const stillThere = await WindowTodoModel.findById(theirsToo._id).lean();
+    expect(stillThere?.deleted).not.toBe(true);
+  });
+
+  it("acks in-scope writes and nacks an update that moves a row out of scope", async () => {
+    const mine = await WindowTodoModel.create({ownerId: actorId, title: "Mine"});
+
+    await agent
+      .post("/sync/mutate")
+      .send(
+        adminWindowMutate({
+          baseVersion: mine._syncSeq ?? 1,
+          collection: "window-todos",
+          data: {title: "Mine edited"},
+          id: mine._id,
+          mutationId: "admin-row-scope-own-update",
+          operation: "update",
+        })
+      )
+      .expect(200);
+
+    const current = await WindowTodoModel.findById(mine._id).lean();
+    await agent
+      .post("/sync/mutate")
+      .send(
+        adminWindowMutate({
+          baseVersion: current?._syncSeq ?? 2,
+          collection: "window-todos",
+          data: {ownerId: otherOwnerId},
+          id: mine._id,
+          mutationId: "admin-row-scope-move",
+          operation: "update",
+        })
+      )
+      .expect(403);
+
+    const after = await WindowTodoModel.findById(mine._id).lean();
+    expect(after?.ownerId).toBe(actorId);
+    expect(after?.title).toBe("Mine edited");
   });
 });

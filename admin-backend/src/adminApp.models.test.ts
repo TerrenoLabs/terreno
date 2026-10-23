@@ -2057,6 +2057,83 @@ describe("AdminApp per-model queryFilter", () => {
     const after = await FoodModel.findById(createdId).lean();
     expect(after?.calories).toBe(12);
   });
+
+  describe("row scope on by-id routes and bulk-patch", () => {
+    const ownerScopedConfig: AdminModelConfig = {
+      ...foodModelConfig,
+      bulkPatchAllowlist: ["name", "calories"],
+      queryFilter: (user, query): Record<string, unknown> => ({
+        ...(query ?? {}),
+        ownerId: user?.id,
+      }),
+    };
+
+    let agent: TestAgent;
+    let actorId: string;
+    let otherOwnerId: mongoose.Types.ObjectId;
+
+    beforeEach(async () => {
+      const localApp = buildApp([ownerScopedConfig]);
+      agent = await authAsUser(localApp, "admin");
+      const actor = await findOneOrNoneFor(UserModel, {email: "admin@example.com"});
+      actorId = String(actor?._id);
+      otherOwnerId = new mongoose.Types.ObjectId();
+    });
+
+    it("reads, updates, and deletes rows inside the scope", async () => {
+      const mine = await FoodModel.create({calories: 1, name: "Mine", ownerId: actorId});
+      await agent.get(`/admin/foods/${mine._id}`).expect(200);
+      await agent.patch(`/admin/foods/${mine._id}`).send({calories: 5}).expect(200);
+      const bulk = await agent
+        .post("/admin/foods/bulk-patch")
+        .send({ids: [String(mine._id)], patch: {name: "MineBulk"}})
+        .expect(200);
+      expect(bulk.body.updated).toBe(1);
+      await agent.delete(`/admin/foods/${mine._id}`).expect(204);
+    });
+
+    it("denies read, update, delete, and bulk-patch of rows outside the scope", async () => {
+      const theirs = await FoodModel.create({calories: 1, name: "Theirs", ownerId: otherOwnerId});
+      const theirsToo = await FoodModel.create({
+        calories: 2,
+        name: "TheirsToo",
+        ownerId: otherOwnerId,
+      });
+
+      await agent.get(`/admin/foods/${theirs._id}`).expect(403);
+      await agent.patch(`/admin/foods/${theirs._id}`).send({calories: 999}).expect(403);
+      const bulk = await agent
+        .post("/admin/foods/bulk-patch")
+        .send({ids: [String(theirs._id)], patch: {name: "BULK"}})
+        .expect(200);
+      expect(bulk.body.updated).toBe(0);
+      expect(bulk.body.failures).toHaveLength(1);
+      await agent.delete(`/admin/foods/${theirsToo._id}`).expect(403);
+
+      const reloaded = await FoodModel.findById(theirs._id).lean();
+      expect(reloaded?.name).toBe("Theirs");
+      expect(reloaded?.calories).toBe(1);
+      expect(await FoodModel.findById(theirsToo._id).lean()).not.toBeNull();
+    });
+
+    it("denies moving an in-scope row outside the scope", async () => {
+      const mine = await FoodModel.create({calories: 1, name: "Mine", ownerId: actorId});
+      await agent
+        .patch(`/admin/foods/${mine._id}`)
+        .send({ownerId: String(otherOwnerId)})
+        .expect(403);
+      const reloaded = await FoodModel.findById(mine._id).lean();
+      expect(String(reloaded?.ownerId)).toBe(actorId);
+    });
+
+    it("denies by-id routes when the scope returns null", async () => {
+      const localApp = buildApp([{...foodModelConfig, queryFilter: (): null => null}]);
+      const nullAgent = await authAsUser(localApp, "admin");
+      const row = await FoodModel.create({calories: 1, name: "Hidden", ownerId: actorId});
+      await nullAgent.get("/admin/foods").expect(200);
+      await nullAgent.get(`/admin/foods/${row._id}`).expect(403);
+    });
+  });
 });
 
 describe("AdminApp organization scoping", () => {

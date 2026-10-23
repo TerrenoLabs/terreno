@@ -21,6 +21,24 @@ export const setUserAdmin = async (email: string): Promise<void> => {
   }
 };
 
+/**
+ * Marks the Better Auth user's email verified, the way a seeded account starts, so account
+ * linking (`verified-email` mode) treats it as the email's owner. The app User's own
+ * `emailVerified` (the profile banner) is left alone.
+ */
+export const setBetterAuthEmailVerified = async (email: string): Promise<void> => {
+  const client = new MongoClient(MONGO_URI);
+  try {
+    await client.connect();
+    await client
+      .db()
+      .collection("user")
+      .updateOne({email: email.toLowerCase()}, {$set: {emailVerified: true}});
+  } finally {
+    await client.close();
+  }
+};
+
 export const getAdminToken = async (request: APIRequestContext): Promise<string> => {
   return signUpOrSignInBetterAuth(request, {
     email: ADMIN_USER.email,

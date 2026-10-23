@@ -236,6 +236,39 @@ Notes:
 - `options` still wins: for example `options.account.accountLinking.enabled` overrides the
   mode `accountLinking` sets.
 
+#### Auth features in example-backend
+
+example-backend (`src/utils/betterAuthConfig.ts`) turns every feature on except `oauthProxy`.
+These env vars tune it:
+
+| Env var | Sets | Default |
+| --- | --- | --- |
+| `AUTH_ACCOUNT_LINKING` | `accountLinking.mode`: `verified-email`, `explicit`, or `never` | `verified-email` |
+| `AUTH_SIGN_UP` | `signUp.mode`: `open` or `closed` | `open` |
+| `FRONTEND_URL` | The first `passkey.origin` (its origin) and the default `passkey.rpID` (its host); also the auth mail links | `http://localhost:8082` |
+| `PASSKEY_RP_ID` | `passkey.rpID`. Must be the `FRONTEND_URL` host or a parent domain of it, such as `example.com` for `https://app.example.com` | The `FRONTEND_URL` host |
+
+The rest is fixed: `twoFactor.issuer` and `passkey.rpName` are `Terreno Example`, and
+`lastLoginMethod`, `multiSession` (5 sessions) and `nativeApps` are on. Email verification
+stays optional at sign-up; linking by email needs it.
+
+`passkey.origin` is the `FRONTEND_URL` origin plus each `CORS_ORIGINS` (and dev) origin whose
+host is the rpID or one of its subdomains, because a browser refuses a passkey on any other
+host. `localhost` and `127.0.0.1` cannot share an rpID, so with the default `FRONTEND_URL`
+passkeys work on `http://localhost:8082` and not on `http://127.0.0.1:8082`. Set
+`FRONTEND_URL=http://127.0.0.1:8082` to use the loopback address instead. On a deploy where the
+web app is `app.<domain>`, set `PASSKEY_RP_ID=<domain>` so a passkey works on every subdomain.
+A passkey made under one rpID cannot be used under another.
+
+With `NODE_ENV=production` and a loopback `FRONTEND_URL` (the default when a deploy does not set
+it), example-backend leaves `passkey` out, logs one warning, and `/terreno/methods` reports
+`passkey: false`: a passkey bound to `localhost` can never work for a deployed web app.
+
+The seed (`seedBetterAuthUserInProcess`) and the e2e setup (`e2e/auth.setup.ts`) mark their
+users' Better Auth email verified, so `verified-email` linking treats them as the email's
+owner. The seed still works with `AUTH_SIGN_UP=closed`: it builds its own instance with sign-up
+open.
+
 ### 3. Register BetterAuthApp Plugin
 
 Use the TerrenoApp plugin system:
@@ -533,6 +566,13 @@ cross-site through a local mock OIDC provider (`e2e/helpers/mockOidcProvider.ts`
 example-backend registers as the `mock-oidc` generic OAuth provider only when `MOCK_OIDC_ISSUER`
 is set. example-backend refuses to start when `MOCK_OIDC_ISSUER` is set with
 `NODE_ENV=production` or names a host other than `127.0.0.1`, `localhost` or `[::1]`.
+
+By default the mock provider signs in one fixed verified user (`MOCK_OIDC_USER`). A test can
+name a different identity per sign-in with `setMockOidcIdentity(context, {email, emailVerified,
+name?, sub?})`, which sets a `mock_oidc_identity` cookie on the provider's host for that browser
+context only, so parallel tests do not collide. An authorize request with a `login_hint` and no
+cookie signs in that email, verified. Use an unverified identity to drive the linking cases that
+must refuse.
 
 ### Trade-offs
 

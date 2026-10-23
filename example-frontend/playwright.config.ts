@@ -4,7 +4,7 @@ import {MOCK_OIDC_ISSUER} from "./e2e/helpers/mockOidcProvider";
 const chromium = {...devices["Desktop Chrome"]};
 
 /**
- * Cross-site bearer run (e2e/crossSiteBearer.spec.ts and e2e/crossSiteOAuth.spec.ts). The web
+ * Cross-site bearer run (the spec files in CROSS_SITE_SPEC_FILES). The web
  * app at localhost:8082 talks to the API at 127.0.0.1:4000, a different site, with
  * `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`. Those values are baked into the web bundle when
  * Metro starts, so this run gets its own web server and runs only the cross-site specs (other
@@ -14,7 +14,16 @@ const chromium = {...devices["Desktop Chrome"]};
  * `E2E_CROSS_SITE_BEARER=true`; the env var also carries the choice to the worker processes,
  * which load this config without the runner's arguments.
  */
-const CROSS_SITE_SPECS = /crossSite(Bearer|OAuth)\.spec\.ts/;
+const CROSS_SITE_SPEC_FILES = [
+  "crossSiteBearer.spec.ts",
+  "crossSiteOAuth.spec.ts",
+  // Auth-experience specs that need the mock OIDC provider or cookie-less sessions join here.
+  "authMethods.spec.ts",
+];
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const CROSS_SITE_SPECS = new RegExp(
+  `(^|[\\/])(${CROSS_SITE_SPEC_FILES.map(escapeRegExp).join("|")})`
+);
 if (process.argv.some((arg) => CROSS_SITE_SPECS.test(arg))) {
   process.env.E2E_CROSS_SITE_BEARER = "true";
 }

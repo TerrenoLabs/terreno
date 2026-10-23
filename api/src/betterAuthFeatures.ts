@@ -83,7 +83,9 @@ export const buildFeaturePlugins = (config: BetterAuthConfig): BetterAuthPlugin[
     plugins.push(lastLoginMethod({storeInDatabase: true}) as unknown as BetterAuthPlugin);
   }
   if (config.multiSession) {
-    plugins.push(multiSession({maximumSessions: config.multiSession.maximumSessions}));
+    // Better Auth spreads options over its defaults, so an explicit undefined would erase its cap.
+    const {maximumSessions} = config.multiSession;
+    plugins.push(multiSession(maximumSessions === undefined ? {} : {maximumSessions}));
   }
   if (config.oauthProxy) {
     plugins.push(

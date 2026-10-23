@@ -241,7 +241,7 @@ Open risks:
     Auth" section links to it.
   - Skills: terreno-backend-api, security-audit
 
-- [ ] **T4** — Example backend enables the full suite; the mock OIDC provider joins e2e
+- [x] **T4** — Example backend enables the full suite; the mock OIDC provider joins e2e
   - Depends on: T2
   - Files: example-backend/src/utils/betterAuthConfig.ts, example-backend/src/utils/betterAuthConfig.test.ts, example-backend/.env.example, example-frontend/playwright.config.ts, example-frontend/e2e/helpers/mockOidcProvider.ts, example-frontend/e2e/authMethods.spec.ts, changelog/unreleased/example-auth-suite.md
   - Build:

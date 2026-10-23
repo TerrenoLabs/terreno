@@ -1,10 +1,28 @@
-import {APIError, type AuthProvider, type BetterAuthConfig} from "@terreno/api";
+import {
+  APIError,
+  type AuthProvider,
+  type BetterAuthAccountLinkingMode,
+  type BetterAuthConfig,
+  type BetterAuthPasskeyConfig,
+  logger,
+} from "@terreno/api";
 import {getCommsService, renderAuthMail} from "@terreno/comms";
 import type {BetterAuthPlugin} from "better-auth";
 import {genericOAuth} from "better-auth/plugins";
 
 const DEFAULT_BETTER_AUTH_SECRET = "terreno-example-better-auth-secret-dev-only-32";
 const DEFAULT_BETTER_AUTH_URL = "http://localhost:4000";
+const DEFAULT_FRONTEND_URL = "http://localhost:8082";
+
+/** Name authenticator apps and passkey prompts show for the example app. */
+export const EXAMPLE_APP_NAME = "Terreno Example";
+
+const ACCOUNT_LINKING_MODES: readonly BetterAuthAccountLinkingMode[] = [
+  "verified-email",
+  "explicit",
+  "never",
+];
+const SIGN_UP_MODES: readonly ("open" | "closed")[] = ["open", "closed"];
 
 /** Dev web origins for the Expo frontend (localhost + loopback on the frontend port). */
 const DEFAULT_WEB_ORIGINS = ["http://localhost:8082", "http://127.0.0.1:8082"];
@@ -70,6 +88,95 @@ const buildMockOidcPlugin = (): BetterAuthPlugin | undefined => {
   });
 };
 
+/** The web app's public URL (`FRONTEND_URL`), used for auth mail links and passkeys. */
+export const getFrontendUrl = (): string => process.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+
+/** `AUTH_ACCOUNT_LINKING`: `verified-email` (default), `explicit`, or `never`. */
+const getAccountLinkingMode = (): BetterAuthAccountLinkingMode => {
+  const value = process.env.AUTH_ACCOUNT_LINKING || "verified-email";
+  const mode = ACCOUNT_LINKING_MODES.find((candidate) => candidate === value);
+  if (!mode) {
+    throw new APIError({
+      status: 500,
+      title: `AUTH_ACCOUNT_LINKING must be one of ${ACCOUNT_LINKING_MODES.join(", ")}`,
+    });
+  }
+  return mode;
+};
+
+/** `AUTH_SIGN_UP`: `open` (default) or `closed`. */
+const getSignUpMode = (): "open" | "closed" => {
+  const value = process.env.AUTH_SIGN_UP || "open";
+  const mode = SIGN_UP_MODES.find((candidate) => candidate === value);
+  if (!mode) {
+    throw new APIError({status: 500, title: "AUTH_SIGN_UP must be open or closed"});
+  }
+  return mode;
+};
+
+const isOnRpID = (hostname: string, rpID: string): boolean =>
+  hostname === rpID || hostname.endsWith(`.${rpID}`);
+
+/**
+ * Passkeys are bound to `PASSKEY_RP_ID`, or to the `FRONTEND_URL` host when it is unset. The
+ * `FRONTEND_URL` origin always uses them; a CORS origin (`getWebOrigins`) joins only when its
+ * host is the rpID or a subdomain of it, because a browser refuses a passkey anywhere else. So
+ * the dev default (rpID `localhost`) covers http://localhost:8082 but not http://127.0.0.1:8082,
+ * and a stable deploy on `app.<domain>` with `PASSKEY_RP_ID=<domain>` covers every subdomain.
+ */
+const buildPasskeyConfig = (): BetterAuthPasskeyConfig => {
+  let frontend: URL;
+  try {
+    frontend = new URL(getFrontendUrl());
+  } catch {
+    throw new APIError({status: 500, title: "FRONTEND_URL must be an http(s) URL"});
+  }
+  if (frontend.protocol !== "http:" && frontend.protocol !== "https:") {
+    throw new APIError({status: 500, title: "FRONTEND_URL must be an http(s) URL"});
+  }
+  const rpID = process.env.PASSKEY_RP_ID || frontend.hostname;
+  if (!isOnRpID(frontend.hostname, rpID)) {
+    throw new APIError({
+      status: 500,
+      title: `PASSKEY_RP_ID "${rpID}" must be the FRONTEND_URL host or a parent domain of it`,
+    });
+  }
+  const origins = new Set<string>([frontend.origin]);
+  for (const origin of getWebOrigins()) {
+    try {
+      const url = new URL(origin);
+      if (url.origin === origin && isOnRpID(url.hostname, rpID)) {
+        origins.add(origin);
+      }
+    } catch {
+      // A malformed CORS origin can never use a passkey.
+    }
+  }
+  return {origin: [...origins], rpID, rpName: EXAMPLE_APP_NAME};
+};
+
+let warnedPasskeysOnLoopback = false;
+
+/**
+ * The passkey config, or undefined in production while `FRONTEND_URL` is still a loopback URL
+ * (the default when a deploy does not set it): passkeys bound to `localhost` can never work for
+ * a deployed web app, so the login screen should not offer them.
+ */
+const buildDeployablePasskeyConfig = (): BetterAuthPasskeyConfig | undefined => {
+  const passkey = buildPasskeyConfig();
+  if (process.env.NODE_ENV !== "production") {
+    return passkey;
+  }
+  if (!LOOPBACK_HOSTS.has(new URL(passkey.origin[0]).hostname)) {
+    return passkey;
+  }
+  if (!warnedPasskeysOnLoopback) {
+    warnedPasskeysOnLoopback = true;
+    logger.warn("Passkeys are off: set FRONTEND_URL to the deployed web app's URL to turn them on");
+  }
+  return undefined;
+};
+
 export const getAuthProvider = (): AuthProvider => {
   const provider = process.env.AUTH_PROVIDER as AuthProvider | undefined;
   return provider ?? "better-auth";
@@ -129,18 +236,29 @@ export const buildBetterAuthConfig = (): BetterAuthConfig | undefined => {
     return undefined;
   }
 
+  // The example turns on every auth feature except oauthProxy; env tunes the policy.
   const config: BetterAuthConfig = {
+    accountLinking: {mode: getAccountLinkingMode()},
     baseURL: process.env.BETTER_AUTH_URL ?? DEFAULT_BETTER_AUTH_URL,
     crossDomainCookies: process.env.CROSS_DOMAIN_AUTH_COOKIES === "true",
     enabled: true,
-    publicAppUrl: process.env.FRONTEND_URL || "http://localhost:8082",
+    lastLoginMethod: true,
+    multiSession: {},
+    nativeApps: true,
+    publicAppUrl: getFrontendUrl(),
     renderAuthMail,
     secret: process.env.BETTER_AUTH_SECRET ?? DEFAULT_BETTER_AUTH_SECRET,
     sendMail: async (message) => {
       await getCommsService().sendMail(message);
     },
+    signUp: {mode: getSignUpMode()},
     trustedOrigins: [...APP_SCHEMES, ...getWebOrigins()],
+    twoFactor: {issuer: EXAMPLE_APP_NAME},
   };
+  const passkey = buildDeployablePasskeyConfig();
+  if (passkey) {
+    config.passkey = passkey;
+  }
 
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     config.googleOAuth = {

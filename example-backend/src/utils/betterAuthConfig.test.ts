@@ -2,12 +2,18 @@ import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {once} from "node:events";
 import {createServer, type Server} from "node:http";
 import type {AddressInfo} from "node:net";
-import {BetterAuthApp, type UserModel as TerrenoAuthUserModel} from "@terreno/api";
+import {
+  BetterAuthApp,
+  type BetterAuthConfig,
+  type BetterAuthMethods,
+  type UserModel as TerrenoAuthUserModel,
+} from "@terreno/api";
 import express from "express";
 import supertest from "supertest";
 import {User} from "../models/user";
 import {
   buildBetterAuthConfig,
+  EXAMPLE_APP_NAME,
   getOAuthHandoffWebOrigins,
   getWebOrigins,
   MOCK_OIDC_PROVIDER_ID,
@@ -46,6 +52,156 @@ const startDiscoveryServer = async (): Promise<{close: () => Promise<void>; issu
     issuer,
   };
 };
+
+const methodsFor = async (config: BetterAuthConfig): Promise<BetterAuthMethods> => {
+  const app = express();
+  new BetterAuthApp({config, userModel: User as unknown as TerrenoAuthUserModel}).register(app);
+  const res = await supertest(app).get("/api/auth/terreno/methods");
+  expect(res.status).toBe(200);
+  return res.body as BetterAuthMethods;
+};
+
+const requireConfig = (): BetterAuthConfig => {
+  const config = buildBetterAuthConfig();
+  if (!config) {
+    throw new Error("Better Auth is the default provider, so a config is expected");
+  }
+  return config;
+};
+
+describe("buildBetterAuthConfig auth features", () => {
+  const originalCorsOrigins = process.env.CORS_ORIGINS;
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  // The preload unsets AUTH_ACCOUNT_LINKING, AUTH_SIGN_UP, PASSKEY_RP_ID and FRONTEND_URL.
+  beforeEach(() => {
+    Reflect.deleteProperty(process.env, "CORS_ORIGINS");
+  });
+
+  afterEach(() => {
+    if (originalCorsOrigins === undefined) {
+      Reflect.deleteProperty(process.env, "CORS_ORIGINS");
+    } else {
+      process.env.CORS_ORIGINS = originalCorsOrigins;
+    }
+    // The preload does not reset NODE_ENV, so a production case must not leak into later files.
+    if (originalNodeEnv === undefined) {
+      Reflect.deleteProperty(process.env, "NODE_ENV");
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+
+  it("leaves passkeys off in production while FRONTEND_URL is a loopback URL", async () => {
+    process.env.NODE_ENV = "production";
+    const config = requireConfig();
+    expect(config.passkey).toBeUndefined();
+    const methods = await methodsFor(config);
+    expect(methods.passkey).toBe(false);
+    expect(methods.twoFactor).toBe(true);
+
+    process.env.FRONTEND_URL = "http://127.0.0.1:8082";
+    expect(requireConfig().passkey).toBeUndefined();
+  });
+
+  it("keeps passkeys on in production once FRONTEND_URL is the deployed web app", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.FRONTEND_URL = "https://app.example.com";
+    const config = requireConfig();
+    expect(config.passkey?.rpID).toBe("app.example.com");
+    expect((await methodsFor(config)).passkey).toBe(true);
+  });
+
+  it("enables every auth feature with the default env", async () => {
+    const config = requireConfig();
+    expect(config.accountLinking).toEqual({mode: "verified-email"});
+    expect(config.signUp).toEqual({mode: "open"});
+    expect(config.twoFactor).toEqual({issuer: "Terreno Example"});
+    expect(EXAMPLE_APP_NAME).toBe("Terreno Example");
+    expect(config.passkey).toEqual({
+      origin: ["http://localhost:8082"],
+      rpID: "localhost",
+      rpName: "Terreno Example",
+    });
+    expect(config.lastLoginMethod).toBe(true);
+    expect(config.multiSession).toEqual({});
+    expect(config.nativeApps).toBe(true);
+
+    const methods = await methodsFor(config);
+    expect(methods).toMatchObject({
+      accountLinking: {mode: "verified-email"},
+      emailPassword: true,
+      multiSession: true,
+      passkey: true,
+      signUp: true,
+      twoFactor: true,
+    });
+  });
+
+  it("switches the linking mode with AUTH_ACCOUNT_LINKING", async () => {
+    process.env.AUTH_ACCOUNT_LINKING = "explicit";
+    const config = requireConfig();
+    expect(config.accountLinking).toEqual({mode: "explicit"});
+    expect((await methodsFor(config)).accountLinking).toEqual({mode: "explicit"});
+
+    process.env.AUTH_ACCOUNT_LINKING = "never";
+    expect(requireConfig().accountLinking).toEqual({mode: "never"});
+  });
+
+  it("refuses an unknown AUTH_ACCOUNT_LINKING", () => {
+    process.env.AUTH_ACCOUNT_LINKING = "sometimes";
+    expect(() => buildBetterAuthConfig()).toThrow(/AUTH_ACCOUNT_LINKING/);
+  });
+
+  it("closes sign-up with AUTH_SIGN_UP=closed", async () => {
+    process.env.AUTH_SIGN_UP = "closed";
+    const config = requireConfig();
+    expect(config.signUp).toEqual({mode: "closed"});
+    expect((await methodsFor(config)).signUp).toBe(false);
+  });
+
+  it("refuses an unknown AUTH_SIGN_UP", () => {
+    process.env.AUTH_SIGN_UP = "invite-only";
+    expect(() => buildBetterAuthConfig()).toThrow(/AUTH_SIGN_UP/);
+  });
+
+  it("binds passkeys to the FRONTEND_URL host and its origin", () => {
+    process.env.FRONTEND_URL = "https://app.example.com/";
+    expect(requireConfig().passkey).toEqual({
+      origin: ["https://app.example.com"],
+      rpID: "app.example.com",
+      rpName: "Terreno Example",
+    });
+  });
+
+  it("keeps only the dev origin that shares the loopback rpID", () => {
+    process.env.FRONTEND_URL = "http://127.0.0.1:8082";
+    expect(requireConfig().passkey?.origin).toEqual(["http://127.0.0.1:8082"]);
+    expect(requireConfig().passkey?.rpID).toBe("127.0.0.1");
+  });
+
+  it("overrides the rpID with PASSKEY_RP_ID and adds the CORS origins on it", () => {
+    process.env.FRONTEND_URL = "https://app.example.com";
+    process.env.PASSKEY_RP_ID = "example.com";
+    process.env.CORS_ORIGINS = "https://admin.example.com, https://preview.netlify.app";
+    expect(requireConfig().passkey).toEqual({
+      origin: ["https://app.example.com", "https://admin.example.com"],
+      rpID: "example.com",
+      rpName: "Terreno Example",
+    });
+  });
+
+  it("refuses a PASSKEY_RP_ID that FRONTEND_URL is not on", () => {
+    process.env.FRONTEND_URL = "https://app.example.com";
+    process.env.PASSKEY_RP_ID = "other.com";
+    expect(() => buildBetterAuthConfig()).toThrow(/PASSKEY_RP_ID/);
+  });
+
+  it("refuses a FRONTEND_URL that is not an http(s) URL", () => {
+    process.env.FRONTEND_URL = "not a url";
+    expect(() => buildBetterAuthConfig()).toThrow(/FRONTEND_URL/);
+  });
+});
 
 describe("buildBetterAuthConfig", () => {
   const originalNodeEnv = process.env.NODE_ENV;

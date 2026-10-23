@@ -8,7 +8,11 @@ import mongoose, {Schema} from "mongoose";
 import supertest from "supertest";
 import type {UserModel} from "./auth";
 import type {BetterAuthConfig} from "./betterAuth";
-import {createAppleClientSecret, resolveAppleProvider} from "./betterAuthFeatures";
+import {
+  buildFeaturePlugins,
+  createAppleClientSecret,
+  resolveAppleProvider,
+} from "./betterAuthFeatures";
 import {
   type BetterAuthInstance,
   createBetterAuth,
@@ -145,6 +149,18 @@ describe("buildFeaturePlugins", () => {
       expect({on: on.status !== 404, path: feature.path}).toEqual({on: true, path: feature.path});
       expect({off: off.status, path: feature.path}).toEqual({off: 404, path: feature.path});
     }
+  });
+
+  it("keeps Better Auth's five-session cap unless maximumSessions is set", () => {
+    const multiSessionOptions = (config: BetterAuthConfig["multiSession"]): unknown => {
+      const plugin = buildFeaturePlugins({enabled: true, multiSession: config}).find(
+        (candidate) => candidate.id === "multi-session"
+      ) as {options?: Record<string, unknown>} | undefined;
+      return plugin?.options;
+    };
+    // An explicit undefined would replace Better Auth's default of 5 and remove the cap.
+    expect(multiSessionOptions({})).not.toHaveProperty("maximumSessions");
+    expect(multiSessionOptions({maximumSessions: 3})).toEqual({maximumSessions: 3});
   });
 
   it("adds no plugins when no feature is configured", () => {

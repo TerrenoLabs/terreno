@@ -36,6 +36,10 @@ registerSimpleMongoPreload({
     Reflect.deleteProperty(process.env, "MIGRATIONS_DIR");
     Reflect.deleteProperty(process.env, "BETTER_AUTH_OAUTH_HANDOFF");
     Reflect.deleteProperty(process.env, "MOCK_OIDC_ISSUER");
+    Reflect.deleteProperty(process.env, "AUTH_ACCOUNT_LINKING");
+    Reflect.deleteProperty(process.env, "AUTH_SIGN_UP");
+    Reflect.deleteProperty(process.env, "PASSKEY_RP_ID");
+    Reflect.deleteProperty(process.env, "FRONTEND_URL");
   },
   testEnv: {
     extra: {

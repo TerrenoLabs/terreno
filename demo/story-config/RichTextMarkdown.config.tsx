@@ -3,6 +3,8 @@ import {RichTextMarkdownDemo} from "@stories/RichTextMarkdown.stories";
 import {EnrichedTextInput} from "react-native-enriched-html";
 
 export const RichTextMarkdownConfiguration: DemoConfiguration = {
+  usageExample:
+    'import {EnrichedTextInput} from "react-native-enriched-html";\n\n<EnrichedTextInput />',
   name: "Rich text",
   component: EnrichedTextInput,
   related: ["Markdown editor field", "MarkdownView"],

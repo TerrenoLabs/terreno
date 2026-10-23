@@ -1,16 +1,15 @@
-import {describe, expect, it, mock} from "bun:test";
+import {afterAll, describe, expect, it, mock, spyOn} from "bun:test";
+import * as terrenoUi from "@terreno/ui";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {renderWithTheme} from "../../ui/src/test-utils";
 
 const printedHtml: string[] = [];
-// The native print boundary: @terreno/ui's printConsentHtml hands the HTML to expo-print.
-// printToFileAsync is stubbed too, since this mock is shared by every test in the process.
-mock.module("expo-print", () => ({
-  printAsync: async ({html}: {html: string}) => {
+// Capture what the print button hands to @terreno/ui's printConsentHtml.
+const printSpy = spyOn(terrenoUi, "printConsentHtml").mockImplementation(
+  async ({html}: {html: string}) => {
     printedHtml.push(html);
-  },
-  printToFileAsync: async () => ({uri: "file:///tmp/consent.pdf"}),
-}));
+  }
+);
 
 import {ConsentHistory} from "./ConsentHistory";
 import type {ConsentHistoryEntry} from "./useConsentHistory";
@@ -223,4 +222,8 @@ describe("ConsentHistory", () => {
       expect(printedHtml[0]).not.toContain("Note:");
     });
   });
+});
+
+afterAll(() => {
+  printSpy.mockRestore();
 });

@@ -1,4 +1,5 @@
-import {describe, expect, it, mock} from "bun:test";
+import {beforeEach, describe, expect, it, type Mock, mock} from "bun:test";
+import * as Print from "expo-print";
 import {DateTime} from "luxon";
 import {Platform} from "react-native";
 
@@ -9,12 +10,17 @@ import {
   sharePdfFromHtml,
 } from "./pdfHtmlTemplate";
 
-const printToFileAsync = mock(() => Promise.resolve({uri: "file:///tmp/consent.pdf"}));
-const printAsync = mock(() => Promise.resolve());
+// expo-print is mocked once in the bun preload (src/bunSetup.ts).
+const printAsync = Print.printAsync as unknown as Mock<typeof Print.printAsync>;
+const printToFileAsync = Print.printToFileAsync as unknown as Mock<typeof Print.printToFileAsync>;
 const shareAsync = mock(() => Promise.resolve());
 
-mock.module("expo-print", () => ({printAsync, printToFileAsync}));
 mock.module("expo-sharing", () => ({shareAsync}));
+
+beforeEach(() => {
+  printAsync.mockClear();
+  printToFileAsync.mockClear();
+});
 
 const baseData: PdfTemplateData = {
   fields: [

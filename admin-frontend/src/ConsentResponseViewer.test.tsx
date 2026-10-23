@@ -1,6 +1,7 @@
 // noExplicitAny: test mocks use type-erased RTK Query API doubles and dynamic mock returns
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterAll, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
+import * as terrenoUi from "@terreno/ui";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
@@ -24,15 +25,13 @@ mock.module("./generateConsentPdf", () => ({
 
 const printedHtml: string[] = [];
 let printImpl: () => Promise<void> = async () => {};
-// The native print boundary: @terreno/ui's printConsentHtml hands the HTML to expo-print.
-// printToFileAsync is stubbed too, since this mock is shared by every test in the process.
-mock.module("expo-print", () => ({
-  printAsync: async ({html}: {html: string}) => {
+// Capture what the print button hands to @terreno/ui's printConsentHtml.
+const printSpy = spyOn(terrenoUi, "printConsentHtml").mockImplementation(
+  async ({html}: {html: string}) => {
     printedHtml.push(html);
     return printImpl();
-  },
-  printToFileAsync: async () => ({uri: "file:///tmp/consent.pdf"}),
-}));
+  }
+);
 
 import {ConsentResponseViewer} from "./ConsentResponseViewer";
 
@@ -243,4 +242,8 @@ describe("ConsentResponseViewer", () => {
       expect(getByTestId("consent-response-print-button")).toBeDefined();
     });
   });
+});
+
+afterAll(() => {
+  printSpy.mockRestore();
 });

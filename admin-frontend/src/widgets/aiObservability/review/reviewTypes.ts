@@ -170,3 +170,26 @@ export const firstUnanswered = (
 ): string | undefined => {
   return dimensions.find((dimension) => scores[dimension.key] === undefined)?.key;
 };
+
+/** The first unanswered question after `fromKey`, wrapping to the start; undefined when all are answered. */
+export const nextUnansweredAfter = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>,
+  fromKey?: string
+): string | undefined => {
+  const start = dimensions.findIndex((dimension) => dimension.key === fromKey) + 1;
+  return firstUnanswered([...dimensions.slice(start), ...dimensions.slice(0, start)], scores);
+};
+
+/** Move the highlighted question up or down one row, stopping at the first and last question. */
+export const stepQuestionKey = (
+  dimensions: EvaluatorDimension[],
+  currentKey: string | undefined,
+  step: 1 | -1
+): string | undefined => {
+  const index = dimensions.findIndex((dimension) => dimension.key === currentKey);
+  if (index < 0) {
+    return (step > 0 ? dimensions[0] : dimensions.at(-1))?.key;
+  }
+  return dimensions[Math.min(dimensions.length - 1, Math.max(0, index + step))]?.key;
+};

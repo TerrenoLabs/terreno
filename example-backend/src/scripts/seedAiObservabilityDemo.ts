@@ -713,6 +713,67 @@ const SUMMARY_QUESTION_SET_EVALUATOR = {
   type: "human" as const,
 };
 
+// The review queue asks three yes/no questions per item so reviewers can answer with Y / N keys.
+export const OUTPUT_QUALITY_QUESTIONS = "output-quality-questions";
+export const HELPFULNESS_QUESTIONS = "helpfulness-questions";
+
+const REVIEW_QUEUE_QUESTION_SETS = [
+  {
+    description: "Yes/no questions reviewers answer for queued traces flagged by feedback or evals",
+    dimensions: [
+      {
+        dataType: "boolean" as const,
+        key: "correct",
+        question: "Is everything it says correct?",
+        required: true,
+      },
+      {
+        dataType: "boolean" as const,
+        key: "complete",
+        question: "Does it handle the whole request?",
+        required: true,
+      },
+      {
+        dataType: "boolean" as const,
+        key: "appropriate",
+        question: "Is it safe and appropriate to show the user?",
+        required: true,
+      },
+    ],
+    instructions: "Read what the AI was given and what it wrote, then answer every question.",
+    name: OUTPUT_QUALITY_QUESTIONS,
+    target: "full trace" as const,
+    type: "human" as const,
+  },
+  {
+    description: "Yes/no questions reviewers answer for chat replies and jokes",
+    dimensions: [
+      {
+        dataType: "boolean" as const,
+        key: "answers_request",
+        question: "Does it answer what the user asked?",
+        required: true,
+      },
+      {
+        dataType: "boolean" as const,
+        key: "clear",
+        question: "Is it clear and easy to follow?",
+        required: true,
+      },
+      {
+        dataType: "boolean" as const,
+        key: "concise",
+        question: "Is it brief, with nothing the user did not need?",
+        required: true,
+      },
+    ],
+    instructions: "Answer as the user who sent the message would.",
+    name: HELPFULNESS_QUESTIONS,
+    target: "full trace" as const,
+    type: "human" as const,
+  },
+];
+
 const SUMMARY_JUDGE_EVALUATORS = [
   {
     description: "LLM judge for the summary review questions (spells out each reviewer rule)",
@@ -1007,15 +1068,17 @@ const ensureEvaluators = async (
       await evaluatorStore.installTemplate(templateName);
     }
   }
-  const questionSet = await evaluatorStore.getByName(SUMMARY_QUESTION_SET);
-  output.changes.push({
-    change: questionSet ? "unchanged" : "created",
-    count: 1,
-    key: JSON.stringify({name: SUMMARY_QUESTION_SET}),
-    model: "ObsEvaluator",
-  });
-  if (!questionSet && !dryRun) {
-    await evaluatorStore.create(SUMMARY_QUESTION_SET_EVALUATOR);
+  for (const questionSet of [SUMMARY_QUESTION_SET_EVALUATOR, ...REVIEW_QUEUE_QUESTION_SETS]) {
+    const existing = await evaluatorStore.getByName(questionSet.name);
+    output.changes.push({
+      change: existing ? "unchanged" : "created",
+      count: 1,
+      key: JSON.stringify({name: questionSet.name}),
+      model: "ObsEvaluator",
+    });
+    if (!existing && !dryRun) {
+      await evaluatorStore.create(questionSet);
+    }
   }
   for (const judge of SUMMARY_JUDGE_EVALUATORS) {
     const existing = await evaluatorStore.getByName(judge.name);
@@ -1451,10 +1514,10 @@ const seedTracesAndReview = async (params: {
   }
   output.results.push(`Created ${scores.length} feedback, judge, and code scores`);
 
-  const correctness = await evaluatorStore.getByName("correctness-human");
-  const helpfulness = await evaluatorStore.getByName("helpfulness-human");
+  const correctness = await evaluatorStore.getByName(OUTPUT_QUALITY_QUESTIONS);
+  const helpfulness = await evaluatorStore.getByName(HELPFULNESS_QUESTIONS);
   if (!correctness || !helpfulness) {
-    output.results.push("Skipped review queue: human evaluators are missing");
+    output.results.push("Skipped review queue: review question sets are missing");
     return;
   }
   const reviewStore = new LocalReviewStore();
@@ -1492,19 +1555,19 @@ const seedTracesAndReview = async (params: {
   await reviewStore.submit({
     comment: "Summary is faithful.",
     id: manualReview.id,
-    scores: {correct: true},
+    scores: {appropriate: true, complete: true, correct: true},
     sinks,
   });
   await reviewStore.submit({
     comment: "Left out the second todo.",
     id: feedbackA.id,
-    scores: {correct: false},
+    scores: {appropriate: true, complete: false, correct: false},
     sinks,
   });
   await reviewStore.submit({
     comment: "Answers the question directly.",
     id: chatHelpful.id,
-    scores: {helpfulness: 0.9},
+    scores: {answers_request: true, clear: true, concise: false},
     sinks,
   });
   await reviewStore.skip(candidateA.id);

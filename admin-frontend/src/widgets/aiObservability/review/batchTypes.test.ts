@@ -10,7 +10,7 @@ import {
   unwrapBatchList,
 } from "./batchTypes";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
-import {dimensionLabel, firstUnanswered} from "./reviewTypes";
+import {dimensionLabel, firstUnanswered, nextUnansweredAfter, stepQuestionKey} from "./reviewTypes";
 
 describe("batchTypes", () => {
   it("formats agreement as a percent with a traffic-light status", () => {
@@ -59,6 +59,24 @@ describe("review question helpers", () => {
     expect(firstUnanswered(dimensions, {a: false, b: true})).toBeUndefined();
   });
 
+  it("moves the keyboard highlight to the next unanswered question and steps between rows", () => {
+    const three = ["a", "b", "c"].map((key) => ({
+      dataType: "boolean" as const,
+      key,
+      required: true,
+    }));
+    expect(nextUnansweredAfter(three, {a: true}, "a")).toBe("b");
+    expect(nextUnansweredAfter(three, {a: true, b: true}, "b")).toBe("c");
+    expect(nextUnansweredAfter(three, {b: true, c: true}, "c")).toBe("a");
+    expect(nextUnansweredAfter(three, {a: true, b: true, c: true}, "a")).toBeUndefined();
+    expect(stepQuestionKey(three, "a", 1)).toBe("b");
+    expect(stepQuestionKey(three, "c", 1)).toBe("c");
+    expect(stepQuestionKey(three, "a", -1)).toBe("a");
+    expect(stepQuestionKey(three, undefined, 1)).toBe("a");
+    expect(stepQuestionKey(three, undefined, -1)).toBe("c");
+    expect(stepQuestionKey([], undefined, 1)).toBeUndefined();
+  });
+
   it("maps keys to shortcuts and ignores typing", () => {
     const listeners: Array<(event: unknown) => void> = [];
     (globalThis as {document?: unknown}).document = {
@@ -86,11 +104,26 @@ describe("review question helpers", () => {
     press({key: "1"});
     press({key: "Enter"});
     press({key: "s"});
+    press({key: "ArrowDown"});
+    press({key: "j"});
+    press({key: "ArrowUp"});
+    press({key: "K"});
     press({key: "x"});
     press({key: "y", metaKey: true});
     press({key: "y", target: {tagName: "TEXTAREA"}});
     press({key: "y", target: {tagName: "DIV"}});
-    expect(actions).toEqual(["yes", "no", "yes", "submit", "skip", "yes"]);
+    expect(actions).toEqual([
+      "yes",
+      "no",
+      "yes",
+      "submit",
+      "skip",
+      "next",
+      "next",
+      "previous",
+      "previous",
+      "yes",
+    ]);
     hook.unmount();
     expect(removed).toBe(1);
   });

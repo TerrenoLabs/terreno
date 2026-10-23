@@ -5,6 +5,7 @@ import {ReviewReadOnlyPanel} from "./ReviewReadOnlyPanel";
 import {displayReviewValue, type ReviewDetail, reviewStatusLabel} from "./reviewTypes";
 
 export interface AiReviewItemViewProps {
+  activeQuestionKey?: string;
   comment: string;
   detail: ReviewDetail;
   isPending: boolean;
@@ -24,6 +25,7 @@ export interface AiReviewItemViewProps {
 }
 
 export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
+  activeQuestionKey,
   comment,
   detail,
   isPending,
@@ -93,6 +95,7 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
     <Card padding={3}>
       <Box gap={3}>
         <ReviewQuestionList
+          activeKey={activeQuestionKey}
           dimensions={detail.dimensions}
           instructions={detail.instructions}
           onAnswer={onScoreChange}

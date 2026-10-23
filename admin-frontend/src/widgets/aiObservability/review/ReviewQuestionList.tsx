@@ -1,10 +1,12 @@
-import {Box, Button, Heading, Text} from "@terreno/ui";
+import {Box, Button, Text} from "@terreno/ui";
 import React from "react";
 import {Platform} from "react-native";
 import {ReviewScoreField} from "./ReviewScoreField";
 import {dimensionLabel, type EvaluatorDimension, firstUnanswered} from "./reviewTypes";
 
 export interface ReviewQuestionListProps {
+  /** Question the keyboard answers; defaults to the first unanswered one. */
+  activeKey?: string;
   dimensions: EvaluatorDimension[];
   instructions?: string;
   onAnswer: (key: string, value: boolean | number | string) => void;
@@ -39,19 +41,10 @@ const QuestionRow: React.FC<{
       border={isNext ? "focus" : "default"}
       direction="row"
       gap={3}
-      justifyContent="between"
       padding={2}
       rounding="md"
       testID={`ai-review-question-${dimension.key}`}
     >
-      <Box flex="grow" gap={1} maxWidth="75%" minWidth={200}>
-        <Text bold={value === undefined}>{`${index + 1}. ${dimensionLabel(dimension)}`}</Text>
-        {dimension.question ? (
-          <Text color="secondaryDark" size="sm">
-            {dimension.key}
-          </Text>
-        ) : undefined}
-      </Box>
       <Box direction="row" gap={2}>
         <Button
           onClick={() => {
@@ -72,12 +65,21 @@ const QuestionRow: React.FC<{
           variant={value === false ? "destructive" : "outline"}
         />
       </Box>
+      <Box flex="grow" gap={1} minWidth={200}>
+        <Text bold={value === undefined}>{`${index + 1}. ${dimensionLabel(dimension)}`}</Text>
+        {dimension.question ? (
+          <Text color="secondaryDark" size="sm">
+            {dimension.key}
+          </Text>
+        ) : undefined}
+      </Box>
     </Box>
   );
 };
 
 /** Every question for one input/output pair, answerable in a few clicks or keystrokes. */
 export const ReviewQuestionList: React.FC<ReviewQuestionListProps> = ({
+  activeKey,
   dimensions,
   instructions,
   onAnswer,
@@ -85,7 +87,7 @@ export const ReviewQuestionList: React.FC<ReviewQuestionListProps> = ({
   scores,
 }) => {
   const answered = dimensions.filter((dimension) => scores[dimension.key] !== undefined).length;
-  const nextKey = firstUnanswered(dimensions, scores);
+  const nextKey = activeKey ?? firstUnanswered(dimensions, scores);
   const hasUnansweredBoolean = dimensions.some(
     (dimension) => dimension.dataType === "boolean" && scores[dimension.key] === undefined
   );
@@ -93,24 +95,17 @@ export const ReviewQuestionList: React.FC<ReviewQuestionListProps> = ({
   return (
     <Box gap={2} testID="ai-review-questions">
       <Box alignItems="center" direction="row" gap={2} justifyContent="between" wrap>
-        <Heading size="sm">
-          {dimensions.length === 1
-            ? "Answer the question"
-            : `Answer ${dimensions.length} questions`}
-        </Heading>
-        <Box alignItems="center" direction="row" gap={2}>
-          <Text color="secondaryDark" testID="ai-review-questions-progress">
-            {`${answered} of ${dimensions.length} answered`}
-          </Text>
-          <Button
-            disabled={!hasUnansweredBoolean}
-            onClick={onAnswerRestYes}
-            size="sm"
-            testID="ai-review-questions-rest-yes"
-            text="Rest Yes"
-            variant="secondary"
-          />
-        </Box>
+        <Text color="secondaryDark" testID="ai-review-questions-progress">
+          {`${answered} of ${dimensions.length} answered`}
+        </Text>
+        <Button
+          disabled={!hasUnansweredBoolean}
+          onClick={onAnswerRestYes}
+          size="sm"
+          testID="ai-review-questions-rest-yes"
+          text="Rest Yes"
+          variant="secondary"
+        />
       </Box>
       {instructions ? <Text color="secondaryDark">{instructions}</Text> : undefined}
       {dimensions.map((dimension, index) => (
@@ -125,7 +120,9 @@ export const ReviewQuestionList: React.FC<ReviewQuestionListProps> = ({
       ))}
       {Platform.OS === "web" ? (
         <Text color="secondaryDark" size="sm" testID="ai-review-shortcuts-hint">
-          Keys: Y or N answers the highlighted question · Enter submits · S skips
+          {
+            "Keys: Y or N answers the highlighted question and moves on · ↑ ↓ (or K J) change question · Enter submits and opens the next item · S skips"
+          }
         </Text>
       ) : undefined}
     </Box>

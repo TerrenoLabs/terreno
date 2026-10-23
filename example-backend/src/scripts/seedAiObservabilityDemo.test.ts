@@ -15,8 +15,10 @@ import {
   CHAT_DATASET_NAME,
   CHAT_EXPERIMENT,
   createSeedFixtureClient,
+  HELPFULNESS_QUESTIONS,
   JOKE_DATASET_NAME,
   JOKE_EXPERIMENT,
+  OUTPUT_QUALITY_QUESTIONS,
   SEED_FIXTURE_MODEL_ID,
   SUMMARIZE_EXPERIMENT_V1_V2,
   SUMMARIZE_EXPERIMENT_V2_V3,
@@ -77,6 +79,8 @@ describe("seedAiObservabilityDemo", () => {
       SUMMARY_QUESTION_SET,
       SUMMARY_CAREFUL_JUDGE,
       SUMMARY_QUICK_JUDGE,
+      OUTPUT_QUALITY_QUESTIONS,
+      HELPFULNESS_QUESTIONS,
     ]);
 
     const dataset = (await new LocalDatasetStore(promptStore).list()).find((entry) => {
@@ -131,6 +135,19 @@ describe("seedAiObservabilityDemo", () => {
 
     const {counts} = await new LocalReviewStore().list();
     assert.deepEqual(counts, {done: 11, in_progress: 1, pending: 11, skipped: 1});
+
+    // Every queue item outside the batch asks exactly three yes/no questions.
+    const evaluatorStore = new LocalEvaluatorStore();
+    const queueItems = (await new LocalReviewStore().list()).data.filter((item) => !item.batchId);
+    assert.isAbove(queueItems.length, 0);
+    for (const item of queueItems) {
+      const {dimensions} = await evaluatorStore.get(item.evaluatorId);
+      assert.lengthOf(dimensions, 3, item.id);
+      for (const dimension of dimensions) {
+        assert.equal(dimension.dataType, "boolean", dimension.key);
+        assert.isNotEmpty(dimension.question, dimension.key);
+      }
+    }
 
     const batchStore = new LocalReviewBatchStore(promptStore);
     const [batchRow] = await batchStore.list();

@@ -1,6 +1,6 @@
 import {useEffect, useRef} from "react";
 
-export type ReviewShortcutAction = "no" | "skip" | "submit" | "yes";
+export type ReviewShortcutAction = "next" | "no" | "previous" | "skip" | "submit" | "yes";
 
 interface ShortcutKeyEvent {
   altKey?: boolean;
@@ -30,6 +30,12 @@ const reviewShortcutAction = (event: ShortcutKeyEvent): ReviewShortcutAction | u
   }
   if (key === "n" || key === "2") {
     return "no";
+  }
+  if (key === "arrowdown" || key === "j") {
+    return "next";
+  }
+  if (key === "arrowup" || key === "k") {
+    return "previous";
   }
   if (key === "enter") {
     return "submit";

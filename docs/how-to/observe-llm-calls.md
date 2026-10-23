@@ -115,7 +115,7 @@ that key exists.
    | Screen | Seeded data |
    | --- | --- |
    | Prompts | `example-summarize` v3 (staging, output capped at 120 characters); `joke-generator` and `chat-assistant` v1 (production) and v2 (staging); judge prompts `eval-judge-correctness` and `eval-judge-helpfulness` |
-   | Evaluators | `correctness-human`, `helpfulness-human`, `schema-assert`, and the `correctness` and `helpfulness` LLM judges |
+   | Evaluators | `correctness-human`, `helpfulness-human`, `schema-assert`, the `correctness` and `helpfulness` LLM judges, and the review-queue question sets `output-quality-questions` and `helpfulness-questions` (three yes/no questions each) |
    | Datasets | `example-summarize-gold` (8 proofread rows, 2 unproofread), `joke-generator-topics` (6), `chat-assistant-gold` (6) |
    | Experiments | `Summarize v1 vs v2 (gold)`: v1 fails correctness, v2 passes. `Summarize v2 vs v3 (length cap)`: v3 fails `schema-assert` on 2 rows. `Jokes v1 vs v2 (one-liners)` and `Chat assistant v1 vs v2 (brevity)`: v1 fails helpfulness, v2 passes |
    | Traces | 18 Todos → Summarize traces over the past week (2 errors, 1 sensitive, 2 flagged for the dataset), 6 `joke-generator` traces, and 6 `chat-assistant` turns (4 with a tool span); user-feedback, LLM-judge, and code scores |

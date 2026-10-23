@@ -7,8 +7,11 @@ import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {AiReviewItemView} from "./AiReviewItemView";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
 import {
+  type EvaluatorDimension,
   firstUnanswered,
+  nextUnansweredAfter,
   type ReviewStatus,
+  stepQuestionKey,
   unwrapCurrentUserId,
   unwrapReviewDetail,
   unwrapReviewList,
@@ -43,7 +46,13 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   const [scores, setScores] = useState<Record<string, boolean | number | string>>({});
   const [comment, setComment] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [activeQuestionKey, setActiveQuestionKey] = useState<string | undefined>();
   const toast = useToast();
+  const booleanDimensions = useMemo(
+    (): EvaluatorDimension[] =>
+      (detail?.dimensions ?? []).filter((dimension) => dimension.dataType === "boolean"),
+    [detail?.dimensions]
+  );
 
   // A batch counts assigned (in progress) items as open work, like the batch screen does.
   const pending = useMemo(() => {
@@ -68,6 +77,12 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     setScores(detail?.scores ?? {});
     setComment(detail?.comment ?? "");
     setSubmitError("");
+    setActiveQuestionKey(
+      firstUnanswered(
+        (detail?.dimensions ?? []).filter((dimension) => dimension.dataType === "boolean"),
+        detail?.scores ?? {}
+      )
+    );
   }, [detail]);
 
   const openItem = useCallback(
@@ -106,9 +121,14 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     [currentIndex, finishAndNavigate, id, pending.length, runAction]
   );
 
-  const handleScoreChange = useCallback((key: string, value: boolean | number | string): void => {
-    setScores((current) => ({...current, [key]: value}));
-  }, []);
+  // Answering a question moves the keyboard highlight to the next unanswered yes/no question.
+  const handleScoreChange = useCallback(
+    (key: string, value: boolean | number | string): void => {
+      setScores((current) => ({...current, [key]: value}));
+      setActiveQuestionKey(nextUnansweredAfter(booleanDimensions, {...scores, [key]: value}, key));
+    },
+    [booleanDimensions, scores]
+  );
 
   const handleAnswerRestYes = useCallback((): void => {
     setScores((current) => {
@@ -120,6 +140,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
       }
       return next;
     });
+    setActiveQuestionKey(undefined);
   }, [detail?.dimensions]);
 
   const handleSubmit = useCallback(async (): Promise<void> => {
@@ -180,15 +201,27 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
         void handleSkip();
         return;
       }
-      const nextKey = firstUnanswered(
-        detail.dimensions.filter((dimension) => dimension.dataType === "boolean"),
-        scores
-      );
-      if (nextKey) {
-        handleScoreChange(nextKey, action === "yes");
+      const currentKey = activeQuestionKey ?? firstUnanswered(booleanDimensions, scores);
+      if (action === "next" || action === "previous") {
+        setActiveQuestionKey(
+          stepQuestionKey(booleanDimensions, currentKey, action === "next" ? 1 : -1)
+        );
+        return;
+      }
+      if (currentKey) {
+        handleScoreChange(currentKey, action === "yes");
       }
     },
-    [actionState.isLoading, detail, handleScoreChange, handleSkip, handleSubmit, scores]
+    [
+      actionState.isLoading,
+      activeQuestionKey,
+      booleanDimensions,
+      detail,
+      handleScoreChange,
+      handleSkip,
+      handleSubmit,
+      scores,
+    ]
   );
 
   useReviewShortcuts({enabled: Boolean(detail), onAction: handleShortcut});
@@ -255,6 +288,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
       status={unwrapObservabilityStatus(statusQuery.data)}
     >
       <AiReviewItemView
+        activeQuestionKey={activeQuestionKey}
         comment={comment}
         detail={detail}
         isPending={currentIndex >= 0}

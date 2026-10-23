@@ -106,6 +106,25 @@ describe("ReviewQuestionList", () => {
     expect(onAnswer).toHaveBeenCalledWith("faithful", true);
   });
 
+  it("puts Yes/No before each question and highlights the active question", () => {
+    const view = renderWithTheme(
+      <ReviewQuestionList
+        activeKey="concise"
+        dimensions={QUESTIONS}
+        onAnswer={() => {}}
+        onAnswerRestYes={() => {}}
+        scores={{}}
+      />
+    );
+    expect(view.queryByText(/^Answer /)).toBeNull();
+    const tree = JSON.stringify(view.toJSON());
+    expect(tree.indexOf("ai-review-question-concise-no")).toBeLessThan(
+      tree.indexOf("2. Is it concise?")
+    );
+    const style = (testID: string): string => JSON.stringify(view.getByTestId(testID).props.style);
+    expect(style("ai-review-question-concise")).not.toBe(style("ai-review-question-faithful"));
+  });
+
   it("answers non-boolean questions through the score field", async () => {
     const onAnswer = mock(() => {});
     const {getByTestId, getByText} = renderWithTheme(
